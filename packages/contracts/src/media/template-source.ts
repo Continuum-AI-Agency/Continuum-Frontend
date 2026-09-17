@@ -12,6 +12,7 @@
 import { z } from 'zod';
 import { slotPlacementSchema } from '../ai-studio/api-render-fit';
 import { apiRenderVariableKindSchema } from '../ai-studio/api-renders';
+import { type FontLicenceScope, fontLicenceScopeSchema } from './fonts';
 
 export const templateSourceFamilySchema = z.enum([
   'after_effects',
@@ -275,6 +276,22 @@ export const templateSourceSchema = z
      * means nobody named it — render `templateDisplayName(parse.filename)` rather than a uuid.
      */
     displayName: z.string().nullable().default(null),
+    /**
+     * The exact template bytes this source was PROMOTED as — the version a render is pinned to.
+     *
+     * Not the source revision (that is `versionId`, an upload of the file someone dropped in) and
+     * not the contract hash (that is the field vocabulary). This is the digest of the package the
+     * renderer opens. Null until promotion, and null for a source the fleet never published.
+     *
+     * A template's LIVE version can differ from this one: the graph's pointer moves during a fork
+     * delivery. Where that matters, ask the fleet through the pin route rather than assuming this
+     * row is current — see template-forge `docs/TEMPLATE_IDENTITY.md`.
+     */
+    aepSha256: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/i)
+      .nullable()
+      .default(null),
     parseError: z.string().nullable().default(null),
     parsedAt: z.string().nullable().default(null),
     createdAt: z.string(),
@@ -305,6 +322,13 @@ export const templateFontStatusSchema = z
     family: z.string().min(1),
     layers: z.number().int().nonnegative(),
     held: z.boolean(),
+    /**
+     * Which repository the held face came from. Absent when the caller only had family
+     * names to compare and could not say. `house` is how a vendor face (Gotham,
+     * Urbanchrome) reads once it is in the shared repository — before it existed, such a
+     * face was reported missing for every brand, because no brand had "uploaded" it.
+     */
+    scope: fontLicenceScopeSchema.optional(),
   })
   .strict();
 export type TemplateFontStatus = z.infer<typeof templateFontStatusSchema>;
@@ -395,13 +419,24 @@ export function templateParseRatios(parse: TemplateParse): string[] {
 export function templateFontStatuses(
   needed: readonly TemplateFont[],
   held: readonly string[],
+  /**
+   * Licence scope per held family key, when the caller resolved from the shared font
+   * repository and therefore knows. Optional so the plain family-name call sites keep
+   * working unchanged.
+   */
+  scopeByKey?: ReadonlyMap<string, FontLicenceScope>,
 ): TemplateFontStatus[] {
   const heldSet = new Set(held.map(normalizeTemplateFontFamily));
-  return needed.map((font) => ({
-    family: font.family,
-    layers: font.layers,
-    held: heldSet.has(normalizeTemplateFontFamily(font.family)),
-  }));
+  return needed.map((font) => {
+    const key = normalizeTemplateFontFamily(font.family);
+    const scope = scopeByKey?.get(key);
+    return {
+      family: font.family,
+      layers: font.layers,
+      held: heldSet.has(key),
+      ...(scope ? { scope } : {}),
+    };
+  });
 }
 
 /** One comparison key for parsed PostScript names, uploaded families and install selection. */

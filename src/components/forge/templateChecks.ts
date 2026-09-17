@@ -72,7 +72,7 @@ function fontsCheck(input: TemplateChecksInput): TemplateCheck {
   const base = {
     id: 'fonts' as const,
     name: 'Fonts',
-    what: 'Checks the brand has uploaded every typeface the template uses. Renders are refused while one is missing.',
+    what: 'Checks the font repository holds every typeface the template uses — the brand\u2019s own uploads plus house faces. Renders are refused while one is missing.',
   };
   const { fontReadiness: readiness, fontCheckFailed } = input;
   if (input.parseState !== 'parsed' || (readiness && readiness.parseState !== 'parsed')) {

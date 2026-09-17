@@ -1,5 +1,5 @@
 /**
- * "Draft variations with AI": a prompt and a count go to suggestRows, the rows are saved as a new
+ * "Draft rows with AI": a prompt and a count go to suggestRows, the rows are saved as a new
  * render set against the template's contract, and the Render tab is asked to open on that set. A
  * writer that is down says so in plain words instead of a status code.
  */
@@ -58,7 +58,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 async function draft(prompt: string, count: string) {
-  fireEvent.click(screen.getByRole('button', { name: 'Draft variations with AI' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Draft rows with AI' }));
   fireEvent.change(await screen.findByLabelText('Prompt'), { target: { value: prompt } });
   fireEvent.change(screen.getByLabelText('How many'), { target: { value: count } });
   fireEvent.click(screen.getByRole('button', { name: 'Draft rows' }));
@@ -143,7 +143,7 @@ describe('AiVariationsDialog', () => {
   test('an unpublished template cannot draft', () => {
     render(<AiVariationsDialog brandId={BRAND} templateKey={null} />);
     expect(
-      screen.getByRole<HTMLButtonElement>('button', { name: 'Draft variations with AI' }).disabled,
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Draft rows with AI' }).disabled,
     ).toBe(true);
     expect(screen.getByText('Available once this template is published.')).toBeTruthy();
   });

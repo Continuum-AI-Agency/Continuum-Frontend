@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { fontLicenceScopeSchema } from '../media/fonts';
 import { apiRenderFitReportSchema, pixelBoxSchema, slotPlacementSchema } from './api-render-fit';
 import { apiRenderJudgeSchema } from './api-render-judge';
 
@@ -11,6 +12,10 @@ export const API_RENDER_BATCHES_ROUTE = '/api/ai-studio/renders/batches';
 export const API_RENDER_ENVIRONMENTS_ROUTE = '/api/ai-studio/renders/environments';
 export const API_RENDER_DESTINATIONS_ROUTE = '/api/ai-studio/renders/destinations';
 export const API_RENDER_SLACK_CHANNELS_ROUTE = '/api/ai-studio/renders/destinations/slack-channels';
+
+/** One room, by id — the path a retire addresses. */
+export const apiRenderDestinationRoute = (destinationId: string) =>
+  `${API_RENDER_DESTINATIONS_ROUTE}/${destinationId}`;
 
 /**
  * A caller-facing variable name. Physical `f_<hash>` renderer field names are private
@@ -171,13 +176,43 @@ export const apiRenderTemplateSummarySchema = z
      * (`templateDisplayName`). Null from a server too old to resolve one — fall back to `name`.
      */
     displayName: z.string().nullable().default(null),
+    /**
+     * How long this template's delivery comps run, and at what rate. A `durationSec` of one frame
+     * is a template that delivers STILLS — every template 133 render is a jpeg, and nothing in the
+     * Renders tab says so, because a one-frame comp and a fifteen-second one draw the same boxes.
+     *
+     * Null when nothing has been parsed, which is not the same as a still.
+     */
+    motion: z
+      .object({
+        durationSec: z.number().nonnegative(),
+        frameRate: z.number().positive().max(240),
+      })
+      .strict()
+      .nullable()
+      .default(null),
   })
   .strict();
 export type ApiRenderTemplateSummary = z.infer<typeof apiRenderTemplateSummarySchema>;
 
+/** `1 frame` for a still, `6.0s · 30 fps` for a video. The pane's whole motion vocabulary. */
+export function motionLabel(motion: ApiRenderTemplateSummary['motion']): string | null {
+  if (!motion) return null;
+  const frames = Math.round(motion.durationSec * motion.frameRate);
+  return frames <= 1
+    ? 'Still · 1 frame'
+    : `${motion.durationSec.toFixed(1)}s · ${Math.round(motion.frameRate)} fps`;
+}
+
 /** A face the template needs, against what the brand actually holds. */
 export const apiRenderTemplateFontSchema = z
-  .object({ family: z.string().min(1), layers: z.number().int().nonnegative(), held: z.boolean() })
+  .object({
+    family: z.string().min(1),
+    layers: z.number().int().nonnegative(),
+    held: z.boolean(),
+    /** Whose licence the held face is under — the brand's own upload, or a house/vendor face. */
+    scope: fontLicenceScopeSchema.optional(),
+  })
   .strict();
 export type ApiRenderTemplateFont = z.infer<typeof apiRenderTemplateFontSchema>;
 
@@ -1045,8 +1080,9 @@ export type ApiRenderSuggestRowsResponse = z.infer<typeof apiRenderSuggestRowsRe
 // --- Delivery destinations ---------------------------------------------------------------------
 //
 // Where a render can go besides the Library. Slack destinations are the brand's own
-// `chat_destinations` rows; the channel list is scoped to the requesting user's OWN Slack
-// workspace, never the global bot token — that would show one tenant another tenant's channels.
+// `chat_destinations` rows; the channel list is scoped to the Slack workspaces connected to the
+// brand, each with its own token, never a global bot token — that would show one tenant another
+// tenant's channels.
 
 export const apiRenderDeliveryDestinationSchema = z
   .object({
@@ -1057,6 +1093,11 @@ export const apiRenderDeliveryDestinationSchema = z
     // Optional only because the schema is strict and the Frontend deploys first; the
     // Backend always sends it — a brand can bind several workspaces.
     workspaceName: z.string().nullable().optional(),
+    // Who can decide in this room today, so a Settings hub asks once instead of three times.
+    // Optional for the same reason as `workspaceName`: the schema is strict and the
+    // Frontend ships before the Backend that fills them.
+    activeApprovers: z.number().int().nonnegative().optional(),
+    requestedApprovers: z.number().int().nonnegative().optional(),
   })
   .strict();
 export type ApiRenderDeliveryDestination = z.infer<typeof apiRenderDeliveryDestinationSchema>;
@@ -1107,7 +1148,9 @@ export type ApiRenderSlackChannelListResponse = z.infer<
 export const apiRenderCreateDeliveryDestinationRequestSchema = z
   .object({
     brandId: z.string().uuid(),
-    role: z.enum(['ops', 'client']),
+    // No `dm`: a dm row is addressed by `connection_id`, and the `chat_destinations_addressed`
+    // CHECK refuses one without it — so an added `dm` room could never be posted to.
+    role: z.enum(['ops', 'client', 'alerts']),
     channelId: z.string().min(1),
   })
   .strict();

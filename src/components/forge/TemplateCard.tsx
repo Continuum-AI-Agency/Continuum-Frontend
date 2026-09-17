@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { TemplateMorph, TemplateWireframe } from './TemplateWireframe';
+import { shortSha } from './templateVersion';
 
 // One template as a card: its picture, what it is called, and where it stands. Everything a person
 // would have to decode — the upload's uuid filename, the render table, the workspace — stays off it.
@@ -204,6 +205,16 @@ export function TemplateCard({
           {source.slotCount ? (
             <span className="text-2xs text-muted-foreground">
               {source.slotCount} variable{source.slotCount === 1 ? '' : 's'}
+            </span>
+          ) : null}
+          {/* The version: the exact bytes this template was promoted as. Not the source revision
+              (an upload of the file someone dropped in) and not the contract hash. */}
+          {source.aepSha256 ? (
+            <span
+              className="text-2xs font-mono text-muted-foreground tabular-nums"
+              title={`Template version ${source.aepSha256}`}
+            >
+              {shortSha(source.aepSha256)}
             </span>
           ) : null}
         </div>

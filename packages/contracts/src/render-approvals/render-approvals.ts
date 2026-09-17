@@ -63,7 +63,11 @@ export const renderApprovalRequestSchema = z
     campaignId: z.string().nullable().default(null),
     adsetId: z.string().nullable().default(null),
     adId: z.string().nullable().default(null),
-    // Per-environment destination. Null falls back to the one default channel.
+    // The room the operator PREFERS, from the sub-app's own `delivery_config`. A preference, not
+    // the room: the backend honours it when the brand has an active room with that `channel_id`,
+    // and otherwise picks the brand's internal rooms. Kept even though nothing falls back to an
+    // env default any more — this schema is `.strict()`, so dropping the key would 400 every
+    // plugin POST.
     approvalChannelId: z.string().nullable().default(null),
     files: z.array(renderApprovalFileSchema).min(1),
   })
@@ -255,7 +259,13 @@ export const renderApprovalDestinationSchema = z
 export type RenderApprovalDestination = z.infer<typeof renderApprovalDestinationSchema>;
 
 export const renderApprovalDestinationListResponseSchema = z
-  .object({ destinations: z.array(renderApprovalDestinationSchema) })
+  .object({
+    destinations: z.array(renderApprovalDestinationSchema),
+    // Where this brand last asked for a package to be shown, intersected with the rooms still
+    // active. `.optional()` because this response is `.strict()` and the Frontend parses it, so
+    // the FRONTEND deploys before the Backend — the same rule as `workspaceName`.
+    defaultDestinationIds: z.array(z.string().uuid()).optional(),
+  })
   .strict();
 export type RenderApprovalDestinationListResponse = z.infer<
   typeof renderApprovalDestinationListResponseSchema

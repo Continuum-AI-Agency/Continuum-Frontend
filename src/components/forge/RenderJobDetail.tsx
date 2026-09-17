@@ -7,6 +7,7 @@ import {
   CalendarClock,
   CircleDot,
   ExternalLink,
+  FileDigit,
   Layers,
   RectangleHorizontal,
   RefreshCw,
@@ -25,6 +26,7 @@ import {
 } from '@/components/forge/FormatPreview';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
+import { templateVersionOf, templateVersionTitle } from '@/components/forge/templateVersion';
 import { Button } from '@/components/ui/button';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { formatDuration, renderJobChecks } from './renderJobChecks';
@@ -292,6 +294,22 @@ export function RenderJobDetail({
                   : '—',
               },
               { icon: Layers, label: 'Set', value: setName },
+              {
+                icon: FileDigit,
+                label: 'Template version',
+                value: (() => {
+                  const view = templateVersionOf(job);
+                  return view.state === 'pinned' ? (
+                    <span className="font-mono tabular-nums" title={view.sha}>
+                      {view.short}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground" title={templateVersionTitle(view)}>
+                      Unrecorded
+                    </span>
+                  );
+                })(),
+              },
               {
                 icon: RectangleHorizontal,
                 label: 'Formats',

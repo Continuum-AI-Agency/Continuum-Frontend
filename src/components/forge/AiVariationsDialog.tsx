@@ -21,7 +21,13 @@ import { toast } from '@/components/ui/toast-imperative';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
 
-// "Draft variations with AI": a prompt becomes rows, the rows become a saved render set, and the
+// "Draft rows with AI": a prompt becomes rows, the rows become a saved render set, and the
+// Render tab opens with it loaded.
+//
+// Called ROWS, not variations, deliberately. A VARIANT is a sibling version of the TEMPLATE — a
+// ratio, a language, a legal wrap — and lives in the Variants tab. What this drafts is data: one
+// row per render. The word was doing both jobs, which is most of why "variants" was impossible to
+// talk about without asking which kind someone meant. See template-forge docs/TEMPLATE_IDENTITY.md.
 // Render tab opens on it. Proposals only — nothing renders until a person fires it from the grid,
 // where every drafted row goes through the same checks as a typed one.
 
@@ -114,7 +120,7 @@ export function AiVariationsDialog({
         onClick={() => setOpen(true)}
       >
         <Sparkles className="size-3.5" aria-hidden />
-        Draft variations with AI
+        Draft rows with AI
       </Button>
       {templateKey ? null : (
         <span className="text-xs text-muted-foreground">
@@ -124,7 +130,7 @@ export function AiVariationsDialog({
       <Dialog open={open} onOpenChange={(next) => (busy ? undefined : setOpen(next))}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Draft variations with AI</DialogTitle>
+            <DialogTitle>Draft rows with AI</DialogTitle>
             <DialogDescription>
               Describe what should change between versions. The rows are saved as a new render set
               and open in Render for you to check before anything is rendered.

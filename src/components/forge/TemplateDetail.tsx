@@ -43,6 +43,7 @@ import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import { TemplateRenders } from '@/components/forge/TemplateRenders';
 import { useForgeRun } from '@/components/forge/useForgeRun';
 import { VariableEditor } from '@/components/forge/VariableEditor';
+import { VariantsPanel } from '@/components/forge/VariantsPanel';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Panel } from '@/components/shared/Panel';
 import {
@@ -816,6 +817,9 @@ export function TemplateDetail({
           <TabsTrigger value="source" className="flex-none px-0 text-xs">
             Source revision
           </TabsTrigger>
+          <TabsTrigger value="variants" className="flex-none px-0 text-xs">
+            Variants
+          </TabsTrigger>
           <TabsTrigger value="history" className="flex-none px-0 text-xs">
             History
           </TabsTrigger>
@@ -848,6 +852,11 @@ export function TemplateDetail({
               await Promise.all([onChanged(), loadVariables()]);
             }}
           />
+        </TabsContent>
+        <TabsContent value="variants" keepMounted className="p-[var(--card-pad)]">
+          {/* Ratio twins, language forks and legal wraps as siblings — the view that had no home:
+              the gallery shows flat ratio chips and the Render tab's forks are forks of DATA. */}
+          <VariantsPanel brandId={brandId} assetId={assetId} />
         </TabsContent>
         <TabsContent value="history" keepMounted className="p-[var(--card-pad)]">
           <LineagePanel brandId={brandId} assetId={assetId} />

@@ -19,6 +19,7 @@ export * from './deployments';
 export * from './element';
 export * from './expand';
 export * from './figma';
+export * from './fonts';
 export * from './hyperframe-mp4';
 export * from './import-ad-creative';
 export * from './instagram';

@@ -7,6 +7,7 @@ import {
   forgeLineageHasReason,
 } from '@continuum/contracts';
 import { useCallback, useEffect, useState } from 'react';
+import { formatRelativeTime } from '@/components/approvals/formatters';
 import { Badge } from '@/components/ui/badge';
 import { fetchTemplateLineage } from '@/lib/library/templateSources';
 import { cn } from '@/lib/utils';
@@ -126,7 +127,9 @@ export function LineagePanel({ brandId, assetId }: { brandId: string; assetId: s
   if (!lineage) {
     return <p className="text-xs text-muted-foreground">Reading the version tree…</p>;
   }
-  if (!lineage.connected) {
+  // A MIRRORED tree still answers the question; it simply is not live. Only an environment with no
+  // forge AND no mirror has nothing to show.
+  if (!lineage.connected && !lineage.cachedAt) {
     return (
       <p className="text-xs text-muted-foreground">
         Lineage is not connected — Template Forge is not configured for this environment.
@@ -150,6 +153,14 @@ export function LineagePanel({ brandId, assetId }: { brandId: string; assetId: s
 
   return (
     <div className="flex flex-col gap-3" title={`master ${shortId(lineage.currentMaster)}`}>
+      {/* Never dress a mirror up as live: the forge store is the authority and this copy can be
+          behind it, so the reader is told how old the answer is. */}
+      {lineage.cachedAt ? (
+        <p className="text-xs text-muted-foreground" title={lineage.cachedAt}>
+          Showing the last version tree Template Forge reported, from{' '}
+          {formatRelativeTime(lineage.cachedAt)}.
+        </p>
+      ) : null}
       {lineage.pinnedToOlderMaster ? (
         <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
           This implementation is pinned to an older master. Follow (replay) is a CLI action.

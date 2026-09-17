@@ -146,6 +146,15 @@ export const forgeLineageViewSchema = z
     log: z.array(forgeCommitSchema),
     worktrees: z.array(forgeWorktreeSchema),
     refs: z.record(z.string(), z.string()).default({}),
+    /**
+     * Set when this view came from the MIRROR rather than from the forge — the moment the forge
+     * last answered for this template.
+     *
+     * Null means live. A cached tree is never presented as live: the forge store is the authority
+     * and a mirror can be behind it, so the reader is told how old the answer is rather than left
+     * to assume it is current.
+     */
+    cachedAt: z.string().nullable().default(null),
   })
   .strict();
 export type ForgeLineageView = z.infer<typeof forgeLineageViewSchema>;

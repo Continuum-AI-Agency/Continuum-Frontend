@@ -25,6 +25,7 @@ import {
   ViewTransition,
 } from '@/components/forge/RenderJobDetail';
 import { type JobCheck, renderJobChecks } from '@/components/forge/renderJobChecks';
+import { templateVersionOf, templateVersionTitle } from '@/components/forge/templateVersion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -332,6 +333,23 @@ export function RenderJobsGrid({
         cell: ({ row: { original: job } }) => <ChecksCell job={job} />,
       },
       {
+        id: 'version',
+        header: 'Version',
+        enableSorting: false,
+        cell: ({ row: { original: job } }) => {
+          const view = templateVersionOf(job);
+          return view.state === 'pinned' ? (
+            <span className="font-mono text-xs tabular-nums" title={templateVersionTitle(view)}>
+              {view.short}
+            </span>
+          ) : (
+            <span className="text-muted-foreground text-xs" title={templateVersionTitle(view)}>
+              Unrecorded
+            </span>
+          );
+        },
+      },
+      {
         id: 'outputs',
         header: 'Files',
         enableSorting: false,
@@ -381,6 +399,8 @@ export function RenderJobsGrid({
               templateOf(job),
               setOf(job),
               deliverySearchText(job),
+              // Pasting a digest from a handoff or a Slack thread finds the renders that used it.
+              job.templateSource?.sha256 ?? '',
             ]
               .join(' ')
               .toLowerCase()

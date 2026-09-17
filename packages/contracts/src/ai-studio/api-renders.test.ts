@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  API_RENDER_DESTINATIONS_ROUTE,
   API_RENDER_MEDIA_LIST_MAX,
   apiRenderApprovalSummarySchema,
   apiRenderBatchPreflightRequestSchema,
@@ -7,13 +8,14 @@ import {
   apiRenderCreateDeliveryDestinationRequestSchema,
   apiRenderDeliveryDestinationsResponseSchema,
   apiRenderDeliveryTargetSchema,
+  apiRenderDestinationRoute,
   apiRenderJobListQuerySchema,
   apiRenderJobSchema,
   apiRenderPreflightRequestSchema,
-  apiRenderSlackChannelListResponseSchema,
-  apiRenderTemplateSummarySchema,
   apiRenderPreflightResponseSchema,
+  apiRenderSlackChannelListResponseSchema,
   apiRenderTemplateContractSchema,
+  apiRenderTemplateSummarySchema,
   apiRenderVariableKeySchema,
   compactEncodeBlock,
   encodeContainerOf,
@@ -337,11 +339,10 @@ describe('output settings', () => {
 
   it('merges per leaf inside audio and video, later layers winning', () => {
     expect(
-      mergeEncodeSettings(
-        { fps: 25, audio: { sampleRate: 44100, bitrate: '128k' } },
-        undefined,
-        { audio: { sampleRate: 48000 }, video: { crf: 18 } },
-      ),
+      mergeEncodeSettings({ fps: 25, audio: { sampleRate: 44100, bitrate: '128k' } }, undefined, {
+        audio: { sampleRate: 48000 },
+        video: { crf: 18 },
+      }),
     ).toEqual({ fps: 25, audio: { sampleRate: 48000, bitrate: '128k' }, video: { crf: 18 } });
     expect(mergeEncodeSettings({}, undefined)).toBeUndefined();
     expect(compactEncodeBlock({ default: {}, outputs: { square: {} } })).toBeUndefined();
@@ -429,8 +430,9 @@ describe('delivery targets', () => {
       adStatus: 'PAUSED',
     });
     expect(
-      apiRenderBatchPreflightRequestSchema.parse(batch({ delivery: createTarget, records: [record()] }))
-        .delivery,
+      apiRenderBatchPreflightRequestSchema.parse(
+        batch({ delivery: createTarget, records: [record()] }),
+      ).delivery,
     ).toMatchObject({ action: 'create' });
   });
 
@@ -442,9 +444,9 @@ describe('delivery targets', () => {
     expect(
       apiRenderDeliveryTargetSchema.safeParse({ ...createTarget, adStatus: 'ACTIVE' }).success,
     ).toBe(false);
-    expect(apiRenderDeliveryTargetSchema.safeParse({ ...replaceTarget, adId: undefined }).success).toBe(
-      false,
-    );
+    expect(
+      apiRenderDeliveryTargetSchema.safeParse({ ...replaceTarget, adId: undefined }).success,
+    ).toBe(false);
   });
 
   it('lets a record carry its own delivery', () => {
@@ -522,7 +524,8 @@ describe('Forge Studio seams', () => {
   it('template summaries default displayName to null for an older server', () => {
     expect(apiRenderTemplateSummarySchema.parse(summary).displayName).toBeNull();
     expect(
-      apiRenderTemplateSummarySchema.parse({ ...summary, displayName: 'StarCraft Promo' }).displayName,
+      apiRenderTemplateSummarySchema.parse({ ...summary, displayName: 'StarCraft Promo' })
+        .displayName,
     ).toBe('StarCraft Promo');
   });
 
@@ -599,7 +602,9 @@ describe('Forge Studio seams', () => {
       slack: {
         state: 'ready',
         workspaceName: 'Continuum',
-        destinations: [{ id: DESTINATION, role: 'ops', channelId: 'C1', channelName: 'starcraft-ops' }],
+        destinations: [
+          { id: DESTINATION, role: 'ops', channelId: 'C1', channelName: 'starcraft-ops' },
+        ],
       },
       meta: { connected: false, adAccountId: null, adAccountName: null },
     });
@@ -618,29 +623,95 @@ describe('Forge Studio seams', () => {
       }).channels,
     ).toHaveLength(1);
 
+    for (const role of ['ops', 'client', 'alerts'] as const) {
+      expect(
+        apiRenderCreateDeliveryDestinationRequestSchema.safeParse({
+          brandId: BRAND,
+          role,
+          channelId: 'C1',
+        }).success,
+      ).toBe(true);
+    }
+    // `dm` is addressed by `connection_id`, not a channel: the `chat_destinations_addressed`
+    // CHECK refuses the row and `postToDestination` refuses a non-channel destination outright,
+    // so a dm a Settings hub could "add" could never be posted to. Refused at the contract.
     expect(
       apiRenderCreateDeliveryDestinationRequestSchema.safeParse({
         brandId: BRAND,
-        role: 'ops',
-        channelId: 'C1',
-      }).success,
-    ).toBe(true);
-    // alerts and dm destinations are not created from Forge
-    expect(
-      apiRenderCreateDeliveryDestinationRequestSchema.safeParse({
-        brandId: BRAND,
-        role: 'alerts',
+        role: 'dm',
         channelId: 'C1',
       }).success,
     ).toBe(false);
+  });
+
+  it('a room carries who can decide in it, and the retire path addresses it by id', () => {
+    const withCounts = apiRenderDeliveryDestinationsResponseSchema.parse({
+      slack: {
+        state: 'ready',
+        workspaceName: 'Continuum',
+        destinations: [
+          {
+            id: DESTINATION,
+            role: 'client',
+            channelId: 'C1',
+            channelName: 'starcraft-client',
+            workspaceName: 'Continuum',
+            activeApprovers: 2,
+            requestedApprovers: 1,
+          },
+        ],
+      },
+      meta: { connected: false, adAccountId: null, adAccountName: null },
+    });
+    expect(withCounts.slack.destinations[0]).toMatchObject({
+      activeApprovers: 2,
+      requestedApprovers: 1,
+    });
+    // Optional, because the schema is strict and the Frontend ships before the Backend fills them:
+    // a room from a Backend too old to count them parses, and reads as "unknown", never as zero.
+    const withoutCounts = apiRenderDeliveryDestinationsResponseSchema.parse({
+      ...withCounts,
+      slack: {
+        ...withCounts.slack,
+        destinations: [
+          { id: DESTINATION, role: 'client', channelId: 'C1', channelName: 'starcraft-client' },
+        ],
+      },
+    });
+    expect(withoutCounts.slack.destinations[0]?.activeApprovers).toBeUndefined();
+    // A count is a whole number of people.
+    for (const activeApprovers of [-1, 1.5]) {
+      expect(
+        apiRenderDeliveryDestinationsResponseSchema.safeParse({
+          ...withCounts,
+          slack: {
+            ...withCounts.slack,
+            destinations: [{ ...withCounts.slack.destinations[0], activeApprovers }],
+          },
+        }).success,
+      ).toBe(false);
+    }
+
+    expect(apiRenderDestinationRoute(DESTINATION)).toBe(
+      `${API_RENDER_DESTINATIONS_ROUTE}/${DESTINATION}`,
+    );
   });
 });
 
 describe('delivery target account name', () => {
   it('both arms carry an optional adAccountName', () => {
     const base = { adAccountId: 'act_1', campaignId: 'c', adsetId: 's' };
-    expect(apiRenderDeliveryTargetSchema.parse({ ...base, adAccountName: 'StarCraft Ads' })).toMatchObject({ adAccountName: 'StarCraft Ads' });
-    expect(apiRenderDeliveryTargetSchema.parse({ ...base, action: 'replace', adId: 'a', adAccountName: 'StarCraft Ads' })).toMatchObject({ adAccountName: 'StarCraft Ads' });
+    expect(
+      apiRenderDeliveryTargetSchema.parse({ ...base, adAccountName: 'StarCraft Ads' }),
+    ).toMatchObject({ adAccountName: 'StarCraft Ads' });
+    expect(
+      apiRenderDeliveryTargetSchema.parse({
+        ...base,
+        action: 'replace',
+        adId: 'a',
+        adAccountName: 'StarCraft Ads',
+      }),
+    ).toMatchObject({ adAccountName: 'StarCraft Ads' });
     expect(apiRenderDeliveryTargetSchema.parse(base)).not.toHaveProperty('adAccountName');
   });
 });
@@ -650,14 +721,20 @@ describe('approval destinations and the package summary', () => {
   const PACKAGE = '00000000-0000-4000-8000-0000000000a1';
   const summary = {
     packageId: PACKAGE,
-    destinations: [{ id: DESTINATION, platform: 'whatsapp', name: 'Vivo approvals', activeApprovers: 0 }],
+    destinations: [
+      { id: DESTINATION, platform: 'whatsapp', name: 'Vivo approvals', activeApprovers: 0 },
+    ],
     warning: 'Nobody can approve yet.',
   };
 
   it('both preflight requests take approval destinations, and refuse a non-uuid', () => {
     expect(
       apiRenderBatchPreflightRequestSchema.parse(
-        batch({ delivery: createTarget, records: [record()], approvalDestinationIds: [DESTINATION] }),
+        batch({
+          delivery: createTarget,
+          records: [record()],
+          approvalDestinationIds: [DESTINATION],
+        }),
       ).approvalDestinationIds,
     ).toEqual([DESTINATION]);
     expect(
@@ -706,8 +783,8 @@ describe('approval destinations and the package summary', () => {
       effects: 'none',
     };
     expect(apiRenderBatchPreflightResponseSchema.parse(response).approval).toBeNull();
-    expect(apiRenderBatchPreflightResponseSchema.parse({ ...response, approval: summary }).approval).toEqual(
-      summary,
-    );
+    expect(
+      apiRenderBatchPreflightResponseSchema.parse({ ...response, approval: summary }).approval,
+    ).toEqual(summary);
   });
 });

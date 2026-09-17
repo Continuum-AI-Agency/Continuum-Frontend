@@ -444,6 +444,32 @@ describe('RenderPreviewPanel', () => {
     );
   });
 
+  test('the pane says what the template delivers — a still, or seconds of video', () => {
+    const withMotion = (motion: unknown) =>
+      ({
+        ...CONTRACT,
+        template: { ...CONTRACT.template, motion },
+      }) as unknown as ApiRenderTemplateContract;
+    const props = { brandId: BRAND, rows: rowWith('Hola'), rowId: ROW, renderSetId: null };
+    // Template 133: three delivery comps, each 0.033367s at 29.97 — one frame, a jpeg.
+    const { rerender } = render(
+      <RenderPreviewPanel
+        {...props}
+        contract={withMotion({ durationSec: 0.033367, frameRate: 29.970001 })}
+      />,
+    );
+    expect(screen.getByText('Still · 1 frame')).toBeTruthy();
+
+    rerender(
+      <RenderPreviewPanel {...props} contract={withMotion({ durationSec: 6, frameRate: 30 })} />,
+    );
+    expect(screen.getByText('6.0s · 30 fps')).toBeTruthy();
+
+    // Unparsed says nothing rather than calling an unread template a still.
+    rerender(<RenderPreviewPanel {...props} contract={withMotion(null)} />);
+    expect(screen.queryAllByText(/^(Still ·|\d+\.\d+s ·)/)).toHaveLength(0);
+  });
+
   test('no selected row shows the hint', () => {
     render(
       <RenderPreviewPanel

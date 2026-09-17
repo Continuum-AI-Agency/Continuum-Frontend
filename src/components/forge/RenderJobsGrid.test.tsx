@@ -242,6 +242,27 @@ describe('RenderJobsGrid', () => {
     expect(listTemplates).not.toHaveBeenCalled();
   }, 30_000);
 
+  test('the Version column reads the exact template bytes a render used, and names the gap when it has none', async () => {
+    const SHA = `${'a1b2c3d4e5'.repeat(6)}f1b2`;
+    const pinned: ApiRenderJob = {
+      ...BASE,
+      id: 'job-pinned',
+      label: 'Pinned',
+      templateSource: { assetId: 'asset-1', versionId: 'ver-1', sha256: SHA },
+    };
+    await renderLedger([pinned, { ...BASE, id: 'job-legacy', label: 'Legacy' }], []);
+    // The digest, elided the same way the lineage panel elides it.
+    expect(screen.getByText('a1b2c3d4e5…')).toBeTruthy();
+    // ...and the render whose bytes nobody recorded says so, rather than showing an empty cell
+    // that reads like "nothing to see here".
+    expect(screen.getByText('Unrecorded')).toBeTruthy();
+    // Pasting a digest out of a handoff finds the renders that used it.
+    fireEvent.change(screen.getByLabelText('Search renders'), { target: { value: SHA } });
+    const table = () => screen.getByRole('table').textContent ?? '';
+    expect(table()).toContain('Pinned');
+    expect(table()).not.toContain('Legacy');
+  }, 30_000);
+
   test('groups by template display name with counts and a status summary, collapsible', async () => {
     await renderLedger([MADRID, ROMA, PROMO], [TEMPLATE]);
     const starcraft = screen.getByRole('button', { name: /StarCraft Promo/ });

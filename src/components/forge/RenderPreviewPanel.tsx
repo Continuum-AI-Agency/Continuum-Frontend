@@ -1,11 +1,12 @@
 'use client';
 
-import type {
-  ApiRenderInputValue,
-  ApiRenderJob,
-  ApiRenderTemplateContract,
-  ApiRenderTemplateLayout,
-  ApiRenderVariable,
+import {
+  type ApiRenderInputValue,
+  type ApiRenderJob,
+  type ApiRenderTemplateContract,
+  type ApiRenderTemplateLayout,
+  type ApiRenderVariable,
+  motionLabel,
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type JSX, useEffect, useState } from 'react';
@@ -419,6 +420,7 @@ export function RenderPreviewPanel({
     );
   }
 
+  const motion = motionLabel(contract.template.motion);
   const values = effectiveValues(rows, rowId);
   const media = effectiveMedia(rows, rowId);
   const scopedIds = effectiveOutputIds(rows, rowId);
@@ -442,7 +444,11 @@ export function RenderPreviewPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 p-2 text-xs">
-      <div className="truncate font-medium">{row.label.trim() || 'Untitled'}</div>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="truncate font-medium">{row.label.trim() || 'Untitled'}</span>
+        {/* What this template DELIVERS. A one-frame comp and a 15s one draw the same boxes. */}
+        {motion ? <span className="shrink-0 text-2xs text-muted-foreground">{motion}</span> : null}
+      </div>
       {format ? (
         <FormatPreview
           label="Row preview"
