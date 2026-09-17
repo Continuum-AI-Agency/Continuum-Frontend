@@ -359,6 +359,7 @@ export function useJainaChatStream() {
         return { error: message };
       }
 
+      let abortError: string | undefined;
       try {
         const token = await getAccessToken();
         const response = await fetch('/api/agents/jaina/chat/stream', {
@@ -389,6 +390,7 @@ export function useJainaChatStream() {
           clearWatchdog();
           watchdogRef.current = setTimeout(async () => {
             const surfaceStall = () => {
+              abortError = 'Jaina stopped responding. Please try again.';
               controller.abort();
               setState((prev) =>
                 prev.status === 'complete' || prev.status === 'error'
@@ -396,7 +398,7 @@ export function useJainaChatStream() {
                   : {
                       ...prev,
                       status: 'error',
-                      error: 'Jaina stopped responding. Please try again.',
+                      error: abortError,
                     },
               );
             };
@@ -442,11 +444,12 @@ export function useJainaChatStream() {
               return;
             }
             if (runStatus === 'failed') {
+              abortError = runErrorMessage || 'Jaina run failed.';
               controller.abort();
               setState((prev) => ({
                 ...prev,
                 status: 'error',
-                error: runErrorMessage || 'Jaina run failed.',
+                error: abortError,
               }));
               return;
             }
@@ -503,11 +506,10 @@ export function useJainaChatStream() {
         // At most one coalescing window of frames, belonging to a turn that just died. Folding
         // them would paint content underneath the error banner.
         discardPendingEvents();
-        const message = error instanceof Error ? error.message : 'Stream failed';
-        if (!controller.signal.aborted) {
-          setState((prev) => ({ ...prev, status: 'error', error: message }));
-          input.onDispatchError?.(message);
-        }
+        if (controller.signal.aborted && !abortError) return {};
+        const message = abortError ?? (error instanceof Error ? error.message : 'Stream failed');
+        setState((prev) => ({ ...prev, status: 'error', error: message }));
+        input.onDispatchError?.(message);
         return { error: message };
       }
 

@@ -975,9 +975,8 @@ export function mergePersistedMessagesWithLocal(
   persistedMessages: JainaChatMessage[],
   localMessages: JainaChatMessage[],
 ): JainaChatMessage[] {
-  if (persistedMessages.length === 0 || localMessages.length === 0) {
-    return persistedMessages;
-  }
+  if (persistedMessages.length === 0) return localMessages;
+  if (localMessages.length === 0) return persistedMessages;
 
   // Local messages with non-"persisted-" IDs are optimistic — they were added to
   // local state while the backend was still writing. The previous implementation

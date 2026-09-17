@@ -10,6 +10,25 @@ const baseUserMessage: JainaChatMessage = {
 };
 
 describe('mergePersistedMessagesWithLocal', () => {
+  it('keeps a completed local answer while persistence is still empty', () => {
+    const local: JainaChatMessage[] = [
+      {
+        ...baseUserMessage,
+        id: 'local-user',
+      },
+      {
+        id: 'local-assistant',
+        role: 'assistant',
+        content: 'Completed Diana analysis with a downloadable report.',
+        createdAt: '2026-04-17T09:20:05.000Z',
+        status: 'done',
+        renderAsReport: true,
+      },
+    ];
+
+    expect(mergePersistedMessagesWithLocal([], local)).toEqual(local);
+  });
+
   it('preserves pending local assistant when only the user message is persisted', () => {
     const persisted: JainaChatMessage[] = [
       {
