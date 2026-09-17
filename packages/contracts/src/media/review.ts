@@ -40,6 +40,13 @@ export const transitionAssetReviewOperationSchema = reviewTransitionRequestSchem
 export const reviewTransitionResponseSchema = z
   .object({
     assetId: z.string().min(1),
+    // The head version at the moment of the transition. The Creative Operations
+    // edge function has always returned this; the schema did not declare it, and
+    // `.strict()` turned a LANDED review change into a thrown parse error on both
+    // the MCP tool and the Frontend's Library review panel. Optional because the
+    // Next route (/api/library/review) builds this envelope itself and has no
+    // version in hand, and nullable because an asset need not have a head version.
+    versionId: z.string().min(1).nullable().optional(),
     reviewStatus: mediaReviewStatusSchema,
     reviewStatusUpdatedAt: z.string().nullable(),
     changed: z.boolean(),

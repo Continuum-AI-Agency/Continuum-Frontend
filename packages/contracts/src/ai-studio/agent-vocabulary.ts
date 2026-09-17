@@ -57,6 +57,18 @@ const formatHandle = (type: StudioNodeType, handle: string): string => {
 // is a field on `export`, `plannerDraft` AND `paidPublisher`, and `mode` is a field on
 // both `designRef` and `plannerDraft`. A bare hint would print one node's legal values
 // on the other two. Every value is read off the schema or const that enforces it.
+/**
+ * The one instruction that sends an agent to a tool by NAME.
+ *
+ * Exported, not inlined, because both surfaces read it and only one of them used to
+ * be able to obey it: the in-canvas composer agent owns a `list_elements` tool, while
+ * an MCP agent read this same sentence out of help_describe and had no such tool to
+ * call. `App/mcp/tools/__tests__/elements.list.spec.ts` asserts the MCP tool's name
+ * against this string, so the instruction and the tool cannot drift apart again.
+ */
+export const ELEMENT_NODE_ELEMENT_ID_HINT =
+  'a saved element id from the list_elements tool — never invent one';
+
 const CONFIG_FIELD_HINTS: Record<string, string> = {
   imageSize: `${IMAGE_SIZES.join('|')} — MODEL-DEPENDENT, see below`,
   aspectRatio: '16:9, 9:16, 1:1, …',
@@ -82,7 +94,7 @@ const CONFIG_FIELD_HINTS: Record<string, string> = {
   'designRef.section': DESIGN_SECTIONS.join('|'),
   'designRef.mode': designRefModeSchema.options.join('|'),
   'export.format': `${IMAGE_EXPORT_FORMATS.join('|')} for a still, ${VIDEO_EXPORT_FORMATS.join('|')} for a clip — ids are case-exact`,
-  'element.elementId': 'a saved element id from the list_elements tool — never invent one',
+  'element.elementId': ELEMENT_NODE_ELEMENT_ID_HINT,
 };
 
 const formatConfigField = (type: StudioNodeType, field: string): string => {

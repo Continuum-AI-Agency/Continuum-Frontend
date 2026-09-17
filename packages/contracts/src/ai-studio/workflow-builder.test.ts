@@ -279,6 +279,83 @@ describe('applyOps', () => {
     expect((refNode?.data as Record<string, unknown>).sourcePath).toBeUndefined();
   });
 
+  // The asset's real dimensions are known at attach time, so a 9:16 photo must not
+  // land in the 1:1 box `image` nodes are born in — the browser only re-snaps when the
+  // detected ratio DISAGREES with data.aspectRatio, so a wrong ratio there is permanent.
+  it('sizes an image node to the aspect ratio of the asset it just attached', () => {
+    const withImg = applyOps(seed(), [{ op: 'add_node', ref: 'ref', type: 'image' }]).graph;
+    const { graph, errors } = applyOps(withImg, [
+      {
+        op: 'attach_media',
+        id: 'ref',
+        media: {
+          bucket: 'media-library',
+          storagePath: 'b/tall.png',
+          fileName: 'tall.png',
+          mediaKind: 'image',
+          width: 1080,
+          height: 1920,
+        },
+      },
+    ]);
+
+    expect(errors).toEqual([]);
+    const refNode = graph.nodes.find((n) => n.id === 'ref');
+    expect((refNode?.data as Record<string, unknown>).aspectRatio).toBe('9:16');
+    expect(refNode?.style?.height).toBeGreaterThan(refNode?.style?.width ?? 0);
+    expect(refNode?.height).toBe(refNode?.style?.height as number);
+    expect(refNode?.width).toBe(refNode?.style?.width as number);
+  });
+
+  it('leaves the declared aspect ratio alone when the asset has no dimensions', () => {
+    const withImg = applyOps(seed(), [{ op: 'add_node', ref: 'ref', type: 'image' }]).graph;
+    const { graph } = applyOps(withImg, [
+      {
+        op: 'attach_media',
+        id: 'ref',
+        media: {
+          bucket: 'media-library',
+          storagePath: 'b/ref.png',
+          fileName: 'ref.png',
+          mediaKind: 'image',
+        },
+      },
+    ]);
+    const refNode = graph.nodes.find((n) => n.id === 'ref');
+    expect((refNode?.data as Record<string, unknown>).aspectRatio).toBe('1:1');
+  });
+
+  // add_node ran its config through coerceNodeConfig and THREW THE CHANGES AWAY, so an
+  // invalid key was stored as `{}` with nothing said — a lost placement nobody could see.
+  it('rejects an invalid action config on add_node instead of storing {} in silence', () => {
+    const { graph, errors } = applyOps(seed(), [
+      {
+        op: 'add_node',
+        ref: 'burn',
+        type: 'action',
+        data: { actionId: 'image.text', config: { anchor: 'bottom' } },
+      },
+    ]);
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('burn');
+    expect(errors[0]).toContain('anchor');
+    const burn = graph.nodes.find((n) => n.id === 'burn');
+    expect((burn?.data as { config: Record<string, unknown> }).config).toEqual({});
+  });
+
+  it('says nothing when the action config is valid', () => {
+    const { errors } = applyOps(seed(), [
+      {
+        op: 'add_node',
+        ref: 'burn',
+        type: 'action',
+        data: { actionId: 'image.text', config: { anchor: 'bottom-left' } },
+      },
+    ]);
+    expect(errors).toEqual([]);
+  });
+
   it('merges node data on update_node', () => {
     const { graph } = applyOps(seed(), [
       { op: 'update_node', id: 'img', data: { positivePrompt: 'studio light' } },
@@ -560,6 +637,40 @@ describe('set_timeline', () => {
     expect(errors[0]).toContain('media-in');
     // The op is all-or-nothing: a half-applied cut is worse than no cut.
     expect(graph.nodes.find((n) => n.id === 'cut')?.data.items).toEqual([]);
+  });
+
+  // A clip from a generator that has not run yet carries no media. Placing it is a
+  // legitimate order of work, so this is a WARNING — but silence made a timeline that
+  // looked built and rendered empty.
+  it('warns when a placed clip carries no media yet, and still lays the cut down', () => {
+    const { graph, errors, warnings } = applyOps(timelineGraph(), [
+      { op: 'set_timeline', id: 'cut', items: [{ sourceNodeId: 'clip-a', order: 0 }] },
+    ]);
+
+    expect(errors).toEqual([]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('clip-a');
+    expect(graph.nodes.find((n) => n.id === 'cut')?.data.items).toHaveLength(1);
+  });
+
+  it('says nothing about a clip that already carries media', () => {
+    const ready = applyOps(timelineGraph(), [
+      {
+        op: 'attach_media',
+        id: 'clip-a',
+        media: {
+          bucket: 'media-library',
+          storagePath: 'b/a.mp4',
+          fileName: 'a.mp4',
+          mediaKind: 'video',
+        },
+      },
+    ]).graph;
+
+    const { warnings } = applyOps(ready, [
+      { op: 'set_timeline', id: 'cut', items: [{ sourceNodeId: 'clip-a', order: 0 }] },
+    ]);
+    expect(warnings).toEqual([]);
   });
 
   it('rejects the op on anything that is not a timelineEditor', () => {

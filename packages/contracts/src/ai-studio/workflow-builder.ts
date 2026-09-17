@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { batchItemType } from './batch-node';
+import { nodeCarriesMedia } from './canvas-render';
+import { simplifyAspectRatio, snapNodeDimensionsToAspectRatio } from './node-sizing';
 import {
   batchLockedType,
   coerceNodeConfig,
-  createNodeData,
+  createNodeDataChecked,
   type GraphEdgeLike,
   type GraphNodeLike,
   getAllowedSourceHandles,
@@ -291,15 +293,15 @@ function makeNode(
   id: string,
   type: string,
   dataOverrides: Record<string, unknown> = {},
-): WorkflowNode {
-  const { data, style } = createNodeData(type as StudioNodeType, dataOverrides);
+): { node: WorkflowNode; changes: string[] } {
+  const { data, style, changes } = createNodeDataChecked(type as StudioNodeType, dataOverrides);
   const node: WorkflowNode = { id, type, position: { x: 0, y: 0 }, data };
   if (style) {
     node.style = style;
     node.width = style.width;
     node.height = style.height;
   }
-  return node;
+  return { node, changes: changes.map((change) => `node "${id}": ${change}`) };
 }
 
 // ---------------------------------------------------------------------------
@@ -374,7 +376,11 @@ export function buildWorkflowGraph(
       continue;
     }
     seen.add(spec.ref);
-    nodes.push(makeNode(spec.ref, spec.type, spec.data));
+    const made = makeNode(spec.ref, spec.type, spec.data);
+    nodes.push(made.node);
+    // A build is all-or-nothing under `failOnError`, so a coerced config is reported
+    // here rather than aborting the whole fragment over one dropped key.
+    warnings.push(...made.changes);
   }
 
   const edges: WorkflowEdge[] = [];
@@ -505,6 +511,9 @@ export interface AttachMediaInput {
   fileName?: string;
   mediaKind: WorkflowMediaKind;
   referenceType?: string;
+  /** The asset's real pixel size, when the Library knows it — see `attach_media`. */
+  width?: number;
+  height?: number;
 }
 
 export type WorkflowEditOp =
@@ -523,6 +532,8 @@ export type WorkflowEditOp =
 export interface ApplyResult {
   graph: WorkflowGraph;
   errors: string[];
+  /** Applied, but worth saying out loud — the caller reports these without refusing. */
+  warnings: string[];
 }
 
 const REFERENCE_NODE_KIND: Record<string, WorkflowMediaKind> = {
@@ -551,6 +562,7 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
   let nodes: WorkflowNode[] = [...graph.nodes];
   let edges: WorkflowEdge[] = [...graph.edges];
   const errors: string[] = [];
+  const warnings: string[] = [];
 
   const replaceNode = (id: string, mutate: (node: WorkflowNode) => WorkflowNode): boolean => {
     const index = nodes.findIndex((n) => n.id === id);
@@ -570,7 +582,12 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
           errors.push(`unknown node type "${op.type}"`);
           break;
         }
-        nodes = [...nodes, makeNode(op.ref, op.type, op.data)];
+        const made = makeNode(op.ref, op.type, op.data);
+        // Rejections, not warnings: `update_node` has always reported a dropped config
+        // key this way, and an add that says nothing is how `{anchor:"bottom"}` became
+        // a stored `{}` nobody could see.
+        errors.push(...made.changes);
+        nodes = [...nodes, made.node];
         break;
       }
       case 'remove_node': {
@@ -659,8 +676,28 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
           errors.push(`cannot attach ${op.media.mediaKind} to a ${node.type} node`);
           break;
         }
+        // An `image` node is born 1:1 and the browser only re-snaps when the ratio it
+        // DETECTS disagrees with `data.aspectRatio` — so a 9:16 photo attached under a
+        // stale 1:1 renders square forever. The Library knows the real pixels here.
+        const ratio =
+          node.type === 'image' && op.media.width && op.media.height
+            ? simplifyAspectRatio(op.media.width, op.media.height)
+            : null;
+        // Mirrors ImageNode.tsx's own snap so the agent and the canvas size the node
+        // the same way.
+        const box = ratio
+          ? snapNodeDimensionsToAspectRatio({
+              aspectRatio: ratio,
+              currentWidth: node.style?.width ?? node.width,
+              currentHeight: node.style?.height ?? node.height,
+              minWidth: 200,
+              minHeight: 200,
+              fallbackWidth: 200,
+            })
+          : null;
         replaceNode(op.id, (n) => ({
           ...n,
+          ...(box ? { style: { ...n.style, ...box }, width: box.width, height: box.height } : {}),
           data: {
             ...n.data,
             // Written even when undefined: attaching different media to a node
@@ -670,6 +707,7 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
             sourcePath: op.media.storagePath,
             bucket: op.media.bucket,
             fileName: op.media.fileName,
+            ...(ratio ? { aspectRatio: ratio } : {}),
             ...(node.type === 'image'
               ? { referenceType: op.media.referenceType ?? 'default' }
               : {}),
@@ -717,6 +755,18 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
           break;
         }
 
+        // Pooled but empty: a clip whose generator has not run yet. Legitimate order of
+        // work, so this does not refuse — but assembling a timeline out of nodes that
+        // hold nothing produced a cut that LOOKED built and rendered empty.
+        const empty = [...new Set(op.items.map((item) => item.sourceNodeId))].filter((id) =>
+          nodes.some((n) => n.id === id && !nodeCarriesMedia(n.data)),
+        );
+        if (empty.length > 0) {
+          warnings.push(
+            `timeline "${op.id}" places ${empty.join(', ')}, which hold no media yet — run those nodes before rendering or the cut comes out empty`,
+          );
+        }
+
         const items = [...op.items]
           .sort((a, b) => a.order - b.order)
           .map((item, index) => ({
@@ -734,7 +784,7 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
 
   const graphOut: WorkflowGraph = { nodes: stampDerivedLocks(nodes, edges), edges };
   if (graph.metadata) graphOut.metadata = graph.metadata;
-  return { graph: graphOut, errors };
+  return { graph: graphOut, errors, warnings };
 }
 
 function connectNodes(

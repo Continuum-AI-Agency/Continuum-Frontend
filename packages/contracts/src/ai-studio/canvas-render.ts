@@ -139,6 +139,20 @@ const SOURCE_IDENTITY_FIELDS = [
   'image',
 ] as const;
 
+/**
+ * True when this node already holds (or has generated) media a timeline can cut.
+ *
+ * Reads the same fields the render fingerprint does, minus `generationSignature` —
+ * that is a receipt of a run, not a frame. A `set_timeline` that places a node failing
+ * this renders nothing, and used to say nothing about it.
+ */
+export const nodeCarriesMedia = (data: Record<string, unknown> | undefined): boolean =>
+  SOURCE_IDENTITY_FIELDS.some((field) => {
+    if (field === 'generationSignature') return false;
+    const value = data?.[field];
+    return value !== undefined && value !== null && value !== '';
+  });
+
 const DURABLE_SOURCE_IDENTITY_FIELDS = [
   'generatedVideoStoragePath',
   'generatedVideoBucket',

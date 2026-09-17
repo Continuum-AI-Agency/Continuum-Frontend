@@ -1758,19 +1758,41 @@ export interface NodeCreationResult {
   style?: Record<string, number>;
 }
 
-export function createNodeData(
+export interface CheckedNodeCreationResult extends NodeCreationResult {
+  /** What `coerceNodeConfig` had to drop or rewrite to make this node legal. */
+  changes: string[];
+}
+
+/**
+ * `createNodeData` plus the coercion report it would otherwise swallow.
+ *
+ * An `add_node` carrying an invalid action config stored `{}` and said NOTHING, so a
+ * placement the caller set was lost with no way to notice — `update_node` had reported
+ * the same class of change since day one. Creation paths that can answer a caller
+ * (the agent write path) take this one; the browser's node menus, which have nobody to
+ * report to and spread the result straight into a node, keep `createNodeData`.
+ */
+export function createNodeDataChecked(
   type: StudioNodeType,
   overrides: Record<string, unknown> = {},
-): NodeCreationResult {
+): CheckedNodeCreationResult {
   const base = baseNodeData(type);
   const merged = { ...base.data, ...overrides };
-  const { data } = coerceNodeConfig(type, merged);
+  const { data, changes } = coerceNodeConfig(type, merged);
 
   for (const key of Object.keys(data)) {
     if (data[key] === undefined) delete data[key];
   }
 
   const style = nodeStyleFor(type, data) ?? base.style;
+  return style ? { data, style, changes } : { data, changes };
+}
+
+export function createNodeData(
+  type: StudioNodeType,
+  overrides: Record<string, unknown> = {},
+): NodeCreationResult {
+  const { data, style } = createNodeDataChecked(type, overrides);
   return style ? { data, style } : { data };
 }
 
