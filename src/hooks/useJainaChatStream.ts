@@ -208,15 +208,15 @@ export function useJainaChatStream() {
   // Fold everything buffered since the last flush in ONE state update. Coalescing is exact —
   // deltas are string concatenation — so the resulting state matches a per-line fold byte for
   // byte (`stream.coalesce.test.ts` asserts exactly that).
-  const flushPendingEvents = useCallback(() => {
+  const flushPendingEvents = useCallback((deferred = true) => {
     clearFlushTimer();
     const batch = pendingEventsRef.current;
     if (batch.length === 0) return;
     pendingEventsRef.current = [];
     const coalesced = coalesceJainaStreamEvents(batch);
-    startTransition(() => {
-      setState((prev) => coalesced.reduce(reduceJainaStreamEvent, prev));
-    });
+    const fold = () => setState((prev) => coalesced.reduce(reduceJainaStreamEvent, prev));
+    if (deferred) startTransition(fold);
+    else fold();
   }, [clearFlushTimer]);
 
   // Abandoning the view (detach/cancel/reset) drops the buffer rather than folding it: the state
@@ -487,7 +487,7 @@ export function useJainaChatStream() {
         if (controller.signal.aborted) {
           discardPendingEvents();
         } else {
-          flushPendingEvents();
+          flushPendingEvents(false);
         }
 
         // Reader closed. If a terminal frame already set complete/error, keep it.

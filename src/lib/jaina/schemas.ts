@@ -1226,6 +1226,7 @@ export const jainaStreamEventSchema = z.union([
   z.object({ type: z.literal('agent.narration'), data: agentNarrationEventSchema }),
   z.object({ type: z.literal('canvas.context.loaded'), data: z.record(z.string(), z.unknown()) }),
   responseCheckpointReportSchema,
+  responseBlockDeltaV2TolerantSchema,
   responseBlockDeltaSchema,
   responseReportAssemblySchema,
   responseReportArtifactJobStartedSchema,

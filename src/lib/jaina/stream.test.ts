@@ -2102,6 +2102,31 @@ describe('reduceJainaStreamEvent tool hydration compatibility', () => {
 });
 
 describe('parseJainaStreamEvent compatibility guards', () => {
+  it('accepts canonical V2 response.block.delta events', () => {
+    const event = parseJainaStreamEvent(
+      JSON.stringify({
+        type: 'response.block.delta',
+        data: {
+          sequence: 1,
+          source: 'structured_output',
+          agent: 'Jaina_blocks',
+          block_category: 'metric_grid',
+          block: {
+            block_id: 'ad_metrics',
+            category: 'metric_grid',
+            scope: 'ad',
+            title: 'Ad metrics',
+            priority: 'primary',
+            metrics: [{ label: 'Spend', value: 686.46, unit: 'USD', format: 'currency' }],
+          },
+        },
+      }),
+    );
+
+    expect(event).not.toBeNull();
+    expect(event?.type).toBe('response.block.delta');
+  });
+
   it('accepts canonical response.block.delta events', () => {
     const event = parseJainaStreamEvent(
       JSON.stringify({

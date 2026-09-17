@@ -80,6 +80,7 @@ const APPROVAL = {
 
 const LIVE_PROMPT =
   'Show live communication angle × individual creative × audience segment performance for the last 30 days.';
+const FINAL_SHELL_PROMPT = 'Render the ad metrics and keep them visible when the response completes.';
 const SCROLL_PROMPT = 'Stream a long campaign analysis while I review earlier sections.';
 const LIVE_DATASET_ID = 'live-creative-audience:browser-fixture';
 const LIVE_ROW_ID = 'row:browser-fixture-alpha-25-34-female';
@@ -375,6 +376,78 @@ function liveReportStreamBody(): string {
   return frames.map((frame) => serializeFrame(frame, mint(seq++))).join('');
 }
 
+function finalShellStreamBody(): string {
+  const mint = createEnvelopeMint();
+  let seq = 0;
+  const frames = [
+    {
+      type: 'response.created',
+      data: {
+        id: `resp_final_shell_${RUN_ID}`,
+        object: 'realtime.response' as const,
+        status: 'in_progress',
+      },
+    },
+    {
+      type: 'response.run.created',
+      data: { run_id: `run_final_shell_${RUN_ID}`, session_id: null },
+    },
+    {
+      type: 'response.block.delta',
+      data: {
+        sequence: 1,
+        source: 'structured_output',
+        agent: 'Jaina_blocks',
+        block_category: 'metric_grid',
+        block: {
+          block_id: 'ad_metrics',
+          category: 'metric_grid',
+          scope: 'ad',
+          title: 'Ad metrics',
+          priority: 'primary',
+          metrics: [{ label: 'Spend', value: 686.46, unit: 'USD', format: 'currency' }],
+        },
+      },
+    },
+    {
+      type: 'response.checkpoint_report',
+      data: {
+        item_id: `item_final_shell_${RUN_ID}`,
+        part_id: 'part_final_shell',
+        report: {
+          language: 'en',
+          executive_summary: 'Performance metrics for the ad.',
+          reasoning_trace: '',
+          blocks: [],
+          follow_up_questions: [],
+          media_map: {},
+          handoff_trace: [],
+          execution_objectives: [],
+          cached_sources: [],
+          _meta: {
+            schema_version: '2',
+            block_count: 0,
+            has_charts: false,
+            has_media: false,
+            primary_scope: 'ad',
+          },
+        },
+      },
+    },
+    {
+      type: 'response.done',
+      data: {
+        id: `resp_final_shell_${RUN_ID}`,
+        object: 'realtime.response' as const,
+        status: 'completed',
+        status_details: null,
+        output: [],
+      },
+    },
+  ];
+  return frames.map((frame) => serializeFrame(frame, mint(seq++))).join('');
+}
+
 function scrollStreamChunks(): string[] {
   const mint = createEnvelopeMint();
   let seq = 0;
@@ -528,7 +601,9 @@ test.describe('jaina tool approval card', () => {
           ? denialStreamBody()
           : body.query === LIVE_PROMPT
             ? liveReportStreamBody()
-            : approvalStreamBody(),
+            : body.query === FINAL_SHELL_PROMPT
+              ? finalShellStreamBody()
+              : approvalStreamBody(),
       });
     });
 
@@ -761,6 +836,21 @@ test.describe('jaina tool approval card', () => {
       true,
       '0 Meta/model writes; only preview and delivery acknowledgements were fixture-routed',
     );
+  });
+
+  test('keeps a streamed metric block rendered after an empty final checkpoint shell', async () => {
+    await page.goto('/scale?tab=jaina', { waitUntil: 'domcontentloaded' });
+    const composer = page.getByRole('textbox', { name: 'Message Jaina' });
+    await expect(composer).toBeVisible({ timeout: 180_000 });
+    await composer.fill(FINAL_SHELL_PROMPT);
+    await composer.press('Enter');
+
+    await expect(page.getByRole('button', { name: 'Analysis complete' })).toBeVisible();
+    await expect(page.getByText('Ad metrics', { exact: true })).toBeVisible();
+    await expect(page.getByText('Spend', { exact: true })).toBeVisible();
+    await expect(page.getByText(/686\.46/)).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Report modules' })).toBeVisible();
+    grade('stream.final_shell_retains_blocks', true, 'the completed response kept its metric block');
   });
 
   test('keeps manual scrolling responsive while a long response streams', async () => {
