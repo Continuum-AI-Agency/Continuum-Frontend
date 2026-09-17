@@ -12,7 +12,38 @@ const uploadMediaAsset = mock(async () => ({
   previewState: 'ready' as const,
 }));
 
+const uploadEphemeralChatDocument = mock(async () => ({
+  documentId: 'document-1',
+  storagePath: 'brand-1/document-1/v1/pasted-text.txt',
+  name: 'pasted-text.txt',
+  expiresAt: '2026-10-01T00:00:00.000Z',
+}));
+
+let documentRows: Record<string, unknown>[] = [];
+const selectDocumentRows = mock(async () => ({ data: documentRows, error: null }));
+const selectDocuments = mock(() => ({ in: selectDocumentRows }));
+const fromDocuments = mock(() => ({ select: selectDocuments }));
+const schemaDocuments = mock(() => ({ from: fromDocuments }));
+
+type RealtimeSubscription = {
+  bindings: Array<{ onRow: (row: Record<string, unknown>) => void }>;
+  onSubscribed?: () => void | Promise<void>;
+};
+let realtimeSubscription: RealtimeSubscription | null = null;
+const subscribeToPostgresChanges = mock((subscription: RealtimeSubscription) => {
+  realtimeSubscription = subscription;
+  return () => {};
+});
+
 mock.module('@/lib/library/uploadMediaAsset', () => ({ uploadMediaAsset }));
+mock.module('@/lib/documents/uploadEphemeralChatDocument', () => ({
+  uploadEphemeralChatDocument,
+}));
+mock.module('@/lib/supabase/client', () => ({
+  createSupabaseBrowserClient: () => ({ schema: schemaDocuments }),
+}));
+mock.module('@/lib/supabase/realtime', () => ({ subscribeToPostgresChanges }));
+mock.module('@/components/documents/useDocuments', () => ({ STALE_PROCESSING_MS: 100 }));
 
 const { MAX_ATTACHMENT_BYTES, useChatAttachments } = await import('./useChatAttachments');
 
@@ -37,6 +68,10 @@ function renderController() {
 describe('useChatAttachments', () => {
   beforeEach(() => {
     uploadMediaAsset.mockClear();
+    uploadEphemeralChatDocument.mockClear();
+    selectDocumentRows.mockClear();
+    documentRows = [];
+    realtimeSubscription = null;
   });
 
   afterEach(() => {
@@ -120,6 +155,83 @@ describe('useChatAttachments', () => {
     await waitFor(() => expect(result.current.files[0]?.status).toBe('ready'));
     expect(result.current.files[0]?.assetId).toBe('asset-9');
     expect(uploadMediaAsset).toHaveBeenCalledTimes(2);
+  });
+
+  it('backfills a document that finished indexing before realtime subscribed', async () => {
+    documentRows = [
+      {
+        id: 'document-1',
+        status: 'ready',
+        progress_step: 'ready',
+        error_message: null,
+        updated_at: '2026-09-17T18:20:00.000Z',
+      },
+    ];
+    const { result } = renderController();
+
+    act(() => {
+      result.current.add([makeFile('pasted-text.txt', 'text/plain', 2048)]);
+    });
+    await waitFor(() => expect(result.current.files[0]?.status).toBe('indexing'));
+    expect(realtimeSubscription).not.toBeNull();
+
+    await act(async () => {
+      await realtimeSubscription?.onSubscribed?.();
+    });
+
+    expect(result.current.files[0]?.status).toBe('ready');
+    expect(result.current.isUploading).toBe(false);
+  });
+
+  it('surfaces a document error that landed before realtime subscribed', async () => {
+    documentRows = [
+      {
+        id: 'document-1',
+        status: 'error',
+        progress_step: 'error',
+        error_message: 'Text extraction failed',
+        updated_at: '2026-09-17T18:20:00.000Z',
+      },
+    ];
+    const { result } = renderController();
+
+    act(() => {
+      result.current.add([makeFile('pasted-text.txt', 'text/plain', 2048)]);
+    });
+    await waitFor(() => expect(result.current.files[0]?.status).toBe('indexing'));
+
+    await act(async () => {
+      await realtimeSubscription?.onSubscribed?.();
+    });
+
+    expect(result.current.files[0]?.status).toBe('error');
+    expect(result.current.files[0]?.error).toBe('Text extraction failed');
+    expect(result.current.hasErrors).toBe(true);
+  });
+
+  it('measures an indexing timeout from the latest server progress heartbeat', async () => {
+    const { result } = renderController();
+
+    act(() => {
+      result.current.add([makeFile('pasted-text.txt', 'text/plain', 2048)]);
+    });
+    await waitFor(() => expect(result.current.files[0]?.status).toBe('indexing'));
+    expect(realtimeSubscription).not.toBeNull();
+
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    act(() => {
+      realtimeSubscription?.bindings[0]?.onRow({
+        id: 'document-1',
+        status: 'processing',
+        progress_step: 'embedding',
+        updated_at: new Date().toISOString(),
+      });
+    });
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    expect(result.current.files[0]?.status).toBe('indexing');
+    await waitFor(() => expect(result.current.files[0]?.status).toBe('error'), { timeout: 150 });
+    expect(result.current.files[0]?.error).toBe('Indexing timed out');
   });
 
   it('removes and clears attachments', async () => {

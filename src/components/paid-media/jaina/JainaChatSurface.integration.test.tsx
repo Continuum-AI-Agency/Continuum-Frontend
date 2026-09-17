@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { useJainaConversationSidebarStore } from '@/lib/jaina/conversation-sidebar-store';
 import { createInitialJainaStreamState, type JainaStreamState } from '@/lib/jaina/stream';
@@ -21,8 +21,17 @@ let streamState: JainaStreamState = createInitialJainaStreamState();
 
 const startMock = mock(() => Promise.resolve({}));
 const cancelMock = mock(() => {});
+const detachMock = mock(() => {});
 const resetMock = mock(() => {});
 const clearMemoryMock = mock(() => Promise.resolve());
+let runStatusCallback:
+  | ((row: {
+      runId: string;
+      sessionId: string;
+      status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+      errorMessage: string | null;
+    }) => void)
+  | null = null;
 
 const toastShowMock = mock(() => {});
 const processAIActionMock = mock(() => {});
@@ -65,9 +74,23 @@ mock.module('@/hooks/useJainaChatStream', () => ({
     state: streamState,
     start: startMock,
     cancel: cancelMock,
+    detach: detachMock,
     reset: resetMock,
     clearMemory: clearMemoryMock,
+    liveRunId: streamState.runId ?? null,
   }),
+}));
+
+mock.module('@/hooks/useJainaRunStatusRealtime', () => ({
+  isTerminalRunStatus: (status: string) =>
+    status === 'completed' || status === 'failed' || status === 'cancelled',
+  useJainaRunStatusRealtime: ({
+    onRunStatus,
+  }: {
+    onRunStatus: NonNullable<typeof runStatusCallback>;
+  }) => {
+    runStatusCallback = onRunStatus;
+  },
 }));
 
 mock.module('@/hooks/useBrandIntegrations', () => ({
@@ -241,8 +264,10 @@ describe('JainaChatSurface integration', () => {
 
     startMock.mockClear();
     cancelMock.mockClear();
+    detachMock.mockClear();
     resetMock.mockClear();
     clearMemoryMock.mockClear();
+    runStatusCallback = null;
     toastShowMock.mockClear();
     processAIActionMock.mockClear();
     removeChannelMock.mockClear();
@@ -857,6 +882,120 @@ describe('JainaChatSurface integration', () => {
       expect(assistantReasoningCount?.textContent).toBe('1');
       expect(assistantMessage?.getAttribute('data-message-id')).toBe('persisted-2');
     });
+  });
+
+  it('keeps the live reader attached when run completion precedes response.done', async () => {
+    global.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const method = init?.method ?? 'GET';
+
+      if (method === 'GET' && url.includes('/api/agents/jaina/chat/conversations?')) {
+        if (url.includes('sessionId=')) {
+          return Promise.resolve(
+            jsonResponse({
+              sessions: [
+                {
+                  sessionId: 'session-1',
+                  brandId: 'brand-1',
+                  adAccountId: 'act-1',
+                  title: null,
+                  lastMessageRole: 'user',
+                  lastMessagePreview: 'What creative elements are driving the low cost?',
+                  lastMessageAt: '2026-04-17T16:26:00.000Z',
+                  createdAt: '2026-04-17T16:20:00.000Z',
+                  updatedAt: '2026-04-17T16:26:00.000Z',
+                },
+              ],
+              messages: [
+                {
+                  id: 1,
+                  sessionId: 'session-1',
+                  brandId: 'brand-1',
+                  adAccountId: 'act-1',
+                  role: 'user',
+                  content: 'Recommend budget reallocations for this week by campaign',
+                  createdAt: '2026-04-17T16:26:00.000Z',
+                },
+              ],
+            }),
+          );
+        }
+        return Promise.resolve(jsonResponse({ sessions: [], messages: [] }));
+      }
+
+      if (method === 'POST' && url.endsWith('/api/agents/jaina/chat/conversations')) {
+        return Promise.resolve(
+          jsonResponse({
+            session_id: 'session-1',
+            brand_id: 'brand-1',
+            ad_account_id: 'act-1',
+            conversation_title: null,
+          }),
+        );
+      }
+
+      return Promise.resolve({
+        ok: false,
+        text: () => Promise.resolve('Unhandled fetch route'),
+      } as MockFetchResponse);
+    }) as typeof fetch;
+
+    const view = render(
+      <JainaChatSurface
+        brandProfileId="brand-1"
+        brandName="Test Brand"
+        adAccountId="act-1"
+        campaignId={null}
+        userId="user-1"
+      />,
+      { wrapper: withQueryClient },
+    );
+
+    await waitFor(() => {
+      expect((screen.getByTestId('prompt-submit') as HTMLButtonElement).disabled).toBe(false);
+    });
+    fireEvent.click(screen.getByTestId('prompt-submit'));
+    await waitFor(() =>
+      expect(screen.getAllByTestId('assistant-message').length).toBeGreaterThan(0),
+    );
+
+    streamState = {
+      ...createInitialJainaStreamState(),
+      status: 'streaming',
+      runId: 'run-1',
+      responseText: 'The low cost is driven by a focused day-pass value proposition.',
+    };
+    view.rerender(
+      <JainaChatSurface
+        brandProfileId="brand-1"
+        brandName="Test Brand"
+        adAccountId="act-1"
+        campaignId={null}
+        userId="user-1"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('assistant-content').at(-1)?.textContent).toContain(
+        'focused day-pass value proposition',
+      );
+      expect(runStatusCallback).not.toBeNull();
+    });
+
+    await act(async () => {
+      runStatusCallback?.({
+        runId: 'run-1',
+        sessionId: 'session-1',
+        status: 'completed',
+        errorMessage: null,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(detachMock).not.toHaveBeenCalled();
+    expect(screen.getAllByTestId('assistant-content').at(-1)?.textContent).toContain(
+      'focused day-pass value proposition',
+    );
   });
 
   it('unwraps response.checkpoint_report blocks from persisted history', async () => {

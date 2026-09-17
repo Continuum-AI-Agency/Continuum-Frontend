@@ -7,7 +7,7 @@ import {
   type JainaChatRequest as JainaChatStreamRequest,
   jainaChatRequestSchema,
 } from '@continuum/contracts';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import type { AgentMentionReference } from '@/lib/agent-references';
 import { useAgentRunStore } from '@/lib/agents/runStore';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
@@ -214,7 +214,9 @@ export function useJainaChatStream() {
     if (batch.length === 0) return;
     pendingEventsRef.current = [];
     const coalesced = coalesceJainaStreamEvents(batch);
-    setState((prev) => coalesced.reduce(reduceJainaStreamEvent, prev));
+    startTransition(() => {
+      setState((prev) => coalesced.reduce(reduceJainaStreamEvent, prev));
+    });
   }, [clearFlushTimer]);
 
   // Abandoning the view (detach/cancel/reset) drops the buffer rather than folding it: the state

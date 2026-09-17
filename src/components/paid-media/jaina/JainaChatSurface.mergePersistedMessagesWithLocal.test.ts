@@ -101,6 +101,83 @@ describe('mergePersistedMessagesWithLocal', () => {
     expect(lastMessage.reasoning?.length).toBe(1);
   });
 
+  it('does not mistake the previous turn assistant for the current plain-text answer', () => {
+    const persisted: JainaChatMessage[] = [
+      {
+        id: 'persisted-user-old',
+        role: 'user',
+        content: 'How did campaigns perform last week?',
+        createdAt: '2026-04-17T09:19:00.000Z',
+      },
+      {
+        id: 'persisted-assistant-old',
+        role: 'assistant',
+        content: 'Campaign performance looked stable.',
+        createdAt: '2026-04-17T09:19:03.000Z',
+      },
+      {
+        id: 'persisted-user-new',
+        role: 'user',
+        content: 'What creative elements are driving the low cost?',
+        createdAt: '2026-04-17T09:20:00.000Z',
+      },
+    ];
+
+    const local: JainaChatMessage[] = [
+      persisted[0],
+      persisted[1],
+      {
+        id: 'local-user-new',
+        role: 'user',
+        content: 'What creative elements are driving the low cost?',
+        createdAt: '2026-04-17T09:20:00.000Z',
+      },
+      {
+        id: 'local-assistant-new',
+        role: 'assistant',
+        content: 'The low cost is driven by a focused day-pass value proposition.',
+        createdAt: '2026-04-17T09:20:04.000Z',
+        status: 'done',
+      },
+    ];
+
+    const merged = mergePersistedMessagesWithLocal(persisted, local);
+
+    expect(merged.at(-1)?.id).toBe('local-assistant-new');
+    expect(merged.at(-1)?.content).toContain('focused day-pass value proposition');
+  });
+
+  it('replaces a projected response only with the persisted assistant from the same run', () => {
+    const persisted: JainaChatMessage[] = [
+      baseUserMessage,
+      {
+        id: 'persisted-assistant',
+        runId: 'run-1',
+        role: 'assistant',
+        content: 'Final persisted analysis.',
+        createdAt: '2026-04-17T09:20:05.000Z',
+        status: 'done',
+      },
+    ];
+    const local: JainaChatMessage[] = [
+      baseUserMessage,
+      {
+        id: 'projected-run-1',
+        runId: 'run-1',
+        role: 'assistant',
+        content: 'Final streamed analysis.',
+        createdAt: '2026-04-17T09:20:04.000Z',
+        status: 'streaming',
+      },
+    ];
+
+    const merged = mergePersistedMessagesWithLocal(persisted, local);
+
+    expect(merged).toHaveLength(2);
+    expect(merged.at(-1)?.id).toBe('persisted-assistant');
+    expect(merged.at(-1)?.content).toBe('Final persisted analysis.');
+  });
+
   it('keeps richer local assistant state when persisted assistant is plan-only', () => {
     const persisted: JainaChatMessage[] = [
       baseUserMessage,

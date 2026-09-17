@@ -995,10 +995,15 @@ export function mergePersistedMessagesWithLocal(
     // assistant (including reasoning/tool traces) on refresh.
     const lastPendingUser = [...pendingLocal].reverse().find((m) => m.role === 'user');
     const lastPendingAssistant = [...pendingLocal].reverse().find((m) => m.role === 'assistant');
-    const lastPersistedUser = [...persistedMessages].reverse().find((m) => m.role === 'user');
-    const lastPersistedAssistant = [...persistedMessages]
-      .reverse()
-      .find((m) => m.role === 'assistant');
+    const lastPersistedUserIndex = persistedMessages.findLastIndex((m) => m.role === 'user');
+    const lastPersistedAssistantIndex = persistedMessages.findLastIndex(
+      (m) => m.role === 'assistant',
+    );
+    const lastPersistedUser = persistedMessages[lastPersistedUserIndex];
+    const lastPersistedAssistant =
+      lastPersistedAssistantIndex > lastPersistedUserIndex
+        ? persistedMessages[lastPersistedAssistantIndex]
+        : undefined;
     const localAssistantHasRichState = Boolean(
       lastPendingAssistant &&
         (lastPendingAssistant.plan ||
@@ -1029,6 +1034,9 @@ export function mergePersistedMessagesWithLocal(
       lastPendingUser &&
       lastPersistedUser &&
       lastPendingUser.content.trim() === lastPersistedUser.content.trim();
+    const assistantRunAlreadySynced = Boolean(
+      lastPendingAssistant?.runId && lastPersistedAssistant?.runId === lastPendingAssistant.runId,
+    );
     const assistantAlreadySynced =
       !lastPendingAssistant ||
       Boolean(
@@ -1041,7 +1049,8 @@ export function mergePersistedMessagesWithLocal(
               lastPendingAssistant.content.trim() === lastPersistedAssistant.content.trim()) ||
             (!localAssistantHasRichState && persistedAssistantHasMeaningfulContent)),
       );
-    const alreadySynced = Boolean(userAlreadySynced && assistantAlreadySynced);
+    const alreadySynced =
+      assistantRunAlreadySynced || Boolean(userAlreadySynced && assistantAlreadySynced);
 
     if (!alreadySynced) {
       // The current exchange hasn't landed in the DB yet. Return the persisted
@@ -2056,10 +2065,9 @@ export function JainaChatSurface({
     currentSessionTitle,
   ]);
 
-  // When the projected run ends (terminal frame, realtime row, or Stop), the hook declines
-  // it. Drop the placeholder and let the persisted snapshot render the finished turn — the
-  // SAME persistedAssistantResponseIdsRef + refreshConversationSnapshot reconciliation the
-  // live path uses. No second reconciliation mechanism.
+  // When the projected run ends (terminal frame, realtime row, or Stop), reconcile it with the
+  // persisted snapshot. Keep the projected message visible until the matching run row exists;
+  // deleting it first recreates the same terminal-before-persistence blank state as the live path.
   React.useEffect(() => {
     if (projectedMessageId && projectedSessionId) {
       projectionHandoffRef.current = {
@@ -2075,7 +2083,6 @@ export function JainaChatSurface({
     if (ended.sessionId !== activeSessionIdRef.current) return;
     if (persistedAssistantResponseIdsRef.current.has(ended.messageId)) return;
     persistedAssistantResponseIdsRef.current.add(ended.messageId);
-    setMessages((previous) => previous.filter((message) => message.id !== ended.messageId));
     void refreshConversationSnapshot(ended.sessionId);
   }, [projectedMessageId, projectedSessionId, refreshConversationSnapshot]);
 
@@ -2320,14 +2327,20 @@ export function JainaChatSurface({
         return;
       }
 
-      persistedAssistantResponseIdsRef.current.add(responseId);
-      if (row.status === 'failed') {
-        updateMessage(responseId, {
-          status: 'error',
-          title: 'Jaina error',
-          content: row.errorMessage || 'Jaina run failed.',
-        });
+      // The durable run row can reach completed before the final assistant message and
+      // response.done frame. Refresh opportunistically, but keep the live reader attached so
+      // its buffered tail remains the authority until the stream finalizes the visible turn.
+      if (row.status === 'completed') {
+        void refreshConversationSnapshot(activeSessionIdRef.current);
+        return;
       }
+
+      persistedAssistantResponseIdsRef.current.add(responseId);
+      updateMessage(responseId, {
+        status: 'error',
+        title: 'Jaina error',
+        content: row.errorMessage || 'Jaina run failed.',
+      });
       void refreshConversationSnapshot(activeSessionIdRef.current);
       setActiveResponseId(null);
       // The run already reached a terminal status server-side — just release the local reader.

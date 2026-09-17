@@ -80,6 +80,7 @@ const APPROVAL = {
 
 const LIVE_PROMPT =
   'Show live communication angle × individual creative × audience segment performance for the last 30 days.';
+const SCROLL_PROMPT = 'Stream a long campaign analysis while I review earlier sections.';
 const LIVE_DATASET_ID = 'live-creative-audience:browser-fixture';
 const LIVE_ROW_ID = 'row:browser-fixture-alpha-25-34-female';
 const LIVE_REPORT = {
@@ -372,6 +373,46 @@ function liveReportStreamBody(): string {
     },
   ];
   return frames.map((frame) => serializeFrame(frame, mint(seq++))).join('');
+}
+
+function scrollStreamChunks(): string[] {
+  const mint = createEnvelopeMint();
+  let seq = 0;
+  const frames = [
+    {
+      type: 'response.created',
+      data: {
+        id: `resp_scroll_${RUN_ID}`,
+        object: 'realtime.response' as const,
+        status: 'in_progress',
+      },
+    },
+    { type: 'response.run.created', data: { run_id: `run_scroll_${RUN_ID}`, session_id: null } },
+    ...Array.from({ length: 45 }, (_, index) => ({
+      type: 'response.output_text.delta',
+      data: {
+        delta:
+          `\n\n## Analysis section ${index + 1}\n` +
+          'Campaign evidence remains grounded in measured delivery. '.repeat(8) +
+          `\n\n| Metric | Value |\n| --- | ---: |\n| Section | ${index + 1} |`,
+      },
+    })),
+    {
+      type: 'response.output_text.delta',
+      data: { delta: '\n\nStreaming response complete.' },
+    },
+    {
+      type: 'response.done',
+      data: {
+        id: `resp_scroll_${RUN_ID}`,
+        object: 'realtime.response' as const,
+        status: 'completed',
+        status_details: null,
+        output: [],
+      },
+    },
+  ];
+  return frames.map((frame) => serializeFrame(frame, mint(seq++)));
 }
 
 type StreamPost = Record<string, unknown>;
@@ -720,5 +761,96 @@ test.describe('jaina tool approval card', () => {
       true,
       '0 Meta/model writes; only preview and delivery acknowledgements were fixture-routed',
     );
+  });
+
+  test('keeps manual scrolling responsive while a long response streams', async () => {
+    const scrollPage = await context.newPage();
+    const chunks = scrollStreamChunks();
+    await scrollPage.addInitScript(
+      ({ prompt, streamChunks }) => {
+        const originalFetch = window.fetch.bind(window);
+        window.fetch = async (...args) => {
+          const [input, init] = args;
+          const url =
+            typeof input === 'string' ? input : input instanceof Request ? input.url : input.href;
+          if (url.includes('/api/agents/jaina/chat/stream') && typeof init?.body === 'string') {
+            const body = JSON.parse(init.body) as { query?: string };
+            if (body.query === prompt) {
+              const encoder = new TextEncoder();
+              return new Response(
+                new ReadableStream({
+                  start(controller) {
+                    let index = 0;
+                    const push = () => {
+                      const chunk = streamChunks[index];
+                      if (chunk === undefined) {
+                        controller.close();
+                        return;
+                      }
+                      index += 1;
+                      controller.enqueue(encoder.encode(chunk));
+                      window.setTimeout(push, 80);
+                    };
+                    push();
+                  },
+                }),
+                { status: 200, headers: { 'content-type': 'application/x-ndjson' } },
+              );
+            }
+          }
+          return originalFetch(...args);
+        };
+      },
+      { prompt: SCROLL_PROMPT, streamChunks: chunks },
+    );
+
+    try {
+      await scrollPage.goto('/scale?tab=jaina', { waitUntil: 'domcontentloaded' });
+      const composer = scrollPage.getByRole('textbox', { name: 'Message Jaina' });
+      await expect(composer).toBeVisible({ timeout: 180_000 });
+      await composer.fill(SCROLL_PROMPT);
+      await composer.press('Enter');
+
+      const viewport = scrollPage.locator('[data-slot="message-scroller-viewport"]');
+      await expect
+        .poll(() => viewport.evaluate((node) => node.scrollHeight > node.clientHeight))
+        .toBe(true);
+      const box = await viewport.boundingBox();
+      expect(box).not.toBeNull();
+      await scrollPage.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+      await scrollPage.mouse.wheel(0, -700);
+      await expect
+        .poll(() =>
+          viewport.evaluate((node) => node.scrollHeight - node.clientHeight - node.scrollTop),
+        )
+        .toBeGreaterThan(100);
+
+      const heldScrollTop = await viewport.evaluate((node) => node.scrollTop);
+      await scrollPage.waitForTimeout(640);
+      const afterMoreChunks = await viewport.evaluate((node) => node.scrollTop);
+      expect(Math.abs(afterMoreChunks - heldScrollTop)).toBeLessThan(24);
+      grade('stream.manual_scroll', true, 'wheel input released auto-follow during later deltas');
+
+      await viewport.evaluate((node) => {
+        node.scrollTop = node.scrollHeight;
+      });
+      await expect
+        .poll(() =>
+          viewport.evaluate((node) => node.scrollHeight - node.clientHeight - node.scrollTop),
+        )
+        .toBeLessThan(24);
+      await scrollPage.waitForTimeout(480);
+      await expect
+        .poll(() =>
+          viewport.evaluate((node) => node.scrollHeight - node.clientHeight - node.scrollTop),
+        )
+        .toBeLessThan(24);
+      grade('stream.follow_resume', true, 'returning to the live edge resumed auto-follow');
+
+      await expect(scrollPage.getByText('Streaming response complete.')).toBeVisible();
+      grade('stream.final_visible', true, 'completed streamed response remained visible');
+    } finally {
+      await scrollPage.close();
+    }
   });
 });

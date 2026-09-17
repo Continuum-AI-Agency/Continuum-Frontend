@@ -10,6 +10,7 @@ import {
   MAX_DOCUMENT_MB,
 } from '@/lib/documents/uploadLimits';
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import { classifyChatAttachment } from './attachmentRouting';
 import type { Attachment } from './attachments';
@@ -52,7 +53,10 @@ export function useChatAttachments({
   sessionId,
 }: UseChatAttachmentsParams): ChatAttachmentsController {
   const [files, setFiles] = useState<Attachment[]>([]);
+  const [heartbeatVersion, setHeartbeatVersion] = useState(0);
   const { show } = useToast();
+  const indexingHeartbeatRef = useRef<Record<string, number>>({});
+  const realtimeObservedAtRef = useRef<Record<string, number>>({});
 
   // A brand-new conversation has no sessionId until the first turn lands, but a
   // document dropped before then still needs a scope. Fall back to a stable
@@ -99,6 +103,7 @@ export function useChatAttachments({
       }
       try {
         const result = await uploadEphemeralChatDocument({ brandId, file, scopeKey });
+        indexingHeartbeatRef.current[result.documentId] = Date.now();
         // Uploaded, but NOT yet usable — ingest runs in the background. The chip stays
         // in a blocking state until the row reaches a terminal step.
         patch(id, {
@@ -202,6 +207,57 @@ export function useChatAttachments({
   );
   const indexingKey = indexingIds.join(',');
 
+  const reconcileDocumentRow = useCallback(
+    (
+      raw: Record<string, unknown>,
+      options: { source: 'realtime' | 'backfill'; readStartedAt?: number },
+    ) => {
+      const id = typeof raw.id === 'string' ? raw.id : null;
+      if (!id || !indexingIds.includes(id)) return;
+
+      if (
+        options.source === 'backfill' &&
+        (realtimeObservedAtRef.current[id] ?? 0) > (options.readStartedAt ?? 0)
+      ) {
+        return;
+      }
+
+      const now = Date.now();
+      if (options.source === 'realtime') {
+        realtimeObservedAtRef.current[id] = now;
+        indexingHeartbeatRef.current[id] = now;
+      } else {
+        const serverBeat = Date.parse(typeof raw.updated_at === 'string' ? raw.updated_at : '');
+        indexingHeartbeatRef.current[id] = Number.isNaN(serverBeat) ? now : serverBeat;
+      }
+
+      const status = typeof raw.status === 'string' ? raw.status : null;
+      const progressStep = typeof raw.progress_step === 'string' ? raw.progress_step : null;
+      const errorMessage =
+        typeof raw.error_message === 'string' ? raw.error_message : 'Indexing failed';
+
+      if (status === 'ready' || progressStep === 'ready') {
+        setFiles((previous) =>
+          previous.map((file) =>
+            file.documentId === id ? { ...file, status: 'ready', error: undefined } : file,
+          ),
+        );
+        return;
+      }
+      if (status === 'error' || progressStep === 'error') {
+        setFiles((previous) =>
+          previous.map((file) =>
+            file.documentId === id ? { ...file, status: 'error', error: errorMessage } : file,
+          ),
+        );
+        return;
+      }
+
+      setHeartbeatVersion((version) => version + 1);
+    },
+    [indexingIds],
+  );
+
   useEffect(() => {
     if (!brandId || indexingIds.length === 0) return;
 
@@ -213,50 +269,64 @@ export function useChatAttachments({
           schema: 'brand_profiles',
           table: 'brand_documents',
           filter: `brand_id=eq.${brandId}`,
-          onRow: (raw) => {
-            const row = raw as {
-              id?: string;
-              progress_step?: string;
-              error_message?: string;
-            };
-            if (!row.id || !indexingIds.includes(row.id)) return;
-            if (row.progress_step === 'ready') {
-              setFiles((previous) =>
-                previous.map((file) =>
-                  file.documentId === row.id ? { ...file, status: 'ready' } : file,
-                ),
-              );
-            } else if (row.progress_step === 'error') {
-              setFiles((previous) =>
-                previous.map((file) =>
-                  file.documentId === row.id
-                    ? { ...file, status: 'error', error: row.error_message ?? 'Indexing failed' }
-                    : file,
-                ),
-              );
-            }
-          },
+          onRow: (row) => reconcileDocumentRow(row, { source: 'realtime' }),
         },
       ],
+      onSubscribed: async () => {
+        const readStartedAt = Date.now();
+        try {
+          const supabase = createSupabaseBrowserClient();
+          const { data, error } = await supabase
+            .schema('brand_profiles')
+            .from('brand_documents')
+            .select('id, status, progress_step, error_message, updated_at')
+            .in('id', indexingIds);
+          if (error) throw error;
+          for (const row of data ?? []) {
+            reconcileDocumentRow(row as Record<string, unknown>, {
+              source: 'backfill',
+              readStartedAt,
+            });
+          }
+        } catch {
+          // Realtime remains active; a later row update can still complete the attachment.
+        }
+      },
     });
 
-    // Same ceiling the settings list uses. An isolate that dies before writing a
-    // terminal row must not leave the composer permanently un-sendable.
+    return () => {
+      unsubscribe();
+    };
+  }, [brandId, indexingKey, indexingIds, reconcileDocumentRow]);
+
+  useEffect(() => {
+    if (indexingIds.length === 0) return;
+    const now = Date.now();
+    for (const id of indexingIds) {
+      indexingHeartbeatRef.current[id] ??= now;
+    }
+    const delay = Math.max(
+      0,
+      Math.min(
+        ...indexingIds.map((id) => indexingHeartbeatRef.current[id] + STALE_PROCESSING_MS - now),
+      ),
+    );
     const timeout = setTimeout(() => {
+      const staleBefore = Date.now() - STALE_PROCESSING_MS;
       setFiles((previous) =>
         previous.map((file) =>
-          file.status === 'indexing' && file.documentId && indexingIds.includes(file.documentId)
+          file.status === 'indexing' &&
+          file.documentId &&
+          indexingIds.includes(file.documentId) &&
+          indexingHeartbeatRef.current[file.documentId] <= staleBefore
             ? { ...file, status: 'error', error: 'Indexing timed out' }
             : file,
         ),
       );
-    }, STALE_PROCESSING_MS);
-
-    return () => {
-      clearTimeout(timeout);
-      unsubscribe();
-    };
-  }, [brandId, indexingKey, indexingIds]);
+      setHeartbeatVersion((version) => version + 1);
+    }, delay);
+    return () => clearTimeout(timeout);
+  }, [heartbeatVersion, indexingKey, indexingIds]);
 
   const remove = useCallback((id: string) => {
     setFiles((previous) => previous.filter((file) => file.id !== id));
