@@ -2801,4 +2801,52 @@ describe('reduceJainaStreamEvent data_table progressive preview', () => {
     expect(state.status).not.toBe('error');
     expect(state.reportV2?.blocks?.[0]?.category).toBe('metric_grid');
   });
+
+  it('keeps streamed V2 blocks when the final checkpoint shell has none', () => {
+    let state = reduceJainaStreamEvent(createInitialJainaStreamState(), {
+      type: 'response.block.delta',
+      data: {
+        sequence: 1,
+        source: 'structured_output',
+        agent: 'Jaina_blocks',
+        block_category: 'metric_grid',
+        block: {
+          block_id: 'ad_metrics',
+          category: 'metric_grid',
+          scope: 'ad',
+          title: 'Ad metrics',
+          priority: 'primary',
+          metrics: [{ label: 'Spend', value: 686.46, format: 'currency' }],
+        },
+      },
+    } as never);
+
+    state = reduceJainaStreamEvent(state, {
+      type: 'response.checkpoint_report',
+      data: {
+        item_id: 'final_item',
+        part_id: 'final_part',
+        report: {
+          language: 'en',
+          executive_summary: 'Performance metrics for the ad.',
+          blocks: [],
+          follow_up_questions: [],
+          media_map: {},
+          _meta: {
+            schema_version: '2',
+            block_count: 0,
+            has_charts: false,
+            has_media: false,
+            primary_scope: 'ad',
+          },
+        },
+      },
+    } as never);
+
+    expect(state.status).not.toBe('error');
+    expect(state.hasCanonicalCheckpointReport).toBe(true);
+    expect(state.reportV2?.executive_summary).toBe('Performance metrics for the ad.');
+    expect(state.reportV2?.blocks).toHaveLength(1);
+    expect(state.reportV2?.blocks[0]?.block_id).toBe('ad_metrics');
+  });
 });

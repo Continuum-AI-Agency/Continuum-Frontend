@@ -2182,11 +2182,29 @@ export function reduceJainaStreamEvent(
       }
 
       if (interpreted.reportV2) {
+        const streamedReportV2 = state.reportV2;
+        const reportV2 =
+          interpreted.reportV2.blocks.length === 0 &&
+          streamedReportV2 &&
+          streamedReportV2.blocks.length > 0
+            ? {
+                ...interpreted.reportV2,
+                blocks: streamedReportV2.blocks,
+                _meta: {
+                  ...interpreted.reportV2._meta,
+                  block_count: streamedReportV2.blocks.length,
+                  has_charts:
+                    interpreted.reportV2._meta.has_charts || streamedReportV2._meta.has_charts,
+                  has_media:
+                    interpreted.reportV2._meta.has_media || streamedReportV2._meta.has_media,
+                },
+              }
+            : interpreted.reportV2;
         return {
           ...nextBase,
           itemId: parsed.data.data.item_id,
           partId: parsed.data.data.part_id,
-          reportV2: interpreted.reportV2,
+          reportV2,
           reportSourceEventId: undefined,
           hasCanonicalCheckpointReport: true,
           blockDeltas: [],
