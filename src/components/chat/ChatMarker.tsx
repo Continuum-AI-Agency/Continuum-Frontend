@@ -38,9 +38,7 @@ export function ChatMarker({ kind, label, icon, id, className }: ChatMarkerProps
     return marker;
   }
 
-  return (
-    <MessageScrollerItem messageId={id} scrollAnchor>
-      {marker}
-    </MessageScrollerItem>
-  );
+  // messageId without scrollAnchor: the minimap can jump to the milestone, but a milestone
+  // arriving mid-run ("Plan ready") no longer yanks the viewport to park itself at the top.
+  return <MessageScrollerItem messageId={id}>{marker}</MessageScrollerItem>;
 }

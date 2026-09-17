@@ -23,9 +23,6 @@ const DEFAULT_ASSISTANT_SPEAKER = 'Continuum';
 export type ChatMessageProps = {
   id: string;
   role: ChatRole;
-  // Anchored turns are where the viewport parks on arrival and on resume. The reader's own message
-  // is the natural anchor for a turn: it puts the question at the top and the answer beneath it.
-  anchor?: boolean;
   avatar?: ReactNode;
   /** Name shown above an assistant turn. Defaults to the product's agent name. */
   speaker?: string;
@@ -38,7 +35,6 @@ export type ChatMessageProps = {
 export function ChatMessage({
   id,
   role,
-  anchor = false,
   avatar,
   speaker = DEFAULT_ASSISTANT_SPEAKER,
   header,
@@ -50,7 +46,10 @@ export function ChatMessage({
   const speakerMark = avatar ?? (isUser ? null : <Sparkles className="size-3.5" aria-hidden />);
 
   return (
-    <MessageScrollerItem messageId={id} scrollAnchor={anchor}>
+    // No scrollAnchor: an anchored item makes the scroller park it at the top of the viewport and
+    // re-park it on every resize, which is what stranded a streaming answer above an empty screen.
+    // messageId stays so the minimap can still jump here and report this turn as on-screen.
+    <MessageScrollerItem messageId={id}>
       <Message align={isUser ? 'end' : 'start'} className={className}>
         {speakerMark ? (
           // Top-aligned, not bottom: an answer can run for screens, and an avatar parked at

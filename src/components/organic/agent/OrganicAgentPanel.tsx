@@ -1701,7 +1701,6 @@ export function OrganicAgentPanel({
         ) : null}
         <ChatTranscript
           anchors={anchors}
-          isStreaming={composerBusy}
           hasEarlier={hasEarlier}
           isLoadingEarlier={isLoadingEarlier}
           onLoadEarlier={loadEarlier}
@@ -1741,7 +1740,7 @@ export function OrganicAgentPanel({
             <>
               {state.messages.map((msg) => (
                 <Fragment key={msg.id}>
-                  <ChatMessage id={msg.id} role={msg.role} anchor={msg.role === 'user'}>
+                  <ChatMessage id={msg.id} role={msg.role}>
                     <div className="space-y-2">
                       {msg.role === 'assistant' ? (
                         msg.content ? (

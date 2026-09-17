@@ -3417,7 +3417,6 @@ export function JainaChatSurface({
           <div className="min-h-0 flex-1 overflow-hidden">
             <ChatTranscript
               anchors={anchors}
-              isStreaming={Boolean(activeResponseId) || Boolean(projectedMessageId)}
               hasEarlier={hasEarlier}
               isLoadingEarlier={isLoadingEarlier}
               onLoadEarlier={loadEarlier}

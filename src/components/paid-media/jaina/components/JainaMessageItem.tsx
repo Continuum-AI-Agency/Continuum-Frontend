@@ -228,7 +228,7 @@ function JainaMessageItemImpl({
   }, [toolResults]);
 
   return (
-    <ChatMessage id={message.id} role={message.role} anchor={message.role === 'user'}>
+    <ChatMessage id={message.id} role={message.role}>
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -358,7 +358,7 @@ function JainaMessageItemImpl({
                 <JainaReportV2
                   report={reportV2}
                   isStreaming={isStreaming}
-                  runId={message.runId ?? (isStreaming ? state.runId ?? undefined : undefined)}
+                  runId={message.runId ?? (isStreaming ? (state.runId ?? undefined) : undefined)}
                   deliverySource={message.deliverySource}
                   onSuggestionClick={onSuggestionClick}
                 />

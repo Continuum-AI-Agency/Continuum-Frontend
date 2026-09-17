@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, ChevronsDown, ChevronUp } from 'lucide-react';
+import { ChevronsDown, ChevronUp } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,8 +28,8 @@ export type ChatMinimapProps = {
 };
 
 export function ChatMinimap({ anchors, className }: ChatMinimapProps) {
-  const { scrollToMessage, scrollToStart, scrollToEnd } = useMessageScroller();
-  const { currentAnchorId, visibleMessageIds } = useMessageScrollerVisibility();
+  const { scrollToMessage, scrollToStart } = useMessageScroller();
+  const { visibleMessageIds } = useMessageScrollerVisibility();
   const scrollable = useMessageScrollerScrollable();
   const activeTickRef = useRef<HTMLButtonElement>(null);
 
@@ -40,6 +40,10 @@ export function ChatMinimap({ anchors, className }: ChatMinimapProps) {
   }, []);
 
   const visible = new Set(visibleMessageIds);
+  // Nothing in the transcript is scroll-anchored any more (it follows the bottom instead of
+  // parking a turn at the top), so the scroller's own currentAnchorId is always null. The reader's
+  // place is the topmost anchor currently on screen — anchors are already in transcript order.
+  const currentAnchorId = anchors.find((anchor) => visible.has(anchor.id))?.id ?? null;
   const nextResponseId = nextNavigableAnchorId(anchors, currentAnchorId);
 
   return (
@@ -107,18 +111,6 @@ export function ChatMinimap({ anchors, className }: ChatMinimapProps) {
           <ChevronsDown aria-hidden="true" />
         </Button>
       ) : null}
-
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        aria-label="Scroll to latest"
-        disabled={!scrollable.end}
-        onClick={() => scrollToEnd()}
-        className="pointer-events-auto text-muted-foreground disabled:opacity-0"
-      >
-        <ChevronDown aria-hidden="true" />
-      </Button>
     </div>
   );
 }
