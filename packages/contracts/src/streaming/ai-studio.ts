@@ -16,12 +16,7 @@ import {
   studioEdgeSchema,
   studioNodeSchema,
 } from '../ai-studio/workflow-graph';
-import {
-  responseDoneSchema,
-  responseErrorSchema,
-  toolCallSchema,
-  toolResultSchema,
-} from './agentFrames';
+import { responseErrorSchema, toolCallSchema, toolResultSchema } from './agentFrames';
 
 const REFERENCE_SOURCE_MESSAGE = 'reference image requires base64 data or image_url';
 
@@ -145,12 +140,55 @@ const composerProposalSchema = z.object({
   data: canvasGraphChangeSetSchema,
 });
 
-// A connection the canvas rules refused, or an op that could not apply. The build
-// still lands — the agent is told what was dropped and may repair it next step.
+/**
+ * The machine-readable reason on a `composer.warning`. Exported as a constant so the
+ * emit side and any future reader share ONE literal — a warning code that exists only as
+ * a string typed twice is a warning code that drifts.
+ */
+export const CANVAS_NO_CHANGE_WARNING_CODE = 'no_canvas_change';
+
+// A connection the canvas rules refused, an op that could not apply, or a turn that
+// worked the canvas and changed nothing. The run still completes — the agent is told what
+// was dropped and may repair it next step.
+// `.loose()` is load-bearing: emitters attach case-specific detail beside the code
+// (`referenceType` on `reference_type_unsupported`), and a strict object would strip it.
 const composerWarningSchema = z.object({
   type: z.literal('composer.warning'),
-  data: z.object({ message: z.string() }).loose(),
+  data: z
+    .object({
+      message: z.string(),
+      /** e.g. `reference_type_unsupported`, `no_canvas_change`. Absent on plain warnings. */
+      code: z.string().optional(),
+    })
+    .loose(),
 });
+
+/**
+ * The composer's terminal frame.
+ *
+ * Declared here rather than reusing the shared `responseDoneSchema`, whose payload is an
+ * open `z.record` that never named a single field — `summary`, which the Frontend renders
+ * as the assistant's reply, has always crossed this boundary undeclared.
+ *
+ * `changed` is required on purpose. A completed turn that changed nothing is a real
+ * outcome (the user asked a question, or the canvas already satisfied the ask), and a
+ * reader cannot infer it from the absence of a `composer.graph` frame. Making it
+ * mandatory means no future emitter can land a completion that stays silent about it.
+ *
+ * NOTE: this object is strict — an undeclared field added to the wire will be silently
+ * STRIPPED here rather than reaching the Frontend. Declare it, do not work around it.
+ */
+const composerDoneSchema = z.object({
+  type: z.literal('response.done'),
+  data: z.object({
+    /** The model's closing sentence. Rendered verbatim as the assistant's reply. */
+    summary: z.string(),
+    /** false when the turn answered without touching the canvas. */
+    changed: z.boolean(),
+  }),
+});
+
+export type AiStudioComposerDoneFrame = z.infer<typeof composerDoneSchema>;
 
 export const aiStudioComposerFrameSchema = z.discriminatedUnion('type', [
   composerStartedSchema,
@@ -162,7 +200,7 @@ export const aiStudioComposerFrameSchema = z.discriminatedUnion('type', [
   agentDelegatedFrameSchema,
   toolCallSchema,
   toolResultSchema,
-  responseDoneSchema,
+  composerDoneSchema,
   responseErrorSchema,
 ]);
 

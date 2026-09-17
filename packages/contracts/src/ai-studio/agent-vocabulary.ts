@@ -60,7 +60,12 @@ const formatHandle = (type: StudioNodeType, handle: string): string => {
 const CONFIG_FIELD_HINTS: Record<string, string> = {
   imageSize: `${IMAGE_SIZES.join('|')} — MODEL-DEPENDENT, see below`,
   aspectRatio: '16:9, 9:16, 1:1, …',
-  durationSeconds: '4|6|8',
+  // CONDITIONAL, and the condition is the one an agent trips first: Veo pins a referenced
+  // render to 8 seconds. Wire ANYTHING into a Veo node's ref-image or first/last-frame
+  // handle and 4 and 6 stop being legal — the request is refused at the schema, not
+  // silently rounded. 4 and 6 are for a prompt-only clip.
+  durationSeconds:
+    '4|6|8 — Veo: 8 ONLY once a reference image or a first/last frame is wired; 4|6 are prompt-only',
   resolution: '720p|1080p',
   outputFormat: 'mp4',
   items: 'READ-ONLY here — place clips with the set_timeline op, never update_node',
@@ -219,7 +224,11 @@ function describeVideoModels(): string {
     'VIDEO GENERATOR MODELS — a videoGen/veoDirector/veoFast node CHANGES ITS INPUT HANDLES',
     'with `data.model` AND `data.referenceMode`. Pick both first, then wire to the handles',
     'it actually has. Veo REJECTS reference images and first/last frames in one request —',
-    'set referenceMode "frames" for a first-frame→last-frame shot, "images" for a moodboard:',
+    'set referenceMode "frames" for a first-frame→last-frame shot, "images" for a moodboard.',
+    'A Veo node carrying EITHER kind of reference renders at durationSeconds 8 and nothing',
+    'else — set 8 the moment you wire one, or the generation is refused. kling-omni and',
+    'pixverse-v6 are the mirror image: they REQUIRE a reference image and will not render',
+    'from a prompt alone:',
     ...rows,
     '',
     `IMAGE GENERATOR MODELS — the ONLY values a nanoGen \`data.model\` accepts: ${IMAGE_GENERATOR_MODELS.join(', ')}.`,

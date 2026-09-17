@@ -4,6 +4,7 @@ export * from './analytics/index';
 export * from './audience-intel/index';
 export * from './automations/index';
 export * from './brand-intelligence/index';
+export * from './billing/index';
 export * from './brands/index';
 export * from './chat/index';
 export * from './competitor-spy/index';

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 
 import {
   aiStudioComposerFrameSchema,
+  CANVAS_NO_CHANGE_WARNING_CODE,
   aiStudioImageResultEventSchema,
   aiStudioReferenceImageSchema,
   aiStudioVideoResultEventSchema,
@@ -122,5 +123,38 @@ describe('aiStudioVideoResultEventSchema', () => {
       bytes: 1234,
     });
     expect(parsed.success).toBe(true);
+  });
+});
+
+// The composer's terminal frame carries whether the turn actually changed the canvas.
+// Before 2026-09-16 the composer union reused the shared `responseDoneSchema`, whose
+// payload is an open record — so neither `summary` nor `changed` was declared anywhere,
+// and a Backend-only field would have crossed the FE↔BE boundary undeclared.
+describe('composer response.done', () => {
+  it('carries the model’s sentence and whether the canvas changed', () => {
+    const parsed = aiStudioComposerFrameSchema.parse({
+      type: 'response.done',
+      data: { summary: 'Hi! What should we build?', changed: false },
+    });
+
+    expect(parsed.data).toEqual({ summary: 'Hi! What should we build?', changed: false });
+  });
+
+  it('refuses a completion that stays silent about whether the canvas changed', () => {
+    expect(
+      aiStudioComposerFrameSchema.safeParse({
+        type: 'response.done',
+        data: { summary: 'Built it.' },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('carries a warning code beside its message without stripping the detail', () => {
+    const parsed = aiStudioComposerFrameSchema.parse({
+      type: 'composer.warning',
+      data: { message: 'Nothing changed.', code: CANVAS_NO_CHANGE_WARNING_CODE, referenceType: 'trend' },
+    });
+
+    expect(parsed.data).toMatchObject({ code: 'no_canvas_change', referenceType: 'trend' });
   });
 });

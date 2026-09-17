@@ -5,6 +5,8 @@ import {
   autoLayout,
   buildWorkflowGraph,
   mergeGraphs,
+  namespaceGraphIds,
+  nodeIsMissingPrompt,
   resolveConnection,
   validateWorkflowGraph,
 } from './workflow-builder';
@@ -711,5 +713,189 @@ describe('a batch locks itself to what is wired into it', () => {
     const { graph, errors } = applyOps(start, [{ op: 'connect', from: 'prompts', to: 'batch' }]);
     expect(errors).toEqual([]);
     expect(graph.nodes.find((n) => n.id === 'batch')?.data.itemType).toBe('text');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The 2026-09-15 AI Studio QA pass. Every case below is a bug a human hit on a
+// real canvas; none of them had a test.
+// ---------------------------------------------------------------------------
+
+describe('a rejected rewire costs the graph nothing', () => {
+  const wired = () =>
+    applyOps(
+      buildWorkflowGraph(
+        [
+          { ref: 'prompt', type: 'string', data: { value: 'hi' } },
+          { ref: 'img', type: 'nanoGen' },
+        ],
+        [{ from_ref: 'prompt', to_ref: 'img' }],
+      ).graph,
+      [
+        { op: 'add_node', ref: 'vid', type: 'veoFast' },
+        { op: 'add_node', ref: 'gen2', type: 'nanoGen' },
+        { op: 'add_node', ref: 'sticky', type: 'note' },
+        { op: 'connect', from: 'img', to: 'vid' },
+        { op: 'connect', from: 'img', to: 'gen2' },
+      ],
+    ).graph;
+
+  // QA asked for ONE rewire, it was refused, and the node lost all 25 of its outgoing
+  // edges (157 → 132) with `persisted: true` and no confirmation. The detach used to run
+  // BEFORE the new connection was validated, and nothing rolled it back.
+  it('leaves the graph byte-identical when the new connection is refused', () => {
+    const base = wired();
+    const before = JSON.stringify(base);
+
+    // `note` renders no target handle at all, so this can only be refused.
+    const { graph, errors } = applyOps(base, [{ op: 'rewire', from: 'img', to: 'sticky' }]);
+
+    expect(errors).toHaveLength(1);
+    expect(JSON.stringify(graph)).toBe(before);
+    expect(graph.edges.filter((e) => e.source === 'img')).toHaveLength(2);
+  });
+
+  it('still detaches and relands when the new connection IS legal', () => {
+    const { graph, errors } = applyOps(wired(), [
+      { op: 'rewire', from: 'img', to: 'vid', role: 'last-frame' },
+    ]);
+
+    expect(errors).toEqual([]);
+    const fromImg = graph.edges.filter((e) => e.source === 'img');
+    expect(fromImg).toHaveLength(1);
+    expect(fromImg[0]?.target).toBe('vid');
+    expect(fromImg[0]?.targetHandle).toBe('last-frame');
+  });
+});
+
+describe('a role hint the node HAS is binding', () => {
+  // The silent fallthrough: `prompt` was occupied, `orderCandidates` only SORTED, so the
+  // walk reached `negative` and returned ok. The agent asked for a prompt and got the
+  // handle that means the opposite.
+  it('refuses a second prompt rather than landing it on negative', () => {
+    const { graph, errors } = buildWorkflowGraph(
+      [
+        { ref: 'a', type: 'string', data: { value: 'hero shot' } },
+        { ref: 'b', type: 'string', data: { value: 'also this' } },
+        { ref: 'gen', type: 'nanoGen' },
+      ],
+      [
+        { from_ref: 'a', to_ref: 'gen', role: 'prompt' },
+        { from_ref: 'b', to_ref: 'gen', role: 'prompt' },
+      ],
+    );
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('prompt');
+    expect(graph.edges).toHaveLength(1);
+    expect(graph.edges.every((e) => e.targetHandle !== 'negative')).toBe(true);
+  });
+
+  // The other half of the same bug: `hasWiredPrompt` counts only prompt/prompt-in, so the
+  // substituted negative edge left the node reported missing_prompt while an edge sat on
+  // it that had been ASKED to be its prompt.
+  it('never reports missing_prompt on a node holding an edge it asked to be a prompt', () => {
+    const { graph } = buildWorkflowGraph(
+      [
+        { ref: 'a', type: 'string', data: { value: 'hero shot' } },
+        { ref: 'b', type: 'string', data: { value: 'also this' } },
+        { ref: 'gen', type: 'nanoGen' },
+      ],
+      [
+        { from_ref: 'a', to_ref: 'gen', role: 'prompt' },
+        { from_ref: 'b', to_ref: 'gen', role: 'prompt' },
+      ],
+    );
+    const gen = graph.nodes.find((n) => n.id === 'gen');
+
+    expect(gen).toBeDefined();
+    if (gen) expect(nodeIsMissingPrompt(gen, graph.edges)).toBe(false);
+    expect(graph.edges.some((e) => e.source === 'b')).toBe(false);
+  });
+
+  // A role the node does not render stays advisory — see `candidatesForRole`.
+  it('still substitutes when the hint names a handle the node does not have', () => {
+    const r = resolveConnection(
+      node('img', 'image'),
+      node('shot', 'veoDirector', { model: 'veo-3.1', referenceMode: 'images' }),
+      { roleHint: 'first-frame' },
+    );
+    expect(r.ok).toBe(true);
+  });
+});
+
+describe('a headless router resolves its own modality', () => {
+  // `sourceModality('router')` reads the STAMPED `data.lockedType`; only the canvas stamps
+  // it. So an agent-built router had no modality, every candidate handle failed, and QA got
+  // "no compatible handle from router to action" 26 times while build still said ok.
+  const chain = (extra: Record<string, unknown> = {}) =>
+    buildWorkflowGraph(
+      [
+        { ref: 'shot', type: 'image' },
+        { ref: 'fan', type: 'router', data: extra },
+        { ref: 'grade', type: 'action', data: { actionId: 'image.grade' } },
+        { ref: 'out', type: 'export' },
+      ],
+      [
+        { from_ref: 'shot', to_ref: 'fan' },
+        { from_ref: 'fan', to_ref: 'grade' },
+        { from_ref: 'fan', to_ref: 'out' },
+      ],
+    );
+
+  it('connects router → action and router → export in one build', () => {
+    const { graph, errors } = chain();
+
+    expect(errors).toEqual([]);
+    expect(graph.edges.map((e) => `${e.source}→${e.target}`).sort()).toEqual([
+      'fan→grade',
+      'fan→out',
+      'shot→fan',
+    ]);
+  });
+
+  it('stamps the derived lock onto the saved node, the way the canvas would', () => {
+    expect(chain().graph.nodes.find((n) => n.id === 'fan')?.data.lockedType).toBe('image');
+  });
+
+  it('leaves an explicitly locked router exactly as the caller set it', () => {
+    expect(
+      chain({ lockedType: 'image' }).graph.nodes.find((n) => n.id === 'fan')?.data.lockedType,
+    ).toBe('image');
+  });
+});
+
+describe('namespaceGraphIds', () => {
+  const template = () =>
+    buildWorkflowGraph(
+      [
+        { ref: 'brief', type: 'string', data: { value: 'a sneaker' } },
+        { ref: 'gen', type: 'nanoGen' },
+      ],
+      [{ from_ref: 'brief', to_ref: 'gen' }],
+    ).graph;
+
+  it('is a no-op when nothing collides, so ops in the same call can still name the ids', () => {
+    const graph = template();
+    expect(namespaceGraphIds(graph, new Set(['unrelated']), 'x1')).toBe(graph);
+  });
+
+  // QA seeded two library templates that both ship `brief` and `gen`. `mergeGraphs` keys on
+  // id and .set() overwrites, so the canvas grew by 2 nodes instead of 4 and generated a
+  // woman holding a tablet on a basketball court.
+  it('seeding two templates that share ids produces four distinct nodes', () => {
+    const first = template();
+    const second = namespaceGraphIds(template(), new Set(first.nodes.map((n) => n.id)), 'x1');
+    const merged = mergeGraphs(first, second);
+
+    expect(merged.nodes).toHaveLength(4);
+    expect(new Set(merged.nodes.map((n) => n.id)).size).toBe(4);
+    expect(merged.edges).toHaveLength(2);
+    // Each copy keeps its OWN wiring — a namespaced edge must not still point at the
+    // original node.
+    expect(merged.edges.map((e) => `${e.source}→${e.target}`).sort()).toEqual([
+      'brief→gen',
+      'x1:brief→x1:gen',
+    ]);
   });
 });

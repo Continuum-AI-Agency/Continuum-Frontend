@@ -10,6 +10,7 @@ import {
   getAllowedTargetHandles,
   isTimelineMediaHandle,
   isValidConnection,
+  routerLockedType,
   STUDIO_NODE_TYPES,
   type StudioNodeType,
   TIMELINE_MEDIA_INPUT_HANDLE,
@@ -90,21 +91,35 @@ export type ResolveResult =
   | { ok: false; reason: string };
 
 /**
- * Rank the target handles a role hint could mean, most-likely first.
+ * The target handles a role hint is allowed to mean — the role's FAMILY, and nothing else.
  *
- * An exact name match and a same-family match score the SAME, so the sort stays
- * stable and the canvas's own handle order breaks the tie. That order is
- * authoritative: `getAllowedTargetHandles` lists the handle each node actually
- * renders first. Scoring an exact match higher instead would send `role: 'prompt'`
- * on a video generator to `prompt` — legal by the rules, but VideoGenBlock /
- * VeoFastBlock / OmniGenBlock only render `prompt-in`, so the edge would land on a
- * handle that does not exist on screen.
+ * An exact name match and a same-family match count the SAME, so the canvas's own handle
+ * order breaks the tie. That order is authoritative: `getAllowedTargetHandles` lists the
+ * handle each node actually renders first. Ranking an exact match higher instead would send
+ * `role: 'prompt'` on a video generator to `prompt` — legal by the rules, but VideoGenBlock /
+ * VeoFastBlock / OmniGenBlock only render `prompt-in`, so the edge would land on a handle
+ * that does not exist on screen.
+ *
+ * It FILTERS where it used to sort, and that is the whole of BUG-02. Sorting left every
+ * other handle in the list, so an occupied `prompt` fell through to the next candidate and
+ * `resolveConnection` returned `ok: true` with targetHandle `negative`: the agent asked for
+ * a prompt, the graph grew a negative-prompt edge, and `hasWiredPrompt` — which counts only
+ * prompt/prompt-in — still reported the node missing_prompt. A role the node HAS is binding;
+ * exhausting it is a rejection by name, never a substitution onto the handle that means the
+ * opposite.
+ *
+ * A role the node does NOT have stays advisory, and the full list comes back. That is not a
+ * loophole — it is the stale-synonym case: `role: 'first-frame'` on a Veo node the agent
+ * cannot see has been switched to images mode names a handle that no longer renders, and
+ * `ref-image` is the same intent under the mode the node is actually in. Refusing there
+ * would break a working build over a word.
  */
-function orderCandidates(candidates: string[], roleHint?: string): string[] {
+function candidatesForRole(candidates: string[], roleHint?: string): string[] {
   if (!roleHint) return candidates;
   const inSameFamily = (handle: string): boolean =>
     handle === roleHint || handle.includes(roleHint) || roleHint.includes(handle);
-  return [...candidates].sort((a, b) => Number(inSameFamily(b)) - Number(inSameFamily(a)));
+  const family = candidates.filter(inSameFamily);
+  return family.length > 0 ? family : candidates;
 }
 
 export function resolveConnection(
@@ -117,7 +132,7 @@ export function resolveConnection(
     return { ok: false, reason: `node ${sourceNode.id} (${sourceNode.type}) produces no output` };
   }
   const sourceHandle = sourceHandles[0];
-  const candidates = orderCandidates(getAllowedTargetHandles(targetNode), opts.roleHint);
+  const candidates = candidatesForRole(getAllowedTargetHandles(targetNode), opts.roleHint);
   const edges = opts.edges ?? [];
   // The pair alone was enough while every rule read only the two endpoints. A batch's
   // modality lock can come from the node wired INTO it, which is a third node, so a
@@ -135,27 +150,40 @@ export function resolveConnection(
 
   return {
     ok: false,
-    reason: `no compatible handle from ${sourceNode.type ?? '?'} to ${targetNode.type ?? '?'}${opts.roleHint ? ` (role ${opts.roleHint})` : ''}`,
+    reason: opts.roleHint
+      ? `no free ${opts.roleHint} handle on ${targetNode.type ?? '?'} "${targetNode.id}" (tried ${candidates.join(', ') || 'nothing'})`
+      : `no compatible handle from ${sourceNode.type ?? '?'} to ${targetNode.type ?? '?'}`,
   };
 }
 
 /**
- * Write each batch's derived lock onto the node, so the graph that is saved carries what
- * the connection rules already resolve. This is the half of the router's arrangement the
- * canvas does on connect — the canvas has a `BatchNode` effect for it, an agent-built
- * graph has nobody, and `materializeBatch` reads `data`, not the edge list.
+ * Write each batch's and each router's derived lock onto the node, so the graph that is
+ * saved carries what the connection rules already resolve. This is the half the canvas does
+ * on connect — it has a `BatchNode` effect and a `routerLockedType` call for it, an
+ * agent-built graph has nobody, and `materializeBatch` reads `data`, not the edge list.
  *
- * Explicit wins, an unwired batch is left alone, and the array identity is preserved when
+ * Without the router half a headless router reached the browser with no `lockedType`, so
+ * `sourceModality` answered undefined and nothing downstream of it could ever be wired.
+ *
+ * Explicit wins, an unwired node is left alone, and the array identity is preserved when
  * nothing changed so callers that diff on reference are unaffected.
  */
-function stampBatchLocks(nodes: WorkflowNode[], edges: GraphEdgeLike[]): WorkflowNode[] {
+function stampDerivedLocks(nodes: WorkflowNode[], edges: GraphEdgeLike[]): WorkflowNode[] {
   let changed = false;
   const stamped = nodes.map((node) => {
-    if (node.type !== 'batch' || batchItemType(node.data)) return node;
-    const locked = batchLockedType(node, edges, nodes);
-    if (!locked) return node;
-    changed = true;
-    return { ...node, data: { ...node.data, itemType: locked } };
+    if (node.type === 'batch' && !batchItemType(node.data)) {
+      const locked = batchLockedType(node, edges, nodes);
+      if (!locked) return node;
+      changed = true;
+      return { ...node, data: { ...node.data, itemType: locked } };
+    }
+    if (node.type === 'router' && !node.data?.['lockedType']) {
+      const locked = routerLockedType(node, edges, nodes);
+      if (!locked) return node;
+      changed = true;
+      return { ...node, data: { ...node.data, lockedType: locked } };
+    }
+    return node;
   });
   return changed ? stamped : nodes;
 }
@@ -371,7 +399,7 @@ export function buildWorkflowGraph(
     if (nodeIsMissingPrompt(node, edges)) warnings.push(missingPromptMessage(node));
   }
 
-  const graph: WorkflowGraph = { nodes: autoLayout(stampBatchLocks(nodes, edges), edges), edges };
+  const graph: WorkflowGraph = { nodes: autoLayout(stampDerivedLocks(nodes, edges), edges), edges };
   if (opts.metadata) graph.metadata = opts.metadata;
   return { graph, warnings, errors };
 }
@@ -419,6 +447,47 @@ export function mergeGraphs(base: WorkflowGraph, incoming: WorkflowGraph): Workf
     graph.metadata = { ...(base.metadata ?? {}), ...(incoming.metadata ?? {}) };
   }
   return graph;
+}
+
+/**
+ * Rename every node in `graph` whose id is already `taken`, carrying its edges with it.
+ *
+ * `mergeGraphs` keys nodes by raw id and `.set()` overwrites, which is CORRECT for
+ * re-applying the same workflow in place (the node keeps the user's position and takes the
+ * new data). It is wrong for seeding a SECOND library template: two templates that both
+ * ship node ids `brief` and `gen` merged into one pair, so seeding both produced a
+ * two-node canvas that spliced half of each workflow together. Namespacing the INCOMING
+ * ids before the merge fixes the seed without touching the in-place update.
+ *
+ * Only collisions are renamed, so a seed that lands on a clear canvas keeps its own ids and
+ * ops in the same call can still name them.
+ */
+export function namespaceGraphIds(
+  graph: WorkflowGraph,
+  taken: ReadonlySet<string>,
+  token: string,
+): WorkflowGraph {
+  const renamed = new Map<string, string>();
+  for (const node of graph.nodes) {
+    if (taken.has(node.id)) renamed.set(node.id, `${token}:${node.id}`);
+  }
+  if (renamed.size === 0) return graph;
+
+  const rename = (id: string): string => renamed.get(id) ?? id;
+  return {
+    ...graph,
+    nodes: graph.nodes.map((node) =>
+      renamed.has(node.id) ? { ...node, id: rename(node.id) } : node,
+    ),
+    edges: graph.edges.map((edge) => {
+      if (!renamed.has(edge.source) && !renamed.has(edge.target)) return edge;
+      const source = rename(edge.source);
+      const target = rename(edge.target);
+      // Same id shape `makeEdge` writes, so a namespaced edge is indistinguishable from
+      // one the builder made — and cannot collide with the edge it was copied from.
+      return { ...edge, id: `e:${source}:${target}:${edge.targetHandle}`, source, target };
+    }),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -548,11 +617,15 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
         break;
       }
       case 'rewire': {
-        edges = edges.filter((e) => e.source !== op.from);
-        const result = connectNodes(nodes, edges, op.from, op.to, op.role);
+        // Resolve against the post-detach edge list (occupancy is what makes the new
+        // handle free), but do not COMMIT the detach until the new edge is legal.
+        // Filtering first and only then validating is how one rejected rewire deleted
+        // all 25 outgoing edges of a node and reported persisted: true.
+        const detached = edges.filter((e) => e.source !== op.from);
+        const result = connectNodes(nodes, detached, op.from, op.to, op.role);
         if (!result.ok) errors.push(result.reason);
         else {
-          edges = [...edges, result.edge];
+          edges = [...detached, result.edge];
         }
         break;
       }
@@ -659,7 +732,7 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
     }
   }
 
-  const graphOut: WorkflowGraph = { nodes: stampBatchLocks(nodes, edges), edges };
+  const graphOut: WorkflowGraph = { nodes: stampDerivedLocks(nodes, edges), edges };
   if (graph.metadata) graphOut.metadata = graph.metadata;
   return { graph: graphOut, errors };
 }

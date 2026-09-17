@@ -9,12 +9,13 @@ import {
 } from "./library-upload";
 
 describe("librarySignUploadRequestSchema", () => {
-  it("requires brandId, fileName and mimeType", () => {
+  it("requires brandId, fileName, mimeType, and a trustworthy size", () => {
     expect(
       librarySignUploadRequestSchema.safeParse({
         brandId: "b1",
         fileName: "photo.png",
         mimeType: "image/png",
+        sizeBytes: 12345,
       }).success,
     ).toBe(true);
     expect(librarySignUploadRequestSchema.safeParse({ brandId: "b1", fileName: "photo.png" }).success).toBe(false);
@@ -26,6 +27,7 @@ describe("librarySignUploadRequestSchema", () => {
         brandId: "b1",
         fileName: "photo.png",
         mimeType: "image/png",
+        sizeBytes: 12345,
         extra: true,
       }).success,
     ).toBe(false);

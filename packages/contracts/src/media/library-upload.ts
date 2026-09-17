@@ -18,6 +18,7 @@ export const librarySignUploadRequestSchema = z
     brandId: z.string().min(1),
     fileName: z.string().min(1),
     mimeType: z.string().min(1),
+    sizeBytes: z.number().int().nonnegative(),
   })
   .strict();
 

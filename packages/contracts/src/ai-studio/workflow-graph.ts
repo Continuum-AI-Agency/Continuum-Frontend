@@ -891,18 +891,32 @@ export function batchLockedType(
 }
 
 /**
- * A batch seen WITH its wired lock resolved. Only the connection rules have the edge list,
- * so the derivation happens here and the producer predicates stay edge-free — the property
- * the rest of this file is built on. Any other node is returned untouched.
+ * A batch or a router seen WITH its wired lock resolved. Only the connection rules have the
+ * edge list, so the derivation happens here and the producer predicates stay edge-free — the
+ * property the rest of this file is built on. Any other node is returned untouched.
+ *
+ * The router half is why a HEADLESS router could not be wired to anything. `sourceModality`
+ * reads a router's STAMPED `data.lockedType`, the canvas is what stamps it, and an
+ * agent-built graph has no canvas — so every candidate handle out of a fresh router failed
+ * and `build` reported "no compatible handle from router to action". Resolving it here is
+ * the same division of labour the batch already had: derive on validate, stamp on persist
+ * (`stampDerivedLocks` in workflow-builder.ts).
  */
-const withResolvedBatchLock = (
+const withResolvedSourceLock = (
   node: GraphNodeLike,
   edges: GraphEdgeLike[],
   nodes: GraphNodeLike[],
 ): GraphNodeLike => {
-  if (node.type !== 'batch' || batchItemType(node.data)) return node;
-  const locked = batchLockedType(node, edges, nodes);
-  return locked ? { ...node, data: { ...node.data, itemType: locked } } : node;
+  if (node.type === 'batch') {
+    if (batchItemType(node.data)) return node;
+    const locked = batchLockedType(node, edges, nodes);
+    return locked ? { ...node, data: { ...node.data, itemType: locked } } : node;
+  }
+  if (node.type === 'router') {
+    const locked = routerLockedType(node, edges, nodes);
+    return locked ? { ...node, data: { ...node.data, lockedType: locked } } : node;
+  }
+  return node;
 };
 
 type PublisherFormat = 'image' | 'carousel' | 'video';
@@ -1242,9 +1256,9 @@ function isConnectionCompatible(
   const sourceHandle = connection.sourceHandle ?? null;
 
   if (!rawSource || !targetNode) return false;
-  // A batch that has not been stamped yet still knows what it carries if something is
-  // wired into it. Resolved once, here, so every predicate below sees the same lock.
-  const sourceNode = withResolvedBatchLock(rawSource, edges, nodes);
+  // A batch or router that has not been stamped yet still knows what it carries if something
+  // is wired into it. Resolved once, here, so every predicate below sees the same lock.
+  const sourceNode = withResolvedSourceLock(rawSource, edges, nodes);
 
   if (
     isTextProducingSource(sourceNode, sourceHandle) &&
