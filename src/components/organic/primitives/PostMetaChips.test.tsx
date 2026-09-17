@@ -168,6 +168,23 @@ describe('PostMetaChips', () => {
     expect(platformOption('Facebook').hasAttribute('disabled')).toBe(false);
   });
 
+  // The chip used to know three platforms and called everything else "Instagram", so a TikTok
+  // draft read "Instagram · Reel" — and toggling it would have rewritten the post to Instagram.
+  it('names a TikTok draft TikTok and offers every publishable platform', () => {
+    setup({ platforms: ['tiktok'] });
+    expect(platformChip().textContent).toBe('TikTok');
+    expect(platformOption('TikTok').getAttribute('aria-checked')).toBe('true');
+    expect(platformOption('YouTube').getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('offers only Reel once YouTube is selected, since YouTube publishes nothing else', () => {
+    setup({ platforms: ['instagram', 'youtube'], format: 'Reel' });
+    const formatMenu = screen.getByLabelText('Change format').parentElement as HTMLElement;
+    expect(screen.queryAllByText('Post').length).toBe(0);
+    expect(screen.queryAllByText('Carousel').length).toBe(0);
+    expect(formatMenu.textContent).toContain('Reel');
+  });
+
   it('changes format from the chip menu', () => {
     const { onFormatChange } = setup();
     fireEvent.click(screen.getByText('Reel'));

@@ -13,11 +13,8 @@
 
 import type { PlatformKey } from '@/components/onboarding/platforms';
 import type { BrandIntegrationSummary } from '@/lib/integrations/brandProfile';
-import {
-  ORGANIC_MVP_PLATFORM_KEYS,
-  type OrganicPlatformKey,
-  organicPlatformLabel,
-} from './platforms';
+import { type OrganicPlatformKey, organicPlatformLabel } from './platforms';
+import { ORGANIC_POST_PLATFORM_KEYS } from './postPlatforms';
 
 export type OrganicAccountOption = {
   id: string;
@@ -42,13 +39,6 @@ export type OrganicConnectionStates = Partial<
   Record<OrganicPlatformKey, OrganicConnectionState | undefined>
 >;
 
-/**
- * The platforms the organic publisher actually supports. Identical to the MVP
- * planner set by construction — the planner cannot schedule to a platform the
- * publisher cannot post to.
- */
-export const ORGANIC_PUBLISH_PLATFORM_KEYS = ORGANIC_MVP_PLATFORM_KEYS;
-
 type DeriveInput = {
   integrationSummary?: Partial<BrandIntegrationSummary> | null;
   /** Personal OAuth connections from onboarding state. Absent on client callers. */
@@ -59,7 +49,7 @@ type DeriveInput = {
 export function deriveOrganicPlatformAccounts({
   integrationSummary,
   connections,
-  platforms = ORGANIC_MVP_PLATFORM_KEYS,
+  platforms = ORGANIC_POST_PLATFORM_KEYS,
 }: DeriveInput): OrganicPlatformAccounts[] {
   return platforms.map((platform) => {
     const connection = connections?.[platform];
@@ -97,7 +87,7 @@ export function deriveOrganicPublishAccountOptions(
 ): OrganicPublishAccountOption[] {
   return deriveOrganicPlatformAccounts({
     integrationSummary,
-    platforms: ORGANIC_PUBLISH_PLATFORM_KEYS,
+    platforms: ORGANIC_POST_PLATFORM_KEYS,
   }).flatMap((entry) =>
     entry.options.map((option) => ({
       platform: entry.platform,

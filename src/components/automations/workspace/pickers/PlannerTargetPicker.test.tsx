@@ -30,7 +30,8 @@ const platformAccounts: OrganicPlatformAccounts[] = [
 ];
 
 describe('PlannerTargetPicker', () => {
-  test('keeps unsupported platforms visible but disabled with the reason', () => {
+  // TikTok sat here disabled as "not supported yet" long after its publisher shipped.
+  test('offers every platform with a publisher, TikTok and YouTube included', () => {
     render(
       <PlannerTargetPicker
         brandId={BRAND_ID}
@@ -43,8 +44,10 @@ describe('PlannerTargetPicker', () => {
 
     openSelect('Planner platform');
     expect(screen.getByRole('option', { name: 'Instagram' })).toBeTruthy();
-    const tiktok = screen.getByRole('option', { name: /TikTok — not supported yet/ });
-    expect(tiktok.getAttribute('data-disabled')).not.toBeNull();
+    for (const name of ['TikTok', 'YouTube']) {
+      expect(screen.getByRole('option', { name }).getAttribute('data-disabled')).toBeNull();
+    }
+    expect(screen.queryAllByText(/not supported yet/).length).toBe(0);
   });
 
   test('writes the account for the selected platform', () => {

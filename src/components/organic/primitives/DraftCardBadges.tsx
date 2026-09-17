@@ -2,24 +2,15 @@
 
 import type * as React from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
+import { POST_PLATFORMS } from '@/lib/organic/postPlatforms';
 import { cn } from '@/lib/utils';
 import { draftStatusPresentation, platformBadgeVariants } from './draft-card-styles';
 import type { OrganicDraftStatus, OrganicPlatformTag } from './types';
 
-const PLATFORM_ABBR: Record<string, string> = {
-  instagram: 'IG',
-  linkedin: 'LI',
-  facebook: 'FB',
-  tiktok: 'TT',
-  youtube: 'YT',
-  twitter: 'TW',
-};
-
 export function PlatformBadge({ platform }: { platform: OrganicPlatformTag }) {
-  const platformKey = platform as 'instagram' | 'linkedin' | 'facebook' | 'tiktok' | 'youtube';
   return (
-    <span className={cn(platformBadgeVariants({ platform: platformKey }), 'px-1.5 py-0 text-3xs')}>
-      {PLATFORM_ABBR[platform] ?? platform.slice(0, 2).toUpperCase()}
+    <span className={cn(platformBadgeVariants({ platform }), 'px-1.5 py-0 text-3xs')}>
+      {POST_PLATFORMS[platform].abbr}
     </span>
   );
 }

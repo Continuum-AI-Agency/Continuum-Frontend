@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { OrganicPlatformAccounts } from '@/lib/organic/platformAccountOptions';
-import { ORGANIC_MVP_PLATFORM_KEYS, ORGANIC_PLATFORMS } from '@/lib/organic/platforms';
+import { ORGANIC_POST_PLATFORM_KEYS, POST_PLATFORMS } from '@/lib/organic/postPlatforms';
 import { useOrganicPlatformAccountSource } from './defaultPickerSources';
 import { isUnsetId, type PickerSource, RawIdFallbackField } from './pickerSource';
 
@@ -31,8 +31,6 @@ export type PlannerTarget = {
   platform: AutomationSocialPlatform;
   accountId: string | null;
 };
-
-const SUPPORTED_PLATFORMS = new Set<string>(ORGANIC_MVP_PLATFORM_KEYS);
 
 export function PlannerTargetPicker({
   brandId,
@@ -70,14 +68,11 @@ export function PlannerTargetPicker({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {ORGANIC_PLATFORMS.map((platform) => {
-              const supported = SUPPORTED_PLATFORMS.has(platform.key);
-              return (
-                <SelectItem key={platform.key} value={platform.key} disabled={!supported}>
-                  {supported ? platform.label : `${platform.label} — not supported yet`}
-                </SelectItem>
-              );
-            })}
+            {ORGANIC_POST_PLATFORM_KEYS.map((platform) => (
+              <SelectItem key={platform} value={platform}>
+                {POST_PLATFORMS[platform].label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

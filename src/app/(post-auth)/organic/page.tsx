@@ -14,7 +14,8 @@ import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import { ensureOnboardingState } from '@/lib/onboarding/storage';
 import { deriveMetricAccountsByPlatform } from '@/lib/organic/metricAccounts';
 import { deriveOrganicPlatformAccounts } from '@/lib/organic/platformAccountOptions';
-import { ORGANIC_MVP_PLATFORM_KEYS, type OrganicPlatformKey } from '@/lib/organic/platforms';
+import type { OrganicPlatformKey } from '@/lib/organic/platforms';
+import { isPostPlatform, ORGANIC_POST_PLATFORM_KEYS } from '@/lib/organic/postPlatforms';
 import type { Trend } from '@/lib/organic/trends';
 import type { BrandInsightsQuestion } from '@/lib/schemas/brandInsights';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -88,7 +89,6 @@ async function OrganicContent({
   }
   const { brandId, state: onboarding } = onboardingResult.value;
   const brandProfileId = brandId;
-  const mvpPlatforms: readonly OrganicPlatformKey[] = ORGANIC_MVP_PLATFORM_KEYS;
 
   const integrationSummary =
     integrationSummaryResult.status === 'fulfilled' ? integrationSummaryResult.value : null;
@@ -104,7 +104,7 @@ async function OrganicContent({
   const platformAccounts = deriveOrganicPlatformAccounts({
     integrationSummary,
     connections: onboarding.connections,
-    platforms: mvpPlatforms,
+    platforms: ORGANIC_POST_PLATFORM_KEYS,
   });
 
   const activePlatformKeys = platformAccounts
@@ -128,7 +128,7 @@ async function OrganicContent({
     return acc;
   }, {});
   const fallbackPlatforms =
-    activePlatformKeys.length > 0 ? activePlatformKeys : [...ORGANIC_MVP_PLATFORM_KEYS];
+    activePlatformKeys.length > 0 ? activePlatformKeys : [...ORGANIC_POST_PLATFORM_KEYS];
 
   let selectorTrends: Trend[] = [];
   let trendTypes: OrganicTrendType[] = [];
@@ -441,9 +441,8 @@ export default async function OrganicPage({ searchParams }: OrganicPageProps) {
       ? composeTrendIdRaw
       : null;
   const initialComposePlatform =
-    typeof composePlatformRaw === 'string' &&
-    (ORGANIC_MVP_PLATFORM_KEYS as readonly string[]).includes(composePlatformRaw)
-      ? (composePlatformRaw as OrganicPlatformKey)
+    typeof composePlatformRaw === 'string' && isPostPlatform(composePlatformRaw)
+      ? composePlatformRaw
       : null;
   // Agent deep link (completion toasts emit /organic?tab=agent&sessionId=...).
   const agentSessionIdRaw = resolvedSearchParams.sessionId;

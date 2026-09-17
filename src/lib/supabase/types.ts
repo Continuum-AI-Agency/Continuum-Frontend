@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "12.2.3 (519615d)"
-  }
   agent_workspace: {
     Tables: {
       alignments: {
@@ -5173,7 +5168,7 @@ export type Database = {
           added_at: string
           added_by: string | null
           annotations: Json
-          applies_to: Json
+          applies_to: string[]
           asset_id: string
           authority: string
           brand_id: string
@@ -5186,7 +5181,7 @@ export type Database = {
           added_at?: string
           added_by?: string | null
           annotations?: Json
-          applies_to?: Json
+          applies_to?: string[]
           asset_id: string
           authority: string
           brand_id: string
@@ -5199,7 +5194,7 @@ export type Database = {
           added_at?: string
           added_by?: string | null
           annotations?: Json
-          applies_to?: Json
+          applies_to?: string[]
           asset_id?: string
           authority?: string
           brand_id?: string
@@ -8872,6 +8867,78 @@ export type Database = {
           },
         ]
       }
+      report_schedules: {
+        Row: {
+          brand_id: string
+          cadence: string
+          created_at: string
+          created_by: string | null
+          day_of_month: number | null
+          day_of_week: number | null
+          enabled: boolean
+          external_emails: string[]
+          hour: number
+          id: string
+          last_run_at: string | null
+          next_run_at: string
+          presentation: string
+          recipient_user_ids: string[]
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          cadence: string
+          created_at?: string
+          created_by?: string | null
+          day_of_month?: number | null
+          day_of_week?: number | null
+          enabled?: boolean
+          external_emails?: string[]
+          hour?: number
+          id?: string
+          last_run_at?: string | null
+          next_run_at: string
+          presentation?: string
+          recipient_user_ids?: string[]
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          cadence?: string
+          created_at?: string
+          created_by?: string | null
+          day_of_month?: number | null
+          day_of_week?: number | null
+          enabled?: boolean
+          external_emails?: string[]
+          hour?: number
+          id?: string
+          last_run_at?: string | null
+          next_run_at?: string
+          presentation?: string
+          recipient_user_ids?: string[]
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_schedules_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "report_schedules_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       report_send_receipts: {
         Row: {
           brand_id: string
@@ -8976,92 +9043,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
-      }
-      tracked_link_clicks: {
-        Row: {
-          clicked_at: string
-          id: string
-          link_id: string
-          referrer: string | null
-          user_agent: string | null
-        }
-        Insert: {
-          clicked_at?: string
-          id?: string
-          link_id: string
-          referrer?: string | null
-          user_agent?: string | null
-        }
-        Update: {
-          clicked_at?: string
-          id?: string
-          link_id?: string
-          referrer?: string | null
-          user_agent?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tracked_link_clicks_link_id_fkey"
-            columns: ["link_id"]
-            isOneToOne: false
-            referencedRelation: "tracked_links"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      tracked_links: {
-        Row: {
-          asset_id: string | null
-          brand_id: string
-          code: string
-          created_at: string
-          created_by: string | null
-          destination_url: string
-          id: string
-          label: string | null
-          placement: string
-          platform_post_id: string | null
-        }
-        Insert: {
-          asset_id?: string | null
-          brand_id: string
-          code: string
-          created_at?: string
-          created_by?: string | null
-          destination_url: string
-          id?: string
-          label?: string | null
-          placement: string
-          platform_post_id?: string | null
-        }
-        Update: {
-          asset_id?: string | null
-          brand_id?: string
-          code?: string
-          created_at?: string
-          created_by?: string | null
-          destination_url?: string
-          id?: string
-          label?: string | null
-          placement?: string
-          platform_post_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tracked_links_brand_id_fkey"
-            columns: ["brand_id"]
-            isOneToOne: false
-            referencedRelation: "brand_account_directory"
-            referencedColumns: ["brand_id"]
-          },
-          {
-            foreignKeyName: "tracked_links_brand_id_fkey"
-            columns: ["brand_id"]
-            isOneToOne: false
-            referencedRelation: "brand_profiles"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       user_brand_preferences: {
         Row: {
@@ -11676,6 +11657,17 @@ export type Database = {
           tags: string[]
         }[]
       }
+      next_report_schedule_run_at: {
+        Args: {
+          p_after: string
+          p_cadence: string
+          p_dom: number
+          p_dow: number
+          p_hour: number
+          p_tz: string
+        }
+        Returns: string
+      }
       open_jaina_tool_gate: {
         Args: {
           p_approval_expires_at: string
@@ -11737,6 +11729,8 @@ export type Database = {
       }
       purge_automation_workflow_evidence: { Args: never; Returns: Json }
       purge_email_delivery_history: { Args: never; Returns: Json }
+      reap_abandoned_canvas_run_requests: { Args: never; Returns: number }
+      reap_expired_canvas_composer_runs: { Args: never; Returns: number }
       reap_expired_hyperframe_runs: { Args: never; Returns: number }
       record_audience_group_member_result: {
         Args: {
@@ -14904,8 +14898,8 @@ export type Database = {
           initiator: string
           initiator_agent: string | null
           next_event_seq: number
-          quality_outcome: Json | null
           parent_run_id: string | null
+          quality_outcome: Json | null
           query: string | null
           request_snapshot: Json | null
           result_payload: Json | null
@@ -14940,8 +14934,8 @@ export type Database = {
           initiator?: string
           initiator_agent?: string | null
           next_event_seq?: number
-          quality_outcome?: Json | null
           parent_run_id?: string | null
+          quality_outcome?: Json | null
           query?: string | null
           request_snapshot?: Json | null
           result_payload?: Json | null
@@ -14976,8 +14970,8 @@ export type Database = {
           initiator?: string
           initiator_agent?: string | null
           next_event_seq?: number
-          quality_outcome?: Json | null
           parent_run_id?: string | null
+          quality_outcome?: Json | null
           query?: string | null
           request_snapshot?: Json | null
           result_payload?: Json | null
@@ -15345,8 +15339,8 @@ export type Database = {
           initiator: string
           initiator_agent: string | null
           next_event_seq: number
-          quality_outcome: Json | null
           parent_run_id: string | null
+          quality_outcome: Json | null
           query: string | null
           request_snapshot: Json | null
           result_payload: Json | null
@@ -16123,11 +16117,13 @@ export type Database = {
           height: number | null
           id: string
           mime_type: string | null
+          poster_source: string | null
           renderer: string | null
           renderer_version: string | null
           role: string
           size_bytes: number | null
           source_checksum: string | null
+          source_timestamp_ms: number | null
           state: string
           storage_path: string | null
           updated_at: string
@@ -16146,11 +16142,13 @@ export type Database = {
           height?: number | null
           id?: string
           mime_type?: string | null
+          poster_source?: string | null
           renderer?: string | null
           renderer_version?: string | null
           role: string
           size_bytes?: number | null
           source_checksum?: string | null
+          source_timestamp_ms?: number | null
           state?: string
           storage_path?: string | null
           updated_at?: string
@@ -16169,11 +16167,13 @@ export type Database = {
           height?: number | null
           id?: string
           mime_type?: string | null
+          poster_source?: string | null
           renderer?: string | null
           renderer_version?: string | null
           role?: string
           size_bytes?: number | null
           source_checksum?: string | null
+          source_timestamp_ms?: number | null
           state?: string
           storage_path?: string | null
           updated_at?: string
@@ -19717,6 +19717,7 @@ export type Database = {
           content_json: Json | null
           content_plan_id: string | null
           created_at: string
+          group_id: string | null
           id: string
           instagram_post_id: string | null
           media_stage: string
@@ -19740,6 +19741,7 @@ export type Database = {
           content_json?: Json | null
           content_plan_id?: string | null
           created_at?: string
+          group_id?: string | null
           id?: string
           instagram_post_id?: string | null
           media_stage?: string
@@ -19763,6 +19765,7 @@ export type Database = {
           content_json?: Json | null
           content_plan_id?: string | null
           created_at?: string
+          group_id?: string | null
           id?: string
           instagram_post_id?: string | null
           media_stage?: string
@@ -20749,6 +20752,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      derive_media_stage: { Args: { content_json: Json }; Returns: string }
       enqueue_post_generation_job: {
         Args: {
           p_account_id: string
@@ -20929,6 +20933,52 @@ export type Database = {
       requeue_post_generation_job: {
         Args: { p_backoff_sec: number; p_job_id: string; p_worker_id: string }
         Returns: boolean
+      }
+      retry_post_generation_job: {
+        Args: { p_job_id: string; p_min_worker_generation: number }
+        Returns: {
+          account_id: string | null
+          attempts: number
+          brand_id: string
+          cancel_requested: boolean
+          claimed_at: string | null
+          client_key: string | null
+          completed_at: string | null
+          creative_brief: Json | null
+          dead_lettered_at: string | null
+          dispatch_context: Json | null
+          draft_id: string | null
+          enqueued_at: string
+          error: Json | null
+          expires_at: string
+          guidance_prompt: string | null
+          heartbeat_at: string | null
+          job_id: string
+          job_type: string
+          last_error: Json | null
+          max_attempts: number
+          min_worker_generation: number
+          next_run_at: string
+          payload: Json | null
+          plan_id: string | null
+          plan_item_id: string | null
+          platform: string
+          progress: Json
+          scheduled_at: string
+          session_id: string
+          started_at: string | null
+          status: Database["organic"]["Enums"]["post_generation_job_status"]
+          trend_id: string | null
+          updated_at: string
+          user_id: string
+          worker_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "post_generation_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       start_inline_post_generation_job: {
         Args: {
@@ -21312,6 +21362,71 @@ export type Database = {
           targeting_spec?: Json
         }
         Relationships: []
+      }
+      canvas_creative_replacements: {
+        Row: {
+          ad_account_id: string
+          ad_id: string
+          adset_id: string
+          applied_at: string | null
+          asset_ids: string[]
+          brand_id: string
+          campaign_id: string
+          created_at: string
+          created_by: string
+          creative_id: string | null
+          creative_row_id: string | null
+          error: string | null
+          format: string
+          id: string
+          previous_creative_id: string
+          status: string
+        }
+        Insert: {
+          ad_account_id: string
+          ad_id: string
+          adset_id: string
+          applied_at?: string | null
+          asset_ids: string[]
+          brand_id: string
+          campaign_id: string
+          created_at?: string
+          created_by: string
+          creative_id?: string | null
+          creative_row_id?: string | null
+          error?: string | null
+          format: string
+          id?: string
+          previous_creative_id: string
+          status: string
+        }
+        Update: {
+          ad_account_id?: string
+          ad_id?: string
+          adset_id?: string
+          applied_at?: string | null
+          asset_ids?: string[]
+          brand_id?: string
+          campaign_id?: string
+          created_at?: string
+          created_by?: string
+          creative_id?: string | null
+          creative_row_id?: string | null
+          error?: string | null
+          format?: string
+          id?: string
+          previous_creative_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "canvas_creative_replacements_creative_row_id_fkey"
+            columns: ["creative_row_id"]
+            isOneToOne: false
+            referencedRelation: "ad_creatives"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       creative_label_jobs: {
         Row: {
@@ -22395,96 +22510,6 @@ export type Database = {
         Relationships: []
       }
       tool_events_2026_07: {
-        Row: {
-          action: string | null
-          brand_id: string | null
-          bytes_in: number | null
-          bytes_out: number | null
-          cache_hit: boolean | null
-          client_id: string | null
-          client_name: string | null
-          client_profile: string | null
-          created_at: string
-          dimensions: Json
-          duration_ms: number | null
-          email: string | null
-          error_code: string | null
-          event_id: string
-          event_kind: string
-          event_name: string
-          id: number
-          method: string | null
-          mount_path: string | null
-          params_hash: string | null
-          request_id: string | null
-          result_status: string
-          session_id: string | null
-          status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool: string | null
-          transport: string | null
-          user_id: string
-        }
-        Insert: {
-          action?: string | null
-          brand_id?: string | null
-          bytes_in?: number | null
-          bytes_out?: number | null
-          cache_hit?: boolean | null
-          client_id?: string | null
-          client_name?: string | null
-          client_profile?: string | null
-          created_at?: string
-          dimensions?: Json
-          duration_ms?: number | null
-          email?: string | null
-          error_code?: string | null
-          event_id?: string
-          event_kind?: string
-          event_name?: string
-          id: number
-          method?: string | null
-          mount_path?: string | null
-          params_hash?: string | null
-          request_id?: string | null
-          result_status?: string
-          session_id?: string | null
-          status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool?: string | null
-          transport?: string | null
-          user_id: string
-        }
-        Update: {
-          action?: string | null
-          brand_id?: string | null
-          bytes_in?: number | null
-          bytes_out?: number | null
-          cache_hit?: boolean | null
-          client_id?: string | null
-          client_name?: string | null
-          client_profile?: string | null
-          created_at?: string
-          dimensions?: Json
-          duration_ms?: number | null
-          email?: string | null
-          error_code?: string | null
-          event_id?: string
-          event_kind?: string
-          event_name?: string
-          id?: number
-          method?: string | null
-          mount_path?: string | null
-          params_hash?: string | null
-          request_id?: string | null
-          result_status?: string
-          session_id?: string | null
-          status?: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool?: string | null
-          transport?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
-      tool_events_2026_08: {
         Row: {
           action: string | null
           brand_id: string | null
@@ -26498,12 +26523,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -26527,11 +26552,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -26552,11 +26577,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -26577,11 +26602,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -26594,11 +26619,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

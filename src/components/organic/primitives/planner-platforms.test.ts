@@ -64,7 +64,9 @@ describe('buildPlannerPlatforms', () => {
     expect(platforms[0]?.canCreate).toBe(true);
   });
 
-  it('shows published platforms as read-only rows', () => {
+  // YouTube has a publisher, so a brand with YouTube posts gets a creatable YouTube row — and a
+  // creatable row is enough on its own, so Instagram is not forced in beside it.
+  it('gives a platform with a publisher a creatable row from its posts alone', () => {
     const postedContent: OrganicCalendarPostedContent[] = [
       {
         id: 'youtube-post',
@@ -79,8 +81,8 @@ describe('buildPlannerPlatforms', () => {
 
     const platforms = buildPlannerPlatforms([], [makeDay()], postedContent);
 
-    expect(platformKeys(platforms)).toEqual(['instagram', 'youtube']);
-    expect(platforms.find((platform) => platform.key === 'youtube')?.canCreate).toBe(false);
+    expect(platformKeys(platforms)).toEqual(['youtube']);
+    expect(platforms.find((platform) => platform.key === 'youtube')?.canCreate).toBe(true);
   });
 
   it('leaves the not-yet-supported channels out unless they are explicitly asked for', () => {
@@ -90,10 +92,10 @@ describe('buildPlannerPlatforms', () => {
     });
 
     expect(withoutComingSoon.some((platform) => platform.comingSoon)).toBe(false);
-    // Facebook and TikTok are NOT here: the coming-soon list is derived from what the backend
-    // cannot publish, and both have publishers now. Facebook sat in this list for months while
-    // having a complete, reviewed publisher, so the planner could not create a Facebook post.
-    expect(platformKeys(withComingSoon)).toEqual(['instagram', 'youtube', 'x']);
+    // Facebook, TikTok and YouTube are NOT here: the coming-soon list is derived from what the
+    // backend cannot publish, and all three have publishers now. Facebook sat in this list for
+    // months while having a complete, reviewed publisher, so the planner could not create a post.
+    expect(platformKeys(withComingSoon)).toEqual(['instagram', 'x']);
     expect(
       withComingSoon.filter((platform) => platform.comingSoon).every((platform) => platform.Icon),
     ).toBe(true);

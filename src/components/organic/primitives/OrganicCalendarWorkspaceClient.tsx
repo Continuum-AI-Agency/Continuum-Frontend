@@ -34,6 +34,7 @@ import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import { mapOneShotPostResponseToCalendarDraft } from '@/lib/organic/mapPlacementToDraft';
 import { writePlannerUrlState } from '@/lib/organic/plannerUrlState';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
+import { isPostPlatform } from '@/lib/organic/postPlatforms';
 import { type PlannerAccountOption, useCalendarStore } from '@/lib/organic/store';
 import type { Trend } from '@/lib/organic/trends';
 import { getLocalStorageJSON, setLocalStorageJSON } from '@/lib/storage';
@@ -147,12 +148,6 @@ type OrganicCalendarWorkspaceClientProps = {
 };
 
 const NOOP_STRING = (_id: string) => {};
-
-function isSchedulablePlannerPlatform(
-  platform: PlannerPlatformKey | undefined,
-): platform is OrganicPlatformTag {
-  return platform === 'instagram' || platform === 'linkedin';
-}
 
 export function OrganicCalendarWorkspaceClient(props: OrganicCalendarWorkspaceClientProps) {
   return (
@@ -786,10 +781,8 @@ function OrganicCalendarWorkspaceInner({
       format?: CreatePostFormat;
     }) => {
       const selectedPlatform =
-        (isSchedulablePlannerPlatform(context?.platform) && context?.platform) ||
-        (activePlatforms.find((platform) => ['instagram', 'linkedin'].includes(platform)) as
-          | OrganicPlatformTag
-          | undefined) ||
+        (isPostPlatform(context?.platform) && context?.platform) ||
+        activePlatforms.find(isPostPlatform) ||
         'instagram';
 
       // The month grid renders every day of the visible month, but `calendarDays`
@@ -862,8 +855,7 @@ function OrganicCalendarWorkspaceInner({
       // AI mode opens the composer and tasks a durable single-post agent; manual
       // mode seeds an editable draft from scratch.
       if (mode === 'ai') {
-        const platform =
-          (isSchedulablePlannerPlatform(context?.platform) && context?.platform) || 'instagram';
+        const platform = (isPostPlatform(context?.platform) && context?.platform) || 'instagram';
         const dayId = (context?.dayId ?? defaultCreateDayId).slice(0, 10);
         const scheduledAt = /^\d{4}-\d{2}-\d{2}$/.test(dayId)
           ? `${dayId}T12:00:00.000Z`

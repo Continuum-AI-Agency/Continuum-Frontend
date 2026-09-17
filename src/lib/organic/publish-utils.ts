@@ -1,5 +1,6 @@
 import { PLATFORM_CAPABILITIES, type PublishPlatform } from '@continuum/contracts';
 import type { OrganicCalendarDraft } from '@/components/organic/primitives/types';
+import { POST_PLATFORMS } from './postPlatforms';
 
 // The body builder and the format→postType mapping live in @continuum/contracts: the
 // backend parses the body it produces, and the publish bench drives it directly. Keeping
@@ -76,17 +77,8 @@ export function resolveGroupPublishTargets(draft: OrganicCalendarDraft): GroupPu
 // The publish SSE frames and their failure codes are parsed here rather than in the hook, so the
 // stream parser and the user-facing error copy exist once.
 
-// Keyed by PublishPlatform, so a newly publishable platform cannot reach the UI unnamed.
-const PLATFORM_LABELS: Record<PublishPlatform, string> = {
-  instagram: 'Instagram',
-  facebook: 'Facebook',
-  linkedin: 'LinkedIn',
-  tiktok: 'TikTok',
-  youtube: 'YouTube',
-};
-
 export function publishPlatformLabel(platform: PublishPlatform | undefined | null): string {
-  return platform ? PLATFORM_LABELS[platform] : 'the platform';
+  return platform ? POST_PLATFORMS[platform].label : 'the platform';
 }
 
 /**

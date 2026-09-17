@@ -4,17 +4,9 @@ import { resolveOrganicImageUrl } from '@continuum/contracts';
 import { Play } from 'lucide-react';
 import Image from 'next/image';
 import { useDraftWithFreshMedia } from '@/components/organic/hooks/useDraftWithFreshMedia';
+import { isPostPlatform, POST_PLATFORMS } from '@/lib/organic/postPlatforms';
 import { cn } from '@/lib/utils';
 import type { OrganicCalendarDraft } from './types';
-
-const PLATFORM_GRADIENTS: Record<string, [string, string]> = {
-  instagram: ['#E1306C', '#833AB4'],
-  linkedin: ['#0A66C2', '#004182'],
-  facebook: ['#1877F2', '#0550AE'],
-  tiktok: ['#69C9D0', '#010101'],
-  youtube: ['#FF0000', '#CC0000'],
-  twitter: ['#1DA1F2', '#0C7ABF'],
-};
 
 function hasText(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
@@ -143,7 +135,9 @@ export function DraftCardMedia({
   // reloaded. The hyperframe early return below must not be able to skip the re-sign.
   const draft = useDraftWithFreshMedia(persistedDraft);
   const platform = draft.platforms[0] ?? 'instagram';
-  const [gradientStart, gradientEnd] = PLATFORM_GRADIENTS[platform] ?? ['#5A48F9', '#7C6FFF'];
+  const [gradientStart, gradientEnd] = isPostPlatform(platform)
+    ? POST_PLATFORMS[platform].gradient
+    : ['#5A48F9', '#7C6FFF'];
   const altText =
     typeof draft.mediaSuggestion?.alt === 'string' && draft.mediaSuggestion.alt.trim()
       ? draft.mediaSuggestion.alt.trim()

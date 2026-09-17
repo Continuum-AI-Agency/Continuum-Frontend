@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { type BrowserContext, expect, type Page, test } from '@playwright/test';
+import { type BrowserContext, expect, type Locator, type Page, test } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createDefaultOnboardingState } from '../src/lib/onboarding/state';
 import { mintSessionWithPassword } from './support/auth';
@@ -39,7 +39,10 @@ import { mintSessionWithPassword } from './support/auth';
 //   · Real media generation. The MP4 is encoded locally by Mediabunny and the poster by the
 //     app's own poster module — no Vertex/Veo call, no reel render.
 //   · Publishing. The attach path is exercised up to the picker's refusal; nothing is posted
-//     to Instagram, and `stageMediaForPublish` is not run.
+//     to Instagram, and `stageMediaForPublish` is not run. The TikTok/YouTube case drives
+//     Publish through the real `publish-intent` route to the confirm dialog and CANCELS it:
+//     the provider hop (TikTok/YouTube actually receiving the post) is not exercised here —
+//     `organic:tiktok:live:bench` is the bench that posts for real.
 //   · Aesthetic judgement on the hover card and the preview panel. Containment, overlap and
 //     scroll deltas are measured; whether the result LOOKS right is a human call, and the
 //     screenshots in e2e/__screenshots__/organic-planner-preview are attached for it.
@@ -73,6 +76,13 @@ const VIDEO_TITLE = 'PLPREV Video — the attached reel must render in the previ
 const VIDEO_FRESH_TITLE = 'PLPREV Fresh — a freshly attached reel, live signed URL';
 const FAR_TITLE = 'PLPREV Far — a draft outside the visible calendar range';
 const PICKER_TITLE = 'PLPREV Picker — two videos must be refused';
+// TikTok and YouTube drafts used to render "Preview for tiktok is coming soon": no media, no
+// picker, a chip reading "Instagram" and a disabled "Publish to Instagram".
+const PLATFORM_REEL_TITLES = {
+  tiktok: 'PLPREV TikTok — the reel must preview and publish on TikTok',
+  youtube: 'PLPREV YouTube — the reel must preview and publish on YouTube',
+} as const;
+const PLATFORM_REEL_LABELS = { tiktok: 'TikTok', youtube: 'YouTube' } as const;
 
 const HAS_LOCAL_STACK = Boolean(
   /127\.0\.0\.1|localhost/.test(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '') &&
@@ -165,6 +175,71 @@ function textDraftRow(index: number) {
         tags: [],
         mediaCount: 0,
       },
+    },
+  };
+}
+
+// A reel whose upload-time signed URL has decayed (`storageUrl: ''`), on a platform other than
+// Instagram — the same re-sign path #231 proves for Instagram.
+function platformReelRow(platform: keyof typeof PLATFORM_REEL_TITLES, dayOffset: number) {
+  const dayId = dayIdOffsetFromToday(dayOffset);
+  const clientKey = `${BENCH_CLIENT_KEY_PREFIX}${platform}`;
+  const title = PLATFORM_REEL_TITLES[platform];
+  const caption = `PLPREV ${platform.toUpperCase()} CAPTION. One reel, previewed where it posts.`;
+  return {
+    brand_id: BRAND_ID,
+    user_id: OWNER_ID,
+    platform,
+    platform_account_id: 'unassigned',
+    status: 'draft',
+    scheduled_date: `${dayId}T10:00:00.000Z`,
+    client_key: clientKey,
+    media_stage: 'realized',
+    slot_data: {
+      placementId: clientKey,
+      dayId,
+      weekStart: dayId,
+      timeLabel: '10:00 AM',
+      platform,
+      trendId: null,
+      title,
+      caption,
+    },
+    content_json: {
+      content: { type: 'reel', format: 'Reel' },
+      copy: { caption, hashtags: { high: [], medium: [], low: [] }, claims: [] },
+      publishingAssets: [
+        {
+          role: 'primary',
+          kind: 'video',
+          storagePath: VIDEO_PATH,
+          storageUrl: '',
+          bucket: BUCKET,
+          mimeType: 'video/mp4',
+        },
+      ],
+      creative: {
+        mediaSuggestion: {
+          kind: 'reel',
+          mediaStatus: 'user_supplied',
+          url: null,
+          assetUrl: null,
+          signedUrl: null,
+          assets: null,
+          assetBase64: null,
+          hyperframe: null,
+          reel: {
+            generated: true,
+            url: VIDEO_PATH,
+            bucket: BUCKET,
+            signedUrl: null,
+            thumbnailUrl: null,
+            durationSec: 4,
+            scenes: [],
+          },
+        },
+      },
+      quality: { passed: true },
     },
   };
 }
@@ -314,6 +389,23 @@ async function dismissHoverCard(page: Page): Promise<void> {
   await expect(page.locator('[data-radix-popper-content-wrapper]')).toHaveCount(0, {
     timeout: 20_000,
   });
+}
+
+// The header is CSS-uppercased and Playwright matches the TRANSFORMED text, so an exact
+// 'Add media' never matches what the browser renders.
+async function openLibraryPicker(page: Page, trigger: Locator): Promise<Locator> {
+  const pickerHeader = page.getByText(/^add media$/i);
+  await expect
+    .poll(
+      async () => {
+        if ((await pickerHeader.count()) > 0) return 1;
+        await trigger.click({ force: true, timeout: 5_000 }).catch(() => {});
+        return pickerHeader.count();
+      },
+      { timeout: 60_000, intervals: [500, 1000, 2000] },
+    )
+    .toBeGreaterThan(0);
+  return pickerHeader;
 }
 
 const hoverCard = (page: Page) =>
@@ -647,6 +739,8 @@ test.describe('organic planner list + draft preview', () => {
         quality: { passed: true },
       },
     });
+
+    rows.push(platformReelRow('tiktok', 4), platformReelRow('youtube', 5));
 
     const { data: inserted } = await supabase
       .schema('organic')
@@ -1106,24 +1200,16 @@ test.describe('organic planner list + draft preview', () => {
       'the Edit toggle did not enter edit mode',
     ).toBeVisible({ timeout: 20_000 });
 
-    // The media slot itself is the picker's entry point in edit mode (`onActivate`). It sits
-    // inside the scaled phone shell, so force past Playwright's stability wait and retry until
-    // the popover is actually up.
+    // The empty slot splits into "Select from library" and "Upload from your computer"; a
+    // forced click on the slot's centre lands on Upload and opens the OS file chooser, never
+    // the picker. Click the library entry the user clicks. It sits inside the scaled phone
+    // shell, so force past Playwright's stability wait and retry until the popover is up.
     const mediaSlot = preview.locator('[aria-label^="Media slot"]').first();
     await expect(mediaSlot).toBeVisible({ timeout: 30_000 });
-    // The header is CSS-uppercased and Playwright matches the TRANSFORMED text, so an exact
-    // 'Add media' never matches what the browser renders.
-    const pickerHeader = page.getByText(/^add media$/i);
-    await expect
-      .poll(
-        async () => {
-          if ((await pickerHeader.count()) > 0) return 1;
-          await mediaSlot.click({ force: true, timeout: 5_000 }).catch(() => {});
-          return pickerHeader.count();
-        },
-        { timeout: 60_000, intervals: [500, 1000, 2000] },
-      )
-      .toBeGreaterThan(0);
+    await openLibraryPicker(
+      page,
+      mediaSlot.getByRole('button', { name: 'Select from library' }).first(),
+    );
 
     const tileA = page.getByRole('button', { name: 'plprev-a.mp4' }).first();
     const tileB = page.getByRole('button', { name: 'plprev-b.mp4' }).first();
@@ -1140,6 +1226,107 @@ test.describe('organic planner list + draft preview', () => {
     console.log('[#231] two video tiles → "Only one video per post", Attach disabled');
     await page.screenshot({ path: `${SCREENSHOT_DIR}/picker-refuses-two-videos.png` });
   });
+
+  for (const platform of ['tiktok', 'youtube'] as const) {
+    const label = PLATFORM_REEL_LABELS[platform];
+    test(`${label}: the reel previews, the library picker opens, and Publish reaches the ${label} confirm`, async () => {
+      await openListPlanner(page);
+      const row = listRow(page, PLATFORM_REEL_TITLES[platform]);
+      await expect(row).toBeVisible({ timeout: 120_000 });
+      await row.click();
+
+      const preview = page.getByRole('complementary', { name: 'Draft preview' });
+      await expect(preview).toBeVisible({ timeout: 60_000 });
+
+      await expect(
+        preview.getByText(/coming soon/i),
+        `the ${label} draft still falls through to the coming-soon placeholder`,
+      ).toHaveCount(0, { timeout: 30_000 });
+      await expect(
+        preview.getByRole('button', { name: /^Change platforms/ }),
+        `the platform chip does not name ${label}`,
+      ).toHaveText(label, { timeout: 30_000 });
+
+      // Pixel truth, as #231: a <video> that decodes proves the media mounted AND re-signed.
+      const video = preview.locator('video');
+      await expect(video, `the ${label} preview renders no <video>`).toHaveCount(1, {
+        timeout: 60_000,
+      });
+      await expect
+        .poll(
+          async () =>
+            video.evaluate(
+              (el) =>
+                (el as HTMLVideoElement).readyState >= 1 && (el as HTMLVideoElement).videoWidth > 0,
+            ),
+          { timeout: 60_000, intervals: [1000, 2000, 3000] },
+        )
+        .toBe(true);
+      const box = await video.boundingBox();
+      console.log(
+        `[${platform}] preview decoded the reel; frame ${Math.round(box?.width ?? 0)}x${Math.round(box?.height ?? 0)}`,
+      );
+      expect(box && box.height > box.width, `the ${label} reel frame is not vertical`).toBe(true);
+      await page.screenshot({ path: `${SCREENSHOT_DIR}/preview-${platform}-readonly.png` });
+
+      // The library picker is mounted inside the media node the placeholder used to drop.
+      const editToggle = preview.locator('button[aria-label="Edit post"]');
+      await editToggle.click();
+      await expect(preview.locator('button[aria-label="Done editing post"]')).toBeVisible({
+        timeout: 20_000,
+      });
+      const mediaSlot = preview.locator('[aria-label^="Media slot"]').first();
+      await expect(mediaSlot, `the ${label} edit mode has no media slot`).toBeVisible({
+        timeout: 30_000,
+      });
+      // A slot that already holds media opens the creative full screen; its Replace is the
+      // user's way into the library for a post that has media.
+      await mediaSlot.click({ force: true });
+      const replace = page.getByRole('button', { name: 'Replace' }).first();
+      await expect(replace, `the ${label} creative lightbox offers no Replace`).toBeVisible({
+        timeout: 30_000,
+      });
+      const pickerHeader = await openLibraryPicker(page, replace);
+      await expect(
+        page.getByRole('button', { name: 'plprev-a.mp4' }).first(),
+        `the library media never reached the ${label} picker`,
+      ).toBeVisible({ timeout: 60_000 });
+      console.log(`[${platform}] library picker opened with the seeded library videos`);
+      await page.keyboard.press('Escape');
+      await expect(pickerHeader).toHaveCount(0, { timeout: 20_000 });
+      await preview.locator('button[aria-label="Done editing post"]').click();
+
+      // Publish goes through the REAL publish-intent route, then stops at the confirm dialog.
+      const publish = preview.getByRole('button', { name: `Publish to ${label}`, exact: true });
+      await expect(publish, `no enabled "Publish to ${label}" button`).toBeEnabled({
+        timeout: 30_000,
+      });
+      await expect(preview.getByRole('button', { name: 'Publish to Instagram' })).toHaveCount(0);
+
+      const intentResponse = page.waitForResponse(
+        (response) =>
+          response.url().includes('/publish-intent') && response.request().method() === 'POST',
+        { timeout: 60_000 },
+      );
+      await publish.click();
+      const intent = await intentResponse;
+      const intentBody = (await intent.json().catch(() => null)) as Record<string, unknown> | null;
+      console.log(
+        `[${platform}] publish-intent ${intent.status()} platform=${String(intentBody?.platform)} publishable=${String(intentBody?.publishable)} media=${JSON.stringify(intentBody?.media ?? null)} account=${JSON.stringify(intentBody?.account ?? null)} blockers=${JSON.stringify(intentBody?.blockers ?? null)}`,
+      );
+      expect(intent.status(), `publish-intent failed for ${label}`).toBeLessThan(400);
+      // The server's own reading of the row: the post goes to this platform, with its media.
+      expect(intentBody?.platform).toBe(platform);
+      expect((intentBody?.media as { count?: number } | undefined)?.count).toBeGreaterThan(0);
+
+      const dialog = page.getByRole('alertdialog');
+      await expect(dialog.getByText(`Publish to ${label}?`)).toBeVisible({ timeout: 30_000 });
+      await page.screenshot({ path: `${SCREENSHOT_DIR}/publish-confirm-${platform}.png` });
+      // Never confirm: this bench does not post.
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      await expect(dialog).toHaveCount(0, { timeout: 20_000 });
+    });
+  }
 
   // #233 — the tester's own surface. "The detail of the post aren't showing in calendar…
   // if you touch the button of edit it should open." Both halves are measured here on the

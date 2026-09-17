@@ -11,6 +11,7 @@ import {
   YouTubeIcon,
 } from '@/components/shared/icons';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
+import { POST_PLATFORMS } from '@/lib/organic/postPlatforms';
 import type { OrganicCalendarDay, OrganicCalendarPostedContent, OrganicPlatformTag } from './types';
 
 export type PlannerPlatformKey = OrganicPlatformTag | 'x';
@@ -42,37 +43,19 @@ export type PlannerPlatform = {
   comingSoon?: boolean;
 };
 
+function postPlatformMeta(
+  key: OrganicPlatformKey,
+  Icon: IconComponent,
+): Omit<PlannerPlatform, 'canCreate'> {
+  return { key, label: POST_PLATFORMS[key].label, shortLabel: POST_PLATFORMS[key].abbr, Icon };
+}
+
 const PLATFORM_META: Record<PlannerPlatformKey, Omit<PlannerPlatform, 'canCreate'>> = {
-  instagram: {
-    key: 'instagram',
-    label: 'Instagram',
-    shortLabel: 'IG',
-    Icon: InstagramIcon,
-  },
-  linkedin: {
-    key: 'linkedin',
-    label: 'LinkedIn',
-    shortLabel: 'IN',
-    Icon: LinkedInIcon,
-  },
-  youtube: {
-    key: 'youtube',
-    label: 'YouTube',
-    shortLabel: 'YT',
-    Icon: YouTubeIcon,
-  },
-  facebook: {
-    key: 'facebook',
-    label: 'Facebook',
-    shortLabel: 'FB',
-    Icon: FacebookIcon,
-  },
-  tiktok: {
-    key: 'tiktok',
-    label: 'TikTok',
-    shortLabel: 'TT',
-    Icon: TikTokIcon,
-  },
+  instagram: postPlatformMeta('instagram', InstagramIcon),
+  linkedin: postPlatformMeta('linkedin', LinkedInIcon),
+  youtube: postPlatformMeta('youtube', YouTubeIcon),
+  facebook: postPlatformMeta('facebook', FacebookIcon),
+  tiktok: postPlatformMeta('tiktok', TikTokIcon),
   x: {
     key: 'x',
     label: 'X',
@@ -93,7 +76,7 @@ const PLATFORM_META: Record<PlannerPlatformKey, Omit<PlannerPlatform, 'canCreate
 const PUBLISHABLE_PLATFORMS = new Set<string>(Object.keys(PLATFORM_CAPABILITIES));
 
 const SCHEDULABLE_PLATFORM_ORDER: OrganicPlatformTag[] = (
-  ['instagram', 'linkedin', 'facebook', 'tiktok'] as OrganicPlatformTag[]
+  ['instagram', 'linkedin', 'facebook', 'tiktok', 'youtube'] as OrganicPlatformTag[]
 ).filter((platform) => PUBLISHABLE_PLATFORMS.has(platform));
 
 /** Whatever the planner can display but the backend cannot publish to. */

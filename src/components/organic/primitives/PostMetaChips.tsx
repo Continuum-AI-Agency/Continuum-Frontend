@@ -14,24 +14,15 @@ import {
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
+import {
+  ORGANIC_POST_PLATFORM_KEYS,
+  POST_PLATFORMS,
+  postFormatOptions,
+} from '@/lib/organic/postPlatforms';
 import { normalizeTimeLabel } from '@/lib/organic/scheduling';
 import { cn } from '@/lib/utils';
 
-const PLATFORM_OPTIONS: { value: OrganicPlatformKey; label: string }[] = [
-  { value: 'instagram', label: 'Instagram' },
-  { value: 'facebook', label: 'Facebook' },
-  { value: 'linkedin', label: 'LinkedIn' },
-];
-
-// HyperFrame is a video-production method, not a selectable post format.
-const FORMAT_OPTIONS = ['Post', 'Carousel', 'Reel'] as const;
 const QUICK_TIME_OPTIONS = ['9:00 AM', '1:00 PM', '5:00 PM'] as const;
-
-const PLATFORM_DOT: Record<string, string> = {
-  instagram: '#E1306C',
-  facebook: '#1877F2',
-  linkedin: '#0A66C2',
-};
 
 const chipClass =
   'inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-foreground/90 transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50';
@@ -61,7 +52,7 @@ function isSameFormat(a: string, b: string): boolean {
 }
 
 function platformLabel(platform: OrganicPlatformKey): string {
-  return PLATFORM_OPTIONS.find((p) => p.value === platform)?.label ?? 'Instagram';
+  return POST_PLATFORMS[platform].label;
 }
 
 /**
@@ -72,9 +63,7 @@ function platformLabel(platform: OrganicPlatformKey): string {
  * rather than writing a row nothing can publish.
  */
 function normalizeSelection(platforms: readonly OrganicPlatformKey[]): OrganicPlatformKey[] {
-  const ordered = PLATFORM_OPTIONS.map((option) => option.value).filter((value) =>
-    platforms.includes(value),
-  );
+  const ordered = ORGANIC_POST_PLATFORM_KEYS.filter((value) => platforms.includes(value));
   return ordered.length > 0 ? ordered : ['instagram'];
 }
 
@@ -219,7 +208,7 @@ export function PostMetaChips({
                       'h-1.5 w-1.5 rounded-full ring-1 ring-muted/40',
                       index > 0 && '-ml-0.5',
                     )}
-                    style={{ backgroundColor: PLATFORM_DOT[value] ?? '#7C6FFF' }}
+                    style={{ backgroundColor: POST_PLATFORMS[value].color }}
                   />
                 ))}
               </span>
@@ -228,11 +217,11 @@ export function PostMetaChips({
           }
         />
         <DropdownMenuContent align="start" className="w-44">
-          {PLATFORM_OPTIONS.map((option) => {
-            const checked = selected.includes(option.value);
+          {ORGANIC_POST_PLATFORM_KEYS.map((value) => {
+            const checked = selected.includes(value);
             return (
               <DropdownMenuCheckboxItem
-                key={option.value}
+                key={value}
                 checked={checked}
                 // The last remaining platform cannot be unchecked: zero platforms is
                 // not representable downstream.
@@ -240,13 +229,13 @@ export function PostMetaChips({
                 // Radix closes the menu on select by default, which would end the
                 // multi-select after the very first toggle.
                 onSelect={(event) => event.preventDefault()}
-                onCheckedChange={() => togglePlatform(option.value)}
+                onCheckedChange={() => togglePlatform(value)}
               >
                 <span
                   className="mr-2 h-1.5 w-1.5 rounded-full"
-                  style={{ backgroundColor: PLATFORM_DOT[option.value] ?? '#7C6FFF' }}
+                  style={{ backgroundColor: POST_PLATFORMS[value].color }}
                 />
-                {option.label}
+                {POST_PLATFORMS[value].label}
               </DropdownMenuCheckboxItem>
             );
           })}
@@ -266,7 +255,9 @@ export function PostMetaChips({
         <DropdownMenuContent align="start" className="w-36">
           {/* The format menu marked no current value at all, so it read as "pick one"
               rather than "this is the one". */}
-          {FORMAT_OPTIONS.map((option) => (
+          {/* HyperFrame is a video-production method, not a selectable post format; and a
+              post goes out on every selected platform, so only formats they all take. */}
+          {postFormatOptions(selected).map((option) => (
             <DropdownMenuItem
               key={option}
               onSelect={() => onFormatChange(option)}

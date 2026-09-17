@@ -761,6 +761,63 @@ describe('OrganicDraftPreview — multi-platform frame selector', () => {
   });
 });
 
+// TikTok and YouTube used to fall through to "Preview for tiktok is coming soon", which never
+// mounted the media: no video, no drop zone, no library picker, and a disabled Publish button
+// labelled "Instagram". Every publishable platform now renders through the shared frame.
+describe('OrganicDraftPreview — every publishable platform previews and posts', () => {
+  beforeEach(() => {
+    cleanup();
+    resetEditingDraftId();
+  });
+
+  const reelDraft = (platform: string) =>
+    baseDraft({
+      platforms: [platform as OrganicCalendarDraft['platforms'][number]],
+      format: 'Reel',
+      publishingAssets: [
+        {
+          role: 'primary',
+          kind: 'video',
+          storagePath: 'library/clip.mp4',
+          storageUrl: 'https://cdn.example/clip.mp4',
+        },
+      ],
+    });
+
+  for (const [platform, label] of [
+    ['tiktok', 'TikTok'],
+    ['youtube', 'YouTube'],
+  ] as const) {
+    it(`mounts the ${label} media and offers Publish to ${label}`, () => {
+      const { container } = render(
+        <OrganicDraftPreview draft={reelDraft(platform)} brandProfileId="brand-1" />,
+      );
+
+      expect(screen.queryAllByText(/coming soon/i).length).toBe(0);
+      expect(container.querySelector('video')?.getAttribute('src')).toContain(
+        'https://cdn.example/clip.mp4',
+      );
+      const publish = screen.getByRole('button', { name: `Publish to ${label}` });
+      expect((publish as HTMLButtonElement).disabled).toBe(false);
+      expect(screen.queryAllByRole('button', { name: 'Publish to Instagram' }).length).toBe(0);
+    });
+
+    it(`opens the ${label} media zone and caption editor in edit mode`, () => {
+      render(
+        <OrganicDraftPreview
+          draft={baseDraft({ platforms: [platform] })}
+          brandProfileId="brand-1"
+        />,
+      );
+      fireEvent.click(screen.getByLabelText('Edit post'));
+
+      expect(screen.getByTestId('media-select')).toBeTruthy();
+      expect(screen.getByTestId('drop-zone')).toBeTruthy();
+      expect(screen.getByLabelText(`Edit ${platform} caption`)).toBeTruthy();
+    });
+  }
+});
+
 // #255 — "if you pass the carousel very fast it shows the same image". Persisted
 // slideIndex is sparse (and absent on assets the agent never numbered) while the
 // preview counts array positions; mixing the two made the badge, the chevrons and

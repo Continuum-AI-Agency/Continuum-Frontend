@@ -31,8 +31,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { OrganicPublishAccountOption } from '@/lib/organic/platformAccountOptions';
-import { ORGANIC_PUBLISH_PLATFORM_KEYS } from '@/lib/organic/platformAccountOptions';
 import { organicPlatformLabel } from '@/lib/organic/platforms';
+import { ORGANIC_POST_PLATFORM_KEYS } from '@/lib/organic/postPlatforms';
 import { cn } from '@/lib/utils';
 import { useOrganicPublishAccountSource } from './defaultPickerSources';
 import { isUnsetId, type PickerSource, RawIdFallbackField } from './pickerSource';
@@ -61,7 +61,7 @@ export function OrganicPublishTargetPicker({
   const accountId = isUnsetId(value.accountId) ? null : value.accountId;
 
   const groups = useMemo(() => {
-    return ORGANIC_PUBLISH_PLATFORM_KEYS.map((platform) => ({
+    return ORGANIC_POST_PLATFORM_KEYS.map((platform) => ({
       platform,
       label: organicPlatformLabel(platform),
       options: items.filter((item) => item.platform === platform),
@@ -94,7 +94,7 @@ export function OrganicPublishTargetPicker({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {ORGANIC_PUBLISH_PLATFORM_KEYS.map((platform) => (
+              {ORGANIC_POST_PLATFORM_KEYS.map((platform) => (
                 <SelectItem key={platform} value={platform}>
                   {organicPlatformLabel(platform)}
                 </SelectItem>

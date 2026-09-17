@@ -74,10 +74,12 @@ describe('deriveOrganicPlatformAccounts', () => {
     expect(rows.find((row) => row.platform === 'facebook')?.accountId).toBeNull();
   });
 
-  it('covers only the MVP platforms unless a wider set is asked for', () => {
+  // The planner page resolves a publish account id per platform from this list. It stopped at
+  // Instagram/Facebook/LinkedIn, so a TikTok draft never had an account id to publish with.
+  it('covers every publishable platform unless a narrower set is asked for', () => {
     expect(
       deriveOrganicPlatformAccounts({ integrationSummary: summary }).map((r) => r.platform),
-    ).toEqual(['instagram', 'facebook', 'linkedin']);
+    ).toEqual(['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube']);
     expect(
       deriveOrganicPlatformAccounts({
         integrationSummary: summary,
@@ -116,12 +118,19 @@ describe('deriveOrganicPublishAccountOptions', () => {
     ]);
   });
 
-  it('never offers a platform the organic publisher does not support', () => {
+  it('offers TikTok, which has a publisher, and never a platform without one', () => {
     const options = deriveOrganicPublishAccountOptions({
       ...summary,
       tiktok: { accounts: [account({ integrationAccountId: 'tt-1', name: 'TikTok' })] },
+      x: { accounts: [account({ integrationAccountId: 'x-1', name: 'X handle' })] },
     });
 
-    expect(options.some((option) => option.platform === 'tiktok')).toBe(false);
+    expect(options.find((option) => option.platform === 'tiktok')).toEqual({
+      platform: 'tiktok',
+      platformLabel: 'TikTok',
+      accountId: 'tt-1',
+      label: 'TikTok',
+    });
+    expect(options.map((option) => option.accountId)).not.toContain('x-1');
   });
 });

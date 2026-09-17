@@ -104,10 +104,13 @@ describe('PostCommandMenu', () => {
         onEditHashtags={mock()}
         onDelete={mock()}
         canPublish
+        publishPlatformLabel="TikTok"
         onPublish={onPublish}
       />,
     );
-    fireEvent.click(screen.getByText('Publish to Instagram'));
+    // The label names the draft's platform; it used to say Instagram for every draft.
+    expect(screen.queryAllByText('Publish to Instagram').length).toBe(0);
+    fireEvent.click(screen.getByText('Publish to TikTok'));
     expect(onPublish).toHaveBeenCalledTimes(1);
   });
 
@@ -121,12 +124,15 @@ describe('PostCommandMenu', () => {
         onEditHashtags={mock()}
         onDelete={mock()}
         canPublish
+        publishPlatformLabel="Instagram"
         onPublish={onPublish}
         publishBlockedReason="Add a caption and at least one image or video to schedule this post."
       />,
     );
 
-    const item = screen.getByText(/Publish to Instagram/).closest('button') as HTMLButtonElement;
+    const item = screen
+      .getByText('Publish to Instagram — needs setup')
+      .closest('button') as HTMLButtonElement;
     expect(item.disabled).toBe(true);
     expect(item.title).toContain('Add a caption');
 

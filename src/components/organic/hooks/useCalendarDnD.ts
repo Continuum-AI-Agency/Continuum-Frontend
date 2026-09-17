@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useToast } from '@/components/ui/ToastProvider';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
+import { isPostPlatform } from '@/lib/organic/postPlatforms';
 import { useCalendarStore } from '@/lib/organic/store';
 import { formatTimeLabel, parseTimeLabelToHour } from '../primitives/calendar-utils';
 import { ORGANIC_BETA_LAUNCH_SCHEDULE } from '../primitives/organic-calendar-config';
@@ -13,10 +14,6 @@ import type {
   OrganicSeedDragPayload,
 } from '../primitives/types';
 
-function isSchedulablePlatformTag(value: string | undefined): value is OrganicPlatformTag {
-  return value === 'instagram' || value === 'linkedin';
-}
-
 function parsePlannerCellId(id: string): { dayId: string; platform?: OrganicPlatformTag } | null {
   if (!id.startsWith('planner-cell::')) return null;
   const [, dayId, platformRaw] = id.split('::');
@@ -24,7 +21,7 @@ function parsePlannerCellId(id: string): { dayId: string; platform?: OrganicPlat
 
   return {
     dayId,
-    platform: isSchedulablePlatformTag(platformRaw) ? platformRaw : undefined,
+    platform: isPostPlatform(platformRaw) ? platformRaw : undefined,
   };
 }
 

@@ -34,8 +34,12 @@ import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { isCarouselFormat, resolveCarouselSlideCount } from '@/lib/organic/carousel';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
-import type { OrganicPlatformKey } from '@/lib/organic/platforms';
-import { inferPublishPlatform } from '@/lib/organic/publish-utils';
+import {
+  isPostPlatform,
+  ORGANIC_POST_PLATFORM_KEYS,
+  POST_PLATFORMS,
+} from '@/lib/organic/postPlatforms';
+import { inferPublishPlatform, publishPlatformLabel } from '@/lib/organic/publish-utils';
 import { isValidTimeLabel, normalizeTimeLabel } from '@/lib/organic/scheduling';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
@@ -48,42 +52,20 @@ import { DuplicateDayPicker } from './DuplicateDayPicker';
 import { cardVariants, draftStatusPresentation } from './draft-card-styles';
 import type { OrganicCalendarDraft } from './types';
 
-const QUICK_PLATFORM_OPTIONS: OrganicPlatformKey[] = ['instagram', 'facebook', 'linkedin'];
 const QUICK_TIME_OPTIONS = ['9:00 AM', '1:00 PM', '5:00 PM'] as const;
-const QUICK_PLATFORM_LABELS: Record<OrganicPlatformKey, string> = {
-  instagram: 'Instagram',
-  facebook: 'Facebook',
-  linkedin: 'LinkedIn',
-  tiktok: 'TikTok',
-  youtube: 'YouTube',
-};
 
 // The left rail says WHERE the post goes; the status pill and the top strip say WHAT
 // STATE it is in. Keeping the two axes apart is why the rail no longer turns emerald
 // on publish — a card that changed both its channel color and its status color at once
 // left the reader guessing which fact had changed.
-const PLATFORM_ACCENT: Record<string, string> = {
-  instagram: '#E1306C',
-  linkedin: '#0A66C2',
-  facebook: '#1877F2',
-  tiktok: '#69C9D0',
-  youtube: '#FF0000',
-  twitter: '#1DA1F2',
-};
 
 function resolvePlatformAccentColor(platform: string): string {
-  return PLATFORM_ACCENT[platform] ?? '#5A48F9';
+  return isPostPlatform(platform) ? POST_PLATFORMS[platform].color : '#5A48F9';
 }
 
 function hasTextValue(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
-
-const PUBLISH_PLATFORM_LABELS: Record<string, string> = {
-  instagram: 'Instagram',
-  facebook: 'Facebook',
-  linkedin: 'LinkedIn',
-};
 
 // Ghost per-stage CTA rendered INSIDE the card's own <button> — a real <button>
 // here would be invalid HTML nesting, so it follows the card's role="button"
@@ -660,7 +642,7 @@ export function CalendarDraftCard({
             </ContextMenuItem>
           ) : null}
           <ContextMenuSeparator />
-          {QUICK_PLATFORM_OPTIONS.map((option) => (
+          {ORGANIC_POST_PLATFORM_KEYS.map((option) => (
             <ContextMenuItem
               key={option}
               onSelect={() =>
@@ -670,7 +652,7 @@ export function CalendarDraftCard({
                 }))
               }
             >
-              Platform: {QUICK_PLATFORM_LABELS[option]}
+              Platform: {POST_PLATFORMS[option].label}
             </ContextMenuItem>
           ))}
           {QUICK_TIME_OPTIONS.map((time) => (
@@ -743,8 +725,8 @@ export function CalendarDraftCard({
               {isPublishing
                 ? 'Publishing…'
                 : publishBlockedReason
-                  ? `Publish to ${PUBLISH_PLATFORM_LABELS[publishPlatform ?? 'instagram']} — needs setup`
-                  : `Publish to ${PUBLISH_PLATFORM_LABELS[publishPlatform ?? 'instagram']}`}
+                  ? `Publish to ${publishPlatformLabel(publishPlatform)} — needs setup`
+                  : `Publish to ${publishPlatformLabel(publishPlatform)}`}
             </ContextMenuItem>
           ) : null}
           {openInStudio && draft.status !== 'streaming' && draft.status !== 'placeholder' ? (

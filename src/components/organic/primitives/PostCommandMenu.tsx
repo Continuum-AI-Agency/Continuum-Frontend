@@ -43,6 +43,7 @@ export function PostCommandMenu({
   onDuplicate,
   onPublish,
   canPublish = false,
+  publishPlatformLabel = 'the platform',
   isPublishing = false,
   publishBlockedReason,
   onOpenInStudio,
@@ -58,6 +59,8 @@ export function PostCommandMenu({
   onDuplicate?: (dayId: string) => void;
   onPublish?: () => void;
   canPublish?: boolean;
+  /** Who the post goes out to, e.g. "TikTok". */
+  publishPlatformLabel?: string;
   isPublishing?: boolean;
   /** Non-null when the draft is not ready to publish. Renders the item disabled and says
       why, instead of offering a click that usePublishDraft will refuse. */
@@ -135,8 +138,8 @@ export function PostCommandMenu({
             {isPublishing
               ? 'Publishing…'
               : publishBlockedReason
-                ? 'Publish to Instagram — needs setup'
-                : 'Publish to Instagram'}
+                ? `Publish to ${publishPlatformLabel} — needs setup`
+                : `Publish to ${publishPlatformLabel}`}
           </DropdownMenuItem>
         )}
         {onOpenInStudio && (
