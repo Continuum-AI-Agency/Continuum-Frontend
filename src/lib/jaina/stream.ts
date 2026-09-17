@@ -2406,6 +2406,7 @@ export function reduceJainaStreamEvent(
         state.responseText.trim().length > 0 ||
         state.reportJson.trim().length > 0 ||
         Boolean(state.report) ||
+        Boolean(state.reportV2) ||
         Boolean(state.reportAssembly) ||
         state.progress.length > 0 ||
         state.objectives.length > 0 ||
@@ -4076,6 +4077,7 @@ export function hasRenderableStreamContent(
   state: Pick<
     JainaStreamState,
     | 'report'
+    | 'reportV2'
     | 'reportAssembly'
     | 'responseText'
     | 'pendingClarification'
@@ -4087,6 +4089,7 @@ export function hasRenderableStreamContent(
 ): boolean {
   return Boolean(
     state.report ||
+      state.reportV2 ||
       state.reportAssembly ||
       (state.responseText && state.responseText.trim().length > 0) ||
       state.pendingClarification ||

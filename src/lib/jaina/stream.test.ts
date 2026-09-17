@@ -663,6 +663,75 @@ describe('reduceJainaStreamEvent canonical report events', () => {
     expect(state.status).toBe('streaming');
   });
 
+  it('does not clear completed V2 blocks when a late response.created arrives', () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: 'response.created',
+      data: {
+        id: 'resp_primary',
+        object: 'realtime.response',
+        status: 'in_progress',
+        status_details: null,
+        output: [],
+      },
+    } as any);
+    state = reduceJainaStreamEvent(state, {
+      type: 'response.checkpoint_report',
+      data: {
+        item_id: 'item_v2',
+        part_id: 'part_v2',
+        report: {
+          language: 'en',
+          executive_summary: 'Final campaign analysis.',
+          blocks: [
+            {
+              block_id: 'summary_1',
+              category: 'narrative',
+              scope: 'account',
+              title: 'Campaign Summary',
+              priority: 'primary',
+              body: 'The completed response must remain visible.',
+            },
+          ],
+          follow_up_questions: [],
+          media_map: {},
+          _meta: {
+            schema_version: '2',
+            block_count: 1,
+            has_charts: false,
+            has_media: false,
+            primary_scope: 'account',
+          },
+        },
+      },
+    } as any);
+    state = reduceJainaStreamEvent(state, {
+      type: 'response.done',
+      data: {
+        id: 'resp_primary',
+        object: 'realtime.response',
+        status: 'completed',
+        status_details: null,
+        output: [],
+      },
+    } as any);
+    state = reduceJainaStreamEvent(state, {
+      type: 'response.created',
+      data: {
+        id: 'resp_late',
+        object: 'realtime.response',
+        status: 'in_progress',
+        status_details: null,
+        output: [],
+      },
+    } as any);
+
+    expect(state.status).toBe('complete');
+    expect(state.responseId).toBe('resp_primary');
+    expect(state.reportV2?.blocks[0]?.title).toBe('Campaign Summary');
+  });
+
   it('does not clear accumulated content when a foreign response.created arrives after an error', () => {
     let state = createInitialJainaStreamState();
 
@@ -2639,6 +2708,26 @@ describe('hasRenderableStreamContent', () => {
         report: { type: 'direct_answer', answer: 'hi' } as any,
       }),
     ).toBe(true);
+  });
+
+  it('is true when a V2 block report is present', () => {
+    const state = createInitialJainaStreamState();
+    state.reportV2 = {
+      language: 'en',
+      executive_summary: 'Completed analysis.',
+      blocks: [],
+      follow_up_questions: [],
+      media_map: {},
+      _meta: {
+        schema_version: '2',
+        block_count: 0,
+        has_charts: false,
+        has_media: false,
+        primary_scope: 'account',
+      },
+    };
+
+    expect(hasRenderableStreamContent(state)).toBe(true);
   });
 
   it('is true when responseText has content', () => {
