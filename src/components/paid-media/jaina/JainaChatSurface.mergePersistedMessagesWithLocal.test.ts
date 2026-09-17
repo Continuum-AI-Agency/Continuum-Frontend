@@ -268,6 +268,64 @@ describe('mergePersistedMessagesWithLocal', () => {
     expect(assistant.content).toBe('Final analysis summary from persisted history.');
   });
 
+  it('keeps streamed V2 blocks when the persisted V2 shell is empty', () => {
+    const emptyReport = {
+      language: 'en' as const,
+      executive_summary: 'DayPass sin costo summary',
+      follow_up_questions: [],
+      media_map: {},
+      _meta: {
+        schema_version: '2' as const,
+        block_count: 0,
+        has_charts: false,
+        has_media: false,
+        primary_scope: 'campaign' as const,
+      },
+      blocks: [],
+    };
+    const persisted: JainaChatMessage[] = [
+      baseUserMessage,
+      {
+        id: 'persisted-assistant',
+        role: 'assistant',
+        content: 'DayPass sin costo summary',
+        createdAt: '2026-04-17T09:20:05.000Z',
+        status: 'done',
+        reportV2: emptyReport,
+      },
+    ];
+    const local: JainaChatMessage[] = [
+      { ...baseUserMessage, id: 'local-user' },
+      {
+        id: 'local-assistant',
+        role: 'assistant',
+        content: 'DayPass sin costo summary',
+        createdAt: '2026-04-17T09:20:05.000Z',
+        status: 'done',
+        reportV2: {
+          ...emptyReport,
+          _meta: { ...emptyReport._meta, block_count: 1 },
+          blocks: [
+            {
+              block_id: 'creative_elements',
+              category: 'narrative',
+              scope: 'campaign',
+              title: 'Creative elements driving low cost',
+              priority: 0,
+              body: 'The day-pass value proposition and direct CTA drive conversion.',
+              highlights: [],
+            },
+          ],
+        },
+      },
+    ];
+
+    const assistant = mergePersistedMessagesWithLocal(persisted, local).at(-1);
+
+    expect(assistant?.reportV2?.blocks).toHaveLength(1);
+    expect(assistant?.reportV2?.blocks[0]?.block_id).toBe('creative_elements');
+  });
+
   it('does not downgrade completed local objectives during persisted refresh', () => {
     const persisted: JainaChatMessage[] = [
       baseUserMessage,

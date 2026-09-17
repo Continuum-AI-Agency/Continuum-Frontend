@@ -1121,7 +1121,11 @@ export function mergePersistedMessagesWithLocal(
   const localHasReport = Boolean(
     localAssistant.report || localAssistant.reportV2 || localAssistant.reportAssembly,
   );
-  const localHasRicherReportV2 = Boolean(localAssistant.reportV2 && !persistedAssistant.reportV2);
+  const localHasRicherReportV2 = Boolean(
+    localAssistant.reportV2 &&
+      (!persistedAssistant.reportV2 ||
+        localAssistant.reportV2.blocks.length > persistedAssistant.reportV2.blocks.length),
+  );
   const persistedPlanOnly =
     Boolean(persistedAssistant.plan) &&
     !persistedAssistant.report &&
