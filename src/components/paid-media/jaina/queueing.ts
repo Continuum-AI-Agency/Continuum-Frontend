@@ -7,6 +7,7 @@ export type QueuedJainaMessage = {
   createdAt: string;
   canvas: boolean;
   images?: AgentAttachment[];
+  inlineTextContext?: string;
   references?: AgentMentionReference[];
   forceReportArtifact?: boolean;
   clarificationId?: string;

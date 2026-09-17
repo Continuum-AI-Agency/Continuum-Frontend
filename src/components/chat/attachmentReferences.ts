@@ -10,6 +10,8 @@ type AttachmentContext = {
   attachments: AgentAttachment[];
   /** Documents — identities the Backend resolves to chunks server-side. */
   documents: AgentDocumentAttachment[];
+  /** Pasted text carried directly in the turn instead of stored or indexed. */
+  inlineTexts: Array<{ id: string; name: string; text: string }>;
   references: AgentMentionReference[];
 };
 
@@ -35,9 +37,15 @@ export function buildAgentAttachmentContext(
 ): AttachmentContext {
   const attachments: AgentAttachment[] = [];
   const documents: AgentDocumentAttachment[] = [];
+  const inlineTexts: AttachmentContext['inlineTexts'] = [];
   const references: AgentMentionReference[] = [];
 
   for (const file of files) {
+    if (file.kind === 'inline-text' && file.status === 'ready' && file.text) {
+      inlineTexts.push({ id: file.id, name: file.name, text: file.text });
+      continue;
+    }
+
     // A document becomes a `document` reference — exactly the shape an @-mention from
     // the Brain folder already produces, which the Organic agent resolves through
     // getDocumentChunks. Routing it through `attachments` instead would put it on the
@@ -89,7 +97,19 @@ export function buildAgentAttachmentContext(
     });
   }
 
-  return { attachments, documents, references };
+  return { attachments, documents, inlineTexts, references };
+}
+
+export function buildInlineTextContextBlock(
+  inlineTexts: readonly AttachmentContext['inlineTexts'][number][],
+): string {
+  if (inlineTexts.length === 0) return '';
+  return [
+    'The user attached the following pasted text as context for this turn.',
+    ...inlineTexts.map(
+      (item) => `<pasted_text name=${JSON.stringify(item.name)}>\n${item.text}\n</pasted_text>`,
+    ),
+  ].join('\n\n');
 }
 
 export function mergeAttachmentReferences(

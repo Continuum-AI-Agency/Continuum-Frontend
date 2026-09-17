@@ -16,6 +16,29 @@ const readyAttachment = (overrides: Partial<Attachment> = {}): Attachment => ({
 });
 
 describe('buildAgentAttachmentContext', () => {
+  it('carries ready pasted text as inline context without a document reference', () => {
+    const context = buildAgentAttachmentContext(
+      [
+        {
+          id: 'paste-1',
+          kind: 'inline-text',
+          name: 'pasted-text.txt',
+          type: 'text/plain',
+          status: 'ready',
+          text: 'Campaign notes go here.',
+        },
+      ],
+      'jaina',
+    );
+
+    expect(context.inlineTexts).toEqual([
+      { id: 'paste-1', name: 'pasted-text.txt', text: 'Campaign notes go here.' },
+    ]);
+    expect(context.attachments).toEqual([]);
+    expect(context.documents).toEqual([]);
+    expect(context.references).toEqual([]);
+  });
+
   it('turns ready Library images into persisted attachments and media references', () => {
     const context = buildAgentAttachmentContext([readyAttachment()], 'organic');
 

@@ -110,6 +110,28 @@ describe('useChatAttachments', () => {
     expect(params.file.name).toBe('shot.png');
   });
 
+  it('adds pasted text as ready inline context without upload or indexing', () => {
+    const { result } = renderController();
+
+    act(() => {
+      result.current.addInlineText('First line\nSecond line');
+    });
+
+    expect(result.current.files).toEqual([
+      expect.objectContaining({
+        kind: 'inline-text',
+        name: 'pasted-text.txt',
+        type: 'text/plain',
+        status: 'ready',
+        text: 'First line\nSecond line',
+      }),
+    ]);
+    expect(result.current.isUploading).toBe(false);
+    expect(uploadMediaAsset).not.toHaveBeenCalled();
+    expect(uploadEphemeralChatDocument).not.toHaveBeenCalled();
+    expect(realtimeSubscription).toBeNull();
+  });
+
   it('rejects a file over the size cap without attempting an upload', async () => {
     const { result } = renderController();
 

@@ -48,6 +48,8 @@ type PromptInputProps = {
   // upload lands. The composer only drives it. Build one with useChatAttachments.
   attachments?: ChatAttachmentsController;
   attachmentOnlyPrompt?: string;
+  /** Keep large text pastes in the next turn instead of uploading and indexing them. */
+  inlinePastedText?: boolean;
   variant?: 'chat' | 'canvas';
   disabled?: boolean;
   placeholder?: string;
@@ -430,6 +432,7 @@ export function PromptInput({
   onStop,
   variant = 'chat',
   attachmentOnlyPrompt,
+  inlinePastedText = false,
 }: PromptInputProps) {
   const [plainValue, setPlainValue] = React.useState('');
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
@@ -488,11 +491,16 @@ export function PromptInput({
       const serialized = syncFromEditor();
       const trimmedValue = serialized.text.trim();
       const submittedAttachments = attachments?.files ?? [];
+      const hasInlineText = submittedAttachments.some(
+        (attachment) => attachment.kind === 'inline-text' && attachment.status === 'ready',
+      );
       const submittedValue =
         trimmedValue ||
-        (submittedAttachments.some((attachment) => attachment.status === 'ready')
-          ? (attachmentOnlyPrompt ?? '')
-          : '');
+        (hasInlineText
+          ? 'Use the pasted text as context.'
+          : submittedAttachments.some((attachment) => attachment.status === 'ready')
+            ? (attachmentOnlyPrompt ?? '')
+            : '');
       const linkReferences = extractLinkReferences(submittedValue, mentionSource);
       onSubmit(submittedValue, submittedAttachments, [
         ...serialized.references.map(({ token: _t, preview, refKey: _k, ...reference }) => {
@@ -716,9 +724,13 @@ export function PromptInput({
       if (!attachments || (!/[\r\n]/.test(text) && text.length <= 280)) return;
 
       event.preventDefault();
-      attachments.add([new File([text], 'pasted-text.txt', { type: 'text/plain' })]);
+      if (inlinePastedText) {
+        attachments.addInlineText(text);
+      } else {
+        attachments.add([new File([text], 'pasted-text.txt', { type: 'text/plain' })]);
+      }
     },
-    [attachments],
+    [attachments, inlinePastedText],
   );
 
   const handleDragOver = useCallback(

@@ -54,6 +54,7 @@ import { AgentDataScopePicker } from '@/components/chat/AgentDataScopePicker';
 import { ChatProvenanceBanner } from '@/components/chat/AgentInitiatorPill';
 import {
   buildAgentAttachmentContext,
+  buildInlineTextContextBlock,
   mergeAttachmentReferences,
 } from '@/components/chat/attachmentReferences';
 import type { Attachment } from '@/components/chat/attachments';
@@ -2625,6 +2626,7 @@ export function JainaChatSurface({
       // Jaina's media resolver warns on anything that is not an image.
       documents?: AgentDocumentAttachment[];
       documentScopeKey?: string;
+      inlineTextContext?: string;
       references?: AgentMentionReference[];
       planAction?: JainaPlanAction;
       scaffoldAction?: JainaScaffoldAction;
@@ -2736,12 +2738,16 @@ export function JainaChatSurface({
       // so the only way Jaina can act on the graph is to READ it. Folded in here rather
       // than at the call site so `userMessage.content` above stays the sentence the
       // human typed — the transcript shows a request, not a wall of nodes.
-      const wireQuery = campaignCanvasPayload
-        ? `${query}\n\n${buildCampaignCanvasProposalBlock(
-            campaignCanvasPayload,
-            'This canvas is the human-reviewed graph. Propose it with paid_scaffold_propose, naming each node with the path_key shown.',
-          )}`
-        : query;
+      const wireContext = [
+        input.inlineTextContext,
+        campaignCanvasPayload
+          ? buildCampaignCanvasProposalBlock(
+              campaignCanvasPayload,
+              'This canvas is the human-reviewed graph. Propose it with paid_scaffold_propose, naming each node with the path_key shown.',
+            )
+          : null,
+      ].filter((value): value is string => Boolean(value));
+      const wireQuery = wireContext.length > 0 ? `${query}\n\n${wireContext.join('\n\n')}` : query;
 
       void start({
         query: wireQuery,
@@ -2800,6 +2806,7 @@ export function JainaChatSurface({
       canvas: boolean;
       clarificationId?: string;
       images?: QueuedJainaMessage['images'];
+      inlineTextContext?: string;
       references?: AgentMentionReference[];
       forceReportArtifact?: boolean;
     }) => {
@@ -2811,6 +2818,7 @@ export function JainaChatSurface({
         createdAt: new Date().toISOString(),
         canvas: input.canvas,
         ...(input.images && input.images.length > 0 ? { images: input.images } : {}),
+        ...(input.inlineTextContext ? { inlineTextContext: input.inlineTextContext } : {}),
         ...(input.references && input.references.length > 0
           ? { references: input.references }
           : {}),
@@ -2835,6 +2843,7 @@ export function JainaChatSurface({
         'jaina',
       );
       const images = attachmentContext.attachments;
+      const inlineTextContext = buildInlineTextContextBlock(attachmentContext.inlineTexts);
       // Documents stay OUT of `images`: that field is the pixels path, where Jaina's
       // media resolver emits an unsupported_media_kind warning for anything non-image.
       const documents = attachmentContext.documents;
@@ -2848,6 +2857,7 @@ export function JainaChatSurface({
         ...(resolvedReferences.length > 0 ? { references: resolvedReferences } : {}),
         forceReportArtifact: isJainaProMode,
         ...(images.length > 0 ? { images } : {}),
+        ...(inlineTextContext ? { inlineTextContext } : {}),
         ...(documents.length > 0 ? { documents } : {}),
         // Scopes which ephemeral documents this turn may resolve — server-derived.
         ...(documents.length > 0 ? { documentScopeKey: attachmentScopeKey } : {}),
@@ -2942,6 +2952,7 @@ export function JainaChatSurface({
         canvas: nextQueuedMessage.canvas,
         clarificationId: nextQueuedMessage.clarificationId,
         images: nextQueuedMessage.images,
+        inlineTextContext: nextQueuedMessage.inlineTextContext,
         references: nextQueuedMessage.references,
         forceReportArtifact: nextQueuedMessage.forceReportArtifact,
       });
@@ -3572,6 +3583,7 @@ export function JainaChatSurface({
                     handleSubmit(value, submitted, references)
                   }
                   attachments={attachments}
+                  inlinePastedText
                   attachmentOnlyPrompt="Analyze the attached media in the context of my paid media."
                   disabled={isInputDisabled}
                   ariaLabel="Message Jaina"

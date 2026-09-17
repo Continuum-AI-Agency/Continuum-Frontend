@@ -25,6 +25,7 @@ export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 export type ChatAttachmentsController = {
   files: Attachment[];
   add: (incoming: FileList | File[]) => void;
+  addInlineText: (text: string) => void;
   remove: (id: string) => void;
   clear: () => void;
   retry: (id: string) => Promise<void>;
@@ -125,10 +126,25 @@ export function useChatAttachments({
   );
 
   const upload = useCallback(
-    (id: string, file: File, kind: Attachment['kind']) =>
+    (id: string, file: File, kind: 'media' | 'document') =>
       kind === 'document' ? uploadDocument(id, file) : uploadMedia(id, file),
     [uploadDocument, uploadMedia],
   );
+
+  const addInlineText = useCallback((text: string) => {
+    setFiles((previous) => [
+      ...previous,
+      {
+        id: crypto.randomUUID(),
+        kind: 'inline-text',
+        name: 'pasted-text.txt',
+        type: 'text/plain',
+        size: formatAttachmentSize(new Blob([text]).size),
+        status: 'ready',
+        text,
+      },
+    ]);
+  }, []);
 
   const add = useCallback(
     (incoming: FileList | File[]) => {
@@ -188,7 +204,7 @@ export function useChatAttachments({
       }
 
       for (const { attachment, file } of accepted) {
-        if (attachment.status === 'uploading') {
+        if (attachment.status === 'uploading' && attachment.kind !== 'inline-text') {
           void upload(attachment.id, file, attachment.kind);
         }
       }
@@ -339,7 +355,7 @@ export function useChatAttachments({
   const retry = useCallback(
     async (id: string) => {
       const target = files.find((file) => file.id === id);
-      if (!target?.file || target.status !== 'error') return;
+      if (!target?.file || target.status !== 'error' || target.kind === 'inline-text') return;
       patch(id, { status: 'uploading', error: undefined });
       await upload(id, target.file, target.kind);
     },
@@ -354,5 +370,5 @@ export function useChatAttachments({
   );
   const hasErrors = useMemo(() => files.some((file) => file.status === 'error'), [files]);
 
-  return { files, add, remove, clear, retry, isUploading, hasErrors, scopeKey };
+  return { files, add, addInlineText, remove, clear, retry, isUploading, hasErrors, scopeKey };
 }

@@ -26,7 +26,7 @@ export type Attachment = {
    * undefined, so downstream code branches on a discriminant rather than guessing
    * from which optional fields happen to be populated.
    */
-  kind: 'media' | 'document';
+  kind: 'media' | 'document' | 'inline-text';
   assetId?: string;
   versionId?: string;
   /** Set for kind === 'document'. The agent resolves chunks from this server-side. */
@@ -42,6 +42,8 @@ export type Attachment = {
   // Retained so an expired signed URL can be re-minted instead of the attachment being lost.
   storagePath?: string;
   error?: string;
+  /** Pasted text carried directly with the next turn; never uploaded or indexed. */
+  text?: string;
   // Retained only for retry while the composer is mounted. Removing the chip
   // deliberately does not remove the already-created Library asset.
   file?: File;
@@ -99,6 +101,10 @@ function AttachmentStatus({ file, onRetry }: { file: Attachment; onRetry?: (id: 
   // moment of sending and not only in the toast that has since disappeared.
   if (file.status === 'ready' && isDocument && file.retention === 'ephemeral') {
     return <Badge variant="outline">Temporary · 14d</Badge>;
+  }
+
+  if (file.status === 'ready' && file.kind === 'inline-text') {
+    return <Badge variant="outline">Included</Badge>;
   }
 
   if (file.status === 'error') {

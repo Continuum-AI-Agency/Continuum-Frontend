@@ -140,10 +140,12 @@ mock.module('@/components/chat/prompt-input', () => ({
     onSubmit,
     disabled,
     actions,
+    inlinePastedText,
   }: {
     onSubmit?: (value: string, attachments?: unknown[]) => void;
     disabled?: boolean;
     actions?: ReactNode;
+    inlinePastedText?: boolean;
   }) => (
     <div>
       <div data-testid="prompt-actions">{actions}</div>
@@ -154,6 +156,25 @@ mock.module('@/components/chat/prompt-input', () => ({
         onClick={() => onSubmit?.('Recommend budget reallocations for this week by campaign')}
       >
         submit
+      </button>
+      <button
+        type="button"
+        data-testid="prompt-submit-inline-text"
+        disabled={disabled || !inlinePastedText}
+        onClick={() =>
+          onSubmit?.('Summarize this pasted brief', [
+            {
+              id: 'paste-1',
+              kind: 'inline-text',
+              name: 'pasted-text.txt',
+              type: 'text/plain',
+              status: 'ready',
+              text: 'The campaign brief says to prioritize retention.',
+            },
+          ])
+        }
+      >
+        submit inline text
       </button>
     </div>
   ),
@@ -431,6 +452,55 @@ describe('JainaChatSurface integration', () => {
       canvas: false,
     });
     expect(startMock.mock.calls[0]?.[0].adAccountIds).toBeUndefined();
+  });
+
+  it('sends pasted text inline without a document upload or reference', async () => {
+    global.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const method = init?.method ?? 'GET';
+      if (method === 'GET' && url.includes('/api/agents/jaina/chat/conversations?')) {
+        return Promise.resolve(jsonResponse({ sessions: [], messages: [] }));
+      }
+      if (method === 'POST' && url.endsWith('/api/agents/jaina/chat/conversations')) {
+        return Promise.resolve(
+          jsonResponse({
+            session_id: 'session-inline',
+            brand_id: 'brand-1',
+            ad_account_id: 'act-1',
+            conversation_title: null,
+          }),
+        );
+      }
+      return Promise.resolve({
+        ok: false,
+        text: () => Promise.resolve('Unhandled fetch route'),
+      } as MockFetchResponse);
+    }) as typeof fetch;
+
+    render(
+      <JainaChatSurface
+        brandProfileId="brand-1"
+        brandName="Test Brand"
+        adAccountId="act-1"
+        campaignId={null}
+        userId="user-1"
+      />,
+      { wrapper: withQueryClient },
+    );
+
+    await waitFor(() => {
+      expect((screen.getByTestId('prompt-submit-inline-text') as HTMLButtonElement).disabled).toBe(
+        false,
+      );
+    });
+    fireEvent.click(screen.getByTestId('prompt-submit-inline-text'));
+
+    await waitFor(() => expect(startMock).toHaveBeenCalledTimes(1));
+    const request = startMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(request.query).toContain('Summarize this pasted brief');
+    expect(request.query).toContain('The campaign brief says to prioritize retention.');
+    expect(request.documents).toBeUndefined();
+    expect(request.documentScopeKey).toBeUndefined();
   });
 
   it('lets the user include another linked Meta ad account for the turn', async () => {

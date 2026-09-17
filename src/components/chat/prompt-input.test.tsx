@@ -13,10 +13,11 @@ globalThis.ResizeObserver ??= TestResizeObserver as unknown as typeof ResizeObse
 
 afterEach(cleanup);
 
-function attachmentController(add = mock()): ChatAttachmentsController {
+function attachmentController(add = mock(), addInlineText = mock()): ChatAttachmentsController {
   return {
     files: [],
     add,
+    addInlineText,
     remove: mock(),
     clear: mock(),
     retry: mock(async () => {}),
@@ -39,20 +40,23 @@ describe('PromptInput pasted text attachments', () => {
   it.each([
     ['multiline text', 'First line\nSecond line'],
     ['text over 280 characters', 'a'.repeat(281)],
-  ])('turns %s into a text file instead of editing the prompt', (_label, text) => {
+  ])('adds %s as ready inline context instead of uploading a document', (_label, text) => {
     const add = mock();
-    render(<PromptInput attachments={attachmentController(add)} onSubmit={mock()} />);
+    const addInlineText = mock();
+    render(
+      <PromptInput
+        attachments={attachmentController(add, addInlineText)}
+        inlinePastedText
+        onSubmit={mock()}
+      />,
+    );
 
     const editor = screen.getByRole('textbox');
     expect(pasteText(editor, text)).toBe(false);
 
     expect(editor.textContent).toBe('');
-    expect(add).toHaveBeenCalledTimes(1);
-    const file = add.mock.calls[0]?.[0]?.[0] as File;
-    expect(file).toBeInstanceOf(File);
-    expect(file.type.startsWith('text/plain')).toBe(true);
-    expect(file.name.endsWith('.txt')).toBe(true);
-    expect(file.size).toBe(new Blob([text]).size);
+    expect(addInlineText).toHaveBeenCalledWith(text);
+    expect(add).not.toHaveBeenCalled();
   });
 
   it('leaves a short single-line paste editable', () => {
