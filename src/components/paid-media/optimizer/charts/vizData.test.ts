@@ -15,6 +15,8 @@ import {
   projectionEndpoint,
   roasBreakevenSeries,
   sumFunnelWindow,
+  summarizeTimelineEvents,
+  timelineEventSummary,
 } from './vizData';
 
 function trendPoint(date: string, over: Record<string, number | null>) {
@@ -410,7 +412,10 @@ describe('sumFunnelRange', () => {
       ],
     },
     { id: 'b', daily: [{ date: '2026-09-02', impressions: 50, clicks: 5, leads: 0 }] },
-    { id: 'not-enrolled', daily: [{ date: '2026-09-02', impressions: 9999, clicks: 999, leads: 99 }] },
+    {
+      id: 'not-enrolled',
+      daily: [{ date: '2026-09-02', impressions: 9999, clicks: 999, leads: 99 }],
+    },
   ];
   it('sums enrolled ad sets inside the range only', () => {
     const w = sumFunnelRange(snapshots, ['a', 'b'], '2026-09-02', '2026-09-03');
@@ -432,5 +437,52 @@ describe('pacingSnapshot — source', () => {
       actualSpendToDate: 300,
     });
     expect(placeholder.estimated).toBe(true);
+  });
+});
+
+describe('summarizeTimelineEvents', () => {
+  const ev = (
+    kind: 'cycle' | 'applied' | 'status' | 'config',
+    label: string,
+    ts: string,
+    adset_id: string | null = null,
+  ) => ({ ts, kind, label, detail: null, adset_id, count: 1 });
+
+  it('collapses identical events into one row with a count, money moves first', () => {
+    const groups = summarizeTimelineEvents([
+      ev('cycle', 'Optimizer cycle', '2026-09-17T06:00:00Z'),
+      ev('config', 'apply item requested changed', '2026-09-17T12:56:00Z', 'a1'),
+      ev('config', 'apply item requested changed', '2026-09-17T13:12:00Z', 'a2'),
+      ev('config', 'apply item requested changed', '2026-09-17T13:12:00Z', 'a2'),
+      ev('applied', 'Budget applied to 3 ad sets', '2026-09-17T13:20:00Z'),
+      ev('config', 'apply mode changed', '2026-09-17T14:00:00Z'),
+    ]);
+    expect(groups.map((g) => [g.kind, g.label, g.count])).toEqual([
+      ['applied', 'Budget applied to 3 ad sets', 1],
+      ['config', 'apply item requested changed', 3],
+      ['config', 'apply mode changed', 1],
+      ['cycle', 'Optimizer cycle', 1],
+    ]);
+    expect(groups[1].ts).toBe('2026-09-17T13:12:00Z');
+    expect(groups[1].adsetIds).toEqual(['a1', 'a2']);
+  });
+
+  it('keeps events with different detail apart and honours a pre-aggregated count', () => {
+    const groups = summarizeTimelineEvents([
+      { ...ev('config', 'max daily minor changed', '2026-09-17T09:00:00Z'), detail: '100 → 200' },
+      { ...ev('config', 'max daily minor changed', '2026-09-17T10:00:00Z'), detail: '200 → 300' },
+      { ...ev('status', '2 ad sets paused', '2026-09-17T11:00:00Z'), count: 2 },
+    ]);
+    expect(groups).toHaveLength(3);
+    expect(groups[0].count).toBe(2);
+  });
+
+  it('renders the one-line form with ×N only where it counts', () => {
+    const line = timelineEventSummary([
+      ev('config', 'apply item requested changed', '2026-09-17T12:56:00Z'),
+      ev('config', 'apply item requested changed', '2026-09-17T13:12:00Z'),
+      ev('config', 'apply mode changed', '2026-09-17T14:00:00Z'),
+    ]);
+    expect(line).toBe('apply item requested changed ×2 · apply mode changed');
   });
 });

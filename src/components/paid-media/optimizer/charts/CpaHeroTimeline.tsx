@@ -41,6 +41,8 @@ import {
   type CpaHeroPoint,
   goldilocksZone,
   projectionEndpoint,
+  summarizeTimelineEvents,
+  timelineEventSummary,
 } from './vizData';
 
 const dayFmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
@@ -197,7 +199,7 @@ function CycleActionPins({ points }: { points: CpaHeroPoint[] }) {
         return (
           <g key={point.ts} transform={`translate(${x}, 0)`}>
             {/* Native hover: a keyboard/screen-reader path to the same list the card shows. */}
-            <title>{point.events.map((event) => event.label).join(' · ')}</title>
+            <title>{timelineEventSummary(point.events)}</title>
             <line
               stroke={color}
               strokeDasharray="2,3"
@@ -301,21 +303,24 @@ function HeroTooltip({
         // Capped + scrollable: a busy cycle can carry a dozen events, and an uncapped card
         // grows past the plot and gets clipped by the chart container.
         <div className="max-h-32 space-y-1 overflow-y-auto border-chart-tooltip-border border-t pt-1.5">
-          {point.events.map((event, index) => {
-            const { Icon, color } = eventStyle(event.kind);
-            const at = Date.parse(event.ts);
-            // Two events on one cycle can be byte-identical (the same config field changed
-            // twice carries the same label and detail), so position is the only thing that
-            // distinguishes them. This list is read-only and never reorders, which is what
-            // makes an index key safe here.
+          {summarizeTimelineEvents(point.events).map((group) => {
+            const { Icon, color } = eventStyle(group.kind);
+            const at = Date.parse(group.ts);
             return (
-              // biome-ignore lint/suspicious/noArrayIndexKey: identical repeated events have no other unique key
-              <div className="flex items-start gap-1.5 text-xs" key={`${point.ts}:event:${index}`}>
+              <div
+                className="flex items-start gap-1.5 text-xs"
+                key={`${group.kind}:${group.label}:${group.detail ?? ''}`}
+              >
                 <Icon aria-hidden="true" className="mt-0.5 size-3 shrink-0" style={{ color }} />
                 <span className="min-w-0 flex-1">
-                  <span className="text-chart-tooltip-foreground">{event.label}</span>
-                  {event.detail ? (
-                    <span className="text-chart-tooltip-muted"> · {event.detail}</span>
+                  <span className="text-chart-tooltip-foreground">{group.label}</span>
+                  {group.count > 1 ? (
+                    <span className="ml-1 rounded-sm bg-chart-tooltip-border px-1 text-3xs text-chart-tooltip-foreground tabular-nums">
+                      ×{group.count}
+                    </span>
+                  ) : null}
+                  {group.detail ? (
+                    <span className="text-chart-tooltip-muted"> · {group.detail}</span>
                   ) : null}
                 </span>
                 {Number.isNaN(at) ? null : (

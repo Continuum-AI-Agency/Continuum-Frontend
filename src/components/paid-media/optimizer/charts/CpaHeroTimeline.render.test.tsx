@@ -70,7 +70,7 @@ describe('CpaHeroTimeline', () => {
     expect(container.textContent).toContain('CPM');
   });
 
-  it('renders repeated events without a duplicate React key warning', () => {
+  it('collapses repeated events into one row with a count, and no duplicate key warning', () => {
     const event = {
       ts: '2026-06-22T00:00:00.000Z',
       kind: 'config' as const,
@@ -89,7 +89,9 @@ describe('CpaHeroTimeline', () => {
         />,
       );
 
-      expect(getAllByText(event.label)).toHaveLength(2);
+      // Two identical events are one line: "label ×2", never the label twice.
+      expect(getAllByText(event.label)).toHaveLength(1);
+      expect(getAllByText('×2')).toHaveLength(1);
       expect(
         consoleError.mock.calls.some((call) =>
           call.join(' ').includes('Encountered two children with the same key'),
