@@ -8,6 +8,7 @@ import {
   budgetMix,
   buildCpaTrendPoints,
   cpaTrendSummary,
+  lastFullDay,
   splitReallocation,
 } from './chartData';
 
@@ -285,6 +286,21 @@ describe('spendStream', () => {
       byObjective: { awareness: 0, purchase: 130, lead: 60 },
     });
     expect(stream.hasData).toBe(true);
+    expect(stream.window).toEqual({ start: '2026-09-09', end: '2026-09-11' });
+    expect(stream.enoughToChart).toBe(true);
+  });
+  it('flags a window with under a dollar a day as not worth charting', () => {
+    const stream = spendStream(
+      [{ date: '2026-09-11', objective: 'lead', spend: 2 }],
+      3,
+      '2026-09-11',
+    );
+    expect(stream.hasData).toBe(true);
+    expect(stream.enoughToChart).toBe(false);
+  });
+  it('lastFullDay is the day before, across a month boundary', () => {
+    expect(lastFullDay('2026-09-01')).toBe('2026-08-31');
+    expect(lastFullDay('2026-09-12')).toBe('2026-09-11');
   });
   it('is honestly empty with no rows', () => {
     const stream = spendStream([], 14, '2026-09-11');

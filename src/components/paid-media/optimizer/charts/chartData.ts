@@ -206,6 +206,10 @@ export type SpendStream = {
   /** The most recent day with any spend, and its split — the "today" of the legend. */
   latest: { date: string; total: number; byObjective: Record<string, number> } | null;
   hasData: boolean;
+  /** First and last day drawn (ISO) — the effective window, stated on the panel. */
+  window: { start: string; end: string };
+  /** Enough spend inside the window to draw a trend, or only a legend's worth. */
+  enoughToChart: boolean;
 };
 
 function isoDaysEnding(today: string, days: number): string[] {
@@ -217,11 +221,21 @@ function isoDaysEnding(today: string, days: number): string[] {
   return out;
 }
 
-/** Fold the per-day, per-objective spend rows into a stacked daily series ending today. */
+/** The last FULL day before `today` (ISO). Today is never final — Meta keeps posting spend
+ *  for a day until well after it ends — so a window that ends today draws a trailing dip that
+ *  is not real. Prism's calendar rule: "last N days" ends yesterday. */
+export function lastFullDay(today: string): string {
+  return new Date(Date.parse(`${today}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+}
+
+/** Below this the window is noise, not a trend: draw the legend, not the chart. */
+export const STREAM_MIN_SPEND_PER_DAY = 1;
+
+/** Fold the per-day, per-objective spend rows into a stacked daily series ending on `endDay`. */
 export function spendStream(
   rows: SpendByObjectiveInput[],
   days: number,
-  today: string,
+  endDay: string,
 ): SpendStream {
   const totals = new Map<string, number>();
   const byDate = new Map<string, Record<string, number>>();
@@ -237,7 +251,7 @@ export function spendStream(
     .sort((a, b) => b[1] - a[1])
     .map(([objective]) => objective);
 
-  const points: SpendStreamPoint[] = isoDaysEnding(today, days).map((date) => {
+  const points: SpendStreamPoint[] = isoDaysEnding(endDay, days).map((date) => {
     const day = byDate.get(date) ?? {};
     const byObjective: Record<string, number> = {};
     const stacked: Record<string, number> = {};
@@ -252,10 +266,15 @@ export function spendStream(
   });
 
   const latestPoint = [...points].reverse().find((point) => point.total > 0) ?? null;
+  const windowSpend = points.reduce((sum, point) => sum + point.total, 0);
   return {
     objectives,
     points,
-    totals: Object.fromEntries(objectives.map((objective) => [objective, totals.get(objective) ?? 0])),
+    window: { start: points[0]?.date ?? endDay, end: points[points.length - 1]?.date ?? endDay },
+    enoughToChart: objectives.length > 0 && windowSpend >= STREAM_MIN_SPEND_PER_DAY * days,
+    totals: Object.fromEntries(
+      objectives.map((objective) => [objective, totals.get(objective) ?? 0]),
+    ),
     latest: latestPoint
       ? { date: latestPoint.date, total: latestPoint.total, byObjective: latestPoint.byObjective }
       : null,

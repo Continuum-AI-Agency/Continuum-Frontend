@@ -12,7 +12,7 @@ import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { spendStream } from '../charts/chartData';
+import { lastFullDay, spendStream } from '../charts/chartData';
 import { SpendByObjectiveStream } from '../charts/SpendByObjectiveStream';
 import { KpiTile } from '../components/KpiTile';
 import { StatusChip, type StatusTone } from '../components/StatusChip';
@@ -87,7 +87,8 @@ export function OptimizerOverview({
   const autopilot = portfolios.filter((portfolio) => portfolio.apply_mode === 'autopilot');
   const paused = autopilot.filter((portfolio) => portfolio.autopilot_paused).length;
   const stream = useMemo(
-    () => spendStream(spendQuery.data, STREAM_DAYS, new Date().toISOString().slice(0, 10)),
+    () =>
+      spendStream(spendQuery.data, STREAM_DAYS, lastFullDay(new Date().toISOString().slice(0, 10))),
     [spendQuery.data],
   );
   const spentSpark = stream.points.map((point) => point.total);
@@ -210,6 +211,7 @@ export function OptimizerOverview({
           onFilter={setObjectiveFilter}
           portfolios={portfolios}
           rows={spendQuery.data}
+          stream={stream}
         />
       </OptimizerPanel>
 
