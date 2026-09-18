@@ -369,11 +369,9 @@ describe('explainConfidence names the term that is holding the score back', () =
       band: 'low',
     });
     expect(explanation?.limiter?.key).toBe('sampleSize');
-    expect(explanation?.terms.map((t) => t.key)).toEqual([
-      'sampleSize',
-      'predictiveness',
-      'consistency',
-    ]);
+    // Two terms: the ones the account controls. Predictiveness is a disclosure, not a term.
+    expect(explanation?.terms.map((t) => t.key)).toEqual(['sampleSize', 'consistency']);
+    expect(explanation?.prior?.pct).toBe(75);
     expect(explanation?.scorePct).toBe(26);
   });
 
@@ -389,9 +387,24 @@ describe('explainConfidence names the term that is holding the score back', () =
 
   it('never presents predictiveness as measured — it is a per-objective prior', () => {
     const explanation = explainConfidence({ predictiveness: 0.75 });
-    const predictive = explanation?.terms.find((t) => t.key === 'predictiveness');
-    expect(predictive?.note).toContain('prior');
-    expect(predictive?.note).toContain('not measured on your account');
+    expect(explanation?.terms).toEqual([]);
+    expect(explanation?.prior?.note).toContain('not measured on yours');
+    expect(explainConfidence({ predictiveness: 0.45 })?.prior?.note).toContain(
+      'hardest to predict',
+    );
+  });
+
+  it('explains the sample term by the ad sets under the floor when the run names them', () => {
+    const explanation = explainConfidence({
+      sampleSize: 0.6,
+      events: 786,
+      underFloor: { adsetIds: ['a', 'b', 'c'], floorEvents: 20 },
+      actionables: [
+        { code: 'under_event_floor', adsetIds: ['a', 'b', 'c'], message: 'Consolidate them.' },
+      ],
+    });
+    expect(explanation?.terms[0].note).toBe('3 ad sets under the 20-event floor');
+    expect(explanation?.actionables.map((a) => a.code)).toEqual(['under_event_floor']);
   });
 
   it('flips the consistency note when the windows disagree', () => {

@@ -76,9 +76,13 @@ import { RecommendationInsight } from './RecommendationInsight';
 import {
   asOfLine,
   evidenceLine,
+  formatSettingsValue,
   impactLabel,
   impactPerDay,
   queueSummary,
+  type SettingsPatch,
+  settingsFieldLabel,
+  settingsPatchOf,
   triggerWords,
 } from './recQueueModel';
 
@@ -99,7 +103,7 @@ export type BudgetQueueRow = {
  *  'fatigue' (renewal task), 'hidden' (found, not executable). */
 export type RecQueueRow = {
   key: string;
-  route: 'pause' | 'creative' | 'fatigue' | 'hidden';
+  route: 'pause' | 'creative' | 'fatigue' | 'settings' | 'hidden';
   adsetId: string;
   name: string | null;
   rec: RecommendationRow;
@@ -108,6 +112,12 @@ export type RecQueueRow = {
 };
 
 export type QueueRow = BudgetQueueRow | RecQueueRow;
+
+type SettingsActions = {
+  busy: boolean;
+  apply: (rec: RecommendationRow, patch: SettingsPatch) => Promise<void>;
+  decide: (rec: RecommendationRow, status: 'approved' | 'rejected') => void;
+};
 
 /** The checkbox's accessible name. It has to name the DECISION, not just the ad set: one
  *  cycle can queue a budget move AND a creative refresh on the same ad set, and labelling
@@ -123,6 +133,9 @@ export function selectionLabel(row: QueueRow): string {
  *  ad-level rows are shown but never selectable. */
 export function isSelectableRow(row: QueueRow): boolean {
   if (row.route === 'hidden') return false;
+  // A settings row is applied from its own button — it writes a portfolio field, not an
+  // ad set, so it never joins a batch approval.
+  if (row.route === 'settings') return false;
   if (row.route === 'budget') return !row.approved;
   return row.rec.status === 'pending';
 }
@@ -255,7 +268,26 @@ export function OptimizerActionsPortfolioGroup({
     adAccountId,
     (portfolio.level as PortfolioLevel) ?? 'adset',
   );
-  const { setStatus, setStatuses, requestApplyItems } = useOptimizerMutations(brandId, adAccountId);
+  const { setStatus, setStatuses, requestApplyItems, update } = useOptimizerMutations(
+    brandId,
+    adAccountId,
+  );
+  // A settings row writes one portfolio field, then records the decision on the row.
+  // Both mutations already exist; this only pairs them for the row's own button.
+  const settingsActions = React.useMemo<SettingsActions>(
+    () => ({
+      busy: update.isPending || setStatus.isPending,
+      apply: async (rec, patch) => {
+        await update.mutateAsync({
+          portfolio_id: portfolio.id,
+          patch: { [patch.field]: patch.to },
+        });
+        await setStatus.mutateAsync({ recommendation_id: rec.id, status: 'applied' });
+      },
+      decide: (rec, status) => setStatus.mutate({ recommendation_id: rec.id, status }),
+    }),
+    [update, setStatus, portfolio.id],
+  );
   const applyApproved = useApplyApproved();
   const applyAdsetStatus = useApplyAdsetStatus();
 
@@ -627,6 +659,7 @@ export function OptimizerActionsPortfolioGroup({
             ) : null}
             <QueueRowView
               brandId={brandId}
+              settingsActions={settingsActions}
               counterparty={
                 row.route === 'budget' ? (counterpartyById.get(row.adsetId) ?? null) : null
               }
@@ -793,6 +826,7 @@ const ROUTE_FILTERS: { route: QueueRow['route']; label: string }[] = [
   { route: 'pause', label: 'Pause' },
   { route: 'creative', label: 'Creative' },
   { route: 'fatigue', label: 'Fatigue' },
+  { route: 'settings', label: 'Settings' },
   { route: 'hidden', label: 'Ad-level' },
 ];
 
@@ -1034,6 +1068,7 @@ function QueueRowView({
   counterparty,
   onToggleSelect,
   onToggleExpand,
+  settingsActions,
 }: {
   row: QueueRow;
   brandId: string;
@@ -1046,6 +1081,7 @@ function QueueRowView({
   counterparty?: { direction: 'funds' | 'fundedBy'; parties: Counterparty[] } | null;
   onToggleSelect: () => void;
   onToggleExpand: () => void;
+  settingsActions: SettingsActions;
 }) {
   const selectable = isSelectableRow(row);
   const hidden = row.route === 'hidden';
@@ -1103,7 +1139,13 @@ function QueueRowView({
           ) : null}
           {row.route !== 'budget' ? <RecEvidenceLine rec={row.rec} currency={currency} /> : null}
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <AdSetIdLabel id={row.adsetId} />
+            {row.route === 'settings' ? (
+              <span className="text-3xs text-muted-foreground uppercase tracking-wide">
+                Portfolio setting
+              </span>
+            ) : (
+              <AdSetIdLabel id={row.adsetId} />
+            )}
             {row.route !== 'budget' && row.rec.severity ? (
               <Badge
                 variant={severityBadgeVariant(row.rec.severity)}
@@ -1136,7 +1178,14 @@ function QueueRowView({
         </button>
       </div>
 
-      {expanded ? <RowDetail row={row} currency={currency} counterparty={counterparty} /> : null}
+      {expanded ? (
+        <RowDetail
+          counterparty={counterparty}
+          currency={currency}
+          row={row}
+          settingsActions={settingsActions}
+        />
+      ) : null}
     </li>
   );
 }
@@ -1214,10 +1263,12 @@ function RowDetail({
   row,
   currency,
   counterparty,
+  settingsActions,
 }: {
   row: QueueRow;
   currency: string | null;
   counterparty?: { direction: 'funds' | 'fundedBy'; parties: Counterparty[] } | null;
+  settingsActions: SettingsActions;
 }) {
   return (
     <div className="mt-2 space-y-1.5 rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-2xs text-muted-foreground">
@@ -1227,8 +1278,76 @@ function RowDetail({
         <p>{notImplementedMessage(row.rec.kind)}</p>
       ) : row.route === 'creative' ? (
         <CreativeBriefDetail rec={row.rec} />
+      ) : row.route === 'settings' ? (
+        <SettingsDetail actions={settingsActions} currency={currency} rec={row.rec} />
       ) : (
         <RecDetail rec={row.rec} />
+      )}
+    </div>
+  );
+}
+
+/** A portfolio-level recommendation: the setting, what it is now, what it would become,
+ *  and a button that writes exactly that through optimizer_update_portfolio. Advice with
+ *  no single knob (consolidate ad sets, fix tracking) has no button; it is acknowledged
+ *  or dismissed. Either way the row leaves the queue on a human's click, never on its own. */
+function SettingsDetail({
+  rec,
+  actions,
+  currency,
+}: {
+  rec: RecommendationRow;
+  actions: SettingsActions;
+  currency: string | null;
+}) {
+  const patch = settingsPatchOf(rec);
+  const decided = rec.status !== 'pending';
+  return (
+    <div className="space-y-2">
+      <RecDetail rec={rec} />
+      {patch ? (
+        <p className="text-foreground tabular-nums">
+          <span className="font-medium">{settingsFieldLabel(patch.field)}:</span>{' '}
+          {formatSettingsValue(patch.field, patch.from, currency)} →{' '}
+          <span className="font-semibold">
+            {formatSettingsValue(patch.field, patch.to, currency)}
+          </span>
+        </p>
+      ) : null}
+      {decided ? (
+        <p className="text-muted-foreground">Decided: {rec.status}.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {patch ? (
+            <Button
+              disabled={actions.busy}
+              onClick={() => void actions.apply(rec, patch)}
+              size="sm"
+              type="button"
+            >
+              Apply setting
+            </Button>
+          ) : (
+            <Button
+              disabled={actions.busy}
+              onClick={() => actions.decide(rec, 'approved')}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
+              Got it
+            </Button>
+          )}
+          <Button
+            disabled={actions.busy}
+            onClick={() => actions.decide(rec, 'rejected')}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            Dismiss
+          </Button>
+        </div>
       )}
     </div>
   );

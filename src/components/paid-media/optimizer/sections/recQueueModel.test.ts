@@ -2,9 +2,11 @@ import { describe, expect, it } from 'bun:test';
 import {
   asOfLine,
   evidenceLine,
+  formatSettingsValue,
   impactLabel,
   impactPerDay,
   queueSummary,
+  settingsPatchOf,
   triggerWords,
 } from './recQueueModel';
 
@@ -95,5 +97,25 @@ describe('words', () => {
       /^As of Sep 1[67] at .* · next cycle Sep (19|20) at /,
     );
     expect(asOfLine(null, '2026-09-20T06:00:00Z')).toBeNull();
+  });
+});
+
+describe('settings patch', () => {
+  it('reads a well-formed patch from seed and rejects anything else', () => {
+    expect(
+      settingsPatchOf({
+        seed: { patch: { field: 'max_change_pct_per_cycle', from: 0.2, to: 0.3 } },
+      }),
+    ).toEqual({ field: 'max_change_pct_per_cycle', from: 0.2, to: 0.3 });
+    expect(
+      settingsPatchOf({ seed: { patch: { field: 'apply_mode', from: null, to: 1 } } }),
+    ).toBeNull();
+    expect(settingsPatchOf({ seed: { patch: { field: 'daily_total', to: 'x' } } })).toBeNull();
+    expect(settingsPatchOf({ seed: null })).toBeNull();
+  });
+  it('formats a percentage knob and a money knob', () => {
+    expect(formatSettingsValue('max_change_pct_per_cycle', 0.3, 'USD')).toBe('30%');
+    expect(formatSettingsValue('daily_total', 340, 'USD')).toBe('$340');
+    expect(formatSettingsValue('daily_total', null, 'USD')).toBe('not set');
   });
 });

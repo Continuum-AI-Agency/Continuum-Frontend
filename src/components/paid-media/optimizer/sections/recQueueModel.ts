@@ -114,3 +114,50 @@ export function asOfLine(latestCycleTs: string | null, nextCycleTs: string | nul
   if (!Number.isNaN(next)) parts.push(`next cycle ${AS_OF_FMT.format(new Date(next))}`);
   return parts.join(' · ');
 }
+
+// ── Settings recommendations ─────────────────────────────────────────────────
+// The engine's S family proposes a change to ONE portfolio field, carried in `seed.patch`
+// (the jsonb column record_cycle already stores). These reads keep the shape honest: a
+// patch is only a patch if it names a known field and a numeric target.
+
+export type SettingsPatch = {
+  field: 'max_change_pct_per_cycle' | 'daily_total' | 'period_budget';
+  from: number | null;
+  to: number;
+};
+
+const SETTINGS_FIELDS = new Set(['max_change_pct_per_cycle', 'daily_total', 'period_budget']);
+
+export function settingsPatchOf(rec: Pick<RecommendationRow, 'seed'>): SettingsPatch | null {
+  const raw = (rec.seed as { patch?: unknown } | null | undefined)?.patch;
+  if (!raw || typeof raw !== 'object') return null;
+  const { field, from, to } = raw as { field?: unknown; from?: unknown; to?: unknown };
+  if (typeof field !== 'string' || !SETTINGS_FIELDS.has(field)) return null;
+  if (typeof to !== 'number' || !Number.isFinite(to)) return null;
+  return {
+    field: field as SettingsPatch['field'],
+    from: typeof from === 'number' && Number.isFinite(from) ? from : null,
+    to,
+  };
+}
+
+export function settingsFieldLabel(field: SettingsPatch['field']): string {
+  switch (field) {
+    case 'max_change_pct_per_cycle':
+      return 'Autopilot hold threshold';
+    case 'daily_total':
+      return 'Daily total';
+    case 'period_budget':
+      return 'Flight budget';
+  }
+}
+
+export function formatSettingsValue(
+  field: SettingsPatch['field'],
+  value: number | null,
+  currency: string | null,
+): string {
+  if (value == null) return 'not set';
+  if (field === 'max_change_pct_per_cycle') return `${Math.round(value * 100)}%`;
+  return formatCurrency(value, currency);
+}
