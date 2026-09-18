@@ -6,6 +6,7 @@ import type {
 } from '@continuum/contracts';
 import type { CheckRow, CheckState, CheckTick } from '@/components/forge/CheckTable';
 import { approvalState, deliveryReasonText } from '@/components/forge/DeliveryChain';
+import { describeRenderJobFailure } from '@/components/forge/renderJobFailureCopy';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 
 // What happened to one render, as the checks it went through: each row says what it looks at and
@@ -31,7 +32,7 @@ export function verdictOf(job: ApiRenderJob): { text: string; tone: Tone; title?
   if (!job.fit.escalate) return { text: 'Fits', tone: 'success', title: job.fit.why };
   return job.status === 'finished'
     ? { text: 'Judging…', tone: 'warning', title: job.fit.why }
-    : { text: 'Needs judge', tone: 'warning', title: job.fit.why };
+    : { text: 'AI check after render', tone: 'warning', title: job.fit.why };
 }
 
 type StepState = 'done' | 'active' | 'error' | 'pending' | 'skipped';
@@ -46,6 +47,7 @@ export function jobSteps(job: ApiRenderJob): Step[] {
   const slack = job.slackDelivery;
   const approval = approvalState(job);
   const receipt = job.delivery[0];
+  const failure = failed ? describeRenderJobFailure(job.error) : null;
 
   const checks: Step = job.judge
     ? {
@@ -75,7 +77,7 @@ export function jobSteps(job: ApiRenderJob): Step[] {
           : job.status === 'rendering'
             ? 'active'
             : 'pending',
-      ...(failed && job.error ? { detail: job.error } : {}),
+      ...(failure ? { detail: failure } : {}),
       ...(finished || failed ? { at: job.finishedAt ?? job.updatedAt } : {}),
     },
     checks,
@@ -374,7 +376,7 @@ function renderCheck(job: ApiRenderJob): JobCheck {
     return {
       ...base,
       state: 'fail',
-      result: job.error ?? 'The render failed.',
+      result: describeRenderJobFailure(job.error) ?? 'The render failed.',
       duration: between(job.createdAt, job.finishedAt),
     };
   }

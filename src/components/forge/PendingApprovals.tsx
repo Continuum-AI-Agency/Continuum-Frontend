@@ -36,11 +36,12 @@ const STATUS_LABEL: Record<string, string> = {
   expired: 'Expired',
 };
 
+// Theme tokens (hex, so the Tailwind token classes — never `hsl(var(--x))`).
 const STATUS_TONE: Record<string, string> = {
-  pending: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
-  approved: 'bg-sky-500/10 text-sky-600 border-sky-500/20',
-  published: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
-  previewed: 'bg-sky-500/10 text-sky-600 border-sky-500/20',
+  pending: 'bg-warning/10 text-warning border-warning/20',
+  approved: 'bg-primary/10 text-foreground border-primary/20',
+  published: 'bg-success/10 text-success border-success/20',
+  previewed: 'bg-primary/10 text-foreground border-primary/20',
   rejected: 'bg-muted text-muted-foreground',
   failed: 'bg-destructive/10 text-destructive border-destructive/20',
   expired: 'bg-muted text-muted-foreground',
@@ -313,7 +314,7 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
   return (
     <section id="approvals" className="space-y-3">
       <div className="flex items-center gap-2">
-        <ShieldCheck className="h-4 w-4 text-amber-600" />
+        <ShieldCheck className="h-4 w-4 text-warning" />
         <h2 className="font-medium text-sm">
           Pending approvals{waiting > 0 ? ` (${waiting})` : ''}
         </h2>

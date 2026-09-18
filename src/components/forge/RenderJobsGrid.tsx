@@ -1,6 +1,11 @@
 'use client';
 
-import { type ApiRenderJob, type ForgeRenderSet, templateDisplayName } from '@continuum/contracts';
+import {
+  type ApiRenderJob,
+  type ApiRenderOutput,
+  type ForgeRenderSet,
+  templateDisplayName,
+} from '@continuum/contracts';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   type ColumnDef,
@@ -19,13 +24,17 @@ import { DataGrid, STICKY_LEFT, selectColumn } from '@/components/forge/DataGrid
 import { DeliveryChain, deliverySearchText } from '@/components/forge/DeliveryChain';
 import { fileForFormat, type PreviewFormat } from '@/components/forge/FormatPreview';
 import {
+  filesSummary,
   formatsNamedByJob,
+  imageFailed,
   jobTransitionName,
   RenderJobDetail,
+  RenderModePill,
+  TemplateVersion,
   ViewTransition,
 } from '@/components/forge/RenderJobDetail';
 import { type JobCheck, renderJobChecks } from '@/components/forge/renderJobChecks';
-import { templateVersionOf, templateVersionTitle } from '@/components/forge/templateVersion';
+import { describeRenderJobFailure } from '@/components/forge/renderJobFailureCopy';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -93,6 +102,36 @@ function ChecksCell({ job }: { job: ApiRenderJob }) {
       </span>
     </span>
   );
+}
+
+/** An image that fails to load — an expired signed link, a deleted file — falls back to the tile. */
+function Thumbnail({ output }: { output: ApiRenderOutput | null }) {
+  const [broken, setBroken] = useState(false);
+  if (output?.kind === 'image' && !broken) {
+    return (
+      <img
+        src={output.url}
+        alt=""
+        width={36}
+        height={36}
+        loading="lazy"
+        decoding="async"
+        className="size-9 rounded-sm object-contain"
+        ref={(element) => {
+          if (imageFailed(element)) setBroken(true);
+        }}
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+  if (output?.kind === 'video') {
+    return (
+      <div className="flex size-9 items-center justify-center rounded-sm bg-muted">
+        <Video className="size-4 text-muted-foreground" aria-hidden />
+      </div>
+    );
+  }
+  return <div className="size-9 rounded-sm bg-muted" />;
 }
 
 const prefersReducedMotion = () =>
@@ -250,23 +289,8 @@ export function RenderJobsGrid({
             : null;
           return (
             <ViewTransition name={jobTransitionName(job.id)}>
-              {first?.kind === 'image' ? (
-                <img
-                  src={first.url}
-                  alt=""
-                  width={36}
-                  height={36}
-                  loading="lazy"
-                  decoding="async"
-                  className="size-9 rounded-sm object-contain"
-                />
-              ) : first ? (
-                <div className="flex size-9 items-center justify-center rounded-sm bg-muted">
-                  <Video className="size-4 text-muted-foreground" aria-hidden />
-                </div>
-              ) : (
-                <div className="size-9 rounded-sm bg-muted" />
-              )}
+              {/* Keyed by URL: a re-read that re-signs the link gets a fresh try. */}
+              <Thumbnail key={first?.url ?? 'none'} output={first} />
             </ViewTransition>
           );
         },
@@ -303,17 +327,15 @@ export function RenderJobsGrid({
         accessorKey: 'status',
         header: 'Status',
         enableSorting: true,
-        cell: ({ getValue }) => {
-          const status = getValue<ApiRenderJob['status']>();
-          return (
-            <Badge variant={STATUS_TONE[status]}>
-              {status === 'rendering' || status === 'queued' || status === 'submitting' ? (
-                <Loader2 className="size-3 animate-spin" aria-hidden />
-              ) : null}
-              {status}
+        cell: ({ row: { original: job } }) => (
+          <span className="flex items-center gap-1.5">
+            <Badge variant={STATUS_TONE[job.status]}>
+              {isInFlight(job) ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
+              {job.status}
             </Badge>
-          );
-        },
+            <RenderModePill test={job.test} />
+          </span>
+        ),
       },
       {
         accessorKey: 'createdAt',
@@ -334,27 +356,16 @@ export function RenderJobsGrid({
       },
       {
         id: 'version',
-        header: 'Version',
+        header: 'Template version',
         enableSorting: false,
-        cell: ({ row: { original: job } }) => {
-          const view = templateVersionOf(job);
-          return view.state === 'pinned' ? (
-            <span className="font-mono text-xs tabular-nums" title={templateVersionTitle(view)}>
-              {view.short}
-            </span>
-          ) : (
-            <span className="text-muted-foreground text-xs" title={templateVersionTitle(view)}>
-              Unrecorded
-            </span>
-          );
-        },
+        cell: ({ row: { original: job } }) => <TemplateVersion job={job} />,
       },
       {
         id: 'outputs',
         header: 'Files',
         enableSorting: false,
         cell: ({ row: { original: job } }) => (
-          <span className="tabular-nums">{job.outputs.length || '—'}</span>
+          <span className="tabular-nums">{filesSummary(job.outputs) || '—'}</span>
         ),
       },
       {
@@ -376,12 +387,13 @@ export function RenderJobsGrid({
         header: '',
         enableSorting: false,
         enableHiding: false,
-        cell: ({ row: { original: job } }) =>
-          job.error ? (
-            <span className="line-clamp-1 max-w-64 text-destructive" title={job.error}>
-              {job.error}
-            </span>
-          ) : null,
+        // The whole sentence, wrapped: a failure cut off mid-sentence hides the part that says why.
+        cell: ({ row: { original: job } }) => {
+          const failure = describeRenderJobFailure(job.error);
+          return failure ? (
+            <p className="m-0 max-w-80 min-w-48 whitespace-normal text-destructive">{failure}</p>
+          ) : null;
+        },
       },
     ],
     [sets, formats],

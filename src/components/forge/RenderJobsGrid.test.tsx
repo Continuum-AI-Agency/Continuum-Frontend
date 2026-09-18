@@ -9,7 +9,7 @@
  * detail with the step timeline.
  */
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { ApiRenderJob, ApiRenderTemplateSummary } from '@continuum/contracts';
 import type { PostgresChangesSubscription } from '@/lib/supabase/realtime';
 
@@ -202,6 +202,22 @@ async function renderLedger(
   return view;
 }
 
+// happy-dom never fetches an image, so every <img> reads as finished with no pixels — exactly what
+// a broken image looks like to the ledger's pre-commit check. Here images decode; the broken-file
+// test fires the error itself.
+let imagePrototype: object | null = null;
+let naturalWidth: PropertyDescriptor | undefined;
+beforeAll(() => {
+  imagePrototype = Object.getPrototypeOf(document.createElement('img')) as object;
+  naturalWidth = Object.getOwnPropertyDescriptor(imagePrototype, 'naturalWidth');
+  Object.defineProperty(imagePrototype, 'naturalWidth', { configurable: true, get: () => 1 });
+});
+afterAll(() => {
+  if (imagePrototype && naturalWidth) {
+    Object.defineProperty(imagePrototype, 'naturalWidth', naturalWidth);
+  }
+});
+
 beforeEach(() => {
   realtime = undefined;
   listJobs.mockClear();
@@ -242,16 +258,34 @@ describe('RenderJobsGrid', () => {
     expect(listTemplates).not.toHaveBeenCalled();
   }, 30_000);
 
-  test('the Version column reads the exact template bytes a render used, and names the gap when it has none', async () => {
+  test('the Template version column reads "Rev N · date", the digest when no revision came back, and names the gap when it has none', async () => {
     const SHA = `${'a1b2c3d4e5'.repeat(6)}f1b2`;
+    const OTHER_SHA = `${'0f9e8d7c6b'.repeat(6)}a0b1`;
     const pinned: ApiRenderJob = {
       ...BASE,
       id: 'job-pinned',
       label: 'Pinned',
-      templateSource: { assetId: 'asset-1', versionId: 'ver-1', sha256: SHA },
+      templateSource: { assetId: 'asset-1', versionId: 'ver-1', sha256: SHA, versionNumber: null },
     };
-    await renderLedger([pinned, { ...BASE, id: 'job-legacy', label: 'Legacy' }], []);
-    // The digest, elided the same way the lineage panel elides it.
+    const revised: ApiRenderJob = {
+      ...BASE,
+      id: 'job-revised',
+      label: 'Revised',
+      createdAt: '2026-09-10T12:00:00.000Z',
+      templateSource: {
+        assetId: 'asset-1',
+        versionId: 'ver-2',
+        sha256: OTHER_SHA,
+        versionNumber: 2,
+      },
+    };
+    await renderLedger([pinned, revised, { ...BASE, id: 'job-legacy', label: 'Legacy' }], []);
+    expect(screen.getByRole('columnheader', { name: /Template version/ })).toBeTruthy();
+    // The source revision and the day the render ran, the full digest one hover away.
+    expect(screen.getByText('Rev 2 · Sep 10').getAttribute('title')).toBe(
+      `Template version ${OTHER_SHA}`,
+    );
+    // No revision read back: the digest, elided the same way the lineage panel elides it.
     expect(screen.getByText('a1b2c3d4e5…')).toBeTruthy();
     // ...and the render whose bytes nobody recorded says so, rather than showing an empty cell
     // that reads like "nothing to see here".
@@ -404,7 +438,7 @@ describe('RenderJobsGrid', () => {
       (preview.querySelector('[data-slot="format-preview-frame"]') as HTMLElement).style
         .aspectRatio,
     ).toBe('1080 / 1920');
-    expect(screen.getByRole('link', { name: /Open file/ }).getAttribute('href')).toBe(
+    expect(screen.getByRole('link', { name: 'Download PNG' }).getAttribute('href')).toBe(
       'https://cdn.example.com/madrid.png',
     );
     expect(screen.getByRole('link', { name: /Slack post/ }).getAttribute('href')).toBe(
@@ -588,5 +622,125 @@ describe('RenderJobsGrid', () => {
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(listJobs.mock.calls.length).toBe(calls);
     view.unmount();
+  }, 30_000);
+  test('a failed render reads its whole sentence, a broken thumbnail falls back to the tile, and Proof and Final are marked', async () => {
+    const sentence =
+      'The render farm stopped this render after 15 minutes without a file. Render it again; if it keeps timing out, the template may be too heavy for one pass.';
+    const expired: ApiRenderJob = {
+      ...MADRID,
+      id: '11111111-1111-4111-8111-111111111131',
+      label: 'Expired link',
+      test: false,
+    };
+    const legacy: ApiRenderJob = {
+      ...ROMA,
+      id: '11111111-1111-4111-8111-111111111132',
+      label: 'Legacy failure',
+      error: 'render_error',
+    };
+    const timedOut: ApiRenderJob = {
+      ...ROMA,
+      id: '11111111-1111-4111-8111-111111111133',
+      label: 'Timed out',
+      error: sentence,
+    };
+    jobsFixture = [expired, legacy, timedOut];
+    const madrid = { name: 'Madrid', width: 1080, height: 1920 };
+    const formats = [
+      { id: 'madrid', label: 'Madrid', ratio: null, comp: madrid, width: 1080, height: 1920 },
+    ];
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <RenderJobsGrid brandId={BRAND} formats={formats} />
+      </QueryClientProvider>,
+    );
+    await screen.findByText('Expired link');
+    const rowOf = (label: string) => screen.getByText(label).closest('tr') as HTMLElement;
+
+    // The backend's sentence, whole and wrapped; the legacy literal in words, never as the code.
+    expect(within(rowOf('Timed out')).getByText(sentence).className).toContain('whitespace-normal');
+    expect(
+      within(rowOf('Legacy failure')).getByText(
+        'The render farm reported an error and sent no file.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole('table').textContent).not.toContain('render_error');
+
+    expect(within(rowOf('Expired link')).getByText('Final')).toBeTruthy();
+    expect(within(rowOf('Timed out')).getByText('Proof')).toBeTruthy();
+
+    // An expired signed link: the image is replaced by the empty tile, never a broken image.
+    const thumbnail = rowOf('Expired link').querySelector('img') as HTMLImageElement;
+    expect(thumbnail.getAttribute('src')).toBe('https://cdn.example.com/madrid.png');
+    fireEvent.error(thumbnail);
+    expect(rowOf('Expired link').querySelector('img')).toBeNull();
+  }, 30_000);
+
+  test('a comp delivered as MP4, MOV and MXF lists every file, previews the playable one, and downloads each', async () => {
+    const clip = (fileName: string, mimeType: string) => ({
+      id: `hash-${fileName}`,
+      kind: 'video' as const,
+      fileName,
+      mimeType,
+      url: `https://cdn.test/${fileName}`,
+      width: null,
+      height: null,
+      assetId: null,
+      versionId: null,
+    });
+    const reel: ApiRenderJob = {
+      ...BASE,
+      id: '11111111-1111-4111-8111-111111111141',
+      label: 'Reel',
+      labelPath: ['Reel'],
+      // The fleet's order: the MXF first, which no browser plays.
+      outputs: [
+        clip('Story_9_16_ab12cd.mxf', 'application/mxf'),
+        clip('Story_9_16_ab12cd.mov', 'video/quicktime'),
+        clip('Story_9_16_ab12cd.mp4', 'video/mp4'),
+      ],
+    };
+    jobsFixture = [reel];
+    const story = { name: 'Story 9:16', width: 1080, height: 1920 };
+    const formats = [
+      { id: 'story', label: 'Story', ratio: '9:16', comp: story, width: 1080, height: 1920 },
+    ];
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <RenderJobsGrid brandId={BRAND} formats={formats} />
+      </QueryClientProvider>,
+    );
+    await screen.findByText('Reel');
+    expect(
+      within(screen.getByText('Reel').closest('tr') as HTMLElement).getByText(
+        '1 MP4 · 1 MOV · 1 MXF',
+      ),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Reel'));
+    await screen.findByRole('heading', { name: 'Reel' });
+    const preview = screen.getByRole('group', { name: 'Render preview' });
+    expect(preview.querySelector('video')?.getAttribute('src')).toBe(
+      'https://cdn.test/Story_9_16_ab12cd.mp4',
+    );
+    expect(
+      ['MP4', 'MOV', 'MXF'].map((type) =>
+        screen.getByRole('link', { name: `Download ${type}` }).getAttribute('href'),
+      ),
+    ).toEqual([
+      'https://cdn.test/Story_9_16_ab12cd.mp4',
+      'https://cdn.test/Story_9_16_ab12cd.mov',
+      'https://cdn.test/Story_9_16_ab12cd.mxf',
+    ]);
+    // A file the browser cannot play falls back to words, and the downloads stay.
+    fireEvent.error(preview.querySelector('video') as HTMLVideoElement);
+    expect(
+      within(preview).getByText('This browser can’t play this file. Download it below.'),
+    ).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Download MXF' })).toBeTruthy();
   }, 30_000);
 });

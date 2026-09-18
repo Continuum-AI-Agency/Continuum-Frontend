@@ -39,6 +39,15 @@ describe('render discovery copy', () => {
     expect(describeRenderDiscoveryFailure(bare)).toBe('render_something_new');
   });
 
+  test('the server’s bare catch-all 500 reads as a next step, not its code', () => {
+    const thrown = new ApiError('api_render_failed', 500, undefined, {
+      error: 'api_render_failed',
+    });
+    expect(describeRenderDiscoveryFailure(thrown)).toBe(
+      'The render service hit an unexpected error. Try again; if it keeps failing, tell your Continuum contact.',
+    );
+  });
+
   test('an unmapped failure is passed through rather than swallowed', () => {
     expect(describeRenderDiscoveryFailure('boom')).toBe('boom');
     expect(describeRenderDiscoveryFailure('')).toBe('Render discovery failed');

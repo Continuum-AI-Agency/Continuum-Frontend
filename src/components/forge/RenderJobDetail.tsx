@@ -1,11 +1,16 @@
 'use client';
 
-import type { ApiRenderJob, ApiRenderOutput } from '@continuum/contracts';
+import {
+  type ApiRenderJob,
+  type ApiRenderOutput,
+  matchOutputFormat,
+} from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   CalendarClock,
   CircleDot,
+  Download,
   ExternalLink,
   FileDigit,
   Layers,
@@ -20,13 +25,14 @@ import { DeliveryChain } from '@/components/forge/DeliveryChain';
 import { FactList } from '@/components/forge/FactList';
 import {
   FormatPreview,
-  fileForFormat,
   type PreviewFormat,
+  playableFirst,
   previewFormats,
 } from '@/components/forge/FormatPreview';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { templateVersionOf, templateVersionTitle } from '@/components/forge/templateVersion';
+import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { formatDuration, renderJobChecks } from './renderJobChecks';
@@ -119,19 +125,103 @@ function useJobFormats(job: ApiRenderJob, given: PreviewFormat[] | undefined) {
   return { formats, labelByKey };
 }
 
+const extOf = (fileName: string) => {
+  const dot = fileName.lastIndexOf('.');
+  return dot > 0 ? fileName.slice(dot + 1).toLowerCase() : '';
+};
+
+
+/** "3 MP4 · 3 MOV · 3 MXF" — every file a job made, by type. */
+export function filesSummary(outputs: readonly ApiRenderOutput[]): string {
+  const counts = new Map<string, number>();
+  for (const output of playableFirst(outputs)) {
+    const type = extOf(output.fileName).toUpperCase() || 'FILE';
+    counts.set(type, (counts.get(type) ?? 0) + 1);
+  }
+  return [...counts].map(([type, count]) => `${count} ${type}`).join(' · ');
+}
+
+/** Proof or Final — what the render was asked to be. Today both are the same pixels. */
+export function RenderModePill({ test }: { test: boolean }) {
+  return test ? (
+    <Pill variant="muted" title="A proof, for review. Not marked ready to use.">
+      Proof
+    </Pill>
+  ) : (
+    <Pill variant="violet" title="A final render, marked ready to use by a brand owner or admin.">
+      Final
+    </Pill>
+  );
+}
+
+/** "Rev 2 · Sep 10", the short digest when the revision was not read back, else "Unrecorded". */
+export function TemplateVersion({
+  job,
+}: {
+  job: Pick<ApiRenderJob, 'templateSource' | 'createdAt'>;
+}) {
+  const view = templateVersionOf(job);
+  if (view.state === 'unrecorded') {
+    return (
+      <span className="text-muted-foreground" title={templateVersionTitle(view)}>
+        Unrecorded
+      </span>
+    );
+  }
+  return (
+    <span
+      className={view.label === view.short ? 'font-mono tabular-nums' : 'tabular-nums'}
+      title={templateVersionTitle(view)}
+    >
+      {view.label}
+    </span>
+  );
+}
+
+/**
+ * Whether an image already failed to load when React attached to it. A transition (opening a job)
+ * builds its elements before it commits them, so an expired link can fail in between and the error
+ * event lands on nothing; this reads the failure off the element instead.
+ */
+export const imageFailed = (element: HTMLImageElement | null) =>
+  element !== null && element.complete && element.naturalWidth === 0;
+
+/** A file that will not load — an expired signed link, or a container the browser cannot play. */
 function OutputFile({ output, alt }: { output: ApiRenderOutput; alt: string }) {
+  const [broken, setBroken] = useState(false);
+  if (broken) {
+    return (
+      <p className="m-0 flex size-full items-center justify-center bg-muted p-[var(--card-pad)] text-center text-xs text-muted-foreground">
+        {output.kind === 'video'
+          ? 'This browser can’t play this file. Download it below.'
+          : 'This file can’t be shown — its link may have expired. Refresh to get a new one.'}
+      </p>
+    );
+  }
   return output.kind === 'video' ? (
     // biome-ignore lint/a11y/useMediaCaption: renders carry no caption track.
     <video
-      key={output.id}
       src={output.url}
       controls
       playsInline
       className="size-full object-contain"
+      // The same race as `imageFailed`, read off the video's own error.
+      ref={(element) => {
+        if (element?.error) setBroken(true);
+      }}
+      onError={() => setBroken(true)}
     />
   ) : (
     // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
-    <img src={output.url} alt={alt} className="size-full object-contain" />
+    <img
+      src={output.url}
+      alt={alt}
+      className="size-full object-contain"
+      ref={(element) => {
+        if (imageFailed(element)) setBroken(true);
+      }}
+      onError={() => setBroken(true)}
+    />
   );
 }
 
@@ -178,10 +268,14 @@ export function RenderJobDetail({
         width: output.width,
         height: output.height,
       }));
-  const fileFor = (formatId: string) =>
-    templateFormats.length
-      ? fileForFormat(job.outputs, formats, formatId)
-      : (job.outputs.find((output) => output.id === formatId) ?? null);
+  const files = playableFirst(job.outputs);
+  const filesFor = (formatId: string) =>
+    files.filter((output) =>
+      templateFormats.length
+        ? matchOutputFormat(output.fileName, formats)?.id === formatId
+        : output.id === formatId,
+    );
+  const fileFor = (formatId: string) => filesFor(formatId)[0] ?? null;
   const [picked, setPicked] = useState<string | null>(null);
   const value =
     formats.find((format) => format.id === picked)?.id ??
@@ -189,7 +283,7 @@ export function RenderJobDetail({
     formats[0]?.id ??
     '';
   const name = job.label ?? job.labelPath.at(-1) ?? templateName;
-  const current = fileFor(value);
+  const current = filesFor(value);
   const rendered = formats.filter((format) => fileFor(format.id));
 
   return (
@@ -228,6 +322,8 @@ export function RenderJobDetail({
                         at: job.finishedAt ?? job.updatedAt,
                         node: (
                           <OutputFile
+                            // By URL: a refresh that re-signs an expired link gets a fresh try.
+                            key={output.url}
                             output={output}
                             alt={`${name} · ${format.ratio ?? format.label}`}
                           />
@@ -252,16 +348,23 @@ export function RenderJobDetail({
             )}
           </ViewTransition>
           <div className="flex flex-wrap gap-3 text-xs">
-            {current ? (
-              <a
-                href={current.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-primary hover:underline"
-              >
-                <ExternalLink className="size-3" aria-hidden /> Open file
-              </a>
-            ) : null}
+            {current.map((output) => {
+              const type = extOf(output.fileName).toUpperCase() || 'file';
+              return (
+                <a
+                  key={output.id}
+                  href={output.url}
+                  download={output.fileName}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={output.fileName}
+                  aria-label={`Download ${type}`}
+                  className="inline-flex items-center gap-1 text-primary hover:underline"
+                >
+                  <Download className="size-3" aria-hidden /> {type}
+                </a>
+              );
+            })}
             {job.slackDelivery?.permalink ? (
               <a
                 href={job.slackDelivery.permalink}
@@ -279,7 +382,16 @@ export function RenderJobDetail({
           <FactList
             className="p-[var(--card-pad)]"
             facts={[
-              { icon: CircleDot, label: 'Status', value: job.status },
+              {
+                icon: CircleDot,
+                label: 'Status',
+                value: (
+                  <span className="inline-flex items-center gap-1.5">
+                    {job.status}
+                    <RenderModePill test={job.test} />
+                  </span>
+                ),
+              },
               {
                 icon: CalendarClock,
                 label: 'Requested',
@@ -297,18 +409,7 @@ export function RenderJobDetail({
               {
                 icon: FileDigit,
                 label: 'Template version',
-                value: (() => {
-                  const view = templateVersionOf(job);
-                  return view.state === 'pinned' ? (
-                    <span className="font-mono tabular-nums" title={view.sha}>
-                      {view.short}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground" title={templateVersionTitle(view)}>
-                      Unrecorded
-                    </span>
-                  );
-                })(),
+                value: <TemplateVersion job={job} />,
               },
               {
                 icon: RectangleHorizontal,

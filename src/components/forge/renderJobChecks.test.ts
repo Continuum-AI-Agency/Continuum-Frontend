@@ -12,7 +12,7 @@ import type {
   ApiRenderJudgeFrame,
   ApiRenderOutput,
 } from '@continuum/contracts';
-import { type JobCheck, renderJobChecks } from './renderJobChecks';
+import { type JobCheck, jobSteps, renderJobChecks } from './renderJobChecks';
 
 const NOW = Date.parse('2026-09-15T12:00:00.000Z');
 const minutesAgo = (minutes: number) => new Date(NOW - minutes * 60_000).toISOString();
@@ -163,6 +163,15 @@ describe('renderJobChecks', () => {
     expect(
       row(checksOf({ status: 'failed', error: 'Render fleet timed out', outputs: [] }), 'Render'),
     ).toMatchObject({ state: 'fail', result: 'Render fleet timed out' });
+    // The legacy literal every old fleet failure carries reads as a sentence, here and in the
+    // tray's Running step, which reads jobSteps.
+    const legacy = { ...JOB, status: 'failed' as const, error: 'render_error', outputs: [] };
+    const sentence = 'The render farm reported an error and sent no file.';
+    expect(row(renderJobChecks(legacy, {}, NOW), 'Render').result).toBe(sentence);
+    expect(jobSteps(legacy).find((step) => step.label === 'Rendering')).toMatchObject({
+      state: 'error',
+      detail: sentence,
+    });
     expect(row(checksOf({ status: 'rendering', finishedAt: null }), 'Render').state).toBe(
       'running',
     );

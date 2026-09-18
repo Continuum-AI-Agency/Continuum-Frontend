@@ -44,6 +44,11 @@ const SLACK_FAILURE_COPY: Record<string, string> = {
   // A 404 here is also another brand's room, on purpose — never phrase it as a permission problem.
   chat_destination_not_found: 'That room is already gone. Refresh the list.',
   chat_destinations_lookup_failed: 'Slack rooms could not be read. Try again.',
+  chat_destination_write_failed: 'That room could not be saved. Try again.',
+  render_slack_destination_not_found: 'That Slack room is gone. Pick another.',
+  // The server's catch-all: it hit an error it has no code for, and said nothing more.
+  api_render_failed:
+    'Continuum hit an unexpected error talking to Slack. Try again; if it keeps failing, tell your Continuum contact.',
 };
 
 /** A Slack or render-service failure in words; render_* codes use the discovery copy. */
