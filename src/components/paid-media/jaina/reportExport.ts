@@ -5,8 +5,22 @@ import {
 } from '@continuum/contracts';
 import { ApiError } from '@/lib/api/errors';
 import { exportJainaReportToGoogleSheets, startGoogleWorkspaceSync } from '@/lib/api/integrations';
-import type { CheckpointReportV2, FrontendCheckpointReport } from '@/lib/jaina/schemas';
+import type {
+  CheckpointBlockV2,
+  CheckpointReportV2,
+  FrontendCheckpointReport,
+} from '@/lib/jaina/schemas';
 import { openCenteredPopup, waitForOAuthCompletion } from '@/lib/popup';
+import type { ExportDocumentHandle } from './export/renderExportDocument';
+
+/** Grace period before an unprinted export frame is reclaimed. */
+const PRINT_CLEANUP_DELAY_MS = 60_000;
+
+export type JainaReportV2ExportOptions = {
+  report: CheckpointReportV2;
+  blocks: CheckpointBlockV2[];
+  title?: string;
+};
 
 export type PdfTable = {
   headers: string[];
@@ -18,8 +32,6 @@ type JainaPdfDocument = InstanceType<typeof import('jspdf').jsPDF>;
 type DownloadJainaReportPdfOptions = {
   report: FrontendCheckpointReport;
   fallbackTables: PdfTable[];
-  exportNode?: HTMLElement | null;
-  backgroundColor?: string;
 };
 
 const SHEETS_LIMITS = {
@@ -848,173 +860,75 @@ export function renderReportPdf(
   }
 }
 
-// Walk up from the report node to the nearest non-transparent background so the
-// captured PDF matches the on-screen theme (light or dark) instead of a guess.
-function resolveExportBackground(node: HTMLElement | null): string {
-  if (!node || typeof window === 'undefined') return '#ffffff';
-  let element: HTMLElement | null = node;
-  while (element) {
-    const background = window.getComputedStyle(element).backgroundColor;
-    if (background && background !== 'transparent' && background !== 'rgba(0, 0, 0, 0)') {
-      return background;
-    }
-    element = element.parentElement;
-  }
-  return '#ffffff';
-}
-
-// Capture a LIVE rendered report node (the real React/Recharts output) into a
-// multi-page PDF. The front-end owns rendering; this only snapshots it — there
-// is no second charting implementation to drift from what the user sees.
-async function captureNodeToPdfFile(
-  exportNode: HTMLElement,
-  options: { backgroundColor: string; fileName: string },
-): Promise<File> {
-  const { jsPDF } = await import('jspdf');
-  const html2canvas = (await import('html2canvas')).default;
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-
-  const capture = html2canvas(exportNode, {
-    scale: 2,
-    useCORS: true,
-    backgroundColor: options.backgroundColor,
-    logging: false,
-  });
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => {
-      exportNode.ownerDocument
-        .querySelectorAll<HTMLIFrameElement>('.html2canvas-container')
-        .forEach((container) => container.remove());
-      reject(new Error('Report capture timed out.'));
-    }, 5_000);
-  });
-  const canvas = await Promise.race([capture, timeout]).finally(() => clearTimeout(timeoutId));
-
-  const margin = 24;
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const usableWidth = pageWidth - margin * 2;
-  const usableHeight = pageHeight - margin * 2;
-  const imageHeight = (canvas.height * usableWidth) / canvas.width;
-  const imageData = canvas.toDataURL('image/png');
-
-  let renderedHeight = 0;
-  while (renderedHeight < imageHeight) {
-    if (renderedHeight > 0) doc.addPage();
-    doc.addImage(
-      imageData,
-      'PNG',
-      margin,
-      margin - renderedHeight,
-      usableWidth,
-      imageHeight,
-      undefined,
-      'FAST',
-    );
-    renderedHeight += usableHeight;
-  }
-  return new File([doc.output('blob')], options.fileName, { type: 'application/pdf' });
-}
-
-async function createTextPdfFile(exportNode: HTMLElement, fileName: string): Promise<File> {
-  const { jsPDF } = await import('jspdf');
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  const margin = 40;
-  const lineHeight = 15;
-  const maxY = doc.internal.pageSize.getHeight() - margin;
-  const maxWidth = doc.internal.pageSize.getWidth() - margin * 2;
-  let y = margin;
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(11);
-  for (const paragraph of exportNode.innerText.split(/\n+/).map((line) => line.trim())) {
-    if (!paragraph) continue;
-    const lines = doc.splitTextToSize(paragraph, maxWidth) as string[];
-    for (const line of lines) {
-      if (y + lineHeight > maxY) {
-        doc.addPage();
-        y = margin;
-      }
-      doc.text(line, margin, y);
-      y += lineHeight;
-    }
-    y += 4;
-  }
-
-  return new File([doc.output('blob')], fileName, { type: 'application/pdf' });
-}
-
 export async function downloadJainaReportPdf({
   report,
   fallbackTables,
-  exportNode,
-  backgroundColor = '#0b0b0b',
 }: DownloadJainaReportPdfOptions): Promise<void> {
-  if (exportNode) {
-    try {
-      downloadFile(
-        await captureNodeToPdfFile(exportNode, {
-          backgroundColor,
-          fileName: createJainaReportFilename(),
-        }),
-      );
-      return;
-    } catch {
-      // Fall back to deterministic text/pdf rendering if canvas export fails.
-    }
-  }
-
   const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   renderReportPdf(doc, report, fallbackTables);
   doc.save(createJainaReportFilename());
 }
 
-// V2 report export: capture the live rendered report (real Recharts charts),
-// theme-matched, as a multi-page PDF. No server-side chart regeneration.
-export async function downloadJainaReportV2Pdf({
-  exportNode,
-  backgroundColor,
-}: {
-  exportNode: HTMLElement | null;
-  backgroundColor?: string;
-}): Promise<'visual' | 'text_fallback'> {
-  if (!exportNode) {
-    throw new Error('No rendered report available to export.');
-  }
-  const artifact = await createJainaReportV2PdfArtifact({ exportNode, backgroundColor });
-  downloadFile(artifact.file);
-  return artifact.mode;
-}
+// V2 report export.
+//
+// The report is composed node by node into a standalone document (see
+// `./export/renderExportDocument`) and handed to the browser's own print engine,
+// which writes a real PDF: selectable text, embedded fonts, and charts that stay
+// vector SVG at any zoom. The previous implementation rasterized the live DOM with
+// html2canvas and sliced the resulting PNG at fixed offsets, which cut through
+// charts and table rows and produced a document nobody could search or copy from.
+//
+// The print dialog is the deliberate cost of that: writing a PDF file silently
+// would mean shipping a headless Chromium, and the browser already contains one.
 
-export async function createJainaReportV2PdfArtifact({
-  exportNode,
-  backgroundColor,
-}: {
-  exportNode: HTMLElement | null;
-  backgroundColor?: string;
-}): Promise<{ file: File; mode: 'visual' | 'text_fallback' }> {
-  if (!exportNode) throw new Error('No rendered report available to export.');
-  const fileName = createJainaReportFilename();
+// Loaded on demand. The export engine pulls in the whole document renderer and is
+// only reachable from a button click, so it has no business in the /scale route's
+// first load — the same reason the previous implementation imported jsPDF lazily.
+const exportEngine = () => import('./export/renderExportDocument');
+
+async function withExportDocument<T>(
+  options: JainaReportV2ExportOptions,
+  use: (handle: ExportDocumentHandle) => T | Promise<T>,
+): Promise<T> {
+  const { renderExportDocument } = await exportEngine();
+  const handle = await renderExportDocument(options);
   try {
-    return {
-      file: await captureNodeToPdfFile(exportNode, {
-        backgroundColor: backgroundColor ?? resolveExportBackground(exportNode),
-        fileName,
-      }),
-      mode: 'visual',
-    };
-  } catch {
-    return { file: await createTextPdfFile(exportNode, fileName), mode: 'text_fallback' };
+    return await use(handle);
+  } finally {
+    handle.cleanup();
   }
 }
 
-export async function createJainaReportV2PdfFile(options: {
-  exportNode: HTMLElement | null;
-  backgroundColor?: string;
-}): Promise<File> {
-  return (await createJainaReportV2PdfArtifact(options)).file;
+export async function downloadJainaReportV2Pdf(options: JainaReportV2ExportOptions): Promise<void> {
+  const { renderExportDocument } = await exportEngine();
+  const handle = await renderExportDocument(options);
+  const view = handle.iframe.contentWindow;
+  if (!view) {
+    handle.cleanup();
+    throw new Error('Could not open the export document.');
+  }
+  // The frame has to outlive print(): Chrome reads the document while the dialog is
+  // open, and tearing it down first prints a blank page. `afterprint` fires on both
+  // save and cancel; the timeout is the belt for browsers that never fire it.
+  view.addEventListener('afterprint', () => handle.cleanup(), { once: true });
+  setTimeout(() => handle.cleanup(), PRINT_CLEANUP_DELAY_MS);
+  view.focus();
+  view.print();
+}
+
+export async function createJainaReportV2HtmlFile(
+  options: JainaReportV2ExportOptions,
+): Promise<File> {
+  const { serializeExportDocument } = await exportEngine();
+  const html = await withExportDocument(options, (handle) => serializeExportDocument(handle.doc));
+  return new File([html], createJainaReportHtmlFilename(), { type: 'text/html;charset=utf-8' });
+}
+
+export async function downloadJainaReportV2Html(
+  options: JainaReportV2ExportOptions,
+): Promise<void> {
+  downloadFile(await createJainaReportV2HtmlFile(options));
 }
 
 function renderLegacyChartSpecs(report: FrontendCheckpointReport): string {

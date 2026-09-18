@@ -7,6 +7,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Line,
   LineChart,
   Pie,
@@ -22,11 +23,15 @@ import {
 import {
   type ChartConfig,
   ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
 import { formatValue } from '@/lib/jaina/formatValue';
 import type { ChartBlockV2 } from '@/lib/jaina/schemas';
+import { useIsExportMode } from '../export/ExportModeContext';
+import { EXPORT_CHART_HEIGHT_PX, EXPORT_CHART_WIDTH_PX } from '../export/exportStyles';
 import { EvidenceTooltip } from './EvidenceTooltip';
 
 type ChartBlockProps = { block: ChartBlockV2; isStreaming: boolean };
@@ -138,6 +143,8 @@ export function ChartBlock({ block }: ChartBlockProps) {
       <ChartTooltipContent formatter={tooltipFormatter} />
     );
 
+  const isExport = useIsExportMode();
+
   const chartConfig: ChartConfig = Object.fromEntries(
     Object.entries(block.chart_config).map(([key, entry]) => [
       key,
@@ -164,14 +171,23 @@ export function ChartBlock({ block }: ChartBlockProps) {
     })
     .join('; ');
 
+  // Recharts animates every series in on mount. An export document is built in an
+  // offscreen frame where rAF is throttled, so the animation never advances and the
+  // series draws at zero progress: axes and gridlines appear, the LINE and the PIE
+  // do not. The chart looks structurally fine and is empty.
+  const animate = !isExport;
+
+  // The screen chart is 380px tall and can spend 112px on wrapped date ticks. The
+  // paper chart is 240px, where that leaves almost nothing for the plot — and every
+  // tick is drawn because interval={0}, so 14 dates collapse into a smear.
   const sharedCartesian = (
     <>
       <CartesianGrid vertical={false} />
       <XAxis
         dataKey={block.category_key}
-        interval={0}
-        height={112}
-        tick={WrappedXAxisTick}
+        interval={isExport ? 'preserveStartEnd' : 0}
+        height={isExport ? 40 : 112}
+        tick={isExport ? undefined : WrappedXAxisTick}
         label={
           block.x_axis_label
             ? { value: block.x_axis_label, position: 'insideBottom', offset: -4 }
@@ -179,7 +195,7 @@ export function ChartBlock({ block }: ChartBlockProps) {
         }
       />
       <YAxis
-        width={104}
+        width={isExport ? 72 : 104}
         tickFormatter={(value: string | number) => formatChartValue(value, block)}
         label={
           block.y_axis_label
@@ -204,6 +220,7 @@ export function ChartBlock({ block }: ChartBlockProps) {
         {configKeys.map((key) => (
           <Line
             key={key}
+            isAnimationActive={animate}
             type="monotone"
             dataKey={key}
             stroke={`var(--color-${key})`}
@@ -220,6 +237,7 @@ export function ChartBlock({ block }: ChartBlockProps) {
         {configKeys.map((key) => (
           <Bar
             key={key}
+            isAnimationActive={animate}
             dataKey={key}
             fill={`var(--color-${key})`}
             stackId={isStacked ? 'stack' : undefined}
@@ -234,6 +252,7 @@ export function ChartBlock({ block }: ChartBlockProps) {
         {configKeys.map((key) => (
           <Area
             key={key}
+            isAnimationActive={animate}
             type="monotone"
             dataKey={key}
             stroke={`var(--color-${key})`}
@@ -252,6 +271,7 @@ export function ChartBlock({ block }: ChartBlockProps) {
         {configKeys.map((key) => (
           <Radar
             key={key}
+            isAnimationActive={animate}
             dataKey={key}
             stroke={`var(--color-${key})`}
             fill={`var(--color-${key})`}
@@ -261,15 +281,32 @@ export function ChartBlock({ block }: ChartBlockProps) {
       </RadarChart>
     );
   } else {
+    // A bare <Pie> paints every slice the same default fill, so the chart renders as
+    // one solid disc with no way to tell the slices apart. Colour comes from the
+    // block's own chart_config, which for pie/doughnut is keyed by SLICE VALUE — read
+    // directly rather than through ChartStyle's `--color-<key>` var, because a slice
+    // named "Paid Search" is not a valid custom-property name.
     chart = (
       <PieChart>
         <ChartTooltip content={tooltipContent} />
         <Pie
+          isAnimationActive={animate}
           data={block.data}
           dataKey={block.value_key ?? configKeys[0] ?? 'value'}
           nameKey={block.category_key}
           innerRadius={block.chart_type === 'doughnut' ? '50%' : 0}
-        />
+        >
+          {block.data.map((row, index) => {
+            const slice = String(row[block.category_key] ?? '');
+            return (
+              <Cell
+                key={`${slice}-${index}`}
+                fill={block.chart_config[slice]?.color ?? `var(--chart-${(index % 5) + 1})`}
+              />
+            );
+          })}
+        </Pie>
+        <ChartLegend content={<ChartLegendContent nameKey={block.category_key} />} />
       </PieChart>
     );
   }
@@ -290,8 +327,11 @@ export function ChartBlock({ block }: ChartBlockProps) {
       <div className="overflow-x-auto">
         <ChartContainer
           config={chartConfig}
-          className="h-[380px] w-full"
-          style={minChartWidth ? { minWidth: minChartWidth } : undefined}
+          explicitSize={
+            isExport ? { width: EXPORT_CHART_WIDTH_PX, height: EXPORT_CHART_HEIGHT_PX } : undefined
+          }
+          className={isExport ? 'w-full' : 'h-[380px] w-full'}
+          style={!isExport && minChartWidth ? { minWidth: minChartWidth } : undefined}
           role="img"
           aria-label={[block.title, block.x_axis_label, block.y_axis_label, accessibleData]
             .filter(Boolean)

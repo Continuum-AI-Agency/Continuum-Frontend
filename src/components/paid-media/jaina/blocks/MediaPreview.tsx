@@ -4,6 +4,7 @@ import { type ReactNode, useState } from 'react';
 import { ChatMediaThumb } from '@/components/chat/media/ChatMedia';
 import { mediaFromJainaMediaEntry } from '@/components/chat/media/media';
 import type { MediaMapEntry } from '@/lib/jaina/schemas';
+import { useIsExportMode } from '../export/ExportModeContext';
 
 type MediaPreviewProps = {
   entry: MediaMapEntry;
@@ -15,6 +16,26 @@ export function MediaPreview({ entry, children }: MediaPreviewProps) {
   // A media-map entry carries no brand/account context, so an expired URL
   // degrades to the branded fallback tile (no re-resolve path from here).
   const media = mediaFromJainaMediaEntry(entry);
+  const isExport = useIsExportMode();
+
+  // On paper the hover never comes, and the trigger is a button wrapping the
+  // creative's own name — so the export renders the name with the thumbnail
+  // beside it rather than an affordance that would hide both.
+  if (isExport) {
+    const src = entry.thumbnail_url ?? entry.image_url;
+    return (
+      <span className="inline-flex items-baseline gap-1.5">
+        <span>{children}</span>
+        {src ? (
+          <img
+            src={src}
+            alt={`${entry.entity_type} ${entry.entity_id}`}
+            className="inline-block size-8 shrink-0 translate-y-1.5 rounded border border-border/50 object-cover"
+          />
+        ) : null}
+      </span>
+    );
+  }
 
   return (
     <button

@@ -38,10 +38,19 @@ function ChartContainer({
   className,
   children,
   config,
+  explicitSize,
   ...props
 }: React.ComponentProps<'div'> & {
   config: ChartConfig;
   children: React.ComponentProps<typeof RechartsPrimitive.ResponsiveContainer>['children'];
+  // Render at a known pixel size instead of measuring the container.
+  //
+  // ResponsiveContainer sizes itself from a ResizeObserver, which never reports a
+  // width for a subtree rendered into another document — the chart then draws its
+  // paths into a zero-width surface and looks, in the DOM, exactly like a chart.
+  // A printed page has a width known in advance, so the export passes it here and
+  // measurement stops being part of the story. Screen callers pass nothing.
+  explicitSize?: { width: number; height: number };
 }) {
   const uniqueId = React.useId();
   const chartId = `chart-${id || uniqueId.replace(/:/g, '')}`;
@@ -58,7 +67,11 @@ function ChartContainer({
         {...props}
       >
         <ChartStyle id={chartId} config={config} />
-        <RechartsPrimitive.ResponsiveContainer>{children}</RechartsPrimitive.ResponsiveContainer>
+        {explicitSize && React.isValidElement(children) ? (
+          React.cloneElement(children as React.ReactElement<typeof explicitSize>, explicitSize)
+        ) : (
+          <RechartsPrimitive.ResponsiveContainer>{children}</RechartsPrimitive.ResponsiveContainer>
+        )}
       </div>
     </ChartContext.Provider>
   );

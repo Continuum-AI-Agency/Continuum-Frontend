@@ -7,6 +7,7 @@ import {
   fetchJainaCreativePreview,
   isResolvableCreativeRef,
 } from '@/lib/api/jainaCreativePreview.client';
+import { useIsExportMode } from '../export/ExportModeContext';
 
 type CreativeCellProps = {
   // The rendered cell text (e.g. the ad name).
@@ -36,7 +37,11 @@ export function CreativeCell({
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<PreviewState>({ status: 'idle', url: null });
   const resolvable = ref !== null && isResolvableCreativeRef(ref);
-  const shouldResolve = display === 'card' || open;
+  // Paper cannot hover. In an export the preview must resolve unprompted, or every
+  // creative in a data table renders as bare text — which is what the old raster
+  // exporter silently shipped.
+  const isExport = useIsExportMode();
+  const shouldResolve = display === 'card' || open || isExport;
 
   useEffect(() => {
     if (!shouldResolve || !ref || !resolvable) return;
@@ -75,6 +80,23 @@ export function CreativeCell({
   }
 
   if (!resolvable) return <span>{label}</span>;
+
+  // A hover card renders into a portal that a printed page never opens, so the
+  // export shows the thumbnail inline beside the label instead.
+  if (isExport) {
+    return (
+      <span className="inline-flex items-center gap-2">
+        {preview.status === 'ready' && preview.url ? (
+          <img
+            src={preview.url}
+            alt={alt}
+            className="size-9 shrink-0 rounded border border-border/50 object-cover"
+          />
+        ) : null}
+        <span>{label}</span>
+      </span>
+    );
+  }
 
   return (
     <HoverCard open={open} onOpenChange={setOpen} openDelay={200} closeDelay={120}>

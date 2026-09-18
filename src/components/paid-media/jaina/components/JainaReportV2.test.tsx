@@ -48,16 +48,24 @@ const exportToSheetsMock = mock(async () => ({
   url: 'https://docs.google.com/spreadsheets/d/sheet-1',
 }));
 const deliveryRequestMock = mock(async () => ({ ok: true }));
+const downloadPdfMock = mock(async () => {});
+const downloadHtmlMock = mock(async () => {});
 
 mock.module('@/lib/api/http', () => ({
   http: { request: deliveryRequestMock },
 }));
 
+const reportExport = await import('../reportExport');
+
+// Spread the real module: `mock.module` is process-global, so a partial mock
+// deletes this module's other exports for every test file that loads later.
 mock.module('../reportExport', () => ({
+  ...reportExport,
   buildJainaReportV2SheetsExportRequest: buildSheetsRequestMock,
-  createJainaReportV2PdfFile: mock(async () => new File(['report'], 'report.pdf')),
+  createJainaReportV2HtmlFile: mock(async () => new File(['<html>'], 'report.html')),
   downloadFile: mock(),
-  downloadJainaReportV2Pdf: mock(async () => 'text_fallback'),
+  downloadJainaReportV2Html: downloadHtmlMock,
+  downloadJainaReportV2Pdf: downloadPdfMock,
   exportJainaReportToSheets: exportToSheetsMock,
   openJainaReportMailDraft: mock(),
   shareJainaReportFile: mock(async () => 'shared'),
@@ -158,7 +166,7 @@ describe('JainaReportV2 module controls', () => {
     expect(visibleBlocks.map((block) => block.block_id)).toEqual(['risks']);
   });
 
-  it('acknowledges hydration render and PDF fallback against the same run identity', async () => {
+  it('acknowledges a hydration render and a successful PDF export against the same run identity', async () => {
     deliveryRequestMock.mockClear();
     render(
       <JainaReportV2
@@ -189,10 +197,45 @@ describe('JainaReportV2 module controls', () => {
       expect.objectContaining({
         body: {
           kind: 'pdf',
+          status: 'success',
+          report_id: 'run_42:checkpoint_report',
+        },
+      }),
+    );
+  });
+
+  // `delivery.pdf.status` is the only production signal that says whether an export
+  // actually produced a document, so a failed export has to report itself as one.
+  it('acknowledges a failed PDF export as a fallback', async () => {
+    deliveryRequestMock.mockClear();
+    downloadPdfMock.mockImplementationOnce(async () => {
+      throw new Error('Export timed out: charts did not finish drawing');
+    });
+    render(<JainaReportV2 report={report} isStreaming={false} runId="run_42" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export report as PDF' }));
+    await waitFor(() => expect(deliveryRequestMock).toHaveBeenCalledTimes(1));
+    expect(deliveryRequestMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        body: {
+          kind: 'pdf',
           status: 'fallback',
           report_id: 'run_42:checkpoint_report',
         },
       }),
     );
+  });
+
+  // The export receives blocks in PRIORITY order, not authoring order — that is what
+  // puts the primary modules on page one.
+  it('exports the visible modules as HTML, highest priority first', async () => {
+    downloadHtmlMock.mockClear();
+    render(<JainaReportV2 report={report} isStreaming={false} runId="run_42" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export report as HTML' }));
+    await waitFor(() => expect(downloadHtmlMock).toHaveBeenCalledTimes(1));
+    const blocks = downloadHtmlMock.mock.calls[0][0].blocks as Array<{ block_id: string }>;
+    expect(blocks.map((block) => block.block_id)).toEqual(['wins', 'risks']);
   });
 });

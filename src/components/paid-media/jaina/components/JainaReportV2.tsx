@@ -1,7 +1,15 @@
 'use client';
 
-import { BookIcon, EyeIcon, EyeOffIcon, FileDownIcon, Share2Icon, Table2Icon } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  BookIcon,
+  CodeIcon,
+  EyeIcon,
+  EyeOffIcon,
+  FileDownIcon,
+  Share2Icon,
+  Table2Icon,
+} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import { Badge } from '@/components/ui/badge';
@@ -16,8 +24,9 @@ import { countBlockCitations } from '../blocks/citations';
 import { MediaMapProvider } from '../blocks/mediaText';
 import {
   buildJainaReportV2SheetsExportRequest,
-  createJainaReportV2PdfFile,
+  createJainaReportV2HtmlFile,
   downloadFile,
+  downloadJainaReportV2Html,
   downloadJainaReportV2Pdf,
   exportJainaReportToSheets,
   openJainaReportMailDraft,
@@ -117,9 +126,8 @@ export function JainaReportV2({
   onSuggestionClick,
 }: JainaReportV2Props) {
   const { show } = useToast();
-  const reportRef = useRef<HTMLDivElement | null>(null);
   const [hiddenBlockIds, setHiddenBlockIds] = useState<Set<string>>(() => new Set());
-  const [exporting, setExporting] = useState<'sheets' | 'share' | null>(null);
+  const [exporting, setExporting] = useState<'sheets' | 'share' | 'pdf' | 'html' | null>(null);
   const sortedBlocks = useMemo(
     () => [...report.blocks].sort((a, b) => a.priority - b.priority),
     [report.blocks],
@@ -159,20 +167,41 @@ export function JainaReportV2({
       return next;
     });
   }, []);
-  // Export the LIVE rendered report (real Recharts charts) as a theme-matched
-  // PDF — the front-end is the single source of rendering truth.
+  // Compose the visible modules into a print-ready document and hand it to the
+  // browser's print engine, which writes a real vector PDF.
   const handlePdfExport = useCallback(async () => {
+    setExporting('pdf');
     try {
-      const mode = await downloadJainaReportV2Pdf({ exportNode: reportRef.current });
-      await acknowledgeDelivery('pdf', mode === 'visual' ? 'success' : 'fallback');
-    } catch {
+      await downloadJainaReportV2Pdf({ report, blocks: visibleBlocks });
+      await acknowledgeDelivery('pdf', 'success');
+    } catch (error) {
+      await acknowledgeDelivery('pdf', 'fallback');
       show({
         title: 'Export failed',
-        description: 'Unable to generate the report PDF right now.',
+        description:
+          error instanceof Error ? error.message : 'Unable to generate the report PDF right now.',
         variant: 'error',
       });
+    } finally {
+      setExporting(null);
     }
-  }, [acknowledgeDelivery, show]);
+  }, [acknowledgeDelivery, report, show, visibleBlocks]);
+
+  const handleHtmlExport = useCallback(async () => {
+    setExporting('html');
+    try {
+      await downloadJainaReportV2Html({ report, blocks: visibleBlocks });
+    } catch (error) {
+      show({
+        title: 'Export failed',
+        description:
+          error instanceof Error ? error.message : 'Unable to generate the report HTML right now.',
+        variant: 'error',
+      });
+    } finally {
+      setExporting(null);
+    }
+  }, [report, show, visibleBlocks]);
 
   const handleSheetsExport = useCallback(async () => {
     setExporting('sheets');
@@ -196,14 +225,14 @@ export function JainaReportV2({
   const handleShare = useCallback(async () => {
     setExporting('share');
     try {
-      const file = await createJainaReportV2PdfFile({ exportNode: reportRef.current });
+      const file = await createJainaReportV2HtmlFile({ report, blocks: visibleBlocks });
       const result = await shareJainaReportFile(file, 'Jaina performance report');
       if (result === 'unsupported') {
         downloadFile(file);
         openJainaReportMailDraft('Jaina performance report');
         show({
           title: 'Attach the downloaded report',
-          description: 'Your email draft is open. Attach the downloaded PDF before sending.',
+          description: 'Your email draft is open. Attach the downloaded report before sending.',
         });
       }
     } catch {
@@ -215,7 +244,7 @@ export function JainaReportV2({
     } finally {
       setExporting(null);
     }
-  }, [show]);
+  }, [report, show, visibleBlocks]);
 
   const content = (
     <section className="mt-4 space-y-4">
@@ -245,7 +274,7 @@ export function JainaReportV2({
         </fieldset>
       ) : null}
 
-      <div ref={reportRef} className="space-y-4">
+      <div className="space-y-4">
         {citationCount > 0 ? (
           <div className="flex items-center">
             <Badge
@@ -289,7 +318,9 @@ export function JainaReportV2({
       ) : null}
 
       <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
-        <span className="text-xs text-muted-foreground">Export this report as a PDF.</span>
+        <span className="text-xs text-muted-foreground">
+          Export the visible modules as a PDF or a self-contained HTML file.
+        </span>
         <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
@@ -317,12 +348,23 @@ export function JainaReportV2({
             type="button"
             size="sm"
             variant="outline"
-            onClick={handlePdfExport}
+            onClick={() => void handleHtmlExport()}
+            disabled={isStreaming || exporting !== null}
+            aria-label="Export report as HTML"
+          >
+            <CodeIcon className="size-3.5" />
+            {exporting === 'html' ? 'Preparing…' : 'Export HTML'}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void handlePdfExport()}
             disabled={isStreaming || exporting !== null}
             aria-label="Export report as PDF"
           >
             <FileDownIcon className="size-3.5" />
-            Export PDF
+            {exporting === 'pdf' ? 'Preparing…' : 'Export PDF'}
           </Button>
         </div>
       </footer>
