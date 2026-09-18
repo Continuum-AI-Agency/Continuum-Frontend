@@ -168,6 +168,45 @@ describe('applyOps', () => {
     expect(graph.edges.some((e) => e.source === 'img' && e.target === 'vid')).toBe(true);
   });
 
+  // QA: "when we create nodes it tends to stack them on top when using the MCP".
+  // `makeNode` starts every node at the origin and `applyOps` used to return them there,
+  // so a run of add_node ops produced one pile no later layout pass could resolve.
+  it('places added nodes clear of each other and of the work already on the canvas', () => {
+    const base = seed();
+    const { graph } = applyOps(base, [
+      { op: 'add_node', ref: 'a', type: 'nanoGen' },
+      { op: 'add_node', ref: 'b', type: 'nanoGen' },
+      { op: 'add_node', ref: 'c', type: 'veoFast' },
+    ]);
+
+    const added = ['a', 'b', 'c'].map((id) => {
+      const node = graph.nodes.find((n) => n.id === id);
+      if (!node) throw new Error(`${id} was not added`);
+      return node;
+    });
+    expect(added.some((n) => n.position.x === 0 && n.position.y === 0)).toBe(false);
+    expect(new Set(added.map((n) => `${n.position.x},${n.position.y}`)).size).toBe(3);
+
+    // Existing work keeps the position the user gave it, and the new block sits below it.
+    for (const before of base.nodes) {
+      const after = graph.nodes.find((n) => n.id === before.id);
+      expect(after?.position).toEqual(before.position);
+    }
+    const lowestExisting = Math.max(...base.nodes.map((n) => n.position.y));
+    expect(Math.min(...added.map((n) => n.position.y))).toBeGreaterThan(lowestExisting);
+  });
+
+  it('lays added nodes out along their own wiring, not in one column', () => {
+    const { graph } = applyOps(seed(), [
+      { op: 'add_node', ref: 'p2', type: 'string', data: { value: 'hi' } },
+      { op: 'add_node', ref: 'g2', type: 'nanoGen' },
+      { op: 'connect', from: 'p2', to: 'g2' },
+    ]);
+    const p2 = graph.nodes.find((n) => n.id === 'p2');
+    const g2 = graph.nodes.find((n) => n.id === 'g2');
+    expect(g2?.position.x).toBeGreaterThan(p2?.position.x ?? 0);
+  });
+
   it("rewires a node's output to a new target", () => {
     const base = applyOps(seed(), [
       { op: 'add_node', ref: 'img2', type: 'nanoGen' },

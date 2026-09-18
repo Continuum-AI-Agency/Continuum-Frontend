@@ -558,11 +558,51 @@ const MEDIA_DATA_KEYS = [
   'referenceType',
 ];
 
+/**
+ * Place the nodes this call created.
+ *
+ * `buildWorkflowGraph` lays its graph out; `applyOps` never did, and `makeNode` starts
+ * every node at the origin — so a run of `add_node` ops stacked them all at (0, 0).
+ * That is the "it jumbles them everywhere" users report, and it is not self-healing: a
+ * later layout pass keeps the position of every node it already knows, so `autoLayout`
+ * preserves the pile rather than resolving it.
+ *
+ * The rule is `mergeGraphs`', deliberately: a node that was already here keeps the
+ * position the user gave it, and new work is laid out among itself and dropped clear
+ * below everything that came before. Three placement rules on one canvas was the
+ * defect; this leaves one.
+ *
+ * ponytail: a new node lands below the graph rather than beside the node it was wired
+ * to in the same call. Give it its upstream's column if that reads wrong in practice.
+ */
+function placeNewNodes(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  addedIds: ReadonlySet<string>,
+): WorkflowNode[] {
+  if (addedIds.size === 0) return nodes;
+  // Membership in `nodes`, never in `addedIds` alone — an add followed by a remove in
+  // the same call leaves an id here that no longer has a node to place.
+  const fresh = nodes.filter((node) => addedIds.has(node.id));
+  if (fresh.length === 0) return nodes;
+
+  const settled = nodes.filter((node) => !addedIds.has(node.id));
+  const offsetY = lowestFreeY(settled);
+  const among = edges.filter((edge) => addedIds.has(edge.source) && addedIds.has(edge.target));
+  const laidOut = new Map(autoLayout(fresh, among).map((node) => [node.id, node.position]));
+
+  return nodes.map((node) => {
+    const position = laidOut.get(node.id);
+    return position ? { ...node, position: { x: position.x, y: position.y + offsetY } } : node;
+  });
+}
+
 export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResult {
   let nodes: WorkflowNode[] = [...graph.nodes];
   let edges: WorkflowEdge[] = [...graph.edges];
   const errors: string[] = [];
   const warnings: string[] = [];
+  const addedIds = new Set<string>();
 
   const replaceNode = (id: string, mutate: (node: WorkflowNode) => WorkflowNode): boolean => {
     const index = nodes.findIndex((n) => n.id === id);
@@ -588,6 +628,7 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
         // a stored `{}` nobody could see.
         errors.push(...made.changes);
         nodes = [...nodes, made.node];
+        addedIds.add(made.node.id);
         break;
       }
       case 'remove_node': {
@@ -782,7 +823,10 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
     }
   }
 
-  const graphOut: WorkflowGraph = { nodes: stampDerivedLocks(nodes, edges), edges };
+  const graphOut: WorkflowGraph = {
+    nodes: stampDerivedLocks(placeNewNodes(nodes, edges, addedIds), edges),
+    edges,
+  };
   if (graph.metadata) graphOut.metadata = graph.metadata;
   return { graph: graphOut, errors, warnings };
 }
