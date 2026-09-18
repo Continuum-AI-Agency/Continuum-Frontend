@@ -4,14 +4,17 @@ import {
   agentDelegatedFrameSchema,
   agentDocumentAttachmentSchema,
   checkpointBlockV2LenientSchema,
+  actionsBlockSchema as contractActionsBlockSchema,
   blockBaseSchema as contractBlockBaseSchema,
   chartBlockBaseSchema as contractChartBlockBaseSchema,
   chartBlockSchema as contractChartBlockSchema,
   chartSeriesConfigSchema as contractChartSeriesConfigSchema,
   comparisonBlockSchema as contractComparisonBlockSchema,
   comparisonPairSchema as contractComparisonPairSchema,
+  dataScopeBlockSchema as contractDataScopeBlockSchema,
   dataTableBlockBaseSchema as contractDataTableBlockBaseSchema,
   degradeToNarrativeBlockV2 as contractDegradeToNarrativeBlockV2,
+  goalPacingBlockSchema as contractGoalPacingBlockSchema,
   insightListBlockSchema as contractInsightListBlockSchema,
   insightListItemSchema as contractInsightListItemSchema,
   jainaExecutionObjectiveSchema as contractJainaExecutionObjectiveSchema,
@@ -19,6 +22,7 @@ import {
   metricGridBlockSchema as contractMetricGridBlockSchema,
   metricItemSchema as contractMetricItemSchema,
   narrativeBlockSchema as contractNarrativeBlockSchema,
+  surveyBlockSchema as contractSurveyBlockSchema,
   tableColumnSchema as contractTableColumnSchema,
   jainaPaidCreativeRenderPayloadSchema,
   jainaScaffoldActionSchema,
@@ -547,6 +551,28 @@ export const comparisonBlockV2Schema = contractComparisonBlockSchema.extend({
 });
 export type ComparisonBlockV2 = z.infer<typeof comparisonBlockV2Schema>;
 
+// The four Prism blocks. Contract shapes verbatim; only `priority` takes the render
+// layering every other block gets.
+export const dataScopeBlockV2Schema = contractDataScopeBlockSchema.extend({
+  priority: blockPriorityV2Schema,
+});
+export type DataScopeBlockV2 = z.infer<typeof dataScopeBlockV2Schema>;
+
+export const actionsBlockV2Schema = contractActionsBlockSchema.extend({
+  priority: blockPriorityV2Schema,
+});
+export type ActionsBlockV2 = z.infer<typeof actionsBlockV2Schema>;
+
+export const goalPacingBlockV2Schema = contractGoalPacingBlockSchema.extend({
+  priority: blockPriorityV2Schema,
+});
+export type GoalPacingBlockV2 = z.infer<typeof goalPacingBlockV2Schema>;
+
+export const surveyBlockV2Schema = contractSurveyBlockSchema.extend({
+  priority: blockPriorityV2Schema,
+});
+export type SurveyBlockV2 = z.infer<typeof surveyBlockV2Schema>;
+
 const checkpointBlockV2UnionSchema = z.discriminatedUnion('category', [
   narrativeBlockV2Schema,
   metricGridBlockV2Schema,
@@ -554,6 +580,10 @@ const checkpointBlockV2UnionSchema = z.discriminatedUnion('category', [
   dataTableBlockV2Schema,
   insightListBlockV2Schema,
   comparisonBlockV2Schema,
+  dataScopeBlockV2Schema,
+  actionsBlockV2Schema,
+  goalPacingBlockV2Schema,
+  surveyBlockV2Schema,
 ]);
 
 // Re-apply the contract's chart-renderability invariants (category_key present

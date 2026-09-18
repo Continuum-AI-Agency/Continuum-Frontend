@@ -8,9 +8,15 @@ export type ValueFormat =
   | 'text'
   | (string & {});
 
+export type PercentBasis = 'fraction' | 'points';
+
 type FormatOptions = {
   currency?: string;
   locale?: string;
+  /** For `percent`: how the value is expressed at the source. When given, no guessing:
+   *  a fraction is ×100, points print as-is. Absent = the legacy magnitude heuristic,
+   *  which reads a 0.918-point CTR as 91.8%. Declare it. */
+  percentBasis?: PercentBasis | null;
 };
 
 type MetricDisplayFormatInput = {
@@ -72,11 +78,21 @@ export function formatValue(
         maximumFractionDigits: 2,
       }).format(num);
 
-    case 'percent':
+    case 'percent': {
+      const basis = options?.percentBasis ?? null;
+      const fraction =
+        basis === 'fraction'
+          ? num
+          : basis === 'points'
+            ? num / 100
+            : num < 1 && num > -1
+              ? num
+              : num / 100;
       return new Intl.NumberFormat(locale, {
         style: 'percent',
-        maximumFractionDigits: 1,
-      }).format(num < 1 && num > -1 ? num : num / 100);
+        maximumFractionDigits: basis ? 2 : 1,
+      }).format(fraction);
+    }
 
     case 'multiplier':
       return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(num)}x`;

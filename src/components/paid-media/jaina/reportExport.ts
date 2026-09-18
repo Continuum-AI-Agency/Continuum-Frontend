@@ -202,6 +202,56 @@ function projectV2Block(block: CheckpointReportV2['blocks'][number]): SheetCandi
           ]),
         ],
       };
+    case 'data_scope':
+      return {
+        title: block.title,
+        rows: [
+          ['Scope', block.dates],
+          ['Timezone', block.timezone ?? null],
+          ['Source', block.source],
+          ...block.notes.map((note) => ['Note', note]),
+        ],
+      };
+    case 'actions':
+      return {
+        title: block.title,
+        rows: [
+          ['Priority', 'Entity', 'Action', 'Size', 'Metric', 'Value', 'Window', 'Comparator'],
+          ...block.rows.map((row) => [
+            row.priority,
+            row.entity.name,
+            row.action,
+            row.sizing ?? null,
+            row.evidence.metric,
+            row.evidence.value,
+            row.evidence.window,
+            row.evidence.comparator ?? null,
+          ]),
+        ],
+      };
+    case 'goal_pacing':
+      return {
+        title: block.title,
+        rows: [
+          ['Budget', block.budget],
+          ['Spent', block.spent],
+          ['Currency', block.currency_code ?? null],
+          ['Period', `${block.period_start} → ${block.period_end}`],
+          ['Elapsed', block.elapsed_pct],
+          ['Pace ratio', block.pace_ratio],
+          ['Projected at end', block.projected_end ?? null],
+          ['Status', block.status],
+        ],
+      };
+    case 'survey':
+      return {
+        title: block.title,
+        rows: [
+          ['Term', block.term],
+          ['Used', block.used],
+          ...block.alternatives.map((alt) => ['Alternative', alt]),
+        ],
+      };
   }
 }
 

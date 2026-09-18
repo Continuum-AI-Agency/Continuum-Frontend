@@ -27,11 +27,10 @@ function toStripItem(metric: MetricItemV2): MetricStripItem {
     value:
       displayFormat === 'currency' && !currency.success
         ? `${formatValue(metric.value, 'number')} (currency unknown)`
-        : formatValue(
-            metric.value,
-            displayFormat,
-            currency.success ? { currency: currency.data } : undefined,
-          ),
+        : formatValue(metric.value, displayFormat, {
+            ...(currency.success ? { currency: currency.data } : {}),
+            percentBasis: metric.percent_basis ?? null,
+          }),
     deltaPct: resolveDeltaPct(metric),
   };
 }

@@ -93,3 +93,14 @@ describe('resolveMetricDisplayFormat', () => {
     ).toBe('currency');
   });
 });
+
+describe('formatValue percent basis', () => {
+  test('prints a 0.918-point CTR as 0.92%, not 91.8%, once the basis is declared', () => {
+    expect(formatValue(0.918, 'percent', { percentBasis: 'points' })).toBe('0.92%');
+    expect(formatValue(0.00918, 'percent', { percentBasis: 'fraction' })).toBe('0.92%');
+    expect(formatValue(12.5, 'percent', { percentBasis: 'points' })).toBe('12.5%');
+  });
+  test('keeps the magnitude heuristic only when no basis is declared', () => {
+    expect(formatValue(0.918, 'percent')).toBe('91.8%');
+  });
+});

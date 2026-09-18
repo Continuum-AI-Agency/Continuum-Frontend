@@ -24,7 +24,13 @@ export default function ComparisonBlock({ block }: ComparisonBlockProps) {
         <table className="w-full text-sm">
           <thead>
             <tr>
-              {['Metric', block.before_label, block.after_label, 'Change'].map((heading) => (
+              {[
+                'Metric',
+                block.before_label,
+                block.after_label,
+                ...(block.baseline_label ? [block.baseline_label] : []),
+                'Change',
+              ].map((heading) => (
                 <th
                   key={heading}
                   className="px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/30 text-left first:text-left text-right"
@@ -51,11 +57,26 @@ export default function ComparisonBlock({ block }: ComparisonBlockProps) {
                     />
                   </td>
                   <td className="px-3 py-2 tabular-nums text-right">
-                    {formatValue(pair.before, pair.format ?? undefined)}
+                    {formatValue(pair.before, pair.format ?? undefined, {
+                      percentBasis: pair.percent_basis ?? null,
+                    })}
                   </td>
                   <td className="px-3 py-2 tabular-nums text-right">
-                    {formatValue(pair.after, pair.format ?? undefined)}
+                    {formatValue(pair.after, pair.format ?? undefined, {
+                      percentBasis: pair.percent_basis ?? null,
+                    })}
                   </td>
+                  {block.baseline_label ? (
+                    // The context floor's third leg: the longer baseline the pair is read
+                    // against. "—" when this pair has none.
+                    <td className="px-3 py-2 tabular-nums text-right text-muted-foreground">
+                      {pair.baseline == null
+                        ? '—'
+                        : formatValue(pair.baseline, pair.format ?? undefined, {
+                            percentBasis: pair.percent_basis ?? null,
+                          })}
+                    </td>
+                  ) : null}
                   <td className={cn('px-3 py-2 text-right tabular-nums', color)}>
                     {pair.change_direction === 'up' && (
                       <ArrowUpIcon className="inline-block h-3 w-3 mr-0.5" />
