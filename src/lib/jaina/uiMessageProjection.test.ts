@@ -24,6 +24,7 @@ import {
   planOf,
   reasoningEntriesOf,
   reasoningOf,
+  reportOf,
   textOf,
   toJainaChatMessage,
   toolsOf,
@@ -674,5 +675,51 @@ describe('sub-agent activity that is not a cross-agent call', () => {
       'handoff_start',
       'thinking',
     ]);
+  });
+});
+
+describe('report blocks once the final report lands', () => {
+  const block = (id: string) => ({
+    type: JAINA_UI_DATA_PART.reportBlock,
+    id: `run_1:block:${id}`,
+    data: { block_id: id, category: 'narrative', title: id, summary: id },
+  });
+  const meta = (order?: string[]) => ({
+    type: JAINA_UI_DATA_PART.reportMeta,
+    id: 'run_1:report',
+    data: { executive_summary: 'Summary', ...(order ? { block_order: order } : {}) },
+  });
+  const blockIds = (message: JainaUIMessage) =>
+    ((reportOf(message)?.blocks ?? []) as { block_id: string }[]).map((b) => b.block_id);
+
+  it('shows streamed blocks in arrival order while the turn is still writing', () => {
+    expect(blockIds(uiMessage([block('draft-b'), block('draft-a')]))).toEqual([
+      'draft-b',
+      'draft-a',
+    ]);
+  });
+
+  it('drops a streamed block the final report re-composed away', () => {
+    // Measured on real runs: the final checkpoint re-ids its blocks, a part is never removed, and
+    // the reader saw 4 blocks for a 2-block report until they reloaded.
+    const message = uiMessage([block('draft-1'), block('kpi'), block('narrative'), meta(['kpi', 'narrative'])]);
+    expect(blockIds(message)).toEqual(['kpi', 'narrative']);
+  });
+
+  it('renders the final report in ITS order, not the order blocks first arrived', () => {
+    const message = uiMessage([block('narrative'), block('kpi'), meta(['kpi', 'narrative'])]);
+    expect(blockIds(message)).toEqual(['kpi', 'narrative']);
+  });
+
+  it('keeps the streamed blocks when the final report is an empty shell', () => {
+    // No order means the report named no blocks. The reader keeps what they were shown rather
+    // than watching a filled report collapse to nothing at the last frame.
+    const message = uiMessage([block('metric'), meta()]);
+    expect(blockIds(message)).toEqual(['metric']);
+  });
+
+  it('never leaks the ordering hint into the report the renderer receives', () => {
+    const message = uiMessage([block('kpi'), meta(['kpi'])]);
+    expect(reportOf(message)).not.toHaveProperty('block_order');
   });
 });

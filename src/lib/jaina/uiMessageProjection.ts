@@ -231,10 +231,26 @@ export const reasoningEntriesOf = (message: JainaUIMessage): JainaProgressEntry[
  * the two back into the shape the renderer already accepts.
  */
 export const reportOf = (message: JainaUIMessage): Record<string, unknown> | undefined => {
-  const blocks = partsOfType(message, JAINA_UI_DATA_PART.reportBlock);
+  const streamed = partsOfType(message, JAINA_UI_DATA_PART.reportBlock);
   const meta = partsOfType(message, JAINA_UI_DATA_PART.reportMeta).at(-1);
-  if (blocks.length === 0 && !meta) return undefined;
-  return { ...(meta ?? {}), blocks };
+  if (streamed.length === 0 && !meta) return undefined;
+
+  // Until the final report lands, the reader sees blocks as they stream, in arrival order. Once it
+  // lands and names its blocks, it is authoritative: exactly those, in its order. A part is never
+  // removed, so without this a block streamed under an id the final checkpoint re-composed away
+  // stays on screen beside its replacement — measured on real runs as 4 blocks shown for a
+  // 2-block report, and a turn that renders differently live than it does after a reload.
+  const { block_order: blockOrder, ...rest } = meta ?? {};
+  const order = Array.isArray(blockOrder)
+    ? blockOrder.filter((id): id is string => typeof id === 'string')
+    : [];
+  if (order.length === 0) return { ...rest, blocks: streamed };
+
+  const byId = new Map(streamed.map((block) => [block.block_id, block]));
+  const blocks = order
+    .map((id) => byId.get(id))
+    .filter((block): block is Record<string, unknown> => block !== undefined);
+  return { ...rest, blocks };
 };
 
 export const reportAssemblyOf = (
