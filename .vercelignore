@@ -7,6 +7,10 @@ tests
 **/*.test.*
 **/*.spec.*
 
+# Dev-only route harnesses (also excluded from the build via next.config
+# pageExtensions, which is what a Git deployment actually honours).
+src/app/dev-preview
+
 # Project docs not needed at runtime.
 AGENTS.md
 AUTH_GUIDE.md

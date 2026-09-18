@@ -15,6 +15,16 @@ const workspaceRoot = existsSync(path.join(monorepoRoot, 'packages/contracts'))
   : currentDirectory;
 
 const nextConfig: NextConfig = {
+  // Dev-only routes are named `page.dev.tsx` and are only a page extension in
+  // development, so a production build never DISCOVERS them. `src/app/dev-preview/*`
+  // holds unauthenticated visual-QA and bench harnesses that render fixture data;
+  // gating them at runtime would still ship the route, and `.vercelignore` is an
+  // upload filter that a Git deployment does not apply. Vercel runs `bun run build`
+  // with NODE_ENV=production, which is exactly the branch below.
+  pageExtensions:
+    process.env.NODE_ENV === 'development'
+      ? ['dev.tsx', 'tsx', 'ts', 'jsx', 'js']
+      : ['tsx', 'ts', 'jsx', 'js'],
   // Parallel local benches can opt into an isolated build directory instead
   // of contending with a developer's existing `.next/dev/lock`.
   ...(distDir ? { distDir } : {}),
