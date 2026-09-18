@@ -211,3 +211,31 @@ test('frozen and flagged ad sets are never evaluated, however dead their funnel'
   expect(flagged.recommendations.length).toBe(0);
   expect(flagged.starveIds.size).toBe(0);
 });
+
+// Every pause trigger carries the figure behind its sentence, structured: the queue sorts by
+// estImpactPerDay and renders one evidence line without re-parsing prose.
+test('P2 carries structured evidence: CPP vs the reference, over 14d, with daily money at stake', () => {
+  const good = mk({ id: 'good', windows: flat(w(100, 10)) }); // CPP 10 → the reference
+  const poor = mk({ id: 'poor', windows: flat(w(1400, 10)) }); // CPP 140 > 2.5 × 10
+  const { recommendations } = evaluateTriggers([good, poor], DEFAULT_CONFIG);
+  const p2 = recommendations.find((r) => r.trigger === 'P2_sustained_poor');
+  expect(p2).toBeDefined();
+  expect(p2?.evidence).toMatchObject({ metric: 'cpp', window: 'd14', source: 'engine' });
+  expect(p2?.evidence?.value).toBeCloseTo(140, 5);
+  expect(p2?.evidence?.threshold).toBeGreaterThan(0);
+  expect(p2?.evidence?.estImpactPerDay).toBeCloseTo(100, 5); // $1,400 over 14d
+});
+
+test('P3 evidence is the dead spend over 14d with 0 conversions', () => {
+  // Under the P1 spend floor in d3 (so P1 stays quiet), dead over 14d.
+  const dead = mk({ id: 'dead', windows: { d3: w(5, 0), d7: w(60, 0), d14: w(140, 0) } });
+  const { recommendations } = evaluateTriggers([dead], DEFAULT_CONFIG);
+  const p3 = recommendations.find((r) => r.trigger === 'P3_low_significance');
+  expect(p3?.evidence).toMatchObject({
+    metric: 'spend',
+    value: 140,
+    threshold: DEFAULT_CONFIG.cpaTarget,
+    window: 'd14',
+    estImpactPerDay: 10,
+  });
+});

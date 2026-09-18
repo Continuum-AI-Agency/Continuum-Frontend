@@ -763,6 +763,23 @@ export const CycleItemRowSchema = z
 export type CycleItemRow = z.infer<typeof CycleItemRowSchema>;
 
 /** One optimizer.recommendations row inside CycleRunReport.recommendations. */
+/** The structured figure behind a recommendation's prose `reason` — what the engine measured,
+ *  against what, over which window, and the daily money at stake. Lets the queue sort by
+ *  impact and render one evidence line per row instead of re-parsing sentences. Optional:
+ *  rows written before the engine carried it have none. */
+export const RecommendationEvidenceSchema = z
+  .object({
+    metric: z.string(),
+    value: z.number(),
+    comparator: z.string(),
+    threshold: z.number().nullable(),
+    window: z.enum(['d3', 'd7', 'd14']),
+    estImpactPerDay: z.number().nullable(),
+    source: z.string(),
+  })
+  .loose();
+export type RecommendationEvidence = z.infer<typeof RecommendationEvidenceSchema>;
+
 export const RecommendationRowSchema = z
   .object({
     id: z.string().uuid(),
@@ -783,6 +800,12 @@ export const RecommendationRowSchema = z
     /** The generation seed on a variate_creative / seed_experiment: the winning creative's
      *  labels, its Library asset, and the deterministic citations the brief is grounded on. */
     seed: z.record(z.string(), z.unknown()).nullable().optional(),
+    /** Structured evidence (see RecommendationEvidenceSchema); null on rows written before
+     *  the engine carried it. */
+    evidence: RecommendationEvidenceSchema.nullable().optional(),
+    /** The cycle that last (re)asserted this recommendation. A row a later cycle no longer
+     *  raises is superseded, so a pending row always belongs to the latest run. */
+    run_id: z.string().nullable().optional(),
     /** Set when a data-driven rule produced this row — the join key to its evaluation. */
     rule_id: z.string().nullable().optional(),
     /** Which channel decided it: a human verdict, or a human-granted standing rule. */
@@ -1134,6 +1157,9 @@ export const SpendByObjectiveRowSchema = z.object({
   date: z.string(),
   objective: z.string(),
   spend: z.number(),
+  /** When the snapshot behind this row was taken — the panel's "as of". Absent from rows
+   *  served by the RPC before it carried the column. */
+  snapshot_ts: z.string().nullable().optional(),
 });
 export type SpendByObjectiveRow = z.infer<typeof SpendByObjectiveRowSchema>;
 

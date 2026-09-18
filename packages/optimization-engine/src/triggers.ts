@@ -73,6 +73,18 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
         trigger: 'P1_zero_upper_funnel',
         severity: 'high',
         reason,
+        evidence: {
+          metric: 'spend',
+          value: d3.spend,
+          comparator:
+            d3.addToCarts === 0
+              ? 'with 0 conversions and 0 add-to-carts'
+              : `with 0 conversions, add-to-cart cost ${atcCost3d.toFixed(0)} vs ${avgAtcCost.toFixed(0)} avg`,
+          threshold: floor,
+          window: 'd3',
+          estImpactPerDay: d3.spend / 3,
+          source: 'engine',
+        },
         needsApproval: true,
       });
       starve.add(s.id);
@@ -89,6 +101,15 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
           trigger: 'P2_sustained_poor',
           severity: 'medium',
           reason: `CPP 14d $${cpp14.toFixed(0)} > ${cfg.sustainedPoorMultiplier}× the robust reference ($${robustBestCpp.toFixed(0)}), with no recent improvement.`,
+          evidence: {
+            metric: 'cpp',
+            value: cpp14,
+            comparator: `vs ${cfg.sustainedPoorMultiplier}× the robust reference ($${robustBestCpp.toFixed(0)})`,
+            threshold: cfg.sustainedPoorMultiplier * robustBestCpp,
+            window: 'd14',
+            estImpactPerDay: d14.spend / 14,
+            source: 'engine',
+          },
           needsApproval: true,
         });
         starve.add(s.id);
@@ -108,6 +129,15 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
         trigger: 'P3_low_significance',
         severity: 'low',
         reason: `Spent $${d14.spend.toFixed(0)} over 14d (> 1 target CPA) with 0 conversions: dead weight.`,
+        evidence: {
+          metric: 'spend',
+          value: d14.spend,
+          comparator: 'with 0 conversions in 7d and 14d',
+          threshold: cfg.cpaTarget,
+          window: 'd14',
+          estImpactPerDay: d14.spend / 14,
+          source: 'engine',
+        },
         needsApproval: true,
       });
       starve.add(s.id);

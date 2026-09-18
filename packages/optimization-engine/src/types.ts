@@ -534,6 +534,27 @@ export type RecommendationTrigger =
    *  account almost never reaches; the reach curve answers it at any frequency. */
   | 'F3_audience_exhausted';
 
+/** The window an evidence figure was measured over. */
+export type EvidenceWindow = 'd3' | 'd7' | 'd14';
+
+/** The number behind a recommendation, structured so the queue can sort by money and render
+ *  one consistent evidence line — "CPP 14d $71 vs $40 reference · $120/day" — instead of
+ *  re-parsing the prose `reason`. Every trigger already computes these; this only carries
+ *  them out. `estImpactPerDay` is the daily money the recommendation puts on the table:
+ *  the ad set's daily spend for a pause, the excess cost per day for a fatigue call. */
+export type RecommendationEvidence = {
+  /** What was measured: 'spend' | 'cpp' | 'ctr' | 'frequency' | 'reach_expansion' … */
+  metric: string;
+  value: number;
+  /** The comparison in words — "vs 2.5× the robust reference", "with 0 conversions". */
+  comparator: string;
+  /** The line it crossed, in the metric's own unit; null when the rule is a plain count. */
+  threshold: number | null;
+  window: EvidenceWindow;
+  estImpactPerDay: number | null;
+  source: 'engine';
+};
+
 export type Recommendation = {
   adSetId: string;
   /** The specific ad this is about. Present on the creative-level kinds, absent on the
@@ -554,6 +575,8 @@ export type Recommendation = {
    *  so the loop closes without a second round-trip. Present on variate_creative /
    *  seed_experiment. */
   seed?: CreativeVariationSeed;
+  /** The structured figure behind `reason`; absent on triggers that predate it. */
+  evidence?: RecommendationEvidence;
   needsApproval: true; // recommendations ALWAYS need user approval (engine never auto-acts)
 };
 
