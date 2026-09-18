@@ -116,10 +116,15 @@ function SourceRebindForm({
     setBusy(true);
     setUploading(file.name);
     try {
+      // A revision builds on the Library's head, not on the version the template is bound to: after
+      // an upload nobody confirmed, those differ, and basing on the template's refused every later
+      // upload as stale — refreshing could never fix it. Read at upload time: a drop arrives before
+      // the list above has loaded.
+      const head = (await listAssetVersions({ brandId, assetId })).find((item) => item.isHead);
       const result = await uploadNewAssetVersion({
         brandId,
         assetId,
-        baseVersionId: expectedVersionId,
+        baseVersionId: head?.id ?? expectedVersionId,
         file,
       });
       if (!alive.current) return;

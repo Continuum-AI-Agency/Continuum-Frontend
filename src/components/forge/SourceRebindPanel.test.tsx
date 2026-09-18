@@ -10,7 +10,7 @@ const preview = mock(async () => ({
   slots: [{ slotKey: 'headline', name: 'Headline', kind: 'text', status: 'missing' as const }],
 }));
 const confirm = mock(async () => preview());
-const uploadNewAssetVersion = mock(async (_input: { file: File }) => ({
+const uploadNewAssetVersion = mock(async (_input: { file: File; baseVersionId?: string }) => ({
   versionId: '33333333-3333-4333-8333-333333333333',
 }));
 
@@ -158,6 +158,10 @@ describe('SourceRebindPanel', () => {
     view.rerender(<SourceRebindPanel {...props} />);
     expect(uploadNewAssetVersion).toHaveBeenCalledTimes(1);
     expect(uploadNewAssetVersion.mock.calls[0]?.[0].file).toBe(dropped);
+    // The template is bound to v1 but the Library head is v2: the revision builds on the head.
+    expect(uploadNewAssetVersion.mock.calls[0]?.[0].baseVersionId).toBe(
+      '33333333-3333-4333-8333-333333333333',
+    );
     expect(taken).toHaveBeenCalledTimes(1);
     expect(preview).toHaveBeenCalledTimes(1);
   });
