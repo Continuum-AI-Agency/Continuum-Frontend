@@ -104,6 +104,9 @@ export function useJainaChat({ sessionId, initialMessages, onNotice }: UseJainaC
     // Reconnect on mount. A reader who reloaded mid-answer rejoins the run instead of watching a
     // dead transcript; the run itself never stopped, because a browser disconnect does not abort it.
     resume: true,
+    // At most one transcript render per 50ms while a turn streams; without it every token is a
+    // render. The SDK flushes the latest messages on `ready`/`error`, so the tail is never dropped.
+    throttle: 50,
     onData: (part) => {
       if (part.type === 'data-jaina-notice') {
         onNotice?.((part.data ?? {}) as Record<string, unknown>);

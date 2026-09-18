@@ -18,13 +18,15 @@ import { buildThinkingSegments } from '@/components/paid-media/jaina/components/
 import {
   approvalsOf,
   canvasActionsOf,
-  delegationsOf,
   checkpointSummaryOf,
+  delegationsOf,
   looksLikePlanDelta,
   planOf,
+  projectTranscriptMessage,
   reasoningEntriesOf,
   reasoningOf,
   reportOf,
+  type TranscriptProjectionInputs,
   textOf,
   toJainaChatMessage,
   toolsOf,
@@ -509,6 +511,104 @@ describe('the plan card, which has no wire part', () => {
   });
 });
 
+/**
+ * The transcript re-projects on every streamed chunk. A message that did not change has to come
+ * back as the SAME object, or `React.memo` on the transcript item never skips it and every chunk
+ * re-renders the whole conversation. Equally, any input that changes what the item shows has to
+ * produce a new object, or a finished turn keeps a stale status, title, plan or delivery source.
+ */
+describe('projectTranscriptMessage keeps identity until something it shows changes', () => {
+  const planJson = JSON.stringify({
+    plan_id: 'plan_7',
+    chat_title: 'Scale the winners',
+    steps: [{ title: 'Read account spend', status: 'pending' }],
+  });
+  const inputs: TranscriptProjectionInputs = {
+    isStreaming: false,
+    optimisticPlanStatusById: {},
+    deliverySource: 'live_render',
+  };
+  const answer = () => uiMessage([reasoning(planJson), text('Move spend to the winners.')]);
+
+  it('returns the same object for the same message and inputs', () => {
+    const cache = new WeakMap();
+    const message = answer();
+    const first = projectTranscriptMessage(cache, message, inputs);
+
+    expect(projectTranscriptMessage(cache, message, { ...inputs })).toBe(first);
+    expect(first.content).toContain('Move spend to the winners.');
+    expect(first.deliverySource).toBe('live_render');
+  });
+
+  it('re-projects a new message object, which is what a chunk is', () => {
+    const cache = new WeakMap();
+    const first = projectTranscriptMessage(cache, answer(), inputs);
+    const next = projectTranscriptMessage(
+      cache,
+      uiMessage([reasoning(planJson), text('Move spend to the winners today.')]),
+      inputs,
+    );
+
+    expect(next).not.toBe(first);
+    expect(next.content).toContain('today');
+  });
+
+  it('re-projects when the turn stops streaming', () => {
+    const cache = new WeakMap();
+    const message = answer();
+    const streaming = projectTranscriptMessage(cache, message, { ...inputs, isStreaming: true });
+    const done = projectTranscriptMessage(cache, message, inputs);
+
+    expect(streaming.status).toBe('streaming');
+    expect(done.status).toBe('done');
+  });
+
+  it('re-projects when the session title arrives', () => {
+    const cache = new WeakMap();
+    const message = answer();
+    const untitled = projectTranscriptMessage(cache, message, inputs);
+
+    expect(
+      projectTranscriptMessage(cache, message, { ...inputs, sessionTitle: 'Winners' }),
+    ).not.toBe(untitled);
+  });
+
+  it('overlays an optimistic status on its own plan and ignores other plans', () => {
+    const cache = new WeakMap();
+    const message = answer();
+    const before = projectTranscriptMessage(cache, message, inputs);
+    const otherPlan = projectTranscriptMessage(cache, message, {
+      ...inputs,
+      optimisticPlanStatusById: { plan_other: 'approved' },
+    });
+    const approved = projectTranscriptMessage(cache, message, {
+      ...inputs,
+      optimisticPlanStatusById: { plan_7: 'approved' },
+    });
+
+    expect(otherPlan).toBe(before);
+    expect(approved).not.toBe(before);
+    expect(approved.plan?.status).toBe('approved');
+  });
+
+  it('re-projects when a message turns out to be history, and never marks a user turn', () => {
+    const cache = new WeakMap();
+    const message = answer();
+    const live = projectTranscriptMessage(cache, message, inputs);
+    const replay = projectTranscriptMessage(cache, message, {
+      ...inputs,
+      deliverySource: 'hydration_replay',
+    });
+
+    expect(replay).not.toBe(live);
+    expect(replay.deliverySource).toBe('hydration_replay');
+    expect(
+      projectTranscriptMessage(cache, uiMessage([text('hi')], { role: 'user' }), inputs)
+        .deliverySource,
+    ).toBeUndefined();
+  });
+});
+
 describe('the checkpoint summary part', () => {
   it('reads summary and provenance, and refuses an unknown provenance', () => {
     expect(
@@ -627,7 +727,7 @@ describe('sub-agent activity that is not a cross-agent call', () => {
     );
   });
 
-  it("reads an agent.envelope row off its own `event`, not off the phase", () => {
+  it('reads an agent.envelope row off its own `event`, not off the phase', () => {
     const entries = reasoningEntriesOf(
       uiMessage([
         delegationPart('c1', {
@@ -670,11 +770,7 @@ describe('sub-agent activity that is not a cross-agent call', () => {
       uiMessage([reasoning('Budgets look lopsided'), handoffStart, reasoning('Waiting on adset')]),
     );
 
-    expect(entries.map((entry) => entry.stage)).toEqual([
-      'thinking',
-      'handoff_start',
-      'thinking',
-    ]);
+    expect(entries.map((entry) => entry.stage)).toEqual(['thinking', 'handoff_start', 'thinking']);
   });
 });
 
@@ -702,7 +798,12 @@ describe('report blocks once the final report lands', () => {
   it('drops a streamed block the final report re-composed away', () => {
     // Measured on real runs: the final checkpoint re-ids its blocks, a part is never removed, and
     // the reader saw 4 blocks for a 2-block report until they reloaded.
-    const message = uiMessage([block('draft-1'), block('kpi'), block('narrative'), meta(['kpi', 'narrative'])]);
+    const message = uiMessage([
+      block('draft-1'),
+      block('kpi'),
+      block('narrative'),
+      meta(['kpi', 'narrative']),
+    ]);
     expect(blockIds(message)).toEqual(['kpi', 'narrative']);
   });
 

@@ -108,32 +108,30 @@ const sseLines = async (chunks: UIMessageChunk[]): Promise<string[]> => {
 const TEXT_BLOCK = 'i1:p1';
 const messageIdFor = (runId: string) => `jaina:${runId}:assistant`;
 
-const shortStreamChunks = (): Promise<string[]> =>
+/** One assistant turn: a single text block streamed as `deltas`, then `finish`. */
+const answerChunks = (runKey: string, deltas: string[]): Promise<string[]> =>
   sseLines([
-    { type: 'start', messageId: messageIdFor(`run_short_${RUN_ID}`) },
+    { type: 'start', messageId: messageIdFor(runKey) },
     { type: 'text-start', id: TEXT_BLOCK },
-    { type: 'text-delta', id: TEXT_BLOCK, delta: SHORT_ANSWER },
+    ...deltas.map((delta): UIMessageChunk => ({ type: 'text-delta', id: TEXT_BLOCK, delta })),
     { type: 'text-end', id: TEXT_BLOCK },
     { type: 'finish' },
   ]);
 
+const shortStreamChunks = (): Promise<string[]> =>
+  answerChunks(`run_short_${RUN_ID}`, [SHORT_ANSWER]);
+
+const LONG_DELTA_COUNT = 40;
 const longStreamChunks = (): Promise<string[]> =>
-  sseLines([
-    { type: 'start', messageId: messageIdFor(`run_long_${RUN_ID}`) },
-    { type: 'text-start', id: TEXT_BLOCK },
-    ...Array.from(
-      { length: 40 },
-      (_, index): UIMessageChunk => ({
-        type: 'text-delta',
-        id: TEXT_BLOCK,
-        delta:
-          `\n\n## Phase ${index + 1}\n` +
-          'Measured delivery stays the grounding for every recommendation here. '.repeat(6),
-      }),
+  answerChunks(
+    `run_long_${RUN_ID}`,
+    Array.from(
+      { length: LONG_DELTA_COUNT },
+      (_, index) =>
+        `\n\n## Phase ${index + 1}\n` +
+        'Measured delivery stays the grounding for every recommendation here. '.repeat(6),
     ),
-    { type: 'text-end', id: TEXT_BLOCK },
-    { type: 'finish' },
-  ]);
+  );
 
 /**
  * Answer the chat stream from inside the page, one SSE line every `gapMs`.
@@ -223,6 +221,129 @@ const assertUiMessageStream = (label: string, body: string): number => {
   expect(first.messageId, `${label}: assistant message id`).toMatch(/^jaina:.+:assistant$/);
   return events.length;
 };
+
+type RenderCounts = {
+  /** Commits that re-rendered each transcript item, by message id. */
+  items: Record<string, number>;
+  /** Markdown blocks, by message id, re-rendered with the same content and completeness. */
+  wastedBlocks: Record<string, number>;
+  /** Which props changed identity on those renders, so a regression names its own cause. */
+  changedProps: Record<string, number>;
+};
+
+/**
+ * Counts renders from React itself, through the DevTools global hook it calls on every commit.
+ *
+ * A fiber rendered when its committed props changed identity since the last commit: a memo bailout
+ * keeps the previous props object, so this counts exactly the renders `React.memo` did not skip.
+ * Fibers alternate between two objects across commits, so each pair shares one identity token.
+ * React Refresh wraps this hook rather than replacing it, which is why it has to exist before the
+ * page's scripts run and why it carries `renderers`.
+ */
+const installRenderCounter = (page: Page) =>
+  page.addInitScript(() => {
+    type Fiber = {
+      child: Fiber | null;
+      sibling: Fiber | null;
+      return: Fiber | null;
+      alternate: Fiber | null;
+      type: unknown;
+      elementType: unknown;
+      memoizedProps: Record<string, unknown> | null;
+    };
+    const counts: RenderCounts = { items: {}, wastedBlocks: {}, changedProps: {} };
+    const tokens = new WeakMap<Fiber, object>();
+    const lastProps = new WeakMap<object, Fiber['memoizedProps']>();
+
+    const nameOf = (value: unknown) =>
+      typeof value === 'function'
+        ? value.name
+        : (value as { displayName?: string } | null)?.displayName;
+
+    /** The props this fiber pair last committed, or `undefined` when they did not change. */
+    const previousPropsIfRendered = (fiber: Fiber) => {
+      const token = tokens.get(fiber) ?? (fiber.alternate && tokens.get(fiber.alternate)) ?? {};
+      tokens.set(fiber, token);
+      if (fiber.alternate) tokens.set(fiber.alternate, token);
+      const previous = lastProps.get(token);
+      if (previous === fiber.memoizedProps) return undefined;
+      lastProps.set(token, fiber.memoizedProps);
+      return previous ?? null;
+    };
+
+    const recordChangedProps = (
+      kind: string,
+      previous: Fiber['memoizedProps'],
+      next: Fiber['memoizedProps'],
+    ) => {
+      if (!previous || !next) return;
+      for (const key of new Set([...Object.keys(previous), ...Object.keys(next)])) {
+        if (previous[key] !== next[key]) {
+          counts.changedProps[`${kind}.${key}`] = (counts.changedProps[`${kind}.${key}`] ?? 0) + 1;
+        }
+      }
+    };
+
+    const walk = (first: Fiber | null, messageId: string | null) => {
+      for (let fiber = first; fiber; fiber = fiber.sibling) {
+        let owner = messageId;
+        if (nameOf(fiber.type) === 'JainaMessageItemImpl') {
+          owner = String((fiber.memoizedProps?.message as { id?: string } | undefined)?.id);
+          const previous = previousPropsIfRendered(fiber);
+          if (previous !== undefined) {
+            counts.items[owner] = (counts.items[owner] ?? 0) + 1;
+            recordChangedProps('item', previous, fiber.memoizedProps);
+          }
+        } else if (
+          // The child of Streamdown's `Block` memo OBJECT. In dev React copies a memo's
+          // displayName onto its inner function, so matching the name alone also catches the
+          // context provider one level down, which has no `content` to compare.
+          owner &&
+          typeof fiber.return?.elementType === 'object' &&
+          nameOf(fiber.return.elementType) === 'Block'
+        ) {
+          const previous = previousPropsIfRendered(fiber);
+          const next = fiber.memoizedProps;
+          if (
+            previous &&
+            next &&
+            previous.content === next.content &&
+            previous.isIncomplete === next.isIncomplete
+          ) {
+            counts.wastedBlocks[owner] = (counts.wastedBlocks[owner] ?? 0) + 1;
+            recordChangedProps('block', previous, next);
+          }
+        }
+        walk(fiber.child, owner);
+      }
+    };
+
+    let rendererId = 0;
+    Object.assign(window, {
+      __jainaRenderCounts: counts,
+      __REACT_DEVTOOLS_GLOBAL_HOOK__: {
+        renderers: new Map(),
+        supportsFiber: true,
+        inject: () => ++rendererId,
+        onScheduleFiberRoot: () => {},
+        onCommitFiberRoot: (_id: number, root: { current: Fiber }) => walk(root.current, null),
+        onCommitFiberUnmount: () => {},
+      },
+    });
+  });
+
+const readRenderCounts = (page: Page) =>
+  page.evaluate(
+    () => (window as unknown as { __jainaRenderCounts: RenderCounts }).__jainaRenderCounts,
+  );
+
+const resetRenderCounts = (page: Page) =>
+  page.evaluate(() => {
+    const counts = (window as unknown as { __jainaRenderCounts: RenderCounts }).__jainaRenderCounts;
+    counts.items = {};
+    counts.wastedBlocks = {};
+    counts.changedProps = {};
+  });
 
 const grade = (id: string, ok: boolean, note: string) => {
   // eslint-disable-next-line no-console
@@ -352,6 +473,80 @@ test.describe('jaina transcript scroll', () => {
       await page
         .locator('[data-slot="message-scroller"]')
         .screenshot({ path: 'e2e/__screenshots__/jaina-transcript-short-answer.png' });
+    } finally {
+      await page.close();
+    }
+  });
+
+  /**
+   * Rendering is ADDITIVE: a streamed chunk re-renders the turn it belongs to and nothing above it,
+   * and inside that turn only the markdown blocks whose content moved.
+   *
+   * Deltas land every 10ms, the cadence of a real token stream, so `useChat`'s `throttle` has
+   * something to coalesce; at the 80ms of the scroll case above every delta would render anyway.
+   */
+  test('renders additively: a chunk re-renders only its own turn and its changed blocks', async () => {
+    const page = await context.newPage();
+    await installRenderCounter(page);
+    const earlierTurns = [
+      { prompt: 'What changed this week?', answer: 'Spend rose 12% and CPA held flat.' },
+      { prompt: 'Which ad set carried it?', answer: 'Prospecting broad carried most purchases.' },
+    ];
+    for (const [index, turn] of earlierTurns.entries()) {
+      await stubStream(
+        page,
+        turn.prompt,
+        await answerChunks(`run_earlier_${index}_${RUN_ID}`, [turn.answer]),
+        20,
+      );
+    }
+    await stubStream(page, LONG_PROMPT, await longStreamChunks(), 10);
+    const streamingId = messageIdFor(`run_long_${RUN_ID}`);
+
+    try {
+      await page.goto('/scale?tab=jaina', { waitUntil: 'domcontentloaded' });
+      const composer = page.getByRole('textbox', { name: 'Message Jaina' });
+      await expect(composer).toBeVisible({ timeout: 180_000 });
+      for (const [index, turn] of earlierTurns.entries()) {
+        await composer.fill(turn.prompt);
+        await composer.press('Enter');
+        await expect(page.getByText(turn.answer)).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Copy response' })).toHaveCount(index + 1);
+      }
+
+      await composer.fill(LONG_PROMPT);
+      await composer.press('Enter');
+      await expect(page.getByRole('heading', { name: 'Phase 1', exact: true })).toBeVisible();
+      await resetRenderCounts(page);
+
+      // The action bar mounts only once the turn is done, so a third one is the end of the stream.
+      await expect(page.getByRole('button', { name: 'Copy response' })).toHaveCount(3);
+      const counts = await readRenderCounts(page);
+
+      const earlierItemRenders = Object.entries(counts.items).filter(([id]) => id !== streamingId);
+      const streamingRenders = counts.items[streamingId] ?? 0;
+      const wastedBlocks = Object.values(counts.wastedBlocks).reduce((sum, n) => sum + n, 0);
+      // eslint-disable-next-line no-console
+      console.log(JSON.stringify({ streamingId, ...counts }));
+
+      grade(
+        'render.earlier_turns_untouched',
+        earlierItemRenders.length === 0,
+        `earlier transcript items re-rendered during the stream: ${JSON.stringify(earlierItemRenders)}`,
+      );
+      grade(
+        'render.no_wasted_blocks',
+        wastedBlocks === 0,
+        `markdown blocks re-rendered with unchanged content: ${wastedBlocks}`,
+      );
+      grade(
+        'render.throttled',
+        streamingRenders <= LONG_DELTA_COUNT / 2,
+        `streaming turn rendered ${streamingRenders} times for ${LONG_DELTA_COUNT} deltas`,
+      );
+      expect(earlierItemRenders).toEqual([]);
+      expect(wastedBlocks).toBe(0);
+      expect(streamingRenders).toBeLessThanOrEqual(LONG_DELTA_COUNT / 2);
     } finally {
       await page.close();
     }

@@ -324,16 +324,22 @@ mock.module('./components/JainaConversationSidebar', () => ({
   ),
 }));
 
+/** Renders per message id. The mock is memoized the way the real item is, so a count here is a
+ * count of props that changed identity, which is what decides whether the real item re-renders. */
+const itemRenders = new Map<string, number>();
+
 // The approval buttons come off `message.pendingToolApprovals` — the projection's own output —
 // and no longer off a second `state` prop. That prop is the thing the cutover deleted.
 mock.module('./components/JainaMessageItem', () => ({
-  JainaMessageItem: ({
+  JainaMessageItem: React.memo(function JainaMessageItemMock({
     message,
     onApprovalDecision,
   }: {
     message: Record<string, unknown>;
     onApprovalDecision?: (approval: Record<string, unknown>, decision: 'approve' | 'deny') => void;
-  }) => {
+  }) {
+    const id = String(message.id);
+    itemRenders.set(id, (itemRenders.get(id) ?? 0) + 1);
     const plan = message.plan as { id?: string; title?: string } | undefined;
     const reasoning = (message.reasoning as unknown[] | undefined) ?? [];
     const report = message.report as { blocks?: unknown[] } | undefined;
@@ -370,7 +376,7 @@ mock.module('./components/JainaMessageItem', () => ({
         ))}
       </div>
     );
-  },
+  }),
 }));
 
 const { JainaChatSurface } = await import('./JainaChatSurface');
@@ -473,6 +479,7 @@ describe('JainaChatSurface integration', () => {
     cleanup();
     chatStatus = 'ready';
     pushMessages = null;
+    itemRenders.clear();
     useJainaConversationSidebarStore.getState().clear();
 
     sendTurnMock.mockClear();
@@ -697,6 +704,46 @@ describe('JainaChatSurface integration', () => {
         'Move 20% of spend',
       );
     });
+  });
+
+  /**
+   * A chunk replaces ONE message object: the SDK rebuilds the array with `slice`, so every earlier
+   * message is the same object it was. Rendering has to be additive to match — the streaming turn
+   * re-renders and nothing above it does. Before, every chunk re-projected and re-rendered the
+   * whole conversation, which on a long transcript is most of the work of a streamed answer.
+   */
+  it('re-renders only the streaming message when a chunk lands', async () => {
+    global.fetch = emptyHistoryFetch();
+    render(surface, { wrapper: withQueryClient });
+    chatStatus = 'streaming';
+    const earlier = [
+      uiMessage('user-1', 'user', [textPart('Why did CPA rise?')]),
+      uiMessage('assistant-1', 'assistant', [textPart('Frequency crossed 4.')], {
+        runId: 'run-1',
+        status: 'completed',
+      }),
+      uiMessage('user-2', 'user', [textPart('What should we cut?')]),
+    ];
+    const streaming = (text: string) =>
+      uiMessage('assistant-2', 'assistant', [textPart(text)], { runId: 'run-2' });
+
+    await showMessages([...earlier, streaming('Cut the')]);
+    await waitFor(() => {
+      expect(screen.getAllByTestId('assistant-content').at(-1)?.textContent).toBe('Cut the');
+    });
+
+    itemRenders.clear();
+    act(() => {
+      pushMessages?.([...earlier, streaming('Cut the retargeting ad set.')]);
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('assistant-content').at(-1)?.textContent).toBe(
+        'Cut the retargeting ad set.',
+      );
+    });
+    expect(itemRenders.get('assistant-2')).toBeGreaterThan(0);
+    expect([...itemRenders.keys()]).toEqual(['assistant-2']);
   });
 
   /**

@@ -114,7 +114,11 @@ import {
   type JainaToolAction,
   reportAssemblySchema,
 } from '@/lib/jaina/schemas';
-import { canvasActionsOf, toJainaChatMessage } from '@/lib/jaina/uiMessageProjection';
+import {
+  canvasActionsOf,
+  projectTranscriptMessage,
+  type TranscriptProjectionCache,
+} from '@/lib/jaina/uiMessageProjection';
 import { isPersistedResultStub, parsePersistedResultWrapper } from '@/lib/jaina/unwrapping';
 import { usePaidMediaPerformanceStore } from '@/lib/paid-media/performance-store';
 import type { CampaignPerformanceRow } from '@/lib/paid-media/performance-types';
@@ -150,6 +154,17 @@ import {
 import type { JainaChatMessage } from './types';
 
 export { parsePersistedResultWrapper } from '@/lib/jaina/unwrapping';
+
+/** A function whose identity never changes and which always calls the latest `handler`. */
+function useStableHandler<Args extends unknown[], Result>(
+  handler: (...args: Args) => Result,
+): (...args: Args) => Result {
+  const latest = React.useRef(handler);
+  React.useEffect(() => {
+    latest.current = handler;
+  }, [handler]);
+  return React.useCallback((...args: Args) => latest.current(...args), []);
+}
 
 function ConversationSkeleton() {
   return (
@@ -874,39 +889,30 @@ export function JainaChatSurface({
   //
   // A `silent` user message is an approval verdict the request schema forced us to send. It is
   // not something a reader typed, so it never reaches the transcript.
-  const messages = React.useMemo(
-    () =>
-      uiMessages
-        .filter((message) => message.metadata?.silent !== true)
-        .map((message, index) => {
-          const projected = toJainaChatMessage(message, {
-            isStreaming: isStreaming && index === uiMessages.length - 1,
-            sessionTitle: sessionTitleById[sessionId],
-          });
-          const optimisticStatus = projected.plan
-            ? optimisticPlanStatusById[projected.plan.id]
-            : undefined;
-          const withPlan =
-            optimisticStatus && projected.plan
-              ? { ...projected, plan: { ...projected.plan, status: optimisticStatus } }
-              : projected;
-          if (withPlan.role !== 'assistant') return withPlan;
-          return {
-            ...withPlan,
-            deliverySource: historyMessageIds.has(message.id)
-              ? ('hydration_replay' as const)
-              : ('live_render' as const),
-          };
+  //
+  // Projected through a per-message cache: a chunk replaces only the streaming message object, so
+  // every other message comes back as the same object and its memoized item does not re-render.
+  const projectionCacheRef = React.useRef<TranscriptProjectionCache>(new WeakMap());
+  const messages = React.useMemo(() => {
+    const streamingMessage = isStreaming ? uiMessages.at(-1) : undefined;
+    return uiMessages
+      .filter((message) => message.metadata?.silent !== true)
+      .map((message) =>
+        projectTranscriptMessage(projectionCacheRef.current, message, {
+          isStreaming: message === streamingMessage,
+          sessionTitle: sessionTitleById[sessionId],
+          optimisticPlanStatusById,
+          deliverySource: historyMessageIds.has(message.id) ? 'hydration_replay' : 'live_render',
         }),
-    [
-      uiMessages,
-      isStreaming,
-      sessionTitleById,
-      sessionId,
-      optimisticPlanStatusById,
-      historyMessageIds,
-    ],
-  );
+      );
+  }, [
+    uiMessages,
+    isStreaming,
+    sessionTitleById,
+    sessionId,
+    optimisticPlanStatusById,
+    historyMessageIds,
+  ]);
 
   /** The turn on screen right now, projected once so the effects below share one object. */
   const liveMessage = uiMessages.at(-1) ?? null;
@@ -2522,6 +2528,13 @@ export function JainaChatSurface({
   // rather than a reverse scan per assistant message, which was quadratic in transcript length on
   // every streaming frame. The values are strings, so a rebuilt map still leaves the items' props
   // equal and their memo intact.
+  // Transcript items are memoized, so a handler that changes identity re-renders every one of them.
+  // `handleSubmit` reads the transcript (new on every chunk) and the other two follow
+  // `dispatchMessage`, which moves mid-turn. Items get forwarders that never change instead.
+  const submitFromTranscript = useStableHandler((query: string) => handleSubmit(query));
+  const planFeedbackFromTranscript = useStableHandler(handlePlanFeedback);
+  const approvalDecisionFromTranscript = useStableHandler(handleApprovalDecision);
+
   const regeneratePromptByMessageId = React.useMemo(() => {
     const prompts = new Map<string, string>();
     let lastUserContent: string | undefined;
@@ -2682,12 +2695,12 @@ export function JainaChatSurface({
                 <React.Fragment key={message.id}>
                   <JainaMessageItem
                     message={message}
-                    onSuggestionClick={handleSubmit}
-                    onPlanFeedback={handlePlanFeedback}
+                    onSuggestionClick={submitFromTranscript}
+                    onPlanFeedback={planFeedbackFromTranscript}
                     onFocusInput={handleFocusInput}
-                    onApprovalDecision={handleApprovalDecision}
+                    onApprovalDecision={approvalDecisionFromTranscript}
                     optimisticApprovalDecisions={optimisticApprovalDecisions}
-                    onRegenerate={handleSubmit}
+                    onRegenerate={submitFromTranscript}
                     regeneratePrompt={regeneratePromptByMessageId.get(message.id)}
                   />
                   {milestonesForJainaMessage(message).map((milestone) => (

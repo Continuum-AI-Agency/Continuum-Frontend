@@ -31,7 +31,7 @@ import {
   paidScaffoldProposedPayloadSchema,
   paidScaffoldReceiptPayloadSchema,
 } from '@continuum/contracts';
-
+import type { PlanStatus } from '@/components/ai-elements/plan';
 import {
   getFinalThought,
   pickRenderableContent,
@@ -795,6 +795,78 @@ export const toJainaChatMessage = (
     resolvedApprovals: approvals.resolved,
     deniedToolOutputs: approvals.denied,
   };
+};
+
+export type TranscriptProjectionInputs = {
+  /** True only for the turn the SDK is still writing. */
+  isStreaming: boolean;
+  sessionTitle?: string;
+  /** Plan verdicts submitted but not yet echoed back by the run. */
+  optimisticPlanStatusById: Readonly<Record<string, PlanStatus>>;
+  /** Whether the reader watched this turn arrive or loaded it; assistant turns only. */
+  deliverySource: NonNullable<JainaChatMessage['deliverySource']>;
+};
+
+type TranscriptProjectionEntry = {
+  isStreaming: boolean;
+  sessionTitle?: string;
+  projected: JainaChatMessage;
+  planStatus?: PlanStatus;
+  deliverySource?: JainaChatMessage['deliverySource'];
+  value: JainaChatMessage;
+};
+
+export type TranscriptProjectionCache = WeakMap<JainaUIMessage, TranscriptProjectionEntry>;
+
+/**
+ * `toJainaChatMessage` plus the surface's overlays, returning the SAME object while nothing it
+ * shows has changed.
+ *
+ * The SDK replaces only the streaming message on a chunk and keeps every other message object, so
+ * keying on the message object is what lets `React.memo` skip the rest of the conversation. The
+ * key must cover every input, or a finished turn keeps a stale status, title, plan or source.
+ */
+export const projectTranscriptMessage = (
+  cache: TranscriptProjectionCache,
+  message: JainaUIMessage,
+  inputs: TranscriptProjectionInputs,
+): JainaChatMessage => {
+  const cached = cache.get(message);
+  const projected =
+    cached &&
+    cached.isStreaming === inputs.isStreaming &&
+    cached.sessionTitle === inputs.sessionTitle
+      ? cached.projected
+      : toJainaChatMessage(message, {
+          isStreaming: inputs.isStreaming,
+          sessionTitle: inputs.sessionTitle,
+        });
+  const planStatus = projected.plan
+    ? inputs.optimisticPlanStatusById[projected.plan.id]
+    : undefined;
+  const deliverySource = projected.role === 'assistant' ? inputs.deliverySource : undefined;
+  if (
+    cached?.projected === projected &&
+    cached.planStatus === planStatus &&
+    cached.deliverySource === deliverySource
+  ) {
+    return cached.value;
+  }
+
+  const withPlan =
+    planStatus && projected.plan
+      ? { ...projected, plan: { ...projected.plan, status: planStatus } }
+      : projected;
+  const value = deliverySource ? { ...withPlan, deliverySource } : withPlan;
+  cache.set(message, {
+    isStreaming: inputs.isStreaming,
+    sessionTitle: inputs.sessionTitle,
+    projected,
+    planStatus,
+    deliverySource,
+    value,
+  });
+  return value;
 };
 
 /**
