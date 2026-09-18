@@ -3,10 +3,13 @@
 import {
   type ApiRenderTemplateContract,
   compactEncodeBlock,
+  ENCODE_FILE_CONTAINERS,
   type EncodeBlock,
+  type EncodeFileContainer,
   type EncodeSettingKey,
   type EncodeSettings,
   encodeContainerOf,
+  encodeFilesOf,
   flattenEncodeSettings,
   mergeEncodeSettings,
   unflattenEncodeSettings,
@@ -15,12 +18,20 @@ import { Loader2, RotateCcw, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { templateBindingFor } from '@/components/forge/templateBinding';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toast-imperative';
 import { http } from '@/lib/api/http';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 
-// Output settings — frame rate, audio and video quality — for a template's renders.
+// Output settings — frame rate, files, audio and video quality — for a template's renders.
 //
 // The template default applies to every output; an output's own settings win over it. Nothing
 // set keeps the fleet's default, which is what every render got before these existed. The same
@@ -30,14 +41,33 @@ type Container = 'mp4' | 'mov';
 type Leaf = string | number | boolean;
 type Output = ApiRenderTemplateContract['outputs'][number];
 
+/** One container in scope and what applies to it when a field is unset. */
+export type InheritedEncode = { container: Container; settings: EncodeSettings | undefined };
+
+export const STILLS_NOTE =
+  'Stills take no output settings. Frame rate and files apply to animated formats.';
+
+const FILE_LABEL: Record<EncodeFileContainer, string> = {
+  mp4: 'MP4',
+  mov: 'MOV (ProRes)',
+  mxf: 'MXF (DNxHR)',
+};
+
+/** The `<Select>` value that stands for "unset — inherit". Never a real setting's spelling. */
+const INHERIT = '__inherit__';
+
 const rate = (value: number) => String(Math.round(value * 1000) / 1000);
 const range = (from: number, to: number) =>
   Array.from({ length: to - from + 1 }, (_, i) => from + i);
+const onAny = (files: EncodeFileContainer[], ...wanted: EncodeFileContainer[]) =>
+  wanted.some((file) => files.includes(file));
 
+// `values` sees the files this scope actually makes, so each container's knobs show only while
+// its file is on: CRF for MP4, the ProRes profile for MOV, PCM audio for MOV and MXF.
 const FIELDS: Array<{
   key: EncodeSettingKey;
   label: string;
-  values: (containers: Container[]) => Leaf[];
+  values: (files: EncodeFileContainer[]) => Leaf[];
   text?: (value: Leaf, frameRate: number | null | undefined) => string;
 }> = [
   {
@@ -46,10 +76,10 @@ const FIELDS: Array<{
     values: () => ['comp', '24000/1001', 24, 25, '30000/1001', 30, 50, '60000/1001', 60],
     text: (value, frameRate) =>
       value === 'comp'
-        ? `Match comp${frameRate ? ` (${rate(frameRate)})` : ''}`
+        ? `Match the comp${frameRate ? ` (${rate(frameRate)} fps)` : ''}`
         : typeof value === 'string' && value.includes('/')
-          ? rate(Number(value.split('/')[0]) / Number(value.split('/')[1]))
-          : String(value),
+          ? `${rate(Number(value.split('/')[0]) / Number(value.split('/')[1]))} fps`
+          : `${value} fps`,
   },
   {
     key: 'audio.enabled',
@@ -60,15 +90,17 @@ const FIELDS: Array<{
   {
     key: 'audio.codec',
     label: 'Audio codec',
-    values: (containers) => [
-      'aac',
-      ...(containers.includes('mov') ? ['pcm_s16le', 'pcm_s24le'] : []),
+    values: (files) => [
+      ...(onAny(files, 'mp4', 'mov') ? ['aac'] : []),
+      ...(onAny(files, 'mov', 'mxf') ? ['pcm_s16le', 'pcm_s24le'] : []),
     ],
   },
   {
     key: 'audio.bitrate',
     label: 'Audio bitrate',
-    values: () => ['64k', '96k', '128k', '192k', '256k', '320k'],
+    // A bitrate is an AAC knob; PCM has none.
+    values: (files) =>
+      onAny(files, 'mp4', 'mov') ? ['64k', '96k', '128k', '192k', '256k', '320k'] : [],
   },
   {
     key: 'audio.sampleRate',
@@ -85,21 +117,21 @@ const FIELDS: Array<{
   {
     key: 'video.crf',
     label: 'Quality (CRF)',
-    values: (containers) => (containers.includes('mp4') ? range(10, 40) : []),
+    values: (files) => (files.includes('mp4') ? range(10, 40) : []),
   },
   {
     key: 'video.pixFmt',
     label: 'Pixel format',
-    values: (containers) => [
-      ...(containers.includes('mp4') ? ['yuv420p', 'yuv422p', 'yuv444p'] : []),
-      ...(containers.includes('mov') ? ['yuva444p12le', 'yuv422p10le', 'yuv444p10le'] : []),
+    values: (files) => [
+      ...(files.includes('mp4') ? ['yuv420p', 'yuv422p', 'yuv444p'] : []),
+      ...(files.includes('mov') ? ['yuva444p12le', 'yuv422p10le', 'yuv444p10le'] : []),
     ],
   },
   {
     key: 'video.proresProfile',
     label: 'ProRes profile',
-    values: (containers) =>
-      containers.includes('mov') ? ['4444', '4444xq', 'hq', 'standard', 'lt', 'proxy'] : [],
+    values: (files) =>
+      files.includes('mov') ? ['4444', '4444xq', 'hq', 'standard', 'lt', 'proxy'] : [],
   },
 ];
 
@@ -111,6 +143,17 @@ export function containersOf(output: Pick<Output, 'mediaType'>): Container[] {
   if (output.mediaType == null) return ['mp4', 'mov'];
   const container = encodeContainerOf(output.mediaType);
   return container ? [container] : [];
+}
+
+/**
+ * A template that renders nothing but stills. Its outputs say so by encoder when the forge names
+ * one; a template with no named outputs says so by its longest delivery comp running one frame.
+ */
+export function isStillsOnly(contract: Pick<ApiRenderTemplateContract, 'outputs' | 'template'>) {
+  const named = contract.outputs.filter((output) => output.mediaType != null);
+  if (named.length) return named.every((output) => !encodeContainerOf(output.mediaType));
+  const motion = contract.template.motion;
+  return motion != null && Math.round(motion.durationSec * motion.frameRate) <= 1;
 }
 
 export function setEncodeLeaf(
@@ -138,19 +181,9 @@ export function withEncodeScope<T>(
   return { ...block, outputs: value === undefined ? outputs : { ...outputs, [scope]: value } };
 }
 
-/** "25 fps · 48 kHz · 1 (mono)" — the short form a grid cell can hold. */
-export function describeEncodeSettings(settings: EncodeSettings | undefined): string {
-  return Object.entries(flattenEncodeSettings(settings))
-    .map(([key, value]) =>
-      key === 'fps' ? `${textOf('fps', value)} fps` : textOf(key as EncodeSettingKey, value),
-    )
-    .join(' · ');
-}
-
 export function EncodeSettingsFields({
   settings,
   inherited,
-  containers,
   frameRate,
   cleared = [],
   onSet,
@@ -158,9 +191,11 @@ export function EncodeSettingsFields({
 }: {
   /** Authored at this scope. */
   settings: EncodeSettings | undefined;
-  /** What applies when a field is unset — one entry per container or source, shown as its placeholder. */
-  inherited: Array<EncodeSettings | undefined>;
-  containers: Container[];
+  /**
+   * Each container in scope and what it inherits — shown as a field's placeholder, and the files
+   * it makes. Empty means every output in scope is a still.
+   */
+  inherited: InheritedEncode[];
   frameRate?: number | null;
   cleared?: EncodeSettingKey[];
   /** `undefined` resets the field to inherited. */
@@ -168,17 +203,57 @@ export function EncodeSettingsFields({
   /** Blank an inherited value back to the template. Only a draft child can. */
   onClear?: (key: EncodeSettingKey) => void;
 }) {
-  if (containers.length === 0) {
-    return <p className="text-xs text-muted-foreground">Stills take no output settings.</p>;
+  if (inherited.length === 0) {
+    return <p className="text-xs text-muted-foreground">{STILLS_NOTE}</p>;
   }
   const own = flattenEncodeSettings(settings);
-  const from = inherited.map((item) => flattenEncodeSettings(item));
+  const from = inherited.map((item) => flattenEncodeSettings(item.settings));
+  const filesPer = inherited.map(({ container, settings: base }) =>
+    encodeFilesOf(mergeEncodeSettings(base, settings), container),
+  );
+  const filesOn = ENCODE_FILE_CONTAINERS.filter((file) => filesPer.some((f) => f.includes(file)));
+  const fileState = (file: EncodeFileContainer) => {
+    const on = filesPer.filter((files) => files.includes(file)).length;
+    return on === filesPer.length ? true : on ? ('indeterminate' as const) : false;
+  };
+  // The one file a container still makes cannot be turned off: a render must deliver something.
+  const lastFile = filesPer.find((files) => files.length === 1)?.[0];
+  const toggleFile = (file: EncodeFileContainer) => {
+    const next = fileState(file) !== true;
+    const inheritsNext = inherited.every(
+      ({ container, settings: base }) => encodeFilesOf(base, container).includes(file) === next,
+    );
+    onSet(`files.${file}`, inheritsNext ? undefined : next);
+  };
+
   return (
     <div className="grid gap-2 sm:grid-cols-2">
+      <fieldset className="flex flex-col gap-1.5 text-xs sm:col-span-2">
+        <legend className="mb-1 text-muted-foreground">Files</legend>
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+          {ENCODE_FILE_CONTAINERS.map((file) => (
+            // biome-ignore lint/a11y/noLabelWithoutControl: the Checkbox renders the control.
+            <label key={file} className="flex items-center gap-1.5 text-sm">
+              <Checkbox
+                checked={fileState(file)}
+                disabled={file === lastFile && fileState(file) === true}
+                onCheckedChange={() => toggleFile(file)}
+              />
+              {FILE_LABEL[file]}
+            </label>
+          ))}
+        </div>
+        {lastFile && fileState(lastFile) === true ? (
+          <p className="text-muted-foreground">
+            {FILE_LABEL[lastFile]} stays on: every render delivers at least one file.
+          </p>
+        ) : null}
+      </fieldset>
       {FIELDS.map((field) => {
-        const values = field.values(containers);
+        const values = field.values(filesOn);
         if (values.length === 0) return null;
         const current = own[field.key];
+        // A value set elsewhere (the API, an older build) stays visible even off the standard list.
         if (current !== undefined && !values.includes(current)) values.push(current);
         const fallback = [
           ...new Set(
@@ -190,32 +265,51 @@ export function EncodeSettingsFields({
         const isCleared = cleared.includes(field.key);
         const placeholder = isCleared
           ? 'Cleared (template)'
-          : `Inherited${fallback.length ? `: ${fallback.join(' / ')}` : ' (fleet default)'}`;
+          : fallback.length
+            ? `Inherited: ${fallback.join(' / ')}`
+            : 'Fleet default';
+        // Pairs, not a record: a record would hoist integer-like keys (`24`, `25`) above `comp`.
+        const options: Array<[string, string]> = [
+          [INHERIT, placeholder],
+          ...values.map((value): [string, string] => [
+            String(value),
+            textOf(field.key, value, frameRate),
+          ]),
+        ];
+        const labels = Object.fromEntries(options);
         return (
           <div key={field.key} className="flex items-end gap-1">
-            <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
+            <div className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
               <span className="text-muted-foreground">{field.label}</span>
-              <select
-                aria-label={field.label}
-                value={current === undefined ? '' : String(current)}
-                onChange={(event) =>
+              <Select
+                value={current === undefined ? INHERIT : String(current)}
+                onValueChange={(next) =>
                   onSet(
                     field.key,
-                    event.target.value === ''
-                      ? undefined
-                      : values.find((value) => String(value) === event.target.value),
+                    next === INHERIT ? undefined : values.find((value) => String(value) === next),
                   )
                 }
-                className="h-8 rounded-md border border-input bg-background px-2 text-sm"
               >
-                <option value="">{placeholder}</option>
-                {values.map((value) => (
-                  <option key={String(value)} value={String(value)}>
-                    {textOf(field.key, value, frameRate)}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <SelectTrigger aria-label={field.label} className="w-full">
+                  <SelectValue>
+                    {(value: unknown) =>
+                      value === INHERIT ? (
+                        <span className="truncate text-muted-foreground">{placeholder}</span>
+                      ) : (
+                        <span className="truncate">{labels[String(value)] ?? String(value)}</span>
+                      )
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {options.map(([value, text]) => (
+                    <SelectItem key={value} value={value}>
+                      {text}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             {current !== undefined || isCleared ? (
               <button
                 type="button"
@@ -278,18 +372,22 @@ export function OutputSettingsPanel({
     void load();
   }, [load]);
 
-  if (!contract?.encode) return null;
+  if (!contract) return null;
+  if (isStillsOnly(contract)) return <p className="text-xs text-muted-foreground">{STILLS_NOTE}</p>;
+  if (!contract.encode) return null;
   const { defaults, stored } = contract.encode;
   const outputs = contract.outputs;
   const all: Container[] = outputs.length
     ? [...new Set(outputs.flatMap(containersOf))]
     : ['mp4', 'mov'];
   const output = outputs.find((item) => item.id === scope);
-  const containers = output ? containersOf(output) : all;
   const settings = output ? draft.outputs?.[output.id] : draft.default;
-  const inherited = output
-    ? containers.map((container) => mergeEncodeSettings(defaults[container], draft.default))
-    : containers.map((container) => defaults[container]);
+  const inherited: InheritedEncode[] = output
+    ? containersOf(output).map((container) => ({
+        container,
+        settings: mergeEncodeSettings(defaults[container], draft.default),
+      }))
+    : all.map((container) => ({ container, settings: defaults[container] }));
   const dirty =
     JSON.stringify(compactEncodeBlock(draft) ?? null) !==
     JSON.stringify(compactEncodeBlock(stored ?? undefined) ?? null);
@@ -339,7 +437,6 @@ export function OutputSettingsPanel({
         key={scope}
         settings={settings}
         inherited={inherited}
-        containers={containers}
         frameRate={output?.frameRate}
         onSet={(key, value) =>
           setDraft((current) => {

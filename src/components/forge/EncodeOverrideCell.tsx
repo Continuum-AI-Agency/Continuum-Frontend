@@ -1,12 +1,12 @@
 'use client';
 
 import type { ApiRenderTemplateContract, EncodeSettingKey } from '@continuum/contracts';
-import { mergeEncodeSettings } from '@continuum/contracts';
+import { describeEncodeSettings, mergeEncodeSettings } from '@continuum/contracts';
 import { useState } from 'react';
 import {
   containersOf,
-  describeEncodeSettings,
   EncodeSettingsFields,
+  type InheritedEncode,
   setEncodeLeaf,
   withEncodeScope,
 } from '@/components/forge/OutputSettingsPanel';
@@ -17,9 +17,17 @@ import {
 } from '@/components/forge/renderRequestRows';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
-// One render's output settings, over the template's. "Template" means this row asks for nothing
-// beyond what the template already says; anything else is pinned into the render when it fires.
+// One render's output settings, over the template's. "Template default" means this row asks for
+// nothing beyond what the template already says; anything else is pinned into the render when it
+// fires. The closed cell reads the same one-line summary the review tray shows.
 
 export function EncodeOverrideCell({
   row,
@@ -42,23 +50,47 @@ export function EncodeOverrideCell({
   const output = inScope.find((item) => item.id === scope);
   const scopeKey = output?.id ?? 'all';
 
-  const overridden = Object.keys(effective?.outputs ?? {}).length;
-  const summary = effective
-    ? [
-        describeEncodeSettings(effective.default),
-        overridden ? `${overridden} output${overridden === 1 ? '' : 's'} adjusted` : '',
-      ]
-        .filter(Boolean)
-        .join(' · ')
-    : 'Template';
-
   const own = output ? row.encode?.outputs?.[output.id] : row.encode?.default;
   const cleared = output
     ? row.clearedEncodeKeys?.outputs?.[output.id]
     : row.clearedEncodeKeys?.default;
-  const inherited = output
-    ? [mergeEncodeSettings(output.encode, effective?.default, parent?.outputs?.[output.id])]
-    : inScope.map((item) => mergeEncodeSettings(item.encode, parent?.default));
+  // No outputs published (an older forge): both containers' knobs, as the template sheet shows.
+  const inherited: InheritedEncode[] = output
+    ? containersOf(output).map((container) => ({
+        container,
+        settings: mergeEncodeSettings(
+          output.encode,
+          effective?.default,
+          parent?.outputs?.[output.id],
+        ),
+      }))
+    : inScope.length
+      ? inScope.flatMap((item) =>
+          containersOf(item).map((container) => ({
+            container,
+            settings: mergeEncodeSettings(item.encode, parent?.default),
+          })),
+        )
+      : [
+          { container: 'mp4', settings: undefined },
+          { container: 'mov', settings: undefined },
+        ];
+
+  const overridden = Object.keys(effective?.outputs ?? {}).length;
+  const described =
+    describeEncodeSettings(effective?.default, inherited[0]?.container ?? null) ??
+    (effective?.default ? 'Custom settings' : null);
+  const summary =
+    [described, overridden ? `${overridden} output${overridden === 1 ? '' : 's'} adjusted` : null]
+      .filter(Boolean)
+      .join(' · ') || 'Template default';
+  const scopes: Array<[string, string]> = [
+    ['all', 'All outputs'],
+    ...inScope.map((item): [string, string] => [
+      item.id,
+      `${item.label}${item.ratio ? ` · ${item.ratio}` : ''}`,
+    ]),
+  ];
   const withoutCleared = (key: EncodeSettingKey, add: boolean) => {
     const keys = (cleared ?? []).filter((item) => item !== key);
     return withEncodeScope(row.clearedEncodeKeys, scopeKey, add ? [...keys, key] : keys);
@@ -68,37 +100,35 @@ export function EncodeOverrideCell({
     <Popover>
       <PopoverTrigger
         render={
-          <Button type="button" size="xs" variant="outline" className="max-w-40 truncate">
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            aria-label={`Output settings: ${summary}`}
+            title={summary}
+            className="max-w-40 truncate"
+          >
             {summary}
           </Button>
         }
       />
       <PopoverContent className="w-96 space-y-3">
-        <select
-          aria-label="Output settings scope"
-          value={scopeKey}
-          onChange={(event) => setScope(event.target.value)}
-          className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
-        >
-          <option value="all">All outputs</option>
-          {inScope.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.label}
-              {item.ratio ? ` · ${item.ratio}` : ''}
-            </option>
-          ))}
-        </select>
+        <Select value={scopeKey} onValueChange={setScope}>
+          <SelectTrigger aria-label="Output settings scope" className="w-full">
+            <SelectValue items={Object.fromEntries(scopes)} />
+          </SelectTrigger>
+          <SelectContent>
+            {scopes.map(([value, text]) => (
+              <SelectItem key={value} value={value}>
+                {text}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <EncodeSettingsFields
           key={scopeKey}
           settings={own}
           inherited={inherited}
-          containers={
-            output
-              ? containersOf(output)
-              : inScope.length
-                ? [...new Set(inScope.flatMap(containersOf))]
-                : ['mp4', 'mov']
-          }
           frameRate={output?.frameRate}
           cleared={cleared}
           onSet={(key, value) =>

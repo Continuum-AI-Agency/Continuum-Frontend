@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  chooseOption,
+  installPickerDomGlobals,
+  openSelect,
+} from '@/components/automations/workspace/pickers/pickerTestHarness';
 
 const contract = () => ({
   template: {
@@ -55,7 +60,26 @@ mock.module('@/lib/api/http', () => ({ http: { request }, request }));
 
 const { OutputSettingsPanel } = await import('./OutputSettingsPanel');
 
-const select = (label: string) => screen.getByLabelText(label) as HTMLSelectElement;
+installPickerDomGlobals();
+
+/** What a Select shows closed: its chosen value, or what it inherits. */
+const shown = (label: string) =>
+  screen.getByRole('combobox', { name: label }).querySelector('[data-slot="select-value"]')
+    ?.textContent;
+/** Every option a Select offers, read with it open. */
+function optionsOf(label: string): string[] {
+  openSelect(label);
+  const list = document.getElementById(
+    screen.getByRole('combobox', { name: label }).getAttribute('aria-controls') ?? '',
+  );
+  if (!list) throw new Error(`${label} opened no listbox`);
+  const options = within(list)
+    .getAllByRole('option')
+    .map((option) => option.textContent ?? '');
+  fireEvent.keyDown(list, { key: 'Escape' });
+  return options;
+}
+const fileBox = (name: string) => screen.getByRole('checkbox', { name });
 
 beforeEach(() => {
   for (const fn of [getContract, listEnvironments, listTemplates, request]) fn.mockClear();
@@ -93,23 +117,21 @@ describe('OutputSettingsPanel', () => {
       items: bindingId === OTHER_BINDING ? [{ key: '133' }] : [],
     }));
     render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
-    await waitFor(() => expect(select('Frame rate').value).toBe('25'));
+    await waitFor(() => expect(shown('Frame rate')).toBe('25 fps'));
     expect(getContract).toHaveBeenCalledWith('brand-1', '133', OTHER_BINDING);
   });
 
   test('an unset field shows what it inherits; a reset clears the stored override', async () => {
     render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
-    await waitFor(() => expect(select('Frame rate').value).toBe('25'));
+    await waitFor(() => expect(shown('Frame rate')).toBe('25 fps'));
 
     // The template default tab inherits the fleet default of every container it renders.
-    expect(select('Sample rate').value).toBe('');
-    expect(select('Sample rate').options[0]?.textContent).toBe('Inherited: 44.1 kHz / 48 kHz');
+    expect(shown('Sample rate')).toBe('Inherited: 44.1 kHz / 48 kHz');
 
     const save = screen.getByRole('button', { name: 'Save' });
     expect(save.hasAttribute('disabled')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Reset Frame rate to inherited' }));
-    expect(select('Frame rate').value).toBe('');
-    expect(select('Frame rate').options[0]?.textContent).toBe('Inherited: 29.97 / 25');
+    expect(shown('Frame rate')).toBe('Inherited: 29.97 fps / 25 fps');
 
     fireEvent.click(save);
     await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
@@ -125,24 +147,144 @@ describe('OutputSettingsPanel', () => {
 
   test('each output shows only the knobs its container uses, inheriting the template default', async () => {
     render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
-    await waitFor(() => expect(select('Frame rate').value).toBe('25'));
+    await waitFor(() => expect(shown('Frame rate')).toBe('25 fps'));
 
     fireEvent.click(screen.getByRole('tab', { name: 'Square' }));
-    await waitFor(() => expect(select('Frame rate').value).toBe(''));
-    expect(select('Frame rate').options[0]?.textContent).toBe('Inherited: 25');
-    expect([...select('Frame rate').options].map((option) => option.textContent)).toContain(
-      'Match comp (59.94)',
-    );
-    expect(screen.queryByLabelText('Quality (CRF)')).not.toBeNull();
-    expect(screen.queryByLabelText('ProRes profile')).toBeNull();
-    expect([...select('Audio codec').options].map((option) => option.value)).toEqual(['', 'aac']);
+    await waitFor(() => expect(shown('Frame rate')).toBe('Inherited: 25 fps'));
+    expect(optionsOf('Frame rate')).toEqual([
+      'Inherited: 25 fps',
+      'Match the comp (59.94 fps)',
+      '23.976 fps',
+      '24 fps',
+      '25 fps',
+      '29.97 fps',
+      '30 fps',
+      '50 fps',
+      '59.94 fps',
+      '60 fps',
+    ]);
+    expect(screen.queryByRole('combobox', { name: 'Quality (CRF)' })).not.toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'ProRes profile' })).toBeNull();
+    expect(optionsOf('Audio codec')).toEqual(['Fleet default', 'aac']);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Story' }));
-    await waitFor(() => expect(screen.queryByLabelText('ProRes profile')).not.toBeNull());
-    expect(screen.queryByLabelText('Quality (CRF)')).toBeNull();
+    await waitFor(() =>
+      expect(screen.queryByRole('combobox', { name: 'ProRes profile' })).not.toBeNull(),
+    );
+    expect(screen.queryByRole('combobox', { name: 'Quality (CRF)' })).toBeNull();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Poster' }));
-    await waitFor(() => expect(screen.getByText('Stills take no output settings.')).toBeTruthy());
-    expect(screen.queryByLabelText('Frame rate')).toBeNull();
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          'Stills take no output settings. Frame rate and files apply to animated formats.',
+        ),
+      ).toBeTruthy(),
+    );
+    expect(screen.queryByRole('combobox', { name: 'Frame rate' })).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: 'MXF (DNxHR)' })).toBeNull();
+  });
+
+  test('a frame rate off the standard list stays visible and chosen', async () => {
+    getContract.mockImplementationOnce(async () => ({
+      ...contract(),
+      encode: { ...contract().encode, stored: { default: { fps: '2997/125' } } },
+    }));
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+    await waitFor(() => expect(shown('Frame rate')).toBe('23.976 fps'));
+    expect(optionsOf('Frame rate')).toHaveLength(11);
+  });
+
+  test('choosing a frame rate stores it as the rate the fleet reads', async () => {
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+    await waitFor(() => expect(shown('Frame rate')).toBe('25 fps'));
+    openSelect('Frame rate');
+    chooseOption('29.97 fps');
+    await waitFor(() => expect(shown('Frame rate')).toBe('29.97 fps'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    expect(request.mock.calls[0]).toEqual([
+      {
+        path: '/api/ai-studio/templates/133/encode',
+        method: 'PUT',
+        body: { brandId: 'brand-1', encode: { default: { fps: '30000/1001' } } },
+      },
+    ]);
+  });
+
+  test('files: the own container is on; each file shows its own knobs; the last file stays on', async () => {
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+    await waitFor(() => expect(shown('Frame rate')).toBe('25 fps'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Square' }));
+    await waitFor(() => expect(fileBox('MP4').getAttribute('aria-checked')).toBe('true'));
+    expect(fileBox('MOV (ProRes)').getAttribute('aria-checked')).toBe('false');
+    expect(fileBox('MXF (DNxHR)').getAttribute('aria-checked')).toBe('false');
+    // The one file this MP4 output makes cannot be turned off, and the panel says why.
+    expect(fileBox('MP4').hasAttribute('data-disabled')).toBe(true);
+    expect(screen.getByText('MP4 stays on: every render delivers at least one file.')).toBeTruthy();
+    expect(screen.queryByRole('combobox', { name: 'ProRes profile' })).toBeNull();
+
+    // MOV on: its ProRes profile and PCM audio appear, and MP4 may now go.
+    fireEvent.click(screen.getByText('MOV (ProRes)'));
+    await waitFor(() =>
+      expect(screen.queryByRole('combobox', { name: 'ProRes profile' })).not.toBeNull(),
+    );
+    expect(fileBox('MP4').hasAttribute('data-disabled')).toBe(false);
+    expect(optionsOf('Audio codec')).toEqual(['Fleet default', 'aac', 'pcm_s16le', 'pcm_s24le']);
+
+    // MP4 off: CRF leaves with it. MOV is now the last file.
+    fireEvent.click(screen.getByText('MP4'));
+    await waitFor(() =>
+      expect(screen.queryByRole('combobox', { name: 'Quality (CRF)' })).toBeNull(),
+    );
+    expect(fileBox('MOV (ProRes)').hasAttribute('data-disabled')).toBe(true);
+
+    // MP4 back on is the template's own state again, so it is unset rather than stored.
+    fireEvent.click(screen.getByText('MXF (DNxHR)'));
+    fireEvent.click(screen.getByText('MP4'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    expect(request.mock.calls[0]).toEqual([
+      {
+        path: '/api/ai-studio/templates/133/encode',
+        method: 'PUT',
+        body: {
+          brandId: 'brand-1',
+          encode: {
+            default: { fps: 25 },
+            outputs: { square: { files: { mov: true, mxf: true } } },
+          },
+        },
+      },
+    ]);
+  });
+
+  test('a stills-only template says settings apply to animated formats, and nothing else', async () => {
+    getContract.mockImplementationOnce(async () => ({
+      ...contract(),
+      outputs: [contract().outputs[2]!],
+    }));
+    const { container } = render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+    await waitFor(() =>
+      expect(container.textContent).toBe(
+        'Stills take no output settings. Frame rate and files apply to animated formats.',
+      ),
+    );
+    expect(screen.queryByRole('tab')).toBeNull();
+  });
+
+  test('a template with no named outputs is stills-only when its comp runs one frame', async () => {
+    getContract.mockImplementationOnce(async () => ({
+      ...contract(),
+      template: { ...contract().template, motion: { durationSec: 1 / 25, frameRate: 25 } },
+      outputs: [],
+      encode: undefined,
+    }));
+    const { container } = render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+    await waitFor(() =>
+      expect(container.textContent).toBe(
+        'Stills take no output settings. Frame rate and files apply to animated formats.',
+      ),
+    );
   });
 });
