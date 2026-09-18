@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'bun:test';
 import {
   asOfLine,
+  audienceExpansionPrompt,
   evidenceLine,
   evidenceSeries,
   formatEvidenceValue,
   formatSettingsValue,
   impactLabel,
   impactPerDay,
+  jainaPromptHref,
   queueSummary,
   settingsPatchOf,
   triggerWords,
@@ -165,5 +167,23 @@ describe('evidenceSeries', () => {
     expect(formatEvidenceValue('money', 40, 'USD')).toBe('$40');
     expect(formatEvidenceValue('percent', 0.0125, null)).toBe('1.25%');
     expect(formatEvidenceValue('number', 3.4, null)).toBe('3.4');
+  });
+});
+
+describe('audience expansion hand-off', () => {
+  it('names the ad set, carries the diagnosis and asks for the three buckets with sizes', () => {
+    const prompt = audienceExpansionPrompt(
+      {
+        adset_id: '1202',
+        reason: 'Frequency 5.4 ≥ 3 with CPA up 39%.',
+        trigger: 'F2_audience_saturation',
+      },
+      'ITESO // AGOSTO - BROAD',
+    );
+    expect(prompt).toContain('"ITESO // AGOSTO - BROAD" (ad set 1202)');
+    expect(prompt).toContain('Frequency 5.4');
+    expect(prompt).toContain('three buckets');
+    expect(prompt).toContain('estimated size');
+    expect(jainaPromptHref('a b')).toBe('/scale?tab=jaina&prompt=a%20b');
   });
 });

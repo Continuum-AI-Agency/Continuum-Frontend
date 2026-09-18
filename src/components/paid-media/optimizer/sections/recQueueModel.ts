@@ -286,3 +286,26 @@ export function formatEvidenceValue(
       return Number.isInteger(value) ? String(value) : value.toFixed(1);
   }
 }
+
+// ── Hand-off to Jaina for audience expansion ──────────────────────────────────
+// "Expand audience" ends in advice inside the Optimizer; the options with sizes live in
+// Jaina's audience tools (catalogue search, reach estimate, audience groups). The row hands
+// the ad set and its diagnosis over in one prepared prompt, so the person lands in a
+// three-bucket answer instead of a blank chat.
+
+export function audienceExpansionPrompt(
+  rec: Pick<RecommendationRow, 'adset_id' | 'reason' | 'trigger'>,
+  adsetName: string | null,
+): string {
+  const subject = adsetName ? `"${adsetName}" (ad set ${rec.adset_id})` : `ad set ${rec.adset_id}`;
+  const diagnosis = rec.reason ? ` The optimizer's diagnosis: ${rec.reason}` : '';
+  return (
+    `Expand the audience of ${subject}.${diagnosis} ` +
+    'Give me the three buckets — what it targets now, what the account already owns that it has never used (saved audiences, lookalikes, wider age or geo), and net-new interests verified in the catalogue this session — each option with its id and estimated size, then the combined reach estimate. Apply the brand rules first and mark anything they block.'
+  );
+}
+
+/** Deep link into the Jaina tab with the prompt prepared. */
+export function jainaPromptHref(prompt: string): string {
+  return `/scale?tab=jaina&prompt=${encodeURIComponent(prompt)}`;
+}

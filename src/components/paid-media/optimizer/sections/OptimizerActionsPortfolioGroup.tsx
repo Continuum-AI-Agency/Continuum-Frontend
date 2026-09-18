@@ -80,10 +80,12 @@ import { RecEvidenceChart } from './RecEvidenceChart';
 import { RecommendationInsight } from './RecommendationInsight';
 import {
   asOfLine,
+  audienceExpansionPrompt,
   evidenceLine,
   formatSettingsValue,
   impactLabel,
   impactPerDay,
+  jainaPromptHref,
   queueSummary,
   type SettingsPatch,
   settingsFieldLabel,
@@ -1322,7 +1324,7 @@ function RowDetail({
         <SettingsDetail actions={settingsActions} currency={currency} rec={row.rec} />
       ) : (
         <>
-          <RecDetail rec={row.rec} />
+          <RecDetail name={row.name} rec={row.rec} />
           <RecEvidenceChart
             currency={currency}
             denominatorMultiplier={evidence.denominatorMultiplier}
@@ -1542,12 +1544,28 @@ function BudgetDetail({
   );
 }
 
-function RecDetail({ rec }: { rec: RecommendationRow }) {
+function RecDetail({ rec, name }: { rec: RecommendationRow; name?: string | null }) {
   return (
     <>
       {rec.reason ? (
         <p>
           <span className="font-medium text-foreground">Why:</span> {rec.reason}
+        </p>
+      ) : null}
+      {rec.kind === 'audience_expand' ? (
+        // The options with sizes live in Jaina's audience tools; hand the ad set and its
+        // diagnosis over so the person lands in the three-bucket answer, not a blank chat.
+        <p>
+          <a
+            className="font-medium text-primary underline-offset-2 hover:underline"
+            href={jainaPromptHref(audienceExpansionPrompt(rec, name ?? null))}
+          >
+            Explore options with Jaina →
+          </a>{' '}
+          <span className="text-muted-foreground">
+            what it targets now, what the account already owns, and catalogue-verified interests —
+            each with an estimated size.
+          </span>
         </p>
       ) : null}
       <p>
