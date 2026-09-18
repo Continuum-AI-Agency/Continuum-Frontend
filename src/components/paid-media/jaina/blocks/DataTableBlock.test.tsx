@@ -240,4 +240,48 @@ describe('DataTableBlock', () => {
     expect(image.getAttribute('src')).toBe('https://cdn.example.com/analyzed-creative.jpg');
     expect(requestPreview).toHaveBeenCalledTimes(1);
   });
+
+  // The entity column used to BE the id (`campaign-1202…`) because the Backend had
+  // no name to put there. Now it carries the name, so the id has to stay visible —
+  // it is what a user pastes into Ads Manager.
+  it('renders the row entity id under the first column, and only there', () => {
+    render(
+      <DataTableBlock
+        block={{
+          ...baseBlock,
+          render_mode: 'table',
+          card_fields: null,
+          columns: [
+            { key: 'entity', label: 'Entity', format: 'text', align: 'left' },
+            { key: 'headline', label: 'Headline', format: 'text', align: 'left' },
+          ],
+          rows: [{ entity: 'ITESO // TOURS // SEPTIEMBRE', headline: 'Move with confidence' }],
+          row_meta: [{ entity_id: '120243403769620322', entity_type: 'campaign' }],
+        }}
+        isStreaming={false}
+      />,
+    );
+
+    expect(screen.getAllByText('120243403769620322')).toHaveLength(1);
+    expect(screen.getByText('ITESO // TOURS // SEPTIEMBRE')).toBeDefined();
+  });
+
+  it('renders no id line when the row carries no entity_id', () => {
+    render(
+      <DataTableBlock
+        block={{
+          ...baseBlock,
+          render_mode: 'table',
+          card_fields: null,
+          columns: [{ key: 'entity', label: 'Entity', format: 'text', align: 'left' }],
+          rows: [{ entity: 'Campaign one' }],
+          row_meta: [{ currency: 'EUR' }],
+        }}
+        isStreaming={false}
+      />,
+    );
+
+    expect(screen.getByText('Campaign one')).toBeDefined();
+    expect(screen.queryAllByText(/^\d{10,}$/)).toHaveLength(0);
+  });
 });

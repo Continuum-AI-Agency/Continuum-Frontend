@@ -272,6 +272,12 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
             <tbody>
               {block.rows.map((row, rowIndex) => {
                 const rowMeta = block.row_meta?.[rowIndex];
+                // The entity's id, under its name in the first column. The cell
+                // used to BE the id (`campaign-1202…`) because the Backend had no
+                // name to put there; now that it does, the id still has to stay
+                // reachable — it is what a user pastes into Ads Manager.
+                const entityId =
+                  typeof rowMeta?.entity_id === 'string' ? rowMeta.entity_id : null;
                 const rowCurrency = currencyCode(rowMeta?.currency);
                 const parsedAudience = paidCreativeAudienceEvidenceSchema.safeParse(
                   rowMeta?.audience,
@@ -279,8 +285,9 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
                 const audience = parsedAudience.success ? parsedAudience.data : null;
                 return (
                   <tr key={rowIndex} className="border-b border-border/30 last:border-0">
-                    {block.columns.map((column) => {
+                    {block.columns.map((column, columnIndex) => {
                       const value = displayValue(row[column.key], column.format, rowCurrency);
+                      const showEntityId = columnIndex === 0 && entityId !== null;
                       return (
                         <td
                           key={column.key}
@@ -292,6 +299,11 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
                           ) : !column.format || column.format === 'text' ? (
                             <>
                               <MediaText>{value}</MediaText>
+                              {showEntityId ? (
+                                <span className="mt-0.5 block font-mono text-xs text-muted-foreground">
+                                  {entityId}
+                                </span>
+                              ) : null}
                               {column.key === 'audience_coverage' ? (
                                 <AudienceEvidence audience={audience} currency={rowCurrency} />
                               ) : null}

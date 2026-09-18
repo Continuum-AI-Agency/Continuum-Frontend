@@ -7,8 +7,9 @@
 // it, so search never filters. This is the pairing every combobox in the app uses.
 
 import type { Project } from '@continuum/contracts';
-import { Check, ChevronsUpDown, FolderOpen } from 'lucide-react';
+import { Check, ChevronsUpDown, FolderOpen, Plus } from 'lucide-react';
 import * as React from 'react';
+import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { useActiveProject } from '@/components/projects/ActiveProjectProvider';
 import { ProjectChip, projectColor } from '@/components/projects/ProjectChip';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ import {
   CommandSeparator,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useProjectMutations } from '@/lib/projects/hooks';
 import { cn } from '@/lib/utils';
 
 type ProjectSelectProps = {
@@ -30,6 +32,14 @@ type ProjectSelectProps = {
   onChange: (projectId: string | null) => void;
   /** Label for the null option — the brand-level scope. */
   noProjectLabel?: string;
+  /**
+   * Create a project from the typed name and return its id.
+   *
+   * Optional: a settings form driving this with its own state has no brand in
+   * scope, and a picker that cannot create is still a valid picker. When it is
+   * absent the create row simply never appears.
+   */
+  onCreate?: (name: string) => Promise<string | null>;
   disabled?: boolean;
   className?: string;
 };
@@ -39,19 +49,56 @@ export function ProjectSelect({
   value,
   onChange,
   noProjectLabel = 'No project',
+  onCreate,
   disabled,
   className,
 }: ProjectSelectProps) {
   const [open, setOpen] = React.useState(false);
+  // Controlled so the create row can read what was typed. cmdk's own filtering
+  // still runs off this same value.
+  const [query, setQuery] = React.useState('');
+  const [status, setStatus] = React.useState<string | null>(null);
   const selected = projects.find((project) => project.id === value) ?? null;
+
+  const trimmed = query.trim();
+  const canCreate =
+    onCreate !== undefined &&
+    trimmed.length > 0 &&
+    !projects.some((project) => project.name.toLowerCase() === trimmed.toLowerCase());
 
   const select = (projectId: string | null) => {
     setOpen(false);
+    setQuery('');
+    setStatus(null);
     onChange(projectId);
   };
 
+  const createAndSelect = async (name: string): Promise<void> => {
+    if (!onCreate) return;
+    setStatus('Creating…');
+    try {
+      const projectId = await onCreate(name);
+      if (projectId) select(projectId);
+      else setStatus('Create failed');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      // The route answers 409 on a duplicate active name; saying so beats a
+      // generic failure the user cannot act on.
+      setStatus(message.includes('409') ? 'A project already has that name' : 'Create failed');
+    }
+  };
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) {
+          setQuery('');
+          setStatus(null);
+        }
+      }}
+    >
       <PopoverTrigger
         render={
           <Button
@@ -77,9 +124,16 @@ export function ProjectSelect({
       />
       <PopoverContent className="w-64 p-0" align="start" sideOffset={4}>
         <Command>
-          <CommandInput placeholder="Search projects..." className="h-9" />
+          <CommandInput
+            value={query}
+            onValueChange={setQuery}
+            placeholder={onCreate ? 'Search or create…' : 'Search projects...'}
+            className="h-9"
+          />
           <CommandList>
-            <CommandEmpty>No projects found.</CommandEmpty>
+            <CommandEmpty>
+              {onCreate ? 'Type a name to create a project.' : 'No projects found.'}
+            </CommandEmpty>
             <CommandGroup>
               {/* null is the default brand-level scope and must stay reachable — a selector
                   that can only ever narrow is a scope you cannot get out of. */}
@@ -111,8 +165,28 @@ export function ProjectSelect({
                 ))}
               </CommandGroup>
             )}
+            {canCreate && (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading="Create">
+                  <CommandItem
+                    value={`create ${trimmed}`}
+                    onSelect={() => void createAndSelect(trimmed)}
+                    className="gap-2"
+                  >
+                    <Plus className="size-3.5 shrink-0 text-muted-foreground" />
+                    <span className="flex-1 truncate">Create “{trimmed}”</span>
+                  </CommandItem>
+                </CommandGroup>
+              </>
+            )}
           </CommandList>
         </Command>
+        {status && (
+          <p className="border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
+            {status}
+          </p>
+        )}
       </PopoverContent>
     </Popover>
   );
@@ -125,11 +199,25 @@ export function ProjectSelect({
  */
 export function ActiveProjectSelect({ className }: { className?: string }) {
   const { projects, activeProjectId, selectProject, isLoading } = useActiveProject();
+  const { activeBrandId } = useActiveBrandContext();
+  const { create } = useProjectMutations(activeBrandId);
+
+  // The brand comes from context rather than a prop so the chip row stays a
+  // zero-argument mount. Without a brand there is nothing to create under, so
+  // the create row stays hidden rather than posting a request that 400s.
+  const onCreate = activeBrandId
+    ? async (name: string): Promise<string | null> => {
+        const project = await create.mutateAsync({ name, adAccountIds: [], campaignIds: [] });
+        return project?.id ?? null;
+      }
+    : undefined;
+
   return (
     <ProjectSelect
       projects={projects}
       value={activeProjectId}
       onChange={selectProject}
+      onCreate={onCreate}
       disabled={isLoading}
       className={className}
     />
