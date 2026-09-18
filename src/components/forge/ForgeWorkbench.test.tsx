@@ -79,8 +79,15 @@ mock.module('@/components/library/useMediaUpload', () => ({
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: { listJobs: async () => ({ items: [], nextCursor: null }) },
 }));
+const toasts = await import('@/components/ui/toast-imperative');
 mock.module('@/components/ui/toast-imperative', () => ({
-  toast: { success: () => undefined, error: toastError },
+  ...toasts,
+  toast: Object.assign(() => undefined, {
+    success: () => undefined,
+    error: toastError,
+    info: () => undefined,
+    warning: () => undefined,
+  }),
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -211,7 +218,9 @@ describe('ForgeWorkbench', () => {
     expect(await screen.findByRole('button', { name: 'Open StarCraft Promo' })).toBeTruthy();
     // Its own build is the card above, not a second "shared" copy of it.
     expect(screen.getByRole('button', { name: /^Shared with you\s*1$/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Added' })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Remove Hero offer from StarCraft' }),
+    ).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/\[DRAFT|template \d+|Continuum_app/);
   });
 

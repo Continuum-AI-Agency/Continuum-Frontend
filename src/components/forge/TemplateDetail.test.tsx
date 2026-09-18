@@ -232,7 +232,14 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  chooseOption,
+  installPickerDomGlobals,
+  openSelect,
+} from '@/components/automations/workspace/pickers/pickerTestHarness';
 import { TemplateDetail } from './TemplateDetail';
+
+installPickerDomGlobals();
 
 afterEach(() => {
   cleanup();
@@ -320,15 +327,21 @@ describe('TemplateDetail', () => {
     renderDetail();
     // The build form lives in the BUILD check's detail.
     fireEvent.click(await screen.findByRole('button', { name: 'Build details' }));
-    const picker = (await screen.findByLabelText('Render workspace')) as HTMLSelectElement;
-    expect([...picker.options].map((option) => option.textContent)).toEqual([
+    await screen.findByRole('combobox', { name: 'Render workspace' });
+    openSelect('Render workspace');
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
       'Workspace 1 (default)',
       'Workspace 2',
     ]);
     expect(visibleText()).not.toMatch(/Continuum_app|Parsed_app/);
 
     // The app name is still findable, inside Details, for whichever workspace is chosen.
-    fireEvent.change(picker, { target: { value: PARSED_WORKSPACE.id } });
+    chooseOption('Workspace 2');
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'Render workspace' }).textContent).toStartWith(
+        'Workspace 2',
+      ),
+    );
     fireEvent.click(screen.getByRole('tab', { name: 'Details' }));
     await waitFor(() => expect(visibleText()).toContain('Parsed_app'));
   });

@@ -1,10 +1,12 @@
 'use client';
 
-import type { TemplateSourceSummary } from '@continuum/contracts';
+import type { ApiRenderJob, TemplateSourceSummary } from '@continuum/contracts';
 import { templateDisplayName } from '@continuum/contracts';
+import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { ForgeProjectDrop } from '@/components/forge/ForgeProjectDrop';
+import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { Input } from '@/components/ui/input';
 import {
@@ -15,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import {
   type SharedTemplate,
   SharedTemplateCard,
@@ -40,6 +43,11 @@ type Filter = (typeof FILTERS)[number]['id'];
 
 const SORTS = { updated: 'Recently updated', name: 'Name' } as const;
 type Sort = keyof typeof SORTS;
+
+// ponytail: one page of the brand's newest finished renders — the list route's page cap. A template
+// last rendered before them reads "No recent render" rather than a claim; page further if that bites.
+const GALLERY_RENDERS = 50;
+const NO_RENDERS: readonly ApiRenderJob[] = [];
 
 type Item =
   | {
@@ -88,6 +96,25 @@ export function TemplateGallery({
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('updated');
+
+  // Every card's picture from ONE read, grouped here — never a read per card.
+  const { data: finished } = useQuery({
+    queryKey: [...forgeQueryKeys.renderJobs(brandId), 'gallery-finished'],
+    queryFn: () => apiRendersApi.listJobs(brandId, GALLERY_RENDERS, { status: 'finished' }),
+    staleTime: FORGE_STALE_MS.active,
+  });
+  const rendersByTemplate = useMemo(() => {
+    const grouped = new Map<string, ApiRenderJob[]>();
+    // Filtered again: a server that ignores `status` would hand back queued and failed jobs too.
+    for (const job of finished?.items ?? []) {
+      if (job.status !== 'finished') continue;
+      grouped.set(job.templateKey, [...(grouped.get(job.templateKey) ?? []), job]);
+    }
+    return grouped;
+  }, [finished]);
+  const emptyLabel = finished ? (finished.nextCursor ? 'No recent render' : 'No render yet') : null;
+  const rendersOf = (templateKey: string | null) =>
+    (templateKey ? rendersByTemplate.get(templateKey) : undefined) ?? NO_RENDERS;
 
   const items = useMemo<Item[]>(
     () => [
@@ -141,7 +168,7 @@ export function TemplateGallery({
   }, [items, query, filter, sort]);
 
   return (
-    <div className="space-y-4">
+    <div className="flex min-w-0 flex-col gap-4">
       <div className="sticky top-0 z-20 -mx-1 flex flex-wrap items-center gap-2 bg-background/95 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div className="relative w-full sm:w-64">
           <Search
@@ -207,6 +234,8 @@ export function TemplateGallery({
               <TemplateCard
                 brandId={brandId}
                 source={item.source}
+                renders={rendersOf(item.source.templateKey)}
+                emptyLabel={emptyLabel}
                 onOpen={() => onOpen(item.source.assetId)}
                 onRename={(title) => onRename(item.source.assetId, title)}
               />
@@ -215,6 +244,8 @@ export function TemplateGallery({
                 brandId={brandId}
                 template={item.shared}
                 brandName={brandName}
+                renders={rendersOf(item.shared.templateKey)}
+                emptyLabel={emptyLabel}
                 busy={adopting === sharedTemplateId(item.shared)}
                 onToggle={() => onToggleShared(item.shared)}
                 onRender={

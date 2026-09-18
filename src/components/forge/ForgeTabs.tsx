@@ -20,7 +20,9 @@ const RenderJobsGrid = dynamic(() =>
 
 type ForgeTab = 'templates' | 'render' | 'renders';
 
-const PANEL = 'min-h-0 overflow-y-auto overscroll-contain pt-2';
+// `min-w-0` down the chain: a flex child's minimum width is its content's, so without it one wide
+// row (a long file name, a wide grid) widens the whole page instead of scrolling inside its panel.
+const PANEL = 'min-h-0 min-w-0 overflow-y-auto overscroll-contain pt-2';
 
 export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?: string }) {
   const [tab, setTab] = useState<ForgeTab>('templates');
@@ -41,7 +43,7 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
     <Tabs
       value={tab}
       onValueChange={(next) => activate(next as ForgeTab)}
-      className="min-h-0 flex-1"
+      className="min-h-0 min-w-0 flex-1"
     >
       <TabsList className="shrink-0">
         <TabsTrigger value="templates">Templates</TabsTrigger>

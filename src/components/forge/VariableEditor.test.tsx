@@ -88,6 +88,23 @@ describe('VariableEditor', () => {
     expect(screen.getByText('Story 9x16')).toBeTruthy();
   });
 
+  test('a label that is still the layer name reads as words; the Name field keeps what is stored', () => {
+    render(
+      <VariableEditor
+        brandId="22222222-2222-4222-8222-222222222222"
+        variables={[variable({ key: 'ref_price_text', label: 'ref_price_text' })]}
+        savedDefaults={{}}
+        parseState="parsed"
+        saving={false}
+        onSave={async () => true}
+      />,
+    );
+    const row = within(screen.getByRole('list', { name: 'Variables' })).getByRole('button');
+    expect(within(row).getByText('Price text')).toBeTruthy();
+    expect(screen.getByLabelText('Price text default')).toBeTruthy();
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('ref_price_text');
+  });
+
   test('a failed save keeps the draft; a successful one clears it', async () => {
     let answer = false;
     const onSave = mock(async (_edits: TemplateSlotEdit[]) => answer);

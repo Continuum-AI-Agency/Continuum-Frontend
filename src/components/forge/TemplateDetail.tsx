@@ -3,6 +3,7 @@
 import {
   type ApiRenderJob,
   type RenderWorkspace,
+  readableLayerName,
   renderWorkspaceLabel,
   type TemplateFontPushResponse,
   type TemplateFontReadiness,
@@ -58,6 +59,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toast-imperative';
 import {
@@ -178,6 +186,8 @@ export function TemplateDetail({
   onRename,
   onOpenRender,
   onChanged,
+  revisionFile,
+  onRevisionTaken,
 }: {
   brandId: string;
   source: TemplateSourceSummary;
@@ -186,6 +196,9 @@ export function TemplateDetail({
   onOpenRender?: (intent: ForgeRenderIntent) => void;
   /** Re-read the template list after something here changed what a card shows. */
   onChanged: () => Promise<void>;
+  /** A dropped file to upload as this template's next source revision: opens on that tab. */
+  revisionFile?: File;
+  onRevisionTaken?: () => void;
 }) {
   const { assetId, templateKey } = source;
   const queryClient = useQueryClient();
@@ -205,6 +218,8 @@ export function TemplateDetail({
     [source.parse, source.ratios],
   );
   const [formatId, setFormatId] = useState<string | undefined>(undefined);
+  // Read once: the dropped file is handed off moments after mount, and the tab must not follow it.
+  const [firstTab] = useState(revisionFile ? 'source' : 'variables');
   const format = formats.find((entry) => entry.id === formatId) ?? formats[0];
   const rendered = useLatestRenderFrame(brandId, templateKey, formats, format?.id);
   const [variables, setVariables] = useState<TemplateVariable[]>([]);
@@ -413,15 +428,13 @@ export function TemplateDetail({
   const unassigned = variables.filter((variable) => variable.role === null).length;
 
   // Numbered, never named: the only names a binding has are its app and client keys.
+  const workspaceLabel = (index: number) =>
+    index < 0 ? '—' : `Workspace ${index + 1}${workspaces[index]?.isDefault ? ' (default)' : ''}`;
   const workspaceIndex = run?.application
     ? workspaces.findIndex((workspace) => workspace.picinst === run.application)
     : workspaces.findIndex((workspace) => workspace.id === workspaceId);
   const workspaceFact =
-    workspaceIndex < 0
-      ? '—'
-      : workspaces.length === 1
-        ? 'Default'
-        : `Workspace ${workspaceIndex + 1}${workspaces[workspaceIndex]?.isDefault ? ' (default)' : ''}`;
+    workspaces.length === 1 && workspaceIndex === 0 ? 'Default' : workspaceLabel(workspaceIndex);
 
   const fontParseState = fontReadiness?.parseState ?? source.parseState;
   const missingFonts = fontReadiness?.fonts.filter((font) => !font.held).length ?? 0;
@@ -539,20 +552,25 @@ export function TemplateDetail({
             />
             {/* Only when there is a choice: one workspace is not a decision. */}
             {workspaces.length > 1 ? (
-              <select
+              <Select
                 value={workspaceId}
-                onChange={(event) => setWorkspaceId(event.target.value)}
-                aria-label="Render workspace"
+                onValueChange={(next) => setWorkspaceId(String(next))}
                 disabled={busy !== null}
-                className="h-7 rounded-md border border-input bg-background px-2 text-xs"
               >
-                {/* The server lists the default first and the rest in a stable order. */}
-                {workspaces.map((workspace, index) => (
-                  <option key={workspace.id} value={workspace.id}>
-                    {`Workspace ${index + 1}${workspace.isDefault ? ' (default)' : ''}`}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger size="sm" className="w-44 text-xs" aria-label="Render workspace">
+                  <SelectValue>
+                    {workspaceLabel(workspaces.findIndex((w) => w.id === workspaceId))}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {/* The server lists the default first and the rest in a stable order. */}
+                  {workspaces.map((workspace, index) => (
+                    <SelectItem key={workspace.id} value={workspace.id} className="text-xs">
+                      {workspaceLabel(index)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             ) : null}
             <Button
               type="button"
@@ -591,7 +609,7 @@ export function TemplateDetail({
           <ul className="flex flex-col gap-0.5 text-muted-foreground">
             {run.needs.map((need) => (
               <li key={need.id}>
-                {need.slot?.label ?? need.id}
+                {need.slot?.label ? readableLayerName(need.slot.label) : need.id}
                 {need.reason ? ` — ${need.reason}` : null}
               </li>
             ))}
@@ -801,7 +819,7 @@ export function TemplateDetail({
       ) : null}
 
       {/* Every panel stays mounted while hidden: switching tabs must never drop an unsaved edit. */}
-      <Tabs defaultValue="variables" className="gap-0">
+      <Tabs defaultValue={firstTab} className="gap-0">
         <TabsList
           variant="line"
           className="h-9 w-full justify-start gap-3 rounded-none border-b border-border px-[var(--card-pad)]"
@@ -848,6 +866,8 @@ export function TemplateDetail({
             brandId={brandId}
             assetId={assetId}
             expectedVersionId={source.versionId}
+            initialFile={revisionFile}
+            onInitialFileTaken={onRevisionTaken}
             onConfirmed={async () => {
               await Promise.all([onChanged(), loadVariables()]);
             }}

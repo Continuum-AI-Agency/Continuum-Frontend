@@ -1,15 +1,23 @@
 /**
- * The Templates gallery: search and the status filter narrow the cards, shared workspace templates
- * sit behind "Shared with you" with an "Add to {brand}" action, and nothing a person would have to
- * decode — an upload's uuid filename, the workspace's app name, "template 133" — reaches the page.
+ * The Templates gallery: search and the status filter narrow the cards, each card shows its newest
+ * rendered frame (found by file name, from one list read), shared workspace templates sit behind
+ * "Shared with you" with a "Use in {brand}" action that says what it does, and nothing a person
+ * would have to decode — an upload's uuid filename, the workspace's app name, "template 133", the
+ * version hash — reaches the page.
  */
 
-import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import type { TemplateSource } from '@continuum/contracts';
+import { afterAll, afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { type ApiRenderJob, apiRenderJobSchema, type TemplateSource } from '@continuum/contracts';
+import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 
-mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
-  apiRendersApi: { listJobs: async () => ({ items: [], nextCursor: null }) },
+let jobs: ApiRenderJob[] = [];
+// A spy on the one method, not a module mock: Bun keeps one module registry per run, and a
+// replaced module would reach every spec that runs after this one.
+const listJobs = spyOn(apiRendersApi, 'listJobs').mockImplementation(async () => ({
+  items: jobs,
+  nextCursor: null,
 }));
+afterAll(() => listJobs.mockRestore());
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
@@ -17,6 +25,10 @@ import { type SharedTemplate, sharedTemplateId } from './TemplateCard';
 import { TemplateGallery } from './TemplateGallery';
 
 afterEach(cleanup);
+beforeEach(() => {
+  jobs = [];
+  listJobs.mockClear();
+});
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
 const UUID_FILE = 'd2f9637b-8fde-4b8a-9c3e-1a2b3c4d5e6f.aep';
@@ -58,7 +70,12 @@ function source(overrides: Partial<TemplateSource> & { filename?: string }): Tem
 }
 
 const SOURCES = [
-  source({ displayName: 'Summer promo', templateKey: '133', updatedAt: '2026-09-10T00:00:00Z' }),
+  source({
+    displayName: 'Summer promo',
+    templateKey: '133',
+    updatedAt: '2026-09-10T00:00:00Z',
+    aepSha256: 'f'.repeat(64),
+  }),
   source({
     displayName: 'Winter sale',
     forgeState: 'needs_input',
@@ -123,7 +140,50 @@ describe('TemplateGallery', () => {
     expect(screen.getByText('No templates match.')).toBeTruthy();
   });
 
-  test('the status filter groups cards, and shared templates carry an Add action and a Draft pill', () => {
+  test("a card shows its newest render's file for its format, read by name, from one list read", async () => {
+    const file = (fileName: string) => ({
+      id: fileName,
+      kind: 'image',
+      fileName,
+      mimeType: 'image/png',
+      url: `https://cdn.test/${fileName}`,
+      width: null,
+      height: null,
+    });
+    jobs = [
+      // Newest: the fleet listed the 9:16 file first; the card must still show the 1:1 one.
+      apiRenderJobSchema.parse({
+        id: crypto.randomUUID(),
+        brandId: BRAND,
+        templateKey: '133',
+        templateName: 'Summer promo',
+        contractHash: 'hash',
+        taskUid: 'T2',
+        status: 'finished',
+        outputs: [file('Story_9_16_bbb.png'), file('Main_1x1_aaa.png')],
+        delivery: [],
+        error: null,
+        createdAt: '2026-09-12T00:00:00Z',
+        updatedAt: '2026-09-12T00:00:00Z',
+      }),
+    ];
+    renderGallery();
+
+    const card = screen.getByRole('button', { name: 'Open Summer promo' }).closest('article')!;
+    const frame = (await within(card as HTMLElement).findByRole('img', {
+      name: 'Summer promo · last render',
+    })) as HTMLImageElement;
+    expect(frame.src).toBe('https://cdn.test/Main_1x1_aaa.png');
+    expect(listJobs).toHaveBeenCalledTimes(1);
+    expect(listJobs.mock.calls[0]?.slice(1)).toEqual([50, { status: 'finished' }]);
+
+    // A template that never rendered says so over its drawing; no card face carries the hash.
+    const winter = screen.getByRole('button', { name: 'Open Winter sale' }).closest('article')!;
+    expect(within(winter as HTMLElement).getByText('No render yet')).toBeTruthy();
+    expect(document.body.textContent).not.toContain('ffffffffff');
+  });
+
+  test('the status filter groups cards, and shared templates carry a Use action and a Draft pill', () => {
     const onToggleShared = renderGallery();
 
     fireEvent.click(screen.getByRole('button', { name: /^Ready/ }));
@@ -142,8 +202,24 @@ describe('TemplateGallery', () => {
     expect(screen.queryByText('New template')).toBeNull();
     const shared = screen.getAllByRole('article')[0]!;
     expect(within(shared).getByText('Draft')).toBeTruthy();
-    fireEvent.click(within(shared).getByRole('button', { name: 'Add to StarCraft' }));
+    expect(
+      within(shared).getByText(
+        'Lets StarCraft render this template. Nothing is copied — it stays in the shared library. Remove any time.',
+      ),
+    ).toBeTruthy();
+    fireEvent.click(within(shared).getByRole('button', { name: 'Use in StarCraft' }));
     expect(onToggleShared).toHaveBeenCalledWith(SHARED[0]);
+  });
+
+  test('a shared template already in the brand says so and offers Remove', () => {
+    const granted = { ...SHARED[0]!, name: 'Hero offer', draft: false, granted: true };
+    const onToggleShared = renderGallery(undefined, { shared: [granted] });
+    fireEvent.click(screen.getByRole('button', { name: /^Shared with you/ }));
+    const card = screen.getAllByRole('article')[0]!;
+    expect(within(card).getByText('In StarCraft')).toBeTruthy();
+    expect(within(card).queryByRole('button', { name: 'Use in StarCraft' })).toBeNull();
+    fireEvent.click(within(card).getByRole('button', { name: 'Remove Hero offer from StarCraft' }));
+    expect(onToggleShared).toHaveBeenCalledWith(granted);
   });
 
   test('one template id in two workspaces is two cards, and only the one being added spins', () => {
@@ -161,7 +237,7 @@ describe('TemplateGallery', () => {
       renderGallery(undefined, { shared: [first, second], adopting: sharedTemplateId(second) });
       fireEvent.click(screen.getByRole('button', { name: /^Shared with you/ }));
 
-      const buttons = screen.getAllByRole('button', { name: 'Add to StarCraft' });
+      const buttons = screen.getAllByRole('button', { name: 'Use in StarCraft' });
       expect(buttons.map((button) => button.hasAttribute('disabled'))).toEqual([false, true]);
       expect(logged.mock.calls.flat().join(' ')).not.toMatch(/same key/);
     } finally {

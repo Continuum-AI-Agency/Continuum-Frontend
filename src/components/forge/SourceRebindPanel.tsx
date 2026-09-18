@@ -2,12 +2,14 @@
 
 import {
   type MediaAssetVersion,
+  readableLayerName,
   type TemplateRebindPreview,
   templateDisplayName,
   UNTITLED_TEMPLATE_NAME,
 } from '@continuum/contracts';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { uploadRefusal } from '@/components/forge/ForgeProjectDrop';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -37,6 +39,9 @@ type SourceRebindProps = {
   assetId: string;
   expectedVersionId: string;
   onConfirmed: () => Promise<void>;
+  /** A file dropped on the gallery as this template's next revision: uploaded once, on arrival. */
+  initialFile?: File;
+  onInitialFileTaken?: () => void;
 };
 
 export function SourceRebindPanel(props: SourceRebindProps) {
@@ -48,7 +53,14 @@ export function SourceRebindPanel(props: SourceRebindProps) {
   );
 }
 
-function SourceRebindForm({ brandId, assetId, expectedVersionId, onConfirmed }: SourceRebindProps) {
+function SourceRebindForm({
+  brandId,
+  assetId,
+  expectedVersionId,
+  onConfirmed,
+  initialFile,
+  onInitialFileTaken,
+}: SourceRebindProps) {
   const [versions, setVersions] = useState<MediaAssetVersion[]>([]);
   const [versionId, setVersionId] = useState('');
   const [preview, setPreview] = useState<TemplateRebindPreview | null>(null);
@@ -56,7 +68,10 @@ function SourceRebindForm({ brandId, assetId, expectedVersionId, onConfirmed }: 
   const [busy, setBusy] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const [uploading, setUploading] = useState<string | null>(null);
   const alive = useRef(true);
+  const root = useRef<HTMLDivElement>(null);
+  const took = useRef(false);
 
   useEffect(() => {
     alive.current = true;
@@ -99,6 +114,7 @@ function SourceRebindForm({ brandId, assetId, expectedVersionId, onConfirmed }: 
 
   const upload = async (file: File) => {
     setBusy(true);
+    setUploading(file.name);
     try {
       const result = await uploadNewAssetVersion({
         brandId,
@@ -115,11 +131,24 @@ function SourceRebindForm({ brandId, assetId, expectedVersionId, onConfirmed }: 
       await inspect(result.versionId);
     } catch (error) {
       if (!alive.current) return;
-      toast.error(error instanceof Error ? error.message : 'Could not upload the revision');
+      const message = error instanceof Error ? error.message : 'Could not upload the revision';
+      toast.error(uploadRefusal({ name: file.name, sizeBytes: file.size }, message) ?? message);
     } finally {
       setBusy(false);
+      setUploading(null);
     }
   };
+
+  // After the listing effect, so a StrictMode remount has already set `alive` back when this
+  // upload's awaits resume. `took` keeps the second run from uploading the same file twice.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once, for the file this panel opened with
+  useEffect(() => {
+    if (!initialFile || took.current) return;
+    took.current = true;
+    onInitialFileTaken?.();
+    root.current?.scrollIntoView?.({ block: 'nearest' });
+    void upload(initialFile);
+  }, []);
 
   const ambiguous = preview?.slots.some((slot) => slot.status === 'ambiguous') ?? false;
   const missing = preview?.slots.some((slot) => slot.status === 'missing') ?? false;
@@ -148,7 +177,7 @@ function SourceRebindForm({ brandId, assetId, expectedVersionId, onConfirmed }: 
   };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div ref={root} className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">
         Compare a Library version before changing what this template parses. Building and publishing
         remain separate.
@@ -198,6 +227,12 @@ function SourceRebindForm({ brandId, assetId, expectedVersionId, onConfirmed }: 
           Upload new revision
         </Label>
       </div>
+      {uploading ? (
+        <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+          Uploading {uploading} as a new revision…
+        </p>
+      ) : null}
       {listError ? (
         <p role="alert" className="text-xs text-destructive">
           {listError}{' '}
@@ -220,7 +255,9 @@ function SourceRebindForm({ brandId, assetId, expectedVersionId, onConfirmed }: 
               <tbody>
                 {preview.slots.map((slot) => (
                   <tr key={slot.slotKey} className="border-t">
-                    <td className="px-3 py-2">{slot.name ?? slot.slotKey}</td>
+                    <td className="px-3 py-2">
+                      {slot.name ? readableLayerName(slot.name) : slot.slotKey}
+                    </td>
                     <td className="px-3 py-2">{slot.kind}</td>
                     <td className="px-3 py-2 capitalize">{slot.status}</td>
                   </tr>

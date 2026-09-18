@@ -10,6 +10,9 @@ const preview = mock(async () => ({
   slots: [{ slotKey: 'headline', name: 'Headline', kind: 'text', status: 'missing' as const }],
 }));
 const confirm = mock(async () => preview());
+const uploadNewAssetVersion = mock(async (_input: { file: File }) => ({
+  versionId: '33333333-3333-4333-8333-333333333333',
+}));
 
 // The real module's other exports ride along: Bun keeps one module registry for a multi-file run,
 // and a mock carrying only this panel's names fails every other file that imports a different one.
@@ -34,14 +37,22 @@ mock.module('@/lib/library/versions', () => ({
       isHead: true,
     },
   ],
-  uploadNewAssetVersion: async () => ({ versionId: '33333333-3333-4333-8333-333333333333' }),
+  uploadNewAssetVersion,
 }));
 
 const { SourceRebindPanel } = await import('./SourceRebindPanel');
+const { registerToastSink } = await import('@/components/ui/toast-imperative');
+
+const toasts: string[] = [];
+registerToastSink((options) => {
+  toasts.push(String(options.title));
+});
 
 beforeEach(() => {
   preview.mockClear();
   confirm.mockClear();
+  uploadNewAssetVersion.mockClear();
+  toasts.length = 0;
 });
 afterEach(cleanup);
 
@@ -129,5 +140,46 @@ describe('SourceRebindPanel', () => {
     expect(
       screen.getByRole<HTMLButtonElement>('button', { name: 'Use this revision' }).disabled,
     ).toBe(true);
+  });
+
+  test('a file handed over from a gallery drop is uploaded once, on arrival, and compared', async () => {
+    const dropped = new File(['project v3'], 'campaign.aep');
+    const taken = mock(() => undefined);
+    const props = {
+      brandId: '44444444-4444-4444-8444-444444444444',
+      assetId: '11111111-1111-4111-8111-111111111111',
+      expectedVersionId: '22222222-2222-4222-8222-222222222222',
+      onConfirmed: async () => undefined,
+      initialFile: dropped,
+      onInitialFileTaken: taken,
+    };
+    const view = render(<SourceRebindPanel {...props} />);
+    expect(await screen.findByRole('button', { name: 'Use this revision' })).toBeTruthy();
+    view.rerender(<SourceRebindPanel {...props} />);
+    expect(uploadNewAssetVersion).toHaveBeenCalledTimes(1);
+    expect(uploadNewAssetVersion.mock.calls[0]?.[0].file).toBe(dropped);
+    expect(taken).toHaveBeenCalledTimes(1);
+    expect(preview).toHaveBeenCalledTimes(1);
+  });
+
+  test("storage's size refusal comes back as a sentence naming the limit", async () => {
+    uploadNewAssetVersion.mockImplementationOnce(async () => {
+      throw new Error('resumable upload creation failed (413)');
+    });
+    const big = new File(['x'], 'inyogo.zip');
+    Object.defineProperty(big, 'size', { value: 210 * 1024 * 1024 });
+    render(
+      <SourceRebindPanel
+        brandId="44444444-4444-4444-8444-444444444444"
+        assetId="11111111-1111-4111-8111-111111111111"
+        expectedVersionId="22222222-2222-4222-8222-222222222222"
+        onConfirmed={async () => undefined}
+        initialFile={big}
+      />,
+    );
+    await waitFor(() => expect(toasts).toHaveLength(1));
+    expect(toasts[0]).toBe(
+      'inyogo.zip is 210 MB, over the 50 MB upload limit, so it was not uploaded. Ask an admin to raise the limit.',
+    );
   });
 });

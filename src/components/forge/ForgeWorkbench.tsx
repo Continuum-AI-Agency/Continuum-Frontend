@@ -7,15 +7,30 @@ import {
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { fileSha256, matchDroppedFile, uploadRefusal } from '@/components/forge/ForgeProjectDrop';
 import { PendingApprovals } from '@/components/forge/PendingApprovals';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
-import { type SharedTemplate, sharedTemplateId } from '@/components/forge/TemplateCard';
+import {
+  type SharedTemplate,
+  sharedTemplateId,
+  sourceDisplayName,
+} from '@/components/forge/TemplateCard';
 import { TemplateDetail } from '@/components/forge/TemplateDetail';
 import { TemplateGallery } from '@/components/forge/TemplateGallery';
 import { useTemplateMorphSwap } from '@/components/forge/TemplateWireframe';
 import { UploadStrip } from '@/components/library/UploadStrip';
 import { useMediaUpload } from '@/components/library/useMediaUpload';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
 import {
   discoverWorkspaceTemplates,
@@ -95,6 +110,12 @@ export function ForgeWorkbench({
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [adopting, setAdopting] = useState<string | null>(null);
+  // Dropped files named like a template already here, waiting for "revision or new template?".
+  const [sameName, setSameName] = useState<Array<{ file: File; source: TemplateSourceSummary }>>(
+    [],
+  );
+  // A file on its way to becoming a template's next source revision, until its panel takes it.
+  const [revision, setRevision] = useState<{ assetId: string; file: File } | null>(null);
   const queryClient = useQueryClient();
   const sourceKey = useMemo(() => forgeQueryKeys.templateSources(brandId), [brandId]);
   const sourceQuery = useQuery({
@@ -235,20 +256,68 @@ export function ForgeWorkbench({
 
   const current = sources.find((source) => source.assetId === selected) ?? null;
 
+  // A drop never makes a second copy by accident: the same bytes open the template that holds them,
+  // and a known file name asks whether this is its next revision.
+  const receive = async (files: File[]) => {
+    const fresh: File[] = [];
+    const named: typeof sameName = [];
+    let existing: TemplateSourceSummary | null = null;
+    const anyChecksum = sources.some((source) => source.sourceChecksum);
+    for (const file of files) {
+      const match = matchDroppedFile(
+        file.name,
+        anyChecksum ? await fileSha256(file) : null,
+        sources,
+      );
+      if (match.kind === 'same') {
+        toast.info(`Already in Forge as ${sourceDisplayName(match.source)}`);
+        existing ??= match.source;
+      } else if (match.kind === 'named') named.push({ file, source: match.source });
+      else fresh.push(file);
+    }
+    if (fresh.length) void uploadFiles(fresh);
+    if (named.length) setSameName((queue) => [...queue, ...named]);
+    if (existing) open(existing.assetId);
+  };
+
+  const asking = sameName[0];
+  const answer = (choice: 'revision' | 'template' | null) => {
+    if (!asking) return;
+    setSameName((queue) => queue.slice(1));
+    if (choice === 'template') void uploadFiles([asking.file]);
+    if (choice === 'revision') {
+      setRevision({ assetId: asking.source.assetId, file: asking.file });
+      open(asking.source.assetId);
+    }
+  };
+  const askingName = asking ? sourceDisplayName(asking.source) : '';
+
+  const refusals = uploads.flatMap((upload) => {
+    const sentence = upload.status === 'error' ? uploadRefusal(upload, upload.error) : null;
+    return sentence ? [{ id: upload.id, sentence }] : [];
+  });
+
   return (
-    <div className="space-y-6">
+    <div className="flex min-w-0 flex-col gap-6">
       {/* Above everything: a batch waiting on a person is the most time-sensitive thing on this
           page, and it belongs to no one template. Renders nothing when there is nothing waiting. */}
       <PendingApprovals brandId={brandId} />
 
       {uploads.length ? (
-        <UploadStrip
-          uploads={uploads}
-          onPause={pauseUpload}
-          onResume={resumeUpload}
-          onRetry={resumeUpload}
-          onCancel={cancelUpload}
-        />
+        <div className="flex flex-col gap-1.5">
+          <UploadStrip
+            uploads={uploads}
+            onPause={pauseUpload}
+            onResume={resumeUpload}
+            onRetry={resumeUpload}
+            onCancel={cancelUpload}
+          />
+          {refusals.map(({ id, sentence }) => (
+            <p key={id} role="alert" className="text-xs text-destructive">
+              {sentence}
+            </p>
+          ))}
+        </div>
       ) : null}
 
       {current ? (
@@ -260,6 +329,8 @@ export function ForgeWorkbench({
           onRename={(title) => void rename(current.assetId, title)}
           onOpenRender={onOpenRender}
           onChanged={refreshTemplate}
+          revisionFile={revision?.assetId === current.assetId ? revision.file : undefined}
+          onRevisionTaken={() => setRevision(null)}
         />
       ) : (
         <TemplateGallery
@@ -272,7 +343,7 @@ export function ForgeWorkbench({
           onRename={(assetId, title) => void rename(assetId, title)}
           onToggleShared={(template) => void toggleShared(template)}
           onOpenRender={onOpenRender}
-          onFiles={(files) => void uploadFiles(files)}
+          onFiles={(files) => void receive(files)}
           onRejected={(files) =>
             toast.error(
               `${files.map((file) => file.name).join(', ')}: use .aep, .aepx, .aet, or .zip files.`,
@@ -280,6 +351,27 @@ export function ForgeWorkbench({
           }
         />
       )}
+
+      <AlertDialog open={asking !== undefined} onOpenChange={(next) => !next && answer(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{askingName} already has this file name</AlertDialogTitle>
+            <AlertDialogDescription>
+              Upload {asking?.file.name} as the next revision of {askingName} — you compare the
+              changes before it replaces anything — or as a separate template.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button type="button" variant="outline" onClick={() => answer('template')}>
+              New template
+            </Button>
+            <Button type="button" onClick={() => answer('revision')}>
+              New revision of {askingName}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

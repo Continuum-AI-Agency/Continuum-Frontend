@@ -4,6 +4,7 @@ import { Accordion as AccordionPrimitive } from '@base-ui/react/accordion';
 import {
   type ApiRenderVariableKind,
   apiRenderVariableLabel,
+  readableLayerName,
   SLOT_ROLE_KIND,
   SLOT_ROLES,
   type SlotRole,
@@ -336,9 +337,13 @@ export function VariableEditor({
     );
   }
 
+  // Display only: a label that is still the After Effects layer name reads as words here, while the
+  // Name field below keeps (and saves) exactly what is stored.
   const nameOf = (variable: TemplateVariable) =>
-    (resolve(draft, variable, 'publicName', null) as string | null) ||
-    apiRenderVariableLabel(variable);
+    readableLayerName(
+      (resolve(draft, variable, 'publicName', null) as string | null) ||
+        apiRenderVariableLabel(variable),
+    );
   const roleOf = (variable: TemplateVariable) =>
     resolve(draft, variable, 'role', variable.role) as string | null;
   const shown = variables.filter((variable) => {
