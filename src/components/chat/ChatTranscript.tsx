@@ -11,6 +11,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { flushSync } from 'react-dom';
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -74,15 +75,32 @@ export function ChatTranscript({
   const [follow, setFollow] = useState(true);
   const lastScrollTopRef = useRef(0);
 
-  const suspendFollow = useCallback(() => setFollow(false), []);
-
-  const suspendOnUpwardWheel = useCallback((event: ReactWheelEvent<HTMLDivElement>) => {
-    if (event.deltaY < 0) setFollow(false);
+  // Suspension is committed SYNCHRONOUSLY, inside the gesture. The scroller reads `autoScroll`
+  // through a ref it assigns during render, and pins the viewport to the end from a resize
+  // observer. With an ordinary state update there is a window between the wheel and the render
+  // that carries `follow = false`, and a delta that lands inside it snaps the reader straight
+  // back to the bottom — measured as exactly the wheel distance, 700px. That window used to be
+  // rare because the old reader coalesced deltas into 80ms batches; `useChat` renders on every
+  // chunk, so it is not rare any more. Only suspension is forced: resuming is safe to defer.
+  const suspendNow = useCallback(() => {
+    flushSync(() => setFollow(false));
   }, []);
 
-  const suspendOnUpwardKey = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (UPWARD_KEYS.has(event.key)) setFollow(false);
-  }, []);
+  const suspendFollow = suspendNow;
+
+  const suspendOnUpwardWheel = useCallback(
+    (event: ReactWheelEvent<HTMLDivElement>) => {
+      if (event.deltaY < 0) suspendNow();
+    },
+    [suspendNow],
+  );
+
+  const suspendOnUpwardKey = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      if (UPWARD_KEYS.has(event.key)) suspendNow();
+    },
+    [suspendNow],
+  );
 
   const resumeFollowAtLiveEdge = useCallback((event: ReactUIEvent<HTMLDivElement>) => {
     const node = event.currentTarget;
