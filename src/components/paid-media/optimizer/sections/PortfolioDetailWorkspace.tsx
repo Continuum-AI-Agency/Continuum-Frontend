@@ -37,17 +37,18 @@ import { AdsetActionMenu } from '../charts/AdsetActionMenu';
 import { AdsetAngleStanding } from '../charts/AdsetAngleStanding';
 import { buildAdsetAngleStanding } from '../charts/angleStanding';
 import { ChartError, ChartSkeleton } from '../charts/ChartStates';
+import { ConfidenceActionables } from '../charts/ConfidenceActionables';
 import { ConfidenceBadge } from '../charts/ConfidenceBadge';
 import { CpaHeroTimeline } from '../charts/CpaHeroTimeline';
 import { splitReallocation } from '../charts/chartData';
 import { maxCiUpperBound } from '../charts/chartScale';
 import { chartStatus, combinedChartStatus } from '../charts/chartStatus';
-import { buildFlightPacing } from '../charts/flightPacingModel';
 import { FlightPacing } from '../charts/FlightPacing';
+import { buildFlightPacing } from '../charts/flightPacingModel';
 import { ReallocationFlow } from '../charts/ReallocationFlow';
 import { ReallocationStory } from '../charts/ReallocationStory';
-import { defaultStoryLookback } from '../charts/reallocationStoryModel';
 import { RoasProfitLine } from '../charts/RoasProfitLine';
+import { defaultStoryLookback } from '../charts/reallocationStoryModel';
 import { ScoreRadar } from '../charts/ScoreRadar';
 import { StepFunnel } from '../charts/StepFunnel';
 import {
@@ -76,10 +77,10 @@ import {
 } from '../useOptimizerData';
 import type { OptimizerAdMetric, WorkspaceSection } from '../useOptimizerUrlState';
 import { AdsetCreativeVerdicts } from './AdsetCreativeVerdicts';
+import { ApplyReallocationDialog } from './ApplyReallocationDialog';
 import { ObjectiveCostRecap } from './detail/ObjectiveCostRecap';
 import { type RangeSpec, resolveRange, todayIso } from './detail/rangeModel';
 import { buildRecap } from './detail/recapModel';
-import { ApplyReallocationDialog } from './ApplyReallocationDialog';
 import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
 import { OptimizerPanel } from './OptimizerPanel';
 import { OptimizerReadError } from './OptimizerReadError';
@@ -235,7 +236,12 @@ export function PortfolioDetailWorkspace({
   const enrolledIds = enrolledQuery.data.map((adset) => adset.adset_id);
   // The funnel over the chosen range from the daily series; older snapshot rows without
   // one fall back to the engine's 7-day window, and the panel meta says which.
-  const funnelRange = sumFunnelRange(snapshotsQuery.data, enrolledIds, resolvedRange.from, resolvedRange.to);
+  const funnelRange = sumFunnelRange(
+    snapshotsQuery.data,
+    enrolledIds,
+    resolvedRange.from,
+    resolvedRange.to,
+  );
   const funnelWindow = funnelRange ?? sumFunnelWindow(snapshotsQuery.data, enrolledIds);
   const funnelMeta = funnelRange ? resolvedRange.label.toLowerCase() : 'engine 7d window';
   // Pacing: the run's own verdict when it paced THIS flight, else derived from the daily
@@ -415,7 +421,12 @@ export function PortfolioDetailWorkspace({
                       : `${formatCurrency(portfolio.daily_total, currency)} · matched`,
                 },
                 ...(typeof portfolio.period_budget === 'number' && portfolio.period_budget > 0
-                  ? [{ label: 'Flight budget', value: formatCurrency(portfolio.period_budget, currency) }]
+                  ? [
+                      {
+                        label: 'Flight budget',
+                        value: formatCurrency(portfolio.period_budget, currency),
+                      },
+                    ]
                   : []),
                 {
                   label: 'Optimizing for',
@@ -517,6 +528,7 @@ export function PortfolioDetailWorkspace({
                 band={latestRun?.confidence?.band}
                 confidence={latestRun?.confidence ?? null}
               />
+              <ConfidenceActionables confidence={latestRun?.confidence ?? null} />
             </OptimizerPanel>
 
             <OptimizerPanel
@@ -538,7 +550,9 @@ export function PortfolioDetailWorkspace({
 
             <OptimizerPanel
               meta={
-                <span className="text-3xs text-muted-foreground">step conversion · {funnelMeta}</span>
+                <span className="text-3xs text-muted-foreground">
+                  step conversion · {funnelMeta}
+                </span>
               }
               title="Conversion funnel"
             >

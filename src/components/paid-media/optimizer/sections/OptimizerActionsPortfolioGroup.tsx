@@ -19,6 +19,7 @@
 // the refetch the mutations trigger.
 
 import {
+  type AdSetSnapshot,
   type CycleItemRow,
   getOptimizationMetricDefinition,
   type ParsedCycleRunReport,
@@ -48,6 +49,7 @@ import { cn } from '@/lib/utils';
 import { resolveAdsetName } from '../adsetName';
 import { AdSetIdLabel } from '../charts/AdSetIdLabel';
 import { attributeTransfers, type TransferAttribution } from '../charts/chartData';
+import { maxCiUpperBound } from '../charts/chartScale';
 import { ReallocationStory } from '../charts/ReallocationStory';
 import { defaultStoryLookback } from '../charts/reallocationStoryModel';
 import { formatCurrency } from '../format';
@@ -72,6 +74,7 @@ import {
 } from '../useOptimizerData';
 import { ActionRow } from './OptimizerActionFeed';
 import { OptimizerReadError } from './OptimizerReadError';
+import { RecEvidenceChart } from './RecEvidenceChart';
 import { RecommendationInsight } from './RecommendationInsight';
 import {
   asOfLine,
@@ -112,6 +115,14 @@ export type RecQueueRow = {
 };
 
 export type QueueRow = BudgetQueueRow | RecQueueRow;
+
+type EvidenceContext = {
+  snapshotById: Map<string, AdSetSnapshot>;
+  itemById: Map<string, CycleItemRow>;
+  kpiField: string;
+  denominatorMultiplier: number;
+  maxCpa: number;
+};
 
 type SettingsActions = {
   busy: boolean;
@@ -367,6 +378,27 @@ export function OptimizerActionsPortfolioGroup({
       ? portfolio.cpa_target * metric.denominatorMultiplier
       : null;
   const hasBudgetRows = rows.some((row) => row.route === 'budget');
+
+  // What the inline evidence chart draws from: the ad set's snapshot windows and its
+  // cycle row (the CI on pause triggers), plus the scale the CI bars share.
+  const itemById = React.useMemo(
+    () => new Map((report?.latest_items ?? []).map((item) => [item.adset_id, item])),
+    [report?.latest_items],
+  );
+  const maxCpa = React.useMemo(
+    () => maxCiUpperBound(report?.latest_items ?? [], metric.denominatorMultiplier),
+    [report?.latest_items, metric.denominatorMultiplier],
+  );
+  const evidenceContext = React.useMemo<EvidenceContext>(
+    () => ({
+      snapshotById,
+      itemById,
+      kpiField: metric.kpiField,
+      denominatorMultiplier: metric.denominatorMultiplier,
+      maxCpa,
+    }),
+    [snapshotById, itemById, metric.kpiField, metric.denominatorMultiplier, maxCpa],
+  );
 
   const selectableBudgetRows = rows.filter((row) => row.route === 'budget' && isSelectableRow(row));
   const budgetGroupSelected =
@@ -659,6 +691,7 @@ export function OptimizerActionsPortfolioGroup({
             ) : null}
             <QueueRowView
               brandId={brandId}
+              evidence={evidenceContext}
               settingsActions={settingsActions}
               counterparty={
                 row.route === 'budget' ? (counterpartyById.get(row.adsetId) ?? null) : null
@@ -1069,6 +1102,7 @@ function QueueRowView({
   onToggleSelect,
   onToggleExpand,
   settingsActions,
+  evidence,
 }: {
   row: QueueRow;
   brandId: string;
@@ -1082,6 +1116,7 @@ function QueueRowView({
   onToggleSelect: () => void;
   onToggleExpand: () => void;
   settingsActions: SettingsActions;
+  evidence: EvidenceContext;
 }) {
   const selectable = isSelectableRow(row);
   const hidden = row.route === 'hidden';
@@ -1182,6 +1217,7 @@ function QueueRowView({
         <RowDetail
           counterparty={counterparty}
           currency={currency}
+          evidence={evidence}
           row={row}
           settingsActions={settingsActions}
         />
@@ -1264,11 +1300,13 @@ function RowDetail({
   currency,
   counterparty,
   settingsActions,
+  evidence,
 }: {
   row: QueueRow;
   currency: string | null;
   counterparty?: { direction: 'funds' | 'fundedBy'; parties: Counterparty[] } | null;
   settingsActions: SettingsActions;
+  evidence: EvidenceContext;
 }) {
   return (
     <div className="mt-2 space-y-1.5 rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-2xs text-muted-foreground">
@@ -1281,7 +1319,19 @@ function RowDetail({
       ) : row.route === 'settings' ? (
         <SettingsDetail actions={settingsActions} currency={currency} rec={row.rec} />
       ) : (
-        <RecDetail rec={row.rec} />
+        <>
+          <RecDetail rec={row.rec} />
+          <RecEvidenceChart
+            currency={currency}
+            denominatorMultiplier={evidence.denominatorMultiplier}
+            item={evidence.itemById.get(row.adsetId) ?? null}
+            kpiField={evidence.kpiField}
+            maxCpa={evidence.maxCpa}
+            name={row.name}
+            rec={row.rec}
+            snapshot={evidence.snapshotById.get(row.adsetId) ?? null}
+          />
+        </>
       )}
     </div>
   );

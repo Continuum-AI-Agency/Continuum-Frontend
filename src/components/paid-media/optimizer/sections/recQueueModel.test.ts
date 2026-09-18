@@ -2,6 +2,8 @@ import { describe, expect, it } from 'bun:test';
 import {
   asOfLine,
   evidenceLine,
+  evidenceSeries,
+  formatEvidenceValue,
   formatSettingsValue,
   impactLabel,
   impactPerDay,
@@ -117,5 +119,51 @@ describe('settings patch', () => {
     expect(formatSettingsValue('max_change_pct_per_cycle', 0.3, 'USD')).toBe('30%');
     expect(formatSettingsValue('daily_total', 340, 'USD')).toBe('$340');
     expect(formatSettingsValue('daily_total', null, 'USD')).toBe('not set');
+  });
+});
+
+describe('evidenceSeries', () => {
+  const w = (spend: number, leads: number, clicks: number, impressions: number) => ({
+    spend,
+    purchases: 0,
+    addToCarts: 0,
+    clicks,
+    impressions,
+    leads,
+  });
+  const snapshot = {
+    id: 'a',
+    status: 'active',
+    currentBudget: 100,
+    ageDays: 30,
+    frequency7d: 3.4,
+    windows: { d3: w(300, 2, 30, 3000), d7: w(700, 10, 100, 8000), d14: w(1400, 35, 300, 20000) },
+  } as never;
+
+  it('turns a cost-per-result argument into the three windows against the reference', () => {
+    const series = evidenceSeries(evidence(), snapshot, 'leads');
+    expect(series?.unit).toBe('money');
+    expect(series?.points).toEqual([
+      { label: '3d', value: 150 },
+      { label: '7d', value: 70 },
+      { label: '14d', value: 40 },
+    ]);
+    expect(series?.threshold).toBe(25);
+  });
+  it('reads CTR from clicks over impressions and frequency from the 7d scalar', () => {
+    const ctr = evidenceSeries(evidence({ metric: 'ctr', threshold: 0.015 }), snapshot, 'leads');
+    expect(ctr?.points.map((p) => p.value)).toEqual([0.01, 0.0125, 0.015]);
+    const freq = evidenceSeries(evidence({ metric: 'frequency', threshold: 3 }), snapshot, 'leads');
+    expect(freq?.points).toEqual([{ label: '7d', value: 3.4 }]);
+    expect(freq?.thresholdLabel).toBe('cap');
+  });
+  it('is null without a snapshot or for a metric it cannot draw', () => {
+    expect(evidenceSeries(evidence(), null, 'leads')).toBeNull();
+    expect(evidenceSeries(evidence({ metric: 'cap_binding_share' }), snapshot, 'leads')).toBeNull();
+  });
+  it('formats by unit', () => {
+    expect(formatEvidenceValue('money', 40, 'USD')).toBe('$40');
+    expect(formatEvidenceValue('percent', 0.0125, null)).toBe('1.25%');
+    expect(formatEvidenceValue('number', 3.4, null)).toBe('3.4');
   });
 });

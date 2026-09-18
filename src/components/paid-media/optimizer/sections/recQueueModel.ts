@@ -3,7 +3,11 @@
 // grouped summary that turns ten identical "Pause ad set · HIGH" rows into "5 ad sets ·
 // sustained poor CPA · $1,240/day". No React, no fetch — all of it testable on fixtures.
 
-import type { RecommendationEvidence, RecommendationRow } from '@continuum/contracts';
+import type {
+  AdSetSnapshot,
+  RecommendationEvidence,
+  RecommendationRow,
+} from '@continuum/contracts';
 import { formatCurrency } from '../format';
 import { recommendationLabel } from '../reportModel';
 
@@ -160,4 +164,125 @@ export function formatSettingsValue(
   if (value == null) return 'not set';
   if (field === 'max_change_pct_per_cycle') return `${Math.round(value * 100)}%`;
   return formatCurrency(value, currency);
+}
+
+// ── The chart behind the evidence ─────────────────────────────────────────────
+// A recommendation argues from a comparison — 3d against 14d, a value against a cap —
+// and the account snapshot already holds every window it was measured on. This turns
+// the evidence metric into the three-window series a small bar chart draws, with the
+// threshold it crossed, so the row can SHOW the argument instead of only stating it.
+
+export type EvidencePoint = { label: string; value: number };
+export type EvidenceSeries = {
+  metric: string;
+  /** How to print a value: money, a percentage, a plain number, or a multiple. */
+  unit: 'money' | 'percent' | 'number' | 'multiple';
+  points: EvidencePoint[];
+  threshold: number | null;
+  thresholdLabel: string | null;
+};
+
+type Window = AdSetSnapshot['windows']['d3'];
+
+const kpiOf = (w: Window, kpiField: string): number => {
+  const value = (w as unknown as Record<string, unknown>)[kpiField];
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+};
+
+export function evidenceSeries(
+  evidence: RecommendationEvidence | null | undefined,
+  snapshot: AdSetSnapshot | null | undefined,
+  kpiField: string,
+): EvidenceSeries | null {
+  if (!evidence || !snapshot) return null;
+  const { d3, d7, d14 } = snapshot.windows;
+  const windows: [string, Window, number][] = [
+    ['3d', d3, 3],
+    ['7d', d7, 7],
+    ['14d', d14, 14],
+  ];
+  switch (evidence.metric) {
+    case 'cpp':
+    case 'cpa': {
+      const points = windows.map(([label, w]) => {
+        const events = kpiOf(w, kpiField);
+        return { label, value: events > 0 ? w.spend / events : 0 };
+      });
+      return {
+        metric: evidence.metric,
+        unit: 'money',
+        points,
+        threshold: evidence.threshold,
+        thresholdLabel: evidence.threshold != null ? 'reference' : null,
+      };
+    }
+    case 'spend': {
+      const points = windows.map(([label, w, days]) => ({ label, value: w.spend / days }));
+      return {
+        metric: 'spend per day',
+        unit: 'money',
+        points,
+        threshold: null,
+        thresholdLabel: null,
+      };
+    }
+    case 'ctr': {
+      const points = windows.map(([label, w]) => ({
+        label,
+        value: w.impressions > 0 ? w.clicks / w.impressions : 0,
+      }));
+      return {
+        metric: 'ctr',
+        unit: 'percent',
+        points,
+        threshold: evidence.threshold,
+        thresholdLabel: evidence.threshold != null ? '14d' : null,
+      };
+    }
+    case 'frequency': {
+      const freq = snapshot.frequency7d;
+      if (typeof freq !== 'number') return null;
+      return {
+        metric: 'frequency',
+        unit: 'number',
+        points: [{ label: '7d', value: freq }],
+        threshold: evidence.threshold,
+        thresholdLabel: evidence.threshold != null ? 'cap' : null,
+      };
+    }
+    case 'reach_expansion': {
+      const r7 = d7.reach ?? 0;
+      const r14 = d14.reach ?? 0;
+      if (r7 <= 0 || r14 <= 0) return null;
+      return {
+        metric: 'people reached',
+        unit: 'number',
+        points: [
+          { label: '7d', value: r7 },
+          { label: '14d', value: r14 },
+        ],
+        threshold: null,
+        thresholdLabel: null,
+      };
+    }
+    default:
+      return null;
+  }
+}
+
+export function formatEvidenceValue(
+  unit: EvidenceSeries['unit'],
+  value: number,
+  currency: string | null,
+): string {
+  switch (unit) {
+    case 'money':
+      return formatCurrency(value, currency);
+    case 'percent':
+      return `${(value * 100).toFixed(2)}%`;
+    case 'multiple':
+      return `${value.toFixed(2)}×`;
+    default:
+      return Number.isInteger(value) ? String(value) : value.toFixed(1);
+  }
 }
