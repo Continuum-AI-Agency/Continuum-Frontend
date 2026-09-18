@@ -9,7 +9,7 @@
  * walk one backwards.
  */
 
-import type { JainaScaffoldNodeProgress } from '@/lib/jaina/stream';
+import type { JainaScaffoldNodeProgress } from '@/lib/jaina/scaffoldTypes';
 
 export type ScaffoldNodeStatus =
   | 'pending'

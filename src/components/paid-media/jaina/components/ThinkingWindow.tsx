@@ -18,10 +18,11 @@ import {
 } from '@/components/ai-elements/chain-of-thought';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Tool, ToolHeader } from '@/components/ai-elements/tool';
+import type { JainaProgressEntry } from '@/components/paid-media/jaina/types';
 import { Badge } from '@/components/ui/badge';
 import { CollapsibleTrigger } from '@/components/ui/collapsible';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
-import type { JainaProgressEntry, JainaStreamState } from '@/lib/jaina/stream';
+import type { ToolCallEventData, ToolResultEventData } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
 import { SparkleSpinner } from './SparkleSpinner';
 import {
@@ -40,8 +41,8 @@ import {
 
 type ThinkingWindowProps = {
   reasoning: JainaProgressEntry[];
-  toolCalls: JainaStreamState['toolCalls'];
-  toolResults: JainaStreamState['toolResults'];
+  toolCalls: ToolCallEventData[];
+  toolResults: ToolResultEventData[];
   isStreaming: boolean;
 };
 
@@ -93,8 +94,8 @@ export function LatestJainaThought({ reasoning, isStreaming }: LatestJainaThough
 
 type ActiveAgentsPanelProps = {
   agents: AgentLifecycleSegment[];
-  toolCalls: JainaStreamState['toolCalls'];
-  toolResults: JainaStreamState['toolResults'];
+  toolCalls: ToolCallEventData[];
+  toolResults: ToolResultEventData[];
   isStreaming: boolean;
 };
 
@@ -106,8 +107,8 @@ function AgentStatusRow({
 }: {
   agent: AgentLifecycleSegment;
   isLast: boolean;
-  toolCalls: JainaStreamState['toolCalls'];
-  toolResults: JainaStreamState['toolResults'];
+  toolCalls: ToolCallEventData[];
+  toolResults: ToolResultEventData[];
 }) {
   const safeToolCalls = toolCalls ?? [];
   const safeToolResults = toolResults ?? [];

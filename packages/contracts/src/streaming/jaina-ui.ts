@@ -11,6 +11,7 @@
 // "which copy is newer" by hand.
 
 import type { UIMessage } from 'ai';
+import type { AgentMentionMetadata } from './agent-references';
 
 /** Metadata the Backend attaches to an assistant message. */
 export type JainaUIMessageMetadata = {
@@ -19,6 +20,19 @@ export type JainaUIMessageMetadata = {
   responseId?: string;
   /** Terminal state of the run this message belongs to. */
   status?: 'completed' | 'failed' | 'cancelled';
+  /**
+   * What a reader attached to their own turn — @-mentions of campaigns and ad sets, and the
+   * images the composer uploaded. Client-set on the user message. Without a home here it would
+   * be dropped on send and the mention chips and attachment grid would vanish the moment the
+   * message left the composer.
+   */
+  mentions?: AgentMentionMetadata;
+  /**
+   * A user message that answers the protocol rather than the conversation — an approval decision,
+   * a plan verdict. The request schema needs a non-empty `query`, so one is sent, but a reader
+   * never typed it and the transcript must not show it. Client-set; the Backend never emits it.
+   */
+  silent?: boolean;
 };
 
 /**
@@ -40,6 +54,25 @@ export type JainaUIDataTypes = {
   'jaina-delegation': Record<string, unknown>;
   'jaina-clarification': Record<string, unknown>;
   'jaina-scaffold': Record<string, unknown>;
+  /**
+   * The gate. `jaina-approval` carries the preview a `tool-approval-request` cannot — the SDK's
+   * approval chunk addresses a tool call, and a uuid on a card is consent to nothing, so the
+   * before/after the gate refuses on travels beside it. `jaina-gate` is the weaker signal: the run
+   * is parked awaiting a human, which is neither an error nor a finish.
+   */
+  'jaina-approval': Record<string, unknown>;
+  'jaina-gate': Record<string, unknown>;
+  'jaina-report-artifact-job': Record<string, unknown>;
+  'jaina-artifact': Record<string, unknown>;
+  'jaina-creative-render': Record<string, unknown>;
+  'jaina-canvas-actions': Record<string, unknown>;
+  /**
+   * The two values the transcript actually reads out of a `state.delta`. The delta itself stays
+   * silent — it is internal bookkeeping — but the checkpoint summary and its provenance decide
+   * the error/fallback content a reader sees, so they cross as their own part rather than as a
+   * raw event the client would have to fold again.
+   */
+  'jaina-checkpoint-summary': Record<string, unknown>;
   /**
    * Transport notices — the idle keepalive and the session fence. Always emitted `transient`, so
    * the SDK hands them to `onData` and never adds them to `message.parts`. A heartbeat kept as a
@@ -65,5 +98,12 @@ export const JAINA_UI_DATA_PART = {
   delegation: 'data-jaina-delegation',
   clarification: 'data-jaina-clarification',
   scaffold: 'data-jaina-scaffold',
+  approval: 'data-jaina-approval',
+  gate: 'data-jaina-gate',
+  reportArtifactJob: 'data-jaina-report-artifact-job',
+  artifact: 'data-jaina-artifact',
+  creativeRender: 'data-jaina-creative-render',
+  canvasActions: 'data-jaina-canvas-actions',
+  checkpointSummary: 'data-jaina-checkpoint-summary',
   notice: 'data-jaina-notice',
 } as const satisfies Record<string, JainaUIDataPartType>;

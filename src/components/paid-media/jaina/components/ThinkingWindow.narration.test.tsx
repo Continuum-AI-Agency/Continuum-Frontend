@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import type { JainaProgressEntry } from '@/lib/jaina/stream';
+import type { JainaProgressEntry } from '@/components/paid-media/jaina/types';
 import { getLatestStreamingThought } from './ThinkingWindow';
 
 /**

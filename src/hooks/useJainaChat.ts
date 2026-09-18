@@ -15,38 +15,52 @@
 //     reconstructed from a second source.
 //   - ABORT is not an error. `stop()` only detaches locally; a deliberate stop must never surface
 //     as a failed request, which is what turned "I pressed stop" into a destructive toast.
+//
+// The request itself is NOT rebuilt here. `buildJainaChatStreamRequest` is the one place a turn
+// becomes `jainaChatRequestSchema`, and a transport that assembles a narrower body of its own
+// silently drops `include_thoughts`, the entity `dataScope`, references, attachments and the
+// plan/scaffold/tool actions — a turn that quietly does less, with nothing at the call site to
+// show for it.
 
 import { useChat } from '@ai-sdk/react';
 import type { JainaUIMessage } from '@continuum/contracts';
 import { DefaultChatTransport } from 'ai';
-import { useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { getApiBaseUrl } from '@/lib/api/config';
 import { getBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
+import { buildJainaChatStreamRequest, type JainaChatInput } from '@/lib/jaina/chatRequest';
 
-export type JainaChatContext = {
-  adAccountId: string | null;
-  brandId: string | null;
-  sessionId: string | null;
-  projectId?: string | null;
-  timezone?: string;
+const STREAM_PATH = '/api/agents/jaina/chat/stream';
+
+/** What the composer hands over for one turn. `query` is what goes on the wire. */
+export type JainaTurnInput = Omit<JainaChatInput, 'onDispatchError'> & {
+  /**
+   * The sentence to show in the transcript, when it differs from what is sent. The canvas graph
+   * is folded into `query` so Jaina can read it; the reader typed a request, not a wall of nodes.
+   */
+  displayText?: string;
+  /** An approval or plan verdict: sent because the schema needs a query, never rendered. */
+  silent?: boolean;
+  /**
+   * Called when the turn fails to reach the Backend. A caller holding optimistic UI has no other
+   * way to learn it was dropped — without this an approval that never arrived still reads
+   * "Approved", which is the exact silence an approval gate exists to prevent.
+   */
+  onDispatchError?: (message: string) => void;
 };
 
 export type UseJainaChatOptions = {
   sessionId: string;
-  context: JainaChatContext;
   initialMessages?: JainaUIMessage[];
   /** Transient parts — the keepalive and the session fence. Never part of the transcript. */
   onNotice?: (notice: Record<string, unknown>) => void;
 };
 
-const STREAM_PATH = '/api/agents/jaina/chat/stream';
+export function useJainaChat({ sessionId, initialMessages, onNotice }: UseJainaChatOptions) {
+  // The failure callback of the turn currently in flight. `sendMessage` resolves before the fetch
+  // settles, so the only honest place to learn a turn was dropped is the hook's own error path.
+  const dispatchErrorRef = useRef<((message: string) => void) | null>(null);
 
-export function useJainaChat({
-  sessionId,
-  context,
-  initialMessages,
-  onNotice,
-}: UseJainaChatOptions) {
   const transport = useMemo(() => {
     const api = `${getApiBaseUrl()}${STREAM_PATH}`;
 
@@ -57,36 +71,22 @@ export function useJainaChat({
       headers: async () => {
         const token = await getBrowserAccessToken();
         return {
-          // Asking for the AI SDK stream is what selects the native wire; the Backend still serves
-          // NDJSON to anything that does not, so an older tab keeps working during a deploy.
+          // Asking for the AI SDK stream is what selects the native wire.
           Accept: 'text/event-stream',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         };
       },
 
       // The SDK would post `{ id, messages, trigger }`. Jaina's route takes the turn's own request
-      // shape, so the newest user message becomes `query` and the rest is its context.
-      prepareSendMessagesRequest: ({ messages, body }) => {
-        const latest = [...messages].reverse().find((message) => message.role === 'user');
-        const text = (latest?.parts ?? [])
-          .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
-          .map((part) => part.text)
-          .join('');
-
-        return {
-          body: {
-            query: text,
-            client_message_id: latest?.id,
-            context: {
-              adAccountId: context.adAccountId,
-              brandId: context.brandId,
-              sessionId: context.sessionId ?? sessionId,
-              ...(context.projectId ? { projectId: context.projectId } : {}),
-              ...(context.timezone ? { timezone: context.timezone } : {}),
-            },
-            ...(body ?? {}),
-          },
-        };
+      // shape, and the composer already assembled it — this only parses it against the contract.
+      prepareSendMessagesRequest: ({ body }) => {
+        const input = (body as { jainaInput?: JainaTurnInput } | undefined)?.jainaInput;
+        if (!input) {
+          // Louder than a narrowed turn. A send with no input would otherwise reach the Backend
+          // missing every optional field and come back as a plausible, smaller answer.
+          throw new Error('Jaina turn dispatched without a request input.');
+        }
+        return { body: buildJainaChatStreamRequest(input) };
       },
 
       // Without this the transport would GET `${api}/${chatId}/stream`. Jaina resumes on the same
@@ -95,14 +95,7 @@ export function useJainaChat({
         api: `${api}?session_id=${encodeURIComponent(id)}`,
       }),
     });
-  }, [
-    context.adAccountId,
-    context.brandId,
-    context.projectId,
-    context.sessionId,
-    context.timezone,
-    sessionId,
-  ]);
+  }, []);
 
   const chat = useChat<JainaUIMessage>({
     id: sessionId,
@@ -116,7 +109,34 @@ export function useJainaChat({
         onNotice?.((part.data ?? {}) as Record<string, unknown>);
       }
     },
+    onError: (error) => {
+      const notify = dispatchErrorRef.current;
+      dispatchErrorRef.current = null;
+      notify?.(error instanceof Error ? error.message : 'Jaina did not receive it.');
+    },
+    onFinish: () => {
+      dispatchErrorRef.current = null;
+    },
   });
 
-  return chat;
+  const { sendMessage } = chat;
+
+  const sendTurn = useCallback(
+    (input: JainaTurnInput) => {
+      const { displayText, silent, onDispatchError, ...request } = input;
+      dispatchErrorRef.current = onDispatchError ?? null;
+
+      return sendMessage(
+        {
+          role: 'user',
+          parts: [{ type: 'text', text: displayText ?? request.query }],
+          ...(silent ? { metadata: { silent: true } } : {}),
+        },
+        { body: { jainaInput: request } },
+      );
+    },
+    [sendMessage],
+  );
+
+  return { ...chat, sendTurn };
 }

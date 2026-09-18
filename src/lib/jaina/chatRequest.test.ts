@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { buildJainaChatStreamRequest } from './useJainaChatStream';
+import { buildJainaChatStreamRequest } from './chatRequest';
 
 describe('buildJainaChatStreamRequest', () => {
   it('keeps legacy single-account requests unchanged when no paid entity is mentioned', () => {

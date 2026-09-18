@@ -68,6 +68,31 @@ export const jainaConversationListResponseSchema = z.object({
 });
 export type JainaConversationListResponse = z.infer<typeof jainaConversationListResponseSchema>;
 
+/**
+ * The transcript in the AI SDK's own shape.
+ *
+ * Validated structurally rather than field-by-field on purpose: the authority on a `UIMessage` is
+ * the SDK, which validates every chunk on the way in, and restating its part union here would be a
+ * second copy of a contract that already exists — the exact drift `packages/contracts` forbids.
+ * What this route owes the caller is that the payload is a list of addressable messages.
+ */
+export const jainaConversationUiListResponseSchema = z.object({
+  sessions: z.array(jainaConversationSessionSchema),
+  uiMessages: z
+    .array(
+      z
+        .object({
+          id: z.string().min(1),
+          role: z.string().min(1),
+          parts: z.array(z.unknown()),
+        })
+        .passthrough(),
+    )
+    .optional(),
+  nextCursor: z.string().nullable().optional(),
+});
+export type JainaConversationUiListResponse = z.infer<typeof jainaConversationUiListResponseSchema>;
+
 export const jainaConversationListQuerySchema = z.object({
   brandId: z.string().min(1),
   adAccountId: z.string().min(1).optional(),
@@ -80,6 +105,8 @@ export const jainaConversationListQuerySchema = z.object({
   initiator: agentInitiatorSchema.optional(),
   initiatorAgent: z.string().trim().min(1).optional(),
   tags: z.string().trim().min(1).optional(),
+  /** `ui` asks the Backend for `JainaUIMessage[]`; absent keeps the legacy row shape. */
+  shape: z.literal('ui').optional(),
 });
 export type JainaConversationListQuery = z.infer<typeof jainaConversationListQuerySchema>;
 

@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { createEnvelopeMint, serializeFrame } from '@continuum/contracts';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
+import {
+  JsonToSseTransformStream,
+  UI_MESSAGE_STREAM_HEADERS,
+  type UIMessageChunk,
+  uiMessageChunkSchema,
+} from 'ai';
 import { mintSessionWithPassword } from './support/auth';
 
 // ---------------------------------------------------------------------------
@@ -26,10 +31,17 @@ import { mintSessionWithPassword } from './support/auth';
 //   3. JUMP RESTORES — the Jump to latest control returns the reader to the live edge and
 //      re-engages follow.
 //
+// ── THE WIRE ──
+// The stub speaks the AI SDK UI message stream (SSE, protocol v1) — the same wire the Backend
+// serves for `Accept: text/event-stream` — NOT the retired NDJSON envelope. Chunk shapes mirror
+// `App/agents-ts/Jaina/src/runtime/uiMessageChunks.ts`: a text block is `text-start` /
+// `text-delta`* / `text-end` keyed by `${item_id}:${part_id}`, the message id is
+// `jaina:${runId}:assistant`, and the turn closes on `finish`.
+//
 // ── MONEY SAFETY ──
 // No Backend is spawned and NEXT_PUBLIC_API_URL points at a dead port. The chat stream is
-// fulfilled inside the page from frames this file builds with the vendored contracts' own
-// serializeFrame. Nothing reaches Meta or any model. No Supabase row is written; the seeded local
+// fulfilled inside the page from chunks this file builds and validates against the SDK's own
+// schema. Nothing reaches Meta or any model. No Supabase row is written; the seeded local
 // brand is read as-is, and the config refuses to start against a non-local project.
 //
 // ── UN-EXERCISED HOP ──
@@ -54,68 +66,86 @@ const SHORT_ANSWER = 'Spend is up 12% week over week and cost per purchase is fl
 // Long enough to overflow several screens, so "scrolled up" has somewhere to go.
 const LONG_PROMPT = 'Walk me through the full recovery plan.';
 
-const frameLines = (frames: { type: string; data: Record<string, unknown> }[]): string[] => {
-  const mint = createEnvelopeMint();
-  let seq = 0;
-  return frames.map((frame) => serializeFrame(frame, mint(seq++)));
+/**
+ * SSE lines for one turn — and the self-check that they really are an AI SDK UI message stream.
+ *
+ * Two things make this verifiable rather than hopeful, and both come from the SDK itself:
+ *   1. every chunk is validated against `uiMessageChunkSchema`, so a stub that drifts from the
+ *      protocol throws HERE, naming the chunk, instead of rendering nothing in the browser and
+ *      reading as an app bug;
+ *   2. the framing is `JsonToSseTransformStream` — the exact transform the server pipes through —
+ *      so `data: <json>\n\n` and the terminating `data: [DONE]\n\n` can never drift from it.
+ */
+const sseLines = async (chunks: UIMessageChunk[]): Promise<string[]> => {
+  const schema = uiMessageChunkSchema();
+  for (const chunk of chunks) {
+    const validated = await schema.validate(chunk);
+    if (!validated.success) {
+      throw new Error(
+        `stub emitted a chunk the AI SDK would reject: ${JSON.stringify(chunk)}\n${String(validated.error)}`,
+      );
+    }
+  }
+  const reader = new ReadableStream<UIMessageChunk>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(chunk);
+      controller.close();
+    },
+  })
+    .pipeThrough(new JsonToSseTransformStream())
+    .getReader();
+
+  const lines: string[] = [];
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    lines.push(value);
+  }
+  return lines;
 };
 
-const shortStreamChunks = (): string[] =>
-  frameLines([
-    {
-      type: 'response.created',
-      data: { id: `resp_short_${RUN_ID}`, object: 'realtime.response', status: 'in_progress' },
-    },
-    { type: 'response.run.created', data: { run_id: `run_short_${RUN_ID}`, session_id: null } },
-    {
-      type: 'response.output_text.delta',
-      data: { item_id: 'i1', part_id: 'p1', delta: SHORT_ANSWER },
-    },
-    {
-      type: 'response.done',
-      data: {
-        id: `resp_short_${RUN_ID}`,
-        object: 'realtime.response',
-        status: 'completed',
-        status_details: null,
-        output: [],
-      },
-    },
+/** `blockKeyOf` in the Backend mapper: one text part per (item_id, part_id). */
+const TEXT_BLOCK = 'i1:p1';
+const messageIdFor = (runId: string) => `jaina:${runId}:assistant`;
+
+const shortStreamChunks = (): Promise<string[]> =>
+  sseLines([
+    { type: 'start', messageId: messageIdFor(`run_short_${RUN_ID}`) },
+    { type: 'text-start', id: TEXT_BLOCK },
+    { type: 'text-delta', id: TEXT_BLOCK, delta: SHORT_ANSWER },
+    { type: 'text-end', id: TEXT_BLOCK },
+    { type: 'finish' },
   ]);
 
-const longStreamChunks = (): string[] =>
-  frameLines([
-    {
-      type: 'response.created',
-      data: { id: `resp_long_${RUN_ID}`, object: 'realtime.response', status: 'in_progress' },
-    },
-    { type: 'response.run.created', data: { run_id: `run_long_${RUN_ID}`, session_id: null } },
-    ...Array.from({ length: 40 }, (_, index) => ({
-      type: 'response.output_text.delta',
-      data: {
-        item_id: 'i1',
-        part_id: 'p1',
+const longStreamChunks = (): Promise<string[]> =>
+  sseLines([
+    { type: 'start', messageId: messageIdFor(`run_long_${RUN_ID}`) },
+    { type: 'text-start', id: TEXT_BLOCK },
+    ...Array.from(
+      { length: 40 },
+      (_, index): UIMessageChunk => ({
+        type: 'text-delta',
+        id: TEXT_BLOCK,
         delta:
           `\n\n## Phase ${index + 1}\n` +
           'Measured delivery stays the grounding for every recommendation here. '.repeat(6),
-      },
-    })),
-    {
-      type: 'response.done',
-      data: {
-        id: `resp_long_${RUN_ID}`,
-        object: 'realtime.response',
-        status: 'completed',
-        status_details: null,
-        output: [],
-      },
-    },
+      }),
+    ),
+    { type: 'text-end', id: TEXT_BLOCK },
+    { type: 'finish' },
   ]);
 
-/** Answer the chat stream from inside the page, one line every `gapMs`. */
+/**
+ * Answer the chat stream from inside the page, one SSE line every `gapMs`.
+ *
+ * The GET on the same path is `useChat`'s `resume` reconnect. It has to be answered too: left to
+ * fall through it reaches the deliberately dead Backend port, and a failed reconnect surfaces as a
+ * chat error that has nothing to do with what this bench measures. 204 is the "nothing in flight"
+ * contract the transport expects.
+ */
 const stubStream = async (page: Page, prompt: string, chunks: string[], gapMs: number) => {
   await page.addInitScript(
-    ({ promptText, streamChunks, gap }) => {
+    ({ promptText, streamChunks, gap, headers }) => {
       window.addEventListener('unhandledrejection', (event) => {
         const reason = String((event.reason as { name?: string })?.name ?? event.reason ?? '');
         if (reason.includes('FunctionsHttpError')) event.preventDefault();
@@ -126,42 +156,91 @@ const stubStream = async (page: Page, prompt: string, chunks: string[], gapMs: n
         const [input, init] = args;
         const url =
           typeof input === 'string' ? input : input instanceof Request ? input.url : input.href;
-        if (url.includes('/api/agents/jaina/chat/stream') && typeof init?.body === 'string') {
-          const body = JSON.parse(init.body) as { query?: string };
-          if (body.query === promptText) {
-            const encoder = new TextEncoder();
-            return new Response(
-              new ReadableStream({
-                start(controller) {
-                  let index = 0;
-                  const push = () => {
-                    const chunk = streamChunks[index];
-                    if (chunk === undefined) {
-                      controller.close();
-                      return;
-                    }
-                    index += 1;
-                    controller.enqueue(encoder.encode(chunk));
-                    window.setTimeout(push, gap);
-                  };
-                  push();
-                },
-              }),
-              { status: 200, headers: { 'content-type': 'application/x-ndjson' } },
-            );
+        if (url.includes('/api/agents/jaina/chat/stream')) {
+          const method = (
+            init?.method ?? (input instanceof Request ? input.method : 'GET')
+          ).toUpperCase();
+          if (method === 'GET') return new Response(null, { status: 204 });
+
+          if (typeof init?.body === 'string') {
+            const body = JSON.parse(init.body) as { query?: string };
+            if (body.query === promptText) {
+              const encoder = new TextEncoder();
+              return new Response(
+                new ReadableStream({
+                  start(controller) {
+                    let index = 0;
+                    const push = () => {
+                      const chunk = streamChunks[index];
+                      if (chunk === undefined) {
+                        controller.close();
+                        return;
+                      }
+                      index += 1;
+                      controller.enqueue(encoder.encode(chunk));
+                      window.setTimeout(push, gap);
+                    };
+                    push();
+                  },
+                }),
+                { status: 200, headers },
+              );
+            }
           }
         }
         return originalFetch(...args);
       };
     },
-    { promptText: prompt, streamChunks: chunks, gap: gapMs },
+    {
+      promptText: prompt,
+      streamChunks: chunks,
+      gap: gapMs,
+      headers: UI_MESSAGE_STREAM_HEADERS as Record<string, string>,
+    },
   );
+};
+
+/**
+ * The protocol, proved WITHOUT the browser.
+ *
+ * The scroll assertions below cannot run until `JainaChatSurface` is swapped from the NDJSON
+ * reader to `useChat`, and a stub whose correctness is only observable through a surface that
+ * cannot read it yet is a stub nobody can trust. Chunk shapes are validated against the SDK's own
+ * `uiMessageChunkSchema` inside `sseLines`; this asserts the framing around them.
+ */
+const assertUiMessageStream = (label: string, body: string): number => {
+  const events = body.split('\n\n').filter((event) => event.length > 0);
+  expect(
+    events.every((event) => event.startsWith('data: ')),
+    `${label}: every SSE event`,
+  ).toBe(true);
+  expect(events.at(-1), `${label}: terminator`).toBe('data: [DONE]');
+  const first = JSON.parse(events[0]!.slice('data: '.length)) as {
+    type: string;
+    messageId?: string;
+  };
+  expect(first.type, `${label}: opening chunk`).toBe('start');
+  expect(first.messageId, `${label}: assistant message id`).toMatch(/^jaina:.+:assistant$/);
+  return events.length;
 };
 
 const grade = (id: string, ok: boolean, note: string) => {
   // eslint-disable-next-line no-console
   console.log(JSON.stringify({ bench: 'jaina:transcript:scroll:e2e:bench', id, ok, note }));
 };
+
+test('the stub speaks the AI SDK UI message stream, not NDJSON', async () => {
+  const short = assertUiMessageStream('short', (await shortStreamChunks()).join(''));
+  const long = assertUiMessageStream('long', (await longStreamChunks()).join(''));
+  // The headers the page answers with are the SDK's own constant, so they cannot drift from it.
+  expect(UI_MESSAGE_STREAM_HEADERS['content-type']).toBe('text/event-stream');
+  expect(UI_MESSAGE_STREAM_HEADERS['x-vercel-ai-ui-message-stream']).toBe('v1');
+  grade(
+    'stream.sse_protocol',
+    true,
+    `short=${short} events, long=${long} events; every event is a data: line terminated by [DONE], served as text/event-stream + x-vercel-ai-ui-message-stream: v1`,
+  );
+});
 
 test.describe.configure({ mode: 'serial' });
 
@@ -235,7 +314,7 @@ test.describe('jaina transcript scroll', () => {
 
   test('leaves no reserved dead space under a short completed answer', async () => {
     const page = await context.newPage();
-    await stubStream(page, SHORT_PROMPT, shortStreamChunks(), 40);
+    await stubStream(page, SHORT_PROMPT, await shortStreamChunks(), 40);
 
     try {
       await page.goto('/scale?tab=jaina', { waitUntil: 'domcontentloaded' });
@@ -287,7 +366,7 @@ test.describe('jaina transcript scroll', () => {
   // src/components/chat/ChatTranscript.test.tsx. Un-fixme once the overlay is tracked down.
   test.fixme('holds position when the reader scrolls up, and Jump to latest brings them back', async () => {
     const page = await context.newPage();
-    await stubStream(page, LONG_PROMPT, longStreamChunks(), 80);
+    await stubStream(page, LONG_PROMPT, await longStreamChunks(), 80);
 
     try {
       await page.goto('/scale?tab=jaina', { waitUntil: 'domcontentloaded' });
@@ -322,18 +401,19 @@ test.describe('jaina transcript scroll', () => {
 
       // A dev-overlay portal over the page would swallow the wheel and make every scroll
       // assertion below vacuously "pass position unchanged". Prove the gesture lands first.
-      const hitsTranscript = await page.evaluate(
-        ({ x, y }) => {
-          const el = document.elementFromPoint(x, y);
-          return {
-            inViewport: Boolean(el?.closest('[data-slot="message-scroller-viewport"]')),
-            tag: el?.tagName.toLowerCase() ?? 'none',
-          };
-        },
-        point,
-      );
+      const hitsTranscript = await page.evaluate(({ x, y }) => {
+        const el = document.elementFromPoint(x, y);
+        return {
+          inViewport: Boolean(el?.closest('[data-slot="message-scroller-viewport"]')),
+          tag: el?.tagName.toLowerCase() ?? 'none',
+        };
+      }, point);
       expect(hitsTranscript.inViewport, `wheel hit <${hitsTranscript.tag}>`).toBe(true);
-      grade('scroll.gesture_lands', true, `wheel lands on the transcript, not <${hitsTranscript.tag}>`);
+      grade(
+        'scroll.gesture_lands',
+        true,
+        `wheel lands on the transcript, not <${hitsTranscript.tag}>`,
+      );
 
       await page.mouse.move(point.x, point.y);
       await page.mouse.wheel(0, -600);

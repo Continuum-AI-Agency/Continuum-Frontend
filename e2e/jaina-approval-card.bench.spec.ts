@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { createEnvelopeMint, serializeFrame } from '@continuum/contracts';
+import { JAINA_UI_DATA_PART } from '@continuum/contracts';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
+import {
+  JsonToSseTransformStream,
+  UI_MESSAGE_STREAM_HEADERS,
+  type UIMessageChunk,
+  uiMessageChunkSchema,
+} from 'ai';
 import { mintSessionWithPassword } from './support/auth';
 
 // ---------------------------------------------------------------------------
@@ -9,9 +15,18 @@ import { mintSessionWithPassword } from './support/auth';
 //
 // A real Chrome, driving the REAL /scale?tab=jaina chat surface as a REAL
 // authenticated local fixture member, with ONE thing faked: the chat-stream route is answered by
-// `page.route` with an NDJSON body this file builds out of the vendored contracts'
-// own `serializeFrame`. No Backend is spawned; `NEXT_PUBLIC_API_URL` points at a dead
-// port, which is what proves the frames came from here.
+// `page.route` with an AI SDK UI message stream (SSE, protocol v1) this file builds out of the
+// SDK's own chunk schema and SSE transform. No Backend is spawned; `NEXT_PUBLIC_API_URL` points at
+// a dead port, which is what proves the chunks came from here.
+//
+// ── THE WIRE ──
+// SSE, not the retired NDJSON envelope: `content-type: text/event-stream` plus
+// `x-vercel-ai-ui-message-stream: v1`, `data: <json>\n\n` lines, terminated by `data: [DONE]`.
+// Chunk shapes mirror `App/agents-ts/Jaina/src/runtime/uiMessageChunks.ts` — assistant message id
+// `jaina:${runId}:assistant`, report blocks as `data-jaina-report-block` addressed
+// `${runId}:block:${blockId}`, and the HITL gate as the SDK's NATIVE `tool-approval-request` /
+// `tool-approval-response` / `tool-output-denied` chunks plus a `data-jaina-approval` part
+// carrying the before → after preview.
 //
 // What it proves, in order:
 //   1. TABLE — a `tool.approval_required` frame carrying `preview` rows renders as a
@@ -80,7 +95,8 @@ const APPROVAL = {
 
 const LIVE_PROMPT =
   'Show live communication angle × individual creative × audience segment performance for the last 30 days.';
-const FINAL_SHELL_PROMPT = 'Render the ad metrics and keep them visible when the response completes.';
+const FINAL_SHELL_PROMPT =
+  'Render the ad metrics and keep them visible when the response completes.';
 const SCROLL_PROMPT = 'Stream a long campaign analysis while I review earlier sections.';
 const LIVE_DATASET_ID = 'live-creative-audience:browser-fixture';
 const LIVE_ROW_ID = 'row:browser-fixture-alpha-25-34-female';
@@ -302,190 +318,202 @@ function printBenchEnvelope(): void {
   );
 }
 
-/** The NDJSON a paused turn really looks like: opener, the gate, then silence. */
-function approvalStreamBody(): string {
-  const mint = createEnvelopeMint();
-  let seq = 0;
-  const frames = [
-    {
-      type: 'response.created',
-      data: { id: `resp_${RUN_ID}`, object: 'realtime.response' as const, status: 'in_progress' },
+/**
+ * SSE lines for one turn — and the self-check that they really are an AI SDK UI message stream.
+ *
+ * Two things make this verifiable rather than hopeful, and both come from the SDK itself:
+ *   1. every chunk is validated against `uiMessageChunkSchema`, so a stub that drifts from the
+ *      protocol throws HERE, naming the chunk, instead of rendering nothing in the browser and
+ *      reading as an app bug;
+ *   2. the framing is `JsonToSseTransformStream` — the exact transform the server pipes through —
+ *      so `data: <json>\n\n` and the terminating `data: [DONE]\n\n` can never drift from it.
+ */
+async function sseLines(chunks: UIMessageChunk[]): Promise<string[]> {
+  const schema = uiMessageChunkSchema();
+  for (const chunk of chunks) {
+    const validated = await schema.validate(chunk);
+    if (!validated.success) {
+      throw new Error(
+        `stub emitted a chunk the AI SDK would reject: ${JSON.stringify(chunk)}\n${String(validated.error)}`,
+      );
+    }
+  }
+  const reader = new ReadableStream<UIMessageChunk>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(chunk);
+      controller.close();
     },
-    { type: 'response.run.created', data: { run_id: `run_${RUN_ID}`, session_id: null } },
-    { type: 'tool.approval_required', data: APPROVAL },
-  ];
-  return frames.map((frame) => serializeFrame(frame, mint(seq++))).join('');
+  })
+    .pipeThrough(new JsonToSseTransformStream())
+    .getReader();
+
+  const lines: string[] = [];
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    lines.push(value);
+  }
+  return lines;
 }
 
-/** The answer to a denial: the gate resolves, nothing ran. */
-function denialStreamBody(): string {
-  const mint = createEnvelopeMint();
-  let seq = 0;
-  const frames = [
+const sseBody = async (chunks: UIMessageChunk[]): Promise<string> =>
+  (await sseLines(chunks)).join('');
+
+const messageIdFor = (runId: string) => `jaina:${runId}:assistant`;
+
+/** The gated tool call itself. Jaina's tools are discovered at run time, so they are DYNAMIC. */
+const gatedToolCall: UIMessageChunk = {
+  type: 'tool-input-available',
+  toolCallId: APPROVAL.toolCallId,
+  toolName: APPROVAL.toolName,
+  input: APPROVAL.input,
+  dynamic: true,
+};
+
+/** A paused turn on the native wire: the gated call, the gate, the preview, then silence. */
+function approvalStreamBody(): Promise<string> {
+  const runId = `run_${RUN_ID}`;
+  return sseBody([
+    { type: 'start', messageId: messageIdFor(runId) },
+    gatedToolCall,
     {
-      type: 'response.created',
-      data: {
-        id: `resp_deny_${RUN_ID}`,
-        object: 'realtime.response' as const,
-        status: 'completed',
-      },
+      type: 'tool-approval-request',
+      approvalId: APPROVAL.approvalId,
+      toolCallId: APPROVAL.toolCallId,
     },
+    // The card shows what WILL change. A uuid on an approval card is consent to nothing, so the
+    // before → after preview rides alongside the native chunk as its own typed part.
     {
-      type: 'tool.approval_resolved',
-      data: {
-        approvalId: APPROVAL.approvalId,
-        toolCallId: APPROVAL.toolCallId,
-        toolName: APPROVAL.toolName,
-        decision: 'denied' as const,
-        resolvedAt: new Date().toISOString(),
-      },
+      type: JAINA_UI_DATA_PART.approval,
+      id: `${runId}:approval:${APPROVAL.approvalId}`,
+      data: APPROVAL,
     },
-    { type: 'response.output_text.delta', data: { delta: 'Understood — nothing was changed.' } },
-  ];
-  return frames.map((frame) => serializeFrame(frame, mint(seq++))).join('');
+    { type: 'finish' },
+  ]);
 }
 
-function liveReportStreamBody(): string {
-  const mint = createEnvelopeMint();
-  let seq = 0;
-  const frames = [
+/**
+ * The answer to a denial: the gate resolves, nothing ran.
+ *
+ * The decision POSTs a NEW turn, so this is a NEW assistant message — and the SDK resolves both
+ * `tool-approval-request` and `tool-approval-response` against tool parts of the message CURRENTLY
+ * streaming (`getToolInvocation` / `getToolInvocationByApprovalId`, ai@7). A chunk that names a
+ * tool call this message has not announced raises `UIMessageStreamError` and the message comes out
+ * with ZERO parts — the whole turn is lost, not just the card, and the only trace is `onError`. So
+ * the resolving turn re-announces the gated call and its request before answering them, which is
+ * what the Backend must emit for the native chunks to survive the decision hop.
+ */
+function denialStreamBody(): Promise<string> {
+  const runId = `run_deny_${RUN_ID}`;
+  const textBlock = `${runId}:text`;
+  return sseBody([
+    { type: 'start', messageId: messageIdFor(runId) },
+    gatedToolCall,
     {
-      type: 'response.created',
-      data: {
-        id: `resp_live_${RUN_ID}`,
-        object: 'realtime.response' as const,
-        status: 'in_progress',
-      },
+      type: 'tool-approval-request',
+      approvalId: APPROVAL.approvalId,
+      toolCallId: APPROVAL.toolCallId,
     },
-    { type: 'response.run.created', data: { run_id: `run_live_${RUN_ID}`, session_id: null } },
-    {
-      type: 'response.checkpoint_report',
-      data: { item_id: `item_live_${RUN_ID}`, part_id: 'part_live', report: LIVE_REPORT },
-    },
-    {
-      type: 'response.done',
-      data: {
-        id: `resp_live_${RUN_ID}`,
-        object: 'realtime.response' as const,
-        status: 'completed',
-        status_details: null,
-        output: [],
-      },
-    },
-  ];
-  return frames.map((frame) => serializeFrame(frame, mint(seq++))).join('');
+    { type: 'tool-approval-response', approvalId: APPROVAL.approvalId, approved: false },
+    { type: 'tool-output-denied', toolCallId: APPROVAL.toolCallId },
+    { type: 'text-start', id: textBlock },
+    { type: 'text-delta', id: textBlock, delta: 'Understood — nothing was changed.' },
+    { type: 'text-end', id: textBlock },
+    { type: 'finish' },
+  ]);
 }
 
-function finalShellStreamBody(): string {
-  const mint = createEnvelopeMint();
-  let seq = 0;
-  const frames = [
-    {
-      type: 'response.created',
-      data: {
-        id: `resp_final_shell_${RUN_ID}`,
-        object: 'realtime.response' as const,
-        status: 'in_progress',
-      },
-    },
-    {
-      type: 'response.run.created',
-      data: { run_id: `run_final_shell_${RUN_ID}`, session_id: null },
-    },
-    {
-      type: 'response.block.delta',
-      data: {
-        sequence: 1,
-        source: 'structured_output',
-        agent: 'Jaina_blocks',
-        block_category: 'metric_grid',
-        block: {
-          block_id: 'ad_metrics',
-          category: 'metric_grid',
-          scope: 'ad',
-          title: 'Ad metrics',
-          priority: 'primary',
-          metrics: [{ label: 'Spend', value: 686.46, unit: 'USD', format: 'currency' }],
-        },
-      },
-    },
-    {
-      type: 'response.checkpoint_report',
-      data: {
-        item_id: `item_final_shell_${RUN_ID}`,
-        part_id: 'part_final_shell',
-        report: {
-          language: 'en',
-          executive_summary: 'Performance metrics for the ad.',
-          reasoning_trace: '',
-          blocks: [],
-          follow_up_questions: [],
-          media_map: {},
-          handoff_trace: [],
-          execution_objectives: [],
-          cached_sources: [],
-          _meta: {
-            schema_version: '2',
-            block_count: 0,
-            has_charts: false,
-            has_media: false,
-            primary_scope: 'ad',
-          },
-        },
-      },
-    },
-    {
-      type: 'response.done',
-      data: {
-        id: `resp_final_shell_${RUN_ID}`,
-        object: 'realtime.response' as const,
-        status: 'completed',
-        status_details: null,
-        output: [],
-      },
-    },
+/**
+ * One checkpoint report, as the mapper projects it: one part PER BLOCK addressed by the block's own
+ * id, plus the report's metadata under `${runId}:report`. Never one part for the whole report — a
+ * 19KB report re-sent on every delta is what made the old client re-fold and freeze the tab.
+ */
+const reportChunks = (runId: string, report: Record<string, unknown>): UIMessageChunk[] => {
+  const { blocks, ...meta } = report as { blocks?: { block_id: string }[] };
+  return [
+    ...(blocks ?? []).map(
+      (block): UIMessageChunk => ({
+        type: JAINA_UI_DATA_PART.reportBlock,
+        id: `${runId}:block:${block.block_id}`,
+        data: block,
+      }),
+    ),
+    { type: JAINA_UI_DATA_PART.reportMeta, id: `${runId}:report`, data: meta },
   ];
-  return frames.map((frame) => serializeFrame(frame, mint(seq++))).join('');
+};
+
+function liveReportStreamBody(): Promise<string> {
+  const runId = `run_live_${RUN_ID}`;
+  return sseBody([
+    { type: 'start', messageId: messageIdFor(runId) },
+    ...reportChunks(runId, LIVE_REPORT),
+    { type: 'finish' },
+  ]);
 }
 
-function scrollStreamChunks(): string[] {
-  const mint = createEnvelopeMint();
-  let seq = 0;
-  const frames = [
+function finalShellStreamBody(): Promise<string> {
+  const runId = `run_final_shell_${RUN_ID}`;
+  return sseBody([
+    { type: 'start', messageId: messageIdFor(runId) },
+    // A streamed block, then a final checkpoint whose own block list is EMPTY. Same part id both
+    // times is the whole point: the SDK replaces a part rather than appending a second copy, so the
+    // shell cannot erase what streamed.
     {
-      type: 'response.created',
+      type: JAINA_UI_DATA_PART.reportBlock,
+      id: `${runId}:block:ad_metrics`,
       data: {
-        id: `resp_scroll_${RUN_ID}`,
-        object: 'realtime.response' as const,
-        status: 'in_progress',
+        block_id: 'ad_metrics',
+        category: 'metric_grid',
+        scope: 'ad',
+        title: 'Ad metrics',
+        priority: 'primary',
+        metrics: [{ label: 'Spend', value: 686.46, unit: 'USD', format: 'currency' }],
       },
     },
-    { type: 'response.run.created', data: { run_id: `run_scroll_${RUN_ID}`, session_id: null } },
-    ...Array.from({ length: 45 }, (_, index) => ({
-      type: 'response.output_text.delta',
-      data: {
+    ...reportChunks(runId, {
+      language: 'en',
+      executive_summary: 'Performance metrics for the ad.',
+      reasoning_trace: '',
+      blocks: [],
+      follow_up_questions: [],
+      media_map: {},
+      handoff_trace: [],
+      execution_objectives: [],
+      cached_sources: [],
+      _meta: {
+        schema_version: '2',
+        block_count: 0,
+        has_charts: false,
+        has_media: false,
+        primary_scope: 'ad',
+      },
+    }),
+    { type: 'finish' },
+  ]);
+}
+
+function scrollStreamChunks(): Promise<string[]> {
+  const runId = `run_scroll_${RUN_ID}`;
+  // `blockKeyOf` falls back to DEFAULT_BLOCK when a delta carries no (item_id, part_id).
+  const textBlock = 'text';
+  return sseLines([
+    { type: 'start', messageId: messageIdFor(runId) },
+    { type: 'text-start', id: textBlock },
+    ...Array.from(
+      { length: 45 },
+      (_, index): UIMessageChunk => ({
+        type: 'text-delta',
+        id: textBlock,
         delta:
           `\n\n## Analysis section ${index + 1}\n` +
           'Campaign evidence remains grounded in measured delivery. '.repeat(8) +
           `\n\n| Metric | Value |\n| --- | ---: |\n| Section | ${index + 1} |`,
-      },
-    })),
-    {
-      type: 'response.output_text.delta',
-      data: { delta: '\n\nStreaming response complete.' },
-    },
-    {
-      type: 'response.done',
-      data: {
-        id: `resp_scroll_${RUN_ID}`,
-        object: 'realtime.response' as const,
-        status: 'completed',
-        status_details: null,
-        output: [],
-      },
-    },
-  ];
-  return frames.map((frame) => serializeFrame(frame, mint(seq++)));
+      }),
+    ),
+    { type: 'text-delta', id: textBlock, delta: '\n\nStreaming response complete.' },
+    { type: 'text-end', id: textBlock },
+    { type: 'finish' },
+  ]);
 }
 
 type StreamPost = Record<string, unknown>;
@@ -503,12 +531,75 @@ type StreamPost = Record<string, unknown>;
  */
 const persistedMessages: Record<string, unknown>[] = [];
 
+/**
+ * The protocol, proved WITHOUT the browser.
+ *
+ * Deliberately outside the serial describe and touching no page: the rendering assertions below
+ * cannot run until `JainaChatSurface` is swapped from the NDJSON reader to `useChat`, and a stub
+ * whose correctness is only observable through a surface that cannot read it yet is a stub nobody
+ * can trust. This asserts every body this file serves is a well-formed AI SDK UI message stream —
+ * chunk shapes via `uiMessageChunkSchema` inside `sseLines`, framing on the bytes here.
+ */
+test('the stub speaks the AI SDK UI message stream, not NDJSON', async () => {
+  const bodies: Record<string, string> = {
+    approval: await approvalStreamBody(),
+    denial: await denialStreamBody(),
+    liveReport: await liveReportStreamBody(),
+    finalShell: await finalShellStreamBody(),
+    scroll: (await scrollStreamChunks()).join(''),
+  };
+
+  const opened: string[] = [];
+  for (const [name, body] of Object.entries(bodies)) {
+    const events = body.split('\n\n').filter((event) => event.length > 0);
+    expect(
+      events.every((event) => event.startsWith('data: ')),
+      `${name}: every SSE event`,
+    ).toBe(true);
+    expect(events.at(-1), `${name}: terminator`).toBe('data: [DONE]');
+    const first = JSON.parse(events[0]!.slice('data: '.length)) as {
+      type: string;
+      messageId?: string;
+    };
+    expect(first.type, `${name}: opening chunk`).toBe('start');
+    expect(first.messageId, `${name}: assistant message id`).toMatch(/^jaina:.+:assistant$/);
+    opened.push(`${name}=${events.length} events`);
+  }
+
+  // The headers the route answers with are the SDK's own constant, so they cannot drift from it.
+  expect(UI_MESSAGE_STREAM_HEADERS['content-type']).toBe('text/event-stream');
+  expect(UI_MESSAGE_STREAM_HEADERS['x-vercel-ai-ui-message-stream']).toBe('v1');
+
+  // The gate crosses as the SDK's NATIVE chunks. `tool-approval-request` resolves against a tool
+  // part of the message CURRENTLY streaming, so the gated call has to be announced first — without
+  // it the SDK drops the ENTIRE message, not just the card.
+  const approvalChunkTypes = bodies
+    .approval!.split('\n\n')
+    .filter((event) => event.startsWith('data: ') && event !== 'data: [DONE]')
+    .map((event) => (JSON.parse(event.slice('data: '.length)) as { type: string }).type);
+  expect(approvalChunkTypes).toEqual([
+    'start',
+    'tool-input-available',
+    'tool-approval-request',
+    JAINA_UI_DATA_PART.approval,
+    'finish',
+  ]);
+
+  grade(
+    'stream.sse_protocol',
+    true,
+    `${opened.join(', ')}; every event is a data: line terminated by [DONE], served as text/event-stream + x-vercel-ai-ui-message-stream: v1`,
+  );
+});
+
 test.describe.configure({ mode: 'serial' });
 
 test.describe('jaina tool approval card', () => {
   let context: BrowserContext;
   let page: Page;
   const streamPosts: StreamPost[] = [];
+  /** The exact bytes this bench put on the wire, so the SSE framing itself can be asserted. */
+  const servedBodies: string[] = [];
   const deliveryPosts: Array<{ kind: string; status: string; report_id: string }> = [];
   const requestLog: { method: string; url: string }[] = [];
 
@@ -580,7 +671,15 @@ test.describe('jaina tool approval card', () => {
       });
     });
 
-    await context.route('**/api/agents/jaina/chat/stream', async (route) => {
+    // `**` after the path: `useChat`'s `resume` reconnects with GET …/stream?session_id=…, and a
+    // glob anchored at `stream` would let that fall through to the deliberately dead Backend port.
+    await context.route('**/api/agents/jaina/chat/stream**', async (route) => {
+      // 204 is the "nothing in flight" answer the SDK's reconnect transport expects.
+      if (route.request().method() !== 'POST') {
+        await route.fulfill({ status: 204, body: '' });
+        return;
+      }
+
       const body = (route.request().postDataJSON() ?? {}) as StreamPost;
       streamPosts.push(body);
       if (!body.tool_action) {
@@ -594,16 +693,18 @@ test.describe('jaina tool approval card', () => {
           createdAt: new Date().toISOString(),
         });
       }
+      const served = await (body.tool_action
+        ? denialStreamBody()
+        : body.query === LIVE_PROMPT
+          ? liveReportStreamBody()
+          : body.query === FINAL_SHELL_PROMPT
+            ? finalShellStreamBody()
+            : approvalStreamBody());
+      servedBodies.push(served);
       await route.fulfill({
         status: 200,
-        headers: { 'content-type': 'application/x-ndjson' },
-        body: body.tool_action
-          ? denialStreamBody()
-          : body.query === LIVE_PROMPT
-            ? liveReportStreamBody()
-            : body.query === FINAL_SHELL_PROMPT
-              ? finalShellStreamBody()
-              : approvalStreamBody(),
+        headers: UI_MESSAGE_STREAM_HEADERS as Record<string, string>,
+        body: served,
       });
     });
 
@@ -661,6 +762,11 @@ test.describe('jaina tool approval card', () => {
       .poll(() => streamPosts.length, { timeout: 60_000, intervals: [250, 500, 1_000] })
       .toBeGreaterThan(0);
     grade('stream.dispatched', true, 'the real composer POSTed the real chat-stream route');
+
+    // What the route actually PUT ON THE WIRE is SSE, not just what the builder can make — the
+    // protocol itself is proved independently by `the stub speaks the AI SDK UI message stream`.
+    expect(servedBodies[0] ?? '').toMatch(/^data: \{"type":"start"/);
+    grade('stream.served_sse', true, 'the fulfilled body opened with an SSE `start` chunk');
 
     // ── 1. the table ──────────────────────────────────────────────────────────
     const table = page.locator('table').filter({ hasText: 'daily_budget' }).first();
@@ -850,48 +956,66 @@ test.describe('jaina tool approval card', () => {
     await expect(page.getByText('Spend', { exact: true })).toBeVisible();
     await expect(page.getByText(/686\.46/)).toBeVisible();
     await expect(page.getByRole('group', { name: 'Report modules' })).toBeVisible();
-    grade('stream.final_shell_retains_blocks', true, 'the completed response kept its metric block');
+    grade(
+      'stream.final_shell_retains_blocks',
+      true,
+      'the completed response kept its metric block',
+    );
   });
 
   test('keeps manual scrolling responsive while a long response streams', async () => {
     const scrollPage = await context.newPage();
-    const chunks = scrollStreamChunks();
+    const chunks = await scrollStreamChunks();
+    // A page-level fetch stub rather than `context.route`, because this case needs the SSE lines to
+    // arrive SPACED OUT: the assertion is about what the viewport does between deltas.
     await scrollPage.addInitScript(
-      ({ prompt, streamChunks }) => {
+      ({ prompt, streamChunks, headers }) => {
         const originalFetch = window.fetch.bind(window);
         window.fetch = async (...args) => {
           const [input, init] = args;
           const url =
             typeof input === 'string' ? input : input instanceof Request ? input.url : input.href;
-          if (url.includes('/api/agents/jaina/chat/stream') && typeof init?.body === 'string') {
-            const body = JSON.parse(init.body) as { query?: string };
-            if (body.query === prompt) {
-              const encoder = new TextEncoder();
-              return new Response(
-                new ReadableStream({
-                  start(controller) {
-                    let index = 0;
-                    const push = () => {
-                      const chunk = streamChunks[index];
-                      if (chunk === undefined) {
-                        controller.close();
-                        return;
-                      }
-                      index += 1;
-                      controller.enqueue(encoder.encode(chunk));
-                      window.setTimeout(push, 80);
-                    };
-                    push();
-                  },
-                }),
-                { status: 200, headers: { 'content-type': 'application/x-ndjson' } },
-              );
+          if (url.includes('/api/agents/jaina/chat/stream')) {
+            const method = (
+              init?.method ?? (input instanceof Request ? input.method : 'GET')
+            ).toUpperCase();
+            // `useChat`'s `resume` reconnect. Unanswered it reaches the dead Backend port.
+            if (method === 'GET') return new Response(null, { status: 204 });
+
+            if (typeof init?.body === 'string') {
+              const body = JSON.parse(init.body) as { query?: string };
+              if (body.query === prompt) {
+                const encoder = new TextEncoder();
+                return new Response(
+                  new ReadableStream({
+                    start(controller) {
+                      let index = 0;
+                      const push = () => {
+                        const chunk = streamChunks[index];
+                        if (chunk === undefined) {
+                          controller.close();
+                          return;
+                        }
+                        index += 1;
+                        controller.enqueue(encoder.encode(chunk));
+                        window.setTimeout(push, 80);
+                      };
+                      push();
+                    },
+                  }),
+                  { status: 200, headers },
+                );
+              }
             }
           }
           return originalFetch(...args);
         };
       },
-      { prompt: SCROLL_PROMPT, streamChunks: chunks },
+      {
+        prompt: SCROLL_PROMPT,
+        streamChunks: chunks,
+        headers: UI_MESSAGE_STREAM_HEADERS as Record<string, string>,
+      },
     );
 
     try {

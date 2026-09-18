@@ -1,8 +1,8 @@
 /**
- * `jainaChatRequestSchema` is a STRIPPING `z.object`, and `useJainaChatStream` parses
- * through it before `JSON.stringify`. A field that is not declared is removed with no
- * type error, no runtime error and no log line, and the Next route is a pure
- * passthrough that would not notice either — the approval would simply never arrive.
+ * `jainaChatRequestSchema` is a STRIPPING `z.object`, and `buildJainaChatStreamRequest`
+ * parses through it before the body is sent. A field that is not declared is removed with
+ * no type error, no runtime error and no log line, and the Backend route would not notice
+ * either — the approval would simply never arrive.
  *
  * This file is small on purpose. It is the cheapest possible guard on the one line
  * that carries a human's decision to the backend.

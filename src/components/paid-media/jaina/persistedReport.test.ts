@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { interpretCheckpointReportPayload } from '@/lib/jaina/stream';
+import { interpretCheckpointReportPayload } from '@/lib/jaina/reportPayload';
 import { parsePersistedReportV2Value, parsePersistedReportValue } from './persistedReport';
 
 describe('parsePersistedReportValue', () => {

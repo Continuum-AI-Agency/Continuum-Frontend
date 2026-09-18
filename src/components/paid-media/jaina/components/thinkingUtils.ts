@@ -1,5 +1,5 @@
 import type { ToolCallEventData, ToolResultEventData } from '@/lib/jaina/schemas';
-import type { JainaProgressEntry } from '@/lib/jaina/stream';
+import type { JainaProgressEntry } from '@/components/paid-media/jaina/types';
 
 export type AgentLifecycleSegment = {
   kind: 'agent_lifecycle';

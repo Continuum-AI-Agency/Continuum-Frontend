@@ -1,5 +1,6 @@
 import {
   type FrontendCheckpointReport,
+  frontendCheckpointReportSchema,
   hasReportContent,
   type ReportPayload,
 } from '@/lib/jaina/schemas';
@@ -27,12 +28,21 @@ const isReportSignalValue = (value: unknown) => {
 const hasReportSignal = (record: Record<string, unknown>) =>
   reportSignalKeys.some((key) => isReportSignalValue(record[key]));
 
+/**
+ * Did anything in this turn ask for its answer to be RENDERED as a report?
+ *
+ * The second argument used to be the raw `state.delta` array. That array does not exist on the
+ * native wire and nothing else read it, so this now takes the flat part payloads that survive it
+ * (the report meta and the checkpoint summary) — `uiMessageProjection.reportSignalRecordsOf` is
+ * what supplies them. The `progress` fallback is unchanged and is still the path that fires for
+ * every turn whose signal arrived as a progress stage.
+ */
 export const resolveReportSignal = (
   progress: JainaChatMessage['reasoning'] = [],
-  deltas: Array<{ delta: Record<string, unknown> }> = [],
+  records: ReadonlyArray<Record<string, unknown>> = [],
 ) => {
-  for (const entry of deltas) {
-    if (hasReportSignal(entry.delta)) return true;
+  for (const record of records) {
+    if (hasReportSignal(record)) return true;
   }
   for (const entry of progress) {
     const data = (entry?.data ?? {}) as Record<string, unknown>;
@@ -53,6 +63,91 @@ export const getFinalThought = (progress: JainaChatMessage['reasoning'] = []) =>
   }
   return undefined;
 };
+
+/**
+ * The report's own one-line summary, healed when synthesis declined to write one.
+ *
+ * "Synthesis summary unavailable" is a placeholder the Backend emits, and printing it is worse
+ * than printing the first thing the report actually says.
+ */
+export function resolveReportSummaryForMessage(
+  report: JainaChatMessage['report'] | undefined,
+): string {
+  if (!report) return '';
+  const summary = getReportSummary(report).trim();
+  const isUnavailableSummary = /synthesis summary unavailable/i.test(summary);
+  if (!isUnavailableSummary) return summary;
+  if ('type' in report) return summary;
+
+  const v1 = frontendCheckpointReportSchema.safeParse(report);
+  if (!v1.success) return summary;
+
+  const firstSectionSummary = v1.data.sections.find((section) =>
+    Boolean(section.summary?.trim()),
+  )?.summary;
+  if (firstSectionSummary) return firstSectionSummary;
+
+  const firstRecommendation = v1.data.strategic_recommendations[0];
+  if (firstRecommendation?.title) {
+    return firstRecommendation.rationale
+      ? `${firstRecommendation.title}: ${firstRecommendation.rationale}`
+      : firstRecommendation.title;
+  }
+
+  return summary;
+}
+
+export type RenderableContentSources = {
+  sessionTitle?: string;
+  pendingClarification?: { question: string } | null;
+  responseText: string;
+  report?: JainaChatMessage['report'] | null;
+  reportV2?: JainaChatMessage['reportV2'] | null;
+  latestCheckpointSummary?: string;
+  checkpointSummarySource?: 'synthesis' | 'tool_fallback' | 'default_unavailable' | null;
+  plan?: JainaChatMessage['plan'] | null;
+  progress: JainaChatMessage['reasoning'];
+};
+
+/**
+ * The prose a turn shows, in the order a reader wants it.
+ *
+ * A turn that answered with a report has little or no plain text, so `message.content` cannot be
+ * the concatenated text parts alone — that renders as an empty bubble under a report card. This
+ * ladder is what fills it, and it is a pure function of one message's own fields.
+ */
+export function pickRenderableContent(sources: RenderableContentSources): string {
+  const clarification = sources.pendingClarification?.question?.trim();
+  if (clarification) return clarification;
+
+  const safeText = isLikelyStructuredJsonContent(sources.responseText)
+    ? (extractRenderableFallbackFromStructuredContent(sources.responseText) ?? '').trim()
+    : sources.responseText.trim();
+  if (safeText) return safeText;
+
+  const v2Summary = sources.reportV2?.executive_summary?.trim();
+  if (v2Summary) return v2Summary;
+
+  const reportSummary = resolveReportSummaryForMessage(sources.report ?? undefined).trim();
+  if (reportSummary) return reportSummary;
+
+  const checkpointSummary =
+    sources.checkpointSummarySource !== 'default_unavailable'
+      ? (sources.latestCheckpointSummary ?? '').trim()
+      : '';
+  if (checkpointSummary) return checkpointSummary;
+
+  const planTitle = sources.plan?.title?.trim();
+  if (planTitle) return planTitle;
+
+  const finalThought = getFinalThought(sources.progress)?.trim();
+  if (finalThought) return finalThought;
+
+  const sessionTitle = sources.sessionTitle?.trim();
+  if (sessionTitle) return sessionTitle;
+
+  return '';
+}
 
 export const getReportSummary = (report: ReportPayload | null) => {
   if (!report) return '';

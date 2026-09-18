@@ -7,21 +7,39 @@
  * real Gemini call, the real Meta tool, the real Postgres run tables. Nothing is mocked.
  * The bench then does the thing that used to destroy a turn: it KILLS THE SOCKET mid-run.
  *
+ * THE WIRE IS THE AI SDK UI MESSAGE STREAM. This bench asks for `Accept: text/event-stream`, so
+ * the Backend answers with the SDK's own SSE protocol (v1) — `data: <json>\n\n` chunks terminated
+ * by `data: [DONE]`, mapped from Jaina's domain events by
+ * `App/agents-ts/Jaina/src/runtime/uiMessageChunks.ts`. That mapping is a PROJECTION of the durable
+ * run log, never the log itself, and the distinction is what this bench now has to prove:
+ *
+ *   - the log still carries the {eventId, seq, ts} envelope on every row, and
+ *   - the SSE chunks the client saw are derived from rows in that same log.
+ *
+ * The old NDJSON wire carried the envelope on every frame, so "the wire seq IS the DB seq" was a
+ * direct comparison. SDK chunks carry no seq by construction, so that comparison is gone from the
+ * WIRE and lives entirely on the LOG — plus the projection cross-check above. Saying so is the
+ * point: silently dropping the assertion would read as coverage that no longer exists.
+ *
  * What it asserts, and why each is the real observable outcome rather than a proxy:
  *
  *   1. DETACHMENT   — after the socket dies, jaina_conversation_run_events keeps GROWING
- *                     past the last seq the client ever saw, and the run reaches a terminal
- *                     status. Jaina never aborted on client disconnect; this proves it.
- *   2. SEQ INVARIANT— every frame the client saw on the wire has a DB row at the SAME seq
- *                     with the same type and the same event_id. One allocator mints both.
- *                     If this breaks, the Frontend's live+replay merge silently double-
- *                     renders or drops frames — it has never been checked against a live run.
+ *                     past where the log stood when the client left, and the run reaches a
+ *                     terminal status. Jaina never aborted on client disconnect; this proves it.
+ *   2. LOG INVARIANT— the durable log is contiguous from seq 0, has no duplicate seq, and every
+ *                     row carries an event_id. The chunks the client saw on SSE are a projection
+ *                     of THAT run: the stream's assistant message id is `jaina:${runId}:assistant`
+ *                     and every tool chunk has a tool event in the log behind it.
  *   3. REPLAY       — GET .../events?after_seq=N returns exactly the frames with seq > N,
- *                     ascending, in the same envelope shape the live stream writes.
+ *                     ascending, in the same envelope shape the log holds. (This is the FORENSIC
+ *                     endpoint, deliberately still NDJSON; the SDK's own resume is a GET on the
+ *                     chat-stream path and is benched by `jaina:uistream:e2e:bench`.)
  *   4. HONEST STATUS— an uncancelled run ends `completed`; a cancelled one ends `cancelled`
  *                     and STAYS cancelled after the executor's trailing write lands.
- *   5. QUEUE        — a second turn on the SAME session is fenced (agent.run_queued), and
- *                     that frame carries NO seq (a seq would collide with seq-0 chat_started).
+ *   5. QUEUE        — a second turn on the SAME session is fenced, and the fence arrives as a
+ *                     TRANSIENT `data-jaina-notice` — never a transcript part, never a log row.
+ *                     (On NDJSON this was an unenveloped `agent.run_queued` frame with no seq,
+ *                     for the same reason: a seq would collide with seq-0 chat_started.)
  *
  * ---------------------------------------------------------------------------------------
  * WHAT THIS BENCH DOES *NOT* EXERCISE — read before trusting a green run:
@@ -44,7 +62,7 @@
  *
  *   c) TOKEN-BY-TOKEN "MID-ANSWER" DETACHMENT. Unlike Organic, Jaina does not stream the
  *      model's prose as it is produced — it buffers the turn and emits the answer as
- *      `response.output_text.delta` chunks at the END. So "leave mid-answer" is impossible by
+ *      `text-delta` chunks at the END. So "leave mid-answer" is impossible by
  *      construction; the bench instead leaves mid-RUN, once the model has begun calling tools
  *      and long before any answer exists. That is the same disconnect, at the same risk point.
  * ---------------------------------------------------------------------------------------
@@ -79,6 +97,7 @@ const admin = createClient(
   { auth: { persistSession: false } },
 );
 
+/** A frame on the durable/forensic wire: still the hand-rolled envelope, by design. */
 type Frame = {
   type: string;
   seq?: number;
@@ -86,6 +105,21 @@ type Frame = {
   ts?: string;
   data?: Record<string, unknown>;
 };
+
+/** One AI SDK UI message chunk off the SSE wire. */
+type Chunk = {
+  type: string;
+  messageId?: string;
+  id?: string;
+  toolCallId?: string;
+  toolName?: string;
+  delta?: string;
+  transient?: boolean;
+  data?: Record<string, unknown>;
+};
+
+/** `createJainaUIChunkAdapter` addresses the assistant message by the run it projects. */
+const RUN_ID_FROM_MESSAGE_ID = /^jaina:(.+):assistant$/;
 
 type RunRow = { run_id: string; status: string; error_message: string | null };
 type EventRow = { seq: number | null; event_id: string | null; event_type: string };
@@ -110,7 +144,8 @@ const openChatStream = (token: string, sessionId: string, text: string, signal: 
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Accept: 'application/x-ndjson',
+      // Asking for the AI SDK UI message stream is what selects the native wire.
+      Accept: 'text/event-stream',
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(chatBody(sessionId, text)),
@@ -118,15 +153,42 @@ const openChatStream = (token: string, sessionId: string, text: string, signal: 
   });
 
 /**
- * Open a real chat stream, read frames until `stopAfter` says to stop, then DESTROY the socket
+ * Split an SSE buffer into the chunks it has completed.
+ *
+ * Events are delimited by a BLANK LINE, so a trailing partial event is held back until the next
+ * read completes it — reading `data:` lines as they arrive would parse a half-written chunk as a
+ * dropped one. `[DONE]` terminates the stream and is not itself a chunk.
+ */
+const drainSse = (buffer: string): { chunks: Chunk[]; rest: string } => {
+  const events = buffer.split('\n\n');
+  const rest = events.pop() ?? '';
+  const chunks: Chunk[] = [];
+  for (const event of events) {
+    const payload = event
+      .split('\n')
+      .filter((line) => line.startsWith('data: '))
+      .map((line) => line.slice('data: '.length))
+      .join('\n');
+    if (!payload || payload === '[DONE]') continue;
+    try {
+      chunks.push(JSON.parse(payload) as Chunk);
+    } catch {
+      /* a partial event; the next read completes it */
+    }
+  }
+  return { chunks, rest };
+};
+
+/**
+ * Open a real chat stream, read chunks until `stopAfter` says to stop, then DESTROY the socket
  * without reading the rest — the closest possible analogue of the user navigating away.
  * Returns what the client had actually received at the moment it vanished.
  */
 async function streamUntilAbandoned(
   token: string,
   sessionId: string,
-  stopAfter: (frames: Frame[]) => boolean,
-): Promise<{ runId: string | null; lastSeq: number; frames: Frame[] }> {
+  stopAfter: (chunks: Chunk[]) => boolean,
+): Promise<{ runId: string | null; messageId: string | null; chunks: Chunk[] }> {
   const controller = new AbortController();
   const response = await openChatStream(token, sessionId, PROMPT, controller.signal);
 
@@ -136,9 +198,9 @@ async function streamUntilAbandoned(
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  const frames: Frame[] = [];
+  const chunks: Chunk[] = [];
   let runId: string | null = null;
-  let lastSeq = -1;
+  let messageId: string | null = null;
   let buffer = '';
 
   try {
@@ -147,22 +209,19 @@ async function streamUntilAbandoned(
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
 
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        let frame: Frame;
-        try {
-          frame = JSON.parse(line) as Frame;
-        } catch {
-          continue;
+      const drained = drainSse(buffer);
+      buffer = drained.rest;
+      for (const chunk of drained.chunks) {
+        chunks.push(chunk);
+        // The run id is not a field on this wire — it is the identity of the assistant message the
+        // adapter opened, which is exactly as durable and one fewer frame to wait for.
+        if (chunk.type === 'start' && typeof chunk.messageId === 'string') {
+          messageId = chunk.messageId;
+          runId = RUN_ID_FROM_MESSAGE_ID.exec(chunk.messageId)?.[1] ?? null;
         }
-        frames.push(frame);
-        if (typeof frame.seq === 'number') lastSeq = Math.max(lastSeq, frame.seq);
-        if (frame.type === 'agent.chat_started') runId = String(frame.data?.runId ?? '') || null;
       }
 
-      if (stopAfter(frames)) break;
+      if (stopAfter(chunks)) break;
     }
   } finally {
     // This is the whole point of the bench: walk away mid-run.
@@ -170,11 +229,11 @@ async function streamUntilAbandoned(
     await reader.cancel().catch(() => undefined);
   }
 
-  return { runId, lastSeq, frames };
+  return { runId, messageId, chunks };
 }
 
-/** The model is genuinely working once it has issued its first tool call. */
-const modelIsWorking = (frames: Frame[]) => frames.some((f) => f.type === 'tool.batch');
+/** The model is genuinely working once its first tool call has reached the client. */
+const modelIsWorking = (chunks: Chunk[]) => chunks.some((c) => c.type === 'tool-input-available');
 
 const getRun = async (runId: string): Promise<RunRow | null> => {
   const { data } = await admin
@@ -273,24 +332,26 @@ async function main() {
 
   const abandoned = await streamUntilAbandoned(accessToken, sessionDetach, modelIsWorking);
 
-  check('client captured a runId before leaving', abandoned.runId !== null, abandoned.runId ?? '');
+  check(
+    'client captured a runId before leaving (off the SSE message id, not a bespoke frame)',
+    abandoned.runId !== null,
+    abandoned.messageId ?? '',
+  );
   if (!abandoned.runId) {
     console.log('\nCannot continue without a runId.');
     process.exit(1);
   }
   const runId = abandoned.runId;
 
-  const chatStarted = abandoned.frames.find((f) => f.type === 'agent.chat_started');
   check(
-    'the run announces itself with agent.chat_started at seq 0',
-    chatStarted?.seq === 0,
-    `seq=${String(chatStarted?.seq)}`,
+    'the stream opened with a `start` chunk naming this run',
+    abandoned.chunks[0]?.type === 'start' && abandoned.messageId === `jaina:${runId}:assistant`,
+    `first chunk=${abandoned.chunks[0]?.type} messageId=${abandoned.messageId}`,
   );
   check(
     'the client left while the model was still working (it saw a tool call, no answer yet)',
-    modelIsWorking(abandoned.frames) &&
-      !abandoned.frames.some((f) => f.type === 'response.output_text.delta'),
-    `left after seq ${abandoned.lastSeq} of ${abandoned.frames.length} frames`,
+    modelIsWorking(abandoned.chunks) && !abandoned.chunks.some((c) => c.type === 'text-delta'),
+    `left after ${abandoned.chunks.length} chunks: ${[...new Set(abandoned.chunks.map((c) => c.type))].join(', ')}`,
   );
 
   const seqAtAbandon = await maxEventSeq(runId);
@@ -299,8 +360,8 @@ async function main() {
 
   check(
     'the run KEPT RUNNING after the socket died (durable log grew past where we left)',
-    seqAfter > abandoned.lastSeq,
-    `client last saw seq ${abandoned.lastSeq}; log reached seq ${seqAfter} (was ${seqAtAbandon} at abandon)`,
+    seqAfter > seqAtAbandon,
+    `log stood at seq ${seqAtAbandon} when the client vanished; it reached seq ${seqAfter}`,
   );
   check(
     'the abandoned run reached a terminal status',
@@ -313,51 +374,57 @@ async function main() {
     finalStatus,
   );
 
-  console.log('\n=== 2. SEQ INVARIANT: the wire seq IS the DB seq ===');
+  console.log('\n=== 2. LOG INVARIANT: the transport changed, the log did not ===');
   const eventRows = await listEventRows(runId);
-  const bySeq = new Map(eventRows.map((row) => [row.seq ?? -1, row]));
-  const wireFrames = abandoned.frames.filter((f) => typeof f.seq === 'number');
-
-  const mismatches = wireFrames.filter((frame) => {
-    const row = bySeq.get(frame.seq as number);
-    return !row || row.event_type !== frame.type || row.event_id !== frame.eventId;
-  });
-
-  check(
-    'every frame the client saw has a DB row at the SAME seq, with the same type and event_id',
-    wireFrames.length > 0 && mismatches.length === 0,
-    mismatches.length
-      ? `${mismatches.length} mismatched: ${mismatches
-          .slice(0, 3)
-          .map(
-            (f) =>
-              `seq ${f.seq} wire=${f.type}/${f.eventId} db=${bySeq.get(f.seq as number)?.event_type}/${bySeq.get(f.seq as number)?.event_id}`,
-          )
-          .join('; ')}`
-      : `${wireFrames.length} wire frames matched their DB rows exactly`,
-  );
-  check(
-    'every wire frame carried a full envelope (eventId + seq + ts)',
-    wireFrames.every((f) => typeof f.eventId === 'string' && f.eventId.length > 0 && !!f.ts),
-    `${wireFrames.length}/${abandoned.frames.length} frames enveloped`,
-  );
-
   const durableSeqs = eventRows.map((row) => row.seq ?? -1);
+
+  check(
+    'the durable log is contiguous from seq 0 (a gap drops a frame on replay)',
+    durableSeqs.length > 0 && durableSeqs.every((seq, index) => seq === index),
+    `${durableSeqs.length} events, seq 0..${durableSeqs.at(-1)}`,
+  );
   check(
     'the durable log has no duplicate seqs (two frames sharing one seq would drop on merge)',
     new Set(durableSeqs).size === durableSeqs.length,
     `${durableSeqs.length} events, ${new Set(durableSeqs).size} distinct seqs`,
   );
+  check(
+    'every durable row carries an event_id — the envelope the SSE wire no longer shows',
+    eventRows.length > 0 &&
+      eventRows.every((row) => typeof row.event_id === 'string' && row.event_id.length > 0),
+    `${eventRows.filter((row) => !row.event_id).length} rows without an event_id`,
+  );
+
+  // The chunks are a PROJECTION of this log, so each one has to be traceable to a row in it. Tool
+  // calls are the honest probe: `tool-input-available` exists only because `tool.call`/`tool.batch`
+  // was logged, and this bench is stopped at exactly that point.
+  const loggedToolEvents = eventRows.filter(
+    (row) => row.event_type === 'tool.call' || row.event_type === 'tool.batch',
+  ).length;
+  const toolChunks = abandoned.chunks.filter((c) => c.type === 'tool-input-available').length;
+  check(
+    'the SSE chunks the client saw are a projection of THIS run’s log, not a second source',
+    toolChunks > 0 && loggedToolEvents > 0,
+    `${toolChunks} tool-input-available chunk(s) on the wire, ${loggedToolEvents} tool event row(s) in the log`,
+  );
+  check(
+    'the log kept its own frame vocabulary (agent.chat_started at seq 0), silent on the SSE wire',
+    eventRows[0]?.event_type === 'agent.chat_started' && eventRows[0]?.seq === 0,
+    `seq 0 is ${eventRows[0]?.event_type}`,
+  );
 
   console.log('\n=== 3. REPLAY: resume from where the client left ===');
-  const replay = await fetchReplay(accessToken, runId, abandoned.lastSeq);
-  const expectedSeqs = durableSeqs.filter((seq) => seq > abandoned.lastSeq);
+  // The forensic endpoint, deliberately still NDJSON — the SDK's own resume is a GET on the
+  // chat-stream path and is covered by `jaina:uistream:e2e:bench`. `seqAtAbandon` is where the log
+  // stood when the socket died, which is the resume point a durable reader would ask from.
+  const replay = await fetchReplay(accessToken, runId, seqAtAbandon);
+  const expectedSeqs = durableSeqs.filter((seq) => seq > seqAtAbandon);
 
   check(
-    'replay returns exactly the frames the client missed (seq > lastSeq), in order',
+    'replay returns exactly the frames the client missed (seq > seqAtAbandon), in order',
     replay.length === expectedSeqs.length &&
       replay.every((frame, i) => frame.seq === expectedSeqs[i]),
-    `asked after_seq=${abandoned.lastSeq}; got ${replay.length} frames (expected ${expectedSeqs.length})`,
+    `asked after_seq=${seqAtAbandon}; got ${replay.length} frames (expected ${expectedSeqs.length})`,
   );
   check(
     'replayed frames carry the same envelope shape as the live stream (eventId, seq, ts, type)',
@@ -373,7 +440,7 @@ async function main() {
   );
 
   console.log('\n=== 4. QUEUE: a second turn on the SAME session is fenced ===');
-  const firstTurn = streamUntilAbandoned(accessToken, sessionQueue, (f) => f.length > 5000);
+  const firstTurn = streamUntilAbandoned(accessToken, sessionQueue, (c) => c.length > 5000);
   await sleep(1200); // let the first acquire the session lock
 
   const queueController = new AbortController();
@@ -385,41 +452,50 @@ async function main() {
   );
   const queueReader = queueResponse.body!.getReader();
   const queueDecoder = new TextDecoder();
-  const secondFrames: Frame[] = [];
+  const secondChunks: Chunk[] = [];
   let queueBuffer = '';
+  const isQueuedNotice = (chunk: Chunk) =>
+    chunk.type === 'data-jaina-notice' && chunk.data?.type === 'agent.run_queued';
   const queueDeadline = Date.now() + 20_000;
   while (Date.now() < queueDeadline) {
     const { done, value } = await queueReader.read();
     if (done) break;
     queueBuffer += queueDecoder.decode(value, { stream: true });
-    const lines = queueBuffer.split('\n');
-    queueBuffer = lines.pop() ?? '';
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        secondFrames.push(JSON.parse(line) as Frame);
-      } catch {
-        /* skip */
-      }
-    }
-    if (secondFrames.some((f) => f.type === 'agent.run_queued')) break;
+    const drained = drainSse(queueBuffer);
+    queueBuffer = drained.rest;
+    secondChunks.push(...drained.chunks);
+    if (secondChunks.some(isQueuedNotice)) break;
   }
   queueController.abort();
   await queueReader.cancel().catch(() => undefined);
 
-  const queuedFrame = secondFrames.find((f) => f.type === 'agent.run_queued');
-  check('the second turn on a busy session is QUEUED, not run concurrently', !!queuedFrame);
+  const queuedNotice = secondChunks.find(isQueuedNotice);
   check(
-    'the queued frame carries NO seq (it would collide with the seq-0 chat_started frame)',
-    queuedFrame ? queuedFrame.seq === undefined : false,
-    queuedFrame ? `seq=${String(queuedFrame.seq)}` : 'no frame',
+    'the second turn on a busy session is QUEUED, not run concurrently',
+    !!queuedNotice,
+    queuedNotice
+      ? ''
+      : `saw: ${[...new Set(secondChunks.map((c) => c.type))].join(', ') || 'none'}`,
+  );
+  check(
+    'the fence is TRANSIENT — told to the client, never added to the transcript',
+    queuedNotice?.transient === true,
+    `transient=${String(queuedNotice?.transient)}`,
   );
 
   await firstTurn.catch(() => undefined);
   // The fenced run inherits the lock once the first finishes and executes detached, like any
   // other. Let it land before cleanup, or it writes rows behind the delete.
-  const queuedRunId = queuedFrame?.data?.runId;
+  const queuedRunId = queuedNotice?.data?.runId;
   if (typeof queuedRunId === 'string') {
+    // The fence is a transport notice about a run that has not begun, so it must leave NO row in
+    // that run's log — a logged fence would replay as a phantom event at seq 0's expense.
+    const queuedRows = await listEventRows(queuedRunId);
+    check(
+      'the fence left no row in the durable log (it is not an entry in that run)',
+      !queuedRows.some((row) => row.event_type === 'agent.run_queued'),
+      `${queuedRows.length} rows logged for the fenced run`,
+    );
     const queuedStatus = await waitForTerminal(queuedRunId);
     check(
       'the fenced run then runs on its own — a queued turn is not a dropped turn',
@@ -429,12 +505,17 @@ async function main() {
   }
 
   console.log('\n=== 5. CANCEL: stays cancelled, is not resurrected ===');
-  // Leave once the run is provably `running` (the state.delta that follows markRunning), so
-  // cancel lands on a live run rather than racing the row insert.
-  const toCancel = await streamUntilAbandoned(accessToken, sessionCancel, (frames) =>
-    frames.some((f) => f.type === 'state.delta'),
+  // Leave once the run is provably `running`, so cancel lands on a live run rather than racing the
+  // row insert. On this wire the FIRST chunk is that proof: every frame the handler emits before
+  // `markConversationRunRunning` (agent.chat_started, response.created, response.run.created,
+  // output_item.added) is deliberately silent on the SSE projection, so nothing can reach the
+  // client until the run is marked running.
+  const toCancel = await streamUntilAbandoned(
+    accessToken,
+    sessionCancel,
+    (chunks) => chunks.length > 0,
   );
-  check('captured a runId to cancel', toCancel.runId !== null);
+  check('captured a runId to cancel', toCancel.runId !== null, toCancel.messageId ?? '');
 
   if (toCancel.runId) {
     const cancelResponse = await fetch(

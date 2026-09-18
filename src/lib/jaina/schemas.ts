@@ -91,9 +91,9 @@ export const jainaChatRequestSchema = z.object({
    * A human's answer to a paid-scaffold approval gate.
    *
    * THIS LINE IS LOAD-BEARING. `jainaChatRequestSchema` is a stripping `z.object`
-   * and `useJainaChatStream` parses through it BEFORE `JSON.stringify`, so an
+   * and `buildJainaChatStreamRequest` parses through it BEFORE the body is sent, so an
    * undeclared field vanishes with no type error, no runtime error and no log — and
-   * the Next route is a pure passthrough that would not catch it either.
+   * the Backend route would not catch it either.
    */
   scaffold_action: jainaScaffoldActionSchema.optional(),
   /**
@@ -118,8 +118,8 @@ export const jainaChatRequestSchema = z.object({
     projectId: z.string().uuid().optional(),
     /**
      * Composer document attachments and the ephemeral-retrieval scope key. Both were
-     * already being SENT by `useJainaChatStream` and both were being silently deleted
-     * here — the exact failure this schema's own comment warns about, live.
+     * already being SENT by the composer and both were being silently deleted here —
+     * the exact failure this schema's own comment warns about, live.
      */
     documents: z.array(agentDocumentAttachmentSchema).optional(),
     documentScopeKey: z.string().min(1).max(200).optional(),

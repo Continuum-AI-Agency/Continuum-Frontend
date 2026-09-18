@@ -1,9 +1,26 @@
+/**
+ * The surface against the AI SDK transcript.
+ *
+ * `useJainaChat` is mocked and the transcript is driven by PARTS, because that is now the only
+ * thing the surface reads. Before the cutover this file injected a `JainaStreamState` — the
+ * 4,000-line reducer's accumulated object — and two of its cases existed only to pin down the
+ * reconciliation between that state and the persisted snapshot. There is one owner now
+ * (`useChat.messages`), so those cases are re-expressed as what still has to hold: a projected
+ * plan and its reasoning survive the turn finishing, and a realtime run-completion does not
+ * blank the answer on screen.
+ *
+ * What is asserted at the dispatch seam is the ARGUMENT to `sendTurn`, not a DOM count: the
+ * composer's job is to turn a click into one correctly-shaped turn, and a decision that travels
+ * on the wrong typed field fails silently in production.
+ */
+
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { JAINA_UI_DATA_PART, type JainaUIMessage } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import * as React from 'react';
 import { useJainaConversationSidebarStore } from '@/lib/jaina/conversation-sidebar-store';
-import { createInitialJainaStreamState, type JainaStreamState } from '@/lib/jaina/stream';
 
 Object.assign(global.window, {
   SyntaxError: globalThis.SyntaxError,
@@ -17,13 +34,30 @@ const withQueryClient = ({ children }: { children: ReactNode }) => (
   </QueryClientProvider>
 );
 
-let streamState: JainaStreamState = createInitialJainaStreamState();
+type ChatStatus = 'ready' | 'submitted' | 'streaming' | 'error';
 
-const startMock = mock(() => Promise.resolve({}));
-const cancelMock = mock(() => {});
-const detachMock = mock(() => {});
-const resetMock = mock(() => {});
-const clearMemoryMock = mock(() => Promise.resolve());
+/** Props `motion` consumes itself; passing them to a DOM node is a React warning per render. */
+const MOTION_ONLY_PROPS = new Set([
+  'initial',
+  'animate',
+  'exit',
+  'transition',
+  'variants',
+  'layout',
+  'layoutId',
+  'drag',
+  'onAnimationComplete',
+  'onAnimationStart',
+  'custom',
+]);
+
+let chatStatus: ChatStatus = 'ready';
+/** Handle onto the mocked hook's real React state, so a test can push a frame into the transcript. */
+let pushMessages: ((next: JainaUIMessage[]) => void) | null = null;
+
+const sendTurnMock = mock(() => Promise.resolve());
+const stopMock = mock(() => {});
+
 let runStatusCallback:
   | ((row: {
       runId: string;
@@ -44,6 +78,36 @@ const mockChannel = {
 
 mock.module('next/dynamic', () => ({
   default: () => () => null,
+}));
+
+// The surface's shader wrapper is a `motion.div` that starts an animation on mount. happy-dom's
+// `Animation.cancel()` rejects `finished` with an AbortError, motion-dom attaches no catch, and
+// the rejection surfaces on whatever test is running when cleanup unmounts — a moving ~8ms
+// failure in a case that never touched it. Rendering motion as plain elements removes the
+// animation rather than the symptom. The REAL module is spread back in: a partial `mock.module`
+// deletes every export it omits, for this file and every later one in the same run.
+const actualMotion = await import('motion/react');
+const plainMotion = new Proxy(
+  {},
+  {
+    get: (_target, tag: string) => {
+      const Plain = ({ children, ...rest }: Record<string, unknown> & { children?: ReactNode }) => {
+        const domProps = Object.fromEntries(
+          Object.entries(rest).filter(
+            ([key]) => !MOTION_ONLY_PROPS.has(key) && !key.startsWith('while'),
+          ),
+        );
+        return React.createElement(tag, domProps, children);
+      };
+      return Plain;
+    },
+  },
+);
+
+mock.module('motion/react', () => ({
+  ...actualMotion,
+  motion: plainMotion,
+  AnimatePresence: ({ children }: { children?: ReactNode }) => children ?? null,
 }));
 
 mock.module('@/components/ui/animated-shader-background', () => ({
@@ -69,16 +133,23 @@ mock.module('@/lib/supabase/client', () => ({
   }),
 }));
 
-mock.module('@/hooks/useJainaChatStream', () => ({
-  useJainaChatStream: () => ({
-    state: streamState,
-    start: startMock,
-    cancel: cancelMock,
-    detach: detachMock,
-    reset: resetMock,
-    clearMemory: clearMemoryMock,
-    liveRunId: streamState.runId ?? null,
-  }),
+// `messages` is REAL React state and not a module variable read on every render: history
+// hydration lands through `setMessages` from inside an effect, and a plain variable would be
+// written without anything re-rendering — the transcript would stay empty and every history
+// case would pass for the wrong reason.
+mock.module('@/hooks/useJainaChat', () => ({
+  useJainaChat: () => {
+    const [messages, setMessages] = React.useState<JainaUIMessage[]>([]);
+    pushMessages = setMessages;
+    return {
+      messages,
+      status: chatStatus,
+      error: undefined,
+      sendTurn: sendTurnMock,
+      stop: stopMock,
+      setMessages,
+    };
+  },
 }));
 
 mock.module('@/hooks/useJainaRunStatusRealtime', () => ({
@@ -210,20 +281,22 @@ mock.module('./components/JainaConversationSidebar', () => ({
   JainaConversationSidebar: () => <div data-testid="conversation-sidebar" />,
 }));
 
+// The approval buttons come off `message.pendingToolApprovals` — the projection's own output —
+// and no longer off a second `state` prop. That prop is the thing the cutover deleted.
 mock.module('./components/JainaMessageItem', () => ({
   JainaMessageItem: ({
     message,
-    state,
     onApprovalDecision,
   }: {
     message: Record<string, unknown>;
-    state: JainaStreamState;
     onApprovalDecision?: (approval: Record<string, unknown>, decision: 'approve' | 'deny') => void;
   }) => {
     const plan = message.plan as { id?: string; title?: string } | undefined;
     const reasoning = (message.reasoning as unknown[] | undefined) ?? [];
     const report = message.report as { blocks?: unknown[] } | undefined;
     const reportV2 = message.reportV2 as { blocks?: unknown[] } | undefined;
+    const pendingApprovals =
+      (message.pendingToolApprovals as { approvalId: string }[] | undefined) ?? [];
     return (
       <div data-testid={`${String(message.role)}-message`} data-message-id={String(message.id)}>
         <span data-testid={`${String(message.role)}-content`}>{String(message.content ?? '')}</span>
@@ -239,12 +312,7 @@ mock.module('./components/JainaMessageItem', () => ({
           {reportV2 ? 'v2' : report ? 'legacy' : 'none'}
         </span>
         <span data-testid={`${String(message.role)}-run-id`}>{String(message.runId ?? '')}</span>
-        <span data-testid={`${String(message.role)}-delivery-source`}>
-          {String(message.deliverySource ?? '')}
-        </span>
-        {/* Stands in for the two approval cards: the real ones derive their pending
-            list from this same `state` and call back with the untouched frame. */}
-        {state.pendingToolApprovals.map((approval) => (
+        {pendingApprovals.map((approval) => (
           <button
             key={approval.approvalId}
             type="button"
@@ -259,7 +327,7 @@ mock.module('./components/JainaMessageItem', () => ({
   },
 }));
 
-const { JainaChatSurface, mergePersistedMessagesWithLocal } = await import('./JainaChatSurface');
+const { JainaChatSurface } = await import('./JainaChatSurface');
 
 type MockFetchResponse = {
   ok: boolean;
@@ -275,19 +343,94 @@ function jsonResponse(payload: unknown): MockFetchResponse {
   };
 }
 
+type Part = Record<string, unknown>;
+
+const uiMessage = (
+  id: string,
+  role: 'user' | 'assistant',
+  parts: Part[],
+  metadata?: Record<string, unknown>,
+): JainaUIMessage =>
+  ({ id, role, parts, ...(metadata ? { metadata } : {}) }) as unknown as JainaUIMessage;
+
+const textPart = (value: string): Part => ({ type: 'text', text: value });
+const reasoningPart = (value: string): Part => ({ type: 'reasoning', text: value });
+
+/** A gated tool as the SDK models it mid-pause: the native state IS the pending approval. */
+const approvalRequestedPart = (fields: {
+  approvalId: string;
+  toolCallId: string;
+  toolName: string;
+  input: Record<string, unknown>;
+}): Part => ({
+  type: 'dynamic-tool',
+  state: 'approval-requested',
+  toolCallId: fields.toolCallId,
+  toolName: fields.toolName,
+  input: fields.input,
+  approval: { id: fields.approvalId },
+});
+
+const surface = (
+  <JainaChatSurface
+    brandProfileId="brand-1"
+    brandName="Test Brand"
+    adAccountId="act-1"
+    campaignId={null}
+    userId="user-1"
+  />
+);
+
+/** Empty history plus a session the composer can dispatch into. */
+const emptyHistoryFetch = () =>
+  mock((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    const method = init?.method ?? 'GET';
+
+    if (method === 'GET' && url.includes('/api/agents/jaina/chat/conversations?')) {
+      return Promise.resolve(jsonResponse({ sessions: [], uiMessages: [] }));
+    }
+    if (method === 'POST' && url.endsWith('/api/agents/jaina/chat/conversations')) {
+      return Promise.resolve(
+        jsonResponse({
+          session_id: 'session-1',
+          brand_id: 'brand-1',
+          ad_account_id: 'act-1',
+          conversation_title: null,
+        }),
+      );
+    }
+    return Promise.resolve({
+      ok: false,
+      text: () => Promise.resolve('Unhandled fetch route'),
+    } as MockFetchResponse);
+  }) as typeof fetch;
+
+/**
+ * Put a transcript on screen the way one actually arrives: AFTER mount.
+ *
+ * Seeding the mocked hook's initial state does not survive — the history effect finds no session
+ * for a fresh conversation and resets the transcript to empty, which is correct behaviour and
+ * would silently blank any seed. Waiting for the empty state proves that effect has already run.
+ */
+const showMessages = async (messages: JainaUIMessage[]) => {
+  await screen.findByTestId('jaina-empty-state', undefined, { timeout: 2000 });
+  act(() => {
+    pushMessages?.(messages);
+  });
+};
+
 describe('JainaChatSurface integration', () => {
   const originalFetch = global.fetch;
 
   beforeEach(() => {
     cleanup();
-    streamState = createInitialJainaStreamState();
+    chatStatus = 'ready';
+    pushMessages = null;
     useJainaConversationSidebarStore.getState().clear();
 
-    startMock.mockClear();
-    cancelMock.mockClear();
-    detachMock.mockClear();
-    resetMock.mockClear();
-    clearMemoryMock.mockClear();
+    sendTurnMock.mockClear();
+    stopMock.mockClear();
     runStatusCallback = null;
     toastShowMock.mockClear();
     processAIActionMock.mockClear();
@@ -302,134 +445,10 @@ describe('JainaChatSurface integration', () => {
     cleanup();
   });
 
-  it('keeps local V2 checkpoint blocks when a settled snapshot only has legacy report data', () => {
-    const merged = mergePersistedMessagesWithLocal(
-      [
-        {
-          id: 'persisted-1',
-          role: 'user',
-          content: 'Build a pilot comparison dashboard',
-          createdAt: '2026-05-05T22:40:00.000Z',
-        },
-        {
-          id: 'persisted-2',
-          role: 'assistant',
-          content: 'Pilot comparison summary',
-          createdAt: '2026-05-05T22:41:00.000Z',
-          status: 'done',
-          report: {
-            language: 'en',
-            report_title: '',
-            executive_summary: 'Pilot comparison summary',
-            budget: null,
-            performance_snapshot: [],
-            blocks: [],
-            sections: [],
-            strategic_recommendations: [],
-            follow_up_questions: [],
-            handoff_trace: [],
-            execution_objectives: [],
-            cached_sources: [],
-            graphs: [],
-          },
-        },
-      ],
-      [
-        {
-          id: 'local-user',
-          role: 'user',
-          content: 'Build a pilot comparison dashboard',
-          createdAt: '2026-05-05T22:40:00.000Z',
-        },
-        {
-          id: 'local-assistant',
-          role: 'assistant',
-          content: 'Pilot comparison summary',
-          createdAt: '2026-05-05T22:41:00.000Z',
-          status: 'done',
-          reportV2: {
-            language: 'en',
-            executive_summary: 'Pilot comparison summary',
-            follow_up_questions: [],
-            media_map: {},
-            _meta: {
-              schema_version: '2',
-              block_count: 2,
-              has_charts: false,
-              has_media: false,
-              primary_scope: 'account',
-            },
-            blocks: [
-              {
-                block_id: 'narrative_summary',
-                category: 'narrative',
-                scope: 'account',
-                title: 'Pilot Performance',
-                priority: 0,
-                body: 'The exposed group had stronger engagement.',
-                highlights: [],
-              },
-              {
-                block_id: 'metric_grid_groups',
-                category: 'metric_grid',
-                scope: 'account',
-                title: 'Group Executive Summary',
-                priority: 0,
-                metrics: [{ label: 'Exposed CTR', value: 0.0106, format: 'percent' }],
-              },
-            ],
-          },
-        },
-      ],
-    );
-
-    const assistant = merged.at(-1);
-    expect(assistant?.id).toBe('persisted-2');
-    expect(assistant?.reportV2?.blocks).toHaveLength(2);
-    expect(assistant?.reportV2?.blocks[1]?.category).toBe('metric_grid');
-  });
-
   it('sends forceReportArtifact when Jaina Pro is selected', async () => {
-    global.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : input.toString();
-      const method = init?.method ?? 'GET';
+    global.fetch = emptyHistoryFetch();
 
-      if (method === 'GET' && url.includes('/api/agents/jaina/chat/conversations?')) {
-        return Promise.resolve(
-          jsonResponse({
-            sessions: [],
-            messages: [],
-          }),
-        );
-      }
-
-      if (method === 'POST' && url.endsWith('/api/agents/jaina/chat/conversations')) {
-        return Promise.resolve(
-          jsonResponse({
-            session_id: 'session-1',
-            brand_id: 'brand-1',
-            ad_account_id: 'act-1',
-            conversation_title: null,
-          }),
-        );
-      }
-
-      return Promise.resolve({
-        ok: false,
-        text: () => Promise.resolve('Unhandled fetch route'),
-      } as MockFetchResponse);
-    }) as typeof fetch;
-
-    render(
-      <JainaChatSurface
-        brandProfileId="brand-1"
-        brandName="Test Brand"
-        adAccountId="act-1"
-        campaignId={null}
-        userId="user-1"
-      />,
-      { wrapper: withQueryClient },
-    );
+    render(surface, { wrapper: withQueryClient });
 
     await waitFor(() => {
       expect((screen.getByTestId('prompt-submit') as HTMLButtonElement).disabled).toBe(false);
@@ -443,50 +462,21 @@ describe('JainaChatSurface integration', () => {
     fireEvent.click(screen.getByTestId('prompt-submit'));
 
     await waitFor(() => {
-      expect(startMock).toHaveBeenCalledTimes(1);
+      expect(sendTurnMock).toHaveBeenCalledTimes(1);
     });
 
-    expect(startMock.mock.calls[0]?.[0]).toMatchObject({
+    expect(sendTurnMock.mock.calls[0]?.[0]).toMatchObject({
       query: 'Recommend budget reallocations for this week by campaign',
       forceReportArtifact: true,
       canvas: false,
     });
-    expect(startMock.mock.calls[0]?.[0].adAccountIds).toBeUndefined();
+    expect(sendTurnMock.mock.calls[0]?.[0].adAccountIds).toBeUndefined();
   });
 
   it('sends pasted text inline without a document upload or reference', async () => {
-    global.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : input.toString();
-      const method = init?.method ?? 'GET';
-      if (method === 'GET' && url.includes('/api/agents/jaina/chat/conversations?')) {
-        return Promise.resolve(jsonResponse({ sessions: [], messages: [] }));
-      }
-      if (method === 'POST' && url.endsWith('/api/agents/jaina/chat/conversations')) {
-        return Promise.resolve(
-          jsonResponse({
-            session_id: 'session-inline',
-            brand_id: 'brand-1',
-            ad_account_id: 'act-1',
-            conversation_title: null,
-          }),
-        );
-      }
-      return Promise.resolve({
-        ok: false,
-        text: () => Promise.resolve('Unhandled fetch route'),
-      } as MockFetchResponse);
-    }) as typeof fetch;
+    global.fetch = emptyHistoryFetch();
 
-    render(
-      <JainaChatSurface
-        brandProfileId="brand-1"
-        brandName="Test Brand"
-        adAccountId="act-1"
-        campaignId={null}
-        userId="user-1"
-      />,
-      { wrapper: withQueryClient },
-    );
+    render(surface, { wrapper: withQueryClient });
 
     await waitFor(() => {
       expect((screen.getByTestId('prompt-submit-inline-text') as HTMLButtonElement).disabled).toBe(
@@ -495,8 +485,8 @@ describe('JainaChatSurface integration', () => {
     });
     fireEvent.click(screen.getByTestId('prompt-submit-inline-text'));
 
-    await waitFor(() => expect(startMock).toHaveBeenCalledTimes(1));
-    const request = startMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
+    const request = sendTurnMock.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(request.query).toContain('Summarize this pasted brief');
     expect(request.query).toContain('The campaign brief says to prioritize retention.');
     expect(request.documents).toBeUndefined();
@@ -504,38 +494,9 @@ describe('JainaChatSurface integration', () => {
   });
 
   it('lets the user include another linked Meta ad account for the turn', async () => {
-    global.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : input.toString();
-      const method = init?.method ?? 'GET';
-      if (method === 'GET' && url.includes('/api/agents/jaina/chat/conversations?')) {
-        return Promise.resolve(jsonResponse({ sessions: [], messages: [] }));
-      }
-      if (method === 'POST' && url.endsWith('/api/agents/jaina/chat/conversations')) {
-        return Promise.resolve(
-          jsonResponse({
-            session_id: 'session-scope',
-            brand_id: 'brand-1',
-            ad_account_id: 'act-1',
-            conversation_title: null,
-          }),
-        );
-      }
-      return Promise.resolve({
-        ok: false,
-        text: () => Promise.resolve('Unhandled fetch route'),
-      } as MockFetchResponse);
-    }) as typeof fetch;
+    global.fetch = emptyHistoryFetch();
 
-    render(
-      <JainaChatSurface
-        brandProfileId="brand-1"
-        brandName="Test Brand"
-        adAccountId="act-1"
-        campaignId={null}
-        userId="user-1"
-      />,
-      { wrapper: withQueryClient },
-    );
+    render(surface, { wrapper: withQueryClient });
 
     await waitFor(() => {
       expect((screen.getByTestId('prompt-submit') as HTMLButtonElement).disabled).toBe(false);
@@ -544,114 +505,11 @@ describe('JainaChatSurface integration', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Second Meta' }));
     fireEvent.click(screen.getByTestId('prompt-submit'));
 
-    await waitFor(() => expect(startMock).toHaveBeenCalledTimes(1));
-    expect(startMock.mock.calls[0]?.[0]).toMatchObject({
+    await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
+    expect(sendTurnMock.mock.calls[0]?.[0]).toMatchObject({
       adAccountId: 'act-1',
       adAccountIds: ['act-1', 'act-2'],
     });
-  });
-
-  /**
-   * The bug this catches was invisible on every gate: the Backend persists an assistant
-   * turn's TEXT and nothing about the approval it is waiting on, and a gate pause
-   * persists a deterministic sentence. So the contents match, the snapshot refresh wins,
-   * and the only copy of the approval — the card the user has to answer — is dropped a
-   * moment after it renders. Observed live against a real audience_group_publish pause.
-   */
-  it('keeps a pending tool approval when the snapshot refresh brings back the same text', () => {
-    const PAUSE_TEXT = 'I need your approval before I create anything on Meta.';
-    const approval = {
-      approvalId: 'appr_aud_1',
-      toolCallId: 'call_1',
-      toolName: 'audience_group_publish',
-      input: { group_version_id: 'agv_1' },
-      expiresAt: '2099-01-01T00:00:00.000Z',
-    };
-
-    const merged = mergePersistedMessagesWithLocal(
-      [
-        {
-          id: 'persisted-1',
-          role: 'user',
-          content: 'Publish the audience group',
-          createdAt: '2026-09-05T09:30:00.000Z',
-        },
-        {
-          id: 'persisted-2',
-          role: 'assistant',
-          content: PAUSE_TEXT,
-          createdAt: '2026-09-05T09:30:10.000Z',
-          status: 'done',
-        },
-      ],
-      [
-        {
-          id: 'user-1',
-          role: 'user',
-          content: 'Publish the audience group',
-          createdAt: '2026-09-05T09:30:00.000Z',
-        },
-        {
-          id: 'assistant-1',
-          role: 'assistant',
-          content: PAUSE_TEXT,
-          createdAt: '2026-09-05T09:30:10.000Z',
-          status: 'done',
-          pendingToolApprovals: [approval as never],
-        },
-      ],
-    );
-
-    const assistant = merged.filter((message) => message.role === 'assistant').at(-1);
-    expect(assistant?.pendingToolApprovals).toHaveLength(1);
-    expect(assistant?.pendingToolApprovals?.[0]?.approvalId).toBe('appr_aud_1');
-  });
-
-  it('keeps the live paid render handle until the persisted assistant restores it', () => {
-    const paidCreativeRenders = [
-      {
-        render_job_id: '11111111-1111-4111-8111-111111111111',
-        brand_id: '22222222-2222-4222-8222-222222222222',
-        draft_id: 'draft-1',
-        clip_count: 3,
-        state: 'awaiting_client_render' as const,
-      },
-    ];
-    const persisted = {
-      id: 'persisted-2',
-      role: 'assistant' as const,
-      content: 'Your reel is queued.',
-      createdAt: '2026-09-14T05:00:00.000Z',
-      status: 'done' as const,
-    };
-    const local = {
-      id: 'persisted-local',
-      role: 'assistant' as const,
-      content: 'Your reel is queued.',
-      createdAt: '2026-09-14T05:00:00.000Z',
-      status: 'done' as const,
-      paidCreativeRenders,
-      runId: 'run_1',
-      deliverySource: 'live_render' as const,
-    };
-
-    const liveMerged = mergePersistedMessagesWithLocal([persisted], [local]);
-    expect(liveMerged[0]?.paidCreativeRenders).toEqual(paidCreativeRenders);
-    expect(liveMerged[0]).toMatchObject({ runId: 'run_1', deliverySource: 'live_render' });
-
-    const reloaded = mergePersistedMessagesWithLocal(
-      [
-        {
-          ...persisted,
-          paidCreativeRenders,
-          runId: 'run_1',
-          deliverySource: 'hydration_replay' as const,
-        },
-      ],
-      [local],
-    );
-    expect(reloaded[0]?.paidCreativeRenders).toEqual(paidCreativeRenders);
-    expect(reloaded[0]).toMatchObject({ runId: 'run_1', deliverySource: 'hydration_replay' });
   });
 
   /**
@@ -662,66 +520,29 @@ describe('JainaChatSurface integration', () => {
    * the database enforces.
    */
   describe('approval decisions route by tool', () => {
-    const chatFetch = () =>
-      mock((input: RequestInfo | URL, init?: RequestInit) => {
-        const url = typeof input === 'string' ? input : input.toString();
-        const method = init?.method ?? 'GET';
-
-        if (method === 'GET' && url.includes('/api/agents/jaina/chat/conversations?')) {
-          return Promise.resolve(jsonResponse({ sessions: [], messages: [] }));
-        }
-        if (method === 'POST' && url.endsWith('/api/agents/jaina/chat/conversations')) {
-          return Promise.resolve(
-            jsonResponse({
-              session_id: 'session-1',
-              brand_id: 'brand-1',
-              ad_account_id: 'act-1',
-              conversation_title: null,
-            }),
-          );
-        }
-        return Promise.resolve({
-          ok: false,
-          text: () => Promise.resolve('Unhandled fetch route'),
-        } as MockFetchResponse);
-      }) as typeof fetch;
-
-    const decide = async (approval: Record<string, unknown>) => {
-      global.fetch = chatFetch();
-      streamState = {
-        ...createInitialJainaStreamState(),
-        pendingToolApprovals: [approval as never],
-      };
-
-      render(
-        <JainaChatSurface
-          brandProfileId="brand-1"
-          brandName="Test Brand"
-          adAccountId="act-1"
-          campaignId={null}
-          userId="user-1"
-        />,
-        { wrapper: withQueryClient },
-      );
-
-      await waitFor(() => {
-        expect((screen.getByTestId('prompt-submit') as HTMLButtonElement).disabled).toBe(false);
-      });
-      // A message has to exist before any card can hang off it.
-      fireEvent.click(screen.getByTestId('prompt-submit'));
-      await waitFor(() => {
-        expect(startMock).toHaveBeenCalledTimes(1);
-      });
+    const decide = async (approval: {
+      approvalId: string;
+      toolCallId: string;
+      toolName: string;
+      input: Record<string, unknown>;
+    }) => {
+      global.fetch = emptyHistoryFetch();
+      render(surface, { wrapper: withQueryClient });
+      await showMessages([
+        uiMessage('user-1', 'user', [textPart('Publish it')]),
+        uiMessage('assistant-1', 'assistant', [
+          textPart('I need your approval first.'),
+          approvalRequestedPart(approval),
+        ]),
+      ]);
 
       fireEvent.click(
-        await screen.findByTestId(`approve-${String(approval.approvalId)}`, undefined, {
-          timeout: 2000,
-        }),
+        await screen.findByTestId(`approve-${approval.approvalId}`, undefined, { timeout: 2000 }),
       );
       await waitFor(() => {
-        expect(startMock).toHaveBeenCalledTimes(2);
+        expect(sendTurnMock).toHaveBeenCalledTimes(1);
       });
-      return startMock.mock.calls[1]?.[0] as Record<string, unknown>;
+      return sendTurnMock.mock.calls[0]?.[0] as Record<string, unknown>;
     };
 
     it('posts tool_action for a gated tool that is not a scaffold', async () => {
@@ -730,7 +551,6 @@ describe('JainaChatSurface integration', () => {
         toolCallId: 'call_1',
         toolName: 'audience_group_publish',
         input: { group_version_id: 'agv_1' },
-        expiresAt: '2099-01-01T00:00:00.000Z',
       });
 
       expect(sent).toMatchObject({
@@ -742,10 +562,10 @@ describe('JainaChatSurface integration', () => {
           tool_call_id: 'call_1',
         },
         query: 'Approved.',
+        // The decision is not something a reader typed: it must not land in the transcript.
+        silent: true,
       });
       expect(sent.scaffoldAction).toBeUndefined();
-      // The decision is silent: it must not post a second user turn into the transcript.
-      expect(screen.getAllByTestId('user-message')).toHaveLength(1);
     });
 
     it('posts scaffold_action, with its gate and version, for a scaffold', async () => {
@@ -754,7 +574,6 @@ describe('JainaChatSurface integration', () => {
         toolCallId: 'call_2',
         toolName: 'paid_scaffold_build',
         input: { scaffold_version_id: '11111111-1111-4111-8111-111111111111' },
-        expiresAt: '2099-01-01T00:00:00.000Z',
       });
 
       expect(sent).toMatchObject({
@@ -770,280 +589,90 @@ describe('JainaChatSurface integration', () => {
     });
   });
 
-  it('keeps plan + reasoning visible after response.done snapshot refresh', async () => {
-    global.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : input.toString();
-      const method = init?.method ?? 'GET';
-
-      if (method === 'GET' && url.includes('/api/agents/jaina/chat/conversations?')) {
-        if (url.includes('sessionId=')) {
-          return Promise.resolve(
-            jsonResponse({
-              sessions: [
-                {
-                  sessionId: 'session-1',
-                  brandId: 'brand-1',
-                  adAccountId: 'act-1',
-                  title: null,
-                  lastMessageRole: 'assistant',
-                  lastMessagePreview: 'Execution plan',
-                  lastMessageAt: '2026-04-17T16:26:05.000Z',
-                  createdAt: '2026-04-17T16:20:00.000Z',
-                  updatedAt: '2026-04-17T16:26:05.000Z',
-                },
-              ],
-              messages: [
-                {
-                  id: 1,
-                  sessionId: 'session-1',
-                  brandId: 'brand-1',
-                  adAccountId: 'act-1',
-                  role: 'user',
-                  content: 'Recommend budget reallocations for this week by campaign',
-                  createdAt: '2026-04-17T16:26:00.000Z',
-                },
-                {
-                  id: 2,
-                  sessionId: 'session-1',
-                  brandId: 'brand-1',
-                  adAccountId: 'act-1',
-                  role: 'assistant',
-                  content: JSON.stringify({
-                    type: 'response.plan_ready',
-                    data: {
-                      item_id: 'item_c2c3e91d73af431fa29e61d93977a73c',
-                      part_id: 'part_2edfb435d7e640d3b6378e75669530da',
-                      plan: {
-                        plan_id: 'fallback_uqc00d',
-                        chat_title: 'Recommend Budget Reallocations For This Week BY Campaign',
-                        date_preset: 'last_7d',
-                        objectives: [
-                          {
-                            task: 'Analyze campaign performance and recommend reallocations.',
-                          },
-                        ],
-                      },
-                    },
-                  }),
-                  createdAt: '2026-04-17T16:26:05.000Z',
-                },
-              ],
-            }),
-          );
-        }
-
-        return Promise.resolve(
-          jsonResponse({
-            sessions: [],
-            messages: [],
-          }),
-        );
-      }
-
-      if (method === 'POST' && url.endsWith('/api/agents/jaina/chat/conversations')) {
-        return Promise.resolve(
-          jsonResponse({
-            session_id: 'session-1',
-            brand_id: 'brand-1',
-            ad_account_id: 'act-1',
-            conversation_title: null,
-          }),
-        );
-      }
-
-      return Promise.resolve({
-        ok: false,
-        text: () => Promise.resolve('Unhandled fetch route'),
-      } as MockFetchResponse);
-    }) as typeof fetch;
-
-    const view = render(
-      <JainaChatSurface
-        brandProfileId="brand-1"
-        brandName="Test Brand"
-        adAccountId="act-1"
-        campaignId={null}
-        userId="user-1"
-      />,
-      { wrapper: withQueryClient },
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId('prompt-submit')).toBeTruthy();
-      expect((screen.getByTestId('prompt-submit') as HTMLButtonElement).disabled).toBe(false);
-    });
-
-    fireEvent.click(screen.getByTestId('prompt-submit'));
-
-    await waitFor(() => {
-      const assistantMessages = screen.getAllByTestId('assistant-message');
-      expect(assistantMessages.length).toBeGreaterThan(0);
-    });
-
-    const plan = {
-      id: 'fallback_uqc00d',
-      title: 'Recommend Budget Reallocations For This Week BY Campaign',
+  /**
+   * Re-expressed from `keeps plan + reasoning visible after response.done snapshot refresh`,
+   * which was RED at HEAD. The plan used to be held in reducer state and the finished turn was
+   * re-read from a persisted snapshot that never carried one, so finishing the turn erased the
+   * card. There is no second read now: the plan is inferred from the SAME reasoning parts on
+   * every projection, so it cannot survive streaming and then vanish on completion.
+   */
+  it('keeps the projected plan and its reasoning after the turn finishes', async () => {
+    global.fetch = emptyHistoryFetch();
+    const planNarration = JSON.stringify({
+      plan_id: 'fallback_uqc00d',
+      chat_title: 'Recommend Budget Reallocations For This Week BY Campaign',
       description: 'Scope: last_7d',
-      status: 'pending' as const,
       steps: [
-        {
-          title: 'Analyze campaign performance and recommend reallocations.',
-          status: 'pending' as const,
-        },
+        { title: 'Analyze campaign performance and recommend reallocations.', status: 'pending' },
       ],
-    };
-    const reasoning = [
-      {
-        stage: 'thinking',
-        at: '2026-04-17T16:26:02.000Z',
-        detail: 'Collecting campaign metrics and trend evidence.',
-        data: { stage: 'thinking' },
-      },
-    ];
+    });
 
-    streamState = {
-      ...createInitialJainaStreamState(),
-      status: 'streaming',
-      plan,
-      progress: reasoning,
-      responseText: '',
-    };
-    view.rerender(
-      <JainaChatSurface
-        brandProfileId="brand-1"
-        brandName="Test Brand"
-        adAccountId="act-1"
-        campaignId={null}
-        userId="user-1"
-      />,
-    );
+    render(surface, { wrapper: withQueryClient });
+    chatStatus = 'streaming';
+    await showMessages([
+      uiMessage('user-1', 'user', [
+        textPart('Recommend budget reallocations for this week by campaign'),
+      ]),
+      uiMessage('assistant-1', 'assistant', [reasoningPart(planNarration)], {
+        runId: 'run-1',
+      }),
+    ]);
 
     await waitFor(() => {
-      const assistantPlanTitle = screen.getAllByTestId('assistant-plan-title').at(-1);
-      expect(assistantPlanTitle?.textContent).toContain(
+      expect(screen.getAllByTestId('assistant-plan-title').at(-1)?.textContent).toContain(
         'Recommend Budget Reallocations For This Week BY Campaign',
       );
     });
 
-    streamState = {
-      ...createInitialJainaStreamState(),
-      status: 'complete',
-      plan,
-      progress: reasoning,
-      responseText: '',
-      finalContentKind: 'text',
-    };
-    view.rerender(
-      <JainaChatSurface
-        brandProfileId="brand-1"
-        brandName="Test Brand"
-        adAccountId="act-1"
-        campaignId={null}
-        userId="user-1"
-      />,
-    );
+    // The turn completes: the answer text lands and the SDK goes idle. Nothing else changes.
+    // `chatStatus` is flipped before the push so ONE render carries both — a second
+    // `rerender` after the transcript settles races the surface's own unmount-on-cleanup.
+    chatStatus = 'ready';
+    act(() => {
+      pushMessages?.([
+        uiMessage('user-1', 'user', [
+          textPart('Recommend budget reallocations for this week by campaign'),
+        ]),
+        uiMessage(
+          'assistant-1',
+          'assistant',
+          [reasoningPart(planNarration), textPart('Move 20% of spend to the Influencer campaign.')],
+          { runId: 'run-1', status: 'completed' },
+        ),
+      ]);
+    });
 
     await waitFor(() => {
-      const assistantPlanId = screen.getAllByTestId('assistant-plan-id').at(-1);
-      const assistantReasoningCount = screen.getAllByTestId('assistant-reasoning-count').at(-1);
-      const assistantMessage = screen.getAllByTestId('assistant-message').at(-1);
-
-      expect(assistantPlanId?.textContent).toBe('fallback_uqc00d');
-      expect(assistantReasoningCount?.textContent).toBe('1');
-      expect(assistantMessage?.getAttribute('data-message-id')).toBe('persisted-2');
+      expect(screen.getAllByTestId('assistant-plan-id').at(-1)?.textContent).toBe(
+        'fallback_uqc00d',
+      );
+      expect(screen.getAllByTestId('assistant-reasoning-count').at(-1)?.textContent).toBe('1');
+      expect(screen.getAllByTestId('assistant-content').at(-1)?.textContent).toContain(
+        'Move 20% of spend',
+      );
     });
   });
 
-  it('keeps the live reader attached when run completion precedes response.done', async () => {
-    global.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : input.toString();
-      const method = init?.method ?? 'GET';
-
-      if (method === 'GET' && url.includes('/api/agents/jaina/chat/conversations?')) {
-        if (url.includes('sessionId=')) {
-          return Promise.resolve(
-            jsonResponse({
-              sessions: [
-                {
-                  sessionId: 'session-1',
-                  brandId: 'brand-1',
-                  adAccountId: 'act-1',
-                  title: null,
-                  lastMessageRole: 'user',
-                  lastMessagePreview: 'What creative elements are driving the low cost?',
-                  lastMessageAt: '2026-04-17T16:26:00.000Z',
-                  createdAt: '2026-04-17T16:20:00.000Z',
-                  updatedAt: '2026-04-17T16:26:00.000Z',
-                },
-              ],
-              messages: [
-                {
-                  id: 1,
-                  sessionId: 'session-1',
-                  brandId: 'brand-1',
-                  adAccountId: 'act-1',
-                  role: 'user',
-                  content: 'Recommend budget reallocations for this week by campaign',
-                  createdAt: '2026-04-17T16:26:00.000Z',
-                },
-              ],
-            }),
-          );
-        }
-        return Promise.resolve(jsonResponse({ sessions: [], messages: [] }));
-      }
-
-      if (method === 'POST' && url.endsWith('/api/agents/jaina/chat/conversations')) {
-        return Promise.resolve(
-          jsonResponse({
-            session_id: 'session-1',
-            brand_id: 'brand-1',
-            ad_account_id: 'act-1',
-            conversation_title: null,
-          }),
-        );
-      }
-
-      return Promise.resolve({
-        ok: false,
-        text: () => Promise.resolve('Unhandled fetch route'),
-      } as MockFetchResponse);
-    }) as typeof fetch;
-
-    const view = render(
-      <JainaChatSurface
-        brandProfileId="brand-1"
-        brandName="Test Brand"
-        adAccountId="act-1"
-        campaignId={null}
-        userId="user-1"
-      />,
-      { wrapper: withQueryClient },
-    );
-
-    await waitFor(() => {
-      expect((screen.getByTestId('prompt-submit') as HTMLButtonElement).disabled).toBe(false);
-    });
-    fireEvent.click(screen.getByTestId('prompt-submit'));
-    await waitFor(() =>
-      expect(screen.getAllByTestId('assistant-message').length).toBeGreaterThan(0),
-    );
-
-    streamState = {
-      ...createInitialJainaStreamState(),
-      status: 'streaming',
-      runId: 'run-1',
-      responseText: 'The low cost is driven by a focused day-pass value proposition.',
-    };
-    view.rerender(
-      <JainaChatSurface
-        brandProfileId="brand-1"
-        brandName="Test Brand"
-        adAccountId="act-1"
-        campaignId={null}
-        userId="user-1"
-      />,
-    );
+  /**
+   * Re-expressed from `keeps the live reader attached when run completion precedes
+   * response.done`, also RED at HEAD. The old surface detached its NDJSON reader on the realtime
+   * row and re-read the turn from a snapshot, which raced the last frames off the screen. There
+   * is no reader to detach any more — the claim that survives is the one a reader cares about:
+   * an answer on screen does not disappear when realtime says the run finished.
+   */
+  it('keeps the answer on screen when realtime reports the run completed', async () => {
+    global.fetch = emptyHistoryFetch();
+    render(surface, { wrapper: withQueryClient });
+    chatStatus = 'streaming';
+    await showMessages([
+      uiMessage('user-1', 'user', [textPart('Why is the cost so low?')]),
+      uiMessage(
+        'assistant-1',
+        'assistant',
+        [textPart('The low cost is driven by a focused day-pass value proposition.')],
+        { runId: 'run-1' },
+      ),
+    ]);
 
     await waitFor(() => {
       expect(screen.getAllByTestId('assistant-content').at(-1)?.textContent).toContain(
@@ -1062,90 +691,79 @@ describe('JainaChatSurface integration', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    expect(detachMock).not.toHaveBeenCalled();
     expect(screen.getAllByTestId('assistant-content').at(-1)?.textContent).toContain(
       'focused day-pass value proposition',
     );
   });
 
-  it('unwraps response.checkpoint_report blocks from persisted history', async () => {
+  /**
+   * History arrives already parts-shaped (`shape=ui`), mapped on the Backend beside the live
+   * mapper. The client no longer unwraps a persisted `response.checkpoint_report` envelope of
+   * its own — if it did, a reloaded report and a streamed one would be two different renders.
+   */
+  it('renders a report reloaded from history out of its parts', async () => {
+    const session = {
+      sessionId: 'session-report',
+      brandId: 'brand-1',
+      adAccountId: 'act-1',
+      title: 'Weekly health report',
+      lastMessageRole: 'assistant',
+      lastMessagePreview: 'Weekly health report',
+      lastMessageAt: '2026-04-17T16:30:00.000Z',
+      createdAt: '2026-04-17T16:20:00.000Z',
+      updatedAt: '2026-04-17T16:30:00.000Z',
+    };
+    const historyMessages = [
+      uiMessage(
+        'assistant-history-1',
+        'assistant',
+        [
+          {
+            type: JAINA_UI_DATA_PART.reportBlock,
+            id: 'run_history_1:block:blk_narrative_1',
+            data: {
+              block_id: 'blk_narrative_1',
+              category: 'narrative',
+              scope: 'account',
+              title: 'Executive Narrative',
+              body: 'Performance was stable over the last week.',
+            },
+          },
+          {
+            type: JAINA_UI_DATA_PART.reportMeta,
+            id: 'run_history_1:report',
+            data: {
+              language: 'en',
+              executive_summary: 'Stable performance with actionable risks',
+              reasoning_trace: '',
+              follow_up_questions: [],
+              media_map: {},
+              handoff_trace: [],
+              execution_objectives: [],
+              cached_sources: [],
+              _meta: {
+                schema_version: '2',
+                block_count: 1,
+                has_charts: false,
+                has_media: false,
+                primary_scope: 'account',
+              },
+            },
+          },
+        ],
+        { runId: 'run_history_1', status: 'completed' },
+      ),
+    ];
+
     global.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString();
       const method = init?.method ?? 'GET';
 
       if (method === 'GET' && url.includes('/api/agents/jaina/chat/conversations?')) {
-        if (url.includes('sessionId=session-report')) {
-          return Promise.resolve(
-            jsonResponse({
-              sessions: [
-                {
-                  sessionId: 'session-report',
-                  brandId: 'brand-1',
-                  adAccountId: 'act-1',
-                  title: 'Weekly health report',
-                  lastMessageRole: 'assistant',
-                  lastMessagePreview: 'Weekly health report',
-                  lastMessageAt: '2026-04-17T16:30:00.000Z',
-                  createdAt: '2026-04-17T16:20:00.000Z',
-                  updatedAt: '2026-04-17T16:30:00.000Z',
-                },
-              ],
-              messages: [
-                {
-                  id: 10,
-                  sessionId: 'session-report',
-                  brandId: 'brand-1',
-                  adAccountId: 'act-1',
-                  role: 'assistant',
-                  content: JSON.stringify({
-                    type: 'response.checkpoint_report',
-                    data: {
-                      report: {
-                        executive_summary: 'Stable performance with actionable risks',
-                        blocks: [
-                          {
-                            block_id: 'blk_narrative_1',
-                            category: 'narrative',
-                            scope: 'account',
-                            title: 'Executive Narrative',
-                            body: 'Performance was stable over the last week.',
-                          },
-                        ],
-                        _meta: {
-                          schema_version: '2',
-                          block_count: 1,
-                          has_charts: false,
-                          has_media: false,
-                          has_citations: false,
-                          primary_scope: 'account',
-                        },
-                      },
-                    },
-                  }),
-                  metadata: { run_id: 'run_history_1' },
-                  createdAt: '2026-04-17T16:30:00.000Z',
-                },
-              ],
-            }),
-          );
-        }
-
         return Promise.resolve(
           jsonResponse({
-            sessions: [
-              {
-                sessionId: 'session-report',
-                brandId: 'brand-1',
-                adAccountId: 'act-1',
-                title: 'Weekly health report',
-                lastMessageRole: 'assistant',
-                lastMessagePreview: 'Weekly health report',
-                lastMessageAt: '2026-04-17T16:30:00.000Z',
-                createdAt: '2026-04-17T16:20:00.000Z',
-                updatedAt: '2026-04-17T16:30:00.000Z',
-              },
-            ],
-            messages: [],
+            sessions: [session],
+            uiMessages: url.includes('sessionId=session-report') ? historyMessages : [],
           }),
         );
       }
@@ -1156,26 +774,12 @@ describe('JainaChatSurface integration', () => {
       } as MockFetchResponse);
     }) as typeof fetch;
 
-    render(
-      <JainaChatSurface
-        brandProfileId="brand-1"
-        brandName="Test Brand"
-        adAccountId="act-1"
-        campaignId={null}
-        userId="user-1"
-      />,
-      { wrapper: withQueryClient },
-    );
+    render(surface, { wrapper: withQueryClient });
 
     await waitFor(() => {
-      const reportBlockCount = screen.getAllByTestId('assistant-report-block-count').at(-1);
-      const reportKind = screen.getAllByTestId('assistant-report-kind').at(-1);
-      const runId = screen.getAllByTestId('assistant-run-id').at(-1);
-      const deliverySource = screen.getAllByTestId('assistant-delivery-source').at(-1);
-      expect(reportBlockCount?.textContent).toBe('1');
-      expect(reportKind?.textContent).toBe('v2');
-      expect(runId?.textContent).toBe('run_history_1');
-      expect(deliverySource?.textContent).toBe('hydration_replay');
+      expect(screen.getAllByTestId('assistant-report-block-count').at(-1)?.textContent).toBe('1');
+      expect(screen.getAllByTestId('assistant-report-kind').at(-1)?.textContent).toBe('v2');
+      expect(screen.getAllByTestId('assistant-run-id').at(-1)?.textContent).toBe('run_history_1');
     });
   });
 });

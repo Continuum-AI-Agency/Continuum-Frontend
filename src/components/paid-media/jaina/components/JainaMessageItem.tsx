@@ -16,7 +16,6 @@ import {
   hasReportContent,
   type ToolResultEventData,
 } from '@/lib/jaina/schemas';
-import type { JainaStreamState } from '@/lib/jaina/stream';
 import {
   extractRenderableFallbackFromReport,
   extractRenderableFallbackFromStructuredContent,
@@ -100,9 +99,15 @@ function isLikelyStructuredJsonMessage(content: string): boolean {
 }
 
 type JainaMessageItemProps = {
+  /**
+   * The ONE source for everything this turn renders, streaming or finished.
+   *
+   * There used to be a second: a raw `JainaStreamState` prop, read through fourteen
+   * `isStreaming ? state.X : message.X` ternaries. Two sources for one turn is what let a
+   * persisted snapshot overwrite a live answer. `toJainaChatMessage` now projects the SDK's
+   * `message.parts` into this shape, so a streaming turn and a reloaded one are the same object.
+   */
   message: JainaChatMessage;
-  activeResponseId: string | null;
-  state: JainaStreamState;
   onSuggestionClick?: (query: string) => void;
   onPlanFeedback?: (payload: PlanFeedbackPayload) => void;
   /**
@@ -123,8 +128,6 @@ type JainaMessageItemProps = {
 
 function JainaMessageItemImpl({
   message,
-  activeResponseId,
-  state,
   onSuggestionClick,
   onPlanFeedback,
   onRegenerate,
@@ -133,25 +136,16 @@ function JainaMessageItemImpl({
   onApprovalDecision,
   optimisticApprovalDecisions,
 }: JainaMessageItemProps) {
-  const isStreaming = message.id === activeResponseId;
+  const isStreaming = message.status === 'streaming';
 
-  const reasoning = isStreaming ? state.progress : message.reasoning;
-  const toolCalls = isStreaming ? state.toolCalls : message.toolCalls;
-  const toolResults = isStreaming ? state.toolResults : message.toolResults;
-  const objectives = isStreaming ? state.objectives : message.objectives;
-  // Cross-agent calls: live from the stream state while the turn runs, then
-  // from the message once it is persisted with the turn.
-  const delegations = isStreaming ? state.delegations : message.delegations;
-  // The scaffold and its gate. Live from the stream while the turn runs; on reload
-  // they come back through the durable run-event projection, which re-folds the same
-  // frames through the same reducer.
-  const scaffold = isStreaming ? state.scaffold : (message.scaffold ?? null);
-  const pendingApprovals = isStreaming
-    ? state.pendingToolApprovals
-    : (message.pendingToolApprovals ?? []);
-  const resolvedApprovals = isStreaming
-    ? state.resolvedApprovals
-    : (message.resolvedApprovals ?? {});
+  const reasoning = message.reasoning;
+  const toolCalls = message.toolCalls;
+  const toolResults = message.toolResults;
+  const objectives = message.objectives;
+  const delegations = message.delegations;
+  const scaffold = message.scaffold ?? null;
+  const pendingApprovals = message.pendingToolApprovals ?? [];
+  const resolvedApprovals = message.resolvedApprovals ?? {};
   const scaffoldApproval =
     pendingApprovals.find((entry) => entry.toolName.startsWith('paid_scaffold_')) ?? null;
   // Every OTHER gated tool. The scaffold keeps its own card because it has a tree to
@@ -163,11 +157,11 @@ function JainaMessageItemImpl({
     ? (resolvedApprovals[scaffoldApproval.approvalId] ?? null)
     : null;
   const scaffoldDenial =
-    (isStreaming ? state.deniedToolOutputs : []).find((entry) =>
+    (message.deniedToolOutputs ?? []).find((entry) =>
       entry.toolName.startsWith('paid_scaffold_'),
     ) ?? null;
-  const report = isStreaming ? state.report : message.report;
-  const reportV2 = isStreaming ? state.reportV2 : message.reportV2;
+  const report = message.report;
+  const reportV2 = message.reportV2;
   const plan = message.plan;
 
   const structuredReport = React.useMemo(() => {
@@ -209,10 +203,8 @@ function JainaMessageItemImpl({
     !structuredFallbackContent &&
     !hasStructuredChild;
 
-  const artifacts = isStreaming ? state.artifacts : message.artifacts;
-  const paidCreativeRenders = isStreaming
-    ? state.paidCreativeRenders
-    : (message.paidCreativeRenders ?? []);
+  const artifacts = message.artifacts;
+  const paidCreativeRenders = message.paidCreativeRenders ?? [];
   const toolCreatives = React.useMemo(() => {
     if (!toolResults) return [];
     return toolResults.flatMap(extractCreativesFromToolResult);
@@ -358,7 +350,7 @@ function JainaMessageItemImpl({
                 <JainaReportV2
                   report={reportV2}
                   isStreaming={isStreaming}
-                  runId={message.runId ?? (isStreaming ? (state.runId ?? undefined) : undefined)}
+                  runId={message.runId}
                   deliverySource={message.deliverySource}
                   onSuggestionClick={onSuggestionClick}
                 />
@@ -419,8 +411,9 @@ function JainaMessageItemImpl({
  * Without this, every prior message re-runs its Markdown parse (Shiki/math/mermaid) and every
  * chart in every earlier report re-renders — for messages that cannot have changed.
  *
- * The memo only bites while the props of a finished message stay referentially equal: the surface
- * keeps each message object's identity across updates, hands non-live items a shared idle stream
- * state, and passes the regenerate prompt as a string rather than a freshly-closed thunk.
+ * The memo only bites while the props of a finished message stay referentially equal, so the
+ * surface must memoize `toJainaChatMessage` per message rather than re-project the whole
+ * transcript each frame. The projection is pure, so that memo is sound; the regenerate prompt is
+ * passed as a string rather than a freshly-closed thunk for the same reason.
  */
 export const JainaMessageItem = React.memo(JainaMessageItemImpl);

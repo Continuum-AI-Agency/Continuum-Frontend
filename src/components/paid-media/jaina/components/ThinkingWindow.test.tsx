@@ -11,7 +11,7 @@ mock.module('@/components/ai-elements/shimmer', () => ({
   Shimmer: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 
-import type { JainaProgressEntry } from '@/lib/jaina/stream';
+import type { JainaProgressEntry } from '@/components/paid-media/jaina/types';
 import { ThinkingWindow } from './ThinkingWindow';
 
 afterEach(cleanup);

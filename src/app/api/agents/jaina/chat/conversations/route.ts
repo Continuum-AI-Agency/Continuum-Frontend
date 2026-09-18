@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { getApiBaseUrl } from '@/lib/api/config';
 import {
   backendConversationMessagesResponseSchema,
@@ -8,6 +9,7 @@ import {
   type JainaConversationListQuery,
   jainaConversationListQuerySchema,
   jainaConversationListResponseSchema,
+  jainaConversationUiListResponseSchema,
   mapConversationMessageRow,
   mapConversationSessionRow,
 } from '@/lib/jaina/conversations';
@@ -54,6 +56,16 @@ function buildConversationMessagesPaths(sessionId: string) {
     `/api/agents/jaina/conversations/${encodedSessionId}/messages`,
   ];
 }
+
+/** What the Backend answers for `?shape=ui`. Structural only — the SDK owns the part union. */
+const backendUiMessagesResponseSchema = z.object({
+  messages: z.array(
+    z
+      .object({ id: z.string().min(1), role: z.string().min(1), parts: z.array(z.unknown()) })
+      .passthrough(),
+  ),
+  nextCursor: z.string().nullable().optional(),
+});
 
 function normalizePath(path: string) {
   return path.startsWith('/') ? path : `/${path}`;
@@ -175,6 +187,12 @@ function buildMessagesQueryString(query: JainaConversationListQuery) {
   if (query.before) {
     params.set('before', query.before);
   }
+  // Asking the Backend for the transcript already in `JainaUIMessage` shape. The at-rest to
+  // parts mapping belongs beside the live one, or the two drift and a reloaded turn renders
+  // differently from the turn the reader just watched.
+  if (query.shape === 'ui') {
+    params.set('shape', 'ui');
+  }
   return params.toString();
 }
 
@@ -199,6 +217,7 @@ export async function GET(request: Request) {
     initiatorAgent:
       searchParams.get('initiatorAgent') ?? searchParams.get('initiator_agent') ?? undefined,
     tags: searchParams.get('tags') ?? undefined,
+    shape: searchParams.get('shape') ?? undefined,
   });
 
   if (!parsedQuery.success) {
@@ -243,6 +262,29 @@ export async function GET(request: Request) {
     if (!messagesResult.ok) return messagesResult.errorResponse;
 
     const messagesPayload = await messagesResult.response.json().catch(() => null);
+
+    if (parsedQuery.data.shape === 'ui') {
+      // Passed through unmapped: these are already the SDK's messages. Mapping them here would
+      // be a second at-rest projection living one hop away from the Backend's.
+      // The Backend names the array `messages`, as it does for the legacy shape; only the
+      // element type differs. Renamed to `uiMessages` downstream so a caller cannot read one
+      // shape while believing it has the other.
+      const parsedUi = backendUiMessagesResponseSchema.safeParse(messagesPayload);
+      if (!parsedUi.success) {
+        return NextResponse.json(
+          { error: 'Invalid UI messages response from backend.' },
+          { status: 502 },
+        );
+      }
+      return NextResponse.json(
+        jainaConversationUiListResponseSchema.parse({
+          sessions,
+          uiMessages: parsedUi.data.messages,
+          nextCursor: parsedUi.data.nextCursor ?? null,
+        }),
+      );
+    }
+
     const parsedMessages = backendConversationMessagesResponseSchema.safeParse(messagesPayload);
     if (!parsedMessages.success) {
       return NextResponse.json(

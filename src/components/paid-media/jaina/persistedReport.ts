@@ -4,7 +4,7 @@ import {
   type ReportPayload,
   reportPayloadSchema,
 } from '@/lib/jaina/schemas';
-import { interpretCheckpointReportPayload } from '@/lib/jaina/stream';
+import { interpretCheckpointReportPayload } from '@/lib/jaina/reportPayload';
 import {
   extractJsonObjectCandidates,
   parseLooseJsonCandidate,

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-import type { JainaProgressEntry } from '@/lib/jaina/stream';
+import type { JainaProgressEntry } from '@/components/paid-media/jaina/types';
 import { buildThinkingSegments, STAGE_LABELS } from './thinkingUtils';
 
 /**
- * `agent.narration` frames land in `state.progress` with stage `agent_narration`
- * (see reduceJainaStreamEvent). They are the only thing a user sees while structured
+ * Agent narration reaches the transcript as a reasoning entry with stage `agent_narration`
+ * (see `reasoningEntriesOf`). It is the only thing a user sees while structured
  * subagents run — measured as up to 79% of a turn — so they must reach the reasoning
  * trace rather than being filtered out with the machinery stages.
  */

@@ -18,7 +18,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
-import type { JainaScaffoldState } from '@/lib/jaina/stream';
+import type { JainaScaffoldState } from '@/lib/jaina/scaffoldTypes';
 import { ScaffoldAdSetTable } from './ScaffoldAdSetTable';
 import { ScaffoldTreeCanvas } from './ScaffoldTreeCanvas';
 import { usePaidScaffoldTree } from './usePaidScaffoldTree';

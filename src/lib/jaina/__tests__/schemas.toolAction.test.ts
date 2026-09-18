@@ -2,11 +2,11 @@
  * The sibling of `schemas.scaffoldAction.test.ts`, for every gated tool that is NOT a
  * paid scaffold.
  *
- * `jainaChatRequestSchema` is a STRIPPING `z.object`, and `useJainaChatStream` parses
- * through it before `JSON.stringify`. A field that is not declared is removed with no
- * type error, no runtime error and no log line, and the Next route is a pure
- * passthrough that would not notice either — the approval would simply never arrive,
- * and the paused turn would hang until the gate expired.
+ * `jainaChatRequestSchema` is a STRIPPING `z.object`, and `buildJainaChatStreamRequest`
+ * parses through it before the body is sent. A field that is not declared is removed with
+ * no type error, no runtime error and no log line, and the Backend route would not notice
+ * either — the approval would simply never arrive, and the paused turn would hang until
+ * the gate expired.
  */
 
 import { describe, expect, it } from 'bun:test';

@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
-import type { JainaScaffoldNodeProgress } from '@/lib/jaina/stream';
+import type { JainaScaffoldNodeProgress } from '@/lib/jaina/scaffoldTypes';
 import { fetchPaidScaffoldTreeRows } from '@/lib/paid-media/scaffold-tree-client';
 import { buildScaffoldTree, type ScaffoldTree } from '@/lib/paid-media/scaffoldTree';
 

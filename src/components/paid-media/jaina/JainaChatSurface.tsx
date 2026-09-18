@@ -27,9 +27,11 @@ const AnimatedShaderBackground = dynamic(
 import type {
   AgentSessionListFilters,
   JainaToolApprovalRequiredPayload,
+  JainaUIMessage,
   PaidScaffoldGate,
 } from '@continuum/contracts';
 import {
+  AGENT_RUN_QUEUED,
   JAINA_MAX_AD_ACCOUNTS,
   normalizeAdAccountId,
   updateAgentSessionTagsResponseSchema,
@@ -70,7 +72,7 @@ import { useActiveProjectOptional } from '@/components/projects';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBrandIntegrations } from '@/hooks/useBrandIntegrations';
-import { useJainaChatStream } from '@/hooks/useJainaChatStream';
+import { useJainaChat } from '@/hooks/useJainaChat';
 import {
   isTerminalRunStatus,
   type JainaRunStatusRow,
@@ -84,11 +86,15 @@ import type {
 } from '@/lib/agent-references';
 import { isSessionStreaming, selectRunForSession, useAgentRunStore } from '@/lib/agents/runStore';
 import { http } from '@/lib/api/http';
-import { extractCampaignCanvasActionsEnvelope } from '@/lib/campaign-canvas/agent-actions';
+import {
+  campaignCanvasActionsEnvelopeSchema,
+  extractCampaignCanvasActionsEnvelope,
+} from '@/lib/campaign-canvas/agent-actions';
 import {
   buildCampaignCanvasProposalBlock,
   type CampaignCanvasPayload,
 } from '@/lib/campaign-canvas/payload';
+import { cancelJainaRun, clearJainaMemory } from '@/lib/jaina/chatControls';
 import { useJainaConversationSidebarStore } from '@/lib/jaina/conversation-sidebar-store';
 import {
   createConversationSessionResponseSchema,
@@ -97,6 +103,7 @@ import {
   type JainaConversationSession,
   jainaConversationListResponseSchema,
   jainaConversationRunsHydrationResponseSchema,
+  jainaConversationUiListResponseSchema,
   mapConversationCreateResponse,
 } from '@/lib/jaina/conversations';
 import {
@@ -107,7 +114,7 @@ import {
   type JainaToolAction,
   reportAssemblySchema,
 } from '@/lib/jaina/schemas';
-import { createInitialJainaStreamState, type JainaStreamState } from '@/lib/jaina/stream';
+import { canvasActionsOf, toJainaChatMessage } from '@/lib/jaina/uiMessageProjection';
 import { isPersistedResultStub, parsePersistedResultWrapper } from '@/lib/jaina/unwrapping';
 import { usePaidMediaPerformanceStore } from '@/lib/paid-media/performance-store';
 import type { CampaignPerformanceRow } from '@/lib/paid-media/performance-types';
@@ -128,17 +135,10 @@ const SCAFFOLD_GATE_BY_TOOL_NAME: Record<string, PaidScaffoldGate> = {
   paid_scaffold_activate: 'activate',
 };
 
+import type { PlanStatus } from '@/components/ai-elements/plan';
 import type { PlanFeedbackPayload } from './components/PlanSection';
 import { deriveJainaAnchors, milestonesForJainaMessage } from './deriveJainaAnchors';
-import {
-  extractRenderableFallbackFromStructuredContent,
-  getFinalThought,
-  getReportSummary,
-  hasReportContent,
-  isLikelyStructuredJsonContent,
-  isStreamingPlaceholderMessage,
-  resolveReportSignal,
-} from './jainaUtils';
+import { getReportSummary, hasReportContent } from './jainaUtils';
 import { parsePersistedReportV2Value, parsePersistedReportValue } from './persistedReport';
 import {
   enqueueMessage,
@@ -148,17 +148,8 @@ import {
   updateQueuedMessageContent,
 } from './queueing';
 import type { JainaChatMessage } from './types';
-import { useProjectedJainaRun } from './useProjectedJainaRun';
 
 export { parsePersistedResultWrapper } from '@/lib/jaina/unwrapping';
-
-/**
- * Handed to every message that is not the live turn. `JainaMessageItem` reads the stream state
- * only when `message.id === activeResponseId`, so the value is never observed — what matters is
- * that it is the SAME reference on every render, which is what lets the item's memo hold while a
- * turn streams.
- */
-const IDLE_JAINA_STREAM_STATE: JainaStreamState = createInitialJainaStreamState();
 
 function ConversationSkeleton() {
   return (
@@ -338,90 +329,6 @@ function normalizeSessionTitle(value: string | null | undefined): string | null 
   return trimmed;
 }
 
-function resolveReportSummaryForMessage(report: JainaChatMessage['report'] | undefined): string {
-  if (!report) return '';
-  const summary = getReportSummary(report).trim();
-  const isUnavailableSummary = /synthesis summary unavailable/i.test(summary);
-  if (!isUnavailableSummary) return summary;
-  if ('type' in report) return summary;
-
-  const v1 = frontendCheckpointReportSchema.safeParse(report);
-  if (!v1.success) return summary;
-
-  const firstSectionSummary = v1.data.sections.find((section) =>
-    Boolean(section.summary?.trim()),
-  )?.summary;
-  if (firstSectionSummary) return firstSectionSummary;
-
-  const firstRecommendation = v1.data.strategic_recommendations[0];
-  if (firstRecommendation?.title) {
-    return firstRecommendation.rationale
-      ? `${firstRecommendation.title}: ${firstRecommendation.rationale}`
-      : firstRecommendation.title;
-  }
-
-  return summary;
-}
-
-type RenderableContentSources = {
-  sessionTitle?: string;
-  pendingClarification?: { question: string } | null;
-  responseText: string;
-  report?: JainaChatMessage['report'] | null;
-  reportV2?: JainaChatMessage['reportV2'] | null;
-  latestCheckpointSummary?: string;
-  checkpointSummarySource?: 'synthesis' | 'tool_fallback' | 'default_unavailable' | null;
-  plan?: JainaChatMessage['plan'] | null;
-  progress: Parameters<typeof getFinalThought>[0];
-};
-
-function pickRenderableContent(sources: RenderableContentSources): string {
-  const clarification = sources.pendingClarification?.question?.trim();
-  if (clarification) return clarification;
-
-  const safeText = isLikelyStructuredJsonContent(sources.responseText)
-    ? (extractRenderableFallbackFromStructuredContent(sources.responseText) ?? '').trim()
-    : sources.responseText.trim();
-  if (safeText) return safeText;
-
-  const v2Summary = sources.reportV2?.executive_summary?.trim();
-  if (v2Summary) return v2Summary;
-
-  const reportSummary = resolveReportSummaryForMessage(sources.report ?? undefined).trim();
-  if (reportSummary) return reportSummary;
-
-  const checkpointSummary =
-    sources.checkpointSummarySource !== 'default_unavailable'
-      ? (sources.latestCheckpointSummary ?? '').trim()
-      : '';
-  if (checkpointSummary) return checkpointSummary;
-
-  const planTitle = sources.plan?.title?.trim();
-  if (planTitle) return planTitle;
-
-  const finalThought = getFinalThought(sources.progress)?.trim();
-  if (finalThought) return finalThought;
-
-  const sessionTitle = sources.sessionTitle?.trim();
-  if (sessionTitle) return sessionTitle;
-
-  return '';
-}
-
-async function readErrorMessage(response: Response, fallback: string): Promise<string> {
-  const detail = await response.text().catch(() => fallback);
-  if (!detail) return fallback;
-  try {
-    const parsed = JSON.parse(detail) as { error?: unknown };
-    if (typeof parsed.error === 'string' && parsed.error.length > 0) {
-      return parsed.error;
-    }
-  } catch {
-    // plain text
-  }
-  return detail;
-}
-
 function asPlainRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
@@ -486,7 +393,21 @@ function buildReportArtifactJobTracker(
   };
 }
 
-function createReportArtifactJobFromEvent(job: JainaStreamState['reportArtifactJob']): {
+async function readErrorMessage(response: Response, fallback: string): Promise<string> {
+  const detail = await response.text().catch(() => fallback);
+  if (!detail) return fallback;
+  try {
+    const parsed = JSON.parse(detail) as { error?: unknown };
+    if (typeof parsed.error === 'string' && parsed.error.length > 0) {
+      return parsed.error;
+    }
+  } catch {
+    // plain text
+  }
+  return detail;
+}
+
+function createReportArtifactJobFromEvent(job: JainaChatMessage['reportArtifactJob']): {
   jobId: string;
   status: ReportArtifactJobStatus;
   reportModel?: string;
@@ -615,100 +536,6 @@ function deriveObjectivesFromReport(
     }));
 
   return objectives.length > 0 ? objectives : undefined;
-}
-
-function hydrateMessagesWithConversationRuns(
-  messages: JainaChatMessage[],
-  runs: JainaConversationRun[],
-): { messages: JainaChatMessage[]; changed: boolean } {
-  type HydratedRunPayload = {
-    runId: string | null;
-    report: JainaChatMessage['report'] | undefined;
-    reportV2: JainaChatMessage['reportV2'] | undefined;
-    reportAssembly: JainaChatMessage['reportAssembly'] | undefined;
-    objectives: JainaChatMessage['objectives'] | undefined;
-  };
-
-  const hydrateableAssistantCount = messages.reduce((count, message) => {
-    if (message.role !== 'assistant' || message.reportV2) {
-      return count;
-    }
-    return count + 1;
-  }, 0);
-  if (hydrateableAssistantCount === 0) {
-    return { messages, changed: false };
-  }
-
-  const hydratedPayloads = runs
-    .map((run) => {
-      const reportV2 = parsePersistedReportV2Value({
-        report: run.resultPayload,
-        content: typeof run.resultPayload === 'string' ? run.resultPayload : '',
-      });
-      const report = parsePersistedReportValue({
-        report: run.resultPayload,
-        content: typeof run.resultPayload === 'string' ? run.resultPayload : '',
-      });
-      if (!report && !reportV2) return null;
-
-      const reportAssembly = parseReportAssemblyFromUnknown(run.resultPayload);
-      const objectives = deriveObjectivesFromReport(report);
-
-      return {
-        runId: run.runId,
-        report,
-        reportV2,
-        reportAssembly,
-        objectives,
-      };
-    })
-    .filter((value): value is HydratedRunPayload => value !== null);
-
-  if (hydratedPayloads.length === 0) {
-    return { messages, changed: false };
-  }
-
-  let changed = false;
-  let payloadIndex = 0;
-  const nextMessages = [...messages];
-
-  for (let index = nextMessages.length - 1; index >= 0; index -= 1) {
-    const message = nextMessages[index];
-    if (!message || message.role !== 'assistant' || message.reportV2) {
-      continue;
-    }
-
-    const payload = hydratedPayloads[payloadIndex];
-    if (!payload) break;
-    payloadIndex += 1;
-
-    nextMessages[index] = {
-      ...message,
-      ...(payload.runId
-        ? { runId: payload.runId, deliverySource: 'hydration_replay' as const }
-        : {}),
-      ...(payload.report && !message.report ? { report: payload.report } : {}),
-      ...(payload.reportV2 ? { reportV2: payload.reportV2 } : {}),
-      ...(payload.reportAssembly && !message.reportAssembly
-        ? { reportAssembly: payload.reportAssembly }
-        : {}),
-      ...(payload.objectives && !message.objectives ? { objectives: payload.objectives } : {}),
-      ...(typeof message.renderAsReport === 'boolean'
-        ? {}
-        : {
-            renderAsReport:
-              Boolean(payload.reportV2) ||
-              Boolean(
-                payload.report &&
-                  !('type' in payload.report && payload.report.type === 'direct_answer') &&
-                  hasReportContent(payload.report),
-              ),
-          }),
-    };
-    changed = true;
-  }
-
-  return { messages: nextMessages, changed };
 }
 
 function normalizePersistedObjectiveStatus(
@@ -852,86 +679,6 @@ function deriveObjectivesFromPersistedSources(input: {
   return objectives.length > 0 ? objectives : undefined;
 }
 
-function mapConversationMessageToChatMessage(
-  message: JainaConversationMessage,
-  sessionTitle?: string,
-): JainaChatMessage {
-  const persistedReport = parsePersistedReport(message);
-  const persistedReportV2 = parsePersistedReportV2(message);
-  const persistedReportAssembly = parsePersistedReportAssembly(message);
-  const persistedObjectives = deriveObjectivesFromPersistedSources({
-    message,
-    report: persistedReport,
-  });
-  const unwrappedResult = !persistedReport
-    ? parsePersistedResultWrapper(message.content, sessionTitle)
-    : null;
-  const content =
-    unwrappedResult !== null
-      ? (unwrappedResult.text ?? '')
-      : persistedReport &&
-          (isFallbackCheckpointMessage(message.content) ||
-            isPersistedErrorMessage(message.content) ||
-            isLikelyStructuredJsonContent(message.content))
-        ? resolveReportSummaryForMessage(persistedReport) || message.content
-        : message.content;
-  const persistedPlan = unwrappedResult?.plan;
-
-  return {
-    id: `persisted-${message.id}`,
-    ...(typeof message.metadata?.run_id === 'string'
-      ? { runId: message.metadata.run_id, deliverySource: 'hydration_replay' as const }
-      : {}),
-    role: message.role,
-    content,
-    createdAt: message.createdAt,
-    ...(persistedReport ? { report: persistedReport } : {}),
-    ...(persistedReportV2 ? { reportV2: persistedReportV2 } : {}),
-    ...(persistedReportAssembly ? { reportAssembly: persistedReportAssembly } : {}),
-    ...(persistedPlan ? { plan: persistedPlan } : {}),
-    ...(typeof message.reportAssemblyHtml === 'string'
-      ? { reportAssemblyHtml: message.reportAssemblyHtml }
-      : {}),
-    ...(typeof message.finalThought === 'string' ? { finalThought: message.finalThought } : {}),
-    ...(typeof message.renderAsReport === 'boolean'
-      ? { renderAsReport: message.renderAsReport }
-      : {}),
-    ...(Array.isArray(message.reasoning)
-      ? { reasoning: message.reasoning as JainaChatMessage['reasoning'] }
-      : {}),
-    ...(Array.isArray(message.toolCalls)
-      ? { toolCalls: message.toolCalls as JainaChatMessage['toolCalls'] }
-      : {}),
-    ...(Array.isArray(message.toolResults)
-      ? { toolResults: message.toolResults as JainaChatMessage['toolResults'] }
-      : {}),
-    ...(message.artifacts && typeof message.artifacts === 'object'
-      ? { artifacts: message.artifacts as JainaChatMessage['artifacts'] }
-      : {}),
-    ...(message.paidCreativeRenders?.length
-      ? { paidCreativeRenders: message.paidCreativeRenders }
-      : {}),
-    ...(message.pendingClarification &&
-    typeof message.pendingClarification === 'object' &&
-    typeof message.pendingClarification.question === 'string'
-      ? {
-          pendingClarification: {
-            id: message.pendingClarification.id,
-            question: message.pendingClarification.question,
-          },
-        }
-      : {}),
-    ...(persistedObjectives ? { objectives: persistedObjectives } : {}),
-    ...(message.metadata ? { metadata: message.metadata } : {}),
-    ...(message.role === 'assistant'
-      ? {
-          status: 'done',
-          title: 'Jaina Analyst',
-        }
-      : {}),
-  };
-}
-
 function isFallbackCheckpointMessage(content: string): boolean {
   return /synthesis summary unavailable/i.test(content);
 }
@@ -971,243 +718,6 @@ const hasGateState = (message: JainaChatMessage): boolean =>
   Boolean(message.scaffold) ||
   (message.pendingToolApprovals?.length ?? 0) > 0 ||
   Object.keys(message.resolvedApprovals ?? {}).length > 0;
-
-export function mergePersistedMessagesWithLocal(
-  persistedMessages: JainaChatMessage[],
-  localMessages: JainaChatMessage[],
-): JainaChatMessage[] {
-  if (persistedMessages.length === 0) return localMessages;
-  if (localMessages.length === 0) return persistedMessages;
-
-  // Local messages with non-"persisted-" IDs are optimistic — they were added to
-  // local state while the backend was still writing. The previous implementation
-  // always returned persistedMessages as the base, silently dropping these pending
-  // messages. This caused the visible "clear": the current exchange (user + assistant)
-  // disappeared as soon as any refreshConversationSnapshot resolved, because the DB
-  // hadn't written the new messages yet. Then the Realtime broadcast (which fires
-  // when the backend finishes) caused a second overwrite with just plain text.
-  const pendingLocal = localMessages.filter((msg) => !msg.id.startsWith('persisted-'));
-
-  if (pendingLocal.length > 0) {
-    // Dedup: if the last pending user message content already matches the last
-    // persisted user message, the backend *may* have written this exchange.
-    // We also require the pending assistant to be present in persisted history.
-    // Without this guard, a user-first DB write can cause us to drop the local
-    // assistant (including reasoning/tool traces) on refresh.
-    const lastPendingUser = [...pendingLocal].reverse().find((m) => m.role === 'user');
-    const lastPendingAssistant = [...pendingLocal].reverse().find((m) => m.role === 'assistant');
-    const lastPersistedUserIndex = persistedMessages.findLastIndex((m) => m.role === 'user');
-    const lastPersistedAssistantIndex = persistedMessages.findLastIndex(
-      (m) => m.role === 'assistant',
-    );
-    const lastPersistedUser = persistedMessages[lastPersistedUserIndex];
-    const lastPersistedAssistant =
-      lastPersistedAssistantIndex > lastPersistedUserIndex
-        ? persistedMessages[lastPersistedAssistantIndex]
-        : undefined;
-    const localAssistantHasRichState = Boolean(
-      lastPendingAssistant &&
-        (lastPendingAssistant.plan ||
-          lastPendingAssistant.report ||
-          lastPendingAssistant.reportV2 ||
-          lastPendingAssistant.reportAssembly ||
-          (lastPendingAssistant.reasoning?.length ?? 0) > 0 ||
-          (lastPendingAssistant.toolCalls?.length ?? 0) > 0 ||
-          (lastPendingAssistant.toolResults?.length ?? 0) > 0 ||
-          (lastPendingAssistant.objectives?.length ?? 0) > 0 ||
-          (lastPendingAssistant.paidCreativeRenders?.length ?? 0) > 0 ||
-          // A scaffold turn is rich state in its own right. It always carries toolCalls
-          // today, so this is belt-and-braces rather than a live bug — but the whole
-          // point of this predicate is that dropping the local copy loses whatever the
-          // persisted snapshot cannot rebuild, and the snapshot cannot rebuild a
-          // scaffold at all.
-          Boolean(lastPendingAssistant.scaffold) ||
-          hasGateState(lastPendingAssistant)),
-    );
-    const persistedAssistantHasMeaningfulContent = Boolean(
-      lastPersistedAssistant &&
-        lastPersistedAssistant.content.trim().length > 0 &&
-        !isFallbackCheckpointMessage(lastPersistedAssistant.content) &&
-        !isPersistedErrorMessage(lastPersistedAssistant.content) &&
-        !isPersistedResultStub(lastPersistedAssistant.content),
-    );
-    const userAlreadySynced =
-      lastPendingUser &&
-      lastPersistedUser &&
-      lastPendingUser.content.trim() === lastPersistedUser.content.trim();
-    const assistantRunAlreadySynced = Boolean(
-      lastPendingAssistant?.runId && lastPersistedAssistant?.runId === lastPendingAssistant.runId,
-    );
-    const assistantAlreadySynced =
-      !lastPendingAssistant ||
-      Boolean(
-        lastPersistedAssistant &&
-          ((lastPendingAssistant.plan?.id &&
-            lastPersistedAssistant.plan?.id === lastPendingAssistant.plan.id) ||
-            (lastPendingAssistant.report && lastPersistedAssistant.report) ||
-            (lastPendingAssistant.reportV2 && lastPersistedAssistant.reportV2) ||
-            (lastPendingAssistant.content.trim().length > 0 &&
-              lastPendingAssistant.content.trim() === lastPersistedAssistant.content.trim()) ||
-            (!localAssistantHasRichState && persistedAssistantHasMeaningfulContent)),
-      );
-    const alreadySynced =
-      assistantRunAlreadySynced || Boolean(userAlreadySynced && assistantAlreadySynced);
-
-    if (!alreadySynced) {
-      // The current exchange hasn't landed in the DB yet. Return the persisted
-      // history (without touching it — the last persisted assistant belongs to a
-      // previous exchange, not this one) plus the pending local pair.
-      const pendingToAppend = userAlreadySynced
-        ? pendingLocal.filter((message) => message.role !== 'user')
-        : pendingLocal;
-      return [...persistedMessages, ...pendingToAppend];
-    }
-    // alreadySynced: fall through — the DB has the new messages so we want the
-    // persisted version and can apply report-data enrichment below.
-  }
-
-  // From here on, all local messages are accounted for in persistedMessages.
-  // Apply the assistant report-data merge: local in-memory state may have richer
-  // data (report, reportAssembly, etc.) than what the backend persisted, either
-  // because the backend saved placeholder text or because it hasn't persisted the
-  // full report JSON yet.
-
-  let persistedAssistantIndex = -1;
-  for (let index = persistedMessages.length - 1; index >= 0; index -= 1) {
-    if (persistedMessages[index]?.role === 'assistant') {
-      persistedAssistantIndex = index;
-      break;
-    }
-  }
-  if (persistedAssistantIndex === -1) {
-    return persistedMessages;
-  }
-
-  let localAssistant: JainaChatMessage | null = null;
-  for (let index = localMessages.length - 1; index >= 0; index -= 1) {
-    const candidate = localMessages[index];
-    if (candidate?.role !== 'assistant') continue;
-    const candidateHasRichState =
-      Boolean(candidate.plan) ||
-      Boolean(candidate.report) ||
-      Boolean(candidate.reportV2) ||
-      Boolean(candidate.reportAssembly) ||
-      (candidate.reasoning?.length ?? 0) > 0 ||
-      (candidate.toolCalls?.length ?? 0) > 0 ||
-      (candidate.toolResults?.length ?? 0) > 0 ||
-      (candidate.objectives?.length ?? 0) > 0 ||
-      (candidate.paidCreativeRenders?.length ?? 0) > 0 ||
-      hasGateState(candidate);
-    if (candidateHasRichState || !isFallbackCheckpointMessage(candidate.content)) {
-      localAssistant = candidate;
-      break;
-    }
-  }
-
-  if (!localAssistant) {
-    return persistedMessages;
-  }
-
-  const persistedAssistant = persistedMessages[persistedAssistantIndex];
-
-  // Bail out if the persisted message is already authoritative — UNLESS the
-  // persisted copy lacks report data that the local state already holds.
-  // This guards the race where the backend saved real text content but hadn't
-  // yet written the report JSON when the snapshot resolved.
-  const persistedLacksReport =
-    !persistedAssistant.report &&
-    !persistedAssistant.reportV2 &&
-    !persistedAssistant.reportAssembly;
-  const localHasReport = Boolean(
-    localAssistant.report || localAssistant.reportV2 || localAssistant.reportAssembly,
-  );
-  const localHasRicherReportV2 = Boolean(
-    localAssistant.reportV2 &&
-      (!persistedAssistant.reportV2 ||
-        localAssistant.reportV2.blocks.length > persistedAssistant.reportV2.blocks.length),
-  );
-  const persistedPlanOnly =
-    Boolean(persistedAssistant.plan) &&
-    !persistedAssistant.report &&
-    !persistedAssistant.reportV2 &&
-    !persistedAssistant.reportAssembly &&
-    persistedAssistant.content.trim().length === 0;
-  const persistedTraceCount =
-    (persistedAssistant.reasoning?.length ?? 0) +
-    (persistedAssistant.toolCalls?.length ?? 0) +
-    (persistedAssistant.toolResults?.length ?? 0) +
-    (persistedAssistant.objectives?.length ?? 0);
-  const localTraceCount =
-    (localAssistant.reasoning?.length ?? 0) +
-    (localAssistant.toolCalls?.length ?? 0) +
-    (localAssistant.toolResults?.length ?? 0) +
-    (localAssistant.objectives?.length ?? 0);
-  const shouldPreserveLocalTrace = persistedTraceCount === 0 && localTraceCount > 0;
-  // The persisted row is never authoritative about a gate: the backend does not store
-  // one, so `persistedAssistant` can only ever be missing it.
-  const shouldPreserveLocalGate = hasGateState(localAssistant) && !hasGateState(persistedAssistant);
-  const shouldPreserveLocalRenders =
-    (localAssistant.paidCreativeRenders?.length ?? 0) > 0 &&
-    (persistedAssistant.paidCreativeRenders?.length ?? 0) === 0;
-  const shouldPreserveLocalRunId = Boolean(localAssistant.runId && !persistedAssistant.runId);
-  const mergedObjectives = mergeMessageObjectives(
-    persistedAssistant.objectives,
-    localAssistant.objectives,
-  );
-  const hasObjectiveUpgrade = objectivesChanged(persistedAssistant.objectives, mergedObjectives);
-  if (
-    !isFallbackCheckpointMessage(persistedAssistant.content) &&
-    !isPersistedErrorMessage(persistedAssistant.content) &&
-    !isPersistedResultStub(persistedAssistant.content) &&
-    !(persistedLacksReport && localHasReport) &&
-    !localHasRicherReportV2 &&
-    !persistedPlanOnly &&
-    !shouldPreserveLocalTrace &&
-    !shouldPreserveLocalGate &&
-    !shouldPreserveLocalRenders &&
-    !shouldPreserveLocalRunId
-  ) {
-    if (hasObjectiveUpgrade) {
-      const mergedMessages = [...persistedMessages];
-      mergedMessages[persistedAssistantIndex] = {
-        ...persistedAssistant,
-        objectives: mergedObjectives,
-      };
-      return mergedMessages;
-    }
-    return persistedMessages;
-  }
-
-  const mergedMessages = [...persistedMessages];
-  mergedMessages[persistedAssistantIndex] = {
-    ...persistedAssistant,
-    runId: persistedAssistant.runId ?? localAssistant.runId,
-    deliverySource: persistedAssistant.deliverySource ?? localAssistant.deliverySource,
-    content: localAssistant.content || persistedAssistant.content,
-    plan: localAssistant.plan ?? persistedAssistant.plan,
-    finalThought: localAssistant.finalThought ?? persistedAssistant.finalThought,
-    renderAsReport: localAssistant.renderAsReport ?? persistedAssistant.renderAsReport,
-    reasoning: localAssistant.reasoning ?? persistedAssistant.reasoning,
-    toolCalls: localAssistant.toolCalls ?? persistedAssistant.toolCalls,
-    toolResults: localAssistant.toolResults ?? persistedAssistant.toolResults,
-    report: localAssistant.report ?? persistedAssistant.report,
-    reportV2: localAssistant.reportV2 ?? persistedAssistant.reportV2,
-    reportAssembly: localAssistant.reportAssembly ?? persistedAssistant.reportAssembly,
-    reportAssemblyHtml: localAssistant.reportAssemblyHtml ?? persistedAssistant.reportAssemblyHtml,
-    artifacts: localAssistant.artifacts ?? persistedAssistant.artifacts,
-    paidCreativeRenders:
-      localAssistant.paidCreativeRenders ?? persistedAssistant.paidCreativeRenders,
-    pendingClarification:
-      localAssistant.pendingClarification ?? persistedAssistant.pendingClarification,
-    objectives: mergedObjectives,
-    // See `hasGateState`: local is the only copy of these.
-    scaffold: localAssistant.scaffold ?? persistedAssistant.scaffold,
-    pendingToolApprovals:
-      localAssistant.pendingToolApprovals ?? persistedAssistant.pendingToolApprovals,
-    resolvedApprovals: localAssistant.resolvedApprovals ?? persistedAssistant.resolvedApprovals,
-  };
-  return mergedMessages;
-}
 
 function sortConversationSessions(
   sessions: JainaConversationSession[],
@@ -1261,8 +771,22 @@ export function JainaChatSurface({
   const supabase = React.useMemo(() => createSupabaseBrowserClient(), []);
   const prefersReducedMotion = useReducedMotion();
 
-  const { state, start, cancel, detach, reset, clearMemory, liveRunId } = useJainaChatStream();
-  const isStreaming = state.status === 'streaming' || state.status === 'starting';
+  // Transport notices, which are deliberately NOT transcript entries. The heartbeat only keeps
+  // a proxy from closing an idle connection. The fence says this turn is parked behind one that
+  // is already running for the same session — the NDJSON wire sent that too and Jaina's reader
+  // dropped it on the floor, so a queued turn looked like a turn that did nothing.
+  const handleStreamNotice = React.useCallback(
+    (notice: Record<string, unknown>) => {
+      if (notice.type !== AGENT_RUN_QUEUED) return;
+      show({
+        title: 'Queued behind the current turn',
+        description: 'Jaina is still finishing the previous request in this conversation.',
+        variant: 'info',
+      });
+    },
+    [show],
+  );
+
   // The optional sub-brand scope. Brand identity is unchanged; what narrows on the Backend
   // is the evidence — ad accounts and the documents the turn may read.
   const activeProjectId = useActiveProjectOptional()?.activeProjectId ?? null;
@@ -1290,12 +814,64 @@ export function JainaChatSurface({
   const [optimisticApprovalDecisions, setOptimisticApprovalDecisions] = React.useState<
     Record<string, ToolApprovalDecision>
   >({});
+  const [optimisticPlanStatusById, setOptimisticPlanStatusById] = React.useState<
+    Record<string, PlanStatus>
+  >({});
   const [sessionId, setSessionId] = React.useState<string>(() => createJainaSessionId());
   const attachments = useChatAttachments({ brandId: brandProfileId, sessionId });
   // Lifted out under a distinct name: handleSubmit takes an `attachments` parameter
   // that shadows the controller, so the scope key has to be captured here.
   const attachmentScopeKey = attachments.scopeKey;
-  const pendingClarificationId = state.pendingClarification?.id;
+
+  const [conversationSessions, setConversationSessions] = React.useState<
+    JainaConversationSession[]
+  >([]);
+  const [sessionTitleById, setSessionTitleById] = React.useState<Record<string, string>>({});
+
+  const {
+    messages: uiMessages,
+    status: chatStatus,
+    error: chatError,
+    sendTurn,
+    stop: stopChat,
+    setMessages: setUiMessages,
+  } = useJainaChat({ sessionId, onNotice: handleStreamNotice });
+  const isStreaming = chatStatus === 'submitted' || chatStatus === 'streaming';
+
+  // ONE transcript. `useChat.messages` is it — live turn, resumed turn and persisted history
+  // alike. There used to be three: this reader's own NDJSON fold, a second fold of the
+  // app-level store's frame log for a run it did not own, and the persisted snapshot, merged
+  // pairwise. `resume: true` replaces the second (the SDK reconnects on GET and the Backend
+  // replays the durable log through the same adapter the live path uses), and history arrives
+  // already parts-shaped, which replaces the third.
+  //
+  // A `silent` user message is an approval verdict the request schema forced us to send. It is
+  // not something a reader typed, so it never reaches the transcript.
+  const messages = React.useMemo(
+    () =>
+      uiMessages
+        .filter((message) => message.metadata?.silent !== true)
+        .map((message, index) => {
+          const projected = toJainaChatMessage(message, {
+            isStreaming: isStreaming && index === uiMessages.length - 1,
+            sessionTitle: sessionTitleById[sessionId],
+          });
+          const optimisticStatus = projected.plan
+            ? optimisticPlanStatusById[projected.plan.id]
+            : undefined;
+          return optimisticStatus && projected.plan
+            ? { ...projected, plan: { ...projected.plan, status: optimisticStatus } }
+            : projected;
+        }),
+    [uiMessages, isStreaming, sessionTitleById, sessionId, optimisticPlanStatusById],
+  );
+
+  /** The turn on screen right now, projected once so the effects below share one object. */
+  const liveMessage = uiMessages.at(-1) ?? null;
+  const liveChatMessage = messages.at(-1) ?? null;
+  const activeResponseId =
+    isStreaming && liveChatMessage?.role === 'assistant' ? liveChatMessage.id : null;
+  const pendingClarificationId = liveChatMessage?.pendingClarification?.id;
 
   // Per-viewed-session streaming from the app-level store: true when the conversation on screen
   // has a run in flight — whether this reader owns it (local `isStreaming`) or it is a detached
@@ -1304,21 +880,7 @@ export function JainaChatSurface({
   const viewedSessionStreaming = useAgentRunStore(isSessionStreaming(sessionId));
   const isViewedStreaming = isStreaming || viewedSessionStreaming;
 
-  // Mid-run transcript resume: when this surface does NOT own the live reader (the user
-  // navigated away and came back), fold the app-level store's frame log for this session
-  // into a JainaStreamState and render it as a placeholder assistant message (see the
-  // projection effects below refreshConversationSnapshot).
-  const { projectedState, projectedRunId, projectedSessionId } = useProjectedJainaRun({
-    sessionId,
-    liveRunId,
-  });
-
-  const [messages, setMessages] = React.useState<JainaChatMessage[]>([]);
   const anchors = React.useMemo(() => deriveJainaAnchors(messages), [messages]);
-  const [conversationSessions, setConversationSessions] = React.useState<
-    JainaConversationSession[]
-  >([]);
-  const [sessionTitleById, setSessionTitleById] = React.useState<Record<string, string>>({});
   const [shaderState, setShaderState] = React.useState<'visible' | 'sweeping' | 'hidden'>(
     'visible',
   );
@@ -1326,7 +888,6 @@ export function JainaChatSurface({
   const [isHistoryLoading, setIsHistoryLoading] = React.useState(false);
   const [isConversationSwitching, setIsConversationSwitching] = React.useState(false);
   const [deletingSessionId, setDeletingSessionId] = React.useState<string | null>(null);
-  const [activeResponseId, setActiveResponseId] = React.useState<string | null>(null);
   const [generatingSessionIds, setGeneratingSessionIds] = React.useState<Set<string>>(
     () => new Set(),
   );
@@ -1498,14 +1059,14 @@ export function JainaChatSurface({
   }, [activeResponseId, isStreaming]);
 
   React.useEffect(() => {
-    const eventJob = createReportArtifactJobFromEvent(state.reportArtifactJob);
+    const eventJob = createReportArtifactJobFromEvent(liveChatMessage?.reportArtifactJob);
     if (!eventJob) return;
     if (processedReportArtifactJobIdsRef.current.has(eventJob.jobId)) return;
 
     processedReportArtifactJobIdsRef.current.add(eventJob.jobId);
     setPendingReportArtifactResponseId(null);
     setReportArtifactJob(buildReportArtifactJobTracker(eventJob));
-  }, [state.reportArtifactJob]);
+  }, [liveChatMessage?.reportArtifactJob]);
 
   React.useEffect(() => {
     if (!reportArtifactJob) return;
@@ -1584,27 +1145,6 @@ export function JainaChatSurface({
     return () => window.clearTimeout(timer);
   }, [prefersReducedMotion, shaderState]);
 
-  const updateMessage = React.useCallback(
-    (
-      id: string,
-      update:
-        | Partial<JainaChatMessage>
-        | ((message: JainaChatMessage) => Partial<JainaChatMessage>),
-    ) => {
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === id
-            ? {
-                ...msg,
-                ...(typeof update === 'function' ? update(msg) : update),
-              }
-            : msg,
-        ),
-      );
-    },
-    [],
-  );
-
   const handleReportArtifactAction = React.useCallback(async () => {
     if (reportArtifactJob?.status === 'failed') {
       setReportArtifactJob(null);
@@ -1657,6 +1197,9 @@ export function JainaChatSurface({
         adAccountId,
         sessionsLimit: '40',
         messagesLimit: '300',
+        // The Backend owns the at-rest to parts mapping, beside the live one. A transcript
+        // reassembled a second time on the client is the thing this migration deletes.
+        shape: 'ui',
       });
 
       if (targetSessionId) {
@@ -1680,12 +1223,15 @@ export function JainaChatSurface({
       }
 
       const payload = await response.json().catch(() => null);
-      const parsed = jainaConversationListResponseSchema.safeParse(payload);
+      const parsed = jainaConversationUiListResponseSchema.safeParse(payload);
       if (!parsed.success) {
         throw new Error('Invalid conversation history payload.');
       }
 
-      return parsed.data;
+      return {
+        ...parsed.data,
+        uiMessages: (parsed.data.uiMessages ?? []) as unknown as JainaUIMessage[],
+      };
     },
     [adAccountId, brandProfileId],
   );
@@ -1756,57 +1302,6 @@ export function JainaChatSurface({
     [brandProfileId, setConversationSessionsWithCache],
   );
 
-  const hydrateConversationMessagesFromRuns = React.useCallback(
-    async (input: { targetSessionId: string; baseMessages: JainaChatMessage[] }) => {
-      if (!adAccountId) return;
-      if (
-        !input.baseMessages.some(
-          (message) =>
-            message.role === 'assistant' &&
-            !message.report &&
-            !message.reportV2 &&
-            !message.reportAssembly,
-        )
-      ) {
-        return;
-      }
-
-      try {
-        const searchParams = new URLSearchParams({
-          brandId: brandProfileId,
-          limit: '300',
-        });
-        if (adAccountId) {
-          searchParams.set('adAccountId', adAccountId);
-        }
-
-        const response = await fetch(
-          `/api/agents/jaina/chat/conversations/${encodeURIComponent(
-            input.targetSessionId,
-          )}/runs?${searchParams.toString()}`,
-          {
-            method: 'GET',
-            cache: 'no-store',
-          },
-        );
-        if (!response.ok) return;
-
-        const payload = await response.json().catch(() => null);
-        const parsed = jainaConversationRunsHydrationResponseSchema.safeParse(payload);
-        if (!parsed.success) return;
-
-        const hydrated = hydrateMessagesWithConversationRuns(input.baseMessages, parsed.data.runs);
-        if (!hydrated.changed) return;
-        if (activeSessionIdRef.current !== input.targetSessionId) return;
-
-        setMessages((previous) => mergePersistedMessagesWithLocal(hydrated.messages, previous));
-      } catch {
-        // Best-effort lazy hydration; ignore failures to avoid interrupting chat load.
-      }
-    },
-    [adAccountId, brandProfileId],
-  );
-
   const ensureConversationSession = React.useCallback(
     async (preferredSessionId?: string) => {
       if (!adAccountId) return null;
@@ -1866,23 +1361,21 @@ export function JainaChatSurface({
   );
 
   const { hasEarlier, isLoadingEarlier, loadEarlier, setEarlierCursor } =
-    useEarlierHistory<JainaChatMessage>({
+    useEarlierHistory<JainaUIMessage>({
       fetchPage: React.useCallback(
         async (cursor: string) => {
           const payload = await fetchConversationHistory(sessionId, cursor);
           if (!payload) return null;
-          return {
-            items: (payload.messages ?? []).map((message) =>
-              mapConversationMessageToChatMessage(message, undefined),
-            ),
-            nextCursor: payload.nextCursor ?? null,
-          };
+          return { items: payload.uiMessages, nextCursor: payload.nextCursor ?? null };
         },
         [fetchConversationHistory, sessionId],
       ),
-      applyPage: React.useCallback((older: JainaChatMessage[]) => {
-        setMessages((current) => prependUnseen(current, older));
-      }, []),
+      applyPage: React.useCallback(
+        (older: JainaUIMessage[]) => {
+          setUiMessages((current) => prependUnseen(current, older));
+        },
+        [setUiMessages],
+      ),
     });
 
   const loadConversationSession = React.useCallback(
@@ -1894,11 +1387,9 @@ export function JainaChatSurface({
         const payload = await fetchConversationHistory(targetSessionId);
         if (!payload) return;
 
-        reset();
         processedToolResultIdsRef.current.clear();
         processedCanvasEnvelopeKeysRef.current.clear();
         persistedAssistantResponseIdsRef.current.clear();
-        setActiveResponseId(null);
         setQueuedMessages([]);
         setEditingQueueMessageId(null);
         setQueueEditDraft('');
@@ -1915,20 +1406,9 @@ export function JainaChatSurface({
           }
           return next;
         });
-        const sessionTitleForTarget =
-          normalizeSessionTitle(
-            payload.sessions?.find((s) => s.sessionId === targetSessionId)?.title ?? null,
-          ) ?? undefined;
-        const mappedMessages = (payload.messages ?? []).map((msg) =>
-          mapConversationMessageToChatMessage(msg, sessionTitleForTarget),
-        );
-        setMessages(mappedMessages);
+        setUiMessages(payload.uiMessages);
         setEarlierCursor(payload.nextCursor ?? null);
-        setShaderState(mappedMessages.length > 0 ? 'hidden' : 'visible');
-        void hydrateConversationMessagesFromRuns({
-          targetSessionId,
-          baseMessages: mappedMessages,
-        });
+        setShaderState(payload.uiMessages.length > 0 ? 'hidden' : 'visible');
       } catch (error) {
         if (!options?.silent) {
           const message =
@@ -1946,14 +1426,20 @@ export function JainaChatSurface({
     [
       adAccountId,
       fetchConversationHistory,
-      hydrateConversationMessagesFromRuns,
-      reset,
       setConversationSessionsWithCache,
+      setEarlierCursor,
+      setUiMessages,
       show,
     ],
   );
 
-  const refreshConversationSnapshot = React.useCallback(
+  /**
+   * Re-read the SESSION list. It used to re-read the transcript too and merge it into the
+   * messages on screen — a polling second source for a turn the reader was watching arrive,
+   * and the reason a finished answer could be replaced by an older snapshot of itself. The
+   * transcript now has one owner, so this touches the sidebar and nothing else.
+   */
+  const refreshConversationSessions = React.useCallback(
     async (targetSessionId: string) => {
       if (!adAccountId) return;
       try {
@@ -1970,335 +1456,40 @@ export function JainaChatSurface({
           }
           return next;
         });
-        if (payload.messages) {
-          const sessionTitleForTarget =
-            normalizeSessionTitle(
-              payload.sessions?.find((s) => s.sessionId === targetSessionId)?.title ?? null,
-            ) ?? undefined;
-          const mappedMessages = payload.messages.map((msg) =>
-            mapConversationMessageToChatMessage(msg, sessionTitleForTarget),
-          );
-          setMessages((previous) => mergePersistedMessagesWithLocal(mappedMessages, previous));
-          setShaderState(mappedMessages.length > 0 ? 'hidden' : 'visible');
-          void hydrateConversationMessagesFromRuns({
-            targetSessionId,
-            baseMessages: mappedMessages,
-          });
-        }
       } catch {
         // Silent polling refresh; keep existing UI state when sync fails.
       }
     },
-    [
-      adAccountId,
-      fetchConversationHistory,
-      hydrateConversationMessagesFromRuns,
-      setConversationSessionsWithCache,
-    ],
+    [adAccountId, fetchConversationHistory, setConversationSessionsWithCache],
   );
 
-  // ---- Mid-run transcript projection. The store's frame log IS the mid-run transcript:
-  // useProjectedJainaRun folds it into a JainaStreamState, and this effect renders it as a
-  // placeholder assistant message the same way the live path renders its streaming turn.
-  // The session guard drops the one-render echo that follows a session switch.
-  const projectedMessageId =
-    projectedRunId && projectedSessionId === sessionId ? `projected-${projectedRunId}` : null;
-  const projectionHandoffRef = React.useRef<{ sessionId: string; messageId: string } | null>(null);
-
+  // A turn ends exactly once, and the SDK says when. What used to live here was a
+  // 200-line reconciler that re-derived the assistant message from a folded stream state on
+  // every frame; `toJainaChatMessage` does that at render time now, from the parts. All that
+  // is left is what genuinely happens ONCE at the end of a turn and is not a message field:
+  // adopt the plan's title, and re-read the session list so the sidebar preview catches up.
+  const settledResponseIdRef = React.useRef<string | null>(null);
   React.useEffect(() => {
-    if (!projectedMessageId || !projectedState) return;
-    if (activeResponseId || isHistoryLoading || isConversationSwitching) return;
+    if (chatStatus === 'submitted' || chatStatus === 'streaming') return;
+    const settled = liveMessage;
+    if (!settled || settled.role !== 'assistant') return;
+    if (settledResponseIdRef.current === settled.id) return;
+    settledResponseIdRef.current = settled.id;
 
-    const content = pickRenderableContent({
-      sessionTitle: currentSessionTitle,
-      pendingClarification: projectedState.pendingClarification,
-      responseText: projectedState.responseText,
-      report: projectedState.report,
-      reportV2: projectedState.reportV2,
-      latestCheckpointSummary: projectedState.latestCheckpointSummary,
-      checkpointSummarySource: projectedState.checkpointSummarySource,
-      plan: projectedState.plan ?? undefined,
-      progress: projectedState.progress,
-    });
-    const patch: Partial<JainaChatMessage> = {
-      runId: projectedRunId ?? undefined,
-      deliverySource: 'hydration_replay',
-      content: content || 'Thinking through your request…',
-      status: 'streaming',
-      objectives: projectedState.objectives,
-      delegations: projectedState.delegations,
-      plan: projectedState.plan ?? undefined,
-      report: projectedState.report ?? undefined,
-      reportV2: projectedState.reportV2 ?? undefined,
-      reportAssembly: projectedState.reportAssembly ?? undefined,
-      reasoning: projectedState.progress,
-      toolCalls: projectedState.toolCalls,
-      toolResults: projectedState.toolResults,
-      paidCreativeRenders: projectedState.paidCreativeRenders,
-      pendingClarification: projectedState.pendingClarification ?? undefined,
-      // The scaffold and its gate. Omitting these was what made a reattach lose the
-      // scaffold card: the reducer folds the frames into projectedState correctly, and
-      // then the patch dropped them on the floor, leaving the turn as bare prose.
-      scaffold: projectedState.scaffold ?? undefined,
-      pendingToolApprovals: projectedState.pendingToolApprovals,
-      resolvedApprovals: projectedState.resolvedApprovals,
-    };
+    persistedAssistantResponseIdsRef.current.add(settled.id);
+    setPendingReportArtifactResponseId(null);
+    void refreshConversationSessions(sessionId);
+  }, [chatStatus, liveMessage, refreshConversationSessions, sessionId]);
 
-    setMessages((previous) => {
-      const index = previous.findIndex((message) => message.id === projectedMessageId);
-      if (index === -1) {
-        const placeholder: JainaChatMessage = {
-          id: projectedMessageId,
-          role: 'assistant',
-          content: 'Thinking through your request…',
-          createdAt: new Date().toISOString(),
-          title: 'Jaina Analyst',
-          ...patch,
-        };
-        return [...previous, placeholder];
-      }
-      const nextMessages = [...previous];
-      nextMessages[index] = { ...nextMessages[index], ...patch };
-      return nextMessages;
-    });
-  }, [
-    projectedMessageId,
-    projectedState,
-    activeResponseId,
-    isHistoryLoading,
-    isConversationSwitching,
-    currentSessionTitle,
-  ]);
-
-  // When the projected run ends (terminal frame, realtime row, or Stop), reconcile it with the
-  // persisted snapshot. Keep the projected message visible until the matching run row exists;
-  // deleting it first recreates the same terminal-before-persistence blank state as the live path.
+  // The planner names the conversation. Applied only when the session has no title yet, so a
+  // later turn's plan cannot rename a conversation the reader has already learned to recognise.
   React.useEffect(() => {
-    if (projectedMessageId && projectedSessionId) {
-      projectionHandoffRef.current = {
-        sessionId: projectedSessionId,
-        messageId: projectedMessageId,
-      };
-      return;
-    }
-    const ended = projectionHandoffRef.current;
-    if (!ended) return;
-    projectionHandoffRef.current = null;
-    // A session switch replaced the transcript wholesale; nothing to reconcile here.
-    if (ended.sessionId !== activeSessionIdRef.current) return;
-    if (persistedAssistantResponseIdsRef.current.has(ended.messageId)) return;
-    persistedAssistantResponseIdsRef.current.add(ended.messageId);
-    void refreshConversationSnapshot(ended.sessionId);
-  }, [projectedMessageId, projectedSessionId, refreshConversationSnapshot]);
-
-  React.useEffect(() => {
-    if (!activeResponseId) return;
-
-    if (state.plan) {
-      updateMessage(activeResponseId, {
-        plan: state.plan,
-      });
-
-      const sessionTitle = normalizeSessionTitle(state.plan.title);
-      if (sessionTitle) {
-        setSessionTitleById((previous) => {
-          if (previous[sessionId] === sessionTitle) return previous;
-          return { ...previous, [sessionId]: sessionTitle };
-        });
-      }
-    }
-
-    if (
-      state.status === 'streaming' &&
-      (state.responseText ||
-        state.objectives.length > 0 ||
-        state.plan ||
-        state.report ||
-        state.reportV2 ||
-        state.pendingClarification ||
-        state.paidCreativeRenders.length > 0)
-    ) {
-      const streamingContent = pickRenderableContent({
-        sessionTitle: currentSessionTitle,
-        pendingClarification: state.pendingClarification,
-        responseText: state.responseText,
-        report: state.report,
-        reportV2: state.reportV2,
-        latestCheckpointSummary: state.latestCheckpointSummary,
-        checkpointSummarySource: state.checkpointSummarySource,
-        plan: state.plan ?? undefined,
-        progress: state.progress,
-      });
-      updateMessage(activeResponseId, {
-        content: streamingContent,
-        objectives: state.objectives,
-        delegations: state.delegations,
-        plan: state.plan ?? undefined,
-        report: state.report ?? undefined,
-        reportV2: state.reportV2 ?? undefined,
-        reportAssembly: state.reportAssembly ?? undefined,
-        paidCreativeRenders: state.paidCreativeRenders,
-      });
-    }
-
-    if (state.status === 'complete') {
-      const completedResponseId = activeResponseId;
-      const finalThought = getFinalThought(state.progress);
-      const content = pickRenderableContent({
-        sessionTitle: currentSessionTitle,
-        pendingClarification: state.pendingClarification,
-        responseText: state.responseText,
-        report: state.report,
-        reportV2: state.reportV2,
-        latestCheckpointSummary: state.latestCheckpointSummary,
-        checkpointSummarySource: state.checkpointSummarySource,
-        plan: state.plan ?? undefined,
-        progress: state.progress,
-      });
-
-      const hasClarificationRequest = Boolean(state.pendingClarification);
-      const reportType =
-        state.report && typeof state.report === 'object' && 'type' in state.report
-          ? (state.report as { type?: unknown }).type
-          : undefined;
-      const isDirectAnswer = reportType === 'direct_answer';
-      const hasReportSignal = resolveReportSignal(state.progress, state.stateDeltas);
-      const reportHasContent = hasReportContent(state.report);
-      const renderAsReport = !!(
-        !hasClarificationRequest &&
-        state.report &&
-        !isDirectAnswer &&
-        reportHasContent &&
-        (hasReportSignal || state.finalContentKind === 'report')
-      );
-
-      updateMessage(completedResponseId, {
-        runId: state.runId ?? undefined,
-        deliverySource: 'live_render',
-        status: 'done',
-        content,
-        report: state.report ?? undefined,
-        reportV2: state.reportV2 ?? undefined,
-        reportAssembly: state.reportAssembly ?? undefined,
-        reportAssemblyHtml: state.reportAssemblyHtml ?? undefined,
-        plan: state.plan ?? undefined,
-        finalThought,
-        renderAsReport,
-        reasoning: state.progress,
-        toolCalls: state.toolCalls,
-        toolResults: state.toolResults,
-        artifacts: state.artifacts,
-        paidCreativeRenders: state.paidCreativeRenders,
-        pendingClarification: state.pendingClarification ?? undefined,
-        objectives: state.objectives,
-        delegations: state.delegations,
-        // Keeps the scaffold card on screen once the turn ends and the stream state
-        // is no longer the source. On reload it comes back through the durable
-        // run-event projection instead.
-        scaffold: state.scaffold ?? undefined,
-        pendingToolApprovals: state.pendingToolApprovals,
-        resolvedApprovals: state.resolvedApprovals,
-      });
-
-      persistedAssistantResponseIdsRef.current.add(completedResponseId);
-
-      void refreshConversationSnapshot(sessionId);
-
-      setPendingReportArtifactResponseId((current) =>
-        current === completedResponseId ? null : current,
-      );
-      setActiveResponseId(null);
-    }
-    if (state.status === 'error' && state.error) {
-      const failedResponseId = activeResponseId;
-      const reportHasContent = hasReportContent(state.report);
-      const safeResponseText = isLikelyStructuredJsonContent(state.responseText)
-        ? extractRenderableFallbackFromStructuredContent(state.responseText) || ''
-        : state.responseText;
-      const reportSummary = resolveReportSummaryForMessage(state.report ?? undefined);
-      const checkpointSummary =
-        state.checkpointSummarySource !== 'default_unavailable'
-          ? (state.latestCheckpointSummary?.trim() ?? '')
-          : '';
-      const finalThought = getFinalThought(state.progress);
-      const derivedErrorContent =
-        reportSummary ||
-        checkpointSummary ||
-        safeResponseText ||
-        state.pendingClarification?.question ||
-        finalThought ||
-        '';
-      updateMessage(failedResponseId, (previousMessage) => ({
-        runId: state.runId ?? previousMessage.runId,
-        deliverySource: 'live_render',
-        status: 'error',
-        content:
-          derivedErrorContent ||
-          (!isStreamingPlaceholderMessage(previousMessage.content) &&
-          previousMessage.content.trim().length > 0
-            ? previousMessage.content
-            : state.error || previousMessage.content),
-        title: 'Jaina error',
-        report: state.report ?? undefined,
-        reportV2: state.reportV2 ?? undefined,
-        reportAssembly: state.reportAssembly ?? undefined,
-        reportAssemblyHtml: state.reportAssemblyHtml ?? undefined,
-        plan: state.plan ?? undefined,
-        renderAsReport: reportHasContent,
-        reasoning: state.progress,
-        toolCalls: state.toolCalls,
-        toolResults: state.toolResults,
-        artifacts: state.artifacts,
-        paidCreativeRenders: state.paidCreativeRenders,
-        pendingClarification: state.pendingClarification ?? undefined,
-        objectives: state.objectives,
-        delegations: state.delegations,
-        // Keeps the scaffold card on screen once the turn ends and the stream state
-        // is no longer the source. On reload it comes back through the durable
-        // run-event projection instead.
-        scaffold: state.scaffold ?? undefined,
-        pendingToolApprovals: state.pendingToolApprovals,
-        resolvedApprovals: state.resolvedApprovals,
-      }));
-
-      persistedAssistantResponseIdsRef.current.add(failedResponseId);
-      void refreshConversationSnapshot(sessionId);
-
-      setPendingReportArtifactResponseId((current) =>
-        current === failedResponseId ? null : current,
-      );
-      setActiveResponseId(null);
-    }
-  }, [
-    activeResponseId,
-    currentSessionTitle,
-    refreshConversationSnapshot,
-    sessionId,
-    show,
-    state.artifacts,
-    state.paidCreativeRenders,
-    state.checkpointSummarySource,
-    state.error,
-    state.finalContentKind,
-    state.latestCheckpointSummary,
-    state.lastEventType,
-    state.delegations,
-    state.objectives,
-    state.pendingClarification,
-    state.plan,
-    state.progress,
-    state.report,
-    state.reportV2,
-    state.reportAssembly,
-    state.reportAssemblyHtml,
-    state.runId,
-    state.responseText,
-    state.stateDeltas,
-    state.status,
-    state.toolCalls,
-    state.toolResults,
-    updateMessage,
-  ]);
+    const planTitle = normalizeSessionTitle(liveChatMessage?.plan?.title ?? null);
+    if (!planTitle) return;
+    setSessionTitleById((previous) =>
+      previous[sessionId] === planTitle ? previous : { ...previous, [sessionId]: planTitle },
+    );
+  }, [liveChatMessage?.plan?.title, sessionId]);
 
   // Mirror the active run/response into refs so the realtime run-status handler
   // (which fires outside React's render) can match the in-flight run.
@@ -2306,8 +1497,8 @@ export function JainaChatSurface({
     activeResponseIdRef.current = activeResponseId;
   }, [activeResponseId]);
   React.useEffect(() => {
-    activeRunIdRef.current = state.runId;
-  }, [state.runId]);
+    activeRunIdRef.current = liveChatMessage?.runId;
+  }, [liveChatMessage?.runId]);
 
   // Recovery channel: even when the live NDJSON stream is lost, the durable run
   // row still transitions to completed/failed. Render the persisted result from
@@ -2336,24 +1527,27 @@ export function JainaChatSurface({
       // response.done frame. Refresh opportunistically, but keep the live reader attached so
       // its buffered tail remains the authority until the stream finalizes the visible turn.
       if (row.status === 'completed') {
-        void refreshConversationSnapshot(activeSessionIdRef.current);
+        void refreshConversationSessions(activeSessionIdRef.current);
         return;
       }
 
       persistedAssistantResponseIdsRef.current.add(responseId);
-      updateMessage(responseId, {
-        status: 'error',
+      // The failure is not patched onto the transcript from here any more. The run row going
+      // terminal is a SECOND source for "how did this turn end", and letting it rewrite the
+      // message is what allowed a stale snapshot to overwrite a live answer. The stream carries
+      // its own `error` chunk; this path only surfaces the failure and releases the reader.
+      show({
         title: 'Jaina error',
-        content: row.errorMessage || 'Jaina run failed.',
+        description: row.errorMessage || 'Jaina run failed.',
+        variant: 'error',
       });
-      void refreshConversationSnapshot(activeSessionIdRef.current);
-      setActiveResponseId(null);
+      void refreshConversationSessions(activeSessionIdRef.current);
       // The run already reached a terminal status server-side — just release the local reader.
-      // Using cancel() here would flip the durable status to `cancelled` and mis-record a run
-      // that actually completed.
-      detach();
+      // Cancelling here would flip the durable status to `cancelled` and mis-record a run that
+      // actually completed.
+      stopChat();
     },
-    [detach, refreshConversationSnapshot, updateMessage],
+    [refreshConversationSessions, show, stopChat],
   );
 
   useJainaRunStatusRealtime({
@@ -2369,11 +1563,13 @@ export function JainaChatSurface({
   }, [generatingSessionIds, isStreaming, activeResponseId, sessionId]);
 
   React.useEffect(() => {
-    if (state.toolResults.length === 0 && state.canvasActions.length === 0) return;
+    const toolResults = liveChatMessage?.toolResults ?? [];
+    const proposedEnvelopes = liveMessage ? canvasActionsOf(liveMessage) : [];
+    if (toolResults.length === 0 && proposedEnvelopes.length === 0) return;
 
     const envelopesToApply: Array<ReturnType<typeof extractCampaignCanvasActionsEnvelope>> = [];
 
-    for (const toolResult of state.toolResults) {
+    for (const toolResult of toolResults) {
       if (processedToolResultIdsRef.current.has(toolResult.id)) {
         continue;
       }
@@ -2389,8 +1585,20 @@ export function JainaChatSurface({
       }
     }
 
-    for (const envelope of state.canvasActions) {
-      envelopesToApply.push(envelope);
+    // The tool-result loop above cannot actually find an envelope today, and the reason is
+    // structural rather than incidental: `sanitizeToolResultData` DELETES `output` from every
+    // `tool.result` before it reaches either wire — unconditionally, not by size — and replaces
+    // it with `output_summary`, which is a shape descriptor (`{omitted, type, keys,
+    // approx_bytes}`), never the payload. It is kept because it costs nothing and is the only
+    // path that ever carried this feature.
+    //
+    // `canvas.actions.proposed` as its own data part is the channel that CAN work, because the
+    // sanitizer only touches tool frames. It is inert for a different reason: nothing in the
+    // Backend emits that event, and it is absent from FORWARDABLE_EVENT_TYPES, so it would be
+    // dropped before the mapper even if something did. Both gaps are pre-existing.
+    for (const proposed of proposedEnvelopes) {
+      const parsed = campaignCanvasActionsEnvelopeSchema.safeParse(proposed);
+      if (parsed.success) envelopesToApply.push(parsed.data);
     }
 
     for (const envelope of envelopesToApply) {
@@ -2444,8 +1652,8 @@ export function JainaChatSurface({
     onCanvasActionApplied,
     processAIAction,
     show,
-    state.canvasActions,
-    state.toolResults,
+    liveChatMessage?.toolResults,
+    liveMessage,
     userId,
   ]);
 
@@ -2459,9 +1667,7 @@ export function JainaChatSurface({
         return;
       }
 
-      reset();
-      setMessages([]);
-      setActiveResponseId(null);
+      setUiMessages([]);
       setQueuedMessages([]);
       setEditingQueueMessageId(null);
       setQueueEditDraft('');
@@ -2499,7 +1705,7 @@ export function JainaChatSurface({
         const targetSessionId = deepLinkSessionId ?? sessions[0]?.sessionId;
         if (!targetSessionId) {
           setSessionId(createJainaSessionId());
-          setMessages([]);
+          setUiMessages([]);
           setQueuedMessages([]);
           setShaderState('visible');
           return;
@@ -2519,21 +1725,9 @@ export function JainaChatSurface({
           }
           return next;
         });
-        const sessionTitleForTarget =
-          normalizeSessionTitle(
-            conversationPayload.sessions?.find((s) => s.sessionId === targetSessionId)?.title ??
-              null,
-          ) ?? undefined;
-        const mappedMessages = (conversationPayload.messages ?? []).map((msg) =>
-          mapConversationMessageToChatMessage(msg, sessionTitleForTarget),
-        );
-        setMessages(mappedMessages);
+        setUiMessages(conversationPayload.uiMessages);
         setEarlierCursor(conversationPayload.nextCursor ?? null);
-        setShaderState(mappedMessages.length > 0 ? 'hidden' : 'visible');
-        void hydrateConversationMessagesFromRuns({
-          targetSessionId,
-          baseMessages: mappedMessages,
-        });
+        setShaderState(conversationPayload.uiMessages.length > 0 ? 'hidden' : 'visible');
       } catch (error) {
         if (cancelled) return;
         const message =
@@ -2562,9 +1756,9 @@ export function JainaChatSurface({
     adAccountId,
     fetchConversationHistory,
     getFreshConversationSessionsFromCache,
-    hydrateConversationMessagesFromRuns,
-    reset,
     setConversationSessionsWithCache,
+    setEarlierCursor,
+    setUiMessages,
     show,
   ]);
 
@@ -2598,7 +1792,7 @@ export function JainaChatSurface({
             return;
           }
 
-          void refreshConversationSnapshot(currentSessionId);
+          void refreshConversationSessions(currentSessionId);
         },
       )
       .subscribe();
@@ -2615,7 +1809,7 @@ export function JainaChatSurface({
     adAccountId,
     brandProfileId,
     fetchConversationHistory,
-    refreshConversationSnapshot,
+    refreshConversationSessions,
     setConversationSessionsWithCache,
     supabase,
   ]);
@@ -2679,43 +1873,15 @@ export function JainaChatSurface({
         return false;
       }
 
-      const hasReferences = Boolean(input.references?.length);
-      const hasAttachments = Boolean(input.images?.length);
-      const userMessage: JainaChatMessage = {
-        id: `user-${Date.now()}`,
-        role: 'user',
-        content: query,
-        createdAt: now,
-        ...(hasReferences || hasAttachments
-          ? {
-              metadata: {
-                references: input.references ?? [],
-                ...(hasAttachments ? { attachments: input.images } : {}),
-              },
-            }
-          : {}),
-      };
-
-      const assistantMessage: JainaChatMessage = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: input.clarificationId
-          ? 'Processing your clarification…'
-          : 'Thinking through your request…',
-        createdAt: now,
-        status: 'streaming',
-        title: 'Jaina Analyst',
-      };
-
+      // No local user or assistant placeholder is built here any more. `sendTurn` appends the
+      // user message and the SDK opens the assistant one from the stream's own `start` chunk,
+      // so the transcript has a single author. The placeholder pair existed to give the NDJSON
+      // fold something to write into, and keeping it would put a second message on screen for
+      // every turn.
       if (shaderState === 'visible') {
         setShaderState('sweeping');
       }
 
-      setMessages((prev) =>
-        input.silentUserMessage
-          ? [...prev, assistantMessage]
-          : [...prev, userMessage, assistantMessage],
-      );
       setConversationSessionsWithCache((previous) =>
         upsertConversationSession(previous, {
           sessionId: activeSessionId,
@@ -2729,9 +1895,8 @@ export function JainaChatSurface({
           updatedAt: now,
         }),
       );
-      setActiveResponseId(assistantMessage.id);
       if (input.forceReportArtifact) {
-        setPendingReportArtifactResponseId(assistantMessage.id);
+        setPendingReportArtifactResponseId(activeSessionId);
         setReportArtifactJob(null);
       }
       processedToolResultIdsRef.current.clear();
@@ -2753,8 +1918,34 @@ export function JainaChatSurface({
       ].filter((value): value is string => Boolean(value));
       const wireQuery = wireContext.length > 0 ? `${query}\n\n${wireContext.join('\n\n')}` : query;
 
-      void start({
+      const hasReferences = Boolean(input.references?.length);
+      const hasAttachments = Boolean(input.images?.length);
+
+      // Fired here rather than in the Next proxy that used to carry it: the proxy exists only to
+      // forward the stream, and the browser talks to the Backend directly now. Imported lazily —
+      // a static `posthog-js` import lands in the root bundle on every route.
+      void import('posthog-js')
+        .then(({ default: posthog }) => {
+          // The proxy read `body.sessionId`; the request schema nests it under `context`, so
+          // this property has been null on every Jaina message ever sent.
+          posthog.capture('jaina_chat_message_sent', { session_id: activeSessionId });
+        })
+        .catch(() => {});
+
+      void sendTurn({
         query: wireQuery,
+        // The transcript shows the sentence the reader typed, never the canvas block folded into
+        // it — and nothing at all for a decision the schema forced us to phrase as a query.
+        displayText: query,
+        silent: input.silentUserMessage,
+        ...(hasReferences || hasAttachments
+          ? {
+              mentions: {
+                references: input.references ?? [],
+                ...(hasAttachments ? { attachments: input.images } : {}),
+              },
+            }
+          : {}),
         canvas: input.canvas || Boolean(campaignCanvasPayload),
         adAccountId,
         ...(selectedAdAccountIds.length > 1 ? { adAccountIds: selectedAdAccountIds } : {}),
@@ -2771,18 +1962,13 @@ export function JainaChatSurface({
         scaffoldAction: input.scaffoldAction,
         toolAction: input.toolAction,
         forceReportArtifact: input.forceReportArtifact,
-        onDispatchError: input.onDispatchError,
-      }).then((result) => {
-        if (result.error) {
+        onDispatchError: (message) => {
           if (input.forceReportArtifact) {
             setPendingReportArtifactResponseId(null);
           }
-          show({
-            title: 'Request failed',
-            description: result.error,
-            variant: 'error',
-          });
-        }
+          show({ title: 'Request failed', description: message, variant: 'error' });
+          input.onDispatchError?.(message);
+        },
       });
 
       return true;
@@ -2798,7 +1984,7 @@ export function JainaChatSurface({
       sessionTitleById,
       shaderState,
       show,
-      start,
+      sendTurn,
       setConversationSessionsWithCache,
       userId,
     ],
@@ -2983,11 +2169,10 @@ export function JainaChatSurface({
 
   const handleClearConversation = React.useCallback(() => {
     if (isStreaming) {
-      cancel();
+      void cancelJainaRun(liveChatMessage?.runId);
+      stopChat();
     }
-    reset();
-    setMessages([]);
-    setActiveResponseId(null);
+    setUiMessages([]);
     setQueuedMessages([]);
     setEditingQueueMessageId(null);
     setQueueEditDraft('');
@@ -3001,26 +2186,29 @@ export function JainaChatSurface({
     processedCanvasEnvelopeKeysRef.current.clear();
     processedReportArtifactJobIdsRef.current.clear();
     persistedAssistantResponseIdsRef.current.clear();
-  }, [cancel, isStreaming, reset]);
+  }, [isStreaming, liveChatMessage?.runId, setUiMessages, stopChat]);
 
   const handleSelectConversation = React.useCallback(
     async (targetSessionId: string) => {
       if (targetSessionId === sessionId) return;
       // Release the local reader before switching — the run keeps executing (Backend + store)
       // and the run row hydrates the completed result when the user returns.
-      detach();
+      stopChat();
       await loadConversationSession(targetSessionId);
     },
-    [detach, loadConversationSession, sessionId],
+    [loadConversationSession, sessionId, stopChat],
   );
 
   // Stop the run on screen even when this reader doesn't own it — the detached run you returned
   // to. Resolve its id from the store when the local reader isn't the owner.
   const handleStop = React.useCallback(() => {
-    const ownedRunId = liveRunId ?? undefined;
-    const projectedRunId = selectRunForSession(sessionId)(useAgentRunStore.getState())?.run.runId;
-    void cancel(ownedRunId ?? projectedRunId);
-  }, [cancel, liveRunId, sessionId]);
+    const ownedRunId = liveChatMessage?.runId;
+    const detachedRunId = selectRunForSession(sessionId)(useAgentRunStore.getState())?.run.runId;
+    // Detach this reader AND end the run. `stop()` alone would leave the turn executing, which
+    // is right on navigation and wrong when a reader presses Stop.
+    stopChat();
+    void cancelJainaRun(ownedRunId ?? detachedRunId);
+  }, [liveChatMessage?.runId, sessionId, stopChat]);
 
   const handleDeleteConversation = React.useCallback(
     async (targetSessionId: string) => {
@@ -3066,9 +2254,7 @@ export function JainaChatSurface({
           if (nextSessionId) {
             await loadConversationSession(nextSessionId);
           } else {
-            reset();
-            setMessages([]);
-            setActiveResponseId(null);
+            setUiMessages([]);
             setQueuedMessages([]);
             setEditingQueueMessageId(null);
             setQueueEditDraft('');
@@ -3106,8 +2292,8 @@ export function JainaChatSurface({
       conversationSessions,
       isStreaming,
       loadConversationSession,
-      reset,
       sessionId,
+      setUiMessages,
       setConversationSessionsWithCache,
       show,
     ],
@@ -3142,13 +2328,11 @@ export function JainaChatSurface({
             ? 'rejected'
             : 'awaiting_approval';
 
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.plan && msg.plan.id === payload.planId
-            ? { ...msg, plan: { ...msg.plan, status: nextStatus } }
-            : msg,
-        ),
-      );
+      // Optimistic, and held OUTSIDE the transcript. The transcript is the SDK's now, and the
+      // very turn that carries this decision restarts the run — a status written into a message
+      // would be replaced by the next projection. Same shape as `optimisticApprovalDecisions`,
+      // for the same reason: a decision that silently fails to land must still be visible.
+      setOptimisticPlanStatusById((previous) => ({ ...previous, [payload.planId]: nextStatus }));
 
       const queryByType: Record<PlanFeedbackPayload['type'], string> = {
         approve: 'approved',
@@ -3179,12 +2363,12 @@ export function JainaChatSurface({
    * channel, the optimistic layer and the rollback are shared, because they are what
    * makes a dropped decision visible rather than silent.
    *
-   * The optimistic layer lives HERE and not in the reducer: `JainaStreamState` is
-   * owned by useJainaChatStream and is reset wholesale by the very `start()` call
-   * that carries the decision, so a reducer-held optimistic value would be wiped the
-   * instant it was set. `onDispatchError` rolls it back — without that a dropped
-   * request leaves a card reading "Approved" while nothing happened, which is exactly
-   * the silence the gate exists to prevent.
+   * The optimistic layer lives HERE and not on the message: the transcript is the SDK's,
+   * and the very turn that carries this decision re-projects every message from its parts,
+   * so a decision written into a message would be replaced the instant it was set.
+   * `onDispatchError` rolls it back — without that a dropped request leaves a card reading
+   * "Approved" while nothing happened, which is exactly the silence the gate exists to
+   * prevent.
    */
   const handleApprovalDecision = React.useCallback(
     (approval: JainaToolApprovalRequiredPayload, decision: ToolApprovalDecision) => {
@@ -3245,7 +2429,7 @@ export function JainaChatSurface({
   const handleClearMemory = React.useCallback(async () => {
     if (!adAccountId) return;
     try {
-      await clearMemory(adAccountId);
+      await clearJainaMemory(adAccountId);
       show({
         title: 'Memory cleared',
         description: 'Jaina will start fresh for this ad account.',
@@ -3255,7 +2439,7 @@ export function JainaChatSurface({
       const message = error instanceof Error ? error.message : 'Unable to clear memory.';
       show({ title: 'Clear failed', description: message, variant: 'error' });
     }
-  }, [clearMemory, adAccountId, show]);
+  }, [adAccountId, show]);
 
   const handleFocusInput = React.useCallback(() => {
     const textarea = promptInputWrapperRef.current?.querySelector('textarea');
@@ -3434,11 +2618,6 @@ export function JainaChatSurface({
                 <React.Fragment key={message.id}>
                   <JainaMessageItem
                     message={message}
-                    activeResponseId={activeResponseId}
-                    // Only the live turn reads `state`; everything else reads its own message.
-                    // Handing finished items one shared instance keeps their props equal so the
-                    // memo holds through a streaming fold.
-                    state={message.id === activeResponseId ? state : IDLE_JAINA_STREAM_STATE}
                     onSuggestionClick={handleSubmit}
                     onPlanFeedback={handlePlanFeedback}
                     onFocusInput={handleFocusInput}
