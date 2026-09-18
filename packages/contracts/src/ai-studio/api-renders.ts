@@ -271,6 +271,20 @@ export const encodeSettingsSchema = z
       })
       .strict()
       .optional(),
+    /**
+     * Which files a VIDEO output is delivered as. Unset keeps the one file the template's own
+     * encoder makes; `true` adds a container, `false` drops one. The fleet renders the comp once
+     * and encodes each requested file from that one intermediate, so a second file is an encode,
+     * not a second render. Stills ignore this — the forge validator refuses it on a still comp.
+     */
+    files: z
+      .object({
+        mp4: z.boolean().optional(),
+        mov: z.boolean().optional(),
+        mxf: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type EncodeSettings = z.infer<typeof encodeSettingsSchema>;
@@ -302,6 +316,9 @@ export const ENCODE_SETTING_KEYS = [
   'video.crf',
   'video.pixFmt',
   'video.proresProfile',
+  'files.mp4',
+  'files.mov',
+  'files.mxf',
 ] as const;
 export type EncodeSettingKey = (typeof ENCODE_SETTING_KEYS)[number];
 export type FlatEncodeSettings = Partial<Record<EncodeSettingKey, string | number | boolean>>;
@@ -358,6 +375,56 @@ export function compactEncodeBlock(block: EncodeBlock | undefined): EncodeBlock 
 export function encodeContainerOf(mediaType: string | null | undefined): 'mp4' | 'mov' | null {
   const container = mediaType?.trim().split(/\s+/)[0]?.toLowerCase();
   return container === 'mp4' || container === 'mov' ? container : null;
+}
+
+/** Every file a video output can be delivered as, in the order they are listed. */
+export const ENCODE_FILE_CONTAINERS = ['mp4', 'mov', 'mxf'] as const;
+export type EncodeFileContainer = (typeof ENCODE_FILE_CONTAINERS)[number];
+
+const FILE_LABEL: Record<EncodeFileContainer, string> = { mp4: 'MP4', mov: 'MOV', mxf: 'MXF' };
+
+/**
+ * The files a video output produces: the template's own container unless `files` turns it off,
+ * plus every container `files` turns on. Empty means the settings ask for no file at all, which
+ * the backend refuses. A still (`container` null) always produces its one image.
+ */
+export function encodeFilesOf(
+  settings: EncodeSettings | null | undefined,
+  container: 'mp4' | 'mov' | null,
+): EncodeFileContainer[] {
+  if (!container) return [];
+  const wanted: Partial<Record<EncodeFileContainer, boolean>> = {
+    [container]: true,
+    ...settings?.files,
+  };
+  return ENCODE_FILE_CONTAINERS.filter((file) => wanted[file] === true);
+}
+
+/** `30000/1001` → `29.97 fps`; `comp` → `Comp rate`. */
+function fpsLabel(fps: EncodeSettings['fps']): string | null {
+  if (fps === undefined) return null;
+  if (fps === 'comp') return 'Comp rate';
+  const [numerator, denominator] = String(fps).split('/').map(Number);
+  const rate = denominator ? (numerator ?? 0) / denominator : Number(fps);
+  return `${Number(rate.toFixed(3))} fps`;
+}
+
+/**
+ * One line a person reads for an output's settings: `25 fps · MP4 + MXF`. Null for a still, or
+ * for a video output that keeps every template default — say "Template default" at the call site.
+ */
+export function describeEncodeSettings(
+  settings: EncodeSettings | null | undefined,
+  container: 'mp4' | 'mov' | null,
+): string | null {
+  if (!container) return null;
+  const files = encodeFilesOf(settings, container);
+  const changedFiles = settings?.files !== undefined;
+  const parts = [
+    fpsLabel(settings?.fps),
+    changedFiles ? (files.map((file) => FILE_LABEL[file]).join(' + ') || 'No file') : null,
+  ].filter((part): part is string => part !== null);
+  return parts.length ? parts.join(' · ') : null;
 }
 
 /** A delivery comp and every measured slot box in it — enough to DRAW the layout. */
@@ -640,6 +707,14 @@ const bindingIdField = z.string().uuid().optional();
  */
 const approvalDestinationIdsField = z.array(z.string().uuid()).max(20).optional();
 
+/**
+ * A Final render: the fleet is told `test: false`. Omitted or false is a Proof (`test: true`),
+ * which is every render before this field existed. Only a brand owner or admin may ask for a
+ * Final — the backend refuses anyone else — and it is signed into the confirmation, so a proof
+ * reviewed as a proof cannot be confirmed as a final.
+ */
+const finalField = z.boolean().optional();
+
 export const apiRenderPreflightRequestSchema = z
   .object({
     brandId: z.string().uuid(),
@@ -663,6 +738,7 @@ export const apiRenderPreflightRequestSchema = z
     /** Per-render output settings, keyed by public output id. Pinned into the signed trigger. */
     encode: apiRenderEncodeOverrideSchema.optional(),
     approvalDestinationIds: approvalDestinationIdsField,
+    final: finalField,
   })
   .strict()
   .refine(oneVariableSource, oneVariableSourceMessage)
@@ -747,6 +823,7 @@ export const apiRenderBatchPreflightRequestSchema = z
      */
     slack: z.object({ destinationId: z.string().uuid() }).strict().optional(),
     approvalDestinationIds: approvalDestinationIdsField,
+    final: finalField,
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -824,10 +901,10 @@ export const apiRenderJobSchema = z
     contractHash: z.string().min(1),
     taskUid: z.string().nullable(),
     status: z.enum(['submitting', 'queued', 'rendering', 'finished', 'failed']),
-    // True means the fleet watermarks the output — every render Continuum submits
-    // today. Carried on the wire so the UI states the fact instead of assuming it,
-    // and so a future unwatermarked production mode cannot ship invisibly. Defaulted
-    // because a server too old to emit it is one that only produced test renders.
+    // True = a Proof (submitted `test: true`), false = a Final. Recorded per job since Finals
+    // exist. Defaulted because a job from before the column is one that was only ever a proof.
+    // It is what was REQUESTED: the fleet's watermark switch is off upstream, so today a proof
+    // and a final are the same pixels.
     test: z.boolean().default(true),
     outputs: z.array(apiRenderOutputSchema),
     delivery: z.array(apiRenderDeliveryReceiptSchema),
@@ -850,10 +927,18 @@ export const apiRenderJobSchema = z
         assetId: z.string().uuid(),
         versionId: z.string().uuid(),
         sha256: z.string().regex(/^[a-f0-9]{64}$/i),
+        /** The source revision's number (`media.asset_versions.version_number`): "Rev 2". */
+        versionNumber: z.number().int().positive().nullable().default(null),
       })
       .strict()
       .nullable()
       .default(null),
+    /**
+     * The public variables this job was submitted with, reserved autofills included — what the
+     * finished frame actually shows. Lets a preview tell which values changed since this render.
+     * Null for a job whose input was not recorded.
+     */
+    renderInput: apiRenderVariableMapSchema.nullable().default(null),
 
     /** Which environment this job was prepared against — the binding frozen into its token. */
     environment: z.string().nullable().default(null),

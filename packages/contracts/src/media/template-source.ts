@@ -292,6 +292,16 @@ export const templateSourceSchema = z
       .regex(/^[a-f0-9]{64}$/i)
       .nullable()
       .default(null),
+    /**
+     * sha256 of the file someone dropped in for the CURRENT source revision (the browser computes
+     * it at upload, `media.assets.checksum`). Lets a drop of the same bytes open this template
+     * instead of creating a second one. Null for an upload that recorded none.
+     */
+    sourceChecksum: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/i)
+      .nullable()
+      .default(null),
     parseError: z.string().nullable().default(null),
     parsedAt: z.string().nullable().default(null),
     createdAt: z.string(),

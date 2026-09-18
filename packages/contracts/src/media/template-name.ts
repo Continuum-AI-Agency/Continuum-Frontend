@@ -129,3 +129,22 @@ export function templateDisplayName(input: string | null | undefined): string {
     .trim();
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : UNTITLED_TEMPLATE_NAME;
 }
+
+const LAYER_PREFIX = /^(?:ref|txt|img|var)[_\s]+/i;
+
+/**
+ * A variable label that is still the raw After Effects layer name, as a person reads it:
+ * `ref_price_text` → `Price text`, `Ref_ precio_anterior` → `Precio anterior`. Display only —
+ * never written back, never used to guess a role. A label someone already typed (no underscore)
+ * is returned as it is.
+ */
+export function readableLayerName(raw: string): string {
+  if (!raw.includes('_')) return raw;
+  const words = raw
+    .trim()
+    .replace(LAYER_PREFIX, '')
+    .replace(/[_\s]+/g, ' ')
+    .trim()
+    .toLowerCase();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : raw;
+}

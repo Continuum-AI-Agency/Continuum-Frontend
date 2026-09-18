@@ -19,7 +19,7 @@ export interface RenderOutputFormatCandidate {
   mediaType?: string | null;
 }
 
-const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'webm']);
+const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'mxf', 'webm']);
 
 const slug = (value: string) =>
   value
