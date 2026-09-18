@@ -21,6 +21,8 @@
 import {
   type AdSetSnapshot,
   type CycleItemRow,
+  GLOBAL_ANGLE_LABELS,
+  type GlobalAngleId,
   getOptimizationMetricDefinition,
   type ParsedCycleRunReport,
   type PortfolioLevel,
@@ -1410,8 +1412,47 @@ function SettingsDetail({
 function CreativeBriefDetail({ rec }: { rec: RecommendationRow }) {
   const brief = creativeBriefForRec(rec);
   if (!brief) return <RecDetail rec={rec} />;
+  const seed = rec.seed as
+    | { posterUrl?: string | null; winnerAssetId?: string | null; angleId?: string | null }
+    | null
+    | undefined;
+  const posterUrl = typeof seed?.posterUrl === 'string' ? seed.posterUrl : null;
+  const angleLabel =
+    typeof seed?.angleId === 'string' && seed.angleId in GLOBAL_ANGLE_LABELS
+      ? GLOBAL_ANGLE_LABELS[seed.angleId as GlobalAngleId]
+      : null;
+  const inLibrary = typeof seed?.winnerAssetId === 'string' && seed.winnerAssetId.length > 0;
   return (
     <div className="space-y-1.5">
+      {/* The creative the recommendation is about, in view. A creative recommendation with
+          no creative in it cannot be acted on; the poster is the reference, the angle chip
+          is the condensed WHY it wins. */}
+      {posterUrl || angleLabel ? (
+        <div className="flex items-start gap-3">
+          {posterUrl ? (
+            // biome-ignore lint/performance/noImgElement: Meta CDN poster with a signed, expiring URL; next/image cannot optimise it and would break the signature.
+            <img
+              alt="Winning creative"
+              className="h-24 w-24 shrink-0 rounded-md border border-border/60 object-cover"
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              src={posterUrl}
+            />
+          ) : null}
+          <div className="min-w-0 space-y-1">
+            {angleLabel ? (
+              <Badge className="text-3xs" variant="teal">
+                {angleLabel}
+              </Badge>
+            ) : null}
+            {!inLibrary ? (
+              <p className="text-2xs text-muted-foreground">
+                Not in the Library yet — import it from the ad account to generate from it.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
       <p className="font-medium text-foreground">{brief.title}</p>
       <p className="leading-relaxed">{brief.brief}</p>
       {brief.groundedOn.length > 0 ? (
