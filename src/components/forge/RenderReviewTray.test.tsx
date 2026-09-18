@@ -2,14 +2,15 @@
  * RenderReviewTray against a mocked render API and a stubbed paid-targets route.
  *
  * Review lists exactly the rows × formats it was handed and the batch readiness per row; Deliver
- * offers the Library (always), the brand's Slack destinations (with add-a-channel, and the
- * not-connected / not-installed / unavailable states) and Meta; Confirm fires ONE batch preflight
- * carrying `slack` and each row's delivery — a replacing row narrowed to its one format — then the
- * confirmed token, and Running follows the fired jobs. A Meta target needs an approval room before
- * Next, the fired batch carries the rooms, and the preflight's approver warning shows in Running.
- * A refusal keeps the tray on Confirm with
- * the reason and nothing fired. It is a docked region, never a dialog: a change to the rows after
- * review sends it back to Review, and it confirms nothing until they are re-checked.
+ * reads its defaults as one line, and Change offers the Library (always), the brand's Slack
+ * destinations (with add-a-channel, and the not-connected / not-installed / unavailable states),
+ * Meta and approval rooms. Without a Meta target Deliver renders from there — Proof or Final, and
+ * each row's output — with ONE batch preflight carrying `slack`, `final` and each row's delivery,
+ * then the confirmed token, and Running follows the fired jobs. A Meta target adds Confirm, needs
+ * an approval room first, carries the rooms and a replacing row narrowed to its one format, and the
+ * preflight's approver warning shows in Running. A refusal keeps the tray where it was with the
+ * reason and nothing fired. One primary button moves it on. It is a docked region, never a
+ * dialog: a change to the rows after review sends it back to Review and re-checks by itself.
  */
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
@@ -179,13 +180,13 @@ mock.module('next/link', () => ({
 }));
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type React from 'react';
+import { useState } from 'react';
 import {
   chooseOption,
   installPickerDomGlobals,
   openSelect,
 } from '@/components/automations/workspace/pickers/pickerTestHarness';
-import type React from 'react';
-import { useState } from 'react';
 import { registerToastSink } from '@/components/ui/toast-imperative';
 import { type RenderPreflightRow, RenderReviewTray } from './RenderReviewTray';
 
@@ -208,6 +209,7 @@ const CONTRACT = {
     name: 'forge_bench_starcraft',
     displayName: 'StarCraft Promo',
     contractHash: 'hash',
+    outputKinds: ['image', 'video'],
   },
   variables: [{ key: 'hero', label: 'Hero' }],
   outputs: [
@@ -238,19 +240,23 @@ const RECORDS: ApiRenderBatchRecord[] = [
   },
 ];
 
-type Snapshot = { reviewKey: number; stale: boolean };
+type Snapshot = { reviewKey: number; stale: boolean; recheckBlocked?: string | null };
 
 /** Holds rows the way RenderRequestsGrid does, so a delivery picked in the tray comes back in. */
 function Harness({
   bindingId,
   initialRows = ROWS,
   records = RECORDS,
+  contract = CONTRACT,
+  finalBlocked = null,
   snapshot,
   handlers,
 }: {
   bindingId: string | null;
   initialRows?: RenderPreflightRow[];
   records?: ApiRenderBatchRecord[];
+  contract?: ApiRenderTemplateContract;
+  finalBlocked?: string | null;
   snapshot: Snapshot;
   handlers: ReturnType<typeof trayHandlers>;
 }) {
@@ -261,13 +267,14 @@ function Harness({
       bindingId={bindingId}
       templateKey="133"
       contractHash="hash"
-      contract={CONTRACT}
+      contract={contract}
       rows={rows}
       records={records}
       reviewKey={snapshot.reviewKey}
       stale={snapshot.stale}
-      recheckBlocked={null}
+      recheckBlocked={snapshot.recheckBlocked ?? null}
       rechecking={false}
+      finalBlocked={finalBlocked}
       onDeliveryChange={(rowId, delivery) =>
         setRows((current) =>
           current.map((row) =>
@@ -290,7 +297,12 @@ const trayHandlers = () => ({
 
 function renderTray(
   bindingId: string | null = BINDING,
-  data: { rows?: RenderPreflightRow[]; records?: ApiRenderBatchRecord[] } = {},
+  data: {
+    rows?: RenderPreflightRow[];
+    records?: ApiRenderBatchRecord[];
+    contract?: ApiRenderTemplateContract;
+    finalBlocked?: string | null;
+  } = {},
 ) {
   const handlers = trayHandlers();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -300,6 +312,8 @@ function renderTray(
         bindingId={bindingId}
         initialRows={data.rows}
         records={data.records}
+        contract={data.contract}
+        finalBlocked={data.finalBlocked}
         snapshot={snapshot}
         handlers={handlers}
       />
@@ -332,11 +346,19 @@ const HERO_STORY = {
   adName: 'Hero story',
 };
 
-const next = async () => {
-  const button = await screen.findByRole<HTMLButtonElement>('button', { name: 'Next' });
+/** The tray's one primary button, pressed once it is enabled. */
+const press = async (name: string) => {
+  const button = await screen.findByRole<HTMLButtonElement>('button', { name });
   await waitFor(() => expect(button.disabled).toBe(false));
   fireEvent.click(button);
 };
+
+/** Deliver starts folded to one line; Change opens every destination. */
+const changeDelivery = async () =>
+  fireEvent.click(await screen.findByRole('button', { name: 'Change delivery' }));
+
+const primaryDisabled = (name: string) =>
+  screen.getByRole<HTMLButtonElement>('button', { name }).disabled;
 
 afterEach(() => {
   unregisterToasts();
@@ -402,9 +424,8 @@ describe('RenderReviewTray · Review', () => {
     expect(reviewLine('Root / Spain')).toMatchObject({ ratios: ['1:1', '9:16'], files: '2 files' });
     expect(reviewLine('Root')).toMatchObject({ ratios: ['1:1', '9:16'], files: '2 files' });
 
-    await next();
-    await next();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm 4 files' }));
+    await press('Next: delivery');
+    await press('Render 4 files');
     await waitFor(() => expect(onFired).toHaveBeenCalledTimes(1));
     const fired = batchPreflightMock.mock.calls[1]?.[0] as { records: ApiRenderBatchRecord[] };
     expect(fired.records[1]).toEqual(records[1]!);
@@ -430,14 +451,14 @@ describe('RenderReviewTray · Review', () => {
     });
     renderTray();
     expect(await screen.findByText('Use a permitted brand color.')).toBeTruthy();
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next' }).disabled).toBe(true);
+    expect(primaryDisabled('Next: delivery')).toBe(true);
   }, 30_000);
 
   test('closing — the button or Esc — fires nothing', async () => {
     const { onClose } = renderTray();
     fireEvent.click(await screen.findByRole('button', { name: 'Close review' }));
     expect(onClose).toHaveBeenCalledTimes(1);
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Next' }), { key: 'Escape' });
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Next: delivery' }), { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(2);
     expect(createBatchMock).not.toHaveBeenCalled();
   }, 30_000);
@@ -450,13 +471,12 @@ describe('RenderReviewTray · Review', () => {
     expect(onShowRow).toHaveBeenCalledWith('spain');
   }, 30_000);
 
-  test('a change after review goes back to Review, and nothing confirms until a re-check', async () => {
+  test('a change after review goes back to Review and re-checks by itself once the rows settle', async () => {
     const { snapshot, onRecheck, onFired } = renderTray();
-    await next();
-    await next();
-    expect(screen.getByRole('button', { name: 'Confirm 3 files' })).toBeTruthy();
+    await press('Next: delivery');
+    expect(screen.getByRole('button', { name: 'Render 3 files' })).toBeTruthy();
 
-    // A row was edited in the grid while the tray sat on Confirm.
+    // A row was edited in the grid while the tray sat on Deliver.
     snapshot({ reviewKey: 1, stale: true });
     const current = () =>
       within(screen.getByRole('list', { name: 'Pre-flight steps' })).getByRole('listitem', {
@@ -464,33 +484,54 @@ describe('RenderReviewTray · Review', () => {
       }).textContent;
     await waitFor(() => expect(current()).toBe('Review'));
     expect(screen.getByText('Rows changed since review')).toBeTruthy();
-    expect(screen.queryAllByRole('button', { name: /Confirm/ })).toHaveLength(0);
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next' }).disabled).toBe(true);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Re-check' }));
-    expect(onRecheck).toHaveBeenCalledTimes(1);
+    expect(screen.queryAllByRole('button', { name: /^Render/ })).toHaveLength(0);
+    expect(primaryDisabled('Next: delivery')).toBe(true);
+    // Nothing to press: the re-check runs on the preflight debounce, once.
+    expect(screen.queryAllByRole('button', { name: 'Re-check' })).toHaveLength(0);
+    await waitFor(() => expect(onRecheck).toHaveBeenCalledTimes(1));
     expect(batchPreflightMock).toHaveBeenCalledTimes(1);
 
-    // The grid re-saved and handed over a fresh snapshot: it is reviewed again, then confirms.
+    // The grid re-saved and handed over a fresh snapshot: it is reviewed again, then renders.
     snapshot({ reviewKey: 2, stale: false });
     await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(2));
     expect(screen.queryByText('Rows changed since review')).toBeNull();
-    await next();
-    await next();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 files' }));
+    await press('Next: delivery');
+    await press('Render 3 files');
     await waitFor(() => expect(onFired).toHaveBeenCalledTimes(1));
     expect(createBatchMock).toHaveBeenCalledTimes(1);
+    expect(onRecheck).toHaveBeenCalledTimes(1);
+  }, 30_000);
+
+  test('a re-check that cannot run says why, with a disabled Re-check, and does not fire', async () => {
+    const { snapshot, onRecheck } = renderTray();
+    await screen.findByText(/Check incomplete/);
+    snapshot({ reviewKey: 1, stale: true, recheckBlocked: 'Select the rows to render' });
+    expect(await screen.findByText('— Select the rows to render.')).toBeTruthy();
+    const recheck = screen.getByRole<HTMLButtonElement>('button', { name: 'Re-check' });
+    expect(recheck.disabled).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    expect(onRecheck).not.toHaveBeenCalled();
   }, 30_000);
 });
 
 describe('RenderReviewTray · Deliver + Confirm', () => {
-  test('Library only: fires the confirmed token and omits bindingId on the default environment', async () => {
+  test('Library only: one line of defaults, then Render fires a Proof from Deliver, no bindingId', async () => {
     const { onFired } = renderTray(null);
-    await next();
+    await press('Next: delivery');
+    // No Meta target, so there is no Confirm step: Deliver is the last look.
+    expect(
+      within(screen.getByRole('list', { name: 'Pre-flight steps' }))
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Review', 'Deliver', 'Running']);
+    const line = screen.getByRole('button', { name: 'Change delivery' }).closest('p')!;
+    expect(within(line).getByText('Library')).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Proof' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByText('Proof · 3 files · Library')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Back' })).toBeTruthy();
+    await changeDelivery();
     expect(screen.getByText(/Every render is saved to this brand’s Library/)).toBeTruthy();
-    await next();
-    expect(screen.getByText('3 files · Library')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 files' }));
+    await press('Render 3 files');
     await waitFor(() => expect(onFired).toHaveBeenCalledWith(JOB_IDS));
 
     const fired = batchPreflightMock.mock.calls[1]?.[0];
@@ -504,9 +545,63 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     expect(toasts).toContain('2 renders queued');
   }, 30_000);
 
+  test('Final is signed into the render’s preflight; the review never asks for one', async () => {
+    const { onFired } = renderTray();
+    await press('Next: delivery');
+    fireEvent.click(screen.getByRole('radio', { name: 'Final' }));
+    await waitFor(() =>
+      expect(screen.getByRole('radio', { name: 'Final' }).getAttribute('aria-checked')).toBe(
+        'true',
+      ),
+    );
+    expect(screen.getByText('Final · 3 files · Library')).toBeTruthy();
+    await press('Render 3 files');
+    await waitFor(() => expect(onFired).toHaveBeenCalledTimes(1));
+    expect(batchPreflightMock.mock.calls[1]?.[0]).toMatchObject({ final: true, records: RECORDS });
+    expect(batchPreflightMock.mock.calls[0]?.[0]).not.toHaveProperty('final');
+  }, 30_000);
+
+  test('Final is for an owner or admin: disabled with the reason, and the batch stays a Proof', async () => {
+    const reason = 'Only a brand owner or admin can render a Final.';
+    const { onFired } = renderTray(BINDING, { finalBlocked: reason });
+    await press('Next: delivery');
+    const final = screen.getByRole('radio', { name: 'Final' });
+    expect(final.hasAttribute('data-disabled')).toBe(true);
+    expect(screen.getByText(reason)).toBeTruthy();
+    fireEvent.click(final);
+    expect(final.getAttribute('aria-checked')).toBe('false');
+    await press('Render 3 files');
+    await waitFor(() => expect(onFired).toHaveBeenCalledTimes(1));
+    expect(batchPreflightMock.mock.calls[1]?.[0]).not.toHaveProperty('final');
+  }, 30_000);
+
+  test('each row says what its files come out as: its own settings, else the template’s', async () => {
+    const contract = {
+      ...CONTRACT,
+      outputs: [
+        { id: 'square', label: 'Square', ratio: '1:1', mediaType: 'PNG Sequence', encode: null },
+        { id: 'story', label: 'Story', ratio: '9:16', mediaType: 'MP4 Video (RGB)' },
+      ],
+    } as unknown as ApiRenderTemplateContract;
+    const records: ApiRenderBatchRecord[] = [
+      RECORDS[0]!,
+      { ...RECORDS[1]!, encode: { outputs: { story: { fps: 25, files: { mxf: true } } } } },
+    ];
+    renderTray(BINDING, { contract, records });
+    await press('Next: delivery');
+    const [root, spain] = within(screen.getByRole('list', { name: 'Output per row' })).getAllByRole(
+      'listitem',
+    );
+    expect(within(root!).getByText('Still image')).toBeTruthy();
+    expect(within(root!).getByText('Template default')).toBeTruthy();
+    expect(within(spain!).getByText('25 fps · MP4 + MXF')).toBeTruthy();
+    expect(within(spain!).queryAllByText('Template default')).toHaveLength(0);
+  }, 30_000);
+
   test('Slack ready: add a client channel, and the fired batch posts there', async () => {
     const { onFired } = renderTray();
-    await next();
+    await press('Next: delivery');
+    await changeDelivery();
     await screen.findByLabelText('Slack channel');
     openSelect('Slack channel');
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
@@ -537,9 +632,8 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
       screen.getByText('A client channel gets a post only after the render passes its check.'),
     ).toBeTruthy();
 
-    await next();
-    expect(screen.getByText('3 files · Library · #client-review')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 files' }));
+    expect(screen.getByText('Proof · 3 files · Library · #client-review')).toBeTruthy();
+    await press('Render 3 files');
     await waitFor(() => expect(onFired).toHaveBeenCalledTimes(1));
     expect(batchPreflightMock.mock.calls[1]?.[0]).toMatchObject({
       slack: { destinationId: CLIENT.id },
@@ -552,8 +646,11 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
       destinations({ state: 'not_connected', destinations: [] }),
     );
     renderTray();
-    await next();
-    const link = await screen.findByRole('link', { name: 'Connect Slack to this brand in Settings' });
+    await press('Next: delivery');
+    await changeDelivery();
+    const link = await screen.findByRole('link', {
+      name: 'Connect Slack to this brand in Settings',
+    });
     expect(link.getAttribute('href')).toBe('/settings?section=integrations');
     expect(screen.queryByLabelText('Slack channel')).toBeNull();
     cleanup();
@@ -562,8 +659,11 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
       destinations({ state: 'not_installed', destinations: [] }),
     );
     renderTray();
-    await next();
-    expect(await screen.findByRole('link', { name: 'Reinstall Slack for this brand in Settings' })).toBeTruthy();
+    await press('Next: delivery');
+    await changeDelivery();
+    expect(
+      await screen.findByRole('link', { name: 'Reinstall Slack for this brand in Settings' }),
+    ).toBeTruthy();
   }, 30_000);
 
   test('without a Slack connection the brand’s channels still post; only adding one needs it', async () => {
@@ -572,16 +672,18 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
       destinations({ state: 'not_connected', workspaceName: null, destinations: [OPS] }),
     );
     const { onFired } = renderTray();
-    await next();
+    await press('Next: delivery');
+    await changeDelivery();
     await screen.findByLabelText('Slack channel');
-    expect(screen.getByRole('link', { name: 'Connect Slack to this brand in Settings' })).toBeTruthy();
+    expect(
+      screen.getByRole('link', { name: 'Connect Slack to this brand in Settings' }),
+    ).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Add a channel/ })).toBeNull();
     openSelect('Slack channel');
     chooseOption(/#renders/);
 
-    await next();
-    expect(screen.getByText('3 files · Library · #renders')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 files' }));
+    expect(screen.getByText('Proof · 3 files · Library · #renders')).toBeTruthy();
+    await press('Render 3 files');
     await waitFor(() => expect(onFired).toHaveBeenCalledTimes(1));
     expect(batchPreflightMock.mock.calls[1]?.[0]).toMatchObject({
       slack: { destinationId: OPS.id },
@@ -593,10 +695,13 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
       throw new ApiError('slack_not_installed', 409, undefined, { error: 'slack_not_installed' });
     });
     renderTray();
-    await next();
+    await press('Next: delivery');
+    await changeDelivery();
     fireEvent.click(await screen.findByRole('button', { name: /Add a channel/ }));
     expect(
-      await screen.findByText(/The Continuum app is no longer installed in this brand’s Slack workspace/),
+      await screen.findByText(
+        /The Continuum app is no longer installed in this brand’s Slack workspace/,
+      ),
     ).toBeTruthy();
     expect(document.body.textContent).not.toContain('slack_not_installed');
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
@@ -622,7 +727,8 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
       });
     });
     renderTray();
-    await next();
+    await press('Next: delivery');
+    await changeDelivery();
     expect(await screen.findByText(/Couldn’t load Slack channels/)).toBeTruthy();
     expect(screen.queryByText(/Slack delivery isn’t available yet/)).toBeNull();
     // The code is for machines: the person reads the discovery copy, never the raw token.
@@ -634,14 +740,14 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
       throw new ApiError('chat_destinations_unavailable', 503);
     });
     const { onFired } = renderTray();
-    await next();
+    await press('Next: delivery');
+    await changeDelivery();
     expect(
       await screen.findByText(
         'Slack delivery isn’t available yet. Renders still go to the Library.',
       ),
     ).toBeTruthy();
-    await next();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 files' }));
+    await press('Render 3 files');
     await waitFor(() => expect(onFired).toHaveBeenCalledTimes(1));
   }, 30_000);
 
@@ -650,7 +756,8 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
       destinations({}, { connected: true, adAccountId: 'act_1', adAccountName: 'StarCraft Ads' }),
     );
     const { onFired } = renderTray();
-    await next();
+    await press('Next: delivery');
+    await changeDelivery();
     await screen.findByLabelText('Slack channel');
     openSelect('Slack channel');
     chooseOption(/#renders/);
@@ -663,7 +770,8 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     // Root renders two formats; a replace swaps one creative, so Next waits for the choice.
     await screen.findByLabelText('Format for Root');
     expect(screen.getByText('Choose one format for each ad replacement.')).toBeTruthy();
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next' }).disabled).toBe(true);
+    // A Meta target is worth one more look: Confirm comes back, and Next goes there.
+    expect(primaryDisabled('Next: confirm')).toBe(true);
     openSelect('Format for Root');
     chooseOption('Story');
     expect(screen.getByText('StarCraft Promo · 2 files')).toBeTruthy();
@@ -674,15 +782,17 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
         'Choose an approval room — a Meta ad waits there until someone approves it.',
       ),
     ).toBeTruthy();
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next' }).disabled).toBe(true);
+    expect(primaryDisabled('Next: confirm')).toBe(true);
     await screen.findByRole('checkbox', { name: /#client-review/ });
     expect(screen.getByText('no approvers yet')).toBeTruthy();
     // The row's label is the click a person makes; the control inside it is Base UI's button.
     fireEvent.click(screen.getByText('#client-review'));
 
-    await next();
+    await press('Next: confirm');
     expect(
-      screen.getByText('2 files · Library · #renders · 1 ad replacement held for approval'),
+      screen.getByText(
+        '2 files · Library · #renders · #client-review approval · no approvers yet · 1 ad replacement held for approval',
+      ),
     ).toBeTruthy();
     expect(screen.getByText('replaces Hero story · 9:16')).toBeTruthy();
     expect(screen.getByText(/Nothing changes in Ads Manager until someone approves/)).toBeTruthy();
@@ -697,7 +807,7 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
         warning,
       },
     }));
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm 2 files' }));
+    await press('Render 2 files');
     await waitFor(() => expect(onFired).toHaveBeenCalledWith(JOB_IDS));
     expect(await screen.findByText(warning)).toBeTruthy();
     expect(batchPreflightMock.mock.calls[1]?.[0]).toEqual({
@@ -729,10 +839,9 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     });
   }, 30_000);
 
-  test('a refused confirm stays on Confirm, says why, and fires nothing', async () => {
+  test('a refused render stays where it was, says why, and fires nothing', async () => {
     const { onFired } = renderTray();
-    await next();
-    await next();
+    await press('Next: delivery');
     // The routes answer `{ error: code, detail }`; toApiError puts the code in the message.
     batchPreflightMock.mockImplementationOnce(async () => {
       throw new ApiError('render_delivery_ad_changed', 409, undefined, {
@@ -740,23 +849,20 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
         detail: 'render_delivery_ad_changed',
       });
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 files' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Render 3 files' }));
     expect(await screen.findByRole('alert')).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toBe(
       'That ad’s creative changed after it was picked. Pick the ad again.',
     );
     expect(createBatchMock).not.toHaveBeenCalled();
     expect(onFired).not.toHaveBeenCalled();
-    expect(
-      screen.getByRole<HTMLButtonElement>('button', { name: 'Confirm 3 files' }).disabled,
-    ).toBe(false);
+    expect(primaryDisabled('Render 3 files')).toBe(false);
   }, 30_000);
 
   test('Running follows the fired jobs in the tray and hands the ledger their ids', async () => {
     const { onOpenLedger, onShowRow, snapshot } = renderTray();
-    await next();
-    await next();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm 3 files' }));
+    await press('Next: delivery');
+    await press('Render 3 files');
     const fired = await screen.findByRole('list', { name: 'Fired renders' });
     expect(screen.getByText('2 renders queued')).toBeTruthy();
     const lines = within(fired).getAllByRole('listitem');

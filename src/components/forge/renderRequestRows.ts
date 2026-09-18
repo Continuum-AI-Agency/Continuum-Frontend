@@ -28,6 +28,9 @@ import {
 /** The largest batch the server signs in one token (`apiRenderBatchPreflightRequestSchema`). */
 export const MAX_BATCH_ROWS = 50;
 
+/** How long an edit settles before it is dry-run again — a row's preflight, a review's re-check. */
+export const PREFLIGHT_DEBOUNCE_MS = 600;
+
 export const canImportRows = (existingRows: number, incomingRows: number): boolean =>
   existingRows + incomingRows <= MAX_BATCH_ROWS;
 
@@ -333,6 +336,27 @@ export function nestRows(rows: RequestRow[]): RequestRow[] {
 const pinCount = (value: ApiRenderInputValue | undefined): number =>
   value === undefined ? 0 : Array.isArray(value) ? value.length : typeof value === 'object' ? 1 : 0;
 
+/** Nothing filled in: no pin for a media slot, no text or number for the rest. */
+export const isEmptyInput = (
+  variable: ApiRenderVariable,
+  value: ApiRenderInputValue | undefined,
+): boolean =>
+  variable.kind === 'image' || variable.kind === 'video'
+    ? pinCount(value) === 0
+    : value === undefined || value === '';
+
+/** Required inputs a row leaves blank. Not wrong, only not filled in yet: "Needs input". */
+export const missingInputs = (
+  variables: ApiRenderVariable[],
+  values: Record<string, ApiRenderInputValue>,
+): string[] =>
+  variables
+    .filter(
+      (variable) =>
+        variable.required && !variable.reserved && isEmptyInput(variable, values[variable.key]),
+    )
+    .map((variable) => variable.key);
+
 /**
  * What the server would refuse, said per cell before it is asked.
  *
@@ -347,17 +371,15 @@ export function validateRow(
   for (const variable of variables) {
     if (variable.reserved) continue;
     const value = values[variable.key];
-    const isMedia = variable.kind === 'image' || variable.kind === 'video';
-    if (isMedia) {
-      const pins = pinCount(value);
-      if (variable.required && pins === 0) errors[variable.key] = 'Pick something from the Library';
-      else if (pins > (variable.multiple ? API_RENDER_MEDIA_LIST_MAX : 1))
+    const empty = isEmptyInput(variable, value);
+    if (variable.kind === 'image' || variable.kind === 'video') {
+      if (variable.required && empty) errors[variable.key] = 'Pick something from the Library';
+      else if (pinCount(value) > (variable.multiple ? API_RENDER_MEDIA_LIST_MAX : 1))
         errors[variable.key] = variable.multiple
           ? `At most ${API_RENDER_MEDIA_LIST_MAX} items`
           : 'One item only';
       continue;
     }
-    const empty = value === undefined || value === '';
     if (empty) {
       if (variable.required) errors[variable.key] = 'Required';
       continue;
@@ -522,7 +544,7 @@ export function buildTemplateCsv(
       ...variables.map((variable) => variableColumnHeader(variable, variables)),
       IMPORT_FIELDS[3].header,
     ],
-    ['Root', '', formatsSample(contract.outputs), ...variables.map(importableSample), ''],
+    ['Base', '', formatsSample(contract.outputs), ...variables.map(importableSample), ''],
   ]);
 }
 

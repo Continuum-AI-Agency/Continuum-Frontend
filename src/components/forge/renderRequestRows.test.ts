@@ -14,15 +14,16 @@ import {
   forkLabel,
   fromRenderSetRows,
   IMPORT_SKIP,
+  missingInputs,
   moveRow,
   ownChangeCount,
   parseDelimited,
   pinnedAssetIds,
   type RequestRow,
   recordsFromTable,
+  renderedRatios,
   reviewSignature,
   rowBreadcrumb,
-  renderedRatios,
   rowDepth,
   rowFileCount,
   rowsFromMappedImport,
@@ -90,6 +91,17 @@ describe('validateRow', () => {
   test('required media needs a pin; reserved slots are never the caller’s problem', () => {
     expect(validateRow([hero, logo], {})).toEqual({ hero: 'Pick something from the Library' });
     expect(validateRow([hero], { hero: { assetId: 'a' } })).toEqual({});
+  });
+});
+
+describe('missingInputs', () => {
+  test('names the required inputs left blank, never a malformed or optional one', () => {
+    expect(missingInputs(all, {})).toEqual(['headline', 'hero']);
+    expect(missingInputs(all, { headline: '', hero: [] })).toEqual(['headline', 'hero']);
+    // Malformed is Invalid, not missing: the value is there, it is only wrong.
+    const colour = variable({ key: 'c', kind: 'color', required: true });
+    expect(missingInputs([colour], { c: 'magenta' })).toEqual([]);
+    expect(missingInputs(all, { headline: 'Hola', hero: { assetId: 'a' } })).toEqual([]);
   });
 });
 
@@ -215,7 +227,12 @@ describe('CSV', () => {
     const tabbed = review('Label\tHeadline\tprice\tOn sale\tSize\tMystery\nA\tHi\t12.5\tyes\tM\tx');
     expect(tabbed.errors).toEqual([]);
     expect(tabbed.rows[0]?.label).toBe('A');
-    expect(tabbed.rows[0]?.values).toEqual({ headline: 'Hi', price: 12.5, on_sale: true, size: 'M' });
+    expect(tabbed.rows[0]?.values).toEqual({
+      headline: 'Hi',
+      price: 12.5,
+      on_sale: true,
+      size: 'M',
+    });
     const quoted = review('label,headline\n"A, B","Hola, mundo"');
     expect(quoted.rows[0]?.label).toBe('A, B');
     expect(quoted.rows[0]?.values).toEqual({ headline: 'Hola, mundo' });
@@ -260,7 +277,7 @@ describe('CSV', () => {
     );
     expect(errors).toEqual([]);
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.label).toBe('Root');
+    expect(rows[0]?.label).toBe('Base');
     expect(rows[0]?.outputIds).toEqual(['sq', 'story']);
     expect(rows[0]?.values).toEqual({
       headline: 'Hola',
@@ -292,10 +309,17 @@ describe('CSV', () => {
       variables: [brand, formats],
       outputs: [{ id: 'sq', label: 'Square', ratio: '1:1' }],
     });
-    expect(headers).toEqual(['Name', 'Parent', 'Formats', 'Brand name', 'Copy formats', 'Replace ad ID']);
+    expect(headers).toEqual([
+      'Name',
+      'Parent',
+      'Formats',
+      'Brand name',
+      'Copy formats',
+      'Replace ad ID',
+    ]);
     expect(mappings).toMatchObject({ Name: '@name', Formats: '@formats', 'Brand name': 'name' });
     expect(errors).toEqual([]);
-    expect(rows[0]?.label).toBe('Root');
+    expect(rows[0]?.label).toBe('Base');
     expect(rows[0]?.outputIds).toEqual(['sq']);
     expect(rows[0]?.values).toEqual({ name: 'Acme', formats: 'long' });
   });
@@ -408,7 +432,10 @@ describe('names, order and parentage', () => {
       ok: false,
       reason: 'cycle',
     });
-    expect(moveRow(rows, a.id, { rowId: a.id, position: 'inside' }, [])).toEqual({ ok: true, rows });
+    expect(moveRow(rows, a.id, { rowId: a.id, position: 'inside' }, [])).toEqual({
+      ok: true,
+      rows,
+    });
   });
 
   test('refuses a drop that would end any row deeper than three levels', () => {
@@ -442,14 +469,23 @@ describe('names, order and parentage', () => {
     };
 
     expect(
-      outputsOf(moveRow(rows, everyFormat.id, { rowId: parent.id, position: 'inside' }, outputIds), everyFormat.id),
+      outputsOf(
+        moveRow(rows, everyFormat.id, { rowId: parent.id, position: 'inside' }, outputIds),
+        everyFormat.id,
+      ),
     ).toEqual({ own: [], effective: ['story'] });
     // A deliberate subset is the row's own choice, and survives becoming a fork.
     expect(
-      outputsOf(moveRow(rows, picked.id, { rowId: parent.id, position: 'inside' }, outputIds), picked.id),
+      outputsOf(
+        moveRow(rows, picked.id, { rowId: parent.id, position: 'inside' }, outputIds),
+        picked.id,
+      ),
     ).toEqual({ own: ['sq'], effective: ['sq'] });
     expect(
-      outputsOf(moveRow(rows, fork.id, { rowId: parent.id, position: 'after' }, outputIds), fork.id),
+      outputsOf(
+        moveRow(rows, fork.id, { rowId: parent.id, position: 'after' }, outputIds),
+        fork.id,
+      ),
     ).toEqual({ own: ['story'], effective: ['story'] });
   });
 

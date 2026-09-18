@@ -6,11 +6,15 @@ import {
   type ApiRenderDeliveryDestination,
   type ApiRenderDeliveryDestinationsResponse,
   type ApiRenderDeliveryTarget,
+  type ApiRenderEncodeOverride,
   type ApiRenderJob,
   type ApiRenderTemplateContract,
+  describeEncodeSettings,
+  encodeContainerOf,
+  mergeEncodeSettings,
   templateDisplayName,
 } from '@continuum/contracts';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
   AlertTriangle,
@@ -22,8 +26,11 @@ import {
   Play,
   X,
 } from 'lucide-react';
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
-import { ApprovalDestinationsField } from '@/components/forge/ApprovalDestinationsField';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ApprovalDestinationsField,
+  approvalRoomName,
+} from '@/components/forge/ApprovalDestinationsField';
 import {
   APPROVAL_COPY,
   DeliveryTargetPicker,
@@ -31,9 +38,14 @@ import {
   metaDeliveryProblems,
   replaceOutputId,
 } from '@/components/forge/DeliveryTargetPicker';
-import { forgeQueryKeys } from '@/components/forge/queryKeys';
-import { jobSteps } from '@/components/forge/RenderJobDetail';
-import { renderedRatios, rowFileCount } from '@/components/forge/renderRequestRows';
+import { approvalDestinationsKey } from '@/components/forge/DestinationApproversPanel';
+import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
+import { jobSteps } from '@/components/forge/renderJobChecks';
+import {
+  PREFLIGHT_DEBOUNCE_MS,
+  renderedRatios,
+  rowFileCount,
+} from '@/components/forge/renderRequestRows';
 import { RatioChips } from '@/components/forge/requestCells';
 import {
   describeSlackFailure,
@@ -42,8 +54,11 @@ import {
   type SlackPickerState,
 } from '@/components/forge/SlackDestinationPicker';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
+import { fetchApprovalDestinations } from '@/lib/library/renderApprovals';
 import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
@@ -54,17 +69,23 @@ import { useApiRenderJobs } from '@/StudioCanvas/nodes/api-render/useApiRenderJo
 //
 //   Review  — a batch preflight over the records as they are, for the readiness block and the
 //             guardrails per row. Editing happens in the grid above; nothing here changes a value.
-//   Deliver — the Library always; a Slack destination; a Meta ad per row, held for approval.
-//   Confirm — a second batch preflight carrying `slack` and each row's delivery, so the signed
-//             token covers exactly what was reviewed, then create batch.
+//   Deliver — the Library always; a Slack destination; approval rooms; a Meta ad per row, held
+//             for approval. The defaults read as one line until someone asks to change them.
+//   Confirm — only when a row goes to Meta, so the ads it touches are read once more. Without
+//             one, what Confirm says (Proof or Final, each row's output) sits at the foot of
+//             Deliver. Either way Render runs a second batch preflight carrying `slack`, each
+//             row's delivery and `final`, so the signed token covers exactly what was reviewed,
+//             then create batch.
 //   Running — the fired jobs, polled until they settle.
+//
+// One button moves the tray on, always at the bottom right, named for what it does next.
 //
 // The caller saves the set before handing over `reviewKey`, so every record points at an
 // immutable revision, and rebuilds `records` from the rows on every render. `stale` says the rows,
-// the selection or the revision moved since that key: the tray goes back to Review and refuses
-// to confirm until the caller re-checks. `records[i]` belongs to `rows[i]`. The ROW is the source
-// of truth for delivery: it is applied to its record at confirm, and a replacing row's record is
-// narrowed to the one format chosen here.
+// the selection or the revision moved since that key: the tray goes back to Review, asks the
+// caller to re-check once the rows settle, and refuses to confirm until then. `records[i]`
+// belongs to `rows[i]`. The ROW is the source of truth for delivery: it is applied to its record
+// at confirm, and a replacing row's record is narrowed to the one format chosen here.
 
 export type RenderPreflightRow = {
   rowId: string;
@@ -85,9 +106,12 @@ export type RenderReviewTrayProps = {
   /** A new value is a new snapshot to review: the tray opening, or a re-check. */
   reviewKey: number;
   stale: boolean;
-  /** Why a re-check cannot run yet — a row still checking, say. Null when it can. */
+  /** Why a re-check cannot run — no rows selected, say. Null when it can, or will by itself. */
   recheckBlocked: string | null;
+  /** A re-check is under way, or waiting on rows still being checked. */
   rechecking: boolean;
+  /** Why this person cannot ask for a Final render. Null when they can. */
+  finalBlocked: string | null;
   onRecheck: () => void;
   onDeliveryChange: (rowId: string, delivery: ApiRenderDeliveryTarget | null) => void;
   onClose: () => void;
@@ -133,6 +157,42 @@ function describeFailure(error: unknown): { message: string; details: string[] }
 }
 
 /**
+ * What a row's files come out as, grouped: each distinct setting and the ratios that get it.
+ * Only the row's own override is described — "Template default" means it asks for nothing more.
+ */
+export function outputGroups(
+  contract: ApiRenderTemplateContract,
+  outputIds: string[],
+  encode: ApiRenderEncodeOverride | undefined,
+): Array<{ summary: string; ratios: string[] }> {
+  const video = contract.template.outputKinds.includes('video');
+  // A template that publishes no outputs renders its source's ratios together, as they are.
+  if (contract.outputs.length === 0) {
+    return [
+      { summary: video ? 'Template default' : 'Still image', ratios: contract.template.ratios },
+    ];
+  }
+  const picked = outputIds.length
+    ? contract.outputs.filter((output) => outputIds.includes(output.id))
+    : contract.outputs;
+  const groups = new Map<string, string[]>();
+  for (const output of picked) {
+    const container = encodeContainerOf(output.mediaType);
+    // An older forge names no container; a template that renders no video is stills either way.
+    const still =
+      container === null && (Boolean(output.mediaType) || output.encode === null || !video);
+    const summary = still
+      ? 'Still image'
+      : (describeEncodeSettings(
+          mergeEncodeSettings(encode?.default, encode?.outputs?.[output.id]),
+          container,
+        ) ?? 'Template default');
+    groups.set(summary, [...(groups.get(summary) ?? []), output.ratio ?? output.label]);
+  }
+  return [...groups].map(([summary, ratios]) => ({ summary, ratios }));
+}
+
+/**
  * The tray's one row rhythm: a name, then columns of facts, on a hairline. The name and formats
  * are capped so a wide screen widens the free-text column, not the gap between facts.
  */
@@ -150,6 +210,7 @@ export function RenderReviewTray({
   stale,
   recheckBlocked,
   rechecking,
+  finalBlocked,
   onRecheck,
   onDeliveryChange,
   onClose,
@@ -167,9 +228,19 @@ export function RenderReviewTray({
   const [approvalDestinationIds, setApprovalDestinationIds] = useState<string[]>([]);
   const [approvalWarning, setApprovalWarning] = useState<string | null>(null);
   const [formatByRow, setFormatByRow] = useState<Record<string, string>>({});
+  const [editingDelivery, setEditingDelivery] = useState(false);
+  const [final, setFinal] = useState(false);
   const [firing, setFiring] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [fired, setFired] = useState<ApiRenderJob[]>([]);
+  // The same read ApprovalDestinationsField makes, so the one-line summary can name the rooms.
+  const rooms =
+    useQuery({
+      queryKey: approvalDestinationsKey(brandId),
+      queryFn: () => fetchApprovalDestinations(brandId),
+      staleTime: FORGE_STALE_MS.active,
+      retry: false,
+    }).data?.destinations ?? [];
 
   const outputs = contract.outputs;
   const variableLabel = (key: string | undefined) =>
@@ -219,6 +290,22 @@ export function RenderReviewTray({
     if (stale) setStep((current) => (current === 'running' ? current : 'review'));
   }, [stale]);
 
+  // Rows edited after review are checked again by themselves once they settle — on the grid's
+  // own preflight debounce. Once per records snapshot, so a re-check that fails is not retried
+  // in a loop; the next edit tries again.
+  const recheck = useRef(onRecheck);
+  recheck.current = onRecheck;
+  const autoChecked = useRef<ApiRenderBatchRecord[] | null>(null);
+  useEffect(() => {
+    if (!stale || recheckBlocked !== null || rechecking || step === 'running') return;
+    if (autoChecked.current === records) return;
+    const timer = setTimeout(() => {
+      autoChecked.current = records;
+      recheck.current();
+    }, PREFLIGHT_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [stale, recheckBlocked, rechecking, step, records]);
+
   useEffect(() => {
     let cancelled = false;
     apiRendersApi
@@ -250,22 +337,34 @@ export function RenderReviewTray({
   const deliverProblems = metaDeliveryProblems(rows, outputs, formatByRow, meta);
   const replacements = rows.filter((row) => row.delivery?.action === 'replace');
   const newAds = rows.filter((row) => row.delivery?.action === 'create');
+  // A Meta target is the one thing worth a separate look before rendering.
+  const goesToMeta = replacements.length + newAds.length > 0;
   // Preflight refuses a Meta target with no room to ask in; say so here instead of on Confirm.
   const approvalProblem =
-    (replacements.length || newAds.length) && !approvalDestinationIds.length
+    goesToMeta && !approvalDestinationIds.length
       ? 'Choose an approval room — a Meta ad waits there until someone approves it.'
       : null;
   const deliverBlockers = approvalProblem ? [...deliverProblems, approvalProblem] : deliverProblems;
+  // Something to fix opens the full delivery form, and it stays open while it is being fixed.
+  if (step === 'deliver' && deliverBlockers.length && !editingDelivery) setEditingDelivery(true);
 
-  const summary = [
-    plural(fileCount, 'file'),
+  const deliveryLine = [
     'Library',
     ...(slackDestination ? [`#${slackDestination.channelName}`] : []),
+    ...rooms
+      .filter((room) => approvalDestinationIds.includes(room.id))
+      .map(
+        (room) =>
+          `${approvalRoomName(room)} approval · ${
+            room.activeApprovers ? plural(room.activeApprovers, 'approver') : 'no approvers yet'
+          }`,
+      ),
     ...(replacements.length
       ? [`${plural(replacements.length, 'ad replacement')} held for approval`]
       : []),
     ...(newAds.length ? [`${plural(newAds.length, 'new paused ad')} held for approval`] : []),
   ].join(' · ');
+  const summary = `${plural(fileCount, 'file')} · ${deliveryLine}`;
 
   const confirm = async () => {
     // The records below are rebuilt from the rows on screen; a review of other rows signs nothing.
@@ -292,6 +391,8 @@ export function RenderReviewTray({
         }),
         ...(slackDestination ? { slack: { destinationId: slackDestination.id } } : {}),
         ...(approvalDestinationIds.length ? { approvalDestinationIds } : {}),
+        // Signed into the token: a batch reviewed as a proof cannot be created as a final.
+        ...(final ? { final: true } : {}),
       });
       setApprovalWarning(preflight.approval?.warning ?? null);
       const batch = await apiRendersApi.createBatch({
@@ -299,10 +400,9 @@ export function RenderReviewTray({
       });
       for (const job of batch.jobs)
         queryClient.setQueryData(forgeQueryKeys.renderJob(brandId, job.id), job);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) }),
-        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.approvals(brandId) }),
-      ]);
+      // Not awaited: the jobs are already cached above, and the lists can follow.
+      void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) });
+      void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.approvals(brandId) });
       toast.success(`${plural(batch.jobs.length, 'render')} queued`);
       setFired(batch.jobs);
       setStep('running');
@@ -315,12 +415,82 @@ export function RenderReviewTray({
     }
   };
 
-  const stepIndex = STEPS.findIndex((item) => item.id === step);
-  const canAdvance =
-    !stale &&
-    (step === 'review'
-      ? review.state === 'ready' && review.readiness.state !== 'BLOCKED'
-      : step === 'deliver' && !deliverBlockers.length);
+  const steps = goesToMeta ? STEPS : STEPS.filter((item) => item.id !== 'confirm');
+  const stepIndex = steps.findIndex((item) => item.id === step);
+  const reviewed = review.state === 'ready' && review.readiness.state !== 'BLOCKED';
+  // The step's one way forward: to the next step, or — on the last one — Render.
+  const primary: { label: string; disabled: boolean; run: () => void; fires?: true } =
+    step === 'review'
+      ? { label: 'Next: delivery', disabled: stale || !reviewed, run: () => setStep('deliver') }
+      : step === 'deliver' && goesToMeta
+        ? {
+            label: 'Next: confirm',
+            disabled: stale || deliverBlockers.length > 0,
+            run: () => setStep('confirm'),
+          }
+        : {
+            label: `Render ${plural(fileCount, 'file')}`,
+            disabled: firing || stale || deliverBlockers.length > 0,
+            run: () => void confirm(),
+            fires: true,
+          };
+
+  // What Confirm says, wherever Confirm is: Proof or Final, and what each row's files come out as.
+  const confirmation = (
+    <>
+      <section aria-label="Render as" className="flex flex-col gap-1.5 px-[var(--card-pad)] py-2">
+        <h3 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+          Render as
+        </h3>
+        <RadioGroup
+          aria-label="Render as"
+          value={final ? 'final' : 'proof'}
+          onValueChange={(value) => setFinal(value === 'final')}
+          className="flex flex-wrap gap-x-6 gap-y-1.5"
+        >
+          {/* The label holds only the word, so the radio is named Proof or Final, not its hint. */}
+          <div className="flex flex-col gap-0.5">
+            <Label className="text-xs">
+              <RadioGroupItem value="proof" />
+              Proof
+            </Label>
+            <span className="pl-6 text-muted-foreground">For review. Recorded as a proof.</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <Label className="text-xs">
+              <RadioGroupItem value="final" disabled={finalBlocked !== null} />
+              Final
+            </Label>
+            <span className="pl-6 text-muted-foreground">
+              {finalBlocked ?? 'Ready to go. Recorded as final.'}
+            </span>
+          </div>
+        </RadioGroup>
+      </section>
+      <ul aria-label="Output per row" className="divide-y divide-border border-y border-border">
+        {rows.map((row, index) => (
+          <li key={row.rowId} className={cn(ROW, 'grid-cols-[minmax(0,16rem)_minmax(0,1fr)]')}>
+            <span className="min-w-0 truncate font-medium">
+              {row.labelPath.length > 1 ? row.labelPath.join(' / ') : row.label}
+            </span>
+            <span className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-0.5">
+              {outputGroups(contract, rowOutputIds(row), records[index]?.encode).map((group) => (
+                <span key={group.summary} className="flex items-center gap-1.5">
+                  <RatioChips ratios={group.ratios} />
+                  <span className="text-muted-foreground">{group.summary}</span>
+                </span>
+              ))}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {problem ? (
+        <p role="alert" className="px-[var(--card-pad)] py-1.5 text-destructive">
+          {problem}
+        </p>
+      ) : null}
+    </>
+  );
 
   return (
     <section
@@ -343,7 +513,7 @@ export function RenderReviewTray({
           {step === 'running' ? templateName : `${templateName} · ${plural(fileCount, 'file')}`}
         </p>
         <ol aria-label="Pre-flight steps" className="flex shrink-0 items-center gap-1.5">
-          {STEPS.map((item, index) => (
+          {steps.map((item, index) => (
             <li
               key={item.id}
               aria-current={item.id === step ? 'step' : undefined}
@@ -365,54 +535,18 @@ export function RenderReviewTray({
             </li>
           ))}
         </ol>
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
-          {step === 'deliver' || step === 'confirm' ? (
-            <Button
-              type="button"
-              size="xs"
-              variant="outline"
-              disabled={firing}
-              onClick={() => setStep(STEPS[stepIndex - 1]?.id ?? 'review')}
-            >
-              Back
-            </Button>
-          ) : null}
-          {step === 'confirm' ? (
-            <Button
-              type="button"
-              size="xs"
-              disabled={firing || stale || approvalProblem !== null}
-              onClick={confirm}
-            >
-              {firing ? (
-                <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden />
-              ) : (
-                <Play data-icon="inline-start" aria-hidden />
-              )}
-              Confirm {plural(fileCount, 'file')}
-            </Button>
-          ) : step !== 'running' ? (
-            <Button
-              type="button"
-              size="xs"
-              disabled={!canAdvance}
-              onClick={() => setStep(STEPS[stepIndex + 1]?.id ?? 'confirm')}
-            >
-              Next
-            </Button>
-          ) : null}
-          <Button
-            type="button"
-            size="icon-xs"
-            variant="ghost"
-            aria-label="Close review"
-            title="Close (Esc)"
-            disabled={firing}
-            onClick={onClose}
-          >
-            <X aria-hidden />
-          </Button>
-        </div>
+        <Button
+          type="button"
+          size="icon-xs"
+          variant="ghost"
+          className="ml-auto"
+          aria-label="Close review"
+          title="Close (Esc)"
+          disabled={firing}
+          onClick={onClose}
+        >
+          <X aria-hidden />
+        </Button>
       </header>
 
       {step === 'running' ? (
@@ -443,21 +577,32 @@ export function RenderReviewTray({
               >
                 <AlertTriangle className="size-3.5 text-warning" aria-hidden />
                 <span className="font-medium">Rows changed since review</span>
-                <span className="text-muted-foreground">— check them again before rendering.</span>
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="outline"
-                  className="ml-auto"
-                  disabled={recheckBlocked !== null || rechecking}
-                  title={recheckBlocked ?? undefined}
-                  onClick={onRecheck}
-                >
-                  {rechecking ? (
-                    <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden />
-                  ) : null}
-                  Re-check
-                </Button>
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  {recheckBlocked ? (
+                    `— ${recheckBlocked}.`
+                  ) : (
+                    <>
+                      — checking them again
+                      <Loader2
+                        className="size-3 animate-spin motion-reduce:animate-none"
+                        aria-hidden
+                      />
+                    </>
+                  )}
+                </span>
+                {/* Only when the re-check cannot run by itself, and disabled for the same reason. */}
+                {recheckBlocked ? (
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    className="ml-auto"
+                    disabled
+                    title={recheckBlocked}
+                  >
+                    Re-check
+                  </Button>
+                ) : null}
               </div>
             ) : null}
 
@@ -557,109 +702,148 @@ export function RenderReviewTray({
                 </ul>
               </>
             ) : step === 'deliver' ? (
-              // One section per destination; a new destination is one more section here.
-              <div className="grid gap-x-6 gap-y-3 p-[var(--card-pad)] lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1.2fr)]">
-                <DeliverSection title="Library">
-                  <p className="flex items-center gap-1.5 text-muted-foreground">
-                    <Check className="size-3.5 text-success" aria-hidden /> Every render is saved to
-                    this brand’s Library.
+              <>
+                {editingDelivery ? null : (
+                  <p className="flex flex-wrap items-center gap-x-2 border-b border-border px-[var(--card-pad)] py-2">
+                    <span className="font-medium">{deliveryLine}</span>
+                    <span aria-hidden className="text-muted-foreground">
+                      —
+                    </span>
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="link"
+                      className="px-0"
+                      aria-label="Change delivery"
+                      onClick={() => setEditingDelivery(true)}
+                    >
+                      Change
+                    </Button>
                   </p>
-                </DeliverSection>
-                <DeliverSection title="Slack">
-                  <SlackDestinationPicker
-                    brandId={brandId}
-                    slack={slack}
-                    value={slackDestination}
-                    onChange={setSlackDestination}
-                  />
-                </DeliverSection>
-                <DeliverSection title="Meta ads">
-                  <DeliveryTargetPicker
-                    brandId={brandId}
-                    meta={meta}
-                    rows={rows}
-                    outputs={outputs}
-                    formatByRow={formatByRow}
-                    onDeliveryChange={onDeliveryChange}
-                    onFormatChange={(rowId, outputId) =>
-                      setFormatByRow((current) => ({ ...current, [rowId]: outputId }))
-                    }
-                  />
-                </DeliverSection>
-                <DeliverSection title="Approval">
-                  <ApprovalDestinationsField
-                    brandId={brandId}
-                    value={approvalDestinationIds}
-                    onChange={setApprovalDestinationIds}
-                  />
-                </DeliverSection>
-              </div>
+                )}
+                {/* Mounted while folded too: the approval field seeds the brand's usual rooms. */}
+                <div
+                  hidden={!editingDelivery}
+                  className="grid gap-x-6 gap-y-3 border-b border-border p-[var(--card-pad)] lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1.2fr)]"
+                >
+                  {/* One section per destination; a new destination is one more section here. */}
+                  <DeliverSection title="Library">
+                    <p className="flex items-center gap-1.5 text-muted-foreground">
+                      <Check className="size-3.5 text-success" aria-hidden /> Every render is saved
+                      to this brand’s Library.
+                    </p>
+                  </DeliverSection>
+                  <DeliverSection title="Slack">
+                    <SlackDestinationPicker
+                      brandId={brandId}
+                      slack={slack}
+                      value={slackDestination}
+                      onChange={setSlackDestination}
+                    />
+                  </DeliverSection>
+                  <DeliverSection title="Meta ads">
+                    <DeliveryTargetPicker
+                      brandId={brandId}
+                      meta={meta}
+                      rows={rows}
+                      outputs={outputs}
+                      formatByRow={formatByRow}
+                      onDeliveryChange={onDeliveryChange}
+                      onFormatChange={(rowId, outputId) =>
+                        setFormatByRow((current) => ({ ...current, [rowId]: outputId }))
+                      }
+                    />
+                  </DeliverSection>
+                  <DeliverSection title="Approval">
+                    <ApprovalDestinationsField
+                      brandId={brandId}
+                      value={approvalDestinationIds}
+                      onChange={setApprovalDestinationIds}
+                    />
+                  </DeliverSection>
+                </div>
+                {goesToMeta ? null : confirmation}
+              </>
             ) : (
-              <div className="flex flex-col gap-2 p-[var(--card-pad)]">
-                <p className="text-sm font-medium">{summary}</p>
-                {replacements.length || newAds.length ? (
-                  <>
-                    <ul className="divide-y divide-border border-y border-border">
-                      {[...replacements, ...newAds].map((row) => (
-                        <li key={row.rowId} className="flex flex-wrap gap-x-2 py-1.5">
-                          <span className="font-medium">{row.label}</span>
-                          <span className="text-muted-foreground">
-                            {row.delivery?.action === 'replace'
-                              ? `replaces ${row.delivery.adName ?? row.delivery.adId} · ${renderedRatios(contract, rowOutputIds(row)).join(', ')}`
-                              : `new paused ad in ${row.delivery?.adsetName ?? row.delivery?.adsetId}`}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                    <p className="text-muted-foreground">{APPROVAL_COPY}</p>
-                    {approvalProblem ? (
-                      <p role="status" className="text-warning">
-                        {approvalProblem}
-                      </p>
-                    ) : null}
-                  </>
-                ) : null}
-                {problem ? (
-                  <p role="alert" className="text-destructive">
-                    {problem}
-                  </p>
-                ) : null}
-              </div>
+              <>
+                <div className="flex flex-col gap-2 p-[var(--card-pad)]">
+                  <p className="text-sm font-medium">{summary}</p>
+                  <ul className="divide-y divide-border border-y border-border">
+                    {[...replacements, ...newAds].map((row) => (
+                      <li key={row.rowId} className="flex flex-wrap gap-x-2 py-1.5">
+                        <span className="font-medium">{row.label}</span>
+                        <span className="text-muted-foreground">
+                          {row.delivery?.action === 'replace'
+                            ? `replaces ${row.delivery.adName ?? row.delivery.adId} · ${renderedRatios(contract, rowOutputIds(row)).join(', ')}`
+                            : `new paused ad in ${row.delivery?.adsetName ?? row.delivery?.adsetId}`}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-muted-foreground">{APPROVAL_COPY}</p>
+                  {approvalProblem ? (
+                    <p role="status" className="text-warning">
+                      {approvalProblem}
+                    </p>
+                  ) : null}
+                </div>
+                {confirmation}
+              </>
             )}
           </div>
 
-          <footer className="flex h-8 shrink-0 items-center gap-2 border-t border-border px-[var(--card-pad)] text-muted-foreground">
-            {step === 'review' ? (
-              review.state === 'loading' ? (
-                <>
-                  <Loader2 className="size-3 animate-spin" aria-hidden /> Checking{' '}
-                  {plural(rows.length, 'row')} against the workspace…
-                </>
-              ) : review.state === 'ready' ? (
-                <span
-                  className={cn(
-                    'font-medium',
-                    review.readiness.state === 'READY' ? 'text-foreground' : 'text-warning',
-                  )}
-                >
-                  {readinessLine(review.readiness)}
-                </span>
-              ) : (
-                <span className="text-destructive">Can’t render as they are</span>
-              )
-            ) : step === 'deliver' ? (
-              deliverBlockers.length ? (
+          <footer className="flex min-h-11 shrink-0 items-center gap-2 border-t border-border px-[var(--card-pad)] py-1.5">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 text-muted-foreground">
+              {step === 'review' ? (
+                review.state === 'loading' ? (
+                  <>
+                    <Loader2 className="size-3 animate-spin" aria-hidden /> Checking{' '}
+                    {plural(rows.length, 'row')} against the workspace…
+                  </>
+                ) : review.state === 'ready' ? (
+                  <span
+                    className={cn(
+                      'font-medium',
+                      review.readiness.state === 'READY' ? 'text-foreground' : 'text-warning',
+                    )}
+                  >
+                    {readinessLine(review.readiness)}
+                  </span>
+                ) : (
+                  <span className="text-destructive">Can’t render as they are</span>
+                )
+              ) : deliverBlockers.length ? (
                 <p role="status" className="flex flex-wrap gap-x-1 text-warning">
                   {deliverBlockers.map((blocker) => (
                     <span key={blocker}>{blocker}</span>
                   ))}
                 </p>
               ) : (
-                <span>{summary}</span>
-              )
-            ) : (
-              <span>Nothing renders until you confirm.</span>
-            )}
+                <span className="truncate">
+                  {primary.fires ? `${final ? 'Final' : 'Proof'} · ${summary}` : summary}
+                </span>
+              )}
+            </div>
+            {stepIndex > 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={firing}
+                onClick={() => setStep(steps[stepIndex - 1]?.id ?? 'review')}
+              >
+                Back
+              </Button>
+            ) : null}
+            <Button type="button" disabled={primary.disabled} onClick={primary.run}>
+              {primary.fires ? (
+                firing ? (
+                  <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden />
+                ) : (
+                  <Play data-icon="inline-start" aria-hidden />
+                )
+              ) : null}
+              {primary.label}
+            </Button>
           </footer>
         </>
       )}
@@ -719,7 +903,10 @@ function RunningStep({
 
   return (
     <>
-      <ul aria-label="Fired renders" className="min-h-0 flex-1 divide-y divide-border overflow-y-auto">
+      <ul
+        aria-label="Fired renders"
+        className="min-h-0 flex-1 divide-y divide-border overflow-y-auto"
+      >
         {latest.map((job) => {
           const steps = jobSteps(job);
           const done = steps.filter((item) => item.state === 'done').length;
@@ -731,10 +918,7 @@ function RunningStep({
           return (
             <li
               key={job.id}
-              className={cn(
-                ROW,
-                'grid-cols-[minmax(0,16rem)_auto_minmax(0,1fr)_3.5rem_1rem]',
-              )}
+              className={cn(ROW, 'grid-cols-[minmax(0,16rem)_auto_minmax(0,1fr)_3.5rem_1rem]')}
             >
               <button
                 type="button"

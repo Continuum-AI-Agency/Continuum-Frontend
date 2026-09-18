@@ -9,7 +9,7 @@ import type {
 import { ChevronRight, ClipboardPaste, Loader2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import type { RenderPreflightRow } from '@/components/forge/RenderPreflightDialog';
+import type { RenderPreflightRow } from '@/components/forge/RenderReviewTray';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

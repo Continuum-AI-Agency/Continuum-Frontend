@@ -92,13 +92,13 @@ mock.module('next/link', () => ({
 }));
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type React from 'react';
+import { useState } from 'react';
 import {
   chooseOption,
   installPickerDomGlobals,
   openSelect,
 } from '@/components/automations/workspace/pickers/pickerTestHarness';
-import type React from 'react';
-import { useState } from 'react';
 import {
   DeliveryTargetPicker,
   type MetaPickerState,
@@ -106,7 +106,7 @@ import {
   parseAdIdLines,
   replaceTargetFor,
 } from './DeliveryTargetPicker';
-import type { RenderPreflightRow } from './RenderPreflightDialog';
+import type { RenderPreflightRow } from './RenderReviewTray';
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
 const OUTPUTS = [

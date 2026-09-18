@@ -2,6 +2,7 @@
 
 import {
   API_RENDER_MEDIA_LIST_MAX,
+  type ApiRenderFitReport,
   type ApiRenderFitVerdict,
   type ApiRenderInputValue,
   type ApiRenderTemplateContract,
@@ -9,6 +10,7 @@ import {
   checkAssetSwap,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   type MediaAsset,
+  readableLayerName,
 } from '@continuum/contracts';
 import type { DraggableAttributes, DraggableSyntheticListeners } from '@dnd-kit/core';
 import { useSortable } from '@dnd-kit/sortable';
@@ -32,7 +34,7 @@ import {
   Video,
   X,
 } from 'lucide-react';
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { BrandColorField } from '@/components/forge/BrandColorField';
 import type { DataGridRowProps } from '@/components/forge/DataGrid';
 import { EncodeOverrideCell } from '@/components/forge/EncodeOverrideCell';
@@ -41,7 +43,9 @@ import {
   effectiveMedia,
   effectiveOutputIds,
   effectiveValues,
+  isEmptyInput,
   MAX_BATCH_ROWS,
+  missingInputs,
   ownChangeCount,
   type RequestRow,
   type RequestRowMedia,
@@ -207,6 +211,31 @@ function MediaPicker({
   );
 }
 
+/** Why a row's frame goes to the AI check, from the slots the placement check could not settle. */
+function aiCheckWhy(fit: ApiRenderFitReport): string {
+  const reasons = [
+    fit.slots.some((slot) => slot.state === 'unknown')
+      ? 'where an image lands couldn’t be measured'
+      : null,
+    fit.slots.some((slot) => slot.state === 'clipped') ? 'an image may be cut off' : null,
+  ].filter(Boolean);
+  return `An AI model checks the finished frame after it renders, because ${
+    reasons.join(' and ') || 'placement couldn’t be measured'
+  }.`;
+}
+
+/** A status word with its one-sentence reason, on hover and on keyboard focus. */
+function Explained({ why, children }: { why: string; children: ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger className="rounded-md text-left focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-hidden">
+        {children}
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{why}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 function StatusBadge({ row, invalid }: { row: RequestRow; invalid: boolean }) {
   if (invalid) return <Badge variant="destructive">Invalid</Badge>;
   switch (row.check.state) {
@@ -228,9 +257,9 @@ function StatusBadge({ row, invalid }: { row: RequestRow; invalid: boolean }) {
       if (row.check.guardrails?.some((finding) => finding.severity === 'unknown'))
         return <Badge variant="warning">Needs review</Badge>;
       return row.check.fit?.escalate ? (
-        <Badge variant="warning" title={row.check.fit.why}>
-          Needs judge
-        </Badge>
+        <Explained why={aiCheckWhy(row.check.fit)}>
+          <Badge variant="warning">AI check after render</Badge>
+        </Explained>
       ) : (
         <Badge variant="success">Ready</Badge>
       );
@@ -281,12 +310,14 @@ function NumberInput({
   label,
   value,
   error,
+  invalid,
   placeholder,
   onCommit,
 }: {
   label: string;
   value: ApiRenderInputValue | undefined;
   error: string | undefined;
+  invalid: boolean;
   placeholder: string | undefined;
   onCommit: (value: number | undefined) => void;
 }) {
@@ -304,7 +335,7 @@ function NumberInput({
   }, [value]);
   return (
     <Input
-      className={cn('h-7 text-xs tabular-nums', error && 'border-destructive')}
+      className={cn('h-7 text-xs tabular-nums', invalid && 'border-destructive')}
       type="text"
       inputMode="decimal"
       aria-label={label}
@@ -330,10 +361,18 @@ export function VariableCell({
   const { brandId, contract, rows, clientErrors, actions } = gridMeta(table);
   const error = clientErrors.get(row.id)?.[variable.key];
   const value = effectiveValues(rows, row.id)[variable.key];
+  // A required blank is "Needs input" on the row, not a red cell: only a wrong value is marked.
+  const invalid = error !== undefined && !(variable.required && isEmptyInput(variable, value));
   const inheritance = <InheritanceAction row={row} variable={variable} actions={actions} />;
 
   if (variable.reserved)
-    return <span className="text-2xs text-muted-foreground">Continuum fills this</span>;
+    return (
+      <Explained why="The brand’s logo, filled in automatically at render time.">
+        <span className="text-2xs text-muted-foreground underline decoration-dotted underline-offset-2">
+          Continuum fills this
+        </span>
+      </Explained>
+    );
 
   if (isMedia(variable)) {
     const dims = effectiveMedia(rows, row.id)[variable.key];
@@ -346,7 +385,7 @@ export function VariableCell({
     return (
       <div
         title={error}
-        className={cn('flex items-center gap-1', error && 'rounded-md ring-1 ring-destructive')}
+        className={cn('flex items-center gap-1', invalid && 'rounded-md ring-1 ring-destructive')}
       >
         <MediaPicker
           variable={variable}
@@ -389,7 +428,7 @@ export function VariableCell({
           }
         >
           <SelectTrigger
-            className={cn('h-7 min-w-28 text-xs', error && 'border-destructive')}
+            className={cn('h-7 min-w-28 text-xs', invalid && 'border-destructive')}
             aria-label={variable.label}
             title={error}
           >
@@ -414,7 +453,7 @@ export function VariableCell({
         title={error}
         className={cn(
           'flex min-w-44 items-center gap-1',
-          error && 'rounded-md ring-1 ring-destructive',
+          invalid && 'rounded-md ring-1 ring-destructive',
         )}
       >
         <BrandColorField
@@ -434,6 +473,7 @@ export function VariableCell({
           label={variable.label}
           value={value}
           error={error}
+          invalid={invalid}
           placeholder={variable.sample ?? undefined}
           onCommit={(next) => actions.setValue(row.id, variable.key, next)}
         />
@@ -446,7 +486,7 @@ export function VariableCell({
   return (
     <div className="flex min-w-36 items-center gap-1.5">
       <Input
-        className={cn('h-7 text-xs', error && 'border-destructive')}
+        className={cn('h-7 text-xs', invalid && 'border-destructive')}
         aria-label={variable.label}
         title={error}
         placeholder={variable.sample ?? undefined}
@@ -595,7 +635,8 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
   const labelInput = useRef<HTMLInputElement>(null);
   const breadcrumb = rowBreadcrumb(rows, row.id).slice(0, -1).join(' / ');
   const note = deliveryNote(row);
-  const full = rows.length >= MAX_BATCH_ROWS ? `A render set holds at most ${MAX_BATCH_ROWS} rows` : null;
+  const full =
+    rows.length >= MAX_BATCH_ROWS ? `A render set holds at most ${MAX_BATCH_ROWS} rows` : null;
   return (
     <div className="flex min-w-72 items-center gap-1">
       {/* One guide per level, reaching through the cell's padding so a branch reads as a line. */}
@@ -827,8 +868,21 @@ export function EncodeCell({ row: { original: row }, table }: CellContext<Reques
 }
 
 export function StatusCell({ row: { original: row }, table }: CellContext<RequestRow, unknown>) {
-  const { clientErrors } = gridMeta(table);
-  return <StatusBadge row={row} invalid={Object.keys(clientErrors.get(row.id) ?? {}).length > 0} />;
+  const { contract, rows, clientErrors } = gridMeta(table);
+  const errorKeys = Object.keys(clientErrors.get(row.id) ?? {});
+  const missing = missingInputs(contract.variables, effectiveValues(rows, row.id));
+  // Blank is not wrong: a row that is only waiting on required inputs reads muted, never red.
+  if (errorKeys.length && errorKeys.every((key) => missing.includes(key))) {
+    const names = missing.map((key) =>
+      readableLayerName(contract.variables.find((item) => item.key === key)?.label ?? key),
+    );
+    return (
+      <Badge variant="muted" title={`Fill in ${names.join(', ')}`}>
+        Needs input
+      </Badge>
+    );
+  }
+  return <StatusBadge row={row} invalid={errorKeys.length > 0} />;
 }
 
 // --- drag and drop -------------------------------------------------------------------------

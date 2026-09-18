@@ -240,6 +240,22 @@ mock.module('@/components/organic/primitives/MediaSelectPopover', () => ({
   },
 }));
 
+// The grid reads the person's brand role from the brand provider; outside one, this file is an
+// owner. Spread, and falling through to the real hook, because mock.module outlives this file.
+const activeBrand = await import('@/components/providers/ActiveBrandProvider');
+const realActiveBrandContext = activeBrand.useActiveBrandContext;
+let brandRole = 'owner';
+mock.module('@/components/providers/ActiveBrandProvider', () => ({
+  ...activeBrand,
+  useActiveBrandContext: () => {
+    try {
+      return realActiveBrandContext();
+    } catch {
+      return { permissions: [{ brand_profile_id: BRAND, role: brandRole }] };
+    }
+  },
+}));
+
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   act,
@@ -251,6 +267,7 @@ import {
   within,
 } from '@testing-library/react';
 import type React from 'react';
+import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
 import { registerToastSink } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
 import { forgeQueryKeys } from './queryKeys';
@@ -267,6 +284,10 @@ const render = (
   });
 };
 
+// Base UI waits on a MutationObserver when a menu or radio opens; happy-dom's, lifted per file
+// the way the review tray's own test does.
+installPickerDomGlobals();
+
 afterEach(() => {
   cleanup();
   localStorage.clear();
@@ -281,6 +302,7 @@ afterEach(() => {
   batchPreflightMock.mockClear();
   extraTemplates = [];
   contractOverrides = {};
+  brandRole = 'owner';
 });
 
 const confirmDialog = async (answer: 'Keep editing' | 'Discard' | 'Cancel' | 'Delete') => {
@@ -290,8 +312,9 @@ const confirmDialog = async (answer: 'Keep editing' | 'Discard' | 'Cancel' | 'De
   await waitFor(() => expect(screen.queryAllByRole('alertdialog')).toHaveLength(0));
 };
 
-const next = async () => {
-  const button = await screen.findByRole<HTMLButtonElement>('button', { name: 'Next' });
+/** The tray's one primary button, pressed once it is enabled. */
+const press = async (name: string) => {
+  const button = await screen.findByRole<HTMLButtonElement>('button', { name });
   await waitFor(() => expect(button.disabled).toBe(false));
   fireEvent.click(button);
 };
@@ -334,6 +357,55 @@ describe('RenderRequestsGrid', () => {
     ).toBeTruthy();
     fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
     expect(screen.getByRole<HTMLButtonElement>('button', { name: /Render 1/ }).disabled).toBe(true);
+    // A value the server refuses is wrong, not missing.
+    expect(screen.getByText('Invalid')).toBeTruthy();
+  });
+
+  test('a blank required field reads Needs input, muted; only a wrong value reads Invalid', async () => {
+    contractOverrides = {
+      variables: [
+        ...VARIABLES,
+        variable({ key: 'ref_price_text', label: 'ref_price_text', kind: 'text' }),
+        variable({ key: 'watermark_logo', label: 'Logo', kind: 'image', reserved: true }),
+      ],
+    };
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    const headline = await screen.findByLabelText('Headline');
+    // Raw After Effects layer names read as words in the header, never as the key.
+    expect(screen.getByRole('columnheader', { name: 'Price text' })).toBeTruthy();
+    expect(screen.getByText('Continuum fills this')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Ready')).toBeTruthy(), { timeout: 3000 });
+
+    fireEvent.change(headline, { target: { value: '' } });
+    const status = await screen.findByText('Needs input');
+    expect(status.getAttribute('title')).toBe('Fill in Headline');
+    expect(screen.queryAllByText('Invalid')).toHaveLength(0);
+    // The blank cell is not painted as an error; the row says what it waits for.
+    expect(headline.classList.contains('border-destructive')).toBe(false);
+    expect(screen.getByText('0 of 1 row ready to render · 1 needs input')).toBeTruthy();
+  });
+
+  test('a frame placement cannot settle reads "AI check after render", and says why', async () => {
+    preflightMock.mockImplementation(async () => ({
+      ...READY_RESPONSE,
+      fit: {
+        comp: null,
+        escalate: true,
+        why: '1 slot could not be measured — the finished frame goes to the judge',
+        slots: [{ key: 'hero', state: 'unknown', why: 'placed by a rig' }],
+      },
+    }));
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    const status = await screen.findByText('AI check after render', undefined, { timeout: 3000 });
+    expect(screen.queryAllByText('Needs judge')).toHaveLength(0);
+    const trigger = status.closest('button')!;
+    fireEvent.mouseEnter(trigger);
+    fireEvent.focus(trigger);
+    expect(
+      await screen.findByText(
+        'An AI model checks the finished frame after it renders, because where an image lands couldn’t be measured.',
+      ),
+    ).toBeTruthy();
   });
 
   test('a paste onto the grid is reviewed like a sheet: its fields, its errors, its row cap', async () => {
@@ -464,7 +536,7 @@ describe('RenderRequestsGrid', () => {
 
     const name = screen.getAllByLabelText('Row name')[0] as HTMLInputElement;
     await typeWhileALandedCheckArrives(name, ' — the summer launch', 'Fourth');
-    expect(name.value).toBe('Root — the summer launch');
+    expect(name.value).toBe('Base — the summer launch');
   });
 
   test('has at most five top-level toolbar controls, and every row capability is still reachable', async () => {
@@ -494,7 +566,7 @@ describe('RenderRequestsGrid', () => {
 
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
-    fireEvent.click(screen.getByRole('button', { name: 'Row actions for Root' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Row actions for Base' }));
     for (const item of ['Rename', 'Add variation', 'Copy', 'Save as inputs', 'Delete'])
       expect(await screen.findByRole('menuitem', { name: item })).toBeTruthy();
   });
@@ -507,7 +579,7 @@ describe('RenderRequestsGrid', () => {
     const selection = screen.getByRole('region', { name: 'Selected rows' });
     fireEvent.click(within(selection).getByRole('button', { name: 'Add variation' }));
 
-    const variation = (await screen.findByDisplayValue('Root · B')) as HTMLInputElement;
+    const variation = (await screen.findByDisplayValue('Base · B')) as HTMLInputElement;
     expect(screen.getAllByDisplayValue('Hola mundo')).toHaveLength(2);
     // The parent is still what renders; the new variation is only named next.
     const [rootBox, variationBox] = screen.getAllByLabelText<HTMLButtonElement>('Select row');
@@ -522,17 +594,17 @@ describe('RenderRequestsGrid', () => {
     expect(screen.getAllByDisplayValue('Hola mundo')).toHaveLength(2);
 
     // A second fork of the same parent takes the next letter.
-    await openMenu('Row actions for Root', 'Add variation');
-    expect(await screen.findByDisplayValue('Root · C')).toBeTruthy();
+    await openMenu('Row actions for Base', 'Add variation');
+    expect(await screen.findByDisplayValue('Base · C')).toBeTruthy();
   });
 
   test('"Save as inputs" on a fork saves what it renders with, inherited values included', async () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
-    await openMenu('Row actions for Root', 'Add variation');
-    await screen.findByDisplayValue('Root · B');
+    await openMenu('Row actions for Base', 'Add variation');
+    await screen.findByDisplayValue('Base · B');
     fireEvent.change(screen.getAllByLabelText('Price')[1]!, { target: { value: '9.5' } });
-    await openMenu('Row actions for Root · B', 'Save as inputs');
+    await openMenu('Row actions for Base · B', 'Save as inputs');
     const dialog = await screen.findByRole('dialog');
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Spain' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save inputs' }));
@@ -597,9 +669,13 @@ describe('RenderRequestsGrid', () => {
     expect(createRenderSetMock.mock.calls[0]?.[0]).toMatchObject({ name: 'Campaign set' });
     // The grid is still there to read and edit while the tray reviews it.
     expect(screen.getByDisplayValue('Hola mundo')).toBeTruthy();
-    await next();
-    await next();
-    fireEvent.click(await within(tray).findByRole('button', { name: 'Confirm 1 file' }));
+    // No Meta target: Deliver folds its defaults to one line and renders from there.
+    await press('Next: delivery');
+    expect(within(tray).getByRole('button', { name: 'Change delivery' })).toBeTruthy();
+    expect(within(tray).getByRole('radio', { name: 'Final' }).hasAttribute('data-disabled')).toBe(
+      false,
+    );
+    await press('Render 1 file');
     // Queued, the tray follows the job; only the ledger link leaves the Render tab.
     const fired = await within(tray).findByRole('list', { name: 'Fired renders' });
     expect(within(fired).getByText('Root / Spain')).toBeTruthy();
@@ -607,7 +683,7 @@ describe('RenderRequestsGrid', () => {
     expect(batchPreflightMock).toHaveBeenCalledTimes(2);
     fireEvent.click(within(tray).getByRole('button', { name: 'Open Render ledger' }));
     expect(onFired).toHaveBeenCalledWith([JOB.id]);
-    await waitFor(() => expect(screen.getByDisplayValue('Root')).toBeTruthy());
+    await waitFor(() => expect(screen.getByDisplayValue('Base')).toBeTruthy());
   });
 
   test('Render saves only a set with edits, and silently; Save is what says “Saved”, once', async () => {
@@ -677,8 +753,8 @@ describe('RenderRequestsGrid', () => {
     expect(within(row).getByRole('button', { name: 'Clear Hero' })).toBeTruthy();
 
     // A fork adds the inheritance control; it joins the same line instead of wrapping under it.
-    await openMenu('Row actions for Root', 'Add variation');
-    await screen.findByDisplayValue('Root · B');
+    await openMenu('Row actions for Base', 'Add variation');
+    await screen.findByDisplayValue('Base · B');
     const forkClear = screen.getByRole('button', { name: 'Clear inherited Hero' });
     const forkChange = screen.getAllByRole('button', { name: 'Change Hero' })[1]!;
     const cell = forkClear.parentElement!;
@@ -951,8 +1027,8 @@ describe('RenderRequestsGrid', () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
     fireEvent.change(screen.getByLabelText('Price'), { target: { value: '9.5' } });
-    await openMenu('Row actions for Root', 'Add variation');
-    await screen.findByDisplayValue('Root · B');
+    await openMenu('Row actions for Base', 'Add variation');
+    await screen.findByDisplayValue('Base · B');
     const forkHeadline = () => screen.getAllByLabelText('Headline')[1] as HTMLInputElement;
     const forkPrice = () => screen.getAllByLabelText('Price')[1] as HTMLInputElement;
     expect(forkHeadline().value).toBe('Hola mundo');
@@ -985,9 +1061,9 @@ describe('RenderRequestsGrid', () => {
     ).toBeTruthy();
     await confirmDialog('Cancel');
 
-    await openMenu('Row actions for Root', 'Add variation');
-    await screen.findByDisplayValue('Root · B');
-    await openMenu('Row actions for Root', 'Delete');
+    await openMenu('Row actions for Base', 'Add variation');
+    await screen.findByDisplayValue('Base · B');
+    await openMenu('Row actions for Base', 'Delete');
     expect(
       within(await screen.findByRole('alertdialog')).getByText(
         '2 rows will be deleted, including every fork under them.',
@@ -1033,10 +1109,10 @@ describe('RenderRequestsGrid', () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
     fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
-    const rootRow = screen.getByDisplayValue('Root').closest('tr')!;
+    const rootRow = screen.getByDisplayValue('Base').closest('tr')!;
 
     fireEvent.click(within(rootRow).getByRole('button', { name: 'Add variation' }));
-    const variation = (await screen.findByDisplayValue('Root · B')) as HTMLInputElement;
+    const variation = (await screen.findByDisplayValue('Base · B')) as HTMLInputElement;
     const variationRow = variation.closest('tr')!;
     expect(within(variationRow).getByText('inherits · 0 changed')).toBeTruthy();
     expect(variationRow.querySelectorAll('[data-guide]')).toHaveLength(1);
@@ -1047,7 +1123,7 @@ describe('RenderRequestsGrid', () => {
 
     // Beside the variation: another variation of the same parent, at the same depth.
     fireEvent.click(within(variationRow).getByRole('button', { name: 'Row below' }));
-    const sibling = (await screen.findByDisplayValue('Root · C')) as HTMLInputElement;
+    const sibling = (await screen.findByDisplayValue('Base · C')) as HTMLInputElement;
     expect(within(sibling.closest('tr')!).getByText('inherits · 0 changed')).toBeTruthy();
     expect(sibling.closest('tr')!.querySelectorAll('[data-guide]')).toHaveLength(1);
     await waitFor(() => expect(document.activeElement).toBe(sibling));
@@ -1057,7 +1133,7 @@ describe('RenderRequestsGrid', () => {
     await screen.findByDisplayValue('Render 4');
     expect(
       screen.getAllByLabelText<HTMLInputElement>('Row name').map((input) => input.value),
-    ).toEqual(['Root', 'Root · B', 'Root · C', 'Render 4']);
+    ).toEqual(['Base', 'Base · B', 'Base · C', 'Render 4']);
     expect(screen.getByText('1 selected')).toBeTruthy();
     expect(checked(rootRow)).toBe('true');
 
@@ -1069,8 +1145,8 @@ describe('RenderRequestsGrid', () => {
   test('Add variation says why it is unavailable three levels down', async () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
-    let label = 'Root';
-    for (const next of ['Root · B', 'Root · B · B', 'Root · B · B · B']) {
+    let label = 'Base';
+    for (const next of ['Base · B', 'Base · B · B', 'Base · B · B · B']) {
       const row = screen.getByDisplayValue(label).closest('tr')!;
       fireEvent.click(within(row).getByRole('button', { name: 'Add variation' }));
       await screen.findByDisplayValue(next);
@@ -1112,10 +1188,10 @@ describe('RenderRequestsGrid', () => {
     expect(chips(own)).toEqual(['16:9', '1:1', '9:16']);
     expect(own.querySelector('[data-formats]')?.getAttribute('data-formats')).toBe('own');
 
-    await openMenu('Row actions for Root', 'Add variation');
-    await screen.findByDisplayValue('Root · B');
+    await openMenu('Row actions for Base', 'Add variation');
+    await screen.findByDisplayValue('Base · B');
     const inherited = screen.getByRole('button', {
-      name: 'Formats 16:9, 1:1, 9:16, inherited from Root',
+      name: 'Formats 16:9, 1:1, 9:16, inherited from Base',
     });
     expect(inherited.querySelector('[data-formats]')?.getAttribute('data-formats')).toBe(
       'inherited',
@@ -1146,19 +1222,17 @@ describe('RenderRequestsGrid', () => {
     fireEvent.click(screen.getAllByLabelText('Select row')[0]!);
     fireEvent.click(screen.getByRole('button', { name: 'Render 1 row · 1 file' }));
     const tray = await screen.findByRole('region', { name: 'Review and render' });
-    await next();
-    await next();
-    expect(within(tray).getByRole('button', { name: 'Confirm 1 file' })).toBeTruthy();
+    await press('Next: delivery');
+    expect(within(tray).getByRole('button', { name: 'Render 1 file' })).toBeTruthy();
 
     fireEvent.change(screen.getByDisplayValue('Newest row'), { target: { value: 'Renamed row' } });
     expect(await within(tray).findByText('Rows changed since review')).toBeTruthy();
-    expect(within(tray).queryAllByRole('button', { name: /Confirm/ })).toHaveLength(0);
+    expect(within(tray).queryAllByRole('button', { name: /^Render/ })).toHaveLength(0);
+    // Nothing to press: the row is still being checked, so the tray waits for it.
+    expect(within(tray).queryAllByRole('button', { name: 'Re-check' })).toHaveLength(0);
 
-    // The rename re-checks the row; Re-check waits for Ready, saves the edit and reviews again.
-    const recheck = within(tray).getByRole<HTMLButtonElement>('button', { name: 'Re-check' });
-    await waitFor(() => expect(recheck.disabled).toBe(false), { timeout: 3000 });
-    fireEvent.click(recheck);
-    await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(2));
+    // The rename re-checks the row; once it is Ready the tray saves the edit and reviews again.
+    await waitFor(() => expect(batchPreflightMock).toHaveBeenCalledTimes(2), { timeout: 5000 });
     expect(updateRenderSetMock).toHaveBeenCalledTimes(1);
     expect(within(tray).queryByText('Rows changed since review')).toBeNull();
     expect(batchPreflightMock.mock.calls[1]?.[0].records).toMatchObject([
@@ -1170,12 +1244,12 @@ describe('RenderRequestsGrid', () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
     expect(screen.getAllByRole('columnheader').length).toBeGreaterThan(0);
-    expect(screen.queryAllByRole('columnheader', { name: /Output settings/ })).toHaveLength(0);
+    expect(screen.queryAllByRole('columnheader', { name: 'Output' })).toHaveLength(0);
     cleanup();
 
     contractOverrides = { encode: { stored: null, defaults: { mp4: {}, mov: {} } } };
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
-    expect(screen.getByRole('columnheader', { name: /Output settings/ })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Output' })).toBeTruthy();
   });
 });

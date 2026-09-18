@@ -13,6 +13,7 @@ import {
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   type ForgeRenderSet,
   type MediaAsset,
+  readableLayerName,
 } from '@continuum/contracts';
 import {
   type Announcements,
@@ -36,11 +37,12 @@ import {
   type RowSelectionState,
   useReactTable,
 } from '@tanstack/react-table';
-import { BookmarkPlus, Copy, CornerDownRight, Play, Trash2, X } from 'lucide-react';
+import { BookmarkPlus, Copy, CornerDownRight, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePanelRef } from 'react-resizable-panels';
 import { DataGrid, KIND_ICONS, STICKY_LEFT, selectColumn } from '@/components/forge/DataGrid';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
+import { isStillsOnly } from '@/components/forge/OutputSettingsPanel';
 import { RenderPreviewPanel } from '@/components/forge/RenderPreviewPanel';
 import { RenderReviewTray } from '@/components/forge/RenderReviewTray';
 import {
@@ -62,9 +64,11 @@ import {
   forkLabel,
   fromRenderSetRows,
   MAX_BATCH_ROWS,
+  missingInputs,
   moveRow,
   nestRows,
   newRowId,
+  PREFLIGHT_DEBOUNCE_MS,
   parseDelimited,
   type RequestRow,
   type RowDrop,
@@ -94,6 +98,7 @@ import {
   VariableCell,
   type VariableColumnMeta,
 } from '@/components/forge/requestCells';
+import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -127,8 +132,7 @@ import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/
 // (requestCells.tsx): anything that changes per keystroke reaches them through the table's
 // `meta`. A column set that depended on `rows` remounted every cell on every keystroke.
 
-const PREFLIGHT_DEBOUNCE_MS = 600;
-/** The review tray folded down to its one strip: the readiness line and Review & render. */
+/** The review tray folded down to its one strip: the readiness line. Render opens it. */
 const TRAY_COLLAPSED_SIZE = '2.5rem';
 const TRAY_OPEN_SIZE = '40%';
 /** The sets rail folded to its one button and the open set's name, set on its side. */
@@ -150,7 +154,7 @@ function readDrafts(key: string): RequestRow[] | null {
       parentId: row.parentId ?? null,
       clearedKeys: row.clearedKeys ?? [],
       outputIds: row.outputIds ?? [],
-      label: row.label || (index === 0 ? 'Root' : `Render ${index + 1}`),
+      label: row.label || (index === 0 ? 'Base' : `Render ${index + 1}`),
       check: { state: 'idle' },
     }));
   } catch {
@@ -170,9 +174,9 @@ function writeDrafts(key: string, rows: RequestRow[]) {
 const allOutputIdsOf = (contract: ApiRenderTemplateContract | null) =>
   contract?.outputs.map((output) => output.id) ?? [];
 
-/** A fresh set: one root row carrying the designer's own values, in every format. */
+/** A fresh set: one base row carrying the designer's own values, in every format. */
 const seededRows = (contract: ApiRenderTemplateContract): RequestRow[] => [
-  { ...seedRow(contract.variables, 'Root'), outputIds: allOutputIdsOf(contract) },
+  { ...seedRow(contract.variables, 'Base'), outputIds: allOutputIdsOf(contract) },
 ];
 
 /** What "saved" is compared against: the rows exactly as a render set would store them. */
@@ -213,7 +217,7 @@ function buildColumns(contract: ApiRenderTemplateContract | null): ColumnDef<Req
       header: () => (
         <span className="flex items-center gap-1">
           <Icon className="size-3" aria-hidden />
-          {variable.label}
+          {readableLayerName(variable.label)}
           {variable.required && !variable.reserved ? ' *' : ''}
         </span>
       ),
@@ -229,8 +233,8 @@ function buildColumns(contract: ApiRenderTemplateContract | null): ColumnDef<Req
     ...(contract.outputs.length || contract.template.ratios.length
       ? [{ id: 'outputs', size: 150, header: 'Formats', cell: FormatsCell }]
       : []),
-    ...(contract.encode
-      ? [{ id: 'encode', size: 160, header: 'Output settings', cell: EncodeCell }]
+    ...(contract.encode && !isStillsOnly(contract)
+      ? [{ id: 'encode', size: 160, header: 'Output', cell: EncodeCell }]
       : []),
     ...perVariable,
     { id: 'status', size: 110, header: 'Status', cell: StatusCell },
@@ -239,7 +243,7 @@ function buildColumns(contract: ApiRenderTemplateContract | null): ColumnDef<Req
 
 /** "4 of 6 rows ready to render · 1 needs fixing · 1 still checking" — no state word to decode. */
 function readinessSummary(
-  counts: { ready: number; blocked: number; review: number; checking: number },
+  counts: { ready: number; blocked: number; needsInput: number; review: number; checking: number },
   total: number,
 ): string {
   const needs = (count: number, what: string) =>
@@ -250,6 +254,7 @@ function readinessSummary(
       : counts.ready === total
         ? `${total === 1 ? 'The row is' : `All ${total} rows are`} ready to render`
         : `${counts.ready} of ${total} ${total === 1 ? 'row' : 'rows'} ready to render`,
+    needs(counts.needsInput, 'input'),
     needs(counts.blocked, 'fixing'),
     needs(counts.review, 'a review'),
     counts.checking ? `${counts.checking} still checking` : null,
@@ -305,6 +310,14 @@ export function RenderRequestsGrid({
   onIntentConsumed?: () => void;
 }) {
   const queryClient = useQueryClient();
+  // A Final is the fleet's `test: false`; the backend refuses it to anyone but an owner or admin.
+  const brandRole = useActiveBrandContext().permissions.find(
+    (permission) => permission.brand_profile_id === brandId,
+  )?.role;
+  const finalBlocked =
+    brandRole === 'owner' || brandRole === 'admin'
+      ? null
+      : 'Only a brand owner or admin can render a Final.';
   const [environments, setEnvironments] = useState<ApiRenderEnvironment[]>([]);
   const [bindingId, setBindingId] = useState<string | null>(null);
   // Templates wait for environment discovery to SETTLE, not to succeed: with no binding named
@@ -662,6 +675,7 @@ export function RenderRequestsGrid({
   const readiness = useMemo(() => {
     const findings = new Map<string, { message: string; rows: string[] }>();
     let blocked = 0;
+    let needsInput = 0;
     let review = 0;
     let checking = 0;
     let ready = 0;
@@ -677,7 +691,11 @@ export function RenderRequestsGrid({
         findings.set(item.code, finding);
       }
       if (Object.keys(errors).length > 0 || row.check.state === 'error') {
-        blocked += 1;
+        const missing = missingInputs(variables ?? [], effectiveValues(rows, row.id));
+        const blank =
+          row.check.state !== 'error' && Object.keys(errors).every((key) => missing.includes(key));
+        if (blank) needsInput += 1;
+        else blocked += 1;
         for (const [key, message] of Object.entries(errors)) {
           const finding = findings.get(key) ?? { message, rows: [] };
           finding.rows.push(row.label || 'Untitled');
@@ -697,8 +715,8 @@ export function RenderRequestsGrid({
       else if (row.check.state === 'ready') ready += 1;
       else checking += 1;
     }
-    return { blocked, review, checking, ready, findings: [...findings.entries()] };
-  }, [rows, clientErrors]);
+    return { blocked, needsInput, review, checking, ready, findings: [...findings.entries()] };
+  }, [rows, clientErrors, variables]);
 
   useEffect(() => {
     if (!contract) return;
@@ -1134,6 +1152,12 @@ export function RenderRequestsGrid({
         : !readyToFire
           ? 'Every selected row has to be Ready'
           : null;
+  // A selected row still being dry-run is a wait, not a block: the tray re-checks once it lands.
+  const stillChecking = selected.some(
+    (row) =>
+      (row.check.state === 'idle' || row.check.state === 'checking') &&
+      Object.keys(clientErrors.get(row.id) ?? {}).length === 0,
+  );
 
   // --- drag and drop ----------------------------------------------------------------------
   const sensors = useSensors(
@@ -1504,8 +1528,9 @@ export function RenderRequestsGrid({
                   records={batch.records}
                   reviewKey={review.key}
                   stale={stale}
-                  recheckBlocked={fireHint}
-                  rechecking={busy === 'firing'}
+                  recheckBlocked={stillChecking ? null : fireHint}
+                  rechecking={busy === 'firing' || stillChecking}
+                  finalBlocked={finalBlocked}
                   onRecheck={openReview}
                   onDeliveryChange={(rowId, delivery) =>
                     // The choice belongs to the row, so the next review and the saved set keep it.
@@ -1532,20 +1557,11 @@ export function RenderRequestsGrid({
                 />
               ) : (
                 <section aria-label="Readiness" className="flex h-full min-h-0 flex-col text-xs">
+                  {/* Only reports: Render in the toolbar is the one way into the review. */}
                   <div className="flex h-10 shrink-0 items-center gap-3 px-[var(--card-pad)]">
                     <p className="min-w-0 truncate font-medium">
                       {readinessSummary(readiness, rows.length)}
                     </p>
-                    <Button
-                      type="button"
-                      size="xs"
-                      className="ml-auto shrink-0"
-                      disabled={!readyToFire || busy !== null}
-                      title={fireHint ?? undefined}
-                      onClick={openReview}
-                    >
-                      <Play data-icon="inline-start" /> Review &amp; render
-                    </Button>
                   </div>
                   <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-[var(--card-pad)] pb-2 text-muted-foreground">
                     {readiness.findings.length ? (
