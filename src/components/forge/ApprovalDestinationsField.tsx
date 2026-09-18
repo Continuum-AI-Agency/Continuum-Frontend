@@ -10,6 +10,7 @@ import {
 } from '@/components/forge/DestinationApproversPanel';
 import { FORGE_STALE_MS } from '@/components/forge/queryKeys';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { fetchApprovalDestinations } from '@/lib/library/renderApprovals';
 import { cn } from '@/lib/utils';
 
@@ -85,7 +86,14 @@ export function ApprovalDestinationsField({
 
   return (
     <div className="space-y-1.5">
-      <p className="text-xs text-muted-foreground">Ask for approval in</p>
+      <p className="text-xs text-muted-foreground">
+        {value.length
+          ? `Every render in this batch is posted for approval in ${destinations
+              .filter((destination) => value.includes(destination.id))
+              .map(approvalRoomName)
+              .join(', ')}.`
+          : 'Ask for approval in'}
+      </p>
       <ul aria-label="Approval rooms" className="flex flex-col gap-1">
         {destinations.map((destination) => {
           const name = approvalRoomName(destination);
@@ -94,12 +102,12 @@ export function ApprovalDestinationsField({
           return (
             <li key={destination.id} className="flex flex-col gap-1">
               <div className="flex min-w-0 items-center gap-2">
+                {/* biome-ignore lint/a11y/noLabelWithoutControl: the Checkbox renders the control. */}
                 <label className="flex min-w-0 flex-1 items-center gap-1.5">
-                  <input
-                    type="checkbox"
-                    className="size-3.5 accent-primary"
+                  <Checkbox
+                    aria-label={name}
                     checked={value.includes(destination.id)}
-                    onChange={() => toggle(destination.id)}
+                    onCheckedChange={() => toggle(destination.id)}
                   />
                   <Icon
                     className="size-3.5 shrink-0 text-muted-foreground"

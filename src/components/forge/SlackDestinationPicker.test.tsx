@@ -1,7 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { ApiRenderDeliveryDestination } from '@continuum/contracts';
-import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  chooseOption,
+  installPickerDomGlobals,
+  openSelect,
+} from '@/components/automations/workspace/pickers/pickerTestHarness';
 import { ApiError } from '@/lib/api/errors';
+
+installPickerDomGlobals();
+
+/** Both pickers are shadcn Selects now: options exist only while the list is open, in a portal. */
+const optionsOf = (name: string) => {
+  openSelect(name);
+  return screen.getAllByRole('option').map((option) => option.textContent);
+};
 
 const BRAND = '00000000-0000-4000-8000-000000000010';
 
@@ -61,7 +74,7 @@ afterEach(cleanup);
 
 describe('SlackDestinationPicker', () => {
   it("labels every destination with its own workspace, falling back to the response's", () => {
-    const { getByRole } = render(
+    render(
       <SlackDestinationPicker
         brandId={BRAND}
         slack={ready(
@@ -77,10 +90,7 @@ describe('SlackDestinationPicker', () => {
       />,
     );
 
-    const options = within(getByRole('combobox', { name: 'Slack channel' }))
-      .getAllByRole('option')
-      .map((option) => option.textContent);
-    expect(options).toEqual([
+    expect(optionsOf('Slack channel')).toEqual([
       'Don’t post to Slack',
       '#renders · Ops · Agency',
       '#review · Ops · Client Co',
@@ -89,7 +99,7 @@ describe('SlackDestinationPicker', () => {
   });
 
   it('leaves a destination unlabelled when no workspace name is known at all', () => {
-    const { getByRole } = render(
+    render(
       <SlackDestinationPicker
         brandId={BRAND}
         slack={ready([destination('01', 'renders')])}
@@ -98,10 +108,7 @@ describe('SlackDestinationPicker', () => {
       />,
     );
 
-    expect(
-      within(getByRole('combobox', { name: 'Slack channel' })).getAllByRole('option')[1]
-        ?.textContent,
-    ).toBe('#renders · Ops');
+    expect(optionsOf('Slack channel')[1]).toBe('#renders · Ops');
   });
 
   it("sends a brand with no workspace, or a removed install, to the brand's Slack settings", () => {
@@ -142,18 +149,15 @@ describe('SlackDestinationPicker', () => {
     );
 
     fireEvent.click(getByRole('button', { name: /Add a channel/ }));
-    const select = await findByRole('combobox', { name: 'Channel to add' });
+    await findByRole('combobox', { name: 'Channel to add' });
     expect(listSlackChannelsMock).toHaveBeenCalledWith(BRAND);
-    const groups = [...select.querySelectorAll('optgroup')].map((group) => [
-      group.getAttribute('label'),
-      [...group.querySelectorAll('option')].map((option) => option.textContent),
-    ]);
-    expect(groups).toEqual([
-      ['Agency', ['#renders']],
-      ['Client Co', ['#review']],
-    ]);
+    openSelect('Channel to add');
+    // The workspace headings are what tell two same-named channels apart.
+    expect(
+      screen.getAllByRole('group').map((group) => group.textContent),
+    ).toEqual(['Agency#renders', 'Client Co#review']);
 
-    fireEvent.change(select, { target: { value: 'C0CLIENT' } });
+    chooseOption('#review');
     fireEvent.click(getByRole('button', { name: 'Add channel' }));
 
     await waitFor(() => expect(onChange).toHaveBeenCalled());

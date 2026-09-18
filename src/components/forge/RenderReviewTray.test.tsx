@@ -179,6 +179,11 @@ mock.module('next/link', () => ({
 }));
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  chooseOption,
+  installPickerDomGlobals,
+  openSelect,
+} from '@/components/automations/workspace/pickers/pickerTestHarness';
 import type React from 'react';
 import { useState } from 'react';
 import { registerToastSink } from '@/components/ui/toast-imperative';
@@ -356,6 +361,8 @@ afterEach(() => {
   createDestinationMock.mockImplementation(async () => CLIENT);
 });
 
+installPickerDomGlobals();
+
 describe('RenderReviewTray · Review', () => {
   test('reviews exactly the rows × formats it was handed, with readiness per row', async () => {
     renderTray();
@@ -500,18 +507,20 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
   test('Slack ready: add a client channel, and the fired batch posts there', async () => {
     const { onFired } = renderTray();
     await next();
-    const channel = await screen.findByLabelText<HTMLSelectElement>('Slack channel');
-    expect([...channel.options].map((option) => option.text)).toEqual([
+    await screen.findByLabelText('Slack channel');
+    openSelect('Slack channel');
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
       'Don’t post to Slack',
       '#renders · Ops · Continuum',
     ]);
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
 
     fireEvent.click(screen.getByRole('button', { name: /Add a channel/ }));
-    fireEvent.change(await screen.findByLabelText('Channel to add'), { target: { value: 'C2' } });
-    const role = screen.getByLabelText<HTMLSelectElement>('Channel role');
-    expect(role.value).toBe('ops');
-    expect(screen.getByText('Client — posts only after the render passes its check')).toBeTruthy();
-    fireEvent.change(role, { target: { value: 'client' } });
+    await screen.findByLabelText('Channel to add');
+    openSelect('Channel to add');
+    chooseOption('#client-review');
+    openSelect('Channel role');
+    chooseOption(/^Client —/);
     fireEvent.click(screen.getByRole('button', { name: 'Add channel' }));
 
     await waitFor(() =>
@@ -522,7 +531,7 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
       }),
     );
     await waitFor(() =>
-      expect(screen.getByLabelText<HTMLSelectElement>('Slack channel').value).toBe(CLIENT.id),
+      expect(screen.getByLabelText('Slack channel').textContent).toContain('client-review'),
     );
     expect(
       screen.getByText('A client channel gets a post only after the render passes its check.'),
@@ -564,10 +573,11 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     );
     const { onFired } = renderTray();
     await next();
-    const channel = await screen.findByLabelText<HTMLSelectElement>('Slack channel');
+    await screen.findByLabelText('Slack channel');
     expect(screen.getByRole('link', { name: 'Connect Slack to this brand in Settings' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Add a channel/ })).toBeNull();
-    fireEvent.change(channel, { target: { value: OPS.id } });
+    openSelect('Slack channel');
+    chooseOption(/#renders/);
 
     await next();
     expect(screen.getByText('3 files · Library · #renders')).toBeTruthy();
@@ -597,7 +607,9 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
       });
     });
     fireEvent.click(screen.getByRole('button', { name: /Add a channel/ }));
-    fireEvent.change(await screen.findByLabelText('Channel to add'), { target: { value: 'C2' } });
+    await screen.findByLabelText('Channel to add');
+    openSelect('Channel to add');
+    chooseOption('#client-review');
     fireEvent.click(screen.getByRole('button', { name: 'Add channel' }));
     expect(await screen.findByText('That channel is gone — pick another.')).toBeTruthy();
     expect(document.body.textContent).not.toContain('slack_channel_not_found');
@@ -639,7 +651,9 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     );
     const { onFired } = renderTray();
     await next();
-    fireEvent.change(await screen.findByLabelText('Slack channel'), { target: { value: OPS.id } });
+    await screen.findByLabelText('Slack channel');
+    openSelect('Slack channel');
+    chooseOption(/#renders/);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Replace an ad for Root' }));
     fireEvent.click(await screen.findByRole('button', { name: /Summer launch/ }));
@@ -647,10 +661,11 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Hero story/ }));
 
     // Root renders two formats; a replace swaps one creative, so Next waits for the choice.
-    const format = await screen.findByLabelText<HTMLSelectElement>('Format for Root');
+    await screen.findByLabelText('Format for Root');
     expect(screen.getByText('Choose one format for each ad replacement.')).toBeTruthy();
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next' }).disabled).toBe(true);
-    fireEvent.change(format, { target: { value: 'story' } });
+    openSelect('Format for Root');
+    chooseOption('Story');
     expect(screen.getByText('StarCraft Promo · 2 files')).toBeTruthy();
 
     // Preflight refuses a Meta target with nowhere to ask, so Next waits for a room too.
@@ -660,9 +675,10 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
       ),
     ).toBeTruthy();
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next' }).disabled).toBe(true);
-    const room = await screen.findByRole('checkbox', { name: /#client-review/ });
+    await screen.findByRole('checkbox', { name: /#client-review/ });
     expect(screen.getByText('no approvers yet')).toBeTruthy();
-    fireEvent.click(room);
+    // The row's label is the click a person makes; the control inside it is Base UI's button.
+    fireEvent.click(screen.getByText('#client-review'));
 
     await next();
     expect(

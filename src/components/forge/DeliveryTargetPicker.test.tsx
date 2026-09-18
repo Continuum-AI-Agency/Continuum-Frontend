@@ -92,6 +92,11 @@ mock.module('next/link', () => ({
 }));
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  chooseOption,
+  installPickerDomGlobals,
+  openSelect,
+} from '@/components/automations/workspace/pickers/pickerTestHarness';
 import type React from 'react';
 import { useState } from 'react';
 import {
@@ -151,6 +156,8 @@ afterEach(() => {
   cleanup();
   searchPaidMock.mockClear();
 });
+
+installPickerDomGlobals();
 
 describe('parseAdIdLines', () => {
   test('maps label⇥id lines by label or path and bare ids by row order, naming bad lines', () => {
@@ -238,15 +245,15 @@ describe('DeliveryTargetPicker', () => {
     expect(screen.getByText('Hero story')).toBeTruthy();
 
     // Root renders every format, so replacing an ad asks for exactly one.
-    const format = screen.getByLabelText<HTMLSelectElement>('Format for Root');
     expect(metaDeliveryProblems(latest.rows, OUTPUTS, latest.formats, CONNECTED)).toHaveLength(1);
-    fireEvent.change(format, { target: { value: 'story' } });
+    openSelect('Format for Root');
+    chooseOption('Story');
     expect(latest.formats).toEqual({ root: 'story' });
     expect(metaDeliveryProblems(latest.rows, OUTPUTS, latest.formats, CONNECTED)).toEqual([]);
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove the ad target for Root' }));
     expect(latest.rows[0]?.delivery).toBeUndefined();
-    expect(screen.queryByLabelText('Format for Root')).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Format for Root' })).toBeNull();
   }, 30_000);
 
   test('pasted ad ids resolve to names across pages; a miss is an error on its line', async () => {

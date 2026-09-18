@@ -6,10 +6,28 @@ import type {
   RenderApprovalDestination,
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, UserPlus } from 'lucide-react';
+import { CheckIcon, ChevronsUpDownIcon, Loader2, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { Button } from '@/components/ui/button';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { fetchBrandAuthors } from '@/lib/library/commentAuthors';
 import {
   activateDestinationApprover,
@@ -185,6 +203,8 @@ export function DestinationApproversPanel({
       <AddApprover
         destination={destination}
         members={members}
+        // Someone already listed here — active, revoked or still asking — is not an add.
+        taken={new Set(approvers.map((approver) => approver.userId).filter(Boolean) as string[])}
         busy={busyId !== null}
         onAdd={(body) => run('add', () => addDestinationApprover(destination.id, body))}
       />
@@ -200,11 +220,13 @@ export function DestinationApproversPanel({
 function AddApprover({
   destination,
   members,
+  taken,
   busy,
   onAdd,
 }: {
   destination: RenderApprovalDestination;
   members: Map<string, { email: string | null }>;
+  taken: Set<string>;
   busy: boolean;
   onAdd: (body: AddDestinationApproverRequest) => Promise<boolean>;
 }) {
@@ -212,6 +234,7 @@ function AddApprover({
   const [userId, setUserId] = useState('');
   const [platformUserId, setPlatformUserId] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [picking, setPicking] = useState(false);
 
   const body: AddDestinationApproverRequest | null =
     mode === 'member'
@@ -229,52 +252,108 @@ function AddApprover({
     setDisplayName('');
   };
 
-  const input = 'h-8 rounded-md border border-input bg-background px-2 text-sm';
+  const addable = [...members].filter(([id]) => !taken.has(id));
+  const labelOf = (id: string) => members.get(id)?.email ?? id;
+  const platformLabel = destination.platform === 'slack' ? 'Slack' : 'WhatsApp';
+
   return (
     <div className="space-y-1.5 border-t border-border pt-2">
-      <label className="flex flex-col gap-1">
-        <span className="text-muted-foreground">Add an approver</span>
-        <select
-          aria-label="Approver kind"
+      <div className="flex flex-col gap-1">
+        <Label htmlFor={`approver-kind-${destination.id}`} className="text-muted-foreground">
+          Add an approver
+        </Label>
+        <Select
           value={mode}
-          onChange={(event) => setMode(event.target.value === 'platform' ? 'platform' : 'member')}
-          className={input}
+          onValueChange={(next) => setMode(next === 'platform' ? 'platform' : 'member')}
         >
-          <option value="member">A member of this brand</option>
-          <option value="platform">
-            Someone in {destination.platform === 'slack' ? 'Slack' : 'WhatsApp'} by id
-          </option>
-        </select>
-      </label>
+          <SelectTrigger
+            id={`approver-kind-${destination.id}`}
+            aria-label="Approver kind"
+            size="sm"
+            className="w-full"
+          >
+            <SelectValue
+              items={{
+                member: 'A member of this brand',
+                platform: `Someone in ${platformLabel} by id`,
+              }}
+            />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="member">A member of this brand</SelectItem>
+            <SelectItem value="platform">Someone in {platformLabel} by id</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
       {mode === 'member' ? (
-        <select
-          aria-label="Brand member"
-          value={userId}
-          onChange={(event) => setUserId(event.target.value)}
-          className={cn(input, 'w-full')}
-        >
-          <option value="">Choose a member</option>
-          {[...members].map(([id, member]) => (
-            <option key={id} value={id}>
-              {member.email ?? id}
-            </option>
-          ))}
-        </select>
+        // A brand can have more people than a dropdown is bearable at, and the only thing anyone
+        // knows about them here is an email — so the picker is searchable, like every other person
+        // picker in the app. cmdk's own scoring does the matching; do not hand-roll one.
+        <Popover open={picking} onOpenChange={setPicking}>
+          <PopoverTrigger
+            render={
+              <Button
+                type="button"
+                variant="outline"
+                role="combobox"
+                size="sm"
+                aria-label="Brand member"
+                aria-expanded={picking}
+                disabled={busy}
+                className="w-full justify-between font-normal"
+              >
+                <span className="min-w-0 truncate">
+                  {userId ? labelOf(userId) : 'Choose a member'}
+                </span>
+                <ChevronsUpDownIcon className="ml-2 size-3.5 shrink-0 opacity-50" />
+              </Button>
+            }
+          />
+          <PopoverContent className="w-(--anchor-width) min-w-56 p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Search by email…" />
+              <CommandList className="scrollbar-thin">
+                <CommandEmpty>
+                  {members.size && !addable.length
+                    ? 'Everyone in this brand is already listed.'
+                    : 'No one matches.'}
+                </CommandEmpty>
+                <CommandGroup>
+                  {addable.map(([id]) => (
+                    <CommandItem
+                      key={id}
+                      value={`${labelOf(id)} ${id}`}
+                      onSelect={() => {
+                        setUserId(id);
+                        setPicking(false);
+                      }}
+                    >
+                      <CheckIcon
+                        className={cn('mr-2 size-3.5', id === userId ? 'opacity-100' : 'opacity-0')}
+                      />
+                      <span className="min-w-0 flex-1 break-all">{labelOf(id)}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       ) : (
         <>
-          <input
+          <Input
             aria-label={PLATFORM_ID_LABEL[destination.platform]}
             placeholder={PLATFORM_ID_LABEL[destination.platform]}
             value={platformUserId}
             onChange={(event) => setPlatformUserId(event.target.value)}
-            className={cn(input, 'w-full')}
+            className="h-8 text-sm"
           />
-          <input
+          <Input
             aria-label="Display name"
             placeholder="Display name"
             value={displayName}
             onChange={(event) => setDisplayName(event.target.value)}
-            className={cn(input, 'w-full')}
+            className="h-8 text-sm"
           />
         </>
       )}

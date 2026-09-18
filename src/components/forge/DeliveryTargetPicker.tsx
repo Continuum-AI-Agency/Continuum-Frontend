@@ -13,6 +13,13 @@ import type { RenderPreflightRow } from '@/components/forge/RenderPreflightDialo
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { publishingApi } from '@/StudioCanvas/nodes/publish/publishingApi';
 
@@ -355,19 +362,24 @@ function MetaRow({
         </span>
         {delivery?.action === 'replace' ? (
           choices.length > 1 ? (
-            <select
-              aria-label={`Format for ${name}`}
-              value={format ?? ''}
-              onChange={(event) => onFormatChange(row.rowId, event.target.value)}
-              className="h-7 rounded-md border border-input bg-background px-2 text-xs"
+            <Select
+              value={format ?? undefined}
+              onValueChange={(next) => onFormatChange(row.rowId, next)}
             >
-              <option value="">Choose one format</option>
-              {choices.map((id) => (
-                <option key={id} value={id}>
-                  {formatLabel(id)}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger aria-label={`Format for ${name}`} size="sm" className="w-auto text-xs">
+                <SelectValue
+                  placeholder="Choose one format"
+                  items={Object.fromEntries(choices.map((id) => [id, formatLabel(id)]))}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {choices.map((id) => (
+                  <SelectItem key={id} value={id}>
+                    {formatLabel(id)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           ) : choices.length === 1 ? (
             <span className="text-muted-foreground">{formatLabel(choices[0] ?? '')} only</span>
           ) : (

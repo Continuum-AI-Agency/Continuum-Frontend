@@ -14,7 +14,18 @@ import {
   ROLE_LABEL,
 } from '@/components/forge/slackRoomCopy';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { SLACK_SETTINGS_PATH } from '@/lib/api/slackWorkspaces.client';
+
+/** "No room" needs a value of its own: a Select item cannot be the empty string. */
+const NO_ROOM = 'none';
 
 // Where a finished render is posted in Slack, if anywhere. The destinations are the brand's own
 // `chat_destinations` rows; the channel list for adding one comes only from the Slack workspaces
@@ -67,30 +78,46 @@ export function SlackDestinationPicker({
     ...slack.destinations,
     ...added.filter((extra) => !slack.destinations.some((known) => known.id === extra.id)),
   ];
+  const roomLabel = (destination: ApiRenderDeliveryDestination) =>
+    withWorkspace(
+      `#${destination.channelName} · ${ROLE_LABEL[destination.role]}`,
+      destination.workspaceName ?? slack.workspaceName,
+    );
+  const roomLabels: Record<string, string> = {
+    [NO_ROOM]: 'Don’t post to Slack',
+    ...Object.fromEntries(destinations.map((destination) => [destination.id, roomLabel(destination)])),
+  };
   return (
     <div className="space-y-2">
       {destinations.length ? (
-        <label className="flex flex-col gap-1 text-xs">
-          <span className="text-muted-foreground">Post each finished render to</span>
-          <select
-            aria-label="Slack channel"
-            value={value?.id ?? ''}
-            onChange={(event) =>
-              onChange(destinations.find((item) => item.id === event.target.value) ?? null)
+        <div className="flex flex-col gap-1 text-xs">
+          <Label htmlFor="forge-slack-channel" className="text-muted-foreground">
+            Post each finished render to
+          </Label>
+          <Select
+            value={value?.id ?? NO_ROOM}
+            onValueChange={(next) =>
+              onChange(destinations.find((item) => item.id === next) ?? null)
             }
-            className="h-8 rounded-md border border-input bg-background px-2 text-sm"
           >
-            <option value="">Don’t post to Slack</option>
-            {destinations.map((destination) => (
-              <option key={destination.id} value={destination.id}>
-                {withWorkspace(
-                  `#${destination.channelName} · ${ROLE_LABEL[destination.role]}`,
-                  destination.workspaceName ?? slack.workspaceName,
-                )}
-              </option>
-            ))}
-          </select>
-        </label>
+            <SelectTrigger
+              id="forge-slack-channel"
+              aria-label="Slack channel"
+              size="sm"
+              className="w-full"
+            >
+              <SelectValue items={roomLabels} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_ROOM}>Don’t post to Slack</SelectItem>
+              {destinations.map((destination) => (
+                <SelectItem key={destination.id} value={destination.id}>
+                  {roomLabel(destination)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       ) : (
         <p className="text-xs text-muted-foreground">
           No Slack channel is set up for this brand yet.

@@ -12,6 +12,13 @@ import type {
 } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  chooseOption,
+  installPickerDomGlobals,
+  openSelect,
+} from '@/components/automations/workspace/pickers/pickerTestHarness';
+
+installPickerDomGlobals();
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
 const MEMBER = '55555555-5555-4555-8555-555555555551';
@@ -177,15 +184,19 @@ test('revoking an active approver keeps them listed, and a revoked one can be ac
   await waitFor(() => expect(activateDestinationApprover).toHaveBeenCalledWith(ROOM.id, GONE.id));
 });
 
+/** The member picker is a Popover + Command combobox: open it, then click the row. */
+async function pickMember(email: string) {
+  fireEvent.click(screen.getByRole('combobox', { name: 'Brand member' }));
+  fireEvent.click(await screen.findByRole('option', { name: new RegExp(email) }));
+}
+
 test('adds a brand member by user id, or someone in Slack by id with a display name', async () => {
   renderPanel();
   await screen.findByRole('list', { name: 'Active approvers' });
   const add = screen.getByRole<HTMLButtonElement>('button', { name: 'Add approver' });
   expect(add.disabled).toBe(true);
 
-  const member = screen.getByLabelText<HTMLSelectElement>('Brand member');
-  await waitFor(() => expect(member.options.length).toBe(3));
-  fireEvent.change(member, { target: { value: '55555555-5555-4555-8555-555555555552' } });
+  await pickMember('leo@vivo47.com');
   fireEvent.click(add);
   await waitFor(() =>
     expect(addDestinationApprover).toHaveBeenCalledWith(ROOM.id, {
@@ -198,7 +209,8 @@ test('adds a brand member by user id, or someone in Slack by id with a display n
     ).toBe(2),
   );
 
-  fireEvent.change(screen.getByLabelText('Approver kind'), { target: { value: 'platform' } });
+  openSelect('Approver kind');
+  chooseOption(/Someone in Slack by id/);
   fireEvent.change(screen.getByLabelText('Slack member id'), { target: { value: ' U_NEW ' } });
   fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Nia' } });
   fireEvent.click(screen.getByRole('button', { name: 'Add approver' }));
@@ -216,9 +228,10 @@ test('a refused change shows the backend’s reason', async () => {
   });
   renderPanel();
   await screen.findByRole('list', { name: 'Active approvers' });
-  const member = screen.getByLabelText<HTMLSelectElement>('Brand member');
-  await waitFor(() => expect(member.options.length).toBe(3));
-  fireEvent.change(member, { target: { value: MEMBER } });
+  fireEvent.click(screen.getByRole('combobox', { name: 'Brand member' }));
+  // Ana already approves here, so she is not on offer — adding her again is not an add.
+  expect(screen.queryByRole('option', { name: /ana@vivo47.com/ })).toBeNull();
+  fireEvent.click(await screen.findByRole('option', { name: /leo@vivo47.com/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Add approver' }));
   expect((await screen.findByRole('alert')).textContent).toBe(
     'That user is not a member of this brand.',

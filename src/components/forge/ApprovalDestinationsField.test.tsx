@@ -94,29 +94,36 @@ const renderField = () =>
     </QueryClientProvider>,
   );
 
+
+/** The room row's control: a shadcn Checkbox renders a button, not an <input>. */
+const roomBox = (name: RegExp) => screen.getByRole('checkbox', { name });
+const isChecked = (box: Element) => box.getAttribute('aria-checked') === 'true';
+/** Click the row the way a person does — on its label, never on the control inside it. */
+const clickRoom = (label: string) => fireEvent.click(screen.getByText(label));
+
 test('lists each room with its platform and approver count, and selects several', async () => {
   picked.length = 0;
   renderField();
-  const slack = await screen.findByRole<HTMLInputElement>('checkbox', { name: /#client-review/ });
-  const whatsapp = screen.getByRole<HTMLInputElement>('checkbox', { name: /Vivo47 approvals/ });
+  const slack = await screen.findByRole('checkbox', { name: /#client-review/ });
+  const whatsapp = roomBox(/Vivo47 approvals/);
   expect(fetchApprovalDestinations).toHaveBeenCalledWith(BRAND);
   expect(screen.getAllByLabelText('Slack')).toHaveLength(1);
   expect(screen.getAllByLabelText('WhatsApp')).toHaveLength(1);
   expect(screen.getByText('2 approvers · 1 asking')).toBeTruthy();
   expect(screen.getByText('no approvers yet')).toBeTruthy();
 
-  fireEvent.click(slack);
-  expect(slack.checked).toBe(true);
+  clickRoom('#client-review');
+  expect(isChecked(slack)).toBe(true);
   expect(screen.queryAllByRole('status')).toHaveLength(0);
 
   // A room nobody can approve in still receives the package: a warning, never a refusal.
-  fireEvent.click(whatsapp);
+  clickRoom('Vivo47 approvals');
   expect(picked).toEqual([[SLACK_ROOM.id], [SLACK_ROOM.id, WHATSAPP_ROOM.id]]);
   expect(screen.getByRole('status').textContent).toContain(
     'Nobody can approve in Vivo47 approvals',
   );
 
-  fireEvent.click(slack);
+  clickRoom('#client-review');
   expect(picked.at(-1)).toEqual([WHATSAPP_ROOM.id]);
 });
 
@@ -149,26 +156,20 @@ test('pre-selects the rooms this brand last asked in', async () => {
   picked.length = 0;
   defaultDestinationIds = [WHATSAPP_ROOM.id];
   renderField();
-  const whatsapp = await screen.findByRole<HTMLInputElement>('checkbox', {
-    name: /Vivo47 approvals/,
-  });
-  await waitFor(() => expect(whatsapp.checked).toBe(true));
-  expect(screen.getByRole<HTMLInputElement>('checkbox', { name: /#client-review/ }).checked).toBe(
-    false,
-  );
+  const whatsapp = await screen.findByRole('checkbox', { name: /Vivo47 approvals/ });
+  await waitFor(() => expect(isChecked(whatsapp)).toBe(true));
+  expect(isChecked(roomBox(/#client-review/))).toBe(false);
 });
 
 test('clearing every room stays cleared — the default does not argue back', async () => {
   picked.length = 0;
   defaultDestinationIds = [WHATSAPP_ROOM.id];
   renderField();
-  const whatsapp = await screen.findByRole<HTMLInputElement>('checkbox', {
-    name: /Vivo47 approvals/,
-  });
-  await waitFor(() => expect(whatsapp.checked).toBe(true));
+  const whatsapp = await screen.findByRole('checkbox', { name: /Vivo47 approvals/ });
+  await waitFor(() => expect(isChecked(whatsapp)).toBe(true));
 
-  fireEvent.click(whatsapp);
-  await waitFor(() => expect(whatsapp.checked).toBe(false));
+  clickRoom('Vivo47 approvals');
+  await waitFor(() => expect(isChecked(whatsapp)).toBe(false));
   // A re-seed here would silently put the render back into a room the person just took it out of.
   expect(picked.at(-1)).toEqual([]);
 });

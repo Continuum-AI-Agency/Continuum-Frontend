@@ -13,6 +13,16 @@ import {
   type SlackRoomRole,
 } from '@/components/forge/slackRoomCopy';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 
 // Turns one Slack channel into a room this brand posts to. The channel list comes only from the
@@ -66,6 +76,9 @@ export function AddSlackRoom({
     };
   }, [brandId]);
 
+  const channelLabel = (channel: { id: string; name: string; isPrivate?: boolean }) =>
+    `${channel.isPrivate ? '🔒 ' : '#'}${channel.name}`;
+
   const add = async () => {
     setSaving(true);
     setProblem(null);
@@ -87,51 +100,71 @@ export function AddSlackRoom({
         </p>
       ) : channels.channels.length ? (
         <>
-          <label className="flex flex-col gap-1">
-            <span className="text-muted-foreground">Channel</span>
-            <select
-              aria-label="Channel to add"
-              value={channelId}
-              onChange={(event) => setChannelId(event.target.value)}
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
-            >
-              <option value="">Choose a channel</option>
-              {groupByWorkspace(channels).map(([workspace, group]) => {
-                const options = group.map((channel) => (
-                  // A Slack Connect channel keeps its id in every workspace it is shared into.
-                  <option key={`${workspace}:${channel.id}`} value={channel.id}>
-                    {channel.isPrivate ? '🔒 ' : '#'}
-                    {channel.name}
-                    {channel.isPrivate && !channel.isMember
-                      ? ' — invite the Continuum app first'
-                      : ''}
-                  </option>
-                ));
-                return workspace ? (
-                  <optgroup key={workspace} label={workspace}>
-                    {options}
-                  </optgroup>
-                ) : (
-                  options
-                );
-              })}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-muted-foreground">Who reads it</span>
-            <select
-              aria-label="Channel role"
-              value={role}
-              onChange={(event) => setRole(event.target.value as SlackRoomRole)}
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
-            >
-              {roles.map((option) => (
-                <option key={option} value={option}>
-                  {ROLE_BLURB[option]}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="slack-room-channel" className="text-muted-foreground">
+              Channel
+            </Label>
+            <Select value={channelId} onValueChange={setChannelId}>
+              <SelectTrigger
+                id="slack-room-channel"
+                aria-label="Channel to add"
+                size="sm"
+                className="w-full"
+              >
+                <SelectValue
+                  placeholder="Choose a channel"
+                  items={Object.fromEntries(
+                    channels.channels.map((channel) => [channel.id, channelLabel(channel)]),
+                  )}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {groupByWorkspace(channels).map(([workspace, group]) => {
+                  const options = group.map((channel) => (
+                    // A Slack Connect channel keeps its id in every workspace it is shared into.
+                    <SelectItem key={`${workspace}:${channel.id}`} value={channel.id}>
+                      {channelLabel(channel)}
+                      {channel.isPrivate && !channel.isMember
+                        ? ' — invite the Continuum app first'
+                        : ''}
+                    </SelectItem>
+                  ));
+                  // Which workspace a channel is in is the only way to tell two same-named
+                  // channels apart, so the grouping survives the move off <optgroup>.
+                  return workspace ? (
+                    <SelectGroup key={workspace}>
+                      <SelectLabel>{workspace}</SelectLabel>
+                      {options}
+                    </SelectGroup>
+                  ) : (
+                    options
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="slack-room-role" className="text-muted-foreground">
+              Who reads it
+            </Label>
+            <Select value={role} onValueChange={(next) => setRole(next as SlackRoomRole)}>
+              <SelectTrigger
+                id="slack-room-role"
+                aria-label="Channel role"
+                size="sm"
+                className="w-full"
+              >
+                <SelectValue items={ROLE_BLURB} />
+              </SelectTrigger>
+              <SelectContent>
+                {roles.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {ROLE_BLURB[option]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </>
       ) : problem ? null : (
         <p className="text-muted-foreground">No channels found in this brand’s Slack workspaces.</p>
