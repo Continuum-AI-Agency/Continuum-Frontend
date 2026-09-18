@@ -81,6 +81,14 @@ const KIND_STYLE: Record<string, string> = {
   color: 'fill-amber-500/20 stroke-amber-500/70',
 };
 
+/** A template's ten newest jobs — one cached read shared by its card, its sheet and the row preview. */
+export const templateFrameQuery = (brandId: string, templateKey: string | null) => ({
+  queryKey: ['forge-template-frame', brandId, templateKey] as const,
+  queryFn: () => apiRendersApi.listJobs(brandId, 10, { templateKey: templateKey ?? '' }),
+  enabled: Boolean(templateKey),
+  staleTime: 60_000,
+});
+
 /**
  * The newest finished render of this template that has a file for one format — `formatId`, else the
  * first of `formats`. Found by file name: the fleet lists a job's files in a different order every
@@ -93,10 +101,7 @@ export function useLatestRenderFrame(
   formatId: string | undefined = formats[0]?.id,
 ) {
   const { data } = useQuery({
-    queryKey: ['forge-template-frame', brandId, templateKey],
-    queryFn: () => apiRendersApi.listJobs(brandId, 10, { templateKey: templateKey ?? '' }),
-    enabled: Boolean(templateKey),
-    staleTime: 60_000,
+    ...templateFrameQuery(brandId, templateKey),
     // Filtered again here: a server that has not learned the `templateKey` filter answers with the
     // brand's latest jobs, and another template's frame on this card would be a lie.
     select: (response) => {

@@ -2,6 +2,7 @@
 
 import {
   type ApiRenderOutput,
+  ENCODE_FILE_CONTAINERS,
   matchOutputFormat,
   outputFormatsOfParse,
   type RenderOutputFormatCandidate,
@@ -16,13 +17,26 @@ import { cn } from '@/lib/utils';
 // One picture of a template per format, always at that format's own shape. The well is a fixed
 // size the caller sets; the frame inside it is the largest box of the format's aspect that fits
 // both axes, so switching 16:9 → 9:16 or dragging a pane never clips it or moves anything else.
-// The badge always says where the picture came from: a finished file, or a drawing of the boxes.
+// The badge always says where the picture came from: a finished file, that file with the row's
+// edits painted over it, or a drawing of the boxes.
 
 export type PreviewFormat = RenderOutputFormatCandidate & {
   label: string;
   /** Pixels, when the comp is measured. Null draws the frame from `ratio` alone. */
   width: number | null;
   height: number | null;
+};
+
+/** A real render with the row's changes painted over it. */
+export type PreviewRepaint = {
+  mode: 'preview';
+  /** When the render underneath was finished. */
+  at: string;
+  /** Whose render is underneath, as the caption names it: "Based on '{basedOn}' render". */
+  basedOn: string;
+  node: ReactNode;
+  /** What the repaint could not match, each said once: "stand-in font", "can't tell what changed". */
+  notes?: string[];
 };
 
 export type PreviewFrame =
@@ -33,13 +47,23 @@ export type PreviewFrame =
       /** The file predates the edits now on screen. */
       stale?: boolean;
       node: ReactNode;
+      /** The same render with the edits since painted over it; shown first when present. */
+      preview?: PreviewRepaint;
       /** The drawing too, so a person can compare the render with what was measured. */
       estimate?: ReactNode;
       caption?: ReactNode;
     }
+  | PreviewRepaint
   | { mode: 'estimate'; node: ReactNode; caption?: ReactNode }
   /** Nothing to draw: an empty frame at the format's shape, saying why. */
   | { mode: 'none'; message?: string };
+
+type Source = 'rendered' | 'preview' | 'estimate';
+const SOURCE_LABEL: Record<Source, string> = {
+  rendered: 'Rendered',
+  preview: 'Preview',
+  estimate: 'Estimate',
+};
 
 type ContractOutput = {
   id: string;
@@ -92,13 +116,28 @@ export function previewFormats(source: {
 }
 
 /** The file a job rendered for this format, read from its name. No match is no file. */
+const containerRank = (output: ApiRenderOutput) => {
+  const dot = output.fileName.lastIndexOf('.');
+  const ext = dot > 0 ? output.fileName.slice(dot + 1).toLowerCase() : '';
+  return (ENCODE_FILE_CONTAINERS as readonly string[]).indexOf(ext);
+};
+
+/**
+ * One comp can come back as several files (MP4, MOV, MXF). Stills first, then the containers in
+ * contract order — so a preview shows the file a browser can play before ProRes or MXF.
+ */
+export const playableFirst = (outputs: readonly ApiRenderOutput[]) =>
+  [...outputs].sort((a, b) => containerRank(a) - containerRank(b));
+
 export function fileForFormat(
   outputs: readonly ApiRenderOutput[],
   formats: readonly PreviewFormat[],
   formatId: string,
 ): ApiRenderOutput | null {
   return (
-    outputs.find((output) => matchOutputFormat(output.fileName, formats)?.id === formatId) ?? null
+    playableFirst(outputs).find(
+      (output) => matchOutputFormat(output.fileName, formats)?.id === formatId,
+    ) ?? null
   );
 }
 
@@ -124,38 +163,58 @@ export function FormatPreview({
   value: string;
   onValueChange: (formatId: string) => void;
   frame: (format: PreviewFormat) => PreviewFrame;
-  /** A problem with the picked format, shown in place of the caption in every mode. */
+  /** A problem with the picked format, on its own line under the caption in every mode. */
   warning?: (format: PreviewFormat) => string | null;
   /** Must give the well a definite height: the frame is sized from it. */
   wellClassName?: string;
   className?: string;
 }) {
-  const [source, setSource] = useState<'rendered' | 'estimate'>('rendered');
+  // Null until a person picks: then a repaint is shown first when there is one, else the render.
+  const [source, setSource] = useState<Source | null>(null);
   const format = formats.find((candidate) => candidate.id === value) ?? formats[0];
   if (!format) return null;
   const [width, height] = aspectOf(format);
   const picked = frame(format);
-  const both = picked.mode === 'rendered' && picked.estimate !== undefined;
+  const sources: Source[] =
+    picked.mode === 'rendered'
+      ? [
+          ...(picked.preview ? (['preview'] as const) : []),
+          'rendered',
+          ...(picked.estimate !== undefined ? (['estimate'] as const) : []),
+        ]
+      : [];
+  const choice = source && sources.includes(source) ? source : sources[0];
   const shown: PreviewFrame =
-    both && source === 'estimate' && picked.mode === 'rendered'
-      ? { mode: 'estimate', node: picked.estimate }
-      : picked;
+    picked.mode !== 'rendered'
+      ? picked
+      : choice === 'preview' && picked.preview
+        ? picked.preview
+        : choice === 'estimate'
+          ? { mode: 'estimate', node: picked.estimate }
+          : picked;
 
   const badge =
     shown.mode === 'rendered'
       ? shown.stale
         ? 'Rendered · before latest edits'
         : `Rendered · ${formatRelativeTime(shown.at)}`
-      : shown.mode === 'estimate'
-        ? 'Estimate · wireframe'
-        : 'No preview';
+      : shown.mode === 'preview'
+        ? 'Preview'
+        : shown.mode === 'estimate'
+          ? 'Estimate · wireframe'
+          : 'No preview';
   const problem = warning?.(format) ?? null;
   const caption =
     shown.mode === 'estimate'
       ? (shown.caption ?? ESTIMATE_CAPTION)
       : shown.mode === 'rendered'
         ? shown.caption
-        : null;
+        : shown.mode === 'preview'
+          ? [
+              `Based on '${shown.basedOn}' render · ${formatRelativeTime(shown.at)}`,
+              ...(shown.notes ?? []),
+            ].join(' · ')
+          : null;
 
   return (
     <fieldset
@@ -213,43 +272,57 @@ export function FormatPreview({
           )}
         </div>
         <div className="absolute top-2 right-2 flex items-center gap-1">
-          {both ? (
+          {sources.length > 1 ? (
             <ToggleGroup
               aria-label="Picture"
               size="sm"
               variant="outline"
               spacing={0}
               className="bg-background"
-              value={source}
-              onValueChange={(next) => next && setSource(next as 'rendered' | 'estimate')}
+              value={choice}
+              onValueChange={(next) => next && setSource(next as Source)}
             >
-              <ToggleGroupItem value="rendered" className="h-6 text-2xs">
-                Rendered
-              </ToggleGroupItem>
-              <ToggleGroupItem value="estimate" className="h-6 text-2xs">
-                Estimate
-              </ToggleGroupItem>
+              {sources.map((entry) => (
+                <ToggleGroupItem key={entry} value={entry} className="h-6 text-2xs">
+                  {SOURCE_LABEL[entry]}
+                </ToggleGroupItem>
+              ))}
             </ToggleGroup>
           ) : null}
           <Badge
             data-slot="format-preview-badge"
-            variant={shown.mode === 'rendered' ? (shown.stale ? 'warning' : 'success') : 'muted'}
+            variant={
+              shown.mode === 'rendered'
+                ? shown.stale
+                  ? 'warning'
+                  : 'success'
+                : shown.mode === 'preview'
+                  ? 'violet'
+                  : 'muted'
+            }
             className="bg-background text-2xs"
           >
             {badge}
           </Badge>
         </div>
       </div>
-      {/* Always one line tall, so a caption appearing never moves the well. */}
+      {/* Each line always one line tall, so a caption or a problem appearing never moves the well. */}
       <p
-        className={cn(
-          'm-0 h-4 truncate text-2xs',
-          problem ? 'text-destructive' : 'text-muted-foreground',
-        )}
-        title={problem ?? undefined}
+        data-slot="format-preview-caption"
+        className="m-0 h-4 truncate text-2xs text-muted-foreground"
+        title={typeof caption === 'string' ? caption : undefined}
       >
-        {problem ?? caption}
+        {caption}
       </p>
+      {warning ? (
+        <p
+          data-slot="format-preview-warning"
+          className="m-0 h-4 truncate text-2xs text-destructive"
+          title={problem ?? undefined}
+        >
+          {problem}
+        </p>
+      ) : null}
     </fieldset>
   );
 }

@@ -25,7 +25,13 @@ const FORMATS: PreviewFormat[] = [
   { id: 'story', label: `${COMP} 9:16`, ratio: '9:16', width: null, height: null },
 ];
 
-function Harness({ frame }: { frame: (format: PreviewFormat) => PreviewFrame }) {
+function Harness({
+  frame,
+  warning,
+}: {
+  frame: (format: PreviewFormat) => PreviewFrame;
+  warning?: (format: PreviewFormat) => string | null;
+}) {
   const [value, setValue] = useState('wide');
   return (
     <FormatPreview
@@ -34,6 +40,7 @@ function Harness({ frame }: { frame: (format: PreviewFormat) => PreviewFrame }) 
       value={value}
       onValueChange={setValue}
       frame={frame}
+      warning={warning}
       wellClassName="h-96"
     />
   );
@@ -105,6 +112,57 @@ describe('FormatPreview', () => {
     expect(screen.queryByAltText('file')).toBeNull();
     expect(screen.getByLabelText('drawing')).toBeTruthy();
     expect(badge()).toBe('Estimate · wireframe');
+  });
+
+  test('a render with edits since shows the repaint first, names what it is based on, and switches back', () => {
+    const at = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    render(
+      <Harness
+        frame={() => ({
+          mode: 'rendered',
+          at,
+          stale: true,
+          node: <img alt="file" />,
+          preview: {
+            mode: 'preview',
+            at,
+            basedOn: 'Row 2',
+            node: <svg aria-label="repaint" />,
+            notes: ['stand-in font'],
+          },
+        })}
+        warning={() => 'Not previewed: Key color'}
+      />,
+    );
+
+    expect(screen.getByLabelText('repaint')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Picture' })).toBeTruthy();
+    expect(badge()).toBe('Preview');
+    expect(screen.getByText("Based on 'Row 2' render · 2d ago · stand-in font")).toBeTruthy();
+    // The problem has its own line; the caption naming the backdrop is never pushed out.
+    expect(screen.getByText('Not previewed: Key color')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rendered' }));
+    expect(screen.getByAltText('file')).toBeTruthy();
+    expect(badge()).toBe('Rendered · before latest edits');
+    expect(screen.queryByRole('button', { name: 'Estimate' })).toBeNull();
+  });
+
+  test('a repaint with no render of this row behind it has nothing to switch to', () => {
+    render(
+      <Harness
+        frame={() => ({
+          mode: 'preview',
+          at: new Date().toISOString(),
+          basedOn: 'Launch',
+          node: <svg aria-label="repaint" />,
+        })}
+      />,
+    );
+
+    expect(badge()).toBe('Preview');
+    expect(screen.getByText("Based on 'Launch' render · just now")).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Picture' })).toBeNull();
   });
 });
 
