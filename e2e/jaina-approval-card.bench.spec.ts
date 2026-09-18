@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import { JAINA_UI_DATA_PART } from '@continuum/contracts';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import {
@@ -361,6 +360,21 @@ const sseBody = async (chunks: UIMessageChunk[]): Promise<string> =>
 
 const messageIdFor = (runId: string) => `jaina:${runId}:assistant`;
 
+/**
+ * The opening and closing chunks as the Backend now sends them. `messageMetadata` is not garnish:
+ * the report acknowledges its delivery against `runId`, and with no run id it sends no ack at all —
+ * so a stub without it would pass a delivery assertion only by never reaching one.
+ */
+const startOf = (runId: string): UIMessageChunk => ({
+  type: 'start',
+  messageId: messageIdFor(runId),
+  messageMetadata: { runId },
+});
+const finishOf = (runId: string): UIMessageChunk => ({
+  type: 'finish',
+  messageMetadata: { runId, status: 'completed' },
+});
+
 /** The gated tool call itself. Jaina's tools are discovered at run time, so they are DYNAMIC. */
 const gatedToolCall: UIMessageChunk = {
   type: 'tool-input-available',
@@ -374,7 +388,7 @@ const gatedToolCall: UIMessageChunk = {
 function approvalStreamBody(): Promise<string> {
   const runId = `run_${RUN_ID}`;
   return sseBody([
-    { type: 'start', messageId: messageIdFor(runId) },
+    startOf(runId),
     gatedToolCall,
     {
       type: 'tool-approval-request',
@@ -407,7 +421,7 @@ function denialStreamBody(): Promise<string> {
   const runId = `run_deny_${RUN_ID}`;
   const textBlock = `${runId}:text`;
   return sseBody([
-    { type: 'start', messageId: messageIdFor(runId) },
+    startOf(runId),
     gatedToolCall,
     {
       type: 'tool-approval-request',
@@ -429,7 +443,11 @@ function denialStreamBody(): Promise<string> {
  * 19KB report re-sent on every delta is what made the old client re-fold and freeze the tab.
  */
 const reportChunks = (runId: string, report: Record<string, unknown>): UIMessageChunk[] => {
-  const { blocks, ...meta } = report as { blocks?: { block_id: string }[] };
+  const { blocks, ...rest } = report as { blocks?: { block_id: string }[] };
+  // Mirrors the Backend's `reportMetaOf`: the final report names its blocks in its own order, and
+  // an empty report names none so the streamed blocks stand.
+  const order = (blocks ?? []).map((block) => block.block_id);
+  const meta = order.length > 0 ? { ...rest, block_order: order } : rest;
   return [
     ...(blocks ?? []).map(
       (block): UIMessageChunk => ({
@@ -444,17 +462,13 @@ const reportChunks = (runId: string, report: Record<string, unknown>): UIMessage
 
 function liveReportStreamBody(): Promise<string> {
   const runId = `run_live_${RUN_ID}`;
-  return sseBody([
-    { type: 'start', messageId: messageIdFor(runId) },
-    ...reportChunks(runId, LIVE_REPORT),
-    { type: 'finish' },
-  ]);
+  return sseBody([startOf(runId), ...reportChunks(runId, LIVE_REPORT), finishOf(runId)]);
 }
 
 function finalShellStreamBody(): Promise<string> {
   const runId = `run_final_shell_${RUN_ID}`;
   return sseBody([
-    { type: 'start', messageId: messageIdFor(runId) },
+    startOf(runId),
     // A streamed block, then a final checkpoint whose own block list is EMPTY. Same part id both
     // times is the whole point: the SDK replaces a part rather than appending a second copy, so the
     // shell cannot erase what streamed.
@@ -497,7 +511,7 @@ function scrollStreamChunks(): Promise<string[]> {
   // `blockKeyOf` falls back to DEFAULT_BLOCK when a delta carries no (item_id, part_id).
   const textBlock = 'text';
   return sseLines([
-    { type: 'start', messageId: messageIdFor(runId) },
+    startOf(runId),
     { type: 'text-start', id: textBlock },
     ...Array.from(
       { length: 45 },
@@ -827,7 +841,13 @@ test.describe('jaina tool approval card', () => {
       entry.url.startsWith(process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4499'),
     );
     const backendWrites = backendCalls.filter(
-      (entry) => entry.method !== 'GET' && entry.method !== 'OPTIONS',
+      (entry) =>
+        entry.method !== 'GET' &&
+        entry.method !== 'OPTIONS' &&
+        // The turns themselves. Since the AI SDK cutover the browser posts them straight to the
+        // Backend origin rather than through a Next proxy (AGENTS.md §5); the stub answers them
+        // and `streamCalls` below counts them exactly, so excluding them here hides nothing.
+        !entry.url.includes('/api/agents/jaina/chat/stream'),
     );
     const streamCalls = requestLog.filter(
       (entry) => entry.method === 'POST' && entry.url.includes('/api/agents/jaina/chat/stream'),
@@ -869,6 +889,8 @@ test.describe('jaina tool approval card', () => {
   });
 
   test('renders the live creative × angle × audience report with evidence and preview', async () => {
+    // `requestLog` spans the serial suite, so this test grades only the requests it caused.
+    const logStart = requestLog.length;
     await page.goto('/scale?tab=jaina', { waitUntil: 'domcontentloaded' });
     const composer = page.getByRole('textbox', { name: 'Message Jaina' });
     await expect(composer).toBeVisible({ timeout: 180_000 });
@@ -894,17 +916,48 @@ test.describe('jaina tool approval card', () => {
     await expect(page.getByText('Evidence references:').first()).toBeVisible();
     grade('live_report.provenance', true, 'dataset provenance and evidence references are visible');
 
-    const downloadPromise = page.waitForEvent('download', { timeout: 30_000 });
+    // Export no longer downloads a file. Since 8697e834 it composes the visible modules into a
+    // document in an iframe and hands it to the browser's print engine, which writes a vector
+    // PDF — and a print dialog never fires Playwright's `download` event. Headless Chrome returns
+    // from print() at once, so capture what was handed to it. The patch sits on the PARENT realm's
+    // `contentWindow` getter, which is what the export reads, so it cannot miss a frame the way an
+    // init script can miss a scripted about:blank iframe. Byte-level PDF validity is
+    // jaina:report:export:e2e:bench's job, not this one's.
+    await page.evaluate(() => {
+      const host = window as Window & { __jainaPrintedHtml?: string };
+      const getter = Object.getOwnPropertyDescriptor(
+        HTMLIFrameElement.prototype,
+        'contentWindow',
+      )?.get;
+      if (!getter) throw new Error('HTMLIFrameElement.contentWindow has no getter to observe');
+      Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', {
+        configurable: true,
+        get(this: HTMLIFrameElement) {
+          const frame = getter.call(this) as (Window & { __observed?: boolean }) | null;
+          if (frame && !frame.__observed) {
+            frame.__observed = true;
+            frame.print = () => {
+              host.__jainaPrintedHtml = frame.document.documentElement.outerHTML;
+            };
+          }
+          return frame;
+        },
+      });
+    });
     await page.getByRole('button', { name: 'Export report as PDF' }).click();
-    const download = await downloadPromise;
-    const downloadPath = await download.path();
-    expect(download.suggestedFilename()).toMatch(/^jaina-report-\d{4}-\d{2}-\d{2}\.pdf$/);
-    expect(downloadPath).not.toBeNull();
-    const pdf = await readFile(downloadPath!);
-    expect(pdf.byteLength).toBeGreaterThan(1_000);
-    expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
-    expect(pdf.toString('latin1')).toContain('Creative Alpha');
-    grade('live_report.pdf', true, `downloaded ${pdf.byteLength} byte PDF after response.done`);
+    await expect
+      .poll(() =>
+        page.evaluate(() => (window as { __jainaPrintedHtml?: string }).__jainaPrintedHtml ?? ''),
+      )
+      .toContain('Creative Alpha');
+    const printedLength = await page.evaluate(
+      () => ((window as { __jainaPrintedHtml?: string }).__jainaPrintedHtml ?? '').length,
+    );
+    grade(
+      'live_report.pdf',
+      true,
+      `handed the print engine a ${printedLength}-char document carrying the report`,
+    );
     await expect.poll(() => deliveryPosts.length).toBe(2);
     expect(deliveryPosts[0]).toEqual({
       kind: 'live_render',
@@ -934,13 +987,24 @@ test.describe('jaina tool approval card', () => {
           entry.method !== 'GET' &&
           entry.method !== 'OPTIONS' &&
           !entry.url.includes('/api/agents/jaina/creative-preview') &&
-          !entry.url.includes('/delivery'),
+          !entry.url.includes('/delivery') &&
+          // The turn itself. Since the AI SDK cutover the browser posts it straight to the Backend
+          // origin rather than through a Next proxy (AGENTS.md §5), so it now lands on this origin
+          // — still answered by the stub above, never by a Backend. Counted exactly below instead,
+          // so this exclusion cannot hide a second, unexpected turn.
+          !entry.url.includes('/api/agents/jaina/chat/stream'),
       ),
     ).toHaveLength(0);
+    const turnPosts = requestLog
+      .slice(logStart)
+      .filter(
+        (entry) => entry.method === 'POST' && entry.url.includes('/api/agents/jaina/chat/stream'),
+      );
+    expect(turnPosts).toHaveLength(1);
     grade(
       'live_report.no_provider',
       true,
-      '0 Meta/model writes; only preview and delivery acknowledgements were fixture-routed',
+      '0 Meta/model writes; one stubbed turn, and only preview and delivery acknowledgements besides',
     );
   });
 

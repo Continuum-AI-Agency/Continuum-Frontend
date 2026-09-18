@@ -26,6 +26,11 @@ process.env.API_URL = backendURL;
 
 export default defineConfig({
   testDir: './e2e',
+  // Its own output directory. Playwright wipes `outputDir` when a run starts, and every config in
+  // this project defaulted to the shared `test-results/` — so another session's bench starting
+  // mid-run deleted this run's trace and failed it with ENOENT, a failure that says nothing about
+  // the code. `.playwright/` is gitignored and no config claims it wholesale.
+  outputDir: '.playwright/jaina-transcript-scroll',
   testMatch: /jaina-transcript-scroll\.bench\.spec\.ts/,
   fullyParallel: false,
   workers: 1,
