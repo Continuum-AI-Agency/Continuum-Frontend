@@ -515,6 +515,16 @@ describe('RenderReviewTray · Review', () => {
 });
 
 describe('RenderReviewTray · Deliver + Confirm', () => {
+  test('Change moves focus into the delivery options, so Escape still closes the tray', async () => {
+    const { onClose } = renderTray(null);
+    await press('Next: delivery');
+    await changeDelivery();
+    const options = screen.getByRole('region', { name: 'Delivery options' });
+    await waitFor(() => expect(document.activeElement === options).toBe(true));
+    fireEvent.keyDown(options, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   test('Library only: one line of defaults, then Render fires a Proof from Deliver, no bindingId', async () => {
     const { onFired } = renderTray(null);
     await press('Next: delivery');

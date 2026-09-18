@@ -229,6 +229,9 @@ export function RenderReviewTray({
   const [approvalWarning, setApprovalWarning] = useState<string | null>(null);
   const [formatByRow, setFormatByRow] = useState<Record<string, string>>({});
   const [editingDelivery, setEditingDelivery] = useState(false);
+  // "Change" unmounts the button that had focus; focus the options it opened so Escape still
+  // reaches the tray instead of falling to <body>.
+  const deliveryEditorRef = useRef<HTMLElement>(null);
   const [final, setFinal] = useState(false);
   const [firing, setFiring] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -715,16 +718,22 @@ export function RenderReviewTray({
                       variant="link"
                       className="px-0"
                       aria-label="Change delivery"
-                      onClick={() => setEditingDelivery(true)}
+                      onClick={() => {
+                        setEditingDelivery(true);
+                        requestAnimationFrame(() => deliveryEditorRef.current?.focus());
+                      }}
                     >
                       Change
                     </Button>
                   </p>
                 )}
                 {/* Mounted while folded too: the approval field seeds the brand's usual rooms. */}
-                <div
+                <section
+                  ref={deliveryEditorRef}
+                  tabIndex={-1}
+                  aria-label="Delivery options"
                   hidden={!editingDelivery}
-                  className="grid gap-x-6 gap-y-3 border-b border-border p-[var(--card-pad)] lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1.2fr)]"
+                  className="grid gap-x-6 outline-none gap-y-3 border-b border-border p-[var(--card-pad)] lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1.2fr)]"
                 >
                   {/* One section per destination; a new destination is one more section here. */}
                   <DeliverSection title="Library">
@@ -761,7 +770,7 @@ export function RenderReviewTray({
                       onChange={setApprovalDestinationIds}
                     />
                   </DeliverSection>
-                </div>
+                </section>
                 {goesToMeta ? null : confirmation}
               </>
             ) : (
