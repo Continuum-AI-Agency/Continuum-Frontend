@@ -22,6 +22,10 @@ function fakeClient() {
   } as never;
 }
 
+function projectFile(): File {
+  return new File(['project'], 'campaign.aep', { type: '' });
+}
+
 describe('uploadNewAssetVersion', () => {
   test('uses resumable TUS for uppercase .AEP and duplicate-safe registration', async () => {
     const resumableCalls: unknown[] = [];
@@ -59,6 +63,56 @@ describe('uploadNewAssetVersion', () => {
         idempotencyKey: `version:asset:${ticket.path}`,
       }),
     ]);
+  });
+
+  test('registers the sha256 of the revision bytes, so the drop zone can match them', async () => {
+    const registerCalls: unknown[] = [];
+    await uploadNewAssetVersion(
+      { brandId: 'brand', assetId: 'asset', baseVersionId: 'base', file: projectFile() },
+      {
+        createClient: fakeClient,
+        signUpload: async () => ticket,
+        supabaseUrl: 'https://db.test',
+        resumableUpload: async () => ({ uploadUrl: 'https://db.test/upload/id' }),
+        registerVersion: async (request) => {
+          registerCalls.push(request);
+          return { assetId: 'asset', versionId: 'version-2', versionNumber: 2, versions: [] };
+        },
+        attachPreview: async () => 'awaiting_companion',
+      },
+    );
+
+    expect(registerCalls).toEqual([
+      expect.objectContaining({
+        baseVersionId: 'base',
+        checksum: '244210e48437b6556980a70249a99369934a352429034cef9d7bd253b3bf2c01',
+        integrityState: 'verified',
+      }),
+    ]);
+  });
+
+  test('sends no checksum for a revision above 64 MB', async () => {
+    const registerCalls: Array<Record<string, unknown>> = [];
+    const file = projectFile();
+    Object.defineProperty(file, 'size', { value: 64 * 1024 * 1024 + 1 });
+    await uploadNewAssetVersion(
+      { brandId: 'brand', assetId: 'asset', file },
+      {
+        createClient: fakeClient,
+        signUpload: async () => ticket,
+        supabaseUrl: 'https://db.test',
+        resumableUpload: async () => ({ uploadUrl: 'https://db.test/upload/id' }),
+        registerVersion: async (request) => {
+          registerCalls.push(request);
+          return { assetId: 'asset', versionId: 'version-2', versionNumber: 2, versions: [] };
+        },
+        attachPreview: async () => 'awaiting_companion',
+      },
+    );
+
+    expect(registerCalls).toHaveLength(1);
+    expect('checksum' in (registerCalls[0] ?? {})).toBe(false);
+    expect(registerCalls[0]?.integrityState).toBe('skipped_large_file');
   });
 
   test('rejects an .aep above 5 GB before signing', async () => {

@@ -29,6 +29,23 @@ import { MAX_PROJECT_FILE_BYTES } from './uploadMediaAsset';
 
 type SupabaseBrowserClient = ReturnType<typeof createSupabaseBrowserClient>;
 
+// The Library upload hashes files of this size or less; a bigger revision records no checksum.
+const HASHED_UP_TO_BYTES = 64 * 1024 * 1024;
+
+// sha256 hex, the same digest uploadMediaAsset records on a first upload. Private on purpose:
+// Forge tests mock this module partially, so a re-export from here breaks their imports.
+async function fileSha256(file: Blob): Promise<string | null> {
+  if (file.size > HASHED_UP_TO_BYTES) return null;
+  try {
+    const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join(
+      '',
+    );
+  } catch {
+    return null;
+  }
+}
+
 async function readErrorMessage(response: Response, fallback: string): Promise<string> {
   try {
     const body = (await response.json()) as { error?: unknown };
@@ -223,6 +240,7 @@ export async function uploadNewAssetVersion(
   }
 
   const mediaDimensions = await probeMediaDimensions(file, contentType);
+  const checksum = await fileSha256(file);
   const registered = await (deps.registerVersion ?? registerAssetVersion)({
     brandId,
     assetId,
@@ -233,7 +251,12 @@ export async function uploadNewAssetVersion(
     sizeBytes: file.size,
     ...mediaDimensions,
     note,
-    integrityState: projectFile && file.size > 64 * 1024 * 1024 ? 'skipped_large_file' : 'unknown',
+    ...(checksum ? { checksum } : {}),
+    integrityState: checksum
+      ? 'verified'
+      : file.size > HASHED_UP_TO_BYTES
+        ? 'skipped_large_file'
+        : 'unknown',
     baseVersionId,
     idempotencyKey: `version:${assetId}:${ticket.path}`,
   });

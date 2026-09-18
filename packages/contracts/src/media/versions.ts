@@ -99,6 +99,12 @@ export const registerVersionRequestSchema = z
     durationMs: z.number().int().positive().optional(),
     note: z.string().max(2000).optional(),
     integrityState: assetIntegrityStateSchema.optional(),
+    // sha256 hex of the bytes, as the first upload records it. The browser hashes files of
+    // 64 MB or less; a bigger revision just leaves it out.
+    checksum: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
     baseVersionId: z.string().uuid().optional(),
     idempotencyKey: z.string().min(1).max(200).optional(),
   })
