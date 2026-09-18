@@ -39,6 +39,7 @@
     "optimizer:e2e:bench": "playwright test --config playwright.optimizer.config.ts --workers=1",
     "jaina:canvas:e2e:bench": "playwright test --config playwright.jaina-canvas.config.ts --workers=1",
     "jaina:approval:card:e2e:bench": "playwright test --config playwright.jaina-approval-card.config.ts --workers=1",
+    "jaina:transcript:scroll:e2e:bench": "playwright test --config playwright.jaina-transcript-scroll.config.ts --workers=1",
     "jaina:report:export:e2e:bench": "playwright test --config playwright.jaina-report-export.config.ts --workers=1",
     "forge:studio:e2e:bench": "playwright test --config playwright.forge-studio.config.ts --workers=1",
     "optimizer:rebalance:e2e:bench": "playwright test --config playwright.optimizer-rebalance.config.ts --workers=1",
@@ -48,7 +49,6 @@
     "optimizer:tooltip:e2e:bench": "playwright test --config playwright.optimizer-tooltip.config.ts --workers=1",
     "integrations:google-assets-render:e2e:bench": "bun run src/lib/integrations/google-assets-render.bench.ts",
     "organic:metrics:compare:bench": "bun run src/lib/organic/organic-metrics-compare.bench.ts",
-    "jaina:stream:bench": "bun run src/lib/jaina/jaina-stream.bench.ts",
     "posthog:logs:bench": "NODE_ENV=production bun run src/lib/observability/posthog-logs.bench.ts",
     "trends:render:e2e:bench": "bun run src/lib/brand-insights/trends-render.bench.ts",
     "contrast:bench": "PORT=3118 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3118 NEXT_DIST_DIR=.next/contrast-e2e NEXT_TSCONFIG_PATH=tsconfig.e2e.json playwright test e2e/contrast.bench.spec.ts --workers=1",
@@ -101,7 +101,7 @@
     "layer-editor:gesture:bench": "set -a; . ./.env.local; set +a; PORT=3001 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3001 NEXT_DIST_DIR=.next/layer-editor-gesture-e2e playwright test e2e/layer-editor-gesture.bench.spec.ts --workers=1"
   },
   "dependencies": {
-    "@ai-sdk/react": "^4.0.17",
+    "@ai-sdk/react": "^4.0.109",
     "@base-ui/react": "^1.7.0",
     "@continuum/contracts": "workspace:*",
     "@dnd-kit/core": "^6.3.1",
@@ -150,7 +150,7 @@
     "@visx/shape": "4.0.1-alpha.0",
     "@visx/zoom": "4.0.1-alpha.0",
     "@xyflow/react": "^12.10.1",
-    "ai": "^7.0.40",
+    "ai": "^7.0.106",
     "ansi-to-react": "^6.2.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
