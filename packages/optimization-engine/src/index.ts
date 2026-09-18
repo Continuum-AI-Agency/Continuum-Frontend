@@ -14,6 +14,7 @@ export {
   NEW_ITEM_LOCK_DAYS,
 } from './classify';
 export { confidenceOf, portfolioConfidence } from './confidence';
+export { PORTFOLIO_SCOPE } from './types';
 export type { DeepPartial, EngineConfig, WindowWeights } from './config';
 export { DEFAULT_CONFIG, resolveConfig } from './config';
 export {
@@ -60,6 +61,12 @@ export {
   velocityCapTruncated,
 } from './explain';
 export { evaluateFatigue } from './fatigue';
+export {
+  CAP_BINDING_SHARE,
+  evaluateSettings,
+  FLOOR_RELAXED_SHARE,
+  UNDERSPEND_SHARE,
+} from './settings';
 // Hierarchical (tree-aware) generalization of `shrinkScores` in ./significance:
 // shrink each node toward its parent's already-shrunk estimate instead of one
 // flat cohort mean. Pure, zero-dependency — safe for this dependency-free barrel.
@@ -139,6 +146,7 @@ export type {
   AdSetStatus,
   AudienceType,
   Confidence,
+  ConfidenceActionable,
   CpaInterval,
   CreativeAdSeries,
   CreativeStanding,
@@ -160,6 +168,7 @@ export type {
   RetentionMetrics,
   RetentionRates,
   ScaleStep,
+  SettingsPatch,
   TrajectoryState,
   WindowMetrics,
 } from './types';

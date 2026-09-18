@@ -20,6 +20,7 @@ import { computePacing } from './pacing';
 import { evaluateRules } from './rules/evaluate';
 import type { AlreadyFlagged, RuleActionKind, RuleDefinition, RuleEvaluation } from './rules/types';
 import { kpiEvents } from './scoring';
+import { evaluateSettings } from './settings';
 import { evaluateTriggers } from './triggers';
 import type {
   AdSetSnapshot,
@@ -64,6 +65,10 @@ export type CycleOptions = {
    *  no snapshot — the ACTIVE roster filter removed them — so they arrive separately.
    *  Absent ⇒ no D1 findings, which is the pre-existing behaviour. */
   absent?: AbsentAdset[];
+  /** The portfolio's autopilot hold threshold (max_change_pct_per_cycle), so the
+   *  settings family can propose raising it when the velocity cap binds. Absent ⇒ the
+   *  S1 advice carries no patch. */
+  applyCapPct?: number | null;
 };
 
 export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleResult {
@@ -352,12 +357,21 @@ export function runCycle(snapshots: AdSetSnapshot[], opts: CycleOptions): CycleR
 
   const confidence = portfolioConfidence(prepared, baseCfg);
 
+  // The portfolio's own knobs, read off what the solver just did. Last, because they
+  // need the reallocation; still proposals, like everything else in the list.
+  const settings = opts.suppressBuiltinTriggers
+    ? []
+    : evaluateSettings({ ...reallocation, items }, prepared, baseCfg, {
+        mode,
+        applyCapPct: opts.applyCapPct ?? null,
+      });
+
   return {
     mode,
     pacing,
     ...(scale ? { scale } : {}),
     reallocation: { ...reallocation, items },
-    recommendations,
+    recommendations: [...recommendations, ...settings],
     confidence,
     ruleEvaluations,
   };

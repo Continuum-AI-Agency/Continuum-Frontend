@@ -843,14 +843,35 @@ export type OptimizerInsightResponse = z.infer<typeof OptimizerInsightResponseSc
  *  the optimizer wire `Confidence` shape (see ConfidenceSchema)
  *  but kept `.loose()` and all-optional for DB reads — the row is opaque jsonb and
  *  older rows may predate a field. `band` stays a loose string on read. */
+/** One thing the account could do to raise its data confidence (engine
+ *  ConfidenceActionable). Absent on runs recorded before the engine carried it. */
+export const ConfidenceActionableSchema = z
+  .object({
+    code: z.string(),
+    adsetIds: z.array(z.string()).default([]),
+    spendShare: z.number().nullable().optional(),
+    projectedScore: z.number().nullable().optional(),
+    message: z.string(),
+  })
+  .loose();
+export type ConfidenceActionable = z.infer<typeof ConfidenceActionableSchema>;
+
 export const RunConfidenceSchema = z
   .object({
+    /** DATA confidence on runs recorded after Sept 18 2026 (sample × consistency, geometric
+     *  mean); the older three-term product on runs before. `predictiveness` is a disclosure
+     *  on the new runs and a factor on the old ones — the FE reads it as a note either way. */
     score: z.number().optional(),
     predictiveness: z.number().optional(),
     sampleSize: z.number().optional(),
     consistency: z.number().optional(),
     events: z.number().optional(),
     band: z.string().optional(),
+    underFloor: z
+      .object({ adsetIds: z.array(z.string()).default([]), floorEvents: z.number() })
+      .nullable()
+      .optional(),
+    actionables: z.array(ConfidenceActionableSchema).optional(),
   })
   .loose();
 export type RunConfidence = z.infer<typeof RunConfidenceSchema>;
