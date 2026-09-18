@@ -33,6 +33,11 @@ mock.module('@/lib/brands/brandTypeInputs.client', () => ({
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { BrandColorField } from './BrandColorField';
+import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
+
+// Base UI waits on a MutationObserver as a popup or dialog animates; happy-dom's, lifted per file
+// (a global shim in the shared setup drops other files' tests).
+installPickerDomGlobals();
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
 

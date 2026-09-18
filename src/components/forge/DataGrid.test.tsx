@@ -14,7 +14,12 @@ import {
 } from '@tanstack/react-table';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { type ComponentProps, useState } from 'react';
+import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
 import { DataGrid, type DataGridRowProps, STICKY_LEFT, selectColumn } from './DataGrid';
+
+// Base UI waits on a MutationObserver as a popup or dialog animates; happy-dom's, lifted per file
+// (a global shim in the shared setup drops other files' tests).
+installPickerDomGlobals();
 
 type Job = { id: string; name: string; template: string };
 

@@ -28,7 +28,12 @@ import {
   within,
 } from '@testing-library/react';
 import type React from 'react';
+import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
 import { RenderSetRail, rendersBySet, rendersLine, templateJobsKey } from './RenderSetRail';
+
+// Base UI waits on a MutationObserver as a popup or dialog animates; happy-dom's, lifted per file
+// (a global shim in the shared setup drops other files' tests).
+installPickerDomGlobals();
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
 const NOW = Date.parse('2026-09-15T12:00:00.000Z');

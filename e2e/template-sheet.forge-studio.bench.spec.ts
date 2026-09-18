@@ -63,7 +63,7 @@ const FORMATS = [
 const CHECK_WHAT: Record<string, string> = {
   Parse: 'Opens the After Effects file and lists its formats, editable layers and fonts.',
   Fonts:
-    'Checks the brand has uploaded every typeface the template uses. Renders are refused while one is missing.',
+    'Checks the font repository holds every typeface the template uses — the brand’s own uploads plus house faces. Renders are refused while one is missing.',
   Build:
     'Turns the file into a renderable template: works out its fields, builds its table, seeds a sample row, validates the spec.',
   'Test render': 'Renders one watermarked frame to prove each variable reaches its layer.',

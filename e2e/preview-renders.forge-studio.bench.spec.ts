@@ -863,6 +863,11 @@ test.describe('Forge previews — true shape, that format’s file', () => {
         .getByRole('row')
         .filter({ has: page.getByRole('button', { name: `Drag ${SET.rows.root}`, exact: true }) });
       await root.getByRole('cell').last().click();
+      // A stale row opens on its repainted Preview; its own (older) render is one toggle away.
+      await preview
+        .getByRole('group', { name: 'Picture' })
+        .getByRole('button', { name: 'Rendered', exact: true })
+        .click();
       await gradeEveryChip(
         page,
         preview,

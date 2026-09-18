@@ -50,7 +50,12 @@ mock.module('@/components/ui/toast-imperative', () => ({
 }));
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
 import { AiVariationsDialog } from './AiVariationsDialog';
+
+// Base UI waits on a MutationObserver as a popup or dialog animates; happy-dom's, lifted per file
+// (a global shim in the shared setup drops other files' tests).
+installPickerDomGlobals();
 
 beforeEach(() => {
   for (const fn of [listEnvironments, getContract, suggestRows, createRenderSet]) fn.mockClear();

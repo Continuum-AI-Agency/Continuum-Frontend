@@ -8,7 +8,10 @@ import {
   type ApiRenderTemplateListResponse,
   type ApiRenderVariable,
   apiRenderBatchSchema,
+  apiRenderDeliveryDestinationsResponseSchema,
   apiRenderJobSchema,
+  forgeRenderSetSchema,
+  renderApprovalDestinationListResponseSchema,
   type TemplateSource,
   templateDisplayName,
   type WorkspaceTemplate,
@@ -54,7 +57,8 @@ import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 //     rows built from FORGE_STUDIO_ASSET_IDS through the real spreadsheet import. Only with
 //     FORGE_STUDIO_FIRE=1 does it pre-flight to Slack, render ≤ FORGE_STUDIO_MAX_RENDERS and wait
 //     for the Slack receipt. Without FIRE, createBatch is blocked in code AND asserted never
-//     attempted.
+//     attempted. FIRE renders from a set of its own, "Bench · Studio <run id>" with rows
+//     "Example N", and deletes that set by id when the suite ends (its renders stay in the ledger).
 //
 // Usage:
 //   cd Continuum-Frontend && bun run forge:studio:e2e:bench
@@ -97,6 +101,15 @@ const TWENTY_CHARACTERS = 'Zerg rush kekekekeke';
 
 const ROWS = FORGE_FIXTURE.set.rows;
 const VARS = FORGE_FIXTURE.variables;
+/** The brand's usual approval room — a Meta target is refused without one. */
+const APPROVAL_ROOM = {
+  id: '5e6f7081-92a3-4b45-8c6d-7e8f90123456',
+  platform: 'slack' as const,
+  role: 'client',
+  name: 'forge-render-testing',
+  activeApprovers: 1,
+  requestedApprovers: 0,
+};
 
 let session: MintedSession | null = null;
 const opened: BrowserContext[] = [];
@@ -260,6 +273,35 @@ async function gotoForge(page: Page): Promise<void> {
   });
 }
 
+/** The approval room, pre-selected the way the backend's `defaultDestinationIds` does. */
+async function answerApprovalRooms(context: BrowserContext): Promise<void> {
+  const body = renderApprovalDestinationListResponseSchema.parse({
+    destinations: [APPROVAL_ROOM],
+    defaultDestinationIds: [APPROVAL_ROOM.id],
+  });
+  await context.route(
+    (url) => url.pathname === '/api/ai-studio/renders/approval-destinations',
+    async (route) => {
+      const origin = (await route.request().headerValue('origin')) ?? '*';
+      const cors = {
+        'access-control-allow-origin': origin,
+        'access-control-allow-credentials': 'true',
+        'access-control-allow-headers': 'Content-Type, Authorization, Accept',
+        'access-control-allow-methods': 'GET, OPTIONS',
+      };
+      if (route.request().method() === 'OPTIONS') {
+        await route.fulfill({ status: 204, headers: cors });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        headers: { ...cors, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    },
+  );
+}
+
 async function openFixtureForge(
   browser: Browser,
   options: {
@@ -267,6 +309,7 @@ async function openFixtureForge(
     reducedMotion?: 'reduce';
     meta?: FixtureMeta;
     preflightDelayMs?: number;
+    approvalRoom?: boolean;
   } = {},
 ): Promise<{ page: Page; fixtures: ForgeFixtures }> {
   const context = await newForgeContext(browser, options);
@@ -275,6 +318,8 @@ async function openFixtureForge(
     preflightDelayMs: options.preflightDelayMs,
   });
   activeFixtures.push(fixtures);
+  // Registered after the fixtures, so it answers first.
+  if (options.approvalRoom) await answerApprovalRooms(context);
   const page = await context.newPage();
   await gotoForge(page);
   return { page, fixtures };
@@ -334,14 +379,15 @@ function identifierLeaks(page: Page): Promise<string[]> {
   );
 }
 
-type ViewTransitionLog = { calls: number; names: string[] };
+type ViewTransitionLog = { calls: number; names: string[]; active: number };
 
 /**
- * Counts `document.startViewTransition` calls and the `view-transition-name`s React applied around
- * them — before the call (the outgoing element) and after its update (the incoming one).
+ * Counts `document.startViewTransition` calls, the ones still running, and the
+ * `view-transition-name`s React applied around them — before the call (the outgoing element) and
+ * after its update (the incoming one).
  */
 function recordViewTransitions(): void {
-  const log: ViewTransitionLog = { calls: 0, names: [] };
+  const log: ViewTransitionLog = { calls: 0, names: [], active: 0 };
   (window as unknown as { __forgeViewTransitions: ViewTransitionLog }).__forgeViewTransitions = log;
   // lib.dom declares it unconditionally; a browser without view transitions does not have it.
   const doc = document as unknown as { startViewTransition?: Document['startViewTransition'] };
@@ -364,6 +410,7 @@ function recordViewTransitions(): void {
     };
   doc.startViewTransition = (update) => {
     log.calls += 1;
+    log.active += 1;
     scan();
     const wrapped =
       typeof update === 'function'
@@ -371,7 +418,12 @@ function recordViewTransitions(): void {
         : update?.update
           ? { ...update, update: afterUpdate(update.update) }
           : update;
-    return original.call(document, wrapped);
+    const transition = original.call(document, wrapped);
+    const settled = () => {
+      log.active -= 1;
+    };
+    transition.finished.then(settled, settled);
+    return transition;
   };
 }
 
@@ -388,6 +440,14 @@ const readViewTransitions = (page: Page) =>
     () =>
       (window as unknown as { __forgeViewTransitions: ViewTransitionLog }).__forgeViewTransitions,
   );
+
+/**
+ * Waits out a view transition still running — the root cross-fade that reveals /forge lands
+ * around the time the Render tab first answers. While one runs the page hit-tests as its root
+ * element, so a press meant for a drag handle lands on <html> and Chrome selects text instead.
+ */
+const viewTransitionsSettled = (page: Page) =>
+  expect.poll(async () => (await readViewTransitions(page)).active).toBe(0);
 
 type FocusProbe = {
   keyups: number;
@@ -452,6 +512,7 @@ async function typeKeepingFocus(page: Page, field: Locator, text: string): Promi
 async function dragRowInside(page: Page, label: string, targetLabel: string): Promise<void> {
   const handle = page.getByRole('button', { name: `Drag ${label}`, exact: true });
   await handle.scrollIntoViewIfNeeded();
+  await viewTransitionsSettled(page);
   const [handleBox, sourceBox, targetBox] = await Promise.all([
     handle.boundingBox(),
     gridRow(page, label).boundingBox(),
@@ -489,6 +550,30 @@ async function openPreflight(page: Page, rowCount: number): Promise<Locator> {
   await expect(tray).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   return tray;
+}
+
+/** The tray's one way forward: the last button in its footer, named for the step it takes. */
+async function pressPrimary(tray: Locator, name: string | RegExp, timeout?: number) {
+  const primary = tray.locator('footer').getByRole('button').last();
+  await expect(primary).toHaveText(name);
+  await expect(primary).toBeEnabled({ timeout });
+  await primary.click();
+}
+
+/** Deliver folds its defaults into one line; this opens the full form when it is folded. */
+async function openDeliveryForm(tray: Locator): Promise<void> {
+  const change = tray.getByRole('button', { name: 'Change delivery', exact: true });
+  if (await change.isVisible()) await change.click();
+}
+
+/** A shadcn Select: open the trigger, then press the option in its listbox. */
+async function chooseOption(
+  scope: Locator,
+  combobox: string,
+  option: string | RegExp,
+): Promise<void> {
+  await scope.getByRole('combobox', { name: combobox, exact: true }).click();
+  await scope.page().getByRole('listbox').getByRole('option', { name: option }).click();
 }
 
 async function uploadCsv(page: Page, fileName: string, csv: string, rowCount: number) {
@@ -793,7 +878,9 @@ test.describe('Forge Studio — fixtures', () => {
   }) => {
     const { page } = await openFixtureForge(browser);
     await openTab(page, 'Render');
-    await expect(gridRow(page, ROWS.solo)).toBeVisible();
+    for (const label of [ROWS.root, ROWS.solo]) {
+      await expect(gridRow(page, label).getByText('Ready', { exact: true })).toBeVisible();
+    }
     await expect(gridRow(page, ROWS.solo).locator('p[title]')).toHaveCount(0);
 
     await dragRowInside(page, ROWS.solo, ROWS.root);
@@ -869,7 +956,10 @@ test.describe('Forge Studio — fixtures', () => {
   test('D14 · pre-flight reviews rows × formats, picks Slack, and forces one format per ad replacement', async ({
     browser,
   }) => {
-    const { page, fixtures } = await openFixtureForge(browser, { meta: 'not_connected' });
+    const { page, fixtures } = await openFixtureForge(browser, {
+      meta: 'not_connected',
+      approvalRoom: true,
+    });
     const { promo, slack, meta } = FORGE_FIXTURE;
     await openTab(page, 'Render');
     for (const label of [ROWS.root, ROWS.launch]) {
@@ -887,46 +977,53 @@ test.describe('Forge Studio — fixtures', () => {
       await expect(item.locator('[data-ratio]')).toHaveCount(2);
       await expect(item).toContainText('2 files');
     }
-    await review.getByRole('button', { name: 'Next', exact: true }).click();
+    await pressPrimary(review, 'Next: delivery');
+    await openDeliveryForm(review);
     await expect(review.getByText('No ad account connected')).toBeVisible();
-    await expect(review.getByLabel('Slack channel')).toBeVisible();
+    await expect(review.getByRole('combobox', { name: 'Slack channel', exact: true })).toBeVisible();
+    await expect(review.locator('select')).toHaveCount(0);
     await shoot(page, 'd14-no-ad-account');
-    await page.keyboard.press('Escape');
+    await review.getByRole('button', { name: 'Close review', exact: true }).click();
     await expect(review).toBeHidden();
 
     // Connected: Slack destination, then campaign → ad set → ad for one row.
     fixtures.state.meta = 'connected';
-    const dialog = await openPreflight(page, 2);
-    await expect(dialog.getByText('Ready · 2 of 2 rows checked')).toBeVisible();
-    await dialog.getByRole('button', { name: 'Next', exact: true }).click();
-    await dialog.getByLabel('Slack channel').selectOption(slack.destinationId);
-    await dialog
+    const tray = await openPreflight(page, 2);
+    await expect(tray.getByText('Ready · 2 of 2 rows checked')).toBeVisible();
+    await pressPrimary(tray, 'Next: delivery');
+    await openDeliveryForm(tray);
+    await chooseOption(tray, 'Slack channel', new RegExp(`^#${escapeRegExp(slack.channelName)} · `));
+    await expect(tray.getByRole('combobox', { name: 'Slack channel', exact: true })).toContainText(
+      `#${slack.channelName}`,
+    );
+    await tray
       .getByRole('button', { name: `Replace an ad for ${ROWS.launch}`, exact: true })
       .click();
-    await dialog
+    await tray
       .getByRole('button', { name: new RegExp(`^${escapeRegExp(meta.campaign.name)}`) })
       .click();
-    await dialog
-      .getByRole('button', { name: new RegExp(`^${escapeRegExp(meta.adset.name)}`) })
-      .click();
-    await dialog
-      .getByRole('button', { name: new RegExp(`^${escapeRegExp(meta.ad.name)}`) })
-      .click();
-    await expect(dialog.getByText('Choose one format for each ad replacement.')).toBeVisible();
-    await expect(dialog.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
-    await dialog.getByLabel(`Format for ${ROWS.launch}`).selectOption('square');
+    await tray.getByRole('button', { name: new RegExp(`^${escapeRegExp(meta.adset.name)}`) }).click();
+    await tray.getByRole('button', { name: new RegExp(`^${escapeRegExp(meta.ad.name)}`) }).click();
+    // A Meta target adds the Confirm step, and it waits on one format for the replacement.
+    await expect(tray.getByText('Choose one format for each ad replacement.')).toBeVisible();
+    const primary = tray.locator('footer').getByRole('button').last();
+    await expect(primary).toHaveText('Next: confirm');
+    await expect(primary).toBeDisabled();
+    await chooseOption(tray, `Format for ${ROWS.launch}`, FORGE_FIXTURE.outputs.square);
     // The replacing row now renders one file: 2 (Root) + 1 (Launch).
-    await expect(dialog.getByText(`${promo.title} · 3 files`)).toBeVisible();
-    await dialog.getByRole('button', { name: 'Next', exact: true }).click();
-    await expect(dialog).toContainText(`#${slack.channelName}`);
-    await expect(dialog).toContainText('1 ad replacement held for approval');
+    await expect(tray.getByText(`${promo.title} · 3 files`)).toBeVisible();
+    await pressPrimary(tray, 'Next: confirm');
+    await expect(tray).toContainText(`#${slack.channelName}`);
+    await expect(tray).toContainText('1 ad replacement held for approval');
+    await expect(tray).toContainText(`#${APPROVAL_ROOM.name} approval`);
     await shoot(page, 'd14-confirm');
-    await dialog.getByRole('button', { name: 'Confirm 3 files', exact: true }).click();
+    await pressPrimary(tray, 'Render 3 files');
     await expect.poll(() => fixtures.calls('POST', /\/renders\/batches$/).length).toBe(1);
 
     const confirmed = fixtures.calls('POST', /\/renders\/batch-preflight$/).at(-1)
       ?.body as ApiRenderBatchPreflightRequest;
     expect(confirmed.slack).toEqual({ destinationId: slack.destinationId });
+    expect(confirmed.approvalDestinationIds).toEqual([APPROVAL_ROOM.id]);
     const launchRecord = confirmed.records.find((record) => record.label === ROWS.launch);
     const rootRecord = confirmed.records.find((record) => record.label === ROWS.root);
     expect(launchRecord?.delivery).toMatchObject({
@@ -1004,6 +1101,20 @@ async function liveGet<T>(path: string): Promise<T> {
     );
   }
   return (await response.json()) as T;
+}
+
+/** DELETE through the same backend route the rail's Delete uses; a row already gone is fine. */
+async function liveDelete(path: string): Promise<void> {
+  if (!session) throw new Error('[forge-studio-bench] no minted session');
+  const response = await fetch(`${API_URL}${path}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${session.accessToken}` },
+  });
+  if (!response.ok && response.status !== 404) {
+    throw new Error(
+      `[forge-studio-bench] DELETE ${path} → ${response.status} ${(await response.text()).slice(0, 300)}`,
+    );
+  }
 }
 
 const brandQuery = `brandId=${encodeURIComponent(STARCRAFT_BRAND_ID)}`;
@@ -1187,11 +1298,22 @@ test.describe('Forge Studio — LIVE on StarCraft template 133', () => {
   test.skip(!LIVE, 'set FORGE_STUDIO_LIVE=1 to run against the local backend and real data');
 
   let contract: ApiRenderTemplateContract | null = null;
+  /** Every render set this suite creates, deleted by id when it ends — never by name or time. */
+  const createdSetIds: string[] = [];
 
   test.beforeAll(async () => {
     contract = await liveGet<ApiRenderTemplateContract>(
       `/api/ai-studio/renders/templates/${encodeURIComponent(TEMPLATE_KEY)}/contract?${brandQuery}`,
     );
+  });
+
+  // Runs before the file's own afterAll signs the session out. Renders already made stay in the
+  // Render ledger, as the rail's own Delete says.
+  test.afterAll(async () => {
+    for (const id of createdSetIds.splice(0)) {
+      await liveDelete(`/api/ai-studio/renders/sets/${encodeURIComponent(id)}?${brandQuery}`);
+      console.log(`[forge-studio-bench] LIVE cleanup deleted render set ${id}`);
+    }
   });
 
   // biome-ignore lint/correctness/noEmptyPattern: Playwright hook signature
@@ -1352,10 +1474,10 @@ test.describe('Forge Studio — LIVE on StarCraft template 133', () => {
     await gotoForge(page);
     await openTab(page, 'Render');
     await selectLiveTemplate(page);
-    const names = await importLiveRows(page, contract, `SC rows ${RUN_ID}`);
+    const names = await importLiveRows(page, contract, 'Example');
     for (const name of names) {
       await expect(
-        gridRow(page, name).getByText(/^(Ready|Needs judge|Needs review)$/),
+        gridRow(page, name).getByText(/^(Ready|AI check after render|Needs review)$/),
         `${name} passes the real preflight`,
       ).toBeVisible({ timeout: 120_000 });
     }
@@ -1382,69 +1504,85 @@ test.describe('Forge Studio — LIVE on StarCraft template 133', () => {
     await selectLiveTemplate(page);
 
     // A set of the bench's own, so the Render click's save never rewrites someone's saved set.
-    const setName = `Forge Studio bench ${RUN_ID}`;
+    // Named for a person reading the rail; deleted by id in afterAll.
+    const setName = `Bench · Studio ${RUN_ID}`;
     await page.getByRole('button', { name: 'New set', exact: true }).click();
     const discard = page.getByRole('alertdialog', { name: 'Discard unsaved edits?' });
     const nameDialog = page.getByRole('dialog', { name: 'New render set' });
     await expect(discard.or(nameDialog)).toBeVisible();
     if (await discard.isVisible()) await discard.getByRole('button', { name: 'Discard' }).click();
     await nameDialog.getByRole('textbox', { name: 'Name', exact: true }).fill(setName);
+    const createdResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === '/api/ai-studio/renders/sets',
+    );
     await nameDialog.getByRole('button', { name: 'Create', exact: true }).click();
+    const created = await createdResponse;
+    expect(created.ok(), `createRenderSet → ${created.status()}`).toBe(true);
+    createdSetIds.push(forgeRenderSetSchema.parse(await created.json()).id);
     await expect(
       page.getByRole('button', { name: `Open ${setName}`, exact: true }),
     ).toHaveAttribute('aria-current', 'true', { timeout: 60_000 });
 
-    const names = await importLiveRows(page, contract, `SC bench ${RUN_ID}`);
+    const names = await importLiveRows(page, contract, 'Example');
     for (const name of names) {
       await gridRow(page, name).getByRole('checkbox', { name: 'Select row' }).click();
     }
-    const render = page.getByRole('button', { name: `Render ${names.length}`, exact: true });
+    const render = page.getByRole('button', {
+      name: new RegExp(`^Render ${names.length} rows? · \\d+ files?$`),
+    });
     await expect(render, 'every selected row passes the real preflight').toBeEnabled({
       timeout: 180_000,
     });
     await render.click();
-    const dialog = page.getByRole('dialog', {
-      name: `Render ${names.length} row${names.length === 1 ? '' : 's'}`,
-    });
-    const description = (await dialog.getByText(/ · \d+ renders?$/).textContent()) ?? '';
-    const renderCount = Number(/(\d+) renders?$/.exec(description)?.[1] ?? Number.NaN);
+    const tray = page.getByRole('region', { name: 'Review and render' });
+    await expect(tray).toBeVisible();
+    const description =
+      (await tray.locator('header').getByText(/ · \d+ files?$/).textContent()) ?? '';
+    const renderCount = Number(/(\d+) files?$/.exec(description)?.[1] ?? Number.NaN);
     expect(
       renderCount,
       `the pre-flight renders ≤ FORGE_STUDIO_MAX_RENDERS (${description})`,
     ).toBeLessThanOrEqual(MAX_RENDERS);
 
-    const next = dialog.getByRole('button', { name: 'Next', exact: true });
-    await expect(next, 'Review is not blocked').toBeEnabled({ timeout: 120_000 });
-    await next.click();
-    const slackSelect = dialog.getByLabel('Slack channel');
-    await expect(slackSelect).toBeVisible({ timeout: 60_000 });
-    const options = await slackSelect.locator('option').evaluateAll((items) =>
-      items.map((item) => ({
-        value: (item as HTMLOptionElement).value,
-        text: item.textContent ?? '',
-      })),
+    // Review re-checks on its own; the one button moves on once it is not blocked.
+    await pressPrimary(tray, 'Next: delivery', 120_000);
+    await openDeliveryForm(tray);
+    // The picker names rooms, not ids: find the destination's channel through the same read.
+    const { slack } = apiRenderDeliveryDestinationsResponseSchema.parse(
+      await liveGet(`/api/ai-studio/renders/destinations?${brandQuery}`),
     );
-    const destination = options.find((option) => option.value === SLACK_DESTINATION);
+    const destination = slack.destinations.find((item) => item.id === SLACK_DESTINATION);
     expect(
       destination,
-      `StarCraft's Slack destinations: ${options.map((o) => o.text).join(', ')}`,
+      `StarCraft's Slack destinations: ${slack.destinations.map((item) => `#${item.channelName}`).join(', ')}`,
     ).toBeTruthy();
-    await slackSelect.selectOption(SLACK_DESTINATION);
-    const channelName = /^#([^·]+)/.exec(destination?.text ?? '')?.[1]?.trim() ?? '';
+    const channelName = destination?.channelName ?? '';
+    await chooseOption(tray, 'Slack channel', new RegExp(`^#${escapeRegExp(channelName)} · `));
     console.log(
-      `[forge-studio-bench] LIVE Meta: ${(await dialog.getByText('No ad account connected').isVisible()) ? 'no ad account connected' : 'an ad account is connected (not targeted)'}`,
+      `[forge-studio-bench] LIVE Meta: ${(await tray.getByText('No ad account connected').isVisible()) ? 'no ad account connected' : 'an ad account is connected (not targeted)'}`,
     );
-    await expect(next).toBeEnabled();
-    await next.click();
-    await expect(dialog).toContainText(`#${channelName}`);
+    // No Meta target, so Deliver is the last step: its foot reads Proof and where renders go.
+    await expect(tray.locator('footer')).toContainText(`#${channelName}`);
 
+    const signed = page.waitForRequest(
+      (request) =>
+        request.method() === 'POST' &&
+        new URL(request.url()).pathname === '/api/ai-studio/renders/batch-preflight' &&
+        Boolean((request.postDataJSON() as ApiRenderBatchPreflightRequest | null)?.slack),
+    );
     const batchResponse = page.waitForResponse(
       (response) =>
         response.request().method() === 'POST' &&
         new URL(response.url()).pathname === '/api/ai-studio/renders/batches',
       { timeout: 120_000 },
     );
-    await dialog.getByRole('button', { name: /^Confirm \d+ renders?$/ }).click();
+    await pressPrimary(tray, /^Render \d+ files?$/);
+    expect(
+      ((await signed).postDataJSON() as ApiRenderBatchPreflightRequest).slack,
+      'the signed pre-flight names the chosen Slack destination',
+    ).toEqual({ destinationId: SLACK_DESTINATION });
     const response = await batchResponse;
     expect(response.ok(), `createBatch → ${response.status()}`).toBe(true);
     const batch = apiRenderBatchSchema.parse(await response.json());

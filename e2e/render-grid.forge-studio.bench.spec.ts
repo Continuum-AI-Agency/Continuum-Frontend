@@ -41,8 +41,10 @@ import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 // At 1280×800 and 1920×1200 it proves: a row's hover buttons add a variation and a row below
 // without touching the selection; inheritance reads as guide lines and `inherits · N changed`;
 // every row shows the ratios it renders; Render totals rows × files; the review tray docks under
-// the grid with no dialog and the grid still usable; an edit after review is refused until
-// re-checked; one confirm posts exactly one batch; Running lists the fired jobs.
+// the grid with no dialog and the grid still usable; an edit after review sends the tray back to
+// Review and re-checks by itself, with nothing to render until it has; one press of the tray's
+// primary button posts exactly one batch; Running lists the fired jobs. A new set's seed row is
+// "Base".
 //
 // It does NOT exercise the Fastify backend, the render fleet, Slack or Meta — the envelope says so.
 //
@@ -348,10 +350,13 @@ async function shoot(page: Page, name: string): Promise<void> {
 const currentStep = (tray: Locator) =>
   tray.getByRole('list', { name: 'Pre-flight steps' }).locator('li[aria-current="step"]');
 
-async function next(tray: Locator) {
-  const button = tray.getByRole('button', { name: 'Next', exact: true });
-  await expect(button).toBeEnabled();
-  await button.click();
+/** The tray's one way forward: the last button in its footer, named for the step it takes. */
+const primary = (tray: Locator) => tray.locator('footer').getByRole('button').last();
+
+async function pressPrimary(tray: Locator, name: string) {
+  await expect(primary(tray)).toHaveText(name);
+  await expect(primary(tray)).toBeEnabled();
+  await primary(tray).click();
 }
 
 // --- the run -------------------------------------------------------------------------------
@@ -476,10 +481,11 @@ test.describe('Render grid — fixtures', () => {
       await root.getByRole('cell').last().click();
       await shoot(page, `${size}-tray-review`);
 
-      // Walk to Confirm, then change a row: back to Review, nothing confirms until re-checked.
-      await next(tray);
-      await next(tray);
-      await expect(tray.getByRole('button', { name: 'Confirm 4 files', exact: true })).toBeEnabled();
+      // Walk to the last step (no Meta target, so Deliver), then change a row: back to Review,
+      // and nothing renders until the tray has re-checked by itself.
+      await pressPrimary(tray, 'Next: delivery');
+      await expect(primary(tray)).toHaveText('Render 4 files');
+      await expect(primary(tray)).toBeEnabled();
       const puts = fixtures.calls('PUT', /\/renders\/sets\//).length;
       const reviews = fixtures.calls('POST', /\/renders\/batch-preflight$/).length;
       const name = variation.getByRole('textbox', { name: 'Row name', exact: true });
@@ -491,19 +497,20 @@ test.describe('Render grid — fixtures', () => {
       await name.pressSequentially(' EU');
       await expect(tray.getByText('Rows changed since review')).toBeVisible();
       await expect(currentStep(tray)).toHaveText('Review');
-      await expect(tray.getByRole('button', { name: /^Confirm/ })).toHaveCount(0);
-      await expect(tray.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
+      await expect(primary(tray)).toHaveText('Next: delivery');
+      await expect(primary(tray)).toBeDisabled();
+      // A re-check that can run needs no button: it only shows, disabled, when one is blocked.
+      await expect(tray.getByRole('button', { name: 'Re-check', exact: true })).toHaveCount(0);
       await shoot(page, `${size}-tray-stale`);
-      await tray.getByRole('button', { name: 'Re-check', exact: true }).click();
       await expect(tray.getByText('Rows changed since review')).toBeHidden();
-      expect(fixtures.calls('PUT', /\/renders\/sets\//).length).toBe(puts + 1);
+      // The re-check saved the renamed row, then reviewed the new revision.
+      await expect.poll(() => fixtures.calls('PUT', /\/renders\/sets\//).length).toBe(puts + 1);
       await expect
         .poll(() => fixtures.calls('POST', /\/renders\/batch-preflight$/).length)
         .toBe(reviews + 1);
 
-      await next(tray);
-      await next(tray);
-      await tray.getByRole('button', { name: 'Confirm 4 files', exact: true }).click();
+      await pressPrimary(tray, 'Next: delivery');
+      await pressPrimary(tray, 'Render 4 files');
       await expect.poll(() => fixtures.calls('POST', /\/renders\/batches$/).length).toBe(1);
       const confirmed = fixtures.calls('POST', /\/renders\/batch-preflight$/).at(-1)
         ?.body as ApiRenderBatchPreflightRequest;
@@ -529,7 +536,8 @@ test.describe('Render grid — fixtures', () => {
       browser,
     }) => {
       const { page, fixtures } = await openRenderTab(browser, viewport, 'zero');
-      const root = gridRow(page, 'Root');
+      // A set seeded from the template starts from one row named "Base".
+      const root = gridRow(page, 'Base');
       await expect(root.getByText('Ready', { exact: true })).toBeVisible();
       const together = root.getByRole('group', {
         name: 'Formats 16:9, 1:1, 9:16. This template renders every format together',
@@ -540,8 +548,8 @@ test.describe('Render grid — fixtures', () => {
       await expect(page.getByText('This template renders every format together')).toBeVisible();
 
       await root.getByRole('checkbox', { name: 'Select row' }).click();
-      await quickAdd(page, 'Root', 'Add variation');
-      const variation = gridRow(page, 'Root · B');
+      await quickAdd(page, 'Base', 'Add variation');
+      const variation = gridRow(page, 'Base · B');
       await expect(variation.getByText('inherits · 0 changed')).toBeVisible();
       await expect.poll(() => ratiosIn(variation)).toEqual(THREE_RATIOS);
       await expect(selectedCount(page)).toHaveText('1 selected');
@@ -568,9 +576,8 @@ test.describe('Render grid — fixtures', () => {
         )
         .toEqual(THREE_RATIOS);
       await expect(tray.getByText('3 files', { exact: true })).toBeVisible();
-      await next(tray);
-      await next(tray);
-      await tray.getByRole('button', { name: 'Confirm 3 files', exact: true }).click();
+      await pressPrimary(tray, 'Next: delivery');
+      await pressPrimary(tray, 'Render 3 files');
       await expect.poll(() => fixtures.calls('POST', /\/renders\/batches$/).length).toBe(1);
       const confirmed = fixtures.calls('POST', /\/renders\/batch-preflight$/).at(-1)
         ?.body as ApiRenderBatchPreflightRequest;

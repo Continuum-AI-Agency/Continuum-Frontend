@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import type { ApiRenderVariable } from '@continuum/contracts';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { ToastProvider } from '@/components/ui/ToastProvider';
+import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import { registerToastSink } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
 import type { RequestRow } from './renderRequestRows';
 
@@ -26,6 +27,10 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
 }));
 
 const { RenderRowsImport, downloadTemplateCsv } = await import('./RenderRowsImport');
+
+// Base UI waits on a MutationObserver as a popup or dialog animates; happy-dom's, lifted per file
+// (a global shim in the shared setup drops other files' tests).
+installPickerDomGlobals();
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
@@ -227,7 +232,10 @@ describe('RenderRowsImport', () => {
   });
 
   test('says how many rows an XLSX has when the server refuses it past the cap', async () => {
-    render(<ToastProvider>{null}</ToastProvider>);
+    // A sink, not a mounted ToastProvider: its motion toasts cancel on unmount, and happy-dom
+    // rejects the cancelled animation's `finished` into whichever test runs next.
+    const toasts: string[] = [];
+    const unregister = registerToastSink(({ title }) => toasts.push(String(title)));
     renderImport();
     previewImport.mockImplementationOnce(async () => {
       throw new ApiError('render_import_too_many_rows', 422, undefined, {
@@ -238,9 +246,7 @@ describe('RenderRowsImport', () => {
     chooseFile(new File(['x'], 'rows.xlsx'));
     finishUpload({ documentId: 'doc-1' });
     await waitFor(() =>
-      expect(
-        screen.getByText('This sheet has 72 rows. A render set holds at most 50.'),
-      ).toBeTruthy(),
+      expect(toasts).toContain('This sheet has 72 rows. A render set holds at most 50.'),
     );
 
     previewImport.mockImplementationOnce(async () => {
@@ -251,11 +257,10 @@ describe('RenderRowsImport', () => {
     chooseFile(new File(['x'], 'rows.xlsx'));
     finishUpload({ documentId: 'doc-2' });
     await waitFor(() =>
-      expect(
-        screen.getByText('Two columns share a header. Rename one and upload again.'),
-      ).toBeTruthy(),
+      expect(toasts).toContain('Two columns share a header. Rename one and upload again.'),
     );
-    expect(screen.queryByText('render_import_duplicate_headers')).toBeNull();
+    expect(toasts.join('\n')).not.toContain('render_import_duplicate_headers');
+    unregister();
   });
 
   test('saves the template CSV with a UTF-8 BOM and does not revoke it during the click', async () => {
