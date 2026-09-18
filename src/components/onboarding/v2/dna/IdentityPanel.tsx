@@ -46,16 +46,19 @@ export function IdentityPanel({
   const hideFirstImpression =
     !firstImpression && (firstImpressionStatus === 'skipped' || firstImpressionStatus === 'error');
 
+  // Plain `fr` tracks, never `auto`: Palette and Typography carry sentences, and an `auto`
+  // track sized to their max-content starved the other columns to zero width.
   return (
     <div
       className="overflow-hidden rounded-xl border border-border bg-card shadow-sm text-foreground"
       data-testid="brand-dna-identity"
     >
       <div
+        data-testid="identity-columns"
         className={`grid grid-cols-1 divide-y divide-border/70 lg:divide-x lg:divide-y-0 ${
           hideFirstImpression
-            ? 'lg:grid-cols-[minmax(0,1.4fr)_auto_auto]'
-            : 'lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto_auto]'
+            ? 'lg:grid-cols-[1.4fr_1.2fr_1.2fr]'
+            : 'lg:grid-cols-[1.4fr_1fr_1.2fr_1.2fr]'
         }`}
       >
         <Subsection className="lg:py-5">

@@ -251,6 +251,47 @@ async function specimenViolations(page: Page, families: string[]): Promise<strin
   }, families);
 }
 
+/* -- the layout scanner ---------------------------------------------------- */
+
+const MIN_COLUMN_PX = 160;
+const LAYOUT_WIDTHS = [1024, 1500, 1920];
+
+/**
+ * Every way the identity row's columns fail to sit side by side, at each desktop width.
+ *
+ * The bug this keeps dead: Palette and Typography were `auto` tracks, and once they carried
+ * sentences their max-content outgrew the row — the `fr` tracks collapsed to zero and the
+ * brand name, the first impression and the palette were drawn on top of one another.
+ * Every text assertion above still passed, because overlapping text is still in the DOM.
+ */
+async function identityLayoutDefects(page: Page): Promise<string[]> {
+  const defects: string[] = [];
+  for (const width of LAYOUT_WIDTHS) {
+    await page.setViewportSize({ width, height: 1100 });
+    const boxes = await page.evaluate(() =>
+      Array.from(
+        document.querySelector('[data-testid="identity-columns"]')?.children ?? [],
+        (column) => {
+          const rect = column.getBoundingClientRect();
+          return { left: rect.left, right: rect.right, width: rect.width };
+        },
+      ),
+    );
+    if (boxes.length < 3) defects.push(`${width}px: ${boxes.length} columns rendered`);
+    boxes.forEach((box, index) => {
+      if (box.width < MIN_COLUMN_PX) {
+        defects.push(`${width}px: column ${index} is ${Math.round(box.width)}px wide`);
+      }
+      const next = boxes[index + 1];
+      if (next && box.right > next.left + 1) {
+        defects.push(`${width}px: column ${index} overlaps column ${index + 1}`);
+      }
+    });
+  }
+  await page.setViewportSize({ width: 1500, height: 1100 });
+  return defects;
+}
+
 /* -- the run --------------------------------------------------------------- */
 
 let backend: LocalBackend | null = null;
@@ -416,6 +457,9 @@ test.describe('onboarding brand reveal — honesty', () => {
       await expect(primary).toContainText(SAVED_FAMILY);
       await expect(primary.getByTestId('field-provenance')).toContainText('read · saved profile');
       expect(await specimenViolations(page, [SAVED_FAMILY])).toEqual([]);
+
+      // Three bare-hex sentences plus the specimen note is the heaviest the row gets.
+      expect(await identityLayoutDefects(page)).toEqual([]);
     } finally {
       await context?.close();
       await teardown(fixture);
