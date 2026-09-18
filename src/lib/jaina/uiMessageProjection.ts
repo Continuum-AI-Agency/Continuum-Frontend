@@ -94,13 +94,6 @@ export const textOf = (message: JainaUIMessage): string =>
     .map((part) => part.text ?? '')
     .join('');
 
-/** The model's thinking, kept separate from the answer. */
-export const reasoningOf = (message: JainaUIMessage): string =>
-  (message.parts as { type: string; text?: string }[])
-    .filter((part) => part.type === 'reasoning')
-    .map((part) => part.text ?? '')
-    .join('');
-
 /**
  * The stage a `data-jaina-delegation` row belongs to, keyed `kind:phase`.
  *
@@ -235,12 +228,28 @@ export const reportOf = (message: JainaUIMessage): Record<string, unknown> | und
   const meta = partsOfType(message, JAINA_UI_DATA_PART.reportMeta).at(-1);
   if (streamed.length === 0 && !meta) return undefined;
 
+  // Before the final report lands there is no meta. The progressive V2 `_meta` below is what
+  // lets the streamed blocks parse as V2. Without it they fell to the v1 normalizer and rendered
+  // under its internal "Checkpoint Blocks" heading.
+  if (!meta) {
+    return {
+      blocks: streamed,
+      _meta: {
+        schema_version: '2',
+        block_count: streamed.length,
+        has_charts: streamed.some((block) => block.category === 'chart'),
+        has_media: false,
+        primary_scope: typeof streamed[0]?.scope === 'string' ? streamed[0].scope : '',
+      },
+    };
+  }
+
   // Until the final report lands, the reader sees blocks as they stream, in arrival order. Once it
   // lands and names its blocks, it is authoritative: exactly those, in its order. A part is never
   // removed, so without this a block streamed under an id the final checkpoint re-composed away
   // stays on screen beside its replacement — measured on real runs as 4 blocks shown for a
   // 2-block report, and a turn that renders differently live than it does after a reload.
-  const { block_order: blockOrder, ...rest } = meta ?? {};
+  const { block_order: blockOrder, ...rest } = meta;
   const order = Array.isArray(blockOrder)
     ? blockOrder.filter((id): id is string => typeof id === 'string')
     : [];
@@ -562,14 +571,12 @@ export const approvalsOf = (
 };
 
 // ---------------------------------------------------------------------------
-// The plan card
+// The plan
 // ---------------------------------------------------------------------------
 //
-// `response.plan.requested` / `response.plan.decision` are NOT in the Backend's forwardable
-// vocabulary — there is no plan event on the wire and never was. The plan card has always been
-// INFERRED from the planner narrating its plan as thought text, and these two helpers are that
-// inference, lifted verbatim out of `stream.ts` so the reducer can be deleted. No new wire part is
-// needed: adding one would be a Backend change to reproduce something the text already carries.
+// The planner's structured plan arrives as `data-jaina-plan`. Its markdown rendering stays off the
+// wire: carried as reasoning, it was the last thought, which `pickRenderableContent` falls back to,
+// so the whole plan printed as the answer.
 
 const getNonEmptyString = (value: unknown): string | undefined => {
   if (typeof value !== 'string') return undefined;
@@ -577,100 +584,56 @@ const getNonEmptyString = (value: unknown): string | undefined => {
   return trimmed.length > 0 ? trimmed : undefined;
 };
 
-export function looksLikePlanDelta(text: string): boolean {
-  const trimmed = text.trim();
-  if (!trimmed) return false;
-  return (
-    trimmed.includes('"plan_id"') ||
-    trimmed.includes('"planId"') ||
-    trimmed.includes('"chat_title"') ||
-    trimmed.includes('"chatTitle"') ||
-    trimmed.includes('"objectives"') ||
-    trimmed.includes('"steps"')
-  );
-}
-
-export function parsePlanFromAccumulatedDelta(
-  planJson: string,
-  currentPlan: JainaPlan | null,
-): JainaPlan | null {
-  const trimmed = planJson.trim();
-  if (!trimmed) return currentPlan;
-
-  const candidates = [trimmed];
-  const firstBraceIndex = trimmed.indexOf('{');
-  const lastBraceIndex = trimmed.lastIndexOf('}');
-  if (firstBraceIndex >= 0 && lastBraceIndex > firstBraceIndex) {
-    const extracted = trimmed.slice(firstBraceIndex, lastBraceIndex + 1);
-    if (extracted !== trimmed) candidates.push(extracted);
-  }
-
-  for (const candidate of candidates) {
-    try {
-      const parsed = JSON.parse(candidate) as Record<string, unknown>;
-      const stepsRaw = Array.isArray(parsed.steps)
-        ? parsed.steps
-        : Array.isArray(parsed.objectives)
-          ? parsed.objectives
-          : [];
-      const steps = stepsRaw.reduce<JainaPlan['steps']>((acc, step) => {
-        if (!step || typeof step !== 'object') return acc;
-        const record = step as Record<string, unknown>;
-        const title =
-          getNonEmptyString(record.title) ??
-          getNonEmptyString(record.task) ??
-          getNonEmptyString(record.objective) ??
-          '';
-        if (!title) return acc;
-        acc.push({
-          title,
-          description:
-            getNonEmptyString(record.description) ??
-            getNonEmptyString(record.success_criteria) ??
-            getNonEmptyString(record.summary) ??
-            undefined,
-          status:
-            typeof record.status === 'string'
-              ? (record.status as JainaPlan['steps'][number]['status'])
-              : 'pending',
-        });
-        return acc;
-      }, []);
-
-      return {
-        id:
-          (typeof parsed.id === 'string' && parsed.id) ||
-          (typeof parsed.plan_id === 'string' && parsed.plan_id) ||
-          currentPlan?.id ||
-          'plan-1',
-        title:
-          (typeof parsed.chat_title === 'string' && parsed.chat_title) ||
-          (typeof parsed.chatTitle === 'string' && parsed.chatTitle) ||
-          (typeof parsed.title === 'string' && parsed.title) ||
-          currentPlan?.title ||
-          'Execution Plan',
+function planFromRecord(record: Record<string, unknown>): JainaPlan {
+  const stepsRaw = Array.isArray(record.steps)
+    ? record.steps
+    : Array.isArray(record.objectives)
+      ? record.objectives
+      : [];
+  const steps = stepsRaw.flatMap((step): JainaPlan['steps'] => {
+    const item = asRecord(step);
+    if (!item) return [];
+    const title =
+      getNonEmptyString(item.title) ??
+      getNonEmptyString(item.task) ??
+      getNonEmptyString(item.objective);
+    if (!title) return [];
+    return [
+      {
+        title,
         description:
-          (typeof parsed.description === 'string' && parsed.description) ||
-          (typeof parsed.summary === 'string' && parsed.summary) ||
-          currentPlan?.description ||
-          'Review this execution plan.',
+          getNonEmptyString(item.description) ??
+          getNonEmptyString(item.success_criteria) ??
+          getNonEmptyString(item.summary),
         status:
-          (typeof parsed.status === 'string'
-            ? (parsed.status as JainaPlan['status'])
-            : currentPlan?.status) || 'pending',
-        steps: steps.length > 0 ? steps : currentPlan?.steps || [],
-      };
-    } catch {}
-  }
+          typeof item.status === 'string'
+            ? (item.status as JainaPlan['steps'][number]['status'])
+            : 'pending',
+      },
+    ];
+  });
 
-  return currentPlan;
+  return {
+    id: getNonEmptyString(record.id) ?? getNonEmptyString(record.plan_id) ?? 'plan-1',
+    title:
+      getNonEmptyString(record.chat_title) ??
+      getNonEmptyString(record.chatTitle) ??
+      getNonEmptyString(record.title) ??
+      'Execution Plan',
+    description:
+      getNonEmptyString(record.description) ??
+      getNonEmptyString(record.summary) ??
+      'Review this execution plan.',
+    status:
+      typeof record.status === 'string' ? (record.status as JainaPlan['status']) : 'pending',
+    steps,
+  };
 }
 
-/** The plan the planner narrated, or undefined when this turn narrated none. */
+/** The plan this turn's planner produced, or undefined when it produced none. */
 export const planOf = (message: JainaUIMessage): JainaPlan | undefined => {
-  const thoughts = reasoningOf(message);
-  if (!looksLikePlanDelta(thoughts)) return undefined;
-  return parsePlanFromAccumulatedDelta(thoughts, null) ?? undefined;
+  const data = partsOfType(message, JAINA_UI_DATA_PART.plan).at(-1);
+  return data ? planFromRecord(data) : undefined;
 };
 
 // ---------------------------------------------------------------------------

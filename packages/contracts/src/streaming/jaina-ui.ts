@@ -74,6 +74,12 @@ export type JainaUIDataTypes = {
    */
   'jaina-checkpoint-summary': Record<string, unknown>;
   /**
+   * The planner's structured plan, one per run. It comes from the `objectives_init` `state.delta`.
+   * The markdown `response.plan.delta` stays off the wire: carried as reasoning, it became the
+   * turn's visible answer.
+   */
+  'jaina-plan': Record<string, unknown>;
+  /**
    * Transport notices — the idle keepalive and the session fence. Always emitted `transient`, so
    * the SDK hands them to `onData` and never adds them to `message.parts`. A heartbeat kept as a
    * part would render as an empty message every fifteen seconds for the length of the run.
@@ -105,5 +111,6 @@ export const JAINA_UI_DATA_PART = {
   creativeRender: 'data-jaina-creative-render',
   canvasActions: 'data-jaina-canvas-actions',
   checkpointSummary: 'data-jaina-checkpoint-summary',
+  plan: 'data-jaina-plan',
   notice: 'data-jaina-notice',
 } as const satisfies Record<string, JainaUIDataPartType>;

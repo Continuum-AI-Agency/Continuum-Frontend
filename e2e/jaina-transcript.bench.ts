@@ -42,7 +42,13 @@
  *
  * Run:
  *   cd Continuum-Frontend
- *   bun --no-env-file --env-file=.env e2e/jaina-transcript.bench.ts
+ *   bun --no-env-file --env-file=.env e2e/jaina-transcript.bench.ts [--analysis]
+ *
+ * `--analysis` adds a second, real analysis turn, which takes minutes and reads Meta but never
+ * writes to it. A greeting never runs the planner or streams a report, so it cannot show the two
+ * things that leaked in the field: the planner's markdown plan printed as the answer, and
+ * streamed blocks rendered under the v1 "Checkpoint Blocks" heading. That turn grades every
+ * snapshot, because both leaks only showed mid-stream.
  *
  * `--no-env-file --env-file=.env` is not decoration: Bun auto-loads `.env.local`, which on
  * this machine points Supabase at the LOCAL stack while the Backend is on prod — a 403
@@ -84,6 +90,13 @@ const AD_ACCOUNT_ID = 'act_521903353286118';
 
 /** The greeting `jaina:uistream:e2e:bench` uses. This bench grades RENDER SHAPES, not analysis. */
 const PROMPT = 'Reply with a one sentence greeting and nothing else.';
+
+/** The ask from the field report that showed the plan as the reply. */
+const ANALYSIS_PROMPT =
+  'Find untapped audience opportunities for the current ad account and prioritize concrete tests.';
+
+/** A line only `renderObjectivePlanMarkdown` writes. If a reader can see it, the plan leaked. */
+const PLAN_MARKDOWN_SIGNATURE = 'Scope ceiling:';
 
 const BACKEND_PORT = Number(process.env.JAINA_TRANSCRIPT_BENCH_BACKEND_PORT ?? 4423);
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
@@ -748,12 +761,129 @@ async function main(): Promise<void> {
         'Whether `GET /chat/conversations/:id/messages` returns part-for-part identical UI ' +
         'messages is jaina:history:e2e:bench.',
     );
+
+    if (process.argv.includes('--analysis')) {
+      const analysisSessionId = `bench_jaina_transcript_${randomUUID().replace(/-/g, '')}`;
+      sessions.push(analysisSessionId);
+      await analysisTurn(transport, analysisSessionId);
+    } else {
+      note(
+        'UN-EXERCISED: an analysis turn — the planner, its plan part and blocks streamed ahead of ' +
+          'the final report. Run with --analysis.',
+      );
+    }
   } finally {
     await cleanup(sessions).catch((error) =>
       console.error('[jaina-transcript-bench] cleanup failed:', error),
     );
     await stopBackend();
   }
+}
+
+/**
+ * One real analysis turn, projected at EVERY snapshot the SDK reader yields. The final message alone
+ * cannot show either leak: the plan text is displaced once the answer lands, and the v1 report is
+ * replaced once the final report's meta arrives.
+ */
+async function analysisTurn(
+  transport: DefaultChatTransport<JainaUIMessage>,
+  sessionId: string,
+): Promise<void> {
+  const stream = await transport.sendMessages({
+    trigger: 'submit-message',
+    chatId: sessionId,
+    messageId: undefined,
+    messages: [
+      {
+        id: `${sessionId}:user`,
+        role: 'user',
+        parts: [{ type: 'text', text: ANALYSIS_PROMPT }],
+      } as unknown as JainaUIMessage,
+    ],
+    abortSignal: undefined,
+    body: {
+      jainaInput: {
+        query: ANALYSIS_PROMPT,
+        adAccountId: AD_ACCOUNT_ID,
+        brandId: BRAND_ID,
+        sessionId,
+      } satisfies JainaChatInput,
+    },
+  });
+
+  let last: JainaUIMessage | undefined;
+  let snapshots = 0;
+  const planVisibleAt: number[] = [];
+  let blocksAheadOfReport = 0;
+  const v1ReportAt: number[] = [];
+
+  for await (const message of readUIMessageStream<JainaUIMessage>({ stream })) {
+    last = message;
+    snapshots += 1;
+    const view = toJainaChatMessage(message, { isStreaming: true });
+    const visible = [view.content, ...(view.reasoning ?? []).map((entry) => entry.detail ?? '')];
+    if (visible.some((value) => value.includes(PLAN_MARKDOWN_SIGNATURE))) {
+      planVisibleAt.push(snapshots);
+    }
+    if (
+      countOf(message, JAINA_UI_DATA_PART.reportBlock) > 0 &&
+      countOf(message, JAINA_UI_DATA_PART.reportMeta) === 0
+    ) {
+      blocksAheadOfReport += 1;
+      if (view.report !== undefined || view.reportV2 === undefined) v1ReportAt.push(snapshots);
+    }
+  }
+
+  if (!last) {
+    check('the analysis turn produced a UI message', false, 'the SDK reader yielded nothing');
+    return;
+  }
+  const rendered = toJainaChatMessage(last, { isStreaming: false });
+
+  check(
+    'the planner’s markdown plan is never shown as the answer or a thought, at any snapshot',
+    planVisibleAt.length === 0,
+    planVisibleAt.length === 0
+      ? `${snapshots} snapshots graded`
+      : `visible at ${planVisibleAt.length}/${snapshots} snapshots, first #${planVisibleAt[0]}`,
+  );
+
+  if (blocksAheadOfReport === 0) {
+    record(
+      'blocks streamed ahead of the final report render as V2, never the v1 "Checkpoint Blocks"',
+      'SKIP',
+      'no report block streamed before the final report this turn',
+    );
+  } else {
+    check(
+      'blocks streamed ahead of the final report render as V2, never the v1 "Checkpoint Blocks"',
+      v1ReportAt.length === 0,
+      v1ReportAt.length === 0
+        ? `${blocksAheadOfReport} pre-report snapshot(s), all V2`
+        : `v1 at ${v1ReportAt.length}/${blocksAheadOfReport}, first #${v1ReportAt[0]}`,
+    );
+  }
+
+  const planParts = countOf(last, JAINA_UI_DATA_PART.plan);
+  if (planParts === 0) {
+    record(
+      'the planner’s plan arrives as a part and names the turn',
+      'SKIP',
+      'no data-jaina-plan part: the planner did not run (quick path) this turn',
+    );
+  } else {
+    check(
+      'the planner’s plan arrives as a part and names the turn',
+      planParts === 1 && Boolean(rendered.plan?.title.trim()),
+      `${planParts} plan part(s); title ${JSON.stringify(rendered.plan?.title)}`,
+    );
+  }
+
+  check(
+    'the analysis turn ends with a non-empty answer',
+    rendered.content.trim().length > 0,
+    `${rendered.content.length} chars; reportV2 ${rendered.reportV2 ? 'set' : 'absent'}`,
+  );
 }
 
 /**

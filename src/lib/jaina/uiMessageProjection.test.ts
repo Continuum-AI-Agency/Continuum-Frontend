@@ -6,9 +6,8 @@
  * with a POSITIVE observable — Frontend tests are excluded from typecheck (`tsconfig.json`
  * 151-162), so a renamed field reds nothing and "it did not throw" proves nothing.
  *
- * The two joins that carry real risk get their own blocks: the approval gate, which is a native
- * SDK part state joined to a preview that rides beside it, and the plan card, which has no wire
- * part at all and is inferred from the planner's own narration.
+ * The approval gate carries real risk and gets its own block: a native SDK part state joined to
+ * a preview that rides beside it.
  */
 
 import { describe, expect, it } from 'bun:test';
@@ -20,11 +19,9 @@ import {
   canvasActionsOf,
   checkpointSummaryOf,
   delegationsOf,
-  looksLikePlanDelta,
   planOf,
   projectTranscriptMessage,
   reasoningEntriesOf,
-  reasoningOf,
   reportOf,
   type TranscriptProjectionInputs,
   textOf,
@@ -76,7 +73,10 @@ describe('text, reasoning and tools', () => {
     ]);
 
     expect(textOf(message)).toBe('Spend is up 12%.');
-    expect(reasoningOf(message)).toBe('Checking spendDone.');
+    expect(reasoningEntriesOf(message).map((entry) => entry.detail)).toEqual([
+      'Checking spend',
+      'Done.',
+    ]);
   });
 
   it('turns each reasoning part into one progress entry the thinking window can render', () => {
@@ -461,53 +461,49 @@ describe('the approval gate', () => {
   });
 });
 
-describe('the plan card, which has no wire part', () => {
-  const planJson = JSON.stringify({
+const planPart = (plan: Record<string, unknown>): Part =>
+  data(JAINA_UI_DATA_PART.plan, 'run_1:plan', plan);
+
+describe('the plan part', () => {
+  const objectivePlan = {
     plan_id: 'plan_7',
     chat_title: 'Scale the winners',
-    description: 'Three steps to more spend on what works.',
-    steps: [
-      { title: 'Read account spend', status: 'completed' },
-      { title: 'Find the winners', description: 'By ROAS', status: 'in_progress' },
+    intent: 'analysis',
+    scope_ceiling: null,
+    objectives: [
+      { objective_id: 'o1', task: 'Read account spend', description: '', success_criteria: 'KPIs' },
+      { objective_id: 'o2', task: 'Find the winners', description: 'By ROAS' },
     ],
-  });
+  };
 
-  it('recognises planner narration and ignores ordinary thinking', () => {
-    expect(looksLikePlanDelta(planJson)).toBe(true);
-    expect(looksLikePlanDelta('Reading the account now.')).toBe(false);
-  });
-
-  it('infers the plan from the reasoning parts', () => {
-    const plan = planOf(uiMessage([reasoning(planJson)]));
+  it('projects the planner plan into a plan with steps', () => {
+    const plan = planOf(uiMessage([planPart(objectivePlan)]));
 
     expect(plan?.id).toBe('plan_7');
     expect(plan?.title).toBe('Scale the winners');
-    expect(plan?.steps.map((step) => step.title)).toEqual([
-      'Read account spend',
-      'Find the winners',
+    expect(plan?.steps).toEqual([
+      { title: 'Read account spend', description: 'KPIs', status: 'pending' },
+      { title: 'Find the winners', description: 'By ROAS', status: 'pending' },
     ]);
-    expect(plan?.steps[1].status).toBe('in_progress');
   });
 
-  it('infers it across split reasoning parts, because deltas arrive in pieces', () => {
-    const half = Math.floor(planJson.length / 2);
-    const plan = planOf(
-      uiMessage([reasoning(planJson.slice(0, half)), reasoning(planJson.slice(half))]),
-    );
-
-    expect(plan?.title).toBe('Scale the winners');
-  });
-
-  it('leaves the plan absent on a turn that narrated none', () => {
-    expect(planOf(uiMessage([reasoning('Reading the account now.')]))).toBeUndefined();
+  it('leaves the plan absent on a turn with no plan part, whatever the reasoning says', () => {
+    expect(planOf(uiMessage([reasoning('Plan: Scale the winners')]))).toBeUndefined();
     expect(
       toJainaChatMessage(uiMessage([text('hi')]), { isStreaming: false }).plan,
     ).toBeUndefined();
   });
 
-  it('puts the inferred plan on the projected message', () => {
-    const projected = toJainaChatMessage(uiMessage([reasoning(planJson)]), { isStreaming: true });
+  // The screenshot this pins: before the answer arrived, the last thought was the whole markdown
+  // plan, and the content ladder printed it as the reply.
+  it('headlines a streaming turn with the plan title, never a thought', () => {
+    const projected = toJainaChatMessage(
+      uiMessage([planPart(objectivePlan), reasoning('Reading the account now.')]),
+      { isStreaming: true },
+    );
+
     expect(projected.plan?.title).toBe('Scale the winners');
+    expect(projected.content).toBe('Scale the winners');
   });
 });
 
@@ -518,17 +514,17 @@ describe('the plan card, which has no wire part', () => {
  * produce a new object, or a finished turn keeps a stale status, title, plan or delivery source.
  */
 describe('projectTranscriptMessage keeps identity until something it shows changes', () => {
-  const planJson = JSON.stringify({
+  const plan = planPart({
     plan_id: 'plan_7',
     chat_title: 'Scale the winners',
-    steps: [{ title: 'Read account spend', status: 'pending' }],
+    objectives: [{ task: 'Read account spend' }],
   });
   const inputs: TranscriptProjectionInputs = {
     isStreaming: false,
     optimisticPlanStatusById: {},
     deliverySource: 'live_render',
   };
-  const answer = () => uiMessage([reasoning(planJson), text('Move spend to the winners.')]);
+  const answer = () => uiMessage([plan, text('Move spend to the winners.')]);
 
   it('returns the same object for the same message and inputs', () => {
     const cache = new WeakMap();
@@ -545,7 +541,7 @@ describe('projectTranscriptMessage keeps identity until something it shows chang
     const first = projectTranscriptMessage(cache, answer(), inputs);
     const next = projectTranscriptMessage(
       cache,
-      uiMessage([reasoning(planJson), text('Move spend to the winners today.')]),
+      uiMessage([plan, text('Move spend to the winners today.')]),
       inputs,
     );
 
@@ -793,6 +789,18 @@ describe('report blocks once the final report lands', () => {
       'draft-b',
       'draft-a',
     ]);
+  });
+
+  // With no meta yet, the streamed blocks used to fail the V2 schema and fall to the v1 inline
+  // report, which labels them "Checkpoint Blocks".
+  it('renders streamed blocks as a V2 report before the final report lands', () => {
+    const projected = toJainaChatMessage(
+      uiMessage([reportBlock('draft-b', 'Spend'), reportBlock('draft-a', 'ROAS')]),
+      { isStreaming: true },
+    );
+
+    expect(projected.report).toBeUndefined();
+    expect(projected.reportV2?.blocks.map((b) => b.block_id)).toEqual(['draft-b', 'draft-a']);
   });
 
   it('drops a streamed block the final report re-composed away', () => {

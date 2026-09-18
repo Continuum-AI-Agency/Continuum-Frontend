@@ -646,19 +646,21 @@ describe('JainaChatSurface integration', () => {
    * Re-expressed from `keeps plan + reasoning visible after response.done snapshot refresh`,
    * which was RED at HEAD. The plan used to be held in reducer state and the finished turn was
    * re-read from a persisted snapshot that never carried one, so finishing the turn erased the
-   * card. There is no second read now: the plan is inferred from the SAME reasoning parts on
-   * every projection, so it cannot survive streaming and then vanish on completion.
+   * card. There is no second read now: the plan is projected from the SAME plan part on every
+   * projection, so it cannot survive streaming and then vanish on completion.
    */
   it('keeps the projected plan and its reasoning after the turn finishes', async () => {
     global.fetch = emptyHistoryFetch();
-    const planNarration = JSON.stringify({
-      plan_id: 'fallback_uqc00d',
-      chat_title: 'Recommend Budget Reallocations For This Week BY Campaign',
-      description: 'Scope: last_7d',
-      steps: [
-        { title: 'Analyze campaign performance and recommend reallocations.', status: 'pending' },
-      ],
-    });
+    const planPart: Part = {
+      type: JAINA_UI_DATA_PART.plan,
+      id: 'run-1:plan',
+      data: {
+        plan_id: 'fallback_uqc00d',
+        chat_title: 'Recommend Budget Reallocations For This Week BY Campaign',
+        objectives: [{ task: 'Analyze campaign performance and recommend reallocations.' }],
+      },
+    };
+    const thought = reasoningPart('Reading campaign spend for the last 7 days.');
 
     render(surface, { wrapper: withQueryClient });
     chatStatus = 'streaming';
@@ -666,7 +668,7 @@ describe('JainaChatSurface integration', () => {
       uiMessage('user-1', 'user', [
         textPart('Recommend budget reallocations for this week by campaign'),
       ]),
-      uiMessage('assistant-1', 'assistant', [reasoningPart(planNarration)], {
+      uiMessage('assistant-1', 'assistant', [planPart, thought], {
         runId: 'run-1',
       }),
     ]);
@@ -689,7 +691,7 @@ describe('JainaChatSurface integration', () => {
         uiMessage(
           'assistant-1',
           'assistant',
-          [reasoningPart(planNarration), textPart('Move 20% of spend to the Influencer campaign.')],
+          [planPart, thought, textPart('Move 20% of spend to the Influencer campaign.')],
           { runId: 'run-1', status: 'completed' },
         ),
       ]);
