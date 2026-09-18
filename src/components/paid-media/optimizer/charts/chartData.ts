@@ -187,7 +187,23 @@ export function budgetMix(portfolios: PortfolioListItem[]): BudgetMix {
 
 // ── Spend by objective, over time ────────────────────────────────────────────
 
-export type SpendByObjectiveInput = { date: string; objective: string; spend: number };
+export type SpendByObjectiveInput = {
+  date: string;
+  objective: string;
+  spend: number;
+  /** When the snapshot behind the row was taken; absent from older RPC responses. */
+  snapshot_ts?: string | null;
+};
+
+/** The oldest snapshot time across the rows — the honest "as of" for a brand-wide sum. */
+export function spendSnapshotTs(rows: ReadonlyArray<SpendByObjectiveInput>): string | null {
+  let oldest: string | null = null;
+  for (const row of rows) {
+    if (!row.snapshot_ts) continue;
+    if (oldest === null || row.snapshot_ts < oldest) oldest = row.snapshot_ts;
+  }
+  return oldest;
+}
 
 export type SpendStreamPoint = {
   date: string;

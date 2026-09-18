@@ -26,11 +26,18 @@ import {
   lastFullDay,
   type SpendByObjectiveInput,
   type SpendStream,
+  spendSnapshotTs,
   spendStream,
 } from './chartData';
 import { objectiveColor } from './vizTokens';
 
 const DATE_FMT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+const SNAPSHOT_FMT = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
 
 type SpendByObjectiveStreamProps = {
   rows: SpendByObjectiveInput[];
@@ -85,6 +92,11 @@ export function SpendByObjectiveStream({
     ? `Spent ${DATE_FMT.format(new Date(`${stream.latest.date}T00:00:00Z`))}`
     : 'Planned per day';
   const windowLabel = `${DATE_FMT.format(new Date(`${stream.window.start}T00:00:00Z`))} – ${DATE_FMT.format(new Date(`${stream.window.end}T00:00:00Z`))}`;
+  const snapshotTs = spendSnapshotTs(rows);
+  const snapshotAt = snapshotTs ? Date.parse(snapshotTs) : Number.NaN;
+  const snapshotLabel = Number.isNaN(snapshotAt)
+    ? null
+    : `snapshot ${SNAPSHOT_FMT.format(new Date(snapshotAt))}`;
 
   const chartData = stream.points.map((point) => ({
     date: new Date(`${point.date}T00:00:00Z`),
@@ -103,6 +115,7 @@ export function SpendByObjectiveStream({
       <div className="min-w-0 space-y-1">
         <p className="text-3xs text-muted-foreground uppercase tracking-wide">
           Last {days} full days · {windowLabel}
+          {snapshotLabel ? ` · ${snapshotLabel}` : ''}
         </p>
         {stream.hasData && stream.enoughToChart ? (
           <AreaChart

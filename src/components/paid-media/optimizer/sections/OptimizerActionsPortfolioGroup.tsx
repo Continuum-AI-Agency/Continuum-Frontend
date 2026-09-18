@@ -73,6 +73,14 @@ import {
 import { ActionRow } from './OptimizerActionFeed';
 import { OptimizerReadError } from './OptimizerReadError';
 import { RecommendationInsight } from './RecommendationInsight';
+import {
+  asOfLine,
+  evidenceLine,
+  impactLabel,
+  impactPerDay,
+  queueSummary,
+  triggerWords,
+} from './recQueueModel';
 
 /** A budget move needing a decision — held by autopilot, approved and awaiting the drain,
  *  or a scored change not yet written (recommend mode). */
@@ -168,7 +176,11 @@ export function buildActionQueue(
     });
   }
 
-  return rows.sort((a, b) => queueRank(a) - queueRank(b));
+  // Within a band, the money decides: two medium pauses are not equal when one drains
+  // $500/day and the other $20/day.
+  return rows.sort(
+    (a, b) => queueRank(a) - queueRank(b) || rowImpactPerDay(b) - rowImpactPerDay(a),
+  );
 }
 
 /** Who this ad set's budget came from, or went to. `direction` is from the row's point of
@@ -212,6 +224,10 @@ export function buildCounterparties(
 
 /** Sort key: needs-decision first, approved-awaiting-execute next, hidden last; within the
  *  needs-decision band, higher-severity recs rise. */
+function rowImpactPerDay(row: QueueRow): number {
+  return row.route === 'budget' ? 0 : impactPerDay(row.rec);
+}
+
 function queueRank(row: QueueRow): number {
   if (row.route === 'hidden') return 300;
   if (row.approved) return 200;
@@ -260,6 +276,14 @@ export function OptimizerActionsPortfolioGroup({
   const rows = React.useMemo(() => buildActionQueue(report, nameById), [report, nameById]);
 
   const runId = (report?.latest_run as { id?: string } | null)?.id ?? null;
+  const asOf = asOfLine(
+    (report?.latest_run as { cycle_ts?: string } | null)?.cycle_ts ?? null,
+    portfolio.next_realloc_at ?? null,
+  );
+  const summary = React.useMemo(
+    () => queueSummary(report?.recommendations ?? []),
+    [report?.recommendations],
+  );
   // Observe hard-halts every Meta write; approving/executing is disabled and the reason shown.
   const writesBlocked = portfolio.apply_mode === 'observe';
 
@@ -497,6 +521,34 @@ export function OptimizerActionsPortfolioGroup({
           value={search}
         />
       </div>
+
+      {/* Is this queue current? One line, before anything in it is read. Every pending row
+          belongs to the latest cycle (older ones are superseded server-side), so the cycle's
+          time IS the queue's time. */}
+      {asOf ? <p className="text-2xs text-muted-foreground">{asOf}</p> : null}
+
+      {/* What is in the queue, by reason, biggest money first — the summary a reader wants
+          before ten rows that each say "Pause ad set · HIGH". */}
+      {summary.length > 1 ? (
+        <ul className="flex flex-wrap gap-1.5" aria-label="Queue summary">
+          {summary.map((group) => (
+            <li
+              className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/20 px-2 py-1 text-2xs"
+              key={`${group.kind}:${group.trigger}`}
+            >
+              <span className="font-medium">
+                {group.count} × {group.label.toLowerCase()}
+              </span>
+              <span className="text-muted-foreground">· {triggerWords(group.trigger)}</span>
+              {group.impactPerDay > 0 ? (
+                <span className="text-muted-foreground tabular-nums">
+                  · {formatCurrency(group.impactPerDay, null)}/day
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       <QueueToolbar
         activeFilters={routeFilters}
@@ -1042,10 +1094,14 @@ function QueueRowView({
             ) : null}
           </div>
           {row.route === 'budget' && row.item.reason ? (
-            <p className="mt-0.5 line-clamp-2 text-2xs text-muted-foreground" title={row.item.reason}>
+            <p
+              className="mt-0.5 line-clamp-2 text-2xs text-muted-foreground"
+              title={row.item.reason}
+            >
               <span className="font-medium text-foreground">Why:</span> {row.item.reason}
             </p>
           ) : null}
+          {row.route !== 'budget' ? <RecEvidenceLine rec={row.rec} currency={currency} /> : null}
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <AdSetIdLabel id={row.adsetId} />
             {row.route !== 'budget' && row.rec.severity ? (
@@ -1082,6 +1138,30 @@ function QueueRowView({
 
       {expanded ? <RowDetail row={row} currency={currency} counterparty={counterparty} /> : null}
     </li>
+  );
+}
+
+/** The justification, in the row, always visible — never only behind a hover. The
+ *  structured line first (metric · value · comparison · window, then the money per day),
+ *  the prose reason under it. A trader should be able to act from this line alone. */
+function RecEvidenceLine({ rec, currency }: { rec: RecommendationRow; currency: string | null }) {
+  const line = evidenceLine(rec.evidence, currency);
+  const money = impactLabel(rec, currency);
+  if (!line && !rec.reason) return null;
+  return (
+    <div className="mt-0.5 space-y-0.5 text-2xs text-muted-foreground">
+      {line ? (
+        <p className="tabular-nums">
+          <span className="font-medium text-foreground">{line}</span>
+          {money ? <span> · {money}</span> : null}
+        </p>
+      ) : null}
+      {rec.reason ? (
+        <p className="line-clamp-2" title={rec.reason}>
+          <span className="font-medium text-foreground">Why:</span> {rec.reason}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
