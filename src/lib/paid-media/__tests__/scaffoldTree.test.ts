@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'bun:test';
-import type { JainaScaffoldNodeProgress } from '@/lib/jaina/stream';
+import type { JainaScaffoldNodeProgress } from '@/lib/jaina/scaffoldTypes';
 import {
   buildScaffoldTree,
   effectiveScaffoldStatus,

@@ -25,11 +25,39 @@ function buildQueuedMessage(
 
 describe('queueing', () => {
   it('queues submissions whenever streaming or an active response exists', () => {
-    expect(shouldQueueSubmission({ isStreaming: true, activeResponseId: null })).toBe(true);
-    expect(shouldQueueSubmission({ isStreaming: false, activeResponseId: 'assistant-1' })).toBe(
-      true,
-    );
-    expect(shouldQueueSubmission({ isStreaming: false, activeResponseId: null })).toBe(false);
+    expect(
+      shouldQueueSubmission({
+        isStreaming: true,
+        activeResponseId: null,
+        isLoadingConversation: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldQueueSubmission({
+        isStreaming: false,
+        activeResponseId: 'assistant-1',
+        isLoadingConversation: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldQueueSubmission({
+        isStreaming: false,
+        activeResponseId: null,
+        isLoadingConversation: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('holds a turn sent while the conversation is still loading', () => {
+    // Sent now, it would go out on the throwaway session id the surface mounted with, and the load
+    // would then swap `useChat` onto the reader's real conversation — taking the turn off screen.
+    expect(
+      shouldQueueSubmission({
+        isStreaming: false,
+        activeResponseId: null,
+        isLoadingConversation: true,
+      }),
+    ).toBe(true);
   });
 
   it('appends queued messages in order', () => {

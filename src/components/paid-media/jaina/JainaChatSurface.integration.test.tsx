@@ -138,8 +138,32 @@ mock.module('@/lib/supabase/client', () => ({
 // written without anything re-rendering — the transcript would stay empty and every history
 // case would pass for the wrong reason.
 mock.module('@/hooks/useJainaChat', () => ({
-  useJainaChat: () => {
-    const [messages, setMessages] = React.useState<JainaUIMessage[]>([]);
+  // Models what @ai-sdk/react actually does, because the difference is where the bug lived: ONE
+  // chat per id, built from `initialMessages` the first time that id is seen, and a `setMessages`
+  // bound to the chat it came from. A mock holding one array regardless of the id let a
+  // conversation switch that rendered an empty transcript pass every test here.
+  useJainaChat: ({
+    sessionId,
+    initialMessages,
+  }: {
+    sessionId: string;
+    initialMessages?: JainaUIMessage[];
+  }) => {
+    const [chats, setChats] = React.useState<Record<string, JainaUIMessage[]>>({});
+    const created = React.useRef<Record<string, JainaUIMessage[]>>({});
+    if (!(sessionId in created.current)) created.current[sessionId] = initialMessages ?? [];
+    const messages = chats[sessionId] ?? created.current[sessionId];
+    const setMessages = React.useCallback(
+      (next: JainaUIMessage[] | ((previous: JainaUIMessage[]) => JainaUIMessage[])) =>
+        setChats((previous) => {
+          const current = previous[sessionId] ?? created.current[sessionId] ?? [];
+          return {
+            ...previous,
+            [sessionId]: typeof next === 'function' ? next(current) : next,
+          };
+        }),
+      [sessionId],
+    );
     pushMessages = setMessages;
     return {
       messages,
@@ -278,7 +302,26 @@ mock.module('./components/JainaEmptyState', () => ({
 }));
 
 mock.module('./components/JainaConversationSidebar', () => ({
-  JainaConversationSidebar: () => <div data-testid="conversation-sidebar" />,
+  JainaConversationSidebar: ({
+    sessions,
+    onSelectConversation,
+  }: {
+    sessions: { sessionId: string; title?: string | null }[];
+    onSelectConversation: (sessionId: string) => void;
+  }) => (
+    <div data-testid="conversation-sidebar">
+      {sessions.map((session) => (
+        <button
+          key={session.sessionId}
+          type="button"
+          data-testid={`select-${session.sessionId}`}
+          onClick={() => onSelectConversation(session.sessionId)}
+        >
+          {session.title}
+        </button>
+      ))}
+    </div>
+  ),
 }));
 
 // The approval buttons come off `message.pendingToolApprovals` — the projection's own output —
@@ -312,6 +355,9 @@ mock.module('./components/JainaMessageItem', () => ({
           {reportV2 ? 'v2' : report ? 'legacy' : 'none'}
         </span>
         <span data-testid={`${String(message.role)}-run-id`}>{String(message.runId ?? '')}</span>
+        <span data-testid={`${String(message.role)}-delivery-source`}>
+          {String(message.deliverySource ?? '')}
+        </span>
         {pendingApprovals.map((approval) => (
           <button
             key={approval.approvalId}
@@ -780,6 +826,98 @@ describe('JainaChatSurface integration', () => {
       expect(screen.getAllByTestId('assistant-report-block-count').at(-1)?.textContent).toBe('1');
       expect(screen.getAllByTestId('assistant-report-kind').at(-1)?.textContent).toBe('v2');
       expect(screen.getAllByTestId('assistant-run-id').at(-1)?.textContent).toBe('run_history_1');
+      // The report acknowledges its own delivery by this field, and that ack is the quality
+      // signal the Backend grades on. A loaded report must say it was replayed.
+      expect(screen.getAllByTestId('assistant-delivery-source').at(-1)?.textContent).toBe(
+        'hydration_replay',
+      );
     });
+  });
+
+  it('shows the history of a conversation picked from the sidebar', async () => {
+    // A different session is a different chat. `useChat` builds it from `initialMessages` and
+    // stops the old one, so history written through the OLD chat's setter lands in the chat being
+    // thrown away and the reader is shown an empty transcript.
+    const session = (sessionId: string, title: string) => ({
+      sessionId,
+      brandId: 'brand-1',
+      adAccountId: 'act-1',
+      title,
+      lastMessageRole: 'assistant',
+      lastMessagePreview: title,
+      lastMessageAt: '2026-04-17T16:30:00.000Z',
+      createdAt: '2026-04-17T16:20:00.000Z',
+      updatedAt: '2026-04-17T16:30:00.000Z',
+    });
+    const sessions = [session('session-a', 'First'), session('session-b', 'Second')];
+    const historyFor = (sessionId: string) => [
+      uiMessage(`${sessionId}-user`, 'user', [textPart(`question in ${sessionId}`)]),
+      uiMessage(`${sessionId}-answer`, 'assistant', [textPart(`answer in ${sessionId}`)], {
+        runId: `run_${sessionId}`,
+        status: 'completed',
+      }),
+    ];
+
+    global.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (
+        (init?.method ?? 'GET') === 'GET' &&
+        url.includes('/api/agents/jaina/chat/conversations?')
+      ) {
+        const picked = new URL(url, 'http://localhost').searchParams.get('sessionId');
+        return Promise.resolve(
+          jsonResponse({ sessions, uiMessages: picked ? historyFor(picked) : [] }),
+        );
+      }
+      return Promise.resolve({
+        ok: false,
+        text: () => Promise.resolve('Unhandled fetch route'),
+      } as MockFetchResponse);
+    }) as typeof fetch;
+
+    render(surface, { wrapper: withQueryClient });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('assistant-content').at(-1)?.textContent).toBe(
+        'answer in session-a',
+      );
+    });
+
+    fireEvent.click(screen.getByTestId('select-session-b'));
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('assistant-content').at(-1)?.textContent).toBe(
+        'answer in session-b',
+      );
+    });
+    expect(screen.getAllByTestId('user-content').map((node) => node.textContent)).toEqual([
+      'question in session-b',
+    ]);
+  });
+
+  it('acknowledges a report the reader watched arrive as a live render', async () => {
+    // Messages pushed through the hook arrived over the stream, never through history, so they
+    // must be graded `live_render`. Without a source at all the report sends no ack, and the
+    // delivery signal goes silent without a single error.
+    render(surface, { wrapper: withQueryClient });
+    await waitFor(() => expect(pushMessages).not.toBeNull());
+
+    chatStatus = 'ready';
+    act(() => {
+      pushMessages?.([
+        uiMessage('user-live', 'user', [textPart('How did last week go?')]),
+        uiMessage('assistant-live', 'assistant', [textPart('Spend held steady.')], {
+          runId: 'run_live_1',
+          status: 'completed',
+        }),
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('assistant-delivery-source').at(-1)?.textContent).toBe(
+        'live_render',
+      );
+    });
+    // A user turn has no report and no delivery to acknowledge.
+    expect(screen.getAllByTestId('user-delivery-source').at(-1)?.textContent).toBe('');
   });
 });

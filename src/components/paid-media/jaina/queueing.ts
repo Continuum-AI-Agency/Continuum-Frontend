@@ -16,8 +16,16 @@ export type QueuedJainaMessage = {
 export function shouldQueueSubmission(input: {
   isStreaming: boolean;
   activeResponseId: string | null;
+  /**
+   * The conversation on screen is still loading, so its session id is not settled. A turn sent now
+   * goes out on the throwaway id the surface mounted with; the load then switches to the reader's
+   * real conversation, `useChat` swaps its chat instance on the new id, and the turn vanishes from
+   * the screen while it keeps streaming into a session nobody is looking at. The drain already
+   * waits for the load — this is the other half of that gate.
+   */
+  isLoadingConversation: boolean;
 }): boolean {
-  return input.isStreaming || Boolean(input.activeResponseId);
+  return input.isStreaming || Boolean(input.activeResponseId) || input.isLoadingConversation;
 }
 
 export function enqueueMessage(

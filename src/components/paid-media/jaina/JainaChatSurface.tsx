@@ -828,6 +828,22 @@ export function JainaChatSurface({
   >([]);
   const [sessionTitleById, setSessionTitleById] = React.useState<Record<string, string>>({});
 
+  // Which messages this reader LOADED rather than watched arrive. The report acknowledges its own
+  // delivery by that distinction — `live_render` versus `hydration_replay` — and that ack is the
+  // quality signal the Backend grades reports on. The SDK does not record where a message came
+  // from, so the surface, which does the loading, keeps the list.
+  const [historyMessageIds, setHistoryMessageIds] = React.useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+
+  // The history a session's chat is BUILT from. `useChat` keeps one chat per id: a new id builds a
+  // new chat from `initialMessages` and stops the old one. So a conversation switch has to carry
+  // its history in, rather than write it through the setter of the chat being replaced.
+  const [chatSeed, setChatSeed] = React.useState<{
+    sessionId: string;
+    messages: JainaUIMessage[];
+  } | null>(null);
+
   const {
     messages: uiMessages,
     status: chatStatus,
@@ -835,7 +851,18 @@ export function JainaChatSurface({
     sendTurn,
     stop: stopChat,
     setMessages: setUiMessages,
-  } = useJainaChat({ sessionId, onNotice: handleStreamNotice });
+  } = useJainaChat({
+    sessionId,
+    initialMessages: chatSeed?.sessionId === sessionId ? chatSeed.messages : undefined,
+    onNotice: handleStreamNotice,
+  });
+  // The CURRENT chat's setter, for async loads. `setMessages` is bound to one chat and changes
+  // identity with it, so an effect that depends on it re-runs on every conversation switch — the
+  // bootstrap did, and re-running it navigated straight back to the most recent conversation.
+  const setUiMessagesRef = React.useRef(setUiMessages);
+  React.useEffect(() => {
+    setUiMessagesRef.current = setUiMessages;
+  }, [setUiMessages]);
   const isStreaming = chatStatus === 'submitted' || chatStatus === 'streaming';
 
   // ONE transcript. `useChat.messages` is it — live turn, resumed turn and persisted history
@@ -859,11 +886,26 @@ export function JainaChatSurface({
           const optimisticStatus = projected.plan
             ? optimisticPlanStatusById[projected.plan.id]
             : undefined;
-          return optimisticStatus && projected.plan
-            ? { ...projected, plan: { ...projected.plan, status: optimisticStatus } }
-            : projected;
+          const withPlan =
+            optimisticStatus && projected.plan
+              ? { ...projected, plan: { ...projected.plan, status: optimisticStatus } }
+              : projected;
+          if (withPlan.role !== 'assistant') return withPlan;
+          return {
+            ...withPlan,
+            deliverySource: historyMessageIds.has(message.id)
+              ? ('hydration_replay' as const)
+              : ('live_render' as const),
+          };
         }),
-    [uiMessages, isStreaming, sessionTitleById, sessionId, optimisticPlanStatusById],
+    [
+      uiMessages,
+      isStreaming,
+      sessionTitleById,
+      sessionId,
+      optimisticPlanStatusById,
+      historyMessageIds,
+    ],
   );
 
   /** The turn on screen right now, projected once so the effects below share one object. */
@@ -1373,10 +1415,31 @@ export function JainaChatSurface({
       applyPage: React.useCallback(
         (older: JainaUIMessage[]) => {
           setUiMessages((current) => prependUnseen(current, older));
+          setHistoryMessageIds(
+            (previous) => new Set([...previous, ...older.map((message) => message.id)]),
+          );
         },
         [setUiMessages],
       ),
     });
+
+  /**
+   * Put a conversation's history on screen. The same session is the same chat, so the history is
+   * written into it. A different session is a different chat, so the history goes in as the seed
+   * it is built from, in the same render as the id change.
+   */
+  const showConversation = React.useCallback(
+    (targetSessionId: string, history: JainaUIMessage[]) => {
+      setHistoryMessageIds(new Set(history.map((message) => message.id)));
+      if (targetSessionId === activeSessionIdRef.current) {
+        setUiMessagesRef.current(history);
+        return;
+      }
+      setChatSeed({ sessionId: targetSessionId, messages: history });
+      setSessionId(targetSessionId);
+    },
+    [],
+  );
 
   const loadConversationSession = React.useCallback(
     async (targetSessionId: string, options?: { silent?: boolean }) => {
@@ -1394,7 +1457,6 @@ export function JainaChatSurface({
         setEditingQueueMessageId(null);
         setQueueEditDraft('');
         queueDispatchInFlightRef.current = false;
-        setSessionId(targetSessionId);
         setConversationSessionsWithCache(sortConversationSessions(payload.sessions));
         setSessionTitleById((previous) => {
           const next = { ...previous };
@@ -1406,7 +1468,7 @@ export function JainaChatSurface({
           }
           return next;
         });
-        setUiMessages(payload.uiMessages);
+        showConversation(targetSessionId, payload.uiMessages);
         setEarlierCursor(payload.nextCursor ?? null);
         setShaderState(payload.uiMessages.length > 0 ? 'hidden' : 'visible');
       } catch (error) {
@@ -1428,7 +1490,7 @@ export function JainaChatSurface({
       fetchConversationHistory,
       setConversationSessionsWithCache,
       setEarlierCursor,
-      setUiMessages,
+      showConversation,
       show,
     ],
   );
@@ -1667,7 +1729,7 @@ export function JainaChatSurface({
         return;
       }
 
-      setUiMessages([]);
+      setUiMessagesRef.current([]);
       setQueuedMessages([]);
       setEditingQueueMessageId(null);
       setQueueEditDraft('');
@@ -1704,14 +1766,13 @@ export function JainaChatSurface({
         deepLinkSessionIdRef.current = null;
         const targetSessionId = deepLinkSessionId ?? sessions[0]?.sessionId;
         if (!targetSessionId) {
-          setSessionId(createJainaSessionId());
-          setUiMessages([]);
-          setQueuedMessages([]);
+          // No history to open, so the session this surface mounted with stands. The queue is
+          // deliberately NOT cleared: a turn sent while this loaded is waiting in it, and a
+          // brand-new reader's first question would otherwise vanish without a trace.
           setShaderState('visible');
           return;
         }
 
-        setSessionId(targetSessionId);
         const conversationPayload = await fetchConversationHistory(targetSessionId);
         if (!conversationPayload || cancelled) return;
         setConversationSessionsWithCache(sortConversationSessions(conversationPayload.sessions));
@@ -1725,7 +1786,7 @@ export function JainaChatSurface({
           }
           return next;
         });
-        setUiMessages(conversationPayload.uiMessages);
+        showConversation(targetSessionId, conversationPayload.uiMessages);
         setEarlierCursor(conversationPayload.nextCursor ?? null);
         setShaderState(conversationPayload.uiMessages.length > 0 ? 'hidden' : 'visible');
       } catch (error) {
@@ -1737,8 +1798,8 @@ export function JainaChatSurface({
           description: message,
           variant: 'error',
         });
-        setSessionId(createJainaSessionId());
-        setQueuedMessages([]);
+        // History failing is no reason to drop a question the reader already asked: the queued
+        // turn drains into the session this surface mounted with once loading ends.
         setShaderState('visible');
       } finally {
         if (!cancelled) {
@@ -1758,7 +1819,7 @@ export function JainaChatSurface({
     getFreshConversationSessionsFromCache,
     setConversationSessionsWithCache,
     setEarlierCursor,
-    setUiMessages,
+    showConversation,
     show,
   ]);
 
@@ -2065,6 +2126,7 @@ export function JainaChatSurface({
       const shouldQueue = shouldQueueSubmission({
         isStreaming,
         activeResponseId,
+        isLoadingConversation: isHistoryLoading || isConversationSwitching,
       });
       if (shouldQueue) {
         queueMessageForLater(input);
@@ -2083,6 +2145,8 @@ export function JainaChatSurface({
       activeResponseId,
       dispatchMessage,
       queueMessageForLater,
+      isConversationSwitching,
+      isHistoryLoading,
       isJainaProMode,
       isStreaming,
       messages,
