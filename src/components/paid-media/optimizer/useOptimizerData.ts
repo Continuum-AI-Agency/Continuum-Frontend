@@ -26,7 +26,9 @@ import {
   type ApplyRunRequest,
   type ApplyRunResponse,
   ApplyRunResponseSchema,
+  type AudienceProposalRow,
   adsetCreativeWinRateRowSchema,
+  audienceProposalRowSchema,
   type ConvertCboRequest,
   type ConvertCboResponse,
   ConvertCboResponseSchema,
@@ -159,6 +161,7 @@ export const optimizerQueryKeys = {
   adAccounts: (brandId: string) => ['optimizer', 'ad-accounts', brandId] as const,
   performance: (portfolioId: string) => ['optimizer', 'performance', portfolioId] as const,
   creativeSwapJobs: (brandId: string) => ['optimizer', 'creative-swap-jobs', brandId] as const,
+  audienceProposals: (brandId: string) => ['optimizer', 'audience-proposals', brandId] as const,
   cpaSeries: (portfolioId: string, limit = DEFAULT_CPA_SERIES_LIMIT) =>
     ['optimizer', 'efficiency-series', portfolioId, limit] as const,
   spendByObjective: (brandId: string, days: number) =>
@@ -1322,6 +1325,123 @@ export function useFlashCreativeMutations(brandId: string) {
     void queryClient.invalidateQueries({ queryKey: pipelineCapabilitiesQueryKey(brandId) });
   };
   return { request, implement, refreshPipelines };
+}
+
+// ── Audience proposals ────────────────────────────────────────────────────────
+// The daily audience analysis for F2/F3 ad sets, its approval and its read-back result.
+// Five RPCs (migration 20260919120000); Meta is touched only by the worker, after a stamp.
+
+const EMPTY_AUDIENCE_PROPOSALS: AudienceProposalRow[] = [];
+const AUDIENCE_TRANSIENT_STATUSES = new Set([
+  'queued',
+  'proposing',
+  'approved',
+  'executing',
+  'activate_requested',
+  'activating',
+  'undo_requested',
+  'undoing',
+]);
+
+async function fetchAudienceProposals(brandId: string): Promise<AudienceProposalRow[]> {
+  const { data, error } = await getClient().rpc('optimizer_get_audience_proposals', {
+    p_brand_id: brandId,
+    p_status: null,
+    p_limit: 200,
+  } as never);
+  if (error) throw new Error(`optimizer_get_audience_proposals: ${rpcErrorText(error)}`);
+  const rows: AudienceProposalRow[] = [];
+  for (const raw of Array.isArray(data) ? data : []) {
+    const parsed = audienceProposalRowSchema.safeParse(raw);
+    if (parsed.success) rows.push(parsed.data);
+  }
+  return rows;
+}
+
+/** The brand's audience proposals. Polls every 10s while any row is in a worker phase, so
+ *  a card watching "proposing…" turns into the plan without a reload. Plain useQuery (not
+ *  useOptimizerRead) because the interval depends on the data. */
+export function useOptimizerAudienceProposals(brandId: string) {
+  const query = useQuery({
+    queryKey: optimizerQueryKeys.audienceProposals(brandId),
+    queryFn: () => fetchAudienceProposals(brandId),
+    enabled: Boolean(brandId),
+    staleTime: 10_000,
+    refetchInterval: (current) => {
+      const rows = (current.state.data ?? []) as AudienceProposalRow[];
+      return rows.some((row) => AUDIENCE_TRANSIENT_STATUSES.has(row.status)) ? 10_000 : false;
+    },
+  });
+  return { ...query, data: query.data ?? EMPTY_AUDIENCE_PROPOSALS };
+}
+
+async function rpcVoid(name: string, args: Record<string, unknown>, what: string): Promise<void> {
+  const { error } = await getClient().rpc(name as never, args as never);
+  if (error) throw new Error(`${what}: ${rpcErrorText(error)}`);
+}
+
+export function useAudienceProposalMutations(brandId: string) {
+  const queryClient = useQueryClient();
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.audienceProposals(brandId) });
+  };
+  const request = useMutation({
+    mutationFn: async (recommendationId: string) => {
+      const { data, error } = await getClient().rpc('optimizer_request_audience_proposal', {
+        p_rec_id: recommendationId,
+      } as never);
+      if (error) throw new Error(`Could not ask for an audience proposal: ${rpcErrorText(error)}`);
+      return String(data);
+    },
+    onSuccess: refresh,
+  });
+  const approve = useMutation({
+    mutationFn: (input: {
+      proposalId: string;
+      budgetMinorUnits: number;
+      activate: boolean;
+      mode: 'replace' | 'add';
+    }) =>
+      rpcVoid(
+        'optimizer_approve_audience_proposal',
+        {
+          p_id: input.proposalId,
+          p_budget_minor_units: input.budgetMinorUnits,
+          p_activate: input.activate,
+          p_mode: input.mode,
+        },
+        'Could not approve the proposal',
+      ),
+    onSuccess: refresh,
+  });
+  const cancel = useMutation({
+    mutationFn: (proposalId: string) =>
+      rpcVoid(
+        'optimizer_cancel_audience_proposal',
+        { p_id: proposalId },
+        'Could not dismiss the proposal',
+      ),
+    onSuccess: refresh,
+  });
+  const activate = useMutation({
+    mutationFn: (proposalId: string) =>
+      rpcVoid(
+        'optimizer_request_audience_proposal_activate',
+        { p_id: proposalId },
+        'Could not request the switch-over',
+      ),
+    onSuccess: refresh,
+  });
+  const undo = useMutation({
+    mutationFn: (proposalId: string) =>
+      rpcVoid(
+        'optimizer_request_audience_proposal_undo',
+        { p_id: proposalId },
+        'Could not request the undo',
+      ),
+    onSuccess: refresh,
+  });
+  return { request, approve, cancel, activate, undo, refresh };
 }
 
 export function useOptimizerRenewals(brandId: string) {

@@ -192,6 +192,16 @@ mock.module('../useOptimizerData', () => ({
   }),
   useAdAccountCurrency: () => 'USD',
   fetchAdsetAds: async () => [],
+  useOptimizerAudienceProposals: () => ({ data: [], isLoading: false }),
+  useAudienceProposalMutations: () => ({
+    request: { mutate: () => undefined, isPending: false },
+    approve: { mutate: () => undefined, isPending: false },
+    cancel: { mutate: () => undefined, isPending: false },
+    activate: { mutate: () => undefined, isPending: false },
+    undo: { mutate: () => undefined, isPending: false },
+    refresh: () => undefined,
+  }),
+  useConvertCbo: () => ({ mutate: () => undefined, isPending: false }),
 }));
 
 // The confirm AlertDialog is a Radix portal + focus-scope; render it as plain, open-gated
