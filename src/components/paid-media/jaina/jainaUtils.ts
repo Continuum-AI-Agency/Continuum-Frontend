@@ -51,19 +51,6 @@ export const resolveReportSignal = (
   return false;
 };
 
-export const getFinalThought = (progress: JainaChatMessage['reasoning'] = []) => {
-  for (let i = progress.length - 1; i >= 0; i -= 1) {
-    const entry = progress[i];
-    if (entry?.stage === 'thinking' && typeof entry.detail === 'string') {
-      const trimmed = entry.detail.trim();
-      if (trimmed.length > 0) {
-        return trimmed;
-      }
-    }
-  }
-  return undefined;
-};
-
 /**
  * The report's own one-line summary, healed when synthesis declined to write one.
  *
@@ -98,7 +85,6 @@ export function resolveReportSummaryForMessage(
 }
 
 export type RenderableContentSources = {
-  sessionTitle?: string;
   pendingClarification?: { question: string } | null;
   responseText: string;
   report?: JainaChatMessage['report'] | null;
@@ -106,7 +92,6 @@ export type RenderableContentSources = {
   latestCheckpointSummary?: string;
   checkpointSummarySource?: 'synthesis' | 'tool_fallback' | 'default_unavailable' | null;
   plan?: JainaChatMessage['plan'] | null;
-  progress: JainaChatMessage['reasoning'];
 };
 
 /**
@@ -115,6 +100,11 @@ export type RenderableContentSources = {
  * A turn that answered with a report has little or no plain text, so `message.content` cannot be
  * the concatenated text parts alone — that renders as an empty bubble under a report card. This
  * ladder is what fills it, and it is a pure function of one message's own fields.
+ *
+ * Every rung is something the turn SAID. Thinking and the conversation title are not: as the last
+ * rungs they printed a thought (once, the planner's whole markdown plan) or an earlier turn's title
+ * as the reply, whenever a turn had produced nothing else yet. Empty is correct then — the
+ * thinking window already shows the turn is working.
  */
 export function pickRenderableContent(sources: RenderableContentSources): string {
   const clarification = sources.pendingClarification?.question?.trim();
@@ -137,16 +127,7 @@ export function pickRenderableContent(sources: RenderableContentSources): string
       : '';
   if (checkpointSummary) return checkpointSummary;
 
-  const planTitle = sources.plan?.title?.trim();
-  if (planTitle) return planTitle;
-
-  const finalThought = getFinalThought(sources.progress)?.trim();
-  if (finalThought) return finalThought;
-
-  const sessionTitle = sources.sessionTitle?.trim();
-  if (sessionTitle) return sessionTitle;
-
-  return '';
+  return sources.plan?.title?.trim() ?? '';
 }
 
 export const getReportSummary = (report: ReportPayload | null) => {

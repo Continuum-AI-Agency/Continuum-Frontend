@@ -217,10 +217,18 @@ describe('toJainaChatMessage fills the whole render model', () => {
     });
   });
 
-  it('fills reasoning, final thought and prose content', () => {
+  it('fills reasoning and prose content', () => {
     expect(projected.reasoning?.map((entry) => entry.detail)).toEqual(['Planning the read']);
-    expect(projected.finalThought).toBe('Planning the read');
     expect(projected.content).toBe('Account spend is up 12%.');
+  });
+
+  // A thought is not the answer. As the ladder's last rung it printed the planner's whole markdown
+  // plan as the reply; the thinking window is where a thought belongs.
+  it('never shows a thought as the answer, streaming or finished', () => {
+    const thinking = uiMessage([reasoning('Checking spend by campaign.')]);
+
+    expect(toJainaChatMessage(thinking, { isStreaming: true }).content).toBe('');
+    expect(toJainaChatMessage(thinking, { isStreaming: false }).content).toBe('');
   });
 
   it('exposes canvas actions for the surface without putting them on the message', () => {
@@ -275,10 +283,10 @@ describe('toJainaChatMessage fills the whole render model', () => {
           source: 'default_unavailable',
         }),
       ]),
-      { isStreaming: false, sessionTitle: 'Weekly review' },
+      { isStreaming: false },
     );
 
-    expect(unavailable.content).toBe('Weekly review');
+    expect(unavailable.content).toBe('');
   });
 
   /**
@@ -557,16 +565,6 @@ describe('projectTranscriptMessage keeps identity until something it shows chang
 
     expect(streaming.status).toBe('streaming');
     expect(done.status).toBe('done');
-  });
-
-  it('re-projects when the session title arrives', () => {
-    const cache = new WeakMap();
-    const message = answer();
-    const untitled = projectTranscriptMessage(cache, message, inputs);
-
-    expect(
-      projectTranscriptMessage(cache, message, { ...inputs, sessionTitle: 'Winners' }),
-    ).not.toBe(untitled);
   });
 
   it('overlays an optimistic status on its own plan and ignores other plans', () => {

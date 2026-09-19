@@ -32,11 +32,7 @@ import {
   paidScaffoldReceiptPayloadSchema,
 } from '@continuum/contracts';
 import type { PlanStatus } from '@/components/ai-elements/plan';
-import {
-  getFinalThought,
-  pickRenderableContent,
-  resolveReportSignal,
-} from '@/components/paid-media/jaina/jainaUtils';
+import { pickRenderableContent, resolveReportSignal } from '@/components/paid-media/jaina/jainaUtils';
 import type {
   JainaChatMessage,
   JainaPlan,
@@ -656,7 +652,7 @@ const STATUS_BY_METADATA: Record<string, JainaChatMessage['status']> = {
  */
 export const toJainaChatMessage = (
   message: JainaUIMessage,
-  options: { isStreaming: boolean; createdAt?: string; sessionTitle?: string },
+  options: { isStreaming: boolean; createdAt?: string },
 ): JainaChatMessage => {
   const role = message.role === 'user' ? 'user' : 'assistant';
   // The run's own terminal verdict WINS over the caller's `isStreaming`, and the reason is that
@@ -703,7 +699,6 @@ export const toJainaChatMessage = (
   const checkpointSummary = checkpointSummaryOf(message);
   const reportArtifactJob = reportArtifactJobOf(message);
   const plan = planOf(message);
-  const finalThought = getFinalThought(reasoning);
 
   // Mirrors the surface's completion rule: a report renders AS a report when it has content, is
   // not a direct answer, is not superseded by a question back to the user, and either something
@@ -721,7 +716,6 @@ export const toJainaChatMessage = (
   return {
     ...base,
     content: pickRenderableContent({
-      ...(options.sessionTitle ? { sessionTitle: options.sessionTitle } : {}),
       pendingClarification: pendingClarification ?? null,
       responseText: base.content,
       report: report ?? null,
@@ -733,10 +727,8 @@ export const toJainaChatMessage = (
           }
         : {}),
       plan: plan ?? null,
-      progress: reasoning,
     }),
     ...(status === 'error' ? { title: 'Jaina error' } : {}),
-    ...(finalThought ? { finalThought } : {}),
     renderAsReport,
     ...(reasoning.length > 0 ? { reasoning } : {}),
     ...(toolCalls.length > 0 ? { toolCalls } : {}),
@@ -763,7 +755,6 @@ export const toJainaChatMessage = (
 export type TranscriptProjectionInputs = {
   /** True only for the turn the SDK is still writing. */
   isStreaming: boolean;
-  sessionTitle?: string;
   /** Plan verdicts submitted but not yet echoed back by the run. */
   optimisticPlanStatusById: Readonly<Record<string, PlanStatus>>;
   /** Whether the reader watched this turn arrive or loaded it; assistant turns only. */
@@ -772,7 +763,6 @@ export type TranscriptProjectionInputs = {
 
 type TranscriptProjectionEntry = {
   isStreaming: boolean;
-  sessionTitle?: string;
   projected: JainaChatMessage;
   planStatus?: PlanStatus;
   deliverySource?: JainaChatMessage['deliverySource'];
@@ -787,7 +777,7 @@ export type TranscriptProjectionCache = WeakMap<JainaUIMessage, TranscriptProjec
  *
  * The SDK replaces only the streaming message on a chunk and keeps every other message object, so
  * keying on the message object is what lets `React.memo` skip the rest of the conversation. The
- * key must cover every input, or a finished turn keeps a stale status, title, plan or source.
+ * key must cover every input, or a finished turn keeps a stale status, plan or source.
  */
 export const projectTranscriptMessage = (
   cache: TranscriptProjectionCache,
@@ -796,14 +786,9 @@ export const projectTranscriptMessage = (
 ): JainaChatMessage => {
   const cached = cache.get(message);
   const projected =
-    cached &&
-    cached.isStreaming === inputs.isStreaming &&
-    cached.sessionTitle === inputs.sessionTitle
+    cached && cached.isStreaming === inputs.isStreaming
       ? cached.projected
-      : toJainaChatMessage(message, {
-          isStreaming: inputs.isStreaming,
-          sessionTitle: inputs.sessionTitle,
-        });
+      : toJainaChatMessage(message, { isStreaming: inputs.isStreaming });
   const planStatus = projected.plan
     ? inputs.optimisticPlanStatusById[projected.plan.id]
     : undefined;
@@ -823,7 +808,6 @@ export const projectTranscriptMessage = (
   const value = deliverySource ? { ...withPlan, deliverySource } : withPlan;
   cache.set(message, {
     isStreaming: inputs.isStreaming,
-    sessionTitle: inputs.sessionTitle,
     projected,
     planStatus,
     deliverySource,

@@ -134,7 +134,6 @@ const persistedMessage = (): JainaChatMessage =>
     // A clarification wins the content ladder, streamed or persisted.
     content: 'Which ad account should I pause it in?',
     renderAsReport: false,
-    finalThought: 'Reading the account now.',
     reasoning: [
       {
         stage: 'thinking',
@@ -269,5 +268,29 @@ describe('JainaMessageItem renders parts and persistence identically', () => {
     );
 
     expect(screen.getByText('How is spend doing?')).toBeTruthy();
+  });
+});
+
+describe('a finished turn that produced no answer', () => {
+  const emptyTurn = (status: JainaChatMessage['status']): JainaChatMessage =>
+    ({
+      id: `msg_${status}`,
+      role: 'assistant',
+      createdAt: '',
+      status,
+      content: '',
+      renderAsReport: false,
+    }) as unknown as JainaChatMessage;
+
+  // With no thought to fall back on, a failed run with no answer used to read "Response complete."
+  it('says the run failed rather than that it completed', () => {
+    render(<JainaMessageItem message={emptyTurn('error')} />, { wrapper });
+    expect(screen.getByText('Jaina could not finish this response.')).toBeTruthy();
+    expect(screen.queryAllByText('Response complete.')).toHaveLength(0);
+  });
+
+  it('still says a finished empty turn completed', () => {
+    render(<JainaMessageItem message={emptyTurn('done')} />, { wrapper });
+    expect(screen.getByText('Response complete.')).toBeTruthy();
   });
 });

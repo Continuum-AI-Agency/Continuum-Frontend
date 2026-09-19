@@ -900,19 +900,11 @@ export function JainaChatSurface({
       .map((message) =>
         projectTranscriptMessage(projectionCacheRef.current, message, {
           isStreaming: message === streamingMessage,
-          sessionTitle: sessionTitleById[sessionId],
           optimisticPlanStatusById,
           deliverySource: historyMessageIds.has(message.id) ? 'hydration_replay' : 'live_render',
         }),
       );
-  }, [
-    uiMessages,
-    isStreaming,
-    sessionTitleById,
-    sessionId,
-    optimisticPlanStatusById,
-    historyMessageIds,
-  ]);
+  }, [uiMessages, isStreaming, optimisticPlanStatusById, historyMessageIds]);
 
   /** The turn on screen right now, projected once so the effects below share one object. */
   const liveMessage = uiMessages.at(-1) ?? null;

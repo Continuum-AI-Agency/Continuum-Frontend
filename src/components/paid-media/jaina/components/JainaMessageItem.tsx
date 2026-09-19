@@ -259,7 +259,11 @@ function JainaMessageItemImpl({
             ) : null}
 
             {showStaticFallback ? (
-              <span className="text-sm text-muted-foreground">Response complete.</span>
+              <span className="text-sm text-muted-foreground">
+                {message.status === 'error'
+                  ? 'Jaina could not finish this response.'
+                  : 'Response complete.'}
+              </span>
             ) : null}
 
             {structuredFallbackContent ? (

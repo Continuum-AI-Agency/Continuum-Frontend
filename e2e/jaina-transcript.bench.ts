@@ -164,6 +164,11 @@ function printBenchEnvelope(): number {
 /* -- the Backend this turn really runs through ----------------------------------- */
 
 let backend: ChildProcess | null = null;
+/** Meta's hosted MCP refusing this user, as the Backend logs it. Read, never re-derived. */
+let metaMcpRefusals = 0;
+const countMetaMcpRefusals = (chunk: unknown): void => {
+  metaMcpRefusals += String(chunk).split('meta_mcp.init_failed').length - 1;
+};
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const backendIsUp = async (): Promise<boolean> => {
@@ -206,8 +211,14 @@ async function startBackend(): Promise<void> {
     // is signalled, and that orphan then holds the port for every later run.
     detached: true,
   });
-  backend.stdout?.on('data', (chunk) => process.stdout.write(`[be] ${String(chunk)}`));
-  backend.stderr?.on('data', (chunk) => process.stderr.write(`[be] ${String(chunk)}`));
+  backend.stdout?.on('data', (chunk) => {
+    countMetaMcpRefusals(chunk);
+    process.stdout.write(`[be] ${String(chunk)}`);
+  });
+  backend.stderr?.on('data', (chunk) => {
+    countMetaMcpRefusals(chunk);
+    process.stderr.write(`[be] ${String(chunk)}`);
+  });
 
   const deadline = Date.now() + 120_000;
   while (Date.now() < deadline) {
@@ -408,6 +419,7 @@ async function main(): Promise<void> {
     } as unknown as JainaUIMessage;
 
     // ---- 1. A REAL TURN, THROUGH THE REAL CONSUMER ---------------------------------
+    const greetingStartedMs = Date.now();
     const stream = await transport.sendMessages({
       trigger: 'submit-message',
       chatId: sessionId,
@@ -482,6 +494,24 @@ async function main(): Promise<void> {
       'the assistant message carries the run-stable id the Backend opened with',
       finalMessage.role === 'assistant' && String(finalMessage.id).startsWith('jaina:'),
       `${finalMessage.role} ${finalMessage.id}`,
+    );
+
+    // A greeting reads nothing from the account. It used to run the whole pipeline: a plan, two
+    // objectives, five tool calls and a checkpoint report.
+    const pipelineParts = parts.filter(
+      (part) =>
+        part.type === JAINA_UI_DATA_PART.plan ||
+        part.type === JAINA_UI_DATA_PART.objective ||
+        part.type === JAINA_UI_DATA_PART.reportBlock ||
+        part.type === JAINA_UI_DATA_PART.delegation ||
+        part.type === 'dynamic-tool',
+    );
+    check(
+      'small talk is answered directly: no plan, no workers, no tools, no report',
+      pipelineParts.length === 0 && parts.some((part) => part.type === 'text'),
+      `${pipelineParts.length} pipeline part(s) ` +
+        `${JSON.stringify([...new Set(pipelineParts.map((part) => part.type))])}; ` +
+        `turn took ${((Date.now() - greetingStartedMs) / 1000).toFixed(1)}s`,
     );
 
     // ---- 2. THE RENDER SHAPES ------------------------------------------------------
@@ -571,22 +601,35 @@ async function main(): Promise<void> {
       projected: rendered.toolResults,
     });
 
-    const delegationCount = countOf(finalMessage, JAINA_UI_DATA_PART.delegation);
+    // Only CROSS-AGENT calls are delegation cards. The handoff and worker rows share this part
+    // type but belong to the thinking window, so counting them reported a gap that is by design.
+    const delegationCount = parts.filter(
+      (part) =>
+        part.type === JAINA_UI_DATA_PART.delegation &&
+        (part.data as { kind?: unknown } | undefined)?.kind === 'cross_agent',
+    ).length;
     gradeProjectedField({
       field: 'delegations',
-      evidence: JAINA_UI_DATA_PART.delegation,
+      evidence: `${JAINA_UI_DATA_PART.delegation} (cross_agent)`,
       evidenceCount: delegationCount,
       projected: rendered.delegations,
       expectation: {
         ok: (rendered.delegations ?? []).length === delegationCount,
-        detail: `${delegationCount} delegation part(s) -> ${(rendered.delegations ?? []).length} rendered`,
+        detail: `${delegationCount} cross-agent part(s) -> ${(rendered.delegations ?? []).length} rendered`,
       },
     });
 
+    // The thinking window reads both: the model's reasoning parts, and the handoff/worker rows
+    // that are not delegation cards.
     gradeProjectedField({
       field: 'reasoning',
-      evidence: 'reasoning',
-      evidenceCount: parts.filter((part) => part.type === 'reasoning').length,
+      evidence: `reasoning / ${JAINA_UI_DATA_PART.delegation} (handoff, worker)`,
+      evidenceCount: parts.filter(
+        (part) =>
+          part.type === 'reasoning' ||
+          (part.type === JAINA_UI_DATA_PART.delegation &&
+            (part.data as { kind?: unknown } | undefined)?.kind !== 'cross_agent'),
+      ).length,
       projected: rendered.reasoning,
     });
     gradeProjectedField({
@@ -765,7 +808,40 @@ async function main(): Promise<void> {
     if (process.argv.includes('--analysis')) {
       const analysisSessionId = `bench_jaina_transcript_${randomUUID().replace(/-/g, '')}`;
       sessions.push(analysisSessionId);
-      await analysisTurn(transport, analysisSessionId);
+      const analysisMessage = await analysisTurn(transport, analysisSessionId);
+      if (analysisMessage) await gradeReload(bearer, analysisSessionId, analysisMessage);
+
+      // This owner is not on Meta's hosted-MCP allowlist. The refusal cannot change between two
+      // turns seconds apart, so paying it on every turn is pure latency. Only a turn that reached
+      // a worker tries the MCP, so the check proves nothing unless both turns did.
+      const reachedWorker = (message: JainaUIMessage | undefined) =>
+        Boolean(message) &&
+        partsOf(message as JainaUIMessage).some(
+          (part) =>
+            part.type === JAINA_UI_DATA_PART.delegation &&
+            (part.data as { kind?: unknown } | undefined)?.kind === 'worker',
+        );
+      const turnsWithWorkers = [finalMessage, analysisMessage].filter(reachedWorker).length;
+      if (turnsWithWorkers < 2) {
+        record(
+          'Meta’s hosted-MCP refusal is paid once, not on every turn',
+          'SKIP',
+          `only ${turnsWithWorkers} turn(s) reached a worker, so a second turn never tried the ` +
+            `MCP (${metaMcpRefusals} refusal line(s) logged); metaMcpClient.spec covers the cache`,
+        );
+      } else if (metaMcpRefusals === 0) {
+        record(
+          'Meta’s hosted-MCP refusal is paid once, not on every turn',
+          'SKIP',
+          'no refusal logged: the MCP was not attempted, or this owner is now allowlisted',
+        );
+      } else {
+        check(
+          'Meta’s hosted-MCP refusal is paid once, not on every turn',
+          metaMcpRefusals === 1,
+          `${metaMcpRefusals} meta_mcp.init_failed line(s) across both turns`,
+        );
+      }
     } else {
       note(
         'UN-EXERCISED: an analysis turn — the planner, its plan part and blocks streamed ahead of ' +
@@ -788,7 +864,7 @@ async function main(): Promise<void> {
 async function analysisTurn(
   transport: DefaultChatTransport<JainaUIMessage>,
   sessionId: string,
-): Promise<void> {
+): Promise<JainaUIMessage | undefined> {
   const stream = await transport.sendMessages({
     trigger: 'submit-message',
     chatId: sessionId,
@@ -814,6 +890,7 @@ async function analysisTurn(
   let last: JainaUIMessage | undefined;
   let snapshots = 0;
   const planVisibleAt: number[] = [];
+  const thoughtAsAnswerAt: number[] = [];
   let blocksAheadOfReport = 0;
   const v1ReportAt: number[] = [];
 
@@ -824,6 +901,10 @@ async function analysisTurn(
     const visible = [view.content, ...(view.reasoning ?? []).map((entry) => entry.detail ?? '')];
     if (visible.some((value) => value.includes(PLAN_MARKDOWN_SIGNATURE))) {
       planVisibleAt.push(snapshots);
+    }
+    const content = view.content.trim();
+    if (content && (view.reasoning ?? []).some((entry) => entry.detail?.trim() === content)) {
+      thoughtAsAnswerAt.push(snapshots);
     }
     if (
       countOf(message, JAINA_UI_DATA_PART.reportBlock) > 0 &&
@@ -836,7 +917,7 @@ async function analysisTurn(
 
   if (!last) {
     check('the analysis turn produced a UI message', false, 'the SDK reader yielded nothing');
-    return;
+    return undefined;
   }
   const rendered = toJainaChatMessage(last, { isStreaming: false });
 
@@ -846,6 +927,14 @@ async function analysisTurn(
     planVisibleAt.length === 0
       ? `${snapshots} snapshots graded`
       : `visible at ${planVisibleAt.length}/${snapshots} snapshots, first #${planVisibleAt[0]}`,
+  );
+
+  check(
+    'the answer is never one of the turn’s own thoughts, at any snapshot',
+    thoughtAsAnswerAt.length === 0,
+    thoughtAsAnswerAt.length === 0
+      ? `${snapshots} snapshots graded`
+      : `a thought was the answer at ${thoughtAsAnswerAt.length}/${snapshots}, first #${thoughtAsAnswerAt[0]}`,
   );
 
   if (blocksAheadOfReport === 0) {
@@ -883,6 +972,69 @@ async function analysisTurn(
     'the analysis turn ends with a non-empty answer',
     rendered.content.trim().length > 0,
     `${rendered.content.length} chars; reportV2 ${rendered.reportV2 ? 'set' : 'absent'}`,
+  );
+  return last;
+}
+
+/**
+ * A reloaded turn must render like the live one. The reload is the Backend's own `?shape=ui`
+ * history, projected by the same `toJainaChatMessage`, and compared field by field with the
+ * live projection. Before the replay, a reload kept the answer and the report and lost the
+ * plan, objectives, thinking, tool rows and sub-agent activity.
+ */
+async function gradeReload(bearer: string, sessionId: string, live: JainaUIMessage): Promise<void> {
+  const url =
+    `${BACKEND_URL}/api/agents/jaina/chat/conversations/${encodeURIComponent(sessionId)}` +
+    `/messages?shape=ui&brand_id=${BRAND_ID}&ad_account_id=${AD_ACCOUNT_ID}`;
+
+  // The run row turns terminal a beat after the stream ends, and only a finished run is replayed.
+  let reloaded: JainaUIMessage | undefined;
+  for (let attempt = 0; attempt < 10 && !reloaded?.metadata?.status; attempt += 1) {
+    if (attempt > 0) await sleep(1_000);
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${bearer}` } });
+    const body = (await response.json()) as { messages?: JainaUIMessage[] };
+    reloaded = (body.messages ?? []).find((message) => message.id === live.id);
+  }
+  if (!reloaded) {
+    check('a reloaded turn renders like the live one', false, `no message ${live.id} on reload`);
+    return;
+  }
+
+  const was = toJainaChatMessage(live, { isStreaming: false });
+  const now = toJainaChatMessage(reloaded, { isStreaming: false });
+  const field = (name: string, before: unknown, after: unknown) => ({
+    name,
+    same: JSON.stringify(before) === JSON.stringify(after),
+    detail: `${name} ${JSON.stringify(before)} -> ${JSON.stringify(after)}`,
+  });
+  const fields = [
+    field('plan', was.plan?.title ?? null, now.plan?.title ?? null),
+    field(
+      'objectives',
+      (was.objectives ?? []).map((objective) => `${objective.id}:${objective.status}`),
+      (now.objectives ?? []).map((objective) => `${objective.id}:${objective.status}`),
+    ),
+    field('thinking', (was.reasoning ?? []).length, (now.reasoning ?? []).length),
+    field('tools', (was.toolCalls ?? []).length, (now.toolCalls ?? []).length),
+    field('delegations', (was.delegations ?? []).length, (now.delegations ?? []).length),
+    field(
+      'report blocks',
+      (was.reportV2?.blocks ?? []).map((block) => block.block_id),
+      (now.reportV2?.blocks ?? []).map((block) => block.block_id),
+    ),
+  ];
+  const differing = fields.filter((entry) => !entry.same);
+  check(
+    'a reloaded turn renders like the live one: plan, objectives, thinking, tools, report',
+    differing.length === 0 && Boolean(now.plan) && (now.toolCalls ?? []).length > 0,
+    differing.length === 0
+      ? fields.map((entry) => entry.detail).join('; ')
+      : `DIFFERS: ${differing.map((entry) => entry.detail).join('; ')}`,
+  );
+  const partsBytes = JSON.stringify(reloaded.parts).length;
+  note(
+    `RELOAD: the replayed assistant message carries ${reloaded.parts.length} parts ` +
+      `(${(partsBytes / 1024).toFixed(1)} KiB on the wire).`,
   );
 }
 
