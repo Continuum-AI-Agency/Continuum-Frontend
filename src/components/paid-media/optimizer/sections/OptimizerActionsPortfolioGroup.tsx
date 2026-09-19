@@ -23,10 +23,13 @@ import {
   type AdsetAd,
   type CreativeSwapJobRow,
   type CycleItemRow,
+  explainFlashUnfit,
+  flashPipelineCandidate,
   GLOBAL_ANGLE_LABELS,
   type GlobalAngleId,
   getOptimizationMetricDefinition,
   type ParsedCycleRunReport,
+  type PipelineCapabilityV2,
   type PortfolioLevel,
   type PortfolioListItem,
   pickFlashPipelines,
@@ -50,7 +53,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { fetchPipelineCapabilities } from '@/lib/ai-studio/pipelines';
+import { fetchPipelineCapabilities, publishPipeline } from '@/lib/ai-studio/pipelines';
 import { cn } from '@/lib/utils';
 import { resolveAdsetName } from '../adsetName';
 import { AdSetIdLabel } from '../charts/AdSetIdLabel';
@@ -86,7 +89,7 @@ import {
   useOptimizerPortfolioAudiences,
 } from '../useOptimizerData';
 import { CreativeRecommendationCard } from './CreativeRecommendationCard';
-import { isCreativeRecommendation } from './creativeCardModel';
+import { isCreativeRecommendation, standingChart, subjectAdId } from './creativeCardModel';
 import {
   flashBriefFor,
   flashPromptsFor,
@@ -163,6 +166,8 @@ type EvidenceContext = {
   implementingKey: string | null;
   audiences: readonly PortfolioAudienceRow[];
   currency: string | null;
+  /** The objective's result, lower-cased, for the creative comparison chart. */
+  resultWord: string;
 };
 
 type SettingsActions = {
@@ -445,36 +450,55 @@ export function OptimizerActionsPortfolioGroup({
       return next;
     });
   }, []);
+  /** Place the request on the given pipelines. When none fits, publish the simplest flow
+   *  that can (one generator, open prompt / negative / reference ports) on the brand and
+   *  run on it — the person asked for variants, not for a workflow. */
+  const placeGeneration = React.useCallback(
+    async (
+      rec: RecommendationRow,
+      name: string | null,
+      ads: readonly AdsetAd[],
+      capabilities: readonly PipelineCapabilityV2[],
+    ): Promise<void> => {
+      const want = flashWantFor(rec, ads);
+      let [fit] = pickFlashPipelines(capabilities, want);
+      if (!fit) {
+        noteFor(rec.id, 'Setting up a flash-creative flow for this brand…');
+        const { capability } = await publishPipeline(
+          flashPipelineCandidate({
+            brandProfileId: brandId,
+            withReference: want.hasReference,
+            ratio: want.ratio,
+          }),
+        );
+        flash.refreshPipelines();
+        [fit] = pickFlashPipelines([capability], want);
+        if (!fit) {
+          const why = explainFlashUnfit(capability, want) ?? 'it cannot run unattended';
+          throw new Error(`The flow was published as “${capability.name}” but ${why}.`);
+        }
+      }
+      const audienceType = snapshotById.get(rec.adset_id)?.audienceType ?? null;
+      const brief = flashBriefFor(rec, name, audienceType, ads, currency, null);
+      const prompts = flashPromptsFor(brief);
+      await flash.request.mutateAsync({
+        recommendationId: rec.id,
+        pipelineId: fit.capability.pipeline_id,
+        prompt: prompts.positive,
+        negativePrompt: prompts.negative,
+        referenceAssetIds: want.hasReference ? referenceAssetIdsFor(rec) : [],
+        count: want.count,
+      });
+      noteFor(rec.id, null);
+    },
+    [brandId, currency, flash, noteFor, snapshotById],
+  );
   const requestGeneration = React.useCallback(
     (rec: RecommendationRow, name: string | null, ads: readonly AdsetAd[]) => {
       setGeneratingIds((prev) => new Set(prev).add(rec.id));
       noteFor(rec.id, null);
-      const run = async () => {
-        const capabilities = await fetchPipelineCapabilities(brandId);
-        const want = flashWantFor(rec, ads);
-        const [fit] = pickFlashPipelines(capabilities, want);
-        if (!fit) {
-          noteFor(
-            rec.id,
-            capabilities.length === 0
-              ? 'This brand has no Creative+ workflow yet. Build one in AI Studio and publish it as a pipeline.'
-              : 'None of the brand’s Creative+ workflows can take a text brief and return images.',
-          );
-          return;
-        }
-        const audienceType = snapshotById.get(rec.adset_id)?.audienceType ?? null;
-        const brief = flashBriefFor(rec, name, audienceType, ads, currency, null);
-        const prompts = flashPromptsFor(brief);
-        await flash.request.mutateAsync({
-          recommendationId: rec.id,
-          pipelineId: fit.capability.pipeline_id,
-          prompt: prompts.positive,
-          negativePrompt: prompts.negative,
-          referenceAssetIds: want.hasReference ? referenceAssetIdsFor(rec) : [],
-          count: want.count,
-        });
-      };
-      run()
+      fetchPipelineCapabilities(brandId)
+        .then((capabilities) => placeGeneration(rec, name, ads, capabilities))
         .catch((error: unknown) => {
           noteFor(
             rec.id,
@@ -490,7 +514,7 @@ export function OptimizerActionsPortfolioGroup({
           void swapJobsQuery.refetch();
         });
     },
-    [brandId, currency, flash.request, noteFor, snapshotById, swapJobsQuery],
+    [brandId, noteFor, placeGeneration, swapJobsQuery],
   );
   const implementCreative = React.useCallback(
     (job: CreativeSwapJobRow, assetId: string, target: ImplementTarget) => {
@@ -543,6 +567,7 @@ export function OptimizerActionsPortfolioGroup({
       implementingKey,
       audiences: audiencesQuery.data,
       currency,
+      resultWord: metric.resultLabel.toLowerCase(),
     }),
     [
       snapshotById,
@@ -560,6 +585,7 @@ export function OptimizerActionsPortfolioGroup({
       implementingKey,
       audiencesQuery.data,
       currency,
+      metric.resultLabel,
     ],
   );
 
@@ -1540,6 +1566,11 @@ function CreativeCardHost({
     [evidence.audiences, rec.adset_id],
   );
   const note = evidence.generateNotes.get(rec.id) ?? null;
+  const snapshot = evidence.snapshotById.get(rec.adset_id) ?? null;
+  const standing = React.useMemo(
+    () => standingChart(snapshot?.creative ?? null, subjectAdId(rec)),
+    [snapshot?.creative, rec],
+  );
   return (
     <CreativeRecommendationCard
       ads={ads}
@@ -1555,6 +1586,8 @@ function CreativeCardHost({
       onGenerate={canGenerate ? () => evidence.requestGeneration(rec, name, ads) : null}
       onImplement={evidence.implementCreative}
       rec={rec}
+      resultWord={evidence.resultWord}
+      standing={standing}
       targets={targets}
     />
   );

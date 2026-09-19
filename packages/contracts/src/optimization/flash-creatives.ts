@@ -62,9 +62,11 @@ export function scoreFlashPipeline(
     }
   }
   const guide = capability.agent_guide;
-  const guideText = [...(guide?.use_when ?? []), capability.name, capability.description ?? ''].join(
-    ' ',
-  );
+  const guideText = [
+    ...(guide?.use_when ?? []),
+    capability.name,
+    capability.description ?? '',
+  ].join(' ');
   if (PAID_WORDS.test(guideText)) {
     score += 2;
     reasons.push('written for paid creatives');
@@ -86,6 +88,28 @@ export function scoreFlashPipeline(
     reasons.push('every run needs approval');
   }
   return { capability, score, reasons };
+}
+
+/** Why a published pipeline cannot make flash creatives, in one sentence a person can act
+ *  on — or null when it can. Mirrors the refusals in `scoreFlashPipeline` exactly. */
+export function explainFlashUnfit(
+  capability: PipelineCapabilityV2,
+  want: Pick<FlashWant, 'hasReference'>,
+): string | null {
+  if (capability.execution_policy.runtime === 'client') {
+    return 'runs in the browser, so the optimizer cannot run it unattended';
+  }
+  if (!capability.outputs.some((o) => o.kind === 'asset' && o.media === 'image')) {
+    return 'declares no image output port';
+  }
+  if (!capability.inputs.some((i) => i.kind === 'text')) {
+    return 'declares no text input port for the prompt';
+  }
+  const reference = capability.inputs.find((i) => i.kind === 'asset' && i.media === 'image');
+  if (reference?.required && !want.hasReference) {
+    return 'requires a reference image and this recommendation has no Library asset to hand in';
+  }
+  return null;
 }
 
 /** Best-first, distinct. Fewer workflows than asked for → the best one repeats, so the
@@ -145,7 +169,9 @@ export function flashPrompts(brief: FlashBrief): { positive: string; negative: s
   if (brief.audience) parts.push(`Audience: ${brief.audience}.`);
   if (brief.why) parts.push(`Why now: ${brief.why}.`);
   if (brief.cta) parts.push(`Call to action: ${brief.cta}.`);
-  parts.push(DIRECTIONS[((brief.variant % DIRECTIONS.length) + DIRECTIONS.length) % DIRECTIONS.length]);
+  parts.push(
+    DIRECTIONS[((brief.variant % DIRECTIONS.length) + DIRECTIONS.length) % DIRECTIONS.length],
+  );
   if (brief.brandName) parts.push(`In ${brief.brandName}'s voice.`);
   return { positive: parts.join(' '), negative: FLASH_NEGATIVE_PROMPT };
 }
@@ -218,9 +244,10 @@ export type FlashJobResult = {
   adId: string | null;
 };
 
-export function readFlashJobResult(
-  job: { asset_id?: string | null; result?: Record<string, unknown> | null },
-): FlashJobResult {
+export function readFlashJobResult(job: {
+  asset_id?: string | null;
+  result?: Record<string, unknown> | null;
+}): FlashJobResult {
   const result = job.result ?? {};
   const listed = Array.isArray(result.assets)
     ? (result.assets as unknown[]).filter((v): v is string => typeof v === 'string' && v.length > 0)

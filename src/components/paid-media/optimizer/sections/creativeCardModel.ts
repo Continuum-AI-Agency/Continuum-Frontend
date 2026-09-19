@@ -2,7 +2,12 @@
 // the angle and the audience, why the engine raised it, and which flash creatives belong
 // to it. No React, no fetch.
 
-import type { AdsetAd, CreativeSwapJobRow, RecommendationRow } from '@continuum/contracts';
+import type {
+  AdSetSnapshot,
+  AdsetAd,
+  CreativeSwapJobRow,
+  RecommendationRow,
+} from '@continuum/contracts';
 import { GLOBAL_ANGLE_LABELS, type GlobalAngleId } from '@continuum/contracts';
 
 export const CREATIVE_KINDS = new Set([
@@ -145,4 +150,81 @@ export function flashCreativesFor(
   const own = jobs.filter((job) => job.recommendation_id === rec.id);
   if (own.length > 0) return own;
   return jobs.filter((job) => job.adset_id === rec.adset_id && job.status !== 'cancelled');
+}
+
+// ── The comparison behind the card ──────────────────────────────────────────
+// The engine ranks an ad set's creatives on cost per result in the objective's own unit
+// (`paid_media_get_adset_creative_standing`): the winner, the laggards, and the median a
+// new ad has to beat. The card draws exactly that, so the chart and the sentence agree.
+
+export type CreativeStanding = NonNullable<AdSetSnapshot['creative']>;
+
+export type StandingBar = {
+  adId: string;
+  name: string;
+  costPerEvent: number | null;
+  events: number;
+  spend: number;
+  /** The creative this recommendation is about. */
+  subject: boolean;
+  /** The engine's cheapest creative (the winner) — highlighted even when not the subject. */
+  winner: boolean;
+  /** 0–1 share of the widest bar; null when the ad has no cost yet. */
+  share: number | null;
+};
+
+export type StandingChart = {
+  bars: StandingBar[];
+  median: number | null;
+  /** 0–1 position of the median on the same scale; null when off scale. */
+  medianShare: number | null;
+  /** Ads the engine compared vs. ads it saw (the rest were under the evidence floor). */
+  eligibleAds: number;
+  totalAds: number;
+};
+
+/** Cheapest first; ads without a cost (no results yet) go last so the picture stays the
+ *  cost ranking. Returns null when nothing is comparable — the card then says so. */
+export function standingChart(
+  standing: CreativeStanding | null | undefined,
+  subjectAdId: string | null,
+): StandingChart | null {
+  if (!standing) return null;
+  const listed = [
+    ...(standing.winner ? [{ ad: standing.winner, winner: true }] : []),
+    ...standing.laggards.map((ad) => ({ ad, winner: false })),
+  ];
+  const seen = new Set<string>();
+  const rows = listed.filter(({ ad }) => {
+    if (seen.has(ad.adId)) return false;
+    seen.add(ad.adId);
+    return true;
+  });
+  if (rows.length === 0) return null;
+  const costs = rows.map(({ ad }) => ad.costPerEvent).filter((v): v is number => v != null);
+  const max = Math.max(...costs, standing.medianCostPerEvent ?? 0, 0);
+  const share = (v: number | null) => (v == null || max <= 0 ? null : Math.min(1, v / max));
+  const bars = rows
+    .map<StandingBar>(({ ad, winner }) => ({
+      adId: ad.adId,
+      name: ad.adName ?? ad.adId,
+      costPerEvent: ad.costPerEvent ?? null,
+      events: ad.events,
+      spend: ad.spend,
+      subject: ad.adId === subjectAdId,
+      winner,
+      share: share(ad.costPerEvent ?? null),
+    }))
+    .sort((a, b) => {
+      if (a.costPerEvent == null) return b.costPerEvent == null ? 0 : 1;
+      if (b.costPerEvent == null) return -1;
+      return a.costPerEvent - b.costPerEvent;
+    });
+  return {
+    bars,
+    median: standing.medianCostPerEvent ?? null,
+    medianShare: share(standing.medianCostPerEvent ?? null),
+    eligibleAds: standing.eligibleAds,
+    totalAds: standing.totalAds,
+  };
 }
