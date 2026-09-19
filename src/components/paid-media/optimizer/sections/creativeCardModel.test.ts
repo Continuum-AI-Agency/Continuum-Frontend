@@ -94,6 +94,8 @@ describe('standingChart', () => {
   });
   it('says nothing when there is no standing or nothing compared', () => {
     expect(standingChart(null, 'w')).toBeNull();
-    expect(standingChart({ ...(standing as object), winner: null, laggards: [] } as never, 'w')).toBeNull();
+    expect(
+      standingChart({ ...(standing as object), winner: null, laggards: [] } as never, 'w'),
+    ).toBeNull();
   });
 });

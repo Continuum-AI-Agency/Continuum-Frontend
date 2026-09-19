@@ -15,19 +15,19 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useSignedAssetUrls } from '@/lib/ai-studio/elements';
 import { cn } from '@/lib/utils';
+import { formatCpa } from '../format';
+import { CreativeStandingBars } from './CreativeStandingBars';
 import {
   adImageUrl,
   angleWords,
   audienceWords,
   creativeCardCopy,
   flashCreativesFor,
-  SWAP_STATUS_LABEL,
   type StandingChart,
+  SWAP_STATUS_LABEL,
   subjectAds,
 } from './creativeCardModel';
-import { CreativeStandingBars } from './CreativeStandingBars';
 import type { ImplementTarget } from './flashCreativesModel';
-import { formatCpa } from '../format';
 import { evidenceLine, impactLabel } from './recQueueModel';
 
 type CreativeRecommendationCardProps = {
@@ -356,14 +356,16 @@ export function CreativeRecommendationCard({
               </li>
             );
           })}
-          {Array.from({ length: emptySlots }, (_, index) => (
-            <li
-              className="flex aspect-square items-center justify-center rounded-lg border border-border/60 border-dashed text-3xs text-muted-foreground"
-              key={`slot-${index}`}
-            >
-              slot {slots.length + index + 1}
-            </li>
-          ))}
+          {Array.from({ length: emptySlots }, (_, index) => slots.length + index + 1).map(
+            (slotNumber) => (
+              <li
+                className="flex aspect-square items-center justify-center rounded-lg border border-border/60 border-dashed text-3xs text-muted-foreground"
+                key={`slot-${slotNumber}`}
+              >
+                slot {slotNumber}
+              </li>
+            ),
+          )}
         </ul>
         {onGenerate ? (
           <Button

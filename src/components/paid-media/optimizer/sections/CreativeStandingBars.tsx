@@ -27,10 +27,15 @@ export function CreativeStandingBars({ chart, resultWord, currency }: CreativeSt
       </figcaption>
       <ol className="space-y-1">
         {chart.bars.map((bar) => (
-          <li className="grid grid-cols-[7rem_minmax(0,1fr)_4.5rem] items-center gap-2 text-2xs" key={bar.adId}>
+          <li
+            className="grid grid-cols-[7rem_minmax(0,1fr)_4.5rem] items-center gap-2 text-2xs"
+            key={bar.adId}
+          >
             <span
               className={
-                bar.subject ? 'truncate font-medium text-foreground' : 'truncate text-muted-foreground'
+                bar.subject
+                  ? 'truncate font-medium text-foreground'
+                  : 'truncate text-muted-foreground'
               }
               title={bar.name}
             >
