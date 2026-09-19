@@ -188,6 +188,7 @@ mock.module('../useOptimizerData', () => ({
   useFlashCreativeMutations: () => ({
     request: { mutateAsync: async () => 'job', isPending: false },
     implement: { mutateAsync: async () => 'job', isPending: false },
+    refreshPipelines: () => undefined,
   }),
   useAdAccountCurrency: () => 'USD',
   fetchAdsetAds: async () => [],

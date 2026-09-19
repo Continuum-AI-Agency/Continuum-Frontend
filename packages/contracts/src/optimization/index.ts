@@ -23,3 +23,4 @@ export * from './service';
 // wizard, Manage, MCP and the scheduler.
 export * from './targetMetric';
 export * from './flash-creatives';
+export * from './flash-pipeline-template';

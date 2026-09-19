@@ -23,10 +23,13 @@ import {
   type AdsetAd,
   type CreativeSwapJobRow,
   type CycleItemRow,
+  explainFlashUnfit,
+  flashPipelineCandidate,
   GLOBAL_ANGLE_LABELS,
   type GlobalAngleId,
   getOptimizationMetricDefinition,
   type ParsedCycleRunReport,
+  type PipelineCapabilityV2,
   type PortfolioLevel,
   type PortfolioListItem,
   pickFlashPipelines,
@@ -50,7 +53,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { fetchPipelineCapabilities } from '@/lib/ai-studio/pipelines';
+import { fetchPipelineCapabilities, publishPipeline } from '@/lib/ai-studio/pipelines';
 import { cn } from '@/lib/utils';
 import { resolveAdsetName } from '../adsetName';
 import { AdSetIdLabel } from '../charts/AdSetIdLabel';
@@ -158,6 +161,15 @@ type EvidenceContext = {
   generatingIds: ReadonlySet<string>;
   /** Why the last request for a row could not be placed (no workflow fits, RPC failed). */
   generateNotes: ReadonlyMap<string, string>;
+  /** Rows offered a simple auto-built flow because nothing published can run for them. */
+  flowOffers: ReadonlySet<string>;
+  /** Publish the minimal flash pipeline for the brand, then generate for this row. */
+  createFlowAndGenerate: (
+    rec: RecommendationRow,
+    name: string | null,
+    ads: readonly AdsetAd[],
+  ) => void;
+  creatingFlowIds: ReadonlySet<string>;
   /** Put a finished variant beside the current ad of an ad set (this one or another). */
   implementCreative: (job: CreativeSwapJobRow, assetId: string, target: ImplementTarget) => void;
   implementingKey: string | null;
@@ -447,36 +459,66 @@ export function OptimizerActionsPortfolioGroup({
       return next;
     });
   }, []);
+  const [flowOffers, setFlowOffers] = React.useState<ReadonlySet<string>>(new Set());
+  const [creatingFlowIds, setCreatingFlowIds] = React.useState<ReadonlySet<string>>(new Set());
+  const offerFlow = React.useCallback((recId: string, offer: boolean) => {
+    setFlowOffers((prev) => {
+      const next = new Set(prev);
+      if (offer) next.add(recId);
+      else next.delete(recId);
+      return next;
+    });
+  }, []);
+  /** The request itself, given the pipelines to choose from. Resolves to false when
+   *  nothing fits (the note says why, and the row is offered an auto-built flow). */
+  const placeGeneration = React.useCallback(
+    async (
+      rec: RecommendationRow,
+      name: string | null,
+      ads: readonly AdsetAd[],
+      capabilities: readonly PipelineCapabilityV2[],
+    ): Promise<boolean> => {
+      const want = flashWantFor(rec, ads);
+      const [fit] = pickFlashPipelines(capabilities, want);
+      if (!fit) {
+        const unfit = capabilities
+          .map((c) => {
+            const why = explainFlashUnfit(c, want);
+            return why ? `“${c.name}” ${why}` : null;
+          })
+          .filter((line): line is string => line !== null)
+          .slice(0, 3);
+        noteFor(
+          rec.id,
+          capabilities.length === 0
+            ? 'This brand has no published Creative+ pipeline yet (a canvas workspace is not one).'
+            : `No published pipeline can run this: ${unfit.join('; ')}.`,
+        );
+        offerFlow(rec.id, true);
+        return false;
+      }
+      offerFlow(rec.id, false);
+      const audienceType = snapshotById.get(rec.adset_id)?.audienceType ?? null;
+      const brief = flashBriefFor(rec, name, audienceType, ads, currency, null);
+      const prompts = flashPromptsFor(brief);
+      await flash.request.mutateAsync({
+        recommendationId: rec.id,
+        pipelineId: fit.capability.pipeline_id,
+        prompt: prompts.positive,
+        negativePrompt: prompts.negative,
+        referenceAssetIds: want.hasReference ? referenceAssetIdsFor(rec) : [],
+        count: want.count,
+      });
+      return true;
+    },
+    [currency, flash.request, noteFor, offerFlow, snapshotById],
+  );
   const requestGeneration = React.useCallback(
     (rec: RecommendationRow, name: string | null, ads: readonly AdsetAd[]) => {
       setGeneratingIds((prev) => new Set(prev).add(rec.id));
       noteFor(rec.id, null);
-      const run = async () => {
-        const capabilities = await fetchPipelineCapabilities(brandId);
-        const want = flashWantFor(rec, ads);
-        const [fit] = pickFlashPipelines(capabilities, want);
-        if (!fit) {
-          noteFor(
-            rec.id,
-            capabilities.length === 0
-              ? 'This brand has no published Creative+ pipeline yet. A canvas workspace is not one: open it in AI Studio, choose Save → Publish pipeline, leave the generator’s prompt handle open (plus a reference-image or negative-prompt handle if the node has them), and publish.'
-              : 'None of the brand’s published pipelines takes a text prompt and returns images. Republish one with the generator’s prompt handle left open.',
-          );
-          return;
-        }
-        const audienceType = snapshotById.get(rec.adset_id)?.audienceType ?? null;
-        const brief = flashBriefFor(rec, name, audienceType, ads, currency, null);
-        const prompts = flashPromptsFor(brief);
-        await flash.request.mutateAsync({
-          recommendationId: rec.id,
-          pipelineId: fit.capability.pipeline_id,
-          prompt: prompts.positive,
-          negativePrompt: prompts.negative,
-          referenceAssetIds: want.hasReference ? referenceAssetIdsFor(rec) : [],
-          count: want.count,
-        });
-      };
-      run()
+      fetchPipelineCapabilities(brandId)
+        .then((capabilities) => placeGeneration(rec, name, ads, capabilities))
         .catch((error: unknown) => {
           noteFor(
             rec.id,
@@ -492,7 +534,39 @@ export function OptimizerActionsPortfolioGroup({
           void swapJobsQuery.refetch();
         });
     },
-    [brandId, currency, flash.request, noteFor, snapshotById, swapJobsQuery],
+    [brandId, noteFor, placeGeneration, swapJobsQuery],
+  );
+  const createFlowAndGenerate = React.useCallback(
+    (rec: RecommendationRow, name: string | null, ads: readonly AdsetAd[]) => {
+      setCreatingFlowIds((prev) => new Set(prev).add(rec.id));
+      noteFor(rec.id, null);
+      const want = flashWantFor(rec, ads);
+      publishPipeline(
+        flashPipelineCandidate({
+          brandProfileId: brandId,
+          withReference: want.hasReference,
+          ratio: want.ratio,
+        }),
+      )
+        .then(async ({ capability }) => {
+          flash.refreshPipelines();
+          const placed = await placeGeneration(rec, name, ads, [capability]);
+          if (placed)
+            noteFor(rec.id, `Flow “${capability.name}” published; you can grow it in AI Studio.`);
+        })
+        .catch((error: unknown) => {
+          noteFor(rec.id, error instanceof Error ? error.message : 'Could not create the flow.');
+        })
+        .finally(() => {
+          setCreatingFlowIds((prev) => {
+            const next = new Set(prev);
+            next.delete(rec.id);
+            return next;
+          });
+          void swapJobsQuery.refetch();
+        });
+    },
+    [brandId, flash, noteFor, placeGeneration, swapJobsQuery],
   );
   const implementCreative = React.useCallback(
     (job: CreativeSwapJobRow, assetId: string, target: ImplementTarget) => {
@@ -541,6 +615,9 @@ export function OptimizerActionsPortfolioGroup({
       requestGeneration,
       generatingIds,
       generateNotes,
+      flowOffers,
+      createFlowAndGenerate,
+      creatingFlowIds,
       implementCreative,
       implementingKey,
       audiences: audiencesQuery.data,
@@ -559,6 +636,9 @@ export function OptimizerActionsPortfolioGroup({
       requestGeneration,
       generatingIds,
       generateNotes,
+      flowOffers,
+      createFlowAndGenerate,
+      creatingFlowIds,
       implementCreative,
       implementingKey,
       audiencesQuery.data,
@@ -1561,6 +1641,9 @@ function CreativeCardHost({
       generating={evidence.generatingIds.has(rec.id)}
       implementingKey={evidence.implementingKey}
       jobs={evidence.swapJobs}
+      creatingFlow={evidence.creatingFlowIds.has(rec.id)}
+      flowOffered={evidence.flowOffers.has(rec.id)}
+      onCreateFlow={() => evidence.createFlowAndGenerate(rec, name, ads)}
       onGenerate={canGenerate ? () => evidence.requestGeneration(rec, name, ads) : null}
       onImplement={evidence.implementCreative}
       rec={rec}

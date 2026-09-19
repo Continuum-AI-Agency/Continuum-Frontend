@@ -78,6 +78,7 @@ import {
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
+import { pipelineCapabilitiesQueryKey } from '@/lib/ai-studio/pipelines';
 import { bareAccountId } from '@/lib/paid-media/accountId';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { dedupeById, type FeedPage, pageOnTimestamp } from './feedPaging';
@@ -1316,7 +1317,11 @@ export function useFlashCreativeMutations(brandId: string) {
   };
   const request = useMutation({ mutationFn: requestFlashCreatives, onSuccess: refresh });
   const implement = useMutation({ mutationFn: implementFlashCreative, onSuccess: refresh });
-  return { request, implement };
+  /** After a pipeline is published on the brand's behalf, the catalogue is stale. */
+  const refreshPipelines = () => {
+    void queryClient.invalidateQueries({ queryKey: pipelineCapabilitiesQueryKey(brandId) });
+  };
+  return { request, implement, refreshPipelines };
 }
 
 export function useOptimizerRenewals(brandId: string) {
