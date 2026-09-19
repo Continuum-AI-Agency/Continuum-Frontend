@@ -19,7 +19,8 @@ export interface RenderOutputFormatCandidate {
   mediaType?: string | null;
 }
 
-const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'mxf', 'webm']);
+// A GIF counts as video: it is one of the files a video output delivers (`encode.files.gif`).
+const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'mxf', 'webm', 'gif']);
 
 const slug = (value: string) =>
   value

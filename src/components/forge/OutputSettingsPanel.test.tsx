@@ -259,6 +259,64 @@ describe('OutputSettingsPanel', () => {
     ]);
   });
 
+  test('an output style sets every file at once; a hand-made mix reads as custom', async () => {
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+    await waitFor(() => expect(shown('Frame rate')).toBe('25 fps'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Square' }));
+    await waitFor(() => expect(shown('Output style')).toBe('Web'));
+
+    openSelect('Output style');
+    chooseOption(/^Broadcast/);
+    await waitFor(() => expect(shown('Output style')).toBe('Broadcast'));
+    expect(fileBox('MXF (DNxHR)').getAttribute('aria-checked')).toBe('true');
+    expect(fileBox('MOV (ProRes)').getAttribute('aria-checked')).toBe('false');
+    expect(fileBox('MP4').getAttribute('aria-checked')).toBe('true');
+
+    // A GIF on top is no style any more; the toggles stay the way to a custom mix.
+    fireEvent.click(screen.getByText('GIF (loop)'));
+    await waitFor(() => expect(shown('Output style')).toBe('Custom mix'));
+
+    // Leaves the scope already inherits stay unset: MP4 is this output's own file.
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    expect(request.mock.calls[0]).toEqual([
+      {
+        path: '/api/ai-studio/templates/133/encode',
+        method: 'PUT',
+        body: {
+          brandId: 'brand-1',
+          encode: {
+            default: { fps: 25 },
+            outputs: { square: { files: { mxf: true, gif: true } } },
+          },
+        },
+      },
+    ]);
+  });
+
+  test('on outputs with different own files, a style pins the files both must make', async () => {
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+    await waitFor(() => expect(shown('Frame rate')).toBe('25 fps'));
+    // Square makes an MP4 and Story a MOV: no one style names both.
+    expect(shown('Output style')).toBe('Custom mix');
+
+    openSelect('Output style');
+    chooseOption(/^Edit master/);
+    await waitFor(() => expect(shown('Output style')).toBe('Edit master'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    expect(request.mock.calls[0]).toEqual([
+      {
+        path: '/api/ai-studio/templates/133/encode',
+        method: 'PUT',
+        body: {
+          brandId: 'brand-1',
+          encode: { default: { fps: 25, files: { mp4: true, mov: true } } },
+        },
+      },
+    ]);
+  });
+
   test('a stills-only template says settings apply to animated formats, and nothing else', async () => {
     getContract.mockImplementationOnce(async () => ({
       ...contract(),

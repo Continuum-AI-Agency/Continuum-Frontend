@@ -4,8 +4,12 @@ import {
   apiRenderJobSchema,
   apiRenderPreflightRequestSchema,
   describeEncodeSettings,
+  ENCODE_FILE_CONTAINERS,
+  ENCODE_STYLES,
   encodeFilesOf,
   encodeSettingsSchema,
+  encodeStyleFiles,
+  encodeStyleOf,
   flattenEncodeSettings,
   mergeEncodeSettings,
 } from './api-renders';
@@ -37,6 +41,53 @@ describe('encode files', () => {
 
   it('refuses an unknown container', () => {
     expect(encodeSettingsSchema.safeParse({ files: { avi: true } }).success).toBe(false);
+  });
+});
+
+describe('output styles', () => {
+  it('names every container, so a style replaces a mix instead of adding to it', () => {
+    const broadcast = ENCODE_STYLES.find((style) => style.id === 'broadcast')!;
+    expect(encodeStyleFiles(broadcast)).toEqual({
+      mp4: true,
+      mov: false,
+      mxf: true,
+      webm: false,
+      gif: false,
+    });
+    expect(encodeFilesOf({ files: encodeStyleFiles(broadcast) }, 'mov')).toEqual(['mp4', 'mxf']);
+  });
+
+  it('round-trips: every style is the style of the files it makes, from either container', () => {
+    for (const style of ENCODE_STYLES) {
+      for (const container of ['mp4', 'mov'] as const) {
+        const files = encodeFilesOf({ files: encodeStyleFiles(style) }, container);
+        expect(encodeStyleOf(files)?.id).toBe(style.id);
+      }
+    }
+  });
+
+  it('keeps the MP4 in every style and uses only known files', () => {
+    for (const style of ENCODE_STYLES) {
+      expect(style.files).toContain('mp4');
+      for (const file of style.files) expect(ENCODE_FILE_CONTAINERS).toContain(file);
+    }
+    expect(new Set(ENCODE_STYLES.map((style) => style.id)).size).toBe(ENCODE_STYLES.length);
+  });
+
+  it('is null for a mix no style names, whatever the order', () => {
+    expect(encodeStyleOf(['mxf', 'mp4'])?.id).toBe('broadcast');
+    expect(encodeStyleOf(['mp4', 'mov', 'mxf'])).toBeNull();
+    expect(encodeStyleOf(['mov'])).toBeNull();
+    expect(encodeStyleOf([])).toBeNull();
+  });
+
+  it('parses webm and gif as files', () => {
+    expect(encodeSettingsSchema.parse({ files: { webm: true, gif: true } })).toEqual({
+      files: { webm: true, gif: true },
+    });
+    expect(describeEncodeSettings({ files: { webm: true, gif: true } }, 'mp4')).toBe(
+      'MP4 + WebM + GIF',
+    );
   });
 });
 
@@ -126,9 +177,20 @@ describe('matchOutputFormat with several files per comp', () => {
     { id: '9x16', ratio: '9:16', comp: { name: 'Card 9:16', width: 1080, height: 1920 } },
   ];
 
-  it('maps the mp4, mov and mxf of one comp to the same format', () => {
-    for (const name of ['Card_16_9_ab12cd.mp4', 'Card_16_9_ab12cd.mov', 'Card_16_9_ab12cd.mxf']) {
-      expect(matchOutputFormat(name, formats)?.id).toBe('16x9');
+  it('maps every file of one comp to the same format', () => {
+    for (const extension of ['mp4', 'mov', 'mxf', 'webm', 'gif']) {
+      expect(matchOutputFormat(`Card_16_9_ab12cd.${extension}`, formats)?.id).toBe('16x9');
     }
+  });
+
+  it('splits a still/video tie on a gif or webm the video output delivers', () => {
+    const tied = [
+      { id: 'poster', ratio: '9:16', mediaType: 'JPG image (RGB)' },
+      { id: 'story', ratio: '9:16', mediaType: 'MP4 Video (RGB)' },
+    ];
+    for (const extension of ['webm', 'gif']) {
+      expect(matchOutputFormat(`Story_9_16_ab12cd.${extension}`, tied)?.id).toBe('story');
+    }
+    expect(matchOutputFormat('Story_9_16_ab12cd.jpg', tied)?.id).toBe('poster');
   });
 });

@@ -11,6 +11,7 @@ const MIME_EXTENSION_MAP: Record<string, string> = {
   'video/mp4': 'mp4',
   'video/webm': 'webm',
   'video/quicktime': 'mov',
+  'application/mxf': 'mxf',
 };
 
 const getExtensionFromMime = (mimeType?: string | null) => {

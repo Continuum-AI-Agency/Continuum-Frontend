@@ -4,12 +4,15 @@ import {
   type ApiRenderTemplateContract,
   compactEncodeBlock,
   ENCODE_FILE_CONTAINERS,
+  ENCODE_STYLES,
   type EncodeBlock,
   type EncodeFileContainer,
   type EncodeSettingKey,
   type EncodeSettings,
   encodeContainerOf,
   encodeFilesOf,
+  encodeStyleFiles,
+  encodeStyleOf,
   flattenEncodeSettings,
   mergeEncodeSettings,
   unflattenEncodeSettings,
@@ -39,6 +42,8 @@ import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 
 type Container = 'mp4' | 'mov';
 type Leaf = string | number | boolean;
+/** Leaves to change at once; `undefined` resets a leaf to inherited. */
+export type EncodeLeafChanges = Partial<Record<EncodeSettingKey, Leaf | undefined>>;
 type Output = ApiRenderTemplateContract['outputs'][number];
 
 /** One container in scope and what applies to it when a field is unset. */
@@ -51,10 +56,14 @@ const FILE_LABEL: Record<EncodeFileContainer, string> = {
   mp4: 'MP4',
   mov: 'MOV (ProRes)',
   mxf: 'MXF (DNxHR)',
+  webm: 'WebM (VP9)',
+  gif: 'GIF (loop)',
 };
 
 /** The `<Select>` value that stands for "unset — inherit". Never a real setting's spelling. */
 const INHERIT = '__inherit__';
+/** The style `<Select>` value for a file mix no style names. */
+const CUSTOM = '__custom__';
 
 const rate = (value: number) => String(Math.round(value * 1000) / 1000);
 const range = (from: number, to: number) =>
@@ -156,14 +165,17 @@ export function isStillsOnly(contract: Pick<ApiRenderTemplateContract, 'outputs'
   return motion != null && Math.round(motion.durationSec * motion.frameRate) <= 1;
 }
 
-export function setEncodeLeaf(
+export function setEncodeLeaves(
   settings: EncodeSettings | undefined,
-  key: EncodeSettingKey,
-  value: Leaf | undefined,
+  changes: EncodeLeafChanges,
 ): EncodeSettings | undefined {
   const flat = flattenEncodeSettings(settings);
-  if (value === undefined) delete flat[key];
-  else flat[key] = value;
+  for (const [key, value] of Object.entries(changes) as Array<
+    [EncodeSettingKey, Leaf | undefined]
+  >) {
+    if (value === undefined) delete flat[key];
+    else flat[key] = value;
+  }
   return unflattenEncodeSettings(flat);
 }
 
@@ -198,8 +210,8 @@ export function EncodeSettingsFields({
   inherited: InheritedEncode[];
   frameRate?: number | null;
   cleared?: EncodeSettingKey[];
-  /** `undefined` resets the field to inherited. */
-  onSet: (key: EncodeSettingKey, value: Leaf | undefined) => void;
+  /** Every leaf in one call, so a style's five files land together. */
+  onSet: (changes: EncodeLeafChanges) => void;
   /** Blank an inherited value back to the template. Only a draft child can. */
   onClear?: (key: EncodeSettingKey) => void;
 }) {
@@ -218,16 +230,58 @@ export function EncodeSettingsFields({
   };
   // The one file a container still makes cannot be turned off: a render must deliver something.
   const lastFile = filesPer.find((files) => files.length === 1)?.[0];
+  // A leaf the scope already inherits is left unset, so the template can still change it later.
+  const fileLeaf = (file: EncodeFileContainer, on: boolean) =>
+    inherited.every(
+      ({ container, settings: base }) => encodeFilesOf(base, container).includes(file) === on,
+    )
+      ? undefined
+      : on;
   const toggleFile = (file: EncodeFileContainer) => {
-    const next = fileState(file) !== true;
-    const inheritsNext = inherited.every(
-      ({ container, settings: base }) => encodeFilesOf(base, container).includes(file) === next,
+    onSet({ [`files.${file}`]: fileLeaf(file, fileState(file) !== true) });
+  };
+  const sameFiles = filesPer.every((files) => files.join() === filesPer[0]?.join());
+  const style = sameFiles && filesPer[0] ? encodeStyleOf(filesPer[0]) : null;
+  const applyStyle = (id: string) => {
+    const target = ENCODE_STYLES.find((item) => item.id === id);
+    if (!target) return;
+    const files = encodeStyleFiles(target);
+    onSet(
+      Object.fromEntries(
+        ENCODE_FILE_CONTAINERS.map((file) => [
+          `files.${file}`,
+          fileLeaf(file, files[file] === true),
+        ]),
+      ),
     );
-    onSet(`files.${file}`, inheritsNext ? undefined : next);
   };
 
   return (
     <div className="grid gap-2 sm:grid-cols-2">
+      <div className="flex flex-col gap-1 text-xs sm:col-span-2">
+        <span className="text-muted-foreground">Output style</span>
+        <Select value={style?.id ?? CUSTOM} onValueChange={(next) => applyStyle(String(next))}>
+          <SelectTrigger aria-label="Output style" className="w-full">
+            <SelectValue>
+              {(value: unknown) => (
+                <span className="truncate">
+                  {ENCODE_STYLES.find((item) => item.id === value)?.label ?? 'Custom mix'}
+                </span>
+              )}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {ENCODE_STYLES.map((item) => (
+              <SelectItem key={item.id} value={item.id}>
+                <span className="flex flex-col">
+                  <span>{item.label}</span>
+                  <span className="text-xs text-muted-foreground">{item.description}</span>
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
       <fieldset className="flex flex-col gap-1.5 text-xs sm:col-span-2">
         <legend className="mb-1 text-muted-foreground">Files</legend>
         <div className="flex flex-wrap gap-x-4 gap-y-1.5">
@@ -284,10 +338,10 @@ export function EncodeSettingsFields({
               <Select
                 value={current === undefined ? INHERIT : String(current)}
                 onValueChange={(next) =>
-                  onSet(
-                    field.key,
-                    next === INHERIT ? undefined : values.find((value) => String(value) === next),
-                  )
+                  onSet({
+                    [field.key]:
+                      next === INHERIT ? undefined : values.find((value) => String(value) === next),
+                  })
                 }
               >
                 <SelectTrigger aria-label={field.label} className="w-full">
@@ -316,7 +370,7 @@ export function EncodeSettingsFields({
                 className="mb-1.5 rounded-md p-0.5 text-muted-foreground hover:bg-muted/50"
                 aria-label={`Reset ${field.label} to inherited`}
                 title="Reset to inherited"
-                onClick={() => onSet(field.key, undefined)}
+                onClick={() => onSet({ [field.key]: undefined })}
               >
                 <RotateCcw className="size-3" aria-hidden />
               </button>
@@ -438,10 +492,10 @@ export function OutputSettingsPanel({
         settings={settings}
         inherited={inherited}
         frameRate={output?.frameRate}
-        onSet={(key, value) =>
+        onSet={(changes) =>
           setDraft((current) => {
             const scoped = output ? current.outputs?.[output.id] : current.default;
-            return withEncodeScope(current, scope, setEncodeLeaf(scoped, key, value));
+            return withEncodeScope(current, scope, setEncodeLeaves(scoped, changes));
           })
         }
       />

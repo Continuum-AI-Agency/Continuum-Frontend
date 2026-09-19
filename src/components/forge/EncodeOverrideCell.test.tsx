@@ -64,6 +64,22 @@ test('the closed cell reads the row summary; 25 fps and MXF land on the row', as
   expect(seen[0]?.encode).toEqual({ default: { fps: 25 } });
 });
 
+test('a style swaps the whole file set on the row in one change', async () => {
+  const seen: RequestRow[] = [];
+  render(<Harness outputs={OUTPUTS} seen={seen} />);
+  fireEvent.click(cell());
+  openSelect('Output style');
+  chooseOption(/^Social loop/);
+  await waitFor(() => expect(cell().textContent).toBe('MP4 + GIF'));
+  expect(seen[0]?.encode).toEqual({ default: { files: { gif: true } } });
+
+  // GIF off and MOV on land together: the row is Edit master, not a GIF-and-MOV mix.
+  openSelect('Output style');
+  chooseOption(/^Edit master/);
+  await waitFor(() => expect(cell().textContent).toBe('MP4 + MOV'));
+  expect(seen[0]?.encode).toEqual({ default: { files: { mov: true } } });
+});
+
 test('the scope is a Select of the formats; settings without a summary still read as custom', async () => {
   const seen: RequestRow[] = [];
   render(<Harness outputs={OUTPUTS} seen={seen} />);

@@ -282,6 +282,8 @@ export const encodeSettingsSchema = z
         mp4: z.boolean().optional(),
         mov: z.boolean().optional(),
         mxf: z.boolean().optional(),
+        webm: z.boolean().optional(),
+        gif: z.boolean().optional(),
       })
       .strict()
       .optional(),
@@ -319,6 +321,8 @@ export const ENCODE_SETTING_KEYS = [
   'files.mp4',
   'files.mov',
   'files.mxf',
+  'files.webm',
+  'files.gif',
 ] as const;
 export type EncodeSettingKey = (typeof ENCODE_SETTING_KEYS)[number];
 export type FlatEncodeSettings = Partial<Record<EncodeSettingKey, string | number | boolean>>;
@@ -377,11 +381,83 @@ export function encodeContainerOf(mediaType: string | null | undefined): 'mp4' |
   return container === 'mp4' || container === 'mov' ? container : null;
 }
 
-/** Every file a video output can be delivered as, in the order they are listed. */
-export const ENCODE_FILE_CONTAINERS = ['mp4', 'mov', 'mxf'] as const;
+/**
+ * Every file a video output can be delivered as, in the order they are listed. MXF is DNxHR HQ
+ * (OP1a, 48 kHz PCM), WebM is VP9 + Opus, GIF is the fleet's 12 fps, 480 px palette loop.
+ */
+export const ENCODE_FILE_CONTAINERS = ['mp4', 'mov', 'mxf', 'webm', 'gif'] as const;
 export type EncodeFileContainer = (typeof ENCODE_FILE_CONTAINERS)[number];
 
-const FILE_LABEL: Record<EncodeFileContainer, string> = { mp4: 'MP4', mov: 'MOV', mxf: 'MXF' };
+const FILE_LABEL: Record<EncodeFileContainer, string> = {
+  mp4: 'MP4',
+  mov: 'MOV',
+  mxf: 'MXF',
+  webm: 'WebM',
+  gif: 'GIF',
+};
+
+/**
+ * Named delivery styles: one pick sets which files a render makes. A style is only a file set —
+ * it rides the wire as ordinary `files` — so the per-file toggles stay the way to a custom mix.
+ * Every style keeps the MP4: it is what the preview plays, what the Library shows, and what Meta
+ * takes. Edit master leaves the ProRes profile alone, so an overlay template keeps its alpha.
+ */
+export const ENCODE_STYLES = [
+  {
+    id: 'web',
+    label: 'Web',
+    description: 'MP4 (H.264). Plays everywhere; what Meta takes.',
+    files: ['mp4'],
+  },
+  {
+    id: 'broadcast',
+    label: 'Broadcast',
+    description: 'MXF (DNxHR HQ, OP1a, 48 kHz PCM) plus the MP4.',
+    files: ['mp4', 'mxf'],
+  },
+  {
+    id: 'edit-master',
+    label: 'Edit master',
+    description: 'MOV (ProRes) plus the MP4.',
+    files: ['mp4', 'mov'],
+  },
+  {
+    id: 'open-web',
+    label: 'Open web',
+    description: 'WebM (VP9 + Opus) plus the MP4.',
+    files: ['mp4', 'webm'],
+  },
+  {
+    id: 'social-loop',
+    label: 'Social loop',
+    description: 'Animated GIF (480 px, 12 fps) plus the MP4.',
+    files: ['mp4', 'gif'],
+  },
+] as const satisfies ReadonlyArray<{
+  id: string;
+  label: string;
+  description: string;
+  files: readonly EncodeFileContainer[];
+}>;
+export type EncodeStyle = (typeof ENCODE_STYLES)[number];
+
+/** A style's files with every container named, so it replaces a mix instead of adding to it. */
+export function encodeStyleFiles(style: EncodeStyle): NonNullable<EncodeSettings['files']> {
+  const on: readonly EncodeFileContainer[] = style.files;
+  return Object.fromEntries(ENCODE_FILE_CONTAINERS.map((file) => [file, on.includes(file)]));
+}
+
+/** The style that makes exactly these files, or null for a custom mix. */
+export function encodeStyleOf(files: readonly EncodeFileContainer[]): EncodeStyle | null {
+  const wanted = new Set(files);
+  return (
+    ENCODE_STYLES.find(
+      (style) =>
+        style.files.length === wanted.size &&
+        style.files.every((file: EncodeFileContainer) => wanted.has(file)),
+    ) ?? null
+  );
+}
 
 /**
  * The files a video output produces: the template's own container unless `files` turns it off,

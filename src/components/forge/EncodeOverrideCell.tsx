@@ -7,7 +7,7 @@ import {
   containersOf,
   EncodeSettingsFields,
   type InheritedEncode,
-  setEncodeLeaf,
+  setEncodeLeaves,
   withEncodeScope,
 } from '@/components/forge/OutputSettingsPanel';
 import {
@@ -91,9 +91,9 @@ export function EncodeOverrideCell({
       `${item.label}${item.ratio ? ` · ${item.ratio}` : ''}`,
     ]),
   ];
-  const withoutCleared = (key: EncodeSettingKey, add: boolean) => {
-    const keys = (cleared ?? []).filter((item) => item !== key);
-    return withEncodeScope(row.clearedEncodeKeys, scopeKey, add ? [...keys, key] : keys);
+  const withoutCleared = (changed: EncodeSettingKey[], add: boolean) => {
+    const keys = (cleared ?? []).filter((item) => !changed.includes(item));
+    return withEncodeScope(row.clearedEncodeKeys, scopeKey, add ? [...keys, ...changed] : keys);
   };
 
   return (
@@ -131,10 +131,10 @@ export function EncodeOverrideCell({
           inherited={inherited}
           frameRate={output?.frameRate}
           cleared={cleared}
-          onSet={(key, value) =>
+          onSet={(changes) =>
             onChange({
-              encode: withEncodeScope(row.encode, scopeKey, setEncodeLeaf(own, key, value)),
-              clearedEncodeKeys: withoutCleared(key, false),
+              encode: withEncodeScope(row.encode, scopeKey, setEncodeLeaves(own, changes)),
+              clearedEncodeKeys: withoutCleared(Object.keys(changes) as EncodeSettingKey[], false),
             })
           }
           onClear={
@@ -144,9 +144,9 @@ export function EncodeOverrideCell({
                     encode: withEncodeScope(
                       row.encode,
                       scopeKey,
-                      setEncodeLeaf(own, key, undefined),
+                      setEncodeLeaves(own, { [key]: undefined }),
                     ),
-                    clearedEncodeKeys: withoutCleared(key, true),
+                    clearedEncodeKeys: withoutCleared([key], true),
                   })
               : undefined
           }
