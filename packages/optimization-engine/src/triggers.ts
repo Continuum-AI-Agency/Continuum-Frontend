@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import type { EngineConfig } from './config';
-import { costPerEvent, kpiEvents, scoreAdSet } from './scoring';
+import { costPerEvent, kpiEvents, scoreAdSet, upperFunnelEvents } from './scoring';
 import type { AdSetSnapshot, Recommendation } from './types';
 
 const isEvaluable = (s: AdSetSnapshot): boolean => s.status !== 'frozen' && s.status !== 'flagged';
@@ -37,11 +37,15 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
     .map((s) => costPerEvent(s.windows.d14, cfg));
   const robustBestCpp = percentile(cpp14s, 25);
 
-  // Portfolio average ATC cost (for P1 relative comparison).
-  const atcCosts = snapshots
-    .filter((s) => isEvaluable(s) && s.windows.d3.addToCarts > 0)
-    .map((s) => s.windows.d3.spend / s.windows.d3.addToCarts);
-  const avgAtcCost = atcCosts.length ? atcCosts.reduce((a, b) => a + b, 0) / atcCosts.length : 0;
+  // Portfolio average upper-funnel cost (for P1's relative comparison): add-to-carts on a
+  // purchase portfolio, link clicks on a conversations one, landing-page views on leads.
+  const upperLabel = cfg.upperFunnelLabel ?? 'add-to-cart';
+  const upperCosts = snapshots
+    .filter((s) => isEvaluable(s) && (upperFunnelEvents(s.windows.d3, cfg) ?? 0) > 0)
+    .map((s) => s.windows.d3.spend / (upperFunnelEvents(s.windows.d3, cfg) as number));
+  const avgAtcCost = upperCosts.length
+    ? upperCosts.reduce((a, b) => a + b, 0) / upperCosts.length
+    : 0;
 
   const floor = Math.max((cfg.cpaTarget * cfg.floorMinSignals) / cfg.floorWindowDays, 0);
 
@@ -52,21 +56,25 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
     const d14 = s.windows.d14;
     const traj = scoreAdSet(s, cfg).trajectoryState;
 
-    // P1 — zero upper funnel (fast)
-    const atcCost3d = d3.addToCarts > 0 ? d3.spend / d3.addToCarts : Infinity;
+    // P1 — zero upper funnel (fast). Skipped entirely on an objective whose KPI is the
+    // top of the funnel (awareness): there is no step above impressions to go dark.
+    const upper3d = upperFunnelEvents(d3, cfg);
+    const atcCost3d = upper3d != null && upper3d > 0 ? d3.spend / upper3d : Infinity;
     const p1 =
+      upper3d != null &&
       d3.spend > floor &&
       kpiEvents(d3, cfg) === 0 &&
-      (d3.addToCarts === 0 ||
-        (avgAtcCost > 0 && atcCost3d > cfg.upperFunnelOverrideMult * avgAtcCost));
+      (upper3d === 0 || (avgAtcCost > 0 && atcCost3d > cfg.upperFunnelOverrideMult * avgAtcCost));
     if (p1) {
       // P1 fires on two disjoint conditions; say which one actually happened. The reason is
       // the sole grounding source for the AI insight tooltip, so every figure in it must be
       // real — a placeholder like "null" reads as a number that was never measured.
+      // Purchases keep the established word; every other objective names its own KPI.
+      const kpiLabel = !cfg.kpiField || cfg.kpiField === 'purchases' ? 'conversions' : cfg.kpiField;
       const reason =
-        d3.addToCarts === 0
-          ? `Spent ${d3.spend.toFixed(0)} over 3d with 0 conversions and 0 add-to-carts.`
-          : `Spent ${d3.spend.toFixed(0)} over 3d with 0 conversions and an add-to-cart cost of ${atcCost3d.toFixed(0)} — over ${cfg.upperFunnelOverrideMult}× the portfolio average of ${avgAtcCost.toFixed(0)}.`;
+        upper3d === 0
+          ? `Spent ${d3.spend.toFixed(0)} over 3d with 0 ${kpiLabel} and 0 ${upperLabel}s.`
+          : `Spent ${d3.spend.toFixed(0)} over 3d with 0 ${kpiLabel} and an ${upperLabel} cost of ${atcCost3d.toFixed(0)} — over ${cfg.upperFunnelOverrideMult}× the portfolio average of ${avgAtcCost.toFixed(0)}.`;
       recs.push({
         adSetId: s.id,
         kind: 'pause',
@@ -77,9 +85,9 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
           metric: 'spend',
           value: d3.spend,
           comparator:
-            d3.addToCarts === 0
-              ? 'with 0 conversions and 0 add-to-carts'
-              : `with 0 conversions, add-to-cart cost ${atcCost3d.toFixed(0)} vs ${avgAtcCost.toFixed(0)} avg`,
+            upper3d === 0
+              ? `with 0 ${kpiLabel} and 0 ${upperLabel}s`
+              : `with 0 ${kpiLabel}, ${upperLabel} cost ${atcCost3d.toFixed(0)} vs ${avgAtcCost.toFixed(0)} avg`,
           threshold: floor,
           window: 'd3',
           estImpactPerDay: d3.spend / 3,

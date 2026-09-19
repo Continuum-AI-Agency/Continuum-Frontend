@@ -11,7 +11,7 @@
 //   newItemProtectDays      = 7    (grace blocks P1/P2/P3)
 import { expect, test } from 'bun:test';
 import type { AdSetSnapshot, WindowMetrics } from '../src/index';
-import { DEFAULT_CONFIG, evaluateTriggers } from '../src/index';
+import { DEFAULT_CONFIG, evaluateTriggers, resolveConfig } from '../src/index';
 
 const FLOOR =
   (DEFAULT_CONFIG.cpaTarget * DEFAULT_CONFIG.floorMinSignals) / DEFAULT_CONFIG.floorWindowDays; // 100/14
@@ -238,4 +238,36 @@ test('P3 evidence is the dead spend over 14d with 0 conversions', () => {
     window: 'd14',
     estImpactPerDay: 10,
   });
+});
+
+// The upper funnel is the objective's, not purchase's. A conversations portfolio judges
+// "dead at the top" by link clicks, an awareness one has no P1 at all.
+test('P1 reads the objective’s own upper funnel — link clicks for conversations', () => {
+  const cfg = resolveConfig({ objective: 'conversations' });
+  const w2 = (spend: number, conversations: number, linkClicks: number): WindowMetrics => ({
+    spend,
+    purchases: 0,
+    addToCarts: 0,
+    clicks: linkClicks,
+    impressions: 5000,
+    conversations,
+    linkClicks,
+  });
+  const talking = mk({ id: 'ok', windows: flat(w2(100, 5, 40)) });
+  const silent = mk({ id: 'silent', windows: flat(w2(100, 0, 0)) });
+  const { recommendations } = evaluateTriggers([talking, silent], cfg);
+  const p1 = recommendations.find((r) => r.trigger === 'P1_zero_upper_funnel');
+  expect(p1?.adSetId).toBe('silent');
+  expect(p1?.reason).toContain('0 conversations and 0 link clicks');
+  expect(p1?.reason).not.toContain('add-to-cart');
+});
+
+test('P1 never fires on awareness — impressions are the top of that funnel', () => {
+  const cfg = resolveConfig({ objective: 'awareness' });
+  const dark = mk({
+    id: 'a',
+    windows: flat({ spend: 300, purchases: 0, addToCarts: 0, clicks: 0, impressions: 0 }),
+  });
+  const { recommendations } = evaluateTriggers([dark], cfg);
+  expect(recommendations.some((r) => r.trigger === 'P1_zero_upper_funnel')).toBe(false);
 });

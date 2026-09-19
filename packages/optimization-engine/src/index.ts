@@ -14,7 +14,6 @@ export {
   NEW_ITEM_LOCK_DAYS,
 } from './classify';
 export { confidenceOf, portfolioConfidence } from './confidence';
-export { PORTFOLIO_SCOPE } from './types';
 export type { DeepPartial, EngineConfig, WindowWeights } from './config';
 export { DEFAULT_CONFIG, resolveConfig } from './config';
 export {
@@ -61,12 +60,6 @@ export {
   velocityCapTruncated,
 } from './explain';
 export { evaluateFatigue } from './fatigue';
-export {
-  CAP_BINDING_SHARE,
-  evaluateSettings,
-  FLOOR_RELAXED_SHARE,
-  UNDERSPEND_SHARE,
-} from './settings';
 // Hierarchical (tree-aware) generalization of `shrinkScores` in ./significance:
 // shrink each node toward its parent's already-shrunk estimate instead of one
 // flat cohort mean. Pure, zero-dependency — safe for this dependency-free barrel.
@@ -136,6 +129,12 @@ export { GRANTABLE_ACTION_KINDS } from './rules/types';
 export type { CycleOptions } from './runCycle';
 export { runCycle } from './runCycle';
 export { costPerEvent, kpiEvents, scoreAdSet, windowScore } from './scoring';
+export {
+  CAP_BINDING_SHARE,
+  evaluateSettings,
+  FLOOR_RELAXED_SHARE,
+  UNDERSPEND_SHARE,
+} from './settings';
 export { adSetCpaInterval, costInterval, cpaInterval, shrinkScores } from './significance';
 export type { SolverAllocation, SolverItem, SolverOutput } from './solver';
 export { solve } from './solver';
@@ -172,6 +171,7 @@ export type {
   TrajectoryState,
   WindowMetrics,
 } from './types';
+export { PORTFOLIO_SCOPE } from './types';
 
 // NOTE: zod-backed IO schemas are intentionally NOT re-exported here — the root
 // entry stays pure/dependency-free. Import them from the BE-safe subpath

@@ -11,6 +11,8 @@ import { creativeBriefForRec, recommendationLabel } from '../reportModel';
 import { useOptimizerMutations } from '../useOptimizerData';
 import { audienceExpansionPrompt } from './recQueueModel';
 
+const TASK_DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+
 type RenewalTaskRowProps = {
   brandId: string;
   task: RenewalTask;
@@ -34,6 +36,15 @@ export function RenewalTaskRow({ brandId, task }: RenewalTaskRowProps) {
         <p className="mt-1 text-xs text-muted-foreground">
           {task.portfolio_name}
           {task.reason ? ` · ${task.reason}` : ''}
+        </p>
+        {/* A task is only on the board while its signal still fires: opened when it was
+            approved, re-asserted by the latest cycle. If a cycle stops raising it, the
+            engine closes the task itself. */}
+        <p className="mt-0.5 text-2xs text-muted-foreground tabular-nums">
+          opened {TASK_DATE.format(new Date(task.created_at))}
+          {task.last_asserted_at
+            ? ` · still firing as of ${TASK_DATE.format(new Date(task.last_asserted_at))}`
+            : ''}
         </p>
         {task.kind === 'audience_expand' ? (
           // The options with sizes live in Jaina's audience tools; hand the ad set and the

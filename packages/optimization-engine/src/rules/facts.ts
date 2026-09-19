@@ -16,7 +16,7 @@
 // ---------------------------------------------------------------------------
 
 import type { EngineConfig } from '../config';
-import { costPerEvent, kpiEvents, scoreAdSet } from '../scoring';
+import { costPerEvent, kpiEvents, scoreAdSet, upperFunnelEvents } from '../scoring';
 import type { AdSetSnapshot, WindowMetrics } from '../types';
 import type { FactMap } from './types';
 
@@ -55,9 +55,11 @@ export function buildPortfolioFacts(snapshots: AdSetSnapshot[], cfg: EngineConfi
   const robustBestCpp = percentile(cpp14s, 25);
 
   // triggers.ts: portfolio average ATC cost over d3, items with ATCs only.
+  // The objective's own upper funnel (add-to-carts, link clicks, landing-page views…) —
+  // the same read the built-in P1 uses, so the parity rules stay parity on every objective.
   const atcCosts = evaluable
-    .filter((s) => s.windows.d3.addToCarts > 0)
-    .map((s) => s.windows.d3.spend / s.windows.d3.addToCarts);
+    .filter((s) => (upperFunnelEvents(s.windows.d3, cfg) ?? 0) > 0)
+    .map((s) => s.windows.d3.spend / (upperFunnelEvents(s.windows.d3, cfg) as number));
 
   // triggers.ts: minimum meaningful daily spend (the P1 spend gate).
   const budgetFloor = Math.max((cfg.cpaTarget * cfg.floorMinSignals) / cfg.floorWindowDays, 0);
@@ -99,6 +101,7 @@ export function buildAdsetFacts(
   cfg: EngineConfig,
 ): FactMap {
   const { d3, d7, d14 } = s.windows;
+  const upper3d = upperFunnelEvents(d3, cfg);
 
   return {
     ...portfolioFacts,
@@ -131,8 +134,10 @@ export function buildAdsetFacts(
     cpp_d14: costPerEvent(d14, cfg),
 
     // Upper funnel
-    atc_d3: d3.addToCarts,
-    atc_cost_d3: d3.addToCarts > 0 ? d3.spend / d3.addToCarts : Number.POSITIVE_INFINITY,
+    // Upper-funnel events per the objective; an objective with no step above its KPI
+    // (awareness) reports "infinitely many at zero cost" so neither P1 arm can match.
+    atc_d3: upper3d === null ? Number.POSITIVE_INFINITY : upper3d,
+    atc_cost_d3: upper3d === null ? 0 : upper3d > 0 ? d3.spend / upper3d : Number.POSITIVE_INFINITY,
 
     // Engagement
     clicks_d3: d3.clicks,

@@ -8,12 +8,23 @@
 import type { EngineConfig, WindowWeights } from './config';
 import type { AdSetSnapshot, TrajectoryState, WindowMetrics } from './types';
 
-const cpp = (m: WindowMetrics): number =>
-  m.purchases > 0 ? m.spend / m.purchases : 0;
+const cpp = (m: WindowMetrics): number => (m.purchases > 0 ? m.spend / m.purchases : 0);
 
 /** Count of the active KPI events in a window (objective-aware; default purchases). */
 export function kpiEvents(m: WindowMetrics, cfg: EngineConfig): number {
   return (m[cfg.kpiField ?? 'purchases'] ?? 0) as number;
+}
+
+/** The objective's upper-funnel events in a window (add-to-carts for purchase, link clicks
+ *  for conversations, landing-page views for leads…). Null when the objective has no step
+ *  above its KPI. A declared field the snapshot never carries falls back to raw clicks —
+ *  the one count every window has — so a portfolio is never judged dead on a missing key. */
+export function upperFunnelEvents(m: WindowMetrics, cfg: EngineConfig): number | null {
+  const field = cfg.upperFunnelField === undefined ? 'addToCarts' : cfg.upperFunnelField;
+  if (field === null) return null;
+  const value = m[field];
+  if (typeof value === 'number') return value;
+  return m.clicks ?? 0;
 }
 
 /** Cost per KPI event for a window (0 when there are no events). */
@@ -50,11 +61,7 @@ export function windowScore(m: WindowMetrics, cfg: EngineConfig): number {
 /** True if a window's score should be trusted (significance gate, toggle #2). */
 export function windowCounts(m: WindowMetrics, cfg: EngineConfig): boolean {
   if (cfg.toggles.significanceGate) {
-    const events = cfg.kpiField
-      ? kpiEvents(m, cfg)
-      : m.purchases > 0
-        ? m.purchases
-        : m.addToCarts;
+    const events = cfg.kpiField ? kpiEvents(m, cfg) : m.purchases > 0 ? m.purchases : m.addToCarts;
     return events >= cfg.toggles.minEventsPerWindow;
   }
   return true; // Excel behaviour: any window with score > 0 counts
@@ -141,7 +148,7 @@ export function scoreAdSet(
 
   // #3 saturation exponent (1 => no-op / Excel)
   if (cfg.toggles.saturationGamma !== 1 && composite > 0) {
-    composite = Math.pow(composite, cfg.toggles.saturationGamma);
+    composite = composite ** cfg.toggles.saturationGamma;
   }
 
   // EWMA smoothing across cycles (Lead): blend this cycle's raw composite with

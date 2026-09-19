@@ -62,6 +62,7 @@ import { formatCurrency, humanize, portfolioLevelLabel } from '../format';
 import { costCiLegend, itemToRow, kpiColumns } from '../kpiColumns';
 import { applyModeExplainer, firstCycleState, parseReport, pendingWorkCount } from '../reportModel';
 import {
+  DEFAULT_CPA_SERIES_LIMIT,
   useOptimizerAccountSnapshots,
   useOptimizerAdAngles,
   useOptimizerAdDailyTrends,
@@ -126,12 +127,18 @@ export function PortfolioDetailWorkspace({
   // charts are entity-agnostic (keyed by entity id) and need no level.
   const level = (portfolio.level as PortfolioLevel) ?? 'adset';
   const performanceQuery = useOptimizerPerformance(portfolio.id);
-  const cpaSeriesQuery = useOptimizerCpaSeries(portfolio.id);
   const timelineEventsQuery = useOptimizerTimelineEvents(portfolio.id);
   // ONE reporting range for every panel. Presets trail today; 'flight' is the portfolio's
   // own period. Read surfaces that only take d7/d14/d30 get the nearest window.
   const today = todayIso();
   const resolvedRange = resolveRange(range, portfolio, today);
+  // One cycle a day: the series has to reach back as far as the range does, plus a few
+  // days so event pins on the first shown cycle keep their history. 30 was a hard cap and
+  // "30d", "Flight" and any longer custom range all drew the same picture.
+  const cpaSeriesQuery = useOptimizerCpaSeries(
+    portfolio.id,
+    Math.max(DEFAULT_CPA_SERIES_LIMIT, resolvedRange.days + 5),
+  );
   const hasFlight = Boolean(portfolio.period_start && portfolio.period_end);
   const flightLabel = portfolio.period_start
     ? formatDateRange({ from: portfolio.period_start, to: portfolio.period_end ?? null })

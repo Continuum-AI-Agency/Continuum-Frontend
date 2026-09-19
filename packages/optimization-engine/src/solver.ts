@@ -90,9 +90,7 @@ export function solve(items: SolverItem[], pool: number, cfg: EngineConfig): Sol
         floorRelaxed.set(it.id, true);
       }
       sumLo = pool;
-      notes.push(
-        `underflow: floors exceed pool, scaled floors by ${scale.toFixed(4)}`,
-      );
+      notes.push(`underflow: floors exceed pool, scaled floors by ${scale.toFixed(4)}`);
     }
   }
 
@@ -111,9 +109,7 @@ export function solve(items: SolverItem[], pool: number, cfg: EngineConfig): Sol
       notes.push(`overflow: relaxed all caps uniformly x${scale.toFixed(4)}`);
     } else if (cfg.overflowMode === 'underspend') {
       // Respect the cap; the residual stays unallocated.
-      notes.push(
-        `overflow: underspend, ${residual.toFixed(2)} left unallocated`,
-      );
+      notes.push(`overflow: underspend, ${residual.toFixed(2)} left unallocated`);
     } else {
       // 'breach_best' (default): place residual on best-scoring items,
       // breaking their cap. Pin everyone at hi first, then water-fill the
@@ -134,11 +130,39 @@ export function solve(items: SolverItem[], pool: number, cfg: EngineConfig): Sol
   if (overflow && cfg.overflowMode === 'breach_best') {
     for (const it of items) amount.set(it.id, hi.get(it.id)!);
     distributeByScore(items, residual, capBreached, amount);
-    return finalize(items, amount, lo, hi, capBreached, floorRelaxed, pool, 0, sumLo, sumHi, overflow, underflow, notes);
+    return finalize(
+      items,
+      amount,
+      lo,
+      hi,
+      capBreached,
+      floorRelaxed,
+      pool,
+      0,
+      sumLo,
+      sumHi,
+      overflow,
+      underflow,
+      notes,
+    );
   }
   if (overflow && cfg.overflowMode === 'underspend') {
     for (const it of items) amount.set(it.id, hi.get(it.id)!);
-    return finalize(items, amount, lo, hi, capBreached, floorRelaxed, pool, residual, sumLo, sumHi, overflow, underflow, notes);
+    return finalize(
+      items,
+      amount,
+      lo,
+      hi,
+      capBreached,
+      floorRelaxed,
+      pool,
+      residual,
+      sumLo,
+      sumHi,
+      overflow,
+      underflow,
+      notes,
+    );
   }
 
   let guard = 0;
@@ -196,7 +220,21 @@ export function solve(items: SolverItem[], pool: number, cfg: EngineConfig): Sol
   remaining = reconcile(items, amount, lo, hi, remaining);
   residual += remaining;
 
-  return finalize(items, amount, lo, hi, capBreached, floorRelaxed, pool, residual, sumLo, sumHi, overflow, underflow, notes);
+  return finalize(
+    items,
+    amount,
+    lo,
+    hi,
+    capBreached,
+    floorRelaxed,
+    pool,
+    residual,
+    sumLo,
+    sumHi,
+    overflow,
+    underflow,
+    notes,
+  );
 }
 
 // --- helpers ---------------------------------------------------------------
@@ -290,12 +328,24 @@ function spreadEvenly(
       const want = cur + per;
       const l = lo.get(it.id)!;
       const h = hi.get(it.id)!;
-      if (want < l - EPS) { amount.set(it.id, l); rem -= l - cur; free.delete(it.id); changed = true; }
-      else if (want > h + EPS) { amount.set(it.id, h); rem -= h - cur; free.delete(it.id); changed = true; }
-      else next.push(it);
+      if (want < l - EPS) {
+        amount.set(it.id, l);
+        rem -= l - cur;
+        free.delete(it.id);
+        changed = true;
+      } else if (want > h + EPS) {
+        amount.set(it.id, h);
+        rem -= h - cur;
+        free.delete(it.id);
+        changed = true;
+      } else next.push(it);
     }
     if (!changed) {
-      for (const it of next) { const cur = amount.get(it.id)!; amount.set(it.id, cur + rem / next.length); free.delete(it.id); }
+      for (const it of next) {
+        const cur = amount.get(it.id)!;
+        amount.set(it.id, cur + rem / next.length);
+        free.delete(it.id);
+      }
       rem = 0;
       break;
     }

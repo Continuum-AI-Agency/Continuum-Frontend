@@ -55,8 +55,7 @@ export function confidenceOf(s: AdSetSnapshot, cfg: EngineConfig): Confidence {
   const sampleSize = events / (events + k);
   const sb = scoreAdSet(s, cfg);
   const scores = [sb.score3d, sb.score7d, sb.score14d].filter((x) => x > 0);
-  const consistency =
-    scores.length >= 2 ? clamp01(1 - cov(scores)) : scores.length === 1 ? 0.5 : 0;
+  const consistency = scores.length >= 2 ? clamp01(1 - cov(scores)) : scores.length === 1 ? 0.5 : 0;
   const predictiveness = cfg.predictiveness ?? 0.75;
   const score = dataScore(sampleSize, consistency);
   return {
@@ -107,9 +106,7 @@ export function portfolioConfidence(snapshots: AdSetSnapshot[], cfg: EngineConfi
   const events = weighed.reduce((sum, x) => sum + x.c.events, 0);
 
   const underFloor = weighed.filter((x) => x.c.events < k);
-  const disagreeing = weighed.filter(
-    (x) => x.c.consistency < CONSISTENCY_WEAK && x.c.events >= k,
-  );
+  const disagreeing = weighed.filter((x) => x.c.consistency < CONSISTENCY_WEAK && x.c.events >= k);
   const untracked = weighed.filter((x) => x.c.events === 0 && x.spend > cfg.cpaTarget);
 
   const actionables: ConfidenceActionable[] = [];

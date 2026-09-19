@@ -27,6 +27,13 @@ export type ObjectiveProfile = {
   objective: OptimizationObjective;
   /** Which WindowMetrics field is the optimization KPI (events). */
   kpiField: keyof WindowMetrics;
+  /** The step BEFORE the KPI in this objective's funnel — what an ad set can still be
+   *  earning while it has no KPI events yet. P1 reads it: an ad set with spend, no KPI
+   *  events AND none of these is dead at the top; one whose upper-funnel cost has blown
+   *  out is dead further down. Null when the KPI is the top of the funnel (awareness). */
+  upperFunnelField: keyof WindowMetrics | null;
+  /** The word for one upper-funnel event, for reasons: "add-to-cart", "link click". */
+  upperFunnelLabel: string;
   /** Higher KPI count per $ = better. For awareness this is impressions/$ (≈1/CPM). */
   weights: { neutral: WindowWeights; positive: WindowWeights; negative: WindowWeights };
   /** Saturation exponent on the score (share ∝ score^gamma). 1 = data-recommended default. */
@@ -62,6 +69,8 @@ export const OBJECTIVE_PROFILES: Record<OptimizationObjective, ObjectiveProfile>
   purchase: {
     objective: 'purchase',
     kpiField: 'purchases',
+    upperFunnelField: 'addToCarts',
+    upperFunnelLabel: 'add-to-cart',
     weights: {
       neutral: { d3: 0.3, d7: 0.5, d14: 0.2 },
       positive: { d3: 0.5, d7: 0.4, d14: 0.1 },
@@ -80,6 +89,8 @@ export const OBJECTIVE_PROFILES: Record<OptimizationObjective, ObjectiveProfile>
   app_install: {
     objective: 'app_install',
     kpiField: 'appInstalls',
+    upperFunnelField: 'clicks',
+    upperFunnelLabel: 'click',
     weights: {
       neutral: { d3: 0.3, d7: 0.5, d14: 0.2 },
       positive: { d3: 0.5, d7: 0.4, d14: 0.1 },
@@ -98,6 +109,8 @@ export const OBJECTIVE_PROFILES: Record<OptimizationObjective, ObjectiveProfile>
   signup: {
     objective: 'signup',
     kpiField: 'signups',
+    upperFunnelField: 'landingPageViews',
+    upperFunnelLabel: 'landing-page view',
     weights: {
       neutral: { d3: 0.45, d7: 0.35, d14: 0.2 },
       positive: { d3: 0.6, d7: 0.3, d14: 0.1 },
@@ -116,6 +129,8 @@ export const OBJECTIVE_PROFILES: Record<OptimizationObjective, ObjectiveProfile>
   lead: {
     objective: 'lead',
     kpiField: 'leads',
+    upperFunnelField: 'landingPageViews',
+    upperFunnelLabel: 'landing-page view',
     weights: {
       neutral: { d3: 0.1, d7: 0.4, d14: 0.5 },
       positive: { d3: 0.2, d7: 0.45, d14: 0.35 },
@@ -134,6 +149,8 @@ export const OBJECTIVE_PROFILES: Record<OptimizationObjective, ObjectiveProfile>
   traffic: {
     objective: 'traffic',
     kpiField: 'landingPageViews',
+    upperFunnelField: 'clicks',
+    upperFunnelLabel: 'click',
     weights: {
       neutral: { d3: 0.5, d7: 0.35, d14: 0.15 },
       positive: { d3: 0.65, d7: 0.25, d14: 0.1 },
@@ -152,6 +169,8 @@ export const OBJECTIVE_PROFILES: Record<OptimizationObjective, ObjectiveProfile>
   awareness: {
     objective: 'awareness',
     kpiField: 'impressions',
+    upperFunnelField: null,
+    upperFunnelLabel: 'impression',
     weights: {
       neutral: { d3: 0.5, d7: 0.35, d14: 0.15 },
       positive: { d3: 0.65, d7: 0.25, d14: 0.1 },
@@ -184,6 +203,8 @@ export const OBJECTIVE_PROFILES: Record<OptimizationObjective, ObjectiveProfile>
   conversations: {
     objective: 'conversations',
     kpiField: 'conversations',
+    upperFunnelField: 'linkClicks',
+    upperFunnelLabel: 'link click',
     // Inherits `lead`: a messaging thread is a mid-funnel, human-handled conversion that
     // saturates as the audience's willingness to talk is used up. Denser than leads (so
     // the gate will bind less often), but until it is measured we keep lead's cautious
@@ -206,6 +227,8 @@ export const OBJECTIVE_PROFILES: Record<OptimizationObjective, ObjectiveProfile>
   link_clicks: {
     objective: 'link_clicks',
     kpiField: 'linkClicks',
+    upperFunnelField: 'clicks',
+    upperFunnelLabel: 'click',
     // Inherits `traffic`: a link click is the same dense, fast-reacting upper-funnel
     // signal as a landing-page view, one step earlier in the same chain.
     weights: {
@@ -226,6 +249,8 @@ export const OBJECTIVE_PROFILES: Record<OptimizationObjective, ObjectiveProfile>
   thruplays: {
     objective: 'thruplays',
     kpiField: 'thruplays',
+    upperFunnelField: 'impressions',
+    upperFunnelLabel: 'impression',
     weights: {
       neutral: { d3: 0.5, d7: 0.35, d14: 0.15 },
       positive: { d3: 0.65, d7: 0.25, d14: 0.1 },
@@ -244,6 +269,8 @@ export const OBJECTIVE_PROFILES: Record<OptimizationObjective, ObjectiveProfile>
   post_engagement: {
     objective: 'post_engagement',
     kpiField: 'postEngagement',
+    upperFunnelField: 'impressions',
+    upperFunnelLabel: 'impression',
     weights: {
       neutral: { d3: 0.5, d7: 0.35, d14: 0.15 },
       positive: { d3: 0.65, d7: 0.25, d14: 0.1 },
@@ -262,6 +289,8 @@ export const OBJECTIVE_PROFILES: Record<OptimizationObjective, ObjectiveProfile>
   clicks: {
     objective: 'clicks',
     kpiField: 'clicks',
+    upperFunnelField: 'impressions',
+    upperFunnelLabel: 'impression',
     // The FLOOR. Not a buy anyone chooses — where an ad set lands when its goal names no
     // action at all. An ad set optimizing clicks is optimizing the cheapest possible
     // proxy, so treat a raise here as weak evidence and cap it tightly.

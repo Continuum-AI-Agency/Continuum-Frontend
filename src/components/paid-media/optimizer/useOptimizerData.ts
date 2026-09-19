@@ -33,8 +33,6 @@ import {
   type CpaSeriesPoint,
   CpaSeriesPointSchema,
   type CreatePortfolioRequest,
-  type SpendByObjectiveRow,
-  SpendByObjectiveRowSchema,
   type CyclePreviewRequest,
   type CyclePreviewResponse,
   CyclePreviewResponseSchema,
@@ -67,6 +65,8 @@ import {
   type RunCycleResponse,
   RunCycleResponseSchema,
   type SetRecommendationStatusRequest,
+  type SpendByObjectiveRow,
+  SpendByObjectiveRowSchema,
   type SuggestResult,
   SuggestResultSchema,
   type TimelineEvent,
@@ -155,7 +155,8 @@ export const optimizerQueryKeys = {
     ['optimizer', 'portfolios', brandId, adAccountId ?? 'all'] as const,
   adAccounts: (brandId: string) => ['optimizer', 'ad-accounts', brandId] as const,
   performance: (portfolioId: string) => ['optimizer', 'performance', portfolioId] as const,
-  cpaSeries: (portfolioId: string) => ['optimizer', 'efficiency-series', portfolioId] as const,
+  cpaSeries: (portfolioId: string, limit = DEFAULT_CPA_SERIES_LIMIT) =>
+    ['optimizer', 'efficiency-series', portfolioId, limit] as const,
   spendByObjective: (brandId: string, days: number) =>
     ['optimizer', 'spend-by-objective', brandId, days] as const,
   renewals: (brandId: string) => ['optimizer', 'renewals', brandId] as const,
@@ -337,10 +338,14 @@ async function fetchPerformance(portfolioId: string): Promise<CycleRunReport | n
   return parsed.data;
 }
 
-async function fetchCpaSeries(portfolioId: string): Promise<CpaSeriesPoint[]> {
+/** Cycles run daily, so a limit in cycles is a limit in days: the dashboard asks for as
+ *  many as its range needs (plus a little history for the event pins), never fewer than 30. */
+export const DEFAULT_CPA_SERIES_LIMIT = 30;
+
+async function fetchCpaSeries(portfolioId: string, limit: number): Promise<CpaSeriesPoint[]> {
   const { data, error } = await getClient().rpc('optimizer_get_cpa_series', {
     p_portfolio_id: portfolioId,
-    p_limit: 30,
+    p_limit: Math.max(1, Math.min(400, Math.round(limit))),
   });
   if (error) throw new Error('optimizer_get_cpa_series unreachable');
   return z
@@ -1138,7 +1143,10 @@ export function useOptimizerPerformance(portfolioId: string | null) {
   });
 }
 
-async function fetchSpendByObjective(brandId: string, days: number): Promise<SpendByObjectiveRow[]> {
+async function fetchSpendByObjective(
+  brandId: string,
+  days: number,
+): Promise<SpendByObjectiveRow[]> {
   const { data, error } = await getClient().rpc('optimizer_get_spend_by_objective', {
     p_brand_id: brandId,
     p_days: days,
@@ -1162,10 +1170,13 @@ export function useOptimizerSpendByObjective(brandId: string, days = 14) {
   });
 }
 
-export function useOptimizerCpaSeries(portfolioId: string | null) {
+export function useOptimizerCpaSeries(
+  portfolioId: string | null,
+  limit: number = DEFAULT_CPA_SERIES_LIMIT,
+) {
   return useOptimizerRead({
-    queryKey: optimizerQueryKeys.cpaSeries(portfolioId ?? 'none'),
-    queryFn: () => fetchCpaSeries(portfolioId as string),
+    queryKey: optimizerQueryKeys.cpaSeries(portfolioId ?? 'none', limit),
+    queryFn: () => fetchCpaSeries(portfolioId as string, limit),
     empty: EMPTY_CPA,
     enabled: Boolean(portfolioId),
     staleTime: FIVE_MINUTES,
@@ -1661,7 +1672,7 @@ export function usePrefetchPortfolioDetail(brandId: string) {
       });
       void queryClient.prefetchQuery({
         queryKey: optimizerQueryKeys.cpaSeries(portfolioId),
-        queryFn: () => withReadTimeout(fetchCpaSeries(portfolioId)),
+        queryFn: () => withReadTimeout(fetchCpaSeries(portfolioId, DEFAULT_CPA_SERIES_LIMIT)),
         staleTime: FIVE_MINUTES,
       });
       void queryClient.prefetchQuery({

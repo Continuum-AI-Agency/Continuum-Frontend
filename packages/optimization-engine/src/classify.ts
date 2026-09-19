@@ -74,18 +74,15 @@ export function classifyStatus(s: AdSetSnapshot, cfg: EngineConfig): AdSetStatus
 }
 
 /** Apply classification to a whole portfolio (returns new snapshots). */
-export function classifyPortfolio(
-  snapshots: AdSetSnapshot[],
-  cfg: EngineConfig,
-): AdSetSnapshot[] {
+export function classifyPortfolio(snapshots: AdSetSnapshot[], cfg: EngineConfig): AdSetSnapshot[] {
   return snapshots.map((s) => {
     const status = classifyStatus(s, cfg);
     return {
       ...s,
       status,
       // keep an explicit learningPhase flag consistent with the status
-      learningPhase: status === 'learning' ? true : s.learningPhase ?? false,
-      freeze: status === 'frozen' ? true : s.freeze ?? false,
+      learningPhase: status === 'learning' ? true : (s.learningPhase ?? false),
+      freeze: status === 'frozen' ? true : (s.freeze ?? false),
     };
   });
 }

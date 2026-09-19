@@ -8,7 +8,7 @@
 // grades it on a dataset.
 // ---------------------------------------------------------------------------
 
-import { resolveConfig, type DeepPartial, type EngineConfig } from './config';
+import { type DeepPartial, type EngineConfig, resolveConfig } from './config';
 import { OBJECTIVE_PROFILES } from './objectives';
 import { scoreAdSet, windowScore } from './scoring';
 import type { AdSetSnapshot, OptimizationObjective, WindowMetrics } from './types';
@@ -41,11 +41,17 @@ export function spearman(xs: number[], ys: number[]): number {
   const rx = rank(xs.slice(0, n));
   const ry = rank(ys.slice(0, n));
   const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
-  const mx = mean(rx), my = mean(ry);
-  let num = 0, dx = 0, dy = 0;
+  const mx = mean(rx),
+    my = mean(ry);
+  let num = 0,
+    dx = 0,
+    dy = 0;
   for (let i = 0; i < n; i++) {
-    const a = rx[i] - mx, b = ry[i] - my;
-    num += a * b; dx += a * a; dy += b * b;
+    const a = rx[i] - mx,
+      b = ry[i] - my;
+    num += a * b;
+    dx += a * a;
+    dy += b * b;
   }
   return dx > 0 && dy > 0 ? num / Math.sqrt(dx * dy) : 0;
 }
@@ -61,9 +67,14 @@ export type BacktestReport = {
   byObjective: Record<string, ObjectivePredictiveness>;
 };
 
-function predictivenessFor(samples: EvalSample[], override?: DeepPartial<EngineConfig>): ObjectivePredictiveness {
+function predictivenessFor(
+  samples: EvalSample[],
+  override?: DeepPartial<EngineConfig>,
+): ObjectivePredictiveness {
   const composite: number[] = [];
-  const w3: number[] = [], w7: number[] = [], w14: number[] = [];
+  const w3: number[] = [],
+    w7: number[] = [],
+    w14: number[] = [];
   const next: number[] = [];
   for (const s of samples) {
     const cfg = resolveConfig({ objective: s.objective, ...override });
@@ -108,7 +119,11 @@ export type AdSetSeries = {
   daily: DailyRow[]; // one row per day (day = integer index or epoch-day)
 };
 
-function kpiWindow(obj: OptimizationObjective | undefined, spend: number, events: number): WindowMetrics {
+function kpiWindow(
+  obj: OptimizationObjective | undefined,
+  spend: number,
+  events: number,
+): WindowMetrics {
   const base: WindowMetrics = { spend, purchases: 0, addToCarts: 0, clicks: 0, impressions: 0 };
   const field: keyof WindowMetrics = obj ? OBJECTIVE_PROFILES[obj].kpiField : 'purchases';
   return { ...base, [field]: events };
@@ -116,22 +131,39 @@ function kpiWindow(obj: OptimizationObjective | undefined, spend: number, events
 
 /** Slide cycle dates over each ad set's daily series, pairing the 3/7/14 trailing
  *  windows at t with the efficiency realized over the next `nextDays`. */
-export function buildEvalSamples(series: AdSetSeries[], opts?: { stride?: number; nextDays?: number }): EvalSample[] {
+export function buildEvalSamples(
+  series: AdSetSeries[],
+  opts?: { stride?: number; nextDays?: number },
+): EvalSample[] {
   const stride = opts?.stride ?? 3;
   const nextDays = opts?.nextDays ?? 3;
   const samples: EvalSample[] = [];
   for (const s of series) {
     if (s.daily.length === 0) continue;
     const byDay = new Map<number, DailyRow>();
-    let minDay = Infinity, maxDay = -Infinity;
-    for (const d of s.daily) { byDay.set(d.day, d); minDay = Math.min(minDay, d.day); maxDay = Math.max(maxDay, d.day); }
+    let minDay = Infinity,
+      maxDay = -Infinity;
+    for (const d of s.daily) {
+      byDay.set(d.day, d);
+      minDay = Math.min(minDay, d.day);
+      maxDay = Math.max(maxDay, d.day);
+    }
     const sumWin = (end: number, len: number) => {
-      let spend = 0, events = 0;
-      for (let d = end - len + 1; d <= end; d++) { const r = byDay.get(d); if (r) { spend += r.spend; events += r.events; } }
+      let spend = 0,
+        events = 0;
+      for (let d = end - len + 1; d <= end; d++) {
+        const r = byDay.get(d);
+        if (r) {
+          spend += r.spend;
+          events += r.events;
+        }
+      }
       return { spend, events };
     };
     for (let t = minDay + 13; t + nextDays <= maxDay; t += stride) {
-      const d3 = sumWin(t, 3), d7 = sumWin(t, 7), d14 = sumWin(t, 14);
+      const d3 = sumWin(t, 3),
+        d7 = sumWin(t, 7),
+        d14 = sumWin(t, 14);
       if (d14.spend <= 0) continue;
       const nxt = sumWin(t + nextDays, nextDays);
       const nextEfficiency = nxt.spend > 0 ? nxt.events / nxt.spend : 0;

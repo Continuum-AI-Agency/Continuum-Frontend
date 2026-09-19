@@ -1036,6 +1036,11 @@ export const RenewalTaskSchema = z.object({
   ad_id: z.string().nullable().optional(),
   kind: z.string(), // creative_refresh | audience_expand | variate_creative | seed_experiment
   reason: z.string().nullable(),
+  /** Last cycle that still raised the signal behind this task; null on tasks opened before
+   *  the engine stamped it. Lets the card say "opened Sep 11 · still firing as of Sep 18". */
+  last_asserted_at: z.string().nullable().optional(),
+  /** 'superseded' when a cycle stopped raising the signal and closed the task itself. */
+  closed_reason: z.string().nullable().optional(),
   /** The generation seed the brief renders from — the winning creative, its Library
    *  asset, the labels to keep, and the grounded citations. Present on creative kinds. */
   seed: z.record(z.string(), z.unknown()).nullable().optional(),

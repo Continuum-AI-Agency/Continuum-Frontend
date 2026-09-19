@@ -105,7 +105,9 @@ describe('moveReasonText is the one line persisted next to the money', () => {
 it('rounds the cost-per-result figure instead of pasting a raw quotient', () => {
   // The field report: MX$50.00 -> MX$51.54 carried "Cost per result 29.91909090909091".
   const reason = moveReasonText(154, {
-    score3d: 1, score7d: 1, score14d: 1,
+    score3d: 1,
+    score7d: 1,
+    score14d: 1,
     ci: { cpa: 29.91909090909091, events: 44 },
   });
   expect(reason).toContain('Cost per result 29.92 on 44 events.');
