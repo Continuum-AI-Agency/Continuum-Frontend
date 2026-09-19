@@ -17,6 +17,20 @@ export const API_RENDER_SLACK_CHANNELS_ROUTE = '/api/ai-studio/renders/destinati
 export const apiRenderDestinationRoute = (destinationId: string) =>
   `${API_RENDER_DESTINATIONS_ROUTE}/${destinationId}`;
 
+/** Mints a share link for one batch. Signed-in brand members only. */
+export const apiRenderBatchShareRoute = (batchId: string) =>
+  `${API_RENDER_BATCHES_ROUTE}/${batchId}/share`;
+
+export const API_RENDER_SHARED_ROUTE = '/api/ai-studio/renders/shared';
+
+/**
+ * The public zip of one batch. The token is the only credential; the file name rides in the
+ * path so the link reads as what it downloads. The token is a query value, not a path segment:
+ * the router refuses path params over 100 characters and a signed token is about twice that.
+ */
+export const apiRenderSharedZipPath = (token: string, fileName: string) =>
+  `${API_RENDER_SHARED_ROUTE}/${encodeURIComponent(fileName)}?token=${encodeURIComponent(token)}`;
+
 /**
  * A caller-facing variable name. Physical `f_<hash>` renderer field names are private
  * and must never cross this boundary in either direction.
@@ -1003,6 +1017,10 @@ export const apiRenderJobSchema = z
     /** When the fleet reported the render finished. `updatedAt` moves on every later write. */
     finishedAt: z.string().nullable().optional(),
     label: z.string().nullable().default(null),
+    /** The Render click this job came from. Every job of one createBatch shares it. */
+    batchId: z.string().uuid().nullable().default(null),
+    /** Who asked for it, as their brand membership email. Null when they are no longer a member. */
+    createdByEmail: z.string().nullable().default(null),
     renderRequestId: z.string().uuid().nullable().default(null),
     renderSetId: z.string().uuid().nullable().default(null),
     renderSetRowId: z.string().uuid().nullable().default(null),
@@ -1063,6 +1081,7 @@ export const apiRenderJobListQuerySchema = z
     renderSetRowId: z.string().uuid().optional(),
     templateKey: z.string().min(1).optional(),
     status: apiRenderJobSchema.shape.status.optional(),
+    batchId: z.string().uuid().optional(),
   })
   .strict();
 export type ApiRenderJobListQuery = z.infer<typeof apiRenderJobListQuerySchema>;
@@ -1216,6 +1235,15 @@ export const apiRenderBatchSchema = z
   .object({ batchId: z.string().uuid(), jobs: z.array(apiRenderJobSchema) })
   .strict();
 export type ApiRenderBatch = z.infer<typeof apiRenderBatchSchema>;
+
+export const apiRenderBatchShareRequestSchema = z.object({ brandId: z.string().uuid() }).strict();
+export type ApiRenderBatchShareRequest = z.infer<typeof apiRenderBatchShareRequestSchema>;
+
+/** `path` is on the Backend's origin; a caller prefixes its API base URL. */
+export const apiRenderBatchShareResponseSchema = z
+  .object({ path: z.string().startsWith(`${API_RENDER_SHARED_ROUTE}/`), expiresAt: z.string() })
+  .strict();
+export type ApiRenderBatchShareResponse = z.infer<typeof apiRenderBatchShareResponseSchema>;
 
 // --- AI fill ---------------------------------------------------------------------------------
 //

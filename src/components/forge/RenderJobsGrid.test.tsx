@@ -14,6 +14,7 @@ import type { ApiRenderJob, ApiRenderTemplateSummary } from '@continuum/contract
 import type { PostgresChangesSubscription } from '@/lib/supabase/realtime';
 
 const HOUR = 3_600_000;
+const BATCH = '99999999-9999-4999-8999-999999999991';
 const ago = (hours: number) => new Date(Date.now() - hours * HOUR).toISOString();
 
 const BASE: ApiRenderJob = {
@@ -31,6 +32,8 @@ const BASE: ApiRenderJob = {
   createdAt: ago(0),
   updatedAt: ago(0),
   label: null,
+  batchId: BATCH,
+  createdByEmail: 'michelle@example.com',
   renderRequestId: null,
   renderSetId: null,
   renderSetRowId: null,
@@ -143,11 +146,20 @@ let templatesFixture: Partial<ApiRenderTemplateSummary>[] = [];
 let clientTemplatesFixture: Partial<ApiRenderTemplateSummary>[] = [];
 let environmentsFixture = [environment(DEFAULT_BINDING, 'Continuum_app', true)];
 let realtime: PostgresChangesSubscription | undefined;
-const listJobs = mock(async () => ({ items: jobsFixture, nextCursor: null }));
+const listJobs = mock(async (_brandId: string, _limit: number, options?: { batchId?: string }) => ({
+  items: options?.batchId
+    ? jobsFixture.filter((job) => job.batchId === options.batchId)
+    : jobsFixture,
+  nextCursor: null,
+}));
 const getJob = mock(async (_brandId: string, id: string) =>
   jobsFixture.find((job) => job.id === id),
 );
 const listEnvironments = mock(async () => ({ items: environmentsFixture }));
+const shareBatch = mock(async (_brandId: string, batchId: string) => ({
+  url: `https://api.example.com/api/ai-studio/renders/shared/hero.zip?token=${batchId}`,
+  expiresAt: '2026-10-19T00:00:00.000Z',
+}));
 const listTemplates = mock(async (_brandId: string, bindingId?: string | null) => ({
   items: bindingId === CLIENT_BINDING ? clientTemplatesFixture : bindingId ? [] : templatesFixture,
   nextCursor: null,
@@ -160,6 +172,7 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
     listRenderSets: async () => ({ items: [], nextCursor: null }),
     listEnvironments,
     listTemplates,
+    shareBatch,
   },
 }));
 mock.module('@/lib/supabase/client', () => ({
@@ -186,10 +199,19 @@ const rowOrder = () => {
     .sort((a, b) => text.indexOf(a) - text.indexOf(b));
 };
 
+/** The brand's ledger opens on batches; its "Pieces" cell is what makes a row read as one. */
+const findBatchRow = async () =>
+  (await screen.findAllByText(/^\d+ renders? · \d+ files?$/))[0]?.closest('tr') as HTMLElement;
+
+/**
+ * Every fixture shares one batch, so the job-level assertions below run inside it: the list a
+ * person sees after opening the batch the Render click made.
+ */
 async function renderLedger(
   jobs: ApiRenderJob[],
   templates: Partial<ApiRenderTemplateSummary>[],
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+  { open = true }: { open?: boolean } = {},
 ) {
   jobsFixture = jobs;
   templatesFixture = templates;
@@ -198,6 +220,9 @@ async function renderLedger(
       <RenderJobsGrid brandId={BRAND} />
     </QueryClientProvider>,
   );
+  const batchRow = await findBatchRow();
+  if (!open) return view;
+  fireEvent.click(batchRow);
   await screen.findByText(jobs[0]?.label ?? 'Spain');
   return view;
 }
@@ -220,6 +245,7 @@ afterAll(() => {
 
 beforeEach(() => {
   realtime = undefined;
+  shareBatch.mockClear();
   listJobs.mockClear();
   getJob.mockClear();
   listEnvironments.mockClear();
@@ -244,7 +270,24 @@ describe('RenderJobsGrid', () => {
         <RenderJobsGrid brandId={BRAND} />
       </QueryClientProvider>,
     );
-    expect(await screen.findByText('StarCraft Promo')).toBeTruthy();
+    // First, one row per Render click: what it rendered, from which set, how much, who.
+    const batch = within(await findBatchRow());
+    expect(batch.getByText('StarCraft Promo')).toBeTruthy();
+    expect(batch.getByText('Campaign set')).toBeTruthy();
+    expect(batch.getByText('1 render · 0 files')).toBeTruthy();
+    expect(batch.getByText('finished')).toBeTruthy();
+    expect(batch.getByText('michelle@example.com')).toBeTruthy();
+    expect(screen.getByText(/1 batch • 1 render loaded/)).toBeTruthy();
+    expect(screen.queryByText('Spain')).toBeNull();
+
+    fireEvent.click(batch.getByText('StarCraft Promo'));
+    expect(await screen.findByText('Spain')).toBeTruthy();
+    expect(listJobs).toHaveBeenLastCalledWith(
+      BRAND,
+      50,
+      expect.objectContaining({ batchId: BATCH }),
+    );
+    expect(screen.getByText('StarCraft Promo · Campaign set')).toBeTruthy();
     expect(screen.queryByText('forge_bench_starcraft')).toBeNull();
     expect(screen.getByText('Spain')).toBeTruthy();
     expect(screen.getByText('Root')).toBeTruthy();
@@ -256,6 +299,67 @@ describe('RenderJobsGrid', () => {
     expect(screen.getByRole('button', { name: /Columns/ })).toBeTruthy();
     expect(listEnvironments).not.toHaveBeenCalled();
     expect(listTemplates).not.toHaveBeenCalled();
+  }, 30_000);
+
+  test('two Render clicks are two batches; one opens into only its renders and comes back', async () => {
+    const OTHER = '99999999-9999-4999-8999-999999999992';
+    const later: ApiRenderJob = {
+      ...PROMO,
+      batchId: OTHER,
+      createdByEmail: 'duane@example.com',
+      outputs: [],
+    };
+    await renderLedger([MADRID, ROMA, later], [TEMPLATE], undefined, { open: false });
+    const rows = screen.getAllByText(/^\d+ renders? · \d+ files?$/).map((cell) => cell.textContent);
+    // Newest click first; a batch counts every render in it and every file a zip would hold.
+    expect(rows).toEqual(['1 render · 0 files', '2 renders · 1 file']);
+    expect(screen.getByText('1 of 1 rendering')).toBeTruthy();
+    expect(screen.getByText('1 of 2 failed')).toBeTruthy();
+    expect(screen.queryByText('Madrid')).toBeNull();
+
+    fireEvent.click(screen.getByText('2 renders · 1 file'));
+    expect(await screen.findByText('Madrid')).toBeTruthy();
+    expect(screen.getByText('Roma')).toBeTruthy();
+    expect(screen.queryByText('Promo B')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /All batches/ }));
+    expect(await screen.findByText('1 render · 0 files')).toBeTruthy();
+    expect(screen.queryByText('Madrid')).toBeNull();
+  }, 30_000);
+
+  test('Copy link mints the batch’s share link without opening the batch; no files, no zip', async () => {
+    const writeText = mock(async (_text: string) => undefined);
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    try {
+      const OTHER = '99999999-9999-4999-8999-999999999992';
+      const queued: ApiRenderJob = { ...PROMO, batchId: OTHER, status: 'queued', outputs: [] };
+      await renderLedger([MADRID, queued], [TEMPLATE], undefined, { open: false });
+
+      const finishedRow = within(
+        screen.getByText('1 render · 1 file').closest('tr') as HTMLElement,
+      );
+      fireEvent.click(finishedRow.getByRole('button', { name: /Copy link/ }));
+      await waitFor(() =>
+        expect(writeText).toHaveBeenCalledWith(
+          `https://api.example.com/api/ai-studio/renders/shared/hero.zip?token=${BATCH}`,
+        ),
+      );
+      expect(shareBatch).toHaveBeenCalledWith(BRAND, BATCH);
+      // The click stayed on the button: the ledger is still on its batches.
+      expect(screen.queryByText('Madrid')).toBeNull();
+
+      const queuedRow = within(screen.getByText('1 render · 0 files').closest('tr') as HTMLElement);
+      expect(
+        (queuedRow.getByRole('button', { name: /Copy link/ }) as HTMLButtonElement).disabled,
+      ).toBe(true);
+      expect((queuedRow.getByRole('button', { name: /Zip/ }) as HTMLButtonElement).disabled).toBe(
+        true,
+      );
+    } finally {
+      if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+    }
   }, 30_000);
 
   test('the Template version column reads "Rev N · date", the digest when no revision came back, and names the gap when it has none', async () => {
@@ -499,10 +603,10 @@ describe('RenderJobsGrid', () => {
 
   test('reuses a fresh ledger page after the tab remounts', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const first = await renderLedger([MADRID], [TEMPLATE], client);
+    const first = await renderLedger([MADRID], [TEMPLATE], client, { open: false });
     first.unmount();
 
-    await renderLedger([MADRID], [TEMPLATE], client);
+    await renderLedger([MADRID], [TEMPLATE], client, { open: false });
     expect(listJobs).toHaveBeenCalledTimes(1);
   }, 30_000);
 
@@ -656,6 +760,7 @@ describe('RenderJobsGrid', () => {
         <RenderJobsGrid brandId={BRAND} formats={formats} />
       </QueryClientProvider>,
     );
+    fireEvent.click(await findBatchRow());
     await screen.findByText('Expired link');
     const rowOf = (label: string) => screen.getByText(label).closest('tr') as HTMLElement;
 
@@ -714,6 +819,7 @@ describe('RenderJobsGrid', () => {
         <RenderJobsGrid brandId={BRAND} formats={formats} />
       </QueryClientProvider>,
     );
+    fireEvent.click(await findBatchRow());
     await screen.findByText('Reel');
     expect(
       within(screen.getByText('Reel').closest('tr') as HTMLElement).getByText(

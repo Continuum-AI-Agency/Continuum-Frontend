@@ -15,6 +15,7 @@ import {
   type ApiRenderBatch,
   type ApiRenderBatchPreflightRequest,
   type ApiRenderBatchPreflightResponse,
+  type ApiRenderBatchShareResponse,
   type ApiRenderCreateDeliveryDestinationRequest,
   type ApiRenderCreateInputSetRequest,
   type ApiRenderCreateJobRequest,
@@ -35,6 +36,8 @@ import {
   type ApiRenderUpdateInputSetRequest,
   apiRenderBatchPreflightResponseSchema,
   apiRenderBatchSchema,
+  apiRenderBatchShareResponseSchema,
+  apiRenderBatchShareRoute,
   apiRenderDeliveryDestinationSchema,
   apiRenderDeliveryDestinationsResponseSchema,
   apiRenderDestinationRoute,
@@ -60,6 +63,7 @@ import {
   forgeRenderSetSchema,
   type UpdateForgeRenderSetRequest,
 } from '@continuum/contracts';
+import { getApiBaseUrl } from '@/lib/api/config';
 import { http } from '@/lib/api/http';
 
 const query = (input: Record<string, string | number>) =>
@@ -132,6 +136,7 @@ export const apiRendersApi = {
       renderSetRowId?: string;
       templateKey?: string;
       status?: ApiRenderJob['status'];
+      batchId?: string;
     },
   ) {
     return http.request<ApiRenderJobListResponse>({
@@ -143,6 +148,7 @@ export const apiRendersApi = {
         ...(options?.renderSetRowId ? { renderSetRowId: options.renderSetRowId } : {}),
         ...(options?.templateKey ? { templateKey: options.templateKey } : {}),
         ...(options?.status ? { status: options.status } : {}),
+        ...(options?.batchId ? { batchId: options.batchId } : {}),
       })}`,
       schema: apiRenderJobListResponseSchema,
     });
@@ -226,8 +232,8 @@ export const apiRendersApi = {
     });
   },
 
-  // Batches. One token wraps N per-record tokens; the 202 from createBatch carries the
-  // only job-id list that will ever exist, because no batch id is persisted server-side.
+  // Batches. One token wraps N per-record tokens; every job createBatch makes carries its
+  // `batchId`, so `listJobs({ batchId })` reads the whole batch back later.
   batchPreflight(input: ApiRenderBatchPreflightRequest) {
     return http.request<ApiRenderBatchPreflightResponse>({
       path: API_RENDER_BATCH_PREFLIGHT_ROUTE,
@@ -277,6 +283,19 @@ export const apiRendersApi = {
       path: apiRenderDestinationRoute(destinationId),
       method: 'DELETE',
     });
+  },
+  /**
+   * A 30-day link that downloads the batch as one zip, with no sign-in. Minted per click: the
+   * link is the credential, so it is never cached or shown before someone asks for it.
+   */
+  async shareBatch(brandId: string, batchId: string) {
+    const share = await http.request<ApiRenderBatchShareResponse>({
+      path: apiRenderBatchShareRoute(batchId),
+      method: 'POST',
+      body: { brandId },
+      schema: apiRenderBatchShareResponseSchema,
+    });
+    return { url: `${getApiBaseUrl()}${share.path}`, expiresAt: share.expiresAt };
   },
   createBatch(input: ApiRenderCreateJobRequest) {
     return http.request<ApiRenderBatch>({

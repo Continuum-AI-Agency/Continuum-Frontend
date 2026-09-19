@@ -60,9 +60,8 @@ function mergePage(
  * 1. **Tracked ids are reconciled with the list.** `GET /jobs` returns the brand's most
  *    recent N rows; a batch of five older jobs, or one pushed off the end by another
  *    canvas, simply vanished. The node persists the ids it launched and this hook fetches
- *    any the list did not return — which is the only way a batch survives a remount at
- *    all, since no batch id is stored server-side and `POST /batches` hands over its job
- *    list exactly once.
+ *    any the list did not return. (The ledger reads a whole batch back with `batchId`; the
+ *    node predates that and keeps its own ids.)
  * 2. **The poll reads the PER-JOB route.** `GET /jobs/:id` is the backend's live relay: it
  *    pulls fleet status, runs library ingest, reconciles delivery, and re-signs finished
  *    outputs to their Library copies. `GET /jobs` returns stored rows, so list-polling
@@ -76,6 +75,8 @@ export function useApiRenderJobs(args: {
   renderSetId?: string;
   /** One template's renders, filtered by the server; realtime rows of other templates are ignored. */
   templateKey?: string;
+  /** One Render click's jobs — at most 50, so the whole batch is one page. */
+  batchId?: string;
   /** A connected push consumer disables per-job polling; other consumers retain recovery. */
   pollIntervalMs?: number | false;
 }) {
@@ -84,13 +85,19 @@ export function useApiRenderJobs(args: {
   const queryClient = useQueryClient();
   const listKey = useMemo(
     () =>
-      forgeQueryKeys.renderJobList(brandId ?? 'none', limit, args.renderSetId, args.templateKey),
-    [args.renderSetId, args.templateKey, brandId, limit],
+      forgeQueryKeys.renderJobList(
+        brandId ?? 'none',
+        limit,
+        args.renderSetId,
+        args.templateKey,
+        args.batchId,
+      ),
+    [args.renderSetId, args.templateKey, args.batchId, brandId, limit],
   );
   const [jobs, setJobs] = useState<ApiRenderJob[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const scope = `${brandId ?? ''}:${args.renderSetId ?? ''}:${args.templateKey ?? ''}`;
+  const scope = `${brandId ?? ''}:${args.renderSetId ?? ''}:${args.templateKey ?? ''}:${args.batchId ?? ''}`;
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
   const paging = useRef(false);
@@ -139,8 +146,9 @@ export function useApiRenderJobs(args: {
     (job: ApiRenderJob) =>
       job.brandId === brandId &&
       (!args.renderSetId || job.renderSetId === args.renderSetId) &&
-      (!args.templateKey || job.templateKey === args.templateKey),
-    [brandId, args.renderSetId, args.templateKey],
+      (!args.templateKey || job.templateKey === args.templateKey) &&
+      (!args.batchId || job.batchId === args.batchId),
+    [brandId, args.renderSetId, args.templateKey, args.batchId],
   );
 
   const mergeJob = useCallback(
@@ -180,6 +188,7 @@ export function useApiRenderJobs(args: {
           apiRendersApi.listJobs(brandId, limit, {
             renderSetId: args.renderSetId,
             templateKey: args.templateKey,
+            batchId: args.batchId,
           }),
         staleTime: options?.preferCache ? FORGE_STALE_MS.active : 0,
       });
@@ -207,6 +216,7 @@ export function useApiRenderJobs(args: {
       trackedKey,
       args.renderSetId,
       args.templateKey,
+      args.batchId,
       scope,
     ],
   );
@@ -222,12 +232,14 @@ export function useApiRenderJobs(args: {
           args.renderSetId,
           nextCursor,
           args.templateKey,
+          args.batchId,
         ),
         queryFn: () =>
           apiRendersApi.listJobs(brandId, limit, {
             cursor: nextCursor,
             renderSetId: args.renderSetId,
             templateKey: args.templateKey,
+            batchId: args.batchId,
           }),
         staleTime: FORGE_STALE_MS.active,
       });
@@ -245,6 +257,7 @@ export function useApiRenderJobs(args: {
     limit,
     args.renderSetId,
     args.templateKey,
+    args.batchId,
     queryClient,
     rememberJob,
     scope,

@@ -16,9 +16,10 @@ import {
   useReactTable,
   type VisibilityState,
 } from '@tanstack/react-table';
-import { Download, Loader2, RefreshCw, Search, Video } from 'lucide-react';
+import { ArrowLeft, Download, Loader2, RefreshCw, Search, Video } from 'lucide-react';
 import { startTransition, useEffect, useMemo, useState } from 'react';
 import { formatRelativeTime } from '@/components/approvals/formatters';
+import { BatchShareActions } from '@/components/forge/BatchShareActions';
 import { type CheckTick, checkSummary, TickBar } from '@/components/forge/CheckTable';
 import { DataGrid, STICKY_LEFT, selectColumn } from '@/components/forge/DataGrid';
 import { DeliveryChain, deliverySearchText } from '@/components/forge/DeliveryChain';
@@ -33,6 +34,11 @@ import {
   TemplateVersion,
   ViewTransition,
 } from '@/components/forge/RenderJobDetail';
+import {
+  batchStatus,
+  groupJobsIntoBatches,
+  type RenderBatch,
+} from '@/components/forge/renderBatches';
 import { type JobCheck, renderJobChecks } from '@/components/forge/renderJobChecks';
 import { describeRenderJobFailure } from '@/components/forge/renderJobFailureCopy';
 import { Badge } from '@/components/ui/badge';
@@ -46,6 +52,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { pluralize } from '@/lib/format/pluralize';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { useApiRenderJobs } from '@/StudioCanvas/nodes/api-render/useApiRenderJobs';
@@ -54,6 +61,10 @@ import { FORGE_STALE_MS, forgeQueryKeys } from './queryKeys';
 // Every render this brand has asked for, wherever it was asked from — the grid, the canvas node,
 // a bench — because they all write `media.ad_render_jobs`. The canvas keeps its own cards per
 // node; this is the brand's ledger.
+//
+// The brand's ledger reads in batches: one row per Render click, which opens into that click's
+// renders, and a render opens into its detail. Each batch downloads as one zip and shares as a
+// link to it. One template's ledger (on the template itself) stays a list of renders by set.
 //
 // Live: the node's own hook polls in-flight jobs (including the auto-judge tail) every 5 s
 // through the live relay, and the list is re-read on focus, on a slow timer, and on a Realtime
@@ -158,13 +169,16 @@ export function RenderJobsGrid({
   const [sets, setSets] = useState<ForgeRenderSet[]>([]);
   const [renderSetId, setRenderSetId] = useState<string>('all');
   const [pushed, setPushed] = useState(false);
+  const batchLevel = !templateKey;
+  const [openBatchId, setOpenBatchId] = useState<string | null>(null);
   const { jobs, refreshJobs, refreshOne, hasMore, loadMore } = useApiRenderJobs({
     brandId,
     trackedIds: [],
     limit: PAGE_SIZE,
     pollIntervalMs: pushed ? false : DISCONNECTED_REFRESH_MS,
     templateKey,
-    ...(renderSetId === 'all' ? {} : { renderSetId }),
+    // An open batch is read whole from the server; the set filter is for choosing one.
+    ...(openBatchId ? { batchId: openBatchId } : renderSetId === 'all' ? {} : { renderSetId }),
   });
   const [sorting, setSorting] = useState<SortingState>([{ id: 'createdAt', desc: true }]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -267,6 +281,12 @@ export function RenderJobsGrid({
     sets.find((set) => set.id === job.renderSetId)?.name ??
     (templateKey ? 'No set' : 'Unassigned');
   const nameOf = (job: ApiRenderJob) => job.label ?? job.labelPath.at(-1) ?? templateOf(job);
+  // The first format's file, found by its name: the fleet lists files in a different order per
+  // job. No file for that format is an empty tile, never whichever came first.
+  const firstFileOf = (job: ApiRenderJob) => {
+    const jobFormats = formats ?? formatsNamedByJob(job);
+    return jobFormats[0] ? fileForFormat(job.outputs, jobFormats, jobFormats[0].id) : null;
+  };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the name helpers read only sets and formats.
   const columns = useMemo<ColumnDef<ApiRenderJob>[]>(
@@ -281,12 +301,7 @@ export function RenderJobsGrid({
         enableHiding: false,
         header: '',
         cell: ({ row: { original: job } }) => {
-          // The first format's file, found by its name: the fleet lists files in a different
-          // order per job. No file for that format is an empty tile, never whichever came first.
-          const jobFormats = formats ?? formatsNamedByJob(job);
-          const first = jobFormats[0]
-            ? fileForFormat(job.outputs, jobFormats, jobFormats[0].id)
-            : null;
+          const first = firstFileOf(job);
           return (
             <ViewTransition name={jobTransitionName(job.id)}>
               {/* Keyed by URL: a re-read that re-signs the link gets a fresh try. */}
@@ -435,6 +450,119 @@ export function RenderJobsGrid({
     getSortedRowModel: getSortedRowModel(),
   });
 
+  // Built from every loaded job, then kept when any of its renders matches the search, so a
+  // batch's counts are the whole batch's and never just the matching part.
+  const batches = useMemo(() => {
+    const matching = new Set(visible.map((job) => job.id));
+    return groupJobsIntoBatches(jobs).filter((batch) =>
+      batch.jobs.some((job) => matching.has(job.id)),
+    );
+  }, [jobs, visible]);
+  const [batchSorting, setBatchSorting] = useState<SortingState>([{ id: 'createdAt', desc: true }]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the name helpers read only sets and formats.
+  const batchColumns = useMemo<ColumnDef<RenderBatch>[]>(
+    () => [
+      {
+        id: 'preview',
+        size: 52,
+        meta: STICKY_LEFT,
+        enableSorting: false,
+        header: '',
+        cell: ({ row: { original: batch } }) => {
+          const first = firstFileOf(batch.preview);
+          return <Thumbnail key={first?.url ?? 'none'} output={first} />;
+        },
+      },
+      {
+        accessorKey: 'createdAt',
+        header: 'Created',
+        sortingFn: 'datetime',
+        enableSorting: true,
+        cell: ({ getValue }) => (
+          <span className="tabular-nums text-muted-foreground" title={getValue<string>()}>
+            {formatRelativeTime(getValue<string>())}
+          </span>
+        ),
+      },
+      {
+        id: 'template',
+        accessorFn: (batch) => templateOf(batch.preview),
+        header: 'Template',
+        enableSorting: true,
+        cell: ({ getValue }) => (
+          <span className="block max-w-60 min-w-32 truncate font-medium">{getValue<string>()}</span>
+        ),
+      },
+      {
+        id: 'set',
+        accessorFn: (batch) => setOf(batch.preview),
+        header: 'Set',
+        enableSorting: true,
+        cell: ({ getValue }) => <span className="text-muted-foreground">{getValue<string>()}</span>,
+      },
+      {
+        id: 'pieces',
+        header: 'Pieces',
+        enableSorting: false,
+        cell: ({ row: { original: batch } }) => (
+          <span className="whitespace-nowrap tabular-nums">
+            {pluralize(batch.jobs.length, 'render')} · {pluralize(batch.files, 'file')}
+          </span>
+        ),
+      },
+      {
+        id: 'status',
+        header: 'Status',
+        enableSorting: false,
+        cell: ({ row: { original: batch } }) => {
+          const status = batchStatus(batch);
+          return (
+            <span className="flex items-center gap-1.5">
+              <Badge variant={status.tone}>
+                {status.busy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
+                {status.label}
+              </Badge>
+              <RenderModePill test={batch.preview.test} />
+            </span>
+          );
+        },
+      },
+      {
+        id: 'createdBy',
+        accessorFn: (batch) => batch.createdByEmail ?? '',
+        header: 'By',
+        enableSorting: true,
+        cell: ({ getValue }) => (
+          <span className="text-muted-foreground">{getValue<string>() || '—'}</span>
+        ),
+      },
+      {
+        id: 'share',
+        header: '',
+        enableSorting: false,
+        cell: ({ row: { original: batch } }) => (
+          <BatchShareActions brandId={brandId} batchId={batch.id} ready={batch.files > 0} />
+        ),
+      },
+    ],
+    [brandId, sets, formats],
+  );
+  const batchTable = useReactTable({
+    data: batches,
+    columns: batchColumns,
+    getRowId: (batch) => batch.id,
+    state: { sorting: batchSorting },
+    onSortingChange: setBatchSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+  const showBatches = batchLevel && !openBatchId;
+  // The open batch as the server returned it — the hook is scoped to it.
+  const openBatch = openBatchId ? (groupJobsIntoBatches(jobs)[0] ?? null) : null;
+  const openBatchTitle = openBatch
+    ? [templateOf(openBatch.preview), setOf(openBatch.preview)].join(' · ')
+    : '';
+
   // Grouped by what a person calls the template, so ratio twins and a template shared across
   // workspaces under one name read as one group. One template's own ledger groups by set instead.
   const groupOf = (job: ApiRenderJob) => (templateKey ? setOf(job) : templateOf(job));
@@ -473,11 +601,43 @@ export function RenderJobsGrid({
 
   return (
     <div className="flex flex-col gap-3">
+      {openBatchId ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="gap-1.5"
+            onClick={() => {
+              setRowSelection({});
+              setOpenBatchId(null);
+            }}
+          >
+            <ArrowLeft className="size-3.5" aria-hidden /> All batches
+          </Button>
+          <p className="min-w-0 truncate text-sm font-medium">{openBatchTitle}</p>
+          {openBatch ? (
+            <span className="text-xs text-muted-foreground">
+              {formatRelativeTime(openBatch.createdAt)}
+              {openBatch.createdByEmail ? ` · ${openBatch.createdByEmail}` : ''}
+            </span>
+          ) : null}
+          <div className="ml-auto">
+            <BatchShareActions
+              brandId={brandId}
+              batchId={openBatchId}
+              ready={(openBatch?.files ?? 0) > 0}
+            />
+          </div>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-xs text-muted-foreground">
           {templateKey
             ? 'Every render of this template, newest first.'
-            : 'Renders for this brand, from here and from the canvas.'}
+            : openBatchId
+              ? 'Every render from this Render click.'
+              : 'One row per Render click, from here and from the canvas. Open one to see its renders.'}
           {pushed ? '' : ' Live updates unavailable — refreshing on a timer.'}
         </p>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
@@ -495,7 +655,7 @@ export function RenderJobsGrid({
               className="h-7 w-60 pl-7 text-xs"
             />
           </div>
-          {templateKey ? null : (
+          {!showBatches ? null : (
             <Select value={renderSetId} onValueChange={setRenderSetId}>
               <SelectTrigger className="h-7 w-44 text-xs" aria-label="Filter by render set">
                 <SelectValue>
@@ -520,7 +680,7 @@ export function RenderJobsGrid({
             type="button"
             size="sm"
             variant="outline"
-            className="gap-1.5"
+            className={showBatches ? 'hidden' : 'gap-1.5'}
             disabled={downloadable.length === 0}
             onClick={() => {
               for (const output of downloadable) {
@@ -545,51 +705,69 @@ export function RenderJobsGrid({
           </Button>
         </div>
       </div>
-      <DataGrid
-        table={table}
-        columnVisibility
-        groupHeader={
-          needle
-            ? `${visible.length} of ${jobs.length} loaded render${jobs.length === 1 ? '' : 's'} match • ${finished} finished • ${inFlight} in flight`
-            : `${jobs.length} render${jobs.length === 1 ? '' : 's'} • ${finished} finished • ${inFlight} in flight`
-        }
-        collapsedGroups={collapsedGroups}
-        onCollapsedGroupsChange={setCollapsedGroups}
-        groupBy={(job) => {
-          const name = groupOf(job);
-          const counts = groupSummary.get(name);
-          return {
-            key: name,
-            label: (
-              <>
-                {name}
-                {counts ? (
-                  <span className="font-normal text-muted-foreground">
-                    {[
-                      counts.finished ? `${counts.finished} finished` : null,
-                      counts.inFlight ? `${counts.inFlight} in flight` : null,
-                      counts.failed ? `${counts.failed} failed` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </span>
-                ) : null}
-              </>
-            ),
-          };
-        }}
-        onRowClick={(job) => withTransition(() => setOpenId(job.id))}
-        empty={
-          !loaded
-            ? 'Loading…'
-            : needle && jobs.length
-              ? `No loaded renders match “${search.trim()}”.${hasMore ? ' Load older renders to search further.' : ''}`
-              : templateKey
-                ? 'No renders of this template yet.'
+      {showBatches ? (
+        <DataGrid
+          table={batchTable}
+          groupHeader={`${pluralize(batches.length, 'batch', 'batches')} • ${pluralize(jobs.length, 'render')} loaded`}
+          onRowClick={(batch) => {
+            setRowSelection({});
+            setOpenBatchId(batch.id);
+          }}
+          empty={
+            !loaded
+              ? 'Loading…'
+              : needle && jobs.length
+                ? `No loaded renders match “${search.trim()}”.${hasMore ? ' Load older renders to search further.' : ''}`
                 : 'No renders yet. Set some up on the Render tab.'
-        }
-      />
-      {hasMore ? (
+          }
+        />
+      ) : (
+        <DataGrid
+          table={table}
+          columnVisibility
+          groupHeader={
+            needle
+              ? `${visible.length} of ${jobs.length} loaded render${jobs.length === 1 ? '' : 's'} match • ${finished} finished • ${inFlight} in flight`
+              : `${jobs.length} render${jobs.length === 1 ? '' : 's'} • ${finished} finished • ${inFlight} in flight`
+          }
+          collapsedGroups={collapsedGroups}
+          onCollapsedGroupsChange={setCollapsedGroups}
+          groupBy={(job) => {
+            const name = groupOf(job);
+            const counts = groupSummary.get(name);
+            return {
+              key: name,
+              label: (
+                <>
+                  {name}
+                  {counts ? (
+                    <span className="font-normal text-muted-foreground">
+                      {[
+                        counts.finished ? `${counts.finished} finished` : null,
+                        counts.inFlight ? `${counts.inFlight} in flight` : null,
+                        counts.failed ? `${counts.failed} failed` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                  ) : null}
+                </>
+              ),
+            };
+          }}
+          onRowClick={(job) => withTransition(() => setOpenId(job.id))}
+          empty={
+            !loaded
+              ? 'Loading…'
+              : needle && jobs.length
+                ? `No loaded renders match “${search.trim()}”.${hasMore ? ' Load older renders to search further.' : ''}`
+                : templateKey
+                  ? 'No renders of this template yet.'
+                  : 'No renders yet. Set some up on the Render tab.'
+          }
+        />
+      )}
+      {hasMore && !openBatchId ? (
         <div className="flex justify-center">
           <Button type="button" size="sm" variant="outline" onClick={() => void loadMore()}>
             Load older renders
