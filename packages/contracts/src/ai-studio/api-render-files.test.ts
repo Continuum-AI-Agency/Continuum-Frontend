@@ -11,6 +11,7 @@ import {
   encodeStyleFiles,
   encodeStyleOf,
   flattenEncodeSettings,
+  isBucketOnlyRenderFile,
   mergeEncodeSettings,
 } from './api-renders';
 import { matchOutputFormat } from './render-output-format';
@@ -91,9 +92,22 @@ describe('output styles', () => {
   });
 });
 
+describe('bucket-only render files', () => {
+  it('keeps masters in the fleet bucket and copies everything else to the Library', () => {
+    for (const name of ['Card_16_9_ab.mov', 'Card_16_9_ab.MXF']) {
+      expect(isBucketOnlyRenderFile(name)).toBe(true);
+    }
+    for (const name of ['Card_16_9_ab.mp4', 'Card.webm', 'Card.gif', 'Card.jpg', 'mov', '']) {
+      expect(isBucketOnlyRenderFile(name)).toBe(false);
+    }
+  });
+});
+
 describe('describeEncodeSettings', () => {
   it('reads fps and files in one line', () => {
-    expect(describeEncodeSettings({ fps: 25, files: { mxf: true } }, 'mp4')).toBe('25 fps · MP4 + MXF');
+    expect(describeEncodeSettings({ fps: 25, files: { mxf: true } }, 'mp4')).toBe(
+      '25 fps · MP4 + MXF',
+    );
     expect(describeEncodeSettings({ fps: '30000/1001' }, 'mp4')).toBe('29.97 fps');
     expect(describeEncodeSettings({ fps: 'comp' }, 'mov')).toBe('Comp rate');
   });

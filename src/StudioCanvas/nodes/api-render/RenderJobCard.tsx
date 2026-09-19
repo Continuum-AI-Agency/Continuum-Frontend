@@ -1,6 +1,10 @@
 'use client';
 
-import type { ApiRenderJob, ApiRenderOutput } from '@continuum/contracts';
+import {
+  type ApiRenderJob,
+  type ApiRenderOutput,
+  isBucketOnlyRenderFile,
+} from '@continuum/contracts';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -183,7 +187,8 @@ export function RenderJobCard({
       <CheckSummary job={job} />
       {job.outputs.map((output) => (
         <div key={output.id} className="mt-1 space-y-1">
-          {output.kind === 'video' ? (
+          {/* A master (MOV/MXF) is a download: browsers cannot play ProRes or MXF inline. */}
+          {isBucketOnlyRenderFile(output.fileName) ? null : output.kind === 'video' ? (
             // biome-ignore lint/a11y/useMediaCaption: a rendered ad has no caption track
             <video
               className="nodrag w-full rounded border border-border/60"
@@ -220,7 +225,11 @@ export function RenderJobCard({
                 </Button>
               ) : null}
               <span className="text-muted-foreground">
-                {output.assetId ? 'Saved to Library' : 'Saving to Library…'}
+                {isBucketOnlyRenderFile(output.fileName)
+                  ? 'In the render bucket'
+                  : output.assetId
+                    ? 'Saved to Library'
+                    : 'Saving to Library…'}
               </span>
             </span>
           </div>

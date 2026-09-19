@@ -447,6 +447,19 @@ export function encodeStyleFiles(style: EncodeStyle): NonNullable<EncodeSettings
   return Object.fromEntries(ENCODE_FILE_CONTAINERS.map((file) => [file, on.includes(file)]));
 }
 
+/**
+ * Masters — MOV (ProRes) and MXF (DNxHR) — stay in the render fleet's bucket and are read from
+ * there, never copied into Supabase Storage: a 25 s master is hundreds of MB. Every other file also
+ * gets a Library copy, so it shows in the Library and in render → ad lineage.
+ */
+export const RENDER_BUCKET_ONLY_FILES = ['mov', 'mxf'] as const;
+
+export function isBucketOnlyRenderFile(fileName: string): boolean {
+  const dot = fileName.lastIndexOf('.');
+  const extension = dot > 0 ? fileName.slice(dot + 1).toLowerCase() : '';
+  return (RENDER_BUCKET_ONLY_FILES as readonly string[]).includes(extension);
+}
+
 /** The style that makes exactly these files, or null for a custom mix. */
 export function encodeStyleOf(files: readonly EncodeFileContainer[]): EncodeStyle | null {
   const wanted = new Set(files);
@@ -498,7 +511,7 @@ export function describeEncodeSettings(
   const changedFiles = settings?.files !== undefined;
   const parts = [
     fpsLabel(settings?.fps),
-    changedFiles ? (files.map((file) => FILE_LABEL[file]).join(' + ') || 'No file') : null,
+    changedFiles ? files.map((file) => FILE_LABEL[file]).join(' + ') || 'No file' : null,
   ].filter((part): part is string => part !== null);
   return parts.length ? parts.join(' · ') : null;
 }

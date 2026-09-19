@@ -1,6 +1,6 @@
 'use client';
 
-import type { ApiRenderJob } from '@continuum/contracts';
+import { type ApiRenderJob, isBucketOnlyRenderFile } from '@continuum/contracts';
 import { Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -84,7 +84,10 @@ export function deliverySearchText(job: ApiRenderJob): string {
  * the chain fits a dense grid row, and a truncated name is in the tooltip.
  */
 export function DeliveryChain({ job, wrap = false }: { job: ApiRenderJob; wrap?: boolean }) {
-  const saved = job.outputs.some((output) => output.assetId);
+  // Masters stay in the render bucket, so only the other files are ever saved to the Library.
+  const libraryBound = job.outputs.filter((output) => !isBucketOnlyRenderFile(output.fileName));
+  const bucketOnly = job.outputs.length > 0 && libraryBound.length === 0;
+  const saved = libraryBound.some((output) => output.assetId);
   const slack = job.slackDelivery;
   const target = job.deliveryTarget;
   const approval = approvalState(job);
@@ -99,13 +102,19 @@ export function DeliveryChain({ job, wrap = false }: { job: ApiRenderJob; wrap?:
         !wrap && 'max-w-[28rem]',
       )}
     >
-      <span
-        className={saved ? 'inline-flex items-center gap-0.5' : 'text-muted-foreground'}
-        title={saved ? 'Saved to the Library' : 'Not in the Library yet'}
-      >
-        Library
-        {saved ? <Check className="size-3 text-emerald-600" aria-label="saved" /> : null}
-      </span>
+      {bucketOnly ? (
+        <span title="Masters stay in the render bucket and are downloaded from there">
+          Render bucket
+        </span>
+      ) : (
+        <span
+          className={saved ? 'inline-flex items-center gap-0.5' : 'text-muted-foreground'}
+          title={saved ? 'Saved to the Library' : 'Not in the Library yet'}
+        >
+          Library
+          {saved ? <Check className="size-3 text-emerald-600" aria-label="saved" /> : null}
+        </span>
+      )}
       {slack ? (
         <>
           <span className="text-muted-foreground">·</span>
