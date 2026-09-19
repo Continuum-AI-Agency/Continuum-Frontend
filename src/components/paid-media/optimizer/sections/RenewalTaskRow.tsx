@@ -6,8 +6,10 @@
 import type { RenewalTask } from '@continuum/contracts';
 
 import { Button } from '@/components/ui/button';
+import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import { creativeBriefForRec, recommendationLabel } from '../reportModel';
 import { useOptimizerMutations } from '../useOptimizerData';
+import { audienceExpansionPrompt } from './recQueueModel';
 
 type RenewalTaskRowProps = {
   brandId: string;
@@ -33,6 +35,27 @@ export function RenewalTaskRow({ brandId, task }: RenewalTaskRowProps) {
           {task.portfolio_name}
           {task.reason ? ` · ${task.reason}` : ''}
         </p>
+        {task.kind === 'audience_expand' ? (
+          // The options with sizes live in Jaina's audience tools; hand the ad set and the
+          // diagnosis over so the person lands in the three-bucket answer.
+          <p className="mt-1.5 text-xs">
+            <a
+              className="font-medium text-primary underline-offset-2 hover:underline"
+              href={jainaPromptHref(
+                audienceExpansionPrompt(
+                  { adset_id: task.adset_id, reason: task.reason, trigger: task.kind },
+                  null,
+                ),
+              )}
+            >
+              Explore options with Jaina →
+            </a>{' '}
+            <span className="text-muted-foreground">
+              what it targets now, what the account already owns, and catalogue-verified interests,
+              each with an estimated size.
+            </span>
+          </p>
+        ) : null}
         {brief ? (
           <div className="mt-2 space-y-1 rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-2xs text-muted-foreground">
             <p className="font-medium text-foreground">{brief.title}</p>

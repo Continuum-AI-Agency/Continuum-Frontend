@@ -156,6 +156,20 @@ export default function PaidMediaClientPage({
   // Deep link from completion toasts (/scale?tab=jaina&sessionId=...): a session id
   // implies the Jaina tab even when the tab param is missing or invalid.
   const jainaSessionIdParam = searchParams.get('sessionId');
+  // Deep link with a question already written (/scale?tab=jaina&prompt=...): the Optimizer's
+  // "Ask Jaina" chips, "Explore options with Jaina" and a dashboard's refresh all land here.
+  // A slash-prefixed prompt is a Goal command, not chat input, and is left alone.
+  const jainaPromptParam = searchParams.get('prompt');
+  const jainaInitialPrompt =
+    jainaPromptParam && jainaPromptParam.trim().length > 0 && !jainaPromptParam.startsWith('/')
+      ? jainaPromptParam
+      : null;
+  const clearJainaPrompt = React.useCallback(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (!params.has('prompt')) return;
+    params.delete('prompt');
+    router.replace(`?${params.toString()}`, { scroll: false });
+  }, [router, searchParams]);
   const { user } = useSession();
   const goalsAccessEnabled = canAccessGoals({
     isAdmin: isAdminUser(user),
@@ -205,7 +219,7 @@ export default function PaidMediaClientPage({
     [setSelectedAdAccount],
   );
   const [activeTab, setActiveTab] = React.useState<PaidMediaTab>(
-    normalizedTabParam ?? (jainaSessionIdParam ? 'jaina' : 'dashboard'),
+    normalizedTabParam ?? (jainaSessionIdParam || jainaInitialPrompt ? 'jaina' : 'dashboard'),
   );
   const [isCanvasOpen, setIsCanvasOpen] = React.useState(false);
   // The ads-manager panel on the Dashboard tab. Separate from `isCanvasOpen`, which is
@@ -636,6 +650,8 @@ export default function PaidMediaClientPage({
                   campaignId={selectedCampaign}
                   userId={user?.id ?? null}
                   initialSessionId={jainaSessionIdParam}
+                  initialPrompt={jainaInitialPrompt}
+                  onInitialPromptConsumed={clearJainaPrompt}
                   onCanvasActionApplied={handleCanvasActionApplied}
                   goalsAccessEnabled={goalsAccessEnabled}
                   className="rounded-none border-none bg-transparent backdrop-blur-none"
