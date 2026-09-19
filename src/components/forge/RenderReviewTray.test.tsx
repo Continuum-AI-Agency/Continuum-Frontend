@@ -188,6 +188,7 @@ import {
   openSelect,
 } from '@/components/automations/workspace/pickers/pickerTestHarness';
 import { registerToastSink } from '@/components/ui/toast-imperative';
+import { FORGE_APPROVAL_COPY } from './ApprovalDestinationsField';
 import { type RenderPreflightRow, RenderReviewTray } from './RenderReviewTray';
 
 // A sink per test, not a module mock: `mock.module` outlives this file in a multi-file run and
@@ -786,13 +787,8 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     chooseOption('Story');
     expect(screen.getByText('StarCraft Promo · 2 files')).toBeTruthy();
 
-    // Preflight refuses a Meta target with nowhere to ask, so Next waits for a room too.
-    expect(
-      screen.getByText(
-        'Choose an approval room — a Meta ad waits there until someone approves it.',
-      ),
-    ).toBeTruthy();
-    expect(primaryDisabled('Next: confirm')).toBe(true);
+    // No room is a choice, not a blocker: the ad would be approved in Forge instead.
+    expect(primaryDisabled('Next: confirm')).toBe(false);
     await screen.findByRole('checkbox', { name: /#client-review/ });
     expect(screen.getByText('no approvers yet')).toBeTruthy();
     // The row's label is the click a person makes; the control inside it is Base UI's button.
@@ -847,6 +843,37 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
       slack: { destinationId: OPS.id },
       approvalDestinationIds: [ROOM.id],
     });
+  }, 30_000);
+
+  test('Meta replace with no approval room is approved in Forge and fires without rooms', async () => {
+    listDestinationsMock.mockImplementation(async () =>
+      destinations({}, { connected: true, adAccountId: 'act_1', adAccountName: 'StarCraft Ads' }),
+    );
+    const { onFired } = renderTray();
+    await press('Next: delivery');
+    await changeDelivery();
+    fireEvent.click(await screen.findByRole('button', { name: 'Replace an ad for Root' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Summer launch/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Spain 18–34/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Hero story/ }));
+    await screen.findByLabelText('Format for Root');
+    openSelect('Format for Root');
+    chooseOption('Story');
+    await screen.findByRole('checkbox', { name: /#client-review/ });
+
+    await press('Next: confirm');
+    expect(
+      screen.getByText(
+        '2 files · Library · Approval in Forge · 1 ad replacement held for approval',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText(FORGE_APPROVAL_COPY)).toBeTruthy();
+
+    await press('Render 2 files');
+    await waitFor(() => expect(onFired).toHaveBeenCalledWith(JOB_IDS));
+    const fired = batchPreflightMock.mock.calls[1]?.[0] as Record<string, unknown>;
+    expect(fired.records).toHaveLength(2);
+    expect('approvalDestinationIds' in fired).toBe(false);
   }, 30_000);
 
   test('a refused render stays where it was, says why, and fires nothing', async () => {

@@ -6,7 +6,11 @@
  */
 
 import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
-import type { RenderApproval, RenderApprovalDecisionResponse } from '@continuum/contracts';
+import type {
+  ApprovalBatchDecisionResponse,
+  RenderApproval,
+  RenderApprovalDecisionResponse,
+} from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
@@ -90,6 +94,33 @@ mock.module('@/lib/library/renderApprovals', () => ({
   },
 }));
 
+// Answers each id the way the Backend would: a still-pending one is decided, anything else is not.
+const decideApprovals = mock(
+  async (input: {
+    brandId: string;
+    ids: string[];
+    decision: 'approve' | 'reject';
+  }): Promise<ApprovalBatchDecisionResponse> => ({
+    results: input.ids.map((id) => {
+      const current = approvals.find((item) => item.id === id);
+      if (current?.status !== 'pending') {
+        return {
+          id,
+          outcome: 'already_decided' as const,
+          error: 'This batch is already approved.',
+        };
+      }
+      approvals = approvals.map((item) =>
+        item.id === id
+          ? { ...item, status: input.decision === 'approve' ? 'approved' : 'rejected' }
+          : item,
+      );
+      return { id, outcome: 'decided' as const };
+    }),
+  }),
+);
+mock.module('@/lib/library/approvalDecisions', () => ({ decideApprovals }));
+
 import { registerToastSink } from '@/components/ui/toast-imperative';
 import { APPROVAL_RELAY_POLL_MS, approvalPollInterval, PendingApprovals } from './PendingApprovals';
 
@@ -107,6 +138,7 @@ afterEach(() => {
   cleanup();
   fetchRenderApprovals.mockClear();
   decideRenderApproval.mockClear();
+  decideApprovals.mockClear();
 });
 
 const renderApprovals = (
@@ -244,4 +276,57 @@ test('polls fast only while a decision is still being relayed', () => {
   expect(approvalPollInterval([pending, row(ID, { status: 'approved' })])).toBe(
     APPROVAL_RELAY_POLL_MS,
   );
+});
+
+const PACKAGED = [
+  '11111111-1111-4111-8111-111111111121',
+  '11111111-1111-4111-8111-111111111122',
+  '11111111-1111-4111-8111-111111111123',
+];
+
+test('Approve all decides exactly the variations shown waiting, in one call', async () => {
+  approvals = [
+    ...PACKAGED.map((id) => row(id, { packageId: PACKAGE, expiresAt: EXPIRES })),
+    row('11111111-1111-4111-8111-111111111124', {
+      packageId: PACKAGE,
+      expiresAt: EXPIRES,
+      status: 'rejected',
+      decidedAt: '2026-09-15T00:05:00.000Z',
+    }),
+  ];
+  renderApprovals();
+  const pack = await screen.findByRole('region', { name: 'Approval package, 4 variations' });
+  fireEvent.click(within(pack).getByRole('button', { name: 'Approve all 3' }));
+  await waitFor(() => expect(toasts).toHaveLength(1));
+  expect(decideApprovals.mock.calls).toEqual([
+    [{ brandId: BRAND, ids: PACKAGED, decision: 'approve' }],
+  ]);
+  expect(toasts).toEqual(['Approved 3. Publishing now — the outcomes appear here in a moment.']);
+  expect(decideRenderApproval).not.toHaveBeenCalled();
+  // The list is read again, so the batch buttons go once nothing is waiting.
+  await waitFor(() =>
+    expect(screen.queryAllByRole('button', { name: /Approve all/ })).toHaveLength(0),
+  );
+});
+
+test('Reject all says how many it could not decide, and why', async () => {
+  approvals = PACKAGED.slice(0, 2).map((id) => row(id, { packageId: PACKAGE, expiresAt: EXPIRES }));
+  renderApprovals();
+  const pack = await screen.findByRole('region', { name: 'Approval package, 2 variations' });
+  // Someone else approves one between the read and the click.
+  approvals = approvals.map((item, index) =>
+    index === 0 ? { ...item, status: 'approved' } : item,
+  );
+  fireEvent.click(within(pack).getByRole('button', { name: 'Reject all' }));
+  await waitFor(() => expect(toasts).toHaveLength(1));
+  expect(toasts).toEqual([
+    'Rejected 1. Nothing was published. 1 not decided: This batch is already approved.',
+  ]);
+});
+
+test('a package with one variation waiting has no batch buttons', async () => {
+  approvals = [row(PACKAGED[0]!, { packageId: PACKAGE, expiresAt: EXPIRES })];
+  renderApprovals();
+  await screen.findByRole('region', { name: 'Approval package, 1 variation' });
+  expect(screen.queryAllByRole('button', { name: /all/ })).toHaveLength(0);
 });

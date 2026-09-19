@@ -65,9 +65,16 @@ const AD_TWO = target({
 });
 
 const searchPaidMock = mock(
-  async (input: { level: string; parentId?: string; cursor?: string; query?: string }) => {
+  async (input: {
+    level: string;
+    adAccountId?: string;
+    parentId?: string;
+    cursor?: string;
+    query?: string;
+  }) => {
+    // The route answers for the account it was asked about, the assigned one when none is named.
     const page = (items: PaidCanvasTarget[], nextCursor: string | null = null) => ({
-      adAccountId: 'act_1',
+      adAccountId: input.adAccountId ?? 'act_1',
       items,
       nextCursor,
     });
@@ -254,6 +261,36 @@ describe('DeliveryTargetPicker', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove the ad target for Root' }));
     expect(latest.rows[0]?.delivery).toBeUndefined();
     expect(screen.queryByRole('combobox', { name: 'Format for Root' })).toBeNull();
+  }, 30_000);
+
+  test('a brand with several linked accounts picks one, and the next ad is searched and targeted there', async () => {
+    render(
+      <Harness
+        meta={{
+          ...CONNECTED,
+          adAccounts: [
+            { id: 'act_1', name: 'StarCraft Ads' },
+            { id: 'act_2', name: 'StarCraft EU' },
+          ],
+        }}
+      />,
+    );
+    // The account is a choice here, so it is not also stated as a fact.
+    expect(screen.queryByText(/Ad account: StarCraft Ads/)).toBeNull();
+    openSelect('Ad account');
+    chooseOption('StarCraft EU');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Replace an ad for Root' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Summer launch/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Spain 18–34/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Hero story/ }));
+
+    await waitFor(() =>
+      expect(latest.rows[0]?.delivery).toEqual(replaceTargetFor('act_2', AD_ONE)),
+    );
+    expect(new Set(searchPaidMock.mock.calls.map((call) => call[0].adAccountId))).toEqual(
+      new Set(['act_2']),
+    );
   }, 30_000);
 
   test('pasted ad ids resolve to names across pages; a miss is an error on its line', async () => {

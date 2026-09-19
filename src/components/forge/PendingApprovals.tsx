@@ -8,6 +8,7 @@ import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
+import { decideApprovals } from '@/lib/library/approvalDecisions';
 import { decideRenderApproval, fetchRenderApprovals } from '@/lib/library/renderApprovals';
 import { cn } from '@/lib/utils';
 
@@ -21,7 +22,8 @@ import { cn } from '@/lib/utils';
 // leave the person who made it with no way to see why.
 //
 // A Forge confirm opens one package, and its variations are listed under it with the package's
-// expiry. A decision answers at once with `approved` — "publishing" — and the plugin's outcome
+// expiry. Approve all / Reject all decide exactly the variations shown waiting — never one that
+// arrived after this list was read. A decision answers at once with `approved` — "publishing" — and the plugin's outcome
 // lands on the row later, so the list re-reads every few seconds while any row is still there.
 
 const STATUS_LABEL: Record<string, string> = {
@@ -209,16 +211,26 @@ function ApprovalCard({
   );
 }
 
+type Decision = 'approve' | 'reject';
+
 function ApprovalPackage({
+  packageId,
   approvals,
   busyId,
   onDecide,
+  onDecideAll,
 }: {
+  packageId: string;
   approvals: RenderApproval[];
   busyId: string | null;
-  onDecide: (id: string, decision: 'approve' | 'reject') => void;
+  onDecide: (id: string, decision: Decision) => void;
+  onDecideAll: (packageId: string, ids: string[], decision: Decision) => void;
 }) {
-  const waiting = approvals.filter((approval) => approval.status === 'pending').length;
+  const pendingIds = approvals
+    .filter((approval) => approval.status === 'pending')
+    .map((approval) => approval.id);
+  const waiting = pendingIds.length;
+  const deciding = busyId === packageId;
   const expiresAt = approvals.find((approval) => approval.expiresAt)?.expiresAt ?? null;
   const expired = expiresAt !== null && Date.parse(expiresAt) <= Date.now();
   const variations = `${approvals.length} variation${approvals.length === 1 ? '' : 's'}`;
@@ -239,6 +251,31 @@ function ApprovalPackage({
           <span className="inline-flex items-center gap-1 text-muted-foreground">
             <Clock className="h-3 w-3" aria-hidden />
             {expired ? 'Expired' : 'Expires'} {when(expiresAt)}
+          </span>
+        ) : null}
+        {waiting > 1 ? (
+          <span className="ml-auto flex gap-2">
+            <Button
+              size="sm"
+              disabled={busyId !== null}
+              onClick={() => onDecideAll(packageId, pendingIds, 'approve')}
+            >
+              {deciding ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : (
+                <CheckCircle2 className="mr-1 h-3 w-3" />
+              )}
+              Approve all {waiting}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busyId !== null}
+              onClick={() => onDecideAll(packageId, pendingIds, 'reject')}
+            >
+              <XCircle className="mr-1 h-3 w-3" />
+              Reject all
+            </Button>
           </span>
         ) : null}
       </header>
@@ -271,7 +308,7 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
   const approvals = approvalQuery.data ?? [];
 
   const onDecide = useCallback(
-    async (approvalId: string, decision: 'approve' | 'reject') => {
+    async (approvalId: string, decision: Decision) => {
       setBusyId(approvalId);
       try {
         const result = await decideRenderApproval(approvalId, decision);
@@ -307,6 +344,32 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
     [approvalKey, brandId, queryClient],
   );
 
+  const onDecideAll = useCallback(
+    async (packageId: string, ids: string[], decision: Decision) => {
+      setBusyId(packageId);
+      try {
+        const { results } = await decideApprovals({ brandId, ids, decision });
+        const decided = results.filter((result) => result.outcome === 'decided').length;
+        const missed = results.filter((result) => result.outcome !== 'decided');
+        const done =
+          decision === 'approve'
+            ? `Approved ${decided}. Publishing now — the outcomes appear here in a moment.`
+            : `Rejected ${decided}. Nothing was published.`;
+        if (missed.length === 0) toast.success(done);
+        // Someone else deciding one first is a normal race; say how many, and the first reason.
+        else
+          toast.warning(`${done} ${missed.length} not decided: ${missed[0]?.error ?? ''}`.trim());
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Those decisions did not go through.');
+      } finally {
+        void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderJobs(brandId) });
+        void queryClient.invalidateQueries({ queryKey: approvalKey, exact: true });
+        setBusyId(null);
+      }
+    },
+    [approvalKey, brandId, queryClient],
+  );
+
   if (approvalQuery.isPending || approvals.length === 0) return null;
 
   const waiting = approvals.filter((a) => a.status === 'pending').length;
@@ -327,9 +390,11 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
           'approvals' in entry ? (
             <ApprovalPackage
               key={entry.packageId}
+              packageId={entry.packageId}
               approvals={entry.approvals}
               busyId={busyId}
               onDecide={onDecide}
+              onDecideAll={onDecideAll}
             />
           ) : (
             <ApprovalCard

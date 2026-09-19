@@ -3470,6 +3470,69 @@ export type Database = {
         }
         Relationships: []
       }
+      approvals: {
+        Row: {
+          batch_id: string | null
+          brand_id: string
+          decided_at: string | null
+          decided_by: string | null
+          decided_by_display_name: string | null
+          decided_via: string | null
+          decision_reason: string | null
+          expires_at: string | null
+          id: string
+          kind: string
+          requested_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          batch_id?: string | null
+          brand_id: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decided_by_display_name?: string | null
+          decided_via?: string | null
+          decision_reason?: string | null
+          expires_at?: string | null
+          id: string
+          kind: string
+          requested_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          batch_id?: string | null
+          brand_id?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decided_by_display_name?: string | null
+          decided_via?: string | null
+          decision_reason?: string | null
+          expires_at?: string | null
+          id?: string
+          kind?: string
+          requested_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "approvals_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "approvals_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audience_group_members: {
         Row: {
           attempt: number

@@ -1288,8 +1288,13 @@ export const apiRenderDeliveryDestinationsResponseSchema = z
     meta: z
       .object({
         connected: z.boolean(),
+        /** The brand's assigned account — what the ad picker opens on. */
         adAccountId: z.string().nullable(),
         adAccountName: z.string().nullable(),
+        /** Every Meta account linked to the brand, the assigned one included; any can be picked. */
+        adAccounts: z
+          .array(z.object({ id: z.string().min(1), name: z.string().nullable() }).strict())
+          .default([]),
       })
       .strict(),
   })

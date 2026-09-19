@@ -28,8 +28,9 @@ import { publishingApi } from '@/StudioCanvas/nodes/publish/publishingApi';
 //
 // A replace swaps exactly ONE creative, so a replacing row renders exactly one format — the
 // dialog owns that choice (`formatByRow`) and applies it to the record at confirm. Targets come
-// from the brand's single assigned ad account via the paid targets route; the canvas Publishing
-// block drills the same route (PublishingBlock.tsx), but it is bound to the canvas store.
+// from one of the brand's linked ad accounts — the assigned one unless another is picked — via
+// the paid targets route; the canvas Publishing block drills the same route (PublishingBlock.tsx),
+// but it is bound to the canvas store.
 
 export type MetaPickerState = 'loading' | 'unknown' | ApiRenderDeliveryDestinationsResponse['meta'];
 
@@ -150,23 +151,30 @@ export function parseAdIdLines(
   return { assignments, errors };
 }
 
-/** Looks ad ids up among the brand account's paused and active ads. */
+/** Looks ad ids up among one brand account's paused and active ads — the assigned one if unnamed. */
 export async function findAds(
   brandId: string,
   adIds: string[],
+  adAccountId?: string,
 ): Promise<{ adAccountId: string | null; ads: Map<string, PaidCanvasTarget> }> {
   const wanted = new Set(adIds);
   const ads = new Map<string, PaidCanvasTarget>();
-  let adAccountId: string | null = null;
+  let answeredAccount: string | null = null;
   let cursor: string | undefined;
   for (let page = 0; page < AD_LOOKUP_PAGES && ads.size < wanted.size; page += 1) {
-    const result = await publishingApi.searchPaid({ brandId, level: 'ad', limit: 50, cursor });
-    adAccountId = result.adAccountId;
+    const result = await publishingApi.searchPaid({
+      brandId,
+      ...(adAccountId ? { adAccountId } : {}),
+      level: 'ad',
+      limit: 50,
+      cursor,
+    });
+    answeredAccount = result.adAccountId;
     for (const item of result.items) if (wanted.has(item.id)) ads.set(item.id, item);
     if (!result.nextCursor) break;
     cursor = result.nextCursor;
   }
-  return { adAccountId, ads };
+  return { adAccountId: answeredAccount, ads };
 }
 
 const describePaidFailure = (error: unknown) => {
@@ -174,7 +182,7 @@ const describePaidFailure = (error: unknown) => {
   if (message.includes('meta_ad_account_not_found'))
     return 'No ad account is connected to this brand.';
   if (message.includes('ad_account_not_assigned_to_brand'))
-    return 'That ad account is not assigned to this brand.';
+    return 'That ad account is not linked to this brand.';
   return message || 'Meta did not answer. Try again.';
 };
 
@@ -202,6 +210,12 @@ export function DeliveryTargetPicker({
   onFormatChange: (rowId: string, outputId: string) => void;
 }) {
   const connected = meta !== 'loading' && (meta === 'unknown' || meta.connected);
+  const known = meta !== 'loading' && meta !== 'unknown' ? meta : null;
+  // Where ads are looked for. Rows keep the account their own target names; this is only the
+  // account the next pick searches.
+  const [pickedAccount, setPickedAccount] = useState<string | null>(null);
+  const adAccountId = pickedAccount ?? known?.adAccountId ?? undefined;
+  const accounts = known?.adAccounts ?? [];
   const [resolveErrors, setResolveErrors] = useState<Record<string, string>>({});
   const [resolving, setResolving] = useState(false);
   // The caller hands a fresh arrow every render; the lookup must not restart on each one.
@@ -227,6 +241,7 @@ export function DeliveryTargetPicker({
     findAds(
       brandId,
       pending.map(([, adId]) => adId),
+      adAccountId,
     )
       .then(({ adAccountId, ads }) => {
         if (cancelled) return;
@@ -254,7 +269,7 @@ export function DeliveryTargetPicker({
     return () => {
       cancelled = true;
     };
-  }, [brandId, connected, pendingKey]);
+  }, [brandId, connected, pendingKey, adAccountId]);
 
   if (meta === 'loading') {
     return <p className="text-xs text-muted-foreground">Checking for an ad account…</p>;
@@ -299,9 +314,30 @@ export function DeliveryTargetPicker({
   const formatLabel = (id: string) => outputs.find((output) => output.id === id)?.label ?? id;
   return (
     <div className="space-y-2">
+      {accounts.length > 1 ? (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-muted-foreground">Ad account</span>
+          <Select value={adAccountId} onValueChange={(next) => setPickedAccount(next)}>
+            <SelectTrigger aria-label="Ad account" size="sm" className="w-auto text-xs">
+              <SelectValue
+                items={Object.fromEntries(
+                  accounts.map((account) => [account.id, account.name ?? account.id]),
+                )}
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {accounts.map((account) => (
+                <SelectItem key={account.id} value={account.id}>
+                  {account.name ?? account.id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
       <p className="text-xs text-muted-foreground">
-        {meta !== 'unknown' && (meta.adAccountName || meta.adAccountId)
-          ? `Ad account: ${meta.adAccountName ?? meta.adAccountId}. `
+        {accounts.length <= 1 && known && (known.adAccountName || known.adAccountId)
+          ? `Ad account: ${known.adAccountName ?? known.adAccountId}. `
           : ''}
         {APPROVAL_COPY}
       </p>
@@ -310,6 +346,7 @@ export function DeliveryTargetPicker({
           <MetaRow
             key={row.rowId}
             brandId={brandId}
+            adAccountId={adAccountId}
             row={row}
             choices={formatChoices(row, outputs)}
             format={replaceOutputId(row, outputs, formatByRow)}
@@ -325,13 +362,19 @@ export function DeliveryTargetPicker({
           />
         ))}
       </ul>
-      <PasteAdIds brandId={brandId} rows={rows} onDeliveryChange={onDeliveryChange} />
+      <PasteAdIds
+        brandId={brandId}
+        adAccountId={adAccountId}
+        rows={rows}
+        onDeliveryChange={onDeliveryChange}
+      />
     </div>
   );
 }
 
 function MetaRow({
   brandId,
+  adAccountId,
   row,
   choices,
   format,
@@ -342,6 +385,7 @@ function MetaRow({
   onFormatChange,
 }: {
   brandId: string;
+  adAccountId: string | undefined;
   row: RenderPreflightRow;
   choices: string[];
   format: string | null;
@@ -440,7 +484,10 @@ function MetaRow({
       </div>
       {picking ? (
         <AdDrillDown
+          // A different account is a different tree: start the drill again from its campaigns.
+          key={adAccountId}
           brandId={brandId}
+          adAccountId={adAccountId}
           onCancel={() => setPicking(false)}
           onPick={(target) => {
             onDeliveryChange(row.rowId, target);
@@ -456,10 +503,12 @@ type Crumb = { id: string; name: string };
 
 function AdDrillDown({
   brandId,
+  adAccountId,
   onPick,
   onCancel,
 }: {
   brandId: string;
+  adAccountId: string | undefined;
   onPick: (target: ApiRenderDeliveryTarget) => void;
   onCancel: () => void;
 }) {
@@ -484,6 +533,7 @@ function AdDrillDown({
     try {
       const result = await publishingApi.searchPaid({
         brandId,
+        ...(adAccountId ? { adAccountId } : {}),
         level,
         parentId,
         query: query.trim() || undefined,
@@ -611,10 +661,12 @@ function AdDrillDown({
 
 function PasteAdIds({
   brandId,
+  adAccountId,
   rows,
   onDeliveryChange,
 }: {
   brandId: string;
+  adAccountId: string | undefined;
   rows: RenderPreflightRow[];
   onDeliveryChange: (rowId: string, delivery: ApiRenderDeliveryTarget | null) => void;
 }) {
@@ -630,14 +682,14 @@ function PasteAdIds({
     const { assignments, errors } = parseAdIdLines(text, rows);
     setBusy(true);
     try {
-      const { adAccountId, ads } = assignments.length
-        ? await findAds(brandId, [...new Set(assignments.map((item) => item.adId))])
+      const { adAccountId: account, ads } = assignments.length
+        ? await findAds(brandId, [...new Set(assignments.map((item) => item.adId))], adAccountId)
         : { adAccountId: null, ads: new Map<string, PaidCanvasTarget>() };
       const lineErrors = [...errors];
       let matched = 0;
       for (const assignment of assignments) {
         const ad = ads.get(assignment.adId);
-        const target = ad && adAccountId ? replaceTargetFor(adAccountId, ad) : null;
+        const target = ad && account ? replaceTargetFor(account, ad) : null;
         if (!target) {
           lineErrors.push({
             line: assignment.line,

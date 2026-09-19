@@ -94,7 +94,6 @@ const renderField = () =>
     </QueryClientProvider>,
   );
 
-
 /** The room row's control: a shadcn Checkbox renders a button, not an <input>. */
 const roomBox = (name: RegExp) => screen.getByRole('checkbox', { name });
 const isChecked = (box: Element) => box.getAttribute('aria-checked') === 'true';
@@ -127,10 +126,11 @@ test('lists each room with its platform and approver count, and selects several'
   expect(picked.at(-1)).toEqual([WHATSAPP_ROOM.id]);
 });
 
-test('a brand with no rooms says where Slack rooms and WhatsApp groups come from', async () => {
+test('a brand with no rooms is told its ads are approved in Forge, and where rooms come from', async () => {
   rooms = [];
   renderField();
-  const empty = await screen.findByText(/no approval room yet/);
+  const empty = await screen.findByText(/wait under Approvals on this page/);
+  expect(empty.textContent).toContain('until a brand member approves them');
   expect(empty.textContent).toContain('Slack');
   expect(empty.textContent).toContain('WhatsApp groups are added by a Continuum operator');
   expect(screen.queryAllByRole('checkbox')).toHaveLength(0);

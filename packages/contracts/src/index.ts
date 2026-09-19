@@ -1,6 +1,7 @@
 export * from './agents/index';
 export * from './ai-studio/index';
 export * from './analytics/index';
+export * from './approvals/index';
 export * from './audience-intel/index';
 export * from './automations/index';
 export * from './brand-intelligence/index';

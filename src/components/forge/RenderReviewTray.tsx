@@ -30,6 +30,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import {
   ApprovalDestinationsField,
   approvalRoomName,
+  FORGE_APPROVAL_COPY,
 } from '@/components/forge/ApprovalDestinationsField';
 import {
   APPROVAL_COPY,
@@ -342,12 +343,9 @@ export function RenderReviewTray({
   const newAds = rows.filter((row) => row.delivery?.action === 'create');
   // A Meta target is the one thing worth a separate look before rendering.
   const goesToMeta = replacements.length + newAds.length > 0;
-  // Preflight refuses a Meta target with no room to ask in; say so here instead of on Confirm.
-  const approvalProblem =
-    goesToMeta && !approvalDestinationIds.length
-      ? 'Choose an approval room — a Meta ad waits there until someone approves it.'
-      : null;
-  const deliverBlockers = approvalProblem ? [...deliverProblems, approvalProblem] : deliverProblems;
+  // No room picked is a choice, not a gap: the ads wait in Forge's approvals for a brand member.
+  const approvesInForge = goesToMeta && !approvalDestinationIds.length;
+  const deliverBlockers = deliverProblems;
   // Something to fix opens the full delivery form, and it stays open while it is being fixed.
   if (step === 'deliver' && deliverBlockers.length && !editingDelivery) setEditingDelivery(true);
 
@@ -362,6 +360,7 @@ export function RenderReviewTray({
             room.activeApprovers ? plural(room.activeApprovers, 'approver') : 'no approvers yet'
           }`,
       ),
+    ...(approvesInForge ? ['Approval in Forge'] : []),
     ...(replacements.length
       ? [`${plural(replacements.length, 'ad replacement')} held for approval`]
       : []),
@@ -375,7 +374,6 @@ export function RenderReviewTray({
       setStep('review');
       return;
     }
-    if (approvalProblem) return;
     setFiring(true);
     setProblem(null);
     setApprovalWarning(null);
@@ -790,10 +788,8 @@ export function RenderReviewTray({
                     ))}
                   </ul>
                   <p className="text-muted-foreground">{APPROVAL_COPY}</p>
-                  {approvalProblem ? (
-                    <p role="status" className="text-warning">
-                      {approvalProblem}
-                    </p>
+                  {approvesInForge ? (
+                    <p className="text-muted-foreground">{FORGE_APPROVAL_COPY}</p>
                   ) : null}
                 </div>
                 {confirmation}

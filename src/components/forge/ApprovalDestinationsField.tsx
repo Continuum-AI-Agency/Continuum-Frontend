@@ -28,6 +28,10 @@ const PLATFORM_LABEL: Record<RenderApprovalDestination['platform'], string> = {
 export const approvalRoomName = (destination: RenderApprovalDestination) =>
   destination.platform === 'slack' ? `#${destination.name}` : destination.name;
 
+/** Said wherever a Meta-bound render has no room: it is still gated, just decided here. */
+export const FORGE_APPROVAL_COPY =
+  'With no approval room, these ads wait under Approvals on this page until a brand member approves them.';
+
 const approverCount = (count: number) =>
   count ? `${count} approver${count === 1 ? '' : 's'}` : 'no approvers yet';
 
@@ -72,8 +76,8 @@ export function ApprovalDestinationsField({
   if (!destinations.length) {
     return (
       <p className="text-xs text-muted-foreground">
-        This brand has no approval room yet. Slack rooms are the brand’s Slack channels — add one
-        under Slack. WhatsApp groups are added by a Continuum operator.
+        {FORGE_APPROVAL_COPY} To be asked in Slack too, add one of the brand’s Slack channels under
+        Slack; WhatsApp groups are added by a Continuum operator.
       </p>
     );
   }
