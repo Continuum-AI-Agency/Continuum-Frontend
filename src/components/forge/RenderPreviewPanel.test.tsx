@@ -1,10 +1,10 @@
 /**
- * RenderPreviewPanel against a mocked jobs API: a row's effective values are drawn into the picked
- * format's slot boxes, overflow is flagged and clears live, the format chips swap the layout, and
- * the row's last render shows THAT format's file — found by name, never by position — re-read when
- * realtime says one of that row's jobs finished. A row with changes since the closest real render
- * (its own, the nearest row's in the set, else the template's) is previewed as that render with
- * only the changed slots painted over it, in colours read off the render when it can be read.
+ * RenderPreviewPanel against a mocked jobs API and a mocked compose endpoint: the row's last render
+ * shows THAT format's file — found by name, never by position — re-read when realtime says one of
+ * that row's jobs finished. A row with changes since the closest real render (its own, the nearest
+ * row's in the set, else the template's) is composed on the server over that render, and with no
+ * render anywhere the template is drawn whole. Until a composition arrives, or when none can be
+ * made, the row is drawn into the picked format's slot boxes and overflow is flagged live.
  */
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
@@ -12,6 +12,8 @@ import type {
   ApiRenderJob,
   ApiRenderTemplateContract,
   ApiRenderTemplateLayout,
+  ForgeRenderPreview,
+  ForgeRenderPreviewRequest,
 } from '@continuum/contracts';
 import type { PostgresChangesSubscription } from '@/lib/supabase/realtime';
 
@@ -29,10 +31,17 @@ const serveJobs = (jobs: ApiRenderJob[]) =>
     nextCursor: null,
   }));
 let setRevision = 3;
+// Unavailable unless a test composes: the wireframe is what shows when no composition can be made.
+const composePreviewMock = mock(
+  async (_input: ForgeRenderPreviewRequest): Promise<ForgeRenderPreview> => {
+    throw new Error('preview_unavailable');
+  },
+);
 
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: {
     listJobs: listJobsMock,
+    composePreview: composePreviewMock,
     listRenderSets: async () => ({
       items: [{ id: '33333333-3333-4333-8333-333333333333', revision: setRevision }],
       nextCursor: null,
@@ -121,7 +130,12 @@ const STORY: ApiRenderTemplateLayout = {
 };
 
 const CONTRACT = {
-  template: { key: '133', name: 'forge_bench_starcraft', contractHash: 'hash' },
+  template: {
+    key: '133',
+    name: 'forge_bench_starcraft',
+    environment: 'Continuum_app',
+    contractHash: 'hash',
+  },
   variables: [
     variable('headline', 'Headline', 'text', { charBudget: 10, sample: 'Hola' }),
     variable('hero', 'Hero', 'image'),
@@ -207,8 +221,23 @@ const caption = (container: HTMLElement) =>
   container.querySelector('[data-slot="format-preview-caption"]')?.textContent;
 const warning = (container: HTMLElement) =>
   container.querySelector('[data-slot="format-preview-warning"]')?.textContent;
-const repainted = (container: HTMLElement) =>
-  [...container.querySelectorAll('[data-repaint]')].map((node) => node.getAttribute('data-repaint'));
+const COMPOSED = 'data:image/webp;base64,UklGRg==';
+/** What the server answers for one composition. */
+const composedOver = (over: Partial<ForgeRenderPreview> = {}): ForgeRenderPreview => ({
+  image: COMPOSED,
+  width: 1080,
+  height: 1080,
+  comp: 'Square',
+  at: 0.0167,
+  source: 'render',
+  basedOn: { jobId: '44444444-4444-4444-8444-444444444444', label: 'Spain', finishedAt: null },
+  notes: [],
+  notPreviewed: [],
+  overflows: [],
+  ...over,
+});
+const composeWith = (answer: ForgeRenderPreview) =>
+  composePreviewMock.mockImplementation(async () => answer);
 
 afterEach(() => {
   cleanup();
@@ -216,6 +245,10 @@ afterEach(() => {
   setRevision = 3;
   listJobsMock.mockReset();
   listJobsMock.mockImplementation(async () => ({ items: [], nextCursor: null }));
+  composePreviewMock.mockReset();
+  composePreviewMock.mockImplementation(async () => {
+    throw new Error('preview_unavailable');
+  });
 });
 
 describe('RenderPreviewPanel', () => {
@@ -343,49 +376,46 @@ describe('RenderPreviewPanel', () => {
     );
   });
 
-  test('a render of an older set revision with no recorded input: every value is repainted over it', async () => {
+  test('a render of an older set revision with no recorded input: the whole row is composed over it', async () => {
     setRevision = 4;
-    serveJobs([job(ROW, [file('Square_1mjxxwb.png')], { renderSetRevision: 3 })]);
-    const rigged = {
-      ...CONTRACT,
-      variables: CONTRACT.variables.map((entry) =>
-        entry.key === 'hero'
-          ? {
-              ...entry,
-              placement: {
-                comp: 'Square',
-                compSize: [1080, 1080],
-                box: [240, 300, 840, 900],
-                boxSource: 'projected',
-                source: [800, 800],
-                sourceKind: 'file',
-                rigged: true,
-              },
-            }
-          : entry,
-      ),
-    } as unknown as ApiRenderTemplateContract;
+    const stale = job(ROW, [file('Square_1mjxxwb.png')], { renderSetRevision: 3 });
+    serveJobs([stale]);
+    composeWith(
+      composedOver({
+        notes: ['Headline: resize rig approximated'],
+        notPreviewed: ['Background'],
+        overflows: ['Headline'],
+      }),
+    );
     const { container } = render(
       <RenderPreviewPanel
         brandId={BRAND}
-        contract={rigged}
+        contract={CONTRACT}
         rows={rowWith('Hola')}
         rowId={ROW}
         renderSetId={SET}
       />,
     );
 
-    // The repaint comes first: nothing says which values the render used, so all are painted.
+    // The composition comes first; nothing says which values the render used, so all are sent.
     await waitFor(() => expect(badge(container)).toBe('Preview'));
-    expect(repainted(container)).toEqual(['headline', 'hero']);
-    expect(caption(container)).toContain("Based on 'Spain' render · 2h ago · stand-in font");
-    expect(caption(container)).toContain("can't tell what changed");
-    expect(caption(container)).toContain('Hero placement estimated');
-    // The colour has no box to paint.
-    expect(warning(container)).toBe('Not previewed: Background');
-    expect(container.querySelector('svg > image')?.getAttribute('href')).toBe(
-      'https://cdn.test/Square_1mjxxwb.png',
+    expect(screen.getByAltText('Composed preview').getAttribute('src')).toBe(COMPOSED);
+    expect(caption(container)).toBe(
+      "Based on 'Spain' render · 2h ago · Headline: resize rig approximated",
     );
+    expect(warning(container)).toBe('Headline overflows its box · Not previewed: Background');
+    expect(composePreviewMock).toHaveBeenCalledWith({
+      brandId: BRAND,
+      environment: 'Continuum_app',
+      templateKey: '133',
+      format: { id: 'square', ratio: '1:1', comp: 'Square' },
+      values: {
+        headline: 'Hola',
+        hero: { assetId: '77777777-7777-4777-8777-777777777777' },
+        bg: 'ff3366',
+      },
+      backdrop: { jobId: stale.id, fileName: 'Square_1mjxxwb.png' },
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'Rendered' }));
     expect(badge(container)).toBe('Rendered · before latest edits');
@@ -396,7 +426,7 @@ describe('RenderPreviewPanel', () => {
     expect(screen.queryByRole('button', { name: 'Estimate' })).toBeNull();
   });
 
-  test('a render made with exactly the row’s values is shown alone, whatever the revision says', async () => {
+  test('a render made with exactly the row’s values is shown alone, and nothing is composed', async () => {
     setRevision = 9;
     serveJobs([
       job(ROW, [file('Square_1mjxxwb.png')], {
@@ -421,11 +451,11 @@ describe('RenderPreviewPanel', () => {
 
     await waitFor(() => expect(badge(container)).toBe('Rendered · 2h ago'));
     expect(screen.queryByRole('group', { name: 'Picture' })).toBeNull();
-    expect(repainted(container)).toEqual([]);
     expect(warning(container)).toBe('');
+    expect(composePreviewMock).not.toHaveBeenCalled();
   });
 
-  test('a fork with no render of its own is previewed over its parent’s, repainting only what it changed', async () => {
+  test('a fork with no render of its own is composed over its parent’s', async () => {
     const FORK = '88888888-8888-4888-8888-888888888888';
     const [root] = rowWith('Hola');
     const rows: RequestRow[] = [
@@ -439,15 +469,15 @@ describe('RenderPreviewPanel', () => {
         media: {},
       },
     ];
-    serveJobs([
-      job(ROW, [file('Square_1mjxxwb.png')], {
-        renderInput: {
-          headline: 'Hola',
-          hero: { assetId: '77777777-7777-4777-8777-777777777777' },
-          bg: 'ff3366',
-        },
-      }),
-    ]);
+    const parent = job(ROW, [file('Square_1mjxxwb.png')], {
+      renderInput: {
+        headline: 'Hola',
+        hero: { assetId: '77777777-7777-4777-8777-777777777777' },
+        bg: 'ff3366',
+      },
+    });
+    serveJobs([parent]);
+    composeWith(composedOver());
     const { container } = render(
       <RenderPreviewPanel
         brandId={BRAND}
@@ -459,28 +489,31 @@ describe('RenderPreviewPanel', () => {
     );
 
     await waitFor(() => expect(badge(container)).toBe('Preview'));
-    expect(repainted(container)).toEqual(['headline']);
-    expect(container.querySelector('[data-repaint="headline"]')?.textContent).toContain('Adiós');
-    expect(caption(container)).toStartWith("Based on 'Spain' render · 2h ago · stand-in font");
-    expect(caption(container)).not.toContain("can't tell");
-    expect(warning(container)).toBe('Not previewed: Background');
+    expect(caption(container)).toStartWith("Based on 'Spain' render · 2h ago");
+    // The fork's own values over what it inherits, painted over the parent's render.
+    expect(composePreviewMock.mock.calls.at(-1)?.[0]).toMatchObject({
+      values: {
+        headline: 'Adiós',
+        bg: '#00ff00',
+        hero: { assetId: '77777777-7777-4777-8777-777777777777' },
+      },
+      backdrop: { jobId: parent.id, fileName: 'Square_1mjxxwb.png' },
+    });
     // No render of its own, so there is nothing to switch to.
     expect(screen.queryByRole('group', { name: 'Picture' })).toBeNull();
   });
 
   test('with no render anywhere in the set, the template’s newest is the backdrop', async () => {
+    const madrid = job('99999999-0000-4000-8000-000000000000', [file('Square_other.png')], {
+      label: 'Madrid',
+      renderInput: { headline: 'Hola', bg: 'ff3366' },
+    });
     listJobsMock.mockImplementation(async (_brandId, _limit, options) => ({
       // Another set's job is in no row-scoped or set-scoped read — only the template's.
-      items: options?.templateKey
-        ? [
-            job('99999999-0000-4000-8000-000000000000', [file('Square_other.png')], {
-              label: 'Madrid',
-              renderInput: { headline: 'Hola', bg: 'ff3366' },
-            }),
-          ]
-        : [],
+      items: options?.templateKey ? [madrid] : [],
       nextCursor: null,
     }));
+    composeWith(composedOver({ basedOn: { jobId: madrid.id, label: 'Madrid', finishedAt: null } }));
     const { container } = render(
       <RenderPreviewPanel
         brandId={BRAND}
@@ -493,70 +526,60 @@ describe('RenderPreviewPanel', () => {
 
     await waitFor(() => expect(badge(container)).toBe('Preview'));
     expect(caption(container)).toStartWith("Based on 'Madrid' render");
-    // The picked hero was not in that render; it has a thumbnail, so it is painted.
-    expect(repainted(container)).toEqual(['hero']);
+    expect(composePreviewMock.mock.calls.at(-1)?.[0].backdrop).toEqual({
+      jobId: madrid.id,
+      fileName: 'Square_other.png',
+    });
   });
 
-  test('the repaint takes its colours and alignment from the render’s own pixels', async () => {
-    // A white box with a centred black line of type, as a real render's headline reads.
-    const canvas = Object.getPrototypeOf(document.createElement('canvas')) as HTMLCanvasElement;
-    const getContext = canvas.getContext;
-    canvas.getContext = (() => ({
-      drawImage: () => undefined,
-      getImageData: (_x: number, _y: number, width: number, height: number) => {
-        const data = new Uint8ClampedArray(width * height * 4).fill(255);
-        for (let y = 60; y < 120; y++) {
-          for (let x = 300; x < 660; x++) data.set([20, 20, 20, 255], (y * width + x) * 4);
-        }
-        return { data, width, height };
-      },
-    })) as unknown as HTMLCanvasElement['getContext'];
-    try {
-      serveJobs([
-        job(ROW, [file('Square_1mjxxwb.png')], {
-          renderInput: {
-            headline: 'Hola',
-            hero: { assetId: '77777777-7777-4777-8777-777777777777' },
-            bg: 'ff3366',
-          },
-        }),
-      ]);
-      const { container } = render(
-        <RenderPreviewPanel
-          brandId={BRAND}
-          contract={CONTRACT}
-          rows={rowWith('Adiós')}
-          rowId={ROW}
-          renderSetId={SET}
-        />,
-      );
-
-      await waitFor(() =>
-        expect(
-          container.querySelector('[data-repaint="headline"] text')?.getAttribute('fill'),
-        ).toBe('#141414'),
-      );
-      const headline = container.querySelector('[data-repaint="headline"]');
-      expect(headline?.querySelector('rect')?.getAttribute('fill')).toBe('#ffffff');
-      expect(headline?.querySelector('text')?.getAttribute('text-anchor')).toBe('middle');
-      // Only the old ink is erased (the box is 60..1020 × 60..260; the ink sat at 360..720 × 120..180).
-      expect(Number(headline?.querySelector('rect')?.getAttribute('width'))).toBeLessThan(400);
-      expect(caption(container)).not.toContain('neutral fill');
-    } finally {
-      canvas.getContext = getContext;
-    }
-  });
-
-  test('a render whose pixels cannot be read is repainted in a neutral fill, and says so', async () => {
-    serveJobs([
-      job(ROW, [file('Square_1mjxxwb.png')], {
-        renderInput: {
-          headline: 'Hola',
-          hero: { assetId: '77777777-7777-4777-8777-777777777777' },
-          bg: 'ff3366',
-        },
+  test('with no render anywhere at all, the template is drawn whole', async () => {
+    composeWith(
+      composedOver({
+        source: 'template',
+        basedOn: null,
+        notes: ['drawn from the template: effects and masks are not drawn'],
       }),
-    ]);
+    );
+    const { container } = render(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={CONTRACT}
+        rows={rowWith('Hola')}
+        rowId={ROW}
+        renderSetId={null}
+      />,
+    );
+
+    await waitFor(() => expect(badge(container)).toBe('Composed from template'));
+    expect(caption(container)).toBe(
+      'Drawn from the template · drawn from the template: effects and masks are not drawn',
+    );
+    expect(composePreviewMock.mock.calls.at(-1)?.[0].backdrop).toBeNull();
+  });
+
+  test('typing keeps the last picture, marked as updating, and composes once it settles', async () => {
+    serveJobs([job(ROW, [file('Square_1mjxxwb.png')], { renderInput: { headline: 'Hola' } })]);
+    composeWith(composedOver());
+    const props = { brandId: BRAND, contract: CONTRACT, rowId: ROW, renderSetId: SET };
+    const { container, rerender } = render(
+      <RenderPreviewPanel {...props} rows={rowWith('Adiós')} />,
+    );
+    await waitFor(() => expect(badge(container)).toBe('Preview'));
+    const settledCalls = composePreviewMock.mock.calls.length;
+
+    rerender(<RenderPreviewPanel {...props} rows={rowWith('Adiós, ')} />);
+    rerender(<RenderPreviewPanel {...props} rows={rowWith('Adiós, amigos')} />);
+    expect(badge(container)).toBe('Preview · updating…');
+    expect(screen.getByAltText('Composed preview')).toBeTruthy();
+
+    await waitFor(() => expect(badge(container)).toBe('Preview'));
+    // One composition for the settled value, none for the keystrokes on the way.
+    expect(composePreviewMock.mock.calls.length).toBe(settledCalls + 1);
+    expect(composePreviewMock.mock.calls.at(-1)?.[0].values.headline).toBe('Adiós, amigos');
+  });
+
+  test('when no composition can be made, the last render or the measured boxes stand in, and say so', async () => {
+    serveJobs([job(ROW, [file('Square_1mjxxwb.png')], { renderInput: { headline: 'Hola' } })]);
     const { container } = render(
       <RenderPreviewPanel
         brandId={BRAND}
@@ -566,12 +589,26 @@ describe('RenderPreviewPanel', () => {
         renderSetId={SET}
       />,
     );
+    await waitFor(() => expect(warning(container)).toBe('Composed preview unavailable'));
+    expect(badge(container)).toBe('Rendered · before latest edits');
+    cleanup();
 
-    // This DOM has no 2D canvas, which is the same refusal a tainted one gives.
-    await waitFor(() => expect(caption(container)).toContain("neutral fill: the render's colours can't be read"));
-    const headline = container.querySelector('[data-repaint="headline"]');
-    expect(headline?.querySelector('rect')?.getAttribute('class')).toBe('fill-muted');
-    expect(headline?.querySelector('text')?.getAttribute('class')).toBe('fill-foreground');
+    // No render anywhere: the slot boxes, with the reason in the caption.
+    const bare = render(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={CONTRACT}
+        rows={rowWith('Adiós')}
+        rowId={ROW}
+        renderSetId={null}
+      />,
+    );
+    await waitFor(() =>
+      expect(caption(bare.container)).toBe(
+        'Composed preview unavailable — showing the measured boxes.',
+      ),
+    );
+    expect(badge(bare.container)).toBe('Estimate · wireframe');
   });
 
   test('the picked format stays picked when another row is selected', async () => {

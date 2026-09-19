@@ -6,8 +6,9 @@ import {
   type ApiRenderTemplateContract,
   type ApiRenderTemplateLayout,
   type ApiRenderVariable,
+  changedKeys,
+  type ForgeRenderPreview,
   motionLabel,
-  type PixelBox,
   readableLayerName,
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -22,16 +23,10 @@ import {
 } from '@/components/forge/FormatPreview';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { templateFrameQuery } from '@/components/forge/TemplateWireframe';
+import { useDebounce } from '@/hooks/useDebounce';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
-import {
-  type Backdrop,
-  changedKeys,
-  clampBox,
-  pickBackdrop,
-  sampleTones,
-  type Tone,
-} from './previewRepaint';
+import { type Backdrop, pickBackdrop } from './previewBackdrop';
 import {
   effectiveMedia,
   effectiveOutputIds,
@@ -40,29 +35,25 @@ import {
   type RequestRowMedia,
 } from './renderRequestRows';
 
-// One row, before a render is spent on it. When a real render of the format exists — this row's,
-// the nearest row's in the set, else the template's newest — it is the picture, and only the
-// slots whose value differs from what that render used are painted over it, in their measured
-// boxes, in colours read off the render. With no render anywhere, the row is drawn into the
-// template's slot boxes as a wireframe. Either way the overflow list says in words what the
-// picture cannot, rather than trusting anyone to spot a squeezed headline.
+// One row, before a render is spent on it. The picture is composed on the server — brand faces
+// never reach a browser, and the render bucket sends no CORS headers — from the closest real
+// render of the format (this row's, the nearest row's in the set, else the template's newest):
+// every layer the row did not change stays that render's own pixels, and each changed layer is
+// set by the template's parser in the template's faces, in its colours, where After Effects will
+// put it. With no render anywhere the template is drawn whole. The slot-box wireframe below is
+// only what shows while the first composition is on its way, or when none can be made.
 
 // ponytail: no text measurement — a flat 0.55em glyph and 1.2em line stand in for the real face,
-// kerning and AE's paragraph box. Add a server still endpoint when these wireframes mislead.
+// kerning and AE's paragraph box. The wireframe is the fallback; the composed preview measures.
 const GLYPH_EM = 0.55;
 const LINE_EM = 1.2;
 const MAX_SIZE_OF_BOX = 0.8;
 const SAMPLE_FLOOR_RATIO = 0.4;
 const FLOOR_PX = 12;
-// ponytail: a repainted slot's text is set in the app's own sans — a stand-in font, and the
-// caption says so. Its size is fitted to the box and capped at the height of the line it replaces
-// (a line's ink spans about this share of its font size), its alignment read from where the old
-// ink sat; weight, tracking and the template's face are not known. Upgrade: load the brand's
-// uploaded faces with the FontFace API and the slot's font from the parse.
-const INK_EM = 0.75;
+/** A keystroke waits this long before it costs a composition. */
+const COMPOSE_DEBOUNCE_MS = 400;
 
 type Box = ApiRenderTemplateLayout['boxes'][number];
-type Comp = ApiRenderTemplateLayout['comp'];
 
 const nameOf = (variable: ApiRenderVariable) => readableLayerName(variable.label);
 
@@ -370,132 +361,6 @@ function drawLayout(
   };
 }
 
-type Repaint = {
-  box: Box;
-  variable: ApiRenderVariable;
-  value: ApiRenderInputValue;
-  media: RequestRowMedia | undefined;
-};
-
-type Align = 'start' | 'middle' | 'end';
-
-/** Where the render's own text sat across its box: flush left, centred, or flush right. */
-function alignOf(ink: PixelBox | null, x0: number, x1: number): Align {
-  if (!ink) return 'start';
-  const left = ink[0] - x0;
-  const right = x1 - ink[2];
-  if (Math.abs(left - right) <= (x1 - x0) * 0.1) return 'middle';
-  return left < right ? 'start' : 'end';
-}
-
-/**
- * One changed slot painted over the render: what the render drew there erased in the box's own
- * fill, then the row's value in the render's ink. With no tone (the render's pixels could not be
- * read) the fill is neutral and the text hangs where the wireframe puts it.
- */
-function repaintSlot(
-  { box, variable, value, media }: Repaint,
-  comp: Comp,
-  tone: Tone | undefined,
-): JSX.Element {
-  const [x0, y0, x1, y1] = clampBox(box.box, comp);
-  const width = x1 - x0;
-  const height = y1 - y0;
-  const ground = tone ? { fill: tone.fill } : { className: 'fill-muted' };
-  const title = <title>{nameOf(variable)}</title>;
-
-  if (variable.kind === 'image' || variable.kind === 'video') {
-    return (
-      <g key={box.key} data-repaint={box.key}>
-        {title}
-        <rect x={x0} y={y0} width={width} height={height} {...ground} />
-        <image
-          x={x0}
-          y={y0}
-          width={width}
-          height={height}
-          href={media?.thumbnailUrl ?? undefined}
-          preserveAspectRatio={
-            variable.role === 'background_image' ? 'xMidYMid slice' : 'xMidYMid meet'
-          }
-        />
-      </g>
-    );
-  }
-
-  // Erase only the ink the render drew here, so a neighbour the measured box overlaps survives.
-  const ink = tone?.inkBox ?? null;
-  const pad = Math.max(2, height * 0.04);
-  const [e0, e1, e2, e3] = ink
-    ? [
-        Math.max(x0, ink[0] - pad),
-        Math.max(y0, ink[1] - pad),
-        Math.min(x1, ink[2] + pad),
-        Math.min(y1, ink[3] + pad),
-      ]
-    : [x0, y0, x1, y1];
-  const text = textOf(value);
-  const fit = fitText(variable, text, width, height);
-  const size =
-    tone?.lineHeight && !fit.overflow ? Math.min(fit.size, tone.lineHeight / INK_EM) : fit.size;
-  const lines =
-    size === fit.size ? fit.lines : wrapLines(text, Math.max(1, perLineAt(size, width)));
-  const align = alignOf(ink, x0, x1);
-  const x = align === 'middle' ? (x0 + x1) / 2 : align === 'end' ? x1 : x0;
-  const spread = (lines.length - 1) * size * LINE_EM;
-  // The new block centred where the old ink sat; with nothing sampled, hung from the box's top.
-  const wanted = ink ? (ink[1] + ink[3]) / 2 - spread / 2 + (size * INK_EM) / 2 : y0 + size;
-  const baseline = Math.max(y0 + size * INK_EM, Math.min(wanted, y1 - spread));
-  return (
-    <g key={box.key} data-repaint={box.key}>
-      {title}
-      <rect x={e0} y={e1} width={e2 - e0} height={e3 - e1} {...ground} />
-      <text
-        x={x}
-        y={baseline}
-        fontSize={size}
-        textAnchor={align}
-        {...(tone ? { fill: tone.ink } : { className: 'fill-foreground' })}
-      >
-        {lines.map((line, index) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: wrapped lines have no identity but position
-          <tspan key={index} x={x} dy={index === 0 ? 0 : size * LINE_EM}>
-            {line}
-          </tspan>
-        ))}
-      </text>
-    </g>
-  );
-}
-
-/** The render as the picture and each changed slot over it. One viewBox unit is one comp pixel. */
-function drawPreview(
-  comp: Comp,
-  url: string,
-  repaints: Repaint[],
-  tones: Record<string, Tone> | undefined,
-): JSX.Element {
-  return (
-    <svg
-      viewBox={`0 0 ${comp.width} ${comp.height}`}
-      className="block size-full"
-      role="img"
-      aria-label={`${comp.name} preview`}
-    >
-      <title>{`${comp.name} — ${comp.width}×${comp.height}`}</title>
-      <image
-        href={url}
-        x={0}
-        y={0}
-        width={comp.width}
-        height={comp.height}
-        preserveAspectRatio="none"
-      />
-      {repaints.map((repaint) => repaintSlot(repaint, comp, tones?.[repaint.box.key]))}
-    </svg>
-  );
-}
-
 const latestFinishedFor = (jobs: ApiRenderJob[], rowId: string): ApiRenderJob | null =>
   jobs
     .filter(
@@ -525,8 +390,16 @@ function sameAspect(ratio: string | null, comp: ApiRenderTemplateLayout['comp'])
 /** The most renders one set read returns: the list endpoint's own ceiling. */
 const SET_JOBS = 50;
 
-const VIDEO_ONLY =
-  'Estimate only: this format renders as video, and a video frame is not painted over yet.';
+/** Keys of one composition: everything but the settled values names WHAT is being previewed. */
+const composeKeyOf = (
+  subject: readonly (string | null)[],
+  settled: string,
+): readonly (string | null)[] => ['forge-preview', ...subject, settled];
+
+const sameSubject = (a: readonly unknown[], b: readonly unknown[]) =>
+  a.length === b.length && a.slice(0, -1).every((part, index) => part === b[index]);
+
+const COMPOSE_FAILED = 'Composed preview unavailable — showing the measured boxes.';
 
 export function RenderPreviewPanel({
   brandId,
@@ -548,7 +421,7 @@ export function RenderPreviewPanel({
   const lastKey =
     rowId && renderSetId ? forgeQueryKeys.renderJobRowLatest(brandId, renderSetId, rowId) : null;
   // One row-scoped read per row, cached: the newest finished render of the row on screen.
-  const { data: lastJob } = useQuery({
+  const { data: lastJob, isFetched: lastRead } = useQuery({
     queryKey: lastKey ?? [...forgeQueryKeys.renderJobs(brandId), 'row-latest', null],
     queryFn: () => findLastRender(brandId, renderSetId as string, rowId as string),
     enabled: lastKey !== null,
@@ -559,7 +432,7 @@ export function RenderPreviewPanel({
   const setKey = renderSetId
     ? [...forgeQueryKeys.renderJobs(brandId), 'set-finished', renderSetId]
     : null;
-  const { data: setJobs } = useQuery({
+  const { data: setJobs, isFetched: setRead } = useQuery({
     queryKey: setKey ?? [...forgeQueryKeys.renderJobs(brandId), 'set-finished', null],
     queryFn: async () =>
       (
@@ -572,7 +445,7 @@ export function RenderPreviewPanel({
     staleTime: FORGE_STALE_MS.active,
   });
   // The template's newest renders, through the read its card and sheet already share.
-  const { data: templateJobs } = useQuery({
+  const { data: templateJobs, isFetched: templateRead } = useQuery({
     ...templateFrameQuery(brandId, templateKey),
     enabled: rowId !== null,
     select: (response) => response.items.filter((job) => job.templateKey === templateKey),
@@ -596,7 +469,6 @@ export function RenderPreviewPanel({
     ? formats.filter((format) => scopedIds.length === 0 || scopedIds.includes(format.id))
     : formats;
   const format = rowFormats.find((entry) => entry.id === picked[templateKey]) ?? rowFormats[0];
-  const byKey = new Map(contract.variables.map((variable) => [variable.key, variable]));
 
   // The template-level layout is ONE comp; under a format of another ratio its boxes sit in the
   // wrong coordinate space and report overflow that does not exist.
@@ -604,9 +476,8 @@ export function RenderPreviewPanel({
     contract.outputs.find((output) => output.id === entry.id)?.layout ??
     (contract.layout && sameAspect(entry.ratio, contract.layout.comp) ? contract.layout : null);
 
-  /** The render under one format, what the row changed since it, and which changes can be painted. */
+  /** The render under one format, and which of the row's values it was not made with. */
   const planOf = (entry: PreviewFormat) => {
-    const layout = layoutOf(entry);
     const backdrop: Backdrop | null = row
       ? pickBackdrop({
           rowId: row.id,
@@ -619,51 +490,64 @@ export function RenderPreviewPanel({
         })
       : null;
     const renderInput = backdrop?.job.renderInput ?? null;
-    const changed = backdrop ? changedKeys(contract.variables, values, renderInput) : [];
-    const repaints: Repaint[] = [];
-    const notPreviewed: string[] = [];
-    for (const key of changed) {
-      const variable = byKey.get(key);
-      if (!variable) continue;
-      const box = layout?.boxes.find((candidate) => candidate.key === key);
-      const value = values[key];
-      // A colour recolours some layer nobody measured, and a picture needs its thumbnail.
-      const paintable =
-        variable.kind === 'image' || variable.kind === 'video'
-          ? Boolean(media[key]?.thumbnailUrl)
-          : variable.kind !== 'color';
-      if (box && value !== undefined && value !== '' && paintable) {
-        repaints.push({ box, variable, value, media: media[key] });
-      } else notPreviewed.push(nameOf(variable));
-    }
-    return { layout, backdrop, known: renderInput !== null, changed, repaints, notPreviewed };
+    return {
+      layout: layoutOf(entry),
+      backdrop,
+      known: renderInput !== null,
+      changed: backdrop ? changedKeys(contract.variables, values, renderInput) : [],
+    };
   };
 
-  // The picked format's backdrop, read once for the colours in every box a row could repaint —
-  // keyed by the file, not its signed URL, so re-signing or typing never re-reads the render.
+  // The picked format is composed once the row stops changing. The subject is part of what is
+  // debounced, so switching rows never composes one row's values over another's render.
   const current = row && format ? planOf(format) : null;
-  const toneSource = current?.backdrop && current.layout ? current : null;
-  const toneBoxes =
-    toneSource?.layout?.boxes.filter((box) => {
-      const variable = byKey.get(box.key);
-      return variable !== undefined && !variable.reserved && variable.kind !== 'color';
-    }) ?? [];
-  const tones = useQuery({
-    queryKey: [
-      'forge-preview-tones',
-      toneSource?.backdrop?.job.id ?? null,
-      toneSource?.backdrop?.file.fileName ?? null,
-      toneSource?.layout?.comp ?? null,
-    ],
-    queryFn: () =>
-      sampleTones(
-        toneSource?.backdrop?.file.url as string,
-        toneSource?.layout?.comp as Comp,
-        toneBoxes,
-      ),
-    enabled: toneSource !== null && toneBoxes.length > 0,
+  const subject = [
+    brandId,
+    contract.template.environment,
+    templateKey,
+    format?.id ?? null,
+    row?.id ?? null,
+    current?.backdrop?.job.id ?? null,
+    current?.backdrop?.file.fileName ?? null,
+  ];
+  const live = JSON.stringify([subject, values]);
+  const settled = useDebounce(live, COMPOSE_DEBOUNCE_MS);
+  const settledValues = (() => {
+    const [settledSubject, settledRow] = JSON.parse(settled) as [unknown[], unknown];
+    return sameSubject([...settledSubject, null], [...subject, null])
+      ? (settledRow as Record<string, ApiRenderInputValue>)
+      : null;
+  })();
+  // Nothing is composed until every render the backdrop could come from has been read: before
+  // then "no render anywhere" is only "not loaded yet", and would draw the template whole.
+  const backdropKnown =
+    (lastKey === null || lastRead) && (setKey === null || setRead) && templateRead;
+  const needsCompose =
+    backdropKnown && current !== null && (current.backdrop === null || current.changed.length > 0);
+  const composeKey = composeKeyOf(subject, settled);
+  const composed = useQuery({
+    queryKey: composeKey,
+    queryFn: (): Promise<ForgeRenderPreview> =>
+      apiRendersApi.composePreview({
+        brandId,
+        environment: contract.template.environment,
+        templateKey,
+        format: {
+          id: (format as PreviewFormat).id,
+          ratio: (format as PreviewFormat).ratio,
+          comp: (format as PreviewFormat).comp?.name ?? null,
+        },
+        values: settledValues ?? {},
+        backdrop: current?.backdrop
+          ? { jobId: current.backdrop.job.id, fileName: current.backdrop.file.fileName }
+          : null,
+      }),
+    enabled: needsCompose && settledValues !== null,
     staleTime: Number.POSITIVE_INFINITY,
     retry: false,
+    // Typing keeps the last settled picture on screen; another row or format never borrows it.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery && sameSubject(previousQuery.queryKey, composeKey) ? previous : undefined,
   });
 
   // A realtime job is a signal to re-read, never data to merge: only the list read re-signs URLs.
@@ -699,48 +583,54 @@ export function RenderPreviewPanel({
   }
 
   const motion = motionLabel(contract.template.motion);
+  const pending = composed.isFetching || settled !== live;
 
-  const previewOf = (plan: ReturnType<typeof planOf>, backdrop: Backdrop, entry: PreviewFormat) => {
-    const sampled = entry.id === format?.id ? tones : null;
-    const comp = plan.layout?.comp;
-    const texts = plan.repaints.some(
-      (repaint) => repaint.variable.kind !== 'image' && repaint.variable.kind !== 'video',
-    );
-    const notes = [
-      ...(plan.known && plan.changed.length === 0 ? ['same values'] : []),
-      ...(texts ? ['stand-in font'] : []),
-      ...(plan.known ? [] : ["can't tell what changed"]),
-      ...plan.repaints
-        .filter((repaint) => repaint.variable.placement?.rigged)
-        .map((repaint) => `${nameOf(repaint.variable)} placement estimated`),
-      ...(sampled?.isError && plan.repaints.length > 0
-        ? ["neutral fill: the render's colours can't be read"]
-        : []),
-    ];
-    const frame: PreviewRepaint = {
+  /** The row as the server composed it — only ever for the picked format. */
+  const composedFrame = (backdrop: Backdrop | null): PreviewRepaint | null => {
+    const data = composed.data;
+    if (!data) return null;
+    return {
       mode: 'preview',
-      at: backdrop.job.finishedAt ?? backdrop.job.updatedAt,
-      basedOn: backdrop.job.label ?? backdrop.job.templateName,
-      notes,
-      node: comp ? (
-        drawPreview(comp, backdrop.file.url, plan.repaints, sampled?.data)
-      ) : (
-        // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
-        <img
-          alt={`${backdrop.job.label ?? 'Render'} preview`}
-          src={backdrop.file.url}
-          className="size-full object-contain"
-        />
+      at: data.source === 'render' ? (backdrop?.job.finishedAt ?? null) : null,
+      basedOn:
+        data.source === 'render'
+          ? (data.basedOn?.label ?? backdrop?.job.label ?? backdrop?.job.templateName ?? 'last')
+          : null,
+      notes: data.notes,
+      pending,
+      node: (
+        // biome-ignore lint/performance/noImgElement: a data URL composed per edit, not a Next-optimisable asset
+        <img alt="Composed preview" src={data.image} className="size-full object-contain" />
       ),
     };
-    return frame;
   };
 
-  /** What one format shows, and what it cannot show, in words. */
+  /** A render made with exactly these values is the preview as it stands. */
+  const unchangedFrame = (backdrop: Backdrop): PreviewRepaint => ({
+    mode: 'preview',
+    at: backdrop.job.finishedAt ?? backdrop.job.updatedAt,
+    basedOn: backdrop.job.label ?? backdrop.job.templateName,
+    notes: ['same values'],
+    node:
+      backdrop.file.kind === 'video' ? (
+        <video controls src={backdrop.file.url} className="size-full object-contain">
+          <track kind="captions" />
+        </video>
+      ) : (
+        // biome-ignore lint/performance/noImgElement: a signed render URL, not a Next-optimisable asset
+        <img alt="Render" src={backdrop.file.url} className="size-full object-contain" />
+      ),
+  });
+
+  /** What the picked format shows, and what it cannot show, in words. */
   const viewOf = (entry: PreviewFormat): { frame: PreviewFrame; warning: string | null } => {
     const plan = planOf(entry);
     const drawing = plan.layout ? drawLayout(plan.layout, contract.variables, values, media) : null;
-    const preview = plan.backdrop ? previewOf(plan, plan.backdrop, entry) : null;
+    const composedPreview = composedFrame(plan.backdrop);
+    const preview =
+      plan.backdrop && plan.known && plan.changed.length === 0
+        ? unchangedFrame(plan.backdrop)
+        : composedPreview;
     const own = lastJob ? fileForFormat(lastJob.outputs, formats, entry.id) : null;
     let frame: PreviewFrame;
     if (lastJob && own) {
@@ -770,23 +660,41 @@ export function RenderPreviewPanel({
     } else if (preview) {
       frame = preview;
     } else if (drawing) {
-      const videoOnly = [lastJob, ...(setJobs ?? []), ...(templateJobs ?? [])].some(
-        (job) => job && fileForFormat(job.outputs, formats, entry.id)?.kind === 'video',
-      );
       frame = {
         mode: 'estimate',
         node: drawing.node,
-        ...(videoOnly ? { caption: VIDEO_ONLY } : {}),
+        caption: composed.isError
+          ? COMPOSE_FAILED
+          : needsCompose
+            ? 'Composing the preview…'
+            : undefined,
       };
     } else {
-      frame = { mode: 'none' };
+      frame = {
+        mode: 'none',
+        message: composed.isError
+          ? COMPOSE_FAILED
+          : needsCompose
+            ? 'Composing the preview…'
+            : undefined,
+      };
     }
-    const previewed = frame.mode === 'preview' || (frame.mode === 'rendered' && frame.preview);
+    const showsComposed =
+      composedPreview !== null &&
+      preview === composedPreview &&
+      (frame === preview || (frame.mode === 'rendered' && frame.preview === preview));
+    const data = showsComposed ? composed.data : undefined;
     const problems = [
-      ...(drawing?.overflows ?? []),
-      ...(previewed && plan.notPreviewed.length
-        ? [`Not previewed: ${plan.notPreviewed.join(', ')}`]
+      // Whatever stands in for it, a composition that failed is said, not silently skipped.
+      ...(composed.isError && needsCompose && frame.mode !== 'estimate' && frame.mode !== 'none'
+        ? ['Composed preview unavailable']
         : []),
+      ...(data
+        ? [
+            ...data.overflows.map((label) => `${label} overflows its box`),
+            ...(data.notPreviewed.length ? [`Not previewed: ${data.notPreviewed.join(', ')}`] : []),
+          ]
+        : (drawing?.overflows ?? [])),
     ];
     return { frame, warning: problems.join(' · ') || null };
   };

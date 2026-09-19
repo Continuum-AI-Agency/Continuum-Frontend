@@ -11,8 +11,10 @@ import {
   apiRenderTemplateListResponseSchema,
   apiRenderTemplateSummarySchema,
   apiRenderVariableMapSchema,
+  type ForgeRenderPreviewRequest,
   type ForgeRenderSetRow,
-  readableLayerName,
+  forgeRenderPreviewRequestSchema,
+  forgeRenderPreviewSchema,
   type SlotPlacement,
   slotPlacementSchema,
 } from '@continuum/contracts';
@@ -36,25 +38,25 @@ import {
 import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 
 // ---------------------------------------------------------------------------
-// forge:studio:e2e:bench — preview-r2: the Render tab previews a row as a REAL render with only
-// the slots the row changed painted over it.
+// forge:studio:e2e:bench — preview-r2: the Render tab previews a row as a REAL render with the
+// row's changes composed over it on the server.
 //
 // The backdrop is real: the newest finished StarCraft render of template 133 (a 1:1 still), read
-// from prod with the service role (read-only), its bytes fetched and served to the browser from a
-// fixture host by `context.route` — once WITH CORS headers (the prod hosts send
-// `access-control-allow-origin: *`; checked with curl on 2026-09-18) and once allowing only another
-// origin, to prove the tainted-canvas fallback. The slot boxes are that template version's real parse placements, and
-// the input the render was made with is that job's real `render_input` column. Everything under
-// /api/ai-studio/** is answered by contract-parsed fixtures (the backend is a dead port).
+// from prod with the service role (read-only), served to the browser from a fixture host. The slot
+// boxes are that template version's real parse placements, and the input the render was made with
+// is that job's real `render_input` column. Everything under /api/ai-studio/** is answered by
+// contract-parsed fixtures (the backend is a dead port) — including POST /renders/preview, whose
+// request is parsed with the real contract and whose answer carries the real render's bytes. The
+// composition itself is graded against real renders by `forge:preview:e2e:bench` (Backend); this
+// proves the tab asks for the right composition and shows it.
 //
-//   R1  "Base" rendered with exactly its values → the render alone, no toggle.
-//   R2  "Base · new copy" (a child: new text in one boxed slot + a new colour) → Preview over
-//       Base's render; the slot is repainted in colours sampled off the render; the colour is
-//       listed "Not previewed"; and — against "Base · same", a child with no changes — pixels
-//       differ ONLY inside that slot's measured box.
-//   R3  "Solo", whose render recorded no input and predates the set's revision, served to another
-//       origin only → Preview first, "can't tell what changed", a neutral fill that says so;
-//       Rendered is one click away.
+//   R1  "Base" rendered with exactly its values → the render alone, no toggle, nothing composed.
+//   R2  "Base · new copy" (a child: new text + a new colour) → one composition over Base's render,
+//       sent the child's effective values and Base's file; shown as the Preview with the server's
+//       notes. "Base · same" (no changes) → Base's render as the preview, "same values", nothing
+//       composed.
+//   R3  "Solo", whose render recorded no input and predates the set's revision → composed over its
+//       own render first; Rendered is one click away.
 //
 // Usage: cd Continuum-Frontend && FORGE_STUDIO_E2E_PORT=3412 \
 //   FORGE_STUDIO_DIST_DIR=.next/forge-studio-e2e-s2 \
@@ -76,6 +78,8 @@ const RENDER_HOST = 'https://render-fixture.continuum.test';
 const NEW_COPY = 'CARRIER HAS ARRIVED';
 const NEW_KEY_COLOUR = '#ff00aa';
 const LABELS = { base: 'Base', same: 'Base · same', changed: 'Base · new copy', solo: 'Solo' };
+/** What the fixture composition says about itself, as the server would. */
+const COMPOSED_NOTE = 'Ref_descripción: resize rig approximated';
 
 // --- the real render -------------------------------------------------------------------------
 
@@ -366,16 +370,44 @@ async function dressAsRealRender(
       });
     },
   );
-  const json = (body: unknown) => ({
-    status: 200,
+  const json = (body: unknown, status = 200) => ({
+    status,
     headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' },
     body: JSON.stringify(body),
   });
+  const composed: ForgeRenderPreviewRequest[] = [];
   await context.route(
     (url) => url.pathname.startsWith('/api/ai-studio/'),
     async (route) => {
       const request = route.request();
       const url = new URL(request.url());
+      if (request.method() === 'POST' && url.pathname === '/api/ai-studio/renders/preview') {
+        const body = forgeRenderPreviewRequestSchema.safeParse(request.postDataJSON());
+        if (!body.success) {
+          fixtures.violations.push(`POST /renders/preview: ${body.error.message}`);
+          return route.fulfill(json({ error: 'invalid_payload' }, 400));
+        }
+        composed.push(body.data);
+        const backdrop = jobs.find((job) => job.id === body.data.backdrop?.jobId) ?? null;
+        return route.fulfill(
+          json(
+            forgeRenderPreviewSchema.parse({
+              image: `data:${real.contentType};base64,${real.bytes.toString('base64')}`,
+              width: shape.comp.width,
+              height: shape.comp.height,
+              comp: shape.comp.name,
+              at: 0.0167,
+              source: backdrop ? 'render' : 'template',
+              basedOn: backdrop
+                ? { jobId: backdrop.id, label: backdrop.label, finishedAt: backdrop.finishedAt }
+                : null,
+              notes: [COMPOSED_NOTE],
+              notPreviewed: [],
+              overflows: [],
+            }),
+          ),
+        );
+      }
       if (request.method() !== 'GET') return route.fallback();
       if (url.pathname === '/api/ai-studio/renders/templates') {
         return route.fulfill(
@@ -405,6 +437,7 @@ async function dressAsRealRender(
       return route.fallback();
     },
   );
+  return { composed, jobs };
 }
 
 // --- session, envelope -------------------------------------------------------------------------
@@ -545,79 +578,9 @@ async function shoot(page: Page, name: string): Promise<void> {
 const badgeOf = (preview: Locator) => preview.locator('[data-slot="format-preview-badge"]');
 const captionOf = (preview: Locator) => preview.locator('[data-slot="format-preview-caption"]');
 const warningOf = (preview: Locator) => preview.locator('[data-slot="format-preview-warning"]');
-const svgOf = (preview: Locator) => preview.locator('[data-slot="format-preview-frame"] svg');
-
-const lumaOf = (hex: string) => {
-  const [r = 0, g = 0, b = 0] = [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
-  return 0.299 * r + 0.587 * g + 0.114 * b;
-};
-
-/** A screenshot of the preview's SVG, once two in a row agree (the backdrop has painted). */
-async function settledShot(svg: Locator): Promise<Buffer> {
-  let previous = await svg.screenshot();
-  for (let attempt = 0; attempt < 20; attempt++) {
-    await svg.page().waitForTimeout(250);
-    const next = await svg.screenshot();
-    if (next.equals(previous)) return next;
-    previous = next;
-  }
-  throw new Error('[preview-r2] the preview never settled');
-}
-
-/** Pixels (max channel delta > 32) that differ inside and outside one screenshot-space box. */
-async function diffShots(
-  page: Page,
-  a: Buffer,
-  b: Buffer,
-  box: [number, number, number, number],
-): Promise<{ inside: number; outside: number; strays: number[][]; size: string }> {
-  return page.evaluate(
-    async ({ first, second, box }) => {
-      const pixels = async (base64: string) => {
-        const blob = await (await fetch(`data:image/png;base64,${base64}`)).blob();
-        const bitmap = await createImageBitmap(blob);
-        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-        const context = canvas.getContext('2d') as OffscreenCanvasRenderingContext2D;
-        context.drawImage(bitmap, 0, 0);
-        return context.getImageData(0, 0, bitmap.width, bitmap.height);
-      };
-      const [one, two] = await Promise.all([pixels(first), pixels(second)]);
-      if (one.width !== two.width || one.height !== two.height) {
-        return {
-          inside: -1,
-          outside: -1,
-          strays: [],
-          size: `${one.width}x${one.height} vs ${two.width}x${two.height}`,
-        };
-      }
-      let inside = 0;
-      let outside = 0;
-      const strays: number[][] = [];
-      for (let y = 0; y < one.height; y++) {
-        for (let x = 0; x < one.width; x++) {
-          const at = (y * one.width + x) * 4;
-          const delta = Math.max(
-            Math.abs(one.data[at]! - two.data[at]!),
-            Math.abs(one.data[at + 1]! - two.data[at + 1]!),
-            Math.abs(one.data[at + 2]! - two.data[at + 2]!),
-          );
-          if (delta <= 32) continue;
-          if (x >= box[0] && x < box[2] && y >= box[1] && y < box[3]) inside += 1;
-          else {
-            outside += 1;
-            if (strays.length < 8) strays.push([x, y, delta]);
-          }
-        }
-      }
-      return { inside, outside, strays, size: `${one.width}x${one.height}` };
-    },
-    { first: a.toString('base64'), second: b.toString('base64'), box },
-  );
-}
-
 // --- the run -------------------------------------------------------------------------------------
 
-test.describe('Forge row preview — a real render, repainted only where the row changed', () => {
+test.describe('Forge row preview — a real render, the row composed over it', () => {
   test.skip(LIVE, 'fixtures only');
 
   // biome-ignore lint/correctness/noEmptyPattern: Playwright hook signature
@@ -650,7 +613,7 @@ test.describe('Forge row preview — a real render, repainted only where the row
     opened.push(context);
     const fixtures = await installForgeFixtures(context);
     activeFixtures.push(fixtures);
-    await dressAsRealRender(context, fixtures, real, shape);
+    const dressed = await dressAsRealRender(context, fixtures, real, shape);
     const page = await openForge(context);
     const corsUrl = `${RENDER_HOST}/cors/${real.fileName}`;
 
@@ -660,76 +623,46 @@ test.describe('Forge row preview — a real render, repainted only where the row
     await expect(preview.getByRole('img', { name: 'Last render' })).toHaveAttribute('src', corsUrl);
     await expect(preview.getByRole('group', { name: 'Picture' })).toHaveCount(0);
     await expect(warningOf(preview)).toHaveText('');
+    expect(dressed.composed, 'nothing to compose for a render of these very values').toEqual([]);
     await shoot(page, 'r1-base');
 
-    // R2 — a child with a new description and a new key colour, over Base's render.
+    // R2 — a child with a new description and a new key colour, composed over Base's render.
     await selectRow(page, LABELS.changed);
     await expect(badgeOf(preview)).toHaveText('Preview');
-    const repaint = preview.locator(`[data-repaint="${shape.changedKey}"]`);
-    await expect(repaint.locator('text')).toHaveText(NEW_COPY);
-    // Colours sampled off the render: the description sits dark on white.
-    await expect(repaint.locator('rect')).toHaveAttribute('fill', /^#[0-9a-f]{6}$/);
-    const fill = (await repaint.locator('rect').getAttribute('fill')) ?? '';
-    const ink = (await repaint.locator('text').getAttribute('fill')) ?? '';
-    console.log(`[preview-r2] ${shape.changedKey} sampled fill ${fill} ink ${ink}`);
-    expect(lumaOf(fill), 'the fill is the render’s own light ground').toBeGreaterThan(200);
-    expect(lumaOf(ink), 'the ink is the render’s own dark type').toBeLessThan(100);
-    await expect(preview.locator('[data-repaint]')).toHaveCount(1);
-    await expect(captionOf(preview)).toContainText(
-      `Based on '${LABELS.base}' render · 2h ago · stand-in font`,
+    await expect(preview.getByRole('img', { name: 'Composed preview' })).toHaveAttribute(
+      'src',
+      /^data:image\//,
     );
-    await expect(captionOf(preview)).not.toContainText('neutral fill');
-    await expect(warningOf(preview)).toContainText(
-      `Not previewed: ${readableLayerName(shape.colourKey)}`,
+    const [baseJob, soloJob] = dressed.jobs;
+    const sent = dressed.composed.at(-1);
+    expect(sent?.backdrop).toEqual({ jobId: baseJob?.id, fileName: real.fileName });
+    expect(sent?.format).toEqual({ id: '1:1', ratio: '1:1', comp: null });
+    expect(sent?.values[shape.changedKey]).toBe(NEW_COPY);
+    expect(sent?.values[shape.colourKey]).toBe(NEW_KEY_COLOUR);
+    await expect(captionOf(preview)).toHaveText(
+      `Based on '${LABELS.base}' render · 2h ago · ${COMPOSED_NOTE}`,
     );
     await expect(preview.getByRole('group', { name: 'Picture' })).toHaveCount(0);
     await shoot(page, 'r2-changed');
-    const svg = svgOf(preview);
-    const changedShot = await settledShot(svg);
-    const geometry = await svg.evaluate((element) => {
-      const rect = element.getBoundingClientRect();
-      return { width: rect.width, height: rect.height };
-    });
 
+    const before = dressed.composed.length;
     await selectRow(page, LABELS.same);
     await expect(badgeOf(preview)).toHaveText('Preview');
-    await expect(captionOf(preview)).toContainText(
+    await expect(captionOf(preview)).toHaveText(
       `Based on '${LABELS.base}' render · 2h ago · same values`,
     );
-    await expect(preview.locator('[data-repaint]')).toHaveCount(0);
-    const sameShot = await settledShot(svg);
+    await expect(preview.getByRole('img', { name: 'Render' })).toHaveAttribute('src', corsUrl);
+    expect(dressed.composed.length, 'a row with no changes costs no composition').toBe(before);
 
-    // The comp box mapped into the screenshot (viewBox `meet`), with a 3px anti-aliasing margin.
-    const scale = Math.min(geometry.width / shape.comp.width, geometry.height / shape.comp.height);
-    const offsetX = (geometry.width - shape.comp.width * scale) / 2;
-    const offsetY = (geometry.height - shape.comp.height * scale) / 2;
-    const [x0, y0, x1, y1] = shape.changedBox;
-    const screenBox: [number, number, number, number] = [
-      offsetX + x0 * scale - 3,
-      offsetY + y0 * scale - 3,
-      offsetX + x1 * scale + 3,
-      offsetY + y1 * scale + 3,
-    ];
-    const diff = await diffShots(page, sameShot, changedShot, screenBox);
-    console.log(
-      `[preview-r2] diff ${diff.size} box ${screenBox.map((n) => n.toFixed(1)).join(',')} inside ${diff.inside} outside ${diff.outside} strays ${JSON.stringify(diff.strays)}`,
-    );
-    expect(diff.inside, 'the changed description is repainted').toBeGreaterThan(200);
-    expect(diff.outside, 'nothing outside the changed box moved').toBe(0);
-
-    // R3 — a render with no recorded input, older than the set's revision, served without CORS.
+    // R3 — a render with no recorded input, older than the set's revision: composed over it first.
     await selectRow(page, LABELS.solo);
     await expect(badgeOf(preview)).toHaveText('Preview');
     await expect(captionOf(preview)).toContainText(`Based on '${LABELS.solo}' render · 1d ago`);
-    await expect(captionOf(preview)).toContainText("can't tell what changed");
-    await expect(captionOf(preview)).toContainText(
-      "neutral fill: the render's colours can't be read",
-    );
-    await expect(preview.locator(`[data-repaint="${shape.changedKey}"] rect`)).toHaveAttribute(
-      'class',
-      'fill-muted',
-    );
-    await shoot(page, 'r3-solo-neutral');
+    expect(dressed.composed.at(-1)?.backdrop).toEqual({
+      jobId: soloJob?.id,
+      fileName: real.fileName,
+    });
+    await shoot(page, 'r3-solo');
     await preview
       .getByRole('group', { name: 'Picture' })
       .getByRole('button', { name: 'Rendered' })

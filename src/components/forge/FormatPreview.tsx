@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
 // size the caller sets; the frame inside it is the largest box of the format's aspect that fits
 // both axes, so switching 16:9 → 9:16 or dragging a pane never clips it or moves anything else.
 // The badge always says where the picture came from: a finished file, that file with the row's
-// edits painted over it, or a drawing of the boxes.
+// edits composed over it, the template drawn whole, or a drawing of the boxes.
 
 export type PreviewFormat = RenderOutputFormatCandidate & {
   label: string;
@@ -27,16 +27,21 @@ export type PreviewFormat = RenderOutputFormatCandidate & {
   height: number | null;
 };
 
-/** A real render with the row's changes painted over it. */
+/**
+ * The row composed on the server: a real render with the row's changes painted over it, or, with
+ * no render anywhere, the template drawn whole.
+ */
 export type PreviewRepaint = {
   mode: 'preview';
-  /** When the render underneath was finished. */
-  at: string;
+  /** When the render underneath was finished; null when drawn from the template alone. */
+  at: string | null;
   /** Whose render is underneath, as the caption names it: "Based on '{basedOn}' render". */
-  basedOn: string;
+  basedOn: string | null;
   node: ReactNode;
-  /** What the repaint could not match, each said once: "stand-in font", "can't tell what changed". */
+  /** What the picture could not match, each said once: "Headline: resize rig approximated". */
   notes?: string[];
+  /** A newer composition is on its way; this one shows the last settled edit. */
+  pending?: boolean;
 };
 
 export type PreviewFrame =
@@ -199,7 +204,11 @@ export function FormatPreview({
         ? 'Rendered · before latest edits'
         : `Rendered · ${formatRelativeTime(shown.at)}`
       : shown.mode === 'preview'
-        ? 'Preview'
+        ? shown.pending
+          ? 'Preview · updating…'
+          : shown.basedOn === null
+            ? 'Composed from template'
+            : 'Preview'
         : shown.mode === 'estimate'
           ? 'Estimate · wireframe'
           : 'No preview';
@@ -211,7 +220,9 @@ export function FormatPreview({
         ? shown.caption
         : shown.mode === 'preview'
           ? [
-              `Based on '${shown.basedOn}' render · ${formatRelativeTime(shown.at)}`,
+              shown.basedOn === null
+                ? 'Drawn from the template'
+                : `Based on '${shown.basedOn}' render${shown.at ? ` · ${formatRelativeTime(shown.at)}` : ''}`,
               ...(shown.notes ?? []),
             ].join(' · ')
           : null;

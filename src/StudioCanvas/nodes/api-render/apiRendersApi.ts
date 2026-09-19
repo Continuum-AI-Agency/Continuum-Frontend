@@ -8,6 +8,7 @@ import {
   API_RENDER_INPUT_SETS_ROUTE,
   API_RENDER_JOBS_ROUTE,
   API_RENDER_PREFLIGHT_ROUTE,
+  API_RENDER_PREVIEW_ROUTE,
   API_RENDER_SETS_ROUTE,
   API_RENDER_SLACK_CHANNELS_ROUTE,
   API_RENDER_SUGGEST_ROWS_ROUTE,
@@ -56,9 +57,12 @@ import {
   type ForgeRenderDriveSnapshotRequest,
   type ForgeRenderImportPreview,
   type ForgeRenderImportPreviewRequest,
+  type ForgeRenderPreview,
+  type ForgeRenderPreviewRequest,
   type ForgeRenderSet,
   forgeRenderDriveSnapshotSchema,
   forgeRenderImportPreviewSchema,
+  forgeRenderPreviewSchema,
   forgeRenderSetListResponseSchema,
   forgeRenderSetSchema,
   type UpdateForgeRenderSetRequest,
@@ -117,6 +121,15 @@ export const apiRendersApi = {
       method: 'POST',
       body: input,
       schema: apiRenderPreflightResponseSchema,
+    });
+  },
+  /** One row composed over the closest real render (or drawn whole from the template) on the server. */
+  composePreview(input: ForgeRenderPreviewRequest) {
+    return http.request<ForgeRenderPreview>({
+      path: API_RENDER_PREVIEW_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: forgeRenderPreviewSchema,
     });
   },
   createJob(input: ApiRenderCreateJobRequest) {
