@@ -48,10 +48,7 @@ type CreativeRecommendationCardProps = {
   generating: boolean;
   /** Why generation is not possible right now (no workflow fits, request failed). */
   generateNote: string | null;
-  /** Nothing published can run: offer to build the simplest flow that can. */
-  flowOffered: boolean;
-  onCreateFlow: () => void;
-  creatingFlow: boolean;
+
   /** Where a finished variant can be implemented: this ad set first, then the same audience. */
   targets: readonly ImplementTarget[];
   onImplement: (job: CreativeSwapJobRow, assetId: string, target: ImplementTarget) => void;
@@ -174,9 +171,6 @@ export function CreativeRecommendationCard({
   onGenerate,
   generating,
   generateNote,
-  flowOffered,
-  onCreateFlow,
-  creatingFlow,
   targets,
   onImplement,
   implementingKey,
@@ -386,47 +380,6 @@ export function CreativeRecommendationCard({
           </Button>
         ) : null}
         {generateNote ? <p className="text-3xs text-muted-foreground">{generateNote}</p> : null}
-        {flowOffered ? (
-          <div
-            className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-2.5 text-2xs"
-            data-testid="flash-flow-offer"
-          >
-            <p className="font-medium text-foreground">Create a simple flow for this brand?</p>
-            <p className="text-muted-foreground">
-              One image generator with its prompt, negative prompt and reference handles open as
-              ports. It takes the brief written from this card (angle, audience, offer) and returns
-              four candidates in the placement ratio. It is published as a Creative+ pipeline you
-              can open and grow in AI Studio.
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              <Button
-                className="h-7 px-2.5 text-2xs"
-                disabled={creatingFlow}
-                onClick={onCreateFlow}
-                size="sm"
-                type="button"
-              >
-                {creatingFlow ? (
-                  <Loader2Icon className="size-3 animate-spin" />
-                ) : (
-                  <SparklesIcon className="size-3" />
-                )}
-                {creatingFlow ? 'Creating…' : 'Create flow and generate'}
-              </Button>
-              <a
-                className={cn(
-                  buttonVariants({ variant: 'ghost', size: 'sm' }),
-                  'h-7 px-2.5 text-2xs',
-                )}
-                href="/ai-studio"
-                rel="noreferrer"
-                target="_blank"
-              >
-                Build my own in AI Studio
-              </a>
-            </div>
-          </div>
-        ) : null}
       </section>
     </div>
   );
