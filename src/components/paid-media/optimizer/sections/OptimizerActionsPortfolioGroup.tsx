@@ -21,6 +21,8 @@
 import {
   type AdSetSnapshot,
   type AdsetAd,
+  type AudienceProposalRow,
+  type ConvertCboResponse,
   type CreativeSwapJobRow,
   type CycleItemRow,
   explainFlashUnfit,
@@ -78,16 +80,21 @@ import {
   useAdAccountCurrency,
   useApplyAdsetStatus,
   useApplyApproved,
+  useAudienceProposalMutations,
+  useConvertCbo,
   useFlashCreativeMutations,
   useOptimizerAccountSnapshots,
   useOptimizerActions,
   useOptimizerAdsetAds,
+  useOptimizerAudienceProposals,
   useOptimizerCreativeSwapJobs,
   useOptimizerEnrolledAdsets,
   useOptimizerMutations,
   useOptimizerPerformance,
   useOptimizerPortfolioAudiences,
 } from '../useOptimizerData';
+import { AudienceRecommendationCard } from './AudienceRecommendationCard';
+import { audienceCardView, isAudienceRecommendation } from './audienceCardModel';
 import { CreativeRecommendationCard } from './CreativeRecommendationCard';
 import { isCreativeRecommendation, standingChart, subjectAdId } from './creativeCardModel';
 import {
@@ -105,12 +112,10 @@ import { RecEvidenceChart } from './RecEvidenceChart';
 import { RecommendationInsight } from './RecommendationInsight';
 import {
   asOfLine,
-  audienceExpansionPrompt,
   evidenceLine,
   formatSettingsValue,
   impactLabel,
   impactPerDay,
-  jainaPromptHref,
   queueSummary,
   type SettingsPatch,
   settingsFieldLabel,
@@ -168,6 +173,28 @@ type EvidenceContext = {
   currency: string | null;
   /** The objective's result, lower-cased, for the creative comparison chart. */
   resultWord: string;
+  /** Audience proposals for the brand and the actions the audience card takes on them. */
+  audienceProposals: readonly AudienceProposalRow[];
+  audienceActions: {
+    request: (recId: string) => void;
+    approve: (input: {
+      proposalId: string;
+      budgetMinorUnits: number;
+      activate: boolean;
+      mode: 'replace' | 'add';
+    }) => void;
+    cancel: (proposalId: string) => void;
+    activate: (proposalId: string) => void;
+    undo: (proposalId: string) => void;
+    convertCbo: (campaignId: string, dryRun: boolean) => void;
+  };
+  audienceBusy: {
+    requestingRecId: string | null;
+    approvingId: string | null;
+    busyId: string | null;
+    convertingCbo: boolean;
+  };
+  cboPreviewByCampaign: ReadonlyMap<string, ConvertCboResponse>;
 };
 
 type SettingsActions = {
@@ -194,6 +221,9 @@ export function isSelectableRow(row: QueueRow): boolean {
   // ad set, so it never joins a batch approval.
   if (row.route === 'settings') return false;
   if (row.route === 'budget') return !row.approved;
+  // An audience recommendation is decided on its card (create the new ad set), never in a
+  // batch approval that would only open a renewal task.
+  if (isAudienceRecommendation(row.rec)) return false;
   return row.rec.status === 'pending';
 }
 
@@ -550,6 +580,53 @@ export function OptimizerActionsPortfolioGroup({
     },
     [adAccountId, brandId, flash.implement, noteFor, swapJobsQuery],
   );
+  const audienceProposalsQuery = useOptimizerAudienceProposals(brandId);
+  const audienceMutations = useAudienceProposalMutations(brandId);
+  const convertCboMutation = useConvertCbo(brandId);
+  const [cboPreviewByCampaign, setCboPreviewByCampaign] = React.useState<
+    ReadonlyMap<string, ConvertCboResponse>
+  >(new Map());
+  const [audienceRequestingRecId, setAudienceRequestingRecId] = React.useState<string | null>(null);
+  const [audienceBusyId, setAudienceBusyId] = React.useState<string | null>(null);
+  const audienceActions = React.useMemo<EvidenceContext['audienceActions']>(
+    () => ({
+      request: (recId) => {
+        setAudienceRequestingRecId(recId);
+        audienceMutations.request.mutate(recId, {
+          onError: (error) =>
+            noteFor(recId, error instanceof Error ? error.message : 'Could not ask Jaina.'),
+          onSettled: () => setAudienceRequestingRecId(null),
+        });
+      },
+      approve: (input) => {
+        setAudienceBusyId(input.proposalId);
+        audienceMutations.approve.mutate(input, { onSettled: () => setAudienceBusyId(null) });
+      },
+      cancel: (proposalId) => {
+        setAudienceBusyId(proposalId);
+        audienceMutations.cancel.mutate(proposalId, { onSettled: () => setAudienceBusyId(null) });
+      },
+      activate: (proposalId) => {
+        setAudienceBusyId(proposalId);
+        audienceMutations.activate.mutate(proposalId, { onSettled: () => setAudienceBusyId(null) });
+      },
+      undo: (proposalId) => {
+        setAudienceBusyId(proposalId);
+        audienceMutations.undo.mutate(proposalId, { onSettled: () => setAudienceBusyId(null) });
+      },
+      convertCbo: (campaignId, dryRun) => {
+        convertCboMutation.mutate(
+          { brandId, accountId: adAccountId, campaignId, dryRun },
+          {
+            onSuccess: (data: ConvertCboResponse | null) => {
+              if (data) setCboPreviewByCampaign((prev) => new Map(prev).set(campaignId, data));
+            },
+          },
+        );
+      },
+    }),
+    [adAccountId, audienceMutations, brandId, convertCboMutation, noteFor],
+  );
   const evidenceContext = React.useMemo<EvidenceContext>(
     () => ({
       snapshotById,
@@ -568,6 +645,15 @@ export function OptimizerActionsPortfolioGroup({
       audiences: audiencesQuery.data,
       currency,
       resultWord: metric.resultLabel.toLowerCase(),
+      audienceProposals: audienceProposalsQuery.data,
+      audienceActions,
+      audienceBusy: {
+        requestingRecId: audienceRequestingRecId,
+        approvingId: audienceMutations.approve.isPending ? audienceBusyId : null,
+        busyId: audienceBusyId,
+        convertingCbo: convertCboMutation.isPending,
+      },
+      cboPreviewByCampaign,
     }),
     [
       snapshotById,
@@ -586,6 +672,13 @@ export function OptimizerActionsPortfolioGroup({
       audiencesQuery.data,
       currency,
       metric.resultLabel,
+      audienceProposalsQuery.data,
+      audienceActions,
+      audienceRequestingRecId,
+      audienceMutations.approve.isPending,
+      audienceBusyId,
+      convertCboMutation.isPending,
+      cboPreviewByCampaign,
     ],
   );
 
@@ -1501,6 +1594,8 @@ function RowDetail({
     <div className="mt-2 space-y-1.5 rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-2xs text-muted-foreground">
       {row.route === 'budget' ? (
         <BudgetDetail item={row.item} currency={currency} counterparty={counterparty} />
+      ) : row.route !== 'settings' && isAudienceRecommendation(row.rec) ? (
+        <AudienceCardHost evidence={evidence} name={row.name} rec={row.rec} />
       ) : row.route !== 'settings' && isCreativeRecommendation(row.rec) ? (
         <>
           <CreativeCardHost evidence={evidence} name={row.name} rec={row.rec} />
@@ -1529,7 +1624,7 @@ function RowDetail({
         <SettingsDetail actions={settingsActions} currency={currency} rec={row.rec} />
       ) : (
         <>
-          <RecDetail name={row.name} rec={row.rec} />
+          <RecDetail rec={row.rec} />
           <RecEvidenceChart
             currency={currency}
             denominatorMultiplier={evidence.denominatorMultiplier}
@@ -1589,6 +1684,56 @@ function CreativeCardHost({
       resultWord={evidence.resultWord}
       standing={standing}
       targets={targets}
+    />
+  );
+}
+
+/** Hosts the audience card: resolves the proposal row for this recommendation and hands the
+ *  card the actions from the group's context, so the card itself stays pure. */
+function AudienceCardHost({
+  rec,
+  name,
+  evidence,
+}: {
+  rec: RecommendationRow;
+  name: string | null;
+  evidence: EvidenceContext;
+}) {
+  const view = React.useMemo(
+    () => audienceCardView(evidence.audienceProposals, rec),
+    [evidence.audienceProposals, rec],
+  );
+  const proposalId = view.row?.id ?? null;
+  const campaignId = view.block?.campaign_id ?? view.plan?.source.campaign_id ?? null;
+  return (
+    <AudienceRecommendationCard
+      adAccountId={evidence.adAccountId}
+      adsetName={name}
+      approving={proposalId !== null && evidence.audienceBusy.approvingId === proposalId}
+      busy={proposalId !== null && evidence.audienceBusy.busyId === proposalId}
+      cboPreview={campaignId ? (evidence.cboPreviewByCampaign.get(campaignId) ?? null) : null}
+      convertingCbo={evidence.audienceBusy.convertingCbo}
+      currency={evidence.currency}
+      onActivate={() => proposalId && evidence.audienceActions.activate(proposalId)}
+      onApprove={({ budgetMinorUnits, activate }) =>
+        proposalId &&
+        view.plan &&
+        evidence.audienceActions.approve({
+          proposalId,
+          budgetMinorUnits,
+          activate,
+          mode: view.plan.mode,
+        })
+      }
+      onCancel={() => proposalId && evidence.audienceActions.cancel(proposalId)}
+      onConvertCbo={evidence.audienceActions.convertCbo}
+      onRequest={() => evidence.audienceActions.request(rec.id)}
+      onUndo={() => proposalId && evidence.audienceActions.undo(proposalId)}
+      rec={rec}
+      requesting={evidence.audienceBusy.requestingRecId === rec.id}
+      resultWord={evidence.resultWord}
+      snapshot={evidence.snapshotById.get(rec.adset_id) ?? null}
+      view={view}
     />
   );
 }
@@ -1796,28 +1941,12 @@ function BudgetDetail({
   );
 }
 
-function RecDetail({ rec, name }: { rec: RecommendationRow; name?: string | null }) {
+function RecDetail({ rec }: { rec: RecommendationRow }) {
   return (
     <>
       {rec.reason ? (
         <p>
           <span className="font-medium text-foreground">Why:</span> {rec.reason}
-        </p>
-      ) : null}
-      {rec.kind === 'audience_expand' ? (
-        // The options with sizes live in Jaina's audience tools; hand the ad set and its
-        // diagnosis over so the person lands in the three-bucket answer, not a blank chat.
-        <p>
-          <a
-            className="font-medium text-primary underline-offset-2 hover:underline"
-            href={jainaPromptHref(audienceExpansionPrompt(rec, name ?? null))}
-          >
-            Explore options with Jaina →
-          </a>{' '}
-          <span className="text-muted-foreground">
-            what it targets now, what the account already owns, and catalogue-verified interests —
-            each with an estimated size.
-          </span>
         </p>
       ) : null}
       <p>

@@ -2124,7 +2124,8 @@ export const CreativeSwapJobRowSchema = z
     portfolio_id: z.string().nullable().optional(),
     brand_id: z.string(),
     recommendation_id: z.string().nullable().optional(),
-    campaign_id: z.string(),
+    /** Null for a flash job: the destination is the ad set, the campaign is not needed. */
+    campaign_id: z.string().nullable().optional(),
     adset_id: z.string(),
     ad_id: z.string().nullable().optional(),
     mode: z.string(),

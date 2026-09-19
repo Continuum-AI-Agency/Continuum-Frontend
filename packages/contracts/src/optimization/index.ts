@@ -7,10 +7,15 @@ export * from './action-stream';
 // Setup advisor — what a selection will actually DO under an objective/budget/target, said
 // before the portfolio is created. Shared so an agent gets the same warnings a human does.
 export * from './advisor';
+// Audience proposals: the daily audience analysis for F2/F3 ad sets, its approval, and
+// what the worker read back from Meta after creating the new ad set.
+export * from './audience-proposals';
 // Meta currency MAJOR->MINOR scaling, shared by the FE guardrail inputs, the apply
 // ledger/audit keys, and the Graph budget write. Never hardcode *100.
 export * from './currency';
 export * from './engine-contracts';
+export * from './flash-creatives';
+export * from './flash-pipeline-template';
 // Which trailing window a portfolio's read surfaces report on, and how to recommend one.
 export * from './lookback';
 // MCP umbrella IO contracts (optimizer_query read + optimizer_manage write).
@@ -22,5 +27,3 @@ export * from './service';
 // Target metric per objective + daily/monthly/period budget derivation, shared by the
 // wizard, Manage, MCP and the scheduler.
 export * from './targetMetric';
-export * from './flash-creatives';
-export * from './flash-pipeline-template';
