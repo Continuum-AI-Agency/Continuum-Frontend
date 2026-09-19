@@ -10,6 +10,7 @@ export * from './dataset';
 export * from './envelope';
 export * from './hyperframes';
 export * from './jaina';
+export * from './jaina-dashboard';
 export * from './jaina-report';
 export * from './jaina-ui';
 export * from './jaina-scaffold';

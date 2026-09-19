@@ -11,6 +11,8 @@ import type {
 import { formatCurrency } from '../format';
 import { recommendationLabel } from '../reportModel';
 
+export { jainaPromptHref } from '@/lib/jaina/deepLink';
+
 const WINDOW_LABEL: Record<string, string> = { d3: '3d', d7: '7d', d14: '14d' };
 
 const METRIC_LABEL: Record<string, string> = {
@@ -303,9 +305,4 @@ export function audienceExpansionPrompt(
     `Expand the audience of ${subject}.${diagnosis} ` +
     'Give me the three buckets — what it targets now, what the account already owns that it has never used (saved audiences, lookalikes, wider age or geo), and net-new interests verified in the catalogue this session — each option with its id and estimated size, then the combined reach estimate. Apply the brand rules first and mark anything they block.'
   );
-}
-
-/** Deep link into the Jaina tab with the prompt prepared. */
-export function jainaPromptHref(prompt: string): string {
-  return `/scale?tab=jaina&prompt=${encodeURIComponent(prompt)}`;
 }

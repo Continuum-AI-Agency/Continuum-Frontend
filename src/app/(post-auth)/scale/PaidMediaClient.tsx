@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 import { type AdAccount, AdAccountSelector } from '@/components/paid-media/AdAccountSelector';
+import { SavedDashboardsPanel } from '@/components/paid-media/jaina/components/SavedDashboardsPanel';
 import {
   useOptimizerAdAccounts,
   usePrefetchOptimizerOverview,
@@ -20,6 +21,7 @@ import { useSession } from '@/hooks/useSession';
 import type { AutomationDeploymentEnvironment } from '@/lib/automations/access';
 import { isAdminUser } from '@/lib/brands/brand-switcher-utils';
 import { canAccessGoals } from '@/lib/goals/access';
+import { JainaBrandScopeProvider } from '@/lib/jaina/brandScope';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import { prefetchPaidMediaDashboard } from '@/lib/prefetch/paid-media-cache';
 import { cn } from '@/lib/utils';
@@ -617,71 +619,74 @@ export default function PaidMediaClientPage({
         </TabsContent>
 
         <TabsContent value="jaina" className="box-border flex min-h-0 flex-col overflow-hidden">
-          <div
-            ref={canvasShellRef}
-            className={cn(
-              'relative flex flex-1 min-h-0 overflow-hidden rounded-lg border bg-background/70',
-              isJainaFullscreen && 'fixed inset-0 z-50 rounded-none border-none',
-            )}
-          >
-            <div className="min-h-0 min-w-0 flex-1">
-              <JainaChatSurface
-                brandProfileId={brandProfileId}
-                brandName={brandName}
-                adAccountId={selectedAdAccount}
-                campaignId={selectedCampaign}
-                userId={user?.id ?? null}
-                initialSessionId={jainaSessionIdParam}
-                onCanvasActionApplied={handleCanvasActionApplied}
-                goalsAccessEnabled={goalsAccessEnabled}
-                className="rounded-none border-none bg-transparent backdrop-blur-none"
-              />
-            </div>
+          <JainaBrandScopeProvider adAccountId={selectedAdAccount} brandId={brandProfileId}>
+            <SavedDashboardsPanel />
+            <div
+              ref={canvasShellRef}
+              className={cn(
+                'relative flex flex-1 min-h-0 overflow-hidden rounded-lg border bg-background/70',
+                isJainaFullscreen && 'fixed inset-0 z-50 rounded-none border-none',
+              )}
+            >
+              <div className="min-h-0 min-w-0 flex-1">
+                <JainaChatSurface
+                  brandProfileId={brandProfileId}
+                  brandName={brandName}
+                  adAccountId={selectedAdAccount}
+                  campaignId={selectedCampaign}
+                  userId={user?.id ?? null}
+                  initialSessionId={jainaSessionIdParam}
+                  onCanvasActionApplied={handleCanvasActionApplied}
+                  goalsAccessEnabled={goalsAccessEnabled}
+                  className="rounded-none border-none bg-transparent backdrop-blur-none"
+                />
+              </div>
 
-            <AnimatePresence initial={false}>
-              {isCanvasOpen ? (
-                <>
-                  <motion.div
-                    key="canvas-handle"
-                    role="separator"
-                    aria-orientation="vertical"
-                    aria-label="Resize campaign canvas"
-                    className="z-30 w-2 shrink-0 cursor-col-resize bg-border/70 transition-colors hover:bg-primary/50"
-                    initial={{ opacity: 0, x: 8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 8 }}
-                    transition={{ type: 'spring', stiffness: 260, damping: 28, mass: 0.8 }}
-                    onPointerDown={handleCanvasResizeStart}
-                  />
-                  <motion.aside
-                    key="canvas-panel"
-                    className="relative min-h-0 shrink-0 overflow-hidden border-l border-border/70 bg-background/80"
-                    initial={{ opacity: 0, x: 24 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 24 }}
-                    transition={{ type: 'spring', stiffness: 240, damping: 26, mass: 0.85 }}
-                    style={{
-                      width: canvasWidthPx,
-                      boxShadow: isResizingCanvas
-                        ? 'inset 0 0 0 1px color-mix(in srgb, var(--primary) 35%, transparent)'
-                        : undefined,
-                    }}
-                  >
+              <AnimatePresence initial={false}>
+                {isCanvasOpen ? (
+                  <>
                     <motion.div
-                      className="absolute inset-0 p-0.5"
-                      initial={{ opacity: 0.6 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ duration: 0.2 }}
+                      key="canvas-handle"
+                      role="separator"
+                      aria-orientation="vertical"
+                      aria-label="Resize campaign canvas"
+                      className="z-30 w-2 shrink-0 cursor-col-resize bg-border/70 transition-colors hover:bg-primary/50"
+                      initial={{ opacity: 0, x: 8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 8 }}
+                      transition={{ type: 'spring', stiffness: 260, damping: 28, mass: 0.8 }}
+                      onPointerDown={handleCanvasResizeStart}
+                    />
+                    <motion.aside
+                      key="canvas-panel"
+                      className="relative min-h-0 shrink-0 overflow-hidden border-l border-border/70 bg-background/80"
+                      initial={{ opacity: 0, x: 24 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 24 }}
+                      transition={{ type: 'spring', stiffness: 240, damping: 26, mass: 0.85 }}
+                      style={{
+                        width: canvasWidthPx,
+                        boxShadow: isResizingCanvas
+                          ? 'inset 0 0 0 1px color-mix(in srgb, var(--primary) 35%, transparent)'
+                          : undefined,
+                      }}
                     >
-                      <ReactFlowProvider>
-                        <CampaignCanvas />
-                      </ReactFlowProvider>
-                    </motion.div>
-                  </motion.aside>
-                </>
-              ) : null}
-            </AnimatePresence>
-          </div>
+                      <motion.div
+                        className="absolute inset-0 p-0.5"
+                        initial={{ opacity: 0.6 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <ReactFlowProvider>
+                          <CampaignCanvas />
+                        </ReactFlowProvider>
+                      </motion.div>
+                    </motion.aside>
+                  </>
+                ) : null}
+              </AnimatePresence>
+            </div>
+          </JainaBrandScopeProvider>
         </TabsContent>
       </Tabs>
     </div>

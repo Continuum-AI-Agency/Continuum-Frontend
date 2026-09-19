@@ -81,6 +81,7 @@ import { ApplyReallocationDialog } from './ApplyReallocationDialog';
 import { ObjectiveCostRecap } from './detail/ObjectiveCostRecap';
 import { type RangeSpec, resolveRange, todayIso } from './detail/rangeModel';
 import { buildRecap } from './detail/recapModel';
+import { JainaEntryChips } from './JainaEntryChips';
 import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
 import { OptimizerPanel } from './OptimizerPanel';
 import { OptimizerReadError } from './OptimizerReadError';
@@ -448,6 +449,8 @@ export function PortfolioDetailWorkspace({
               />
             </span>
           </div>
+
+          <JainaEntryChips portfolio={portfolio} />
 
           {/* The one period every panel below reports on, and the objective recap for it. */}
           <div className="flex flex-wrap items-center justify-between gap-2">
