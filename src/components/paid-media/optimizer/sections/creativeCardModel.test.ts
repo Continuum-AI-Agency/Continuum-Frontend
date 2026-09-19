@@ -6,6 +6,7 @@ import {
   creativeCardCopy,
   flashCreativesFor,
   isCreativeRecommendation,
+  standingChart,
   subjectAds,
 } from './creativeCardModel';
 
@@ -66,5 +67,33 @@ describe('creative card model', () => {
       'j1',
       'j2',
     ]);
+  });
+});
+
+describe('standingChart', () => {
+  const standing = {
+    winner: { adId: 'w', adName: 'Winner', spend: 300, events: 10, costPerEvent: 30 },
+    laggards: [
+      { adId: 'l1', adName: 'Slow', spend: 280, events: 4, costPerEvent: 70 },
+      { adId: 'l0', adName: 'Nothing yet', spend: 40, events: 0, costPerEvent: null },
+    ],
+    eligibleAds: 3,
+    totalAds: 5,
+    killSpendShare: null,
+    belowAvgSpendShare: null,
+    medianCostPerEvent: 50,
+    flags: [],
+  } as never;
+  it('ranks cheapest first, scales to the widest bar and places the median on it', () => {
+    const chart = standingChart(standing, 'w');
+    expect(chart?.bars.map((b) => b.adId)).toEqual(['w', 'l1', 'l0']);
+    expect(chart?.bars[0]).toMatchObject({ subject: true, winner: true, share: 30 / 70 });
+    expect(chart?.bars[2]?.share).toBeNull();
+    expect(chart?.medianShare).toBeCloseTo(50 / 70);
+    expect(chart?.eligibleAds).toBe(3);
+  });
+  it('says nothing when there is no standing or nothing compared', () => {
+    expect(standingChart(null, 'w')).toBeNull();
+    expect(standingChart({ ...(standing as object), winner: null, laggards: [] } as never, 'w')).toBeNull();
   });
 });

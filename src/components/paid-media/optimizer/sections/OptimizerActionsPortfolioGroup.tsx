@@ -86,7 +86,7 @@ import {
   useOptimizerPortfolioAudiences,
 } from '../useOptimizerData';
 import { CreativeRecommendationCard } from './CreativeRecommendationCard';
-import { isCreativeRecommendation } from './creativeCardModel';
+import { isCreativeRecommendation, standingChart, subjectAdId } from './creativeCardModel';
 import {
   flashBriefFor,
   flashPromptsFor,
@@ -163,6 +163,8 @@ type EvidenceContext = {
   implementingKey: string | null;
   audiences: readonly PortfolioAudienceRow[];
   currency: string | null;
+  /** The objective's result, lower-cased, for the creative comparison chart. */
+  resultWord: string;
 };
 
 type SettingsActions = {
@@ -543,6 +545,7 @@ export function OptimizerActionsPortfolioGroup({
       implementingKey,
       audiences: audiencesQuery.data,
       currency,
+      resultWord: metric.resultLabel.toLowerCase(),
     }),
     [
       snapshotById,
@@ -560,6 +563,7 @@ export function OptimizerActionsPortfolioGroup({
       implementingKey,
       audiencesQuery.data,
       currency,
+      metric.resultLabel,
     ],
   );
 
@@ -1540,6 +1544,11 @@ function CreativeCardHost({
     [evidence.audiences, rec.adset_id],
   );
   const note = evidence.generateNotes.get(rec.id) ?? null;
+  const snapshot = evidence.snapshotById.get(rec.adset_id) ?? null;
+  const standing = React.useMemo(
+    () => standingChart(snapshot?.creative ?? null, subjectAdId(rec)),
+    [snapshot?.creative, rec],
+  );
   return (
     <CreativeRecommendationCard
       ads={ads}
@@ -1555,6 +1564,8 @@ function CreativeCardHost({
       onGenerate={canGenerate ? () => evidence.requestGeneration(rec, name, ads) : null}
       onImplement={evidence.implementCreative}
       rec={rec}
+      resultWord={evidence.resultWord}
+      standing={standing}
       targets={targets}
     />
   );
