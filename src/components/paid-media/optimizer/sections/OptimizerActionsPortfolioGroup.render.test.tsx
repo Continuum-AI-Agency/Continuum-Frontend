@@ -176,9 +176,21 @@ mock.module('../useOptimizerData', () => ({
     setStatus: { mutate: setStatusMutate, isPending: false },
     setStatuses: { mutate: setStatusesMutate, isPending: false },
     requestApplyItems: { mutate: requestApplyItemsMutate, isPending: false },
+    update: { mutateAsync: async () => null, isPending: false },
   }),
   useApplyApproved: () => ({ mutate: applyApprovedMutate, isPending: false }),
   useApplyAdsetStatus: () => ({ mutate: applyAdsetStatusMutate, isPending: false }),
+  // Reads the queue only touches when a creative row is expanded; empty here.
+  useOptimizerAccountSnapshots: () => ({ data: [], isLoading: false }),
+  useOptimizerAdsetAds: () => ({ data: [], isLoading: false }),
+  useOptimizerCreativeSwapJobs: () => ({ data: [], isLoading: false, refetch: () => undefined }),
+  useOptimizerPortfolioAudiences: () => ({ data: [], isLoading: false }),
+  useFlashCreativeMutations: () => ({
+    request: { mutateAsync: async () => 'job', isPending: false },
+    implement: { mutateAsync: async () => 'job', isPending: false },
+  }),
+  useAdAccountCurrency: () => 'USD',
+  fetchAdsetAds: async () => [],
 }));
 
 // The confirm AlertDialog is a Radix portal + focus-scope; render it as plain, open-gated
@@ -317,7 +329,8 @@ describe('buildActionQueue — pure inclusion + selectability', () => {
 describe('OptimizerActionsPortfolioGroup — the unified queue', () => {
   it('renders the budget move, the pause rec, and the ad-level danger affordance', () => {
     renderGroup();
-    expect(screen.getByText(/Budget Set/)).toBeDefined();
+    // The ad set is named in the row and again in the story chart above the queue.
+    expect(screen.getAllByText(/Budget Set/).length).toBeGreaterThan(0);
     // The ad-level row is present but shows a danger affordance, not a selectable control.
     expect(
       screen.getByLabelText('Ad-level execution is in progress — not yet surfaced here'),
@@ -644,14 +657,17 @@ describe('a conserved rebalance reads as ONE decision without losing per-ad-set 
     const { container } = renderGroup();
     fireEvent.click(screen.getAllByLabelText('Show detail')[1]);
     expect(container.textContent).toContain('Before → after: $50 → $65');
-    expect(container.textContent).not.toContain('Why:');
+    // The row's own detail carries no why; the story above may still explain the donor.
+    const detail = screen.getByText(/Before → after/).closest('.rounded-md');
+    expect(detail?.textContent ?? '').not.toContain('Why:');
   });
 
   it('does NOT group a cycle that only raises — there is no donor and nothing to describe', () => {
     // `report` (the default) has a lone +$30 move. A header there would invent a transfer.
     const { container } = renderGroup();
     expect(container.textContent).not.toContain('Reallocating');
-    expect(container.textContent).not.toContain('Moving');
+    // A lone raise is funded by the pool, never by a named donor ad set.
+    expect(container.textContent).not.toMatch(/Moving .* from \d+ ad set/);
     expect(screen.queryByLabelText('Select all budget moves in this cycle')).toBeNull();
   });
 });

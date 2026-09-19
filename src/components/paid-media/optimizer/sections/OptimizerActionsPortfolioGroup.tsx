@@ -20,6 +20,7 @@
 
 import {
   type AdSetSnapshot,
+  type AdsetAd,
   type CreativeSwapJobRow,
   type CycleItemRow,
   GLOBAL_ANGLE_LABELS,
@@ -28,6 +29,7 @@ import {
   type ParsedCycleRunReport,
   type PortfolioLevel,
   type PortfolioListItem,
+  pickFlashPipelines,
   type RecommendationRow,
 } from '@continuum/contracts';
 import { ChevronDownIcon, ChevronRightIcon, Loader2Icon, TriangleAlertIcon } from 'lucide-react';
@@ -48,6 +50,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { fetchPipelineCapabilities } from '@/lib/ai-studio/pipelines';
 import { cn } from '@/lib/utils';
 import { resolveAdsetName } from '../adsetName';
 import { AdSetIdLabel } from '../charts/AdSetIdLabel';
@@ -67,8 +70,12 @@ import {
   severityRank,
 } from '../reportModel';
 import {
+  fetchAdsetAds,
+  type PortfolioAudienceRow,
+  useAdAccountCurrency,
   useApplyAdsetStatus,
   useApplyApproved,
+  useFlashCreativeMutations,
   useOptimizerAccountSnapshots,
   useOptimizerActions,
   useOptimizerAdsetAds,
@@ -76,9 +83,19 @@ import {
   useOptimizerEnrolledAdsets,
   useOptimizerMutations,
   useOptimizerPerformance,
+  useOptimizerPortfolioAudiences,
 } from '../useOptimizerData';
 import { CreativeRecommendationCard } from './CreativeRecommendationCard';
 import { isCreativeRecommendation } from './creativeCardModel';
+import {
+  flashBriefFor,
+  flashPromptsFor,
+  flashWantFor,
+  type ImplementTarget,
+  implementTargets,
+  predecessorAdIn,
+  referenceAssetIdsFor,
+} from './flashCreativesModel';
 import { ActionRow } from './OptimizerActionFeed';
 import { OptimizerReadError } from './OptimizerReadError';
 import { RecEvidenceChart } from './RecEvidenceChart';
@@ -135,9 +152,17 @@ type EvidenceContext = {
   adAccountId: string;
   /** The brand's creative swap jobs — the flash creatives a recommendation spawned. */
   swapJobs: readonly CreativeSwapJobRow[];
-  /** Ask Creative+ for variants: approves the row with the generation route. */
-  requestGeneration: (rec: RecommendationRow) => void;
+  /** Ask Creative+ for variants: picks the brand's best-fitting workflow, writes the
+   *  prompts from the card's three lines and queues one job on the recommendation. */
+  requestGeneration: (rec: RecommendationRow, name: string | null, ads: readonly AdsetAd[]) => void;
   generatingIds: ReadonlySet<string>;
+  /** Why the last request for a row could not be placed (no workflow fits, RPC failed). */
+  generateNotes: ReadonlyMap<string, string>;
+  /** Put a finished variant beside the current ad of an ad set (this one or another). */
+  implementCreative: (job: CreativeSwapJobRow, assetId: string, target: ImplementTarget) => void;
+  implementingKey: string | null;
+  audiences: readonly PortfolioAudienceRow[];
+  currency: string | null;
 };
 
 type SettingsActions = {
@@ -406,25 +431,100 @@ export function OptimizerActionsPortfolioGroup({
     [report?.latest_items, metric.denominatorMultiplier],
   );
   const swapJobsQuery = useOptimizerCreativeSwapJobs(brandId);
+  const audiencesQuery = useOptimizerPortfolioAudiences(portfolio.id);
+  const flash = useFlashCreativeMutations(brandId);
   const [generatingIds, setGeneratingIds] = React.useState<ReadonlySet<string>>(new Set());
+  const [generateNotes, setGenerateNotes] = React.useState<ReadonlyMap<string, string>>(new Map());
+  const [implementingKey, setImplementingKey] = React.useState<string | null>(null);
+  const currency = useAdAccountCurrency(brandId, adAccountId);
+  const noteFor = React.useCallback((recId: string, note: string | null) => {
+    setGenerateNotes((prev) => {
+      const next = new Map(prev);
+      if (note) next.set(recId, note);
+      else next.delete(recId);
+      return next;
+    });
+  }, []);
   const requestGeneration = React.useCallback(
-    (rec: RecommendationRow) => {
+    (rec: RecommendationRow, name: string | null, ads: readonly AdsetAd[]) => {
       setGeneratingIds((prev) => new Set(prev).add(rec.id));
-      setStatus.mutate(
-        { recommendation_id: rec.id, status: 'approved', route: 'generate' },
-        {
-          onSettled: () => {
-            setGeneratingIds((prev) => {
-              const next = new Set(prev);
-              next.delete(rec.id);
-              return next;
-            });
-            void swapJobsQuery.refetch();
-          },
-        },
-      );
+      noteFor(rec.id, null);
+      const run = async () => {
+        const capabilities = await fetchPipelineCapabilities(brandId);
+        const want = flashWantFor(rec, ads);
+        const [fit] = pickFlashPipelines(capabilities, want);
+        if (!fit) {
+          noteFor(
+            rec.id,
+            capabilities.length === 0
+              ? 'This brand has no Creative+ workflow yet. Build one in AI Studio and publish it as a pipeline.'
+              : 'None of the brand’s Creative+ workflows can take a text brief and return images.',
+          );
+          return;
+        }
+        const audienceType = snapshotById.get(rec.adset_id)?.audienceType ?? null;
+        const brief = flashBriefFor(rec, name, audienceType, ads, currency, null);
+        const prompts = flashPromptsFor(brief);
+        await flash.request.mutateAsync({
+          recommendationId: rec.id,
+          pipelineId: fit.capability.pipeline_id,
+          prompt: prompts.positive,
+          negativePrompt: prompts.negative,
+          referenceAssetIds: want.hasReference ? referenceAssetIdsFor(rec) : [],
+          count: want.count,
+        });
+      };
+      run()
+        .catch((error: unknown) => {
+          noteFor(
+            rec.id,
+            error instanceof Error ? error.message : 'Could not request flash creatives.',
+          );
+        })
+        .finally(() => {
+          setGeneratingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(rec.id);
+            return next;
+          });
+          void swapJobsQuery.refetch();
+        });
     },
-    [setStatus, swapJobsQuery],
+    [brandId, currency, flash.request, noteFor, snapshotById, swapJobsQuery],
+  );
+  const implementCreative = React.useCallback(
+    (job: CreativeSwapJobRow, assetId: string, target: ImplementTarget) => {
+      const key = `${job.id}:${assetId}`;
+      setImplementingKey(key);
+      const run = async () => {
+        let predecessorAdId: string | null = job.ad_id ?? null;
+        if (target.adsetId !== job.adset_id) {
+          const ads = await fetchAdsetAds(brandId, adAccountId, target.adsetId);
+          predecessorAdId = predecessorAdIn(ads)?.id ?? null;
+          if (!predecessorAdId) {
+            throw new Error(`${target.name} has no ad to place the variant beside.`);
+          }
+        }
+        await flash.implement.mutateAsync({
+          jobId: job.id,
+          assetId,
+          targetAdsetId: target.adsetId,
+          predecessorAdId,
+        });
+      };
+      run()
+        .catch((error: unknown) => {
+          noteFor(
+            job.recommendation_id ?? job.id,
+            error instanceof Error ? error.message : 'Could not implement the creative.',
+          );
+        })
+        .finally(() => {
+          setImplementingKey((current) => (current === key ? null : current));
+          void swapJobsQuery.refetch();
+        });
+    },
+    [adAccountId, brandId, flash.implement, noteFor, swapJobsQuery],
   );
   const evidenceContext = React.useMemo<EvidenceContext>(
     () => ({
@@ -438,6 +538,11 @@ export function OptimizerActionsPortfolioGroup({
       swapJobs: swapJobsQuery.data,
       requestGeneration,
       generatingIds,
+      generateNotes,
+      implementCreative,
+      implementingKey,
+      audiences: audiencesQuery.data,
+      currency,
     }),
     [
       snapshotById,
@@ -450,6 +555,11 @@ export function OptimizerActionsPortfolioGroup({
       swapJobsQuery.data,
       requestGeneration,
       generatingIds,
+      generateNotes,
+      implementCreative,
+      implementingKey,
+      audiencesQuery.data,
+      currency,
     ],
   );
 
@@ -1370,11 +1480,7 @@ function RowDetail({
           <CreativeCardHost evidence={evidence} name={row.name} rec={row.rec} />
           {row.route === 'hidden' ? (
             <p className="mt-2">{notImplementedMessage(row.rec.kind)}</p>
-          ) : row.route === 'creative' ? (
-            <div className="mt-2 border-border/50 border-t pt-2">
-              <CreativeBriefDetail rec={row.rec} />
-            </div>
-          ) : (
+          ) : row.route === 'creative' ? null : (
             <div className="mt-2 border-border/50 border-t pt-2">
               <RecEvidenceChart
                 currency={currency}
@@ -1427,19 +1533,29 @@ function CreativeCardHost({
   evidence: EvidenceContext;
 }) {
   const adsQuery = useOptimizerAdsetAds(evidence.brandId, evidence.adAccountId, rec.adset_id);
-  const canGenerate =
-    rec.status === 'pending' && (rec.kind === 'variate_creative' || rec.kind === 'seed_experiment');
+  const ads = adsQuery.data;
+  const canGenerate = rec.status === 'pending' || rec.status === 'approved';
+  const targets = React.useMemo(
+    () => implementTargets(evidence.audiences, rec.adset_id),
+    [evidence.audiences, rec.adset_id],
+  );
+  const note = evidence.generateNotes.get(rec.id) ?? null;
   return (
     <CreativeRecommendationCard
-      ads={adsQuery.data}
+      ads={ads}
       adsLoading={adsQuery.isLoading}
       adsetName={name}
       audienceType={evidence.snapshotById.get(rec.adset_id)?.audienceType ?? null}
-      currency={null}
+      brandId={evidence.brandId}
+      currency={evidence.currency}
+      generateNote={note ?? (canGenerate ? null : 'This recommendation is closed.')}
       generating={evidence.generatingIds.has(rec.id)}
+      implementingKey={evidence.implementingKey}
       jobs={evidence.swapJobs}
-      onGenerate={canGenerate ? () => evidence.requestGeneration(rec) : null}
+      onGenerate={canGenerate ? () => evidence.requestGeneration(rec, name, ads) : null}
+      onImplement={evidence.implementCreative}
       rec={rec}
+      targets={targets}
     />
   );
 }

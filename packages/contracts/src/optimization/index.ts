@@ -22,3 +22,4 @@ export * from './service';
 // Target metric per objective + daily/monthly/period budget derivation, shared by the
 // wizard, Manage, MCP and the scheduler.
 export * from './targetMetric';
+export * from './flash-creatives';
