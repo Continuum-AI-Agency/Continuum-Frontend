@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "12.2.3 (519615d)"
+  }
   agent_workspace: {
     Tables: {
       alignments: {
@@ -5168,7 +5173,7 @@ export type Database = {
           added_at: string
           added_by: string | null
           annotations: Json
-          applies_to: string[]
+          applies_to: Json
           asset_id: string
           authority: string
           brand_id: string
@@ -5181,7 +5186,7 @@ export type Database = {
           added_at?: string
           added_by?: string | null
           annotations?: Json
-          applies_to?: string[]
+          applies_to?: Json
           asset_id: string
           authority: string
           brand_id: string
@@ -5194,7 +5199,7 @@ export type Database = {
           added_at?: string
           added_by?: string | null
           annotations?: Json
-          applies_to?: string[]
+          applies_to?: Json
           asset_id?: string
           authority?: string
           brand_id?: string
@@ -6598,11 +6603,15 @@ export type Database = {
           brand_profile_id: string
           created_at: string
           error: string | null
+          finished_at: string | null
           id: string
+          node_events: Json
           node_ids: Json | null
+          origin: string
           requested_by: string
           result: Json | null
           room_id: string
+          started_at: string | null
           status: string
           updated_at: string
         }
@@ -6610,11 +6619,15 @@ export type Database = {
           brand_profile_id: string
           created_at?: string
           error?: string | null
+          finished_at?: string | null
           id?: string
+          node_events?: Json
           node_ids?: Json | null
+          origin?: string
           requested_by: string
           result?: Json | null
           room_id: string
+          started_at?: string | null
           status?: string
           updated_at?: string
         }
@@ -6622,11 +6635,15 @@ export type Database = {
           brand_profile_id?: string
           created_at?: string
           error?: string | null
+          finished_at?: string | null
           id?: string
+          node_events?: Json
           node_ids?: Json | null
+          origin?: string
           requested_by?: string
           result?: Json | null
           room_id?: string
+          started_at?: string | null
           status?: string
           updated_at?: string
         }
@@ -6806,6 +6823,94 @@ export type Database = {
             columns: ["brand_profile_id"]
             isOneToOne: false
             referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comment_trigger_rules: {
+        Row: {
+          active_from: string | null
+          active_until: string | null
+          brand_id: string
+          created_at: string
+          created_by: string | null
+          enabled: boolean
+          follow_up_delay_minutes: number
+          follow_up_message: string | null
+          id: string
+          keywords: string[]
+          link_button_label: string | null
+          match_mode: string
+          platform_post_ids: string[]
+          post_scope: string
+          priority: number
+          public_reply_messages: string[]
+          reply_message: string
+          tracked_link_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          active_from?: string | null
+          active_until?: string | null
+          brand_id: string
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          follow_up_delay_minutes?: number
+          follow_up_message?: string | null
+          id?: string
+          keywords?: string[]
+          link_button_label?: string | null
+          match_mode: string
+          platform_post_ids?: string[]
+          post_scope: string
+          priority?: number
+          public_reply_messages?: string[]
+          reply_message: string
+          tracked_link_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active_from?: string | null
+          active_until?: string | null
+          brand_id?: string
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          follow_up_delay_minutes?: number
+          follow_up_message?: string | null
+          id?: string
+          keywords?: string[]
+          link_button_label?: string | null
+          match_mode?: string
+          platform_post_ids?: string[]
+          post_scope?: string
+          priority?: number
+          public_reply_messages?: string[]
+          reply_message?: string
+          tracked_link_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_trigger_rules_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "comment_trigger_rules_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comment_trigger_rules_tracked_link_id_fkey"
+            columns: ["tracked_link_id"]
+            isOneToOne: false
+            referencedRelation: "tracked_links"
             referencedColumns: ["id"]
           },
         ]
@@ -7527,6 +7632,66 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      jaina_dashboards: {
+        Row: {
+          ad_account_id: string | null
+          blocks: Json
+          brand_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          scope: string
+          source_prompt: string | null
+          source_title: string | null
+          updated_at: string
+          window_label: string | null
+        }
+        Insert: {
+          ad_account_id?: string | null
+          blocks?: Json
+          brand_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          scope?: string
+          source_prompt?: string | null
+          source_title?: string | null
+          updated_at?: string
+          window_label?: string | null
+        }
+        Update: {
+          ad_account_id?: string | null
+          blocks?: Json
+          brand_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          scope?: string
+          source_prompt?: string | null
+          source_title?: string | null
+          updated_at?: string
+          window_label?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jaina_dashboards_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "jaina_dashboards_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       jaina_tool_gate_approvals: {
         Row: {
@@ -8867,78 +9032,6 @@ export type Database = {
           },
         ]
       }
-      report_schedules: {
-        Row: {
-          brand_id: string
-          cadence: string
-          created_at: string
-          created_by: string | null
-          day_of_month: number | null
-          day_of_week: number | null
-          enabled: boolean
-          external_emails: string[]
-          hour: number
-          id: string
-          last_run_at: string | null
-          next_run_at: string
-          presentation: string
-          recipient_user_ids: string[]
-          timezone: string
-          updated_at: string
-        }
-        Insert: {
-          brand_id: string
-          cadence: string
-          created_at?: string
-          created_by?: string | null
-          day_of_month?: number | null
-          day_of_week?: number | null
-          enabled?: boolean
-          external_emails?: string[]
-          hour?: number
-          id?: string
-          last_run_at?: string | null
-          next_run_at: string
-          presentation?: string
-          recipient_user_ids?: string[]
-          timezone?: string
-          updated_at?: string
-        }
-        Update: {
-          brand_id?: string
-          cadence?: string
-          created_at?: string
-          created_by?: string | null
-          day_of_month?: number | null
-          day_of_week?: number | null
-          enabled?: boolean
-          external_emails?: string[]
-          hour?: number
-          id?: string
-          last_run_at?: string | null
-          next_run_at?: string
-          presentation?: string
-          recipient_user_ids?: string[]
-          timezone?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "report_schedules_brand_id_fkey"
-            columns: ["brand_id"]
-            isOneToOne: false
-            referencedRelation: "brand_account_directory"
-            referencedColumns: ["brand_id"]
-          },
-          {
-            foreignKeyName: "report_schedules_brand_id_fkey"
-            columns: ["brand_id"]
-            isOneToOne: false
-            referencedRelation: "brand_profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       report_send_receipts: {
         Row: {
           brand_id: string
@@ -9043,6 +9136,92 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      tracked_link_clicks: {
+        Row: {
+          clicked_at: string
+          id: string
+          link_id: string
+          referrer: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          clicked_at?: string
+          id?: string
+          link_id: string
+          referrer?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          clicked_at?: string
+          id?: string
+          link_id?: string
+          referrer?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tracked_link_clicks_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "tracked_links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tracked_links: {
+        Row: {
+          asset_id: string | null
+          brand_id: string
+          code: string
+          created_at: string
+          created_by: string | null
+          destination_url: string
+          id: string
+          label: string | null
+          placement: string
+          platform_post_id: string | null
+        }
+        Insert: {
+          asset_id?: string | null
+          brand_id: string
+          code: string
+          created_at?: string
+          created_by?: string | null
+          destination_url: string
+          id?: string
+          label?: string | null
+          placement: string
+          platform_post_id?: string | null
+        }
+        Update: {
+          asset_id?: string | null
+          brand_id?: string
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          destination_url?: string
+          id?: string
+          label?: string | null
+          placement?: string
+          platform_post_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tracked_links_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "tracked_links_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_brand_preferences: {
         Row: {
@@ -11352,6 +11531,14 @@ export type Database = {
       }
       decrypt_token: { Args: { ct: string }; Returns: string }
       decrypt_tokens: { Args: { p_cts: string[] }; Returns: string[] }
+      delete_canvas_workspace: {
+        Args: {
+          p_brand_profile_id: string
+          p_room_id: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
       encrypt_token: { Args: { token: string }; Returns: string }
       enqueue_automation_run_manual: {
         Args: {
@@ -11656,17 +11843,6 @@ export type Database = {
           surface: string
           tags: string[]
         }[]
-      }
-      next_report_schedule_run_at: {
-        Args: {
-          p_after: string
-          p_cadence: string
-          p_dom: number
-          p_dow: number
-          p_hour: number
-          p_tz: string
-        }
-        Returns: string
       }
       open_jaina_tool_gate: {
         Args: {
@@ -13596,6 +13772,38 @@ export type Database = {
   }
   external_connections: {
     Tables: {
+      brand_slack_workspaces: {
+        Row: {
+          app_id: string
+          brand_id: string
+          installation_id: string
+          linked_at: string
+          linked_by: string | null
+        }
+        Insert: {
+          app_id: string
+          brand_id: string
+          installation_id: string
+          linked_at?: string
+          linked_by?: string | null
+        }
+        Update: {
+          app_id?: string
+          brand_id?: string
+          installation_id?: string
+          linked_at?: string
+          linked_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_slack_workspaces_app_id_installation_id_fkey"
+            columns: ["app_id", "installation_id"]
+            isOneToOne: false
+            referencedRelation: "slack_installations"
+            referencedColumns: ["app_id", "installation_id"]
+          },
+        ]
+      }
       chat_brand_preferences: {
         Row: {
           brand_id: string
@@ -15568,6 +15776,7 @@ export type Database = {
           template_source_id: string | null
           template_source_sha256: string | null
           template_source_version_id: string | null
+          test: boolean | null
           updated_at: string
         }
         Insert: {
@@ -15609,6 +15818,7 @@ export type Database = {
           template_source_id?: string | null
           template_source_sha256?: string | null
           template_source_version_id?: string | null
+          test?: boolean | null
           updated_at?: string
         }
         Update: {
@@ -15650,6 +15860,7 @@ export type Database = {
           template_source_id?: string | null
           template_source_sha256?: string | null
           template_source_version_id?: string | null
+          test?: boolean | null
           updated_at?: string
         }
         Relationships: [
@@ -16117,13 +16328,11 @@ export type Database = {
           height: number | null
           id: string
           mime_type: string | null
-          poster_source: string | null
           renderer: string | null
           renderer_version: string | null
           role: string
           size_bytes: number | null
           source_checksum: string | null
-          source_timestamp_ms: number | null
           state: string
           storage_path: string | null
           updated_at: string
@@ -16142,13 +16351,11 @@ export type Database = {
           height?: number | null
           id?: string
           mime_type?: string | null
-          poster_source?: string | null
           renderer?: string | null
           renderer_version?: string | null
           role: string
           size_bytes?: number | null
           source_checksum?: string | null
-          source_timestamp_ms?: number | null
           state?: string
           storage_path?: string | null
           updated_at?: string
@@ -16167,13 +16374,11 @@ export type Database = {
           height?: number | null
           id?: string
           mime_type?: string | null
-          poster_source?: string | null
           renderer?: string | null
           renderer_version?: string | null
           role?: string
           size_bytes?: number | null
           source_checksum?: string | null
-          source_timestamp_ms?: number | null
           state?: string
           storage_path?: string | null
           updated_at?: string
@@ -17345,6 +17550,72 @@ export type Database = {
           },
         ]
       }
+      fonts: {
+        Row: {
+          brand_id: string | null
+          bytes: number
+          created_at: string
+          family: string
+          family_key: string
+          format: string
+          id: string
+          licence_scope: string
+          notes: string | null
+          postscript_name: string | null
+          sha256: string
+          source: string
+          storage_bucket: string
+          storage_path: string
+          style: string
+          updated_at: string
+          uploaded_by: string | null
+          weight: number | null
+          win_registry_name: string | null
+        }
+        Insert: {
+          brand_id?: string | null
+          bytes: number
+          created_at?: string
+          family: string
+          family_key: string
+          format: string
+          id?: string
+          licence_scope?: string
+          notes?: string | null
+          postscript_name?: string | null
+          sha256: string
+          source?: string
+          storage_bucket?: string
+          storage_path: string
+          style?: string
+          updated_at?: string
+          uploaded_by?: string | null
+          weight?: number | null
+          win_registry_name?: string | null
+        }
+        Update: {
+          brand_id?: string | null
+          bytes?: number
+          created_at?: string
+          family?: string
+          family_key?: string
+          format?: string
+          id?: string
+          licence_scope?: string
+          notes?: string | null
+          postscript_name?: string | null
+          sha256?: string
+          source?: string
+          storage_bucket?: string
+          storage_path?: string
+          style?: string
+          updated_at?: string
+          uploaded_by?: string | null
+          weight?: number | null
+          win_registry_name?: string | null
+        }
+        Relationships: []
+      }
       intake_forms: {
         Row: {
           allowed_extensions: string[]
@@ -17869,6 +18140,7 @@ export type Database = {
           contract_hash: string
           created_at: string
           created_by: string | null
+          description: string | null
           id: string
           name: string
           revision: number
@@ -17882,6 +18154,7 @@ export type Database = {
           contract_hash: string
           created_at?: string
           created_by?: string | null
+          description?: string | null
           id?: string
           name: string
           revision?: number
@@ -17895,6 +18168,7 @@ export type Database = {
           contract_hash?: string
           created_at?: string
           created_by?: string | null
+          description?: string | null
           id?: string
           name?: string
           revision?: number
@@ -19717,7 +19991,6 @@ export type Database = {
           content_json: Json | null
           content_plan_id: string | null
           created_at: string
-          group_id: string | null
           id: string
           instagram_post_id: string | null
           media_stage: string
@@ -19741,7 +20014,6 @@ export type Database = {
           content_json?: Json | null
           content_plan_id?: string | null
           created_at?: string
-          group_id?: string | null
           id?: string
           instagram_post_id?: string | null
           media_stage?: string
@@ -19765,7 +20037,6 @@ export type Database = {
           content_json?: Json | null
           content_plan_id?: string | null
           created_at?: string
-          group_id?: string | null
           id?: string
           instagram_post_id?: string | null
           media_stage?: string
@@ -20752,7 +21023,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      derive_media_stage: { Args: { content_json: Json }; Returns: string }
       enqueue_post_generation_job: {
         Args: {
           p_account_id: string
@@ -20933,52 +21203,6 @@ export type Database = {
       requeue_post_generation_job: {
         Args: { p_backoff_sec: number; p_job_id: string; p_worker_id: string }
         Returns: boolean
-      }
-      retry_post_generation_job: {
-        Args: { p_job_id: string; p_min_worker_generation: number }
-        Returns: {
-          account_id: string | null
-          attempts: number
-          brand_id: string
-          cancel_requested: boolean
-          claimed_at: string | null
-          client_key: string | null
-          completed_at: string | null
-          creative_brief: Json | null
-          dead_lettered_at: string | null
-          dispatch_context: Json | null
-          draft_id: string | null
-          enqueued_at: string
-          error: Json | null
-          expires_at: string
-          guidance_prompt: string | null
-          heartbeat_at: string | null
-          job_id: string
-          job_type: string
-          last_error: Json | null
-          max_attempts: number
-          min_worker_generation: number
-          next_run_at: string
-          payload: Json | null
-          plan_id: string | null
-          plan_item_id: string | null
-          platform: string
-          progress: Json
-          scheduled_at: string
-          session_id: string
-          started_at: string | null
-          status: Database["organic"]["Enums"]["post_generation_job_status"]
-          trend_id: string | null
-          updated_at: string
-          user_id: string
-          worker_id: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "post_generation_jobs"
-          isOneToOne: true
-          isSetofReturn: false
-        }
       }
       start_inline_post_generation_job: {
         Args: {
@@ -21362,71 +21586,6 @@ export type Database = {
           targeting_spec?: Json
         }
         Relationships: []
-      }
-      canvas_creative_replacements: {
-        Row: {
-          ad_account_id: string
-          ad_id: string
-          adset_id: string
-          applied_at: string | null
-          asset_ids: string[]
-          brand_id: string
-          campaign_id: string
-          created_at: string
-          created_by: string
-          creative_id: string | null
-          creative_row_id: string | null
-          error: string | null
-          format: string
-          id: string
-          previous_creative_id: string
-          status: string
-        }
-        Insert: {
-          ad_account_id: string
-          ad_id: string
-          adset_id: string
-          applied_at?: string | null
-          asset_ids: string[]
-          brand_id: string
-          campaign_id: string
-          created_at?: string
-          created_by: string
-          creative_id?: string | null
-          creative_row_id?: string | null
-          error?: string | null
-          format: string
-          id?: string
-          previous_creative_id: string
-          status: string
-        }
-        Update: {
-          ad_account_id?: string
-          ad_id?: string
-          adset_id?: string
-          applied_at?: string | null
-          asset_ids?: string[]
-          brand_id?: string
-          campaign_id?: string
-          created_at?: string
-          created_by?: string
-          creative_id?: string | null
-          creative_row_id?: string | null
-          error?: string | null
-          format?: string
-          id?: string
-          previous_creative_id?: string
-          status?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "canvas_creative_replacements_creative_row_id_fkey"
-            columns: ["creative_row_id"]
-            isOneToOne: false
-            referencedRelation: "ad_creatives"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       creative_label_jobs: {
         Row: {
@@ -22510,6 +22669,96 @@ export type Database = {
         Relationships: []
       }
       tool_events_2026_07: {
+        Row: {
+          action: string | null
+          brand_id: string | null
+          bytes_in: number | null
+          bytes_out: number | null
+          cache_hit: boolean | null
+          client_id: string | null
+          client_name: string | null
+          client_profile: string | null
+          created_at: string
+          dimensions: Json
+          duration_ms: number | null
+          email: string | null
+          error_code: string | null
+          event_id: string
+          event_kind: string
+          event_name: string
+          id: number
+          method: string | null
+          mount_path: string | null
+          params_hash: string | null
+          request_id: string | null
+          result_status: string
+          session_id: string | null
+          status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
+          tool: string | null
+          transport: string | null
+          user_id: string
+        }
+        Insert: {
+          action?: string | null
+          brand_id?: string | null
+          bytes_in?: number | null
+          bytes_out?: number | null
+          cache_hit?: boolean | null
+          client_id?: string | null
+          client_name?: string | null
+          client_profile?: string | null
+          created_at?: string
+          dimensions?: Json
+          duration_ms?: number | null
+          email?: string | null
+          error_code?: string | null
+          event_id?: string
+          event_kind?: string
+          event_name?: string
+          id: number
+          method?: string | null
+          mount_path?: string | null
+          params_hash?: string | null
+          request_id?: string | null
+          result_status?: string
+          session_id?: string | null
+          status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
+          tool?: string | null
+          transport?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string | null
+          brand_id?: string | null
+          bytes_in?: number | null
+          bytes_out?: number | null
+          cache_hit?: boolean | null
+          client_id?: string | null
+          client_name?: string | null
+          client_profile?: string | null
+          created_at?: string
+          dimensions?: Json
+          duration_ms?: number | null
+          email?: string | null
+          error_code?: string | null
+          event_id?: string
+          event_kind?: string
+          event_name?: string
+          id?: number
+          method?: string | null
+          mount_path?: string | null
+          params_hash?: string | null
+          request_id?: string | null
+          result_status?: string
+          session_id?: string | null
+          status?: Database["plugin_mcp"]["Enums"]["tool_event_status"]
+          tool?: string | null
+          transport?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      tool_events_2026_08: {
         Row: {
           action: string | null
           brand_id: string | null
@@ -26340,6 +26589,10 @@ export type Database = {
         Args: { p_actor?: string; p_patch: Json; p_rule_id: string }
         Returns: undefined
       }
+      optimizer_supersede_recommendations: {
+        Args: { p_portfolio_id: string; p_run_id: string }
+        Returns: number
+      }
       optimizer_unenroll_adset: {
         Args: { p_adset_id: string; p_portfolio_id: string }
         Returns: undefined
@@ -26523,12 +26776,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -26552,11 +26805,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -26577,11 +26830,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -26602,11 +26855,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -26619,11 +26872,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
