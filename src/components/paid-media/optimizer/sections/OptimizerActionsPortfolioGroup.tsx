@@ -457,8 +457,8 @@ export function OptimizerActionsPortfolioGroup({
           noteFor(
             rec.id,
             capabilities.length === 0
-              ? 'This brand has no Creative+ workflow yet. Build one in AI Studio and publish it as a pipeline.'
-              : 'None of the brand’s Creative+ workflows can take a text brief and return images.',
+              ? 'This brand has no published Creative+ pipeline yet. A canvas workspace is not one: open it in AI Studio, choose Save → Publish pipeline, leave the generator’s prompt handle open (plus a reference-image or negative-prompt handle if the node has them), and publish.'
+              : 'None of the brand’s published pipelines takes a text prompt and returns images. Republish one with the generator’s prompt handle left open.',
           );
           return;
         }
