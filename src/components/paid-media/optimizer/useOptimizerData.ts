@@ -33,6 +33,8 @@ import {
   type CpaSeriesPoint,
   CpaSeriesPointSchema,
   type CreatePortfolioRequest,
+  type CreativeSwapJobRow,
+  CreativeSwapJobRowSchema,
   type CyclePreviewRequest,
   type CyclePreviewResponse,
   CyclePreviewResponseSchema,
@@ -155,6 +157,7 @@ export const optimizerQueryKeys = {
     ['optimizer', 'portfolios', brandId, adAccountId ?? 'all'] as const,
   adAccounts: (brandId: string) => ['optimizer', 'ad-accounts', brandId] as const,
   performance: (portfolioId: string) => ['optimizer', 'performance', portfolioId] as const,
+  creativeSwapJobs: (brandId: string) => ['optimizer', 'creative-swap-jobs', brandId] as const,
   cpaSeries: (portfolioId: string, limit = DEFAULT_CPA_SERIES_LIMIT) =>
     ['optimizer', 'efficiency-series', portfolioId, limit] as const,
   spendByObjective: (brandId: string, days: number) =>
@@ -520,7 +523,7 @@ async function fetchArchivedPortfolios(
 
 /** The ads inside one ad set (provenance only) — lazy-loaded when an ad-set node
  *  is expanded in the picker. Same edge as the snapshots, scope=adset_ads. */
-async function fetchAdsetAds(
+export async function fetchAdsetAds(
   brandId: string,
   accountId: string,
   adsetId: string,
@@ -1181,6 +1184,139 @@ export function useOptimizerCpaSeries(
     enabled: Boolean(portfolioId),
     staleTime: FIVE_MINUTES,
   });
+}
+
+const EMPTY_SWAP_JOBS: CreativeSwapJobRow[] = [];
+
+async function fetchCreativeSwapJobs(brandId: string): Promise<CreativeSwapJobRow[]> {
+  const { data, error } = await getClient().rpc('optimizer_get_creative_swap_jobs', {
+    p_brand_id: brandId,
+    p_status: null,
+    p_limit: 100,
+  });
+  if (error) throw new Error('optimizer_get_creative_swap_jobs unreachable');
+  return z
+    .array(CreativeSwapJobRowSchema)
+    .catch([])
+    .parse(data ?? []);
+}
+
+/** Every creative swap job the brand has — the "flash creatives" a recommendation
+ *  spawned: queued, generating, generated, publishing, published, failed. One read per
+ *  brand; rows are matched to a recommendation / ad set on the client. */
+export function useOptimizerCreativeSwapJobs(brandId: string) {
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.creativeSwapJobs(brandId),
+    queryFn: () => fetchCreativeSwapJobs(brandId),
+    empty: EMPTY_SWAP_JOBS,
+    enabled: Boolean(brandId),
+    staleTime: 30_000,
+  });
+}
+
+// ── Flash creatives ───────────────────────────────────────────────────────────
+// A creative recommendation → one job on the brand's chosen Creative+ workflow → each
+// variant implemented here or in another ad set. Three RPCs (migration 20260918170000).
+
+const EMPTY_AUDIENCES: PortfolioAudienceRow[] = [];
+
+function rpcErrorText(error: unknown): string {
+  const message = (error as { message?: unknown } | null)?.message;
+  return typeof message === 'string' && message ? message : 'unknown error';
+}
+
+export type PortfolioAudienceRow = {
+  adset_id: string;
+  adset_name: string | null;
+  targeting_hash: string | null;
+  age_min?: number | null;
+  age_max?: number | null;
+  genders?: number[] | null;
+  observed_at?: string | null;
+};
+
+async function fetchPortfolioAudiences(portfolioId: string): Promise<PortfolioAudienceRow[]> {
+  const { data, error } = await getClient().rpc('optimizer_list_portfolio_audiences', {
+    p_portfolio_id: portfolioId,
+  } as never);
+  if (error) throw new Error('optimizer_list_portfolio_audiences unreachable');
+  return z
+    .array(
+      z
+        .object({
+          adset_id: z.string(),
+          adset_name: z.string().nullable().default(null),
+          targeting_hash: z.string().nullable().default(null),
+          age_min: z.number().nullable().optional(),
+          age_max: z.number().nullable().optional(),
+          genders: z.array(z.number()).nullable().optional(),
+          observed_at: z.string().nullable().optional(),
+        })
+        .loose(),
+    )
+    .catch([])
+    .parse(data ?? []);
+}
+
+export function useOptimizerPortfolioAudiences(portfolioId: string | null) {
+  return useOptimizerRead({
+    queryKey: ['optimizer', 'portfolio-audiences', portfolioId ?? 'none'] as const,
+    queryFn: () => fetchPortfolioAudiences(portfolioId as string),
+    empty: EMPTY_AUDIENCES,
+    enabled: Boolean(portfolioId),
+    staleTime: FIVE_MINUTES,
+  });
+}
+
+export type RequestFlashCreativesInput = {
+  recommendationId: string;
+  pipelineId: string;
+  prompt: string;
+  negativePrompt: string | null;
+  referenceAssetIds: string[];
+  count: number;
+};
+
+async function requestFlashCreatives(input: RequestFlashCreativesInput): Promise<string> {
+  const { data, error } = await getClient().rpc('optimizer_request_flash_creatives', {
+    p_rec_id: input.recommendationId,
+    p_pipeline_id: input.pipelineId,
+    p_prompt: input.prompt,
+    p_negative_prompt: input.negativePrompt,
+    p_reference_asset_ids: input.referenceAssetIds,
+    p_count: input.count,
+  } as never);
+  if (error) throw new Error(`Could not request flash creatives: ${rpcErrorText(error)}`);
+  return String(data);
+}
+
+export type ImplementFlashCreativeInput = {
+  jobId: string;
+  assetId: string;
+  targetAdsetId: string;
+  predecessorAdId: string | null;
+};
+
+async function implementFlashCreative(input: ImplementFlashCreativeInput): Promise<string> {
+  const { data, error } = await getClient().rpc('optimizer_implement_flash_creative', {
+    p_job_id: input.jobId,
+    p_asset_id: input.assetId,
+    p_target_adset_id: input.targetAdsetId,
+    p_predecessor_ad_id: input.predecessorAdId,
+  } as never);
+  if (error) throw new Error(`Could not implement the creative: ${rpcErrorText(error)}`);
+  return String(data);
+}
+
+export function useFlashCreativeMutations(brandId: string) {
+  const queryClient = useQueryClient();
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.creativeSwapJobs(brandId) });
+    void queryClient.invalidateQueries({ queryKey: ['optimizer'] });
+  };
+  const request = useMutation({ mutationFn: requestFlashCreatives, onSuccess: refresh });
+  const implement = useMutation({ mutationFn: implementFlashCreative, onSuccess: refresh });
+  return { request, implement };
 }
 
 export function useOptimizerRenewals(brandId: string) {

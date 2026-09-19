@@ -67,93 +67,58 @@ export function parseReport(
   };
 }
 
-// ── Why the confidence score is what it is ───────────────────────────────────
-// Data confidence is built from the two terms the account controls — sample (KPI
-// events against the floor) and consistency (do the 3/7/14d scores agree) — so the
-// weaker of the two is the answer to "why isn't this higher", and the hover leads with
-// it. The objective's predictiveness is a calibrated PRIOR (cfg.predictiveness); it is
-// disclosed beside the score, never presented as a term of it. Runs recorded before
-// Sept 18 2026 multiplied it in; the explainer reads them the same way, which is why
-// the note says what the number is rather than pretending it was measured.
-//
-// `actionables` are the engine's own list of what would move the score: the ad sets
-// under the event floor, the ones whose windows disagree, the ones spending with no
-// tracked conversions. Each names its ad sets and, where it can be computed, the score
-// fixing it would leave.
+// ── Conversion volume: the one confidence read that survives ──────────────────
+// The portfolio-wide "confidence score" is gone from the surface. What stays is the term
+// the account controls and can read at a glance: how many conversions the portfolio is
+// tracking, and how many ad sets sit under the floor the engine needs to score them. The
+// engine still computes its full Confidence; this reads only the volume half.
 
-export type ConfidenceTerm = {
-  key: 'sampleSize' | 'consistency';
-  label: string;
-  pct: number;
+export type ConversionVolume = {
+  /** KPI events in the trailing 14 days, summed over ad sets. */
+  events: number;
+  /** Events an ad set needs before its score is read as measured rather than guessed. */
+  floorEvents: number;
+  /** Ad sets under that floor. */
+  underFloorIds: string[];
+  band: 'thin' | 'building' | 'strong';
+  /** One line for the badge's hover / the panel's headline. */
   note: string;
-};
-
-export type ConfidenceExplanation = {
-  /** Weakest term first — the limiter leads. */
-  terms: ConfidenceTerm[];
-  limiter: ConfidenceTerm | null;
-  scorePct: number | null;
-  /** The per-objective prior, as a disclosure. Null when the run carries none. */
-  prior: { pct: number; note: string } | null;
+  /** The engine's own suggestions about the floor and tracking, when it wrote them. */
   actionables: ConfidenceActionable[];
 };
 
 const asPct = (value: number | undefined): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? Math.round(value * 100) : null;
 
-export function explainConfidence(
+export function conversionVolume(
   confidence: RunConfidence | null | undefined,
-): ConfidenceExplanation | null {
+): ConversionVolume | null {
   if (!confidence) return null;
-
-  const events = confidence.events;
-  const under = confidence.underFloor;
-  const underCount = under?.adsetIds?.length ?? 0;
-  const eventLabel =
-    underCount > 0 && under
-      ? `${underCount} ad set${underCount === 1 ? '' : 's'} under the ${under.floorEvents}-event floor`
-      : typeof events === 'number' && Number.isFinite(events)
-        ? `${Math.round(events)} conversion${Math.round(events) === 1 ? '' : 's'} in the last 14 days`
-        : 'how many conversions the trailing window carries';
-
-  const candidates: ConfidenceTerm[] = [];
-  const sample = asPct(confidence.sampleSize);
-  if (sample != null) {
-    candidates.push({ key: 'sampleSize', label: 'Sample', pct: sample, note: eventLabel });
-  }
-  const consistency = asPct(confidence.consistency);
-  if (consistency != null) {
-    candidates.push({
-      key: 'consistency',
-      label: 'Consistency',
-      pct: consistency,
-      note:
-        consistency >= 70
-          ? 'the 3d, 7d and 14d scores agree'
-          : 'the 3d, 7d and 14d scores disagree',
-    });
-  }
-  const predictive = asPct(confidence.predictiveness);
-  const prior =
-    predictive != null
-      ? {
-          pct: predictive,
-          note:
-            predictive < 60
-              ? 'this objective is among the hardest to predict — treat rankings as directional'
-              : 'how predictable this objective is, calibrated across accounts — not measured on yours',
-        }
+  const events =
+    typeof confidence.events === 'number' && Number.isFinite(confidence.events)
+      ? Math.round(confidence.events)
       : null;
-
-  if (candidates.length === 0 && prior == null) return null;
-  const terms = [...candidates].sort((a, b) => a.pct - b.pct);
-  return {
-    terms,
-    limiter: terms[0] ?? null,
-    scorePct: asPct(confidence.score),
-    prior,
-    actionables: confidence.actionables ?? [],
-  };
+  if (events == null) return null;
+  const floorEvents = confidence.underFloor?.floorEvents ?? 20;
+  const underFloorIds = confidence.underFloor?.adsetIds ?? [];
+  const sample = asPct(confidence.sampleSize);
+  // Sample is the spend-weighted events/(events+floor) across ad sets: 80%+ means the money
+  // sits on ad sets that clear the floor comfortably; under 50% most of it does not.
+  const band: ConversionVolume['band'] =
+    sample != null && sample >= 80
+      ? 'strong'
+      : sample != null && sample >= 50
+        ? 'building'
+        : 'thin';
+  const under = underFloorIds.length;
+  const note =
+    under > 0
+      ? `${events} conversion${events === 1 ? '' : 's'} in 14 days · ${under} ad set${under === 1 ? '' : 's'} under the ${floorEvents}-event floor`
+      : `${events} conversion${events === 1 ? '' : 's'} in 14 days · every ad set clears the ${floorEvents}-event floor`;
+  const actionables = (confidence.actionables ?? []).filter(
+    (action) => action.code === 'under_event_floor' || action.code === 'tracking_gap',
+  );
+  return { events, floorEvents, underFloorIds, band, note, actionables };
 }
 
 // ── Why one budget move happened ─────────────────────────────────────────────

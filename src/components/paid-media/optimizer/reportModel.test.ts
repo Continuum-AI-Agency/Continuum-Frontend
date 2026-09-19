@@ -8,9 +8,9 @@ import {
   CREATIVE_RECOMMENDATION_KINDS,
   CREATIVE_REQUEST_KINDS,
   confidenceBand,
+  conversionVolume,
   creativeBriefForRec,
   deliveryLabel,
-  explainConfidence,
   firstCycleState,
   freezeLabel,
   hasPendingWork,
@@ -357,66 +357,31 @@ describe('creative-level recommendations', () => {
   });
 });
 
-describe('explainConfidence names the term that is holding the score back', () => {
-  it('sorts weakest first and reports it as the limiter', () => {
-    // score is a PRODUCT, so the smallest factor is the honest answer to "why not higher".
-    const explanation = explainConfidence({
-      score: 0.26,
-      predictiveness: 0.75,
-      sampleSize: 0.38,
-      consistency: 0.91,
-      events: 12,
-      band: 'low',
-    });
-    expect(explanation?.limiter?.key).toBe('sampleSize');
-    // Two terms: the ones the account controls. Predictiveness is a disclosure, not a term.
-    expect(explanation?.terms.map((t) => t.key)).toEqual(['sampleSize', 'consistency']);
-    expect(explanation?.prior?.pct).toBe(75);
-    expect(explanation?.scorePct).toBe(26);
-  });
-
-  it('quotes the real event count in the sample note', () => {
-    const explanation = explainConfidence({ sampleSize: 0.38, events: 12 });
-    expect(explanation?.terms[0].note).toBe('12 conversions in the last 14 days');
-  });
-
-  it('singularizes a lone conversion', () => {
-    const explanation = explainConfidence({ sampleSize: 0.05, events: 1 });
-    expect(explanation?.terms[0].note).toBe('1 conversion in the last 14 days');
-  });
-
-  it('never presents predictiveness as measured — it is a per-objective prior', () => {
-    const explanation = explainConfidence({ predictiveness: 0.75 });
-    expect(explanation?.terms).toEqual([]);
-    expect(explanation?.prior?.note).toContain('not measured on yours');
-    expect(explainConfidence({ predictiveness: 0.45 })?.prior?.note).toContain(
-      'hardest to predict',
-    );
-  });
-
-  it('explains the sample term by the ad sets under the floor when the run names them', () => {
-    const explanation = explainConfidence({
-      sampleSize: 0.6,
+describe('conversionVolume reads the one term that survives', () => {
+  it('counts events, names the ad sets under the floor and bands by the sample term', () => {
+    const volume = conversionVolume({
+      score: 0.9,
+      sampleSize: 0.86,
+      consistency: 0.9,
       events: 786,
-      underFloor: { adsetIds: ['a', 'b', 'c'], floorEvents: 20 },
+      band: 'high',
+      underFloor: { adsetIds: ['a', 'b'], floorEvents: 20 },
       actionables: [
-        { code: 'under_event_floor', adsetIds: ['a', 'b', 'c'], message: 'Consolidate them.' },
+        { code: 'under_event_floor', adsetIds: ['a', 'b'], message: 'Consolidate.' },
+        { code: 'windows_disagree', adsetIds: ['c'], message: 'ignored here' },
       ],
     });
-    expect(explanation?.terms[0].note).toBe('3 ad sets under the 20-event floor');
-    expect(explanation?.actionables.map((a) => a.code)).toEqual(['under_event_floor']);
+    expect(volume?.events).toBe(786);
+    expect(volume?.band).toBe('strong');
+    expect(volume?.underFloorIds).toEqual(['a', 'b']);
+    expect(volume?.note).toBe('786 conversions in 14 days · 2 ad sets under the 20-event floor');
+    expect(volume?.actionables.map((a) => a.code)).toEqual(['under_event_floor']);
   });
-
-  it('flips the consistency note when the windows disagree', () => {
-    expect(explainConfidence({ consistency: 0.91 })?.terms[0].note).toContain('agree');
-    expect(explainConfidence({ consistency: 0.2 })?.terms[0].note).toContain('disagree');
-  });
-
-  it('returns null when the row carries no confidence signal at all', () => {
-    expect(explainConfidence(null)).toBeNull();
-    expect(explainConfidence(undefined)).toBeNull();
-    expect(explainConfidence({})).toBeNull();
-    expect(explainConfidence({ band: 'medium' })).toBeNull();
+  it('is thin under half the sample term and null without an event count', () => {
+    expect(conversionVolume({ events: 3, sampleSize: 0.13 })?.band).toBe('thin');
+    expect(conversionVolume({ events: 40, sampleSize: 0.6 })?.band).toBe('building');
+    expect(conversionVolume({ sampleSize: 0.6 })).toBeNull();
+    expect(conversionVolume(null)).toBeNull();
   });
 });
 

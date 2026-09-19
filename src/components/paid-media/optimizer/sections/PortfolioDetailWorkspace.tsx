@@ -21,7 +21,7 @@ import {
   type PortfolioListItem,
 } from '@continuum/contracts';
 import { ArrowLeftIcon, LineChartIcon, RefreshCwIcon } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { InsightDataTable } from '@/components/dashboard/datatable/InsightDataTable';
 import { formatDateRange } from '@/components/shared/DateRangeField';
 import { MetricStrip } from '@/components/shared/MetricStrip';
@@ -37,8 +37,8 @@ import { AdsetActionMenu } from '../charts/AdsetActionMenu';
 import { AdsetAngleStanding } from '../charts/AdsetAngleStanding';
 import { buildAdsetAngleStanding } from '../charts/angleStanding';
 import { ChartError, ChartSkeleton } from '../charts/ChartStates';
-import { ConfidenceActionables } from '../charts/ConfidenceActionables';
-import { ConfidenceBadge } from '../charts/ConfidenceBadge';
+import { ConversionVolumeBadge } from '../charts/ConversionVolumeBadge';
+import { ConversionVolumePanel } from '../charts/ConversionVolumePanel';
 import { CpaHeroTimeline } from '../charts/CpaHeroTimeline';
 import { splitReallocation } from '../charts/chartData';
 import { maxCiUpperBound } from '../charts/chartScale';
@@ -49,7 +49,6 @@ import { ReallocationFlow } from '../charts/ReallocationFlow';
 import { ReallocationStory } from '../charts/ReallocationStory';
 import { RoasProfitLine } from '../charts/RoasProfitLine';
 import { defaultStoryLookback } from '../charts/reallocationStoryModel';
-import { ScoreRadar } from '../charts/ScoreRadar';
 import { StepFunnel } from '../charts/StepFunnel';
 import {
   adSetRoasSeries,
@@ -145,6 +144,10 @@ export function PortfolioDetailWorkspace({
     : null;
   const winratesQuery = useOptimizerAdsetCreativeWinrates(brandId, resolvedRange.lookback, 'angle');
   const enrolledQuery = useOptimizerEnrolledAdsets(portfolio.id);
+  const nameById = useMemo(
+    () => new Map(enrolledQuery.data.map((row) => [row.adset_id, row.adset_name ?? ''])),
+    [enrolledQuery.data],
+  );
   const snapshotsQuery = useOptimizerAccountSnapshots(brandId, adAccountId, level);
   const { run, archive, update } = useOptimizerMutations(brandId, adAccountId);
 
@@ -183,7 +186,6 @@ export function PortfolioDetailWorkspace({
   // moves it is being prevented from making. Before that it is just the mode.
   const isObserveWithMoves = portfolio.apply_mode === 'observe' && movedCount > 0;
   const latestRunId = (latestRun as { id?: string } | null)?.id;
-  const confidenceScore = latestRun?.confidence?.score;
   // Bind every observed event (cycles, applied budgets, pauses, config changes) to the cycle
   // it could have influenced. The old buildCycleActionMap read only latest_run.cycle_ts, so
   // by construction the chart could show exactly one flag no matter how much had happened.
@@ -192,6 +194,8 @@ export function PortfolioDetailWorkspace({
     timelineEventsQuery.data,
   );
   const metric = getOptimizationMetricDefinition(portfolio.objective);
+  // The objective's result word for the volume read: leads, conversations, purchases.
+  const resultWord = metric.resultLabel.toLowerCase();
   // Target in the metric's DISPLAY unit (CPM for awareness), like every cost it meets.
   const targetDisplay =
     portfolio.cpa_target != null && portfolio.cpa_target > 0
@@ -446,13 +450,10 @@ export function PortfolioDetailWorkspace({
               ]}
             />
             <span className="inline-flex items-center gap-1.5">
-              <span className="text-2xs text-muted-foreground uppercase tracking-wide">
-                Confidence
-              </span>
-              <ConfidenceBadge
-                band={latestRun?.confidence?.band}
+              <span className="text-2xs text-muted-foreground uppercase tracking-wide">Volume</span>
+              <ConversionVolumeBadge
                 confidence={latestRun?.confidence ?? null}
-                score={confidenceScore}
+                resultLabel={resultWord}
               />
             </span>
           </div>
@@ -526,19 +527,18 @@ export function PortfolioDetailWorkspace({
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
             <OptimizerPanel
               meta={
-                <ConfidenceBadge
-                  band={latestRun?.confidence?.band}
+                <ConversionVolumeBadge
                   confidence={latestRun?.confidence ?? null}
-                  score={confidenceScore}
+                  resultLabel={resultWord}
                 />
               }
-              title="Confidence"
+              title="Conversion volume"
             >
-              <ScoreRadar
-                band={latestRun?.confidence?.band}
+              <ConversionVolumePanel
                 confidence={latestRun?.confidence ?? null}
+                nameById={nameById}
+                resultLabel={resultWord}
               />
-              <ConfidenceActionables confidence={latestRun?.confidence ?? null} />
             </OptimizerPanel>
 
             <OptimizerPanel
