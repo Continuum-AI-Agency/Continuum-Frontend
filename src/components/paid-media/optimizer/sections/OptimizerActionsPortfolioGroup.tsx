@@ -20,6 +20,7 @@
 
 import {
   type AdSetSnapshot,
+  type CreativeSwapJobRow,
   type CycleItemRow,
   GLOBAL_ANGLE_LABELS,
   type GlobalAngleId,
@@ -70,10 +71,14 @@ import {
   useApplyApproved,
   useOptimizerAccountSnapshots,
   useOptimizerActions,
+  useOptimizerAdsetAds,
+  useOptimizerCreativeSwapJobs,
   useOptimizerEnrolledAdsets,
   useOptimizerMutations,
   useOptimizerPerformance,
 } from '../useOptimizerData';
+import { CreativeRecommendationCard } from './CreativeRecommendationCard';
+import { isCreativeRecommendation } from './creativeCardModel';
 import { ActionRow } from './OptimizerActionFeed';
 import { OptimizerReadError } from './OptimizerReadError';
 import { RecEvidenceChart } from './RecEvidenceChart';
@@ -126,6 +131,13 @@ type EvidenceContext = {
   kpiField: string;
   denominatorMultiplier: number;
   maxCpa: number;
+  brandId: string;
+  adAccountId: string;
+  /** The brand's creative swap jobs — the flash creatives a recommendation spawned. */
+  swapJobs: readonly CreativeSwapJobRow[];
+  /** Ask Creative+ for variants: approves the row with the generation route. */
+  requestGeneration: (rec: RecommendationRow) => void;
+  generatingIds: ReadonlySet<string>;
 };
 
 type SettingsActions = {
@@ -393,6 +405,27 @@ export function OptimizerActionsPortfolioGroup({
     () => maxCiUpperBound(report?.latest_items ?? [], metric.denominatorMultiplier),
     [report?.latest_items, metric.denominatorMultiplier],
   );
+  const swapJobsQuery = useOptimizerCreativeSwapJobs(brandId);
+  const [generatingIds, setGeneratingIds] = React.useState<ReadonlySet<string>>(new Set());
+  const requestGeneration = React.useCallback(
+    (rec: RecommendationRow) => {
+      setGeneratingIds((prev) => new Set(prev).add(rec.id));
+      setStatus.mutate(
+        { recommendation_id: rec.id, status: 'approved', route: 'generate' },
+        {
+          onSettled: () => {
+            setGeneratingIds((prev) => {
+              const next = new Set(prev);
+              next.delete(rec.id);
+              return next;
+            });
+            void swapJobsQuery.refetch();
+          },
+        },
+      );
+    },
+    [setStatus, swapJobsQuery],
+  );
   const evidenceContext = React.useMemo<EvidenceContext>(
     () => ({
       snapshotById,
@@ -400,8 +433,24 @@ export function OptimizerActionsPortfolioGroup({
       kpiField: metric.kpiField,
       denominatorMultiplier: metric.denominatorMultiplier,
       maxCpa,
+      brandId,
+      adAccountId,
+      swapJobs: swapJobsQuery.data,
+      requestGeneration,
+      generatingIds,
     }),
-    [snapshotById, itemById, metric.kpiField, metric.denominatorMultiplier, maxCpa],
+    [
+      snapshotById,
+      itemById,
+      metric.kpiField,
+      metric.denominatorMultiplier,
+      maxCpa,
+      brandId,
+      adAccountId,
+      swapJobsQuery.data,
+      requestGeneration,
+      generatingIds,
+    ],
   );
 
   const selectableBudgetRows = rows.filter((row) => row.route === 'budget' && isSelectableRow(row));
@@ -1316,6 +1365,30 @@ function RowDetail({
     <div className="mt-2 space-y-1.5 rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-2xs text-muted-foreground">
       {row.route === 'budget' ? (
         <BudgetDetail item={row.item} currency={currency} counterparty={counterparty} />
+      ) : row.route !== 'settings' && isCreativeRecommendation(row.rec) ? (
+        <>
+          <CreativeCardHost evidence={evidence} name={row.name} rec={row.rec} />
+          {row.route === 'hidden' ? (
+            <p className="mt-2">{notImplementedMessage(row.rec.kind)}</p>
+          ) : row.route === 'creative' ? (
+            <div className="mt-2 border-border/50 border-t pt-2">
+              <CreativeBriefDetail rec={row.rec} />
+            </div>
+          ) : (
+            <div className="mt-2 border-border/50 border-t pt-2">
+              <RecEvidenceChart
+                currency={currency}
+                denominatorMultiplier={evidence.denominatorMultiplier}
+                item={evidence.itemById.get(row.adsetId) ?? null}
+                kpiField={evidence.kpiField}
+                maxCpa={evidence.maxCpa}
+                name={row.name}
+                rec={row.rec}
+                snapshot={evidence.snapshotById.get(row.adsetId) ?? null}
+              />
+            </div>
+          )}
+        </>
       ) : row.route === 'hidden' ? (
         <p>{notImplementedMessage(row.rec.kind)}</p>
       ) : row.route === 'creative' ? (
@@ -1338,6 +1411,36 @@ function RowDetail({
         </>
       )}
     </div>
+  );
+}
+
+/** Resolves the creative(s) a recommendation is about from the ad set's live ads (lazy —
+ *  only an expanded row reads them) and hands the card everything else from the row
+ *  context. Variants can be requested only from rows that carry a seed to generate from. */
+function CreativeCardHost({
+  rec,
+  name,
+  evidence,
+}: {
+  rec: RecommendationRow;
+  name: string | null;
+  evidence: EvidenceContext;
+}) {
+  const adsQuery = useOptimizerAdsetAds(evidence.brandId, evidence.adAccountId, rec.adset_id);
+  const canGenerate =
+    rec.status === 'pending' && (rec.kind === 'variate_creative' || rec.kind === 'seed_experiment');
+  return (
+    <CreativeRecommendationCard
+      ads={adsQuery.data}
+      adsLoading={adsQuery.isLoading}
+      adsetName={name}
+      audienceType={evidence.snapshotById.get(rec.adset_id)?.audienceType ?? null}
+      currency={null}
+      generating={evidence.generatingIds.has(rec.id)}
+      jobs={evidence.swapJobs}
+      onGenerate={canGenerate ? () => evidence.requestGeneration(rec) : null}
+      rec={rec}
+    />
   );
 }
 

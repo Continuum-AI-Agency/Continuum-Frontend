@@ -33,6 +33,8 @@ import {
   type CpaSeriesPoint,
   CpaSeriesPointSchema,
   type CreatePortfolioRequest,
+  type CreativeSwapJobRow,
+  CreativeSwapJobRowSchema,
   type CyclePreviewRequest,
   type CyclePreviewResponse,
   CyclePreviewResponseSchema,
@@ -155,6 +157,7 @@ export const optimizerQueryKeys = {
     ['optimizer', 'portfolios', brandId, adAccountId ?? 'all'] as const,
   adAccounts: (brandId: string) => ['optimizer', 'ad-accounts', brandId] as const,
   performance: (portfolioId: string) => ['optimizer', 'performance', portfolioId] as const,
+  creativeSwapJobs: (brandId: string) => ['optimizer', 'creative-swap-jobs', brandId] as const,
   cpaSeries: (portfolioId: string, limit = DEFAULT_CPA_SERIES_LIMIT) =>
     ['optimizer', 'efficiency-series', portfolioId, limit] as const,
   spendByObjective: (brandId: string, days: number) =>
@@ -1180,6 +1183,34 @@ export function useOptimizerCpaSeries(
     empty: EMPTY_CPA,
     enabled: Boolean(portfolioId),
     staleTime: FIVE_MINUTES,
+  });
+}
+
+const EMPTY_SWAP_JOBS: CreativeSwapJobRow[] = [];
+
+async function fetchCreativeSwapJobs(brandId: string): Promise<CreativeSwapJobRow[]> {
+  const { data, error } = await getClient().rpc('optimizer_get_creative_swap_jobs', {
+    p_brand_id: brandId,
+    p_status: null,
+    p_limit: 100,
+  });
+  if (error) throw new Error('optimizer_get_creative_swap_jobs unreachable');
+  return z
+    .array(CreativeSwapJobRowSchema)
+    .catch([])
+    .parse(data ?? []);
+}
+
+/** Every creative swap job the brand has — the "flash creatives" a recommendation
+ *  spawned: queued, generating, generated, publishing, published, failed. One read per
+ *  brand; rows are matched to a recommendation / ad set on the client. */
+export function useOptimizerCreativeSwapJobs(brandId: string) {
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.creativeSwapJobs(brandId),
+    queryFn: () => fetchCreativeSwapJobs(brandId),
+    empty: EMPTY_SWAP_JOBS,
+    enabled: Boolean(brandId),
+    staleTime: 30_000,
   });
 }
 
