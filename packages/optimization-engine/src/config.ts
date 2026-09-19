@@ -106,6 +106,9 @@ export type EngineConfig = {
   // When set, scoring uses kpiField (events/$) and velocity caps are asymmetric.
   objective?: OptimizationObjective;
   kpiField?: keyof WindowMetrics; // which WindowMetrics field scores (events/$)
+  /** The objective's upper-funnel event (see ObjectiveProfile.upperFunnelField). */
+  upperFunnelField?: keyof WindowMetrics | null;
+  upperFunnelLabel?: string;
   velocityUpPct?: number; // asymmetric raise cap (defaults to velocityCapPct)
   velocityDownPct?: number; // asymmetric cut cap (defaults to velocityCapPct)
   ewmaAlpha?: number; // composite smoothing across cycles (0 = off)
@@ -187,6 +190,8 @@ export function applyObjectiveProfile(profile: ObjectiveProfile): EngineConfig {
     weightsNegative: profile.weights.negative,
     objective: profile.objective,
     kpiField: profile.kpiField,
+    upperFunnelField: profile.upperFunnelField,
+    upperFunnelLabel: profile.upperFunnelLabel,
     velocityUpPct: profile.velocityUpPct,
     velocityDownPct: profile.velocityDownPct,
     ewmaAlpha: profile.ewmaAlpha,

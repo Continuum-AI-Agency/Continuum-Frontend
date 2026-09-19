@@ -8,3 +8,4 @@
 // construction and creative generation.
 
 export * from './persona';
+export * from './expansion';

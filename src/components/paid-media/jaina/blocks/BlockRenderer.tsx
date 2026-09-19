@@ -15,6 +15,10 @@ const ChartBlock = lazy(() => import('./ChartBlock'));
 const DataTableBlock = lazy(() => import('./DataTableBlock'));
 const InsightListBlock = lazy(() => import('./InsightListBlock'));
 const ComparisonBlock = lazy(() => import('./ComparisonBlock'));
+const DataScopeBlock = lazy(() => import('./DataScopeBlock'));
+const ActionsBlock = lazy(() => import('./ActionsBlock'));
+const GoalPacingBlock = lazy(() => import('./GoalPacingBlock'));
+const SurveyBlock = lazy(() => import('./SurveyBlock'));
 
 const BLOCK_REGISTRY: Record<
   string,
@@ -26,6 +30,10 @@ const BLOCK_REGISTRY: Record<
   data_table: DataTableBlock,
   insight_list: InsightListBlock,
   comparison: ComparisonBlock,
+  data_scope: DataScopeBlock,
+  actions: ActionsBlock,
+  goal_pacing: GoalPacingBlock,
+  survey: SurveyBlock,
 } as Record<
   string,
   React.LazyExoticComponent<React.ComponentType<{ block: never; isStreaming: boolean }>>

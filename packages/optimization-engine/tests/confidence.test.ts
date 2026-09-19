@@ -38,11 +38,52 @@ test("inconsistent windows => lower consistency, lower score", () => {
   expect(c.score).toBeLessThan(confidenceOf(strong, PURCHASE).score);
 });
 
-test("lower objective predictiveness scales confidence down", () => {
+test("objective predictiveness is disclosed beside the score, never multiplied into it", () => {
   const lo = confidenceOf(strong, resolveConfig({ predictiveness: 0.45 }));
   const hi = confidenceOf(strong, resolveConfig({ predictiveness: 0.9 }));
-  expect(hi.score).toBeGreaterThan(lo.score);
+  expect(hi.score).toBeCloseTo(lo.score, 10);
   expect(lo.predictiveness).toBeCloseTo(0.45);
+  expect(hi.predictiveness).toBeCloseTo(0.9);
+});
+
+test("a well-fed, consistent portfolio reaches the top of the scale on any objective", () => {
+  // 786 conversions over 14d, windows agreeing: the screenshot case. It read 'Low 28%'
+  // because the lead prior (0.45) capped the product; data confidence must not.
+  const fed: AdSetSnapshot = {
+    ...strong,
+    windows: { d3: w(4200, 170), d7: w(9800, 395), d14: w(19600, 786) },
+  };
+  const c = confidenceOf(fed, resolveConfig({ objective: "purchase", predictiveness: 0.45 }));
+  expect(c.sampleSize).toBeGreaterThan(0.97);
+  expect(c.score).toBeGreaterThan(0.9);
+  expect(c.band).toBe("high");
+  expect(c.underFloor.adsetIds).toEqual([]);
+});
+
+test("portfolioConfidence names the ad sets under the floor and what fixing them would leave", () => {
+  const big: AdSetSnapshot = { ...strong, id: "big" };
+  const thin: AdSetSnapshot = {
+    id: "thin", status: "active", currentBudget: 10, ageDays: 40,
+    windows: { d3: w(400, 1), d7: w(900, 2), d14: w(2000, 3) },
+  };
+  const c = portfolioConfidence([big, thin], PURCHASE);
+  expect(c.underFloor).toEqual({ adsetIds: ["thin"], floorEvents: 20 });
+  const floor = c.actionables.find((a) => a.code === "under_event_floor");
+  expect(floor?.adsetIds).toEqual(["thin"]);
+  expect(floor?.spendShare).toBeCloseTo(2000 / 10000, 5);
+  expect(floor?.projectedScore).toBeGreaterThan(c.score);
+  expect(floor?.message).toContain("1 of 2 ad sets are under the 20-event floor");
+});
+
+test("an ad set spending past a target CPA with zero events is flagged as a tracking gap", () => {
+  const dark: AdSetSnapshot = {
+    id: "dark", status: "active", currentBudget: 50, ageDays: 40,
+    windows: { d3: w(100, 0), d7: w(300, 0), d14: w(700, 0) },
+  };
+  const c = portfolioConfidence([strong, dark], PURCHASE);
+  const gap = c.actionables.find((a) => a.code === "tracking_gap");
+  expect(gap?.adsetIds).toEqual(["dark"]);
+  expect(gap?.message).toContain("pixel / CAPI");
 });
 
 test("portfolioConfidence is spend-weighted (big ad set dominates)", () => {

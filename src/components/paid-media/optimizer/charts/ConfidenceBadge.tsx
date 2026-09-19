@@ -7,10 +7,12 @@
 // signal before the label is even read. The band drives which segments light and
 // their color; the score (0–1 composite) is shown as a percentage.
 //
-// Pass `confidence` and the meter also answers WHY. The score is a product of three
-// terms, so the smallest one is the whole answer, and the hover leads with it. Without
-// `confidence` there is nothing to explain and the meter renders exactly as before —
-// static, role="img", no interactive affordance promising a popover that has no content.
+// Pass `confidence` and the meter also answers WHY. Data confidence is built from the
+// two terms the account controls — sample and consistency — so the weaker one is the
+// answer, and the hover leads with it; the objective's predictiveness is disclosed as a
+// note, never as a term. The engine's actionables follow: what would raise the number.
+// Without `confidence` there is nothing to explain and the meter renders exactly as
+// before — static, role="img", no interactive affordance promising an empty popover.
 
 import type { RunConfidence } from '@continuum/contracts';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
@@ -107,9 +109,21 @@ export function ConfidenceBadge({ band, score, confidence, className }: Confiden
           ))}
         </ul>
         <p className="border-t border-border/60 pt-1.5 text-muted-foreground">
-          The three multiply together
+          Data confidence is the balance of the two
           {explanation.scorePct != null ? `, giving ${explanation.scorePct}%` : ''}.
+          {explanation.prior
+            ? ` Predictability of this objective: ${explanation.prior.pct}% — ${explanation.prior.note}.`
+            : ''}
         </p>
+        {explanation.actionables.length > 0 ? (
+          <ul className="space-y-1 border-t border-border/60 pt-1.5">
+            {explanation.actionables.map((action) => (
+              <li className="text-foreground" key={action.code}>
+                <span className="font-medium">To raise it:</span> {action.message}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </HoverCardContent>
     </HoverCard>
   );

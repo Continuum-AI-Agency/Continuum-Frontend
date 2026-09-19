@@ -19,7 +19,10 @@
 // the refetch the mutations trigger.
 
 import {
+  type AdSetSnapshot,
   type CycleItemRow,
+  GLOBAL_ANGLE_LABELS,
+  type GlobalAngleId,
   getOptimizationMetricDefinition,
   type ParsedCycleRunReport,
   type PortfolioLevel,
@@ -48,6 +51,7 @@ import { cn } from '@/lib/utils';
 import { resolveAdsetName } from '../adsetName';
 import { AdSetIdLabel } from '../charts/AdSetIdLabel';
 import { attributeTransfers, type TransferAttribution } from '../charts/chartData';
+import { maxCiUpperBound } from '../charts/chartScale';
 import { ReallocationStory } from '../charts/ReallocationStory';
 import { defaultStoryLookback } from '../charts/reallocationStoryModel';
 import { formatCurrency } from '../format';
@@ -72,7 +76,22 @@ import {
 } from '../useOptimizerData';
 import { ActionRow } from './OptimizerActionFeed';
 import { OptimizerReadError } from './OptimizerReadError';
+import { RecEvidenceChart } from './RecEvidenceChart';
 import { RecommendationInsight } from './RecommendationInsight';
+import {
+  asOfLine,
+  audienceExpansionPrompt,
+  evidenceLine,
+  formatSettingsValue,
+  impactLabel,
+  impactPerDay,
+  jainaPromptHref,
+  queueSummary,
+  type SettingsPatch,
+  settingsFieldLabel,
+  settingsPatchOf,
+  triggerWords,
+} from './recQueueModel';
 
 /** A budget move needing a decision — held by autopilot, approved and awaiting the drain,
  *  or a scored change not yet written (recommend mode). */
@@ -91,7 +110,7 @@ export type BudgetQueueRow = {
  *  'fatigue' (renewal task), 'hidden' (found, not executable). */
 export type RecQueueRow = {
   key: string;
-  route: 'pause' | 'creative' | 'fatigue' | 'hidden';
+  route: 'pause' | 'creative' | 'fatigue' | 'settings' | 'hidden';
   adsetId: string;
   name: string | null;
   rec: RecommendationRow;
@@ -100,6 +119,20 @@ export type RecQueueRow = {
 };
 
 export type QueueRow = BudgetQueueRow | RecQueueRow;
+
+type EvidenceContext = {
+  snapshotById: Map<string, AdSetSnapshot>;
+  itemById: Map<string, CycleItemRow>;
+  kpiField: string;
+  denominatorMultiplier: number;
+  maxCpa: number;
+};
+
+type SettingsActions = {
+  busy: boolean;
+  apply: (rec: RecommendationRow, patch: SettingsPatch) => Promise<void>;
+  decide: (rec: RecommendationRow, status: 'approved' | 'rejected') => void;
+};
 
 /** The checkbox's accessible name. It has to name the DECISION, not just the ad set: one
  *  cycle can queue a budget move AND a creative refresh on the same ad set, and labelling
@@ -115,6 +148,9 @@ export function selectionLabel(row: QueueRow): string {
  *  ad-level rows are shown but never selectable. */
 export function isSelectableRow(row: QueueRow): boolean {
   if (row.route === 'hidden') return false;
+  // A settings row is applied from its own button — it writes a portfolio field, not an
+  // ad set, so it never joins a batch approval.
+  if (row.route === 'settings') return false;
   if (row.route === 'budget') return !row.approved;
   return row.rec.status === 'pending';
 }
@@ -168,7 +204,11 @@ export function buildActionQueue(
     });
   }
 
-  return rows.sort((a, b) => queueRank(a) - queueRank(b));
+  // Within a band, the money decides: two medium pauses are not equal when one drains
+  // $500/day and the other $20/day.
+  return rows.sort(
+    (a, b) => queueRank(a) - queueRank(b) || rowImpactPerDay(b) - rowImpactPerDay(a),
+  );
 }
 
 /** Who this ad set's budget came from, or went to. `direction` is from the row's point of
@@ -212,6 +252,10 @@ export function buildCounterparties(
 
 /** Sort key: needs-decision first, approved-awaiting-execute next, hidden last; within the
  *  needs-decision band, higher-severity recs rise. */
+function rowImpactPerDay(row: QueueRow): number {
+  return row.route === 'budget' ? 0 : impactPerDay(row.rec);
+}
+
 function queueRank(row: QueueRow): number {
   if (row.route === 'hidden') return 300;
   if (row.approved) return 200;
@@ -239,7 +283,26 @@ export function OptimizerActionsPortfolioGroup({
     adAccountId,
     (portfolio.level as PortfolioLevel) ?? 'adset',
   );
-  const { setStatus, setStatuses, requestApplyItems } = useOptimizerMutations(brandId, adAccountId);
+  const { setStatus, setStatuses, requestApplyItems, update } = useOptimizerMutations(
+    brandId,
+    adAccountId,
+  );
+  // A settings row writes one portfolio field, then records the decision on the row.
+  // Both mutations already exist; this only pairs them for the row's own button.
+  const settingsActions = React.useMemo<SettingsActions>(
+    () => ({
+      busy: update.isPending || setStatus.isPending,
+      apply: async (rec, patch) => {
+        await update.mutateAsync({
+          portfolio_id: portfolio.id,
+          patch: { [patch.field]: patch.to },
+        });
+        await setStatus.mutateAsync({ recommendation_id: rec.id, status: 'applied' });
+      },
+      decide: (rec, status) => setStatus.mutate({ recommendation_id: rec.id, status }),
+    }),
+    [update, setStatus, portfolio.id],
+  );
   const applyApproved = useApplyApproved();
   const applyAdsetStatus = useApplyAdsetStatus();
 
@@ -260,6 +323,14 @@ export function OptimizerActionsPortfolioGroup({
   const rows = React.useMemo(() => buildActionQueue(report, nameById), [report, nameById]);
 
   const runId = (report?.latest_run as { id?: string } | null)?.id ?? null;
+  const asOf = asOfLine(
+    (report?.latest_run as { cycle_ts?: string } | null)?.cycle_ts ?? null,
+    portfolio.next_realloc_at ?? null,
+  );
+  const summary = React.useMemo(
+    () => queueSummary(report?.recommendations ?? []),
+    [report?.recommendations],
+  );
   // Observe hard-halts every Meta write; approving/executing is disabled and the reason shown.
   const writesBlocked = portfolio.apply_mode === 'observe';
 
@@ -311,6 +382,27 @@ export function OptimizerActionsPortfolioGroup({
       ? portfolio.cpa_target * metric.denominatorMultiplier
       : null;
   const hasBudgetRows = rows.some((row) => row.route === 'budget');
+
+  // What the inline evidence chart draws from: the ad set's snapshot windows and its
+  // cycle row (the CI on pause triggers), plus the scale the CI bars share.
+  const itemById = React.useMemo(
+    () => new Map((report?.latest_items ?? []).map((item) => [item.adset_id, item])),
+    [report?.latest_items],
+  );
+  const maxCpa = React.useMemo(
+    () => maxCiUpperBound(report?.latest_items ?? [], metric.denominatorMultiplier),
+    [report?.latest_items, metric.denominatorMultiplier],
+  );
+  const evidenceContext = React.useMemo<EvidenceContext>(
+    () => ({
+      snapshotById,
+      itemById,
+      kpiField: metric.kpiField,
+      denominatorMultiplier: metric.denominatorMultiplier,
+      maxCpa,
+    }),
+    [snapshotById, itemById, metric.kpiField, metric.denominatorMultiplier, maxCpa],
+  );
 
   const selectableBudgetRows = rows.filter((row) => row.route === 'budget' && isSelectableRow(row));
   const budgetGroupSelected =
@@ -498,6 +590,34 @@ export function OptimizerActionsPortfolioGroup({
         />
       </div>
 
+      {/* Is this queue current? One line, before anything in it is read. Every pending row
+          belongs to the latest cycle (older ones are superseded server-side), so the cycle's
+          time IS the queue's time. */}
+      {asOf ? <p className="text-2xs text-muted-foreground">{asOf}</p> : null}
+
+      {/* What is in the queue, by reason, biggest money first — the summary a reader wants
+          before ten rows that each say "Pause ad set · HIGH". */}
+      {summary.length > 1 ? (
+        <ul className="flex flex-wrap gap-1.5" aria-label="Queue summary">
+          {summary.map((group) => (
+            <li
+              className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/20 px-2 py-1 text-2xs"
+              key={`${group.kind}:${group.trigger}`}
+            >
+              <span className="font-medium">
+                {group.count} × {group.label.toLowerCase()}
+              </span>
+              <span className="text-muted-foreground">· {triggerWords(group.trigger)}</span>
+              {group.impactPerDay > 0 ? (
+                <span className="text-muted-foreground tabular-nums">
+                  · {formatCurrency(group.impactPerDay, null)}/day
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
       <QueueToolbar
         activeFilters={routeFilters}
         allSelected={allSelected}
@@ -575,6 +695,8 @@ export function OptimizerActionsPortfolioGroup({
             ) : null}
             <QueueRowView
               brandId={brandId}
+              evidence={evidenceContext}
+              settingsActions={settingsActions}
               counterparty={
                 row.route === 'budget' ? (counterpartyById.get(row.adsetId) ?? null) : null
               }
@@ -741,6 +863,7 @@ const ROUTE_FILTERS: { route: QueueRow['route']; label: string }[] = [
   { route: 'pause', label: 'Pause' },
   { route: 'creative', label: 'Creative' },
   { route: 'fatigue', label: 'Fatigue' },
+  { route: 'settings', label: 'Settings' },
   { route: 'hidden', label: 'Ad-level' },
 ];
 
@@ -982,6 +1105,8 @@ function QueueRowView({
   counterparty,
   onToggleSelect,
   onToggleExpand,
+  settingsActions,
+  evidence,
 }: {
   row: QueueRow;
   brandId: string;
@@ -994,6 +1119,8 @@ function QueueRowView({
   counterparty?: { direction: 'funds' | 'fundedBy'; parties: Counterparty[] } | null;
   onToggleSelect: () => void;
   onToggleExpand: () => void;
+  settingsActions: SettingsActions;
+  evidence: EvidenceContext;
 }) {
   const selectable = isSelectableRow(row);
   const hidden = row.route === 'hidden';
@@ -1042,12 +1169,22 @@ function QueueRowView({
             ) : null}
           </div>
           {row.route === 'budget' && row.item.reason ? (
-            <p className="mt-0.5 line-clamp-2 text-2xs text-muted-foreground" title={row.item.reason}>
+            <p
+              className="mt-0.5 line-clamp-2 text-2xs text-muted-foreground"
+              title={row.item.reason}
+            >
               <span className="font-medium text-foreground">Why:</span> {row.item.reason}
             </p>
           ) : null}
+          {row.route !== 'budget' ? <RecEvidenceLine rec={row.rec} currency={currency} /> : null}
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <AdSetIdLabel id={row.adsetId} />
+            {row.route === 'settings' ? (
+              <span className="text-3xs text-muted-foreground uppercase tracking-wide">
+                Portfolio setting
+              </span>
+            ) : (
+              <AdSetIdLabel id={row.adsetId} />
+            )}
             {row.route !== 'budget' && row.rec.severity ? (
               <Badge
                 variant={severityBadgeVariant(row.rec.severity)}
@@ -1080,8 +1217,40 @@ function QueueRowView({
         </button>
       </div>
 
-      {expanded ? <RowDetail row={row} currency={currency} counterparty={counterparty} /> : null}
+      {expanded ? (
+        <RowDetail
+          counterparty={counterparty}
+          currency={currency}
+          evidence={evidence}
+          row={row}
+          settingsActions={settingsActions}
+        />
+      ) : null}
     </li>
+  );
+}
+
+/** The justification, in the row, always visible — never only behind a hover. The
+ *  structured line first (metric · value · comparison · window, then the money per day),
+ *  the prose reason under it. A trader should be able to act from this line alone. */
+function RecEvidenceLine({ rec, currency }: { rec: RecommendationRow; currency: string | null }) {
+  const line = evidenceLine(rec.evidence, currency);
+  const money = impactLabel(rec, currency);
+  if (!line && !rec.reason) return null;
+  return (
+    <div className="mt-0.5 space-y-0.5 text-2xs text-muted-foreground">
+      {line ? (
+        <p className="tabular-nums">
+          <span className="font-medium text-foreground">{line}</span>
+          {money ? <span> · {money}</span> : null}
+        </p>
+      ) : null}
+      {rec.reason ? (
+        <p className="line-clamp-2" title={rec.reason}>
+          <span className="font-medium text-foreground">Why:</span> {rec.reason}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -1134,10 +1303,14 @@ function RowDetail({
   row,
   currency,
   counterparty,
+  settingsActions,
+  evidence,
 }: {
   row: QueueRow;
   currency: string | null;
   counterparty?: { direction: 'funds' | 'fundedBy'; parties: Counterparty[] } | null;
+  settingsActions: SettingsActions;
+  evidence: EvidenceContext;
 }) {
   return (
     <div className="mt-2 space-y-1.5 rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-2xs text-muted-foreground">
@@ -1147,8 +1320,88 @@ function RowDetail({
         <p>{notImplementedMessage(row.rec.kind)}</p>
       ) : row.route === 'creative' ? (
         <CreativeBriefDetail rec={row.rec} />
+      ) : row.route === 'settings' ? (
+        <SettingsDetail actions={settingsActions} currency={currency} rec={row.rec} />
       ) : (
-        <RecDetail rec={row.rec} />
+        <>
+          <RecDetail name={row.name} rec={row.rec} />
+          <RecEvidenceChart
+            currency={currency}
+            denominatorMultiplier={evidence.denominatorMultiplier}
+            item={evidence.itemById.get(row.adsetId) ?? null}
+            kpiField={evidence.kpiField}
+            maxCpa={evidence.maxCpa}
+            name={row.name}
+            rec={row.rec}
+            snapshot={evidence.snapshotById.get(row.adsetId) ?? null}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+/** A portfolio-level recommendation: the setting, what it is now, what it would become,
+ *  and a button that writes exactly that through optimizer_update_portfolio. Advice with
+ *  no single knob (consolidate ad sets, fix tracking) has no button; it is acknowledged
+ *  or dismissed. Either way the row leaves the queue on a human's click, never on its own. */
+function SettingsDetail({
+  rec,
+  actions,
+  currency,
+}: {
+  rec: RecommendationRow;
+  actions: SettingsActions;
+  currency: string | null;
+}) {
+  const patch = settingsPatchOf(rec);
+  const decided = rec.status !== 'pending';
+  return (
+    <div className="space-y-2">
+      <RecDetail rec={rec} />
+      {patch ? (
+        <p className="text-foreground tabular-nums">
+          <span className="font-medium">{settingsFieldLabel(patch.field)}:</span>{' '}
+          {formatSettingsValue(patch.field, patch.from, currency)} →{' '}
+          <span className="font-semibold">
+            {formatSettingsValue(patch.field, patch.to, currency)}
+          </span>
+        </p>
+      ) : null}
+      {decided ? (
+        <p className="text-muted-foreground">Decided: {rec.status}.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {patch ? (
+            <Button
+              disabled={actions.busy}
+              onClick={() => void actions.apply(rec, patch)}
+              size="sm"
+              type="button"
+            >
+              Apply setting
+            </Button>
+          ) : (
+            <Button
+              disabled={actions.busy}
+              onClick={() => actions.decide(rec, 'approved')}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
+              Got it
+            </Button>
+          )}
+          <Button
+            disabled={actions.busy}
+            onClick={() => actions.decide(rec, 'rejected')}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            Dismiss
+          </Button>
+        </div>
       )}
     </div>
   );
@@ -1161,8 +1414,47 @@ function RowDetail({
 function CreativeBriefDetail({ rec }: { rec: RecommendationRow }) {
   const brief = creativeBriefForRec(rec);
   if (!brief) return <RecDetail rec={rec} />;
+  const seed = rec.seed as
+    | { posterUrl?: string | null; winnerAssetId?: string | null; angleId?: string | null }
+    | null
+    | undefined;
+  const posterUrl = typeof seed?.posterUrl === 'string' ? seed.posterUrl : null;
+  const angleLabel =
+    typeof seed?.angleId === 'string' && seed.angleId in GLOBAL_ANGLE_LABELS
+      ? GLOBAL_ANGLE_LABELS[seed.angleId as GlobalAngleId]
+      : null;
+  const inLibrary = typeof seed?.winnerAssetId === 'string' && seed.winnerAssetId.length > 0;
   return (
     <div className="space-y-1.5">
+      {/* The creative the recommendation is about, in view. A creative recommendation with
+          no creative in it cannot be acted on; the poster is the reference, the angle chip
+          is the condensed WHY it wins. */}
+      {posterUrl || angleLabel ? (
+        <div className="flex items-start gap-3">
+          {posterUrl ? (
+            // biome-ignore lint/performance/noImgElement: Meta CDN poster with a signed, expiring URL; next/image cannot optimise it and would break the signature.
+            <img
+              alt="Winning creative"
+              className="h-24 w-24 shrink-0 rounded-md border border-border/60 object-cover"
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              src={posterUrl}
+            />
+          ) : null}
+          <div className="min-w-0 space-y-1">
+            {angleLabel ? (
+              <Badge className="text-3xs" variant="teal">
+                {angleLabel}
+              </Badge>
+            ) : null}
+            {!inLibrary ? (
+              <p className="text-2xs text-muted-foreground">
+                Not in the Library yet — import it from the ad account to generate from it.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
       <p className="font-medium text-foreground">{brief.title}</p>
       <p className="leading-relaxed">{brief.brief}</p>
       {brief.groundedOn.length > 0 ? (
@@ -1252,12 +1544,28 @@ function BudgetDetail({
   );
 }
 
-function RecDetail({ rec }: { rec: RecommendationRow }) {
+function RecDetail({ rec, name }: { rec: RecommendationRow; name?: string | null }) {
   return (
     <>
       {rec.reason ? (
         <p>
           <span className="font-medium text-foreground">Why:</span> {rec.reason}
+        </p>
+      ) : null}
+      {rec.kind === 'audience_expand' ? (
+        // The options with sizes live in Jaina's audience tools; hand the ad set and its
+        // diagnosis over so the person lands in the three-bucket answer, not a blank chat.
+        <p>
+          <a
+            className="font-medium text-primary underline-offset-2 hover:underline"
+            href={jainaPromptHref(audienceExpansionPrompt(rec, name ?? null))}
+          >
+            Explore options with Jaina →
+          </a>{' '}
+          <span className="text-muted-foreground">
+            what it targets now, what the account already owns, and catalogue-verified interests —
+            each with an estimated size.
+          </span>
         </p>
       ) : null}
       <p>

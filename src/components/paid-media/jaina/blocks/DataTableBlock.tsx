@@ -23,12 +23,16 @@ const displayValue = (
   value: string | number | null | undefined,
   format?: string | null,
   currency?: string | null,
+  percentBasis?: 'fraction' | 'points' | null,
 ): string => {
   if (value == null) return '—';
   if (format === 'currency' && !currency) {
     return `${formatValue(value, 'number')} (currency unknown)`;
   }
-  return formatValue(value, format ?? undefined, currency ? { currency } : undefined);
+  return formatValue(value, format ?? undefined, {
+    ...(currency ? { currency } : {}),
+    percentBasis: percentBasis ?? null,
+  });
 };
 
 const temporalBasisLabel = (basis: PaidCreativeAudienceEvidence['temporalBasis']): string => {
@@ -188,7 +192,12 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
             );
             const audience = parsedAudience.success ? parsedAudience.data : null;
             const titleColumn = columnsByKey.get(cardFields.title);
-            const title = displayValue(row[cardFields.title], titleColumn?.format, rowCurrency);
+            const title = displayValue(
+              row[cardFields.title],
+              titleColumn?.format,
+              rowCurrency,
+              titleColumn?.percent_basis,
+            );
             const creativeColumn = columnsByKey.get(cardFields.creative);
             const creativeLabel = displayValue(
               row[cardFields.creative],
@@ -223,6 +232,7 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
                               row[cardFields.subtitle],
                               subtitleColumn?.format,
                               rowCurrency,
+                              subtitleColumn?.percent_basis,
                             )}
                           </MediaText>
                         </p>
@@ -238,7 +248,12 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
                                 {column?.label ?? key}
                               </dt>
                               <dd className="mt-0.5 text-sm font-medium tabular-nums text-foreground">
-                                {displayValue(row[key], column?.format, rowCurrency)}
+                                {displayValue(
+                                  row[key],
+                                  column?.format,
+                                  rowCurrency,
+                                  column?.percent_basis,
+                                )}
                                 {key === 'audience_coverage' ? (
                                   <AudienceEvidence audience={audience} currency={rowCurrency} />
                                 ) : null}
@@ -276,8 +291,7 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
                 // used to BE the id (`campaign-1202…`) because the Backend had no
                 // name to put there; now that it does, the id still has to stay
                 // reachable — it is what a user pastes into Ads Manager.
-                const entityId =
-                  typeof rowMeta?.entity_id === 'string' ? rowMeta.entity_id : null;
+                const entityId = typeof rowMeta?.entity_id === 'string' ? rowMeta.entity_id : null;
                 const rowCurrency = currencyCode(rowMeta?.currency);
                 const parsedAudience = paidCreativeAudienceEvidenceSchema.safeParse(
                   rowMeta?.audience,

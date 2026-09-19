@@ -62,6 +62,10 @@ export function evaluateFatigue(
     const freqCap = isRemarketing(s.audienceType)
       ? cfg.fatigueFreqRemarketing
       : cfg.fatigueFreqProspecting;
+    // The money a fatigue call puts on the table: the share of today's spend that is the
+    // CPA rise itself. Spending $90/day at a CPA up 50% means $30/day is the decay.
+    const dailySpend = s.windows.d3.spend / 3;
+    const excessPerDay = dailySpend * (decay.cpaUpPct / (100 + decay.cpaUpPct));
 
     // F2 — audience saturation (frequency over cap takes precedence: expanding the
     // audience is the lever, refreshing creative won't fix an exhausted pool).
@@ -72,6 +76,15 @@ export function evaluateFatigue(
         trigger: 'F2_audience_saturation',
         severity: 'medium',
         reason: `Frequency ${freq.toFixed(1)} ≥ ${freqCap} with CPA up ${cpaUpPct}% (3d $${cppRecent.toFixed(0)} vs 14d $${cppBase.toFixed(0)}): audience saturated — expand or rotate.`,
+        evidence: {
+          metric: 'frequency',
+          value: freq,
+          comparator: `at or over the ${freqCap} cap, CPA up ${cpaUpPct}%`,
+          threshold: freqCap,
+          window: 'd7',
+          estImpactPerDay: excessPerDay,
+          source: 'engine',
+        },
         needsApproval: true,
       });
       continue;
@@ -94,6 +107,15 @@ export function evaluateFatigue(
         trigger: 'F3_audience_exhausted',
         severity: 'medium',
         reason: `Doubling the window to 14 days reached only ${newPeoplePct}% more people than the last 7 did, with CPA up ${cpaUpPct}% (3d $${cppRecent.toFixed(0)} vs 14d $${cppBase.toFixed(0)}) at frequency ${freq.toFixed(1)}. The audience is used up, not the creative — a new ad here is shown to the same people. Widen or rotate the audience.`,
+        evidence: {
+          metric: 'reach_expansion',
+          value: reachExpansion,
+          comparator: `14d reach vs 7d — only ${newPeoplePct}% new people, CPA up ${cpaUpPct}%`,
+          threshold: REACH_EXHAUSTED_EXPANSION,
+          window: 'd14',
+          estImpactPerDay: excessPerDay,
+          source: 'engine',
+        },
         needsApproval: true,
       });
       continue;
@@ -110,6 +132,15 @@ export function evaluateFatigue(
         trigger: 'F1_creative_fatigue',
         severity: 'medium',
         reason: `CTR down ${ctrDownPct}% (3d ${(ctrRecent * 100).toFixed(2)}% vs 14d ${(ctrBase * 100).toFixed(2)}%) with CPA up ${cpaUpPct}%: creative worn out — refresh.`,
+        evidence: {
+          metric: 'ctr',
+          value: ctrRecent,
+          comparator: `down ${ctrDownPct}% vs 14d, CPA up ${cpaUpPct}%`,
+          threshold: ctrBase,
+          window: 'd3',
+          estImpactPerDay: excessPerDay,
+          source: 'engine',
+        },
         needsApproval: true,
       });
     }

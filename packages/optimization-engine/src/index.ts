@@ -129,6 +129,12 @@ export { GRANTABLE_ACTION_KINDS } from './rules/types';
 export type { CycleOptions } from './runCycle';
 export { runCycle } from './runCycle';
 export { costPerEvent, kpiEvents, scoreAdSet, windowScore } from './scoring';
+export {
+  CAP_BINDING_SHARE,
+  evaluateSettings,
+  FLOOR_RELAXED_SHARE,
+  UNDERSPEND_SHARE,
+} from './settings';
 export { adSetCpaInterval, costInterval, cpaInterval, shrinkScores } from './significance';
 export type { SolverAllocation, SolverItem, SolverOutput } from './solver';
 export { solve } from './solver';
@@ -139,6 +145,7 @@ export type {
   AdSetStatus,
   AudienceType,
   Confidence,
+  ConfidenceActionable,
   CpaInterval,
   CreativeAdSeries,
   CreativeStanding,
@@ -160,9 +167,11 @@ export type {
   RetentionMetrics,
   RetentionRates,
   ScaleStep,
+  SettingsPatch,
   TrajectoryState,
   WindowMetrics,
 } from './types';
+export { PORTFOLIO_SCOPE } from './types';
 
 // NOTE: zod-backed IO schemas are intentionally NOT re-exported here — the root
 // entry stays pure/dependency-free. Import them from the BE-safe subpath

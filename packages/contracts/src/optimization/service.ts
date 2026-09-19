@@ -763,6 +763,23 @@ export const CycleItemRowSchema = z
 export type CycleItemRow = z.infer<typeof CycleItemRowSchema>;
 
 /** One optimizer.recommendations row inside CycleRunReport.recommendations. */
+/** The structured figure behind a recommendation's prose `reason` — what the engine measured,
+ *  against what, over which window, and the daily money at stake. Lets the queue sort by
+ *  impact and render one evidence line per row instead of re-parsing sentences. Optional:
+ *  rows written before the engine carried it have none. */
+export const RecommendationEvidenceSchema = z
+  .object({
+    metric: z.string(),
+    value: z.number(),
+    comparator: z.string(),
+    threshold: z.number().nullable(),
+    window: z.enum(['d3', 'd7', 'd14']),
+    estImpactPerDay: z.number().nullable(),
+    source: z.string(),
+  })
+  .loose();
+export type RecommendationEvidence = z.infer<typeof RecommendationEvidenceSchema>;
+
 export const RecommendationRowSchema = z
   .object({
     id: z.string().uuid(),
@@ -783,6 +800,12 @@ export const RecommendationRowSchema = z
     /** The generation seed on a variate_creative / seed_experiment: the winning creative's
      *  labels, its Library asset, and the deterministic citations the brief is grounded on. */
     seed: z.record(z.string(), z.unknown()).nullable().optional(),
+    /** Structured evidence (see RecommendationEvidenceSchema); null on rows written before
+     *  the engine carried it. */
+    evidence: RecommendationEvidenceSchema.nullable().optional(),
+    /** The cycle that last (re)asserted this recommendation. A row a later cycle no longer
+     *  raises is superseded, so a pending row always belongs to the latest run. */
+    run_id: z.string().nullable().optional(),
     /** Set when a data-driven rule produced this row — the join key to its evaluation. */
     rule_id: z.string().nullable().optional(),
     /** Which channel decided it: a human verdict, or a human-granted standing rule. */
@@ -820,14 +843,35 @@ export type OptimizerInsightResponse = z.infer<typeof OptimizerInsightResponseSc
  *  the optimizer wire `Confidence` shape (see ConfidenceSchema)
  *  but kept `.loose()` and all-optional for DB reads — the row is opaque jsonb and
  *  older rows may predate a field. `band` stays a loose string on read. */
+/** One thing the account could do to raise its data confidence (engine
+ *  ConfidenceActionable). Absent on runs recorded before the engine carried it. */
+export const ConfidenceActionableSchema = z
+  .object({
+    code: z.string(),
+    adsetIds: z.array(z.string()).default([]),
+    spendShare: z.number().nullable().optional(),
+    projectedScore: z.number().nullable().optional(),
+    message: z.string(),
+  })
+  .loose();
+export type ConfidenceActionable = z.infer<typeof ConfidenceActionableSchema>;
+
 export const RunConfidenceSchema = z
   .object({
+    /** DATA confidence on runs recorded after Sept 18 2026 (sample × consistency, geometric
+     *  mean); the older three-term product on runs before. `predictiveness` is a disclosure
+     *  on the new runs and a factor on the old ones — the FE reads it as a note either way. */
     score: z.number().optional(),
     predictiveness: z.number().optional(),
     sampleSize: z.number().optional(),
     consistency: z.number().optional(),
     events: z.number().optional(),
     band: z.string().optional(),
+    underFloor: z
+      .object({ adsetIds: z.array(z.string()).default([]), floorEvents: z.number() })
+      .nullable()
+      .optional(),
+    actionables: z.array(ConfidenceActionableSchema).optional(),
   })
   .loose();
 export type RunConfidence = z.infer<typeof RunConfidenceSchema>;
@@ -992,6 +1036,11 @@ export const RenewalTaskSchema = z.object({
   ad_id: z.string().nullable().optional(),
   kind: z.string(), // creative_refresh | audience_expand | variate_creative | seed_experiment
   reason: z.string().nullable(),
+  /** Last cycle that still raised the signal behind this task; null on tasks opened before
+   *  the engine stamped it. Lets the card say "opened Sep 11 · still firing as of Sep 18". */
+  last_asserted_at: z.string().nullable().optional(),
+  /** 'superseded' when a cycle stopped raising the signal and closed the task itself. */
+  closed_reason: z.string().nullable().optional(),
   /** The generation seed the brief renders from — the winning creative, its Library
    *  asset, the labels to keep, and the grounded citations. Present on creative kinds. */
   seed: z.record(z.string(), z.unknown()).nullable().optional(),
@@ -1134,6 +1183,9 @@ export const SpendByObjectiveRowSchema = z.object({
   date: z.string(),
   objective: z.string(),
   spend: z.number(),
+  /** When the snapshot behind this row was taken — the panel's "as of". Absent from rows
+   *  served by the RPC before it carried the column. */
+  snapshot_ts: z.string().nullable().optional(),
 });
 export type SpendByObjectiveRow = z.infer<typeof SpendByObjectiveRowSchema>;
 

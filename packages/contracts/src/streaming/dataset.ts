@@ -96,10 +96,19 @@ export type TimeSeriesDataset = z.infer<typeof timeSeriesDatasetSchema>;
 // table
 // ---------------------------------------------------------------------------
 
+/** How a `percent` value is expressed at the source: a fraction (0.0092 = 0.92%) or
+ *  percentage points (0.92 = 0.92%). Meta's Graph API and the paid-performance MCP tools
+ *  return points; ratios computed in SQL from clicks / impressions return fractions. A
+ *  renderer that has to GUESS from the magnitude prints 91.8% for a 0.918-point CTR —
+ *  the Sept 17 report bug. Declared here, once, per column. */
+export const percentBasisSchema = z.enum(['fraction', 'points']);
+export type PercentBasis = z.infer<typeof percentBasisSchema>;
+
 export const datasetTableColumnSchema = z.object({
   key: z.string(),
   label: z.string(),
   format: datasetValueFormatSchema.default('text'),
+  percent_basis: percentBasisSchema.nullable().default(null),
 });
 export type DatasetTableColumn = z.infer<typeof datasetTableColumnSchema>;
 
@@ -136,6 +145,7 @@ export const datasetScalarMetricSchema = z.object({
   value: z.union([z.number(), z.string(), z.null()]),
   unit: z.string().nullable().default(null),
   format: datasetValueFormatSchema.default('number'),
+  percent_basis: percentBasisSchema.nullable().default(null),
 });
 export type DatasetScalarMetric = z.infer<typeof datasetScalarMetricSchema>;
 

@@ -494,7 +494,14 @@ export type RecommendationKind =
   /** Nothing is being served. The fix is operational — un-enrol it, un-pause it, widen the
    *  audience, clear Meta's blocker — and a new creative is NOT it. This kind exists
    *  precisely so the queue stops answering "we are not delivering" with "make an ad". */
-  | 'restore_delivery';
+  | 'restore_delivery'
+  /** Change a portfolio setting. The engine's own guardrails got in the way of what it
+   *  scored, or the plan exceeds what the inventory can absorb; the fix is a knob, not an
+   *  ad set. Portfolio-level: `adSetId` is the PORTFOLIO_SCOPE sentinel. */
+  | 'settings';
+
+/** `adSetId` of a portfolio-level recommendation (the settings family). */
+export const PORTFOLIO_SCOPE = 'portfolio';
 
 export type RecommendationTrigger =
   | 'P1_zero_upper_funnel'
@@ -532,7 +539,45 @@ export type RecommendationTrigger =
   /** Reach has plateaued while frequency keeps climbing — the audience is used up, not the
    *  creative. F2 asks the same question through a fixed frequency cap (3.0) that this
    *  account almost never reaches; the reach curve answers it at any frequency. */
-  | 'F3_audience_exhausted';
+  | 'F3_audience_exhausted'
+  /** The velocity cap bound on most of the cycle's moves: the engine scored bigger
+   *  changes than the cap let through. */
+  | 'S1_velocity_cap_binding'
+  /** Floors asked for more than the pool holds; the solver relaxed them on many items. */
+  | 'S2_floor_too_high'
+  /** In efficiency mode the residual stayed unallocated cycle after cycle: the plan is
+   *  bigger than what the inventory absorbs efficiently. */
+  | 'S3_persistent_underspend'
+  /** Ad sets spending past a target CPA with zero tracked conversions — the engine will
+   *  defund them as failures; if they convert, tracking is what is broken. */
+  | 'S5_tracking_gap';
+
+/** The window an evidence figure was measured over. */
+export type EvidenceWindow = 'd3' | 'd7' | 'd14';
+
+/** The number behind a recommendation, structured so the queue can sort by money and render
+ *  one consistent evidence line — "CPP 14d $71 vs $40 reference · $120/day" — instead of
+ *  re-parsing the prose `reason`. Every trigger already computes these; this only carries
+ *  them out. `estImpactPerDay` is the daily money the recommendation puts on the table:
+ *  the ad set's daily spend for a pause, the excess cost per day for a fatigue call. */
+export type RecommendationEvidence = {
+  /** What was measured: 'spend' | 'cpp' | 'ctr' | 'frequency' | 'reach_expansion' … */
+  metric: string;
+  value: number;
+  /** The comparison in words — "vs 2.5× the robust reference", "with 0 conversions". */
+  comparator: string;
+  /** The line it crossed, in the metric's own unit; null when the rule is a plain count. */
+  threshold: number | null;
+  window: EvidenceWindow;
+  estImpactPerDay: number | null;
+  source: 'engine';
+};
+
+export type SettingsPatch = {
+  field: 'max_change_pct_per_cycle' | 'daily_total' | 'period_budget';
+  from: number | null;
+  to: number;
+};
 
 export type Recommendation = {
   adSetId: string;
@@ -554,6 +599,12 @@ export type Recommendation = {
    *  so the loop closes without a second round-trip. Present on variate_creative /
    *  seed_experiment. */
   seed?: CreativeVariationSeed;
+  /** The structured figure behind `reason`; absent on triggers that predate it. */
+  evidence?: RecommendationEvidence;
+  /** A settings recommendation's proposed change — the portfolio field, what it is now,
+   *  what it would become. Absent when the advice has no single knob (consolidate ad
+   *  sets, fix tracking). Applied only by a human, through optimizer_update_portfolio. */
+  patch?: SettingsPatch;
   needsApproval: true; // recommendations ALWAYS need user approval (engine never auto-acts)
 };
 
@@ -620,13 +671,32 @@ export type ScaleStep = {
 
 /** How much to trust a measured efficiency signal (0..1). Deterministic, derived
  *  from objective predictiveness × sample size × within-signal consistency. */
+/** One thing the account could do to raise its data confidence, with the ad sets it
+ *  names and, where it can be computed, the score it would move to. */
+export type ConfidenceActionable = {
+  code: 'under_event_floor' | 'windows_disagree' | 'tracking_gap';
+  adsetIds: string[];
+  /** Share of 14-day spend the named ad sets carry. */
+  spendShare: number;
+  /** Data confidence over the remaining ad sets — what fixing this would leave. */
+  projectedScore: number | null;
+  message: string;
+};
+
 export type Confidence = {
-  score: number; // 0..1 overall
-  predictiveness: number; // objective Spearman ceiling (prior)
-  sampleSize: number; // 0..1, events/(events+k)
-  consistency: number; // 0..1, 1 - CoV of the 3/7/14d per-$ scores
-  events: number; // raw KPI events in the 14d window
+  /** DATA confidence, 0..1: the geometric mean of sampleSize and consistency — the two
+   *  terms the account controls. Predictiveness is NOT in it (see confidence.ts). */
+  score: number;
+  /** The objective's calibrated Spearman ceiling (prior). A disclosure beside the score,
+   *  never a factor of it. */
+  predictiveness: number;
+  sampleSize: number; // 0..1, events/(events+k), spend-weighted over ad sets
+  consistency: number; // 0..1, 1 - CoV of the 3/7/14d per-$ scores, spend-weighted
+  events: number; // raw KPI events in the 14d window, summed over ad sets
   band: 'low' | 'medium' | 'high';
+  /** The ad sets under the event floor — what the Sample term is actually about. */
+  underFloor: { adsetIds: string[]; floorEvents: number };
+  actionables: ConfidenceActionable[];
 };
 
 export type CycleResult = {

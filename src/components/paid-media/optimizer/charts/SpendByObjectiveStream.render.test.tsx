@@ -18,6 +18,7 @@ mock.module('@/components/charts/area-chart', () => ({
   },
 }));
 mock.module('@/components/charts/tooltip', () => ({ ChartTooltip: () => null }));
+mock.module('@visx/curve', () => ({ curveLinear: 'linear' }));
 
 const { SpendByObjectiveStream } = await import('./SpendByObjectiveStream');
 
@@ -53,13 +54,16 @@ const rows = [
 describe('SpendByObjectiveStream', () => {
   it('draws one stacked layer per objective and a legend of the latest day', () => {
     const { getByTestId, container } = render(
-      <SpendByObjectiveStream currency="USD" portfolios={[]} rows={rows} today="2026-09-11" />,
+      <SpendByObjectiveStream currency="USD" portfolios={[]} rows={rows} today="2026-09-12" />,
     );
     expect(getByTestId('area-chart')).toBeTruthy();
     // largest running sum drawn first (at the back)
     expect(areas).toEqual(['s1', 's0']);
     const text = container.textContent ?? '';
     expect(text).toContain('Spent Sep 11');
+    // the window ends on the last full day, never today, and says so
+    expect(text).toContain('Last 14 full days');
+    expect(text).toContain('Aug 29 – Sep 11');
     expect(text).toContain('Purchase');
     expect(text).toContain('80%');
     expect(text).toContain('$320');
@@ -76,7 +80,7 @@ describe('SpendByObjectiveStream', () => {
           portfolio({ id: 'b', objective: 'purchase', daily_total: 100 }),
         ]}
         rows={[]}
-        today="2026-09-11"
+        today="2026-09-12"
       />,
     );
     expect(queryByTestId('area-chart')).toBeNull();
@@ -96,7 +100,7 @@ describe('SpendByObjectiveStream', () => {
         onFilter={onFilter}
         portfolios={[]}
         rows={rows}
-        today="2026-09-11"
+        today="2026-09-12"
       />,
     );
     fireEvent.click(getByRole('button', { name: /Lead/ }));
@@ -105,5 +109,23 @@ describe('SpendByObjectiveStream', () => {
     expect(onFilter).toHaveBeenLastCalledWith(null);
     fireEvent.click(getByRole('button', { name: /Show all portfolios/ }));
     expect(onFilter).toHaveBeenLastCalledWith(null);
+  });
+});
+
+describe('SpendByObjectiveStream low-spend window', () => {
+  it('draws the legend but not a trend when the window holds under a dollar a day', () => {
+    const { queryByTestId, container } = render(
+      <SpendByObjectiveStream
+        currency="USD"
+        portfolios={[]}
+        rows={[{ date: '2026-09-11', objective: 'lead', spend: 3 }]}
+        today="2026-09-12"
+      />,
+    );
+    expect(queryByTestId('area-chart')).toBeNull();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Not enough spend in this window');
+    expect(text).toContain('Spent Sep 11');
+    expect(text).toContain('$3');
   });
 });

@@ -21,6 +21,7 @@
  */
 
 import { z } from 'zod';
+import { percentBasisSchema } from './dataset';
 
 // ---------------------------------------------------------------------------
 // Shared item schemas referenced by multiple block variants
@@ -57,6 +58,11 @@ export const blockCategorySchema = z.enum([
   'data_table',
   'insight_list',
   'comparison',
+  // The four the reference methodology requires and this contract lacked:
+  'data_scope',
+  'actions',
+  'goal_pacing',
+  'survey',
 ]);
 export type BlockCategory = z.infer<typeof blockCategorySchema>;
 
@@ -123,6 +129,8 @@ export const metricItemSchema = z.object({
   value: z.union([z.number(), z.string()]),
   unit: z.string().nullable().default(null),
   format: z.enum(['number', 'currency', 'percent', 'multiplier']).default('number'),
+  /** For `percent`: fraction or points (see dataset.ts). Null = renderer must guess. */
+  percent_basis: percentBasisSchema.nullable().default(null),
   change: z.number().nullable().default(null),
   change_direction: z.enum(['up', 'down', 'flat']).nullable().default(null),
   severity: z.enum(['positive', 'neutral', 'watch', 'risk']).default('neutral'),
@@ -178,6 +186,8 @@ export const chartBlockBaseSchema = blockBaseSchema.extend({
   x_axis_label: z.string().nullable().default(null),
   y_axis_label: z.string().nullable().default(null),
   value_format: z.enum(['number', 'currency', 'percent', 'multiplier']).default('number'),
+  /** For `percent` values: fraction or points. Null = renderer must guess. */
+  value_basis: percentBasisSchema.nullable().default(null),
   // ISO currency code supplied by the source data. Null/absent preserves legacy
   // charts without inventing a currency.
   currency_code: z.string().nullable().default(null),
@@ -254,6 +264,8 @@ export const tableColumnSchema = z.object({
     .enum(['text', 'number', 'currency', 'percent', 'multiplier', 'creative'])
     .default('text'),
   align: z.enum(['left', 'center', 'right']).default('left'),
+  /** For `percent` columns: fraction or points. Null = renderer must guess. */
+  percent_basis: percentBasisSchema.nullable().default(null),
 });
 export type TableColumn = z.infer<typeof tableColumnSchema>;
 
@@ -329,8 +341,12 @@ export const comparisonPairSchema = z.object({
   label: z.string(),
   before: z.union([z.number(), z.string()]),
   after: z.union([z.number(), z.string()]),
+  /** The context floor's third leg: the longer baseline (e.g. L30D) the pair is read
+   *  against. Null on pairs that only compare two periods. */
+  baseline: z.union([z.number(), z.string()]).nullable().default(null),
   unit: z.string().nullable().default(null),
   format: z.enum(['number', 'currency', 'percent', 'multiplier']).default('number'),
+  percent_basis: percentBasisSchema.nullable().default(null),
   change: z.number().nullable().default(null),
   change_direction: z.enum(['up', 'down', 'flat']).nullable().default(null),
   severity: z.enum(['positive', 'neutral', 'watch', 'risk']).default('neutral'),
@@ -342,6 +358,7 @@ export const comparisonBlockSchema = blockBaseSchema.extend({
   category: z.literal('comparison'),
   before_label: z.string(),
   after_label: z.string(),
+  baseline_label: z.string().nullable().default(null),
   pairs: z.array(comparisonPairSchema).min(1),
   citations: z.array(citationSchema).default([]),
 });
@@ -357,6 +374,100 @@ export type ComparisonBlock = z.infer<typeof comparisonBlockSchema>;
 // discriminates AND enforces chart renderability.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Data scope — the first block of every report: dates, timezone, source, caveats.
+// "Never deliver a naked number": the reader knows what window and what source
+// before reading any figure.
+// ---------------------------------------------------------------------------
+
+export const dataScopeBlockSchema = blockBaseSchema.extend({
+  category: z.literal('data_scope'),
+  /** Human-readable window, e.g. "Sep 4 – Sep 17, 2026 (14 full days)". */
+  dates: z.string().min(1),
+  /** IANA zone the window was resolved in; null when the source reports in UTC only. */
+  timezone: z.string().nullable().default(null),
+  source: z.enum(['db', 'api', 'sheet', 'mixed']),
+  /** Caveats that change how the numbers read: partial month, sheet not refreshed,
+   *  rows truncated, mixed currencies. */
+  notes: z.array(z.string()).default([]),
+});
+export type DataScopeBlock = z.infer<typeof dataScopeBlockSchema>;
+
+// ---------------------------------------------------------------------------
+// Actions — the recommendation table. Every row names an entity, an action, a size
+// and the evidence it rests on (metric, value, window). No verdict labels.
+// ---------------------------------------------------------------------------
+
+export const actionEvidenceSchema = z.object({
+  metric: z.string().min(1),
+  value: z.union([z.number(), z.string()]),
+  unit: z.string().nullable().default(null),
+  /** The window the value was measured over, e.g. "L14D", "d7". */
+  window: z.string().min(1),
+  /** The comparison in words: "vs $40 target", "2.1× the account median". */
+  comparator: z.string().nullable().default(null),
+});
+export type ActionEvidence = z.infer<typeof actionEvidenceSchema>;
+
+export const actionRowSchema = z.object({
+  priority: z.enum(['P1', 'P2', 'P3']),
+  entity: z.object({
+    id: z.string().nullable().default(null),
+    name: z.string().min(1),
+    kind: z.string().nullable().default(null),
+  }),
+  action: z.string().min(1),
+  /** The size of the move: "+$500/day", "pause", "−30%", "~$890/day recoverable". */
+  sizing: z.string().nullable().default(null),
+  evidence: actionEvidenceSchema,
+  cite_ids: z.array(z.string()).default([]),
+});
+export type ActionRow = z.infer<typeof actionRowSchema>;
+
+export const actionsBlockSchema = blockBaseSchema.extend({
+  category: z.literal('actions'),
+  rows: z.array(actionRowSchema).min(1),
+  citations: z.array(citationSchema).default([]),
+});
+export type ActionsBlock = z.infer<typeof actionsBlockSchema>;
+
+// ---------------------------------------------------------------------------
+// Goal pacing — budget vs. spend vs. time, for a flight or a month.
+// ---------------------------------------------------------------------------
+
+export const goalPacingBlockSchema = blockBaseSchema.extend({
+  category: z.literal('goal_pacing'),
+  budget: z.number().nonnegative(),
+  spent: z.number().nonnegative(),
+  currency_code: z.string().nullable().default(null),
+  period_start: z.string().min(1),
+  period_end: z.string().min(1),
+  /** Share of the period elapsed, 0..1. */
+  elapsed_pct: z.number().min(0).max(1),
+  /** spent / (budget × elapsed_pct): 1 = on plan, >1 ahead, <1 behind. */
+  pace_ratio: z.number().nonnegative(),
+  /** Spend projected at period end on the current run rate; null when unknowable. */
+  projected_end: z.number().nullable().default(null),
+  status: z.enum(['on_track', 'underpacing', 'overpacing']),
+});
+export type GoalPacingBlock = z.infer<typeof goalPacingBlockSchema>;
+
+// ---------------------------------------------------------------------------
+// Survey — ambiguity, surfaced. Shipped only when a term had several readings; the
+// first option is always the definition that was used ("keep it").
+// ---------------------------------------------------------------------------
+
+export const surveyBlockSchema = blockBaseSchema.extend({
+  category: z.literal('survey'),
+  /** The ambiguous term: "active", "top", "recent", "underperforming". */
+  term: z.string().min(1),
+  /** The definition the report used. */
+  used: z.string().min(1),
+  /** Alternatives, 1–3. */
+  alternatives: z.array(z.string().min(1)).min(1).max(3),
+});
+export type SurveyBlock = z.infer<typeof surveyBlockSchema>;
+
 const checkpointBlockV2UnionSchema = z.discriminatedUnion('category', [
   narrativeBlockSchema,
   metricGridBlockSchema,
@@ -364,6 +475,10 @@ const checkpointBlockV2UnionSchema = z.discriminatedUnion('category', [
   dataTableBlockBaseSchema,
   insightListBlockSchema,
   comparisonBlockSchema,
+  dataScopeBlockSchema,
+  actionsBlockSchema,
+  goalPacingBlockSchema,
+  surveyBlockSchema,
 ]);
 
 export const checkpointBlockV2Schema = checkpointBlockV2UnionSchema.superRefine((block, ctx) => {
@@ -430,3 +545,134 @@ export const checkpointMetaSchema = z.object({
   primary_scope: z.string(),
 });
 export type CheckpointMeta = z.infer<typeof checkpointMetaSchema>;
+
+// ---------------------------------------------------------------------------
+// Content validator — the reference methodology's closing checklist as a function
+// over the block tree, so "quality" is a test, not a judgement. Renderability is the
+// schema's job (above); this checks what the report SAYS. Run before send in dev;
+// a violation is a reason to fix the emitter, never to hide the block.
+// ---------------------------------------------------------------------------
+
+export const TABLE_ROW_LIMIT = 25;
+
+export type ReportViolation = {
+  code:
+    | 'data_scope_missing'
+    | 'data_scope_not_first'
+    | 'context_floor_missing'
+    | 'percent_basis_missing'
+    | 'currency_missing'
+    | 'table_truncation_undeclared'
+    | 'table_totals_missing';
+  block_id: string | null;
+  message: string;
+};
+
+type AnyBlock = z.infer<typeof checkpointBlockV2UnionSchema>;
+
+const mentionsTruncation = (notes: string | null): boolean =>
+  typeof notes === 'string' && /truncat|top \d+|first \d+|showing \d+/i.test(notes);
+
+const hasTotalsRow = (rows: Record<string, string | number | null>[]): boolean =>
+  rows.some((row) => Object.values(row).some((v) => typeof v === 'string' && /^total/i.test(v)));
+
+export function validateReport(blocks: readonly AnyBlock[]): ReportViolation[] {
+  const out: ReportViolation[] = [];
+  if (blocks.length === 0) return out;
+
+  const scopeIndex = blocks.findIndex((b) => b.category === 'data_scope');
+  if (scopeIndex < 0) {
+    out.push({
+      code: 'data_scope_missing',
+      block_id: null,
+      message: 'Every report opens with a data_scope block: dates, timezone, source.',
+    });
+  } else if (scopeIndex !== 0) {
+    out.push({
+      code: 'data_scope_not_first',
+      block_id: blocks[scopeIndex].block_id,
+      message: 'The data_scope block must be the first block.',
+    });
+  }
+
+  const hasFloor = blocks.some(
+    (b) =>
+      b.category === 'comparison' ||
+      (b.category === 'metric_grid' && b.metrics.some((m) => m.change != null)),
+  );
+  const headlineGrid = blocks.find((b) => b.category === 'metric_grid');
+  if (headlineGrid && !hasFloor) {
+    out.push({
+      code: 'context_floor_missing',
+      block_id: headlineGrid.block_id,
+      message:
+        'A headline KPI needs a context floor: a prior period and a baseline (a comparison block, or change on the metric).',
+    });
+  }
+
+  for (const b of blocks) {
+    if (b.category === 'metric_grid') {
+      for (const m of b.metrics) {
+        if (m.format === 'percent' && m.percent_basis == null) {
+          out.push({
+            code: 'percent_basis_missing',
+            block_id: b.block_id,
+            message: `Metric "${m.label}" is a percent with no basis (fraction or points); the renderer would have to guess.`,
+          });
+        }
+        if (m.format === 'currency' && !m.unit) {
+          out.push({
+            code: 'currency_missing',
+            block_id: b.block_id,
+            message: `Metric "${m.label}" is money with no currency code.`,
+          });
+        }
+      }
+    }
+    if (b.category === 'data_table') {
+      for (const c of b.columns) {
+        if (c.format === 'percent' && c.percent_basis == null) {
+          out.push({
+            code: 'percent_basis_missing',
+            block_id: b.block_id,
+            message: `Column "${c.label}" is a percent with no basis (fraction or points).`,
+          });
+        }
+      }
+      if (b.rows.length > TABLE_ROW_LIMIT && !mentionsTruncation(b.notes)) {
+        out.push({
+          code: 'table_truncation_undeclared',
+          block_id: b.block_id,
+          message: `Table has ${b.rows.length} rows (limit ${TABLE_ROW_LIMIT}) and does not say it was truncated.`,
+        });
+      }
+      const hasMoney = b.columns.some((c) => c.format === 'currency');
+      if (hasMoney && b.rows.length >= 2 && !hasTotalsRow(b.rows)) {
+        out.push({
+          code: 'table_totals_missing',
+          block_id: b.block_id,
+          message: 'A money table with two or more entities needs a totals row.',
+        });
+      }
+    }
+    if (b.category === 'chart' && b.value_format === 'percent' && b.value_basis == null) {
+      out.push({
+        code: 'percent_basis_missing',
+        block_id: b.block_id,
+        message: 'Chart plots percent values with no basis (fraction or points).',
+      });
+    }
+    if (b.category === 'comparison') {
+      for (const pair of b.pairs) {
+        if (pair.format === 'percent' && pair.percent_basis == null) {
+          out.push({
+            code: 'percent_basis_missing',
+            block_id: b.block_id,
+            message: `Comparison "${pair.label}" is a percent with no basis.`,
+          });
+        }
+      }
+    }
+  }
+  return out;
+}

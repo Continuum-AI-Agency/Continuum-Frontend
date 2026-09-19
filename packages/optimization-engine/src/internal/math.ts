@@ -3,5 +3,4 @@
 
 export const sum = (xs: number[]): number => xs.reduce((a, b) => a + b, 0);
 
-export const clamp = (x: number, lo: number, hi: number): number =>
-  Math.max(lo, Math.min(hi, x));
+export const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));

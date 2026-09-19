@@ -6,6 +6,7 @@
 
 import {
   buildCreativeRequestBrief,
+  type ConfidenceActionable,
   type CreativeRequestBrief,
   type CreativeVariationSeedInput,
   type CycleItemRow,
@@ -67,15 +68,21 @@ export function parseReport(
 }
 
 // ── Why the confidence score is what it is ───────────────────────────────────
-// score = predictiveness × sampleSize × consistency, so the SMALLEST term is the
-// answer to "why isn't this higher" — naming it is the whole point of the hover.
+// Data confidence is built from the two terms the account controls — sample (KPI
+// events against the floor) and consistency (do the 3/7/14d scores agree) — so the
+// weaker of the two is the answer to "why isn't this higher", and the hover leads with
+// it. The objective's predictiveness is a calibrated PRIOR (cfg.predictiveness); it is
+// disclosed beside the score, never presented as a term of it. Runs recorded before
+// Sept 18 2026 multiplied it in; the explainer reads them the same way, which is why
+// the note says what the number is rather than pretending it was measured.
 //
-// predictiveness is NOT measured from the account: it is a static per-objective
-// constant in the engine config (cfg.predictiveness ?? 0.75). The copy says so,
-// because a number presented as evidence when it is a prior is a lie of omission.
+// `actionables` are the engine's own list of what would move the score: the ad sets
+// under the event floor, the ones whose windows disagree, the ones spending with no
+// tracked conversions. Each names its ad sets and, where it can be computed, the score
+// fixing it would leave.
 
 export type ConfidenceTerm = {
-  key: 'sampleSize' | 'consistency' | 'predictiveness';
+  key: 'sampleSize' | 'consistency';
   label: string;
   pct: number;
   note: string;
@@ -86,6 +93,9 @@ export type ConfidenceExplanation = {
   terms: ConfidenceTerm[];
   limiter: ConfidenceTerm | null;
   scorePct: number | null;
+  /** The per-objective prior, as a disclosure. Null when the run carries none. */
+  prior: { pct: number; note: string } | null;
+  actionables: ConfidenceActionable[];
 };
 
 const asPct = (value: number | undefined): number | null =>
@@ -97,10 +107,14 @@ export function explainConfidence(
   if (!confidence) return null;
 
   const events = confidence.events;
+  const under = confidence.underFloor;
+  const underCount = under?.adsetIds?.length ?? 0;
   const eventLabel =
-    typeof events === 'number' && Number.isFinite(events)
-      ? `${Math.round(events)} conversion${Math.round(events) === 1 ? '' : 's'} in the last 14 days`
-      : 'how many conversions the trailing window carries';
+    underCount > 0 && under
+      ? `${underCount} ad set${underCount === 1 ? '' : 's'} under the ${under.floorEvents}-event floor`
+      : typeof events === 'number' && Number.isFinite(events)
+        ? `${Math.round(events)} conversion${Math.round(events) === 1 ? '' : 's'} in the last 14 days`
+        : 'how many conversions the trailing window carries';
 
   const candidates: ConfidenceTerm[] = [];
   const sample = asPct(confidence.sampleSize);
@@ -120,18 +134,26 @@ export function explainConfidence(
     });
   }
   const predictive = asPct(confidence.predictiveness);
-  if (predictive != null) {
-    candidates.push({
-      key: 'predictiveness',
-      label: 'Predictive',
-      pct: predictive,
-      note: 'a calibrated prior for this objective — not measured on your account',
-    });
-  }
+  const prior =
+    predictive != null
+      ? {
+          pct: predictive,
+          note:
+            predictive < 60
+              ? 'this objective is among the hardest to predict — treat rankings as directional'
+              : 'how predictable this objective is, calibrated across accounts — not measured on yours',
+        }
+      : null;
 
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0 && prior == null) return null;
   const terms = [...candidates].sort((a, b) => a.pct - b.pct);
-  return { terms, limiter: terms[0] ?? null, scorePct: asPct(confidence.score) };
+  return {
+    terms,
+    limiter: terms[0] ?? null,
+    scorePct: asPct(confidence.score),
+    prior,
+    actionables: confidence.actionables ?? [],
+  };
 }
 
 // ── Why one budget move happened ─────────────────────────────────────────────
@@ -289,6 +311,8 @@ export function recommendationLabel(kind: string): { label: string; glyph: strin
     case 'audience_expand':
       return { label: 'Expand audience', glyph: '👥' };
     // --- Creative-level kinds. These name ONE AD inside the ad set, not the ad set. ---
+    case 'settings':
+      return { label: 'Change a setting', glyph: '⚙' };
     case 'pause_ad':
       return { label: 'Pause this ad', glyph: '⏸' };
     case 'variate_creative':
@@ -340,8 +364,11 @@ export function isExecutable(kind: string): boolean {
  *    - 'creative_refresh' / expand …       → a tracked renewal task (no auto Meta write)
  *    - 'pause_ad'                          → hidden (found, but no single-ad drain yet)
  *  Unknown kinds route to the renewal path — the conservative default that never writes. */
-export function actionRoute(kind: string): 'budget' | 'pause' | 'creative' | 'fatigue' | 'hidden' {
+export function actionRoute(
+  kind: string,
+): 'budget' | 'pause' | 'creative' | 'fatigue' | 'settings' | 'hidden' {
   if (NOT_YET_EXECUTABLE_KINDS.has(kind)) return 'hidden';
+  if (kind === 'settings') return 'settings';
   if (kind === 'pause') return 'pause';
   if (CREATIVE_REQUEST_KINDS.has(kind)) return 'creative';
   return 'fatigue';
@@ -357,6 +384,9 @@ export function recommendationActionCopy(kind: string): {
 } {
   if (kind === 'pause') {
     return { approveLabel: 'Pause ad set', advisory: null };
+  }
+  if (kind === 'settings') {
+    return { approveLabel: 'Apply setting', advisory: null };
   }
   // Generated and stored, not yet actionable. The button says so rather than
   // pretending. One phrasing for this state across the surface — "not built yet",

@@ -8,19 +8,42 @@
 //
 // With no history yet (portfolios created today), the legend falls back to the plan: the
 // daily budgets grouped by objective, labelled as such.
+//
+// Three rules keep the picture honest. The window ends YESTERDAY (today is never final),
+// and the panel states the window it drew. Daily spend is a discrete quantity, so the
+// areas are drawn linearly — a spline over sparse days invents humps that never happened.
+// And when the window holds less than a dollar a day, there is no trend to draw: the legend
+// stands alone and says so.
 
 import type { PortfolioListItem } from '@continuum/contracts';
+import { curveLinear } from '@visx/curve';
 import { Area, AreaChart } from '@/components/charts/area-chart';
 import { ChartTooltip } from '@/components/charts/tooltip';
 import { cn } from '@/lib/utils';
 import { formatCurrency, humanize } from '../format';
-import { budgetByObjective, type SpendByObjectiveInput, spendStream } from './chartData';
+import {
+  budgetByObjective,
+  lastFullDay,
+  type SpendByObjectiveInput,
+  type SpendStream,
+  spendSnapshotTs,
+  spendStream,
+} from './chartData';
 import { objectiveColor } from './vizTokens';
 
 const DATE_FMT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+const SNAPSHOT_FMT = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
 
 type SpendByObjectiveStreamProps = {
   rows: SpendByObjectiveInput[];
+  /** Pass the already-folded stream when the parent has it (the Overview tiles read the
+   *  same one); otherwise it is folded here from `rows`. One fold, one truth. */
+  stream?: SpendStream;
   portfolios: PortfolioListItem[];
   currency?: string | null;
   days?: number;
@@ -44,6 +67,7 @@ function legendRows(byObjective: Record<string, number>): LegendRow[] {
 
 export function SpendByObjectiveStream({
   rows,
+  stream: streamProp,
   portfolios,
   currency,
   days = 14,
@@ -52,7 +76,7 @@ export function SpendByObjectiveStream({
   onFilter,
   className,
 }: SpendByObjectiveStreamProps) {
-  const stream = spendStream(rows, days, today);
+  const stream = streamProp ?? spendStream(rows, days, lastFullDay(today));
   const planSplit = Object.fromEntries(
     budgetByObjective(portfolios).map((slice) => [slice.name, slice.daily]),
   );
@@ -67,6 +91,12 @@ export function SpendByObjectiveStream({
   const legendTitle = stream.latest
     ? `Spent ${DATE_FMT.format(new Date(`${stream.latest.date}T00:00:00Z`))}`
     : 'Planned per day';
+  const windowLabel = `${DATE_FMT.format(new Date(`${stream.window.start}T00:00:00Z`))} – ${DATE_FMT.format(new Date(`${stream.window.end}T00:00:00Z`))}`;
+  const snapshotTs = spendSnapshotTs(rows);
+  const snapshotAt = snapshotTs ? Date.parse(snapshotTs) : Number.NaN;
+  const snapshotLabel = Number.isNaN(snapshotAt)
+    ? null
+    : `snapshot ${SNAPSHOT_FMT.format(new Date(snapshotAt))}`;
 
   const chartData = stream.points.map((point) => ({
     date: new Date(`${point.date}T00:00:00Z`),
@@ -82,8 +112,12 @@ export function SpendByObjectiveStream({
 
   return (
     <div className={cn('grid gap-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]', className)}>
-      <div className="min-w-0">
-        {stream.hasData ? (
+      <div className="min-w-0 space-y-1">
+        <p className="text-3xs text-muted-foreground uppercase tracking-wide">
+          Last {days} full days · {windowLabel}
+          {snapshotLabel ? ` · ${snapshotLabel}` : ''}
+        </p>
+        {stream.hasData && stream.enoughToChart ? (
           <AreaChart
             aspectRatio="3 / 1"
             data={chartData}
@@ -92,6 +126,7 @@ export function SpendByObjectiveStream({
           >
             {layers.map(({ objective, i }) => (
               <Area
+                curve={curveLinear}
                 dataKey={`s${i}`}
                 fill={objectiveColor(objective)}
                 fillOpacity={0.35}
@@ -111,8 +146,13 @@ export function SpendByObjectiveStream({
               }
             />
           </AreaChart>
+        ) : stream.hasData ? (
+          <div className="flex min-h-28 items-center rounded-md border border-border/60 border-dashed bg-muted/10 px-3 py-2 text-2xs text-muted-foreground">
+            Not enough spend in this window to chart a trend — the enrolled ad sets spent under a
+            dollar a day on average. The split beside it is what did go out.
+          </div>
         ) : (
-          <div className="flex h-full min-h-28 items-center rounded-md border border-border/60 border-dashed bg-muted/10 px-3 py-2 text-2xs text-muted-foreground">
+          <div className="flex min-h-28 items-center rounded-md border border-border/60 border-dashed bg-muted/10 px-3 py-2 text-2xs text-muted-foreground">
             The spend stream draws after the first scored cycle. Until then the split beside it is
             the plan: each portfolio&rsquo;s daily budget by objective.
           </div>

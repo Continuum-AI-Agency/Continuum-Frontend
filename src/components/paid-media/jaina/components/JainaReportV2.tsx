@@ -32,6 +32,7 @@ import {
   openJainaReportMailDraft,
   shareJainaReportFile,
 } from '../reportExport';
+import { SaveDashboardButton } from './SaveDashboardButton';
 
 const OBJECTIVE_STATUS_STYLE: Record<ExecutionObjective['status'], string> = {
   completed: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
@@ -322,6 +323,11 @@ export function JainaReportV2({
           Export the visible modules as a PDF or a self-contained HTML file.
         </span>
         <div className="flex flex-wrap items-center gap-2">
+          <SaveDashboardButton
+            blocks={visibleBlocks}
+            disabled={isStreaming || exporting !== null}
+            report={report}
+          />
           <Button
             type="button"
             size="sm"

@@ -7,6 +7,7 @@ import {
   dataTableBlockSchema,
   degradeToNarrativeBlockV2,
   narrativeBlockSchema,
+  validateReport,
 } from './jaina-report';
 
 describe('checkpointBlockV2LenientSchema', () => {
@@ -163,5 +164,141 @@ describe('degradeToNarrativeBlockV2', () => {
     expect(narrativeBlockSchema.safeParse(degraded).success).toBe(true);
     expect(degraded.scope).toBe('account');
     expect(degraded.title).toBe('Section unavailable');
+  });
+});
+
+describe('Prism blocks + validateReport', () => {
+  const base = { block_id: 'b', scope: 'account', title: 'T', priority: 'primary' as const };
+  it('parses the four new block categories', () => {
+    expect(
+      checkpointBlockV2Schema.safeParse({
+        ...base,
+        category: 'data_scope',
+        dates: 'Sep 4 – Sep 17, 2026',
+        source: 'db',
+      }).success,
+    ).toBe(true);
+    expect(
+      checkpointBlockV2Schema.safeParse({
+        ...base,
+        category: 'actions',
+        rows: [
+          {
+            priority: 'P1',
+            entity: { name: 'Cold Lookalike' },
+            action: 'Pause',
+            sizing: '~$120/day recoverable',
+            evidence: { metric: 'CPA', value: 71, window: 'L14D', comparator: 'vs $40 target' },
+          },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
+      checkpointBlockV2Schema.safeParse({
+        ...base,
+        category: 'goal_pacing',
+        budget: 3000,
+        spent: 1200,
+        period_start: '2026-09-01',
+        period_end: '2026-09-30',
+        elapsed_pct: 0.5,
+        pace_ratio: 0.8,
+        status: 'underpacing',
+      }).success,
+    ).toBe(true);
+    expect(
+      checkpointBlockV2Schema.safeParse({
+        ...base,
+        category: 'survey',
+        term: 'recent',
+        used: 'last 7 days',
+        alternatives: ['last 14 days', 'last 30 days'],
+      }).success,
+    ).toBe(true);
+  });
+
+  it('flags a report with no scope, a naked KPI, a guessed percent, and an undeclared truncation', () => {
+    const rows = Array.from({ length: 30 }, (_, i) => ({ name: `c${i}`, spend: i }));
+    const violations = validateReport([
+      {
+        ...base,
+        block_id: 'grid',
+        category: 'metric_grid',
+        metrics: [
+          {
+            label: 'CTR',
+            value: 0.92,
+            unit: null,
+            format: 'percent',
+            percent_basis: null,
+            change: null,
+            change_direction: null,
+            severity: 'neutral',
+          },
+        ],
+        dataset_id: null,
+      },
+      {
+        ...base,
+        block_id: 'table',
+        category: 'data_table',
+        columns: [
+          { key: 'name', label: 'Campaign', format: 'text', align: 'left', percent_basis: null },
+          { key: 'spend', label: 'Spend', format: 'currency', align: 'right', percent_basis: null },
+        ],
+        rows,
+        notes: null,
+        dataset_id: null,
+        row_meta: null,
+        render_mode: 'table',
+        card_fields: null,
+      },
+    ] as never);
+    expect(violations.map((v) => v.code)).toEqual([
+      'data_scope_missing',
+      'context_floor_missing',
+      'percent_basis_missing',
+      'table_truncation_undeclared',
+      'table_totals_missing',
+    ]);
+  });
+
+  it('is clean for a scoped report with a floor, declared bases and a totals row', () => {
+    const violations = validateReport([
+      {
+        ...base,
+        block_id: 's',
+        category: 'data_scope',
+        dates: 'L14D',
+        timezone: 'UTC',
+        source: 'db',
+        notes: [],
+      },
+      {
+        ...base,
+        block_id: 'c',
+        category: 'comparison',
+        before_label: 'Prior',
+        after_label: 'This',
+        baseline_label: 'L30D',
+        pairs: [
+          {
+            label: 'CTR',
+            before: 0.8,
+            after: 0.92,
+            baseline: 0.85,
+            unit: null,
+            format: 'percent',
+            percent_basis: 'points',
+            change: 0.15,
+            change_direction: 'up',
+            severity: 'positive',
+            cite_ids: [],
+          },
+        ],
+        citations: [],
+      },
+    ] as never);
+    expect(violations).toEqual([]);
   });
 });

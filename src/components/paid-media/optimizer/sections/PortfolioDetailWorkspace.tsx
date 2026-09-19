@@ -37,17 +37,18 @@ import { AdsetActionMenu } from '../charts/AdsetActionMenu';
 import { AdsetAngleStanding } from '../charts/AdsetAngleStanding';
 import { buildAdsetAngleStanding } from '../charts/angleStanding';
 import { ChartError, ChartSkeleton } from '../charts/ChartStates';
+import { ConfidenceActionables } from '../charts/ConfidenceActionables';
 import { ConfidenceBadge } from '../charts/ConfidenceBadge';
 import { CpaHeroTimeline } from '../charts/CpaHeroTimeline';
 import { splitReallocation } from '../charts/chartData';
 import { maxCiUpperBound } from '../charts/chartScale';
 import { chartStatus, combinedChartStatus } from '../charts/chartStatus';
-import { buildFlightPacing } from '../charts/flightPacingModel';
 import { FlightPacing } from '../charts/FlightPacing';
+import { buildFlightPacing } from '../charts/flightPacingModel';
 import { ReallocationFlow } from '../charts/ReallocationFlow';
 import { ReallocationStory } from '../charts/ReallocationStory';
-import { defaultStoryLookback } from '../charts/reallocationStoryModel';
 import { RoasProfitLine } from '../charts/RoasProfitLine';
+import { defaultStoryLookback } from '../charts/reallocationStoryModel';
 import { ScoreRadar } from '../charts/ScoreRadar';
 import { StepFunnel } from '../charts/StepFunnel';
 import {
@@ -61,6 +62,7 @@ import { formatCurrency, humanize, portfolioLevelLabel } from '../format';
 import { costCiLegend, itemToRow, kpiColumns } from '../kpiColumns';
 import { applyModeExplainer, firstCycleState, parseReport, pendingWorkCount } from '../reportModel';
 import {
+  DEFAULT_CPA_SERIES_LIMIT,
   useOptimizerAccountSnapshots,
   useOptimizerAdAngles,
   useOptimizerAdDailyTrends,
@@ -76,10 +78,11 @@ import {
 } from '../useOptimizerData';
 import type { OptimizerAdMetric, WorkspaceSection } from '../useOptimizerUrlState';
 import { AdsetCreativeVerdicts } from './AdsetCreativeVerdicts';
+import { ApplyReallocationDialog } from './ApplyReallocationDialog';
 import { ObjectiveCostRecap } from './detail/ObjectiveCostRecap';
 import { type RangeSpec, resolveRange, todayIso } from './detail/rangeModel';
 import { buildRecap } from './detail/recapModel';
-import { ApplyReallocationDialog } from './ApplyReallocationDialog';
+import { JainaEntryChips } from './JainaEntryChips';
 import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
 import { OptimizerPanel } from './OptimizerPanel';
 import { OptimizerReadError } from './OptimizerReadError';
@@ -124,12 +127,18 @@ export function PortfolioDetailWorkspace({
   // charts are entity-agnostic (keyed by entity id) and need no level.
   const level = (portfolio.level as PortfolioLevel) ?? 'adset';
   const performanceQuery = useOptimizerPerformance(portfolio.id);
-  const cpaSeriesQuery = useOptimizerCpaSeries(portfolio.id);
   const timelineEventsQuery = useOptimizerTimelineEvents(portfolio.id);
   // ONE reporting range for every panel. Presets trail today; 'flight' is the portfolio's
   // own period. Read surfaces that only take d7/d14/d30 get the nearest window.
   const today = todayIso();
   const resolvedRange = resolveRange(range, portfolio, today);
+  // One cycle a day: the series has to reach back as far as the range does, plus a few
+  // days so event pins on the first shown cycle keep their history. 30 was a hard cap and
+  // "30d", "Flight" and any longer custom range all drew the same picture.
+  const cpaSeriesQuery = useOptimizerCpaSeries(
+    portfolio.id,
+    Math.max(DEFAULT_CPA_SERIES_LIMIT, resolvedRange.days + 5),
+  );
   const hasFlight = Boolean(portfolio.period_start && portfolio.period_end);
   const flightLabel = portfolio.period_start
     ? formatDateRange({ from: portfolio.period_start, to: portfolio.period_end ?? null })
@@ -235,7 +244,12 @@ export function PortfolioDetailWorkspace({
   const enrolledIds = enrolledQuery.data.map((adset) => adset.adset_id);
   // The funnel over the chosen range from the daily series; older snapshot rows without
   // one fall back to the engine's 7-day window, and the panel meta says which.
-  const funnelRange = sumFunnelRange(snapshotsQuery.data, enrolledIds, resolvedRange.from, resolvedRange.to);
+  const funnelRange = sumFunnelRange(
+    snapshotsQuery.data,
+    enrolledIds,
+    resolvedRange.from,
+    resolvedRange.to,
+  );
   const funnelWindow = funnelRange ?? sumFunnelWindow(snapshotsQuery.data, enrolledIds);
   const funnelMeta = funnelRange ? resolvedRange.label.toLowerCase() : 'engine 7d window';
   // Pacing: the run's own verdict when it paced THIS flight, else derived from the daily
@@ -415,7 +429,12 @@ export function PortfolioDetailWorkspace({
                       : `${formatCurrency(portfolio.daily_total, currency)} · matched`,
                 },
                 ...(typeof portfolio.period_budget === 'number' && portfolio.period_budget > 0
-                  ? [{ label: 'Flight budget', value: formatCurrency(portfolio.period_budget, currency) }]
+                  ? [
+                      {
+                        label: 'Flight budget',
+                        value: formatCurrency(portfolio.period_budget, currency),
+                      },
+                    ]
                   : []),
                 {
                   label: 'Optimizing for',
@@ -437,6 +456,8 @@ export function PortfolioDetailWorkspace({
               />
             </span>
           </div>
+
+          <JainaEntryChips portfolio={portfolio} />
 
           {/* The one period every panel below reports on, and the objective recap for it. */}
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -517,6 +538,7 @@ export function PortfolioDetailWorkspace({
                 band={latestRun?.confidence?.band}
                 confidence={latestRun?.confidence ?? null}
               />
+              <ConfidenceActionables confidence={latestRun?.confidence ?? null} />
             </OptimizerPanel>
 
             <OptimizerPanel
@@ -538,7 +560,9 @@ export function PortfolioDetailWorkspace({
 
             <OptimizerPanel
               meta={
-                <span className="text-3xs text-muted-foreground">step conversion · {funnelMeta}</span>
+                <span className="text-3xs text-muted-foreground">
+                  step conversion · {funnelMeta}
+                </span>
               }
               title="Conversion funnel"
             >

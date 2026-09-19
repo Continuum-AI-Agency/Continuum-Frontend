@@ -412,6 +412,66 @@ export function bindTimelineEvents(
   return out;
 }
 
+/** One line per DISTINCT change on a cycle, with a count.
+ *
+ *  A cycle that touches twenty ad sets emits twenty byte-identical
+ *  "apply item requested changed" events; listing them one by one is what turned the
+ *  timeline pin's tooltip into an unreadable, unscrollable wall. Group identical events
+ *  (same kind, label and detail) and carry the count instead. Money moving outranks a
+ *  status flip, which outranks a setting, which outranks the bare "cycle ran" marker —
+ *  that is the reading order, and inside a kind the first-seen order is kept. */
+export type TimelineEventGroup = {
+  kind: TimelineEvent['kind'];
+  label: string;
+  detail: string | null;
+  count: number;
+  /** Most recent occurrence in the group. */
+  ts: string;
+  /** Ad sets named across the group (deduped); empty for config-level events. */
+  adsetIds: string[];
+};
+
+const EVENT_KIND_ORDER: Record<TimelineEvent['kind'], number> = {
+  applied: 0,
+  status: 1,
+  config: 2,
+  cycle: 3,
+};
+
+export function summarizeTimelineEvents(events: readonly TimelineEvent[]): TimelineEventGroup[] {
+  const groups = new Map<string, TimelineEventGroup>();
+  for (const event of events) {
+    const detail = event.detail ?? null;
+    const key = `${event.kind}\u0000${event.label}\u0000${detail ?? ''}`;
+    const existing = groups.get(key);
+    const count = event.count ?? 1;
+    if (existing) {
+      existing.count += count;
+      if (event.ts > existing.ts) existing.ts = event.ts;
+      if (event.adset_id && !existing.adsetIds.includes(event.adset_id)) {
+        existing.adsetIds.push(event.adset_id);
+      }
+      continue;
+    }
+    groups.set(key, {
+      kind: event.kind,
+      label: event.label,
+      detail,
+      count,
+      ts: event.ts,
+      adsetIds: event.adset_id ? [event.adset_id] : [],
+    });
+  }
+  return [...groups.values()].sort((a, b) => EVENT_KIND_ORDER[a.kind] - EVENT_KIND_ORDER[b.kind]);
+}
+
+/** "apply item requested changed ×18 · apply mode changed" — the one-line form. */
+export function timelineEventSummary(events: readonly TimelineEvent[]): string {
+  return summarizeTimelineEvents(events)
+    .map((group) => (group.count > 1 ? `${group.label} ×${group.count}` : group.label))
+    .join(' · ');
+}
+
 // ── Multi-creative ad-set timeline ───────────────────────────────────────────
 // TradingView-style: plot ONE metric for several creatives on one chart, each
 // creative its own line keyed by ad_id. mergeAdDailyByMetric pivots the per-ad

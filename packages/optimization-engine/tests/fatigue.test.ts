@@ -57,6 +57,13 @@ test('F1 — CTR decay + rising CPA (freq under cap) => creative_refresh', () =>
   expect(recs.length).toBe(1);
   expect(recs[0].kind).toBe('creative_refresh');
   expect(recs[0].trigger).toBe('F1_creative_fatigue');
+  // The figure behind the sentence: 3d CTR against the 14d one, and the share of daily
+  // spend that IS the CPA rise (600/3 = $200/day at a CPA up 50% → $66.67/day).
+  expect(recs[0].evidence).toMatchObject({ metric: 'ctr', window: 'd3', source: 'engine' });
+  expect(recs[0].evidence?.value).toBeCloseTo(0.01, 6);
+  expect(recs[0].evidence?.threshold).toBeCloseTo(0.025, 6);
+  expect(recs[0].evidence?.estImpactPerDay).toBeGreaterThan(0);
+  expect(recs[0].evidence?.estImpactPerDay).toBeLessThan(200);
 });
 
 test('healthy ad set (stable CPA, low freq) => no fatigue', () => {
@@ -236,8 +243,6 @@ test('an ad set that did not deliver at all in d3 is not called fatigued', () =>
     },
   });
   expect(
-    evaluateFatigue([undelivered], DEFAULT_CONFIG).some(
-      (r) => r.trigger === 'F1_creative_fatigue',
-    ),
+    evaluateFatigue([undelivered], DEFAULT_CONFIG).some((r) => r.trigger === 'F1_creative_fatigue'),
   ).toBe(false);
 });
