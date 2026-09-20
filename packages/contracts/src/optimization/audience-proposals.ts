@@ -154,6 +154,8 @@ export const audienceProposalApprovalSchema = z.object({
   budget_minor_units: z.number().int().nonnegative(),
   activate: z.boolean(),
   mode: audienceProposalModeSchema,
+  /** Who approved: a person on the card, or autopilot under a checked scope. */
+  via: z.enum(['human', 'autopilot']).default('human'),
 });
 export type AudienceProposalApproval = z.infer<typeof audienceProposalApprovalSchema>;
 

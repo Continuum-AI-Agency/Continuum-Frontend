@@ -261,3 +261,83 @@ export function readFlashJobResult(job: {
     adId: typeof result.adId === 'string' ? result.adId : null,
   };
 }
+
+// ---------------------------------------------------------------------------
+// A flash request from the recommendation alone (seed + reason), so the Backend autopilot
+// sweeper and the card build the same prompt without the card's ad reads.
+// ---------------------------------------------------------------------------
+
+type SeedLike = {
+  angleId?: unknown;
+  labels?: Record<string, unknown> | null;
+  audience?: { branch?: unknown; strategy?: unknown; offerText?: unknown } | null;
+  winnerAssetId?: unknown;
+  winnerAdId?: unknown;
+};
+
+const seedString = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null);
+
+export function seedAngleWords(
+  seed: SeedLike | null | undefined,
+  labelsById: Record<string, string>,
+): string | null {
+  if (!seed) return null;
+  const angleId = seedString(seed.angleId);
+  if (angleId && angleId in labelsById) return labelsById[angleId] ?? null;
+  const labels = seed.labels ?? null;
+  if (!labels) return null;
+  const parts = [seedString(labels.angle), seedString(labels.hook ?? labels.hookArchetype)].filter(
+    (p): p is string => p !== null,
+  );
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+export function seedAudienceWords(
+  seed: SeedLike | null | undefined,
+  fallback: string | null,
+): string | null {
+  const a = seed?.audience ?? null;
+  const parts = [seedString(a?.branch), seedString(a?.strategy), seedString(a?.offerText)].filter(
+    (p): p is string => p !== null,
+  );
+  return parts.length > 0 ? parts.join(' · ') : fallback;
+}
+
+export type FlashRequest = {
+  prompt: string;
+  negative: string;
+  count: number;
+  referenceAssetIds: string[];
+  want: FlashWant;
+};
+
+/** What the sweeper asks Creative+ for, from the recommendation row alone. */
+export function buildFlashRequest(args: {
+  rec: { reason?: string | null; seed?: Record<string, unknown> | null; ad_id?: string | null };
+  adsetName: string | null;
+  audienceType?: string | null;
+  brandName?: string | null;
+  angleLabels: Record<string, string>;
+  count?: number;
+}): FlashRequest {
+  const seed = (args.rec.seed ?? null) as SeedLike | null;
+  const reference = seedString(seed?.winnerAssetId);
+  const count = args.count ?? 3;
+  const prompts = flashPrompts({
+    angle: seedAngleWords(seed, args.angleLabels),
+    hook: null,
+    audience: seedAudienceWords(seed, args.audienceType ?? args.adsetName),
+    why: args.rec.reason ?? null,
+    cta: null,
+    sourceAdName: seedString(seed?.winnerAdId) ?? args.rec.ad_id ?? null,
+    brandName: args.brandName ?? null,
+    variant: 0,
+  });
+  return {
+    prompt: prompts.positive,
+    negative: prompts.negative,
+    count,
+    referenceAssetIds: reference ? [reference] : [],
+    want: { ratio: null, hasReference: Boolean(reference), count },
+  };
+}

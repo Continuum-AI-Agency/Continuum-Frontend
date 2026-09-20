@@ -1,0 +1,287 @@
+'use client';
+
+// The first thing a portfolio shows: how it is growing, and the one thing worth doing
+// today. Entrance: tiles rise in a short stagger, the hero card settles in, the numbers
+// count up once per portfolio. Everything is static under prefers-reduced-motion.
+
+import { ExternalLinkIcon, SparklesIcon } from 'lucide-react';
+import {
+  animate,
+  motion,
+  useMotionValue,
+  useMotionValueEvent,
+  useReducedMotion,
+  type Variants,
+} from 'motion/react';
+import * as React from 'react';
+import { Sparkline } from '@/components/organic/cards/Sparkline';
+import { DeltaBadge } from '@/components/shared/DeltaBadge';
+import { Badge } from '@/components/ui/badge';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { formatCurrency } from '../../format';
+import { asOfLine } from '../recQueueModel';
+import type { HeroCta, HeroTile, HeroView } from './heroModel';
+
+const EASE = [0.16, 1, 0.3, 1] as const;
+
+const tileVariants: Variants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: 'easeOut' } },
+};
+const heroVariants: Variants = {
+  hidden: { opacity: 0, y: 12, scale: 0.98 },
+  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.45, ease: EASE } },
+};
+const groupVariants: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.07, delayChildren: 0.05 } },
+};
+
+/** A number that counts up on first paint, once. */
+function CountUp({
+  value,
+  format,
+  play,
+}: {
+  value: number;
+  format: (n: number) => string;
+  play: boolean;
+}) {
+  const mv = useMotionValue(play ? 0 : value);
+  const [shown, setShown] = React.useState(play ? 0 : value);
+  useMotionValueEvent(mv, 'change', (v) => setShown(v));
+  React.useEffect(() => {
+    if (!play) {
+      mv.set(value);
+      setShown(value);
+      return;
+    }
+    const controls = animate(mv, value, { duration: 0.9, ease: 'easeOut' });
+    return () => controls.stop();
+  }, [value, play, mv]);
+  return <>{format(shown)}</>;
+}
+
+function Tile({
+  tile,
+  currency,
+  play,
+}: {
+  tile: HeroTile;
+  currency: string | null;
+  play: boolean;
+}) {
+  const format = (n: number) =>
+    tile.format === 'currency'
+      ? formatCurrency(n, currency)
+      : Math.round(n).toLocaleString('en-US');
+  const deltaPct = tile.delta != null ? Math.round(tile.delta * 100) : null;
+  const tone: 'positive' | 'negative' | 'flat' =
+    deltaPct == null || deltaPct === 0
+      ? 'flat'
+      : deltaPct > 0 !== tile.goodWhenDown
+        ? 'positive'
+        : 'negative';
+  return (
+    <motion.div
+      className="flex min-w-0 items-center gap-3 rounded-lg border border-border/70 bg-card p-3"
+      variants={tileVariants}
+    >
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="truncate text-2xs text-muted-foreground uppercase tracking-wide">
+          {tile.label}
+        </span>
+        <div className="flex items-baseline gap-2">
+          <span className="font-mono font-semibold text-2xl text-foreground leading-none tabular-nums">
+            {tile.value == null ? '—' : <CountUp format={format} play={play} value={tile.value} />}
+          </span>
+          {deltaPct != null ? <DeltaBadge value={deltaPct} /> : null}
+        </div>
+        {tile.note ? <span className="text-3xs text-muted-foreground">{tile.note}</span> : null}
+      </div>
+      {tile.series.length > 1 ? (
+        <Sparkline
+          ariaLabel={`${tile.label} trend`}
+          className="ml-auto shrink-0"
+          height={32}
+          tone={tone}
+          values={tile.series}
+          width={96}
+        />
+      ) : null}
+    </motion.div>
+  );
+}
+
+const MODULE_LABEL: Record<string, string> = {
+  budget: 'Budget',
+  pause: 'Pause',
+  creative: 'Creative',
+  audience: 'Audience',
+  none: 'Growth',
+};
+
+export type PortfolioHeroProps = {
+  view: HeroView;
+  currency: string | null;
+  portfolioId: string;
+  nextCycleAt: string | null;
+  onCta: (cta: HeroCta) => void;
+  explainHref: string;
+};
+
+export function PortfolioHero({
+  view,
+  currency,
+  portfolioId,
+  nextCycleAt,
+  onCta,
+  explainHref,
+}: PortfolioHeroProps) {
+  const reduce = useReducedMotion();
+  // Play the entrance once per portfolio, not on every refetch.
+  const playedFor = React.useRef<string | null>(null);
+  const play = !reduce && playedFor.current !== portfolioId;
+  React.useEffect(() => {
+    playedFor.current = portfolioId;
+  }, [portfolioId]);
+  const { brief, cta } = view;
+  const hero = brief.hero;
+  const secondary = brief.secondary
+    .map((id) => brief.candidates.find((c) => c.id === id))
+    .filter((c): c is NonNullable<typeof c> => Boolean(c))
+    .slice(0, 2);
+
+  if (view.state === 'first_cycle') {
+    return (
+      <section
+        className="grid gap-3 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]"
+        data-testid="portfolio-hero"
+      >
+        <div className="grid grid-cols-3 gap-2">
+          {[0, 1, 2].map((i) => (
+            <div className="h-20 animate-pulse rounded-lg bg-muted/70" key={i} />
+          ))}
+        </div>
+        <div className="rounded-lg border border-border/60 border-dashed p-4 text-2xs text-muted-foreground">
+          Jaina writes your first read after the first cycle.
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <motion.section
+      animate="visible"
+      className="grid gap-3 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]"
+      data-testid="portfolio-hero"
+      initial={play ? 'hidden' : false}
+      variants={groupVariants}
+    >
+      <div className="space-y-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {view.tiles.map((tile) => (
+            <Tile currency={currency} key={tile.key} play={play} tile={tile} />
+          ))}
+        </div>
+        <motion.p
+          className="flex flex-wrap items-center gap-2 text-2xs text-muted-foreground"
+          variants={tileVariants}
+        >
+          {view.pacingLine ? (
+            <Badge
+              className="text-3xs"
+              variant={
+                view.pacingTone === 'success'
+                  ? 'success'
+                  : view.pacingTone === 'warning'
+                    ? 'warning'
+                    : 'muted'
+              }
+            >
+              {view.pacingLine}
+            </Badge>
+          ) : null}
+          <span>{brief.growth_sentence}</span>
+        </motion.p>
+      </div>
+
+      <motion.div
+        className="flex flex-col gap-2 rounded-lg border border-primary/20 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4"
+        variants={heroVariants}
+      >
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge
+            className="text-3xs uppercase"
+            variant={hero.module === 'none' ? 'muted' : 'default'}
+          >
+            {MODULE_LABEL[hero.module] ?? hero.module}
+          </Badge>
+          <span className="inline-flex items-center gap-1 text-3xs text-muted-foreground">
+            <SparklesIcon className="size-3" /> Jaina
+            {brief.model === 'deterministic' ? ' · draft read' : ''}
+          </span>
+        </div>
+        <p
+          className="font-semibold text-base text-foreground leading-snug"
+          data-testid="hero-headline"
+        >
+          {hero.headline}
+        </p>
+        {hero.why ? <p className="text-muted-foreground text-xs">{hero.why}</p> : null}
+        {hero.impact_per_day != null ? (
+          <p className="text-2xs text-muted-foreground">
+            <span className="font-mono font-semibold text-foreground text-xl tabular-nums">
+              <CountUp
+                format={(n) => formatCurrency(n, currency)}
+                play={play}
+                value={hero.impact_per_day}
+              />
+            </span>
+            <span className="text-foreground">/day</span>
+            {hero.impact_basis ? <span> · {hero.impact_basis}</span> : null}
+          </p>
+        ) : null}
+        {hero.justification ? (
+          <p className="text-2xs text-muted-foreground">
+            <span className="font-medium text-foreground">Why this over the biggest number:</span>{' '}
+            {hero.justification}
+          </p>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          {cta ? (
+            <Button onClick={() => onCta(cta)} size="sm" type="button">
+              {cta.label}
+            </Button>
+          ) : null}
+          <a
+            className={cn(
+              buttonVariants({ variant: 'ghost', size: 'sm' }),
+              'h-8 gap-1 px-2 text-2xs',
+            )}
+            href={explainHref}
+          >
+            Explain with Jaina <ExternalLinkIcon className="size-3" />
+          </a>
+        </div>
+        {secondary.length > 0 ? (
+          <p className="text-3xs text-muted-foreground">
+            Also worth a look:{' '}
+            {secondary.map((c, i) => (
+              <span key={c.id}>
+                {i > 0 ? ' · ' : ''}
+                {MODULE_LABEL[c.module]?.toLowerCase()} on{' '}
+                {c.adset_name ?? c.adset_id ?? 'the portfolio'} (
+                {formatCurrency(c.impact_per_day, currency)}/day)
+              </span>
+            ))}
+          </p>
+        ) : null}
+        <p className="text-3xs text-muted-foreground">
+          {asOfLine(view.asOf, nextCycleAt) ?? 'Awaiting the first cycle'}
+        </p>
+      </motion.div>
+    </motion.section>
+  );
+}

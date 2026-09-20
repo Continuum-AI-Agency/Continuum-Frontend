@@ -78,6 +78,7 @@ import {
   type UpdatePortfolioPatch,
 } from '@continuum/contracts';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import { pipelineCapabilitiesQueryKey } from '@/lib/ai-studio/pipelines';
@@ -1442,6 +1443,24 @@ export function useAudienceProposalMutations(brandId: string) {
     onSuccess: refresh,
   });
   return { request, approve, cancel, activate, undo, refresh };
+}
+
+/** While the latest cycle has no brief yet, nudge the performance read every 30s for up
+ *  to ten minutes — the worker writes the brief within a few minutes of the cycle. */
+export function useHeroBriefWatch(portfolioId: string | null, waiting: boolean) {
+  const queryClient = useQueryClient();
+  React.useEffect(() => {
+    if (!portfolioId || !waiting) return;
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      if (Date.now() - startedAt > 10 * 60_000) {
+        clearInterval(timer);
+        return;
+      }
+      void queryClient.invalidateQueries({ queryKey: optimizerQueryKeys.performance(portfolioId) });
+    }, 30_000);
+    return () => clearInterval(timer);
+  }, [portfolioId, waiting, queryClient]);
 }
 
 export function useOptimizerRenewals(brandId: string) {

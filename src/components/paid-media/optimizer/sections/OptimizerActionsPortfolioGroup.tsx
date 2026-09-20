@@ -339,12 +339,17 @@ type OptimizerActionsPortfolioGroupProps = {
   brandId: string;
   adAccountId: string;
   portfolio: PortfolioListItem;
+  /** A row the hero asked to land on: filters clear, the row expands and scrolls into view. */
+  focusRowKey?: string | null;
+  onFocusRowConsumed?: () => void;
 };
 
 export function OptimizerActionsPortfolioGroup({
   brandId,
   adAccountId,
   portfolio,
+  focusRowKey = null,
+  onFocusRowConsumed,
 }: OptimizerActionsPortfolioGroupProps) {
   const performanceQuery = useOptimizerPerformance(portfolio.id);
   const enrolledQuery = useOptimizerEnrolledAdsets(portfolio.id);
@@ -383,6 +388,21 @@ export function OptimizerActionsPortfolioGroup({
   const [expanded, setExpanded] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState('');
   const [routeFilters, setRouteFilters] = React.useState<Set<QueueRow['route']>>(new Set());
+  // The hero's CTA: clear whatever narrows the list, open the row, bring it into view.
+  React.useEffect(() => {
+    if (!focusRowKey) return;
+    setSearch('');
+    setRouteFilters(new Set());
+    setExpanded(focusRowKey);
+    const timer = setTimeout(() => {
+      const node = document.querySelector<HTMLElement>(
+        `[data-row-key="${CSS.escape(focusRowKey)}"]`,
+      );
+      node?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      onFocusRowConsumed?.();
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [focusRowKey, onFocusRowConsumed]);
   const [executeNote, setExecuteNote] = React.useState<string | null>(null);
   const [failedAdsets, setFailedAdsets] = React.useState<Set<string>>(new Set());
   const [confirm, setConfirm] = React.useState<null | 'budget' | 'pause'>(null);
@@ -1411,6 +1431,7 @@ function QueueRowView({
         selected ? 'border-primary/60 bg-accent/40 ring-1 ring-primary/40' : 'border-border/70',
         selectable && !writesBlocked && 'cursor-pointer hover:bg-muted/30',
       )}
+      data-row-key={row.key}
       onClick={selectable ? onToggleSelect : undefined}
     >
       <div className="flex items-start gap-2.5">

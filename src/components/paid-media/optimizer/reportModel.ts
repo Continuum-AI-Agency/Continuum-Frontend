@@ -5,6 +5,7 @@
 // columns pass through untouched.
 
 import {
+  type AutopilotScopes,
   buildCreativeRequestBrief,
   type ConfidenceActionable,
   type CreativeRequestBrief,
@@ -463,7 +464,24 @@ export function severityBadgeVariant(
 
 /** One-line legend making the observe↔recommend↔autopilot boundary explicit at the
  *  point a user reads a proposed reallocation. */
-export function applyModeExplainer(applyMode: string | null | undefined): string {
+const SCOPE_WORDS: Record<keyof AutopilotScopes, string> = {
+  budget: 'budget moves',
+  creative_swap: 'creative rotation',
+  audience_change: 'audience replacements',
+  new_audience: 'new audiences',
+  new_creatives: 'flash creatives',
+};
+
+/** "budget moves, creative rotation" — the ON scopes, in the panel's order. */
+export function autopilotScopeWords(scopes: AutopilotScopes | null | undefined): string {
+  const on = (Object.keys(SCOPE_WORDS) as (keyof AutopilotScopes)[]).filter((k) => scopes?.[k]);
+  return on.length > 0 ? on.map((k) => SCOPE_WORDS[k]).join(', ') : 'nothing yet';
+}
+
+export function applyModeExplainer(
+  applyMode: string | null | undefined,
+  scopes?: AutopilotScopes | null,
+): string {
   // Written for a media buyer, not for us. "Soak tier" and "human-in-the-loop"
   // are our words for our rollout; what the reader needs is whether their money
   // can move, and what they do about it.
@@ -472,7 +490,9 @@ export function applyModeExplainer(applyMode: string | null | undefined): string
     return 'Observe — the optimizer scores every night but never changes a budget. Switch to Recommend to start approving its moves.';
   }
   if (mode === 'autopilot') {
-    return 'Autopilot — budgets change automatically, within your guardrails. Stop halts every write without leaving this mode.';
+    return scopes
+      ? `Autopilot — approves ${autopilotScopeWords(scopes)} on its own; budget moves stay within your guardrails and anything created is born paused. Stop halts all of it without leaving this mode.`
+      : 'Autopilot — budgets change automatically, within your guardrails. Stop halts every write without leaving this mode.';
   }
   if (mode === 'recommend') {
     return 'Recommend — the optimizer proposes moves and nothing changes until you approve them.';

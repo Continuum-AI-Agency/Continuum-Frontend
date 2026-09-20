@@ -275,7 +275,7 @@ export function OptimizerTab({
     : undefined;
   if (detailPortfolio) {
     return (
-      <section className="grid h-full min-h-0 overflow-hidden rounded-lg border border-border/70 bg-background">
+      <section className="fade-in-0 grid h-full min-h-0 animate-in overflow-hidden rounded-lg border border-border/70 bg-background duration-200 motion-reduce:animate-none">
         <PortfolioDetailWorkspace
           adAccountId={adAccountId}
           brandId={brandId}

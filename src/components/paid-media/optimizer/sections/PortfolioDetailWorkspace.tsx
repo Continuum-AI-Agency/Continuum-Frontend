@@ -21,7 +21,7 @@ import {
   type PortfolioListItem,
 } from '@continuum/contracts';
 import { ArrowLeftIcon, LineChartIcon, RefreshCwIcon } from 'lucide-react';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { InsightDataTable } from '@/components/dashboard/datatable/InsightDataTable';
 import { formatDateRange } from '@/components/shared/DateRangeField';
 import { MetricStrip } from '@/components/shared/MetricStrip';
@@ -30,6 +30,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import { cn } from '@/lib/utils';
 import { ApplyModePill } from '../ApplyModePill';
 import { AdSetTimeline } from '../charts/AdSetTimeline';
@@ -62,6 +63,7 @@ import { costCiLegend, itemToRow, kpiColumns } from '../kpiColumns';
 import { applyModeExplainer, firstCycleState, parseReport, pendingWorkCount } from '../reportModel';
 import {
   DEFAULT_CPA_SERIES_LIMIT,
+  useHeroBriefWatch,
   useOptimizerAccountSnapshots,
   useOptimizerAdAngles,
   useOptimizerAdDailyTrends,
@@ -78,7 +80,9 @@ import {
 import type { OptimizerAdMetric, WorkspaceSection } from '../useOptimizerUrlState';
 import { AdsetCreativeVerdicts } from './AdsetCreativeVerdicts';
 import { ApplyReallocationDialog } from './ApplyReallocationDialog';
+import { buildHeroView, type HeroCta } from './detail/heroModel';
 import { ObjectiveCostRecap } from './detail/ObjectiveCostRecap';
+import { PortfolioHero } from './detail/PortfolioHero';
 import { type RangeSpec, resolveRange, todayIso } from './detail/rangeModel';
 import { buildRecap } from './detail/recapModel';
 import { JainaEntryChips } from './JainaEntryChips';
@@ -272,6 +276,27 @@ export function PortfolioDetailWorkspace({
     metric,
     target: targetDisplay,
   });
+  const heroView = buildHeroView({
+    report,
+    recap,
+    flightPacing,
+    metric,
+    currency: currency ?? null,
+    portfolio,
+    target: targetDisplay ?? null,
+    window: resolvedRange.window,
+    firstCycle: !latestRun,
+  });
+  useHeroBriefWatch(portfolio.id, Boolean(latestRun) && heroView.source === 'fallback');
+  const [focusRowKey, setFocusRowKey] = useState<string | null>(null);
+  const onHeroCta = (cta: HeroCta) => {
+    if (cta.kind === 'manage') {
+      onSectionChange('manage');
+      return;
+    }
+    setFocusRowKey(cta.rowKey);
+    onSectionChange('activity');
+  };
   // The cost timeline is per cycle; keep the cycles inside the range (older ones still feed
   // the event binding above so a pin on the first shown cycle keeps its history).
   const cpaSeriesInRange = cpaSeriesQuery.data.filter(
@@ -327,6 +352,7 @@ export function PortfolioDetailWorkspace({
                 <ApplyModePill
                   applyMode={portfolio.apply_mode}
                   autopilotPaused={portfolio.autopilot_paused}
+                  scopes={portfolio.autopilot_scopes ?? null}
                 />
               </h2>
               <p className="text-3xs text-muted-foreground">
@@ -415,6 +441,17 @@ export function PortfolioDetailWorkspace({
               </Button>
             </div>
           ) : null}
+
+          <PortfolioHero
+            currency={currency ?? null}
+            explainHref={jainaPromptHref(
+              `Explain today's top recommendation for the portfolio "${portfolio.name}" and how it is growing.`,
+            )}
+            nextCycleAt={portfolio.next_realloc_at ?? null}
+            onCta={onHeroCta}
+            portfolioId={portfolio.id}
+            view={heroView}
+          />
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <MetricStrip
@@ -806,6 +843,8 @@ export function PortfolioDetailWorkspace({
             <OptimizerActionsPortfolioGroup
               adAccountId={adAccountId}
               brandId={brandId}
+              focusRowKey={focusRowKey}
+              onFocusRowConsumed={() => setFocusRowKey(null)}
               portfolio={portfolio}
             />
           ) : (
