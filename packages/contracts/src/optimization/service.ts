@@ -16,6 +16,7 @@ import {
   FreezeReasonSchema,
   OptimizationObjectiveSchema,
 } from './engine-contracts';
+import { portfolioBriefRowSchema } from './portfolio-brief';
 
 /** Why an ad set was HELD (budget left unchanged on purpose) this cycle — mirrors
  *  the engine FreezeReason. Surfaced so the FE renders a labeled "Held" state
@@ -31,6 +32,55 @@ export type FreezeReason = z.infer<typeof FreezeReasonSchema>;
  *  auto-write to Meta. */
 export const ApplyModeSchema = z.enum(['observe', 'recommend', 'autopilot']);
 export type ApplyMode = z.infer<typeof ApplyModeSchema>;
+
+/** What autopilot may APPROVE on its own. Budget moves apply within the guardrails;
+ *  every other scope approves the recommendation and what it creates is born PAUSED,
+ *  in the queue, for a person to activate. Everything is still recommended regardless. */
+export const AutopilotScopeSchema = z.enum([
+  'budget',
+  'creative_swap',
+  'audience_change',
+  'new_audience',
+  'new_creatives',
+]);
+export type AutopilotScope = z.infer<typeof AutopilotScopeSchema>;
+export const AutopilotScopesSchema = z.object({
+  budget: z.boolean(),
+  creative_swap: z.boolean(),
+  audience_change: z.boolean(),
+  new_audience: z.boolean(),
+  new_creatives: z.boolean(),
+});
+export type AutopilotScopes = z.infer<typeof AutopilotScopesSchema>;
+export const DEFAULT_AUTOPILOT_SCOPES: AutopilotScopes = {
+  budget: true,
+  creative_swap: true,
+  audience_change: false,
+  new_audience: false,
+  new_creatives: false,
+};
+export const AUTOPILOT_SCOPE_COPY: Record<AutopilotScope, { label: string; body: string }> = {
+  budget: {
+    label: 'Budget moves',
+    body: 'Applied automatically within the guardrails.',
+  },
+  creative_swap: {
+    label: 'Creative rotation',
+    body: 'Approves the recommendation and publishes the new ad paused beside the winner.',
+  },
+  audience_change: {
+    label: 'Replace an audience',
+    body: 'Approves the proposal; the new ad set is created paused, the current one keeps running until you switch over.',
+  },
+  new_audience: {
+    label: 'Add an audience',
+    body: 'Approves the proposal; the new ad set is created paused beside the current one.',
+  },
+  new_creatives: {
+    label: 'Flash creatives',
+    body: 'Generates variants into the Library; nothing is published.',
+  },
+};
 
 export const OptimizationModeSchema = z.enum(['efficiency', 'balanced', 'scale']);
 export type OptimizationModeDto = z.infer<typeof OptimizationModeSchema>;
@@ -423,6 +473,49 @@ export const CreatePortfolioResponseSchema = z.object({
 });
 export type CreatePortfolioResponse = z.infer<typeof CreatePortfolioResponseSchema>;
 
+/** The DCO autogen block on a portfolio. One definition, shared by the Backend swap worker
+ *  (which used to hand-copy it) and the Frontend patch. */
+export const PortfolioAutogenSchema = z.object({
+  enabled: z.boolean(),
+  /**
+   * The angles a human has already agreed this portfolio may sell on. The DCO picks
+   * WITHIN this list and may never step outside it.
+   *
+   * This is the "not fake autonomous" line. The alternative — let the machine choose
+   * an angle per creative and put an accept button under the finished design — asks a
+   * person to judge a strategy from a picture, after the money to make it was already
+   * spent. Approving the angle list once, up front, is the same consent taken at the
+   * point where it is cheap and where it is actually about strategy.
+   *
+   * Drawn from the CLOSED global vocabulary, so an off-list value is a hard reject
+   * rather than a coerce — a coerce would launder a hallucinated strategy into the
+   * store as a legitimate-looking row. An empty or absent list means no angle has been
+   * agreed, which is not the same as "any angle is fine".
+   */
+  allowedAngles: z.array(globalAngleIdSchema).max(29).optional(),
+  /**
+   * The saved Canvas workflow (a Technique — declared input and output ports) the DCO
+   * runs to make the creative. Absent keeps the one-shot prompt path.
+   */
+  pipelineId: z.string().uuid().optional(),
+  /**
+   * The minimum number of days between AUTO-GENERATED swaps on the same ad. Default 7
+   * when absent; 0 disables the cooldown.
+   *
+   * A minimum interval, not a scheduled swap date — a date needs something to run it,
+   * an interval needs one predicate at enqueue. The floor exists because
+   * `decision_outcomes` grades a swap on a 7-day delivery horizon: replacing a creative
+   * inside that window destroys the measurement the swap was made to produce, and the
+   * open-target unique index cannot express it (it releases the moment a job reaches
+   * `published`).
+   *
+   * Applies to the generate lane only. A human attaching a creative to a renewal task
+   * is a person deciding, and this was never a limit on people.
+   */
+  minSwapIntervalDays: z.number().min(0).max(365).optional(),
+});
+export type PortfolioAutogen = z.infer<typeof PortfolioAutogenSchema>;
+
 /** Whitelisted patch for optimizer_update_portfolio (FE settings modal).
  *  Nullable fields (cpa_target, period_budget) can be cleared with null. */
 export const UpdatePortfolioPatchSchema = z
@@ -448,47 +541,9 @@ export const UpdatePortfolioPatchSchema = z
      *  live — activation stays a human verdict — but an object IS created on the ad
      *  account. Default off, and it had no writer at all before this: every one of 153
      *  portfolios read `{}`, which is why 5 real human approvals produced 0 swap jobs. */
-    autogen: z
-      .object({
-        enabled: z.boolean(),
-        /**
-         * The angles a human has already agreed this portfolio may sell on. The DCO picks
-         * WITHIN this list and may never step outside it.
-         *
-         * This is the "not fake autonomous" line. The alternative — let the machine choose
-         * an angle per creative and put an accept button under the finished design — asks a
-         * person to judge a strategy from a picture, after the money to make it was already
-         * spent. Approving the angle list once, up front, is the same consent taken at the
-         * point where it is cheap and where it is actually about strategy.
-         *
-         * Drawn from the CLOSED global vocabulary, so an off-list value is a hard reject
-         * rather than a coerce — a coerce would launder a hallucinated strategy into the
-         * store as a legitimate-looking row. An empty or absent list means no angle has been
-         * agreed, which is not the same as "any angle is fine".
-         */
-        allowedAngles: z.array(globalAngleIdSchema).max(29).optional(),
-        /**
-         * The saved Canvas workflow (a Technique — declared input and output ports) the DCO
-         * runs to make the creative. Absent keeps the one-shot prompt path.
-         */
-        pipelineId: z.string().uuid().optional(),
-        /**
-         * The minimum number of days between AUTO-GENERATED swaps on the same ad. Default 7
-         * when absent; 0 disables the cooldown.
-         *
-         * A minimum interval, not a scheduled swap date — a date needs something to run it,
-         * an interval needs one predicate at enqueue. The floor exists because
-         * `decision_outcomes` grades a swap on a 7-day delivery horizon: replacing a creative
-         * inside that window destroys the measurement the swap was made to produce, and the
-         * open-target unique index cannot express it (it releases the moment a job reaches
-         * `published`).
-         *
-         * Applies to the generate lane only. A human attaching a creative to a renewal task
-         * is a person deciding, and this was never a limit on people.
-         */
-        minSwapIntervalDays: z.number().min(0).max(365).optional(),
-      })
-      .optional(),
+    autogen: PortfolioAutogenSchema.optional(),
+    /** Partial: the panel sends the keys it changed; the RPC merges into the stored object. */
+    autopilot_scopes: AutopilotScopesSchema.partial().optional(),
     // Flight window — null clears the date, returning the portfolio to unpaced.
     period_start: z.string().date().nullable().optional(),
     period_end: z.string().date().nullable().optional(),
@@ -653,6 +708,8 @@ export const CycleRunReportSchema = z.object({
   latest_items: z.array(z.record(z.string(), z.unknown())),
   recommendations: z.array(z.record(z.string(), z.unknown())),
   history: z.array(z.record(z.string(), z.unknown())),
+  /** The latest ready daily brief (optimizer.portfolio_daily_briefs), when one exists. */
+  hero_brief: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 export type CycleRunReport = z.infer<typeof CycleRunReportSchema>;
 
@@ -936,6 +993,7 @@ export const PortfolioRowSchema = z
     name: z.string(),
     mode: z.string(),
     apply_mode: z.string(),
+    autopilot_scopes: AutopilotScopesSchema.catch(DEFAULT_AUTOPILOT_SCOPES).optional(),
     status: z.string(),
     level: z.string().optional(),
     daily_total: z.number().nullable().optional(),
@@ -963,6 +1021,7 @@ export const ParsedCycleRunReportSchema = z.object({
   latest_items: z.array(CycleItemRowSchema),
   recommendations: z.array(RecommendationRowSchema),
   history: z.array(CycleRunRowSchema),
+  hero_brief: portfolioBriefRowSchema.nullable().optional(),
 });
 export type ParsedCycleRunReport = z.infer<typeof ParsedCycleRunReportSchema>;
 
@@ -1012,6 +1071,7 @@ export const PortfolioListItemSchema = z.object({
   // here or z.object strips them and the FE reads undefined (which is how the paused
   // banner and the guardrail gate silently read as "not paused" / "no caps").
   autopilot_paused: z.boolean().nullable().optional(),
+  autopilot_scopes: AutopilotScopesSchema.catch(DEFAULT_AUTOPILOT_SCOPES).optional(),
   max_daily_apply_minor: z.number().nullable().optional(),
   max_change_pct_per_cycle: z.number().nullable().optional(),
 });

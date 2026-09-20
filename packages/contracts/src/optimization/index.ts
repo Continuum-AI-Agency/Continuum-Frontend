@@ -22,6 +22,8 @@ export * from './lookback';
 export * from './mcp';
 // Shared onboarding builders (suggestion→config, create→enroll) — the parity keystone.
 export * from './onboarding';
+// The portfolio brief: the growth read and the one highest-impact thing to do today.
+export * from './portfolio-brief';
 // Optimizer-service orchestration DTOs (enrollment, run requests, FE read model).
 export * from './service';
 // Target metric per objective + daily/monthly/period budget derivation, shared by the
