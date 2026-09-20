@@ -1,10 +1,6 @@
 'use client';
 
-import {
-  type ApiRenderJob,
-  type ApiRenderOutput,
-  matchOutputFormat,
-} from '@continuum/contracts';
+import { type ApiRenderJob, type ApiRenderOutput, matchOutputFormat } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -130,7 +126,6 @@ const extOf = (fileName: string) => {
   return dot > 0 ? fileName.slice(dot + 1).toLowerCase() : '';
 };
 
-
 /** "3 MP4 · 3 MOV · 3 MXF" — every file a job made, by type. */
 export function filesSummary(outputs: readonly ApiRenderOutput[]): string {
   const counts = new Map<string, number>();
@@ -158,7 +153,7 @@ export function RenderModePill({ test }: { test: boolean }) {
 export function TemplateVersion({
   job,
 }: {
-  job: Pick<ApiRenderJob, 'templateSource' | 'createdAt'>;
+  job: Pick<ApiRenderJob, 'templateSource' | 'templateVariant' | 'createdAt'>;
 }) {
   const view = templateVersionOf(job);
   if (view.state === 'unrecorded') {
@@ -169,11 +164,15 @@ export function TemplateVersion({
     );
   }
   return (
-    <span
-      className={view.label === view.short ? 'font-mono tabular-nums' : 'tabular-nums'}
-      title={templateVersionTitle(view)}
-    >
-      {view.label}
+    <span className="inline-flex items-center gap-1.5" title={templateVersionTitle(view)}>
+      <span className={view.label === view.short ? 'font-mono tabular-nums' : 'tabular-nums'}>
+        {view.label}
+      </span>
+      {/* The variant, when the version tree named one. Silence here is UNCHECKED, not "only one
+          variant exists" — so nothing is drawn rather than a reassuring default. */}
+      {view.variant ? (
+        <span className="font-mono text-2xs text-muted-foreground">{view.variant}</span>
+      ) : null}
     </span>
   );
 }

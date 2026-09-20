@@ -19,6 +19,17 @@ export function shortSha(sha: string | null | undefined): string {
   return `${sha.slice(0, 10)}…`;
 }
 
+/**
+ * `inyogo/9:16/base` reads as `9:16/base`; `232/story/tall@accepted` keeps its state.
+ *
+ * Lives beside the version helpers rather than in the Variants panel, because the ledger names a
+ * render's variant too and a pure helper must not drag a client component into its importers.
+ */
+export function variantLabel(ref: string): string {
+  const cut = ref.indexOf('/');
+  return cut === -1 ? ref : ref.slice(cut + 1);
+}
+
 /** "Rev 2 · Sep 10" — a source revision and the day it was used. */
 export function revisionLabel(versionNumber: number, at: string): string {
   const day = new Date(at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -34,13 +45,20 @@ export type TemplateVersionView =
       label: string;
       assetId: string;
       versionId: string;
+      /**
+       * Which sibling version of the design those bytes are — `9:16/base`, `es/legal-wrap`.
+       *
+       * Null is UNCHECKED, never "there is only one": an operator-granted template has no store
+       * commit by construction, and a forge that could not be reached leaves the pin unnamed.
+       */
+      variant: string | null;
     }
   // A render that recorded no source can never be traced back to the bytes it used. That is a
   // permanent gap in the record, not a pending one, so it is named rather than blanked.
   | { state: 'unrecorded' };
 
 export function templateVersionOf(
-  job: Pick<ApiRenderJob, 'templateSource' | 'createdAt'>,
+  job: Pick<ApiRenderJob, 'templateSource' | 'templateVariant' | 'createdAt'>,
 ): TemplateVersionView {
   const source = job.templateSource;
   if (!source?.sha256) return { state: 'unrecorded' };
@@ -52,6 +70,9 @@ export function templateVersionOf(
     label: source.versionNumber ? revisionLabel(source.versionNumber, job.createdAt) : short,
     assetId: source.assetId,
     versionId: source.versionId,
+    // A commit with no ref is an unnamed head — real, but not a name anyone can read, so the
+    // ledger shows nothing rather than a bare sha pretending to be a variant.
+    variant: job.templateVariant?.ref ? variantLabel(job.templateVariant.ref) : null,
   };
 }
 
@@ -60,5 +81,6 @@ export function templateVersionTitle(view: TemplateVersionView): string {
   if (view.state === 'unrecorded') {
     return 'No template version was recorded for this render — the exact bytes it used cannot be established.';
   }
-  return `Template version ${view.sha}`;
+  if (view.variant) return `Template version ${view.sha} — variant ${view.variant}`;
+  return `Template version ${view.sha} — variant unchecked`;
 }

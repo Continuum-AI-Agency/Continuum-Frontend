@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { formatRelativeTime } from '@/components/approvals/formatters';
 import { Badge } from '@/components/ui/badge';
 import { fetchTemplateLineage } from '@/lib/library/templateSources';
-import { shortSha } from './templateVersion';
+import { shortSha, variantLabel } from './templateVersion';
 
 /**
  * The template's VARIANTS — its named heads.
@@ -30,12 +30,6 @@ export type VariantRow = {
   /** The last pointer move recorded for these bytes, if the store has one. */
   lastPointer: { direction: string; at: string; attachment: number | null } | null;
 };
-
-/** `inyogo/9:16/base` reads as `9:16/base`; `232/story/tall@accepted` keeps its state. */
-export function variantLabel(ref: string): string {
-  const cut = ref.indexOf('/');
-  return cut === -1 ? ref : ref.slice(cut + 1);
-}
 
 function tagString(tags: Record<string, unknown>, key: string): string | null {
   const value = tags[key];

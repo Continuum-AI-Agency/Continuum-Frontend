@@ -15837,8 +15837,10 @@ export type Database = {
           root_row_id: string | null
           status: string
           task_uid: string | null
+          template_commit_sha: string | null
           template_key: string
           template_name: string
+          template_ref: string | null
           template_source_asset_id: string | null
           template_source_id: string | null
           template_source_sha256: string | null
@@ -15880,8 +15882,10 @@ export type Database = {
           root_row_id?: string | null
           status?: string
           task_uid?: string | null
+          template_commit_sha?: string | null
           template_key: string
           template_name: string
+          template_ref?: string | null
           template_source_asset_id?: string | null
           template_source_id?: string | null
           template_source_sha256?: string | null
@@ -15923,8 +15927,10 @@ export type Database = {
           root_row_id?: string | null
           status?: string
           task_uid?: string | null
+          template_commit_sha?: string | null
           template_key?: string
           template_name?: string
+          template_ref?: string | null
           template_source_asset_id?: string | null
           template_source_id?: string | null
           template_source_sha256?: string | null
@@ -15971,6 +15977,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "assets"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_render_jobs_template_source_id_fkey"
+            columns: ["template_source_id"]
+            isOneToOne: false
+            referencedRelation: "render_job_trace"
+            referencedColumns: ["template_source_asset_id"]
           },
           {
             foreignKeyName: "ad_render_jobs_template_source_id_fkey"
@@ -18114,7 +18127,9 @@ export type Database = {
           render_set_revision: number | null
           render_set_row_id: string | null
           root_row_id: string | null
+          template_commit_sha: string | null
           template_key: string
+          template_ref: string | null
           template_source_asset_id: string | null
           template_source_sha256: string | null
           template_source_version_id: string | null
@@ -18138,7 +18153,9 @@ export type Database = {
           render_set_revision?: number | null
           render_set_row_id?: string | null
           root_row_id?: string | null
+          template_commit_sha?: string | null
           template_key: string
+          template_ref?: string | null
           template_source_asset_id?: string | null
           template_source_sha256?: string | null
           template_source_version_id?: string | null
@@ -18162,7 +18179,9 @@ export type Database = {
           render_set_revision?: number | null
           render_set_row_id?: string | null
           root_row_id?: string | null
+          template_commit_sha?: string | null
           template_key?: string
+          template_ref?: string | null
           template_source_asset_id?: string | null
           template_source_sha256?: string | null
           template_source_version_id?: string | null
@@ -18698,6 +18717,38 @@ export type Database = {
         }
         Relationships: []
       }
+      template_lineage_cache: {
+        Row: {
+          asset_id: string
+          brand_id: string
+          fetched_at: string
+          master: string | null
+          view: Json
+        }
+        Insert: {
+          asset_id: string
+          brand_id: string
+          fetched_at?: string
+          master?: string | null
+          view: Json
+        }
+        Update: {
+          asset_id?: string
+          brand_id?: string
+          fetched_at?: string
+          master?: string | null
+          view?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_lineage_cache_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       template_source_runs: {
         Row: {
           application: string | null
@@ -18761,6 +18812,13 @@ export type Database = {
             foreignKeyName: "template_source_runs_asset_id_fkey"
             columns: ["asset_id"]
             isOneToOne: false
+            referencedRelation: "render_job_trace"
+            referencedColumns: ["template_source_asset_id"]
+          },
+          {
+            foreignKeyName: "template_source_runs_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
             referencedRelation: "template_sources"
             referencedColumns: ["asset_id"]
           },
@@ -18813,6 +18871,13 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "template_source_slots_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "render_job_trace"
+            referencedColumns: ["template_source_asset_id"]
+          },
           {
             foreignKeyName: "template_source_slots_asset_id_fkey"
             columns: ["asset_id"]
@@ -19041,7 +19106,44 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      render_job_trace: {
+        Row: {
+          batch_id: string | null
+          binding_id: string | null
+          brand_id: string | null
+          brand_name: string | null
+          client_key: string | null
+          contract_hash: string | null
+          created_at: string | null
+          environment: string | null
+          environment_key: string | null
+          finished_at: string | null
+          forge_run_id: string | null
+          forge_run_state: string | null
+          forged_here: boolean | null
+          job_id: string | null
+          render_request_id: string | null
+          render_set_id: string | null
+          root_table: string | null
+          status: string | null
+          task_uid: string | null
+          template_commit_sha: string | null
+          template_key: string | null
+          template_name: string | null
+          template_ref: string | null
+          template_source_asset_id: string | null
+          template_version_sha256: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_sources_asset_id_fkey"
+            columns: ["template_source_asset_id"]
+            isOneToOne: true
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       _assert_brand: { Args: { p_brand_id: string }; Returns: undefined }
@@ -21456,6 +21558,7 @@ export type Database = {
           analyzed_at: string | null
           angle_id: string | null
           angle_label: string | null
+          angle_provenance: Json | null
           angle_scope: string | null
           angle_vocab_version: number
           body: string | null
@@ -21492,6 +21595,7 @@ export type Database = {
           analyzed_at?: string | null
           angle_id?: string | null
           angle_label?: string | null
+          angle_provenance?: Json | null
           angle_scope?: string | null
           angle_vocab_version?: number
           body?: string | null
@@ -21528,6 +21632,7 @@ export type Database = {
           analyzed_at?: string | null
           angle_id?: string | null
           angle_label?: string | null
+          angle_provenance?: Json | null
           angle_scope?: string | null
           angle_vocab_version?: number
           body?: string | null

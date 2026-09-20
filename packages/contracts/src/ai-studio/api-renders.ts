@@ -1068,6 +1068,22 @@ export const apiRenderJobSchema = z
       .nullable()
       .default(null),
     /**
+     * Which VARIANT of the template this render is of — the Template Forge store commit, and the
+     * named head it carried (`<templateKey>/9:16/base`). `templateSource.sha256` says which BYTES
+     * rendered; this says which sibling version of the design those bytes are.
+     *
+     * Null is UNCHECKED, never clean: a template an operator granted has no store commit by
+     * construction, and a forge that could not be reached must not be reported as a clean pin.
+     */
+    templateVariant: z
+      .object({
+        commitSha: z.string().min(1),
+        ref: z.string().min(1).nullable().default(null),
+      })
+      .strict()
+      .nullable()
+      .default(null),
+    /**
      * The public variables this job was submitted with, reserved autofills included — what the
      * finished frame actually shows. Lets a preview tell which values changed since this render.
      * Null for a job whose input was not recorded.

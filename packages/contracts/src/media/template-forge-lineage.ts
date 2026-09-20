@@ -163,3 +163,51 @@ export function forgeLineageHasReason(node: ForgeLineageNode, reason: string): b
   if (node.reason === reason) return true;
   return node.children.some((child) => forgeLineageHasReason(child, reason));
 }
+
+/** The variant a render is of: the store commit, and the named head it carried. */
+export type ForgeVariantPin = { commitSha: string; ref: string | null };
+
+/**
+ * Which VARIANT the template's graph is currently pointed at, named from the version tree.
+ *
+ * The forge's pin answers with an ATTACHMENT id and its bytes; the tree hangs `shipped` on the
+ * commit those bytes came from. Matching the two is the only way a render can say it is the 9:16
+ * cut rather than merely naming a sha256 — see template-forge `docs/TEMPLATE_IDENTITY.md`.
+ *
+ * Returns null for every UNCHECKED case, and they are all the same answer: no attachment id, no
+ * cached tree, or a tree that has not recorded these bytes. A commit stamped `from-ledger` is a
+ * fork whose checkout was deleted — it names bytes nobody has, so it is not a pin either.
+ */
+export function forgeLineageVariantOfAttachment(
+  view: Pick<ForgeLineageView, 'roots'>,
+  attachmentId: number | null | undefined,
+): ForgeVariantPin | null {
+  if (typeof attachmentId !== 'number' || !Number.isFinite(attachmentId)) return null;
+
+  const shippedAs = (node: ForgeLineageNode): number | null => {
+    const shipped = (node.tags ?? {}).shipped as { attachmentId?: unknown } | undefined;
+    return typeof shipped?.attachmentId === 'number' ? shipped.attachmentId : null;
+  };
+
+  const walk = (node: ForgeLineageNode): ForgeVariantPin | null => {
+    if (shippedAs(node) === attachmentId) {
+      // `id` is the commit (a hash of the instruction set); `sha` is the checkout blob and is the
+      // commit only for an intake. Prefer the commit, and never pin to the ledger placeholder.
+      const commitSha = node.id || node.sha;
+      if (commitSha && commitSha !== 'from-ledger') {
+        return { commitSha, ref: node.refs[0] ?? null };
+      }
+    }
+    for (const child of node.children ?? []) {
+      const hit = walk(child);
+      if (hit) return hit;
+    }
+    return null;
+  };
+
+  for (const root of view.roots) {
+    const hit = walk(root);
+    if (hit) return hit;
+  }
+  return null;
+}

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   FORGE_REASONS,
   forgeLineageHasReason,
+  forgeLineageVariantOfAttachment,
   forgeLineageNodeSchema,
   forgeLineageViewSchema,
   forgeReasonSchema,
@@ -98,5 +99,61 @@ describe('forgeWorktreeSchema', () => {
       reason: 'authored',
     });
     expect(parsed.locked).toBe(true);
+  });
+});
+
+describe('forgeLineageVariantOfAttachment', () => {
+  const tree = {
+    roots: [
+      forgeLineageNodeSchema.parse({
+        ...ROOT,
+        tags: { shipped: { attachmentId: 11 } },
+        children: [
+          {
+            sha: 'c'.repeat(64),
+            id: 'd'.repeat(64),
+            refs: ['inyogo/9:16/base'],
+            tags: { shipped: { attachmentId: 42 }, state: 'accepted' },
+            children: [],
+          },
+          {
+            sha: 'from-ledger',
+            refs: ['inyogo/1:1/base'],
+            tags: { shipped: { attachmentId: 43 } },
+            children: [],
+          },
+        ],
+      }),
+    ],
+  };
+
+  it('names the variant the live attachment came from', () => {
+    expect(forgeLineageVariantOfAttachment(tree, 42)).toEqual({
+      commitSha: 'd'.repeat(64),
+      ref: 'inyogo/9:16/base',
+    });
+  });
+
+  it('prefers the commit id over the checkout blob', () => {
+    // `sha` is the bytes, `id` is the instruction set that produced them. Pinning the blob would
+    // name two different commits identically whenever a materialised AEP is byte-identical.
+    expect(forgeLineageVariantOfAttachment(tree, 42)?.commitSha).not.toBe('c'.repeat(64));
+  });
+
+  it('carries an unnamed head as a commit with no ref', () => {
+    expect(forgeLineageVariantOfAttachment(tree, 11)).toEqual({
+      commitSha: 'a'.repeat(64),
+      ref: 'ngrbigguypantsok/master',
+    });
+  });
+
+  it('refuses the ledger placeholder — it names bytes nobody has', () => {
+    expect(forgeLineageVariantOfAttachment(tree, 43)).toBeNull();
+  });
+
+  it('is UNCHECKED, not clean, when the tree has not recorded these bytes', () => {
+    expect(forgeLineageVariantOfAttachment(tree, 999)).toBeNull();
+    expect(forgeLineageVariantOfAttachment(tree, null)).toBeNull();
+    expect(forgeLineageVariantOfAttachment({ roots: [] }, 42)).toBeNull();
   });
 });

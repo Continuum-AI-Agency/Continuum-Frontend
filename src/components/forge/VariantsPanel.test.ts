@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { variantLabel, variantsOf } from '@/components/forge/VariantsPanel';
+import { variantLabel } from '@/components/forge/templateVersion';
+import { variantsOf } from '@/components/forge/VariantsPanel';
 
 // A variant is a sibling VERSION that differs deliberately — a ratio, a language, a legal wrap, a
 // motion preset. Same lineage, its own named head. The Render tab's "forks" are forks of DATA and
