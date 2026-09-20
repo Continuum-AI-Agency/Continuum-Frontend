@@ -10,8 +10,15 @@ mock.module('../charts/SpendByObjectiveStream', () => ({
   SpendByObjectiveStream: () => <div data-testid="spend-stream" />,
 }));
 mock.module('../ApplyModePill', () => ({ ApplyModePill: () => null }));
+// Spread the real module: `mock.module` replaces it for the whole PROCESS and bun runs
+// every test file in one, so a partial replacement here reaches the next file in the run.
+const realOptimizerData = await import('../useOptimizerData');
 mock.module('../useOptimizerData', () => ({
+  ...realOptimizerData,
   useOptimizerSpendByObjective: () => ({ data: [], isLoading: false, isError: false }),
+  // The account read is written by a worker on its own clock; absent is the normal case
+  // and the overview has to stand on its own without it.
+  useOptimizerAccountRead: () => ({ data: null, isLoading: false, isError: false }),
 }));
 
 const { OptimizerOverview, sortPortfolios } = await import('./OptimizerOverview');
