@@ -223,6 +223,48 @@ export type ForgeVariantPin = { commitSha: string; ref: string | null };
  * cached tree, or a tree that has not recorded these bytes. A commit stamped `from-ledger` is a
  * fork whose checkout was deleted — it names bytes nobody has, so it is not a pin either.
  */
+/**
+ * The commit a NAMED head points at — the same walk as `forgeLineageVariantOfAttachment`, asked
+ * the other way round.
+ *
+ * The attachment lookup answers "which variant is the template pointing at right now", which is
+ * what a render pins itself to when nobody chooses. This answers "which commit does THIS ref
+ * name", which is what an operator picking a row off the variants panel is asking for. One
+ * function per direction rather than one clever one: the predicates differ, the refusal differs
+ * (an unknown ref is a 409 a person must see, an unmatched attachment is a quiet `absent`), and
+ * merging them would hide that.
+ *
+ * Null when no node carries the ref, so the caller refuses rather than falling back to the live
+ * pointer — silently rendering something other than what was chosen is the whole failure here.
+ */
+export function forgeLineageVariantOfRef(
+  view: Pick<ForgeLineageView, 'roots'>,
+  ref: string | null | undefined,
+): ForgeVariantPin | null {
+  if (typeof ref !== 'string' || !ref.trim()) return null;
+  const wanted = ref.trim();
+
+  const walk = (node: ForgeLineageNode): ForgeVariantPin | null => {
+    if (node.refs.includes(wanted)) {
+      // Same rule as the attachment walk: `id` is the commit, `sha` is the checkout blob and is
+      // the commit only for an intake, and the ledger placeholder is never a pin.
+      const commitSha = node.id || node.sha;
+      if (commitSha && commitSha !== 'from-ledger') return { commitSha, ref: wanted };
+    }
+    for (const child of node.children ?? []) {
+      const hit = walk(child);
+      if (hit) return hit;
+    }
+    return null;
+  };
+
+  for (const root of view.roots) {
+    const hit = walk(root);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 export function forgeLineageVariantOfAttachment(
   view: Pick<ForgeLineageView, 'roots'>,
   attachmentId: number | null | undefined,

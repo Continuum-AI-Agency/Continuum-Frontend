@@ -334,6 +334,11 @@ export type ForgeRenderIntent = {
   bindingId?: string;
   renderSetId?: string;
   draftWithAi?: boolean;
+  /**
+   * Render this named head instead of the template's live pointer. Set by the variants panel,
+   * which could list heads but never aim a render at one, so every name on it was decoration.
+   */
+  templateRef?: string;
 };
 
 type NameRequest = {
@@ -915,6 +920,7 @@ export function RenderRequestsGrid({
             templateKey: key,
             contractHash,
             variables: resolved,
+            ...(templateRef ? { templateRef } : {}),
             ...(encode ? { encode } : {}),
           });
           check = {
@@ -1278,12 +1284,19 @@ export function RenderRequestsGrid({
     setPendingDiscard(() => action);
   };
 
+  // The head this grid is pinned to, or null for the template's live pointer.
+  const [templateRef, setTemplateRef] = useState<string | null>(null);
+
   // An intent is an event, taken once and handed back. Like every other way of replacing the rows
   // it saves or asks first; one for what is already open changes nothing.
   // biome-ignore lint/correctness/useExhaustiveDependencies: only a new intent is an event; the rest is read as it arrives.
   useEffect(() => {
     if (!intent) return;
     onIntentConsumed?.();
+    // A head belongs to the template it was picked from. Taking it from the intent — rather
+    // than leaving it set — means switching template clears it, so a ref can never be carried
+    // onto a template whose tree has never heard of it.
+    setTemplateRef(intent.templateRef ?? null);
     const alreadyOpen =
       intent.templateKey === templateKey &&
       (!intent.renderSetId || intent.renderSetId === activeSet?.id);
@@ -2286,6 +2299,7 @@ export function RenderRequestsGrid({
                   bindingId={bindingId}
                   templateKey={contract.template.key}
                   contractHash={contract.template.contractHash}
+                  templateRef={templateRef}
                   contract={contract}
                   rows={batch.rows}
                   records={batch.records}

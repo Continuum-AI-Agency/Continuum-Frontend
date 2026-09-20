@@ -4,6 +4,7 @@ import type { ForgeLineageNode, ForgeLineageView } from '@continuum/contracts';
 import { useEffect, useState } from 'react';
 import { formatRelativeTime } from '@/components/approvals/formatters';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { fetchTemplateLineage } from '@/lib/library/templateSources';
 import { shortSha, variantLabel } from './templateVersion';
 
@@ -69,7 +70,22 @@ export function variantsOf(view: Pick<ForgeLineageView, 'roots'>): VariantRow[] 
   return out;
 }
 
-export function VariantsPanel({ brandId, assetId }: { brandId: string; assetId: string }) {
+export function VariantsPanel({
+  brandId,
+  assetId,
+  selectedRef,
+  onSelect,
+}: {
+  brandId: string;
+  assetId: string;
+  /** The head the Render tab is currently pinned to, or null for the template's live pointer. */
+  selectedRef?: string | null;
+  /**
+   * Pick this head for the next render, or unpick it. Omitted, the panel stays read-only —
+   * which is what it was before, and is still right anywhere there is no render to aim at.
+   */
+  onSelect?: (ref: string | null) => void;
+}) {
   const [view, setView] = useState<ForgeLineageView | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -141,6 +157,21 @@ export function VariantsPanel({ brandId, assetId }: { brandId: string; assetId: 
             <span className="text-muted-foreground" title={variant.lastPointer.at}>
               pointer {variant.lastPointer.direction}
             </span>
+          ) : null}
+          {/* The panel could list heads and never render one, which made every name on it
+              decoration. Choosing one OVERRIDES the template's live pointer for the next
+              render — so it is a toggle with a visible pinned state, not a fire-and-forget
+              button someone could press twice without knowing what changed. */}
+          {onSelect && variant.refs[0] ? (
+            <Button
+              type="button"
+              size="sm"
+              variant={selectedRef === variant.refs[0] ? 'default' : 'outline'}
+              className="ml-auto h-6 px-2 text-xs"
+              onClick={() => onSelect(selectedRef === variant.refs[0] ? null : variant.refs[0])}
+            >
+              {selectedRef === variant.refs[0] ? 'Rendering this' : 'Render this'}
+            </Button>
           ) : null}
         </li>
       ))}

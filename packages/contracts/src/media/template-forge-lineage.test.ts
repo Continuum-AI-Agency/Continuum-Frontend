@@ -4,6 +4,7 @@ import {
   forgeLineageHasReason,
   forgeLineageNodeSchema,
   forgeLineageVariantOfAttachment,
+  forgeLineageVariantOfRef,
   forgeLineageViewSchema,
   forgeReasonSchema,
   forgeWorktreeSchema,
@@ -100,6 +101,62 @@ describe('forgeWorktreeSchema', () => {
       reason: 'authored',
     });
     expect(parsed.locked).toBe(true);
+  });
+});
+
+describe('forgeLineageVariantOfRef', () => {
+  const tree = {
+    roots: [
+      forgeLineageNodeSchema.parse({
+        ...ROOT,
+        refs: ['inyogo/master'],
+        children: [
+          {
+            sha: 'c'.repeat(64),
+            id: 'd'.repeat(64),
+            refs: ['inyogo/9:16/base', 'inyogo/9:16/base@published'],
+            children: [],
+          },
+          {
+            sha: 'from-ledger',
+            refs: ['inyogo/1:1/base'],
+            children: [],
+          },
+        ],
+      }),
+    ],
+  };
+
+  it('names the commit a chosen head points at, however deep it sits', () => {
+    expect(forgeLineageVariantOfRef(tree, 'inyogo/9:16/base')).toEqual({
+      commitSha: 'd'.repeat(64),
+      ref: 'inyogo/9:16/base',
+    });
+  });
+
+  it('matches any of a node’s refs, and answers with the one that was asked for', () => {
+    // A node carries several names — a head and its @state alias. Answering with refs[0]
+    // would report a ref the caller did not choose back onto the job row.
+    expect(forgeLineageVariantOfRef(tree, 'inyogo/9:16/base@published')).toEqual({
+      commitSha: 'd'.repeat(64),
+      ref: 'inyogo/9:16/base@published',
+    });
+  });
+
+  it('refuses a ref nothing carries, rather than falling back to a root', () => {
+    expect(forgeLineageVariantOfRef(tree, 'inyogo/4:5/base')).toBeNull();
+    expect(forgeLineageVariantOfRef(tree, '')).toBeNull();
+    expect(forgeLineageVariantOfRef(tree, null)).toBeNull();
+  });
+
+  it('never pins to the ledger placeholder', () => {
+    // `from-ledger` is a node the store knows OF but does not hold bytes for. Pinning a render
+    // to it would name a commit nobody can check out.
+    expect(forgeLineageVariantOfRef(tree, 'inyogo/1:1/base')).toBeNull();
+  });
+
+  it('matches exactly — a prefix is a different variant', () => {
+    expect(forgeLineageVariantOfRef(tree, 'inyogo/9:16')).toBeNull();
   });
 });
 

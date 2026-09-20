@@ -896,6 +896,16 @@ export const apiRenderPreflightRequestSchema = z
     rootRowId: z.string().uuid().optional(),
     parentRowId: z.string().uuid().nullable().optional(),
     outputIds: z.array(z.string().min(1)).min(1).optional(),
+    /**
+     * Render THIS named head instead of whatever the template's live pointer resolves to.
+     *
+     * Without it the pin is decided entirely server-side at preflight — which is right as a
+     * default, and is why the variants panel could list heads but never render one. Choosing a
+     * variant necessarily means OVERRIDING the live pointer, so it is an explicit field rather
+     * than an inference, and an unknown ref is refused rather than quietly falling back: a
+     * render that silently ignores the head someone picked is the failure this exists to stop.
+     */
+    templateRef: z.string().min(1).optional(),
     /** Per-render output settings, keyed by public output id. Pinned into the signed trigger. */
     encode: apiRenderEncodeOverrideSchema.optional(),
     approvalDestinationIds: approvalDestinationIdsField,
@@ -977,6 +987,14 @@ export const apiRenderBatchPreflightRequestSchema = z
     templateKey: z.string().min(1),
     contractHash: z.string().min(1),
     delivery: apiRenderDeliveryTargetSchema.optional(),
+    /**
+     * Render this named head rather than the template's live pointer. Batch-level, not per
+     * record: it names which VERSION of the template every record is rendered from, and two
+     * records of one batch rendering different versions of the design is not a thing anyone
+     * asked for — while a batch silently split across two versions is very much a thing that
+     * would be found by a client.
+     */
+    templateRef: z.string().min(1).optional(),
     records: z.array(apiRenderBatchRecordSchema).min(1).max(50),
     /**
      * Post each finished render to this brand Slack destination. Here, not on createBatch, so the

@@ -802,7 +802,19 @@ export function TemplateDetail({
         <TabsContent value="variants" keepMounted className="p-[var(--card-pad)]">
           {/* Ratio twins, language forks and legal wraps as siblings — the view that had no home:
               the gallery shows flat ratio chips and the Render tab's forks are forks of DATA. */}
-          <VariantsPanel brandId={brandId} assetId={assetId} />
+          <VariantsPanel
+            brandId={brandId}
+            assetId={assetId}
+            // Only when this template can actually be rendered from — a panel that offers to
+            // render a template with no key, or with nowhere to send the choice, would be the
+            // dangling affordance this whole hop exists to avoid.
+            {...(onOpenRender && templateKey
+              ? {
+                  onSelect: (ref: string | null) =>
+                    onOpenRender({ templateKey, ...(ref ? { templateRef: ref } : {}) }),
+                }
+              : {})}
+          />
         </TabsContent>
         <TabsContent value="history" keepMounted className="p-[var(--card-pad)]">
           <LineagePanel brandId={brandId} assetId={assetId} />

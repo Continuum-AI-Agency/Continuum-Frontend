@@ -101,6 +101,8 @@ export type RenderReviewTrayProps = {
   bindingId: string | null;
   templateKey: string;
   contractHash: string;
+  /** The named head to render, or null for the template's live pointer. */
+  templateRef?: string | null;
   contract: ApiRenderTemplateContract;
   rows: RenderPreflightRow[];
   records: ApiRenderBatchRecord[];
@@ -204,6 +206,7 @@ export function RenderReviewTray({
   bindingId,
   templateKey,
   contractHash,
+  templateRef,
   contract,
   rows,
   records,
@@ -269,6 +272,7 @@ export function RenderReviewTray({
         ...(bindingId ? { bindingId } : {}),
         templateKey,
         contractHash,
+        ...(templateRef ? { templateRef } : {}),
         records: records.map(({ delivery: _delivery, ...record }) => record),
         ...(approvalDestinationIds.length ? { approvalDestinationIds } : {}),
       });
@@ -281,7 +285,7 @@ export function RenderReviewTray({
           : { state: 'failed', message },
       );
     }
-  }, [brandId, bindingId, templateKey, contractHash, records, approvalDestinationIds]);
+  }, [brandId, bindingId, templateKey, contractHash, templateRef, records, approvalDestinationIds]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: one review per snapshot; Retry and Re-check re-run it.
   useEffect(() => {
@@ -383,6 +387,7 @@ export function RenderReviewTray({
         ...(bindingId ? { bindingId } : {}),
         templateKey,
         contractHash,
+        ...(templateRef ? { templateRef } : {}),
         records: records.map(({ delivery: _delivery, ...record }, index) => {
           const row = rows[index];
           if (!row?.delivery) return record;
