@@ -448,9 +448,27 @@ export function templateFamilyForLibraryFormat(family: string): TemplateSourceFa
   return TEMPLATE_SOURCE_FAMILIES_FROM_LIBRARY_FORMAT[family] ?? null;
 }
 
-/** Distinct font families a parse needs, normalized and deduped for the `fonts[]` column. */
+/**
+ * Distinct font families a parse needs, normalized and deduped for the `fonts[]` column.
+ *
+ * `layers: 0` faces are dropped, and that is not tidying — the `fonts[]` column IS the render
+ * gate. `fleetFontsFor` refuses the whole render with "No stored face for: X. Upload them
+ * before rendering" if the brand does not hold every name in it, so a face no delivery layer
+ * renders is a face that can block a render nobody needed it for. Measured on production:
+ * template 133's gate demanded Poppins-Bold, Poppins-Light and Poppins-SemiBold while only
+ * SemiBold reaches a delivery layer (9 of them); the other two come from `used_fonts`, which
+ * reads the WHOLE project — an animator keyframe or a comp that never ships.
+ *
+ * The guard matters more than the filter. When NOTHING reads above zero the tally itself is
+ * untrustworthy — the parse counts text off delivery layers only, so a design whose copy all
+ * lives one precomp down legitimately reports zero everywhere — and an empty gate list would
+ * let a render go out in a substituted face, which is the failure this gate exists to prevent.
+ * So: filter when the tally demonstrably counted something, keep every face when it did not.
+ */
 export function templateParseFontFamilies(parse: TemplateParse): string[] {
-  return [...new Set(parse.fonts.map((font) => font.family.trim()).filter(Boolean))].sort();
+  const counted = parse.fonts.some((font) => (font.layers ?? 0) > 0);
+  const used = counted ? parse.fonts.filter((font) => (font.layers ?? 0) > 0) : parse.fonts;
+  return [...new Set(used.map((font) => font.family.trim()).filter(Boolean))].sort();
 }
 
 /** Distinct ratio labels, for the `ratios[]` column and the facet chips. */
