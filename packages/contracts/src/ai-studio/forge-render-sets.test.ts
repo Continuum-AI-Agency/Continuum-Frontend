@@ -5,6 +5,7 @@ import {
   forgeRenderSetSchema,
   resolveForgeRenderSetRows,
   updateForgeRenderSetRequestSchema,
+  crossForgeRenderSetRows
 } from './forge-render-sets';
 
 const rootId = '00000000-0000-4000-8000-000000000001';
@@ -241,5 +242,81 @@ describe('Forge render-set description', () => {
         contractHash: 'hash-2',
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('crossForgeRenderSetRows', () => {
+  const id = (i: number) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`;
+
+  test('crosses three headlines with four pictures into twelve rows', () => {
+    const rows = crossForgeRenderSetRows({
+      axes: [
+        { key: 'headline', values: ['A', 'B', 'C'] },
+        { key: 'picture', values: ['p1', 'p2', 'p3', 'p4'] },
+      ],
+      existingRowCount: 0,
+      id,
+    });
+    expect(rows).toHaveLength(12);
+    // Every combination exactly once — a product that repeats or drops one is not a product.
+    const seen = new Set(rows.map((r) => `${r.overrides['headline']}/${r.overrides['picture']}`));
+    expect(seen.size).toBe(12);
+    // Last axis moves fastest, so it reads like a person writing the grid out by hand.
+    expect(rows[0]?.overrides).toEqual({ headline: 'A', picture: 'p1' });
+    expect(rows[1]?.overrides).toEqual({ headline: 'A', picture: 'p2' });
+    expect(rows[4]?.overrides).toEqual({ headline: 'B', picture: 'p1' });
+  });
+
+  // The ordering that matters: the AI path pays a model to propose rows, so a product that
+  // cannot be saved has to be refused BEFORE the call, not after the money is spent.
+  test('refuses a product that will not fit before building any of it', () => {
+    expect(() =>
+      crossForgeRenderSetRows({
+        axes: [
+          { key: 'headline', values: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] },
+          { key: 'picture', values: ['1', '2', '3', '4', '5', '6', '7', '8'] },
+        ],
+        existingRowCount: 0,
+        id,
+      }),
+    ).toThrow('render_set_rows_exceeded');
+  });
+
+  test('counts the rows already in the set, not just the new ones', () => {
+    const axes = [
+      { key: 'headline', values: ['a', 'b', 'c'] },
+      { key: 'picture', values: ['1', '2', '3'] },
+    ];
+    expect(crossForgeRenderSetRows({ axes, existingRowCount: 41, id })).toHaveLength(9);
+    expect(() => crossForgeRenderSetRows({ axes, existingRowCount: 42, id })).toThrow(
+      'render_set_rows_exceeded',
+    );
+  });
+
+  test('is not a product with fewer than two axes', () => {
+    expect(() =>
+      crossForgeRenderSetRows({ axes: [{ key: 'headline', values: ['a'] }], existingRowCount: 0, id }),
+    ).toThrow('render_set_cross_needs_two_axes');
+    // An axis with no values is not an axis, so this is one axis, not two.
+    expect(() =>
+      crossForgeRenderSetRows({
+        axes: [{ key: 'headline', values: ['a', 'b'] }, { key: 'picture', values: [] }],
+        existingRowCount: 0,
+        id,
+      }),
+    ).toThrow('render_set_cross_needs_two_axes');
+  });
+
+  test('forks every generated row from the same parent when asked', () => {
+    const rows = crossForgeRenderSetRows({
+      axes: [
+        { key: 'headline', values: ['a', 'b'] },
+        { key: 'picture', values: ['1', '2'] },
+      ],
+      existingRowCount: 0,
+      parentId: id(99),
+      id,
+    });
+    expect(rows.every((r) => r.parentId === id(99))).toBe(true);
   });
 });

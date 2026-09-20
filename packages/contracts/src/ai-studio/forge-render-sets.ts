@@ -228,3 +228,65 @@ export function resolveForgeRenderSetRows(rows: ForgeRenderSetRow[]): ResolvedFo
   // the order the rows were saved in.
   return parsed.map(visit);
 }
+
+/** One axis of a cross-product: a variable, and the values to walk across it. */
+export type ForgeRenderSetAxis = { key: string; values: readonly string[] };
+
+/**
+ * Three headlines crossed with four pictures, as twelve rows.
+ *
+ * Forge had no cross-product at all. `crossBatches` exists, is tested and is shipped — and
+ * takes `BatchItem` (`kind` plus `value`/`assetId`), which a `ForgeRenderSetRow` is not: its
+ * payload is an `overrides` map, `clearedKeys` and `outputIds`. The translation layer would
+ * have been larger than the product itself, so the product lives here, beside the rows it
+ * makes. `crossBatches` stays where it belongs, on the StudioCanvas Batch node.
+ *
+ * The cap is checked BEFORE anything is built, and that ordering is the whole point: the AI
+ * path proposes rows by calling a model, so a 3x4x5 request that cannot be saved must be
+ * refused before it is paid for, not after. `resolveForgeRenderSetRows` would refuse the
+ * result anyway — one row too late.
+ */
+export function crossForgeRenderSetRows(args: {
+  axes: readonly ForgeRenderSetAxis[];
+  /** Rows already in the set. The product has to fit ALONGSIDE them, not instead of them. */
+  existingRowCount: number;
+  /** The row every generated row forks from, or null for roots. */
+  parentId?: string | null;
+  /** Ids are the caller's to mint — this module has no randomness of its own. */
+  id: (index: number) => string;
+  label?: (combination: ReadonlyArray<{ key: string; value: string }>) => string;
+}): ForgeRenderSetRow[] {
+  const axes = args.axes.filter((axis) => axis.values.length > 0);
+  if (axes.length < 2) {
+    throw new Error('render_set_cross_needs_two_axes');
+  }
+  const total = axes.reduce((count, axis) => count * axis.values.length, 1);
+  if (args.existingRowCount + total > FORGE_RENDER_SET_MAX_ROWS) {
+    throw new Error('render_set_rows_exceeded');
+  }
+
+  // Odometer over the axes, last axis moving fastest, so the output reads the way a person
+  // writing the grid out by hand would: all the pictures for headline one, then headline two.
+  const rows: ForgeRenderSetRow[] = [];
+  for (let index = 0; index < total; index += 1) {
+    let remainder = index;
+    const combination: Array<{ key: string; value: string }> = [];
+    for (let axisIndex = axes.length - 1; axisIndex >= 0; axisIndex -= 1) {
+      const axis = axes[axisIndex]!;
+      const value = axis.values[remainder % axis.values.length]!;
+      remainder = Math.floor(remainder / axis.values.length);
+      combination.unshift({ key: axis.key, value });
+    }
+    rows.push({
+      id: args.id(index),
+      parentId: args.parentId ?? null,
+      label: args.label
+        ? args.label(combination)
+        : combination.map((part) => part.value).join(' · ').slice(0, 200),
+      overrides: Object.fromEntries(combination.map((part) => [part.key, part.value])),
+      clearedKeys: [],
+      outputIds: [],
+    });
+  }
+  return rows;
+}
