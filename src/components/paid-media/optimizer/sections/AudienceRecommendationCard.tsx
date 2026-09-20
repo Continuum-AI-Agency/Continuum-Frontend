@@ -493,6 +493,11 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
             <div className="space-y-0.5">
               <p className="font-medium text-foreground">
                 {state === 'undone' ? 'Undone' : 'Created on Meta'}
+                {(row?.approval as { via?: string } | null)?.via === 'autopilot' ? (
+                  <Badge className="ml-1.5 text-3xs" variant="success">
+                    Approved by autopilot · created paused
+                  </Badge>
+                ) : null}
               </p>
               {result.campaign ? (
                 <p className="truncate text-muted-foreground">

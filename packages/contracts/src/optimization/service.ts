@@ -1072,6 +1072,9 @@ export const PortfolioListItemSchema = z.object({
   // banner and the guardrail gate silently read as "not paused" / "no caps").
   autopilot_paused: z.boolean().nullable().optional(),
   autopilot_scopes: AutopilotScopesSchema.catch(DEFAULT_AUTOPILOT_SCOPES).optional(),
+  /** Who autonomous approvals are attributed to; both null = nobody, so nothing runs alone. */
+  apply_mode_changed_by: z.string().uuid().nullable().optional(),
+  autopilot_scopes_changed_by: z.string().uuid().nullable().optional(),
   max_daily_apply_minor: z.number().nullable().optional(),
   max_change_pct_per_cycle: z.number().nullable().optional(),
 });

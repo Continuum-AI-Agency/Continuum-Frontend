@@ -326,6 +326,9 @@ export function CreativeRecommendationCard({
                 >
                   {SWAP_STATUS_LABEL[status] ?? status}
                 </Badge>
+                {slot.job.enqueued_via === 'autopilot' ? (
+                  <span className="text-3xs text-muted-foreground">by autopilot</span>
+                ) : null}
                 {status === 'failed' && failureText(slot.job) ? (
                   <p className="line-clamp-2 text-destructive" title={failureText(slot.job) ?? ''}>
                     {failureText(slot.job)}

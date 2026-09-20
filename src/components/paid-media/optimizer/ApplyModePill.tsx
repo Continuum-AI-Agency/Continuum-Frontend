@@ -4,6 +4,7 @@
 // Same kibo-ui Pill + indicator pattern as HeldPill. When autopilot is kill-switched
 // (stop), we render a "Stopped" pill so halt is visible without losing the mode.
 
+import type { AutopilotScopes } from '@continuum/contracts';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { applyModeExplainer, applyModePill } from './reportModel';
@@ -11,11 +12,14 @@ import { applyModeExplainer, applyModePill } from './reportModel';
 export function ApplyModePill({
   applyMode,
   autopilotPaused,
+  scopes,
   className,
 }: {
   applyMode: string | null | undefined;
   /** Autopilot kill-switch — halt autonomous writes without leaving autopilot mode. */
   autopilotPaused?: boolean | null;
+  /** What autopilot may approve; named in the tooltip when present. */
+  scopes?: AutopilotScopes | null;
   className?: string;
 }) {
   const meta = applyModePill(applyMode);
@@ -27,7 +31,7 @@ export function ApplyModePill({
   const indicator = stopped ? 'warning' : meta.indicator;
   const tip = stopped
     ? 'Stop — autopilot writes are halted. Resume from Manage, or switch to Observe / Recommend.'
-    : applyModeExplainer(applyMode);
+    : applyModeExplainer(applyMode, scopes);
 
   return (
     <Tooltip>

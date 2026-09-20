@@ -352,6 +352,7 @@ export function PortfolioDetailWorkspace({
                 <ApplyModePill
                   applyMode={portfolio.apply_mode}
                   autopilotPaused={portfolio.autopilot_paused}
+                  scopes={portfolio.autopilot_scopes ?? null}
                 />
               </h2>
               <p className="text-3xs text-muted-foreground">

@@ -23,7 +23,7 @@ export const TIER_COPY: Record<ApplyMode, { title: string; body: string }> = {
   },
   autopilot: {
     title: 'Autopilot',
-    body: 'Applies moves automatically inside your guardrails. Only a change above the per-cycle cap waits for you.',
+    body: 'Applies budget moves inside your guardrails and approves the actions you tick. Anything it creates is born paused.',
   },
 };
 

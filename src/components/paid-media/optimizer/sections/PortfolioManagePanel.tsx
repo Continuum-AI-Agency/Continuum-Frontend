@@ -25,8 +25,9 @@
 
 import {
   type AdSetSnapshot,
-  allowedTargetMetrics,
   type ApplyMode,
+  type AutopilotScope,
+  allowedTargetMetrics,
   type BudgetGranularity,
   type BudgetSource,
   type CreativeAnalysis,
@@ -66,8 +67,6 @@ import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
   Select,
   SelectContent,
@@ -75,6 +74,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import { ReallocationFlow } from '../charts/ReallocationFlow';
 import { currencySymbol, formatCurrency, humanize } from '../format';
@@ -92,6 +93,7 @@ import {
   useOptimizerMutations,
   useOptimizerPerformance,
 } from '../useOptimizerData';
+import { AutopilotScopesField } from './AutopilotScopesField';
 import { type AutopilotForecast, forecastAutopilot } from './autopilotForecast';
 import { TierCards } from './fields/TierCards';
 import {
@@ -258,7 +260,8 @@ export function PortfolioManagePanel({
       period_start: portfolio.period_start,
       period_end: portfolio.period_end,
       target_metric: portfolio.target_metric ?? portfolioRow?.target_metric ?? null,
-      budget_granularity: portfolio.budget_granularity ?? portfolioRow?.budget_granularity ?? 'daily',
+      budget_granularity:
+        portfolio.budget_granularity ?? portfolioRow?.budget_granularity ?? 'daily',
       daily_total: portfolio.daily_total,
       period_budget: portfolio.period_budget,
       cpa_target: portfolio.cpa_target ?? portfolioRow?.cpa_target ?? null,
@@ -421,6 +424,7 @@ export function PortfolioManagePanel({
   // reachable on a portfolio that is not on autopilot — see `guardrailsRelevant`.
   const [arming, setArming] = useState(false);
   const isPaused = Boolean(portfolio.autopilot_paused);
+  const [savingScope, setSavingScope] = useState<AutopilotScope | null>(null);
 
   // Autopilot writes real budgets to Meta, and the apply layer reads an absent cap as
   // UNCAPPED — so it may only be armed once BOTH guardrails are set and positive. The DB
@@ -605,9 +609,13 @@ export function PortfolioManagePanel({
             {allowedMetrics.length > 1 ? (
               <Select
                 onValueChange={(value) =>
-                  form.setValue('target_metric', value === objective ? null : (value as TargetMetric), {
-                    shouldDirty: true,
-                  })
+                  form.setValue(
+                    'target_metric',
+                    value === objective ? null : (value as TargetMetric),
+                    {
+                      shouldDirty: true,
+                    },
+                  )
                 }
                 value={effectiveTargetMetric}
               >
@@ -675,11 +683,7 @@ export function PortfolioManagePanel({
           </div>
           <div className="space-y-1.5 sm:col-span-2 lg:col-span-2">
             <Label>Autonomy tier</Label>
-            <TierCards
-              arming={arming}
-              onSelect={handleApplyModeChange}
-              value={applyMode}
-            />
+            <TierCards arming={arming} onSelect={handleApplyModeChange} value={applyMode} />
             {/* applyModeExplainer describes the selected tier and re-runs as the choice changes. */}
             <p className="text-2xs text-muted-foreground">
               {arming && !isArmed
@@ -768,7 +772,9 @@ export function PortfolioManagePanel({
                       key={chip.days}
                       label={chip.label}
                       onClick={() =>
-                        form.setValue('scale_cadence_days', String(chip.days), { shouldDirty: true })
+                        form.setValue('scale_cadence_days', String(chip.days), {
+                          shouldDirty: true,
+                        })
                       }
                     />
                   ))}
@@ -941,7 +947,7 @@ export function PortfolioManagePanel({
       {guardrailsRelevant ? (
         <Section
           title="Autopilot guardrails"
-          description="Both are required to turn autopilot on. They bound autonomous budget writes: a change over the % cap is held for your approval instead of being auto-applied."
+          description="Both caps are required to turn autopilot on; they bound the budget writes. Below, tick what autopilot may approve on its own — anything it creates is born paused."
           action={
             portfolio.apply_mode === 'autopilot' || isArmed ? (
               <Button
@@ -975,6 +981,27 @@ export function PortfolioManagePanel({
               Stopped — no autonomous budget writes until you resume. Ingest and scoring still run.
             </p>
           ) : null}
+          <div className="space-y-1.5">
+            <p className="font-medium text-foreground text-xs">What autopilot may approve</p>
+            <AutopilotScopesField
+              disabled={portfolio.apply_mode !== 'autopilot' && !isArmed}
+              noActor={
+                portfolio.apply_mode === 'autopilot' &&
+                portfolio.apply_mode_changed_by === null &&
+                portfolio.autopilot_scopes_changed_by === null
+              }
+              onChange={(scope, enabled) => {
+                setSavingScope(scope);
+                update.mutate(
+                  { portfolio_id: portfolio.id, patch: { autopilot_scopes: { [scope]: enabled } } },
+                  { onSettled: () => setSavingScope(null) },
+                );
+              }}
+              portfolioId={portfolio.id}
+              savingScope={savingScope}
+              scopes={portfolio.autopilot_scopes ?? null}
+            />
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <NumberField
               control={form.control}

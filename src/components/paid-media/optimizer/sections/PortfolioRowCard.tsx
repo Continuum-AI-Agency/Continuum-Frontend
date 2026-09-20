@@ -83,6 +83,7 @@ export function PortfolioRowCard({
             <ApplyModePill
               applyMode={portfolio.apply_mode}
               autopilotPaused={portfolio.autopilot_paused}
+              scopes={portfolio.autopilot_scopes ?? null}
             />
           </div>
         </div>
