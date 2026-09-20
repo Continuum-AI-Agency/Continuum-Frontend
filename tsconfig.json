@@ -142,7 +142,11 @@
     ".next-paid-creative-52373/types/**/*.ts",
     ".next-paid-creative-52373/dev/types/**/*.ts",
     ".next-paid-creative-63249/types/**/*.ts",
-    ".next-paid-creative-63249/dev/types/**/*.ts"
+    ".next-paid-creative-63249/dev/types/**/*.ts",
+    ".next/vercel-parity/types/**/*.ts",
+    ".next/vercel-parity/dev/types/**/*.ts",
+    ".next/studio-placement/types/**/*.ts",
+    ".next/studio-placement/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

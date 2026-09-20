@@ -20,6 +20,15 @@ export const workspaceTemplateSchema = z
   .object({
     templateKey: z.string().min(1),
     templateId: z.number().int().positive(),
+    /**
+     * Which binding this template lives in — the other half of its identity.
+     *
+     * A template key is a NocoBase id, unique only WITHIN a sub-app: `Parsed_app` 133 and
+     * `Continuum_app` 133 are two different clients' templates. The gallery merges every binding
+     * a brand holds into one list, so a row that carried only the key would collide with a
+     * stranger's, and adopting it would grant the wrong template.
+     */
+    bindingId: z.string().uuid(),
     name: z.string(),
     rootTable: z.string().nullable().default(null),
     updatedAt: z.string().nullable().default(null),

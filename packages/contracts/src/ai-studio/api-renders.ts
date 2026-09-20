@@ -166,6 +166,17 @@ export const apiRenderTemplateSummarySchema = z
   .object({
     key: z.string().min(1),
     name: z.string().min(1),
+    /**
+     * Which of the brand's bindings this template lives in — HALF OF ITS IDENTITY.
+     *
+     * Template keys are per sub-app, not global: `Continuum_app` 133 is StarCraft's promo and
+     * `Parsed_app` 133 is another client's product template. A merged list that keyed on `key`
+     * alone would collapse them into one row, and whichever won would render the other brand's
+     * comp. So every read that follows a template — contract, preflight, job — carries the pair,
+     * and no request ever needs a person to name a workspace.
+     */
+    bindingId: z.string().uuid(),
+    /** The binding's sub-app. A label for operators; never a thing a person picks. */
     environment: z.string().min(1),
     contractVersion: z.string().min(1),
     contractHash: z.string().min(1),
@@ -209,6 +220,21 @@ export const apiRenderTemplateSummarySchema = z
   })
   .strict();
 export type ApiRenderTemplateSummary = z.infer<typeof apiRenderTemplateSummarySchema>;
+
+/**
+ * What tells two templates apart once a brand's bindings are merged into one list.
+ *
+ * A template key is a NocoBase row id, unique only WITHIN a sub-app: `Continuum_app` 133 is one
+ * client's promo and `Parsed_app` 133 is another's product card. Anything that identifies a
+ * template by key alone silently picks one of them — a Backend de-dupe would drop a real row, and
+ * a React key would make the renderer drop the second child without a word, so the person sees
+ * one template where they hold two and renders the wrong tenant's comp.
+ *
+ * One function so the Backend's de-dupe and the Frontend's picker cannot drift on the spelling.
+ */
+export function templateRefOf(template: { bindingId: string; key: string }): string {
+  return `${template.bindingId}:${template.key}`;
+}
 
 /** `1 frame` for a still, `6.0s · 30 fps` for a video. The pane's whole motion vocabulary. */
 export function motionLabel(motion: ApiRenderTemplateSummary['motion']): string | null {

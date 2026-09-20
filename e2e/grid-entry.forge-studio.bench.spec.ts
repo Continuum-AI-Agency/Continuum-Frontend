@@ -33,6 +33,10 @@ import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 //   E5  with nothing remembered, at least three variable columns fit beside the pinned ones and the
 //       headline field is at least 8rem wide; a divider moved by hand is where it was after a reload.
 //   E6  delete asks nothing, says what went on a toast, and the toast's Undo brings the rows back.
+//   E7  a row's "Generate with AI ▸ 6 variations" drafts six proposed rows with no dialog and
+//       nothing typed, and they arrive marked and excluded from the set until kept.
+//   E8  right-clicking a cell varies only that cell's own key; on a picture cell the presets are
+//       disabled with their reason and the brief beneath them is not.
 //
 // It does NOT exercise the Fastify backend or the render fleet — the envelope says so.
 //
@@ -211,6 +215,20 @@ const closeMenu = async (page: Page) => {
   await expect(page.getByRole('menuitem')).toHaveCount(0);
 };
 
+/** The open submenu panel. Both levels stay in the DOM together, so scope or you read both. */
+const submenu = (page: Page): Locator => page.locator('[data-slot$="-sub-content"]');
+const submenuLabels = async (page: Page) => {
+  // allTextContents() is a snapshot with no auto-wait, so read it only once an item is there.
+  await expect(submenu(page).getByRole('menuitem').first()).toBeVisible();
+  return (await submenu(page).getByRole('menuitem').allTextContents()).map((text) => text.trim());
+};
+/** One Escape closes the submenu, the next its parent. */
+const closeSubmenu = async (page: Page) => {
+  await page.keyboard.press('Escape');
+  await expect(submenu(page)).toHaveCount(0);
+  await closeMenu(page);
+};
+
 async function shoot(page: Page, name: string): Promise<void> {
   mkdirSync(SHOTS_DIR, { recursive: true });
   await page.screenshot({ path: resolve(SHOTS_DIR, `entry-${name}.png`) }).catch(() => undefined);
@@ -271,7 +289,7 @@ test.describe('Render grid entry — fixtures', () => {
         'Rename',
         'Add variation',
         'Add row below',
-        'Vary with AI…',
+        'Generate with AI',
         'Copy',
         'Save as inputs',
         'Delete',
@@ -295,6 +313,84 @@ test.describe('Render grid entry — fixtures', () => {
       await field.click({ button: 'right' });
       await page.waitForTimeout(250);
       await expect(page.getByRole('menuitem')).toHaveCount(0, { timeout: 2000 });
+    });
+
+    test(`E7 · ${size} · a row drafts six variations from the menu, with nothing typed`, async ({
+      browser,
+    }) => {
+      const { page, fixtures } = await newPage(browser, viewport);
+      const before = await page.getByRole('row').count();
+
+      await gridRow(page, ROWS.solo)
+        .getByRole('button', { name: `Row actions for ${ROWS.solo}`, exact: true })
+        .click();
+      await page.getByRole('menuitem', { name: 'Generate with AI', exact: true }).click();
+      expect(
+        await submenuLabels(page),
+        'the presets and the brief that is still reachable behind them',
+      ).toEqual(['3 variations', '6 variations', '12 variations', 'With a brief…']);
+      await shoot(page, `${size}-generate-presets`);
+      await submenu(page).getByRole('menuitem', { name: '6 variations', exact: true }).click();
+
+      // No dialog stood in the way, and nothing was typed.
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expect(page.getByRole('region', { name: 'Proposed rows' })).toBeVisible();
+      await expect(page.getByRole('row')).toHaveCount(before + 6, { timeout: 10_000 });
+
+      const sent = fixtures.requests.filter(
+        (request) => request.path === '/api/ai-studio/renders/suggest-rows',
+      );
+      expect(sent, 'one request, for the row the cursor was on').toHaveLength(1);
+      const body = sent[0]!.body as {
+        count: number;
+        varyKeys: string[];
+        prompt: string;
+        forksPerRow: number;
+      };
+      expect(body.count).toBe(6);
+      expect(body.forksPerRow).toBe(0);
+      // A real brief went out even though nobody typed one: an empty one leaves the model a bare
+      // "BRIEF:" header and the Library search nothing to go on.
+      expect(body.prompt.trim().length).toBeGreaterThan(0);
+      // The picture slots are never in a no-typing draft.
+      expect(body.varyKeys).toEqual(['headline', 'tagline', 'price', 'accent']);
+
+      await shoot(page, `${size}-generate-proposed`);
+    });
+
+    test(`E8 · ${size} · a cell varies its own key; a picture cell sends you to the brief`, async ({
+      browser,
+    }) => {
+      const { page, fixtures } = await newPage(browser, viewport);
+      const cellIn = (label: string, key: string) =>
+        gridRow(page, label).locator(`td[data-column-id="${key}"]`);
+
+      await cellIn(ROWS.solo, 'accent').click({ button: 'right' });
+      await page.getByRole('menuitem', { name: 'Vary Accent colour', exact: true }).click();
+      await submenu(page).getByRole('menuitem', { name: '3 variations', exact: true }).click();
+      await expect(page.getByRole('region', { name: 'Proposed rows' })).toBeVisible();
+      const accent = fixtures.requests.filter(
+        (request) => request.path === '/api/ai-studio/renders/suggest-rows',
+      );
+      // The cursor is the detection: one key, the one it was on.
+      expect((accent[0]!.body as { varyKeys: string[] }).varyKeys).toEqual(['accent']);
+
+      await cellIn(ROWS.solo, 'hero').click({ button: 'right' });
+      await page.getByRole('menuitem', { name: 'Vary Hero image', exact: true }).click();
+      const preset = submenu(page).getByRole('menuitem', { name: '3 variations', exact: true });
+      // Disabled with the reason, never hidden — and the brief beneath it is the way through.
+      await expect(preset).toHaveAttribute('title', 'Pick pictures with a brief');
+      await expect(
+        submenu(page).getByRole('menuitem', { name: 'With a brief…', exact: true }),
+      ).not.toHaveAttribute('title', 'Pick pictures with a brief');
+      await shoot(page, `${size}-picture-needs-brief`);
+      await closeSubmenu(page);
+      expect(
+        fixtures.requests.filter(
+          (request) => request.path === '/api/ai-studio/renders/suggest-rows',
+        ),
+        'the disabled preset sent nothing',
+      ).toHaveLength(accent.length);
     });
 
     test(`E3 · ${size} · one value to the selected rows is one undo step`, async ({ browser }) => {

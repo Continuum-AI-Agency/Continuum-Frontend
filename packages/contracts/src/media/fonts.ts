@@ -88,6 +88,65 @@ export type FontInventoryResponse = z.infer<typeof fontInventoryResponseSchema>;
  * ("Gotham-Bold (TrueType)"). The worker registers under the latter and the guard greps for
  * it; matching on the former finds nothing and reports a font it just installed as missing.
  */
+/* -------------------------------------------------------------------------- */
+/*  The worker agent's two calls                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One face as the worker-resident font agent sees it, and deliberately WITHOUT a url.
+ *
+ * Every worker polls this on a short interval. Minting a signed URL per face per poll would
+ * be hundreds of storage round trips to tell a healthy fleet it has nothing to do, so the
+ * manifest is identity only and the worker asks for URLs separately, for what it lacks.
+ */
+export const fleetFontManifestEntrySchema = z
+  .object({
+    family: z.string().min(1),
+    /** What the Windows font registry is keyed by — what the agent compares against. */
+    registryName: z.string().min(1),
+    postScriptName: z.string().nullable(),
+    format: fontFormatSchema,
+    filename: z.string().min(1),
+    sha256: z.string().min(1),
+    bytes: z.number().int().nonnegative(),
+  })
+  .strict();
+export type FleetFontManifestEntry = z.infer<typeof fleetFontManifestEntrySchema>;
+
+export const fleetFontManifestResponseSchema = z
+  .object({ fonts: z.array(fleetFontManifestEntrySchema) })
+  .strict();
+export type FleetFontManifestResponse = z.infer<typeof fleetFontManifestResponseSchema>;
+
+/**
+ * "Here is what I am missing." Digests, never family names.
+ *
+ * The digest is the thing the worker re-verifies after downloading, so asking by digest
+ * means a caller cannot be handed a different face under a name it recognises.
+ */
+export const fleetFontFetchRequestSchema = z
+  .object({ sha256: z.array(z.string().min(1)).min(1).max(500) })
+  .strict();
+export type FleetFontFetchRequest = z.infer<typeof fleetFontFetchRequestSchema>;
+
+export const fleetFontFetchResponseSchema = z
+  .object({
+    fonts: z.array(
+      z
+        .object({
+          family: z.string().min(1),
+          registryName: z.string().min(1),
+          filename: z.string().min(1),
+          sha256: z.string().min(1),
+          /** Short-TTL signed URL. Server-to-worker only; never returned to a browser. */
+          url: z.string().url(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+export type FleetFontFetchResponse = z.infer<typeof fleetFontFetchResponseSchema>;
+
 export const renderFontRefSchema = z
   .object({
     family: z.string().min(1),

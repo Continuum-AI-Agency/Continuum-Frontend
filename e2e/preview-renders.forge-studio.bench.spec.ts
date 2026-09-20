@@ -25,6 +25,7 @@ import {
 import { createClient } from '@supabase/supabase-js';
 import { type MintedSession, mintSessionBundleForEmail } from './support/auth';
 import {
+  BINDING_ID,
   FORGE_FIXTURE,
   type ForgeFixtures,
   installForgeFixtures,
@@ -226,6 +227,7 @@ const summary = (title: string) =>
   apiRenderTemplateSummarySchema.parse({
     key: TEMPLATE_KEY,
     name: TEMPLATE_KEY,
+    bindingId: BINDING_ID,
     environment: 'Continuum_app',
     contractVersion: '1',
     contractHash: 'sc-promo-v1-contract-hash',

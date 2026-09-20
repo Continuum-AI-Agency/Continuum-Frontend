@@ -10,6 +10,7 @@ const contract = () => ({
   template: {
     key: '133',
     name: 'Hero',
+    bindingId: '00000000-0000-4000-8000-0000000000b1',
     environment: 'Continuum_app',
     contractVersion: '1',
     contractHash: 'hash',
@@ -89,7 +90,7 @@ afterEach(cleanup);
 describe('OutputSettingsPanel', () => {
   test('a contract without output settings renders nothing', async () => {
     getContract.mockImplementationOnce(async () => ({ ...contract(), encode: undefined }) as never);
-    const { container } = render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+    const { container } = render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
     await waitFor(() => expect(getContract).toHaveBeenCalledTimes(1));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(container.textContent).toBe('');
@@ -101,7 +102,7 @@ describe('OutputSettingsPanel', () => {
     });
     const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
-      const { container } = render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+      const { container } = render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
       await waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
       expect(container.textContent).toBe('');
     } finally {
@@ -109,20 +110,26 @@ describe('OutputSettingsPanel', () => {
     }
   });
 
-  test('a template in a non-default workspace reads its contract from that workspace', async () => {
-    listEnvironments.mockImplementationOnce(async () => ({
-      items: [{ bindingId: DEFAULT_BINDING }, { bindingId: OTHER_BINDING }],
-    }));
-    listTemplates.mockImplementation(async (_brandId, bindingId) => ({
-      items: bindingId === OTHER_BINDING ? [{ key: '133' }] : [],
-    }));
-    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+  test('a template in a non-default workspace is read WITHOUT enumerating workspaces', async () => {
+    // This used to list the brand's environments and call listTemplates once per environment
+    // until the key turned up — an N+1 from the browser to answer a question the server can
+    // answer. A null binding now means "find it", and the server refuses only a key that is
+    // genuinely ambiguous across two of the brand's bindings.
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
+    await waitFor(() => expect(shown('Frame rate')).toBe('25 fps'));
+    expect(getContract).toHaveBeenCalledWith('brand-1', '133', null);
+    expect(listEnvironments).not.toHaveBeenCalled();
+    expect(listTemplates).not.toHaveBeenCalled();
+  });
+
+  test('a known binding is passed straight through', async () => {
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={OTHER_BINDING} />);
     await waitFor(() => expect(shown('Frame rate')).toBe('25 fps'));
     expect(getContract).toHaveBeenCalledWith('brand-1', '133', OTHER_BINDING);
   });
 
   test('an unset field shows what it inherits; a reset clears the stored override', async () => {
-    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
     await waitFor(() => expect(shown('Frame rate')).toBe('25 fps'));
 
     // The template default tab inherits the fleet default of every container it renders.
@@ -146,7 +153,7 @@ describe('OutputSettingsPanel', () => {
   });
 
   test('each output shows only the knobs its container uses, inheriting the template default', async () => {
-    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
     await waitFor(() => expect(shown('Frame rate')).toBe('25 fps'));
 
     fireEvent.click(screen.getByRole('tab', { name: 'Square' }));
@@ -190,13 +197,13 @@ describe('OutputSettingsPanel', () => {
       ...contract(),
       encode: { ...contract().encode, stored: { default: { fps: '2997/125' } } },
     }));
-    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
     await waitFor(() => expect(shown('Frame rate')).toBe('23.976 fps'));
     expect(optionsOf('Frame rate')).toHaveLength(11);
   });
 
   test('choosing a frame rate stores it as the rate the fleet reads', async () => {
-    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
     await waitFor(() => expect(shown('Frame rate')).toBe('25 fps'));
     openSelect('Frame rate');
     chooseOption('29.97 fps');
@@ -213,7 +220,7 @@ describe('OutputSettingsPanel', () => {
   });
 
   test('files: the own container is on; each file shows its own knobs; the last file stays on', async () => {
-    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
     await waitFor(() => expect(shown('Frame rate')).toBe('25 fps'));
     fireEvent.click(screen.getByRole('tab', { name: 'Square' }));
     await waitFor(() => expect(fileBox('MP4').getAttribute('aria-checked')).toBe('true'));
@@ -260,7 +267,7 @@ describe('OutputSettingsPanel', () => {
   });
 
   test('an output style sets every file at once; a hand-made mix reads as custom', async () => {
-    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
     await waitFor(() => expect(shown('Frame rate')).toBe('25 fps'));
     fireEvent.click(screen.getByRole('tab', { name: 'Square' }));
     await waitFor(() => expect(shown('Output style')).toBe('Web'));
@@ -295,7 +302,7 @@ describe('OutputSettingsPanel', () => {
   });
 
   test('on outputs with different own files, a style pins the files both must make', async () => {
-    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
     await waitFor(() => expect(shown('Frame rate')).toBe('25 fps'));
     // Square makes an MP4 and Story a MOV: no one style names both.
     expect(shown('Output style')).toBe('Custom mix');
@@ -322,7 +329,7 @@ describe('OutputSettingsPanel', () => {
       ...contract(),
       outputs: [contract().outputs[2]!],
     }));
-    const { container } = render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+    const { container } = render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
     await waitFor(() =>
       expect(container.textContent).toBe(
         'Stills take no output settings. Frame rate and files apply to animated formats.',
@@ -338,7 +345,7 @@ describe('OutputSettingsPanel', () => {
       outputs: [],
       encode: undefined,
     }));
-    const { container } = render(<OutputSettingsPanel brandId="brand-1" templateKey="133" />);
+    const { container } = render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
     await waitFor(() =>
       expect(container.textContent).toBe(
         'Stills take no output settings. Frame rate and files apply to animated formats.',

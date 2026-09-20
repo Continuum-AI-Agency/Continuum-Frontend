@@ -19,7 +19,6 @@ import {
 } from '@continuum/contracts';
 import { Loader2, RotateCcw, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { templateBindingFor } from '@/components/forge/templateBinding';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -395,9 +394,12 @@ export function EncodeSettingsFields({
 export function OutputSettingsPanel({
   brandId,
   templateKey,
+  bindingId,
 }: {
   brandId: string;
   templateKey: string;
+  /** Read off the template row. A key alone is ambiguous — 133 exists in two sub-apps. */
+  bindingId: string | null;
 }) {
   const [contract, setContract] = useState<ApiRenderTemplateContract | null>(null);
   const [draft, setDraft] = useState<EncodeBlock>({});
@@ -406,12 +408,7 @@ export function OutputSettingsPanel({
 
   const load = useCallback(async () => {
     try {
-      const { bindingId, several } = await templateBindingFor(brandId, templateKey);
-      const next = await apiRendersApi.getContract(
-        brandId,
-        templateKey,
-        several ? bindingId : null,
-      );
+      const next = await apiRendersApi.getContract(brandId, templateKey, bindingId);
       setContract(next);
       setDraft(next.encode?.stored ?? {});
     } catch (error) {
@@ -419,7 +416,7 @@ export function OutputSettingsPanel({
       // and a template whose contract cannot be read has none to show.
       console.warn('[OutputSettingsPanel] could not read the template contract', error);
     }
-  }, [brandId, templateKey]);
+  }, [brandId, templateKey, bindingId]);
 
   useEffect(() => {
     setScope('all');

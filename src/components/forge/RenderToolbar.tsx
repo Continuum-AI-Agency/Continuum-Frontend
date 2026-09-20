@@ -1,10 +1,10 @@
 'use client';
 
 import {
-  type ApiRenderEnvironment,
   type ApiRenderInputSet,
   type ApiRenderTemplateSummary,
   templateDisplayName,
+  templateRefOf,
 } from '@continuum/contracts';
 import {
   ChevronDown,
@@ -61,9 +61,7 @@ export function RenderToolbar({
   templateKey,
   templatesLoading,
   onTemplateChange,
-  environments,
   bindingId,
-  onBindingChange,
   ready,
   inputSets,
   canAddRows,
@@ -86,10 +84,10 @@ export function RenderToolbar({
   templates: ApiRenderTemplateSummary[];
   templateKey: string;
   templatesLoading: boolean;
-  onTemplateChange: (key: string) => void;
-  environments: ApiRenderEnvironment[];
+  /** Called with the template REF (`bindingId:key`), never a bare key. */
+  onTemplateChange: (ref: string) => void;
+  /** The chosen template's binding, so a key held in two of them resolves to the right row. */
   bindingId: string | null;
-  onBindingChange: (bindingId: string) => void;
   /** False until a template's contract is loaded; so are the controls after the picker. */
   ready: boolean;
   inputSets: ApiRenderInputSet[];
@@ -116,8 +114,10 @@ export function RenderToolbar({
   busy: 'saving' | 'firing' | null;
   onRender: () => void;
 }) {
-  const current = templates.find((template) => template.key === templateKey);
-  const multiEnv = environments.length > 1;
+  const current = templates.find(
+    (template) => template.key === templateKey && (!bindingId || template.bindingId === bindingId),
+  );
+  const currentRef = current ? templateRefOf(current) : '';
   return (
     <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Render">
       <Control>
@@ -146,9 +146,15 @@ export function RenderToolbar({
             }
           />
           <DropdownMenuContent align="start" className="w-72">
-            <DropdownMenuRadioGroup value={templateKey} onValueChange={onTemplateChange}>
+            {/* Keyed and valued by the REF. Two templates can share a key — 133 exists in two
+                sub-apps — and React silently drops the second child of a duplicated key, so a
+                person would see one row where they hold two and render the wrong tenant's comp. */}
+            <DropdownMenuRadioGroup value={currentRef} onValueChange={onTemplateChange}>
               {templates.map((template) => (
-                <DropdownMenuRadioItem key={template.key} value={template.key}>
+                <DropdownMenuRadioItem
+                  key={templateRefOf(template)}
+                  value={templateRefOf(template)}
+                >
                   <span className="truncate">{templateLabel(template)}</span>
                   {template.ratios.length ? (
                     <span className="ml-auto text-2xs text-muted-foreground">
@@ -158,24 +164,6 @@ export function RenderToolbar({
                 </DropdownMenuRadioItem>
               ))}
             </DropdownMenuRadioGroup>
-            {multiEnv ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>Render workspace</DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    <DropdownMenuRadioGroup value={bindingId ?? ''} onValueChange={onBindingChange}>
-                      {environments.map((env) => (
-                        <DropdownMenuRadioItem key={env.bindingId} value={env.bindingId}>
-                          {env.workspace}
-                          {env.isDefault ? ' (default)' : ''}
-                        </DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              </>
-            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
       </Control>

@@ -3,7 +3,6 @@
 export { describeRenderDiscoveryFailure } from './api-render/renderDiscoveryCopy';
 
 import type {
-  ApiRenderEnvironment,
   ApiRenderFitVerdict,
   ApiRenderInputSet,
   ApiRenderInputValue,
@@ -98,7 +97,6 @@ export function ApiRenderBlock({
   // not a failed request, it is a working request with the wrong destination.
   // Showing it as an error would be wrong, and showing nothing is worse.
   const [workspace, setWorkspace] = useState<ApiRenderWorkspaceStatus | null>(null);
-  const [environments, setEnvironments] = useState<ApiRenderEnvironment[]>([]);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
 
@@ -169,32 +167,17 @@ export function ApiRenderBlock({
     });
   }, [brandId, patchData, setError, setJobs]);
 
-  // Which workspaces this brand can reach. Discovered rather than assumed: the fleet has no
-  // endpoint that enumerates them, so Supabase's own bindings are the authority, and a brand
-  // that holds several used to be able to reach exactly one of them, silently.
-  useEffect(() => {
-    if (!brandId) return;
-    let cancelled = false;
-    void apiRendersApi
-      .listEnvironments(brandId)
-      .then((response) => !cancelled && setEnvironments(response.items))
-      .catch(() => {
-        // Not fatal: the template list below reports the resolved workspace on its own, so a
-        // failed enumeration costs the picker, never the render.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [brandId]);
-
   const bindingId = data.bindingId ?? null;
 
   useEffect(() => {
     if (!brandId) return;
     let cancelled = false;
     setLoadingTemplates(true);
+    // No binding: one merged list of everything this brand may render. The node used to pick a
+    // workspace first and list within it, which asked the author about our deployment topology
+    // and could reach only one workspace at a time.
     void apiRendersApi
-      .listTemplates(brandId, bindingId)
+      .listTemplates(brandId, null)
       .then((response) => {
         if (cancelled) return;
         setTemplates(response.items);
@@ -215,7 +198,7 @@ export function ApiRenderBlock({
     return () => {
       cancelled = true;
     };
-  }, [brandId, bindingId, setError]);
+  }, [brandId, setError]);
 
   // Jobs have exactly ONE loader. Two effects both calling the list raced, and the loser
   // overwrote the tracked-id recovery that makes a batch survive a reload — nothing
@@ -289,13 +272,18 @@ export function ApiRenderBlock({
   }, [brandId, data.templateKey]);
 
   const selectTemplate = useCallback(
-    async (templateKey: string) => {
+    async (template: ApiRenderTemplateSummary) => {
       if (!brandId) return;
+      const templateKey = template.key;
       setBusy(true);
       setError(null);
       try {
-        const contract = await apiRendersApi.getContract(brandId, templateKey, bindingId);
+        // The binding comes OFF THE ROW, not from a separate choice: a key is unique only within
+        // a sub-app, so the template the author clicked already names the only binding whose
+        // contract matches it. Persisted on the node so a reloaded graph renders where it did.
+        const contract = await apiRendersApi.getContract(brandId, templateKey, template.bindingId);
         patchData({
+          bindingId: template.bindingId,
           templateKey,
           templateName: contract.template.name,
           contractHash: contract.template.contractHash,
@@ -319,7 +307,7 @@ export function ApiRenderBlock({
         setBusy(false);
       }
     },
-    [bindingId, brandId, patchData, setError],
+    [brandId, patchData, setError],
   );
 
   // Delivery is the caller's choice, and the contract says variables come from exactly one
@@ -510,10 +498,6 @@ export function ApiRenderBlock({
   ]);
 
   const templatesOffered = canOfferTemplates(workspace);
-  const chosenEnvironment =
-    environments.find((environment) => environment.bindingId === bindingId) ??
-    environments.find((environment) => environment.isDefault) ??
-    null;
   const chosenTemplate = templates.find((template) => template.key === data.templateKey) ?? null;
   // A template name is prefixed by the fleet with its own bracketed tag; the tag is noise to
   // everyone but the fleet.
@@ -544,50 +528,14 @@ export function ApiRenderBlock({
           <NodeBadge>{renderCount(variationCount)}</NodeBadge>
         </NodeTitleBar>
         <NodeContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 text-xs">
-          {/* Where this renders. A brand with one workspace gets a label; a brand with several
-              gets a choice it never had. Either way the eligibility verdict is on screen —
-              `env_plane_undeployed` is the state that most needs saying, because the fleet does
-              not refuse it, it renders against the shared workspace and looks like success. */}
+          {/* Where this renders — reported, never chosen. The eligibility verdict still has to be
+              on screen: `env_plane_undeployed` is the state that most needs saying, because the
+              fleet does not refuse it, it renders against the shared workspace and looks like
+              success. */}
           <div className="flex items-center gap-1.5">
-            {environments.length > 1 ? (
-              <Select
-                value={chosenEnvironment?.bindingId ?? ''}
-                onValueChange={(next) =>
-                  patchData({
-                    bindingId: next,
-                    // The contract is workspace-scoped: the same template key in another
-                    // workspace is another template. Clearing is the honest reset.
-                    templateKey: null,
-                    templateName: null,
-                    contractHash: null,
-                    variableDefinitions: [],
-                    templateLayout: null,
-                    variables: {},
-                    assetDims: {},
-                    inputSetId: null,
-                    batchInputSetIds: [],
-                  })
-                }
-              >
-                <SelectTrigger className="nodrag h-7 flex-1 text-2xs" aria-label="Render workspace">
-                  <SelectValue placeholder="Workspace" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {environments.map((environment) => (
-                      <SelectItem key={environment.bindingId} value={environment.bindingId}>
-                        {environment.workspace}
-                        {environment.isDefault ? ' · default' : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            ) : (
-              <span className="truncate text-2xs text-muted-foreground">
-                {chosenEnvironment?.workspace ?? workspace?.workspace ?? 'No workspace'}
-              </span>
-            )}
+            <span className="truncate text-2xs text-muted-foreground">
+              {chosenTemplate?.environment ?? workspace?.workspace ?? 'No workspace'}
+            </span>
             {workspace ? (
               <Tooltip>
                 <TooltipTrigger
@@ -624,11 +572,13 @@ export function ApiRenderBlock({
                   <CommandGroup>
                     {templates.map((template) => (
                       <CommandItem
-                        key={template.key}
+                        // The pair, never the key: two sub-apps can both hold 133, and React
+                        // drops the second child of a duplicated key without a word.
+                        key={`${template.bindingId}:${template.key}`}
                         value={`${templateLabel(template)} ${template.key}`}
                         onSelect={() => {
                           setTemplatePickerOpen(false);
-                          void selectTemplate(template.key);
+                          void selectTemplate(template);
                         }}
                       >
                         <span className="flex min-w-0 flex-1 flex-col gap-0.5">

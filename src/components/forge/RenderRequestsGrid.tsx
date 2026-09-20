@@ -3,7 +3,6 @@
 import {
   API_RENDER_MEDIA_LIST_MAX,
   type ApiRenderBatchRecord,
-  type ApiRenderEnvironment,
   type ApiRenderInputSet,
   type ApiRenderInputValue,
   type ApiRenderSuggestRowsResponse,
@@ -17,6 +16,7 @@ import {
   type ForgeRenderSetRow,
   type MediaAsset,
   readableLayerName,
+  templateRefOf,
 } from '@continuum/contracts';
 import {
   type Announcements,
@@ -41,7 +41,7 @@ import {
   useReactTable,
   type VisibilityState,
 } from '@tanstack/react-table';
-import { ChevronDown, ChevronRight, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDefaultLayout, usePanelRef } from 'react-resizable-panels';
 import { AiDraftDialog, type AiDraftParent } from '@/components/forge/AiVariationsDialog';
@@ -326,6 +326,12 @@ const HIDEABLE = (columnId: string) => !['drag', 'select', 'label'].includes(col
  */
 export type ForgeRenderIntent = {
   templateKey: string;
+  /**
+   * Which binding the key belongs to. Optional only for callers that cannot know one — a link, a
+   * gallery card from a single-binding brand — and resolved against the list when omitted. A key
+   * alone is NOT an identity: 133 exists in two sub-apps and means two different templates.
+   */
+  bindingId?: string;
   renderSetId?: string;
   draftWithAi?: boolean;
 };
@@ -373,17 +379,23 @@ export function RenderRequestsGrid({
     brandRole === 'owner' || brandRole === 'admin'
       ? null
       : 'Only a brand owner or admin can render a Final.';
-  const [environments, setEnvironments] = useState<ApiRenderEnvironment[]>([]);
-  const [bindingId, setBindingId] = useState<string | null>(null);
-  // Templates wait for environment discovery to SETTLE, not to succeed: with no binding named
-  // the server answers from the brand's default, so an empty or failed environment list must
-  // not hide the templates behind it.
-  const [envsSettled, setEnvsSettled] = useState(false);
   const [templates, setTemplates] = useState<ApiRenderTemplateSummary[]>([]);
   // Which template, and optionally which saved set, the rows come from. A new object is a new
   // load, so an intent for another set of the same template still reloads.
   const [selection, setSelection] = useState<ForgeRenderIntent>({ templateKey: '' });
   const { templateKey } = selection;
+  /**
+   * The binding is READ OFF THE CHOSEN TEMPLATE, never chosen separately.
+   *
+   * The list is merged across every binding the brand holds, and a template key is unique only
+   * within a sub-app — 133 exists twice and means two different templates — so the template a
+   * person picked already names the only binding its contract, preflight and job can use. Asking
+   * for it as a second question could only ever produce a pair that does not exist.
+   */
+  const bindingId =
+    selection.bindingId ??
+    templates.find((template) => template.key === templateKey)?.bindingId ??
+    null;
   const [contract, setContract] = useState<ApiRenderTemplateContract | null>(null);
   const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
   const [renderSets, setRenderSets] = useState<ForgeRenderSet[]>([]);
@@ -398,7 +410,13 @@ export function RenderRequestsGrid({
   const [conflict, setConflict] = useState<ForgeRenderSet | null>(null);
   const [historyFor, setHistoryFor] = useState<ForgeRenderSet | null>(null);
   /** The AI draft dialog: open for new rows (`parent: null`) or for variations of one row. */
-  const [aiDraft, setAiDraft] = useState<{ parent: AiDraftParent | null } | null>(null);
+  const [aiDraft, setAiDraft] = useState<{
+    parent: AiDraftParent | null;
+    varyKeys?: string[];
+    count?: number;
+  } | null>(null);
+  /** A menu-driven draft in flight: what the banner says, and what blocks a second click. */
+  const [generating, setGenerating] = useState<{ count: number; of: string } | null>(null);
   /** A template whose Render tab was opened to draft with AI, until its contract has loaded. */
   const [draftFor, setDraftFor] = useState<string | null>(null);
   const [rows, setRows] = useState<RequestRow[]>([]);
@@ -489,37 +507,6 @@ export function RenderRequestsGrid({
   bindingRef.current = bindingId;
 
   // --- discovery ---------------------------------------------------------------------------
-  useEffect(() => {
-    let cancelled = false;
-    queryClient
-      .fetchQuery({
-        queryKey: forgeQueryKeys.environments(brandId),
-        queryFn: () => apiRendersApi.listEnvironments(brandId),
-        staleTime: FORGE_STALE_MS.lists,
-      })
-      .then((response) => {
-        if (cancelled) return;
-        setEnvironments(response.items);
-        setBindingId(
-          (current) =>
-            current ??
-            response.items.find((e) => e.isDefault)?.bindingId ??
-            response.items[0]?.bindingId ??
-            null,
-        );
-      })
-      .catch((error: unknown) =>
-        setProblem(describeRenderDiscoveryFailure(error instanceof Error ? error.message : '')),
-      )
-      .finally(() => {
-        if (!cancelled) setEnvsSettled(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [brandId, queryClient]);
-
-  const multiEnv = environments.length > 1;
   // Bumped each time the tab comes back into view; checks the cached template list without
   // touching rows, and re-lists only when that cache is stale or a template mutation invalidated it.
   const [templatesEpoch, setTemplatesEpoch] = useState(0);
@@ -530,13 +517,13 @@ export function RenderRequestsGrid({
   }, [active]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: templatesEpoch is the re-list trigger.
   useEffect(() => {
-    if (!envsSettled) return;
     let cancelled = false;
     setBusy('loading');
     queryClient
       .fetchQuery({
-        queryKey: forgeQueryKeys.templateList(brandId, multiEnv ? bindingId : null),
-        queryFn: () => apiRendersApi.listTemplates(brandId, multiEnv ? bindingId : null),
+        // No binding: one merged list of everything this brand may render, from every binding.
+        queryKey: forgeQueryKeys.templateList(brandId, null),
+        queryFn: () => apiRendersApi.listTemplates(brandId, null),
         staleTime: FORGE_STALE_MS.lists,
       })
       .then((response) => {
@@ -544,10 +531,12 @@ export function RenderRequestsGrid({
         setTemplates(response.items);
         setProblem(null);
         // One template is not a decision.
-        const only = response.items.length === 1 ? (response.items[0]?.key ?? '') : null;
-        if (only !== null)
+        const only = response.items.length === 1 ? response.items[0] : null;
+        if (only)
           setSelection((current) =>
-            current.templateKey === only ? current : { templateKey: only },
+            current.templateKey === only.key && current.bindingId === only.bindingId
+              ? current
+              : { templateKey: only.key, bindingId: only.bindingId },
           );
       })
       .catch((error: unknown) => {
@@ -561,7 +550,7 @@ export function RenderRequestsGrid({
     return () => {
       cancelled = true;
     };
-  }, [brandId, bindingId, envsSettled, multiEnv, queryClient, templatesEpoch]);
+  }, [brandId, queryClient, templatesEpoch]);
 
   // A loaded set or draft carries Library pins but not their thumbnails or pixel sizes — those
   // are browser-side facts. Look each asset up once so cells, fit checks and the preview have
@@ -645,7 +634,7 @@ export function RenderRequestsGrid({
 
   // Only a binding the request actually names reloads the contract: a single environment settling
   // its id must not replace rows someone has started editing.
-  const contractBindingId = multiEnv ? bindingId : null;
+  const contractBindingId = bindingId;
   useEffect(() => {
     if (!templateKey) {
       setContract(null);
@@ -922,7 +911,7 @@ export function RenderRequestsGrid({
         try {
           const response = await apiRendersApi.preflight({
             brandId,
-            ...(multiEnv && bindingId ? { bindingId } : {}),
+            ...(bindingId ? { bindingId } : {}),
             templateKey: key,
             contractHash,
             variables: resolved,
@@ -953,7 +942,7 @@ export function RenderRequestsGrid({
       }, PREFLIGHT_DEBOUNCE_MS);
       pending.set(row.id, { timer, snapshot });
     }
-  }, [rows, contract, clientErrors, brandId, bindingId, multiEnv]);
+  }, [rows, contract, clientErrors, brandId, bindingId]);
 
   useEffect(() => {
     const pending = timers.current;
@@ -1114,21 +1103,94 @@ export function RenderRequestsGrid({
   };
 
   /** A draft's rows, proposed, under the rows already there; the first one is shown. */
-  const acceptDraft = (response: ApiRenderSuggestRowsResponse) => {
+  const acceptDrafts = (responses: ApiRenderSuggestRowsResponse[]) => {
     if (!contract) return;
-    const drafted = rowsFromSuggestion(response, allOutputIdsOf(contract));
+    const outputs = allOutputIdsOf(contract);
+    const drafted = responses.flatMap((response) => rowsFromSuggestion(response, outputs));
+    const notes = responses.flatMap((response) => [...response.unfilled, ...response.dropped]);
+    // Said, never assumed: the server reports a short answer in `dropped`, and a draft that
+    // produced nothing is a failure the person has to see rather than an empty success toast.
+    const described = notes.length
+      ? {
+          description: `${notes.slice(0, 3).join('; ')}${notes.length > 3 ? ` (+${notes.length - 3} more)` : ''}`,
+        }
+      : undefined;
+    if (drafted.length === 0) {
+      toast.error('Nothing usable came back — try again, or write a brief.', described);
+      return;
+    }
     if (!appendRows(drafted)) return;
     setExpanded(true);
     setPreviewRowId(drafted[0]?.id ?? null);
-    const notes = [...response.unfilled, ...response.dropped];
     toast.success(
       `${drafted.length} ${drafted.length === 1 ? 'row' : 'rows'} proposed — keep the ones you want`,
-      notes.length
-        ? {
-            description: `${notes.slice(0, 3).join('; ')}${notes.length > 3 ? ` (+${notes.length - 3} more)` : ''}`,
-          }
-        : undefined,
+      described,
     );
+  };
+  const acceptDraft = (response: ApiRenderSuggestRowsResponse) => acceptDrafts([response]);
+
+  /**
+   * Variations straight from a menu: no dialog, nothing typed. The row's own values already reach
+   * the model as `now=` / `LOCKED=`, so the brief only has to carry the axis and the ask — and
+   * `varyKeys`, which the caller built, carries the axis structurally. One request per row.
+   */
+  const generateWithAi = async ({
+    ids,
+    count,
+    varyKeys,
+  }: { ids: string[]; count: number; varyKeys: string[] }) => {
+    if (!contract || generating || varyKeys.length === 0) return;
+    const current = latestRows.current;
+    const targets = ids.flatMap((id) => {
+      const row = current.find((item) => item.id === id);
+      return row ? [row] : [];
+    });
+    if (targets.length === 0) return;
+    const only =
+      varyKeys.length === 1
+        ? contract.variables.find((variable) => variable.key === varyKeys[0])
+        : undefined;
+    const what = only ? readableLayerName(only.label) : null;
+    setGenerating({
+      count: count * targets.length,
+      of:
+        targets.length === 1
+          ? `“${targets[0]!.label.trim() || 'Untitled'}”`
+          : `${targets.length} rows`,
+    });
+    try {
+      const responses = await Promise.all(
+        targets.map((row) =>
+          apiRendersApi.suggestRows({
+            brandId,
+            ...(bindingId ? { bindingId } : {}),
+            templateKey: contract.template.key,
+            contractHash: contract.template.contractHash,
+            prompt: what
+              ? `Vary only the ${what}. ${count} variations of this row, each clearly different.`
+              : `${count} variations of this row, each clearly different from it and from each other.`,
+            count,
+            forksPerRow: 0,
+            parent: {
+              id: row.id,
+              label: row.label.trim() || 'Untitled',
+              values: effectiveValues(current, row.id),
+            },
+            varyKeys,
+          }),
+        ),
+      );
+      acceptDrafts(responses);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      toast.error(
+        message.includes('suggest_unavailable')
+          ? 'The AI writer is unavailable right now. Try again in a few minutes, or add rows by hand.'
+          : describeRenderDiscoveryFailure(message),
+      );
+    } finally {
+      setGenerating(null);
+    }
   };
 
   const actions: RequestRowActions = {
@@ -1153,7 +1215,7 @@ export function RenderRequestsGrid({
     hideColumn: (columnId) => changeColumns({ ...columnVisibility, [columnId]: false }),
     showAllColumns: () => changeColumns({}),
     keepProposed: (ids) => editRows((current) => keepProposed(current, ids)),
-    varyWithAi: (id) => {
+    varyWithAi: (id, varyKeys) => {
       const row = latestRows.current.find((item) => item.id === id);
       if (row)
         setAiDraft({
@@ -1162,8 +1224,11 @@ export function RenderRequestsGrid({
             label: row.label.trim() || 'Untitled',
             values: effectiveValues(latestRows.current, id),
           },
+          // Arriving from a cell, the dialog opens with only that key ticked.
+          ...(varyKeys?.length ? { varyKeys } : {}),
         });
     },
+    generateWithAi: (args) => void generateWithAi(args),
     discardProposed: (ids) => editRows((current) => discardProposed(current, ids)),
   };
 
@@ -1532,7 +1597,16 @@ export function RenderRequestsGrid({
     (column) => columnVisibility[column.id ?? ''] === false,
   ).length;
   const meta: RequestGridMeta | undefined = contract
-    ? { brandId, contract, rows, clientErrors, actions, selectedIds, hiddenColumns }
+    ? {
+        brandId,
+        contract,
+        rows,
+        clientErrors,
+        actions,
+        selectedIds,
+        hiddenColumns,
+        generating: generating !== null,
+      }
     : undefined;
   const table = useReactTable({
     data: nestedRows,
@@ -1560,7 +1634,7 @@ export function RenderRequestsGrid({
     return index > 0 ? shown[index - 1]! : null;
   };
   const actionContext: GridActionContext | null = contract
-    ? { rows, selectedIds, contract, actions, hiddenColumns }
+    ? { rows, selectedIds, contract, actions, hiddenColumns, generating: generating !== null }
     : null;
   // What Render will make, counted the way the review tray counts it.
   const files = { total: 0, byRatio: new Map<string, number>(), replacements: 0 };
@@ -1841,12 +1915,16 @@ export function RenderRequestsGrid({
         templates={templates}
         templateKey={templateKey}
         templatesLoading={busy === 'loading'}
-        onTemplateChange={(key) =>
-          key !== templateKey && confirmDiscard(() => setSelection({ templateKey: key }))
-        }
-        environments={environments}
+        // The picker hands back the REF, not the key: two templates can share a key and only
+        // the pair says which one was clicked.
         bindingId={bindingId}
-        onBindingChange={(id) => id !== bindingId && confirmDiscard(() => setBindingId(id))}
+        onTemplateChange={(ref) => {
+          const picked = templates.find((template) => templateRefOf(template) === ref);
+          if (!picked || (picked.key === templateKey && picked.bindingId === bindingId)) return;
+          confirmDiscard(() =>
+            setSelection({ templateKey: picked.key, bindingId: picked.bindingId }),
+          );
+        }}
         ready={contract !== null}
         inputSets={inputSets}
         canAddRows={rows.length < MAX_BATCH_ROWS}
@@ -1940,19 +2018,28 @@ export function RenderRequestsGrid({
           </Button>
         </section>
       ) : null}
-      {proposed.size ? (
+      {generating || proposed.size ? (
         <section
           aria-label="Proposed rows"
           className="flex shrink-0 flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-xs"
         >
-          <p className="min-w-0 flex-1">
-            {proposed.size} proposed {proposed.size === 1 ? 'row' : 'rows'} · not saved until you
-            keep {proposed.size === 1 ? 'it' : 'them'}.
-          </p>
+          {generating ? (
+            <p className="flex min-w-0 flex-1 items-center gap-1.5">
+              <Loader2 className="size-3 animate-spin" aria-hidden />
+              Drafting {generating.count} {generating.count === 1 ? 'variation' : 'variations'} of{' '}
+              {generating.of}…
+            </p>
+          ) : (
+            <p className="min-w-0 flex-1">
+              {proposed.size} proposed {proposed.size === 1 ? 'row' : 'rows'} · not saved until you
+              keep {proposed.size === 1 ? 'it' : 'them'}.
+            </p>
+          )}
           <Button
             type="button"
             size="xs"
             variant="outline"
+            disabled={proposed.size === 0}
             onClick={() =>
               editRows((current) =>
                 keepProposed(
@@ -1968,6 +2055,7 @@ export function RenderRequestsGrid({
             type="button"
             size="xs"
             variant="ghost"
+            disabled={proposed.size === 0}
             onClick={() =>
               editRows((current) =>
                 discardProposed(
@@ -2195,7 +2283,7 @@ export function RenderRequestsGrid({
               {review ? (
                 <RenderReviewTray
                   brandId={brandId}
-                  bindingId={multiEnv ? bindingId : null}
+                  bindingId={bindingId}
                   templateKey={contract.template.key}
                   contractHash={contract.template.contractHash}
                   contract={contract}
@@ -2296,9 +2384,11 @@ export function RenderRequestsGrid({
           open={aiDraft !== null}
           onOpenChange={(open) => !open && setAiDraft(null)}
           brandId={brandId}
-          bindingId={multiEnv ? bindingId : null}
+          bindingId={bindingId}
           contract={contract}
           parent={aiDraft?.parent ?? null}
+          initialVaryKeys={aiDraft?.varyKeys ?? null}
+          initialCount={aiDraft?.count ?? null}
           onDrafted={acceptDraft}
         />
       ) : null}

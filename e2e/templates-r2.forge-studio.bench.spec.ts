@@ -38,6 +38,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { TemplateVariablesResponse } from '@/lib/library/templateSources';
 import { type MintedSession, mintSessionBundleForEmail } from './support/auth';
 import {
+  BINDING_ID,
   FORGE_FIXTURE,
   type ForgeFixtures,
   installForgeFixtures,
@@ -475,6 +476,7 @@ async function overrideRoutes(context: BrowserContext): Promise<Uploads> {
               {
                 templateKey: 'terran_dropship_launch',
                 templateId: 131,
+                bindingId: BINDING_ID,
                 name: '[DRAFT/agent] terran_dropship_launch',
                 granted: false,
                 sourceAssetId: DRAFT.assetId,
@@ -483,6 +485,7 @@ async function overrideRoutes(context: BrowserContext): Promise<Uploads> {
               {
                 templateKey: FORGE_FIXTURE.shared.templateKey,
                 templateId: 132,
+                bindingId: BINDING_ID,
                 name: FORGE_FIXTURE.shared.templateKey,
                 updatedAt: '2026-09-11T09:00:00.000Z',
                 granted: true,
@@ -491,6 +494,7 @@ async function overrideRoutes(context: BrowserContext): Promise<Uploads> {
               {
                 templateKey: HYDRA.templateKey,
                 templateId: 134,
+                bindingId: BINDING_ID,
                 name: HYDRA.templateKey,
                 updatedAt: '2026-09-09T09:00:00.000Z',
                 granted: hydraGranted,

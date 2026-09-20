@@ -4,6 +4,7 @@ import type {
   AgentAttachment,
   AgentDelegatedFrameData,
   AgentMentionReference,
+  AiStudioComposerDoneFrame,
   AiStudioComposerFrame,
   CanvasComposerReference,
   CanvasEditorContext,
@@ -11,6 +12,7 @@ import type {
 } from '@continuum/contracts';
 import {
   CANVAS_COMPOSER_MAX_REFERENCES,
+  CANVAS_NO_CHANGE_WARNING_CODE,
   COMPOSER_HISTORY_MAX_MESSAGES,
   canvasComposerReferenceTypeSchema,
   isTerminalAgentRunStatus,
@@ -55,6 +57,13 @@ export interface CanvasComposerState {
   summary: string;
   /** Set once at least one write has landed — this is what enables Run. */
   graph: ComposerGraphSummary | null;
+  /**
+   * The wire's own verdict on whether this turn touched the canvas. `null` until the
+   * turn completes. `false` is a COMPLETED answer, not a failed build — the user asked
+   * a question, or the canvas already satisfied the ask — so the build affordances
+   * (the graph line, Run) stay off and the turn reads as prose.
+   */
+  changed: AiStudioComposerDoneFrame['data']['changed'] | null;
   error: string | null;
 }
 
@@ -73,6 +82,7 @@ export const IDLE_COMPOSER_STATE: CanvasComposerState = {
   delegations: [],
   summary: '',
   graph: null,
+  changed: null,
   error: null,
 };
 
@@ -104,18 +114,26 @@ export function applyComposerFrame(
   switch (frame.type) {
     case 'composer.status':
       return { ...previous, steps: [...previous.steps, frame.data.message] };
+    // `no_canvas_change` is not a warning to the user — it is the same fact
+    // `response.done.changed` carries, and rendered amber beside a correct answer it
+    // reads as something having gone wrong. Kept off the list; the card states it.
     case 'composer.warning':
-      return { ...previous, warnings: [...previous.warnings, frame.data.message] };
+      return frame.data.code === CANVAS_NO_CHANGE_WARNING_CODE
+        ? previous
+        : { ...previous, warnings: [...previous.warnings, frame.data.message] };
     case 'composer.graph':
       return { ...previous, graph: foldGraph(previous.graph, frame.data) };
     // Folded by callId so a delegation that reports running and then completed
     // is ONE card whose status changes, not two.
     case 'agent.delegated':
       return { ...previous, delegations: foldDelegation(previous.delegations, frame.data) };
-    case 'response.done': {
-      const summary = typeof frame.data?.summary === 'string' ? frame.data.summary : '';
-      return { ...previous, status: 'done', summary };
-    }
+    case 'response.done':
+      return {
+        ...previous,
+        status: 'done',
+        summary: frame.data.summary,
+        changed: frame.data.changed,
+      };
     case 'response.error':
       return { ...previous, status: 'error', error: frame.data.message };
     default:

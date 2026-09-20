@@ -110,7 +110,14 @@ export interface RunCanvasRequestParams {
   roomId: string;
   brandId?: string;
   getNodes: () => RunNode[];
-  execute: (opts: { targetNodeId?: string; roomId?: string; brandId?: string }) => Promise<void>;
+  execute: (opts: {
+    targetNodeId?: string;
+    roomId?: string;
+    brandId?: string;
+    // The executor records this run's timing onto the row THIS request already owns
+    // instead of minting a second one, which the one-active-run-per-room index refuses.
+    runRequestId?: string;
+  }) => Promise<void>;
 }
 
 export async function runCanvasRequest(params: RunCanvasRequestParams): Promise<void> {
@@ -123,10 +130,10 @@ export async function runCanvasRequest(params: RunCanvasRequestParams): Promise<
     const ids = requestedNodeIds && requestedNodeIds.length > 0 ? requestedNodeIds : null;
     if (ids) {
       for (const nodeId of ids) {
-        await execute({ targetNodeId: nodeId, roomId, brandId });
+        await execute({ targetNodeId: nodeId, roomId, brandId, runRequestId });
       }
     } else {
-      await execute({ roomId, brandId });
+      await execute({ roomId, brandId, runRequestId });
     }
     const result = buildCanvasRunResult(getNodes(), resolveRunNodeIds(getNodes(), ids));
     await store.markDone(runRequestId, result);

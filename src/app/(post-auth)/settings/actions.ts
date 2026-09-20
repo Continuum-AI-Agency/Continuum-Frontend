@@ -136,6 +136,36 @@ export async function updatePulseOptInAction(brandId: string, optIn: boolean): P
 // Tag/untag an existing member as a Pulse recipient. permissions is self-only
 // under RLS, so this routes through the brand_invite edge function (service-role
 // write, owner/admin authz) — same path role changes use.
+/**
+ * Arm or disarm real Meta Graph writes for this brand.
+ *
+ * The permission the render-delivery plugin asks Continuum for on every publish
+ * (it rides the meta-context response, beside the token it authorises). The
+ * plugin holds no copy: turning this off here stops publishing everywhere,
+ * within the resolver's short armed-cache window.
+ *
+ * Authorisation is the database's, not this function's: RLS on
+ * brand_profiles UPDATE is `is_brand_admin(id)`, so a member who is not an
+ * owner or admin writes nothing and gets an error to show. That is the whole
+ * check — a hand-rolled one here would be a second, weaker copy.
+ */
+export async function updateBrandMetaWritesAllowedAction(
+  brandId: string,
+  allowed: boolean,
+): Promise<void> {
+  if (!brandId) throw new Error('brandId is required');
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .schema('brand_profiles')
+    .from('brand_profiles')
+    .update({ meta_writes_allowed: allowed, updated_at: new Date().toISOString() } as never)
+    .eq('id', brandId);
+
+  if (error) throw new Error(error.message);
+  revalidatePath('/forge');
+}
+
 export async function setPulseRecipientAction(
   brandId: string,
   userId: string,

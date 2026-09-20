@@ -475,16 +475,16 @@ export type SharedTemplate = {
   draft: boolean;
   granted: boolean;
   updatedAt: string | null;
-  /** Set only when the brand has several workspaces, so adoption names the right one. */
-  workspaceId?: string;
+  /** The binding this template lives in. Always set — adoption and rendering both need it. */
+  workspaceId: string;
 };
 
 /**
- * What tells two shared templates apart. `templateKey` alone does not: it is a NocoBase row id, and
- * a brand with several workspaces can hold the same id in two of them.
+ * What tells two shared templates apart. `templateKey` alone does not: it is a NocoBase row id,
+ * unique only within a sub-app, so a brand bound to two of them can hold the same id twice.
  */
 export function sharedTemplateId(template: SharedTemplate): string {
-  return `${template.workspaceId ?? 'default'}:${template.templateKey}`;
+  return `${template.workspaceId}:${template.templateKey}`;
 }
 
 export function SharedTemplateCard({

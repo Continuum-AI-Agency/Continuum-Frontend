@@ -10,6 +10,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import React from 'react';
+import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useStudioStore } from '../stores/useStudioStore';
 import { Toolbar } from './Toolbar';
@@ -28,6 +29,10 @@ const renderToolbar = () => {
     </QueryClientProvider>,
   );
 };
+
+// Base UI waits on a MutationObserver when a popup opens; happy-dom's, lifted per file.
+// Installing it globally backfires — it drops other specs on an unhandled AbortError.
+installPickerDomGlobals();
 
 describe('Toolbar', () => {
   beforeEach(() => {

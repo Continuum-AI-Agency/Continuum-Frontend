@@ -59,6 +59,7 @@ describe('API render contracts', () => {
       template: {
         key: 'vivo-hero',
         name: 'Vivo Hero',
+        bindingId: '5f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
         environment: 'Parsed_app',
         contractVersion: '1',
         contractHash: 'hash',
@@ -98,6 +99,7 @@ describe('API render contracts', () => {
       template: {
         key: 'vivo-hero',
         name: 'Vivo Hero',
+        bindingId: '5f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
         environment: 'Parsed_app',
         contractVersion: '1',
         contractHash: 'hash',
@@ -133,6 +135,7 @@ describe('API render contracts', () => {
       template: {
         key: 'vivo-hero',
         name: 'Vivo Hero',
+        bindingId: '5f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
         environment: 'Parsed_app',
         contractVersion: '1',
         contractHash: 'hash',
@@ -172,6 +175,7 @@ describe('API render contracts', () => {
       template: {
         key: 'vivo-hero',
         name: 'Vivo Hero',
+        bindingId: '5f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
         environment: 'Parsed_app',
         contractVersion: '1',
         contractHash: 'hash',
@@ -353,6 +357,7 @@ describe('output settings', () => {
       template: {
         key: '133',
         name: 'Hero',
+        bindingId: '5f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
         environment: 'Continuum_app',
         contractVersion: 'v1',
         contractHash: 'hash',
@@ -511,6 +516,7 @@ describe('Forge Studio seams', () => {
   const summary = {
     key: '133',
     name: '[DRAFT/agent] forge_bench_starcraft',
+    bindingId: '5f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
     environment: 'Continuum_app',
     contractVersion: 'v1',
     contractHash: 'hash',
@@ -769,6 +775,7 @@ describe('approval destinations and the package summary', () => {
       template: {
         key: '133',
         name: 'Hero',
+        bindingId: '5f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
         environment: 'Parsed_app',
         contractVersion: '1',
         contractHash: 'hash',

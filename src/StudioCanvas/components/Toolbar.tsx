@@ -16,6 +16,7 @@ export function Toolbar() {
   const { streamState, cancel } = executionControls;
 
   const run = async (options: { forceRegenerateAll?: boolean } = {}) => {
+    console.warn('[studio] RUNFLOW-CLICK', { brandId, options });
     setIsRunning(true);
     try {
       await executeWorkflow(executionControls, { brandId, ...options });

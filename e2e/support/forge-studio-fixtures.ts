@@ -17,6 +17,8 @@ import {
   apiRenderJobListResponseSchema,
   apiRenderJobSchema,
   apiRenderPreflightRequestSchema,
+  apiRenderSuggestRowsRequestSchema,
+  apiRenderSuggestRowsResponseSchema,
   apiRenderPreflightResponseSchema,
   apiRenderSlackChannelListResponseSchema,
   apiRenderTemplateContractSchema,
@@ -58,7 +60,7 @@ import type { TemplateVariablesResponse } from '@/lib/library/templateSources';
 
 export const STARCRAFT_BRAND_ID = 'b17d8151-a9b9-4579-b1d2-7e8f01c2e9dc';
 
-const BINDING_ID = '5f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f';
+export const BINDING_ID = '5f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f';
 const WORKSPACE_ID = '2b3c4d5e-6f70-4812-9a3b-4c5d6e7f8091';
 const PROMO_ASSET_ID = '7a1e4c2b-3d5f-4a6b-9c8d-0e1f2a3b4c5d';
 const PROMO_VERSION_ID = '8b2f5d3c-4e6a-4b7c-8d9e-1f2a3b4c5d6e';
@@ -192,6 +194,9 @@ function promoSummary(displayName: string | null) {
   return apiRenderTemplateSummarySchema.parse({
     key: PROMO_TEMPLATE_KEY,
     name: PROMO_TEMPLATE_KEY,
+    // The SAME binding the render sets carry: the grid reads the binding off the chosen
+    // template now, and a set belongs to the binding its template lives in.
+    bindingId: BINDING_ID,
     environment: 'Continuum_app',
     contractVersion: '1',
     contractHash: 'sc-promo-v1-contract-hash',
@@ -627,6 +632,7 @@ const ROUTES: Array<[method: string, path: RegExp, handler: Handler]> = [
           {
             templateKey: 'terran_dropship_launch',
             templateId: 131,
+            bindingId: BINDING_ID,
             name: '[DRAFT/agent] terran_dropship_launch',
             rootTable: 'tpl_starcraft_b17d81_terran_dropship_launch_root',
             granted: false,
@@ -636,6 +642,7 @@ const ROUTES: Array<[method: string, path: RegExp, handler: Handler]> = [
           {
             templateKey: ZERG_TEMPLATE_KEY,
             templateId: 132,
+            bindingId: BINDING_ID,
             name: ZERG_TEMPLATE_KEY,
             rootTable: 'tpl_starcraft_b17d81_zerg_rush_teaser_root',
             updatedAt: '2026-09-11T09:00:00.000Z',
@@ -805,6 +812,43 @@ const ROUTES: Array<[method: string, path: RegExp, handler: Handler]> = [
       });
       fixtures.state.sets[index] = updated;
       return ok(updated);
+    },
+  ],
+  [
+    'POST',
+    /^\/api\/ai-studio\/renders\/suggest-rows$/,
+    ({ body, fixtures }) => {
+      const request = checked(fixtures, 'suggest rows', apiRenderSuggestRowsRequestSchema, body);
+      if (!request) return refused('suggest rows');
+      // Answered from the request itself: what the menu asked for is exactly what a bench needs to
+      // read back, and a value of the wrong KIND would render but never survive the grid's checks.
+      const kindOf = (key: string) =>
+        contractVariables.find((variable) => variable.key === key)?.kind ?? 'text';
+      const valueFor = (key: string, nth: number) => {
+        switch (kindOf(key)) {
+          case 'number':
+            return 10 + nth;
+          case 'color':
+            return nth % 2 === 0 ? '#1e90ff' : '#ff6f61';
+          default:
+            return `AI ${key} ${nth}`;
+        }
+      };
+      const keys = request.varyKeys ?? ['headline'];
+      const rows = Array.from({ length: request.count }, (_, index) => ({
+        id: randomUUID(),
+        parentId: request.parent?.id ?? null,
+        label: `${request.parent ? `${request.parent.label} · ` : ''}AI ${index + 1}`,
+        overrides: Object.fromEntries(keys.map((key) => [key, valueFor(key, index + 1)])),
+      }));
+      return ok(
+        apiRenderSuggestRowsResponseSchema.parse({
+          rows,
+          assets: [],
+          dropped: [],
+          unfilled: [],
+        }),
+      );
     },
   ],
   [

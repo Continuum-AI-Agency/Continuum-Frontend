@@ -17,6 +17,8 @@ const HOUR = 3_600_000;
 const BATCH = '99999999-9999-4999-8999-999999999991';
 const ago = (hours: number) => new Date(Date.now() - hours * HOUR).toISOString();
 
+const DEFAULT_BINDING = '55555555-5555-4555-8555-555555555551';
+const CLIENT_BINDING = '55555555-5555-4555-8555-555555555552';
 const BASE: ApiRenderJob = {
   id: '11111111-1111-4111-8111-111111111111',
   brandId: '22222222-2222-4222-8222-222222222222',
@@ -43,6 +45,7 @@ const BASE: ApiRenderJob = {
   labelPath: ['Root', 'Spain'],
   renderSetRevision: null,
   templateSource: null,
+  bindingId: DEFAULT_BINDING,
   environment: 'Continuum_app',
   fit: null,
   judge: null,
@@ -126,12 +129,11 @@ const PROMO: ApiRenderJob = {
 const TEMPLATE = {
   key: '133',
   name: 'forge_bench_starcraft',
+  bindingId: DEFAULT_BINDING,
   environment: 'Continuum_app',
   displayName: 'StarCraft Promo',
 };
 
-const DEFAULT_BINDING = '55555555-5555-4555-8555-555555555551';
-const CLIENT_BINDING = '55555555-5555-4555-8555-555555555552';
 const environment = (bindingId: string, workspace: string, isDefault: boolean) => ({
   bindingId,
   workspace,
@@ -635,13 +637,20 @@ describe('RenderJobsGrid', () => {
       environment(CLIENT_BINDING, 'Client_ws', false),
     ];
     clientTemplatesFixture = [
-      { key: '133', name: 'winter_promo', environment: 'Client_ws', displayName: 'Winter Promo' },
+      {
+        key: '133',
+        name: 'winter_promo',
+        bindingId: CLIENT_BINDING,
+        environment: 'Client_ws',
+        displayName: 'Winter Promo',
+      },
     ];
     const romaTwin = { ...ROMA, templateKey: '134', templateName: 'StarCraft Promo' };
     const promoClient = {
       ...PROMO,
       templateKey: '133',
       templateName: 'Winter Promo',
+      bindingId: CLIENT_BINDING,
       environment: 'Client_ws',
     };
     await renderLedger([MADRID, romaTwin, promoClient], [TEMPLATE, TWIN]);

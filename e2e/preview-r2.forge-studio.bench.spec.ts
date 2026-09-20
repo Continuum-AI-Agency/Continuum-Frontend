@@ -30,6 +30,7 @@ import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { type MintedSession, mintSessionBundleForEmail } from './support/auth';
 import {
+  BINDING_ID,
   FORGE_FIXTURE,
   type ForgeFixtures,
   installForgeFixtures,
@@ -236,6 +237,7 @@ function dress(real: RealRender): Dress {
   const summary = apiRenderTemplateSummarySchema.parse({
     key: TEMPLATE_KEY,
     name: TEMPLATE_KEY,
+    bindingId: BINDING_ID,
     environment: 'Continuum_app',
     contractVersion: '1',
     contractHash: 'sc-promo-v1-contract-hash',

@@ -84,3 +84,37 @@ export const canvasRunResultSchema = z
   .strict();
 
 export type CanvasRunResult = z.infer<typeof canvasRunResultSchema>;
+
+// ---------------------------------------------------------------------------
+// Run telemetry — how long a canvas run took, and where the time went
+// ---------------------------------------------------------------------------
+//
+// Lives here beside `canvasRunResultSchema` because it is written to the SAME row:
+// brand_profiles.canvas_run_requests (see 20260917_canvas_run_timing.sql). Both sides
+// of the FE/BE boundary touch that table — the Frontend executor writes these events,
+// the Backend's rooms.ts reads and settles the row — so the shape is declared once.
+
+/** Which surface issued a run. `canvas` = a human pressed Run Flow. */
+export const canvasRunOriginSchema = z.enum(['mcp', 'canvas']);
+export type CanvasRunOrigin = z.infer<typeof canvasRunOriginSchema>;
+
+/**
+ * One node's slice of a run. `running` means the executor recorded a start and never a
+ * finish — a tab that closed mid-run, or a node still in flight at the last heartbeat.
+ * Kept deliberately media-free, exactly like `canvasRunResultSchema`: ids and timings only.
+ */
+export const canvasRunNodeEventSchema = z
+  .object({
+    node_id: z.string(),
+    node_type: z.string().nullable(),
+    status: z.enum(['running', 'completed', 'failed', 'awaiting']),
+    started_at: z.string(),
+    finished_at: z.string().nullable(),
+    duration_ms: z.number().nullable(),
+    error: z.string().optional(),
+  })
+  .strict();
+
+export type CanvasRunNodeEvent = z.infer<typeof canvasRunNodeEventSchema>;
+
+export const canvasRunNodeEventsSchema = z.array(canvasRunNodeEventSchema);

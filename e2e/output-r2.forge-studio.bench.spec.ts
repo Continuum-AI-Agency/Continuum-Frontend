@@ -19,6 +19,7 @@ import {
 import { createClient } from '@supabase/supabase-js';
 import { type MintedSession, mintSessionBundleForEmail } from './support/auth';
 import {
+  BINDING_ID,
   FORGE_FIXTURE,
   type ForgeFixtures,
   installForgeFixtures,
@@ -196,6 +197,7 @@ function promoContract(mediaType: string, motion: { durationSec: number; frameRa
     template: apiRenderTemplateSummarySchema.parse({
       key: PROMO.templateKey,
       name: PROMO.templateKey,
+      bindingId: BINDING_ID,
       environment: 'Continuum_app',
       contractVersion: '1',
       // The fixtures' preflight answers for the promo hash.

@@ -52,6 +52,8 @@ export function AiDraftDialog({
   bindingId,
   contract,
   parent,
+  initialVaryKeys,
+  initialCount,
   onDrafted,
 }: {
   open: boolean;
@@ -62,6 +64,9 @@ export function AiDraftDialog({
   contract: ApiRenderTemplateContract;
   /** Set: draft variations of this row. Unset: draft new rows. */
   parent: AiDraftParent | null;
+  /** What the path that opened this already decided may change — a cell ticks only its own key. */
+  initialVaryKeys?: string[] | null;
+  initialCount?: number | null;
   onDrafted: (response: ApiRenderSuggestRowsResponse) => void;
 }) {
   const editable = contract.variables.filter((variable) => !variable.reserved);
@@ -76,11 +81,11 @@ export function AiDraftDialog({
   // biome-ignore lint/correctness/useExhaustiveDependencies: only opening resets the form.
   useEffect(() => {
     if (!open) return;
-    setCount(parent ? 3 : 5);
+    setCount(initialCount ?? (parent ? 3 : 5));
     setForks(0);
-    setVary(editable.map((variable) => variable.key));
+    setVary(initialVaryKeys?.length ? initialVaryKeys : editable.map((variable) => variable.key));
     setProblem(null);
-  }, [open, parent?.id]);
+  }, [open, parent?.id, initialCount, initialVaryKeys]);
 
   // Rows and their variations together stay within what one draft may return.
   const maxForks = Math.min(

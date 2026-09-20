@@ -110,7 +110,11 @@ describe('runCanvasRequest', () => {
         executed.push(opts);
       },
     });
-    expect(executed).toEqual([{ targetNodeId: undefined, roomId: 'room-1', brandId: 'brand-1' }]);
+    // runRequestId rides along so the executor records this run's timing onto the row
+    // this request already owns instead of minting one the room index would refuse.
+    expect(executed).toEqual([
+      { targetNodeId: undefined, roomId: 'room-1', brandId: 'brand-1', runRequestId: 'run-1' },
+    ]);
     expect(calls.done).toHaveLength(1);
     expect(calls.done[0].id).toBe('run-1');
   });

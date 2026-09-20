@@ -429,6 +429,8 @@ function TurnMessages({
 
           {state.status === 'done' ? <p>{state.summary || 'Done.'}</p> : null}
 
+          {state.status === 'done' && state.changed === false ? <ComposerAnsweredNote /> : null}
+
           {state.warnings.length > 0 ? (
             <ul className="flex flex-col gap-1">
               {state.warnings.map((warning) => (
@@ -447,7 +449,7 @@ function TurnMessages({
             </div>
           ) : null}
 
-          {state.graph ? (
+          {state.graph && state.changed !== false ? (
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">
                 {state.graph.nodeCount} node{state.graph.nodeCount === 1 ? '' : 's'} ·{' '}
@@ -509,6 +511,19 @@ function ElementGroundingChips({ references }: { references?: AgentMentionRefere
   );
 }
 
+/**
+ * A completed turn that changed nothing. The wire says so (`response.done.changed`),
+ * and without this the same prose, node count and Run button rendered as an ordinary
+ * build — so an answered question looked like a workflow the user had to go run.
+ */
+function ComposerAnsweredNote() {
+  return (
+    <p className="text-xs text-muted-foreground" data-testid="composer-answered-note">
+      Answered — nothing on the canvas changed.
+    </p>
+  );
+}
+
 function ComposerProgress({
   state,
   references,
@@ -546,9 +561,11 @@ function ComposerProgress({
             <p className="text-foreground">{state.summary}</p>
           ) : null}
 
+          {state.status === 'done' && state.changed === false ? <ComposerAnsweredNote /> : null}
+
           <ElementGroundingChips references={references} />
 
-          {state.graph ? (
+          {state.graph && state.changed !== false ? (
             <p className="mt-1 text-xs text-muted-foreground">
               {state.graph.nodeCount} node{state.graph.nodeCount === 1 ? '' : 's'} ·{' '}
               {state.graph.edgeCount} connection{state.graph.edgeCount === 1 ? '' : 's'} on the
@@ -568,7 +585,7 @@ function ComposerProgress({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          {state.status === 'done' && state.graph ? (
+          {state.status === 'done' && state.graph && state.changed !== false ? (
             <Button size="sm" type="button" onClick={onRun} data-testid="composer-card-run">
               <Play data-icon="inline-start" />
               Run

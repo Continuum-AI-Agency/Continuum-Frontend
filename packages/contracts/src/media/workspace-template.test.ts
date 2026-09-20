@@ -8,7 +8,8 @@ import {
 describe('workspaceTemplateSchema', () => {
   it('keys on the string template id every other store joins on', () => {
     const parsed = workspaceTemplateSchema.parse({
-      templateKey: '133', templateId: 133, name: 'forge_bench_starcraft',
+      templateKey: '133', templateId: 133, bindingId: '5f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
+      name: 'forge_bench_starcraft',
       rootTable: 'tpl_starcraft_forge_bench_starcraft_root', updatedAt: null,
       granted: true, sourceAssetId: null, draft: false,
     });
@@ -19,7 +20,8 @@ describe('workspaceTemplateSchema', () => {
   it('stays strict — an unknown key is refused', () => {
     expect(
       workspaceTemplateSchema.safeParse({
-        templateKey: '1', templateId: 1, name: 'x', granted: false, draft: false, contract: {},
+        templateKey: '1', templateId: 1, bindingId: '5f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
+        name: 'x', granted: false, draft: false, contract: {},
       }).success,
     ).toBe(false);
   });

@@ -20,6 +20,7 @@ import {
 import { createClient } from '@supabase/supabase-js';
 import { type MintedSession, mintSessionBundleForEmail } from './support/auth';
 import {
+  BINDING_ID,
   FORGE_FIXTURE,
   type ForgeFixtures,
   installForgeFixtures,
@@ -209,6 +210,7 @@ const summary = (key: string, displayName: string, ratios: string[]) =>
   apiRenderTemplateSummarySchema.parse({
     key,
     name: key,
+    bindingId: BINDING_ID,
     environment: 'Continuum_app',
     contractVersion: '1',
     // The fixtures' preflight answers for the promo hash; a different key still renders.

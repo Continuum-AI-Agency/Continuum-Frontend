@@ -28,6 +28,7 @@ import {
   variationIndexFromHandle,
 } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
+import { buildCanvasRunResult, type RunNode } from '@/components/ai-studio/canvasRunRequests';
 import {
   defaultElementUseIntent,
   elementReferenceTypeForUse,
@@ -73,6 +74,11 @@ import {
   toBackendExtendVideoPayload,
   toBackendPayload,
 } from './buildNodePayload';
+import {
+  createSupabaseCanvasRunTelemetryStore,
+  NO_CANVAS_RUN_TELEMETRY,
+  startCanvasRunTelemetry,
+} from './canvasRunTelemetry';
 import { compositeImages } from './compositeImages';
 import { blobToBase64, buildDataUrl, parseDataUrl } from './dataUrl';
 import {
@@ -1594,6 +1600,10 @@ type ExecuteWorkflowOptions = {
   // content and signatures. The explicit "start over" path, since a normal run
   // now reuses nodes that already have content.
   forceRegenerateAll?: boolean;
+  // Set when this run is executing a canvas_run_requests row someone else minted (the
+  // MCP `studio_workflow run` path). Telemetry then attaches to that row instead of
+  // minting one, which is what keeps the two originators off each other's room.
+  runRequestId?: string;
 };
 
 export async function executeWorkflow(
@@ -1604,7 +1614,13 @@ export async function executeWorkflow(
   // that forgot to pass one. Nothing below substitutes a placeholder for a missing brand:
   // an id no brand can have used to reach the Backend and come back as a permissions
   // denial, which is not what had gone wrong.
+  console.warn('[studio] EXEC-ENTER', { options });
   const workflowBrandId = options.brandId ?? useStudioStore.getState().brandId;
+  // Same rule as the brand, and for the same reason: the store is the canvas's own answer
+  // for "which room am I", and the Run Flow button never passed one. Everything that needed
+  // a room on a user-initiated run — media-library provenance, the Hyperframes agent, run
+  // telemetry — was reading `undefined` and silently degrading.
+  const workflowRoomId = options.roomId ?? useStudioStore.getState().activeRoomId;
 
   // Inline/re-sign reference media feeding the run BEFORE building payloads. A
   // Library/Continuum reference arrives as a signed URL (which expires ~1h) or had
@@ -1619,7 +1635,7 @@ export async function executeWorkflow(
       options.targetNodeId,
     ).map((node) => node.id);
     if (scopeNodeIds.length === 0) {
-      console.log('No executable nodes found');
+      console.warn('[studio] EXEC-EARLY-RETURN scope empty');
       controls.show?.({
         title: 'Nothing to run',
         description:
@@ -1656,6 +1672,7 @@ export async function executeWorkflow(
       mustRegenerate,
     );
     if (preflightIssue) {
+      console.warn('[studio] EXEC-EARLY-RETURN preflight', preflightIssue);
       surfacePreflightIssue(controls, snapshot.nodes, preflightIssue);
       return;
     }
@@ -1680,7 +1697,7 @@ export async function executeWorkflow(
   const executableNodeIds = executableNodes.map((n) => n.id);
 
   if (executableNodeIds.length === 0) {
-    console.log('No executable nodes found');
+    console.warn('[studio] EXEC-EARLY-RETURN executable empty');
     controls.show?.({
       title: 'Nothing to run',
       description:
@@ -1693,6 +1710,32 @@ export async function executeWorkflow(
     targetNodeId: options.targetNodeId,
     executableNodeIds,
   });
+
+  // The run's durable server-side record. Started here — after preflight, so a press that
+  // was refused before anything ran is not counted as a run — and never awaited: a missing
+  // room, a missing session or a room already held by an MCP run all degrade to
+  // NO_CANVAS_RUN_TELEMETRY rather than standing between the user and their run.
+  // TEMP-INSTRUMENT: prints on BOTH branches so its absence proves the run returned
+  // before this line, and its presence names which value was missing.
+  console.warn('[studio] TELEMETRY-GATE', {
+    workflowBrandId,
+    workflowRoomId,
+    optionsRoomId: options.roomId,
+    storeRoomId: useStudioStore.getState().activeRoomId,
+    optionsBrandId: options.brandId,
+    storeBrandId: useStudioStore.getState().brandId,
+    runRequestId: options.runRequestId,
+  });
+  const runTelemetry =
+    workflowBrandId && workflowRoomId
+      ? startCanvasRunTelemetry({
+          store: createSupabaseCanvasRunTelemetryStore(),
+          brandProfileId: workflowBrandId,
+          roomId: workflowRoomId,
+          nodeIds: executableNodeIds,
+          ...(options.runRequestId ? { runRequestId: options.runRequestId } : {}),
+        })
+      : NO_CANVAS_RUN_TELEMETRY;
 
   // Report — never silently skip — any publisher sink fed by this run. The run
   // produces the media; delivery is an explicit handoff from the publisher node.
@@ -2042,7 +2085,13 @@ export async function executeWorkflow(
       error: error,
       errorCode: errorCode,
     });
-    if (status !== 'running') {
+    // Every node transition in this executor routes through here, whatever the node type,
+    // so this one call is the whole per-node timing feed — the "where did the time go" half
+    // of a run record. Recording it anywhere else would have missed a node type.
+    if (status === 'running') {
+      runTelemetry.nodeStarted(nodeId, nodeById.get(nodeId)?.type ?? null);
+    } else {
+      runTelemetry.nodeSettled(nodeId, status, error);
       useStudioStore.getState().triggerSave();
     }
   };
@@ -2083,7 +2132,7 @@ export async function executeWorkflow(
         sizeBytes: asset.sizeBytes,
         originRef: {
           kind: 'canvas',
-          roomId: options.roomId ?? null,
+          roomId: workflowRoomId ?? null,
           nodeId,
           prompt: typeof data.prompt === 'string' ? data.prompt : null,
           model: typeof data.model === 'string' ? data.model : null,
@@ -2842,13 +2891,13 @@ export async function executeWorkflow(
           updateNodeStatus(nodeId, 'completed');
           return true;
         }
-        if (!brandId || !options.roomId) {
+        if (!brandId || !workflowRoomId) {
           updateNodeStatus(nodeId, 'failed', 'AI Studio workspace is unavailable');
           return false;
         }
         await startHyperframesAgentNode({
           nodeId,
-          roomId: options.roomId,
+          roomId: workflowRoomId,
           brandId,
         });
         updateNodeStatus(nodeId, 'awaiting');
@@ -3033,7 +3082,7 @@ export async function executeWorkflow(
             actionId,
             brandId: workflowBrandId,
             nodeId,
-            roomId: options.roomId,
+            roomId: workflowRoomId,
             sourceAssetIds,
             keep: data.keep === true,
             wiredToLibrarySink: nodeWiredToLibrarySink(nodeId, edges, typeById),
@@ -3211,55 +3260,76 @@ export async function executeWorkflow(
     }
   }
 
-  const pendingNodes = new Set(
-    executableNodeIds.filter((id) => {
-      if (options.targetNodeId === id) {
-        console.info('[studio] forcing target node into pending', id);
-        return true;
-      }
-      return !resolvedOutputs.has(id);
-    }),
-  );
-  console.info('[studio] pendingNodes initialized', Array.from(pendingNodes));
-  const runningNodes = new Map<string, Promise<{ id: string; success: boolean }>>();
+  try {
+    const pendingNodes = new Set(
+      executableNodeIds.filter((id) => {
+        if (options.targetNodeId === id) {
+          console.info('[studio] forcing target node into pending', id);
+          return true;
+        }
+        return !resolvedOutputs.has(id);
+      }),
+    );
+    console.info('[studio] pendingNodes initialized', Array.from(pendingNodes));
+    const runningNodes = new Map<string, Promise<{ id: string; success: boolean }>>();
 
-  while (pendingNodes.size > 0 || runningNodes.size > 0) {
-    const readyNodes = Array.from(pendingNodes).filter((nodeId) => {
-      const node = nodeById.get(nodeId);
-      if (!node) return false;
-      const readiness = getNodeReadiness(
-        node,
-        edges,
-        resolvedOutputs,
-        nodeById,
-        failedNodes,
-        awaitingNodes,
-      );
-      console.info('[studio] checking readiness', {
-        nodeId,
-        type: node.type,
-        ready: readiness.ready,
-        reason: readiness.reason,
+    while (pendingNodes.size > 0 || runningNodes.size > 0) {
+      const readyNodes = Array.from(pendingNodes).filter((nodeId) => {
+        const node = nodeById.get(nodeId);
+        if (!node) return false;
+        const readiness = getNodeReadiness(
+          node,
+          edges,
+          resolvedOutputs,
+          nodeById,
+          failedNodes,
+          awaitingNodes,
+        );
+        console.info('[studio] checking readiness', {
+          nodeId,
+          type: node.type,
+          ready: readiness.ready,
+          reason: readiness.reason,
+        });
+        return readiness.ready;
       });
-      return readiness.ready;
-    });
 
-    while (readyNodes.length > 0 && runningNodes.size < MAX_CONCURRENT_EXECUTIONS) {
-      const nodeId = readyNodes.shift()!;
-      pendingNodes.delete(nodeId);
-      const execution = executeNode(nodeId).then((success) => ({ id: nodeId, success }));
-      runningNodes.set(nodeId, execution);
-    }
+      while (readyNodes.length > 0 && runningNodes.size < MAX_CONCURRENT_EXECUTIONS) {
+        const nodeId = readyNodes.shift()!;
+        pendingNodes.delete(nodeId);
+        const execution = executeNode(nodeId).then((success) => ({ id: nodeId, success }));
+        runningNodes.set(nodeId, execution);
+      }
 
-    if (runningNodes.size === 0) {
-      // Nothing left to run. Classify the stalled nodes: a Video Editor gate (and
-      // everything downstream of it) that is merely awaiting a human render is
-      // PARKED, not failed — the run halts cleanly and resumes when the human
-      // clicks "Render & Continue". Iterate to a fixed point so the awaiting state
-      // propagates through the full downstream chain regardless of scan order.
-      let changed = true;
-      while (changed) {
-        changed = false;
+      if (runningNodes.size === 0) {
+        // Nothing left to run. Classify the stalled nodes: a Video Editor gate (and
+        // everything downstream of it) that is merely awaiting a human render is
+        // PARKED, not failed — the run halts cleanly and resumes when the human
+        // clicks "Render & Continue". Iterate to a fixed point so the awaiting state
+        // propagates through the full downstream chain regardless of scan order.
+        let changed = true;
+        while (changed) {
+          changed = false;
+          for (const nodeId of pendingNodes) {
+            if (awaitingNodes.has(nodeId)) continue;
+            const node = nodeById.get(nodeId);
+            if (!node) continue;
+            const readiness = getNodeReadiness(
+              node,
+              edges,
+              resolvedOutputs,
+              nodeById,
+              failedNodes,
+              awaitingNodes,
+            );
+            if (readiness.awaiting) {
+              awaitingNodes.add(nodeId);
+              updateNodeStatus(nodeId, 'awaiting');
+              changed = true;
+            }
+          }
+        }
+
         for (const nodeId of pendingNodes) {
           if (awaitingNodes.has(nodeId)) continue;
           const node = nodeById.get(nodeId);
@@ -3272,39 +3342,30 @@ export async function executeWorkflow(
             failedNodes,
             awaitingNodes,
           );
-          if (readiness.awaiting) {
-            awaitingNodes.add(nodeId);
-            updateNodeStatus(nodeId, 'awaiting');
-            changed = true;
-          }
+          updateNodeStatus(
+            nodeId,
+            'failed',
+            readiness.reason ?? 'Missing required inputs or prompt',
+          );
+          failedNodes.add(nodeId);
         }
+        pendingNodes.clear();
+        break;
       }
 
-      for (const nodeId of pendingNodes) {
-        if (awaitingNodes.has(nodeId)) continue;
-        const node = nodeById.get(nodeId);
-        if (!node) continue;
-        const readiness = getNodeReadiness(
-          node,
-          edges,
-          resolvedOutputs,
-          nodeById,
-          failedNodes,
-          awaitingNodes,
-        );
-        updateNodeStatus(nodeId, 'failed', readiness.reason ?? 'Missing required inputs or prompt');
-        failedNodes.add(nodeId);
+      const result = await Promise.race(runningNodes.values());
+      runningNodes.delete(result.id);
+      if (!result.success) {
+        failedNodes.add(result.id);
       }
-      pendingNodes.clear();
-      break;
     }
 
-    const result = await Promise.race(runningNodes.values());
-    runningNodes.delete(result.id);
-    if (!result.success) {
-      failedNodes.add(result.id);
-    }
+    console.log('Workflow execution finished');
+  } finally {
+    // Always: a throw that escapes the loop must still close the row, or the sweeper
+    // settles it as abandoned 16 minutes later and the duration is a lie.
+    await runTelemetry.finish(
+      buildCanvasRunResult(useStudioStore.getState().nodes as RunNode[], executableNodeIds),
+    );
   }
-
-  console.log('Workflow execution finished');
 }

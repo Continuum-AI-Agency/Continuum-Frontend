@@ -6176,6 +6176,7 @@ export type Database = {
           email_report_opt_in: boolean
           id: string
           logo_path: string | null
+          meta_writes_allowed: boolean
           target_audience: Json | null
           tier: number
           timezone: string
@@ -6197,6 +6198,7 @@ export type Database = {
           email_report_opt_in?: boolean
           id?: string
           logo_path?: string | null
+          meta_writes_allowed?: boolean
           target_audience?: Json | null
           tier?: number
           timezone?: string
@@ -6218,6 +6220,7 @@ export type Database = {
           email_report_opt_in?: boolean
           id?: string
           logo_path?: string | null
+          meta_writes_allowed?: boolean
           target_audience?: Json | null
           tier?: number
           timezone?: string
@@ -15802,6 +15805,7 @@ export type Database = {
       ad_render_jobs: {
         Row: {
           approval_package_id: string | null
+          batch_id: string
           binding_id: string
           brand_id: string
           contract_hash: string
@@ -15844,6 +15848,7 @@ export type Database = {
         }
         Insert: {
           approval_package_id?: string | null
+          batch_id?: string
           binding_id: string
           brand_id: string
           contract_hash: string
@@ -15886,6 +15891,7 @@ export type Database = {
         }
         Update: {
           approval_package_id?: string | null
+          batch_id?: string
           binding_id?: string
           brand_id?: string
           contract_hash?: string
@@ -18196,6 +18202,44 @@ export type Database = {
           },
         ]
       }
+      render_set_revisions: {
+        Row: {
+          brand_id: string
+          contract_hash: string
+          name: string
+          revision: number
+          rows: Json
+          saved_at: string
+          set_id: string
+        }
+        Insert: {
+          brand_id: string
+          contract_hash: string
+          name: string
+          revision: number
+          rows: Json
+          saved_at: string
+          set_id: string
+        }
+        Update: {
+          brand_id?: string
+          contract_hash?: string
+          name?: string
+          revision?: number
+          rows?: Json
+          saved_at?: string
+          set_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "render_set_revisions_set_id_fkey"
+            columns: ["set_id"]
+            isOneToOne: false
+            referencedRelation: "render_sets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       render_sets: {
         Row: {
           binding_id: string
@@ -18248,6 +18292,39 @@ export type Database = {
             referencedColumns: ["id", "brand_id"]
           },
         ]
+      }
+      render_suggest_events: {
+        Row: {
+          brand_id: string
+          count_requested: number
+          created_at: string
+          created_by: string | null
+          id: string
+          rows_returned: number
+          template_key: string
+          vary_key_count: number
+        }
+        Insert: {
+          brand_id: string
+          count_requested: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          rows_returned: number
+          template_key: string
+          vary_key_count?: number
+        }
+        Update: {
+          brand_id?: string
+          count_requested?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          rows_returned?: number
+          template_key?: string
+          vary_key_count?: number
+        }
+        Relationships: []
       }
       render_template_memberships: {
         Row: {
@@ -26115,6 +26192,15 @@ export type Database = {
       }
       optimizer_action_count: { Args: { p_since?: string }; Returns: number }
       optimizer_append_logs: { Args: { p_rows: Json }; Returns: number }
+      optimizer_approve_audience_proposal: {
+        Args: {
+          p_activate?: boolean
+          p_budget_minor_units: number
+          p_id: string
+          p_mode?: string
+        }
+        Returns: undefined
+      }
       optimizer_approve_creative_swap_publish: {
         Args: { p_job_id: string }
         Returns: undefined
@@ -26124,9 +26210,55 @@ export type Database = {
         Args: { p_portfolio_id: string }
         Returns: undefined
       }
+      optimizer_autopilot_approve_audience_proposal: {
+        Args: { p_id: string }
+        Returns: boolean
+      }
+      optimizer_autopilot_approve_recommendations: {
+        Args: { p_portfolio_id?: string }
+        Returns: Json
+      }
+      optimizer_autopilot_approve_swap_publishes: {
+        Args: { p_portfolio_id?: string }
+        Returns: number
+      }
+      optimizer_autopilot_pending_flash_recs: {
+        Args: never
+        Returns: {
+          actor: string
+          ad_id: string
+          adset_id: string
+          adset_name: string
+          brand_id: string
+          kind: string
+          portfolio_id: string
+          reason: string
+          rec_id: string
+          seed: Json
+        }[]
+      }
+      optimizer_autopilot_request_flash_creatives: {
+        Args: {
+          p_count?: number
+          p_negative_prompt?: string
+          p_pipeline_id: string
+          p_prompt: string
+          p_rec_id: string
+          p_reference_asset_ids?: string[]
+        }
+        Returns: string
+      }
+      optimizer_autopilot_sweep_audience_proposals: {
+        Args: never
+        Returns: number
+      }
       optimizer_backfill_adset_names: {
         Args: { p_names: Json; p_portfolio_id: string }
         Returns: number
+      }
+      optimizer_cancel_audience_proposal: {
+        Args: { p_id: string }
+        Returns: undefined
       }
       optimizer_claim_due_portfolios: {
         Args: { p_limit?: number }
@@ -26135,6 +26267,8 @@ export type Database = {
           apply_mode: string
           apply_mode_changed_by: string
           autopilot_paused: boolean
+          autopilot_scopes: Json
+          autopilot_scopes_changed_by: string
           brand_id: string
           budget_source: string
           config: Json
@@ -26158,6 +26292,16 @@ export type Database = {
           target_metric: string
         }[]
       }
+      optimizer_claim_next_audience_proposal: {
+        Args: { p_lease_ttl_sec?: number; p_phase: string; p_worker_id: string }
+        Returns: unknown[]
+        SetofOptions: {
+          from: "*"
+          to: "audience_proposals"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       optimizer_claim_next_creative_swap_job: {
         Args: { p_lease_ttl_sec?: number; p_worker_id: string }
         Returns: unknown[]
@@ -26178,12 +26322,47 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      optimizer_claim_next_portfolio_brief: {
+        Args: { p_lease_ttl_sec?: number; p_worker_id: string }
+        Returns: unknown[]
+        SetofOptions: {
+          from: "*"
+          to: "portfolio_daily_briefs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      optimizer_complete_audience_proposal_owned: {
+        Args: {
+          p_blocked_by?: Json
+          p_error?: Json
+          p_id: string
+          p_proposal?: Json
+          p_result?: Json
+          p_status: string
+          p_undo_result?: Json
+          p_worker_id: string
+        }
+        Returns: boolean
+      }
       optimizer_complete_creative_swap_job_owned: {
         Args: {
           p_asset_id?: string
           p_error?: Json
           p_job_id: string
           p_result?: Json
+          p_status: string
+          p_worker_id: string
+        }
+        Returns: boolean
+      }
+      optimizer_complete_portfolio_brief_owned: {
+        Args: {
+          p_brief?: Json
+          p_error?: Json
+          p_id: string
+          p_model?: string
+          p_prompt_version?: string
           p_status: string
           p_worker_id: string
         }
@@ -26264,9 +26443,17 @@ export type Database = {
         Args: { p_brand_id: string; p_insight_key: string }
         Returns: undefined
       }
+      optimizer_enqueue_audience_proposals: {
+        Args: { p_cooldown_days?: number; p_since_days?: number }
+        Returns: number
+      }
       optimizer_enqueue_creative_swap_job: {
         Args: { p_job: Json }
         Returns: string
+      }
+      optimizer_enqueue_portfolio_briefs: {
+        Args: { p_since_days?: number }
+        Returns: number
       }
       optimizer_enroll_adset: {
         Args: { p_adsets: Json; p_portfolio_id: string }
@@ -26323,6 +26510,20 @@ export type Database = {
           rec_id: string
         }[]
       }
+      optimizer_get_audience_proposal_context: {
+        Args: { p_id: string }
+        Returns: Json
+      }
+      optimizer_get_audience_proposals: {
+        Args: { p_brand_id: string; p_limit?: number; p_status?: string }
+        Returns: unknown[]
+        SetofOptions: {
+          from: "*"
+          to: "audience_proposals"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       optimizer_get_cpa_series: {
         Args: { p_limit?: number; p_portfolio_id: string }
         Returns: Json
@@ -26344,6 +26545,14 @@ export type Database = {
       optimizer_get_enrolled_adsets: {
         Args: { p_portfolio_id: string }
         Returns: string[]
+      }
+      optimizer_get_portfolio_brief: {
+        Args: { p_portfolio_id: string }
+        Returns: Json
+      }
+      optimizer_get_portfolio_brief_context: {
+        Args: { p_portfolio_id: string }
+        Returns: Json
       }
       optimizer_get_portfolio_performance: {
         Args: { p_limit?: number; p_portfolio_id: string }
@@ -26422,6 +26631,10 @@ export type Database = {
         Args: { p_rec_id: string; p_rule_id: string }
         Returns: boolean
       }
+      optimizer_heartbeat_audience_proposal: {
+        Args: { p_id: string; p_lease_ttl_sec?: number; p_worker_id: string }
+        Returns: boolean
+      }
       optimizer_heartbeat_creative_swap_job: {
         Args: {
           p_job_id: string
@@ -26429,6 +26642,19 @@ export type Database = {
           p_worker_id: string
         }
         Returns: boolean
+      }
+      optimizer_heartbeat_portfolio_brief: {
+        Args: { p_id: string; p_lease_ttl_sec?: number; p_worker_id: string }
+        Returns: boolean
+      }
+      optimizer_implement_flash_creative: {
+        Args: {
+          p_asset_id: string
+          p_job_id: string
+          p_predecessor_ad_id?: string
+          p_target_adset_id: string
+        }
+        Returns: string
       }
       optimizer_list_account_enrollments: {
         Args: { p_ad_account_id?: string; p_brand_id: string }
@@ -26499,6 +26725,10 @@ export type Database = {
           missing_since: string
         }[]
       }
+      optimizer_list_portfolio_audiences: {
+        Args: { p_portfolio_id: string }
+        Returns: Json
+      }
       optimizer_list_portfolios: { Args: { p_brand_id: string }; Returns: Json }
       optimizer_list_renewal_tasks: {
         Args: { p_brand_id: string; p_status?: string }
@@ -26511,6 +26741,8 @@ export type Database = {
           apply_mode: string
           apply_mode_changed_by: string
           autopilot_paused: boolean
+          autopilot_scopes: Json
+          autopilot_scopes_changed_by: string
           brand_id: string
           budget_source: string
           config: Json
@@ -26558,6 +26790,10 @@ export type Database = {
         }
         Returns: Json
       }
+      optimizer_patch_audience_proposal_result_owned: {
+        Args: { p_id: string; p_patch: Json; p_worker_id: string }
+        Returns: boolean
+      }
       optimizer_reconcile_cycle_items: {
         Args: { p_run_id: string }
         Returns: number
@@ -26590,6 +26826,29 @@ export type Database = {
       optimizer_request_apply_items: {
         Args: { p_adset_ids: string[]; p_run_id: string }
         Returns: number
+      }
+      optimizer_request_audience_proposal: {
+        Args: { p_rec_id: string }
+        Returns: string
+      }
+      optimizer_request_audience_proposal_activate: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
+      optimizer_request_audience_proposal_undo: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
+      optimizer_request_flash_creatives: {
+        Args: {
+          p_count?: number
+          p_negative_prompt?: string
+          p_pipeline_id: string
+          p_prompt: string
+          p_rec_id: string
+          p_reference_asset_ids?: string[]
+        }
+        Returns: string
       }
       optimizer_reserve_ad_status: {
         Args: {

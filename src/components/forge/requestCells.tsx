@@ -118,8 +118,10 @@ export type RequestRowActions = {
   /** Proposed rows into the set — with the proposed rows above them — or gone, with what is under them. */
   keepProposed: (ids: string[]) => void;
   discardProposed: (ids: string[]) => void;
-  /** Opens the AI draft for variations of this row. */
-  varyWithAi: (id: string) => void;
+  /** Opens the AI draft dialog for variations of this row, with `varyKeys` already ticked. */
+  varyWithAi: (id: string, varyKeys?: string[]) => void;
+  /** Drafts variations straight from a menu: no dialog, no brief to write. */
+  generateWithAi: (args: { ids: string[]; count: number; varyKeys: string[] }) => void;
 };
 
 export type RequestGridMeta = {
@@ -131,6 +133,8 @@ export type RequestGridMeta = {
   /** Rows ticked for Render, in grid order — what "Apply to selected" writes to. */
   selectedIds: string[];
   hiddenColumns: number;
+  /** A draft already running: the row menu's AI items say so rather than starting a second. */
+  generating: boolean;
 };
 
 export type VariableColumnMeta = { variable: ApiRenderVariable };

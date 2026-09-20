@@ -93,6 +93,24 @@ export function templateNameProblem(
  */
 const CLIENT_KEY_NAME_MAX = 12;
 
+/**
+ * The sub-app every Continuum brand renders through.
+ *
+ * A product decision, not per-environment config, so it is a constant rather than an env read:
+ * the fleet already hardcodes the same value (`template-forge/src/app/catalog.js`
+ * `SHARED_WORKSPACE`), and when the two disagreed — the variable simply unset on the prod VM —
+ * the product refused a first upload for 117 of the 119 brands entitled to one, while every
+ * engineer's machine worked. Root AGENTS.md §6.7.
+ *
+ * It is also the SHARED tier: many brands to one sub-app, no `delivery_config` row per brand, and
+ * brand authority carried per-request by `ensureBrandAccess` rather than by the workspace.
+ *
+ * It lives here, beside the key helpers, rather than in the fleet HTTP client — a test that
+ * partially `mock.module`s that client would otherwise blank this constant for every later file,
+ * and a binding written with `picinst: undefined` looks like success and fails at render time.
+ */
+export const SHARED_RENDER_WORKSPACE = 'Continuum_app';
+
 export function renderClientKeyFor(brandName: string | null | undefined, brandId: string): string {
   const uniq = String(brandId).replace(/[^0-9a-f]/gi, '').slice(0, 6).toLowerCase();
   let stem = templateKeySlug(brandName ?? '').slice(0, CLIENT_KEY_NAME_MAX);

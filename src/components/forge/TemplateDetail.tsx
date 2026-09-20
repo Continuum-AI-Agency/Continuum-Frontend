@@ -2,9 +2,7 @@
 
 import {
   type ApiRenderJob,
-  type RenderWorkspace,
   readableLayerName,
-  renderWorkspaceLabel,
   type TemplateFontPushResponse,
   type TemplateFontReadiness,
   type TemplateSourceSummary,
@@ -14,7 +12,6 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
-  Boxes,
   CalendarClock,
   CircleDot,
   History,
@@ -59,19 +56,11 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toast-imperative';
 import {
   advanceTemplateForgeRun,
   type ForgeLadderAction,
-  fetchRenderWorkspaces,
   fetchTemplateFonts,
   fetchTemplateVariables,
   pushTemplateFonts,
@@ -231,10 +220,6 @@ export function TemplateDetail({
   // from it (`tpl_<slug(name)>_root`, 40 characters, never truncated). The display name above is
   // separate and can change any time; this one cannot.
   const [templateName, setTemplateName] = useState(() => buildNameSuggestion(source));
-  // WHICH WORKSPACE. A brand may hold several enabled bindings and a template belongs to exactly
-  // one, so when there is a choice a person makes it, and when there is not there is nothing to ask.
-  const [workspaces, setWorkspaces] = useState<RenderWorkspace[]>([]);
-  const [workspaceId, setWorkspaceId] = useState('');
   const [fontReadiness, setFontReadiness] = useState<TemplateFontReadiness | null>(null);
   const [fontCheckFailed, setFontCheckFailed] = useState(false);
   const [fontPlan, setFontPlan] = useState<Extract<
@@ -295,27 +280,6 @@ export function TemplateDetail({
     };
   }, [loadFonts, source.parseState, source.updatedAt, source.versionId]);
 
-  useEffect(() => {
-    let cancelled = false;
-    queryClient
-      .fetchQuery({
-        queryKey: forgeQueryKeys.workspaces(brandId),
-        queryFn: () => fetchRenderWorkspaces(brandId),
-        staleTime: FORGE_STALE_MS.lists,
-      })
-      .then((items) => {
-        if (cancelled) return;
-        setWorkspaces(items);
-        setWorkspaceId(items.find((w) => w.isDefault)?.id ?? items[0]?.id ?? '');
-      })
-      // Advisory: a brand with no binding yet gets one provisioned on submit, so failing to list
-      // them must not block the page.
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [brandId, queryClient]);
-
   const onSave = async (edits: TemplateSlotEdit[]) => {
     setSaving(true);
     try {
@@ -340,12 +304,10 @@ export function TemplateDetail({
     }
     setBusy('submit');
     try {
-      await sendTemplateToForge(
-        brandId,
-        assetId,
-        templateName.trim(),
-        workspaces.length > 1 ? workspaceId : undefined,
-      );
+      // No workspace argument: a build always goes to the brand's own space in the shared
+      // sub-app. Which one that is, is our deployment topology, not a question for the person
+      // naming a template.
+      await sendTemplateToForge(brandId, assetId, templateName.trim());
       await Promise.all([onChanged(), refreshRun()]);
       toast.success('Sent to the forge');
     } catch (error) {
@@ -417,7 +379,6 @@ export function TemplateDetail({
   });
 
   const nameProblem = templateNameProblem(templateName);
-  const chosenWorkspace = workspaces.find((workspace) => workspace.id === workspaceId);
   const status = templateStatus({
     parseState: source.parseState,
     forgeState: run?.state ?? source.forgeState,
@@ -426,15 +387,6 @@ export function TemplateDetail({
   const ratios = source.ratios;
   const variableCount = variables.length || source.slotCount || 0;
   const unassigned = variables.filter((variable) => variable.role === null).length;
-
-  // Numbered, never named: the only names a binding has are its app and client keys.
-  const workspaceLabel = (index: number) =>
-    index < 0 ? '—' : `Workspace ${index + 1}${workspaces[index]?.isDefault ? ' (default)' : ''}`;
-  const workspaceIndex = run?.application
-    ? workspaces.findIndex((workspace) => workspace.picinst === run.application)
-    : workspaces.findIndex((workspace) => workspace.id === workspaceId);
-  const workspaceFact =
-    workspaces.length === 1 && workspaceIndex === 0 ? 'Default' : workspaceLabel(workspaceIndex);
 
   const fontParseState = fontReadiness?.parseState ?? source.parseState;
   const missingFonts = fontReadiness?.fonts.filter((font) => !font.held).length ?? 0;
@@ -550,28 +502,6 @@ export function TemplateDetail({
               className="w-64"
               disabled={busy !== null}
             />
-            {/* Only when there is a choice: one workspace is not a decision. */}
-            {workspaces.length > 1 ? (
-              <Select
-                value={workspaceId}
-                onValueChange={(next) => setWorkspaceId(String(next))}
-                disabled={busy !== null}
-              >
-                <SelectTrigger size="sm" className="w-44 text-xs" aria-label="Render workspace">
-                  <SelectValue>
-                    {workspaceLabel(workspaces.findIndex((w) => w.id === workspaceId))}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {/* The server lists the default first and the rest in a stable order. */}
-                  {workspaces.map((workspace, index) => (
-                    <SelectItem key={workspace.id} value={workspace.id} className="text-xs">
-                      {workspaceLabel(index)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : null}
             <Button
               type="button"
               size="sm"
@@ -771,7 +701,6 @@ export function TemplateDetail({
                   '—'
                 ),
               },
-              { icon: Boxes, label: 'Workspace', value: workspaceFact },
               {
                 icon: Variable,
                 label: 'Variables',
@@ -854,7 +783,8 @@ export function TemplateDetail({
         {templateKey ? (
           <TabsContent value="output" keepMounted className="p-[var(--card-pad)]">
             {/* Renders nothing until the template's contract carries output settings. */}
-            <OutputSettingsPanel brandId={brandId} templateKey={templateKey} />
+            {/* The server resolves which binding holds this key; the page never asks. */}
+            <OutputSettingsPanel brandId={brandId} templateKey={templateKey} bindingId={null} />
           </TabsContent>
         ) : null}
         <TabsContent value="source" keepMounted className="p-[var(--card-pad)]">
@@ -881,10 +811,10 @@ export function TemplateDetail({
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1.5 text-xs">
             <dt className="text-muted-foreground">Template key</dt>
             <dd className="break-all font-mono">{templateKey ?? '—'}</dd>
-            <dt className="text-muted-foreground">Workspace</dt>
-            <dd className="break-all font-mono">
-              {run?.application ?? (chosenWorkspace ? renderWorkspaceLabel(chosenWorkspace) : '—')}
-            </dd>
+            {/* Where the build actually RAN, read off the run. Not a choice and not a control:
+                the Details tab is operator plumbing, and a build has exactly one home. */}
+            <dt className="text-muted-foreground">Rendered in</dt>
+            <dd className="break-all font-mono">{run?.application ?? '—'}</dd>
             <dt className="text-muted-foreground">Root table</dt>
             <dd className="break-all font-mono">{run?.root_table ?? '—'}</dd>
             <dt className="text-muted-foreground">Asset id</dt>

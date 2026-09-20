@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { AgentMentionReference, AiStudioComposerFrame } from '@continuum/contracts';
-import { composerHistoryMessageSchema } from '@continuum/contracts';
+import { CANVAS_NO_CHANGE_WARNING_CODE, composerHistoryMessageSchema } from '@continuum/contracts';
 import { parseComposerFrame } from '@/lib/ai-studio/composer/streamCanvasComposer';
 import {
   applyComposerFrame,
@@ -136,12 +136,40 @@ describe('applyComposerFrame', () => {
   it('surfaces warnings without failing the turn', () => {
     const state = fold([
       { type: 'composer.warning', data: { message: 'no compatible handle from image to video' } },
-      { type: 'response.done', data: { summary: 'Built it.' } },
+      { type: 'response.done', data: { summary: 'Built it.', changed: true } },
     ] as AiStudioComposerFrame[]);
 
     expect(state.status).toBe('done');
     expect(state.warnings).toHaveLength(1);
     expect(state.summary).toBe('Built it.');
+    expect(state.changed).toBe(true);
+  });
+
+  // A turn that answered without touching the canvas is COMPLETE. The Frontend used to
+  // ignore `changed` entirely, so it rendered exactly like a build — same prose, same
+  // node count, same Run button — with the no-change notice amber beside it as if
+  // something had gone wrong.
+  it('reads a turn that changed nothing as an answer, not a build', () => {
+    const state = fold([
+      { type: 'composer.graph', data: { nodeCount: 4, edgeCount: 3, addedNodeIds: [] } },
+      {
+        type: 'composer.warning',
+        data: {
+          message: 'Nothing on your canvas changed this turn.',
+          code: CANVAS_NO_CHANGE_WARNING_CODE,
+        },
+      },
+      {
+        type: 'response.done',
+        data: { summary: 'Your canvas already renders 4:5 — nothing to change.', changed: false },
+      },
+    ] as AiStudioComposerFrame[]);
+
+    expect(state.status).toBe('done');
+    expect(state.changed).toBe(false);
+    // The no-change code carries the same fact `changed: false` does. Rendering it as a
+    // warning too is what made a correct answer look like a failure.
+    expect(state.warnings).toEqual([]);
   });
 
   it('ends in error when the agent reports one', () => {

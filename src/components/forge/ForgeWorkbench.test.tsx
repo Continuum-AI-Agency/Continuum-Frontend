@@ -112,6 +112,7 @@ afterEach(() => {
 function workspaceTemplate(overrides: Record<string, unknown>) {
   return {
     templateId: Number(overrides.templateKey),
+    bindingId: '00000000-0000-4000-8000-0000000000b1',
     rootTable: 'tpl_starcraft_root',
     updatedAt: null,
     granted: false,
@@ -159,7 +160,8 @@ describe('ForgeWorkbench', () => {
       fetchedSources = [SOURCE];
       if (typeof poll === 'function') poll();
       expect(await screen.findByText('Parsed')).toBeTruthy();
-      expect(fetchRenderWorkspaces).toHaveBeenCalledTimes(1);
+      // ONE read: the server merges every binding, so the browser never enumerates workspaces.
+      expect(fetchRenderWorkspaces).not.toHaveBeenCalled();
       expect(discoverWorkspaceTemplates).toHaveBeenCalledTimes(1);
     } finally {
       interval.mockRestore();
@@ -176,7 +178,7 @@ describe('ForgeWorkbench', () => {
     await screen.findByRole('button', { name: 'Open Untitled template' });
 
     expect(fetchTemplateSources).toHaveBeenCalledTimes(1);
-    expect(fetchRenderWorkspaces).toHaveBeenCalledTimes(1);
+    expect(fetchRenderWorkspaces).not.toHaveBeenCalled();
     expect(discoverWorkspaceTemplates).toHaveBeenCalledTimes(1);
   });
 

@@ -176,14 +176,12 @@ export async function sendTemplateToForge(
   // Asked for, never inferred: the forge names this template's render table after it, capped at
   // 40 characters and never truncated, so a filename is not a safe default.
   templateName: string,
-  // Which workspace to build in. Omitted means the brand's default, which is the only choice
-  // when it has one — but a template belongs to exactly ONE workspace, so when there are several
-  // the person picks and we send it.
-  workspaceId?: string,
 ): Promise<TemplateSource> {
+  // No workspace: a build always lands in the brand's own space in the shared sub-app, which the
+  // Backend provisions on first use. Operator tools still choose; the product does not.
   const response = await authorizedFetch(`/api/ai-studio/templates/${assetId}/forge`, {
     method: 'POST',
-    body: JSON.stringify({ brandId, templateName, ...(workspaceId ? { workspaceId } : {}) }),
+    body: JSON.stringify({ brandId, templateName }),
   });
   return unwrap<TemplateSource>(response, 'Template Forge hand-off');
 }

@@ -125,6 +125,7 @@ const file = (fileName: string): ApiRenderOutput => ({
   assetId: null,
   versionId: null,
 });
+const sendTemplateToForge = mock(async (..._args: unknown[]) => SOURCE);
 const advanceTemplateForgeRun = mock(
   async (_brandId: string, _assetId: string, _action: string) => undefined,
 );
@@ -186,7 +187,7 @@ mock.module('@/lib/library/templateSources', () => ({
   fetchTemplateFonts: async () => fontReadiness,
   pushTemplateFonts,
   saveTemplateVariables: async () => undefined,
-  sendTemplateToForge: async () => SOURCE,
+  sendTemplateToForge,
   advanceTemplateForgeRun,
   // The History and Source revision panels render for real, from these. Mocking the panels
   // themselves would replace them for LineagePanel.test too: a multi-file Bun run shares mocks.
@@ -321,29 +322,27 @@ describe('TemplateDetail', () => {
     expect(opened).toContain(ASSET);
   });
 
-  test('a brand with two workspaces picks between names, not app names', async () => {
+  test('a brand with two workspaces is never asked to pick one', async () => {
+    // A build always lands in the brand's own space in the shared sub-app, so there is nothing
+    // to choose — the page used to offer a numbered "Workspace 1 / Workspace 2" select here,
+    // which asked the person about our deployment topology to name a template.
     workspaces = [CONTINUUM_WORKSPACE, PARSED_WORKSPACE];
     run = null;
     renderDetail();
-    // The build form lives in the BUILD check's detail.
     fireEvent.click(await screen.findByRole('button', { name: 'Build details' }));
-    await screen.findByRole('combobox', { name: 'Render workspace' });
-    openSelect('Render workspace');
-    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
-      'Workspace 1 (default)',
-      'Workspace 2',
-    ]);
-    expect(visibleText()).not.toMatch(/Continuum_app|Parsed_app/);
+    await screen.findByRole('textbox', { name: 'Template name' });
+    expect(screen.queryByRole('combobox', { name: 'Render workspace' })).toBeNull();
+    expect(visibleText()).not.toMatch(/Workspace \d/);
 
-    // The app name is still findable, inside Details, for whichever workspace is chosen.
-    chooseOption('Workspace 2');
-    await waitFor(() =>
-      expect(screen.getByRole('combobox', { name: 'Render workspace' }).textContent).toStartWith(
-        'Workspace 2',
-      ),
-    );
-    fireEvent.click(screen.getByRole('tab', { name: 'Details' }));
-    await waitFor(() => expect(visibleText()).toContain('Parsed_app'));
+    // And the build carries no workspace to the server.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Template name' }), {
+      target: { value: 'winter_promo' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Build the template' }));
+    await waitFor(() => expect(sendTemplateToForge).toHaveBeenCalledTimes(1));
+    // Three arguments, and none of them a workspace.
+    expect(sendTemplateToForge.mock.calls[0]).toHaveLength(3);
+    expect(sendTemplateToForge.mock.calls[0]?.[2]).toBe('winter_promo');
   });
 
   test('Render with this opens Render on the template', async () => {

@@ -14,6 +14,9 @@ import { useEffect } from 'react';
 const TEMPLATE = {
   key: '133',
   name: 'forge_bench_starcraft',
+  // The SAME binding the saved sets below carry: a set belongs to the binding its template
+  // lives in, and the grid now reads the binding off the chosen template.
+  bindingId: '44444444-4444-4444-8444-444444444444',
   environment: 'Continuum_app',
   contractVersion: '1',
   contractHash: 'hash',
@@ -169,6 +172,7 @@ const JOB = {
   error: null,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
+  bindingId: '00000000-0000-4000-8000-0000000000b1',
   environment: 'Continuum_app',
   fit: null,
   judge: null,
@@ -334,6 +338,24 @@ const press = async (name: string) => {
   const button = await screen.findByRole<HTMLButtonElement>('button', { name });
   await waitFor(() => expect(button.disabled).toBe(false));
   fireEvent.click(button);
+};
+
+/**
+ * Shuts every open menu level. A closed Base UI menu stays in the DOM with `data-closed` while it
+ * animates out, so this waits on `[data-open]`; a submenu needs one Escape per level, and a menu
+ * left open portals into the body and outlives `cleanup()`.
+ */
+const closeAnyMenu = async () => {
+  for (let level = 0; level < 3; level += 1) {
+    if (document.querySelectorAll('[role="menu"][data-open]').length === 0) break;
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    await waitFor(() =>
+      expect(document.querySelectorAll('[role="menu"][data-open]').length).toBeLessThan(3 - level),
+    );
+  }
+  await waitFor(() =>
+    expect(document.querySelectorAll('[role="menu"][data-open]').length).toBe(0),
+  );
 };
 
 const openMenu = async (trigger: string | RegExp, item: string | RegExp) => {
@@ -1231,7 +1253,7 @@ describe('RenderRequestsGrid', () => {
       'Rename',
       'Add variation',
       'Add row below',
-      'Vary with AI…',
+      'Generate with AI',
       'Copy',
       'Save as inputs',
       'Delete',
@@ -1249,6 +1271,70 @@ describe('RenderRequestsGrid', () => {
     await waitFor(() =>
       expect(screen.getAllByRole('columnheader', { name: /Price/ })).toHaveLength(1),
     );
+  });
+
+  test('“Generate with AI” drafts straight from the menu: no dialog, and pictures stay put', async () => {
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Row actions for Base' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Generate with AI' }));
+    const presets = (await screen.findAllByRole('menuitem')).map((item) => item.textContent?.trim());
+    expect(presets).toEqual(
+      expect.arrayContaining(['3 variations', '6 variations', '12 variations', 'With a brief…']),
+    );
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: '6 variations' }));
+    await waitFor(() => expect(suggestRowsMock).toHaveBeenCalled());
+    const sent = suggestRowsMock.mock.calls.at(-1)![0] as {
+      count: number;
+      varyKeys: string[];
+      prompt: string;
+      forksPerRow: number;
+      parent: { label: string };
+    };
+    expect(sent.count).toBe(6);
+    expect(sent.forksPerRow).toBe(0);
+    expect(sent.parent.label).toBe('Base');
+    // Nothing was typed, and a real brief still went out — an empty one would leave the model a
+    // bare "BRIEF:" header and the Library search nothing to go on.
+    expect(sent.prompt.trim().length).toBeGreaterThan(0);
+    // The picture slot is never in a no-typing draft: with no brief the Library search falls back
+    // to the slot's own label and returns arbitrary assets that pass every downstream check.
+    expect(sent.varyKeys).toEqual(['headline', 'price']);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  test('right-click a cell varies only that cell’s own key', async () => {
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+
+    fireEvent.contextMenu(document.querySelector<HTMLElement>('td[data-column-id="headline"]')!);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Vary Headline' }));
+    // Picking a preset closes the menu itself, so nothing is left portalled into the body.
+    fireEvent.click(await screen.findByRole('menuitem', { name: '3 variations' }));
+    await waitFor(() => expect(suggestRowsMock).toHaveBeenCalled());
+    // The cursor is the detection: one key, the one it was on.
+    expect((suggestRowsMock.mock.calls.at(-1)![0] as { varyKeys: string[] }).varyKeys).toEqual([
+      'headline',
+    ]);
+  });
+
+  test('a picture cell offers the brief instead of the presets', async () => {
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+
+    fireEvent.contextMenu(document.querySelector<HTMLElement>('td[data-column-id="hero"]')!);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Vary Hero' }));
+    // Disabled with the reason, never hidden — and the brief beneath it is the way through.
+    expect(
+      (await screen.findByRole('menuitem', { name: '3 variations' })).getAttribute('title'),
+    ).toBe('Pick pictures with a brief');
+    expect(
+      (await screen.findByRole('menuitem', { name: 'With a brief…' })).getAttribute('title'),
+    ).not.toBe('Pick pictures with a brief');
+    await closeAnyMenu();
+    expect(suggestRowsMock).not.toHaveBeenCalled();
   });
 
   test('a field already being typed in keeps the browser’s own menu', async () => {

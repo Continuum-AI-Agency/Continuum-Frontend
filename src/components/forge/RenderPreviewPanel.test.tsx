@@ -133,6 +133,7 @@ const CONTRACT = {
   template: {
     key: '133',
     name: 'forge_bench_starcraft',
+    bindingId: '00000000-0000-4000-8000-0000000000b1',
     environment: 'Continuum_app',
     contractHash: 'hash',
   },

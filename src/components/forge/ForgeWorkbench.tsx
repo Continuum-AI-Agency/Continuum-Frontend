@@ -34,7 +34,6 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
 import {
   discoverWorkspaceTemplates,
-  fetchRenderWorkspaces,
   fetchTemplateSources,
   renameTemplateSource,
   setTemplateAdoption,
@@ -53,29 +52,22 @@ import {
  * template nobody titled still reads as what it was built as. Everything else is "shared": discovery
  * ends at an intersection — what the workspace holds ∩ what this brand has been granted — so a brand
  * nobody granted anything sees an empty picker however much is really there, and this is that list
- * with the grant as a button. A brand with several workspaces reads each, and adoption names the one
- * a template came from.
+ * with the grant as a button.
+ *
+ * ONE read, whatever the brand's topology. This used to list the brand's workspaces and fan a
+ * discover call out per workspace from the browser; the server merges them now, and each row
+ * carries the binding it came from so adoption still names the right one.
  */
-type DiscoveredWorkspaceTemplate = WorkspaceTemplate & { workspaceId?: string };
-
-async function loadWorkspaceTemplates(brandId: string): Promise<DiscoveredWorkspaceTemplate[]> {
-  const workspaces = await fetchRenderWorkspaces(brandId).catch(() => []);
-  const reads = workspaces.length > 1 ? workspaces.map((workspace) => workspace.id) : [undefined];
-  return (
-    await Promise.all(
-      reads.map((workspaceId) =>
-        discoverWorkspaceTemplates(brandId, workspaceId)
-          .then((result) => result.items.map((item) => ({ ...item, workspaceId })))
-          // Advisory: a brand with no binding yet has no workspace to read, which is a normal state
-          // for a new tenant and must not put an error on the page.
-          .catch(() => []),
-      ),
-    )
-  ).flat();
+async function loadWorkspaceTemplates(brandId: string): Promise<WorkspaceTemplate[]> {
+  // Advisory: a brand with no binding yet has no workspace to read, which is a normal state for a
+  // new tenant and must not put an error on the page.
+  return discoverWorkspaceTemplates(brandId)
+    .then((result) => result.items)
+    .catch(() => []);
 }
 
 function splitWorkspaceTemplates(
-  items: DiscoveredWorkspaceTemplate[],
+  items: WorkspaceTemplate[],
   ownAssetIds: Set<string>,
 ): { shared: SharedTemplate[]; buildNames: Map<string, string> } {
   const buildNames = new Map<string, string>();
@@ -92,7 +84,7 @@ function splitWorkspaceTemplates(
       draft: item.draft,
       granted: item.granted,
       updatedAt: item.updatedAt,
-      ...(item.workspaceId ? { workspaceId: item.workspaceId } : {}),
+      workspaceId: item.bindingId,
     });
   }
   return { shared, buildNames };
@@ -233,7 +225,7 @@ export function ForgeWorkbench({
         brandId,
         templateKey: template.templateKey,
         enabled: !template.granted,
-        ...(template.workspaceId ? { workspaceId: template.workspaceId } : {}),
+        workspaceId: template.workspaceId,
       });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: forgeQueryKeys.workspaceTemplates(brandId) }),
