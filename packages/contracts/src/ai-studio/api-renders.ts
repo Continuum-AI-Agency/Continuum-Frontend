@@ -198,6 +198,27 @@ export const apiRenderTemplateSummarySchema = z
      */
     fontsMissing: z.number().int().nonnegative().nullable().default(null),
     /**
+     * How many of this template's parsed slots actually met a public variable.
+     *
+     * The join is by slug, so a designer renaming a layer does not break loudly — the variable
+     * arrives with `role: null` and `charBudget: null` and renders a naked field that looks
+     * exactly like a template with nothing to say about it. Counting the join is what turns that
+     * silence into a number a bench can fail on, and `unmatched` names the slots that were
+     * parsed and then dropped on the floor.
+     *
+     * Null means the enrichment never ran (legacy reflection, or no parse), which is not the
+     * same as a template whose every slot matched.
+     */
+    slotJoin: z
+      .object({
+        slots: z.number().int().nonnegative(),
+        matched: z.number().int().nonnegative(),
+        unmatched: z.array(z.string()).default([]),
+      })
+      .strict()
+      .nullable()
+      .default(null),
+    /**
      * What a person calls this template: the Library asset's title, else a prettified build name
      * (`templateDisplayName`). Null from a server too old to resolve one — fall back to `name`.
      */
