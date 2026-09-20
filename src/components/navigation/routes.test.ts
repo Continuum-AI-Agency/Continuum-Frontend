@@ -18,8 +18,8 @@ describe('navigation structure', () => {
       'Home',
       'Canvas',
       'Automations',
-      'Organic',
-      'Scale',
+      'Organic +',
+      'Performance +',
       'Library',
       'Brand Spy',
       'Forge',
@@ -36,28 +36,38 @@ describe('navigation structure', () => {
     ]);
   });
 
-  it('groups the sidebar into Hessian-style sections', () => {
+  // The sidebar is the three PRODUCTS, named the way they are sold. "Scale",
+  // "Intelligence" and "Storage" were internal words that appeared nowhere in a
+  // customer's head, and every destination now belongs to exactly one product.
+  it('groups the sidebar into the three products', () => {
     expect(APP_NAVIGATION_GROUPS.map((g) => g.label)).toEqual([
       null,
-      'Organic',
-      'Scale',
-      'Intelligence',
-      'Storage',
-      null,
+      'Organic +',
+      'Performance +',
+      'Creative +',
     ]);
+  });
+
+  it('gives every destination exactly one product, with nothing orphaned', () => {
+    const grouped = APP_NAVIGATION_GROUPS.flatMap((g) => g.items.map((i) => i.href));
+    expect(new Set(grouped).size).toBe(grouped.length);
+    for (const href of ['/ai-studio', '/library', '/competitor-spy', '/forge']) {
+      expect(grouped).toContain(href);
+    }
   });
 
   it('keeps Goals out of the global sidebar lead group', () => {
     const lead = APP_NAVIGATION_GROUPS[0];
     expect(lead.label).toBeNull();
-    expect(lead.items.map((i) => i.href)).toEqual(['/dashboard', '/ai-studio', '/automations']);
+    // Canvas moved into Creative +; the lead group is what is not a product.
+    expect(lead.items.map((i) => i.href)).toEqual(['/dashboard', '/automations']);
     expect(
       APP_NAVIGATION_GROUPS.flatMap((group) => group.items).some((i) => i.href === '/goals'),
     ).toBe(false);
   });
 
   it('nests Organic sub-routes with area-qualified labels', () => {
-    const organic = APP_NAVIGATION_GROUPS.find((g) => g.label === 'Organic');
+    const organic = APP_NAVIGATION_GROUPS.find((g) => g.label === 'Organic +');
     expect(organic?.items.map((i) => i.label)).toEqual([
       'Organic Agent',
       'Organic Analytics',
@@ -71,7 +81,7 @@ describe('navigation structure', () => {
   });
 
   it('nests Scale sub-routes as Jaina / Paid Analytics / Paid Optimization', () => {
-    const scale = APP_NAVIGATION_GROUPS.find((g) => g.label === 'Scale');
+    const scale = APP_NAVIGATION_GROUPS.find((g) => g.label === 'Performance +');
     expect(scale?.items.map((i) => i.label)).toEqual([
       'Jaina',
       'Paid Analytics',
@@ -98,19 +108,30 @@ describe('navigation structure', () => {
     expect(organicLabels.some((label) => scaleLabels.includes(label))).toBe(false);
   });
 
-  it('puts Library under a Storage section', () => {
-    const storage = APP_NAVIGATION_GROUPS.find((g) => g.label === 'Storage');
-    expect(storage?.items.map((i) => i.href)).toEqual(['/library']);
+  // Library, Canvas, Brand Spy and Forge are ONE product now. Library was its own
+  // "Storage" section and Brand Spy its own "Intelligence" one; both were internal
+  // words, and neither is a thing a customer buys.
+  it('gathers the creative surface under Creative +', () => {
+    const creative = APP_NAVIGATION_GROUPS.find((g) => g.label === 'Creative +');
+    expect(creative?.items.map((i) => i.label)).toEqual([
+      'Canvas',
+      'Library',
+      'Brand Spy',
+      'Forge',
+    ]);
+    expect(creative?.items.map((i) => i.href)).toEqual([
+      '/ai-studio',
+      '/library',
+      '/competitor-spy',
+      '/forge',
+    ]);
   });
 
-  it('puts Brand Spy under an Intelligence section between Scale and Storage', () => {
+  it('has no section named after an internal area', () => {
     const labels = APP_NAVIGATION_GROUPS.map((g) => g.label);
-    expect(labels.indexOf('Intelligence')).toBe(labels.indexOf('Scale') + 1);
-    expect(labels.indexOf('Storage')).toBe(labels.indexOf('Intelligence') + 1);
-
-    const intelligence = APP_NAVIGATION_GROUPS.find((g) => g.label === 'Intelligence');
-    expect(intelligence?.items.map((i) => i.label)).toEqual(['Brand Spy']);
-    expect(intelligence?.items.map((i) => i.href)).toEqual(['/competitor-spy']);
+    for (const internal of ['Scale', 'Intelligence', 'Storage', 'Organic']) {
+      expect(labels).not.toContain(internal);
+    }
   });
 
   it('exposes Forge as a real destination, not the old locked placeholder', () => {

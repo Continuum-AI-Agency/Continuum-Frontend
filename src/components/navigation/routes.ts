@@ -130,14 +130,14 @@ const BRAND_SPY: AppNavigationItem = {
 // In the sidebar these render as section headers; the flat entries keep their
 // canonical /organic and /scale hrefs so the breadcrumb resolves by pathname.
 const ORGANIC: AppNavigationItem = {
-  label: 'Organic',
+  label: 'Organic +',
   href: '/organic',
   icon: Sprout,
   accentColor: 'text-emerald-500',
   items: ORGANIC_ITEMS,
 };
 const SCALE: AppNavigationItem = {
-  label: 'Scale',
+  label: 'Performance +',
   href: '/scale',
   icon: TrendingUp,
   accentColor: 'text-amber-500',
@@ -163,15 +163,24 @@ const FORGE: AppNavigationItem = {
   description: 'Turn an After Effects project into a template you can render.',
 };
 
-// The canonical sidebar IA: an unlabeled lead group, then one labeled section
-// per product area, Storage, and Forge.
+// The canonical sidebar IA: the three PRODUCTS, each named the way it is sold.
+//
+// The sidebar used to be organised by internal area — "Scale", "Intelligence", "Storage" —
+// which are words that exist inside the company and nowhere in a customer's head. The three
+// products are Organic +, Performance + and Creative +, so those are the three sections, and
+// every destination belongs to exactly one of them.
+//
+// Home and Automations stay unlabeled above: they are not a product, they are where you land
+// and where cross-product workflows live.
+//
+// Brand Spy sits in Creative + because what it actually returns is competitor CREATIVE —
+// the ads themselves, which feed briefs and angles. It informs paid decisions too, so if it
+// reads better under Performance + it is a one-line move.
 export const APP_NAVIGATION_GROUPS: AppNavigationGroup[] = [
-  { label: null, items: [HOME, CANVAS, AUTOMATIONS] },
-  { label: 'Organic', items: ORGANIC_ITEMS },
-  { label: 'Scale', items: SCALE_ITEMS },
-  { label: 'Intelligence', items: [BRAND_SPY] },
-  { label: 'Storage', items: [LIBRARY] },
-  { label: null, items: [FORGE] },
+  { label: null, items: [HOME, AUTOMATIONS] },
+  { label: 'Organic +', items: ORGANIC_ITEMS },
+  { label: 'Performance +', items: SCALE_ITEMS },
+  { label: 'Creative +', items: [CANVAS, LIBRARY, BRAND_SPY, FORGE] },
 ];
 
 // Flat list of navigable areas for non-grouped consumers (breadcrumb, command
