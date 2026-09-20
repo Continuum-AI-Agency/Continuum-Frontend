@@ -5,6 +5,7 @@
 export * from './account-chart';
 export * from './account-card-html';
 export * from './account-strategy';
+export * from './insight-approval';
 export * from './jaina-card';
 // One normalized row of public.continuum_action_stream, and the fold that makes a change
 // and its undo read as ONE entry. Shared by every surface that narrates what we did.
