@@ -5,4 +5,4 @@
 linker = "hoisted"
 
 [test]
-preload = ["../test/setup-bun-test.ts", "./bun-test-setup.ts"]
+preload = ["./test/setup-bun-test.ts", "./bun-test-setup.ts"]
