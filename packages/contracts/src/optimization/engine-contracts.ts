@@ -62,6 +62,9 @@ export const OptimizationObjectiveSchema = z.enum([
   'thruplays',
   'post_engagement',
   'clicks',
+  // A conversion the business names itself — see custom-conversion.ts. It carries a
+  // descriptor and borrows a measured objective's profile; it never invents constants.
+  'custom',
 ]);
 
 export const AdSetStatusSchema = z.enum([

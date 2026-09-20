@@ -431,7 +431,32 @@ export const RESULT_RUNG: Record<OptimizationObjective, ResultRung> = {
   awareness: 'attention',
   thruplays: 'attention',
   post_engagement: 'attention',
+
+  /**
+   * A placeholder, and the only entry here that is not the truth.
+   *
+   * A custom conversion has no fixed rung — it sits wherever its ANALOG sits, and the analog
+   * is per-account. `person` is the conservative default because it is the rung that asks for
+   * a close rate before it trusts a margin. Resolve it properly with `resultRungFor()`, which
+   * takes the descriptor; reading this entry directly for a custom objective is a bug.
+   */
+  custom: 'person',
 };
+
+/**
+ * The rung this objective's results actually sit on.
+ *
+ * Use this, never `RESULT_RUNG[objective]`, wherever a custom conversion can appear: a custom
+ * event carrying revenue belongs on `money` and one fired by a CRM belongs on `person`, and
+ * the difference decides whether the economics guard asks for a margin or a close rate.
+ */
+export function resultRungFor(
+  objective: OptimizationObjective,
+  analog?: OptimizationObjective | null,
+): ResultRung {
+  if (objective === 'custom' && analog && analog !== 'custom') return RESULT_RUNG[analog];
+  return RESULT_RUNG[objective];
+}
 
 /**
  * What a detector does under one objective.

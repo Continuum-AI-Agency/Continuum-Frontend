@@ -208,6 +208,17 @@ const OPTIMIZATION_METRIC_DEFINITIONS: Record<
     targetLabel: 'Target cost per engagement',
     denominatorMultiplier: 1,
   },
+  custom: {
+    objective: 'custom',
+    // The KPI field is the analog's; the LABELS below are fallbacks a descriptor replaces.
+    // A card that renders "Conversions" for an event the business calls "Demos booked" is
+    // the mislabelling this objective exists to end, so the descriptor always wins.
+    kpiField: 'purchases',
+    resultLabel: 'Conversions',
+    costLabel: 'Cost per conversion',
+    targetLabel: 'Target cost per conversion',
+    denominatorMultiplier: 1,
+  },
   clicks: {
     objective: 'clicks',
     kpiField: 'clicks',
