@@ -85,6 +85,12 @@ export type JainaUIDataTypes = {
    * part would render as an empty message every fifteen seconds for the length of the run.
    */
   'jaina-notice': Record<string, unknown>;
+  /**
+   * An optimizer card, CITED. The payload addresses a candidate in a stored read and carries
+   * NO figures, because there is no field for one — the digit gate becomes a property of the
+   * wire rather than a regex over the model's prose.
+   */
+  'jaina-optimizer-card': Record<string, unknown>;
 };
 
 /** Jaina's tools are discovered at run time, so they cross the wire as DYNAMIC tool parts. */
@@ -113,4 +119,5 @@ export const JAINA_UI_DATA_PART = {
   checkpointSummary: 'data-jaina-checkpoint-summary',
   plan: 'data-jaina-plan',
   notice: 'data-jaina-notice',
+  optimizerCard: 'data-jaina-optimizer-card',
 } as const satisfies Record<string, JainaUIDataPartType>;
