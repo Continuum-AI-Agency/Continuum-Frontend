@@ -14,6 +14,31 @@ import { slotPlacementSchema } from '../ai-studio/api-render-fit';
 import { apiRenderVariableKindSchema } from '../ai-studio/api-renders';
 import { type FontLicenceScope, fontLicenceScopeSchema } from './fonts';
 
+/**
+ * The largest project file the Forge can actually accept, in bytes — the ONE number.
+ *
+ * There are four ceilings on this path and only the smallest is ever real:
+ *
+ * | Ceiling | Value | Binding? |
+ * |---|---|---|
+ * | Supabase **project-global** upload limit (Settings → Storage) | 50 MB | **yes, today** |
+ * | `storage.buckets.file_size_limit` for `media-source` | 5 GB | no — the global silently overrides it |
+ * | Template Forge's own package limit | 250 MB | only once the global is raised above it |
+ * | `library-upload`'s register-time refusal | this constant | mirrors it by hand |
+ *
+ * The project-global cap is readable from neither SQL nor the browser — only the Management
+ * API — which is why it was copied by hand into the drop zone and then drifted from the two
+ * bench scripts and the edge function, giving four different answers to one question.
+ *
+ * So this number is NOT trusted: `forge:intake:e2e:bench` proves the effective ceiling
+ * empirically by pushing one byte over it and requiring storage to refuse. Change this when
+ * the dashboard changes and let the bench tell you if you are wrong.
+ */
+export const FORGE_PROJECT_FILE_MAX_BYTES = 50 * 1024 * 1024;
+
+/** The same ceiling in whole MB, for the sentence a refusal shows a person. */
+export const FORGE_PROJECT_FILE_MAX_MB = Math.floor(FORGE_PROJECT_FILE_MAX_BYTES / (1024 * 1024));
+
 export const templateSourceFamilySchema = z.enum([
   'after_effects',
   'after_effects_package',

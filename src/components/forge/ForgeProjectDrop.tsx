@@ -1,6 +1,6 @@
 'use client';
 
-import type { TemplateSourceSummary } from '@continuum/contracts';
+import { FORGE_PROJECT_FILE_MAX_MB, type TemplateSourceSummary } from '@continuum/contracts';
 import { FileUp } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -10,10 +10,6 @@ export const FORGE_PROJECT_ACCEPT = '.aep,.aepx,.aet,.zip';
 
 /** The Library upload records no checksum above this size, so a bigger file has nothing to match. */
 const HASHED_UP_TO_BYTES = 64 * 1024 * 1024;
-
-// ponytail: the project-wide Supabase storage cap (Settings → Storage), read off the dashboard on
-// 2026-09-17 — the browser cannot read it. Change this number when that setting changes.
-const STORAGE_UPLOAD_LIMIT_MB = 50;
 
 /** sha256 hex of a dropped file, the same digest the upload stores as the source's checksum. */
 export async function fileSha256(file: Blob): Promise<string | null> {
@@ -61,7 +57,7 @@ export function uploadRefusal(
 ): string | null {
   if (!error || !/exceeded the maximum allowed size|failed \(413\)/i.test(error)) return null;
   const megabytes = Math.max(1, Math.round(file.sizeBytes / (1024 * 1024)));
-  return `${file.name} is ${megabytes} MB, over the ${STORAGE_UPLOAD_LIMIT_MB} MB upload limit, so it was not uploaded. Ask an admin to raise the limit.`;
+  return `${file.name} is ${megabytes} MB, over the ${FORGE_PROJECT_FILE_MAX_MB} MB upload limit, so it was not uploaded. Ask an admin to raise the limit.`;
 }
 
 export function partitionForgeProjectFiles(files: File[]): { accepted: File[]; rejected: File[] } {
