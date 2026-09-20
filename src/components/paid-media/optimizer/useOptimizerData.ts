@@ -27,6 +27,7 @@ import {
   type ApplyRunResponse,
   ApplyRunResponseSchema,
   type AudienceProposalRow,
+  accountCandidateSchema,
   adsetCreativeWinRateRowSchema,
   audienceProposalRowSchema,
   type ConvertCboRequest,
@@ -165,6 +166,8 @@ export const optimizerQueryKeys = {
   audienceProposals: (brandId: string) => ['optimizer', 'audience-proposals', brandId] as const,
   cpaSeries: (portfolioId: string, limit = DEFAULT_CPA_SERIES_LIMIT) =>
     ['optimizer', 'efficiency-series', portfolioId, limit] as const,
+  accountRead: (brandId: string, adAccountId: string) =>
+    ['optimizer', 'account-read', brandId, adAccountId] as const,
   spendByObjective: (brandId: string, days: number) =>
     ['optimizer', 'spend-by-objective', brandId, days] as const,
   renewals: (brandId: string) => ['optimizer', 'renewals', brandId] as const,
@@ -1168,6 +1171,59 @@ async function fetchSpendByObjective(
 
 /** Daily spend per portfolio objective across the brand's enrolled ad sets, off the latest
  *  snapshot daily series (no Meta call). Feeds the Overview's spend-by-objective stream. */
+/**
+ * The account read: one strategic brief spanning every portfolio of an ad account.
+ *
+ * Tolerant on purpose. The row is written by a worker that may not have run yet, so a
+ * missing read is an ABSENT screen section, never an error — and a row whose shape has
+ * moved on is dropped rather than taking the page down with it.
+ */
+const AccountReadEnvelopeSchema = z
+  .object({
+    utc_day: z.string().nullable().default(null),
+    read: z
+      .object({
+        candidates: z.array(accountCandidateSchema).catch([]),
+        guards: z.array(accountCandidateSchema).catch([]),
+        narrative: z.string().catch(''),
+        lead_reason: z.string().nullable().catch(null),
+        justification_if_not_max: z.string().nullable().catch(null),
+        conflicts: z.array(z.object({ a: z.string(), b: z.string(), why: z.string() })).catch([]),
+        starved: z.array(z.object({ detector: z.string(), missing: z.string() })).catch([]),
+        scale_per_day: z.number().nullable().catch(null),
+        currency: z.string().nullable().catch(null),
+        model: z.string().catch('deterministic'),
+      })
+      .nullable()
+      .catch(null),
+    ready_at: z.string().nullable().default(null),
+  })
+  .nullable();
+
+export type AccountReadEnvelope = z.infer<typeof AccountReadEnvelopeSchema>;
+
+async function fetchAccountRead(
+  brandId: string,
+  adAccountId: string,
+): Promise<AccountReadEnvelope> {
+  const { data, error } = await getClient().rpc('optimizer_get_account_read', {
+    p_brand_id: brandId,
+    p_ad_account_id: adAccountId,
+  });
+  if (error) throw new Error('optimizer_get_account_read unreachable');
+  return AccountReadEnvelopeSchema.catch(null).parse(data ?? null);
+}
+
+export function useOptimizerAccountRead(brandId: string, adAccountId: string | null) {
+  return useOptimizerRead({
+    queryKey: optimizerQueryKeys.accountRead(brandId, adAccountId ?? 'none'),
+    queryFn: () => fetchAccountRead(brandId, adAccountId as string),
+    empty: null as AccountReadEnvelope,
+    enabled: Boolean(brandId && adAccountId),
+    staleTime: FIVE_MINUTES,
+  });
+}
+
 export function useOptimizerSpendByObjective(brandId: string, days = 14) {
   return useOptimizerRead({
     queryKey: optimizerQueryKeys.spendByObjective(brandId, days),

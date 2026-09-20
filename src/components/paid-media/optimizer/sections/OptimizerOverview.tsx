@@ -18,7 +18,8 @@ import { KpiTile } from '../components/KpiTile';
 import { StatusChip, type StatusTone } from '../components/StatusChip';
 import { formatCurrency, humanize } from '../format';
 import { pendingWorkCount } from '../reportModel';
-import { useOptimizerSpendByObjective } from '../useOptimizerData';
+import { useOptimizerAccountRead, useOptimizerSpendByObjective } from '../useOptimizerData';
+import { AccountRead } from './account/AccountRead';
 import { OptimizerPanel } from './OptimizerPanel';
 import { PortfolioRowCard } from './PortfolioRowCard';
 
@@ -59,6 +60,8 @@ export function spendVsPlan(
 
 type OptimizerOverviewProps = {
   brandId: string;
+  /** The account the read is about. Null while no account is selected. */
+  adAccountId: string | null;
   portfolios: PortfolioListItem[];
   pendingCount: number;
   currency?: string | null;
@@ -70,6 +73,7 @@ type OptimizerOverviewProps = {
 
 export function OptimizerOverview({
   brandId,
+  adAccountId,
   portfolios,
   pendingCount,
   currency,
@@ -82,6 +86,9 @@ export function OptimizerOverview({
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [objectiveFilter, setObjectiveFilter] = useState<string | null>(null);
   const spendQuery = useOptimizerSpendByObjective(brandId, STREAM_DAYS);
+  // The account read opens the screen when the worker has written one. Absent is absent:
+  // no spinner, no empty shell — the rest of the overview stands on its own.
+  const accountRead = useOptimizerAccountRead(brandId, adAccountId);
 
   const dailyTotal = portfolios.reduce((sum, portfolio) => sum + (portfolio.daily_total ?? 0), 0);
   const autopilot = portfolios.filter((portfolio) => portfolio.apply_mode === 'autopilot');
@@ -99,8 +106,20 @@ export function OptimizerOverview({
     : portfolios;
   const sorted = sortPortfolios(visible, sortKey, sortDir);
 
+  const read = accountRead.data?.read ?? null;
+
   return (
     <div className="space-y-3">
+      {read && (read.candidates.length > 0 || read.guards.length > 0) ? (
+        <AccountRead
+          candidates={[...read.candidates, ...read.guards]}
+          currency={read.currency ?? currency ?? null}
+          dailySpend={read.scale_per_day ?? dailyTotal}
+          onOpenPortfolio={onSelectPortfolio}
+          source={read.model === 'deterministic' ? 'fallback' : 'brief'}
+          starved={read.starved as never}
+        />
+      ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-semibold text-foreground">
           {portfolios.length} {portfolios.length === 1 ? 'portfolio' : 'portfolios'} ·{' '}
