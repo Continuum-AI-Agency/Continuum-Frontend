@@ -219,8 +219,20 @@ function variants(value: number): string[] {
   return [...out].map((v) => v.replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1'));
 }
 
-export function allowedNumberTokens(figures: readonly (number | null | undefined)[]): Set<string> {
+/** Numbers already written in packet prose (a quoted reason, an impact basis, a pacing
+ *  note) may be quoted back verbatim. */
+export function numberTokensIn(texts: readonly (string | null | undefined)[]): string[] {
+  return texts.flatMap((t) => (t ? numberTokens(t) : []));
+}
+
+export function allowedNumberTokens(
+  figures: readonly (number | null | undefined)[],
+  quotedTexts: readonly (string | null | undefined)[] = [],
+): Set<string> {
   const allowed = new Set<string>();
+  for (const token of numberTokensIn(quotedTexts)) {
+    allowed.add(token.replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1'));
+  }
   for (const figure of figures) {
     if (figure == null || !Number.isFinite(figure)) continue;
     for (const v of variants(figure)) allowed.add(v);
