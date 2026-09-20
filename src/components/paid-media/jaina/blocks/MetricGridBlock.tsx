@@ -4,6 +4,7 @@ import { paidCurrencyCodeSchema } from '@continuum/contracts';
 import { MetricStrip, type MetricStripItem } from '@/components/shared/MetricStrip';
 import { formatValue, resolveMetricDisplayFormat } from '@/lib/jaina/formatValue';
 import type { MetricGridBlockV2, MetricItemV2 } from '@/lib/jaina/schemas';
+import { fallsAreGood, judgeValue } from '../reading';
 import { EvidenceTooltip } from './EvidenceTooltip';
 
 type MetricGridBlockProps = { block: MetricGridBlockV2; isStreaming: boolean };
@@ -32,6 +33,11 @@ function toStripItem(metric: MetricItemV2): MetricStripItem {
             percentBasis: metric.percent_basis ?? null,
           }),
     deltaPct: resolveDeltaPct(metric),
+    goodWhenDown: fallsAreGood(metric.label),
+    // The contract has carried `severity` with four values all along and this block threw it
+    // away. It is the model's own judgement of the figure; nothing downstream is entitled to
+    // re-derive it.
+    judgement: judgeValue(metric.severity),
   };
 }
 

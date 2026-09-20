@@ -1,4 +1,5 @@
 import { Fragment } from 'react';
+import { type Judgement, JUDGEMENT_LABEL, JUDGEMENT_TEXT } from '@/components/paid-media/jaina/reading';
 import { DeltaBadge } from '@/components/shared/DeltaBadge';
 import { cn } from '@/lib/utils';
 
@@ -6,6 +7,14 @@ export type MetricStripItem = {
   label: string;
   value: string;
   deltaPct?: number;
+  /** True when a FALLING value is the good outcome. Decides the delta's colour, not its arrow. */
+  goodWhenDown?: boolean;
+  /**
+   * What something judged this figure to be. Colours the VALUE — separately from the delta,
+   * because a metric can sit at a healthy level while moving the wrong way, and one colour
+   * for both loses exactly that.
+   */
+  judgement?: Judgement;
   tone?: 'default' | 'muted' | 'danger';
   // Overrides the value's text color (e.g. a hook-rate health gradient) while
   // keeping the shared label/value/delta layout.
@@ -37,15 +46,22 @@ export function MetricStrip({ items, live = false }: { items: MetricStripItem[];
             <span
               className={cn(
                 'font-mono text-sm font-semibold tabular-nums',
-                item.tone === 'muted' && 'text-muted-foreground',
-                item.tone === 'danger' && 'text-destructive',
-                (!item.tone || item.tone === 'default') && 'text-foreground',
+                item.judgement
+                  ? JUDGEMENT_TEXT[item.judgement]
+                  : item.tone === 'muted'
+                    ? 'text-muted-foreground'
+                    : item.tone === 'danger'
+                      ? 'text-destructive'
+                      : 'text-foreground',
               )}
               style={item.valueColor ? { color: item.valueColor } : undefined}
+              title={item.judgement ? `${item.label}: ${JUDGEMENT_LABEL[item.judgement]}` : undefined}
             >
               {item.value}
             </span>
-            {typeof item.deltaPct === 'number' ? <DeltaBadge value={item.deltaPct} /> : null}
+            {typeof item.deltaPct === 'number' ? (
+              <DeltaBadge goodWhenDown={item.goodWhenDown ?? false} value={item.deltaPct} />
+            ) : null}
           </span>
         </Fragment>
       ))}

@@ -15,15 +15,13 @@ import {
   type Variants,
 } from 'motion/react';
 import * as React from 'react';
-import { Sparkline } from '@/components/organic/cards/Sparkline';
-import { AccountChartView } from '../account/AccountChartView';
-import { DeltaBadge } from '@/components/shared/DeltaBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '../../format';
+import { AccountChartView } from '../account/AccountChartView';
 import { asOfLine } from '../recQueueModel';
-import type { HeroCta, HeroTile, HeroView } from './heroModel';
+import type { HeroCta, HeroView } from './heroModel';
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
@@ -63,57 +61,6 @@ function CountUp({
     return () => controls.stop();
   }, [value, play, mv]);
   return <>{format(shown)}</>;
-}
-
-function Tile({
-  tile,
-  currency,
-  play,
-}: {
-  tile: HeroTile;
-  currency: string | null;
-  play: boolean;
-}) {
-  const format = (n: number) =>
-    tile.format === 'currency'
-      ? formatCurrency(n, currency)
-      : Math.round(n).toLocaleString('en-US');
-  const deltaPct = tile.delta != null ? Math.round(tile.delta * 100) : null;
-  const tone: 'positive' | 'negative' | 'flat' =
-    deltaPct == null || deltaPct === 0
-      ? 'flat'
-      : deltaPct > 0 !== tile.goodWhenDown
-        ? 'positive'
-        : 'negative';
-  return (
-    <motion.div
-      className="flex min-w-0 items-center gap-3 rounded-lg border border-border/70 bg-card p-3"
-      variants={tileVariants}
-    >
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="truncate text-2xs text-muted-foreground uppercase tracking-wide">
-          {tile.label}
-        </span>
-        <div className="flex items-baseline gap-2">
-          <span className="font-mono font-semibold text-2xl text-foreground leading-none tabular-nums">
-            {tile.value == null ? '—' : <CountUp format={format} play={play} value={tile.value} />}
-          </span>
-          {deltaPct != null ? <DeltaBadge value={deltaPct} /> : null}
-        </div>
-        {tile.note ? <span className="text-3xs text-muted-foreground">{tile.note}</span> : null}
-      </div>
-      {tile.series.length > 1 ? (
-        <Sparkline
-          ariaLabel={`${tile.label} trend`}
-          className="ml-auto shrink-0"
-          height={32}
-          tone={tone}
-          values={tile.series}
-          width={96}
-        />
-      ) : null}
-    </motion.div>
-  );
 }
 
 const TIER_VARIANT: Record<ImpactTier, 'destructive' | 'warning' | 'muted'> = {
