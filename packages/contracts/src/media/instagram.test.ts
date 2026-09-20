@@ -19,8 +19,10 @@ describe("instagramTopMediaRequestSchema", () => {
     if (parsed.success) expect(parsed.data.limit).toBe(50);
   });
 
-  it("rejects a missing username", () => {
-    expect(instagramTopMediaRequestSchema.safeParse({ brandId: BRAND_ID }).success).toBe(false);
+  it("accepts a missing username, which means the brand's own account", () => {
+    // `username` became optional deliberately: with no handle the Backend resolves the
+    // brand's OWN connected Instagram account, so omitting it is a request, not an error.
+    expect(instagramTopMediaRequestSchema.safeParse({ brandId: BRAND_ID }).success).toBe(true);
   });
 
   it("rejects a non-uuid brandId", () => {

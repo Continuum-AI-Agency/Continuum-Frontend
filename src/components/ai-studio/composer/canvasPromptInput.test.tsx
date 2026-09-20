@@ -13,6 +13,17 @@ class TestResizeObserver {
 
 globalThis.ResizeObserver ??= TestResizeObserver as unknown as typeof ResizeObserver;
 
+// The scroll area settles its thumb by waiting on `Element.getAnimations`, which the test
+// DOM does not implement. Nothing here animates, so an empty list is the truthful answer —
+// and without it the whole render throws before a single assertion runs.
+if (typeof Element !== 'undefined' && !('getAnimations' in Element.prototype)) {
+  Object.defineProperty(Element.prototype, 'getAnimations', {
+    configurable: true,
+    writable: true,
+    value: () => [],
+  });
+}
+
 const skill: Skill = {
   id: 'skill-1',
   brandId: 'brand-1',
