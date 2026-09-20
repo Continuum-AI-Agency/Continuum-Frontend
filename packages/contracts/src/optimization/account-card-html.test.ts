@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'bun:test';
-import { accountCardHtml, cardFigures } from './account-card-html';
-import { type AccountCandidate, accountCandidateSchema } from './account-strategy';
+import {
+  accountCardHtml,
+  CARD_COMPOSITIONS,
+  cardFigures,
+  clipLine,
+  COMPOSITION_BY_DETECTOR,
+  LINE_BUDGET,
+} from './account-card-html';
+import { type AccountCandidate, accountCandidateSchema, accountDetectorSchema } from './account-strategy';
 
 const candidate = (over: Partial<AccountCandidate> = {}): AccountCandidate =>
   accountCandidateSchema.parse({
@@ -195,21 +202,100 @@ describe('accountCardHtml — every shape draws its own marks', () => {
     });
   }
 
-  it('renders the sentence alone when there is no chart, rather than an empty frame', () => {
-    const html = accountCardHtml(candidate({ chart: null }), opts);
-    expect(html).toContain('200/day moved');
+  it('renders the line alone when there is no chart, rather than an empty frame', () => {
+    const html = accountCardHtml(candidate({ chart: null }), { ...opts, line: 'no chart for this one' });
+    expect(html).toContain('no chart for this one');
     expect(html).not.toContain('<svg');
   });
 });
 
 describe('accountCardHtml — hostile input cannot break out', () => {
   it('escapes a label that tries to close the document', () => {
-    const html = accountCardHtml(
-      candidate({ impact_basis: '</style><script>alert(1)</script>' }),
-      { ...opts, title: '"><img onerror=x>' },
-    );
+    const html = accountCardHtml(candidate(), {
+      ...opts,
+      title: '"><img onerror=x>',
+      line: '</style><script>alert(1)</script>',
+    });
     expect(html).not.toContain('<script>');
     expect(html).not.toContain('<img');
     expect(html).toContain('&lt;script&gt;');
+  });
+});
+
+describe('twenty-five detectors, twenty-five compositions', () => {
+  it('assigns every detector a layout, with none left out', () => {
+    for (const detector of accountDetectorSchema.options) {
+      expect(COMPOSITION_BY_DETECTOR[detector]).toBeDefined();
+      expect(CARD_COMPOSITIONS).toContain(COMPOSITION_BY_DETECTOR[detector]);
+    }
+    expect(Object.keys(COMPOSITION_BY_DETECTOR)).toHaveLength(25);
+  });
+
+  it('uses every layout it defines — an unused composition is dead code', () => {
+    const used = new Set(Object.values(COMPOSITION_BY_DETECTOR));
+    for (const composition of CARD_COMPOSITIONS) expect(used.has(composition)).toBe(true);
+  });
+
+  it('spreads them, so a screen of cards does not look like one card repeated', () => {
+    const counts = new Map<string, number>();
+    for (const c of Object.values(COMPOSITION_BY_DETECTOR)) counts.set(c, (counts.get(c) ?? 0) + 1);
+    // no layout may carry more than a fifth of the catalogue
+    for (const n of counts.values()) expect(n).toBeLessThanOrEqual(5);
+  });
+
+  it('renders every detector without a hole in it', () => {
+    for (const detector of accountDetectorSchema.options) {
+      const html = accountCardHtml(candidate({ detector, id: `${detector}:x` }), {
+        ...opts,
+        line: 'a short line under the budget',
+      });
+      expect(html).not.toContain('NaN');
+      expect(html).not.toContain('undefined');
+      expect(html).not.toContain('Infinity');
+      expect(html).toContain(`· ${detector}`);
+      expect(html).toContain('class="fr c-');
+    }
+  });
+
+  it('keeps the two guards in the filled head, where they still interrupt', () => {
+    expect(COMPOSITION_BY_DETECTOR.measurement_integrity).toBe('banner');
+    const banners = Object.values(COMPOSITION_BY_DETECTOR).filter((c) => c === 'banner');
+    expect(banners.length).toBeLessThanOrEqual(3);
+  });
+});
+
+describe('the copy budget — what wrecked the first pass', () => {
+  it('clips a long line on a word boundary', () => {
+    const long =
+      '200/day moved from a portfolio at 90 to one at 60, which is 33% cheaper over the window';
+    const clipped = clipLine(long);
+    expect(clipped.length).toBeLessThanOrEqual(LINE_BUDGET);
+    expect(clipped.endsWith('…')).toBe(true);
+    expect(clipped).not.toContain('  ');
+  });
+
+  it('leaves a short line exactly alone', () => {
+    expect(clipLine('two ad sets, no results')).toBe('two ad sets, no results');
+  });
+
+  it('collapses the whitespace a model or a detector may have left', () => {
+    expect(clipLine('  a   line\nwith  breaks ')).toBe('a line with breaks');
+  });
+
+  it('never lets a detector’s hover prose onto the frame by default', () => {
+    // impact_basis is written for a tooltip. It became the largest block on the frame once.
+    const c = candidate({ impact_basis: 'a very long basis line that belongs on the screen' });
+    const html = accountCardHtml(c, opts);
+    expect(html).not.toContain('a very long basis line');
+  });
+});
+
+describe('every shape moves — a still frame in an animated set reads as broken', () => {
+  it('gives each of the seven a moving element', () => {
+    const markers = ['a-flow', 'a-reach', 'a-breathe', 'a-halo', 'a-widen', 'a-nudge', 'a-drift'];
+    // Each marker must be reachable: the CSS defines it and at least one shape emits it.
+    for (const marker of markers) {
+      expect(accountCardHtml(candidate(), opts)).toContain(`.${marker}{animation`);
+    }
   });
 });
