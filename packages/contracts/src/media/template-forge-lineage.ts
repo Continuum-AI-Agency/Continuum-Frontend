@@ -29,7 +29,15 @@ export const FORGE_GIT_OPS = ['blob', 'commit', 'branch', 'tag', 'note', 'worktr
 export const forgeGitOpSchema = z.enum(FORGE_GIT_OPS);
 export type ForgeGitOp = z.infer<typeof forgeGitOpSchema>;
 
-export const FORGE_FACETS = ['colour', 'type', 'layout', 'animation', 'legal', 'audio', 'footage'] as const;
+export const FORGE_FACETS = [
+  'colour',
+  'type',
+  'layout',
+  'animation',
+  'legal',
+  'audio',
+  'footage',
+] as const;
 export const forgeFacetSchema = z.enum(FORGE_FACETS);
 export type ForgeFacet = z.infer<typeof forgeFacetSchema>;
 
@@ -155,9 +163,46 @@ export const forgeLineageViewSchema = z
      * to assume it is current.
      */
     cachedAt: z.string().nullable().default(null),
+    /**
+     * Why this view is empty, when the reason is something other than "no forge configured".
+     *
+     * `connected: false` was carrying two unrelated meanings and the UI rendered both as
+     * "Template Forge is not configured". A brand whose mirror row failed to READ was told its
+     * forge was switched off — an answer that sends someone to check settings that are fine.
+     *
+     *   `null`                  — nothing went wrong; read `connected` as usual.
+     *   `mirror_unreadable`     — the mirror row could not be read. supabase-js RESOLVES with
+     *                             an error object rather than throwing, so this case reached
+     *                             the caller as an ordinary empty result for as long as the
+     *                             reader existed.
+     *   `mirror_wrong_master`   — a row exists, built for a different gospel. Withheld on
+     *                             purpose: a tree for another design is worse than no tree,
+     *                             because it looks like an answer.
+     */
+    unavailable: z
+      .enum(['mirror_unreadable', 'mirror_wrong_master'])
+      .nullable()
+      .default(null),
   })
   .strict();
 export type ForgeLineageView = z.infer<typeof forgeLineageViewSchema>;
+
+/**
+ * May a mirrored tree built for `cachedMaster` be shown for a template whose gospel is
+ * `liveMaster`? Only when both are known AND equal.
+ *
+ * The old rule was `master && cached.master && master !== cached.master` — which SKIPPED the
+ * comparison whenever either side was null, so a cache row with no master was served for any
+ * template at all. A null on either side means nobody can prove the tree belongs to this
+ * design, and an unprovable tree is exactly the thing that must not be rendered as fact.
+ */
+export function forgeLineageMirrorUsable(
+  liveMaster: string | null | undefined,
+  cachedMaster: string | null | undefined,
+): boolean {
+  if (!liveMaster || !cachedMaster) return false;
+  return liveMaster === cachedMaster;
+}
 
 export function forgeLineageHasReason(node: ForgeLineageNode, reason: string): boolean {
   if (node.reason === reason) return true;

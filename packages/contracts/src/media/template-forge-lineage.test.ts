@@ -2,11 +2,12 @@ import { describe, expect, it } from 'bun:test';
 import {
   FORGE_REASONS,
   forgeLineageHasReason,
-  forgeLineageVariantOfAttachment,
   forgeLineageNodeSchema,
+  forgeLineageVariantOfAttachment,
   forgeLineageViewSchema,
   forgeReasonSchema,
   forgeWorktreeSchema,
+  forgeLineageMirrorUsable,
 } from './template-forge-lineage';
 
 const ROOT = {
@@ -155,5 +156,26 @@ describe('forgeLineageVariantOfAttachment', () => {
     expect(forgeLineageVariantOfAttachment(tree, 999)).toBeNull();
     expect(forgeLineageVariantOfAttachment(tree, null)).toBeNull();
     expect(forgeLineageVariantOfAttachment({ roots: [] }, 42)).toBeNull();
+  });
+});
+
+describe('forgeLineageMirrorUsable', () => {
+  it('shows a mirrored tree only when both gospels are known and equal', () => {
+    expect(forgeLineageMirrorUsable('a'.repeat(64), 'a'.repeat(64))).toBe(true);
+  });
+
+  it('withholds a tree built for a different gospel', () => {
+    expect(forgeLineageMirrorUsable('a'.repeat(64), 'b'.repeat(64))).toBe(false);
+  });
+
+  // The rule that was missing. `master && cached.master && master !== cached.master` skipped the
+  // comparison entirely when either side was null, so a cache row with no master was served for
+  // ANY template — a tree nobody can prove belongs to this design, rendered as fact.
+  it('withholds when either side has no master at all', () => {
+    expect(forgeLineageMirrorUsable(null, 'a'.repeat(64))).toBe(false);
+    expect(forgeLineageMirrorUsable('a'.repeat(64), null)).toBe(false);
+    expect(forgeLineageMirrorUsable(null, null)).toBe(false);
+    expect(forgeLineageMirrorUsable(undefined, undefined)).toBe(false);
+    expect(forgeLineageMirrorUsable('', 'a'.repeat(64))).toBe(false);
   });
 });
