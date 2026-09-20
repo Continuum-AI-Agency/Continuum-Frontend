@@ -22,7 +22,7 @@
     "bundle:e2e:bench": "playwright test --config playwright.bundle.config.ts",
     "test:vercel": "bun test scripts/check-vercel-bundle-budget.test.ts scripts/vercel-ignore-build.test.ts src/lib/theme/themeDom.test.ts",
     "vercel:runtime:bench": "playwright test --config playwright.vercel.config.ts",
-    "tests": "bun test --path-ignore-patterns '**/e2e/**'",
+    "tests": "bun test --path-ignore-patterns '**/e2e/**' --parallel",
     "test": "bun run tests",
     "test:e2e": "playwright test",
     "admin:tier:e2e:bench": "bun run e2e/admin-tier.e2e.bench.ts",

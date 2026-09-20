@@ -168,7 +168,11 @@ const applyAdsetStatusMutate = mock(
     applyAdsetStatusHandler(payload, opts),
 );
 
+// Spread the real module: `mock.module` replaces it for the whole PROCESS and bun runs
+// every test file in one, so a partial replacement here reaches the next file in the run.
+const realOptimizerData = await import('../useOptimizerData');
 mock.module('../useOptimizerData', () => ({
+  ...realOptimizerData,
   useOptimizerPerformance: () => ({ data: activeReport, isLoading: false }),
   useOptimizerActions: () => ({ data: recentActions }),
   useOptimizerEnrolledAdsets: () => ({ data: [] }),

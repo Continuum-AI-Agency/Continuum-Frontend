@@ -8,6 +8,7 @@ const ACTIVE_BRAND_CONTEXT_PATH = '@/components/providers/ActiveBrandProvider';
 const NEXT_NAV_PATH = 'next/navigation';
 
 type MockState = {
+  brandSummaries: Array<{ id: string; name: string; completed?: boolean }>;
   selectBrand: (brandId: string) => Promise<SelectBrandResult>;
   pathname: string;
   push: (url: string) => void;
@@ -15,6 +16,12 @@ type MockState = {
 };
 
 const state: MockState = {
+  // The hook names the brand it switched TO in its toast, so the context has to carry the
+  // summaries, not just the switcher.
+  brandSummaries: [
+    { id: 'brand-a', name: 'Brand A', completed: true },
+    { id: 'brand-b', name: 'Brand B', completed: true },
+  ],
   selectBrand: async () => ({ switched: true, prevBrandId: 'brand-a' }),
   pathname: '/dashboard',
   push: () => {},
@@ -24,6 +31,7 @@ const state: MockState = {
 mock.module(ACTIVE_BRAND_CONTEXT_PATH, () => ({
   useActiveBrandContext: () => ({
     selectBrand: (id: string) => state.selectBrand(id),
+    brandSummaries: state.brandSummaries,
   }),
 }));
 
@@ -44,12 +52,31 @@ mock.module(NEXT_NAV_PATH, () => ({
   notFound: () => {},
 }));
 
+// The hook tells the person what happened, so it needs a toast. Rendering it through the
+// real ToastProvider would drag a portal and a timer into a pure hook test; the SHOWN
+// messages are asserted in ToastProvider's own tests, so here the toast is a spy and this
+// file records only that switching does not crash without a provider above it.
+const shown: Array<Record<string, unknown>> = [];
+mock.module('@/components/ui/ToastProvider', () => ({
+  useToast: () => ({
+    show: (toast: Record<string, unknown>) => {
+      shown.push(toast);
+    },
+    dismiss: () => {},
+  }),
+  useToastContext: () => ({ show: () => {}, dismiss: () => {} }),
+}));
+
 const { useSwitchBrand } = await import('./useSwitchBrand');
 
 describe('useSwitchBrand', () => {
   beforeEach(() => {
     storeRegistry.reset();
     state.selectBrand = async () => ({ switched: true, prevBrandId: 'brand-a' });
+    state.brandSummaries = [
+      { id: 'brand-a', name: 'Brand A', completed: true },
+      { id: 'brand-b', name: 'Brand B', completed: true },
+    ];
     state.pathname = '/dashboard';
     state.push = () => {};
   });
@@ -88,7 +115,7 @@ describe('useSwitchBrand', () => {
     expect(calls).toEqual(['teardown:brand-a', 'purge:brand-a']);
   });
 
-  it('redirects to / when switching from /onboarding', async () => {
+  it('leaves onboarding for / when the brand switched to has finished it', async () => {
     state.pathname = '/onboarding/step-2';
     const pushed: string[] = [];
     state.push = (url) => pushed.push(url);
@@ -101,6 +128,28 @@ describe('useSwitchBrand', () => {
     });
 
     expect(pushed).toEqual(['/']);
+    expect(outcome?.redirected).toBe(true);
+  });
+
+  // Switching brands mid-onboarding to a brand that has not finished it must not dump the
+  // person on the dashboard: it carries them to that brand's onboarding instead.
+  it('stays in onboarding, on the new brand, when that brand has not finished it', async () => {
+    state.pathname = '/onboarding/step-2';
+    state.brandSummaries = [
+      { id: 'brand-a', name: 'Brand A', completed: true },
+      { id: 'brand-b', name: 'Brand B', completed: false },
+    ];
+    const pushed: string[] = [];
+    state.push = (url) => pushed.push(url);
+
+    const { result } = renderHook(() => useSwitchBrand());
+
+    let outcome: SwitchBrandOutcome | undefined;
+    await act(async () => {
+      outcome = await result.current('brand-b');
+    });
+
+    expect(pushed).toEqual(['/onboarding?brand=brand-b']);
     expect(outcome?.redirected).toBe(true);
   });
 

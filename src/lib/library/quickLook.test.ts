@@ -350,11 +350,18 @@ describe('registerResizedAsset', () => {
     signedUrl: 'https://signed.example/out.png',
   };
 
-  function makeRegisterFetch(bodies: unknown[], urls: string[], assetId: string | null = 'new-1') {
+  // The route answers with BOTH ids and the response schema is strict, so a stub that
+  // returns only `assetId` is not the route — it is a shape the caller never sees.
+  function makeRegisterFetch(
+    bodies: unknown[],
+    urls: string[],
+    assetId: string | null = 'new-1',
+    assetVersionId: string | null = 'version-1',
+  ) {
     return (async (input: URL | RequestInfo, init?: RequestInit) => {
       urls.push(String(input));
       bodies.push(JSON.parse(String(init?.body)));
-      return new Response(JSON.stringify({ assetId }), { status: 200 });
+      return new Response(JSON.stringify({ assetId, assetVersionId }), { status: 200 });
     }) as typeof fetch;
   }
 

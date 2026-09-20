@@ -192,7 +192,10 @@ export function PortfolioSetup({
             </div>
             {suggestReason === 'not_permitted' ? (
               <Link
-                className={cn(buttonVariants({ variant: 'link', size: 'sm' }), 'h-auto p-0 text-xs')}
+                className={cn(
+                  buttonVariants({ variant: 'link', size: 'sm' }),
+                  'h-auto p-0 text-xs',
+                )}
                 href={PAID_SETUP_CONNECT_HREF}
               >
                 Manage assignments

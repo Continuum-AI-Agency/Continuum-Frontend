@@ -276,7 +276,12 @@ describe('v1 Brand Book is byte-stable through this packet', () => {
     },
   });
 
-  it('renders the same forced brand block as before v2 existed', () => {
+  it('renders the v1 tokens through the current forced block, byte for byte', () => {
+    // This pin still guards v1 token COVERAGE — every piece renders and none is silently
+    // dropped. What it no longer pins is the pre-v2 wording: the block deliberately stopped
+    // naming hex codes and font families, because naming them is how they ended up drawn
+    // INTO the artwork (`brand-enforcement.ts` says so where the block is built). Colours now
+    // point at the attached swatch and typography carries role, never family.
     const { block, renderedPieces } = renderForcedBrandBlock(tokens, [
       'colors',
       'typography',
@@ -284,12 +289,15 @@ describe('v1 Brand Book is byte-stable through this packet', () => {
     ]);
     expect(renderedPieces).toEqual(['colors', 'typography', 'imagery']);
     expect(block).toBe(
-      '<brand_book>(authoritative brand rules — the generation MUST comply)\n' +
-        'Colors (use these exact brand colors): #111111 (primary, ink)\n' +
-        'Typography: Söhne (display)\n' +
+      '<brand_book>(authoritative brand rules — the generation MUST comply; these are instructions, NEVER text to render. Never draw hex codes, colour names, font names, or any of this wording into the image.)\n' +
+        'Colors: use ONLY the 1 colours in the attached palette swatch reference, left to right (band 1 = primary, ink). Match them by eye from the swatch.\n' +
+        'Typography: display.\n' +
         'Visual direction: workshop tables, real hands, no styling. Mood: quiet, worn. Avoid: stock smiles.\n' +
         '</brand_book>',
     );
+    // The brand's own values must NOT reach the prompt as text.
+    expect(block).not.toContain('#111111');
+    expect(block).not.toContain('Söhne');
   });
 
   it('round-trips a brand.md document with populated imagery', () => {

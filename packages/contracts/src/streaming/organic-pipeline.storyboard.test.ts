@@ -99,16 +99,30 @@ describe("organicMediaSuggestionSchema storyboard", () => {
 });
 
 describe("draft.blueprint_ready frame previews", () => {
-  it("carries typed transient preview frames for instant display", () => {
-    const parsed = organicStreamFrameSchema.safeParse({
+  const frame = (data: Record<string, unknown>) =>
+    organicStreamFrameSchema.safeParse({
       type: "draft.blueprint_ready",
-      data: {
-        jobId: "job_1",
-        brandId: "brand_1",
-        draftId: "draft_1",
-        previews: [{ role: "primary", signedUrl: "https://example/sign", format: "post" }],
-      },
+      data: { jobId: "job_1", brandId: "brand_1", draftId: "draft_1", ...data },
     });
-    expect(parsed.success).toBe(true);
+
+  it("carries typed transient preview frames for instant display", () => {
+    expect(
+      frame({
+        previewRevision: "rev_1",
+        previews: [{ role: "primary", signedUrl: "https://example/sign", format: "post" }],
+      }).success,
+    ).toBe(true);
+  });
+
+  // previewRevision is the media-approval TOKEN, not a rendering detail, so the frame
+  // has to carry it even when signing produced no previews at all. Reading `previews` as
+  // the carrier is what strands a draft on "awaiting media choice" with nothing to click.
+  it("requires the approval token, with or without previews", () => {
+    expect(frame({ previewRevision: "rev_1" }).success).toBe(true);
+    expect(
+      frame({
+        previews: [{ role: "primary", signedUrl: "https://example/sign", format: "post" }],
+      }).success,
+    ).toBe(false);
   });
 });

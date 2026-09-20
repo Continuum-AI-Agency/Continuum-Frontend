@@ -31,6 +31,10 @@ global.Node = window.Node as any;
 // Radix focus-scopes (Popover, Dialog, DropdownMenu) walk the DOM with a
 // TreeWalker on open, so NodeFilter must be global or opening one throws.
 global.NodeFilter = window.NodeFilter as any;
+// Base UI's open/close transitions wait for `[data-starting-style]` to be removed, which
+// they watch with a MutationObserver. happy-dom ships a real one; it simply was never
+// lifted onto the global, so the first component to reach that step threw.
+global.MutationObserver = window.MutationObserver as any;
 global.Event = window.Event as any;
 global.CustomEvent = window.CustomEvent as any;
 global.MouseEvent = window.MouseEvent as any;
@@ -81,6 +85,54 @@ if (typeof globalThis.ResizeObserver !== 'function') {
     unobserve(): void {}
     disconnect(): void {}
   } as unknown as typeof globalThis.ResizeObserver;
+}
+
+// The rest of what happy-dom does not ship, for the same reason ResizeObserver is above.
+//
+// These used to arrive by ACCIDENT. Bun ran every file in ONE process, so whichever test
+// installed `IntersectionObserver` or `scrollIntoView` first handed it to every file after
+// it. Running the files isolated removed that leak, and ~27 tests that had never installed
+// them went red at once — not defects, just a suite that had been leaning on its own file
+// ordering. They belong here, in the preload every file gets in every worker.
+//
+// Each answers the way an absent feature truthfully would: no observations, no animations,
+// no media match, no scrolling. A suite that needs real behaviour still stubs its own.
+if (typeof globalThis.IntersectionObserver !== 'function') {
+  globalThis.IntersectionObserver = class {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+    takeRecords(): [] {
+      return [];
+    }
+  } as unknown as typeof globalThis.IntersectionObserver;
+}
+
+const defineOnElement = (key: string, value: unknown): void => {
+  if (typeof Element === 'undefined' || key in Element.prototype) return;
+  Object.defineProperty(Element.prototype, key, { configurable: true, writable: true, value });
+};
+
+// Scrolling is a no-op in a document with no viewport; callers use it only for effect.
+defineOnElement('scrollIntoView', () => {});
+// Base UI's scroll area settles its thumb by awaiting subtree animations.
+defineOnElement('getAnimations', () => []);
+
+if (typeof globalThis.window !== 'undefined' && !('matchMedia' in globalThis.window)) {
+  Object.defineProperty(globalThis.window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
 }
 
 mock.module('next/navigation', () => {

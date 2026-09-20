@@ -1,6 +1,9 @@
 // Optimizer execution is backend-owned. Only its validated wire shapes belong
 // in the shared FE<->BE contract package.
 
+// The portfolio brief: the growth read and the one highest-impact thing to do today.
+export * from './account-chart';
+export * from './account-strategy';
 // One normalized row of public.continuum_action_stream, and the fold that makes a change
 // and its undo read as ONE entry. Shared by every surface that narrates what we did.
 export * from './action-stream';
@@ -22,7 +25,6 @@ export * from './lookback';
 export * from './mcp';
 // Shared onboarding builders (suggestion→config, create→enroll) — the parity keystone.
 export * from './onboarding';
-// The portfolio brief: the growth read and the one highest-impact thing to do today.
 export * from './portfolio-brief';
 // Optimizer-service orchestration DTOs (enrollment, run requests, FE read model).
 export * from './service';

@@ -24,7 +24,11 @@ let performanceData: unknown = null;
 let cyclePreviewOutcome: { status: 'ready'; preview: CyclePreviewResponse } | undefined;
 const cyclePreviewMutate = mock(() => {});
 
+// Spread the real module: `mock.module` replaces it for the whole PROCESS and bun runs
+// every test file in one, so a partial replacement here reaches the next file in the run.
+const realOptimizerData = await import('../useOptimizerData');
 mock.module('../useOptimizerData', () => ({
+  ...realOptimizerData,
   useOptimizerMutations: () => ({
     update: noopMutation(),
     enroll: noopMutation(),
@@ -378,7 +382,6 @@ describe('arming autopilot is staged: caps → preview → arm', () => {
     expect(document.body.textContent).toContain('autopilot would write nothing at all');
   });
 });
-
 
 describe('target metric, plan granularity and the scale plan', () => {
   it('offers the alternative pricing only where one exists, and labels the target by it', () => {

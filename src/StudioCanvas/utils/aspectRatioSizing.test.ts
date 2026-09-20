@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-
+import * as contractBounds from '@continuum/contracts';
 import {
   generatorNodeStyle,
   getAspectRatioValue,
@@ -51,10 +51,16 @@ describe('aspectRatioSizing', () => {
   // The canvas re-exports the contracts helpers so the browser and the agent write path
   // size a node identically. If this file ever stops seeing them, a hand-rolled copy has
   // crept back in — which is exactly how the library seeder drifted.
+  //
+  // Identity, not dimensions: this used to pin omniGen at 512x360 and went red the day the
+  // node was deliberately shrunk to a launcher card. A copy is what this guards against,
+  // and a copy fails identity no matter what numbers it holds.
   it('re-exports the generator envelopes the canvas nodes are built from', () => {
+    expect(IMAGE_GENERATOR_NODE_BOUNDS).toBe(contractBounds.IMAGE_GENERATOR_NODE_BOUNDS);
+    expect(VIDEO_GENERATOR_NODE_BOUNDS).toBe(contractBounds.VIDEO_GENERATOR_NODE_BOUNDS);
+    expect(OMNI_GENERATOR_NODE_BOUNDS).toBe(contractBounds.OMNI_GENERATOR_NODE_BOUNDS);
+    // One dimension still pinned, so a contracts-side typo is caught somewhere.
     expect(IMAGE_GENERATOR_NODE_BOUNDS.area).toEqual({ width: 400, height: 225 });
-    expect(VIDEO_GENERATOR_NODE_BOUNDS.area).toEqual({ width: 512, height: 288 });
-    expect(OMNI_GENERATOR_NODE_BOUNDS.area).toEqual({ width: 512, height: 360 });
   });
 
   it('reads a locked node box back as the ratio that produced it', () => {

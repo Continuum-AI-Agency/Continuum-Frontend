@@ -63,10 +63,13 @@ describe('parseNdjson', () => {
       aspectRatio: '9:16',
       durationSec: 12,
       clips: [
+        // `bucket` is required: the signed URL is preview-only and expires, so a clip that
+        // carries only the signed URL cannot be re-signed later.
         {
           index: 0,
           role: 'hook',
           durationSec: 6,
+          bucket: 'reel-clips',
           clipUrl: 'reel/b/s0.mp4',
           signedClipUrl: 'https://s/0',
         },
@@ -74,6 +77,7 @@ describe('parseNdjson', () => {
           index: 1,
           role: 'cta',
           durationSec: 6,
+          bucket: 'reel-clips',
           clipUrl: 'reel/b/s1.mp4',
           signedClipUrl: 'https://s/1',
         },
