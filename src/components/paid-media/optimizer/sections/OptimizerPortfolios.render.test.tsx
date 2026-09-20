@@ -6,7 +6,15 @@ import type { PortfolioOpenPlan } from './portfolioAccounts';
 // The archived section runs live React Query reads; stub the data layer so the card
 // stack renders without a QueryClient. The apply-mode pill needs a Radix
 // TooltipProvider ancestor — not relevant here — so it is stubbed out too.
+//
+// SPREAD THE REAL MODULE. `mock.module` replaces a module for the whole PROCESS, and bun
+// runs every test file in one — so a partial replacement here left the next file in the
+// run importing a `useOptimizerData` with only two exports, and it died on
+// "Export named 'useOptimizerAccountEnrollments' not found". Overriding only what this
+// file needs keeps the leak harmless.
+const realOptimizerData = await import('../useOptimizerData');
 mock.module('../useOptimizerData', () => ({
+  ...realOptimizerData,
   useOptimizerArchivedPortfolios: () => ({ data: [] }),
   useOptimizerMutations: () => ({
     restore: { mutate: () => {}, isPending: false, isError: false, error: null },
