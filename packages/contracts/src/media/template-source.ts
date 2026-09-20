@@ -226,6 +226,21 @@ export const templateParseSchema = z
     ratios: z.array(templateRatioSchema).default([]),
     slots: z.array(templateSlotSchema).default([]),
     fonts: z.array(templateFontSchema).default([]),
+    /**
+     * Every DISTINCT string the design currently contains — which is NOT what the name says.
+     *
+     * Measured 2026-09-20 against the real parse: 5 of 5 entries on template 133 and 14 of 15
+     * on a real animated template are also slot values. That is not a bug in either producer,
+     * it is what both of them do by construction: `_slot_kind` makes EVERY enabled text layer
+     * in a delivery comp a slot, and `figmaTemplateParse` pushes every text node's characters
+     * the same way. So "static" cannot mean "copy the API will never change" — there is
+     * essentially no such copy in a delivery comp, and a caller filtering on this field to
+     * find untouchable text would be wrong about nearly every line.
+     *
+     * Read it as: the authored copy corpus, useful for tone and length samples. To find copy
+     * a render will not touch, compare against `slots[].instances[].sample` yourself.
+     * Renaming it is a producer-side change across both the AEP and Figma paths.
+     */
     staticText: z
       .array(
         z

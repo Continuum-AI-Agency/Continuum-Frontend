@@ -604,8 +604,18 @@ export const apiRenderTemplateContractSchema = z
      * Where the LIVE template and its stored contract disagree, straight from the forge. A
      * template whose fields moved under its contract is one whose renders quietly stop matching
      * what a caller filled in, so it is reported rather than reconciled here.
+     *
+     * THREE states, because two of them were being collapsed into one:
+     *   `null` — nobody checked. Nothing asks the forge today; this is the honest answer.
+     *   `[]`   — checked, and the live template matches its stored contract.
+     *   `[…]`  — checked, and these fields moved.
+     *
+     * It defaulted to `[]` and was hardcoded to `[]` at its only producer, so an unchecked
+     * template was indistinguishable from a verified-clean one. That is the same shape as the
+     * incident this whole surface exists to prevent: 54 files shipped with wrong QR codes while
+     * every guard was green, because a guard that never ran looks exactly like one that passed.
      */
-    divergence: z.array(z.string()).default([]),
+    divergence: z.array(z.string()).nullable().default(null),
     outputs: z
       .array(
         z
