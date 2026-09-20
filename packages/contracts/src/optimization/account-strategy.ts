@@ -14,6 +14,7 @@
 // so they surface ABOVE the list as guards (`ACCOUNT_GUARD_DETECTORS`).
 
 import { z } from 'zod';
+import { accountChartSchema } from './account-chart';
 
 export const accountDetectorSchema = z.enum([
   'portfolio_reallocation',
@@ -301,6 +302,12 @@ export const accountCandidateSchema = z.object({
   impact_basis: z.string().max(240),
   /** The comparison that fired, as figures: what was held against what, and the threshold. */
   evidence: z.record(z.string(), z.union([z.number(), z.string(), z.null()])).default({}),
+  /**
+   * The formula, drawn. Built from the same figures `impact_basis` names, so the picture
+   * cannot say something the sentence does not. Null only while a detector's chart is
+   * still being wired — the card then shows the sentence alone rather than an invention.
+   */
+  chart: accountChartSchema.nullable().default(null),
   /** Where the card sends a person. */
   cta: z
     .object({
