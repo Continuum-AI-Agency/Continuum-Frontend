@@ -189,28 +189,41 @@ function candidatesFromReport(
   return out;
 }
 
+/** Where a candidate's call to action lands: the queue row, the audience card, or Manage
+ *  when the portfolio only observes (the click then shows what Recommend would do). */
+export function ctaForCandidate(
+  candidate: Pick<BriefCandidate, 'id' | 'module' | 'cta'>,
+  observe: boolean,
+): HeroCta {
+  if (observe) return { kind: 'manage', rowKey: null, label: 'See what Recommend would do' };
+  const rowKey =
+    candidate.cta.kind === 'audience_card'
+      ? candidate.id
+      : candidate.cta.kind === 'queue_row'
+        ? candidate.cta.target_id
+        : null;
+  const label =
+    candidate.module === 'pause'
+      ? 'Review the pause'
+      : candidate.module === 'budget'
+        ? 'Review the budget moves'
+        : candidate.module === 'creative'
+          ? 'Open the creative recommendation'
+          : candidate.cta.kind === 'audience_card'
+            ? 'Open the audience proposal'
+            : 'Open the audience recommendation';
+  return { kind: candidate.cta.kind, rowKey, label };
+}
+
 function ctaFor(brief: PortfolioBrief, observe: boolean): HeroCta | null {
   const hero = brief.hero;
   if (observe) return { kind: 'manage', rowKey: null, label: 'See what Recommend would do' };
   if (!hero.cta || hero.module === 'none') return null;
   const candidate = brief.candidates.find((c) => c.id === hero.candidate_id) ?? null;
-  const rowKey =
-    hero.cta.kind === 'audience_card'
-      ? (candidate?.id ?? null)
-      : hero.cta.kind === 'queue_row'
-        ? hero.cta.target_id
-        : null;
-  const label =
-    hero.module === 'pause'
-      ? 'Review the pause'
-      : hero.module === 'budget'
-        ? 'Review the budget moves'
-        : hero.module === 'creative'
-          ? 'Open the creative recommendation'
-          : hero.cta.kind === 'audience_card'
-            ? 'Open the audience proposal'
-            : 'Open the audience recommendation';
-  return { kind: hero.cta.kind, rowKey, label };
+  return ctaForCandidate(
+    candidate ?? { id: hero.candidate_id ?? '', module: hero.module, cta: hero.cta },
+    observe,
+  );
 }
 
 export function buildHeroView(args: {

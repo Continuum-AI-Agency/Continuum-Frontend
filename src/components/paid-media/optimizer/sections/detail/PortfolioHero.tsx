@@ -4,6 +4,7 @@
 // today. Entrance: tiles rise in a short stagger, the hero card settles in, the numbers
 // count up once per portfolio. Everything is static under prefers-reduced-motion.
 
+import { IMPACT_TIER_COPY, type ImpactTier, impactTier } from '@continuum/contracts';
 import { ExternalLinkIcon, SparklesIcon } from 'lucide-react';
 import {
   animate,
@@ -114,6 +115,12 @@ function Tile({
   );
 }
 
+const TIER_VARIANT: Record<ImpactTier, 'destructive' | 'warning' | 'muted'> = {
+  high: 'destructive',
+  medium: 'warning',
+  low: 'muted',
+};
+
 const MODULE_LABEL: Record<string, string> = {
   budget: 'Budget',
   pause: 'Pause',
@@ -126,6 +133,8 @@ export type PortfolioHeroProps = {
   view: HeroView;
   currency: string | null;
   portfolioId: string;
+  /** The portfolio's daily total, the scale the impact tiers are read against. */
+  dailyTotal: number | null;
   nextCycleAt: string | null;
   onCta: (cta: HeroCta) => void;
   explainHref: string;
@@ -135,6 +144,7 @@ export function PortfolioHero({
   view,
   currency,
   portfolioId,
+  dailyTotal,
   nextCycleAt,
   onCta,
   explainHref,
@@ -231,7 +241,13 @@ export function PortfolioHero({
         </p>
         {hero.why ? <p className="text-muted-foreground text-xs">{hero.why}</p> : null}
         {hero.impact_per_day != null ? (
-          <p className="text-2xs text-muted-foreground">
+          <p className="flex flex-wrap items-baseline gap-x-2 text-2xs text-muted-foreground">
+            <Badge
+              className="text-3xs"
+              variant={TIER_VARIANT[impactTier(hero.impact_per_day, dailyTotal)]}
+            >
+              {IMPACT_TIER_COPY[impactTier(hero.impact_per_day, dailyTotal)]}
+            </Badge>
             <span className="font-mono font-semibold text-foreground text-xl tabular-nums">
               <CountUp
                 format={(n) => formatCurrency(n, currency)}
@@ -273,7 +289,7 @@ export function PortfolioHero({
                 {i > 0 ? ' · ' : ''}
                 {MODULE_LABEL[c.module]?.toLowerCase()} on{' '}
                 {c.adset_name ?? c.adset_id ?? 'the portfolio'} (
-                {formatCurrency(c.impact_per_day, currency)}/day)
+                {IMPACT_TIER_COPY[impactTier(c.impact_per_day, dailyTotal)].toLowerCase()})
               </span>
             ))}
           </p>

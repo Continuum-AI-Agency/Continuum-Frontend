@@ -6,9 +6,11 @@ import {
   briefFigures,
   deterministicBrief,
   heroThresholdMet,
+  impactTier,
   numbersOutsidePacket,
   portfolioBriefSchema,
   rankCandidates,
+  topCandidatePerModule,
   validateHeroPick,
 } from './portfolio-brief';
 
@@ -51,6 +53,19 @@ describe('portfolio brief', () => {
     expect(ranked.map((c) => c.id)).toEqual(['rec:c', 'rec:b', 'rec:a']);
     expect(heroThresholdMet([cand({ impact_per_day: 4 })], 100)).toBe(false);
     expect(heroThresholdMet([cand({ impact_per_day: 6 })], 100)).toBe(true);
+  });
+  it('tiers impact against the daily total and keeps one candidate per module', () => {
+    expect(impactTier(4, 1000)).toBe('low');
+    expect(impactTier(20, 1000)).toBe('medium');
+    expect(impactTier(100, 1000)).toBe('high');
+    // No daily total: the 5-unit floor still separates the tiers.
+    expect(impactTier(25, null)).toBe('high');
+    const top = topCandidatePerModule([
+      cand({ id: 'rec:a', module: 'creative', impact_per_day: 10 }),
+      cand({ id: 'rec:b', module: 'creative', impact_per_day: 30 }),
+      cand({ id: 'budget:x', module: 'budget', impact_per_day: 20 }),
+    ]);
+    expect(top.map((c) => c.id)).toEqual(['rec:b', 'budget:x']);
   });
   it('accepts the maximum, or a justified non-maximum with the maximum listed first', () => {
     const cands = [

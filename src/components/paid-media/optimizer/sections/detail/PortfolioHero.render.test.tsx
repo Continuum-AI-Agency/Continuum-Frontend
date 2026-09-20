@@ -123,6 +123,7 @@ describe('PortfolioHero', () => {
         explainHref="/scale?tab=jaina"
         nextCycleAt={null}
         onCta={(cta) => clicks.push(cta.rowKey ?? cta.kind)}
+        dailyTotal={1000}
         portfolioId="p1"
         view={view()}
       />,
@@ -147,6 +148,7 @@ describe('PortfolioHero', () => {
         explainHref="#"
         nextCycleAt={null}
         onCta={() => undefined}
+        dailyTotal={1000}
         portfolioId="p1"
         view={draft}
       />,
@@ -159,6 +161,7 @@ describe('PortfolioHero', () => {
         explainHref="#"
         nextCycleAt={null}
         onCta={() => undefined}
+        dailyTotal={1000}
         portfolioId="p1"
         view={view({ state: 'first_cycle' })}
       />,

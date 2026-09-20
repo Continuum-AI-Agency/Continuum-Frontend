@@ -150,6 +150,48 @@ export function heroMinImpact(dailyTotal: number | null | undefined): number {
   return Math.max(0.02 * (dailyTotal ?? 0), 5);
 }
 
+/** How big a candidate is against the portfolio's own scale, in words a reader can rank
+ *  without doing the arithmetic. Medium starts at the hero floor (2% of the daily total, at
+ *  least 5); high at five times that — a tenth of the day's budget. */
+export const impactTierSchema = z.enum(['low', 'medium', 'high']);
+export type ImpactTier = z.infer<typeof impactTierSchema>;
+
+export function impactTier(
+  impactPerDay: number,
+  dailyTotal: number | null | undefined,
+): ImpactTier {
+  const floor = heroMinImpact(dailyTotal);
+  if (impactPerDay >= floor * 5) return 'high';
+  if (impactPerDay >= floor) return 'medium';
+  return 'low';
+}
+
+export const IMPACT_TIER_COPY: Record<ImpactTier, string> = {
+  low: 'Low impact',
+  medium: 'Medium impact',
+  high: 'High impact',
+};
+
+export const HERO_MODULE_COPY: Record<Exclude<HeroModule, 'none'>, { label: string }> = {
+  budget: { label: 'Budget' },
+  pause: { label: 'Pausing' },
+  creative: { label: 'Creatives' },
+  audience: { label: 'Audience' },
+};
+
+/** The strongest candidate of each module, strongest module first. A module with nothing
+ *  to say is absent — the read never pads itself with an empty category. */
+export function topCandidatePerModule(candidates: readonly BriefCandidate[]): BriefCandidate[] {
+  const seen = new Set<BriefCandidate['module']>();
+  const out: BriefCandidate[] = [];
+  for (const candidate of rankCandidates(candidates)) {
+    if (seen.has(candidate.module)) continue;
+    seen.add(candidate.module);
+    out.push(candidate);
+  }
+  return out;
+}
+
 export function heroThresholdMet(
   candidates: readonly BriefCandidate[],
   dailyTotal: number | null | undefined,

@@ -80,6 +80,8 @@ import {
 import type { OptimizerAdMetric, WorkspaceSection } from '../useOptimizerUrlState';
 import { AdsetCreativeVerdicts } from './AdsetCreativeVerdicts';
 import { ApplyReallocationDialog } from './ApplyReallocationDialog';
+import { DailyReadList } from './detail/DailyReadList';
+import { buildDailyRead } from './detail/dailyReadModel';
 import { buildHeroView, type HeroCta } from './detail/heroModel';
 import { ObjectiveCostRecap } from './detail/ObjectiveCostRecap';
 import { PortfolioHero } from './detail/PortfolioHero';
@@ -288,6 +290,7 @@ export function PortfolioDetailWorkspace({
     firstCycle: !latestRun,
   });
   useHeroBriefWatch(portfolio.id, Boolean(latestRun) && heroView.source === 'fallback');
+  const dailyRead = buildDailyRead(heroView, portfolio.daily_total);
   const [focusRowKey, setFocusRowKey] = useState<string | null>(null);
   const onHeroCta = (cta: HeroCta) => {
     if (cta.kind === 'manage') {
@@ -444,6 +447,7 @@ export function PortfolioDetailWorkspace({
 
           <PortfolioHero
             currency={currency ?? null}
+            dailyTotal={portfolio.daily_total ?? null}
             explainHref={jainaPromptHref(
               `Explain today's top recommendation for the portfolio "${portfolio.name}" and how it is growing.`,
             )}
@@ -834,6 +838,10 @@ export function PortfolioDetailWorkspace({
         </TabsContent>
 
         <TabsContent value="activity" className="min-h-0 overflow-y-auto p-3">
+          {/* Every category the brief weighed, not only the one the hero opened on. */}
+          {heroView.state === 'ready' ? (
+            <DailyReadList onCta={onHeroCta} rows={dailyRead} source={heroView.source} />
+          ) : null}
           {/* The same unified queue the account-wide Actions tab renders, scoped to THIS
               portfolio: budget moves + recommendations, approved and executed on Meta from
               here. The group carries its own search + approve/execute toolbar.
