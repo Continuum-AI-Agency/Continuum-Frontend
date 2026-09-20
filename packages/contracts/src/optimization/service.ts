@@ -52,9 +52,12 @@ export const AutopilotScopesSchema = z.object({
   new_creatives: z.boolean(),
 });
 export type AutopilotScopes = z.infer<typeof AutopilotScopesSchema>;
+/** What a portfolio approves on its own before anyone ticks anything. Budget only: the
+ *  creative path is repaired but not yet proven on a real brand, so nothing that reaches the
+ *  canvas runs unattended. Matches the column default in 20260920140000. */
 export const DEFAULT_AUTOPILOT_SCOPES: AutopilotScopes = {
   budget: true,
-  creative_swap: true,
+  creative_swap: false,
   audience_change: false,
   new_audience: false,
   new_creatives: false,
