@@ -2,31 +2,44 @@ import { describe, expect, test } from 'bun:test';
 import type { ApiRenderVariable } from '@continuum/contracts';
 import {
   addSibling,
+  applyFormats,
+  applyValue,
   autoMapHeaders,
   buildTemplateCsv,
   canImportRows,
+  clearKey,
   descendantsOf,
+  discardProposed,
   duplicateLabel,
   duplicateMappedVariable,
   effectiveEncode,
   effectiveOutputIds,
   effectiveValues,
+  emptyHistory,
   forkLabel,
   fromRenderSetRows,
+  HISTORY_LIMIT,
   IMPORT_SKIP,
+  keepProposed,
+  mergeSetRows,
   missingInputs,
   moveRow,
   ownChangeCount,
   parseDelimited,
   pinnedAssetIds,
+  pushHistory,
   type RequestRow,
+  rebaseRows,
   recordsFromTable,
   renderedRatios,
+  resetKey,
+  restoreRows,
   reviewSignature,
   rowBreadcrumb,
   rowDepth,
   rowFileCount,
   rowsFromMappedImport,
+  rowsFromSuggestion,
   seedRow,
   toCsv,
   toPreflightDelivery,
@@ -698,5 +711,253 @@ describe('how many files a row renders', () => {
     expect(
       rowFileCount(threeOutputs, { outputIds: [], delivery: { action: 'replace', adId: '1201' } }),
     ).toBe(1);
+  });
+});
+
+describe('a set saved for an earlier template', () => {
+  const output = (id: string) => ({ id, label: id, ratio: null, kind: 'image' as const });
+
+  test('drops what the template no longer has, names it once, and keeps untouched rows', () => {
+    const kept = { ...seedRow([headline], 'Kept'), outputIds: ['square'] };
+    const stale: RequestRow = {
+      ...seedRow([], 'Stale', kept.id),
+      values: { headline: 'Hi', subtitle: 'Gone' },
+      clearedKeys: ['subtitle'],
+      outputIds: ['square', 'story'],
+      encode: { outputs: { story: { fps: 30 }, square: { fps: 25 } } },
+      media: { subtitle: { name: 'x' } },
+      check: { state: 'ready', fit: null, test: true },
+    };
+
+    const { rows, dropped } = rebaseRows([kept, stale], {
+      variables: [headline],
+      outputs: [output('square')] as never,
+    });
+
+    expect(rows[0]).toBe(kept);
+    expect(rows[1]).toMatchObject({
+      values: { headline: 'Hi' },
+      clearedKeys: [],
+      outputIds: ['square'],
+      encode: { outputs: { square: { fps: 25 } } },
+      media: {},
+      check: { state: 'idle' },
+    });
+    expect(dropped.sort()).toEqual(['story format', 'subtitle field']);
+  });
+
+  test('rows that still fit come back as they were, with nothing to report', () => {
+    const rows = [seedRow([headline], 'Base')];
+    const rebased = rebaseRows(rows, { variables: [headline], outputs: [] });
+    expect(rebased.rows[0]).toBe(rows[0]);
+    expect(rebased.dropped).toEqual([]);
+  });
+});
+
+describe('editing many rows at once', () => {
+  const root = (label: string, values: Record<string, string> = {}): RequestRow => ({
+    ...seedRow([], label),
+    values,
+    check: { state: 'ready', fit: null, test: true },
+  });
+
+  test('applyValue copies one row’s value, leaves rows that already render it, and re-checks only changed rows', () => {
+    const a = root('A', { headline: 'Summer' });
+    const b = root('B', { headline: 'Winter' });
+    const c = root('C', { headline: 'Summer' });
+    const next = applyValue([a, b, c], 'headline', a.id, [b.id, c.id]);
+    expect(next[1]).toMatchObject({ values: { headline: 'Summer' }, check: { state: 'idle' } });
+    expect(next[0]).toBe(a);
+    expect(next[2]).toBe(c);
+  });
+
+  test('a variation that inherits the value keeps inheriting; one that differs gets its own', () => {
+    const parent = root('Parent', { headline: 'Summer' });
+    const same: RequestRow = { ...seedRow([], 'Same', parent.id) };
+    const other: RequestRow = { ...seedRow([], 'Other', parent.id), values: { headline: 'X' } };
+    const source = root('Source', { headline: 'Summer' });
+    const next = applyValue([parent, same, other, source], 'headline', source.id, [
+      same.id,
+      other.id,
+    ]);
+    expect(next[1]).toBe(same);
+    // Back to inheriting the parent's equal value rather than pinning a copy of it.
+    expect(next[2]).toMatchObject({ values: {}, clearedKeys: [] });
+  });
+
+  test('a blank source blanks a variation on purpose, and carries a picked image’s sidecar', () => {
+    const parent = root('Parent', { headline: 'Summer' });
+    const child = seedRow([], 'Child', parent.id);
+    const blank = root('Blank');
+    expect(applyValue([parent, child, blank], 'headline', blank.id, [child.id])[1]).toMatchObject({
+      clearedKeys: ['headline'],
+    });
+
+    const pin = { assetId: '77777777-7777-4777-8777-777777777777' };
+    const picked: RequestRow = {
+      ...root('Picked'),
+      values: { hero: pin },
+      media: { hero: { name: 'hero.png' } },
+    };
+    const target = root('Target');
+    const next = applyValue([picked, target], 'hero', picked.id, [target.id]);
+    expect(next[1]).toMatchObject({ values: { hero: pin }, media: { hero: { name: 'hero.png' } } });
+  });
+
+  test('applyFormats spells out every format and skips rows already rendering them', () => {
+    const a = { ...root('A'), outputIds: ['square'] };
+    const b = root('B');
+    const c = { ...root('C'), outputIds: ['square'] };
+    const next = applyFormats([a, b, c], a.id, [b.id, c.id], ['square', 'story']);
+    expect(next[1]?.outputIds).toEqual(['square']);
+    expect(next[2]).toBe(c);
+  });
+
+  test('clearKey and resetKey: a root drops the value, a variation blanks it, then goes back to inheriting', () => {
+    const parent = root('Parent', { headline: 'Summer' });
+    const child: RequestRow = { ...seedRow([], 'Child', parent.id), values: { headline: 'Own' } };
+    const cleared = clearKey([parent, child], 'headline', [parent.id, child.id]);
+    expect(cleared[0]?.values).toEqual({});
+    expect(cleared[1]).toMatchObject({ values: {}, clearedKeys: ['headline'] });
+    const reset = resetKey(cleared, 'headline', [parent.id, child.id]);
+    expect(reset[0]).toBe(cleared[0]);
+    expect(reset[1]).toMatchObject({ values: {}, clearedKeys: [] });
+  });
+});
+
+describe('undo history', () => {
+  const rows = [seedRow([], 'A')];
+
+  test('keystrokes in one cell within the window are one step; another cell or a gap is a new one', () => {
+    let history = pushHistory(emptyHistory(), rows, 'value:a:headline', 1000);
+    history = pushHistory(history, rows, 'value:a:headline', 1500);
+    expect(history.past).toHaveLength(1);
+    history = pushHistory(history, rows, 'value:a:price', 1600);
+    expect(history.past).toHaveLength(2);
+    history = pushHistory(history, rows, 'value:a:price', 3000);
+    expect(history.past).toHaveLength(3);
+    history = pushHistory(history, rows, null, 3001);
+    history = pushHistory(history, rows, null, 3002);
+    expect(history.past).toHaveLength(5);
+  });
+
+  test('keeps at most the newest HISTORY_LIMIT steps, and a new edit drops the redo stack', () => {
+    let history = { ...emptyHistory(), future: [rows] };
+    for (let index = 0; index < HISTORY_LIMIT + 5; index += 1)
+      history = pushHistory(history, [seedRow([], String(index))], null, index);
+    expect(history.past).toHaveLength(HISTORY_LIMIT);
+    expect(history.past[0]?.[0]?.label).toBe('5');
+    expect(history.future).toEqual([]);
+  });
+
+  test('restoreRows keeps unchanged rows and their verdict; changed rows are checked again', () => {
+    const kept: RequestRow = {
+      ...seedRow([], 'Kept'),
+      check: { state: 'ready', fit: null, test: true },
+    };
+    const edited: RequestRow = {
+      ...seedRow([], 'Before'),
+      check: { state: 'ready', fit: null, test: true },
+    };
+    const current = [{ ...kept }, { ...edited, label: 'After' }];
+    const restored = restoreRows([kept, edited], current);
+    expect(restored[0]).toBe(current[0]);
+    expect(restored[1]).toMatchObject({ label: 'Before', check: { state: 'idle' } });
+  });
+});
+
+describe('rows the AI proposed', () => {
+  const kept = seedRow([], 'Kept');
+  const proposed: RequestRow = { ...seedRow([], 'Proposed'), proposed: true };
+  const child: RequestRow = seedRow([], 'Child', proposed.id);
+
+  test('are never saved, and neither is anything under them', () => {
+    expect(toRenderSetRows([kept, proposed, child], []).map((row) => row.label)).toEqual(['Kept']);
+  });
+
+  test('keeping a child keeps the proposed rows above it; discarding takes what is under it', () => {
+    const next = keepProposed([kept, proposed, child], [child.id]);
+    expect(next[1]?.proposed).toBeUndefined();
+    expect(toRenderSetRows(next, []).map((row) => row.label)).toEqual([
+      'Kept',
+      'Proposed',
+      'Child',
+    ]);
+    expect(discardProposed([kept, proposed, child], [proposed.id]).map((row) => row.label)).toEqual(
+      ['Kept'],
+    );
+    // A kept row is not the AI's to take back.
+    expect(discardProposed([kept], [kept.id])).toHaveLength(1);
+  });
+});
+
+describe('merging two saves of one set', () => {
+  const row = (id: string, label: string, parentId: string | null = null) => ({
+    id: `00000000-0000-4000-8000-00000000000${id}`,
+    parentId: parentId ? `00000000-0000-4000-8000-00000000000${parentId}` : null,
+    label,
+    overrides: {},
+    clearedKeys: [],
+    outputIds: [],
+  });
+  const base = [row('1', 'A'), row('2', 'B')];
+
+  test('edits to different rows both land, and rows added on either side are kept', () => {
+    const mine = [row('1', 'A mine'), row('2', 'B'), row('3', 'C mine')];
+    const theirs = [row('1', 'A'), row('2', 'B theirs'), row('4', 'D theirs')];
+    expect(mergeSetRows(base, mine, theirs)?.map((item) => item.label)).toEqual([
+      'A mine',
+      'B theirs',
+      'D theirs',
+      'C mine',
+    ]);
+  });
+
+  test('one row changed two ways, or a fork of a row the other side deleted, cannot merge', () => {
+    expect(
+      mergeSetRows(base, [row('1', 'X'), row('2', 'B')], [row('1', 'Y'), row('2', 'B')]),
+    ).toBeNull();
+    expect(mergeSetRows(base, [...base, row('3', 'Fork', '2')], [row('1', 'A')])).toBeNull();
+  });
+});
+
+describe('a draft from the AI', () => {
+  test('arrives proposed, roots in every format, with the picked picture’s thumbnail', () => {
+    const root = '00000000-0000-4000-8000-000000000001';
+    const hero = {
+      id: '77777777-7777-4777-8777-777777777777',
+      fileName: 'shoe.png',
+      title: 'Shoe',
+      width: 800,
+      height: 600,
+      thumbnailUrl: 'https://cdn.test/shoe.png',
+    };
+    const rows = rowsFromSuggestion(
+      {
+        rows: [
+          {
+            id: root,
+            parentId: null,
+            label: 'Base',
+            overrides: { headline: 'Hi', hero: { assetId: hero.id } },
+          },
+          {
+            id: '00000000-0000-4000-8000-000000000002',
+            parentId: root,
+            label: 'Coral',
+            overrides: { accent: '#ff6f61' },
+          },
+        ],
+        assets: [hero as never],
+      },
+      ['square', 'story'],
+    );
+    expect(rows[0]).toMatchObject({
+      proposed: true,
+      outputIds: ['square', 'story'],
+      media: { hero: { w: 800, h: 600, thumbnailUrl: 'https://cdn.test/shoe.png', name: 'Shoe' } },
+    });
+    expect(rows[1]).toMatchObject({ proposed: true, parentId: root, outputIds: [] });
+    expect(toRenderSetRows(rows, ['square', 'story'])).toEqual([]);
   });
 });

@@ -39,6 +39,7 @@ import {
 } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -123,6 +124,32 @@ function useStickyOffsets(headerRow: RefObject<HTMLTableRowElement | null>, ids:
   return offsets;
 }
 
+const shiftTicks = new WeakMap<TanTable<unknown>, boolean>();
+
+/** Where a shift-click range starts: the last row whose box was ticked or unticked on its own. */
+const rangeAnchor = new WeakMap<TanTable<unknown>, string>();
+
+/**
+ * Every row from the anchor to `row`, in the order the grid shows them, set to `checked` — the
+ * spreadsheet shift-click. Without an anchor it is an ordinary tick.
+ */
+function selectRange<T>(table: TanTable<T>, row: Row<T>, checked: boolean) {
+  const anchor = rangeAnchor.get(table as TanTable<unknown>);
+  const shown = table.getRowModel().rows;
+  const from = shown.findIndex((item) => item.id === anchor);
+  const to = shown.findIndex((item) => item.id === row.id);
+  if (from < 0 || to < 0) return row.toggleSelected(checked);
+  const range = shown.slice(Math.min(from, to), Math.max(from, to) + 1);
+  table.setRowSelection((current) => {
+    const next = { ...current };
+    for (const item of range) {
+      if (checked) next[item.id] = true;
+      else delete next[item.id];
+    }
+    return next;
+  });
+}
+
 /** The checkbox gutter. Header toggles the page, cell toggles the row. Always in view. */
 export function selectColumn<T>(): ColumnDef<T> {
   return {
@@ -143,16 +170,29 @@ export function selectColumn<T>(): ColumnDef<T> {
         onCheckedChange={(checked) => table.toggleAllPageRowsSelected(checked === true)}
       />
     ),
-    cell: ({ row }) => (
+    cell: ({ row, table }) => (
       <Checkbox
         aria-label="Select row"
         checked={row.getIsSelected()}
-        onClick={(event) => event.stopPropagation()}
-        onCheckedChange={(checked) => row.toggleSelected(checked === true)}
+        onClick={(event) => {
+          event.stopPropagation();
+          // The click lands before the change it causes; only the change knows the new state.
+          shiftTicks.set(table as TanTable<unknown>, event.shiftKey);
+        }}
+        onCheckedChange={(checked) => {
+          const key = table as TanTable<unknown>;
+          if (shiftTicks.get(key)) selectRange(table, row, checked === true);
+          else row.toggleSelected(checked === true);
+          shiftTicks.delete(key);
+          rangeAnchor.set(key, row.id);
+        }}
       />
     ),
   };
 }
+
+/** What a right-click landed on: a body cell, a header, or the grid around the rows. */
+export type DataGridMenuTarget = { rowId: string | null; columnId: string | null; header: boolean };
 
 /** What a custom row receives: the `tr` props to spread, plus the react-table row it draws. */
 export type DataGridRowProps<T> = ComponentProps<typeof TableRow> & { row: Row<T> };
@@ -219,6 +259,7 @@ export function DataGrid<T>({
   onCollapsedGroupsChange,
   RowComponent = DefaultRow,
   className,
+  contextMenu,
 }: {
   table: TanTable<T>;
   empty: ReactNode;
@@ -236,6 +277,15 @@ export function DataGrid<T>({
   /** Draws each body row — pass one that wraps `tr` to make rows sortable by drag. */
   RowComponent?: ComponentType<DataGridRowProps<T>>;
   className?: string;
+  /**
+   * A right-click menu over the whole grid: `content` draws the items for what was clicked.
+   * Right-clicking a row also counts as clicking it. A field that already had focus keeps the
+   * browser's own menu, so copy, paste and spelling still work where someone is typing.
+   */
+  contextMenu?: {
+    content: (target: DataGridMenuTarget) => ReactNode;
+    finalFocus?: () => HTMLElement | boolean;
+  };
 }) {
   const [ownCollapsed, setOwnCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const collapsed = collapsedGroups ?? ownCollapsed;
@@ -246,6 +296,9 @@ export function DataGrid<T>({
   const headerRow = useRef<HTMLTableRowElement>(null);
   const stickyLeft = useStickyOffsets(headerRow, stickyIds);
   const [scrolled, setScrolled] = useState(false);
+  const [menuTarget, setMenuTarget] = useState<DataGridMenuTarget | null>(null);
+  /** The field being typed in when the right button went down: its menu is the browser's. */
+  const typingIn = useRef<Element | null>(null);
   /** Props that pin a cell of a sticky column; nothing for any other column. */
   const stickyProps = (column: Column<T>, surface: string) =>
     isSticky(column)
@@ -267,126 +320,170 @@ export function DataGrid<T>({
     (onCollapsedGroupsChange ?? setOwnCollapsed)(next);
   };
 
-  const grid = (
-    <div
-      className={cn('overflow-auto rounded-lg border bg-card', className)}
-      data-scrolled={scrolled || undefined}
-      onPaste={onPaste}
-      onScroll={(event) => setScrolled(event.currentTarget.scrollLeft > 0)}
-    >
-      {/* This div scrolls, not the table's own wrapper, so the grid knows when it has scrolled. */}
-      <Table className="text-xs" containerClassName="overflow-visible">
-        <TableHeader className="sticky top-0 z-10 bg-card">
-          {table.getHeaderGroups().map((group, index, groups) => (
-            <TableRow
-              key={group.id}
-              ref={index === groups.length - 1 ? headerRow : undefined}
-              className="hover:bg-transparent"
-            >
-              {group.headers.map((header) => {
-                const sortable =
-                  !header.isPlaceholder &&
-                  header.column.columnDef.enableSorting === true &&
-                  header.column.getCanSort();
-                const sorted = header.column.getIsSorted();
-                const sticky = stickyProps(header.column, 'bg-card');
-                return (
-                  <TableHead
-                    key={header.id}
-                    {...sticky}
-                    style={{
-                      ...(header.getSize() !== 150 ? { width: header.getSize() } : {}),
-                      ...sticky?.style,
-                    }}
-                    aria-sort={sortable ? (sorted ? ARIA_SORT[sorted] : 'none') : undefined}
-                    className={cn(
-                      'h-8 whitespace-nowrap text-2xs font-medium text-muted-foreground',
-                      sticky?.className,
-                    )}
-                  >
-                    {header.isPlaceholder ? null : sortable ? (
-                      <SortableHeader header={header} />
-                    ) : (
-                      flexRender(header.column.columnDef.header, header.getContext())
-                    )}
-                  </TableHead>
-                );
-              })}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {groupHeader && rows.length > 0 ? (
-            <TableRow className="bg-muted/30 hover:bg-muted/30">
-              <TableCell colSpan={width} className="h-7 py-0 text-2xs text-muted-foreground">
-                <div className="sticky left-2 w-max">{groupHeader}</div>
-              </TableCell>
-            </TableRow>
-          ) : null}
-          {rows.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={width} className="h-24 text-center text-muted-foreground">
-                {empty}
-              </TableCell>
-            </TableRow>
-          ) : (
-            groups.map((group) => {
-              const open = !collapsed.has(group.key);
+  const scroller = {
+    className: cn('overflow-auto rounded-lg border bg-card', className),
+    'data-scrolled': scrolled || undefined,
+    onPaste,
+    onScroll: (event: React.UIEvent<HTMLDivElement>) =>
+      setScrolled(event.currentTarget.scrollLeft > 0),
+  };
+  const onMouseDownCapture = (event: React.MouseEvent) => {
+    const field = (event.target as Element).closest('input, textarea, [contenteditable="true"]');
+    if (event.button === 2)
+      typingIn.current = field && field === document.activeElement ? field : null;
+  };
+  const onContextMenuCapture = (event: React.MouseEvent) => {
+    const element = event.target as Element;
+    if (typingIn.current && typingIn.current.contains(element)) {
+      typingIn.current = null;
+      // Stops the menu's own handlers, which would cancel the browser's.
+      event.stopPropagation();
+      return;
+    }
+    const cell = element.closest<HTMLElement>('th, td');
+    const rowId = element.closest<HTMLElement>('tr[data-row-id]')?.dataset.rowId ?? null;
+    setMenuTarget({
+      rowId,
+      columnId: cell?.dataset.columnId ?? null,
+      header: cell?.tagName === 'TH',
+    });
+    const row = rowId ? rows.find((item) => item.id === rowId) : undefined;
+    if (row) onRowClick?.(row.original);
+  };
+
+  const tableElement = (
+    <Table className="text-xs" containerClassName="overflow-visible">
+      <TableHeader className="sticky top-0 z-10 bg-card">
+        {table.getHeaderGroups().map((group, index, groups) => (
+          <TableRow
+            key={group.id}
+            ref={index === groups.length - 1 ? headerRow : undefined}
+            className="hover:bg-transparent"
+          >
+            {group.headers.map((header) => {
+              const sortable =
+                !header.isPlaceholder &&
+                header.column.columnDef.enableSorting === true &&
+                header.column.getCanSort();
+              const sorted = header.column.getIsSorted();
+              const sticky = stickyProps(header.column, 'bg-card');
               return (
-                <Fragment key={group.key}>
-                  {groupBy ? (
-                    <TableRow className="bg-muted/20 hover:bg-muted/20">
-                      <TableCell colSpan={width} className="h-7 py-0">
-                        <button
-                          type="button"
-                          aria-expanded={open}
-                          className="sticky left-2 flex w-max items-center gap-1.5 text-2xs font-medium"
-                          onClick={() => toggleGroup(group.key)}
-                        >
-                          {open ? (
-                            <ChevronDown className="size-3" aria-hidden />
-                          ) : (
-                            <ChevronRight className="size-3" aria-hidden />
-                          )}
-                          {group.label}
-                          <span className="tabular-nums text-muted-foreground">
-                            {group.rows.length}
-                          </span>
-                        </button>
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                  {open
-                    ? group.rows.map((row) => (
-                        <RowComponent
-                          key={row.id}
-                          row={row}
-                          data-state={row.getIsSelected() ? 'selected' : undefined}
-                          className={cn('h-9', ROW_SURFACE, onRowClick && 'cursor-pointer')}
-                          onClick={onRowClick ? () => onRowClick(row.original) : undefined}
-                        >
-                          {row.getVisibleCells().map((cell) => {
-                            const sticky = stickyProps(cell.column, 'bg-inherit');
-                            return (
-                              <TableCell
-                                key={cell.id}
-                                {...sticky}
-                                className={cn('py-1 align-middle', sticky?.className)}
-                              >
-                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                              </TableCell>
-                            );
-                          })}
-                        </RowComponent>
-                      ))
-                    : null}
-                </Fragment>
+                <TableHead
+                  key={header.id}
+                  data-column-id={header.column.id}
+                  {...sticky}
+                  style={{
+                    ...(header.getSize() !== 150 ? { width: header.getSize() } : {}),
+                    ...sticky?.style,
+                  }}
+                  aria-sort={sortable ? (sorted ? ARIA_SORT[sorted] : 'none') : undefined}
+                  className={cn(
+                    'h-8 whitespace-nowrap text-2xs font-medium text-muted-foreground',
+                    sticky?.className,
+                  )}
+                >
+                  {header.isPlaceholder ? null : sortable ? (
+                    <SortableHeader header={header} />
+                  ) : (
+                    flexRender(header.column.columnDef.header, header.getContext())
+                  )}
+                </TableHead>
               );
-            })
-          )}
-        </TableBody>
-      </Table>
-    </div>
+            })}
+          </TableRow>
+        ))}
+      </TableHeader>
+      <TableBody>
+        {groupHeader && rows.length > 0 ? (
+          <TableRow className="bg-muted/30 hover:bg-muted/30">
+            <TableCell colSpan={width} className="h-7 py-0 text-2xs text-muted-foreground">
+              <div className="sticky left-2 w-max">{groupHeader}</div>
+            </TableCell>
+          </TableRow>
+        ) : null}
+        {rows.length === 0 ? (
+          <TableRow>
+            <TableCell colSpan={width} className="h-24 text-center text-muted-foreground">
+              {empty}
+            </TableCell>
+          </TableRow>
+        ) : (
+          groups.map((group) => {
+            const open = !collapsed.has(group.key);
+            return (
+              <Fragment key={group.key}>
+                {groupBy ? (
+                  <TableRow className="bg-muted/20 hover:bg-muted/20">
+                    <TableCell colSpan={width} className="h-7 py-0">
+                      <button
+                        type="button"
+                        aria-expanded={open}
+                        className="sticky left-2 flex w-max items-center gap-1.5 text-2xs font-medium"
+                        onClick={() => toggleGroup(group.key)}
+                      >
+                        {open ? (
+                          <ChevronDown className="size-3" aria-hidden />
+                        ) : (
+                          <ChevronRight className="size-3" aria-hidden />
+                        )}
+                        {group.label}
+                        <span className="tabular-nums text-muted-foreground">
+                          {group.rows.length}
+                        </span>
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+                {open
+                  ? group.rows.map((row) => (
+                      <RowComponent
+                        key={row.id}
+                        row={row}
+                        data-row-id={row.id}
+                        data-state={row.getIsSelected() ? 'selected' : undefined}
+                        className={cn('h-9', ROW_SURFACE, onRowClick && 'cursor-pointer')}
+                        onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                      >
+                        {row.getVisibleCells().map((cell) => {
+                          const sticky = stickyProps(cell.column, 'bg-inherit');
+                          return (
+                            <TableCell
+                              key={cell.id}
+                              data-column-id={cell.column.id}
+                              {...sticky}
+                              className={cn('py-1 align-middle', sticky?.className)}
+                            >
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </TableCell>
+                          );
+                        })}
+                      </RowComponent>
+                    ))
+                  : null}
+              </Fragment>
+            );
+          })
+        )}
+      </TableBody>
+    </Table>
+  );
+  // The div scrolls, not the table's own wrapper, so the grid knows when it has scrolled.
+  const grid = contextMenu ? (
+    <ContextMenu>
+      <ContextMenuTrigger
+        {...scroller}
+        className={cn(scroller.className, 'select-text')}
+        onMouseDownCapture={onMouseDownCapture}
+        onContextMenuCapture={onContextMenuCapture}
+      >
+        {tableElement}
+      </ContextMenuTrigger>
+      <ContextMenuContent className="min-w-56" finalFocus={contextMenu.finalFocus}>
+        {menuTarget ? contextMenu.content(menuTarget) : null}
+      </ContextMenuContent>
+    </ContextMenu>
+  ) : (
+    <div {...scroller}>{tableElement}</div>
   );
 
   if (!columnVisibility) return grid;

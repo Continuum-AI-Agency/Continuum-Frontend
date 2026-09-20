@@ -6,12 +6,15 @@ import {
   type ApiRenderEnvironment,
   type ApiRenderInputSet,
   type ApiRenderInputValue,
+  type ApiRenderSuggestRowsResponse,
   type ApiRenderTemplateContract,
   type ApiRenderTemplateSummary,
   type ApiRenderVariable,
   apiRenderPreflightResponseSchema,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   type ForgeRenderSet,
+  type ForgeRenderSetRevision,
+  type ForgeRenderSetRow,
   type MediaAsset,
   readableLayerName,
 } from '@continuum/contracts';
@@ -36,13 +39,22 @@ import {
   getExpandedRowModel,
   type RowSelectionState,
   useReactTable,
+  type VisibilityState,
 } from '@tanstack/react-table';
-import { BookmarkPlus, Copy, CornerDownRight, Trash2, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { usePanelRef } from 'react-resizable-panels';
+import { useDefaultLayout, usePanelRef } from 'react-resizable-panels';
+import { AiDraftDialog, type AiDraftParent } from '@/components/forge/AiVariationsDialog';
 import { DataGrid, KIND_ICONS, STICKY_LEFT, selectColumn } from '@/components/forge/DataGrid';
-import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
+import {
+  ActionMenuItems,
+  type GridActionContext,
+  menuFor,
+  selectionActions,
+  takeFocusAfter,
+} from '@/components/forge/gridActions';
 import { isStillsOnly } from '@/components/forge/OutputSettingsPanel';
+import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { RenderPreviewPanel } from '@/components/forge/RenderPreviewPanel';
 import { RenderReviewTray } from '@/components/forge/RenderReviewTray';
 import {
@@ -55,30 +67,43 @@ import { RenderSetRail, templateJobsKey } from '@/components/forge/RenderSetRail
 import { RenderToolbar, templateLabel } from '@/components/forge/RenderToolbar';
 import {
   addSibling,
+  applyFormats,
+  applyValue,
+  clearKey,
   descendantsOf,
+  discardProposed,
   draftStorageKey,
   duplicateLabel,
   effectiveEncode,
   effectiveOutputIds,
   effectiveValues,
+  emptyHistory,
   forkLabel,
   fromRenderSetRows,
+  keepProposed,
   MAX_BATCH_ROWS,
+  mergeSetRows,
   missingInputs,
   moveRow,
   nestRows,
   newRowId,
   PREFLIGHT_DEBOUNCE_MS,
   parseDelimited,
+  proposedIds,
+  pushHistory,
   type RequestRow,
   type RowDrop,
+  rebaseRows,
   renderedRatios,
+  resetKey,
+  restoreRows,
   reviewSignature,
   rootRowId,
   rowBreadcrumb,
   rowDepth,
   rowFileCount,
   rowMediaOf,
+  rowsFromSuggestion,
   seedRow,
   toPreflightDelivery,
   toRenderSetRows,
@@ -93,11 +118,13 @@ import {
   type RequestGridMeta,
   type RequestRowActions,
   RowDropHintContext,
+  RowFields,
   SortableRequestRow,
   StatusCell,
   VariableCell,
   type VariableColumnMeta,
 } from '@/components/forge/requestCells';
+import { SetHistoryDialog } from '@/components/forge/SetHistoryDialog';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import {
   AlertDialog,
@@ -113,6 +140,7 @@ import { Button } from '@/components/ui/button';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { toast } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
+import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { pickedPins, pinFromAsset } from '@/StudioCanvas/nodes/api-render/RenderVariableFields';
 import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
@@ -137,6 +165,9 @@ const TRAY_COLLAPSED_SIZE = '2.5rem';
 const TRAY_OPEN_SIZE = '40%';
 /** The sets rail folded to its one button and the open set's name, set on its side. */
 const RAIL_COLLAPSED_SIZE = '2.25rem';
+/** How long an edit settles before autosave writes it; how long after a failed save it retries. */
+const AUTOSAVE_MS = 1500;
+const AUTOSAVE_RETRY_MS = 5000;
 /** A third of a row per arrow press, so the keyboard reaches before, inside and after a row. */
 const KEYBOARD_DROP_STEP_PX = 12;
 
@@ -159,15 +190,6 @@ function readDrafts(key: string): RequestRow[] | null {
     }));
   } catch {
     return null;
-  }
-}
-
-function writeDrafts(key: string, rows: RequestRow[]) {
-  try {
-    if (rows.length === 0) localStorage.removeItem(key);
-    else localStorage.setItem(key, JSON.stringify({ rows } satisfies Persisted));
-  } catch {
-    // Quota or private mode: drafts just do not persist.
   }
 }
 
@@ -228,7 +250,10 @@ function buildColumns(contract: ApiRenderTemplateContract | null): ColumnDef<Req
     // The row's handle, checkbox and name stay in view while the variables scroll past.
     { id: 'drag', size: 28, header: '', cell: DragHandleCell, meta: STICKY_LEFT },
     selectColumn<RequestRow>(),
-    { id: 'label', size: 300, header: 'Name', cell: LabelCell, meta: STICKY_LEFT },
+    { id: 'label', size: 232, header: 'Name', cell: LabelCell, meta: STICKY_LEFT },
+    // The values come first: they are what a person edits row after row. Formats and output
+    // settings are set once, so they wait at the end of the row.
+    ...perVariable,
     // A template that publishes no outputs still renders its source's ratios, all together.
     ...(contract.outputs.length || contract.template.ratios.length
       ? [{ id: 'outputs', size: 150, header: 'Formats', cell: FormatsCell }]
@@ -236,7 +261,6 @@ function buildColumns(contract: ApiRenderTemplateContract | null): ColumnDef<Req
     ...(contract.encode && !isStillsOnly(contract)
       ? [{ id: 'encode', size: 160, header: 'Output', cell: EncodeCell }]
       : []),
-    ...perVariable,
     { id: 'status', size: 110, header: 'Status', cell: StatusCell },
   ];
 }
@@ -263,17 +287,48 @@ function readinessSummary(
     .join(' · ');
 }
 
-/** Forks are named only when the delete takes rows nobody picked. */
-function deleteMessage({ requested, all }: { requested: Set<string>; all: Set<string> }): string {
-  if (all.size > requested.size)
-    return `${all.size} rows will be deleted, including every fork under them.`;
-  return all.size > 1
-    ? `${all.size} rows will be deleted. Saved renders stay in Render ledger.`
-    : 'This removes the row from the set. Saved renders stay in Render ledger.';
+/** "Deleted 3 rows, 2 variations included" — variations are named only when nobody picked them. */
+function deletedMessage(picked: number, all: number): string {
+  const extra = all - picked;
+  return `Deleted ${picked} ${picked === 1 ? 'row' : 'rows'}${
+    extra ? `, ${extra} ${extra === 1 ? 'variation' : 'variations'} included` : ''
+  }`;
 }
 
-/** "Open this in Render": which template, and optionally which saved render set, to land on. */
-export type ForgeRenderIntent = { templateKey: string; renderSetId?: string };
+/** Hidden columns and the Fields drawer are how one person likes the grid; this browser keeps them. */
+const columnsStorageKey = (brandId: string, templateKey: string) =>
+  `forge:render-columns:${brandId}:${templateKey}`;
+const FIELDS_OPEN_KEY = 'forge:render-fields-open';
+
+function readStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw === null ? fallback : (JSON.parse(raw) as T);
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStored(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Quota or private mode: the preference lasts until the page closes.
+  }
+}
+
+/** The columns that say which row you are looking at stay; every other one can be hidden. */
+const HIDEABLE = (columnId: string) => !['drag', 'select', 'label'].includes(columnId);
+
+/**
+ * "Open this in Render": which template, and optionally which saved render set, to land on — and
+ * whether to open the AI draft there, where its rows will land.
+ */
+export type ForgeRenderIntent = {
+  templateKey: string;
+  renderSetId?: string;
+  draftWithAi?: boolean;
+};
 
 type NameRequest = {
   title: string;
@@ -334,6 +389,18 @@ export function RenderRequestsGrid({
   const [renderSets, setRenderSets] = useState<ForgeRenderSet[]>([]);
   const [activeSet, setActiveSet] = useState<ForgeRenderSet | null>(null);
   const [draftOffer, setDraftOffer] = useState<RequestRow[] | null>(null);
+  /** What opening a set saved for an earlier template trimmed off; saving it makes that final. */
+  const [rebaseDrops, setRebaseDrops] = useState<string[]>([]);
+  const [saveState, setSaveState] = useState<{ phase: 'idle' | 'saving' | 'failed' }>({
+    phase: 'idle',
+  });
+  /** Someone else's version of the open set, when it and the rows on screen changed one row two ways. */
+  const [conflict, setConflict] = useState<ForgeRenderSet | null>(null);
+  const [historyFor, setHistoryFor] = useState<ForgeRenderSet | null>(null);
+  /** The AI draft dialog: open for new rows (`parent: null`) or for variations of one row. */
+  const [aiDraft, setAiDraft] = useState<{ parent: AiDraftParent | null } | null>(null);
+  /** A template whose Render tab was opened to draft with AI, until its contract has loaded. */
+  const [draftFor, setDraftFor] = useState<string | null>(null);
   const [rows, setRows] = useState<RequestRow[]>([]);
   const [savedSignature, setSavedSignature] = useState('');
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -341,10 +408,6 @@ export function RenderRequestsGrid({
   const [previewRowId, setPreviewRowId] = useState<string | null>(null);
   const [busy, setBusy] = useState<'loading' | 'saving' | 'firing' | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-  const [deleteRequest, setDeleteRequest] = useState<{
-    requested: Set<string>;
-    all: Set<string>;
-  } | null>(null);
   const [pendingDiscard, setPendingDiscard] = useState<(() => void) | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [pasted, setPasted] = useState<{ text: string } | null>(null);
@@ -355,12 +418,75 @@ export function RenderRequestsGrid({
   const trayPanel = usePanelRef();
   const railPanel = usePanelRef();
   const [railCollapsed, setRailCollapsed] = useState(false);
+  // Panel widths, and whether the sets rail is folded, are the person's — remembered in this browser.
+  const panelsLayout = useDefaultLayout({
+    id: 'forge-render-panels',
+    storage: typeof window === 'undefined' ? undefined : localStorage,
+  });
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [fieldsOpen, setFieldsOpen] = useState(() => readStored(FIELDS_OPEN_KEY, false));
+  /** Where a menu's picked action wants focus once the menu has closed. */
+  const menuFocus = useRef<(() => HTMLElement | null) | null>(null);
   const gridBox = useRef<HTMLDivElement>(null);
   /** A row just added, whose name field takes focus once it is on screen. */
   const focusRowId = useRef<string | null>(null);
 
   const latestRows = useRef(rows);
   latestRows.current = rows;
+  // The open set as the server last answered, read by saves that outlive the render that began them.
+  const activeSetRef = useRef(activeSet);
+  activeSetRef.current = activeSet;
+  /** The rows both sides of a conflict started from: the set as last loaded or saved. */
+  const savedBase = useRef<ForgeRenderSetRow[]>([]);
+  /** The save in flight; the next one, and any rename, waits for it. */
+  const inFlight = useRef<Promise<void> | null>(null);
+  /** Undo for row edits in this sitting; loading other rows starts it over. */
+  const history = useRef(emptyHistory());
+  /** The rows as they were, as the next undo step. Called before an edit, never inside setRows. */
+  const record = (key: string | null = null) => {
+    history.current = pushHistory(history.current, latestRows.current, key, Date.now());
+  };
+  const replaceRows = (next: RequestRow[]) => {
+    latestRows.current = next;
+    setRows(next);
+    setPreviewRowId((current) =>
+      current && next.some((row) => row.id === current) ? current : null,
+    );
+    setRowSelection((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([id]) => next.some((row) => row.id === id)),
+      ),
+    );
+  };
+  const step = (from: 'past' | 'future') => {
+    const { past, future } = history.current;
+    const stack = from === 'past' ? past : future;
+    const snapshot = stack.at(-1);
+    if (!snapshot) return false;
+    const current = latestRows.current;
+    history.current = {
+      past: from === 'past' ? past.slice(0, -1) : [...past, current],
+      future: from === 'past' ? [...future, current] : future.slice(0, -1),
+      lastKey: null,
+      lastAt: 0,
+    };
+    replaceRows(restoreRows(snapshot, current));
+    return true;
+  };
+  const undo = () => step('past');
+  const redo = () => step('future');
+  /** A change to many rows at once, as one undo step. Nothing changed, nothing recorded. */
+  const editRows = (change: (current: RequestRow[]) => RequestRow[]) => {
+    const current = latestRows.current;
+    const next = change(current);
+    if (next.length === current.length && next.every((row, index) => row === current[index]))
+      return;
+    record();
+    replaceRows(next);
+  };
+  // Read when a template's sets load, which must not itself reload them as the binding settles.
+  const bindingRef = useRef(bindingId);
+  bindingRef.current = bindingId;
 
   // --- discovery ---------------------------------------------------------------------------
   useEffect(() => {
@@ -482,6 +608,7 @@ export function RenderRequestsGrid({
 
   const showRows = useCallback(
     (next: RequestRow[], saved: RequestRow[] | null, forContract: ApiRenderTemplateContract) => {
+      history.current = emptyHistory();
       setRows(next);
       // A browser draft was never saved anywhere, so it starts out as unsaved edits.
       setSavedSignature(saved ? signatureOf(saved, forContract) : '');
@@ -492,6 +619,28 @@ export function RenderRequestsGrid({
       void rehydrateMedia(next);
     },
     [rehydrateMedia],
+  );
+
+  /**
+   * A saved set's rows on screen. One saved for an earlier version of the template is trimmed to
+   * this one first — a field or format it no longer has would fail every dry-run — and what that
+   * dropped is said before anything saves it.
+   */
+  const openSet = useCallback(
+    (set: ForgeRenderSet, forContract: ApiRenderTemplateContract) => {
+      activeSetRef.current = set;
+      savedBase.current = set.rows;
+      setActiveSet(set);
+      setConflict(null);
+      const loaded = fromRenderSetRows(set.rows);
+      const { rows: rebased, dropped } =
+        set.contractHash === forContract.template.contractHash
+          ? { rows: loaded, dropped: [] }
+          : rebaseRows(loaded, forContract);
+      setRebaseDrops(dropped);
+      showRows(rebased, rebased, forContract);
+    },
+    [showRows],
   );
 
   // Only a binding the request actually names reloads the contract: a single environment settling
@@ -529,21 +678,25 @@ export function RenderRequestsGrid({
         if (cancelled) return;
         setContract(next);
         setInputSets(sets.items);
-        setRenderSets(savedSets.items);
+        // A set belongs to the environment it was saved in; one from another would refuse to render.
+        const binding = bindingRef.current;
+        const inBinding = savedSets.items.filter((set) => !binding || set.bindingId === binding);
+        setRenderSets(inBinding);
         const draft = readDrafts(draftStorageKey(brandId, templateKey));
         const saved =
-          savedSets.items.find((set) => set.id === selection.renderSetId) ??
-          savedSets.items[0] ??
-          null;
-        setActiveSet(saved);
+          inBinding.find((set) => set.id === selection.renderSetId) ?? inBinding[0] ?? null;
         setDraftOffer(saved ? draft : null);
-        if (saved) {
-          const loaded = fromRenderSetRows(saved.rows);
-          showRows(loaded, loaded, next);
-        } else if (draft) showRows(draft, null, next);
+        if (saved) openSet(saved, next);
         else {
-          const seeded = seededRows(next);
-          showRows(seeded, seeded, next);
+          activeSetRef.current = null;
+          savedBase.current = [];
+          setActiveSet(null);
+          setRebaseDrops([]);
+          if (draft) showRows(draft, null, next);
+          else {
+            const seeded = seededRows(next);
+            showRows(seeded, seeded, next);
+          }
         }
       })
       .catch((error: unknown) => {
@@ -553,37 +706,51 @@ export function RenderRequestsGrid({
     return () => {
       cancelled = true;
     };
-  }, [brandId, selection, templateKey, contractBindingId, queryClient, showRows]);
+  }, [brandId, selection, templateKey, contractBindingId, queryClient, showRows, openSet]);
 
   // --- row edits ---------------------------------------------------------------------------
-  const updateRow = useCallback((id: string, patch: (row: RequestRow) => RequestRow) => {
-    setRows((current) => {
-      const affected = descendantsOf(current, [id]);
-      return current.map((row) =>
-        row.id === id
-          ? { ...patch(row), check: { state: 'idle' } }
-          : affected.has(row.id)
-            ? { ...row, check: { state: 'idle' } }
-            : row,
-      );
-    });
-  }, []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `record` reads refs only.
+  const updateRow = useCallback(
+    (id: string, patch: (row: RequestRow) => RequestRow, coalesce?: string) => {
+      record(coalesce ?? null);
+      setRows((current) => {
+        const affected = descendantsOf(current, [id]);
+        return current.map((row) =>
+          row.id === id
+            ? { ...patch(row), check: { state: 'idle' } }
+            : affected.has(row.id)
+              ? { ...row, check: { state: 'idle' } }
+              : row,
+        );
+      });
+    },
+    [],
+  );
 
   const setValue = useCallback(
     (id: string, key: string, value: ApiRenderInputValue | undefined) =>
-      updateRow(id, (row) => {
-        const values = { ...row.values };
-        const clearedKeys = row.clearedKeys.filter((item) => item !== key);
-        if (value !== undefined) {
-          values[key] = value;
-          return { ...row, values, clearedKeys };
-        }
-        delete values[key];
-        // Emptying a fork's cell blanks it. Dropping only the override would put the parent's
-        // value straight back under the cursor, and the next keystroke would append to it.
-        // Going back to inherited is the reset button's job.
-        return { ...row, values, clearedKeys: row.parentId ? [...clearedKeys, key] : clearedKeys };
-      }),
+      updateRow(
+        id,
+        (row) => {
+          const values = { ...row.values };
+          const clearedKeys = row.clearedKeys.filter((item) => item !== key);
+          if (value !== undefined) {
+            values[key] = value;
+            return { ...row, values, clearedKeys };
+          }
+          delete values[key];
+          // Emptying a fork's cell blanks it. Dropping only the override would put the parent's
+          // value straight back under the cursor, and the next keystroke would append to it.
+          // Going back to inherited is the reset button's job.
+          return {
+            ...row,
+            values,
+            clearedKeys: row.parentId ? [...clearedKeys, key] : clearedKeys,
+          };
+        },
+        // Typing in one cell is one undo step, not one per keystroke.
+        `value:${id}:${key}`,
+      ),
     [updateRow],
   );
 
@@ -805,6 +972,7 @@ export function RenderRequestsGrid({
       );
       return false;
     }
+    record();
     latestRows.current = [...current, ...added];
     setRows(latestRows.current);
     return true;
@@ -842,6 +1010,7 @@ export function RenderRequestsGrid({
       contract.variables,
       allOutputIdsOf(contract),
     );
+    record();
     latestRows.current = next;
     setRows(next);
     setPreviewRowId(added.id);
@@ -882,15 +1051,34 @@ export function RenderRequestsGrid({
         })),
     );
 
-  const deleteRows = () => {
-    const gone = deleteRequest?.all;
-    if (!gone) return;
-    setRows((current) => current.filter((row) => !gone.has(row.id)));
-    setRowSelection((current) =>
-      Object.fromEntries(Object.entries(current).filter(([id]) => !gone.has(id))),
-    );
-    setPreviewRowId((current) => (current && gone.has(current) ? null : current));
-    setDeleteRequest(null);
+  /** At once, variations included; the toast's Undo is the way back, as long as it is the last step. */
+  const remove = (ids: string[]) => {
+    const current = latestRows.current;
+    const picked = current.filter((row) => ids.includes(row.id)).length;
+    const gone = descendantsOf(current, ids);
+    if (picked === 0) return;
+    record();
+    const before = history.current.past.at(-1);
+    replaceRows(current.filter((row) => !gone.has(row.id)));
+    toast.success(deletedMessage(picked, gone.size), {
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          if (history.current.past.at(-1) === before) undo();
+        },
+      },
+    });
+  };
+
+  const addRow = () => {
+    if (!contract) return;
+    const added = {
+      ...seedRow(contract.variables, `Render ${latestRows.current.length + 1}`),
+      outputIds: allOutputIdsOf(contract),
+    };
+    if (!appendRows([added])) return;
+    setPreviewRowId(added.id);
+    focusRowId.current = added.id;
   };
 
   const saveAsInputs = (id: string) => {
@@ -925,6 +1113,24 @@ export function RenderRequestsGrid({
     });
   };
 
+  /** A draft's rows, proposed, under the rows already there; the first one is shown. */
+  const acceptDraft = (response: ApiRenderSuggestRowsResponse) => {
+    if (!contract) return;
+    const drafted = rowsFromSuggestion(response, allOutputIdsOf(contract));
+    if (!appendRows(drafted)) return;
+    setExpanded(true);
+    setPreviewRowId(drafted[0]?.id ?? null);
+    const notes = [...response.unfilled, ...response.dropped];
+    toast.success(
+      `${drafted.length} ${drafted.length === 1 ? 'row' : 'rows'} proposed — keep the ones you want`,
+      notes.length
+        ? {
+            description: `${notes.slice(0, 3).join('; ')}${notes.length > 3 ? ` (+${notes.length - 3} more)` : ''}`,
+          }
+        : undefined,
+    );
+  };
+
   const actions: RequestRowActions = {
     updateRow,
     setValue,
@@ -935,20 +1141,80 @@ export function RenderRequestsGrid({
     fork,
     addRowBelow,
     duplicate,
-    remove: (ids) =>
-      setDeleteRequest({ requested: new Set(ids), all: descendantsOf(latestRows.current, ids) }),
+    remove,
     saveAsInputs,
+    addRow,
+    applyValue: (key, fromId, toIds) =>
+      editRows((current) => applyValue(current, key, fromId, toIds)),
+    applyFormats: (fromId, toIds) =>
+      editRows((current) => applyFormats(current, fromId, toIds, allOutputIdsOf(contract))),
+    clearIn: (key, ids) => editRows((current) => clearKey(current, key, ids)),
+    resetIn: (key, ids) => editRows((current) => resetKey(current, key, ids)),
+    hideColumn: (columnId) => changeColumns({ ...columnVisibility, [columnId]: false }),
+    showAllColumns: () => changeColumns({}),
+    keepProposed: (ids) => editRows((current) => keepProposed(current, ids)),
+    varyWithAi: (id) => {
+      const row = latestRows.current.find((item) => item.id === id);
+      if (row)
+        setAiDraft({
+          parent: {
+            id,
+            label: row.label.trim() || 'Untitled',
+            values: effectiveValues(latestRows.current, id),
+          },
+        });
+    },
+    discardProposed: (ids) => editRows((current) => discardProposed(current, ids)),
   };
+
+  // --- columns ----------------------------------------------------------------------------
+  const columnsKey = contract ? columnsStorageKey(brandId, contract.template.key) : null;
+  useEffect(() => {
+    if (columnsKey) setColumnVisibility(readStored<VisibilityState>(columnsKey, {}));
+  }, [columnsKey]);
+  function changeColumns(next: VisibilityState) {
+    setColumnVisibility(next);
+    if (columnsKey) writeStored(columnsKey, next);
+  }
 
   // --- render sets ------------------------------------------------------------------------
   const dirty = contract !== null && signatureOf(rows, contract) !== savedSignature;
+  // Saved against an earlier version of the template: the fire path refuses it until the rows on
+  // screen — already fitted to this version — are saved with this contract.
+  const olderTemplate =
+    contract !== null &&
+    activeSet !== null &&
+    activeSet.contractHash !== contract.template.contractHash;
+  // Saving would make what the rebase dropped final, so that is the person's call.
+  const updateRequired = olderTemplate && rebaseDrops.length > 0;
+  const needsSave = dirty || olderTemplate;
+  const proposed = proposedIds(rows);
+  // Autosave waits while a review signs the set's revision, while a conflict is unresolved, and
+  // while the set waits on "Update set".
+  const autosaveBlocked =
+    !contract ||
+    !bindingId ||
+    rows.length === 0 ||
+    review !== null ||
+    conflict !== null ||
+    updateRequired;
 
-  /** Everything that replaces the rows on screen comes through here, and asks first when dirty. */
-  const confirmDiscard = (action: () => void) =>
-    dirty ? setPendingDiscard(() => action) : action();
+  /**
+   * Everything that replaces the rows on screen comes through here. Edits are saved first, so
+   * nothing is lost; only rows that cannot be saved — proposed ones, or a set that is waiting on a
+   * decision — ask first.
+   */
+  const confirmDiscard = (action: () => void) => {
+    if (proposed.size === 0 && !needsSave) return action();
+    if (proposed.size === 0 && !autosaveBlocked)
+      return void saveRenderSet({ announce: false }).then((saved) =>
+        saved ? action() : setPendingDiscard(() => action),
+      );
+    setPendingDiscard(() => action);
+  };
 
   // An intent is an event, taken once and handed back. Like every other way of replacing the rows
-  // it asks before losing unsaved edits; one for what is already open changes nothing.
+  // it saves or asks first; one for what is already open changes nothing.
   // biome-ignore lint/correctness/useExhaustiveDependencies: only a new intent is an event; the rest is read as it arrives.
   useEffect(() => {
     if (!intent) return;
@@ -956,41 +1222,39 @@ export function RenderRequestsGrid({
     const alreadyOpen =
       intent.templateKey === templateKey &&
       (!intent.renderSetId || intent.renderSetId === activeSet?.id);
-    if (!alreadyOpen) confirmDiscard(() => setSelection({ ...intent }));
+    if (intent.draftWithAi) setDraftFor(intent.templateKey);
+    if (!alreadyOpen)
+      confirmDiscard(() =>
+        setSelection({ templateKey: intent.templateKey, renderSetId: intent.renderSetId }),
+      );
   }, [intent]);
 
-  // --- drafts ------------------------------------------------------------------------------
-  // The browser copy exists to recover edits nobody saved, so only unsaved edits are written.
-  // Rows that match their set are not a draft: writing them would overwrite the draft still on
-  // offer, and one reload later the edits it held are gone.
+  // The draft opens once the template it was asked for is on screen, not over the previous one.
   useEffect(() => {
-    if (!contract) return;
-    const key = draftStorageKey(brandId, contract.template.key);
-    if (dirty) writeDrafts(key, rows);
-    else if (!draftOffer) writeDrafts(key, []);
-  }, [brandId, contract, rows, dirty, draftOffer]);
+    if (!draftFor || contract?.template.key !== draftFor) return;
+    setDraftFor(null);
+    setAiDraft({ parent: null });
+  }, [draftFor, contract]);
 
-  const reportSetError = async (error: unknown, set: ForgeRenderSet | null) => {
-    const message = error instanceof Error ? error.message : '';
-    if (message.includes('render_set_revision_conflict') && set) {
-      const fresh = await apiRendersApi.getRenderSet(brandId, set.id).catch(() => null);
-      // Keep the stale revision attached to the local edits until an explicit reload.
-      if (fresh) setRenderSets((sets) => sets.map((item) => (item.id === fresh.id ? fresh : item)));
-      toast.error('This set changed elsewhere. Reload it before saving again.');
-    } else toast.error(describeRenderDiscoveryFailure(message));
-  };
+  // ponytail: drafts are no longer written — the server autosaves. Browser drafts written before
+  // autosave are still offered through "Import browser draft"; drop `readDrafts` and the offer one
+  // release after this ships.
 
   const adoptSet = (saved: ForgeRenderSet, savedRows: RequestRow[]) => {
+    activeSetRef.current = saved;
+    savedBase.current = saved.rows;
     setActiveSet(saved);
+    if (saved.contractHash === contract?.template.contractHash) setRebaseDrops([]);
     setRenderSets((current) => [saved, ...current.filter((set) => set.id !== saved.id)]);
     setSavedSignature(signatureOf(savedRows, contract));
     setDraftOffer(null);
+    setConflict(null);
   };
 
   const createSet = async (
     name: string,
     rowsToSave: RequestRow[],
-    { announce = true } = {},
+    { announce = true, description }: { announce?: boolean; description?: string | null } = {},
   ): Promise<ForgeRenderSet | null> => {
     if (!contract || !bindingId) return null;
     try {
@@ -998,6 +1262,7 @@ export function RenderRequestsGrid({
         brandId,
         bindingId,
         name,
+        ...(description ? { description } : {}),
         templateKey: contract.template.key,
         contractHash: contract.template.contractHash,
         rows: toRenderSetRows(rowsToSave, allOutputIdsOf(contract)),
@@ -1007,75 +1272,232 @@ export function RenderRequestsGrid({
       if (announce) toast.success(`Saved “${created.name}”`);
       return created;
     } catch (error) {
-      await reportSetError(error, null);
+      toast.error(describeRenderDiscoveryFailure(error instanceof Error ? error.message : ''));
       return null;
     }
   };
 
   /**
-   * Saves the rows on screen; a set with no name yet asks for one first. `announce: false` is for
-   * a save that is only a step of something else, which says so itself.
+   * Another save won the race. Row edits on different rows merge by themselves — the other side's
+   * version becomes the base, the merged rows go on screen and autosave writes them. The same row
+   * changed two ways is a decision, never an overwrite: autosave waits behind the banner.
+   */
+  const resolveConflict = async (set: ForgeRenderSet, submitted: RequestRow[]) => {
+    if (!contract) return null;
+    const fresh = await apiRendersApi.getRenderSet(brandId, set.id).catch(() => null);
+    if (!fresh) return null;
+    setRenderSets((sets) => sets.map((item) => (item.id === fresh.id ? fresh : item)));
+    const merged =
+      fresh.contractHash === set.contractHash
+        ? mergeSetRows(
+            savedBase.current,
+            toRenderSetRows(submitted, allOutputIdsOf(contract)),
+            fresh.rows,
+          )
+        : null;
+    if (!merged) {
+      setConflict(fresh);
+      return null;
+    }
+    const theirs = fromRenderSetRows(fresh.rows);
+    activeSetRef.current = fresh;
+    savedBase.current = fresh.rows;
+    setActiveSet(fresh);
+    setSavedSignature(signatureOf(theirs, contract));
+    const current = latestRows.current;
+    const local = current.filter((row) => proposedIds(current).has(row.id));
+    const next = [...restoreRows(fromRenderSetRows(merged), current), ...local];
+    replaceRows(next);
+    void rehydrateMedia(next);
+    toast.info(`“${fresh.name}” changed elsewhere; both sets of edits are kept.`);
+    return fresh;
+  };
+
+  /**
+   * The rows on screen, saved into the open set — or into a new "Untitled set" when there is none
+   * yet. One save at a time: edits made while it is in flight stay unsaved and go next. `announce`
+   * is for a person pressing Save; autosave says so in the toolbar instead.
    */
   const saveRenderSet = async ({ announce = true } = {}): Promise<ForgeRenderSet | null> => {
-    if (!contract || !bindingId || rows.length === 0) return null;
+    if (!contract || !bindingId || latestRows.current.length === 0) return null;
+    if (inFlight.current) await inFlight.current;
     const submitted = latestRows.current;
-    if (!activeSet)
-      return new Promise((resolve) =>
-        setNameRequest({
-          title: 'Name this render set',
-          initialName: 'Untitled set',
-          confirmLabel: 'Save',
-          onConfirm: async (name) => {
-            const created = await createSet(name, submitted, { announce });
-            if (!created) return;
-            setNameRequest(null);
-            resolve(created);
-          },
-          onCancel: () => resolve(null),
-        }),
-      );
+    const set = activeSetRef.current;
+    if (proposedIds(submitted).size === submitted.length) return set;
+    const run = (async () => {
+      setSaveState({ phase: 'saving' });
+      try {
+        if (!set) {
+          const created = await createSet('Untitled set', submitted, { announce });
+          setSaveState({ phase: created ? 'idle' : 'failed' });
+          return created;
+        }
+        const saved = await apiRendersApi.updateRenderSet(set.id, {
+          brandId,
+          expectedRevision: set.revision,
+          rows: toRenderSetRows(submitted, allOutputIdsOf(contract)),
+          // Only when it moves: a server without the field refuses it, and an unchanged hash needs none.
+          ...(set.contractHash !== contract.template.contractHash
+            ? { contractHash: contract.template.contractHash }
+            : {}),
+        });
+        adoptSet(saved, submitted);
+        void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
+        if (announce) toast.success(`Saved “${saved.name}”`);
+        setSaveState({ phase: 'idle' });
+        return saved;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '';
+        if (set && message.includes('render_set_revision_conflict')) {
+          const merged = await resolveConflict(set, submitted);
+          setSaveState({ phase: 'idle' });
+          return merged;
+        }
+        setSaveState({ phase: 'failed' });
+        if (announce) toast.error(describeRenderDiscoveryFailure(message));
+        return null;
+      }
+    })();
+    const mine = run.then(() => undefined);
+    inFlight.current = mine;
     try {
-      const saved = await apiRendersApi.updateRenderSet(activeSet.id, {
-        brandId,
-        expectedRevision: activeSet.revision,
-        rows: toRenderSetRows(submitted, allOutputIdsOf(contract)),
-      });
-      adoptSet(saved, submitted);
-      void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
-      if (announce) toast.success(`Saved “${saved.name}”`);
-      return saved;
-    } catch (error) {
-      await reportSetError(error, activeSet);
-      return null;
+      return await run;
+    } finally {
+      if (inFlight.current === mine) inFlight.current = null;
+    }
+  };
+
+  // Autosave: a second and a half after the last edit, five after a save that failed.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the signature stands for the rows.
+  useEffect(() => {
+    if (!needsSave || autosaveBlocked || saveState.phase === 'saving') return;
+    const timer = setTimeout(
+      () => void saveRenderSet({ announce: false }),
+      saveState.phase === 'failed' ? AUTOSAVE_RETRY_MS : AUTOSAVE_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [
+    contract ? signatureOf(rows, contract) : '',
+    needsSave,
+    autosaveBlocked,
+    saveState.phase,
+    activeSet?.revision,
+  ]);
+
+  // Leaving the page while something is unsaved asks the browser to ask; a hidden tab saves now.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reads the latest save each time.
+  useEffect(() => {
+    const unsaved = needsSave || saveState.phase === 'saving' || proposed.size > 0;
+    if (!unsaved) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    const hidden = () => {
+      if (document.visibilityState === 'hidden' && needsSave && !autosaveBlocked)
+        void saveRenderSet({ announce: false });
+    };
+    window.addEventListener('beforeunload', warn);
+    document.addEventListener('visibilitychange', hidden);
+    return () => {
+      window.removeEventListener('beforeunload', warn);
+      document.removeEventListener('visibilitychange', hidden);
+    };
+  }, [needsSave, saveState.phase, proposed.size, autosaveBlocked]);
+
+  // Back on this tab with nothing unsaved: if someone else saved the open set meanwhile, show theirs.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reads the latest set each time.
+  useEffect(() => {
+    if (!active) return;
+    const refresh = () => {
+      const set = activeSetRef.current;
+      if (!set || !contract || needsSave || proposed.size > 0 || inFlight.current) return;
+      void apiRendersApi
+        .getRenderSet(brandId, set.id)
+        .then((fresh) => {
+          if (fresh.revision !== activeSetRef.current?.revision && !inFlight.current)
+            openSet(fresh, contract);
+        })
+        .catch(() => undefined);
+    };
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  });
+
+  const saveNow = async () => {
+    if (busy || !bindingId || rows.length === 0) return;
+    setBusy('saving');
+    try {
+      await saveRenderSet();
+    } finally {
+      setBusy(null);
     }
   };
 
   const loadRenderSet = (set: ForgeRenderSet) => {
-    if (!contract) return;
-    setActiveSet(set);
-    const loaded = fromRenderSetRows(set.rows);
-    showRows(loaded, loaded, contract);
+    if (contract) openSet(set, contract);
   };
 
-  /** A name or description change: unsaved row edits stay on screen and stay unsaved. */
+  /** A name or description change, queued behind any row save so both keep their revision. */
   const updateSetDetails = async (
     set: ForgeRenderSet,
     change: { name: string } | { description: string | null },
   ) => {
-    // The open set keeps the revision its rows were loaded at, so a conflict here stays a conflict.
-    const current = set.id === activeSet?.id ? activeSet : set;
+    if (inFlight.current) await inFlight.current;
+    const current = set.id === activeSetRef.current?.id ? activeSetRef.current : set;
     try {
       const updated = await apiRendersApi.updateRenderSet(set.id, {
         brandId,
         expectedRevision: current.revision,
         ...change,
       });
-      if (updated.id === activeSet?.id) setActiveSet(updated);
+      if (updated.id === activeSetRef.current?.id) {
+        activeSetRef.current = updated;
+        setActiveSet(updated);
+      }
       setRenderSets((sets) => sets.map((item) => (item.id === updated.id ? updated : item)));
       void queryClient.invalidateQueries({ queryKey: forgeQueryKeys.renderSets(brandId) });
     } catch (error) {
-      await reportSetError(error, current);
+      const message = error instanceof Error ? error.message : '';
+      if (message.includes('render_set_revision_conflict')) {
+        const fresh = await apiRendersApi.getRenderSet(brandId, set.id).catch(() => null);
+        if (fresh)
+          setRenderSets((sets) => sets.map((item) => (item.id === fresh.id ? fresh : item)));
+        toast.error('This set changed elsewhere. Reload it before saving again.');
+      } else toast.error(describeRenderDiscoveryFailure(message));
     }
+  };
+
+  /** A new set with the same rows — deliveries left behind, as a copied row leaves its own. */
+  const duplicateSet = async (set: ForgeRenderSet) => {
+    if (!contract) return;
+    const source = set.id === activeSet?.id ? latestRows.current : fromRenderSetRows(set.rows);
+    const copy = rebaseRows(
+      source.filter((row) => !proposed.has(row.id)).map(({ delivery: _delivery, ...row }) => row),
+      contract,
+    ).rows;
+    const created = await createSet(duplicateLabel(set.name), copy, {
+      announce: false,
+      description: set.description,
+    });
+    if (!created) return;
+    showRows(copy, copy, contract);
+    toast.success(`Duplicated as “${created.name}”`);
+  };
+
+  /** A kept version as a new set. The set it came from is never written back over. */
+  const restoreRevision = async (revision: ForgeRenderSetRevision) => {
+    if (!contract) return;
+    const restored = rebaseRows(fromRenderSetRows(revision.rows), contract).rows;
+    const created = await createSet(
+      `${revision.name} (restored ${formatRelativeTime(revision.savedAt)})`,
+      restored,
+      { announce: false },
+    );
+    if (!created) return;
+    showRows(restored, restored, contract);
+    setHistoryFor(null);
+    toast.success(`Restored as “${created.name}”`);
   };
 
   const deleteSet = async (set: ForgeRenderSet) => {
@@ -1093,7 +1515,10 @@ export function RenderRequestsGrid({
     if (set.id !== activeSet?.id) return;
     if (remaining[0]) loadRenderSet(remaining[0]);
     else {
+      activeSetRef.current = null;
+      savedBase.current = [];
       setActiveSet(null);
+      setRebaseDrops([]);
       const seeded = seededRows(contract);
       showRows(seeded, seeded, contract);
     }
@@ -1102,8 +1527,12 @@ export function RenderRequestsGrid({
   // --- the table --------------------------------------------------------------------------
   const columns = useMemo(() => buildColumns(contract), [contract]);
   const nestedRows = useMemo(() => nestRows(rows), [rows]);
+  const selectedIds = rows.filter((row) => rowSelection[row.id]).map((row) => row.id);
+  const hiddenColumns = columns.filter(
+    (column) => columnVisibility[column.id ?? ''] === false,
+  ).length;
   const meta: RequestGridMeta | undefined = contract
-    ? { brandId, contract, rows, clientErrors, actions }
+    ? { brandId, contract, rows, clientErrors, actions, selectedIds, hiddenColumns }
     : undefined;
   const table = useReactTable({
     data: nestedRows,
@@ -1111,8 +1540,10 @@ export function RenderRequestsGrid({
     meta,
     getRowId: (row) => row.id,
     getSubRows: (row) => row.subRows,
-    state: { rowSelection, expanded },
+    state: { rowSelection, expanded, columnVisibility },
     onRowSelectionChange: setRowSelection,
+    onColumnVisibilityChange: (updater) =>
+      changeColumns(typeof updater === 'function' ? updater(columnVisibility) : updater),
     onExpandedChange: setExpanded,
     enableRowSelection: true,
     enableSubRowSelection: false,
@@ -1121,7 +1552,16 @@ export function RenderRequestsGrid({
   });
 
   const selected = rows.filter((row) => rowSelection[row.id]);
-  const selectedIds = selected.map((row) => row.id);
+  /** Rows in the order the grid shows them: a tree, not the saved order. */
+  const shownIds = () => table.getRowModel().rows.map((row) => row.id);
+  const rowAbove = (id: string | null) => {
+    const shown = shownIds();
+    const index = id ? shown.indexOf(id) : -1;
+    return index > 0 ? shown[index - 1]! : null;
+  };
+  const actionContext: GridActionContext | null = contract
+    ? { rows, selectedIds, contract, actions, hiddenColumns }
+    : null;
   // What Render will make, counted the way the review tray counts it.
   const files = { total: 0, byRatio: new Map<string, number>(), replacements: 0 };
   if (contract)
@@ -1137,21 +1577,27 @@ export function RenderRequestsGrid({
     selected.length > 0 &&
     rows.length < MAX_BATCH_ROWS &&
     selected.every((row) => rowDepth(rows, row.id) < FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH);
+  const renderingProposed = selected.some((row) => proposed.has(row.id));
   const readyToFire =
+    !updateRequired &&
+    !renderingProposed &&
     selected.length > 0 &&
     selected.length <= MAX_BATCH_ROWS &&
     selected.every(
       (row) =>
         row.check.state === 'ready' && Object.keys(clientErrors.get(row.id) ?? {}).length === 0,
     );
-  const fireHint =
-    selected.length === 0
-      ? 'Select the rows to render'
-      : selected.length > MAX_BATCH_ROWS
-        ? `At most ${MAX_BATCH_ROWS} renders per batch`
-        : !readyToFire
-          ? 'Every selected row has to be Ready'
-          : null;
+  const fireHint = updateRequired
+    ? 'Update this set to the current template first'
+    : renderingProposed
+      ? 'Keep or discard the proposed rows first'
+      : selected.length === 0
+        ? 'Select the rows to render'
+        : selected.length > MAX_BATCH_ROWS
+          ? `At most ${MAX_BATCH_ROWS} renders per batch`
+          : !readyToFire
+            ? 'Every selected row has to be Ready'
+            : null;
   // A selected row still being dry-run is a wait, not a block: the tray re-checks once it lands.
   const stillChecking = selected.some(
     (row) =>
@@ -1203,6 +1649,7 @@ export function RenderRequestsGrid({
       return;
     }
     if (moved.rows === latestRows.current) return;
+    record();
     latestRows.current = moved.rows;
     setRows(moved.rows);
     if (drop.position === 'inside') setExpanded(true);
@@ -1231,7 +1678,7 @@ export function RenderRequestsGrid({
     setBusy('firing');
     try {
       const submittedSet =
-        activeSet && !dirty ? activeSet : await saveRenderSet({ announce: false });
+        activeSet && !needsSave ? activeSet : await saveRenderSet({ announce: false });
       if (!submittedSet) return;
       const current = latestRows.current;
       const signature = reviewSignature(
@@ -1291,6 +1738,99 @@ export function RenderRequestsGrid({
     else if (!review && !panel.isCollapsed()) panel.collapse();
   }, [review === null]);
 
+  // --- keyboard ---------------------------------------------------------------------------
+  /** The same column's field one row down (or up), selected for typing over. */
+  const moveInColumn = (from: HTMLElement, by: 1 | -1): boolean => {
+    const column = from.closest<HTMLElement>('td[data-column-id]')?.dataset.columnId;
+    const rowId = from.closest<HTMLElement>('tr[data-row-id]')?.dataset.rowId;
+    if (!column || !rowId) return false;
+    const shown = shownIds();
+    const next = shown[shown.indexOf(rowId) + by];
+    const field = next
+      ? gridBox.current?.querySelector<HTMLInputElement>(
+          `tr[data-row-id="${next}"] td[data-column-id="${column}"] input[type="text"], tr[data-row-id="${next}"] td[data-column-id="${column}"] input:not([type])`,
+        )
+      : null;
+    if (!field) return false;
+    field.focus();
+    field.select();
+    return true;
+  };
+
+  /** ⌘D, as in a spreadsheet: the top selected row's value into the rest, else the row above's. */
+  const fillDown = (from: HTMLElement): boolean => {
+    const key = from.closest<HTMLElement>('td[data-column-id]')?.dataset.columnId;
+    const rowId = from.closest<HTMLElement>('tr[data-row-id]')?.dataset.rowId;
+    if (!key || !rowId || !contract?.variables.some((item) => item.key === key && !item.reserved))
+      return false;
+    const shown = shownIds().filter((id) => rowSelection[id]);
+    if (shown.length > 1) actions.applyValue(key, shown[0]!, shown.slice(1));
+    else {
+      const above = rowAbove(rowId);
+      if (!above) return false;
+      actions.applyValue(key, above, [rowId]);
+    }
+    return true;
+  };
+
+  const onGridKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.nativeEvent.isComposing) return;
+    const target = event.target as HTMLElement;
+    const mod = event.metaKey || event.ctrlKey;
+    if (mod && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'd') {
+      if (fillDown(target)) event.preventDefault();
+      return;
+    }
+    if (mod || event.altKey || !(target instanceof HTMLInputElement)) return;
+    if (target.type !== 'text' && target.getAttribute('type') !== null) return;
+    const by =
+      event.key === 'Enter'
+        ? event.shiftKey
+          ? -1
+          : 1
+        : event.key === 'ArrowDown' && !event.shiftKey
+          ? 1
+          : event.key === 'ArrowUp' && !event.shiftKey
+            ? -1
+            : 0;
+    if (by !== 0 && moveInColumn(target, by)) event.preventDefault();
+  };
+
+  // ⌘Z / ⇧⌘Z / ⌘S belong to the grid while the Render tab shows and nothing floats over it. Undo
+  // takes back row edits, not keystrokes inside one field: typing in a field is one step.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reads the latest handlers each keypress.
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.defaultPrevented) return;
+      if (
+        document.querySelector(
+          // Something modal over the grid, or a menu open on it. Not a toast — toasts are
+          // non-modal dialogs and arrive any time — and not a menu fading out after a pick.
+          '[role="dialog"][data-open]:not([aria-modal="false"]), [role="alertdialog"][data-open], [role="menu"][data-open], [role="listbox"][data-open]',
+        )
+      )
+        return;
+      const target = event.target as Element | null;
+      // In the grid, or on something holding it: a closing menu hands focus back to the grid's
+      // nearest focusable ancestor — the Render tab's panel — which is still this grid's keyboard.
+      const box = gridBox.current;
+      const inGrid =
+        !target ||
+        target === document.body ||
+        Boolean(box && (box.contains(target) || target.contains(box)));
+      const key = event.key.toLowerCase();
+      if (key === 's') {
+        event.preventDefault();
+        void saveNow();
+      } else if (inGrid && key === 'z' && (event.shiftKey ? redo() : undo()))
+        event.preventDefault();
+      else if (inGrid && key === 'y' && !event.shiftKey && redo()) event.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   // --- render -----------------------------------------------------------------------------
   const ready = rows.filter((row) => row.check.state === 'ready').length;
   const previewId = previewRowId ?? (selected.length === 1 ? selected[0]!.id : null);
@@ -1310,15 +1850,8 @@ export function RenderRequestsGrid({
         ready={contract !== null}
         inputSets={inputSets}
         canAddRows={rows.length < MAX_BATCH_ROWS}
-        onAddRow={() =>
-          contract &&
-          appendRows([
-            {
-              ...seedRow(contract.variables, `Render ${rows.length + 1}`),
-              outputIds: allOutputIdsOf(contract),
-            },
-          ])
-        }
+        onAddRow={addRow}
+        onDraftWithAi={() => setAiDraft({ parent: null })}
         onAddFromInputs={(set) =>
           appendRows([{ ...seedRow([], set.name), values: { ...set.variables } }])
         }
@@ -1334,16 +1867,18 @@ export function RenderRequestsGrid({
             } rows.csv`,
           )
         }
-        dirty={dirty}
+        dirty={needsSave}
+        saveStatus={
+          saveState.phase === 'saving'
+            ? { phase: 'saving' }
+            : saveState.phase === 'failed'
+              ? { phase: 'failed' }
+              : activeSet
+                ? { phase: 'saved', at: activeSet.updatedAt }
+                : null
+        }
         canSave={Boolean(bindingId) && rows.length > 0}
-        onSave={async () => {
-          setBusy('saving');
-          try {
-            await saveRenderSet();
-          } finally {
-            setBusy(null);
-          }
-        }}
+        onSave={saveNow}
         selectedCount={selected.length}
         files={{ ...files, byRatio: [...files.byRatio] }}
         readyToFire={readyToFire}
@@ -1352,7 +1887,100 @@ export function RenderRequestsGrid({
         onRender={openReview}
       />
       {problem ? <p className="text-xs text-destructive">{problem}</p> : null}
+      {updateRequired && activeSet ? (
+        <section
+          aria-label="Older template"
+          className="flex shrink-0 flex-wrap items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-xs"
+        >
+          <p className="min-w-0 flex-1">
+            “{activeSet.name}” was saved for an earlier version of this template. Updating it
+            removes what this version no longer has: {rebaseDrops.join(', ')}.
+          </p>
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            disabled={busy === 'saving'}
+            onClick={async () => {
+              setBusy('saving');
+              try {
+                await saveRenderSet();
+              } finally {
+                setBusy(null);
+              }
+            }}
+          >
+            Update set
+          </Button>
+        </section>
+      ) : null}
 
+      {conflict ? (
+        <section
+          aria-label="Changed elsewhere"
+          className="flex shrink-0 flex-wrap items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-xs"
+        >
+          <p className="min-w-0 flex-1">
+            “{conflict.name}” was changed elsewhere, on some of the same rows you changed here.
+            Autosave is paused until you choose.
+          </p>
+          <Button type="button" size="xs" variant="outline" onClick={() => loadRenderSet(conflict)}>
+            Load their version
+          </Button>
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            onClick={async () => {
+              const mine = latestRows.current;
+              await createSet(`${conflict.name} (mine)`, mine);
+            }}
+          >
+            Keep mine as a new set
+          </Button>
+        </section>
+      ) : null}
+      {proposed.size ? (
+        <section
+          aria-label="Proposed rows"
+          className="flex shrink-0 flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-xs"
+        >
+          <p className="min-w-0 flex-1">
+            {proposed.size} proposed {proposed.size === 1 ? 'row' : 'rows'} · not saved until you
+            keep {proposed.size === 1 ? 'it' : 'them'}.
+          </p>
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            onClick={() =>
+              editRows((current) =>
+                keepProposed(
+                  current,
+                  current.filter((row) => row.proposed).map((row) => row.id),
+                ),
+              )
+            }
+          >
+            Keep all
+          </Button>
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            onClick={() =>
+              editRows((current) =>
+                discardProposed(
+                  current,
+                  current.filter((row) => row.proposed).map((row) => row.id),
+                ),
+              )
+            }
+          >
+            Discard all
+          </Button>
+        </section>
+      ) : null}
       {contract ? (
         <>
           <section
@@ -1361,45 +1989,25 @@ export function RenderRequestsGrid({
             className="flex shrink-0 flex-wrap items-center gap-1 rounded-md border bg-muted/30 px-2 py-1 text-xs"
           >
             <span className="mr-1 font-medium tabular-nums">{selected.length} selected</span>
-            <Button
-              type="button"
-              size="xs"
-              variant="ghost"
-              disabled={!canFork}
-              title="Child rows that inherit every value until you change it"
-              onClick={() => fork(selectedIds)}
-            >
-              <CornerDownRight data-icon="inline-start" /> Add variation
-            </Button>
-            <Button
-              type="button"
-              size="xs"
-              variant="ghost"
-              disabled={rows.length + selected.length > MAX_BATCH_ROWS}
-              title="Independent copies, with no delivery"
-              onClick={() => duplicate(selectedIds)}
-            >
-              <Copy data-icon="inline-start" /> Copy
-            </Button>
-            <Button
-              type="button"
-              size="xs"
-              variant="ghost"
-              disabled={selected.length !== 1}
-              title={selected.length === 1 ? undefined : 'Select one row to save its inputs'}
-              onClick={() => selected[0] && saveAsInputs(selected[0].id)}
-            >
-              <BookmarkPlus data-icon="inline-start" /> Save as inputs
-            </Button>
-            <Button
-              type="button"
-              size="xs"
-              variant="ghost"
-              className="text-destructive"
-              onClick={() => actions.remove(selectedIds)}
-            >
-              <Trash2 data-icon="inline-start" /> Delete
-            </Button>
+            {/* The same actions as a row's menus, acting on every selected row. */}
+            {actionContext
+              ? selectionActions(actionContext, selectedIds, { counted: false })
+                  .flat()
+                  .map((action) => (
+                    <Button
+                      key={action.id}
+                      type="button"
+                      size="xs"
+                      variant="ghost"
+                      className={action.destructive ? 'text-destructive' : undefined}
+                      disabled={Boolean(action.disabledReason)}
+                      title={action.disabledReason ?? action.hint}
+                      onClick={action.run}
+                    >
+                      <action.icon data-icon="inline-start" /> {action.label}
+                    </Button>
+                  ))
+              : null}
             <Button
               type="button"
               size="icon-xs"
@@ -1413,7 +2021,12 @@ export function RenderRequestsGrid({
           </section>
           <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
             <ResizablePanel id="rows" minSize="30%" className="min-h-0">
-              <ResizablePanelGroup orientation="horizontal" className="items-stretch">
+              <ResizablePanelGroup
+                orientation="horizontal"
+                className="items-stretch"
+                defaultLayout={panelsLayout.defaultLayout}
+                onLayoutChanged={panelsLayout.onLayoutChanged}
+              >
                 <ResizablePanel
                   id="render-sets"
                   panelRef={railPanel}
@@ -1428,6 +2041,7 @@ export function RenderRequestsGrid({
                   <RenderSetRail
                     brandId={brandId}
                     templateKey={contract.template.key}
+                    contractHash={contract.template.contractHash}
                     sets={renderSets}
                     activeSet={activeSet}
                     activeRows={rows.length}
@@ -1447,8 +2061,13 @@ export function RenderRequestsGrid({
                     onRename={(set, name) => updateSetDetails(set, { name })}
                     onDescribe={(set, description) => updateSetDetails(set, { description })}
                     onDelete={deleteSet}
+                    onDuplicate={(set) => void duplicateSet(set)}
+                    onHistory={setHistoryFor}
+                    onUpdate={() => void saveNow()}
                     onImportDraft={() => {
                       if (!draftOffer) return;
+                      activeSetRef.current = null;
+                      savedBase.current = [];
                       setActiveSet(null);
                       showRows(draftOffer, null, contract);
                       setDraftOffer(null);
@@ -1458,11 +2077,12 @@ export function RenderRequestsGrid({
                 <ResizableHandle withHandle />
                 <ResizablePanel
                   id="render-grid"
-                  defaultSize="52%"
+                  defaultSize="54%"
                   minSize="40%"
                   className="min-w-0"
                 >
-                  <div ref={gridBox} className="h-full min-h-0">
+                  {/* biome-ignore lint/a11y/noStaticElementInteractions: keys typed in the grid's own fields bubble here — Enter moves down a column, ⌘D fills down. */}
+                  <div ref={gridBox} className="h-full min-h-0" onKeyDown={onGridKeyDown}>
                     <DndContext
                       sensors={sensors}
                       collisionDetection={closestCenter}
@@ -1479,6 +2099,25 @@ export function RenderRequestsGrid({
                             onPaste={onPaste}
                             onRowClick={(row) => setPreviewRowId(row.id)}
                             RowComponent={SortableRequestRow}
+                            contextMenu={
+                              actionContext
+                                ? {
+                                    content: (target) => (
+                                      <ActionMenuItems
+                                        kind="context"
+                                        groups={menuFor(
+                                          actionContext,
+                                          target,
+                                          rowAbove(target.rowId),
+                                          HIDEABLE,
+                                        )}
+                                        focusAfter={menuFocus}
+                                      />
+                                    ),
+                                    finalFocus: takeFocusAfter(menuFocus),
+                                  }
+                                : undefined
+                            }
                             groupHeader={`${rows.length} request${rows.length === 1 ? '' : 's'} • ${ready} ready • ${selected.length} selected`}
                             empty="No rows. Add one, import a spreadsheet, or paste rows onto the grid."
                           />
@@ -1490,17 +2129,53 @@ export function RenderRequestsGrid({
                 <ResizableHandle withHandle />
                 <ResizablePanel
                   id="render-preview"
-                  defaultSize="32%"
+                  defaultSize="30%"
                   minSize="20%"
                   className="min-w-0"
                 >
-                  <RenderPreviewPanel
-                    brandId={brandId}
-                    contract={contract}
-                    rows={rows}
-                    rowId={previewId}
-                    renderSetId={activeSet?.id ?? null}
-                  />
+                  <div className="flex h-full min-h-0 flex-col">
+                    <div className="min-h-0 flex-1">
+                      <RenderPreviewPanel
+                        brandId={brandId}
+                        contract={contract}
+                        rows={rows}
+                        rowId={previewId}
+                        renderSetId={activeSet?.id ?? null}
+                      />
+                    </div>
+                    {/* The previewed row's fields at the pane's full width: room for long copy. */}
+                    <section
+                      aria-label="Fields"
+                      className="flex max-h-[55%] shrink-0 flex-col border-t border-border"
+                    >
+                      <button
+                        type="button"
+                        aria-expanded={fieldsOpen}
+                        className="flex h-8 shrink-0 items-center gap-1.5 px-[var(--card-pad)] text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          setFieldsOpen(!fieldsOpen);
+                          writeStored(FIELDS_OPEN_KEY, !fieldsOpen);
+                        }}
+                      >
+                        {fieldsOpen ? (
+                          <ChevronDown className="size-3" aria-hidden />
+                        ) : (
+                          <ChevronRight className="size-3" aria-hidden />
+                        )}
+                        Fields
+                        <span className="min-w-0 truncate font-normal normal-case tracking-normal">
+                          {previewId
+                            ? (rows.find((row) => row.id === previewId)?.label ?? '')
+                            : 'Pick a row'}
+                        </span>
+                      </button>
+                      {fieldsOpen && previewId ? (
+                        <div className="min-h-0 overflow-y-auto px-[var(--card-pad)] pb-2">
+                          <RowFields table={table} rowId={previewId} />
+                        </div>
+                      ) : null}
+                    </section>
+                  </div>
                 </ResizablePanel>
               </ResizablePanelGroup>
             </ResizablePanel>
@@ -1532,17 +2207,18 @@ export function RenderRequestsGrid({
                   rechecking={busy === 'firing' || stillChecking}
                   finalBlocked={finalBlocked}
                   onRecheck={openReview}
-                  onDeliveryChange={(rowId, delivery) =>
+                  onDeliveryChange={(rowId, delivery) => {
                     // The choice belongs to the row, so the next review and the saved set keep it.
                     // Not `updateRow`: where a render goes changes nothing the dry-run checked.
+                    record();
                     setRows((current) =>
                       current.map((row) => {
                         if (row.id !== rowId) return row;
                         const { delivery: _previous, ...rest } = row;
                         return delivery ? { ...rest, delivery } : rest;
                       }),
-                    )
-                  }
+                    );
+                  }}
                   onClose={() => setReview(null)}
                   onFired={() => {
                     setRowSelection({});
@@ -1615,6 +2291,24 @@ export function RenderRequestsGrid({
           Choose a template to set up renders.
         </div>
       )}
+      {contract ? (
+        <AiDraftDialog
+          open={aiDraft !== null}
+          onOpenChange={(open) => !open && setAiDraft(null)}
+          brandId={brandId}
+          bindingId={multiEnv ? bindingId : null}
+          contract={contract}
+          parent={aiDraft?.parent ?? null}
+          onDrafted={acceptDraft}
+        />
+      ) : null}
+      <SetHistoryDialog
+        brandId={brandId}
+        set={historyFor}
+        contractHash={contract?.template.contractHash ?? ''}
+        onRestore={restoreRevision}
+        onOpenChange={(open) => !open && setHistoryFor(null)}
+      />
       <NameDialog
         open={nameRequest !== null}
         title={nameRequest?.title ?? ''}
@@ -1636,9 +2330,11 @@ export function RenderRequestsGrid({
           <AlertDialogHeader>
             <AlertDialogTitle>Discard unsaved edits?</AlertDialogTitle>
             <AlertDialogDescription>
-              {activeSet
-                ? `Changes to “${activeSet.name}” since it was last saved will be lost.`
-                : 'These rows were never saved to a render set.'}
+              {proposed.size
+                ? 'Proposed rows are saved only once you keep them; these will be lost.'
+                : activeSet
+                  ? `Changes to “${activeSet.name}” could not be saved and will be lost.`
+                  : 'These rows were never saved to a render set.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1652,25 +2348,6 @@ export function RenderRequestsGrid({
               }}
             >
               Discard
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <AlertDialog
-        open={deleteRequest !== null}
-        onOpenChange={(open) => !open && setDeleteRequest(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete rows?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleteRequest ? deleteMessage(deleteRequest) : null}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={deleteRows}>
-              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

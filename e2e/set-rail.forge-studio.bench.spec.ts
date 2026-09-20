@@ -435,30 +435,32 @@ test.describe('Sets rail — fixtures', () => {
       await expect(gridRow(page, ROWS.root).getByText('Ready', { exact: true })).toBeVisible();
       expect(puts).toHaveLength(1);
 
-      // Switching with unsaved grid edits asks first; Keep editing keeps them, Discard switches.
+      // Switching with unsaved grid edits saves them into the open set first, then switches —
+      // nothing is asked, and nothing is lost: the edit is there on the way back.
       const rootName = gridRow(page, ROWS.root).getByRole('textbox', {
         name: 'Row name',
         exact: true,
       });
       await rootName.fill('Root EU');
       await openByName(page, TEASER);
-      const guard = page.getByRole('alertdialog', { name: 'Discard unsaved edits?' });
-      await expect(guard).toBeVisible();
-      await shoot(page, `${size}-discard-guard`);
-      await guard.getByRole('button', { name: 'Keep editing', exact: true }).click();
-      await expect(guard).toBeHidden();
-      await expect(
-        page.getByRole('textbox', { name: 'Row name', exact: true }).first(),
-      ).toHaveValue('Root EU');
-      await expect(openButton(page, LAUNCH)).toHaveAttribute('aria-current', 'true');
-      await openByName(page, TEASER);
-      await guard.getByRole('button', { name: 'Discard', exact: true }).click();
       await expect(gridRow(page, 'Teaser')).toBeVisible();
+      await expect(page.getByRole('alertdialog')).toHaveCount(0);
       await expect(openButton(page, TEASER)).toHaveAttribute('aria-current', 'true');
-      // Nothing unsaved now: back to Launch week with no question asked.
+      const rowSave = puts.at(-1)?.body as {
+        expectedRevision: number;
+        rows?: Array<{ label: string }>;
+      };
+      expect(puts).toHaveLength(2);
+      expect(rowSave.expectedRevision).toBe(4);
+      expect(rowSave.rows?.map((row) => row.label)).toContain('Root EU');
+      await shoot(page, `${size}-switch-saves-first`);
       await openByName(page, LAUNCH);
+      const renamed = gridRow(page, 'Root EU');
+      await expect(renamed).toBeVisible();
+      await expect(page.getByRole('alertdialog')).toHaveCount(0);
+      // Back to the name the rest of this run looks for.
+      await renamed.getByRole('textbox', { name: 'Row name', exact: true }).fill(ROWS.root);
       await expect(gridRow(page, ROWS.root)).toBeVisible();
-      await expect(guard).toHaveCount(0);
 
       // Folding the rail gives its width to the grid, and still names the open set.
       const grid = page.getByTestId('render-grid');
@@ -494,8 +496,11 @@ test.describe('Sets rail — fixtures', () => {
       );
       expect(await overflow(page)).toEqual({ page: 0, main: 0, rail: 0 });
       await shoot(page, `${size}-tray`);
-      // No row edit reached the server: the one PUT is still the description.
-      expect(puts).toHaveLength(1);
+      // Every PUT is one the person caused: the description, the edit saved before the switch, and
+      // the name put back — each at the revision the one before it left, never a conflict.
+      expect(
+        puts.map(({ body }) => (body as { expectedRevision: number }).expectedRevision),
+      ).toEqual([3, 4, 5]);
     });
   }
 });

@@ -12,10 +12,16 @@ import {
   useReactTable,
   type VisibilityState,
 } from '@tanstack/react-table';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { type ComponentProps, useState } from 'react';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
-import { DataGrid, type DataGridRowProps, STICKY_LEFT, selectColumn } from './DataGrid';
+import {
+  DataGrid,
+  type DataGridMenuTarget,
+  type DataGridRowProps,
+  STICKY_LEFT,
+  selectColumn,
+} from './DataGrid';
 
 // Base UI waits on a MutationObserver as a popup or dialog animates; happy-dom's, lifted per file
 // (a global shim in the shared setup drops other files' tests).
@@ -40,12 +46,14 @@ function Harness({
   ...props
 }: Partial<ComponentProps<typeof DataGrid<Job>>> & { columns?: ColumnDef<Job>[] }) {
   const [visibility, setVisibility] = useState<VisibilityState>({});
+  const [selection, setSelection] = useState({});
   const table = useReactTable({
     data: JOBS,
     columns,
     getRowId: (job) => job.id,
-    state: { columnVisibility: visibility },
+    state: { columnVisibility: visibility, rowSelection: selection },
     onColumnVisibilityChange: setVisibility,
+    onRowSelectionChange: setSelection,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
@@ -175,5 +183,57 @@ describe('DataGrid', () => {
     render(<Harness RowComponent={Sortable} />);
     expect(screen.getByTestId('sortable-2').textContent).toBe('AlphaHero');
     expect(screen.getAllByTestId(/^sortable-/)).toHaveLength(3);
+  });
+
+  test('every header and cell names its column, and every row its id', () => {
+    render(<Harness />);
+    const header = screen.getByRole('columnheader', { name: 'Template' });
+    expect(header.getAttribute('data-column-id')).toBe('template');
+    const alpha = screen.getByText('Alpha').closest('tr')!;
+    expect(alpha.getAttribute('data-row-id')).toBe('2');
+    expect(within(alpha).getByText('Hero').closest('td')?.getAttribute('data-column-id')).toBe(
+      'template',
+    );
+  });
+
+  test('a right-click says what it landed on, and counts as clicking that row', async () => {
+    const targets: DataGridMenuTarget[] = [];
+    const clicked: string[] = [];
+    render(
+      <Harness
+        onRowClick={(job) => clicked.push(job.name)}
+        contextMenu={{
+          content: (target) => {
+            targets.push(target);
+            return (
+              <span role="menuitem" tabIndex={-1}>
+                Item
+              </span>
+            );
+          },
+        }}
+      />,
+    );
+    fireEvent.contextMenu(screen.getByText('Hero'));
+    await screen.findByRole('menuitem');
+    expect(targets.at(-1)).toEqual({ rowId: '2', columnId: 'template', header: false });
+    expect(clicked).toEqual(['Alpha']);
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryAllByRole('menuitem')).toHaveLength(0));
+    fireEvent.contextMenu(screen.getByRole('columnheader', { name: 'Template' }));
+    await screen.findByRole('menuitem');
+    expect(targets.at(-1)).toEqual({ rowId: null, columnId: 'template', header: true });
+  });
+
+  test('shift-click ticks every row from the last one ticked', () => {
+    render(<Harness columns={[selectColumn<Job>(), ...COLUMNS]} />);
+    const boxes = () => screen.getAllByLabelText('Select row');
+    fireEvent.click(boxes()[0]!);
+    fireEvent.click(boxes()[2]!, { shiftKey: true });
+    expect(boxes().map((box) => box.getAttribute('aria-checked'))).toEqual([
+      'true',
+      'true',
+      'true',
+    ]);
   });
 });

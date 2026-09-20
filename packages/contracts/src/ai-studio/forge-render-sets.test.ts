@@ -222,4 +222,24 @@ describe('Forge render-set description', () => {
       }).success,
     ).toBe(true);
   });
+
+  test('a contract hash moves only with rows', () => {
+    const rows = [{ id: rootId, parentId: null, label: 'Root' }];
+    expect(
+      updateForgeRenderSetRequestSchema.safeParse({
+        brandId,
+        expectedRevision: 3,
+        rows,
+        contractHash: 'hash-2',
+      }).success,
+    ).toBe(true);
+    expect(
+      updateForgeRenderSetRequestSchema.safeParse({
+        brandId,
+        expectedRevision: 3,
+        name: 'Renamed',
+        contractHash: 'hash-2',
+      }).success,
+    ).toBe(false);
+  });
 });

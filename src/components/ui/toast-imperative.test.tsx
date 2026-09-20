@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
 import { ToastProvider } from './ToastProvider';
 import { toast } from './toast-imperative';
 
@@ -12,6 +13,9 @@ import { toast } from './toast-imperative';
 //
 // So the assertion has to be that a MODULE-LEVEL call reaches a MOUNTED renderer and puts
 // text on screen. Asserting the function was called would have passed the whole time.
+
+// Base UI's toast waits on a MutationObserver; happy-dom's, lifted per file like the pickers do.
+installPickerDomGlobals();
 
 afterEach(cleanup);
 
@@ -64,5 +68,23 @@ describe('imperative toast', () => {
     await waitFor(() => {
       expect(screen.getByText('Queued before mount')).toBeTruthy();
     });
+  });
+
+  it('an action is a button named for it, and pressing it runs the action once', async () => {
+    render(<ToastProvider>{null}</ToastProvider>);
+    let undone = 0;
+
+    act(() => {
+      toast.success('Deleted 2 rows', { action: { label: 'Undo', onClick: () => undone++ } });
+    });
+
+    const button = await screen.findByRole('button', { name: 'Undo' });
+    act(() => button.click());
+    expect(undone).toBe(1);
+
+    // Pressing it also dismisses the toast. Waited for rather than asserted straight away,
+    // because unmounting while the exit animation is still running CANCELS it, and happy-dom
+    // rejects the cancelled animation's `finished` where nothing is listening.
+    await waitFor(() => expect(screen.queryAllByText('Deleted 2 rows')).toHaveLength(0));
   });
 });

@@ -14,12 +14,10 @@ import {
 } from '@continuum/contracts';
 import type { DraggableAttributes, DraggableSyntheticListeners } from '@dnd-kit/core';
 import { useSortable } from '@dnd-kit/sortable';
-import type { CellContext, Table } from '@tanstack/react-table';
+import { type CellContext, flexRender, type Row, type Table } from '@tanstack/react-table';
 import {
-  BookmarkPlus,
   ChevronDown,
   ChevronRight,
-  Copy,
   CornerDownRight,
   GripVertical,
   ImageIcon,
@@ -27,17 +25,24 @@ import {
   Loader2,
   type LucideIcon,
   MoreHorizontal,
-  Pencil,
   Plus,
   RotateCcw,
-  Trash2,
   Video,
   X,
 } from 'lucide-react';
-import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  Fragment,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { BrandColorField } from '@/components/forge/BrandColorField';
 import type { DataGridRowProps } from '@/components/forge/DataGrid';
 import { EncodeOverrideCell } from '@/components/forge/EncodeOverrideCell';
+import { ActionMenuItems, rowActions, takeFocusAfter } from '@/components/forge/gridActions';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import {
   effectiveMedia,
@@ -51,7 +56,6 @@ import {
   type RequestRowMedia,
   type RowDrop,
   rowBreadcrumb,
-  rowDepth,
 } from '@/components/forge/renderRequestRows';
 import { MediaSelectPopover } from '@/components/organic/primitives/MediaSelectPopover';
 import { Badge } from '@/components/ui/badge';
@@ -61,8 +65,6 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -90,7 +92,8 @@ import { pickedPins } from '@/StudioCanvas/nodes/api-render/RenderVariableFields
 const UNSET = '__unset__';
 
 export type RequestRowActions = {
-  updateRow: (id: string, patch: (row: RequestRow) => RequestRow) => void;
+  /** `coalesce` names a stream of edits — typing in one field — that undo takes back as one step. */
+  updateRow: (id: string, patch: (row: RequestRow) => RequestRow, coalesce?: string) => void;
   setValue: (id: string, key: string, value: ApiRenderInputValue | undefined) => void;
   clearValue: (id: string, key: string) => void;
   resetValue: (id: string, key: string) => void;
@@ -101,9 +104,22 @@ export type RequestRowActions = {
   /** A row straight after this one's subtree, under the same parent. */
   addRowBelow: (id: string) => void;
   duplicate: (ids: string[]) => void;
-  /** Asks first — a row takes its descendants with it. */
+  /** Deletes at once, variations included, with Undo on the toast. */
   remove: (ids: string[]) => void;
   saveAsInputs: (id: string) => void;
+  addRow: () => void;
+  /** One row's value for `key` given to others — "Apply to selected" and fill-down. */
+  applyValue: (key: string, fromId: string, toIds: string[]) => void;
+  applyFormats: (fromId: string, toIds: string[]) => void;
+  clearIn: (key: string, ids: string[]) => void;
+  resetIn: (key: string, ids: string[]) => void;
+  hideColumn: (columnId: string) => void;
+  showAllColumns: () => void;
+  /** Proposed rows into the set — with the proposed rows above them — or gone, with what is under them. */
+  keepProposed: (ids: string[]) => void;
+  discardProposed: (ids: string[]) => void;
+  /** Opens the AI draft for variations of this row. */
+  varyWithAi: (id: string) => void;
 };
 
 export type RequestGridMeta = {
@@ -112,6 +128,9 @@ export type RequestGridMeta = {
   rows: RequestRow[];
   clientErrors: Map<string, Record<string, string>>;
   actions: RequestRowActions;
+  /** Rows ticked for Render, in grid order — what "Apply to selected" writes to. */
+  selectedIds: string[];
+  hiddenColumns: number;
 };
 
 export type VariableColumnMeta = { variable: ApiRenderVariable };
@@ -335,6 +354,7 @@ function NumberInput({
   }, [value]);
   return (
     <Input
+      size={1}
       className={cn('h-7 text-xs tabular-nums', invalid && 'border-destructive')}
       type="text"
       inputMode="decimal"
@@ -482,52 +502,50 @@ export function VariableCell({
     );
 
   const used = typeof value === 'string' ? value.length : 0;
-  const over = variable.charBudget !== null && used > variable.charBudget;
+  const budget = variable.charBudget;
+  const over = budget !== null && used > budget;
   return (
-    <div className="flex min-w-36 items-center gap-1.5">
-      <Input
-        className={cn('h-7 text-xs', invalid && 'border-destructive')}
-        aria-label={variable.label}
-        title={error}
-        placeholder={variable.sample ?? undefined}
-        value={value === undefined ? '' : String(value)}
-        onChange={(event) =>
-          actions.setValue(
-            row.id,
-            variable.key,
-            event.target.value === '' ? undefined : event.target.value,
-          )
-        }
-      />
-      {variable.charBudget !== null ? (
-        <span
+    <div className="flex min-w-32 items-center gap-1.5">
+      {/* The count sits inside the field, shown while typing or once over: width is for the text. */}
+      <div className="group/count relative min-w-0 flex-1">
+        <Input
+          size={1}
           className={cn(
-            'shrink-0 tabular-nums text-2xs text-muted-foreground',
-            over && 'text-warning',
+            'h-7 text-xs',
+            budget !== null && (over ? 'pr-11' : 'focus-visible:pr-11'),
+            invalid && 'border-destructive',
           )}
-          title={`${used} of ${variable.charBudget} characters the design has room for${over ? ' — the type shrinks to fit, or overflows' : ''}`}
-        >
-          {used}/{variable.charBudget}
-        </span>
-      ) : null}
+          aria-label={variable.label}
+          title={error}
+          placeholder={variable.sample ?? undefined}
+          value={value === undefined ? '' : String(value)}
+          onChange={(event) =>
+            actions.setValue(
+              row.id,
+              variable.key,
+              event.target.value === '' ? undefined : event.target.value,
+            )
+          }
+        />
+        {budget !== null ? (
+          <span
+            className={cn(
+              'pointer-events-none absolute inset-y-0 right-2 flex items-center font-mono tabular-nums text-2xs text-muted-foreground',
+              over ? 'text-warning' : 'invisible group-focus-within/count:visible',
+            )}
+            title={`${used} of ${budget} characters the design has room for${over ? ' — the type shrinks to fit, or overflows' : ''}`}
+          >
+            {used}/{budget}
+          </span>
+        ) : null}
+      </div>
       {inheritance}
     </div>
   );
 }
 
-function RowMenu({
-  row,
-  rows,
-  actions,
-  labelInput,
-}: {
-  row: RequestRow;
-  rows: RequestRow[];
-  actions: RequestRowActions;
-  labelInput: React.RefObject<HTMLInputElement | null>;
-}) {
-  const renaming = useRef(false);
-  const full = rows.length >= MAX_BATCH_ROWS;
+function RowMenu({ row, meta }: { row: RequestRow; meta: RequestGridMeta }) {
+  const focusAfter = useRef<(() => HTMLElement | null) | null>(null);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -542,36 +560,12 @@ function RowMenu({
           </Button>
         }
       />
-      <DropdownMenuContent
-        align="end"
-        className="w-44"
-        // Rename hands focus straight to the name field instead of back to this button.
-        finalFocus={() => {
-          if (!renaming.current) return true;
-          renaming.current = false;
-          queueMicrotask(() => labelInput.current?.select());
-          return labelInput.current;
-        }}
-      >
-        <DropdownMenuItem onClick={() => (renaming.current = true)}>
-          <Pencil aria-hidden /> Rename
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={full || rowDepth(rows, row.id) >= FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH}
-          onClick={() => actions.fork([row.id])}
-        >
-          <CornerDownRight aria-hidden /> Add variation
-        </DropdownMenuItem>
-        <DropdownMenuItem disabled={full} onClick={() => actions.duplicate([row.id])}>
-          <Copy aria-hidden /> Copy
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => actions.saveAsInputs(row.id)}>
-          <BookmarkPlus aria-hidden /> Save as inputs
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onClick={() => actions.remove([row.id])}>
-          <Trash2 aria-hidden /> Delete
-        </DropdownMenuItem>
+      <DropdownMenuContent align="end" className="w-48" finalFocus={takeFocusAfter(focusAfter)}>
+        <ActionMenuItems
+          kind="dropdown"
+          groups={rowActions({ ...meta }, row.id)}
+          focusAfter={focusAfter}
+        />
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -612,8 +606,10 @@ function RowAddButton({
             variant="ghost"
             aria-label={label}
             disabled={disabledReason !== null}
+            // Disabled but still hoverable, so the tooltip can say why.
             focusableWhenDisabled
-            className="invisible group-focus-within/row:visible group-hover/row:visible"
+            // Not a tab stop: both live in the row's menus, and a tab stop per row is two too many.
+            tabIndex={-1}
             // The row's own click previews that row; this one previews the row it adds.
             onClick={(event) => {
               event.stopPropagation();
@@ -630,15 +626,15 @@ function RowAddButton({
 }
 
 export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unknown>) {
-  const { rows, actions } = gridMeta(table);
+  const meta = gridMeta(table);
+  const { rows, actions } = meta;
   const row = tableRow.original;
-  const labelInput = useRef<HTMLInputElement>(null);
   const breadcrumb = rowBreadcrumb(rows, row.id).slice(0, -1).join(' / ');
   const note = deliveryNote(row);
   const full =
     rows.length >= MAX_BATCH_ROWS ? `A render set holds at most ${MAX_BATCH_ROWS} rows` : null;
   return (
-    <div className="flex min-w-72 items-center gap-1">
+    <div className="relative flex min-w-52 items-center gap-1">
       {/* One guide per level, reaching through the cell's padding so a branch reads as a line. */}
       {Array.from({ length: tableRow.depth }, (_, level) => (
         <span
@@ -664,7 +660,12 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
       ) : (
         <span className="size-4" />
       )}
-      <div className="min-w-0 flex-1">
+      {/* contain: a truncated breadcrumb or delivery note still counts its full text when a table
+          sizes its columns; containing the block's inline size keeps the column at its own width. */}
+      <div className="min-w-0 flex-1 [contain:inline-size]">
+        {row.proposed ? (
+          <p className="text-3xs font-medium text-primary">Proposed · not saved yet</p>
+        ) : null}
         {breadcrumb ? (
           <div className="flex min-w-0 items-center gap-1.5">
             <p className="truncate text-3xs text-muted-foreground" title={breadcrumb}>
@@ -676,13 +677,19 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
           </div>
         ) : null}
         <Input
-          ref={labelInput}
+          // size=1: a text field's own default width (about 20 characters) would otherwise set
+          // the column's width; the column's size and min-w decide it instead.
+          size={1}
           className="h-7 text-xs"
           aria-label="Row name"
           placeholder={`Render ${rows.findIndex((item) => item.id === row.id) + 1}`}
           value={row.label}
           onChange={(event) =>
-            actions.updateRow(row.id, (current) => ({ ...current, label: event.target.value }))
+            actions.updateRow(
+              row.id,
+              (current) => ({ ...current, label: event.target.value }),
+              `label:${row.id}`,
+            )
           }
         />
         {note ? (
@@ -691,26 +698,29 @@ export function LabelCell({ row: tableRow, table }: CellContext<RequestRow, unkn
           </p>
         ) : null}
       </div>
-      <RowAddButton
-        label="Add variation"
-        hint="Add variation — inherits every value until you change it"
-        icon={CornerDownRight}
-        disabledReason={
-          full ??
-          (tableRow.depth >= FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH
-            ? `Variations go at most ${FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH} levels deep`
-            : null)
-        }
-        onAdd={() => actions.fork([row.id])}
-      />
-      <RowAddButton
-        label="Row below"
-        hint={row.parentId ? 'Add another variation of the same parent' : 'Add a row below'}
-        icon={Plus}
-        disabledReason={full}
-        onAdd={() => actions.addRowBelow(row.id)}
-      />
-      <RowMenu row={row} rows={rows} actions={actions} labelInput={labelInput} />
+      {/* Over the end of the name while the row is hovered, so they cost the name no width. */}
+      <div className="invisible absolute inset-y-0 right-7 flex items-center gap-0.5 rounded-md bg-card/95 px-0.5 group-hover/row:visible">
+        <RowAddButton
+          label="Add variation"
+          hint="Add variation — inherits every value until you change it"
+          icon={CornerDownRight}
+          disabledReason={
+            full ??
+            (tableRow.depth >= FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH
+              ? `Variations go at most ${FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH} levels deep`
+              : null)
+          }
+          onAdd={() => actions.fork([row.id])}
+        />
+        <RowAddButton
+          label="Row below"
+          hint={row.parentId ? 'Add another variation of the same parent' : 'Add a row below'}
+          icon={Plus}
+          disabledReason={full}
+          onAdd={() => actions.addRowBelow(row.id)}
+        />
+      </div>
+      <RowMenu row={row} meta={meta} />
     </div>
   );
 }
@@ -883,6 +893,39 @@ export function StatusCell({ row: { original: row }, table }: CellContext<Reques
     );
   }
   return <StatusBadge row={row} invalid={errorKeys.length > 0} />;
+}
+
+/**
+ * One row's fields at full width — the same cells the grid draws, so an edit here is an edit
+ * there. Hidden columns are still here: hiding a column is about the grid's width, not the data.
+ */
+export function RowFields({ table, rowId }: { table: Table<RequestRow>; rowId: string }) {
+  let row: Row<RequestRow>;
+  try {
+    row = table.getRow(rowId, true);
+  } catch {
+    return null;
+  }
+  const cells = row
+    .getAllCells()
+    .filter((cell) => (cell.column.columnDef.meta as Partial<VariableColumnMeta>)?.variable);
+  return (
+    <dl className="grid grid-cols-[minmax(5rem,max-content)_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 text-xs">
+      {cells.map((cell) => {
+        const { variable } = cell.column.columnDef.meta as VariableColumnMeta;
+        return (
+          <Fragment key={cell.id}>
+            <dt className="truncate text-muted-foreground" title={variable.label}>
+              {readableLayerName(variable.label)}
+            </dt>
+            <dd className="min-w-0 [&_input]:w-full">
+              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+            </dd>
+          </Fragment>
+        );
+      })}
+    </dl>
+  );
 }
 
 // --- drag and drop -------------------------------------------------------------------------

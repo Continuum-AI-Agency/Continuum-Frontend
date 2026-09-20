@@ -9,7 +9,11 @@ const RENDER_DISCOVERY_MESSAGES: Record<string, string> = {
   render_api_not_configured: 'Rendering is not configured for this environment yet.',
   render_input_set_name_taken: 'A set with that name already exists for this template.',
   render_contract_changed:
-    'This template changed since that set was saved. Re-pick the template and save the set again.',
+    'This template was updated after these rows were checked. Reload the template, save the set, then render again.',
+  render_set_binding_changed:
+    'This set was saved for another version or workspace of this template. Open it again and save it, then render.',
+  render_set_coordinate_incomplete:
+    'This render lost track of the set it came from. Save the set, then render again.',
   render_reserved_variable: 'That variable is filled by Continuum and cannot be sent.',
   render_callback_not_configured:
     'This environment has no render callback URL configured, so nothing can be prepared here yet.',

@@ -15,6 +15,7 @@ import {
   Play,
   Plus,
   Save,
+  Sparkles,
   Upload,
 } from 'lucide-react';
 import { Fragment, type ReactNode } from 'react';
@@ -35,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
 
 // The Render tab's toolbar: four controls, left to right in the order a person uses them —
@@ -66,10 +68,12 @@ export function RenderToolbar({
   inputSets,
   canAddRows,
   onAddRow,
+  onDraftWithAi,
   onAddFromInputs,
   onUpload,
   onDownloadTemplate,
   dirty,
+  saveStatus,
   canSave,
   onSave,
   selectedCount,
@@ -91,10 +95,17 @@ export function RenderToolbar({
   inputSets: ApiRenderInputSet[];
   canAddRows: boolean;
   onAddRow: () => void;
+  /** Rows from a brief, proposed by the AI — they land in the grid unsaved until kept. */
+  onDraftWithAi: () => void;
   onAddFromInputs: (set: ApiRenderInputSet) => void;
   onUpload: () => void;
   onDownloadTemplate: () => void;
   dirty: boolean;
+  /**
+   * What autosave is doing: writing now, written at a time, or failed — then Save retries. Null
+   * while there is nothing saved and nothing to save.
+   */
+  saveStatus: { phase: 'saving' } | { phase: 'saved'; at: string } | { phase: 'failed' } | null;
   canSave: boolean;
   onSave: () => void;
   selectedCount: number;
@@ -185,6 +196,9 @@ export function RenderToolbar({
                 <DropdownMenuItem disabled={!canAddRows} onClick={onAddRow}>
                   <Plus aria-hidden /> Blank row
                 </DropdownMenuItem>
+                <DropdownMenuItem disabled={!canAddRows} onClick={onDraftWithAi}>
+                  <Sparkles aria-hidden /> Draft with AI…
+                </DropdownMenuItem>
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger disabled={inputSets.length === 0 || !canAddRows}>
                     <FolderOpen aria-hidden /> From saved inputs
@@ -233,13 +247,28 @@ export function RenderToolbar({
           </Control>
 
           <Control className="ml-auto">
+            <span
+              role="status"
+              aria-label="Save status"
+              className="text-2xs text-muted-foreground tabular-nums"
+            >
+              {saveStatus?.phase === 'saving'
+                ? 'Saving…'
+                : saveStatus?.phase === 'failed'
+                  ? 'Couldn’t save. Save retries.'
+                  : dirty
+                    ? 'Unsaved changes'
+                    : saveStatus?.phase === 'saved'
+                      ? `Saved · ${formatRelativeTime(saveStatus.at)}`
+                      : null}
+            </span>
             <Button
               type="button"
               size="sm"
               variant="outline"
               className="relative gap-1.5"
               disabled={!canSave || busy !== null}
-              title={dirty ? 'Unsaved edits' : 'Saved'}
+              title={dirty ? 'Save now (⌘S) — edits also save by themselves' : 'Saved'}
               onClick={onSave}
             >
               {busy === 'saving' ? (

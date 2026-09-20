@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { mediaAssetSchema } from '../media/asset';
 import { fontLicenceScopeSchema } from '../media/fonts';
 import { apiRenderFitReportSchema, pixelBoxSchema, slotPlacementSchema } from './api-render-fit';
 import { apiRenderJudgeSchema } from './api-render-judge';
@@ -1255,6 +1256,8 @@ export type ApiRenderBatchShareResponse = z.infer<typeof apiRenderBatchShareResp
 export const API_RENDER_SUGGEST_ROWS_ROUTE = '/api/ai-studio/renders/suggest-rows';
 
 export const API_RENDER_SUGGEST_ROWS_MAX = 20;
+/** Variations drafted under each new row. Rows and their variations together stay within the max. */
+export const API_RENDER_SUGGEST_FORKS_MAX = 4;
 
 export const apiRenderSuggestRowsRequestSchema = z
   .object({
@@ -1264,17 +1267,56 @@ export const apiRenderSuggestRowsRequestSchema = z
     contractHash: z.string().min(1),
     prompt: z.string().trim().min(1).max(2000),
     count: z.number().int().min(1).max(API_RENDER_SUGGEST_ROWS_MAX).default(5),
+    /** Variations drafted under each new row, each changing one or two of its values. */
+    forksPerRow: z.number().int().min(0).max(API_RENDER_SUGGEST_FORKS_MAX).default(0),
     /** Values to keep across every proposed row — a product already chosen, a fixed price. */
     seed: apiRenderVariableMapSchema.optional(),
+    /** Only these may change — "vary only the headline". Absent means every proposable one. */
+    varyKeys: z.array(apiRenderVariableKeySchema).min(1).optional(),
+    /** Draft variations OF this row: the new rows are its children and say only what they change. */
+    parent: z
+      .object({
+        id: z.string().uuid(),
+        label: z.string().min(1).max(200),
+        values: apiRenderVariableMapSchema,
+      })
+      .strict()
+      .optional(),
   })
-  .strict();
+  .strict()
+  .refine((request) => request.count * (1 + request.forksPerRow) <= API_RENDER_SUGGEST_ROWS_MAX, {
+    message: `Rows and their variations together are at most ${API_RENDER_SUGGEST_ROWS_MAX}`,
+    path: ['forksPerRow'],
+  })
+  .refine((request) => !request.parent || request.forksPerRow === 0, {
+    message: 'Variations of a row are drafted one level at a time',
+    path: ['forksPerRow'],
+  });
 export type ApiRenderSuggestRowsRequest = z.infer<typeof apiRenderSuggestRowsRequestSchema>;
 
 export const apiRenderSuggestRowsResponseSchema = z
   .object({
-    rows: z.array(z.object({ label: z.string(), variables: apiRenderVariableMapSchema }).strict()),
+    /**
+     * Rows as a render set stores them: ids minted by the server, variations pointing at their row
+     * (or at the request's `parent`), `overrides` only what each one sets. No formats: a new root
+     * renders every format, a variation inherits its parent's.
+     */
+    rows: z.array(
+      z
+        .object({
+          id: z.string().uuid(),
+          parentId: z.string().uuid().nullable(),
+          label: z.string().min(1).max(200),
+          overrides: apiRenderVariableMapSchema,
+        })
+        .strict(),
+    ),
+    /** The Library assets the rows picked, so a grid can show them without looking each one up. */
+    assets: z.array(mediaAssetSchema).default([]),
     /** What the model proposed that was dropped, and why — surfaced, never silent. */
     dropped: z.array(z.string()).default([]),
+    /** What nothing could fill: a picture slot with no Library match, a required value left blank. */
+    unfilled: z.array(z.string()).default([]),
   })
   .strict();
 export type ApiRenderSuggestRowsResponse = z.infer<typeof apiRenderSuggestRowsResponseSchema>;

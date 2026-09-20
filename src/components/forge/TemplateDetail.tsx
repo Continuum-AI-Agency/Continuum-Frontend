@@ -30,7 +30,7 @@ import {
   Variable,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AiVariationsDialog } from '@/components/forge/AiVariationsDialog';
+import { DraftWithAiButton } from '@/components/forge/AiVariationsDialog';
 import { type CheckRow, CheckTable, type CheckTick, TickBar } from '@/components/forge/CheckTable';
 import { FactList } from '@/components/forge/FactList';
 import { ForgeRunProgress } from '@/components/forge/ForgeRunProgress';
@@ -670,11 +670,7 @@ export function TemplateDetail({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <AiVariationsDialog
-            brandId={brandId}
-            templateKey={templateKey}
-            onOpenRender={onOpenRender}
-          />
+          <DraftWithAiButton templateKey={templateKey} onOpenRender={onOpenRender} />
           {templateKey ? (
             <Button
               type="button"

@@ -135,14 +135,44 @@ export const updateForgeRenderSetRequestSchema = z
     name: z.string().trim().min(1).max(200).optional(),
     description: descriptionSchema.optional(),
     rows: forgeRenderSetRowsSchema.optional(),
+    /**
+     * The contract these rows were checked against. Only with `rows`: a set moves to a republished
+     * template by saving rows that fit it, never by relabelling rows written for the old one.
+     */
+    contractHash: z.string().min(1).optional(),
   })
   .strict()
   .refine(
     (value) =>
       value.name !== undefined || value.rows !== undefined || value.description !== undefined,
     { message: 'Update at least one of name, description or rows' },
-  );
+  )
+  .refine((value) => value.contractHash === undefined || value.rows !== undefined, {
+    message: 'contractHash is only saved with rows',
+    path: ['contractHash'],
+  });
 export type UpdateForgeRenderSetRequest = z.infer<typeof updateForgeRenderSetRequestSchema>;
+
+/**
+ * A state a set was left in, kept by the database: the end of an editing burst, the state before a
+ * template change, or a revision something was rendered from. Newest 30 per set. Restoring one makes
+ * a new set from its rows; nothing is ever written back over the set it came from.
+ */
+export const forgeRenderSetRevisionSchema = z
+  .object({
+    setId: z.string().uuid(),
+    revision: z.number().int().nonnegative(),
+    name: z.string().min(1),
+    contractHash: z.string().min(1),
+    rows: forgeRenderSetRowsSchema,
+    savedAt: z.string(),
+  })
+  .strict();
+export type ForgeRenderSetRevision = z.infer<typeof forgeRenderSetRevisionSchema>;
+
+export const forgeRenderSetRevisionListResponseSchema = z
+  .object({ items: z.array(forgeRenderSetRevisionSchema) })
+  .strict();
 
 export interface ResolvedForgeRenderSetRow {
   id: string;

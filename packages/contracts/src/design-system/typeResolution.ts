@@ -44,7 +44,7 @@ import {
   type Rgb,
 } from './image-analysis';
 import type { DesignSystemSnapshot } from './manifest';
-import { projectSectionsToBrandTokens } from './sections';
+import { projectSectionsToBrandTokens, sectionForToken } from './sections';
 import { isLiteralHex } from './tokens';
 
 /** Ordered worst-last. The array IS the precedence; nothing re-declares it. */
@@ -352,3 +352,52 @@ export function deriveLegibleInk(pixels: PixelBuffer, box: FractionalBox): Deriv
 /** True when the caller reached at least one brand shape. Distinguishes "this brand has no
  *  colour" from "nothing about this brand could be read", which are different refusals. */
 export const hasAnyBrandShape = (inputs: BrandTypeInputs): boolean => rungsOf(inputs).length > 0;
+
+// --- palette ---------------------------------------------------------------------------------
+
+/** One brand colour a picker offers, and what an agent may choose from: a name and six-digit hex. */
+export type BrandPaletteSwatch = { name: string; hex: string };
+
+/** `#abc` / `aabbccdd` → `#aabbcc`, the render contract's six digits. Null for anything not hex. */
+function toSixDigitHex(value: string): string | null {
+  const hex = value.trim().replace(/^#/, '').toLowerCase();
+  if (!isLiteralHex(`#${hex}`)) return null;
+  const wide = hex.length > 4 ? hex.slice(0, 6) : [...hex.slice(0, 3)].map((c) => c + c).join('');
+  return `#${wide}`;
+}
+
+/**
+ * The brand's palette, from the first source that has one: the design system's palette section,
+ * then brand.md colours, then the brand kit. Deduplicated by hex, in the source's own order. The
+ * Forge colour picker and the row-drafting agent read this one list, so what a person can pick and
+ * what the agent may choose never differ.
+ */
+export function brandPaletteSwatches(inputs: BrandTypeInputs | undefined): BrandPaletteSwatch[] {
+  if (!inputs) return [];
+  const sources: Array<Array<{ name: string; value: string }>> = [
+    (inputs.designSystem?.tokens ?? []).flatMap((token) =>
+      token.kind === 'color' && sectionForToken(token) === 'palette'
+        ? [{ name: token.name, value: token.resolvedValue ?? token.value }]
+        : [],
+    ),
+    (inputs.brandMd?.colors ?? []).map((token, index) => ({
+      name: token.name?.trim() || token.role || `Brand color ${index + 1}`,
+      value: token.value,
+    })),
+    (inputs.brandKit?.colors ?? []).map((color, index) => ({
+      name: `Brand color ${index + 1}`,
+      value: color,
+    })),
+  ];
+  for (const source of sources) {
+    const seen = new Set<string>();
+    const swatches = source.flatMap(({ name, value }) => {
+      const hex = toSixDigitHex(value);
+      if (!hex || seen.has(hex)) return [];
+      seen.add(hex);
+      return [{ name, hex }];
+    });
+    if (swatches.length) return swatches;
+  }
+  return [];
+}

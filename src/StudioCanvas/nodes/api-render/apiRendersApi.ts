@@ -60,10 +60,12 @@ import {
   type ForgeRenderPreview,
   type ForgeRenderPreviewRequest,
   type ForgeRenderSet,
+  type ForgeRenderSetRevision,
   forgeRenderDriveSnapshotSchema,
   forgeRenderImportPreviewSchema,
   forgeRenderPreviewSchema,
   forgeRenderSetListResponseSchema,
+  forgeRenderSetRevisionListResponseSchema,
   forgeRenderSetSchema,
   type UpdateForgeRenderSetRequest,
 } from '@continuum/contracts';
@@ -236,6 +238,13 @@ export const apiRendersApi = {
       method: 'PUT',
       body: input,
       schema: forgeRenderSetSchema,
+    });
+  },
+  /** The states the set was left in, newest first, for Version history. */
+  listRenderSetRevisions(brandId: string, setId: string) {
+    return http.request<{ items: ForgeRenderSetRevision[] }>({
+      path: `${API_RENDER_SETS_ROUTE}/${encodeURIComponent(setId)}/revisions?${query({ brandId })}`,
+      schema: forgeRenderSetRevisionListResponseSchema,
     });
   },
   deleteRenderSet(brandId: string, setId: string) {

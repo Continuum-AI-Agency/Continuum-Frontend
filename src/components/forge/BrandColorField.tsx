@@ -1,6 +1,6 @@
 'use client';
 
-import { type BrandTypeInputs, isLiteralHex, sectionForToken } from '@continuum/contracts';
+import { brandPaletteSwatches, isLiteralHex } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { ColorField } from '@/components/ui/color-field';
@@ -9,53 +9,14 @@ import { brandTypeInputsQueryKey, loadBrandTypeInputs } from '@/lib/brands/brand
 import { cn } from '@/lib/utils';
 
 // Every Forge colour input shares the burn-in's brand query, but not its font-registration hook.
+// The palette itself is `brandPaletteSwatches`, the list the row-drafting agent chooses from too.
 
-/**
- * `#abc` / `aabbccdd` → `#aabbcc`: the render contract types a colour as six hex digits. The `#`
- * is optional because imported rows arrive without one. Null for anything that is not hex.
- */
+/** `#abc` / `aabbccdd` → `#aabbcc`, for comparing a typed value against a swatch. */
 function toSixDigitHex(value: string): string | null {
   const hex = value.trim().replace(/^#/, '').toLowerCase();
   if (!isLiteralHex(`#${hex}`)) return null;
   const wide = hex.length > 4 ? hex.slice(0, 6) : [...hex.slice(0, 3)].map((c) => c + c).join('');
   return `#${wide}`;
-}
-
-type SwatchCandidate = { name: string; value: string };
-type Swatch = { name: string; hex: string };
-
-function swatchesOf(candidates: readonly SwatchCandidate[]): Swatch[] {
-  const seen = new Set<string>();
-  return candidates.flatMap(({ name, value }) => {
-    const hex = toSixDigitHex(value);
-    if (!hex || seen.has(hex)) return [];
-    seen.add(hex);
-    return [{ name, hex }];
-  });
-}
-
-function paletteSwatches(inputs: BrandTypeInputs | undefined): Swatch[] {
-  if (!inputs) return [];
-  const sources: SwatchCandidate[][] = [
-    (inputs.designSystem?.tokens ?? []).flatMap((token) =>
-      token.kind === 'color' && sectionForToken(token) === 'palette'
-        ? [{ name: token.name, value: token.resolvedValue ?? token.value }]
-        : [],
-    ),
-    (inputs.brandMd?.colors ?? []).map((token, index) => ({
-      name: token.name?.trim() || token.role || `Brand color ${index + 1}`,
-      value: token.value,
-    })),
-    (inputs.brandKit?.colors ?? []).map((color, index) => ({
-      name: `Brand color ${index + 1}`,
-      value: color,
-    })),
-  ];
-  for (const source of sources) {
-    const swatches = swatchesOf(source);
-    if (swatches.length) return swatches;
-  }
-  return [];
 }
 
 export function BrandColorField({
@@ -78,7 +39,7 @@ export function BrandColorField({
     enabled: Boolean(brandId),
     staleTime: 5 * 60_000,
   });
-  const swatches = useMemo(() => paletteSwatches(data), [data]);
+  const swatches = useMemo(() => brandPaletteSwatches(data), [data]);
   const selected = value ? toSixDigitHex(value) : null;
 
   return (

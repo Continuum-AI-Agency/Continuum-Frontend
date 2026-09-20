@@ -40,6 +40,22 @@ global.DOMRect = (window as any).DOMRect;
 global.sessionStorage = window.sessionStorage as any;
 global.localStorage = window.localStorage as any;
 
+// happy-dom rejects a cancelled animation's `finished` promise, and motion-dom cancels one
+// for every element that unmounts mid-animation without ever reading `finished`. The rejection
+// surfaces as an unhandled AbortError and fails whichever spec did the unmounting — the toast
+// specs, where dismissing a toast IS the assertion. Marking it handled changes no behaviour:
+// nothing in the app awaits `finished` either.
+{
+  const animation = (window as unknown as { Animation?: { prototype: Animation } }).Animation;
+  const cancel = animation?.prototype?.cancel;
+  if (animation && cancel) {
+    animation.prototype.cancel = function cancelWithHandledFinished(this: Animation): void {
+      this.finished?.catch(() => undefined);
+      cancel.call(this);
+    };
+  }
+}
+
 if (typeof globalThis.requestAnimationFrame !== 'function') {
   globalThis.requestAnimationFrame = (cb: FrameRequestCallback): number =>
     setTimeout(() => cb(performance.now()), 16) as unknown as number;

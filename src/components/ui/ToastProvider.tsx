@@ -191,21 +191,18 @@ function ToastList() {
                     />
                   ) : null}
                   {action ? (
-                    <ToastPrimitive.Close
-                      render={
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            action.onClick();
-                            close(toast.id);
-                          }}
-                          className={`mt-1 inline-flex h-7 items-center rounded-md border px-2.5 text-xs font-semibold transition hover:bg-black/5 dark:hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 ${paletteItem.ring} ${paletteItem.text}`}
-                        >
-                          {action.label}
-                        </button>
-                      }
-                    />
+                    // A plain button, not Toast.Close: Close is aria-hidden, which hid the action
+                    // (an Undo) from screen readers and from anything that looks for it by role.
+                    <button
+                      type="button"
+                      onClick={() => {
+                        action.onClick();
+                        close(toast.id);
+                      }}
+                      className={`mt-1 inline-flex h-7 items-center rounded-md border px-2.5 text-xs font-semibold transition hover:bg-black/5 dark:hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 ${paletteItem.ring} ${paletteItem.text}`}
+                    >
+                      {action.label}
+                    </button>
                   ) : null}
                 </div>
                 <ToastPrimitive.Close

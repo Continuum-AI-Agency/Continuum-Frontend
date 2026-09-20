@@ -5,6 +5,7 @@ import {
   type ApiRenderFitReport,
   type ApiRenderInputValue,
   type ApiRenderPreflightResponse,
+  type ApiRenderSuggestRowsResponse,
   type ApiRenderTemplateContract,
   type ApiRenderVariable,
   compactEncodeBlock,
@@ -14,6 +15,7 @@ import {
   inheritEncodeBlock,
   type MediaAsset,
   type PinnedRenderAsset,
+  resolveForgeRenderSetRows,
 } from '@continuum/contracts';
 
 // One row of the render-requests grid: the wire-shaped values for one render, plus what the
@@ -114,6 +116,11 @@ export type RequestRow = {
   clearedEncodeKeys?: ForgeRenderSetEncodeClear;
   /** This row's own delivery. Never inherited by forks, never copied by a duplicate. */
   delivery?: RequestRowDelivery;
+  /**
+   * Drafted by the AI and not yet kept. Never saved, reviewed or rendered — nor is anything under
+   * it — until the person keeps it; discarding it leaves the set exactly as it was.
+   */
+  proposed?: true;
   media: Record<string, RequestRowMedia>;
   check: RequestRowCheck;
   subRows?: RequestRow[];
@@ -837,24 +844,263 @@ export function addSibling(
   return { rows: moved.ok ? moved.rows : [...rows, added], added };
 }
 
+// --- editing many rows at once -------------------------------------------------------------
+
+const sameValue = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
+
+/** Changed rows, and everything that inherits from them, dry-run again. */
+function idleFrom(rows: RequestRow[], changed: Set<string>): RequestRow[] {
+  if (changed.size === 0) return rows;
+  const affected = descendantsOf(rows, changed);
+  return rows.map((row) =>
+    affected.has(row.id) && row.check.state !== 'idle' ? { ...row, check: { state: 'idle' } } : row,
+  );
+}
+
+/**
+ * One row's value for `key` given to other rows: "Apply to selected" and fill-down. A target that
+ * already renders that value is left alone, so a variation that inherits it keeps inheriting;
+ * untouched rows stay the same objects, so only the rows that changed are dry-run again.
+ */
+export function applyValue(
+  rows: RequestRow[],
+  key: string,
+  fromId: string,
+  toIds: string[],
+): RequestRow[] {
+  const value = effectiveValues(rows, fromId)[key];
+  const media = effectiveMedia(rows, fromId)[key];
+  const targets = new Set(toIds.filter((id) => id !== fromId));
+  const changed = new Set<string>();
+  const next = rows.map((row) => {
+    if (!targets.has(row.id) || sameValue(effectiveValues(rows, row.id)[key], value)) return row;
+    changed.add(row.id);
+    const values = { ...row.values };
+    const nextMedia = { ...row.media };
+    const clearedKeys = row.clearedKeys.filter((item) => item !== key);
+    delete values[key];
+    delete nextMedia[key];
+    const inherited = row.parentId ? effectiveValues(rows, row.parentId)[key] : undefined;
+    if (value === undefined)
+      // A blank over an inherited value has to be said, or the parent's comes straight back.
+      return {
+        ...row,
+        values,
+        media: nextMedia,
+        clearedKeys: inherited === undefined ? clearedKeys : [...clearedKeys, key],
+      };
+    if (!row.parentId || !sameValue(inherited, value)) {
+      values[key] = structuredClone(value);
+      if (media) nextMedia[key] = media;
+    }
+    return { ...row, values, media: nextMedia, clearedKeys };
+  });
+  return idleFrom(next, changed);
+}
+
+/** The formats one row renders, given to others. "Every format" is spelled out for a variation. */
+export function applyFormats(
+  rows: RequestRow[],
+  fromId: string,
+  toIds: string[],
+  allOutputIds: string[],
+): RequestRow[] {
+  const own = effectiveOutputIds(rows, fromId);
+  const picked = own.length ? own : allOutputIds;
+  const renders = (id: string) => {
+    const ids = effectiveOutputIds(rows, id);
+    return ids.length ? ids : allOutputIds;
+  };
+  const changed = new Set<string>();
+  const next = rows.map((row) => {
+    if (row.id === fromId || !toIds.includes(row.id) || sameValue(renders(row.id), picked))
+      return row;
+    changed.add(row.id);
+    return { ...row, outputIds: [...picked] };
+  });
+  return idleFrom(next, changed);
+}
+
+/** Blank `key` on each row: a root drops its value, a variation says it is blank on purpose. */
+export function clearKey(rows: RequestRow[], key: string, ids: string[]): RequestRow[] {
+  const changed = new Set<string>();
+  const next = rows.map((row) => {
+    if (!ids.includes(row.id)) return row;
+    const cleared = row.parentId && !row.clearedKeys.includes(key);
+    if (!(key in row.values) && !(key in row.media) && !cleared) return row;
+    changed.add(row.id);
+    const { [key]: _value, ...values } = row.values;
+    const { [key]: _media, ...media } = row.media;
+    return {
+      ...row,
+      values,
+      media,
+      clearedKeys: cleared ? [...row.clearedKeys, key] : row.clearedKeys,
+    };
+  });
+  return idleFrom(next, changed);
+}
+
+/** Variations go back to what they inherit for `key`; roots have nothing to go back to. */
+export function resetKey(rows: RequestRow[], key: string, ids: string[]): RequestRow[] {
+  const changed = new Set<string>();
+  const next = rows.map((row) => {
+    if (!row.parentId || !ids.includes(row.id)) return row;
+    if (!(key in row.values) && !row.clearedKeys.includes(key)) return row;
+    changed.add(row.id);
+    const { [key]: _value, ...values } = row.values;
+    const { [key]: _media, ...media } = row.media;
+    return { ...row, values, media, clearedKeys: row.clearedKeys.filter((item) => item !== key) };
+  });
+  return idleFrom(next, changed);
+}
+
+// --- undo ------------------------------------------------------------------------------------
+
+export const HISTORY_LIMIT = 100;
+/** Keystrokes in one cell closer together than this are one step. */
+export const HISTORY_COALESCE_MS = 1000;
+
+/** Row snapshots before each edit, newest last. In memory only: a reload starts a new history. */
+export type RowHistory = {
+  past: RequestRow[][];
+  future: RequestRow[][];
+  lastKey: string | null;
+  lastAt: number;
+};
+
+export const emptyHistory = (): RowHistory => ({ past: [], future: [], lastKey: null, lastAt: 0 });
+
+/**
+ * `before` as the next undo step — unless it continues the last one: the same `key` (a cell being
+ * typed in) within the coalescing window. `key: null` is always its own step.
+ */
+export function pushHistory(
+  history: RowHistory,
+  before: RequestRow[],
+  key: string | null,
+  now: number,
+): RowHistory {
+  if (key !== null && key === history.lastKey && now - history.lastAt < HISTORY_COALESCE_MS)
+    return { ...history, future: [], lastAt: now };
+  return {
+    past: [...history.past, before].slice(-HISTORY_LIMIT),
+    future: [],
+    lastKey: key,
+    lastAt: now,
+  };
+}
+
+const storedShape = ({ check: _check, media: _media, subRows: _subRows, ...row }: RequestRow) =>
+  JSON.stringify(row);
+
+/**
+ * A snapshot back on screen. A row the step did not change keeps its current object and its
+ * dry-run verdict; only the rows that differ are checked again.
+ */
+export function restoreRows(snapshot: RequestRow[], current: RequestRow[]): RequestRow[] {
+  const byId = new Map(current.map((row) => [row.id, row]));
+  return snapshot.map((row) => {
+    const now = byId.get(row.id);
+    return now && storedShape(now) === storedShape(row)
+      ? now
+      : { ...row, check: { state: 'idle' } };
+  });
+}
+
 // --- render sets ----------------------------------------------------------------------------
 
-/** Rows as a render set stores them. A root with no formats is every format, said explicitly. */
-export function toRenderSetRows(rows: RequestRow[], allOutputIds: string[]): ForgeRenderSetRow[] {
-  return rows.map((row) => {
-    const encode = compactEncodeBlock(row.encode);
+/**
+ * A draft from the AI as grid rows: proposed, so nothing is saved until the person keeps them. A
+ * picked Library asset brings its sidecar from the answer, so thumbnails and the fit check work
+ * without looking each one up. New roots render every format; variations inherit theirs.
+ */
+export function rowsFromSuggestion(
+  response: Pick<ApiRenderSuggestRowsResponse, 'rows' | 'assets'>,
+  allOutputIds: string[],
+): RequestRow[] {
+  const assets = new Map(response.assets.map((asset) => [asset.id, asset]));
+  return response.rows.map((row) => {
+    const media: Record<string, RequestRowMedia> = {};
+    for (const [key, value] of Object.entries(row.overrides)) {
+      const pin = Array.isArray(value) ? value[0] : value;
+      const asset =
+        typeof pin === 'object' && pin !== null && 'assetId' in pin
+          ? assets.get(pin.assetId)
+          : undefined;
+      if (asset) media[key] = rowMediaOf(asset);
+    }
     return {
       id: row.id,
       parentId: row.parentId,
-      label: row.label.trim() || 'Untitled',
-      overrides: toVariableMap(row),
-      clearedKeys: row.clearedKeys,
-      outputIds: row.parentId === null && row.outputIds.length === 0 ? allOutputIds : row.outputIds,
-      ...(encode ? { encode } : {}),
-      ...(row.clearedEncodeKeys ? { clearedEncodeKeys: row.clearedEncodeKeys } : {}),
-      ...(isResolvedDelivery(row.delivery) ? { delivery: row.delivery } : {}),
+      label: row.label,
+      values: { ...row.overrides },
+      clearedKeys: [],
+      outputIds: row.parentId === null ? [...allOutputIds] : [],
+      media,
+      check: { state: 'idle' },
+      proposed: true,
     };
   });
+}
+
+/** Rows the AI proposed, and everything under them: on screen, but not part of the set yet. */
+export const proposedIds = (rows: RequestRow[]): Set<string> =>
+  descendantsOf(
+    rows,
+    rows.filter((row) => row.proposed).map((row) => row.id),
+  );
+
+/** Proposed rows become part of the set, with the proposed rows above them so none is orphaned. */
+export function keepProposed(rows: RequestRow[], ids: string[]): RequestRow[] {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const keep = new Set<string>();
+  for (const id of ids)
+    for (
+      let row = byId.get(id);
+      row && !keep.has(row.id);
+      row = row.parentId ? byId.get(row.parentId) : undefined
+    )
+      keep.add(row.id);
+  return rows.map((row) => {
+    if (!row.proposed || !keep.has(row.id)) return row;
+    const { proposed: _proposed, ...kept } = row;
+    return kept;
+  });
+}
+
+/** Proposed rows gone, with everything under them. Kept rows are never touched. */
+export function discardProposed(rows: RequestRow[], ids: string[]): RequestRow[] {
+  const gone = descendantsOf(
+    rows,
+    ids.filter((id) => rows.find((row) => row.id === id)?.proposed),
+  );
+  return rows.filter((row) => !gone.has(row.id));
+}
+
+/**
+ * Rows as a render set stores them. A root with no formats is every format, said explicitly.
+ * Proposed rows, and anything under them, are not the set's until they are kept.
+ */
+export function toRenderSetRows(rows: RequestRow[], allOutputIds: string[]): ForgeRenderSetRow[] {
+  const proposed = proposedIds(rows);
+  return rows
+    .filter((row) => !proposed.has(row.id))
+    .map((row) => {
+      const encode = compactEncodeBlock(row.encode);
+      return {
+        id: row.id,
+        parentId: row.parentId,
+        label: row.label.trim() || 'Untitled',
+        overrides: toVariableMap(row),
+        clearedKeys: row.clearedKeys,
+        outputIds:
+          row.parentId === null && row.outputIds.length === 0 ? allOutputIds : row.outputIds,
+        ...(encode ? { encode } : {}),
+        ...(row.clearedEncodeKeys ? { clearedEncodeKeys: row.clearedEncodeKeys } : {}),
+        ...(isResolvedDelivery(row.delivery) ? { delivery: row.delivery } : {}),
+      };
+    });
 }
 
 /**
@@ -892,6 +1138,94 @@ export function fromRenderSetRows(rows: ForgeRenderSetRow[]): RequestRow[] {
     media: {},
     check: { state: 'idle' },
   }));
+}
+
+/**
+ * Rows saved for an earlier version of the template, trimmed to what this version has: values and
+ * blanks for fields it dropped, formats and output settings it no longer publishes. `dropped` names
+ * each thing removed, once, so the person is told before it is saved away. Unchanged rows are the
+ * same objects.
+ */
+export function rebaseRows(
+  rows: RequestRow[],
+  contract: Pick<ApiRenderTemplateContract, 'variables' | 'outputs'>,
+): { rows: RequestRow[]; dropped: string[] } {
+  const keys = new Set(contract.variables.map((variable) => variable.key));
+  const outputs = new Set(contract.outputs.map((output) => output.id));
+  const dropped = new Set<string>();
+  const keep = <T>(record: Record<string, T> | undefined, known: Set<string>, what: string) => {
+    if (!record) return record;
+    const gone = Object.keys(record).filter((key) => !known.has(key));
+    for (const key of gone) dropped.add(`${key} ${what}`);
+    return gone.length
+      ? Object.fromEntries(Object.entries(record).filter(([key]) => known.has(key)))
+      : record;
+  };
+  const next = rows.map((row) => {
+    const values = keep(row.values, keys, 'field')!;
+    const media = keep(row.media, keys, 'field')!;
+    const clearedKeys = row.clearedKeys.filter((key) => keys.has(key));
+    for (const key of row.clearedKeys) if (!keys.has(key)) dropped.add(`${key} field`);
+    const outputIds = row.outputIds.filter((id) => outputs.has(id));
+    for (const id of row.outputIds) if (!outputs.has(id)) dropped.add(`${id} format`);
+    const encodeOutputs = keep(row.encode?.outputs, outputs, 'format');
+    const clearedOutputs = keep(row.clearedEncodeKeys?.outputs, outputs, 'format');
+    const changed =
+      values !== row.values ||
+      media !== row.media ||
+      clearedKeys.length !== row.clearedKeys.length ||
+      outputIds.length !== row.outputIds.length ||
+      encodeOutputs !== row.encode?.outputs ||
+      clearedOutputs !== row.clearedEncodeKeys?.outputs;
+    if (!changed) return row;
+    return {
+      ...row,
+      values,
+      media,
+      clearedKeys,
+      outputIds,
+      ...(row.encode
+        ? { encode: compactEncodeBlock({ ...row.encode, outputs: encodeOutputs }) }
+        : {}),
+      ...(row.clearedEncodeKeys
+        ? { clearedEncodeKeys: { ...row.clearedEncodeKeys, outputs: clearedOutputs } }
+        : {}),
+      check: { state: 'idle' } as const,
+    };
+  });
+  return { rows: next, dropped: [...dropped] };
+}
+
+/**
+ * Two people's saves of one set, merged row by row against the version both started from: each row
+ * is whichever side changed it. `null` when both changed the same row differently, or when the
+ * merge is not a valid set — one side deleted a row the other forked.
+ */
+export function mergeSetRows(
+  base: ForgeRenderSetRow[],
+  mine: ForgeRenderSetRow[],
+  theirs: ForgeRenderSetRow[],
+): ForgeRenderSetRow[] | null {
+  const byId = (rows: ForgeRenderSetRow[]) => new Map(rows.map((row) => [row.id, row]));
+  const [was, mineById, theirsById] = [byId(base), byId(mine), byId(theirs)];
+  const shape = (row: ForgeRenderSetRow | undefined) => (row ? JSON.stringify(row) : '');
+  const ids = [...new Set([...theirs.map((row) => row.id), ...mine.map((row) => row.id)])];
+  const merged: ForgeRenderSetRow[] = [];
+  for (const id of ids) {
+    const [before, mineRow, theirRow] = [was.get(id), mineById.get(id), theirsById.get(id)];
+    const mineChanged = shape(mineRow) !== shape(before);
+    const theirsChanged = shape(theirRow) !== shape(before);
+    if (mineChanged && theirsChanged && shape(mineRow) !== shape(theirRow)) return null;
+    const row = mineChanged ? mineRow : theirRow;
+    if (row) merged.push(row);
+  }
+  if (merged.length === 0) return null;
+  try {
+    resolveForgeRenderSetRows(merged);
+  } catch {
+    return null;
+  }
+  return merged;
 }
 
 export const draftStorageKey = (brandId: string, templateKey: string): string =>

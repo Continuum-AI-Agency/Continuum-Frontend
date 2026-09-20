@@ -194,7 +194,13 @@ const variables = [
     charBudget: 28,
     sample: 'Build your army',
   },
-  { key: 'tagline', label: 'Tagline', kind: 'text', required: false, sample: 'In the Koprulu sector' },
+  {
+    key: 'tagline',
+    label: 'Tagline',
+    kind: 'text',
+    required: false,
+    sample: 'In the Koprulu sector',
+  },
   { key: 'price', label: 'Price', kind: 'number', required: false, sample: '19.99' },
   { key: 'hero', label: 'Hero image', kind: 'image', required: false },
 ];
@@ -322,9 +328,9 @@ const gridRow = (page: Page, label: string): Locator =>
     .filter({ has: page.getByRole('button', { name: `Drag ${label}`, exact: true }) });
 
 const ratiosIn = (row: Locator) =>
-  row.locator('[data-formats] [data-ratio]').evaluateAll((chips) =>
-    chips.map((chip) => (chip as HTMLElement).dataset.ratio),
-  );
+  row
+    .locator('[data-formats] [data-ratio]')
+    .evaluateAll((chips) => chips.map((chip) => (chip as HTMLElement).dataset.ratio));
 
 const formatsState = (row: Locator) =>
   row.locator('[data-formats]').first().getAttribute('data-formats');
@@ -558,12 +564,12 @@ test.describe('Render grid — fixtures', () => {
       await expect(render).toBeEnabled();
       await shoot(page, `${size}-zero-output`);
       await render.click();
-      // A seeded set was never saved: it is named first, then reviewed.
-      const naming = page.getByRole('dialog', { name: 'Name this render set' });
-      await naming.getByLabel('Name').fill('Zero-output set');
-      await naming.getByRole('button', { name: 'Save', exact: true }).click();
-      await expect(naming).toBeHidden();
-      expect(fixtures.calls('POST', /\/renders\/sets$/)).toHaveLength(1);
+      // A seeded set was never saved: it becomes "Untitled set" with no question, then is reviewed.
+      await expect.poll(() => fixtures.calls('POST', /\/renders\/sets$/).length).toBe(1);
+      expect(
+        (fixtures.calls('POST', /\/renders\/sets$/)[0]?.body as { name?: string } | undefined)
+          ?.name,
+      ).toBe('Untitled set');
       const tray = page.getByRole('region', { name: 'Review and render' });
       await expect(tray.getByText('StarCraft 133 · 3 files')).toBeVisible();
       await expect(page.locator('[role="dialog"], [role="alertdialog"]')).toHaveCount(0);
