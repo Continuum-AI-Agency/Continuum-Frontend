@@ -15,6 +15,7 @@
 
 import { z } from 'zod';
 import { accountChartSchema } from './account-chart';
+import type { OptimizationObjective } from './engine-contracts';
 
 export const accountDetectorSchema = z.enum([
   'portfolio_reallocation',
@@ -308,6 +309,25 @@ export const accountCandidateSchema = z.object({
    * still being wired — the card then shows the sentence alone rather than an invention.
    */
   chart: accountChartSchema.nullable().default(null),
+  /**
+   * Why this figure is smaller than the gap the chart draws.
+   *
+   * A transfer card ends in "move $X", and X cannot exceed the objective's
+   * per-cycle velocity cap — which differs by a factor of two across the
+   * catalogue (50% on signup, 25% on lead, conversations and clicks). The same
+   * detector on the same gap therefore proposes twice as much money on one
+   * account as on another, and that is CORRECT. What is not acceptable is the
+   * card staying silent about it: an unexplained small number reads as a weak
+   * recommendation rather than a bounded one.
+   */
+  capped_by: z.enum(['guardrail', 'velocity']).nullable().default(null),
+  /**
+   * The objective's own word for one result — "purchases", "leads",
+   * "conversations", "impressions". Resolved from the metric definition, never
+   * written by a model. A cost per conversation rendered as "CPA" is how a
+   * $39.48 messaging thread gets read as a $255.98 failed lead.
+   */
+  result_label: z.string().default('results'),
   /** Where the card sends a person. */
   cta: z
     .object({
@@ -376,4 +396,257 @@ export function reallocationSaving(args: {
   const { moved, sourceCostPerResult: from, destinationCostPerResult: to } = args;
   if (!(moved > 0) || !(from > 0) || !(to > 0) || to >= from) return 0;
   return Math.round(moved * (1 - to / from) * 100) / 100;
+}
+
+// ---------------------------------------------------------------------------
+// The ladder: how far this objective's result sits from the money.
+//
+// Eleven objectives do not need eleven card designs. They need four, and the
+// thing that sorts them is what a "result" actually IS — revenue, a person, an
+// intent, or attention. Each rung down takes cards away and makes the ones that
+// stay say something smaller.
+//
+// Worth stating plainly because it explains a long-standing puzzle: exactly ONE
+// objective has revenue attached to the event it buys. That is why
+// `target_economics` has been starved since it was written — it wants a
+// contribution margin, and ten of eleven objectives have nothing to compare one
+// against. It was never a missing field. It was a missing rung.
+// ---------------------------------------------------------------------------
+
+export const resultRungSchema = z.enum(['money', 'person', 'intent', 'attention']);
+export type ResultRung = z.infer<typeof resultRungSchema>;
+
+export const RESULT_RUNG: Record<OptimizationObjective, ResultRung> = {
+  purchase: 'money',
+
+  signup: 'person',
+  app_install: 'person',
+  lead: 'person',
+  conversations: 'person',
+
+  traffic: 'intent',
+  link_clicks: 'intent',
+  clicks: 'intent',
+
+  awareness: 'attention',
+  thruplays: 'attention',
+  post_engagement: 'attention',
+};
+
+/**
+ * What a detector does under one objective.
+ *
+ * `reterm` is NOT a smaller `on`: the card still appears and still ranks, it
+ * just takes a threshold or a window from the objective's profile instead of a
+ * constant. Only `mute` changes what is in the deck.
+ */
+export type DetectorVerdict =
+  | { kind: 'on' }
+  | { kind: 'reterm'; from: string }
+  | { kind: 'mute'; because: string };
+
+/**
+ * The six that keep their comparison and change their line, on EVERY objective.
+ *
+ * Kept separate from the per-objective table because the re-term is universal —
+ * only its source differs — and folding it into a matrix would imply a choice
+ * that does not exist.
+ */
+export const DETECTOR_RETERM: Partial<Record<AccountDetector, string>> = {
+  structure_consolidation: 'profile.minEventsPerWindow',
+  creative_supply: 'the objective’s own result unit',
+  scale_readiness: 'profile.saturationGamma — the caveat, where β is not flat',
+  dead_tail: 'profile.upperFunnelField — which KIND of dead',
+  decision_window: 'the objective’s attribution lag',
+  target_economics: 'margin, margin × close rate, or “are you buying the right thing”',
+};
+
+/**
+ * The exceptions, and ONLY the exceptions.
+ *
+ * Twenty-five detectors across eleven objectives is three hundred cells. A table
+ * that size is a table nobody maintains, and a stale cell is worse than no cell.
+ * So: absent means `on`. Adding an objective costs nothing; adding a detector
+ * costs only the exceptions someone can actually argue for.
+ */
+export const DETECTOR_MUTES: Partial<Record<AccountDetector, Partial<Record<OptimizationObjective, string>>>> =
+  {
+    funnel_coverage: {
+      awareness: 'no upper-funnel step to talk about — the KPI is the top of the funnel',
+    },
+    optimization_event: {
+      awareness: 'the KPI is the goal; there is nothing downstream to mismatch against',
+      traffic: 'the KPI is the goal; there is nothing downstream to mismatch against',
+      clicks: 'the KPI is the goal; there is nothing downstream to mismatch against',
+      link_clicks: 'the KPI is the goal; there is nothing downstream to mismatch against',
+      thruplays: 'the KPI is the goal; there is nothing downstream to mismatch against',
+      post_engagement: 'the KPI is the goal; there is nothing downstream to mismatch against',
+    },
+    post_click: {
+      // traffic KEEPS this one: its KPI is the landing-page view and its
+      // upper-funnel step is the click, so the gap between them IS the question.
+      awareness: 'nothing happens after a click that this objective counts',
+      thruplays: 'nothing happens after a click that this objective counts',
+      post_engagement: 'nothing happens after a click that this objective counts',
+      conversations: 'the conversation IS the conversion — there is no landing page',
+      link_clicks: 'the click is the conversion',
+      clicks: 'the click is the conversion',
+    },
+    new_vs_returning: {
+      app_install: 'an install is new by definition',
+      awareness: 'no customer concept',
+      traffic: 'no customer concept',
+      link_clicks: 'no customer concept',
+      clicks: 'no customer concept',
+      thruplays: 'no customer concept',
+      post_engagement: 'no customer concept',
+    },
+    account_saturation: {
+      awareness: 'frequency rising against flat reach is the GOAL of this buy, not its failure',
+    },
+  };
+
+/**
+ * What this detector does for this objective.
+ *
+ * Guards are exempt from muting on purpose. If the figures cannot be trusted, or
+ * the target is the wrong number, that is true under every objective — a product
+ * that can silence its own instrument check has none.
+ */
+export function verdictFor(
+  detector: AccountDetector,
+  objective: OptimizationObjective,
+): DetectorVerdict {
+  const muted = DETECTOR_MUTES[detector]?.[objective];
+  if (muted && !isGuardDetector(detector)) return { kind: 'mute', because: muted };
+  const reterm = DETECTOR_RETERM[detector];
+  if (reterm) return { kind: 'reterm', from: reterm };
+  return { kind: 'on' };
+}
+
+/**
+ * The deck: every detector that can mean something for this objective.
+ *
+ * Derived, never stored. Storing it is how it goes stale the first time a
+ * detector is added.
+ *
+ * A muted detector is NOT starved. It did not fail to run and it is not a gap in
+ * coverage — it does not apply here, and the screen must not list it as one.
+ */
+export function deckFor(objective: OptimizationObjective): AccountDetector[] {
+  return DETECTOR_ORDER.filter((detector) => verdictFor(detector, objective).kind !== 'mute');
+}
+
+/**
+ * The prior on confidence, from how well this objective's signal predicts at all.
+ *
+ * `confidence` on a candidate used to default to 1, which meant an uncalibrated
+ * conversations account ranked exactly as confidently as a measured purchase
+ * account. Two different things multiply here and both belong:
+ *
+ *   evidence       — the detector's own read of ITS sample (it already sets this)
+ *   predictiveness — the objective profile's measured Spearman ceiling, which
+ *                    ranges from 0.88 on app_install to 0.45 on lead
+ *
+ * An uncalibrated profile's prior is BORROWED from a measured analog, so it is
+ * discounted again rather than trusted. The factor is `IMPACT_CLASS_WEIGHT`'s
+ * own `better_price` weight, reused deliberately: one discount vocabulary in the
+ * catalogue, not two.
+ */
+export const UNCALIBRATED_PRIOR_DISCOUNT = IMPACT_CLASS_WEIGHT.better_price;
+
+export function seedConfidence(args: {
+  /** 0..1, what the detector already decided about its own sample. */
+  evidence: number;
+  /** The objective profile's `predictiveness`. */
+  predictiveness: number;
+  /** The profile's `calibrated` flag. False = the prior is somebody else's. */
+  calibrated: boolean;
+}): number {
+  const { evidence, predictiveness, calibrated } = args;
+  const bounded = Math.min(1, Math.max(0, evidence)) * Math.min(1, Math.max(0, predictiveness));
+  const discounted = calibrated ? bounded : bounded * UNCALIBRATED_PRIOR_DISCOUNT;
+  return Math.round(discounted * 1000) / 1000;
+}
+
+// ---------------------------------------------------------------------------
+// What the nine that cannot ask their question are waiting for.
+//
+// `computable: false` says a detector is blocked. It does not say BY WHAT, and a
+// gap nobody can name is a gap nobody closes — nine separate one-line notes in
+// ACCOUNT_DETECTOR_META are nine things to rediscover every time someone asks
+// "what would it take". Grouping them by the thing that unblocks them turns a
+// list of defects into a short list of decisions, and several detectors share a
+// decision: two are waiting on the same economics, two on the same platform
+// call.
+//
+// The screen groups its folded "could not run" list by this, so a reader sees
+// four reasons instead of nine symptoms.
+// ---------------------------------------------------------------------------
+
+export const blockedCategorySchema = z.enum([
+  /** Unit economics the business owns: margin, lifetime value, close rate. */
+  'economics',
+  /** A call to the ad platform we do not currently make. */
+  'platform_call',
+  /** A breakdown the platform returns and we do not persist. */
+  'breakdown',
+  /** Simply time: not enough history yet. */
+  'history',
+  /** An outside reference point we have no source for. */
+  'benchmark',
+  /** What happens on the advertiser's own site, after the click. */
+  'post_click',
+  /** Whether a converting person is new to the business or returning. */
+  'customer_state',
+]);
+export type BlockedCategory = z.infer<typeof blockedCategorySchema>;
+
+export const BLOCKED_CATEGORY_COPY: Record<BlockedCategory, string> = {
+  economics: 'Unit economics — margin, lifetime value, close rate',
+  platform_call: 'A platform call we do not make yet',
+  breakdown: 'A breakdown the platform returns and we do not store',
+  history: 'More history than this account has',
+  benchmark: 'An outside benchmark we have no source for',
+  post_click: 'What happens on the site, after the click',
+  customer_state: 'Telling a new customer from a returning one',
+};
+
+/**
+ * Detector → the one thing that unblocks it.
+ *
+ * Only detectors whose META says `computable: false` belong here, and every one
+ * of them must: the test pins both directions, so a detector cannot be marked
+ * blocked without naming what it waits for, and cannot be listed here once it
+ * starts working.
+ */
+export const DETECTOR_BLOCKED_ON: Partial<Record<AccountDetector, BlockedCategory>> = {
+  target_economics: 'economics',
+  audience_overlap: 'platform_call',
+  account_saturation: 'platform_call',
+  market_allocation: 'breakdown',
+  measurement_integrity: 'breakdown',
+  seasonality: 'history',
+  auction_pressure: 'benchmark',
+  post_click: 'post_click',
+  new_vs_returning: 'customer_state',
+};
+
+/** The blocked detectors of this deck, grouped by what would unblock them. */
+export function blockedByCategory(
+  objective: OptimizationObjective,
+): Array<{ category: BlockedCategory; detectors: AccountDetector[] }> {
+  const deck = new Set(deckFor(objective));
+  const grouped = new Map<BlockedCategory, AccountDetector[]>();
+  for (const detector of DETECTOR_ORDER) {
+    if (!deck.has(detector)) continue;
+    const category = DETECTOR_BLOCKED_ON[detector];
+    if (!category) continue;
+    const list = grouped.get(category) ?? [];
+    list.push(detector);
+    grouped.set(category, list);
+  }
+  return blockedCategorySchema.options
+    .filter((category) => grouped.has(category))
+    .map((category) => ({ category, detectors: grouped.get(category) ?? [] }));
 }

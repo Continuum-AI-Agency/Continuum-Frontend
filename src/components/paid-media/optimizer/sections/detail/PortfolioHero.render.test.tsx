@@ -25,6 +25,20 @@ afterEach(cleanup);
 const view = (over: Partial<HeroView> = {}): HeroView => ({
   state: 'ready',
   source: 'brief',
+  chart: {
+    shape: 'rates',
+    unit: 'currency',
+    points: [
+      { t: '2026-09-17', a: 83, b: 70 },
+      { t: '2026-09-18', a: 79, b: 70 },
+      { t: '2026-09-19', a: 74, b: 70 },
+    ],
+    a_label: 'Cost per lead',
+    b_label: 'Target',
+    projected_from: null,
+    gap_per_day: 120,
+  },
+  chartReading: 'cost per result across the window, against the target',
   tiles: [
     {
       key: 'spend',
@@ -115,7 +129,7 @@ const view = (over: Partial<HeroView> = {}): HeroView => ({
 });
 
 describe('PortfolioHero', () => {
-  it('renders the growth tiles, the pacing pill, the headline, the money and the CTA', () => {
+  it('renders the chart, the pacing pill, the headline, the money and the CTA', () => {
     const clicks: string[] = [];
     const { container, getByText } = render(
       <PortfolioHero
@@ -129,8 +143,14 @@ describe('PortfolioHero', () => {
       />,
     );
     const text = container.textContent ?? '';
-    expect(text).toContain('$3,640');
-    expect(text).toContain('47');
+    // The three tiles were REPLACED by one chart on purpose — $3,640 was the spend tile.
+    // What has to survive is the growth read itself, which the sentence still carries.
+    expect(container.querySelector('[data-testid="hero-chart"]')).toBeTruthy();
+    expect(text).toContain('cost per result across the window');
+    // 47 was the results TILE. The tiles are gone; the growth sentence carries the read as
+    // direction against target rather than as three absolute numbers, which was the trade the
+    // design made deliberately when it chose one chart over three frozen figures.
+    expect(text).toContain('+34%');
     expect(text).toContain('11% over target');
     expect(text).toContain('On pace · day 12 of 30');
     expect(text).toContain('Stop $120/day going to Dead');
@@ -167,5 +187,40 @@ describe('PortfolioHero', () => {
       />,
     );
     expect(first.container.textContent).toContain('first read after the first cycle');
+  });
+});
+
+describe('PortfolioHero — the chart is the growth read, or nothing', () => {
+  it('draws the chart it was given', () => {
+    const { container } = render(
+      <PortfolioHero brandId="b1" currency="USD" portfolioId="p1" view={view()} />,
+    );
+    const host = container.querySelector('[data-testid="hero-chart"]');
+    expect(host?.querySelector('svg')).toBeTruthy();
+  });
+
+  it('says so plainly when the window cannot be drawn, instead of drawing nothing', () => {
+    const { container } = render(
+      <PortfolioHero
+        brandId="b1"
+        currency="USD"
+        portfolioId="p1"
+        view={view({ chart: null, chartReading: null })}
+      />,
+    );
+    expect(container.textContent).toContain('Not enough priced days');
+    expect(container.querySelector('[data-testid="hero-chart"] svg')).toBeNull();
+  });
+
+  it('keeps the growth sentence visible either way — that was a deliberate decision', () => {
+    const { container } = render(
+      <PortfolioHero
+        brandId="b1"
+        currency="USD"
+        portfolioId="p1"
+        view={view({ chart: null, chartReading: null })}
+      />,
+    );
+    expect(container.textContent).toContain('cost per result');
   });
 });

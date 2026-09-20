@@ -12,7 +12,9 @@ import type {
   PortfolioListItem,
 } from '@continuum/contracts';
 import { deterministicBrief, readPortfolioBrief } from '@continuum/contracts';
+import type { AccountChart } from '@continuum/contracts';
 import type { FlightPacingModel } from '../../charts/flightPacingModel';
+import { heroChart, heroChartReading } from './heroChart';
 import { impactPerDay } from '../recQueueModel';
 import type { RecapModel } from './recapModel';
 
@@ -40,6 +42,13 @@ export type HeroCta = {
 
 export type HeroView = {
   state: 'first_cycle' | 'ready';
+  /**
+   * The one chart the hero opens on, in place of the three tiles. Null when the window
+   * cannot honestly be drawn — the hero then shows the sentence alone, which is the
+   * correct outcome and not a degraded one. See heroChart.ts.
+   */
+  chart: AccountChart | null;
+  chartReading: string | null;
   /** 'brief' when Jaina wrote today's words; 'fallback' when composed here. */
   source: 'brief' | 'fallback';
   tiles: HeroTile[];
@@ -304,9 +313,20 @@ export function buildHeroView(args: {
           promptVersion: 'fallback',
           generatedAt: args.now ?? new Date().toISOString(),
         });
+  const heroCandidate =
+    brief.candidates.find((c) => c.id === brief.hero.candidate_id) ?? null;
+  const chart = heroChart({
+    candidate: heroCandidate,
+    series: recap.series,
+    target: args.target,
+    resultLabel: metric.resultLabel,
+  });
+
   return {
     state: args.firstCycle ? 'first_cycle' : 'ready',
     source: briefIsCurrent ? 'brief' : 'fallback',
+    chart,
+    chartReading: heroChartReading(chart),
     tiles,
     pacingLine: pacing.line,
     pacingTone: pacing.tone,

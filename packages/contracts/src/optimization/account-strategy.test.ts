@@ -130,3 +130,198 @@ describe('reallocationSaving — the arithmetic four detectors share', () => {
     ).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The ladder, the deck, and the confidence prior.
+// ---------------------------------------------------------------------------
+
+import { OptimizationObjectiveSchema } from './engine-contracts';
+import {
+  BLOCKED_CATEGORY_COPY,
+  blockedByCategory,
+  blockedCategorySchema,
+  DETECTOR_BLOCKED_ON,
+  DETECTOR_MUTES,
+  DETECTOR_RETERM,
+  deckFor,
+  RESULT_RUNG,
+  seedConfidence,
+  UNCALIBRATED_PRIOR_DISCOUNT,
+  verdictFor,
+} from './account-strategy';
+
+const OBJECTIVES = OptimizationObjectiveSchema.options;
+const DETECTORS = accountDetectorSchema.options;
+
+describe('the result ladder', () => {
+  it('places every objective, with no objective left unplaced', () => {
+    for (const objective of OBJECTIVES) {
+      expect(RESULT_RUNG[objective]).toBeDefined();
+    }
+    expect(Object.keys(RESULT_RUNG).sort()).toEqual([...OBJECTIVES].sort());
+  });
+
+  it('puts exactly one objective on the money rung — the reason target_economics starves', () => {
+    const money = OBJECTIVES.filter((o) => RESULT_RUNG[o] === 'money');
+    expect(money).toEqual(['purchase']);
+  });
+});
+
+describe('deckFor', () => {
+  // These numbers are the contract. A detector added later must not silently
+  // appear on a rung where it means nothing, and a mute removed by accident
+  // must fail here rather than on someone's screen.
+  const EXPECTED: Record<string, number> = {
+    purchase: 25,
+    signup: 25,
+    lead: 25,
+    app_install: 24,
+    conversations: 24,
+    traffic: 23,
+    link_clicks: 22,
+    clicks: 22,
+    thruplays: 22,
+    post_engagement: 22,
+    awareness: 20,
+  };
+
+  for (const [objective, size] of Object.entries(EXPECTED)) {
+    it(`gives ${objective} a deck of ${size}`, () => {
+      expect(deckFor(objective as (typeof OBJECTIVES)[number])).toHaveLength(size);
+    });
+  }
+
+  it('never falls below the twenty that cannot be muted', () => {
+    const floor = DETECTORS.filter(
+      (d) => !DETECTOR_MUTES[d] || isGuardDetector(d),
+    ).length;
+    expect(floor).toBe(20);
+    for (const objective of OBJECTIVES) {
+      expect(deckFor(objective).length).toBeGreaterThanOrEqual(20);
+    }
+  });
+
+  it('keeps post_click on traffic, where click → landing-page view IS the question', () => {
+    expect(deckFor('traffic')).toContain('post_click');
+    expect(deckFor('conversations')).not.toContain('post_click');
+  });
+
+  it('returns detectors in the catalogue order, so a run is reproducible', () => {
+    const deck = deckFor('purchase');
+    expect(deck).toEqual(DETECTORS.filter((d) => deck.includes(d)));
+  });
+});
+
+describe('verdictFor', () => {
+  it('never mutes a guard, whatever the objective', () => {
+    for (const objective of OBJECTIVES) {
+      for (const detector of DETECTORS) {
+        if (!isGuardDetector(detector)) continue;
+        expect(verdictFor(detector, objective).kind).not.toBe('mute');
+      }
+    }
+  });
+
+  it('re-terms without shrinking the deck', () => {
+    for (const detector of Object.keys(DETECTOR_RETERM) as (typeof DETECTORS)[number][]) {
+      expect(deckFor('purchase')).toContain(detector);
+    }
+  });
+
+  it('names a reason on every mute — a gap nobody can name is a gap nobody closes', () => {
+    for (const objective of OBJECTIVES) {
+      for (const detector of DETECTORS) {
+        const v = verdictFor(detector, objective);
+        if (v.kind === 'mute') expect(v.because.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('only names real detectors and real objectives in the override table', () => {
+    for (const [detector, byObjective] of Object.entries(DETECTOR_MUTES)) {
+      expect(DETECTORS).toContain(detector);
+      for (const objective of Object.keys(byObjective ?? {})) {
+        expect(OBJECTIVES).toContain(objective);
+      }
+    }
+  });
+});
+
+describe('seedConfidence', () => {
+  it('multiplies the detector’s own evidence by the objective’s prior', () => {
+    expect(seedConfidence({ evidence: 1, predictiveness: 0.8, calibrated: true })).toBe(0.8);
+    expect(seedConfidence({ evidence: 0.5, predictiveness: 0.8, calibrated: true })).toBe(0.4);
+  });
+
+  it('ranks the same raw impact lower on lead than on app_install', () => {
+    const lead = seedConfidence({ evidence: 1, predictiveness: 0.45, calibrated: true });
+    const app = seedConfidence({ evidence: 1, predictiveness: 0.88, calibrated: true });
+    expect(lead).toBeLessThan(app);
+    // close to half, which is the whole point: a leads account gets a shorter read
+    expect(lead / app).toBeLessThan(0.6);
+  });
+
+  it('discounts a borrowed prior again, rather than trusting it', () => {
+    const measured = seedConfidence({ evidence: 1, predictiveness: 0.45, calibrated: true });
+    const borrowed = seedConfidence({ evidence: 1, predictiveness: 0.45, calibrated: false });
+    expect(borrowed).toBeLessThan(measured);
+    expect(borrowed).toBeCloseTo(measured * UNCALIBRATED_PRIOR_DISCOUNT, 5);
+  });
+
+  it('stays inside 0..1 however badly it is called', () => {
+    expect(seedConfidence({ evidence: 5, predictiveness: 5, calibrated: true })).toBe(1);
+    expect(seedConfidence({ evidence: -3, predictiveness: 0.8, calibrated: true })).toBe(0);
+  });
+});
+
+describe('the candidate carries why its figure is small', () => {
+  it('defaults capped_by to null and result_label to a neutral word', () => {
+    const c = candidate({});
+    expect(c.capped_by).toBeNull();
+    expect(c.result_label).toBe('results');
+  });
+
+  it('admits only the two real reasons a figure gets bounded', () => {
+    expect(candidate({ capped_by: 'velocity' }).capped_by).toBe('velocity');
+    expect(candidate({ capped_by: 'guardrail' }).capped_by).toBe('guardrail');
+    expect(() => candidate({ capped_by: 'vibes' as never })).toThrow();
+  });
+});
+
+describe('what the blocked detectors are waiting for', () => {
+  it('names a category for every detector the catalogue marks non-computable', () => {
+    const blocked = DETECTORS.filter((d) => !ACCOUNT_DETECTOR_META[d].computable);
+    for (const detector of blocked) {
+      expect(DETECTOR_BLOCKED_ON[detector]).toBeDefined();
+    }
+    expect(blocked).toHaveLength(9);
+  });
+
+  it('lists nothing that already works — the two directions are pinned', () => {
+    for (const detector of Object.keys(DETECTOR_BLOCKED_ON) as (typeof DETECTORS)[number][]) {
+      expect(ACCOUNT_DETECTOR_META[detector].computable).toBe(false);
+    }
+  });
+
+  it('turns nine symptoms into a handful of decisions', () => {
+    const groups = blockedByCategory('purchase');
+    expect(groups.length).toBeLessThan(9);
+    expect(groups.flatMap((g) => g.detectors)).toHaveLength(9);
+    // two detectors share one platform call; the reader should see that
+    const platform = groups.find((g) => g.category === 'platform_call');
+    expect(platform?.detectors).toEqual(['audience_overlap', 'account_saturation']);
+  });
+
+  it('only reports what is actually in this objective’s deck', () => {
+    // awareness mutes new_vs_returning and post_click, so their blockers are not its problem
+    const detectors = blockedByCategory('awareness').flatMap((g) => g.detectors);
+    expect(detectors).not.toContain('new_vs_returning');
+    expect(detectors).not.toContain('post_click');
+  });
+
+  it('every category carries copy a person can read', () => {
+    for (const category of blockedCategorySchema.options) {
+      expect(BLOCKED_CATEGORY_COPY[category].length).toBeGreaterThan(0);
+    }
+  });
+});

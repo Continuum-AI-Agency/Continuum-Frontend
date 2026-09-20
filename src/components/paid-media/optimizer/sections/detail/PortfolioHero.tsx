@@ -16,6 +16,7 @@ import {
 } from 'motion/react';
 import * as React from 'react';
 import { Sparkline } from '@/components/organic/cards/Sparkline';
+import { AccountChartView } from '../account/AccountChartView';
 import { DeltaBadge } from '@/components/shared/DeltaBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -190,11 +191,27 @@ export function PortfolioHero({
       variants={groupVariants}
     >
       <div className="space-y-2">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          {view.tiles.map((tile) => (
-            <Tile currency={currency} key={tile.key} play={play} tile={tile} />
-          ))}
-        </div>
+        {/* One chart instead of three tiles. The tiles froze the same window into three
+         *  numbers; the chart draws it. When the window cannot be drawn honestly the
+         *  chart is null and the sentence below carries the read alone. */}
+        <motion.div
+          className="rounded-lg border border-border/60 bg-card p-3"
+          data-testid="hero-chart"
+          variants={tileVariants}
+        >
+          {view.chart ? (
+            <>
+              <AccountChartView chart={view.chart} currency={currency} />
+              {view.chartReading ? (
+                <p className="mt-1.5 text-3xs text-muted-foreground">{view.chartReading}</p>
+              ) : null}
+            </>
+          ) : (
+            <p className="text-2xs text-muted-foreground">
+              Not enough priced days in this window to draw it yet.
+            </p>
+          )}
+        </motion.div>
         <motion.p
           className="flex flex-wrap items-center gap-2 text-2xs text-muted-foreground"
           variants={tileVariants}
