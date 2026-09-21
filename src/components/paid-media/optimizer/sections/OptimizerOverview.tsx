@@ -122,6 +122,7 @@ export function OptimizerOverview({
           dailySpend={read.scale_per_day ?? dailyTotal}
           onOpenPortfolio={onSelectPortfolio}
           onSetState={(detector, state) => approvals.setInsight.mutate({ detector, state })}
+          assumptions={read.assumptions ?? []}
           deck={read.deck ?? null}
           source={read.model === 'deterministic' ? 'fallback' : 'brief'}
           starved={read.starved as never}

@@ -79,6 +79,8 @@ export type AccountReadProps = {
    * every day until the gap list reads as noise.
    */
   deck?: { applies: number; total: number } | null;
+  /** What the worker assumed in order to measure this account. Empty is the normal case. */
+  assumptions?: string[];
   /**
    * What this account mostly buys, and — for a custom conversion — the objective it behaves like.
    *
@@ -373,6 +375,7 @@ export function AccountRead({
   source = 'fallback',
   sentence = null,
   deck = null,
+  assumptions = [],
   objective = null,
   objectiveAnalog = null,
   onSetState,
@@ -398,6 +401,7 @@ export function AccountRead({
           Every check ran and none of them found money worth moving across this account.
         </p>
         {starved.length > 0 ? <Starved starved={starved} /> : null}
+        <AssumptionNote assumptions={assumptions} />
         <DeckNote deck={deck} />
       </section>
     );
@@ -496,6 +500,7 @@ export function AccountRead({
 
       {/* 5 — what could not be asked, grouped by what would unblock it */}
       {starved.length > 0 ? <Starved starved={starved} /> : null}
+      <AssumptionNote assumptions={assumptions} />
       <DeckNote deck={deck} />
     </section>
   );
@@ -581,6 +586,25 @@ function RungNote({
  * and they are not missing — they do not apply. The count is the whole useful fact, and it is
  * what stops a short read from looking like a broken one.
  */
+/**
+ * What the worker had to assume in order to measure this account at all.
+ *
+ * A custom conversion has no calibration of its own, so it is read as the closest objective
+ * we DID backtest — and every figure on this screen inherits that choice. An assumption the
+ * product makes silently is one nobody can correct, which is the whole reason it is printed
+ * rather than left in the prompt where only the model sees it.
+ */
+function AssumptionNote({ assumptions }: { assumptions: string[] }) {
+  if (assumptions.length === 0) return null;
+  return (
+    <div className="text-3xs text-muted-foreground" data-testid="account-assumptions">
+      {assumptions.map((line) => (
+        <p key={line}>{line}</p>
+      ))}
+    </div>
+  );
+}
+
 function DeckNote({ deck }: { deck?: { applies: number; total: number } | null }) {
   if (!deck || deck.total <= 0) return null;
   const full = deck.applies >= deck.total;

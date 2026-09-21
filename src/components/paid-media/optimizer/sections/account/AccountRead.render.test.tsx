@@ -485,3 +485,40 @@ describe('AccountRead — promoting an insight from its own card', () => {
     expect(queryByTestId('always-do-this')).toBeNull();
   });
 });
+
+describe('what the read assumed', () => {
+  // A custom conversion is measured as the closest objective we actually backtested, and
+  // every figure inherits that choice. Printing it is the only way a person can correct it.
+  it('prints each assumption the worker made, on the normal read', () => {
+    const { getByTestId } = render(
+      <AccountRead
+        assumptions={['Read as a signup: the event carries no revenue and arrives in 4 days.']}
+        candidates={many(3)}
+        currency="USD"
+        dailySpend={5000}
+      />,
+    );
+    expect(getByTestId('account-assumptions').textContent).toContain('Read as a signup');
+  });
+
+  // The empty read is a different render path, and the two must not disagree about what
+  // was assumed — "nothing to move" is itself a conclusion that rests on the assumption.
+  it('prints them on the empty read too', () => {
+    const { getByTestId } = render(
+      <AccountRead
+        assumptions={['Read as a purchase: the event carries revenue.']}
+        candidates={[]}
+        currency="USD"
+        dailySpend={1200}
+      />,
+    );
+    expect(getByTestId('account-assumptions').textContent).toContain('Read as a purchase');
+  });
+
+  it('says nothing when nothing had to be assumed', () => {
+    const { queryByTestId } = render(
+      <AccountRead candidates={many(3)} currency="USD" dailySpend={5000} />,
+    );
+    expect(queryByTestId('account-assumptions')).toBeNull();
+  });
+});

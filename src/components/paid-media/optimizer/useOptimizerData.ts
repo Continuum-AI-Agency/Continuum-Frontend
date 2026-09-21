@@ -1203,6 +1203,10 @@ const AccountReadEnvelopeSchema = z
           })
           .nullable()
           .catch(null),
+        // What the worker ASSUMED to measure this account — the analog a custom conversion
+        // was read as, and why. An assumption the product makes silently is one nobody can
+        // correct, so it travels with the read rather than living only in the prompt.
+        assumptions: z.array(z.string()).catch([]),
         scale_per_day: z.number().nullable().catch(null),
         currency: z.string().nullable().catch(null),
         model: z.string().catch('deterministic'),
