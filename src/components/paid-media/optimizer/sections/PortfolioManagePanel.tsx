@@ -25,16 +25,22 @@
 
 import {
   type AdSetSnapshot,
+  type AnalogObjective,
   type ApplyMode,
   type AutopilotScope,
   allowedTargetMetrics,
+  analogNote,
+  analogObjectiveSchema,
   type BudgetGranularity,
   type BudgetSource,
+  type ConversionDescriptor,
   type CreativeAnalysis,
   type CycleItemRow,
   type CyclePreviewItem,
+  conversionDescriptorSchema,
   flightDays,
   getOptimizationMetricDefinition,
+  inferAnalog,
   LOOKBACK_LABEL,
   LOOKBACK_WINDOWS,
   type LookbackWindow,
@@ -46,6 +52,7 @@ import {
   portfolioMetric,
   recommendLookbackWindow,
   type TargetMetric,
+  type UpdatePortfolioPatch,
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Archive, ChevronDown, Loader2, Pause, Play, SparklesIcon } from 'lucide-react';
@@ -123,6 +130,119 @@ const OBJECTIVES = OptimizationObjectiveSchema.options;
 /** The period the pacing gauge estimates against when no period budget is set. */
 const PACING_PERIOD_DAYS = 30;
 const SUGGESTED_MAX_CHANGE_PCT = '20';
+
+/**
+ * The descriptor form's own state, as strings — what an operator is halfway through typing
+ * is not a `ConversionDescriptor` yet, and pretending it is would mean a half-typed number
+ * reaching the contract.
+ *
+ * Held outside React Hook Form deliberately: `portfolioFields` owns one descriptor per
+ * COLUMN, and this is one column holding seven answers. Keeping it here means the form
+ * schema stays a map of scalars and the descriptor is validated by the contract that owns
+ * it, in one place, on the way out.
+ */
+export type ConversionDescriptorDraft = {
+  event_id: string;
+  result_label: string;
+  cost_label: string;
+  typical_lag_days: string;
+  events_per_week: string;
+  carries_revenue: boolean;
+  /** null = let it be inferred. A value here is a person overruling the inference. */
+  analog: AnalogObjective | null;
+};
+
+export const EMPTY_DESCRIPTOR_DRAFT: ConversionDescriptorDraft = {
+  event_id: '',
+  result_label: '',
+  cost_label: '',
+  typical_lag_days: '',
+  events_per_week: '',
+  carries_revenue: false,
+  analog: null,
+};
+
+/** Seed the form from what is stored. A declared analog stays declared. */
+export function descriptorDraftFrom(
+  stored: ConversionDescriptor | null | undefined,
+): ConversionDescriptorDraft {
+  if (!stored) return EMPTY_DESCRIPTOR_DRAFT;
+  return {
+    event_id: stored.event_id,
+    result_label: stored.result_label,
+    cost_label: stored.cost_label,
+    typical_lag_days: String(stored.typical_lag_days),
+    events_per_week: String(stored.events_per_week),
+    carries_revenue: stored.carries_revenue,
+    analog: stored.analog_source === 'declared' ? stored.analog : null,
+  };
+}
+
+/**
+ * The draft as the contract sees it, or the one sentence that stops it.
+ *
+ * Blank is checked BEFORE `Number`: `Number('')` is 0, so an unanswered "how long does it
+ * take to arrive" would otherwise validate as "it arrives instantly" — a wrong answer the
+ * inference then acts on, which is worse than no answer at all.
+ */
+export function buildConversionDescriptor(
+  draft: ConversionDescriptorDraft,
+): { descriptor: ConversionDescriptor } | { error: string } {
+  if (draft.event_id.trim() === '') return { error: 'Name the event as the platform reports it.' };
+  if (draft.result_label.trim() === '') return { error: 'Say what you call one of these.' };
+  if (draft.cost_label.trim() === '') return { error: 'Say what you call the cost of one.' };
+  if (draft.typical_lag_days.trim() === '') {
+    return { error: 'Say how many days it usually takes to arrive.' };
+  }
+  if (draft.events_per_week.trim() === '') {
+    return { error: 'Say roughly how many land in a week.' };
+  }
+  const typical_lag_days = Number(draft.typical_lag_days);
+  const events_per_week = Number(draft.events_per_week);
+  const inferred = inferAnalog({
+    typicalLagDays: typical_lag_days,
+    eventsPerWeek: events_per_week,
+    carriesRevenue: draft.carries_revenue,
+  });
+  const parsed = conversionDescriptorSchema.safeParse({
+    event_id: draft.event_id.trim(),
+    result_label: draft.result_label.trim(),
+    cost_label: draft.cost_label.trim(),
+    analog: draft.analog ?? inferred,
+    analog_source: draft.analog ? 'declared' : 'inferred',
+    typical_lag_days,
+    events_per_week,
+    carries_revenue: draft.carries_revenue,
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'That conversion cannot be saved yet.' };
+  }
+  return { descriptor: parsed.data };
+}
+
+/** Same seven answers, or not. Stringified because the shape is flat and fully ordered. */
+export function sameDescriptor(
+  a: ConversionDescriptor | null,
+  b: ConversionDescriptor | null,
+): boolean {
+  if (a === null || b === null) return a === b;
+  return (
+    a.event_id === b.event_id &&
+    a.result_label === b.result_label &&
+    a.cost_label === b.cost_label &&
+    a.analog === b.analog &&
+    a.analog_source === b.analog_source &&
+    a.typical_lag_days === b.typical_lag_days &&
+    a.events_per_week === b.events_per_week &&
+    a.carries_revenue === b.carries_revenue
+  );
+}
+
+const ANALOG_LABEL: Record<AnalogObjective, string> = {
+  purchase: 'a purchase',
+  signup: 'a signup',
+  lead: 'a lead',
+};
 
 /** A flight window of `days` starting today, as plain ISO dates. Built in UTC so the start
  *  date is the day the operator sees, not a timezone-shifted neighbour. */
@@ -314,6 +434,26 @@ export function PortfolioManagePanel({
   const values = form.watch();
 
   const objective = values.objective as OptimizationObjective;
+  // The stored descriptor, and the draft the operator is editing. Seeded once per portfolio
+  // rather than through `values`: the descriptor is one jsonb column, so it is dirty as a
+  // whole or not at all, and React Hook Form has nothing to track per field here.
+  const storedDescriptor = portfolio.conversion_descriptor ?? null;
+  const [descriptorDraft, setDescriptorDraft] = useState<ConversionDescriptorDraft>(() =>
+    descriptorDraftFrom(storedDescriptor),
+  );
+  const builtDescriptor = useMemo(
+    () => buildConversionDescriptor(descriptorDraft),
+    [descriptorDraft],
+  );
+  const descriptor = 'descriptor' in builtDescriptor ? builtDescriptor.descriptor : null;
+  // Leaving 'custom' clears the descriptor: a booked-demo label on a portfolio now buying
+  // purchases is worse than no label.
+  const descriptorDirty =
+    objective === 'custom'
+      ? !sameDescriptor(descriptor, storedDescriptor)
+      : storedDescriptor !== null;
+  const patchDescriptor = (patch: Partial<ConversionDescriptorDraft>) =>
+    setDescriptorDraft((current) => ({ ...current, ...patch }));
   const applyMode = values.apply_mode as ApplyMode;
   const budgetSource = values.budget_source as BudgetSource;
   const lookbackWindow = values.lookback_window as LookbackWindow;
@@ -467,7 +607,8 @@ export function PortfolioManagePanel({
     };
   }, [enrolledIds, selectedAdsetIds]);
 
-  const hasChanges = form.formState.isDirty || toAdd.length > 0 || toRemove.length > 0;
+  const hasChanges =
+    form.formState.isDirty || descriptorDirty || toAdd.length > 0 || toRemove.length > 0;
   const saving =
     form.formState.isSubmitting || update.isPending || enroll.isPending || unenroll.isPending;
 
@@ -479,11 +620,27 @@ export function PortfolioManagePanel({
   const confirmedValues = useRef<PortfolioFormPatch | null>(null);
 
   async function performSave(patchValues: PortfolioFormPatch) {
-    const patch = buildPatch(patchValues, form.formState.dirtyFields);
+    const patch: Record<string, unknown> = {
+      ...buildPatch(patchValues, form.formState.dirtyFields),
+    };
     form.clearErrors('root');
+    // A custom objective without a described conversion is the mislabelling this objective
+    // exists to end, so it blocks the save rather than storing a portfolio nobody can read.
+    if (objective === 'custom') {
+      if ('error' in builtDescriptor) {
+        form.setError('root', { message: builtDescriptor.error });
+        return;
+      }
+      if (descriptorDirty) patch.conversion_descriptor = builtDescriptor.descriptor;
+    } else if (storedDescriptor !== null) {
+      patch.conversion_descriptor = null;
+    }
     try {
       if (Object.keys(patch).length > 0) {
-        await update.mutateAsync({ portfolio_id: portfolio.id, patch });
+        await update.mutateAsync({
+          portfolio_id: portfolio.id,
+          patch: patch as UpdatePortfolioPatch,
+        });
       }
       if (toAdd.length > 0) {
         const nameById = new Map(pickerEntities.map((entity) => [entity.id, entity.name]));
@@ -595,7 +752,8 @@ export function PortfolioManagePanel({
               </SelectContent>
             </Select>
             <p className="text-2xs text-muted-foreground">
-              Prices this portfolio on {metric.resultLabel} ({metric.costLabel}).
+              Prices this portfolio on {descriptor?.result_label ?? metric.resultLabel} (
+              {descriptor?.cost_label ?? metric.costLabel}).
             </p>
             {objectiveChanged && affectedAdsets.length > 0 ? (
               <p className="text-2xs text-warning">
@@ -604,6 +762,120 @@ export function PortfolioManagePanel({
               </p>
             ) : null}
           </div>
+          {objective === 'custom' ? (
+            <div className="space-y-2.5 rounded-md border border-border/60 bg-background/60 p-3 sm:col-span-2">
+              <div>
+                <p className="font-semibold text-xs tracking-tight">The conversion you buy</p>
+                <p className="mt-0.5 text-2xs text-muted-foreground">
+                  Nobody but you knows what this event is. Name it, and say how it behaves — it is
+                  measured against whichever calibrated objective behaves the same way.
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor={`manage-conv-event-${portfolio.id}`}>Event id</Label>
+                  <Input
+                    id={`manage-conv-event-${portfolio.id}`}
+                    onChange={(event) => patchDescriptor({ event_id: event.target.value })}
+                    placeholder="offsite_conversion.fb_pixel_custom"
+                    value={descriptorDraft.event_id}
+                  />
+                  <p className="text-2xs text-muted-foreground">
+                    What the platform calls it, not what you call it.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={`manage-conv-result-${portfolio.id}`}>What you call one</Label>
+                  <Input
+                    id={`manage-conv-result-${portfolio.id}`}
+                    onChange={(event) => patchDescriptor({ result_label: event.target.value })}
+                    placeholder="Demos booked"
+                    value={descriptorDraft.result_label}
+                  />
+                  <p className="text-2xs text-muted-foreground">
+                    Every card on this account says this word instead of &ldquo;conversions&rdquo;.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={`manage-conv-cost-${portfolio.id}`}>What one costs</Label>
+                  <Input
+                    id={`manage-conv-cost-${portfolio.id}`}
+                    onChange={(event) => patchDescriptor({ cost_label: event.target.value })}
+                    placeholder="Cost per demo booked"
+                    value={descriptorDraft.cost_label}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`manage-conv-lag-${portfolio.id}`}>Days to arrive</Label>
+                    <Input
+                      id={`manage-conv-lag-${portfolio.id}`}
+                      inputMode="decimal"
+                      onChange={(event) =>
+                        patchDescriptor({ typical_lag_days: event.target.value })
+                      }
+                      placeholder="4"
+                      value={descriptorDraft.typical_lag_days}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`manage-conv-volume-${portfolio.id}`}>A week</Label>
+                    <Input
+                      id={`manage-conv-volume-${portfolio.id}`}
+                      inputMode="decimal"
+                      onChange={(event) => patchDescriptor({ events_per_week: event.target.value })}
+                      placeholder="18"
+                      value={descriptorDraft.events_per_week}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 sm:col-span-2">
+                  <Switch
+                    aria-label="Carries a value"
+                    checked={descriptorDraft.carries_revenue}
+                    id={`manage-conv-revenue-${portfolio.id}`}
+                    onCheckedChange={(checked) => patchDescriptor({ carries_revenue: checked })}
+                  />
+                  <Label className="font-normal" htmlFor={`manage-conv-revenue-${portfolio.id}`}>
+                    The event carries a money value — it IS the revenue, not a step toward it.
+                  </Label>
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Measured like</Label>
+                  <Select
+                    onValueChange={(value) =>
+                      patchDescriptor({
+                        analog:
+                          value === 'inferred'
+                            ? null
+                            : (analogObjectiveSchema.parse(value) as AnalogObjective),
+                      })
+                    }
+                    value={descriptorDraft.analog ?? 'inferred'}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="inferred">Work it out from the answers above</SelectItem>
+                      {analogObjectiveSchema.options.map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {`Like ${ANALOG_LABEL[value]}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {descriptor ? (
+                    <p className="text-2xs text-muted-foreground">{analogNote(descriptor)}</p>
+                  ) : (
+                    <p className="text-2xs text-warning">
+                      {'error' in builtDescriptor ? builtDescriptor.error : null}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
           <div className="space-y-1.5">
             <Label htmlFor={`manage-target-metric-${portfolio.id}`}>Target metric</Label>
             {allowedMetrics.length > 1 ? (

@@ -11,6 +11,7 @@
 import { z } from 'zod';
 import { competitorAdHookArchetypeSchema } from '../competitor-spy/analysis';
 import { globalAngleIdSchema } from '../creative-strategy/angles';
+import { conversionDescriptorSchema } from './custom-conversion';
 import {
   AdSetSnapshotSchema,
   FreezeReasonSchema,
@@ -574,6 +575,13 @@ export const UpdatePortfolioPatchSchema = z
     max_daily_apply_minor: z.number().int().nonnegative().nullable().optional(),
     max_change_pct_per_cycle: z.number().min(0).nullable().optional(),
     status: PortfolioStatusSchema.optional(),
+    /**
+     * What the advertiser calls the conversion this portfolio buys, when the objective is
+     * 'custom'. Sent WHOLE (the RPC replaces the object, it does not merge): a descriptor
+     * half of which is the previous event is a descriptor nobody can read. null clears it,
+     * which is what leaving 'custom' means.
+     */
+    conversion_descriptor: conversionDescriptorSchema.nullable().optional(),
   })
   .refine((d) => Object.values(d).some((v) => v !== undefined), {
     message: 'Patch must set at least one field',
@@ -1091,6 +1099,14 @@ export const PortfolioListItemSchema = z.object({
   autopilot_scopes_changed_by: z.string().uuid().nullable().optional(),
   max_daily_apply_minor: z.number().nullable().optional(),
   max_change_pct_per_cycle: z.number().nullable().optional(),
+  /**
+   * For objective = 'custom': what the advertiser calls the event they buy.
+   *
+   * Declare-or-be-stripped again, and `.catch(null)` on top: a stored blob written before
+   * the shape settled must cost that portfolio its descriptor, never its row — a row that
+   * fails to parse disappears from the list entirely.
+   */
+  conversion_descriptor: conversionDescriptorSchema.nullable().catch(null).optional(),
 });
 export type PortfolioListItem = z.infer<typeof PortfolioListItemSchema>;
 

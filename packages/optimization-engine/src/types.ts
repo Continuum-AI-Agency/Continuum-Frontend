@@ -109,7 +109,12 @@ export type OptimizationObjective =
   | 'link_clicks'
   | 'thruplays'
   | 'post_engagement'
-  | 'clicks';
+  | 'clicks'
+  // The twelfth. `OBJECTIVE_PROFILES` has carried a `custom` profile since the descriptor
+  // work landed, so leaving it out of the union made the profile unreachable through this
+  // type: every caller holding the contracts objective (12 members) failed to compile
+  // against a function that claimed 11.
+  | 'custom';
 
 // --- Delivery: is this thing being SERVED at all? ---------------------------
 // Every performance trigger in this engine (F1/F2, C1-C4) is a ratio: recent versus

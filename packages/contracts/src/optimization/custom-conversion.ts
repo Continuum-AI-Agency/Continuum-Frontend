@@ -104,3 +104,53 @@ export function analogNote(descriptor: ConversionDescriptor): string {
         : 'it is fast and frequent';
   return `Measured like ${descriptor.analog}, because ${why}. Change it if that is wrong.`;
 }
+
+/**
+ * A stored descriptor, made usable — or null when the row does not carry one.
+ *
+ * Null is the ONLY failure mode, and it is the one the rest of the code already handles:
+ * the column is absent until the migration lands, and a malformed blob must degrade to
+ * today's behaviour rather than take an account's whole read down.
+ *
+ * An `inferred` analog is re-inferred here rather than trusted. The stored value was
+ * inferred from a lag and a volume that both move; re-deriving it means a descriptor
+ * corrected by newer figures stops being stale the moment they are written. A `declared`
+ * analog is left exactly as a person set it — a correction that does not survive the next
+ * inference is not a correction.
+ */
+export function resolveConversionDescriptor(raw: unknown): ConversionDescriptor | null {
+  if (raw == null) return null;
+  const parsed = conversionDescriptorSchema.safeParse(raw);
+  if (!parsed.success) return null;
+  const descriptor = parsed.data;
+  if (descriptor.analog_source === 'declared') return descriptor;
+  return {
+    ...descriptor,
+    analog: inferAnalog({
+      typicalLagDays: descriptor.typical_lag_days,
+      eventsPerWeek: descriptor.events_per_week,
+      carriesRevenue: descriptor.carries_revenue,
+    }),
+  };
+}
+
+/**
+ * The objective an account is actually MEASURED against.
+ *
+ * `custom` has no calibration of its own, so every read of it — the confidence prior, the
+ * detector deck, the ceilings a family ships with — has to be taken against the analog.
+ * Without this the twelfth objective falls through `getObjectiveProfile('custom')` to
+ * `lead`'s numbers whatever the event does, which is right for a slow CRM event and wrong
+ * for a same-day one carrying revenue.
+ *
+ * Every other objective answers for itself, and a `custom` portfolio with no descriptor
+ * stays `custom` — the uncalibrated profile is the honest default when nobody has told us
+ * what the event is.
+ */
+export function measuredObjective(
+  objective: z.infer<typeof OptimizationObjectiveSchema> | null,
+  descriptor: ConversionDescriptor | null,
+): z.infer<typeof OptimizationObjectiveSchema> | null {
+  if (objective !== 'custom') return objective;
+  return descriptor ? descriptor.analog : objective;
+}

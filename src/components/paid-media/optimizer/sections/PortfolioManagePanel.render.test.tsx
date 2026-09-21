@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -9,6 +9,14 @@ import type { CyclePreviewResponse, PortfolioListItem } from '@continuum/contrac
 const noopMutation = () => ({
   mutate: mock(() => {}),
   mutateAsync: mock(async () => {}),
+  isPending: false,
+});
+
+/** Stable across renders so a test can read the patch the panel actually sent. */
+const updateMutateAsync = mock(async (_input: unknown) => {});
+const updateMutation = () => ({
+  mutate: mock(() => {}),
+  mutateAsync: updateMutateAsync,
   isPending: false,
 });
 
@@ -30,7 +38,7 @@ const realOptimizerData = await import('../useOptimizerData');
 mock.module('../useOptimizerData', () => ({
   ...realOptimizerData,
   useOptimizerMutations: () => ({
-    update: noopMutation(),
+    update: updateMutation(),
     enroll: noopMutation(),
     unenroll: noopMutation(),
     archive: noopMutation(),
@@ -112,9 +120,12 @@ mock.module('../picker/CampaignAdsetPicker', () => ({
   ),
 }));
 
-const { PortfolioManagePanel, adsetsThatStopMatching } = await import('./PortfolioManagePanel');
+const { PortfolioManagePanel, adsetsThatStopMatching, buildConversionDescriptor } = await import(
+  './PortfolioManagePanel'
+);
 
 beforeEach(() => {
+  updateMutateAsync.mockClear();
   performanceData = null;
   cyclePreviewOutcome = undefined;
   cyclePreviewMutate.mockClear();
@@ -436,5 +447,76 @@ describe('target metric, plan granularity and the scale plan', () => {
     expect(toggle).not.toBeNull();
     fireEvent.click(toggle as HTMLElement);
     expect(document.body.textContent).toContain('Off — ad-set level only');
+  });
+});
+
+describe('the custom conversion an advertiser names', () => {
+  const draft = {
+    event_id: 'offsite_conversion.fb_pixel_custom.demo',
+    result_label: 'Demos booked',
+    cost_label: 'Cost per demo booked',
+    typical_lag_days: '4',
+    events_per_week: '18',
+    carries_revenue: false,
+    analog: null,
+  };
+  const stored = {
+    ...draft,
+    analog: 'lead' as const,
+    analog_source: 'inferred' as const,
+    typical_lag_days: 4,
+    events_per_week: 18,
+  };
+
+  it('infers the analog from how the event behaves', () => {
+    const built = buildConversionDescriptor(draft);
+    expect('descriptor' in built && built.descriptor.analog).toBe('lead');
+    expect('descriptor' in built && built.descriptor.analog_source).toBe('inferred');
+  });
+
+  it('keeps an analog a person chose, and says it was chosen', () => {
+    const built = buildConversionDescriptor({ ...draft, analog: 'purchase' });
+    expect('descriptor' in built && built.descriptor.analog).toBe('purchase');
+    expect('descriptor' in built && built.descriptor.analog_source).toBe('declared');
+  });
+
+  it('refuses a blank lag rather than reading it as "it arrives instantly"', () => {
+    const built = buildConversionDescriptor({ ...draft, typical_lag_days: '' });
+    expect('error' in built && built.error).toMatch(/how many days/i);
+  });
+
+  it('shows the assumption it made, in the advertiser own words', () => {
+    renderPanel({ objective: 'custom', conversion_descriptor: stored });
+
+    expect(screen.getByText(/Measured like lead, because it takes about 4 days/)).toBeDefined();
+    expect(screen.getByText(/Prices this portfolio on Demos booked/)).toBeDefined();
+  });
+
+  it('will not save a custom objective nobody has described', async () => {
+    renderPanel({ objective: 'custom' });
+
+    fireEvent.change(input(/Name/), { target: { value: 'Renamed' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() =>
+      expect(
+        screen.getAllByText(/Name the event as the platform reports it/).length,
+      ).toBeGreaterThan(0),
+    );
+    expect(updateMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('sends the descriptor with the patch the operator saved', async () => {
+    renderPanel({ objective: 'custom', conversion_descriptor: stored });
+
+    fireEvent.change(input(/What you call one/), { target: { value: 'Demos held' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
+    const sent = updateMutateAsync.mock.calls[0]?.[0] as {
+      patch: { conversion_descriptor?: { result_label: string; analog: string } };
+    };
+    expect(sent.patch.conversion_descriptor?.result_label).toBe('Demos held');
+    expect(sent.patch.conversion_descriptor?.analog).toBe('lead');
   });
 });
