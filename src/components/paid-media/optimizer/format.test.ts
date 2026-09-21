@@ -6,6 +6,9 @@ import {
   deriveEfficiency,
   formatCpa,
   formatCurrency,
+  formatHeadline,
+  formatPercent,
+  formatPerPeriod,
   humanize,
   nextCycleLabel,
   soonestNextCycle,
@@ -133,5 +136,64 @@ describe('soonestNextCycle', () => {
   it('returns null when nothing is scheduled', () => {
     expect(soonestNextCycle([])).toBeNull();
     expect(soonestNextCycle([{ next_realloc_at: null }])).toBeNull();
+  });
+});
+
+describe('the impact vocabulary', () => {
+  it('says a daily figure in the two periods a person thinks in', () => {
+    expect(formatPerPeriod(96)).toBe('$96/day · $2,880/mo');
+  });
+
+  it('honours the ad account\u2019s own currency on both halves', () => {
+    expect(formatPerPeriod(100, 'EUR')).toContain('/day');
+    expect(formatPerPeriod(100, 'EUR')).toContain('/mo');
+  });
+
+  it('returns a dash rather than inventing a month for a figure it does not have', () => {
+    expect(formatPerPeriod(null)).toBe('—');
+    expect(formatPerPeriod(Number.POSITIVE_INFINITY)).toBe('—');
+  });
+
+  it('prints a percentage that is ALREADY a percentage, and never multiplies', () => {
+    // 33 is 33%. A formatter that multiplies is one that eventually doubles.
+    expect(formatPercent(33)).toBe('33%');
+    expect(formatPercent(33.4, { fractionDigits: 1 })).toBe('33.4%');
+    expect(formatPercent(18, { signed: true })).toBe('+18%');
+    expect(formatPercent(null)).toBe('—');
+  });
+
+  it('formats a headline by its unit and leaves the detector\u2019s words alone', () => {
+    expect(
+      formatHeadline({
+        kind: 'efficiency',
+        value: 33,
+        unit: 'percent',
+        label: 'cheaper per result',
+        from: 90,
+        to: 60,
+      }),
+    ).toEqual({ figure: '33%', label: 'cheaper per result' });
+
+    expect(
+      formatHeadline({
+        kind: 'avoided',
+        value: 96,
+        unit: 'currency_per_day',
+        label: 'a day buying nothing',
+        from: null,
+        to: null,
+      }),
+    ).toEqual({ figure: '$96', label: 'a day buying nothing' });
+
+    expect(
+      formatHeadline({
+        kind: 'count',
+        value: 1200,
+        unit: 'count',
+        label: 'results a week, combined',
+        from: null,
+        to: 50,
+      }),
+    ).toEqual({ figure: '1,200', label: 'results a week, combined' });
   });
 });

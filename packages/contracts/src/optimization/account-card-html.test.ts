@@ -80,7 +80,96 @@ describe('accountCardHtml — a compiler cannot hallucinate, but it can carry a 
   it('collects every figure each shape can print', () => {
     expect(cardFigures(candidate())).toContain(90);
     expect(cardFigures(candidate())).toContain(60);
-    expect(cardFigures(candidate({ chart: null }))).toEqual([66.67]);
+    // The day AND the month, because both are now printed on the frame.
+    expect(cardFigures(candidate({ chart: null }))).toEqual([66.67, 2000.1]);
+  });
+
+  it('admits the headline, so the gate cannot call a declared figure an invention', () => {
+    const figures = cardFigures(
+      candidate({
+        headline: {
+          kind: 'efficiency',
+          value: 33,
+          unit: 'percent',
+          label: 'cheaper per result',
+          from: 90,
+          to: 60,
+        },
+      }),
+    );
+    expect(figures).toContain(33);
+    expect(figures).toContain(90);
+    expect(figures).toContain(60);
+  });
+});
+
+describe('the headline — each detector leads with its own metric, money supports it', () => {
+  const withHeadline = (over = {}) =>
+    candidate({
+      headline: {
+        kind: 'efficiency',
+        value: 33,
+        unit: 'percent',
+        label: 'cheaper per result',
+        from: 90,
+        to: 60,
+        ...over,
+      },
+    });
+
+  it('prints the detector’s figure, not the money, in the figure slot', () => {
+    const html = accountCardHtml(withHeadline(), opts);
+    expect(html).toContain('<span class="fig">33%</span>');
+    expect(html).toContain('cheaper per result');
+  });
+
+  it('still carries the money every card shares, as day · month', () => {
+    const html = accountCardHtml(withHeadline(), opts);
+    // Whole units above 100, per `money()` — the month is a figure to grasp, not audit.
+    expect(html).toContain('$66.67/day · $2000/mo');
+  });
+
+  it('says the month even when the money is the headline it fell back to', () => {
+    // No detector declared one: the money leads, exactly as before, plus the month.
+    const html = accountCardHtml(candidate(), opts);
+    expect(html).toContain('<span class="fig">$66.67</span><span class="unit">/day</span>');
+    expect(html).toContain('· $2000/mo');
+  });
+
+  it('prints a count as a count and money per day as money', () => {
+    expect(accountCardHtml(withHeadline({ kind: 'count', value: 62, unit: 'count' }), opts)).toContain(
+      '<span class="fig">62</span>',
+    );
+    expect(
+      accountCardHtml(
+        withHeadline({ kind: 'avoided', value: 96.4, unit: 'currency_per_day' }),
+        opts,
+      ),
+    ).toContain('<span class="fig">$96.40</span>');
+  });
+
+  it('clips a label that would push the figure row out of its band', () => {
+    const html = accountCardHtml(
+      withHeadline({ label: 'cheaper per result than source' }),
+      opts,
+    );
+    expect(html).not.toContain('cheaper per result than source');
+    expect(html).toContain('…');
+  });
+
+  it('prints no figure the headline did not declare', () => {
+    const c = withHeadline();
+    const html = accountCardHtml(c, opts);
+    const allowed = new Set<string>();
+    for (const figure of cardFigures(c)) {
+      for (const form of [String(figure), figure.toFixed(0), figure.toFixed(1), figure.toFixed(2)])
+        for (const piece of form.split('.')) allowed.add(piece);
+    }
+    const body = html.slice(html.indexOf('<body'));
+    const unexplained = (body.match(/\d+/g) ?? []).filter(
+      (d) => !allowed.has(d) && !/^\d{1,3}$/.test(d),
+    );
+    expect(unexplained).toEqual([]);
   });
 });
 
