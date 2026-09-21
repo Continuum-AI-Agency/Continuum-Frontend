@@ -84,7 +84,7 @@ const { JainaMessageItem } = await import('./JainaMessageItem');
 
 afterEach(cleanup);
 
-const turnCiting = (size: 'chip' | 'card'): JainaChatMessage => ({
+const turnCiting = (size: 'card' | 'strip' = 'card'): JainaChatMessage => ({
   id: 'msg-1',
   role: 'assistant',
   status: 'done',
@@ -94,18 +94,6 @@ const turnCiting = (size: 'chip' | 'card'): JainaChatMessage => ({
 });
 
 describe('a cited optimizer figure reaches the account read', () => {
-  it('hands a click on the chip back to the caller, with the read it cites', () => {
-    const opened: string[] = [];
-    render(
-      <JainaMessageItem message={turnCiting('chip')} onOpenAccountRead={(id) => opened.push(id)} />,
-      { wrapper },
-    );
-
-    fireEvent.click(screen.getByTestId('optimizer-chip'));
-
-    expect(opened).toEqual(['read-abc']);
-  });
-
   it('reaches the card footer control too, which is the same callback one size up', () => {
     const opened: string[] = [];
     render(

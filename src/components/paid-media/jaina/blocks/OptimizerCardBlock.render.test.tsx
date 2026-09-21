@@ -1,3 +1,4 @@
+import { jainaCardSizeSchema } from '@continuum/contracts';
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { AccountCandidate } from '@continuum/contracts';
 import { accountCandidateSchema, jainaOptimizerCardSchema } from '@continuum/contracts';
@@ -125,21 +126,11 @@ describe('a citation that no longer resolves still renders', () => {
 });
 
 describe('the three sizes', () => {
-  it('renders a chip inline, and opens the read when tapped', () => {
-    const onOpenRead = mock();
-    const { getByTestId } = render(
-      <OptimizerCardBlock
-        card={part({ size: 'chip' })}
-        currency="USD"
-        onOpenRead={onOpenRead}
-        readDate="20 Sep"
-        resolve={resolves(candidate())}
-      />,
-    );
-    const chip = getByTestId('optimizer-chip');
-    expect(chip.tagName).toBe('BUTTON');
-    fireEvent.click(chip);
-    expect(onOpenRead).toHaveBeenCalledWith('read_2026_09_20');
+  // `chip` is gone from the wire: its definition was positional and the Frontend flattens a
+  // message's parts before rendering, so it could never land inside a sentence — it landed as
+  // a lone pill under the finished paragraph, with the prose written around the hole.
+  it('has no chip renderer, because the wire has no chip', () => {
+    expect(jainaCardSizeSchema.options).toEqual(['card', 'strip']);
   });
 
   it('renders a strip of exactly three', () => {

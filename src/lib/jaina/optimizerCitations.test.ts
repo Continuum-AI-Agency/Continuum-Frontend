@@ -42,10 +42,10 @@ describe('a cited card reaches the transcript', () => {
   it('keeps every citation in the turn, in the order they were emitted', () => {
     const message = uiMessage([
       citationPart(wellFormed),
-      citationPart({ ...wellFormed, candidate_ids: ['audience_overlap:acct'], size: 'chip' }),
+      citationPart({ ...wellFormed, candidate_ids: ['audience_overlap:acct'], size: 'card' }),
     ]);
 
-    expect(optimizerCitationsOf(message).map((card) => card.size)).toEqual(['card', 'chip']);
+    expect(optimizerCitationsOf(message).map((card) => card.size)).toEqual(['card', 'card']);
   });
 
   it('leaves a turn that cited nothing without the field at all', () => {

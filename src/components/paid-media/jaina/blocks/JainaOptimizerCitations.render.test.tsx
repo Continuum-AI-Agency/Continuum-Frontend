@@ -94,7 +94,7 @@ describe('what the block draws with that resolver', () => {
   const draw = (
     read: CitedRead | null,
     readId: string,
-    card: { read_id: string; candidate_ids: string[]; size: 'chip' | 'card' | 'strip' },
+    card: { read_id: string; candidate_ids: string[]; size: 'card' | 'strip' },
   ) => {
     const resolution = resolutionFrom(read, readId);
     return render(
@@ -145,15 +145,6 @@ describe('what the block draws with that resolver', () => {
     expect(getByTestId('optimizer-cleared').textContent).toContain('cleared');
   });
 
-  it('picks the chip renderer for a chip', () => {
-    const { getByTestId } = draw(storedRead(), 'read-abc', {
-      read_id: 'read-abc',
-      candidate_ids: ['dead_tail:acct'],
-      size: 'chip',
-    });
-
-    expect(getByTestId('optimizer-chip').tagName).toBe('BUTTON');
-  });
 
   it('picks the strip renderer for three', () => {
     const read = storedRead({

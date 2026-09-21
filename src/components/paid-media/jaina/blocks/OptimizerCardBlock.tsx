@@ -7,9 +7,8 @@
 // from the model. What Jaina chose is which comparison to show; the figures are the
 // detector's.
 //
-// Three sizes, and the rule for each is about how much of the answer rests on the card:
+// Two sizes, and the rule for each is about how much of the answer rests on the card:
 //
-//   chip   the figure belongs inside a sentence. Inline, monospaced, with the provenance dot.
 //   card   the whole answer rests on one comparison. LANDSCAPE, not the square the account
 //          grid uses — a square in a chat column wastes half the width and pushes the next
 //          sentence off the screen.
@@ -30,7 +29,6 @@ import {
   chartShapeFor,
   citationIsWellFormed,
   IMPACT_CLASS_COPY,
-  isGuardDetector,
 } from '@continuum/contracts';
 import { formatCurrency } from '@/components/paid-media/optimizer/format';
 import { AccountChartView } from '@/components/paid-media/optimizer/sections/account/AccountChartView';
@@ -49,47 +47,6 @@ export type OptimizerCardBlockProps = {
   readDate: string | null;
   onOpenRead?: (readId: string) => void;
 };
-
-function Provenance({ detector }: { detector: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        'inline-block size-1.5 shrink-0 rounded-full',
-        isGuardDetector(detector as never) ? 'bg-destructive' : 'bg-primary',
-      )}
-      data-detector={detector}
-    />
-  );
-}
-
-/** A figure inside a sentence. Tapping it opens the card it came from. */
-function Chip({
-  candidate,
-  currency,
-  onOpenRead,
-  readId,
-}: {
-  candidate: AccountCandidate;
-  currency: string | null;
-  onOpenRead?: (readId: string) => void;
-  readId: string;
-}) {
-  const label = `${ACCOUNT_DETECTOR_META[candidate.detector].label}, from the cited read`;
-  return (
-    <button
-      aria-label={label}
-      className="inline-flex items-baseline gap-1.5 rounded bg-muted px-1.5 py-0.5 align-baseline font-mono text-foreground text-sm tabular-nums"
-      data-testid="optimizer-chip"
-      onClick={() => onOpenRead?.(readId)}
-      type="button"
-    >
-      <Provenance detector={candidate.detector} />
-      {formatCurrency(candidate.impact_per_day, currency)}
-      <span className="text-2xs text-muted-foreground">/day</span>
-    </button>
-  );
-}
 
 function Body({ candidate, currency }: { candidate: AccountCandidate; currency: string | null }) {
   const meta = ACCOUNT_DETECTOR_META[candidate.detector];
@@ -192,19 +149,6 @@ export function OptimizerCardBlock({
     );
   }
 
-  if (card.size === 'chip') {
-    const first = resolved[0];
-    if (!first?.candidate) return <Cleared candidateId={first?.id ?? ''} servingCitedRead={servingCitedRead} status={status} />;
-    return (
-      <Chip
-        candidate={first.candidate}
-        currency={currency}
-        onOpenRead={onOpenRead}
-        readId={card.read_id}
-      />
-    );
-  }
-
   const foot = (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-border/60 border-t bg-muted/30 px-4 py-2 text-3xs text-muted-foreground">
       <span>{readDate ? `read of ${readDate}` : 'from a stored read'}</span>
@@ -264,7 +208,11 @@ export function OptimizerCardBlock({
         </div>
       ) : (
         <div className="p-4">
-          <Cleared candidateId={only?.id ?? ''} servingCitedRead={servingCitedRead} status={status} />
+          <Cleared
+            candidateId={only?.id ?? ''}
+            servingCitedRead={servingCitedRead}
+            status={status}
+          />
         </div>
       )}
       {foot}

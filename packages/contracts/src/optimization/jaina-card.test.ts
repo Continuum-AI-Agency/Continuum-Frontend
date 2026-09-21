@@ -47,12 +47,15 @@ describe('a strip means three, and four is not an answer', () => {
       true,
     );
     expect(citationIsWellFormed(card({ size: 'strip', candidate_ids: ['dead_tail:1'] }))).toBe(false);
-    expect(citationIsWellFormed(card({ size: 'chip' }))).toBe(true);
+    expect(citationIsWellFormed(card({ size: 'card' }))).toBe(true);
     expect(citationIsWellFormed(card({ size: 'card', candidate_ids: ['dead_tail:1', 'audience_overlap:2'] }))).toBe(false);
   });
 
   it('offers exactly three sizes — more than three cards is the account read, not an answer', () => {
-    expect(jainaCardSizeSchema.options).toEqual(['chip', 'card', 'strip']);
+    // `chip` is gone: its whole definition was positional, and the Frontend flattens a
+    // message's parts before rendering, so it could never land inside a sentence.
+    expect(jainaCardSizeSchema.options).toEqual(['card', 'strip']);
+    expect(() => card({ size: 'chip' })).toThrow();
   });
 });
 

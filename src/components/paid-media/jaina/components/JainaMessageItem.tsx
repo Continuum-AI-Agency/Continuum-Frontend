@@ -286,6 +286,16 @@ function JainaMessageItemImpl({
               />
             ) : null}
 
+            {/* Directly under the prose it supports. It used to render last in the turn —
+             *  after the plan, the report and the creatives — so the evidence for the first
+             *  sentence sat below content that had nothing to do with it. */}
+            {optimizerCitations.length > 0 ? (
+              <JainaOptimizerCitations
+                citations={optimizerCitations}
+                onOpenRead={onOpenAccountRead}
+              />
+            ) : null}
+
             {message.pendingClarification ? (
               <motion.div
                 initial={{ opacity: 0, y: 6 }}
@@ -396,12 +406,6 @@ function JainaMessageItemImpl({
               <CreativesSection creatives={allCreatives} />
             )}
 
-            {optimizerCitations.length > 0 ? (
-              <JainaOptimizerCitations
-                citations={optimizerCitations}
-                onOpenRead={onOpenAccountRead}
-              />
-            ) : null}
 
             {paidCreativeRenders.map((render) => (
               <PaidCreativeRenderStatus key={render.render_job_id} render={render} />

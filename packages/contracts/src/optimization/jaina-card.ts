@@ -25,11 +25,23 @@ import { accountDetectorSchema } from './account-strategy';
 /**
  * How much of the frame a citation takes.
  *
- * `chip` when the figure belongs inside a sentence; `card` when the whole answer rests on one
- * comparison; `strip` when the answer is "here are the three things". More than three is not
- * an answer, it is the account read — link to it instead.
+ * `card` when the whole answer rests on one comparison; `strip` when the answer is "here are
+ * the three things". More than three is not an answer, it is the account read — link to it
+ * instead.
+ *
+ * THERE WAS A THIRD, `chip`, and it is gone. Its entire definition was positional — "when the
+ * figure belongs inside a sentence" — and the Frontend flattens a message's parts before it
+ * renders, discarding the citation's index among them. So a chip could never land inside a
+ * sentence; it landed as a lone pill under the finished paragraph. That alone would be
+ * cosmetic, except the tool description told the model to write prose that DEPENDS on the
+ * placement, so answers came out shaped like "about that much a day" with the figure below.
+ * A size that is strictly worse than not citing at all, because the sentence was written
+ * around a hole nothing fills.
+ *
+ * Bringing it back means giving the model a way to place the figure — a marker it writes into
+ * its own prose that the renderer substitutes — not another size on this enum.
  */
-export const jainaCardSizeSchema = z.enum(['chip', 'card', 'strip']);
+export const jainaCardSizeSchema = z.enum(['card', 'strip']);
 export type JainaCardSize = z.infer<typeof jainaCardSizeSchema>;
 
 /**
