@@ -1,5 +1,6 @@
 import type {
   AgentDelegatedFrameData,
+  JainaHyperframeSet,
   JainaOptimizerCard,
   JainaPaidCreativeRenderPayload,
   JainaToolApprovalRequiredPayload,
@@ -64,6 +65,8 @@ export type JainaChatMessage = {
    * quietly become a snapshot of numbers nobody can trace.
    */
   optimizerCitations?: JainaOptimizerCard[];
+  /** Compiled cards filed for this turn — the whole document, not a reference into a read. */
+  optimizerHyperframes?: JainaHyperframeSet[];
   pendingClarification?: {
     id?: string;
     question: string;

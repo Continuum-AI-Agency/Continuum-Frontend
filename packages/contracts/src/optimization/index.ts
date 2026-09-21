@@ -23,6 +23,7 @@ export * from './flash-creatives';
 export * from './flash-pipeline-template';
 export * from './insight-approval';
 export * from './jaina-card';
+export * from './jaina-hyperframe';
 // Which trailing window a portfolio's read surfaces report on, and how to recommend one.
 export * from './lookback';
 // MCP umbrella IO contracts (optimizer_query read + optimizer_manage write).

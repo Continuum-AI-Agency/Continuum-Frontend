@@ -20,12 +20,14 @@ import {
   type AgentDelegatedFrameData,
   agentDelegatedFrameDataSchema,
   JAINA_UI_DATA_PART,
+  type JainaHyperframeSet,
+  type JainaOptimizerCard,
   type JainaPaidCreativeRenderPayload,
   type JainaToolApprovalRequiredPayload,
   type JainaToolApprovalResolvedPayload,
-  type JainaOptimizerCard,
   type JainaToolOutputDeniedPayload,
   type JainaUIMessage,
+  jainaHyperframeSetSchema,
   jainaOptimizerCardSchema,
   jainaPaidCreativeRenderPayloadSchema,
   jainaToolApprovalRequiredPayloadSchema,
@@ -434,6 +436,19 @@ export const optimizerCitationsOf = (message: JainaUIMessage): JainaOptimizerCar
   });
 
 /** Canvas actions the run proposed. Read by the surface's canvas effect, not by a message card. */
+/**
+ * Compiled optimizer cards, in the order they were emitted.
+ *
+ * Parsed here as well as on the emit side because a part can arrive from a replayed run log
+ * the emitter never touched — and what this parse guards is a POINTER the surface is about to
+ * sign and load, not a figure.
+ */
+export const optimizerHyperframesOf = (message: JainaUIMessage): JainaHyperframeSet[] =>
+  partsOfType(message, JAINA_UI_DATA_PART.optimizerHyperframe).flatMap((data) => {
+    const parsed = jainaHyperframeSetSchema.safeParse(data);
+    return parsed.success ? [parsed.data] : [];
+  });
+
 export const canvasActionsOf = (message: JainaUIMessage): Record<string, unknown>[] =>
   partsOfType(message, JAINA_UI_DATA_PART.canvasActions);
 
@@ -723,6 +738,7 @@ export const toJainaChatMessage = (
   const checkpointSummary = checkpointSummaryOf(message);
   const reportArtifactJob = reportArtifactJobOf(message);
   const optimizerCitations = optimizerCitationsOf(message);
+  const optimizerHyperframes = optimizerHyperframesOf(message);
   const plan = planOf(message);
 
   // Mirrors the surface's completion rule: a report renders AS a report when it has content, is
@@ -767,6 +783,7 @@ export const toJainaChatMessage = (
     ...(artifacts.creatives?.length || artifacts.images?.length ? { artifacts } : {}),
     ...(paidCreativeRenders.length > 0 ? { paidCreativeRenders } : {}),
     ...(optimizerCitations.length > 0 ? { optimizerCitations } : {}),
+    ...(optimizerHyperframes.length > 0 ? { optimizerHyperframes } : {}),
     ...(pendingClarification ? { pendingClarification } : {}),
     ...(objectives.length > 0 ? { objectives } : {}),
     ...(delegations.length > 0 ? { delegations } : {}),
