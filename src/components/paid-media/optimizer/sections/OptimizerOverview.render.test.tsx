@@ -13,13 +13,14 @@ mock.module('../ApplyModePill', () => ({ ApplyModePill: () => null }));
 // Spread the real module: `mock.module` replaces it for the whole PROCESS and bun runs
 // every test file in one, so a partial replacement here reaches the next file in the run.
 let approvalFailure: Error | null = null;
+let accountReadData: unknown = null;
 const realOptimizerData = await import('../useOptimizerData');
 mock.module('../useOptimizerData', () => ({
   ...realOptimizerData,
   useOptimizerSpendByObjective: () => ({ data: [], isLoading: false, isError: false }),
   // The account read is written by a worker on its own clock; absent is the normal case
   // and the overview has to stand on its own without it.
-  useOptimizerAccountRead: () => ({ data: null, isLoading: false, isError: false }),
+  useOptimizerAccountRead: () => ({ data: accountReadData, isLoading: false, isError: false }),
   // The real hook asks for a QueryClient, and these tests deliberately mount no provider —
   // the overview's own behaviour is what is under test, not React Query's wiring.
   // `mock.module` replaces the module for the whole process, so the failure case is driven
@@ -32,7 +33,10 @@ mock.module('../useOptimizerData', () => ({
   }),
 }));
 
-const { OptimizerOverview, sortPortfolios } = await import('./OptimizerOverview');
+const { OptimizerOverview, sortPortfolios, dominantObjective } = await import(
+  './OptimizerOverview'
+);
+const { AccountReadEnvelopeSchema } = await import('../useOptimizerData');
 
 function portfolio(
   overrides: Partial<PortfolioListItem> & { id: string; name: string },
@@ -58,6 +62,7 @@ const ALPHA = portfolio({ id: 'a', name: 'Alpha', daily_total: 900 });
 
 afterEach(() => {
   approvalFailure = null;
+  accountReadData = null;
   cleanup();
 });
 
@@ -205,5 +210,131 @@ describe('sortPortfolios', () => {
   it('treats a null daily budget as zero rather than sorting it to the top', () => {
     const unset = portfolio({ id: 'u', name: 'Unset', daily_total: null });
     expect(sortPortfolios([ALPHA, unset], 'daily', 'desc').map((p) => p.id)).toEqual(['a', 'u']);
+  });
+});
+
+// Nothing in this file used to render the account read at all — `useOptimizerAccountRead` was
+// mocked to `{data: null}` in every case. That is how a gate, two unpassed props and two
+// crash-on-parse bugs all lived in this branch at once.
+describe('the account read, on the screen that actually mounts it', () => {
+  const envelope = (read: Record<string, unknown>) => ({
+    utc_day: '2026-09-21',
+    ready_at: '2026-09-21T06:00:00Z',
+    read: AccountReadEnvelopeSchema.parse({ utc_day: '2026-09-21', read }).read,
+  });
+
+  const candidate = {
+    id: 'dead_tail:a1',
+    detector: 'dead_tail',
+    impact_per_day: 120,
+    impact_class: 'recoverable',
+    impact_basis: 'spent with nothing to show',
+    chart: null,
+  };
+
+  function mount() {
+    return render(
+      <OptimizerOverview
+        brandId="b1"
+        portfolios={[ALPHA]}
+        pendingCount={0}
+        currency="USD"
+        onOpenActions={() => {}}
+        onSelectPortfolio={() => {}}
+        onCreatePortfolio={() => {}}
+      />,
+    );
+  }
+
+  it('renders a quiet read — one with nothing to act on still has things to say', () => {
+    accountReadData = envelope({
+      candidates: [],
+      guards: [],
+      starved: [],
+      assumptions: ['Demo funnel: measured like a purchase.'],
+      deck: { applies: 24, total: 25, muted: ['new_vs_returning'] },
+      model: 'deterministic',
+    });
+    const { getByTestId } = mount();
+    expect(getByTestId('account-read')).toBeTruthy();
+    expect(getByTestId('account-assumptions').textContent).toContain('Demo funnel');
+    expect(getByTestId('account-deck-note').textContent).toContain('24 of 25');
+  });
+
+  it('survives a starved row naming a detector this build has never heard of', () => {
+    accountReadData = envelope({
+      candidates: [candidate],
+      guards: [],
+      starved: [
+        { detector: 'brand_new_detector', missing: 'a thing' },
+        { detector: 'creative_supply', missing: 'creative rows' },
+      ],
+      model: 'deterministic',
+    });
+    // Before: ACCOUNT_DETECTOR_META[unknown].label threw and took the whole overview down.
+    const { getByTestId } = mount();
+    expect(getByTestId('account-read')).toBeTruthy();
+  });
+
+  it('keeps the good candidates when one row has a shape this build cannot read', () => {
+    accountReadData = envelope({
+      candidates: [candidate, { ...candidate, id: 'x:2', detector: 'brand_new_detector' }],
+      guards: [],
+      starved: [],
+      model: 'deterministic',
+    });
+    // Before: the `.catch([])` sat on the ARRAY, so one bad row emptied every good one.
+    const { getAllByTestId } = mount();
+    expect(getAllByTestId('account-lead').length).toBe(1);
+  });
+
+  it("prints the read's own narrative rather than the constant fallback", () => {
+    accountReadData = envelope({
+      candidates: [candidate],
+      guards: [],
+      starved: [],
+      narrative: 'Two portfolios are paying twice the account average.',
+      model: 'gemini-2.5-flash',
+    });
+    const { getByTestId } = mount();
+    expect(getByTestId('account-read').textContent).toContain('paying twice the account average');
+    expect(getByTestId('account-read').textContent).not.toContain(
+      'Across the account, most worth doing first',
+    );
+  });
+
+  it('says what a figure buys, resolved from the book the account actually runs', () => {
+    accountReadData = envelope({
+      candidates: [candidate],
+      guards: [],
+      starved: [],
+      model: 'deterministic',
+    });
+    // ALPHA is a `lead` portfolio, so the rung is the one `lead` sits on.
+    const { getByTestId } = mount();
+    expect(getByTestId('account-rung-note')).toBeTruthy();
+  });
+});
+
+describe('dominantObjective', () => {
+  const p = (id: string, objective: string, daily: number | null) =>
+    portfolio({ id, name: id, daily_total: daily, objective: objective as never });
+
+  it('picks the objective the account spends the most on, not the one it has most of', () => {
+    expect(
+      dominantObjective([p('a', 'lead', 100), p('b', 'lead', 100), p('c', 'purchase', 900)]),
+    ).toBe('purchase');
+  });
+
+  it('says nothing when two objectives are tied, because a mixed account has no one answer', () => {
+    expect(dominantObjective([p('a', 'lead', 500), p('b', 'purchase', 500)])).toBeNull();
+  });
+
+  it('ignores a row whose objective it cannot parse', () => {
+    expect(dominantObjective([p('a', 'not_an_objective', 900), p('b', 'lead', 100)])).toBe('lead');
+  });
+
+  it('has no answer for an empty book', () => {
+    expect(dominantObjective([])).toBeNull();
   });
 });

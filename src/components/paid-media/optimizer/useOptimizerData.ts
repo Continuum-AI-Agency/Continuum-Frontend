@@ -29,6 +29,7 @@ import {
   ApplyRunResponseSchema,
   type AudienceProposalRow,
   accountCandidateSchema,
+  accountDetectorSchema,
   adsetCreativeWinRateRowSchema,
   audienceProposalRowSchema,
   type ConvertCboRequest,
@@ -1180,18 +1181,38 @@ async function fetchSpendByObjective(
  * missing read is an ABSENT screen section, never an error — and a row whose shape has
  * moved on is dropped rather than taking the page down with it.
  */
-const AccountReadEnvelopeSchema = z
+/**
+ * Drop the rows whose shape has moved on, and KEEP the rest.
+ *
+ * `z.array(schema).catch([])` puts the catch on the ARRAY, so one row the Frontend does not
+ * recognise — a detector the Backend shipped before a Vercel promote — silently empties every
+ * other row with it. The screen then renders nothing and says nothing, which reads exactly
+ * like "no findings today". Per-row is what the envelope's own comment already promises.
+ */
+function tolerantRows<T>(schema: z.ZodType<T>) {
+  return z
+    .array(z.unknown())
+    .catch([])
+    .transform((rows) =>
+      rows.flatMap((row) => {
+        const parsed = schema.safeParse(row);
+        return parsed.success ? [parsed.data] : [];
+      }),
+    );
+}
+
+export const AccountReadEnvelopeSchema = z
   .object({
     utc_day: z.string().nullable().default(null),
     read: z
       .object({
-        candidates: z.array(accountCandidateSchema).catch([]),
-        guards: z.array(accountCandidateSchema).catch([]),
+        candidates: tolerantRows(accountCandidateSchema),
+        guards: tolerantRows(accountCandidateSchema),
         narrative: z.string().catch(''),
         lead_reason: z.string().nullable().catch(null),
         justification_if_not_max: z.string().nullable().catch(null),
         conflicts: z.array(z.object({ a: z.string(), b: z.string(), why: z.string() })).catch([]),
-        starved: z.array(z.object({ detector: z.string(), missing: z.string() })).catch([]),
+        starved: tolerantRows(z.object({ detector: accountDetectorSchema, missing: z.string() })),
         // How much of the catalogue applies to what this account buys. Tolerant like the rest
         // of this envelope: a read written before the worker carried it must still render, and
         // the screen simply says nothing rather than claiming a deck size it was not told.

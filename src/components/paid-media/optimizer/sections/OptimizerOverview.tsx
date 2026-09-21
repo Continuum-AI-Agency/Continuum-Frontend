@@ -6,7 +6,8 @@
 // live split beside it, and the portfolio cards. The legend filters the cards, so "show me
 // the lead portfolios" is one click.
 
-import type { PortfolioListItem } from '@continuum/contracts';
+import type { OptimizationObjective, PortfolioListItem } from '@continuum/contracts';
+import { OptimizationObjectiveSchema } from '@continuum/contracts';
 import { ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, PlusIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -31,6 +32,55 @@ type SortKey = 'name' | 'daily' | 'pending';
 type SortDir = 'asc' | 'desc';
 
 const STREAM_DAYS = 14;
+
+/**
+ * The objective the account mostly buys, by money rather than by count.
+ *
+ * The rung line says what a figure BUYS — money, a person, an intent, attention — and a
+ * mixed account has no single answer, so the largest book wins and a tie says nothing.
+ * The read doc does not carry an objective yet; the portfolio list does.
+ */
+export function dominantObjective(portfolios: PortfolioListItem[]): OptimizationObjective | null {
+  const byObjective = new Map<OptimizationObjective, number>();
+  for (const portfolio of portfolios) {
+    const parsed = OptimizationObjectiveSchema.safeParse(portfolio.objective);
+    if (!parsed.success) continue;
+    byObjective.set(
+      parsed.data,
+      (byObjective.get(parsed.data) ?? 0) + (portfolio.daily_total ?? 0),
+    );
+  }
+  let best: OptimizationObjective | null = null;
+  let bestSpend = -1;
+  let tied = false;
+  for (const [objective, spend] of byObjective) {
+    if (spend > bestSpend) {
+      best = objective;
+      bestSpend = spend;
+      tied = false;
+    } else if (spend === bestSpend) {
+      tied = true;
+    }
+  }
+  return tied ? null : best;
+}
+
+/** Whether the read has anything at all to put on screen. */
+function hasSomethingToSay(read: {
+  candidates: unknown[];
+  guards: unknown[];
+  starved: unknown[];
+  assumptions?: string[];
+  deck?: { total: number } | null;
+}): boolean {
+  return (
+    read.candidates.length > 0 ||
+    read.guards.length > 0 ||
+    read.starved.length > 0 ||
+    (read.assumptions?.length ?? 0) > 0 ||
+    (read.deck?.total ?? 0) > 0
+  );
+}
 
 /** Pure, order-stable sort for the glance list. Nullable daily budgets sort as 0 so a
  *  half-configured portfolio does not jump to the top of a descending budget sort. */
@@ -115,17 +165,25 @@ export function OptimizerOverview({
 
   return (
     <div className="space-y-3">
-      {read && (read.candidates.length > 0 || read.guards.length > 0) ? (
+      {/* A read with nothing to act on still has things to say: what it assumed, how much of
+       *  the catalogue applies, and which checks could not run. Gating on candidates alone
+       *  meant the component's "Nothing to move today" branch could never appear on screen —
+       *  the quiet day rendered as a blank where a sentence belonged. */}
+      {read && hasSomethingToSay(read) ? (
         <AccountRead
+          assumptions={read.assumptions ?? []}
           candidates={[...read.candidates, ...read.guards]}
           currency={read.currency ?? currency ?? null}
           dailySpend={read.scale_per_day ?? dailyTotal}
+          deck={read.deck ?? null}
+          objective={dominantObjective(portfolios)}
           onOpenPortfolio={onSelectPortfolio}
           onSetState={(detector, state) => approvals.setInsight.mutate({ detector, state })}
-          assumptions={read.assumptions ?? []}
-          deck={read.deck ?? null}
+          // The read's own narrative, not a constant. The envelope has carried it all along
+          // while the screen printed the fallback line under a header crediting Jaina.
+          sentence={read.narrative || null}
           source={read.model === 'deterministic' ? 'fallback' : 'brief'}
-          starved={read.starved as never}
+          starved={read.starved}
         />
       ) : null}
       {/* A control that silently does nothing is worse than one that is absent. Until the

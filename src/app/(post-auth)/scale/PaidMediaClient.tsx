@@ -550,7 +550,7 @@ export default function PaidMediaClientPage({
           </div>
         </div>
 
-        <TabsContent value="dashboard" className="box-border min-h-0 overflow-hidden">
+        <TabsContent value="dashboard" className="box-border flex min-h-0 flex-col overflow-hidden">
           {/* A saved dashboard is something you READ, so it belongs with the numbers rather
            *  than inside the chat that happened to produce it. Jaina is the conversation; what
            *  the conversation left behind lives here. The panel reads the Jaina brand scope, so
@@ -558,7 +558,7 @@ export default function PaidMediaClientPage({
           <JainaBrandScopeProvider adAccountId={selectedAdAccount} brandId={brandProfileId}>
             <SavedDashboardsPanel />
           </JainaBrandScopeProvider>
-          <div ref={adsManagerShellRef} className="relative flex h-full min-h-0 overflow-hidden">
+          <div ref={adsManagerShellRef} className="relative flex min-h-0 flex-1 overflow-hidden">
             <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
               {selectedAdAccount ? (
                 <PaidMediaDashboard
