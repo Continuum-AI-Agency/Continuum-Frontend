@@ -3,12 +3,14 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { SafeMarkdown } from '@/components/ui/SafeMarkdown';
 
-// This used to assert the safe link kept its `href`. Streamdown 2.5 defaults
-// `linkSafety` to `{ enabled: true }`, so an allowed link now renders as a confirm-first
-// `<button data-streamdown="link">` that holds the URL in a closure and calls
-// `window.open` only after the reader confirms — the href is not in the DOM at all.
-// That is a stronger posture than the old pin, not a weaker one, so the pin follows it:
-// no raw href for the allowed link, and the `javascript:` URL still refused outright.
+// Streamdown 2.5 defaults `linkSafety` to `{ enabled: true }`, which renders an allowed link
+// as a confirm-first `<button>` holding the URL in a closure — no href in the DOM. We turn that
+// off: `harden` below already vets every link, and the interstitial costs middle-click, copy-link
+// and keyboard navigation, while doing nothing at all in a `mode="static"` render with no JS.
+//
+// The earlier version of this test asserted only `data-streamdown="link"`, which Streamdown puts
+// on BOTH the button and the anchor — so it passed either way and pinned nothing. It now names
+// the element, which is the actual decision.
 test('SafeMarkdown renders markdown and hardens links', () => {
   const html = renderToStaticMarkup(
     <SafeMarkdown
@@ -20,13 +22,17 @@ test('SafeMarkdown renders markdown and hardens links', () => {
   expect(html).toContain('Hello');
   expect(html).toContain('data-streamdown="strong"');
   expect(html).toContain('world');
-  // The allowed link survives as a link-safety control carrying its own label.
-  expect(html).toContain('data-streamdown="link"');
+
+  // An allowed link is a real anchor a reader can middle-click, copy and tab to.
+  const link = html.match(/<(a|button)[^>]*data-streamdown="link"[^>]*>/)?.[0] ?? '';
+  expect(link.startsWith('<a ')).toBe(true);
+  expect(link).toContain('href="https://example.com/"');
+  expect(link).toContain('rel="noopener noreferrer"');
   expect(html).toContain('>ok<');
-  // The refused one never becomes a control at all — it is replaced by inert text.
+
+  // The refused one never becomes a link at all — it is replaced by inert text, and its URL
+  // survives only inside the title that explains the refusal.
   expect(html).toContain('Blocked URL: javascript:alert(1)');
-  // The refused URL survives only inside the `title` that explains the refusal, and
-  // exactly one link control exists — the allowed one.
   expect(html).not.toContain('href="javascript');
   expect(html.match(/data-streamdown="link"/g)).toHaveLength(1);
 });
