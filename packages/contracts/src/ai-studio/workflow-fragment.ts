@@ -172,6 +172,26 @@ export type EditorPipelineConfiguration = z.infer<typeof editorPipelineConfigura
 export const canvasPipelinePortSchema = canvasTechniquePortSchema.extend({
   /** Explicit pipeline contract semantics. Never inferred from a label. */
   pipelineBinding: pipelinePortBindingSchema.optional(),
+  /**
+   * More consumers the SAME value feeds, besides `nodeRef`/`handleId`.
+   *
+   * A multi-shot graph needs one persona in every shot. Three ports would let a caller cast
+   * three different people into one video and make every form ask three times; one port
+   * wired to every shot is the contract that actually holds. Pipeline ports only — the
+   * Technique port is also an LLM output schema and stays narrow.
+   */
+  alsoFeeds: z
+    .array(
+      z
+        .object({
+          nodeRef: z.string().min(1).max(120),
+          handleId: z.string().min(1).max(120).optional(),
+        })
+        .strict(),
+    )
+    .min(1)
+    .max(8)
+    .optional(),
 });
 export type CanvasPipelinePort = z.infer<typeof canvasPipelinePortSchema>;
 
@@ -269,6 +289,13 @@ export const canvasPipelineMetadataSchema = canvasTechniqueMetadataSchema
       }
     });
     metadata.outputPorts.forEach((port, index) => {
+      if (port.alsoFeeds) {
+        context.addIssue({
+          code: 'custom',
+          path: ['outputPorts', index, 'alsoFeeds'],
+          message: 'Only an input port may feed more than one node',
+        });
+      }
       if (port.pipelineBinding?.kind === 'element') {
         context.addIssue({
           code: 'custom',

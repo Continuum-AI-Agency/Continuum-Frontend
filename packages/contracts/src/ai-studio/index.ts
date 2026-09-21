@@ -42,6 +42,7 @@ export * from './render-output-format';
 export * from './shader-stack';
 export * from './slot-roles';
 export * from './timeline-authoring';
+export * from './ugc-pipeline-template';
 export * from './ugc-workflow';
 export * from './video-production';
 export * from './visual-evidence';
