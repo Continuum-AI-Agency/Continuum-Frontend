@@ -77,6 +77,25 @@ describe('useOptimizerUrlState', () => {
     );
   });
 
+  // Where a cited optimizer figure in a Jaina answer lands. The account read only ever renders
+  // at the top of Overview, and a leftover portfolio deep-link would put the detail workspace
+  // there instead — so the chip would switch tabs and still show the reader nothing.
+  it('opens the account read on Overview, clearing any portfolio drill-in', () => {
+    navigation.params = new URLSearchParams(
+      'tab=jaina&optimizerView=portfolios&portfolio=portfolio-1&adset=adset-1&section=manage',
+    );
+    const { result } = renderHook(() => useOptimizerUrlState());
+
+    result.current.openAccountRead();
+
+    expect(pushState).toHaveBeenNthCalledWith(
+      1,
+      null,
+      '',
+      '/scale?tab=performance&optimizerView=overview',
+    );
+  });
+
   it('pushes the create view with no portfolio param', () => {
     navigation.params = new URLSearchParams(
       'tab=performance&optimizerView=portfolios&portfolio=portfolio-1&adset=adset-1',

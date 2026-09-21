@@ -12,6 +12,7 @@ import {
   useOptimizerAdAccounts,
   usePrefetchOptimizerOverview,
 } from '@/components/paid-media/optimizer/useOptimizerData';
+import { useOptimizerUrlState } from '@/components/paid-media/optimizer/useOptimizerUrlState';
 import { PaidSetupDiagnostics } from '@/components/paid-media/PaidSetupDiagnostics';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -273,6 +274,17 @@ export default function PaidMediaClientPage({
       router.replace(`?${params.toString()}`, { scroll: false });
     });
   };
+
+  // A cited optimizer figure in a Jaina answer opens the read it was taken from. Two pieces of
+  // state have to move together for that to land anywhere: the paid-media tab, which is React
+  // state on this shell, and where inside the optimizer to arrive, which is URL state the
+  // optimizer already owns. Stable identity matters — `JainaMessageItem` is memoized, and a new
+  // function each render would put every finished message back into each streaming frame.
+  const { openAccountRead } = useOptimizerUrlState();
+  const handleOpenAccountRead = React.useCallback(() => {
+    setActiveTab('performance');
+    openAccountRead();
+  }, [openAccountRead]);
 
   // Prefetch dashboard data while user is on Jaina tab so data is warm on switch-back
   React.useEffect(() => {
@@ -659,6 +671,7 @@ export default function PaidMediaClientPage({
                   initialPrompt={jainaInitialPrompt}
                   onInitialPromptConsumed={clearJainaPrompt}
                   onCanvasActionApplied={handleCanvasActionApplied}
+                  onOpenAccountRead={handleOpenAccountRead}
                   goalsAccessEnabled={goalsAccessEnabled}
                   className="rounded-none border-none bg-transparent backdrop-blur-none"
                 />

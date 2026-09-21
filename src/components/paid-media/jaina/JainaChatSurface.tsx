@@ -201,6 +201,14 @@ type JainaChatSurfaceProps = {
   initialPrompt?: string | null;
   onInitialPromptConsumed?: () => void;
   onCanvasActionApplied?: () => void;
+  /**
+   * Opens the optimizer's account read for a cited optimizer figure in an answer.
+   *
+   * The surface only forwards it: honouring it means moving the paid-media tab AND the
+   * optimizer's URL view, and neither belongs to a chat surface that also mounts on the
+   * campaign canvas route. It must be referentially stable — `JainaMessageItem` is memoized.
+   */
+  onOpenAccountRead?: (readId: string) => void;
   goalsAccessEnabled?: boolean;
   className?: string;
 };
@@ -774,6 +782,7 @@ export function JainaChatSurface({
   initialPrompt,
   onInitialPromptConsumed,
   onCanvasActionApplied,
+  onOpenAccountRead,
   goalsAccessEnabled = process.env.NODE_ENV !== 'production',
   className,
 }: JainaChatSurfaceProps) {
@@ -2694,6 +2703,7 @@ export function JainaChatSurface({
                     optimisticApprovalDecisions={optimisticApprovalDecisions}
                     onRegenerate={submitFromTranscript}
                     regeneratePrompt={regeneratePromptByMessageId.get(message.id)}
+                    onOpenAccountRead={onOpenAccountRead}
                   />
                   {milestonesForJainaMessage(message).map((milestone) => (
                     <ChatMarker

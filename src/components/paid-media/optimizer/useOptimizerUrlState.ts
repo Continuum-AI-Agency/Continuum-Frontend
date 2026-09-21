@@ -82,6 +82,19 @@ export function useOptimizerUrlState() {
     [navigate],
   );
 
+  /** Where a cited optimizer figure lands. The account read opens the Overview and there is only
+   * ever one of it — `optimizer_get_account_read` serves the latest ready read per ad account —
+   * so this is a view to reach, not a row to focus. The portfolio deep-link has to go: with one
+   * set, `OptimizerTab` renders the detail workspace and the read never gets on screen. */
+  const openAccountRead = useCallback(() => {
+    navigate((params) => {
+      params.set('optimizerView', 'overview');
+      params.delete('portfolio');
+      params.delete('adset');
+      params.delete('section');
+    }, 'push');
+  }, [navigate]);
+
   const closePortfolio = useCallback(() => {
     navigate((params) => {
       params.set('optimizerView', 'portfolios');
@@ -145,6 +158,7 @@ export function useOptimizerUrlState() {
   return {
     ...state,
     setView,
+    openAccountRead,
     openPortfolio,
     closePortfolio,
     openCreate,

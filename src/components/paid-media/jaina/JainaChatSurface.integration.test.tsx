@@ -334,9 +334,11 @@ mock.module('./components/JainaMessageItem', () => ({
   JainaMessageItem: React.memo(function JainaMessageItemMock({
     message,
     onApprovalDecision,
+    onOpenAccountRead,
   }: {
     message: Record<string, unknown>;
     onApprovalDecision?: (approval: Record<string, unknown>, decision: 'approve' | 'deny') => void;
+    onOpenAccountRead?: (readId: string) => void;
   }) {
     const id = String(message.id);
     itemRenders.set(id, (itemRenders.get(id) ?? 0) + 1);
@@ -374,6 +376,18 @@ mock.module('./components/JainaMessageItem', () => ({
             approve
           </button>
         ))}
+        {/* Stands in for the cited optimizer chip: the real item forwards this same callback
+         *  into JainaOptimizerCitations, so what matters here is only that the surface HANDS
+         *  its own prop to the item rather than dropping it. */}
+        {onOpenAccountRead ? (
+          <button
+            type="button"
+            data-testid={`open-read-${id}`}
+            onClick={() => onOpenAccountRead('read-abc')}
+          >
+            open the read
+          </button>
+        ) : null}
       </div>
     );
   }),
@@ -563,6 +577,36 @@ describe('JainaChatSurface integration', () => {
       adAccountId: 'act-1',
       adAccountIds: ['act-1', 'act-2'],
     });
+  });
+
+  /**
+   * The surface's half of the cited-optimizer chain. It owns no tabs and no URL, so it can only
+   * pass the page's handler to each turn — and the defect this pins was exactly that kind of
+   * omission one layer down, where a chip stayed a real `<button>` that did nothing.
+   */
+  it('forwards the account-read handler to every turn it renders', async () => {
+    global.fetch = emptyHistoryFetch();
+    const opened: string[] = [];
+    render(
+      <JainaChatSurface
+        brandProfileId="brand-1"
+        brandName="Test Brand"
+        adAccountId="act-1"
+        campaignId={null}
+        userId="user-1"
+        onOpenAccountRead={(readId) => opened.push(readId)}
+      />,
+      { wrapper: withQueryClient },
+    );
+    await showMessages([
+      uiMessage('assistant-1', 'assistant', [textPart('The dead tail is worth 102 a day.')]),
+    ]);
+
+    fireEvent.click(
+      await screen.findByTestId('open-read-assistant-1', undefined, { timeout: 2000 }),
+    );
+
+    expect(opened).toEqual(['read-abc']);
   });
 
   /**

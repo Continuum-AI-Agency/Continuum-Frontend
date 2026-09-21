@@ -125,6 +125,14 @@ type JainaMessageItemProps = {
   ) => void;
   /** Decisions submitted but not yet echoed back by a tool.approval_resolved frame. */
   optimisticApprovalDecisions?: Record<string, ToolApprovalDecision>;
+  /**
+   * Opens the optimizer's account read — what a cited optimizer figure points at.
+   *
+   * Only the shell that owns the paid-media tabs can honour it, so it arrives from there rather
+   * than being hand-rolled here: the tab is React state on that shell and where to land inside
+   * the optimizer is URL state, and both have to move for the chip to reach anything.
+   */
+  onOpenAccountRead?: (readId: string) => void;
 };
 
 function JainaMessageItemImpl({
@@ -136,6 +144,7 @@ function JainaMessageItemImpl({
   onFocusInput,
   onApprovalDecision,
   optimisticApprovalDecisions,
+  onOpenAccountRead,
 }: JainaMessageItemProps) {
   const isStreaming = message.status === 'streaming';
 
@@ -388,7 +397,10 @@ function JainaMessageItemImpl({
             )}
 
             {optimizerCitations.length > 0 ? (
-              <JainaOptimizerCitations citations={optimizerCitations} />
+              <JainaOptimizerCitations
+                citations={optimizerCitations}
+                onOpenRead={onOpenAccountRead}
+              />
             ) : null}
 
             {paidCreativeRenders.map((render) => (
