@@ -19,6 +19,10 @@ export const OBJECTIVES: OptimizationObjective[] = [
   'thruplays',
   'post_engagement',
   'awareness',
+  // The twelfth. The manage panel already offers it (it lists the schema's own options), so
+  // leaving it out here only made the two surfaces disagree about what an account can buy.
+  // Both need optimizer_portfolios_objective_chk widened before a save succeeds.
+  'custom',
 ];
 
 export const MODES: OptimizationModeDto[] = ['efficiency', 'balanced', 'scale'];
@@ -59,8 +63,7 @@ export const CONVERSION_OBJECTIVES = new Set<OptimizationObjective>([
   // A messaging thread is a tracked conversion like any other: with none recorded, the
   // first cycle has nothing to score and the same nudge applies.
   'conversations',
-  // So is an event only this advertiser defines. It is NOT in `OBJECTIVES` yet: the
-  // portfolios check constraint does not admit 'custom' until the catch-up migration is
-  // applied, so offering it in the wizard first would mean a create that fails.
+  // So is an event only this advertiser defines: with none recorded there is nothing to
+  // score on the first cycle, and the same nudge applies.
   'custom',
 ]);
