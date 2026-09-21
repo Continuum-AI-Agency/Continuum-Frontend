@@ -7,10 +7,59 @@
 // drawing actually reaches, and text takes its colour from the theme tokens so both themes
 // read. Plain SVG and flex: a library here would buy nothing and cost a runtime fetch the
 // artifact CSP would refuse anyway.
+//
+// `rates` and `interval` are readable by POINTER AND BY KEYBOARD. A chart whose figures only
+// a mouse can reach is a chart half the readers cannot check, so every mark a reader can
+// interrogate is a real <button> with its own accessible name: the date, the label and the
+// value with its unit. A readout line above the plot carries the same three facts in the
+// same place whether the reader is hovering, tabbing or sitting still — no popup that
+// appears and vanishes, and no layout that shifts when it does.
+//
+// The reference is NOT a second series. A `b` that never moves across the window is the line
+// the series is being read against, and it is drawn as a labelled rule rather than a second
+// polyline a reader has to decode from a legend. Which of the two a chart carries is read
+// off the data itself — never assumed, never configured.
 
 import type { AccountChart } from '@continuum/contracts';
+import { motion, useReducedMotion, type Variants } from 'motion/react';
+import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '../../format';
+
+const DAY_SHORT = new Intl.DateTimeFormat('en-US', {
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'UTC',
+});
+const DAY_FULL = new Intl.DateTimeFormat('en-US', {
+  day: 'numeric',
+  month: 'long',
+  timeZone: 'UTC',
+  weekday: 'long',
+  year: 'numeric',
+});
+
+/**
+ * A point's own `t`, read as a day when it is one.
+ *
+ * `t` is a free string in the contract — most detectors put a date in it, some put a week
+ * label. Anything that does not parse is returned untouched: the axis says what the data
+ * says, and a date nobody supplied is never invented to fill the slot.
+ */
+function dayLabel(t: string, formatter: Intl.DateTimeFormat): string {
+  const ms = /^\d{4}-\d{2}-\d{2}$/.test(t) ? Date.parse(`${t}T00:00:00Z`) : Date.parse(t);
+  return Number.isNaN(ms) ? t : formatter.format(ms);
+}
+
+/** ~5s, and it neither sweeps nor shines: the newest point breathes so "today" is findable. */
+const beaconVariants: Variants = {
+  still: { opacity: 0, scale: 1 },
+  breathing: {
+    opacity: [0, 0.4, 0],
+    scale: [1, 2.4, 2.4],
+    transition: { duration: 5, ease: 'easeInOut', repeat: Number.POSITIVE_INFINITY },
+  },
+};
 
 type Fmt = (n: number) => string;
 
@@ -211,6 +260,14 @@ function Share({
   );
 }
 
+/**
+ * Two series over the same days — or one series against the line it is read against.
+ *
+ * The readout above the plot is the whole point: it names the label, the value with its
+ * unit and the DAY, and it is present before anyone touches anything (it opens on the
+ * newest point). Pointer moves it; ArrowLeft/ArrowRight/Home/End move it too, because the
+ * points are real buttons under a roving tabindex rather than SVG a screen reader skips.
+ */
 function Rates({
   chart,
   currency,
@@ -218,74 +275,225 @@ function Rates({
   chart: Extract<AccountChart, { shape: 'rates' }>;
   currency: string | null;
 }) {
+  const reduce = useReducedMotion();
   const fmt = fmtFor(chart.unit, currency);
-  const values = chart.points.flatMap((p) => [p.a, p.b ?? p.a]);
+  const points = chart.points;
+  const lastIndex = points.length - 1;
+  const [active, setActive] = React.useState<number | null>(null);
+  const cursor = active != null && active >= 0 && active <= lastIndex ? active : lastIndex;
+  const shown = points[cursor];
+
+  // A `b` that never moves is the LINE the series is measured against; a `b` that moves is a
+  // second series. Read off the data, never assumed — the shape carries both.
+  const bs = points.map((point) => point.b);
+  const firstB = bs.find((value) => value != null) ?? null;
+  const reference = firstB != null && bs.every((value) => value === firstB) ? firstB : null;
+  const bIsSeries = reference == null && bs.some((value) => value != null);
+
+  const values = [...points.map((point) => point.a), ...bs.filter((v): v is number => v != null)];
+  // The same scale the drawing has always used. A chart that re-bases to flatter its own
+  // series is the failure this module exists to prevent, so the domain stays put.
   const max = Math.max(...values, 1);
   const min = Math.min(...values, 0);
   const span = max - min || 1;
-  const x = (i: number) => (chart.points.length > 1 ? (i / (chart.points.length - 1)) * 100 : 50);
+  const x = (i: number) => (lastIndex > 0 ? (i / lastIndex) * 100 : 50);
   const y = (v: number) => 100 - ((v - min) / span) * 100;
-  const line = (pick: (p: (typeof chart.points)[number]) => number | null) =>
-    chart.points
-      .map((p, i) => {
-        const v = pick(p);
+  const line = (pick: (p: (typeof points)[number]) => number | null) =>
+    points
+      .map((point, i) => {
+        const v = pick(point);
         return v == null ? null : `${x(i)},${y(v)}`;
       })
       .filter((s): s is string => s !== null)
       .join(' ');
   const projectedAt = chart.projected_from
-    ? chart.points.findIndex((p) => p.t === chart.projected_from)
+    ? points.findIndex((point) => point.t === chart.projected_from)
     : -1;
 
+  const plot = React.useRef<HTMLElement | null>(null);
+  const dots = React.useRef<(HTMLButtonElement | null)[]>([]);
+  const pickAt = (clientX: number) => {
+    const el = plot.current;
+    if (!el || lastIndex < 1) return;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const ratio = (clientX - rect.left) / rect.width;
+    setActive(Math.min(lastIndex, Math.max(0, Math.round(ratio * lastIndex))));
+  };
+  const focusPoint = (to: number) => {
+    const i = Math.min(lastIndex, Math.max(0, to));
+    setActive(i);
+    dots.current[i]?.focus();
+  };
+  const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, i: number) => {
+    const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+    if (step !== 0) {
+      event.preventDefault();
+      focusPoint(i + step);
+      return;
+    }
+    if (event.key === 'Home') {
+      event.preventDefault();
+      focusPoint(0);
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      focusPoint(lastIndex);
+    }
+  };
+
+  const secondLine =
+    reference != null
+      ? `${chart.b_label} ${fmt(reference)}`
+      : shown.b != null
+        ? `${chart.b_label} ${fmt(shown.b)}`
+        : chart.b_label;
+
   return (
-    <div className="space-y-1.5">
-      {/* viewBox leaves no room for labels on purpose: they are DOM text beside it, so they
-          can never be clipped by the drawing's own bounds. */}
-      <svg aria-hidden className="h-24 w-full" preserveAspectRatio="none" viewBox="0 0 100 100">
-        <title>{`${chart.a_label} against ${chart.b_label}`}</title>
-        <polyline
-          fill="none"
-          points={line((p) => p.b)}
-          stroke="currentColor"
-          strokeDasharray="3 3"
-          strokeWidth="1.5"
-          className="text-muted-foreground"
-          vectorEffect="non-scaling-stroke"
-        />
-        <polyline
-          fill="none"
-          points={line((p) => p.a)}
-          stroke="currentColor"
-          strokeWidth="2"
-          className="text-primary"
-          vectorEffect="non-scaling-stroke"
-        />
-        {projectedAt >= 0 ? (
-          <line
-            stroke="currentColor"
-            strokeDasharray="2 2"
-            strokeWidth="1"
-            x1={x(projectedAt)}
-            x2={x(projectedAt)}
-            y1={0}
-            y2={100}
-            className="text-muted-foreground/60"
-            vectorEffect="non-scaling-stroke"
-          />
-        ) : null}
-      </svg>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-3xs text-muted-foreground">
-        <span>
-          <span className="inline-block h-0.5 w-3 bg-primary align-middle" /> {chart.a_label}
-        </span>
-        <span>
-          <span className="inline-block h-0.5 w-3 bg-muted-foreground align-middle" />{' '}
-          {chart.b_label}
-        </span>
-        <span className="font-mono tabular-nums">
-          {fmt(min)} – {fmt(max)}
-        </span>
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-3xs text-muted-foreground">{chart.a_label}</p>
+          <p
+            className="font-mono text-foreground text-sm tabular-nums"
+            data-testid="rates-readout-value"
+          >
+            {fmt(shown.a)}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-3xs text-muted-foreground" data-testid="rates-readout-day">
+            {dayLabel(shown.t, DAY_SHORT)}
+          </p>
+          <p className="font-mono text-3xs text-muted-foreground tabular-nums">{secondLine}</p>
+        </div>
       </div>
+
+      <div className="flex gap-2">
+        {/* The value axis, named where it is read rather than in a legend somewhere else. */}
+        <div className="flex w-12 shrink-0 flex-col justify-between text-right font-mono text-3xs text-muted-foreground tabular-nums">
+          <span>{fmt(max)}</span>
+          <span>{fmt(min)}</span>
+        </div>
+        {/* A figure rather than a labelled div: the region has to be announced when a reader
+            tabs into the points, and a div with an aria-label alone is announced by nothing. */}
+        <figure
+          aria-label={`${chart.a_label}, ${dayLabel(points[0].t, DAY_SHORT)} to ${dayLabel(points[lastIndex].t, DAY_SHORT)}`}
+          className="relative m-0 h-24 flex-1"
+          onPointerLeave={() => setActive(null)}
+          onPointerMove={(event) => pickAt(event.clientX)}
+          ref={plot}
+        >
+          {/* The drawing is decorative: every figure in it is reachable as text below and as
+              an accessible name on each point. */}
+          <svg
+            aria-hidden
+            className="absolute inset-0 h-full w-full"
+            preserveAspectRatio="none"
+            viewBox="0 0 100 100"
+          >
+            <title>{`${chart.a_label} against ${chart.b_label}`}</title>
+            {bIsSeries ? (
+              <polyline
+                className="text-muted-foreground"
+                fill="none"
+                points={line((point) => point.b)}
+                stroke="currentColor"
+                strokeDasharray="3 3"
+                strokeWidth="1.5"
+                vectorEffect="non-scaling-stroke"
+              />
+            ) : null}
+            <polyline
+              className="text-primary"
+              fill="none"
+              points={line((point) => point.a)}
+              stroke="currentColor"
+              strokeWidth="2"
+              vectorEffect="non-scaling-stroke"
+            />
+            {projectedAt >= 0 ? (
+              <line
+                className="text-muted-foreground/60"
+                stroke="currentColor"
+                strokeDasharray="2 2"
+                strokeWidth="1"
+                vectorEffect="non-scaling-stroke"
+                x1={x(projectedAt)}
+                x2={x(projectedAt)}
+                y1={0}
+                y2={100}
+              />
+            ) : null}
+          </svg>
+
+          {reference != null ? (
+            <div
+              className="-translate-y-1/2 pointer-events-none absolute inset-x-0 flex items-center"
+              data-testid="rates-reference"
+              style={{ top: `${y(reference)}%` }}
+            >
+              <span className="flex-1 border-muted-foreground/70 border-t border-dashed" />
+              <span className="ml-1 whitespace-nowrap font-mono text-3xs text-muted-foreground tabular-nums">
+                {chart.b_label} {fmt(reference)}
+              </span>
+            </div>
+          ) : null}
+
+          {points.map((point, i) => (
+            <button
+              aria-label={`${dayLabel(point.t, DAY_FULL)} — ${chart.a_label} ${fmt(point.a)}${
+                point.b != null ? `, ${chart.b_label} ${fmt(point.b)}` : ''
+              }`}
+              className="-translate-x-1/2 -translate-y-1/2 absolute flex size-5 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              data-point={point.t}
+              key={`${point.t}-${i}`}
+              onBlur={() => setActive(null)}
+              onFocus={() => setActive(i)}
+              onKeyDown={(event) => onKeyDown(event, i)}
+              ref={(el) => {
+                dots.current[i] = el;
+              }}
+              style={{ left: `${x(i)}%`, top: `${y(point.a)}%` }}
+              tabIndex={i === cursor ? 0 : -1}
+              type="button"
+            >
+              {i === lastIndex ? (
+                <motion.div
+                  animate={reduce || active != null ? 'still' : 'breathing'}
+                  className="pointer-events-none absolute size-2 rounded-full bg-primary"
+                  initial="still"
+                  variants={beaconVariants}
+                />
+              ) : null}
+              <span
+                className={cn(
+                  'relative size-1.5 rounded-full bg-primary transition-transform duration-150',
+                  i === cursor ? 'scale-150' : 'opacity-60',
+                )}
+              />
+            </button>
+          ))}
+        </figure>
+      </div>
+
+      {/* WHEN. The window's own ends, so any figure above can be checked against a date. */}
+      <div className="flex justify-between gap-2 pl-14 font-mono text-3xs text-muted-foreground tabular-nums">
+        <span>{dayLabel(points[0].t, DAY_SHORT)}</span>
+        <span>{dayLabel(points[lastIndex].t, DAY_SHORT)}</span>
+      </div>
+
+      {bIsSeries ? (
+        <div className="flex flex-wrap items-baseline gap-x-3 text-3xs text-muted-foreground">
+          <span>
+            <span className="inline-block h-0.5 w-3 bg-primary align-middle" /> {chart.a_label}
+          </span>
+          <span>
+            <span className="inline-block h-0.5 w-3 bg-muted-foreground align-middle" />{' '}
+            {chart.b_label}
+          </span>
+        </div>
+      ) : null}
+
       {chart.gap_per_day != null ? (
         <p className="text-2xs text-muted-foreground">
           gap{' '}
@@ -297,6 +505,14 @@ function Rates({
   );
 }
 
+/**
+ * An estimate with its uncertainty, against the line it has to beat.
+ *
+ * The shape carries no name for its value axis — only `unit` and `reference_label` — so the
+ * axis is named by what the drawing actually reaches: its two ends, printed as money. The
+ * two marks a reader can interrogate (the interval, and the reference) are buttons, so the
+ * readout can be opened with a pointer or with the Tab key.
+ */
 function Interval({
   chart,
   currency,
@@ -308,50 +524,100 @@ function Interval({
   const max = Math.max(chart.high, chart.reference ?? 0) || 1;
   const left = (chart.low / max) * 100;
   const width = Math.max(4, ((chart.high - chart.low) / max) * 100);
+  const [active, setActive] = React.useState<'band' | 'reference' | null>(null);
+
+  const bounds = chart.no_results
+    ? `at least ${fmt(chart.low)} — no results to divide by, so no upper bound`
+    : `between ${fmt(chart.low)} and ${fmt(chart.high)}`;
+  const bandReading = chart.estimate != null ? `${fmt(chart.estimate)}, ${bounds}` : bounds;
+  const referenceLabel = chart.reference_label ?? 'reference';
+  const referenceReading =
+    chart.reference != null ? `${referenceLabel} ${fmt(chart.reference)}` : null;
+
   return (
     <div className="space-y-2">
-      <div className="relative h-10">
-        <div className="absolute top-4 h-2 w-full rounded bg-muted-foreground/15" />
-        <div
-          className={cn(
-            'absolute top-3.5 h-3 rounded',
-            chart.no_results ? 'bg-amber-500/60' : 'bg-primary/70',
-          )}
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="min-w-0 text-foreground text-xs" data-testid="interval-readout">
+          {active === 'reference' && referenceReading ? referenceReading : bandReading}
+        </p>
+        {chart.at_stake_per_day != null ? (
+          <p className="shrink-0 text-3xs text-muted-foreground">
+            <span className="font-mono font-semibold text-foreground tabular-nums">
+              {fmt(chart.at_stake_per_day)}
+            </span>{' '}
+            a day at stake
+          </p>
+        ) : null}
+      </div>
+
+      <div className="relative h-11">
+        <div className="absolute top-7 h-2 w-full rounded bg-muted-foreground/15" />
+        <button
+          aria-label={`the interval: ${bandReading}`}
+          className="absolute top-6 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onBlur={() => setActive(null)}
+          onFocus={() => setActive('band')}
+          onPointerEnter={() => setActive('band')}
+          onPointerLeave={() => setActive(null)}
           style={{ left: `${left}%`, width: `${width}%` }}
-        />
+          type="button"
+        >
+          <span
+            className={cn(
+              'block h-4 rounded',
+              chart.no_results ? 'bg-amber-500/60' : 'bg-primary/70',
+              active === 'band' && 'ring-1 ring-foreground/50',
+            )}
+          />
+        </button>
+        {chart.estimate != null ? (
+          <span
+            aria-hidden
+            className="-translate-x-1/2 absolute top-6 h-4 w-0.5 rounded bg-foreground"
+            style={{ left: `${(chart.estimate / max) * 100}%` }}
+          />
+        ) : null}
         {chart.no_results ? (
           <span
-            className="absolute top-3 text-foreground text-xs"
-            style={{ left: `calc(${Math.min(96, left + width)}% )` }}
+            aria-hidden
+            className="absolute top-6 text-foreground text-xs"
+            style={{ left: `calc(${Math.min(96, left + width)}%)` }}
           >
             →
           </span>
         ) : null}
         {chart.reference != null ? (
-          <div
-            className="absolute top-2 h-6 border-foreground/60 border-l"
+          // The line, and identifiable as one: a dashed rule wearing its own name and value,
+          // never a second bar a reader has to tell apart from the interval.
+          <button
+            aria-label={referenceReading ?? referenceLabel}
+            className="-translate-x-1/2 absolute top-0 flex h-11 w-4 flex-col items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            data-testid="interval-reference"
+            onBlur={() => setActive(null)}
+            onFocus={() => setActive('reference')}
+            onPointerEnter={() => setActive('reference')}
+            onPointerLeave={() => setActive(null)}
             style={{ left: `${(chart.reference / max) * 100}%` }}
+            type="button"
           >
-            <span className="-top-3 absolute whitespace-nowrap text-3xs text-muted-foreground">
-              {chart.reference_label} {fmt(chart.reference)}
+            <span
+              className={cn(
+                '-translate-x-1/2 absolute top-0 left-1/2 whitespace-nowrap font-mono text-3xs tabular-nums',
+                active === 'reference' ? 'text-foreground' : 'text-muted-foreground',
+              )}
+            >
+              {referenceLabel} {fmt(chart.reference)}
             </span>
-          </div>
+            <span className="mt-4 w-px flex-1 border-foreground/60 border-l border-dashed" />
+          </button>
         ) : null}
       </div>
-      <p className="text-2xs text-muted-foreground">
-        {chart.no_results
-          ? 'no results yet, so the true cost has no upper bound to draw'
-          : `between ${fmt(chart.low)} and ${fmt(chart.high)}`}
-        {chart.at_stake_per_day != null ? (
-          <>
-            {' · '}
-            <span className="font-mono font-semibold text-foreground">
-              {fmt(chart.at_stake_per_day)}
-            </span>{' '}
-            a day at stake
-          </>
-        ) : null}
-      </p>
+
+      {/* The axis, named by the two ends the drawing actually reaches. */}
+      <div className="flex justify-between font-mono text-3xs text-muted-foreground tabular-nums">
+        <span>{fmt(0)}</span>
+        <span>{fmt(max)}</span>
+      </div>
     </div>
   );
 }

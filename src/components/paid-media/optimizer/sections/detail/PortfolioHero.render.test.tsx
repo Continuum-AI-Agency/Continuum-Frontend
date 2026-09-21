@@ -193,7 +193,15 @@ describe('PortfolioHero', () => {
 describe('PortfolioHero — the chart is the growth read, or nothing', () => {
   it('draws the chart it was given', () => {
     const { container } = render(
-      <PortfolioHero brandId="b1" currency="USD" portfolioId="p1" view={view()} />,
+      <PortfolioHero
+        currency="USD"
+        dailyTotal={1000}
+        explainHref="#"
+        nextCycleAt={null}
+        onCta={() => undefined}
+        portfolioId="p1"
+        view={view()}
+      />,
     );
     const host = container.querySelector('[data-testid="hero-chart"]');
     expect(host?.querySelector('svg')).toBeTruthy();
@@ -202,8 +210,11 @@ describe('PortfolioHero — the chart is the growth read, or nothing', () => {
   it('says so plainly when the window cannot be drawn, instead of drawing nothing', () => {
     const { container } = render(
       <PortfolioHero
-        brandId="b1"
         currency="USD"
+        dailyTotal={1000}
+        explainHref="#"
+        nextCycleAt={null}
+        onCta={() => undefined}
         portfolioId="p1"
         view={view({ chart: null, chartReading: null })}
       />,
@@ -215,12 +226,65 @@ describe('PortfolioHero — the chart is the growth read, or nothing', () => {
   it('keeps the growth sentence visible either way — that was a deliberate decision', () => {
     const { container } = render(
       <PortfolioHero
-        brandId="b1"
         currency="USD"
+        dailyTotal={1000}
+        explainHref="#"
+        nextCycleAt={null}
+        onCta={() => undefined}
         portfolioId="p1"
         view={view({ chart: null, chartReading: null })}
       />,
     );
     expect(container.textContent).toContain('cost per result');
+  });
+});
+
+describe('PortfolioHero — a chart with no dates of its own still says when', () => {
+  const interval = view({
+    chart: {
+      shape: 'interval',
+      unit: 'currency',
+      estimate: null,
+      low: 120,
+      high: 240,
+      reference: 70,
+      reference_label: 'target',
+      at_stake_per_day: 120,
+      no_results: true,
+    },
+    chartReading: 'what it spent, against the line it had to beat',
+  });
+
+  it('names the cycle that produced the figure, because the interval carries no window', () => {
+    const { container } = render(
+      <PortfolioHero
+        currency="USD"
+        dailyTotal={1000}
+        explainHref="#"
+        nextCycleAt={null}
+        onCta={() => undefined}
+        portfolioId="p1"
+        view={interval}
+      />,
+    );
+    expect(container.textContent).toContain('what it spent, against the line it had to beat');
+    expect(container.textContent).toContain('as of ');
+  });
+
+  it('leaves the rates chart alone — its own x axis already carries the window', () => {
+    const { container } = render(
+      <PortfolioHero
+        currency="USD"
+        dailyTotal={1000}
+        explainHref="#"
+        nextCycleAt={null}
+        onCta={() => undefined}
+        portfolioId="p1"
+        view={view()}
+      />,
+    );
+    const host = container.querySelector('[data-testid="hero-chart"]');
+    expect(host?.textContent).not.toContain('as of ');
+    expect(host?.textContent).toContain('Sep 19');
   });
 });

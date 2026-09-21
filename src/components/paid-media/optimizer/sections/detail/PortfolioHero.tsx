@@ -25,6 +25,22 @@ import type { HeroCta, HeroView } from './heroModel';
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
+const CYCLE_DAY = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short' });
+
+/**
+ * The day the figures were computed, for a chart that carries no dates of its own.
+ *
+ * `rates` puts its window on its own x axis. `interval` cannot: the candidate supplies an
+ * amount per day and nothing that says over which days it was observed, so the only date
+ * that is actually known is the cycle that produced it. That one is named, and nothing is
+ * inferred about the observation window — see heroChart.ts.
+ */
+function cycleDay(iso: string | null): string | null {
+  if (!iso) return null;
+  const at = Date.parse(iso);
+  return Number.isNaN(at) ? null : CYCLE_DAY.format(at);
+}
+
 const tileVariants: Variants = {
   hidden: { opacity: 0, y: 12 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: 'easeOut' } },
@@ -105,6 +121,7 @@ export function PortfolioHero({
     playedFor.current = portfolioId;
   }, [portfolioId]);
   const { brief, cta } = view;
+  const asOfDay = cycleDay(view.asOf);
   const hero = brief.hero;
   const secondary = brief.secondary
     .map((id) => brief.candidates.find((c) => c.id === id))
@@ -150,7 +167,10 @@ export function PortfolioHero({
             <>
               <AccountChartView chart={view.chart} currency={currency} />
               {view.chartReading ? (
-                <p className="mt-1.5 text-3xs text-muted-foreground">{view.chartReading}</p>
+                <p className="mt-1.5 text-3xs text-muted-foreground">
+                  {view.chartReading}
+                  {view.chart.shape === 'interval' && asOfDay ? <> · as of {asOfDay}</> : null}
+                </p>
               ) : null}
             </>
           ) : (
