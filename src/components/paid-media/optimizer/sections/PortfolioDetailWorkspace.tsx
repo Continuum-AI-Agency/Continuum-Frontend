@@ -15,6 +15,7 @@
 // lazy and a portfolio can hold dozens of ad sets.
 
 import {
+  type AdhocSuggestionCategory,
   getOptimizationMetricDefinition,
   type OptimizationObjective,
   type PortfolioLevel,
@@ -80,13 +81,17 @@ import {
 import type { OptimizerAdMetric, WorkspaceSection } from '../useOptimizerUrlState';
 import { AdsetCreativeVerdicts } from './AdsetCreativeVerdicts';
 import { ApplyReallocationDialog } from './ApplyReallocationDialog';
+import { buildAskedForRows } from './detail/askedForModel';
 import { DailyReadList } from './detail/DailyReadList';
+import type { DailyReadRow } from './detail/dailyReadModel';
 import { buildDailyRead } from './detail/dailyReadModel';
 import { buildHeroView, type HeroCta } from './detail/heroModel';
 import { ObjectiveCostRecap } from './detail/ObjectiveCostRecap';
 import { PortfolioHero } from './detail/PortfolioHero';
 import { type RangeSpec, resolveRange, todayIso } from './detail/rangeModel';
 import { buildRecap } from './detail/recapModel';
+import { SuggestionAsk } from './detail/SuggestionAsk';
+import { useAdhocSuggestionMutations, useAdhocSuggestions } from './detail/useAdhocSuggestions';
 import { JainaEntryChips } from './JainaEntryChips';
 import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
 import { OptimizerPanel } from './OptimizerPanel';
@@ -292,6 +297,61 @@ export function PortfolioDetailWorkspace({
   useHeroBriefWatch(portfolio.id, Boolean(latestRun) && heroView.source === 'fallback');
   const dailyRead = buildDailyRead(heroView, portfolio.daily_total);
   const [focusRowKey, setFocusRowKey] = useState<string | null>(null);
+  /** The asked-for row whose adopt/dismiss is mid-write. */
+  const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null);
+
+  // Suggestions someone asked for, in this portfolio, per category. They are NOT a second
+  // inbox: `buildAskedForRows` emits rows of the same shape the day's read does, and the
+  // two are concatenated into the ONE list below. A suggestion whose plan names a queue row
+  // focuses that row in the group underneath, exactly as a brief candidate does.
+  const suggestionsQuery = useAdhocSuggestions(portfolio.id);
+  const { ask, adopt, dismiss } = useAdhocSuggestionMutations(portfolio.id);
+  const [asking, setAsking] = useState<AdhocSuggestionCategory | null>(null);
+  const askedRows = useMemo(
+    () => buildAskedForRows(suggestionsQuery.data.rows, portfolio.daily_total),
+    [suggestionsQuery.data.rows, portfolio.daily_total],
+  );
+  const askedById = useMemo(() => new Map(askedRows.map((row) => [row.id, row])), [askedRows]);
+  // What you just asked for comes first, then the day's read. Sorting the two together by
+  // money would bury the answer to the button somebody pressed eight seconds ago.
+  // The brief half keeps its original gate: a portfolio on its first cycle has no read to
+  // show yet. The asked-for half does not — asking is exactly what a person does when the
+  // cycle has said nothing.
+  const readRows: DailyReadRow[] = [...askedRows, ...(heroView.state === 'ready' ? dailyRead : [])];
+  const busyRowId = adopt.isPending || dismiss.isPending ? (activeSuggestionId ?? null) : null;
+
+  const onAsk = (category: AdhocSuggestionCategory) => {
+    setAsking(category);
+    ask.mutate(category, { onSettled: () => setAsking(null) });
+  };
+
+  /** A read row's action. An asked-for row with a live grant is TAKEN ON here — a stamp,
+   *  nothing written to Meta — and one without a grant falls through to the shared CTA, so
+   *  a plan that named a queue row lands on that row. */
+  const onReadCta = (cta: HeroCta, row?: DailyReadRow) => {
+    const asked = row ? askedById.get(row.id) : undefined;
+    if (asked?.adoptToken && asked.cta.kind === 'manage') {
+      setActiveSuggestionId(asked.id);
+      adopt.mutate(
+        { id: asked.suggestionId, token: asked.adoptToken },
+        { onSettled: () => setActiveSuggestionId(null) },
+      );
+      return;
+    }
+    onHeroCta(cta);
+  };
+
+  const onReadDismiss = (row: DailyReadRow) => {
+    const asked = askedById.get(row.id);
+    if (!asked) return;
+    setActiveSuggestionId(asked.id);
+    dismiss.mutate(asked.suggestionId, { onSettled: () => setActiveSuggestionId(null) });
+  };
+
+  const isReadRowWaiting = (row: DailyReadRow): boolean => {
+    const asked = askedById.get(row.id);
+    return asked ? asked.status === 'queued' || asked.status === 'proposing' : false;
+  };
   const onHeroCta = (cta: HeroCta) => {
     if (cta.kind === 'manage') {
       onSectionChange('manage');
@@ -838,9 +898,29 @@ export function PortfolioDetailWorkspace({
         </TabsContent>
 
         <TabsContent value="activity" className="min-h-0 overflow-y-auto p-3">
-          {/* Every category the brief weighed, not only the one the hero opened on. */}
-          {heroView.state === 'ready' ? (
-            <DailyReadList onCta={onHeroCta} rows={dailyRead} source={heroView.source} />
+          {/* Asking is always available — it is the door that exists precisely BECAUSE the
+              cycle raised nothing today, so gating it behind pending work would close it
+              exactly when it is wanted. The server owns the floor (90s cooldown, four per
+              category per UTC day); these controls read it rather than guess. */}
+          <SuggestionAsk
+            error={ask.error instanceof Error ? ask.error.message : null}
+            gates={suggestionsQuery.data.gates}
+            onAsk={onAsk}
+            pending={asking}
+          />
+          {/* ONE list: every category the brief weighed, and the suggestions this person
+              asked for, with one CTA handler between them. An asked row whose plan names a
+              queue row focuses that row in the group below instead of duplicating it. */}
+          {readRows.length > 0 ? (
+            <DailyReadList
+              busyRowId={busyRowId}
+              currency={currency}
+              isWaiting={isReadRowWaiting}
+              onCta={onReadCta}
+              onDismiss={onReadDismiss}
+              rows={readRows}
+              source={heroView.source}
+            />
           ) : null}
           {/* The same unified queue the account-wide Actions tab renders, scoped to THIS
               portfolio: budget moves + recommendations, approved and executed on Meta from
