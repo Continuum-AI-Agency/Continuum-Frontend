@@ -172,11 +172,13 @@ describe('OptimizerPortfolios', () => {
       brandPortfolioCount: 4,
       brandGroups: [
         {
-          adAccountId: 'act_2',
-          name: 'Another account',
+          accountId: 'act_2',
+          label: 'Another account',
+          known: true,
+          isSelected: false,
           portfolios: [portfolio({ id: 'p9', name: 'Elsewhere', ad_account_id: 'act_2' })],
         },
-      ] as never,
+      ],
     });
 
     fireEvent.click(getByRole('button', { name: /All accounts/ }));
