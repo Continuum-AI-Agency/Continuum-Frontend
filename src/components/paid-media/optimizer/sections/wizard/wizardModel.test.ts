@@ -190,3 +190,44 @@ describe('planReadout / suggestedGuardrails', () => {
     expect(suggestedGuardrails(0)).toEqual({ maxDailyApply: '', maxChangePct: '20' });
   });
 });
+
+describe('a custom conversion, named at creation', () => {
+  const described = {
+    ...emptyDraft(),
+    name: 'Demo funnel',
+    objective: 'custom' as const,
+    adsetIds: ['as-1'],
+    dailyTotal: '1600',
+    conversion: {
+      event_id: 'offsite_conversion.fb_pixel_custom.demo',
+      result_label: 'Demos booked',
+      cost_label: 'Cost per demo booked',
+      typical_lag_days: '4',
+      events_per_week: '18',
+      carries_revenue: false,
+      analog: null,
+    },
+  };
+
+  it('refuses the goal step while the conversion has no name', () => {
+    // Otherwise the portfolio is created reporting "conversions" for an event the business
+    // calls something else, and nothing ever asks again.
+    expect(stepIssues({ ...emptyDraft(), objective: 'custom' }, 'goal', ctx)[0]).toMatch(
+      /Name the event/,
+    );
+    expect(stepIssues(described, 'goal', ctx)).toEqual([]);
+  });
+
+  it('sends the descriptor with the create config, analog inferred', () => {
+    const config = buildCreateConfig(described, createCtx);
+    expect(config.conversion_descriptor?.result_label).toBe('Demos booked');
+    expect(config.conversion_descriptor?.analog).toBe('lead');
+    expect(config.conversion_descriptor?.analog_source).toBe('inferred');
+  });
+
+  it('never sends a descriptor for an objective that is not custom', () => {
+    const config = buildCreateConfig({ ...described, objective: 'purchase' }, createCtx);
+    expect(config.conversion_descriptor).toBeUndefined();
+  });
+});
+

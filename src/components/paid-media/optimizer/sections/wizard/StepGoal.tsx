@@ -6,12 +6,18 @@
 // grow by X% every N days, up to a ceiling.
 
 import type {
+  AnalogObjective,
   OptimizationModeDto,
   OptimizationObjective,
   SetupAdvice,
   TargetMetric,
 } from '@continuum/contracts';
-import { allowedTargetMetrics, getOptimizationMetricDefinition } from '@continuum/contracts';
+import {
+  allowedTargetMetrics,
+  analogNote,
+  analogObjectiveSchema,
+  getOptimizationMetricDefinition,
+} from '@continuum/contracts';
 import {
   DownloadIcon,
   EyeIcon,
@@ -40,6 +46,7 @@ import { TargetHint } from '../../advisor/SetupAdvisor';
 import { currencySymbol, formatCurrency, humanize } from '../../format';
 import { acceptSuggestionOnTab, suggestionPlaceholder } from '../../suggestInput';
 import { MODES, OBJECTIVES } from '../suggestionModel';
+import { ANALOG_LABEL, buildConversionDescriptor } from './conversionDescriptor';
 import {
   DEFAULT_SCALE_CADENCE_DAYS,
   DEFAULT_SCALE_GROWTH_PCT,
@@ -78,6 +85,11 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
   const allowed = allowedTargetMetrics(draft.objective);
   const targetMetric = effectiveTargetMetric(draft);
   const metric = getOptimizationMetricDefinition(targetMetric);
+  // Only meaningful for 'custom'; built every render so the note tracks what is typed.
+  const built = buildConversionDescriptor(draft.conversion);
+  const descriptor = 'descriptor' in built ? built.descriptor : null;
+  const patchConversion = (patch: Partial<WizardDraft['conversion']>) =>
+    onChange({ conversion: { ...draft.conversion, ...patch } });
 
   return (
     <div className="space-y-5">
@@ -109,6 +121,110 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
           })}
         </fieldset>
       </div>
+
+      {draft.objective === 'custom' ? (
+        <div className="space-y-2.5 rounded-lg border border-border/70 bg-card p-3">
+          <div>
+            <h4 className="font-semibold text-xs tracking-tight">
+              Which conversion, and how does it behave?
+            </h4>
+            <p className="mt-0.5 text-2xs text-muted-foreground">
+              Nobody outside your business knows what this event is. Name it, and it is measured
+              against whichever calibrated objective behaves the same way.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="wizard-conv-event">Event id</Label>
+              <Input
+                disabled={disabled}
+                id="wizard-conv-event"
+                onChange={(event) => patchConversion({ event_id: event.target.value })}
+                placeholder="offsite_conversion.fb_pixel_custom"
+                value={draft.conversion.event_id}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="wizard-conv-result">What you call one</Label>
+              <Input
+                disabled={disabled}
+                id="wizard-conv-result"
+                onChange={(event) => patchConversion({ result_label: event.target.value })}
+                placeholder="Demos booked"
+                value={draft.conversion.result_label}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="wizard-conv-cost">What one costs</Label>
+              <Input
+                disabled={disabled}
+                id="wizard-conv-cost"
+                onChange={(event) => patchConversion({ cost_label: event.target.value })}
+                placeholder="Cost per demo booked"
+                value={draft.conversion.cost_label}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="wizard-conv-lag">Days to arrive</Label>
+                <Input
+                  disabled={disabled}
+                  id="wizard-conv-lag"
+                  inputMode="decimal"
+                  onChange={(event) => patchConversion({ typical_lag_days: event.target.value })}
+                  placeholder="4"
+                  value={draft.conversion.typical_lag_days}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="wizard-conv-volume">A week</Label>
+                <Input
+                  disabled={disabled}
+                  id="wizard-conv-volume"
+                  inputMode="decimal"
+                  onChange={(event) => patchConversion({ events_per_week: event.target.value })}
+                  placeholder="18"
+                  value={draft.conversion.events_per_week}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="wizard-conv-analog">Measured like</Label>
+              <Select
+                disabled={disabled}
+                onValueChange={(value) =>
+                  patchConversion({
+                    analog:
+                      value === 'inferred'
+                        ? null
+                        : (analogObjectiveSchema.parse(value) as AnalogObjective),
+                  })
+                }
+                value={draft.conversion.analog ?? 'inferred'}
+              >
+                <SelectTrigger id="wizard-conv-analog">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="inferred">Work it out from the answers above</SelectItem>
+                  {analogObjectiveSchema.options.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {`Like ${ANALOG_LABEL[value]}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {descriptor ? (
+                <p className="text-2xs text-muted-foreground">{analogNote(descriptor)}</p>
+              ) : (
+                <p className="text-2xs text-muted-foreground">
+                  {'error' in built ? built.error : null}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">

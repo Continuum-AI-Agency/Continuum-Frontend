@@ -23,6 +23,11 @@ import {
   getOptimizationMetricDefinition,
   toMinorUnits,
 } from '@continuum/contracts';
+import {
+  buildConversionDescriptor,
+  type ConversionDescriptorDraft,
+  EMPTY_DESCRIPTOR_DRAFT,
+} from './conversionDescriptor';
 
 export const WIZARD_STEPS = [
   { id: 'start', label: 'Start', hint: 'From a suggestion or from scratch' },
@@ -39,6 +44,13 @@ export type WizardDraft = {
   suggestionName: string | null;
   name: string;
   objective: OptimizationObjective;
+  /**
+   * The conversion being bought, when the objective is 'custom'. Ignored for every other
+   * objective — and captured HERE rather than left to the Manage panel, because a portfolio
+   * created against an event nobody named is already reporting "conversions" by the time
+   * anyone opens it.
+   */
+  conversion: ConversionDescriptorDraft;
   /** Null = the objective's own metric. */
   targetMetric: TargetMetric | null;
   mode: OptimizationModeDto;
@@ -91,6 +103,7 @@ export function emptyDraft(): WizardDraft {
     suggestionName: null,
     name: '',
     objective: 'purchase',
+    conversion: EMPTY_DESCRIPTOR_DRAFT,
     targetMetric: null,
     mode: 'balanced',
     target: '',
@@ -170,6 +183,10 @@ export function stepIssues(draft: WizardDraft, step: WizardStep, ctx: StepContex
       }
       break;
     case 'goal': {
+      if (draft.objective === 'custom') {
+        const built = buildConversionDescriptor(draft.conversion);
+        if ('error' in built) issues.push(built.error);
+      }
       if (draft.mode === 'scale') {
         const growth = num(draft.scaleGrowthPct);
         const cadence = num(draft.scaleCadenceDays);
@@ -236,9 +253,17 @@ export function buildCreateConfig(draft: WizardDraft, ctx: CreateContext): Portf
   const maxDaily = num(draft.maxDailyApply);
   const maxPct = num(draft.maxChangePct);
 
+  const conversion =
+    draft.objective === 'custom' ? buildConversionDescriptor(draft.conversion) : null;
+
   return {
     name: draft.name.trim(),
     objective: draft.objective,
+    // Only ever sent with a 'custom' objective, and only once it validates — `stepIssues`
+    // refuses the step otherwise, so an invalid one cannot reach here.
+    ...(conversion && 'descriptor' in conversion
+      ? { conversion_descriptor: conversion.descriptor }
+      : {}),
     level: ctx.level === 'campaign' ? 'adset' : 'adset',
     mode: draft.mode,
     apply_mode: draft.applyMode,

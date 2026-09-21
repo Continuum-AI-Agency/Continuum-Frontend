@@ -443,6 +443,12 @@ export const PortfolioConfigSchema = z
     max_change_pct_per_cycle: z.number().min(0).optional(),
     /** DeepPartial<EngineConfig> overrides — kept loose; the engine validates. */
     config: z.record(z.string(), z.unknown()).optional(),
+    /**
+     * For objective = 'custom': what the advertiser calls the event this portfolio buys.
+     * Captured at creation because a portfolio created against an unnamed event is already
+     * reporting "conversions" by the time anyone opens it.
+     */
+    conversion_descriptor: conversionDescriptorSchema.optional(),
   })
   // The DB refuses an unguarded autopilot (optimizer_portfolios_autopilot_guardrails_chk);
   // say so at the contract so the wizard can enable autopilot at creation with defaults
