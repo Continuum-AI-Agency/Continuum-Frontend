@@ -101,6 +101,7 @@ import {
   useOptimizerPerformance,
 } from '../useOptimizerData';
 import { AutopilotScopesField } from './AutopilotScopesField';
+import { OBJECTIVES } from './suggestionModel';
 import {
   ANALOG_LABEL,
   buildConversionDescriptor,
@@ -136,7 +137,20 @@ const SCALE_CADENCE_CHIPS: Array<{ label: string; days: number }> = [
   { label: 'Every week', days: 7 },
   { label: 'Every 2 weeks', days: 14 },
 ];
-const OBJECTIVES = OptimizationObjectiveSchema.options;
+/**
+ * What a person may choose here, which is NOT every member of the enum.
+ *
+ * This listed the schema's raw options, so it offered `clicks` — which the wizard
+ * deliberately withholds because it is the engine's internal fallback, not a thing an
+ * advertiser sets out to buy. One screen could create a portfolio the other could not, and
+ * an operator could move a live portfolio onto an objective nobody can create.
+ *
+ * A portfolio already STORED on an objective outside the list still shows its own value, so
+ * this narrows what can be chosen without hiding what is true.
+ */
+function selectableObjectives(current: OptimizationObjective): OptimizationObjective[] {
+  return OBJECTIVES.includes(current) ? OBJECTIVES : [current, ...OBJECTIVES];
+}
 /** The period the pacing gauge estimates against when no period budget is set. */
 const PACING_PERIOD_DAYS = 30;
 const SUGGESTED_MAX_CHANGE_PCT = '20';
@@ -641,7 +655,7 @@ export function PortfolioManagePanel({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {OBJECTIVES.map((value) => (
+                {selectableObjectives(objective).map((value) => (
                   <SelectItem key={value} value={value}>
                     {humanize(value)}
                   </SelectItem>
