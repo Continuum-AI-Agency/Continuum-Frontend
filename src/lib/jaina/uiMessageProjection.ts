@@ -23,8 +23,10 @@ import {
   type JainaPaidCreativeRenderPayload,
   type JainaToolApprovalRequiredPayload,
   type JainaToolApprovalResolvedPayload,
+  type JainaOptimizerCard,
   type JainaToolOutputDeniedPayload,
   type JainaUIMessage,
+  jainaOptimizerCardSchema,
   jainaPaidCreativeRenderPayloadSchema,
   jainaToolApprovalRequiredPayloadSchema,
   paidScaffoldProgressPayloadSchema,
@@ -32,7 +34,10 @@ import {
   paidScaffoldReceiptPayloadSchema,
 } from '@continuum/contracts';
 import type { PlanStatus } from '@/components/ai-elements/plan';
-import { pickRenderableContent, resolveReportSignal } from '@/components/paid-media/jaina/jainaUtils';
+import {
+  pickRenderableContent,
+  resolveReportSignal,
+} from '@/components/paid-media/jaina/jainaUtils';
 import type {
   JainaChatMessage,
   JainaPlan,
@@ -408,6 +413,26 @@ export const paidCreativeRendersOf = (message: JainaUIMessage): JainaPaidCreativ
     return parsed.success ? [parsed.data] : [];
   });
 
+/**
+ * The optimizer cards this turn cited, in the order Jaina cited them.
+ *
+ * `safeParse` and not `parse`, and the line between what it keeps and what it drops is the
+ * whole point of the schema living in contracts:
+ *
+ *   a payload that does not type — an extra numeric field, four candidate ids — is DROPPED.
+ *   `.strict()` is the digit gate, and a card that found somewhere to put a figure must not
+ *   reach a renderer that would draw it.
+ *
+ *   a payload that types but whose size and count disagree — a `strip` naming one candidate —
+ *   is KEPT and handed on. `OptimizerCardBlock` says so on screen; swallowing it here would
+ *   render as Jaina having cited nothing, which hides the bug instead of showing it.
+ */
+export const optimizerCitationsOf = (message: JainaUIMessage): JainaOptimizerCard[] =>
+  partsOfType(message, JAINA_UI_DATA_PART.optimizerCard).flatMap((data) => {
+    const parsed = jainaOptimizerCardSchema.safeParse(data);
+    return parsed.success ? [parsed.data] : [];
+  });
+
 /** Canvas actions the run proposed. Read by the surface's canvas effect, not by a message card. */
 export const canvasActionsOf = (message: JainaUIMessage): Record<string, unknown>[] =>
   partsOfType(message, JAINA_UI_DATA_PART.canvasActions);
@@ -620,8 +645,7 @@ function planFromRecord(record: Record<string, unknown>): JainaPlan {
       getNonEmptyString(record.description) ??
       getNonEmptyString(record.summary) ??
       'Review this execution plan.',
-    status:
-      typeof record.status === 'string' ? (record.status as JainaPlan['status']) : 'pending',
+    status: typeof record.status === 'string' ? (record.status as JainaPlan['status']) : 'pending',
     steps,
   };
 }
@@ -698,6 +722,7 @@ export const toJainaChatMessage = (
   const pendingClarification = clarificationOf(message);
   const checkpointSummary = checkpointSummaryOf(message);
   const reportArtifactJob = reportArtifactJobOf(message);
+  const optimizerCitations = optimizerCitationsOf(message);
   const plan = planOf(message);
 
   // Mirrors the surface's completion rule: a report renders AS a report when it has content, is
@@ -741,6 +766,7 @@ export const toJainaChatMessage = (
     ...(plan ? { plan } : {}),
     ...(artifacts.creatives?.length || artifacts.images?.length ? { artifacts } : {}),
     ...(paidCreativeRenders.length > 0 ? { paidCreativeRenders } : {}),
+    ...(optimizerCitations.length > 0 ? { optimizerCitations } : {}),
     ...(pendingClarification ? { pendingClarification } : {}),
     ...(objectives.length > 0 ? { objectives } : {}),
     ...(delegations.length > 0 ? { delegations } : {}),

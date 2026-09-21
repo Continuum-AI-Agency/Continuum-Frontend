@@ -51,3 +51,15 @@ export function citationIsWellFormed(card: JainaOptimizerCard): boolean {
 
 /** What a reader is told when the run that produced a citation has moved on. */
 export const CITATION_CLEARED_NOTE = 'This one cleared — the figures are from the read it cites.';
+
+/**
+ * The `state.delta` variant a citation travels on, Backend-side.
+ *
+ * A citation needed no new frame type: `state.delta` is already forwardable and already
+ * fans out by `source` (`objectives_init` → the plan, `checkpoint_summary` → the summary).
+ * Adding a twenty-ninth frame type would have meant two more allowlists to keep in parity,
+ * for a payload that is three fields wide. The literal lives here because the emitter and
+ * the chunk adapter are different modules and a string they both retype is a string that
+ * eventually disagrees.
+ */
+export const JAINA_OPTIMIZER_CARD_DELTA_SOURCE = 'optimizer_card';

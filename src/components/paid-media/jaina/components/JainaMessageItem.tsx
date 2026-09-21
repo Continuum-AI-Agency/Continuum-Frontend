@@ -8,6 +8,7 @@ import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
 import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
 import { MentionifiedText } from '@/components/chat/mentionified-text';
+import { JainaOptimizerCitations } from '@/components/paid-media/jaina/blocks/JainaOptimizerCitations';
 import { PaidScaffoldCard } from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import {
@@ -204,6 +205,7 @@ function JainaMessageItemImpl({
     !hasStructuredChild;
 
   const artifacts = message.artifacts;
+  const optimizerCitations = message.optimizerCitations ?? [];
   const paidCreativeRenders = message.paidCreativeRenders ?? [];
   const toolCreatives = React.useMemo(() => {
     if (!toolResults) return [];
@@ -384,6 +386,10 @@ function JainaMessageItemImpl({
             ) : (
               <CreativesSection creatives={allCreatives} />
             )}
+
+            {optimizerCitations.length > 0 ? (
+              <JainaOptimizerCitations citations={optimizerCitations} />
+            ) : null}
 
             {paidCreativeRenders.map((render) => (
               <PaidCreativeRenderStatus key={render.render_job_id} render={render} />

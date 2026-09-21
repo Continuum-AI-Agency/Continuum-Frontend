@@ -1,5 +1,6 @@
 import type {
   AgentDelegatedFrameData,
+  JainaOptimizerCard,
   JainaPaidCreativeRenderPayload,
   JainaToolApprovalRequiredPayload,
   JainaToolApprovalResolvedPayload,
@@ -57,6 +58,12 @@ export type JainaChatMessage = {
   plan?: JainaPlan;
   artifacts?: ArtifactDeltaEventData;
   paidCreativeRenders?: JainaPaidCreativeRenderPayload[];
+  /**
+   * Optimizer cards this turn CITED — ids only. The figures are resolved from the stored read
+   * the citation names at render time, never carried here, so a persisted transcript cannot
+   * quietly become a snapshot of numbers nobody can trace.
+   */
+  optimizerCitations?: JainaOptimizerCard[];
   pendingClarification?: {
     id?: string;
     question: string;
