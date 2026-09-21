@@ -19,6 +19,7 @@ export * from './errors/integration-error';
 export * from './goals/index';
 export * from './insights/index';
 export * from './invites/index';
+export * from './laya/index';
 export * from './mcp/index';
 export * from './media/index';
 export * from './media-stream/index';
