@@ -16,7 +16,7 @@
       "name": "authenticated dashboard route",
       "source": "routeFirstLoad",
       "route": "/organic",
-      "baselineBytes": 4262541
+      "baselineBytes": 3843997
     },
     {
       "name": "settings route",
@@ -28,19 +28,19 @@
       "name": "library route",
       "source": "routeFirstLoad",
       "route": "/library",
-      "baselineBytes": 4370123
+      "baselineBytes": 3951579
     },
     {
       "name": "scale route",
       "source": "routeFirstLoad",
       "route": "/scale",
-      "baselineBytes": 3869686
+      "baselineBytes": 3451941
     },
     {
       "name": "AI Studio route",
       "source": "routeFirstLoad",
       "route": "/ai-studio",
-      "baselineBytes": 3856418
+      "baselineBytes": 3437874
     }
   ]
 }
