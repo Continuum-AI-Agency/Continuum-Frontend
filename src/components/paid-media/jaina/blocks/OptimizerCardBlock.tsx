@@ -25,6 +25,7 @@ import {
   ACCOUNT_DETECTOR_META,
   CHART_SHAPE_READING,
   CITATION_CLEARED_NOTE,
+  CITATION_NOT_SERVED_NOTE,
   chartShapeFor,
   citationIsWellFormed,
   IMPACT_CLASS_COPY,
@@ -38,6 +39,8 @@ export type OptimizerCardBlockProps = {
   card: JainaOptimizerCard;
   /** Resolves against the STORED read the citation names. Null when it is no longer there. */
   resolve: (candidateId: string) => AccountCandidate | null;
+  /** Whether the read being served is the one cited. Decides WHICH absence is reported. */
+  servingCitedRead?: boolean;
   currency: string | null;
   /** The day the cited read was taken. Shown on every size — a citation without a date lies. */
   readDate: string | null;
@@ -127,11 +130,25 @@ function Chart({ candidate, currency }: { candidate: AccountCandidate; currency:
   );
 }
 
-/** What a reader sees where a citation used to be. Never nothing. */
-function Cleared({ candidateId }: { candidateId: string }) {
+/**
+ * What a reader sees where a citation used to be. Never nothing — and never the wrong reason.
+ *
+ * "This one cleared" says the finding was FIXED. That is only true when the read being served
+ * IS the one cited and the candidate has left it. When the cited read is simply not the one
+ * on hand — the commonest case, since only today's is kept and transcripts persist — saying
+ * it cleared is a claim about the account, not an absence of data.
+ */
+function Cleared({
+  candidateId,
+  servingCitedRead,
+}: {
+  candidateId: string;
+  servingCitedRead?: boolean;
+}) {
   return (
     <p className="text-2xs text-muted-foreground" data-testid="optimizer-cleared">
-      <span className="font-mono">{candidateId.split(':')[0]}</span> — {CITATION_CLEARED_NOTE}
+      <span className="font-mono">{candidateId.split(':')[0]}</span> —{' '}
+      {servingCitedRead ? CITATION_CLEARED_NOTE : CITATION_NOT_SERVED_NOTE}
     </p>
   );
 }
@@ -139,6 +156,7 @@ function Cleared({ candidateId }: { candidateId: string }) {
 export function OptimizerCardBlock({
   card,
   resolve,
+  servingCitedRead,
   currency,
   readDate,
   onOpenRead,
@@ -157,7 +175,7 @@ export function OptimizerCardBlock({
 
   if (card.size === 'chip') {
     const first = resolved[0];
-    if (!first?.candidate) return <Cleared candidateId={first?.id ?? ''} />;
+    if (!first?.candidate) return <Cleared candidateId={first?.id ?? ''} servingCitedRead={servingCitedRead} />;
     return (
       <Chip
         candidate={first.candidate}
@@ -204,7 +222,7 @@ export function OptimizerCardBlock({
                   </div>
                 </>
               ) : (
-                <Cleared candidateId={id} />
+                <Cleared candidateId={id} servingCitedRead={servingCitedRead} />
               )}
             </div>
           ))}
@@ -227,7 +245,7 @@ export function OptimizerCardBlock({
         </div>
       ) : (
         <div className="p-4">
-          <Cleared candidateId={only?.id ?? ''} />
+          <Cleared candidateId={only?.id ?? ''} servingCitedRead={servingCitedRead} />
         </div>
       )}
       {foot}

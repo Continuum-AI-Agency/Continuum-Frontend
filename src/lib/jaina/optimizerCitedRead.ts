@@ -51,6 +51,13 @@ export type CitedRead = NonNullable<z.infer<typeof citedReadSchema>>;
 /** What a citation renders from. `resolve` answers null for anything the read does not hold. */
 export type CitedReadResolution = {
   resolve: (candidateId: string) => AccountCandidate | null;
+  /**
+   * Whether the read this citation names is the one being served.
+   *
+   * False is the ordinary case for any answer looked at after its own day — the RPC serves
+   * only the latest ready read — and it is NOT the same fact as a finding that cleared.
+   */
+  servingCitedRead: boolean;
   /** The day the cited read was taken, formatted short. Null when nothing was resolved. */
   readDate: string | null;
   currency: string | null;
@@ -58,6 +65,7 @@ export type CitedReadResolution = {
 
 const NOTHING_RESOLVES: CitedReadResolution = {
   resolve: () => null,
+  servingCitedRead: false,
   readDate: null,
   currency: null,
 };
@@ -96,6 +104,9 @@ export function resolutionFrom(read: CitedRead | null, readId: string | null): C
 
   return {
     resolve: (candidateId: string) => byId.get(candidateId) ?? null,
+    // We reached this line only because `read.id === readId`, so anything unresolved from
+    // here really is gone from the read it was cited from.
+    servingCitedRead: true,
     readDate: shortDay(read.utc_day),
     currency: read.read.currency,
   };

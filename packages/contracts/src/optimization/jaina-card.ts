@@ -50,7 +50,22 @@ export function citationIsWellFormed(card: JainaOptimizerCard): boolean {
 }
 
 /** What a reader is told when the run that produced a citation has moved on. */
+/**
+ * The finding is genuinely gone: the read this citation names IS the read being served, and
+ * the candidate is not in it any more.
+ */
 export const CITATION_CLEARED_NOTE = 'This one cleared — the figures are from the read it cites.';
+
+/**
+ * A different, and much commoner, thing: the cited read is not the one being served.
+ *
+ * `optimizer_get_account_read` serves only the LATEST ready read per ad account, and
+ * transcripts persist — so every citation looked at after its own day lands here. Saying
+ * "this one cleared" there tells the reader the finding was FIXED, which is a claim about
+ * the account rather than an absence of data, and it would be wrong nearly every time.
+ */
+export const CITATION_NOT_SERVED_NOTE =
+  'From an earlier read — only today’s is kept, so its figures are no longer on hand.';
 
 /**
  * The `state.delta` variant a citation travels on, Backend-side.

@@ -24,7 +24,7 @@ export type JainaOptimizerCitationsProps = {
 export function JainaOptimizerCitations({ citations, onOpenRead }: JainaOptimizerCitationsProps) {
   const scope = useJainaBrandScope();
   // Every citation in one answer names the same read; the first is as good as any for the key.
-  const { resolve, readDate, currency } = useCitedOptimizerRead(
+  const { resolve, servingCitedRead, readDate, currency } = useCitedOptimizerRead(
     scope,
     citations[0]?.read_id ?? null,
   );
@@ -40,6 +40,7 @@ export function JainaOptimizerCitations({ citations, onOpenRead }: JainaOptimize
           key={`${card.read_id}:${card.candidate_ids.join(',')}`}
           readDate={readDate}
           resolve={resolve}
+          servingCitedRead={servingCitedRead}
           {...(onOpenRead ? { onOpenRead } : {})}
         />
       ))}

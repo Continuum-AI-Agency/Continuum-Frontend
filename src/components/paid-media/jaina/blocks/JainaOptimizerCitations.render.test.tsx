@@ -7,11 +7,15 @@
  * passes is exactly the shape of the bug this task existed to fix.
  */
 
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { type AccountCandidate, accountCandidateSchema } from '@continuum/contracts';
 import { cleanup, render } from '@testing-library/react';
 
 import { type CitedRead, resolutionFrom } from '@/lib/jaina/optimizerCitedRead';
+
+// Spread into the module mocks below: `mock.module` replaces a module for the whole process,
+// so a partial replacement would reach the next file in the run.
+const realCitedRead = await import('@/lib/jaina/optimizerCitedRead');
 import { OptimizerCardBlock } from './OptimizerCardBlock';
 
 afterEach(cleanup);
@@ -99,6 +103,7 @@ describe('what the block draws with that resolver', () => {
         currency={resolution.currency}
         readDate={resolution.readDate}
         resolve={resolution.resolve}
+        servingCitedRead={resolution.servingCitedRead}
       />,
     );
   };
@@ -115,10 +120,25 @@ describe('what the block draws with that resolver', () => {
     expect(host.textContent).toContain('read of 20 Sep');
   });
 
-  it('draws the cleared line rather than nothing when the read has moved on', () => {
+  // Two different absences, and they used to print the same sentence. Only today's read is
+  // served and transcripts persist, so the second case is the ordinary one — and telling a
+  // reader the finding "cleared" there is a claim about their account, not missing data.
+  it('says the cited read is not the one on hand when a DIFFERENT read is served', () => {
     const { getByTestId } = draw(storedRead(), 'read-from-tuesday', {
       read_id: 'read-from-tuesday',
       candidate_ids: ['dead_tail:acct'],
+      size: 'card',
+    });
+
+    const note = getByTestId('optimizer-cleared').textContent ?? '';
+    expect(note).toContain('From an earlier read');
+    expect(note).not.toContain('cleared');
+  });
+
+  it('says the finding cleared when the cited read IS the one served and it is gone', () => {
+    const { getByTestId } = draw(storedRead(), 'read-abc', {
+      read_id: 'read-abc',
+      candidate_ids: ['a_detector_that_left:acct'],
       size: 'card',
     });
 
@@ -160,5 +180,54 @@ describe('what the block draws with that resolver', () => {
     });
 
     expect(getByTestId('optimizer-malformed')).toBeTruthy();
+  });
+});
+
+
+// The header of this file promises "the render pass proves the resolver is actually handed
+// to the block — a correct resolver nobody passes is exactly the shape of the bug this task
+// existed to fix". It did not: every case above builds the resolver here and hands it to
+// OptimizerCardBlock by hand, so it would pass whether or not the HOST wires it. These do
+// render the host, with the hook stubbed.
+describe('the host, which is what actually wires the resolver', () => {
+  it('hands the block a resolver and the serving flag, not just a card', async () => {
+    const stored = storedRead();
+    mock.module('@/lib/jaina/brandScope', () => ({
+      useJainaBrandScope: () => ({ brandId: 'b1', adAccountId: 'act_1' }),
+      JainaBrandScopeProvider: ({ children }: { children: unknown }) => children,
+    }));
+    mock.module('@/lib/jaina/optimizerCitedRead', () => ({
+      ...realCitedRead,
+      useCitedOptimizerRead: () => resolutionFrom(stored, 'read-abc'),
+    }));
+    const { JainaOptimizerCitations } = await import('./JainaOptimizerCitations');
+
+    const { getByTestId } = render(
+      <JainaOptimizerCitations
+        citations={[{ read_id: 'read-abc', candidate_ids: ['dead_tail:acct'], size: 'card' }]}
+      />,
+    );
+    // Resolved through the host: the figure is on screen, which only happens if the host
+    // passed the resolver down.
+    expect(getByTestId('optimizer-card').textContent).toContain('Spending on nothing');
+  });
+
+  it('reports the right absence through the host too', async () => {
+    const stored = storedRead();
+    mock.module('@/lib/jaina/optimizerCitedRead', () => ({
+      ...realCitedRead,
+      // The served read is a different one, which is the everyday case.
+      useCitedOptimizerRead: () => resolutionFrom(stored, 'read-from-tuesday'),
+    }));
+    const { JainaOptimizerCitations } = await import('./JainaOptimizerCitations');
+
+    const { getByTestId } = render(
+      <JainaOptimizerCitations
+        citations={[
+          { read_id: 'read-from-tuesday', candidate_ids: ['dead_tail:acct'], size: 'card' },
+        ]}
+      />,
+    );
+    expect(getByTestId('optimizer-cleared').textContent).toContain('From an earlier read');
   });
 });
