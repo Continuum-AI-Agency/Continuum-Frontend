@@ -31,13 +31,15 @@ type Props = {
   metricsSlot: React.ReactNode;
   metricsPrefetchParams?: MetricsPrefetchParams;
   agentSlot?: React.ReactNode;
+  rulesSlot?: React.ReactNode;
   brandId?: string | null;
 };
 
-const WORKSPACE_LABELS: Record<'planner' | 'metrics' | 'agent', string> = {
+const WORKSPACE_LABELS: Record<'planner' | 'metrics' | 'agent' | 'rules', string> = {
   planner: 'Planner',
   metrics: 'Metrics',
   agent: 'Agent',
+  rules: 'Rules',
 };
 
 export function OrganicWorkspaceTabs({
@@ -45,17 +47,25 @@ export function OrganicWorkspaceTabs({
   metricsSlot,
   metricsPrefetchParams,
   agentSlot,
+  rulesSlot,
   brandId,
 }: Props) {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const initialView: 'planner' | 'metrics' | 'agent' =
-    tabParam === 'metrics' ? 'metrics' : tabParam === 'agent' ? 'agent' : 'planner';
-  const [activeView, setActiveView] = React.useState<'planner' | 'metrics' | 'agent'>(initialView);
+  const initialView: 'planner' | 'metrics' | 'agent' | 'rules' =
+    tabParam === 'metrics'
+      ? 'metrics'
+      : tabParam === 'agent'
+        ? 'agent'
+        : tabParam === 'rules'
+          ? 'rules'
+          : 'planner';
+  const [activeView, setActiveView] = React.useState<'planner' | 'metrics' | 'agent' | 'rules'>(initialView);
   // Track whether metrics/agent tabs have ever been shown — once mounted, keep alive
   // so switching back doesn't re-fetch / re-mount the components.
   const [metricsEverShown, setMetricsEverShown] = React.useState(initialView === 'metrics');
   const [agentEverShown, setAgentEverShown] = React.useState(initialView === 'agent');
+  const [rulesEverShown, setRulesEverShown] = React.useState(initialView === 'rules');
 
   // Prefetch metrics data while user is on the planner tab
   React.useEffect(() => {
@@ -83,22 +93,30 @@ export function OrganicWorkspaceTabs({
   }, [activeView, metricsPrefetchParams]);
 
   React.useEffect(() => {
-    const nextView: 'planner' | 'metrics' | 'agent' =
-      tabParam === 'metrics' ? 'metrics' : tabParam === 'agent' ? 'agent' : 'planner';
+    const nextView: 'planner' | 'metrics' | 'agent' | 'rules' =
+      tabParam === 'metrics'
+        ? 'metrics'
+        : tabParam === 'agent'
+          ? 'agent'
+          : tabParam === 'rules'
+            ? 'rules'
+            : 'planner';
     if (nextView !== activeView) {
       setActiveView(nextView);
       if (nextView === 'metrics') setMetricsEverShown(true);
       if (nextView === 'agent') setAgentEverShown(true);
+      if (nextView === 'rules') setRulesEverShown(true);
     }
   }, [activeView, tabParam]);
 
   const handleValueChange = React.useCallback((value: string) => {
-    const nextView = value as 'planner' | 'metrics' | 'agent';
+    const nextView = value as 'planner' | 'metrics' | 'agent' | 'rules';
 
     const apply = () => {
       setActiveView(nextView);
       if (nextView === 'metrics') setMetricsEverShown(true);
       if (nextView === 'agent') setAgentEverShown(true);
+      if (nextView === 'rules') setRulesEverShown(true);
       // One writer for every planner URL param (see plannerUrlState): still
       // history.replaceState under the hood, so no Next re-render and no Suspense flash.
       writePlannerUrlState({ tab: nextView });
@@ -132,9 +150,12 @@ export function OrganicWorkspaceTabs({
               aria-label="Organic workspace"
             >
               {(
-                ['planner', 'metrics', ...(agentSlot !== undefined ? ['agent'] : [])] as Array<
-                  'planner' | 'metrics' | 'agent'
-                >
+                [
+                  'planner',
+                  'metrics',
+                  ...(agentSlot !== undefined ? ['agent'] : []),
+                  ...(rulesSlot !== undefined ? ['rules'] : []),
+                ] as Array<'planner' | 'metrics' | 'agent' | 'rules'>
               ).map((view) => {
                 const isActive = activeView === view;
 
@@ -184,6 +205,15 @@ export function OrganicWorkspaceTabs({
                 hidden={activeView !== 'metrics'}
               >
                 {metricsSlot}
+              </div>
+            )}
+            {/* Defer rules mount until first viewed, then keep alive */}
+            {rulesSlot !== undefined && rulesEverShown && (
+              <div
+                className="h-full w-full min-h-0 overflow-hidden px-[var(--card-pad)]"
+                hidden={activeView !== 'rules'}
+              >
+                {rulesSlot}
               </div>
             )}
             {/* Defer agent mount until first viewed, then keep alive */}

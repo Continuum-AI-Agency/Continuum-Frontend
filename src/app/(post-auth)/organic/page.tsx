@@ -4,6 +4,7 @@ import type { OrganicAgentMentionContext } from '@/components/organic/agent/Orga
 import { OrganicAgentPanelLazy } from '@/components/organic/agent/OrganicAgentPanelLazy';
 import { OrganicMetricsDashboardLazy } from '@/components/organic/OrganicMetricsDashboardLazy';
 import { OrganicNoticeBridge } from '@/components/organic/OrganicNoticeBridge';
+import { CommentRulesWorkspace } from '@/components/organic/rules/CommentRulesWorkspace';
 import { OrganicWorkspaceTabs } from '@/components/organic/OrganicWorkspaceTabs';
 import { OrganicCalendarWorkspace } from '@/components/organic/primitives/OrganicCalendarWorkspace';
 import { PlannerViewSkeleton } from '@/components/organic/primitives/PlannerViewSkeletons';
@@ -341,6 +342,7 @@ async function OrganicContent({
       />
       <OrganicWorkspaceTabs
         brandId={brandProfileId}
+        rulesSlot={<CommentRulesWorkspace brandId={brandProfileId} />}
         plannerSlot={
           <OrganicCalendarWorkspace
             trendTypes={trendTypes}

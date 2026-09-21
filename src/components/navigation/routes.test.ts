@@ -60,11 +60,13 @@ describe('navigation structure', () => {
       'Organic Agent',
       'Organic Analytics',
       'Calendar',
+      'Comment Rules',
     ]);
     expect(organic?.items.map((i) => i.href)).toEqual([
       '/organic?tab=agent',
       '/organic?tab=metrics',
       '/organic?tab=planner',
+      '/organic?tab=rules',
     ]);
   });
 

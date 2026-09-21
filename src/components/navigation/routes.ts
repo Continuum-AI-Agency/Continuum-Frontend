@@ -11,6 +11,7 @@ import {
   Home,
   Images,
   type LucideIcon,
+  MessageSquare,
   Plug,
   Settings,
   ShieldCheck,
@@ -73,6 +74,12 @@ const ORGANIC_ITEMS: AppNavigationItem[] = [
     label: 'Calendar',
     href: '/organic?tab=planner',
     icon: CalendarDays,
+    accentColor: 'text-emerald-500',
+  },
+  {
+    label: 'Comment Rules',
+    href: '/organic?tab=rules',
+    icon: MessageSquare,
     accentColor: 'text-emerald-500',
   },
 ];
