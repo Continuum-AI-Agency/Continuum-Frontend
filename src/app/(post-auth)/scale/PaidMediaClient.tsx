@@ -567,9 +567,13 @@ export default function PaidMediaClientPage({
            *  than inside the chat that happened to produce it. Jaina is the conversation; what
            *  the conversation left behind lives here. The panel reads the Jaina brand scope, so
            *  it brings that provider with it. */}
-          <JainaBrandScopeProvider adAccountId={selectedAdAccount} brandId={brandProfileId}>
-            <SavedDashboardsPanel />
-          </JainaBrandScopeProvider>
+          {/* shrink-0: the panel bounds its own height, so it must not also be squeezed to
+           *  nothing by the ads manager's flex-1 below it. */}
+          <div className="shrink-0">
+            <JainaBrandScopeProvider adAccountId={selectedAdAccount} brandId={brandProfileId}>
+              <SavedDashboardsPanel />
+            </JainaBrandScopeProvider>
+          </div>
           <div ref={adsManagerShellRef} className="relative flex min-h-0 flex-1 overflow-hidden">
             <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
               {selectedAdAccount ? (

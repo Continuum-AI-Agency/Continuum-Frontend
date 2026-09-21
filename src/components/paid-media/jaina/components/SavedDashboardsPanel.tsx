@@ -63,8 +63,12 @@ export function SavedDashboardsPanel() {
         Saved dashboards
         <span className="text-muted-foreground text-xs">({dashboards.length})</span>
       </button>
+      {/* The opened dashboard is a REPORT — five modules of charts and tables — and it lands
+       *  inside a host that bounds its own height. Without a scroll of its own the list grew
+       *  past the host, the host clipped it, and there was nowhere to scroll: the only way
+       *  back to the page was to close the panel. The names stay put; the reading scrolls. */}
       {expanded ? (
-        <ul className="divide-y divide-border/50 border-border/60 border-t">
+        <ul className="max-h-[min(62vh,720px)] divide-y divide-border/50 overflow-y-auto overscroll-contain border-border/60 border-t">
           {dashboards.map((dashboard) => {
             const isOpen = openId === dashboard.id;
             const refreshPrompt =
