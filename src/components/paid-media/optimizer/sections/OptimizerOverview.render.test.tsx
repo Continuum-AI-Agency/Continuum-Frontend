@@ -14,6 +14,7 @@ mock.module('../ApplyModePill', () => ({ ApplyModePill: () => null }));
 // every test file in one, so a partial replacement here reaches the next file in the run.
 let approvalFailure: Error | null = null;
 let accountReadData: unknown = null;
+const setFamilyMutate = mock((_input: unknown) => {});
 let approvalMaps: { families: Record<string, string>; insights: Record<string, string> } = {
   families: {},
   insights: {},
@@ -34,7 +35,7 @@ mock.module('../useOptimizerData', () => ({
     setInsight: approvalFailure
       ? { mutate: () => {}, isError: true, error: approvalFailure }
       : { mutate: () => {}, isError: false, error: null },
-    setFamily: { mutate: () => {}, isError: false, error: null },
+    setFamily: { mutate: setFamilyMutate, isError: false, error: null },
   }),
 }));
 
@@ -412,5 +413,41 @@ describe('an approval made today, against a read composed last night', () => {
     const { getByTestId, queryByTestId } = mount();
     expect(getByTestId('always-do-this').textContent).toContain('Always do this');
     expect(queryByTestId('state-lowered')).toBeNull();
+  });
+});
+
+describe('the family ceilings, on the screen that mounts them', () => {
+  it('appears beside the read, so the cap on every card has somewhere to be moved', () => {
+    accountReadData = {
+      utc_day: '2026-09-21',
+      ready_at: '2026-09-21T06:00:00Z',
+      read: AccountReadEnvelopeSchema.parse({
+        utc_day: '2026-09-21',
+        read: {
+          candidates: [],
+          guards: [],
+          starved: [],
+          assumptions: ['x'],
+          ceiling_defaults: { budget: 'recommend', structure: 'recommend' },
+          model: 'deterministic',
+        },
+      }).read,
+    };
+    const { getByTestId } = render(
+      <OptimizerOverview
+        brandId="b1"
+        portfolios={[ALPHA]}
+        pendingCount={0}
+        currency="USD"
+        onOpenActions={() => {}}
+        onSelectPortfolio={() => {}}
+        onCreatePortfolio={() => {}}
+      />,
+    );
+    const grid = getByTestId('family-ceilings');
+    const structure = grid.querySelector('[data-family="structure"]');
+    expect(structure).toBeTruthy();
+    fireEvent.click(structure?.querySelector('[data-state-option="autopilot"]') as HTMLElement);
+    expect(setFamilyMutate).toHaveBeenCalledWith({ family: 'structure', state: 'autopilot' });
   });
 });

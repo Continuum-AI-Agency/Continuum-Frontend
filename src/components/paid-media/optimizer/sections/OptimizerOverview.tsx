@@ -26,6 +26,7 @@ import {
   useOptimizerSpendByObjective,
 } from '../useOptimizerData';
 import { AccountRead } from './account/AccountRead';
+import { FamilyCeilings } from './account/FamilyCeilings';
 import { OptimizerPanel } from './OptimizerPanel';
 import { PortfolioRowCard } from './PortfolioRowCard';
 
@@ -200,6 +201,19 @@ export function OptimizerOverview({
           sentence={shown.narrative || null}
           source={shown.model === 'deterministic' ? 'fallback' : 'brief'}
           starved={shown.starved}
+        />
+      ) : null}
+      {/* The other half of the approval: the card is where someone decides to trust a
+       *  recommendation, this is where that decision gets a boundary. Without it the
+       *  per-insight switch is capped by a ceiling nobody can reach. */}
+      {shown && approvalMaps.data ? (
+        <FamilyCeilings
+          current={approvalMaps.data.families}
+          defaults={shown.ceiling_defaults}
+          error={
+            approvals.setFamily.error instanceof Error ? approvals.setFamily.error.message : null
+          }
+          onSetFamily={(family, state) => approvals.setFamily.mutate({ family, state })}
         />
       ) : null}
       {/* A control that silently does nothing is worse than one that is absent. Until the
