@@ -480,6 +480,26 @@ export function resultRungFor(
 }
 
 /**
+ * How to read a money-per-day figure on an objective at this rung.
+ *
+ * "$102/day" is money this account can stop wasting on a purchase objective and money moved
+ * toward views on an awareness one, and NOTHING else on a card distinguishes the two — the
+ * figure, the class chip and the result label all read the same. One line beside the figures
+ * is the whole fix, and it belongs next to the ladder rather than in a component, because the
+ * card, the deck note and any future surface must say the same thing about the same rung.
+ */
+export const RESULT_RUNG_READING: Record<ResultRung, string> = {
+  money:
+    'What this account buys carries revenue, so these figures can be held against your margin.',
+  person:
+    'What this account buys is a person, not revenue — these figures are spend moved toward contacts, and only a close rate turns them into money.',
+  intent:
+    'What this account buys is intent, not revenue — these figures are spend moved toward clicks, and nothing here says what a click is worth.',
+  attention:
+    'What this account buys is attention, not revenue — these figures are spend moved toward reach, and nothing here says what that reach is worth.',
+};
+
+/**
  * What a detector does under one objective.
  *
  * `reterm` is NOT a smaller `on`: the card still appears and still ranks, it
@@ -679,14 +699,21 @@ export const DETECTOR_BLOCKED_ON: Partial<Record<AccountDetector, BlockedCategor
   new_vs_returning: 'customer_state',
 };
 
-/** The blocked detectors of this deck, grouped by what would unblock them. */
+/**
+ * The blocked detectors, grouped by what would unblock them.
+ *
+ * Takes an OBJECTIVE — every blocked detector in that deck, the "what would it take" question —
+ * or an explicit list of DETECTORS, which is what a screen has: a read carries the detectors
+ * that actually starved today, never the objective that produced them. One grouping rule serves
+ * both, because a caller that re-derived it would be free to drift from it.
+ */
 export function blockedByCategory(
-  objective: OptimizationObjective,
+  source: OptimizationObjective | readonly AccountDetector[],
 ): Array<{ category: BlockedCategory; detectors: AccountDetector[] }> {
-  const deck = new Set(deckFor(objective));
+  const wanted = new Set<AccountDetector>(typeof source === 'string' ? deckFor(source) : source);
   const grouped = new Map<BlockedCategory, AccountDetector[]>();
   for (const detector of DETECTOR_ORDER) {
-    if (!deck.has(detector)) continue;
+    if (!wanted.has(detector)) continue;
     const category = DETECTOR_BLOCKED_ON[detector];
     if (!category) continue;
     const list = grouped.get(category) ?? [];

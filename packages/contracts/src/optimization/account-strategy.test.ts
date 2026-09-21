@@ -135,7 +135,6 @@ describe('reallocationSaving — the arithmetic four detectors share', () => {
 // The ladder, the deck, and the confidence prior.
 // ---------------------------------------------------------------------------
 
-import { OptimizationObjectiveSchema } from './engine-contracts';
 import {
   BLOCKED_CATEGORY_COPY,
   blockedByCategory,
@@ -145,10 +144,14 @@ import {
   DETECTOR_RETERM,
   deckFor,
   RESULT_RUNG,
+  RESULT_RUNG_READING,
+  resultRungFor,
+  resultRungSchema,
   seedConfidence,
   UNCALIBRATED_PRIOR_DISCOUNT,
   verdictFor,
 } from './account-strategy';
+import { OptimizationObjectiveSchema } from './engine-contracts';
 
 const OBJECTIVES = OptimizationObjectiveSchema.options;
 const DETECTORS = accountDetectorSchema.options;
@@ -164,6 +167,24 @@ describe('the result ladder', () => {
   it('puts exactly one objective on the money rung — the reason target_economics starves', () => {
     const money = OBJECTIVES.filter((o) => RESULT_RUNG[o] === 'money');
     expect(money).toEqual(['purchase']);
+  });
+
+  it('gives every rung a line that says how to read a figure at it', () => {
+    for (const rung of resultRungSchema.options) {
+      expect(RESULT_RUNG_READING[rung].length).toBeGreaterThan(0);
+    }
+    // Only the money rung may invite a margin comparison. Saying it anywhere else is exactly
+    // the misreading the ladder exists to stop.
+    const mentionsMargin = resultRungSchema.options.filter((rung) =>
+      RESULT_RUNG_READING[rung].includes('margin'),
+    );
+    expect(mentionsMargin).toEqual(['money']);
+  });
+
+  it('reads a custom conversion at its analog’s rung, never at the placeholder', () => {
+    expect(RESULT_RUNG_READING[resultRungFor('custom', 'purchase')]).toBe(
+      RESULT_RUNG_READING.money,
+    );
   });
 });
 
@@ -192,9 +213,7 @@ describe('deckFor', () => {
   }
 
   it('never falls below the twenty that cannot be muted', () => {
-    const floor = DETECTORS.filter(
-      (d) => !DETECTOR_MUTES[d] || isGuardDetector(d),
-    ).length;
+    const floor = DETECTORS.filter((d) => !DETECTOR_MUTES[d] || isGuardDetector(d)).length;
     expect(floor).toBe(20);
     for (const objective of OBJECTIVES) {
       expect(deckFor(objective).length).toBeGreaterThanOrEqual(20);
@@ -317,6 +336,25 @@ describe('what the blocked detectors are waiting for', () => {
     const detectors = blockedByCategory('awareness').flatMap((g) => g.detectors);
     expect(detectors).not.toContain('new_vs_returning');
     expect(detectors).not.toContain('post_click');
+  });
+
+  it('groups an explicit list of detectors, which is what a screen actually holds', () => {
+    // A read carries the detectors that starved, never the objective behind them. Handed that
+    // list — in whatever order the worker emitted it — the grouping is the catalogue's, so the
+    // screen cannot invent an order of its own.
+    const groups = blockedByCategory([
+      'account_saturation',
+      'target_economics',
+      'audience_overlap',
+    ]);
+    expect(groups).toEqual([
+      { category: 'economics', detectors: ['target_economics'] },
+      { category: 'platform_call', detectors: ['audience_overlap', 'account_saturation'] },
+    ]);
+  });
+
+  it('ignores a detector that names no blocker rather than inventing a category for it', () => {
+    expect(blockedByCategory(['dead_tail'])).toEqual([]);
   });
 
   it('every category carries copy a person can read', () => {

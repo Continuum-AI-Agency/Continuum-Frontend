@@ -237,6 +237,79 @@ describe('AccountRead — what could not be asked, grouped by its blocker', () =
     expect(container.textContent).toContain('A platform call we do not make yet');
     expect(container.textContent).toContain('Unit economics');
   });
+
+  it('orders a group by the catalogue, not by the order the worker happened to emit', () => {
+    // The grouping is the contracts helper's, so two reads that starve on the same two
+    // detectors read identically whichever order they arrived in.
+    const { container } = render(
+      <AccountRead
+        candidates={many(1)}
+        currency="USD"
+        dailySpend={5000}
+        starved={[
+          { detector: 'account_saturation', missing: 'net reach deduplicated across portfolios' },
+          { detector: 'audience_overlap', missing: 'true overlap needs a Meta call' },
+        ]}
+      />,
+    );
+    const text = container.textContent ?? '';
+    expect(text.indexOf('Two portfolios bidding on the same people')).toBeGreaterThan(-1);
+    expect(text.indexOf('Two portfolios bidding on the same people')).toBeLessThan(
+      text.indexOf('The account has run out of people'),
+    );
+  });
+
+  it('still names a detector the catalogue has no blocker for', () => {
+    // An older worker can name one; dropping the row would turn a gap into a clean screen.
+    const { container } = render(
+      <AccountRead
+        candidates={many(1)}
+        currency="USD"
+        dailySpend={5000}
+        starved={[{ detector: 'dead_tail', missing: 'the window had no spend in it' }]}
+      />,
+    );
+    expect(container.textContent).toContain('Something else');
+    expect(container.textContent).toContain('the window had no spend in it');
+  });
+});
+
+describe('AccountRead — how far these figures sit from the money', () => {
+  it('says the figures can be held against margin only when the account buys revenue', () => {
+    const { getByTestId } = render(
+      <AccountRead candidates={many(1)} currency="USD" dailySpend={5000} objective="purchase" />,
+    );
+    expect(getByTestId('account-rung-note').textContent).toContain('margin');
+  });
+
+  it('says an attention buy is attention, so $/day is not read as money recovered', () => {
+    const { getByTestId } = render(
+      <AccountRead candidates={many(1)} currency="USD" dailySpend={5000} objective="awareness" />,
+    );
+    const note = getByTestId('account-rung-note').textContent ?? '';
+    expect(note).toContain('attention');
+    expect(note).not.toContain('margin');
+  });
+
+  it('reads a custom conversion at its analog’s rung, never at the placeholder', () => {
+    const { getByTestId } = render(
+      <AccountRead
+        candidates={many(1)}
+        currency="USD"
+        dailySpend={5000}
+        objective="custom"
+        objectiveAnalog="purchase"
+      />,
+    );
+    expect(getByTestId('account-rung-note').textContent).toContain('margin');
+  });
+
+  it('stays silent when nobody said what this account buys', () => {
+    const { queryByTestId } = render(
+      <AccountRead candidates={many(1)} currency="USD" dailySpend={5000} />,
+    );
+    expect(queryByTestId('account-rung-note')).toBeNull();
+  });
 });
 
 describe('AccountRead — a short deck should not look like a broken one', () => {
@@ -407,12 +480,7 @@ describe('AccountRead — promoting an insight from its own card', () => {
   it('never offers it when no state was resolved', () => {
     // Offering a control whose effect we cannot predict is worse than offering none.
     const { queryByTestId } = render(
-      <AccountRead
-        candidates={many(1)}
-        currency="USD"
-        dailySpend={5000}
-        onSetState={mock()}
-      />,
+      <AccountRead candidates={many(1)} currency="USD" dailySpend={5000} onSetState={mock()} />,
     );
     expect(queryByTestId('always-do-this')).toBeNull();
   });

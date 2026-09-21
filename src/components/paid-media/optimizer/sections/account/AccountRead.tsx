@@ -26,21 +26,23 @@ import type {
   AccountDetector,
   BlockedCategory,
   InsightState,
+  OptimizationObjective,
 } from '@continuum/contracts';
 import {
   ACCOUNT_DETECTOR_META,
   ACTION_FAMILY_COPY,
   accountGuards,
   BLOCKED_CATEGORY_COPY,
-  blockedCategorySchema,
+  blockedByCategory,
   CHART_SHAPE_READING,
   chartShapeFor,
   DETECTOR_ACTION_FAMILY,
-  DETECTOR_BLOCKED_ON,
   IMPACT_CLASS_COPY,
   IMPACT_TIER_COPY,
   impactTier,
+  RESULT_RUNG_READING,
   rankAccountCandidates,
+  resultRungFor,
 } from '@continuum/contracts';
 import { AlertTriangleIcon, ChevronDownIcon, SparklesIcon } from 'lucide-react';
 import { useState } from 'react';
@@ -77,6 +79,14 @@ export type AccountReadProps = {
    * every day until the gap list reads as noise.
    */
   deck?: { applies: number; total: number } | null;
+  /**
+   * What this account mostly buys, and — for a custom conversion — the objective it behaves like.
+   *
+   * Only ever used to say how far the figures below sit from the money. Absent renders no line
+   * at all: guessing the rung would be worse than staying quiet about it.
+   */
+  objective?: OptimizationObjective | null;
+  objectiveAnalog?: OptimizationObjective | null;
   /** Promote or demote one insight from its own card. Absent renders no control. */
   onSetState?: (detector: AccountDetector, state: InsightState) => void;
   /** One line over the whole list. Absent on a fallback read, and that is fine. */
@@ -363,6 +373,8 @@ export function AccountRead({
   source = 'fallback',
   sentence = null,
   deck = null,
+  objective = null,
+  objectiveAnalog = null,
   onSetState,
   onOpenPortfolio,
 }: AccountReadProps) {
@@ -428,6 +440,7 @@ export function AccountRead({
               {source === 'brief' ? 'Jaina, from today’s run' : 'Draft read from today’s run'}
             </p>
           </header>
+          <RungNote analog={objectiveAnalog} objective={objective} />
 
           {/* 3 — the three, as one surface */}
           <div className="grid overflow-hidden rounded-lg border border-border/60 bg-card sm:grid-cols-3">
@@ -496,12 +509,20 @@ export function AccountRead({
  * the shape of the work.
  */
 function Starved({ starved }: { starved: Array<{ detector: AccountDetector; missing: string }> }) {
-  const grouped = new Map<BlockedCategory | 'other', typeof starved>();
-  for (const row of starved) {
-    const key = DETECTOR_BLOCKED_ON[row.detector] ?? 'other';
-    grouped.set(key, [...(grouped.get(key) ?? []), row]);
-  }
-  const order: Array<BlockedCategory | 'other'> = [...blockedCategorySchema.options, 'other'];
+  const missingFor = new Map(starved.map((row) => [row.detector, row.missing]));
+  const groups: Array<{ key: BlockedCategory | 'other'; detectors: AccountDetector[] }> =
+    blockedByCategory(starved.map((row) => row.detector)).map((group) => ({
+      key: group.category,
+      detectors: group.detectors,
+    }));
+  // A blocked detector that names no category cannot happen — the catalogue test pins both
+  // directions — but a read written by an older worker can still name one, and dropping the row
+  // silently would turn a gap in coverage into a clean screen.
+  const placed = new Set(groups.flatMap((group) => group.detectors));
+  const uncategorised = starved
+    .map((row) => row.detector)
+    .filter((detector) => !placed.has(detector));
+  if (uncategorised.length > 0) groups.push({ key: 'other', detectors: uncategorised });
 
   return (
     <details className="mt-3 rounded-lg border border-border/60 bg-muted/10 p-3">
@@ -509,27 +530,47 @@ function Starved({ starved }: { starved: Array<{ detector: AccountDetector; miss
         {starved.length} checks could not run today
       </summary>
       <div className="mt-2 space-y-2">
-        {order
-          .filter((key) => grouped.has(key))
-          .map((key) => (
-            <div key={key}>
-              <p className="font-semibold text-3xs text-foreground">
-                {key === 'other' ? 'Something else' : BLOCKED_CATEGORY_COPY[key]}
-              </p>
-              <ul className="mt-0.5 space-y-0.5">
-                {(grouped.get(key) ?? []).map((row) => (
-                  <li className="text-2xs text-muted-foreground" key={row.detector}>
-                    <span className="text-foreground">
-                      {ACCOUNT_DETECTOR_META[row.detector].label}
-                    </span>{' '}
-                    — {row.missing}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+        {groups.map(({ key, detectors }) => (
+          <div key={key}>
+            <p className="font-semibold text-3xs text-foreground">
+              {key === 'other' ? 'Something else' : BLOCKED_CATEGORY_COPY[key]}
+            </p>
+            <ul className="mt-0.5 space-y-0.5">
+              {detectors.map((detector) => (
+                <li className="text-2xs text-muted-foreground" key={detector}>
+                  <span className="text-foreground">{ACCOUNT_DETECTOR_META[detector].label}</span> —{' '}
+                  {missingFor.get(detector)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </div>
     </details>
+  );
+}
+
+/**
+ * How far the figures above sit from the money, in one line.
+ *
+ * Every card states a money-per-day figure, and "$102/day" means money this account can stop
+ * wasting when it buys purchases and money moved toward views when it buys attention. Nothing
+ * else on the card separates those two: the figure, the class chip and the result label read
+ * identically. The sentence itself lives in the catalogue beside the ladder, so the card and any
+ * other surface cannot describe the same rung differently.
+ */
+function RungNote({
+  objective,
+  analog,
+}: {
+  objective: OptimizationObjective | null;
+  analog: OptimizationObjective | null;
+}) {
+  if (!objective) return null;
+  return (
+    <p className="text-3xs text-muted-foreground" data-testid="account-rung-note">
+      {RESULT_RUNG_READING[resultRungFor(objective, analog)]}
+    </p>
   );
 }
 
