@@ -24,9 +24,11 @@ import {
   useInsightApprovalMutations,
   useOptimizerAccountRead,
   useOptimizerSpendByObjective,
+  useRequestAccountRead,
 } from '../useOptimizerData';
 import { AccountLeadCard } from './account/AccountLeadCard';
 import { AccountRead } from './account/AccountRead';
+import { AccountReadFreshness } from './account/AccountReadFreshness';
 import { FamilyCeilings } from './account/FamilyCeilings';
 import { OptimizerPanel } from './OptimizerPanel';
 import { PortfolioRowCard } from './PortfolioRowCard';
@@ -148,6 +150,7 @@ export function OptimizerOverview({
   const accountRead = useOptimizerAccountRead(brandId, adAccountId);
   const approvals = useInsightApprovalMutations(brandId, adAccountId);
   const approvalMaps = useAccountApprovals(brandId, adAccountId);
+  const requestRead = useRequestAccountRead(brandId, adAccountId);
 
   const dailyTotal = portfolios.reduce((sum, portfolio) => sum + (portfolio.daily_total ?? 0), 0);
   const autopilot = portfolios.filter((portfolio) => portfolio.apply_mode === 'autopilot');
@@ -198,6 +201,21 @@ export function OptimizerOverview({
           starved={shown.starved}
         />
       ) : null}
+      {/* Outside the has-something-to-say gate on purpose: a quiet day and a first read still
+       *  queueing are exactly when a reader most needs to know WHEN this was taken. A figure
+       *  without its date cannot be checked, and a row composed before a deploy is
+       *  indistinguishable from a current one without this line. */}
+      {accountRead.data ? (
+        <AccountReadFreshness
+          error={requestRead.error instanceof Error ? requestRead.error.message : null}
+          onRequest={() => requestRead.mutate()}
+          readyAt={accountRead.data.ready_at}
+          refresh={accountRead.data.refresh}
+          requesting={requestRead.isPending}
+          utcDay={accountRead.data.utc_day}
+        />
+      ) : null}
+
       {/* A read with nothing to act on still has things to say: what it assumed, how much of
        *  the catalogue applies, and which checks could not run. Gating on candidates alone
        *  meant the component's "Nothing to move today" branch could never appear on screen —

@@ -27,6 +27,10 @@ mock.module('../useOptimizerData', () => ({
   // and the overview has to stand on its own without it.
   useOptimizerAccountRead: () => ({ data: accountReadData, isLoading: false, isError: false }),
   useAccountApprovals: () => ({ data: approvalMaps, isLoading: false, isError: false }),
+  // The third hook this file has had to stub for the same reason: the real one asks for a
+  // QueryClient and these tests deliberately mount no provider. A hook added to the component
+  // and not to this mock does not fail loudly — it takes the whole suite down at render.
+  useRequestAccountRead: () => ({ mutate: () => {}, isPending: false, error: null }),
   // The real hook asks for a QueryClient, and these tests deliberately mount no provider —
   // the overview's own behaviour is what is under test, not React Query's wiring.
   // `mock.module` replaces the module for the whole process, so the failure case is driven
