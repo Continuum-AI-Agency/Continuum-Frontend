@@ -1228,6 +1228,9 @@ export const AccountReadEnvelopeSchema = z
         // was read as, and why. An assumption the product makes silently is one nobody can
         // correct, so it travels with the read rather than living only in the prompt.
         assumptions: z.array(z.string()).catch([]),
+        // The family ceilings this read was composed under. Carried so the screen can
+        // re-apply an approval at once rather than waiting for tomorrow's run.
+        ceiling_defaults: z.record(z.string(), z.string()).catch({}),
         scale_per_day: z.number().nullable().catch(null),
         currency: z.string().nullable().catch(null),
         model: z.string().catch('deterministic'),
@@ -1272,8 +1275,44 @@ export function useOptimizerAccountRead(brandId: string, adAccountId: string | n
  * Both invalidate the account read, because the resolved state rides on each candidate — the
  * worker applied the ceiling, so the card cannot recompute it locally and be sure it agrees.
  */
+/**
+ * What someone has changed about what these insights may do.
+ *
+ * Read separately from the account read because the read is a DAILY SNAPSHOT: the worker
+ * bakes `state` into it once a night and `optimizer_get_account_read` serves that frozen
+ * row, so a write made at noon was invisible until the next morning. The control worked and
+ * looked broken, which is worse than one that refuses.
+ *
+ * Absent RPCs mean "nobody changed anything", which is what the shipped ceilings already
+ * answer — so this fails to an empty pair of maps rather than emptying the screen.
+ */
+export function useAccountApprovals(brandId: string, adAccountId: string | null) {
+  return useQuery({
+    queryKey: [...optimizerQueryKeys.accountRead(brandId, adAccountId ?? 'none'), 'approvals'],
+    enabled: Boolean(brandId && adAccountId),
+    queryFn: async () => {
+      const { data, error } = await getClient().rpc('optimizer_get_account_approvals', {
+        p_brand_id: brandId,
+        p_ad_account_id: adAccountId,
+      } as never);
+      if (error) return { families: {}, insights: {} };
+      return ApprovalMapsSchema.parse(data ?? {});
+    },
+  });
+}
+
+const ApprovalMapsSchema = z
+  .object({
+    families: z.record(z.string(), z.string()).catch({}),
+    insights: z.record(z.string(), z.string()).catch({}),
+  })
+  .catch({ families: {}, insights: {} });
+
 export function useInsightApprovalMutations(brandId: string, adAccountId: string | null) {
   const queryClient = useQueryClient();
+  // Invalidating the read's key prefix covers the approvals query too, since it hangs off
+  // the same key. The read itself will not have changed — that is the point of also having
+  // the approvals.
   const refresh = () => {
     void queryClient.invalidateQueries({
       queryKey: optimizerQueryKeys.accountRead(brandId, adAccountId ?? 'none'),

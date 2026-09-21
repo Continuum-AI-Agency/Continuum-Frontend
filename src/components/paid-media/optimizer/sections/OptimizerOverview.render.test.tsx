@@ -14,6 +14,10 @@ mock.module('../ApplyModePill', () => ({ ApplyModePill: () => null }));
 // every test file in one, so a partial replacement here reaches the next file in the run.
 let approvalFailure: Error | null = null;
 let accountReadData: unknown = null;
+let approvalMaps: { families: Record<string, string>; insights: Record<string, string> } = {
+  families: {},
+  insights: {},
+};
 const realOptimizerData = await import('../useOptimizerData');
 mock.module('../useOptimizerData', () => ({
   ...realOptimizerData,
@@ -21,6 +25,7 @@ mock.module('../useOptimizerData', () => ({
   // The account read is written by a worker on its own clock; absent is the normal case
   // and the overview has to stand on its own without it.
   useOptimizerAccountRead: () => ({ data: accountReadData, isLoading: false, isError: false }),
+  useAccountApprovals: () => ({ data: approvalMaps, isLoading: false, isError: false }),
   // The real hook asks for a QueryClient, and these tests deliberately mount no provider —
   // the overview's own behaviour is what is under test, not React Query's wiring.
   // `mock.module` replaces the module for the whole process, so the failure case is driven
@@ -63,6 +68,7 @@ const ALPHA = portfolio({ id: 'a', name: 'Alpha', daily_total: 900 });
 afterEach(() => {
   approvalFailure = null;
   accountReadData = null;
+  approvalMaps = { families: {}, insights: {} };
   cleanup();
 });
 
@@ -336,5 +342,75 @@ describe('dominantObjective', () => {
 
   it('has no answer for an empty book', () => {
     expect(dominantObjective([])).toBeNull();
+  });
+});
+
+// The stored read is a nightly snapshot: the worker bakes `state` into it once and
+// `optimizer_get_account_read` serves that frozen row all day. So a write made at noon
+// landed in the database and the card kept showing last night's answer — the control worked
+// and looked broken, which is worse than one that refuses.
+describe('an approval made today, against a read composed last night', () => {
+  const frozen = (state: string | null) => ({
+    utc_day: '2026-09-21',
+    ready_at: '2026-09-21T06:00:00Z',
+    read: AccountReadEnvelopeSchema.parse({
+      utc_day: '2026-09-21',
+      read: {
+        candidates: [
+          {
+            id: 'dead_tail:a1',
+            detector: 'dead_tail',
+            impact_per_day: 120,
+            impact_class: 'recoverable',
+            impact_basis: 'spent with nothing to show',
+            chart: null,
+            state,
+          },
+        ],
+        guards: [],
+        starved: [],
+        // dead_tail is a `structure` insight; the read was composed with that family
+        // allowed to recommend and no further.
+        ceiling_defaults: { structure: 'recommend', budget: 'recommend', creative: 'off' },
+        model: 'deterministic',
+      },
+    }).read,
+  });
+
+  function mount() {
+    return render(
+      <OptimizerOverview
+        brandId="b1"
+        portfolios={[ALPHA]}
+        pendingCount={0}
+        currency="USD"
+        onOpenActions={() => {}}
+        onSelectPortfolio={() => {}}
+        onCreatePortfolio={() => {}}
+      />,
+    );
+  }
+
+  it('shows the new state at once, without waiting for tomorrow to re-compose the row', () => {
+    accountReadData = frozen('recommend');
+    approvalMaps = { families: { structure: 'autopilot' }, insights: { dead_tail: 'autopilot' } };
+    const { getByTestId } = mount();
+    expect(getByTestId('always-do-this').textContent).toContain('Stop doing this on its own');
+  });
+
+  it('still refuses to exceed the family, and says it was lowered', () => {
+    accountReadData = frozen('recommend');
+    // Asked for autopilot on the insight, but the family it belongs to only allows recommend.
+    approvalMaps = { families: {}, insights: { dead_tail: 'autopilot' } };
+    const { getByTestId } = mount();
+    expect(getByTestId('state-lowered')).toBeTruthy();
+    expect(getByTestId('always-do-this').textContent).toContain('Always do this');
+  });
+
+  it('leaves the stored state alone when nobody has approved anything', () => {
+    accountReadData = frozen('recommend');
+    const { getByTestId, queryByTestId } = mount();
+    expect(getByTestId('always-do-this').textContent).toContain('Always do this');
+    expect(queryByTestId('state-lowered')).toBeNull();
   });
 });

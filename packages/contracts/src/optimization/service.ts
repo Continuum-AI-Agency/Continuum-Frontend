@@ -211,10 +211,16 @@ const OPTIMIZATION_METRIC_DEFINITIONS: Record<
   },
   custom: {
     objective: 'custom',
-    // The KPI field is the analog's; the LABELS below are fallbacks a descriptor replaces.
-    // A card that renders "Conversions" for an event the business calls "Demos booked" is
-    // the mislabelling this objective exists to end, so the descriptor always wins.
-    kpiField: 'purchases',
+    // `leads`, matching OBJECTIVE_PROFILES.custom in the engine — not because a custom
+    // conversion IS a lead, but because an unresolved one has to borrow SOME calibration and
+    // lead's is the cautious borrow. This said `purchases` while the engine said `leads`,
+    // which measured the same portfolio two ways depending on which map was asked; the
+    // comment claiming the field was "the analog's" was false, since it is written by hand.
+    // A descriptor still decides the real analog upstream of both maps.
+    kpiField: 'leads',
+    // The LABELS are fallbacks a descriptor replaces. A card that renders "Conversions" for
+    // an event the business calls "Demos booked" is the mislabelling this objective exists
+    // to end, so the descriptor always wins.
     resultLabel: 'Conversions',
     costLabel: 'Cost per conversion',
     targetLabel: 'Target cost per conversion',

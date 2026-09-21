@@ -7,7 +7,7 @@
 // the lead portfolios" is one click.
 
 import type { OptimizationObjective, PortfolioListItem } from '@continuum/contracts';
-import { OptimizationObjectiveSchema } from '@continuum/contracts';
+import { applyApprovals, OptimizationObjectiveSchema } from '@continuum/contracts';
 import { ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, PlusIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -20,6 +20,7 @@ import { StatusChip, type StatusTone } from '../components/StatusChip';
 import { formatCurrency, humanize } from '../format';
 import { pendingWorkCount } from '../reportModel';
 import {
+  useAccountApprovals,
   useInsightApprovalMutations,
   useOptimizerAccountRead,
   useOptimizerSpendByObjective,
@@ -144,6 +145,7 @@ export function OptimizerOverview({
   // no spinner, no empty shell — the rest of the overview stands on its own.
   const accountRead = useOptimizerAccountRead(brandId, adAccountId);
   const approvals = useInsightApprovalMutations(brandId, adAccountId);
+  const approvalMaps = useAccountApprovals(brandId, adAccountId);
 
   const dailyTotal = portfolios.reduce((sum, portfolio) => sum + (portfolio.daily_total ?? 0), 0);
   const autopilot = portfolios.filter((portfolio) => portfolio.apply_mode === 'autopilot');
@@ -162,6 +164,20 @@ export function OptimizerOverview({
   const sorted = sortPortfolios(visible, sortKey, sortDir);
 
   const read = accountRead.data?.read ?? null;
+  // The stored read is a nightly snapshot, so the state baked into it is last night's. Apply
+  // what has been approved SINCE, against the very ceilings that read was composed under —
+  // otherwise a change made at noon is invisible until tomorrow and the control looks broken.
+  const shown = useMemo(() => {
+    if (!read) return null;
+    const maps = approvalMaps.data;
+    if (!maps) return read;
+    const defaults = read.ceiling_defaults as never;
+    return {
+      ...read,
+      candidates: applyApprovals(read.candidates, { ...maps, defaults }),
+      guards: applyApprovals(read.guards, { ...maps, defaults }),
+    };
+  }, [read, approvalMaps.data]);
 
   return (
     <div className="space-y-3">
@@ -169,21 +185,21 @@ export function OptimizerOverview({
        *  the catalogue applies, and which checks could not run. Gating on candidates alone
        *  meant the component's "Nothing to move today" branch could never appear on screen —
        *  the quiet day rendered as a blank where a sentence belonged. */}
-      {read && hasSomethingToSay(read) ? (
+      {shown && hasSomethingToSay(shown) ? (
         <AccountRead
-          assumptions={read.assumptions ?? []}
-          candidates={[...read.candidates, ...read.guards]}
-          currency={read.currency ?? currency ?? null}
-          dailySpend={read.scale_per_day ?? dailyTotal}
-          deck={read.deck ?? null}
+          assumptions={shown.assumptions ?? []}
+          candidates={[...shown.candidates, ...shown.guards]}
+          currency={shown.currency ?? currency ?? null}
+          dailySpend={shown.scale_per_day ?? dailyTotal}
+          deck={shown.deck ?? null}
           objective={dominantObjective(portfolios)}
           onOpenPortfolio={onSelectPortfolio}
           onSetState={(detector, state) => approvals.setInsight.mutate({ detector, state })}
           // The read's own narrative, not a constant. The envelope has carried it all along
           // while the screen printed the fallback line under a header crediting Jaina.
-          sentence={read.narrative || null}
-          source={read.model === 'deterministic' ? 'fallback' : 'brief'}
-          starved={read.starved}
+          sentence={shown.narrative || null}
+          source={shown.model === 'deterministic' ? 'fallback' : 'brief'}
+          starved={shown.starved}
         />
       ) : null}
       {/* A control that silently does nothing is worse than one that is absent. Until the

@@ -605,6 +605,36 @@ export function deckFor(objective: OptimizationObjective): AccountDetector[] {
 }
 
 /**
+ * The deck for a whole account, which is what the screen's line is actually about.
+ *
+ * A detector applies when it has a question for ANY objective the account buys, so the deck
+ * is the union — the same rule the runner filters by.
+ *
+ * This exists because the number was being derived from what got muted on TODAY'S run, and a
+ * run only executes the cadences that are due. All five detectors carrying a mute entry are
+ * weekly, and `cadencesDue` adds weekly only on Mondays — so six days out of seven an
+ * awareness account was told "All 25 checks apply" when its real deck is 20. The catalogue
+ * does not change with the day of the week, and neither should the sentence.
+ */
+export function deckForAccount(objectives: readonly OptimizationObjective[]): {
+  applies: number;
+  total: number;
+  muted: AccountDetector[];
+} {
+  const total = DETECTOR_ORDER.length;
+  // No objective we can name is not the same as an objective that mutes nothing: we simply
+  // cannot say, so the whole catalogue stands rather than claiming a narrower deck.
+  if (objectives.length === 0) return { applies: total, total, muted: [] };
+  const applies = new Set<AccountDetector>();
+  for (const objective of objectives) for (const detector of deckFor(objective)) applies.add(detector);
+  return {
+    applies: applies.size,
+    total,
+    muted: DETECTOR_ORDER.filter((detector) => !applies.has(detector)),
+  };
+}
+
+/**
  * The prior on confidence, from how well this objective's signal predicts at all.
  *
  * `confidence` on a candidate used to default to 1, which meant an uncalibrated
