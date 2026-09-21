@@ -48,28 +48,13 @@ import { AlertTriangleIcon } from 'lucide-react';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { formatCurrency } from '../../format';
+import { formatPercent } from '../../format';
+import { CalmRule, HeadlineComparison, HeadlineFigure, MoneyLine } from './candidateHeadline';
 import { doubtedBy, scopeOf } from './guardScope';
-
-/** The calm rhythm. One short rule breathes inside the first fifth of it and rests for the rest. */
-const CALM_SECONDS = 5;
 
 const enterVariants: Variants = {
   hidden: { opacity: 0, y: 8 },
   shown: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
-};
-
-const ruleVariants: Variants = {
-  still: { scaleX: 1 },
-  calm: {
-    scaleX: [1, 1.08, 1, 1],
-    transition: {
-      duration: CALM_SECONDS,
-      times: [0, 0.09, 0.2, 1],
-      repeat: Number.POSITIVE_INFINITY,
-      ease: 'easeInOut',
-    },
-  },
 };
 
 const TIER_VARIANT = { high: 'destructive', medium: 'warning', low: 'muted' } as const;
@@ -120,20 +105,6 @@ function surenessBasis(candidate: AccountCandidate): string {
 
 function Kicker({ children }: { children: React.ReactNode }) {
   return <p className="text-3xs uppercase tracking-[0.16em] text-muted-foreground">{children}</p>;
-}
-
-/** The rule under the figure — the card's one moving element. */
-function CalmRule({ play }: { play: boolean }) {
-  return (
-    <motion.span
-      animate={play ? 'calm' : 'still'}
-      aria-hidden="true"
-      className="block h-0.5 w-14 origin-left rounded-full bg-foreground/30"
-      data-testid="account-lead-rule"
-      initial="still"
-      variants={ruleVariants}
-    />
-  );
 }
 
 /**
@@ -336,17 +307,18 @@ function LeadFace({
         </Badge>
       </div>
       <h2 className="font-semibold text-base text-foreground">{meta.label}</h2>
-      <p
-        className="flex flex-wrap items-baseline gap-x-1.5 text-2xs text-muted-foreground"
-        data-testid="account-lead-figure"
-      >
-        <span className="font-mono font-semibold text-3xl tabular-nums text-foreground">
-          {formatCurrency(candidate.impact_per_day, currency)}
-        </span>
-        <span className="text-foreground">/day</span>
-        <span>· {candidate.result_label}</span>
-      </p>
-      <CalmRule play={play} />
+      {/* The detector's OWN figure leads; the money it is worth follows as the one line every
+       *  card on this screen shares. A card whose headline is money says it once, large, and
+       *  its support line carries the month rather than the same day twice. */}
+      <HeadlineFigure
+        candidate={candidate}
+        currency={currency}
+        size="card"
+        testId="account-lead-figure"
+      />
+      <HeadlineComparison candidate={candidate} currency={currency} testId="account-lead-sides" />
+      <MoneyLine candidate={candidate} currency={currency} testId="account-lead-money" />
+      <CalmRule play={play} testId="account-lead-rule" />
       <p className="text-2xs text-muted-foreground">{clipLine(meta.compares)}</p>
       {candidate.capped_by ? (
         <p className="text-3xs text-muted-foreground" data-testid="account-lead-cap">
@@ -365,7 +337,7 @@ function GuardFace({ guard, play }: { guard: AccountCandidate; play: boolean }) 
     <Face>
       <Kicker>Before anything else</Kicker>
       <h2 className="font-semibold text-base text-foreground">{meta.label}</h2>
-      <CalmRule play={play} />
+      <CalmRule play={play} testId="account-lead-rule" />
       <p className="text-2xs text-muted-foreground">{clipLine(guard.impact_basis)}</p>
       <p className="text-3xs text-muted-foreground">
         Nothing else cleared today, and a list ordered by money would point precisely at the wrong
@@ -408,7 +380,7 @@ function QuietFace({
           <span>· of {deck.applies} that apply here</span>
         </p>
       ) : null}
-      <CalmRule play={play} />
+      <CalmRule play={play} testId="account-lead-rule" />
       <p className="text-2xs text-muted-foreground">
         Every check that could ask a question here compared this account against its own numbers and
         found nothing worth moving.
@@ -420,7 +392,7 @@ function QuietFace({
 function SurenessRow({ candidate, doubted }: { candidate: AccountCandidate; doubted: boolean }) {
   const { word, pct } = sureness(candidate.confidence);
   return (
-    <Row label="How sure" testId="account-lead-sure" value={`${word} · ${pct}%`}>
+    <Row label="How sure" testId="account-lead-sure" value={`${word} · ${formatPercent(pct)}`}>
       <div
         aria-hidden="true"
         className="h-1 w-full max-w-[9rem] overflow-hidden rounded-full bg-muted"

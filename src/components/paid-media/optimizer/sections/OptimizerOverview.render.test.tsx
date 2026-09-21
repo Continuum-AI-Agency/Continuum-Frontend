@@ -327,6 +327,90 @@ describe('the account read, on the screen that actually mounts it', () => {
   });
 });
 
+// The portfolios list used to say only "$500/day, 2 ad sets" — which makes a reader open every
+// portfolio to discover which one is worth opening. The account read already knows.
+describe('the portfolios list, in the same vocabulary as the card above it', () => {
+  const inPortfolio = (portfolioId: string, over: Record<string, unknown> = {}) => ({
+    id: `portfolio_reallocation:${portfolioId}`,
+    detector: 'portfolio_reallocation',
+    portfolio_ids: [portfolioId],
+    impact_per_day: 66.67,
+    impact_class: 'better_price',
+    impact_basis: '200/day moved from a portfolio at 90 to one at 60',
+    result_label: 'leads',
+    chart: null,
+    headline: {
+      kind: 'efficiency',
+      value: 33,
+      unit: 'percent',
+      label: 'cheaper per result',
+      from: 90,
+      to: 60,
+    },
+    ...over,
+  });
+
+  function mount(portfolios: PortfolioListItem[]) {
+    return render(
+      <OptimizerOverview
+        brandId="b1"
+        portfolios={portfolios}
+        pendingCount={0}
+        currency="USD"
+        onOpenActions={() => {}}
+        onSelectPortfolio={() => {}}
+        onCreatePortfolio={() => {}}
+      />,
+    );
+  }
+
+  it('gives the named portfolio its own finding, in the detector’s own terms', () => {
+    accountReadData = {
+      utc_day: '2026-09-21',
+      ready_at: '2026-09-21T06:00:00Z',
+      read: AccountReadEnvelopeSchema.parse({
+        utc_day: '2026-09-21',
+        read: {
+          candidates: [inPortfolio('a')],
+          guards: [],
+          starved: [],
+          model: 'deterministic',
+        },
+      }).read,
+    };
+    const { getAllByTestId } = mount([ALPHA, ZEBRA]);
+    const bands = getAllByTestId('portfolio-lead');
+    // Only the portfolio the read named carries one.
+    expect(bands).toHaveLength(1);
+    expect(bands[0]?.textContent).toContain('Move budget between portfolios');
+    expect(bands[0]?.textContent).toContain('33%');
+    expect(bands[0]?.textContent).toContain('$67/day · $2,000/mo');
+  });
+
+  it('leaves every card bare when the read found nothing inside a portfolio', () => {
+    accountReadData = {
+      utc_day: '2026-09-21',
+      ready_at: '2026-09-21T06:00:00Z',
+      read: AccountReadEnvelopeSchema.parse({
+        utc_day: '2026-09-21',
+        read: {
+          candidates: [inPortfolio('a', { portfolio_ids: [] })],
+          guards: [],
+          starved: [],
+          model: 'deterministic',
+        },
+      }).read,
+    };
+    const { queryAllByTestId } = mount([ALPHA, ZEBRA]);
+    expect(queryAllByTestId('portfolio-lead')).toHaveLength(0);
+  });
+
+  it('shows nothing on the cards when no read has been written yet', () => {
+    const { queryAllByTestId } = mount([ALPHA, ZEBRA]);
+    expect(queryAllByTestId('portfolio-lead')).toHaveLength(0);
+  });
+});
+
 describe('dominantObjective', () => {
   const p = (id: string, objective: string, daily: number | null) =>
     portfolio({ id, name: id, daily_total: daily, objective: objective as never });

@@ -49,8 +49,9 @@ import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { formatCurrency } from '../../format';
+import { formatPerPeriod } from '../../format';
 import { AccountChartView } from './AccountChartView';
+import { HeadlineComparison, HeadlineFigure, MoneyLine } from './candidateHeadline';
 import { doubtedBy } from './guardScope';
 
 /** How many lead the read. Three is what someone carries away from a screen. */
@@ -192,28 +193,28 @@ function CapNote({ candidate }: { candidate: AccountCandidate }) {
   );
 }
 
-function Money({
+/**
+ * What a row leads with: the detector's own figure, then the money it is worth.
+ *
+ * The rank is unaffected — `rankAccountCandidates` still orders on `rankedValue`, which is
+ * money. Only what the reader sees first changes, and that is the point: the ORDER stays one
+ * comparable scale while each row finally says what it actually found.
+ */
+function Lead({
   candidate,
   currency,
-  large,
+  size,
 }: {
   candidate: AccountCandidate;
   currency: string | null;
-  large?: boolean;
+  size: 'row' | 'column';
 }) {
   return (
-    <p className="flex flex-wrap items-baseline gap-x-1.5 text-2xs text-muted-foreground">
-      <span
-        className={cn(
-          'font-mono font-semibold tabular-nums text-foreground',
-          large ? 'text-xl' : 'text-base',
-        )}
-      >
-        {formatCurrency(candidate.impact_per_day, currency)}
-      </span>
-      <span className="text-foreground">/day</span>
-      <span>· {candidate.result_label}</span>
-    </p>
+    <div className="space-y-0.5">
+      <HeadlineFigure candidate={candidate} currency={currency} size={size} />
+      <HeadlineComparison candidate={candidate} currency={currency} />
+      <MoneyLine candidate={candidate} currency={currency} />
+    </div>
   );
 }
 
@@ -261,7 +262,7 @@ function LeadColumn({
       <div className="flex min-h-[86px] flex-col justify-end gap-1">
         <ChartWithReading candidate={candidate} currency={currency} />
       </div>
-      <Money candidate={candidate} currency={currency} large />
+      <Lead candidate={candidate} currency={currency} size="column" />
       <p className="text-2xs text-muted-foreground">{candidate.impact_basis}</p>
       <CapNote candidate={candidate} />
       <StateNote candidate={candidate} />
@@ -322,7 +323,7 @@ function RestRow({
         </div>
         <h3 className="font-semibold text-foreground text-sm">{meta.label}</h3>
         <p className="text-2xs text-muted-foreground">{candidate.impact_basis}</p>
-        <Money candidate={candidate} currency={currency} />
+        <Lead candidate={candidate} currency={currency} size="row" />
         <CapNote candidate={candidate} />
         <StateNote candidate={candidate} />
         <AlwaysDoThis candidate={candidate} onSetState={onSetState} />
@@ -454,7 +455,7 @@ export function AccountRead({
                   className={cn('size-3.5 transition-transform', showRest && 'rotate-180')}
                 />
                 {showRest ? 'Hide the rest' : `${rest.length} more`} ·{' '}
-                {formatCurrency(restWorth, currency)}/day between them
+                {formatPerPeriod(restWorth, currency)} between them
               </Button>
               {showRest ? (
                 <div className="mt-2 overflow-hidden rounded-lg border border-border/60 bg-card">

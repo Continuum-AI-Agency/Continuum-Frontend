@@ -17,7 +17,7 @@ import { lastFullDay, spendStream } from '../charts/chartData';
 import { SpendByObjectiveStream } from '../charts/SpendByObjectiveStream';
 import { KpiTile } from '../components/KpiTile';
 import { StatusChip, type StatusTone } from '../components/StatusChip';
-import { formatCurrency, humanize } from '../format';
+import { formatCurrency, formatPercent, humanize } from '../format';
 import { pendingWorkCount } from '../reportModel';
 import {
   useAccountApprovals,
@@ -31,7 +31,7 @@ import { AccountRead } from './account/AccountRead';
 import { AccountReadFreshness } from './account/AccountReadFreshness';
 import { FamilyCeilings } from './account/FamilyCeilings';
 import { OptimizerPanel } from './OptimizerPanel';
-import { PortfolioRowCard } from './PortfolioRowCard';
+import { PortfolioRowCard, portfolioLeads } from './PortfolioRowCard';
 
 type SortKey = 'name' | 'daily' | 'pending';
 type SortDir = 'asc' | 'desc';
@@ -112,9 +112,10 @@ export function spendVsPlan(
   if (spent == null || plan <= 0) return null;
   const ratio = spent / plan;
   const pct = Math.round(ratio * 100);
-  if (ratio > 1.1) return { pct, tone: 'warning', label: `${pct}% of plan · over` };
-  if (ratio < 0.9) return { pct, tone: 'info', label: `${pct}% of plan · under` };
-  return { pct, tone: 'success', label: `${pct}% of plan` };
+  const share = formatPercent(pct);
+  if (ratio > 1.1) return { pct, tone: 'warning', label: `${share} of plan · over` };
+  if (ratio < 0.9) return { pct, tone: 'info', label: `${share} of plan · under` };
+  return { pct, tone: 'success', label: `${share} of plan` };
 }
 
 type OptimizerOverviewProps = {
@@ -183,6 +184,13 @@ export function OptimizerOverview({
       guards: applyApprovals(read.guards, { ...maps, defaults }),
     };
   }, [read, approvalMaps.data]);
+
+  // The same read the lead card is built from, resolved per portfolio. Pure — no second fetch,
+  // no hook: the portfolios list shows what today already found rather than asking again.
+  const { leads, emphasised } = useMemo(
+    () => portfolioLeads(shown?.candidates ?? []),
+    [shown?.candidates],
+  );
 
   return (
     <div className="space-y-3">
@@ -425,7 +433,9 @@ export function OptimizerOverview({
           {sorted.map((portfolio) => (
             <PortfolioRowCard
               currency={currency}
+              emphasis={portfolio.id === emphasised}
               key={portfolio.id}
+              lead={leads.get(portfolio.id) ?? null}
               onPrefetch={onPrefetchPortfolio ? () => onPrefetchPortfolio(portfolio.id) : undefined}
               onSelect={() => onSelectPortfolio(portfolio.id)}
               portfolio={portfolio}

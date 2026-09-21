@@ -9,6 +9,8 @@ import {
   impactLabel,
   impactPerDay,
   jainaPromptHref,
+  queueHeadline,
+  queueHeadlineLine,
   queueSummary,
   settingsPatchOf,
   triggerWords,
@@ -53,9 +55,78 @@ describe('evidenceLine', () => {
 describe('impact', () => {
   it('reads the daily money and labels it, and is 0 / null when unknown', () => {
     expect(impactPerDay({ evidence: evidence() })).toBe(100);
-    expect(impactLabel({ evidence: evidence() }, 'USD')).toBe('$100/day at stake');
+    // Day AND month — the same pair the account cards print, from the same helper.
+    expect(impactLabel({ evidence: evidence() }, 'USD')).toBe('$100/day · $3,000/mo at stake');
     expect(impactPerDay({ evidence: null })).toBe(0);
     expect(impactLabel({ evidence: evidence({ estImpactPerDay: null }) }, 'USD')).toBeNull();
+  });
+});
+
+// The queue and the account cards are two views of the same findings. A row that carries the
+// engine's headline leads with it; one that does not falls back to its money, exactly as an
+// account candidate with no headline does.
+describe('the headline a queue row leads with', () => {
+  const headline = {
+    kind: 'efficiency',
+    value: 33,
+    unit: 'percent',
+    label: 'cheaper per result',
+    from: 90,
+    to: 60,
+  };
+
+  it('surfaces a headline the engine wrote onto the row', () => {
+    expect(queueHeadline({ evidence: evidence({ headline }) })).toEqual({
+      kind: 'efficiency',
+      value: 33,
+      unit: 'percent',
+      label: 'cheaper per result',
+      from: 90,
+      to: 60,
+    });
+    expect(queueHeadlineLine({ evidence: evidence({ headline }) }, 'USD')).toBe(
+      '33% cheaper per result',
+    );
+  });
+
+  it('prints money per day in the account currency, never multiplied', () => {
+    expect(
+      queueHeadlineLine(
+        {
+          evidence: evidence({
+            headline: {
+              kind: 'avoided',
+              value: 96,
+              unit: 'currency_per_day',
+              label: 'a day buying nothing',
+              from: null,
+              to: null,
+            },
+          }),
+        },
+        'USD',
+      ),
+    ).toBe('$96 a day buying nothing');
+  });
+
+  it('reads a malformed headline as no headline, rather than printing a figure nobody computed', () => {
+    // A label longer than the 32 characters the schema allows, and a value that is not a number.
+    expect(
+      queueHeadline({ evidence: evidence({ headline: { kind: 'efficiency', value: 'lots' } }) }),
+    ).toBeNull();
+    expect(
+      queueHeadline({
+        evidence: evidence({
+          headline: { ...headline, label: 'a label far longer than the thirty-two allowed' },
+        }),
+      }),
+    ).toBeNull();
+  });
+
+  it('is null on every row written before the engine carried one', () => {
+    expect(queueHeadline({ evidence: evidence() })).toBeNull();
+    expect(queueHeadline({ evidence: null })).toBeNull();
+    expect(queueHeadlineLine({ evidence: evidence() }, 'USD')).toBeNull();
   });
 });
 
@@ -119,6 +190,8 @@ describe('settings patch', () => {
   });
   it('formats a percentage knob and a money knob', () => {
     expect(formatSettingsValue('max_change_pct_per_cycle', 0.3, 'USD')).toBe('30%');
+    // The stored field is a fraction; the formatter it goes through never multiplies twice.
+    expect(formatSettingsValue('max_change_pct_per_cycle', 1, 'USD')).toBe('100%');
     expect(formatSettingsValue('daily_total', 340, 'USD')).toBe('$340');
     expect(formatSettingsValue('daily_total', null, 'USD')).toBe('not set');
   });

@@ -102,14 +102,121 @@ describe('AccountLeadCard — a lead was found', () => {
     expect(getByTestId('account-lead-foot').textContent).toContain('dead_tail');
   });
 
-  it('states what it is worth per day, and what one result is called', () => {
+  // ── The headline vocabulary ───────────────────────────────────────────────
+  // Money per day is the ranking scale, not the finding. The card leads with what the
+  // detector actually found and drops the money to the line every card shares.
+
+  it('leads with the detector’s own figure, not with the money it is priced at', () => {
+    const { getByTestId } = render(
+      <AccountLeadCard
+        candidates={[
+          candidate({
+            id: 'portfolio_reallocation:p1>p2',
+            detector: 'portfolio_reallocation',
+            impact_class: 'better_price',
+            headline: {
+              kind: 'efficiency',
+              value: 33,
+              unit: 'percent',
+              label: 'cheaper per result',
+              from: 90,
+              to: 60,
+            },
+          }),
+        ]}
+        currency="USD"
+        dailySpend={1200}
+      />,
+    );
+    const figure = getByTestId('account-lead-figure').textContent ?? '';
+    expect(figure).toContain('33%');
+    expect(figure).toContain('cheaper per result');
+    // The percentage is printed as it arrived. A renderer that multiplies is one that will
+    // one day be handed a figure that was multiplied already.
+    expect(figure).not.toContain('3300');
+    expect(figure).not.toContain('$102');
+  });
+
+  it('keeps the money as the support line every card shares — day AND month', () => {
+    const { getByTestId } = render(
+      <AccountLeadCard
+        candidates={[
+          candidate({
+            headline: {
+              kind: 'avoided',
+              value: 102,
+              unit: 'currency_per_day',
+              label: 'a day buying nothing',
+              from: null,
+              to: null,
+            },
+          }),
+        ]}
+        currency="USD"
+        dailySpend={1200}
+      />,
+    );
+    const money = getByTestId('account-lead-money').textContent ?? '';
+    expect(money).toContain('$102/day');
+    // 102 × 30, the same thirty days the budget wizard normalises against.
+    expect(money).toContain('$3,060/mo');
+    expect(money).toContain('purchases');
+  });
+
+  it('draws the two sides only when the detector declared both of them', () => {
+    const { getByTestId, queryByTestId, rerender } = render(
+      <AccountLeadCard
+        candidates={[
+          candidate({
+            headline: {
+              kind: 'efficiency',
+              value: 33,
+              unit: 'percent',
+              label: 'cheaper per result',
+              from: 90,
+              to: 60,
+            },
+          }),
+        ]}
+        currency="USD"
+        dailySpend={1200}
+      />,
+    );
+    expect(getByTestId('account-lead-sides').textContent).toContain('90% → 60%');
+
+    rerender(
+      <AccountLeadCard
+        candidates={[
+          candidate({
+            headline: {
+              kind: 'share',
+              value: 92,
+              unit: 'percent',
+              label: 'of spend on one platform',
+              from: null,
+              to: null,
+            },
+          }),
+        ]}
+        currency="USD"
+        dailySpend={1200}
+      />,
+    );
+    expect(queryByTestId('account-lead-sides')).toBeNull();
+  });
+
+  it('still reads as finished when a detector holds no headline — money leads, month follows', () => {
     const { getByTestId } = render(
       <AccountLeadCard candidates={[candidate({})]} currency="USD" dailySpend={1200} />,
     );
     const figure = getByTestId('account-lead-figure').textContent ?? '';
-    expect(figure).toContain('102');
+    expect(figure).toContain('$102');
     expect(figure).toContain('/day');
-    expect(figure).toContain('purchases');
+    // The support line carries the month alone: repeating the day would be the same money twice.
+    const money = getByTestId('account-lead-money').textContent ?? '';
+    expect(money).toContain('$3,060/mo');
+    expect(money).not.toContain('/day');
+    expect(money).toContain('purchases');
   });
 
   it('says what that figure BUYS — the kind of money, and the rung it sits on', () => {
