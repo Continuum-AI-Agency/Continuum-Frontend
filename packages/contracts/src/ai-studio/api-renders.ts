@@ -213,7 +213,17 @@ export const apiRenderTemplateSummarySchema = z
       .object({
         slots: z.number().int().nonnegative(),
         matched: z.number().int().nonnegative(),
+        /** Parsed slots that met no variable. */
         unmatched: z.array(z.string()).default([]),
+        /**
+         * Public variables that met no slot — the OTHER direction, and the one that was missing.
+         *
+         * Counting only slots reads a perfect 7/7 while variables arrive naked, which is exactly
+         * the silence this field was added to break: `color_porcentaje`, `key_color` and the
+         * duplicate spellings `ref_descripcion` / `ref_sizes` render as fields with no role, no
+         * budget and no sample, and nothing noticed because the join was measured one way.
+         */
+        unmatchedVariables: z.array(z.string()).default([]),
       })
       .strict()
       .nullable()
