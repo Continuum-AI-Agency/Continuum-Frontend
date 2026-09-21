@@ -7,8 +7,8 @@
 // send messages to strangers on the account owner's behalf, so the state of
 // each rule and the way to stop all of them are the two things that read first.
 
-import type { CommentTriggerRule } from '@continuum/contracts';
-import { MessageSquare, Plus, Power } from 'lucide-react';
+import type { CommentTriggerRule, TrackedLinkStats } from '@continuum/contracts';
+import { MessageSquare, MousePointerClick, Plus, Power } from 'lucide-react';
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -53,13 +53,28 @@ function windowLabel(rule: CommentTriggerRule): string | null {
   return `Until ${formatDay(rule.activeUntil as string)}`;
 }
 
+/**
+ * Clicks for this rule's link, or null when there is nothing to say.
+ *
+ * Null is NOT zero. A rule with no link has no number to show, and a link whose
+ * stats have not arrived has an unknown one — printing "0 clicks" for either
+ * would be inventing a measurement. Zero only appears when the server actually
+ * counted zero.
+ */
+function clicksFor(rule: CommentTriggerRule, stats: Map<string, TrackedLinkStats>): number | null {
+  if (rule.trackedLinkId === null) return null;
+  return stats.get(rule.trackedLinkId)?.clicks ?? null;
+}
+
 function RuleRow({
   rule,
   now,
+  clicks,
   onEdit,
 }: {
   rule: CommentTriggerRule;
   now: Date;
+  clicks: number | null;
   onEdit: (rule: CommentTriggerRule) => void;
 }) {
   const state = ruleState(rule, now);
@@ -93,13 +108,32 @@ function RuleRow({
         </span>
         {window ? <span className="text-xs text-muted-foreground">· {window}</span> : null}
       </div>
-      <p className="line-clamp-1 text-xs text-muted-foreground">{rule.replyMessage}</p>
+      <div className="flex items-center gap-2.5">
+        {/* Not pinned right: a figure parked at the far edge of a wide row reads
+            as unrelated to the line it belongs to, and leaves a gap that makes
+            the row look empty. It sits next to what it is about. */}
+        <p className="line-clamp-1 min-w-0 text-xs text-muted-foreground">{rule.replyMessage}</p>
+        {clicks === null ? null : (
+          <span
+            className="flex shrink-0 items-center gap-1 text-sm font-medium tabular-nums text-foreground"
+            title={
+              clicks === 0
+                ? 'Nobody has opened this link yet'
+                : `${clicks} ${clicks === 1 ? 'person has' : 'people have'} opened this link`
+            }
+          >
+            <MousePointerClick className="h-3.5 w-3.5 text-muted-foreground" />
+            {clicks}
+          </span>
+        )}
+      </div>
     </button>
   );
 }
 
 export function CommentRulesList({
   rules,
+  linkStats = [],
   isLoading,
   onCreate,
   onEdit,
@@ -108,6 +142,7 @@ export function CommentRulesList({
   now = new Date(),
 }: {
   rules: CommentTriggerRule[];
+  linkStats?: TrackedLinkStats[];
   isLoading: boolean;
   onCreate: () => void;
   onEdit: (rule: CommentTriggerRule) => void;
@@ -116,6 +151,16 @@ export function CommentRulesList({
   now?: Date;
 }) {
   const liveCount = rules.filter((rule) => ruleState(rule, now) === 'live').length;
+  const statsByLink = React.useMemo(
+    () => new Map(linkStats.map((entry) => [entry.linkId, entry])),
+    [linkStats],
+  );
+  // Summed over the links we actually have a count for, so the headline never
+  // claims a total that silently omits a link whose stats failed to load.
+  const totalClicks = React.useMemo(
+    () => linkStats.reduce((sum, entry) => sum + entry.clicks, 0),
+    [linkStats],
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -125,6 +170,12 @@ export function CommentRulesList({
           {liveCount > 0 ? (
             <span className="text-xs text-muted-foreground">
               {liveCount} sending automatically
+            </span>
+          ) : null}
+          {linkStats.length > 0 ? (
+            <span className="flex items-center gap-1 text-sm font-medium tabular-nums text-foreground">
+              <MousePointerClick className="h-3.5 w-3.5 text-muted-foreground" />
+              {totalClicks} {totalClicks === 1 ? 'click' : 'clicks'}
             </span>
           ) : null}
         </div>
@@ -165,7 +216,15 @@ export function CommentRulesList({
             </Button>
           </div>
         ) : (
-          rules.map((rule) => <RuleRow key={rule.id} rule={rule} now={now} onEdit={onEdit} />)
+          rules.map((rule) => (
+            <RuleRow
+              key={rule.id}
+              rule={rule}
+              now={now}
+              clicks={clicksFor(rule, statsByLink)}
+              onEdit={onEdit}
+            />
+          ))
         )}
       </div>
     </div>

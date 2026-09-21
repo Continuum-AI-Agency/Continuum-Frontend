@@ -9,6 +9,7 @@
 import type { CommentTriggerRule } from '@continuum/contracts';
 import React from 'react';
 import { CommentRuleForm } from './CommentRuleForm';
+import { getApiBaseUrl } from '@/lib/api/config';
 import { CommentRulesList } from './CommentRulesList';
 import { type RuleFormValues, emptyRuleForm, formToRule, ruleToForm } from './ruleFormSchema';
 import {
@@ -29,6 +30,18 @@ export function CommentRulesWorkspace({ brandId }: { brandId: string | null }) {
 
   const [editing, setEditing] = React.useState<Editing>({ kind: 'none' });
   const rules = data?.rules ?? [];
+  const linkStats = data?.linkStats ?? [];
+
+  // The address the rule being edited actually hands out. Assembled here rather
+  // than sent by the server: the code is what identifies the link, and the host
+  // it is served from is a property of the environment the browser is in.
+  const editedLinkUrl = React.useMemo(() => {
+    if (editing.kind !== 'existing') return null;
+    const linkId = editing.rule.trackedLinkId;
+    if (linkId === null) return null;
+    const code = linkStats.find((entry) => entry.linkId === linkId)?.code;
+    return code === undefined ? null : `${getApiBaseUrl()}/r/${code}`;
+  }, [editing, linkStats]);
 
   // A new object every render would reset the form on every keystroke, so the
   // defaults are memoised on what actually identifies the edit.
@@ -72,6 +85,7 @@ export function CommentRulesWorkspace({ brandId }: { brandId: string | null }) {
         ) : null}
         <CommentRulesList
           rules={rules}
+          linkStats={linkStats}
           isLoading={isLoading}
           onCreate={() => setEditing({ kind: 'new' })}
           onEdit={(rule) => setEditing({ kind: 'existing', rule })}
@@ -92,6 +106,7 @@ export function CommentRulesWorkspace({ brandId }: { brandId: string | null }) {
             onCancel={() => setEditing({ kind: 'none' })}
             onDelete={editing.kind === 'existing' ? handleDelete : undefined}
             isSaving={save.isPending || remove.isPending}
+            trackedLinkUrl={editedLinkUrl}
           />
         ) : (
           <p className="px-4 py-8 text-center text-xs text-muted-foreground">

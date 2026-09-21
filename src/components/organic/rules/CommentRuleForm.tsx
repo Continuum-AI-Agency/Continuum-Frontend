@@ -12,7 +12,7 @@ import {
   MAX_PUBLIC_REPLY_VARIATIONS,
   MAX_REPLY_MESSAGE_LENGTH,
 } from '@continuum/contracts';
-import { Plus, X } from 'lucide-react';
+import { Check, Copy, Plus, X } from 'lucide-react';
 import React from 'react';
 import { type Control, useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
@@ -165,6 +165,53 @@ function PublicRepliesField({ control }: { control: Control<RuleFormValues> }) {
   );
 }
 
+/**
+ * The address that actually goes out, and the way to get it out of the screen.
+ *
+ * The field above holds the DESTINATION — where a person ends up. What the
+ * message carries is this shortened address, and it is the only one whose
+ * clicks are counted. Without showing it, the link exists and works and is
+ * invisible: nobody can put it in a story or a bio, and nobody can check it.
+ *
+ * It appears only for a saved rule, because the link is minted when the rule is
+ * saved. On a rule being written for the first time there is nothing to show.
+ */
+function TrackedLinkRow({ url }: { url: string }) {
+  const [copied, setCopied] = React.useState(false);
+
+  const copy = React.useCallback(() => {
+    // Absent in an insecure context and refusable by permission, and a failed
+    // copy must not throw into a form the person is still filling in.
+    void navigator.clipboard
+      ?.writeText(url)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => setCopied(false));
+  }, [url]);
+
+  return (
+    <div className="rounded-md border bg-muted/40 px-2.5 py-2">
+      <p className="text-2xs text-muted-foreground">The link your message sends</p>
+      <div className="mt-1 flex items-center gap-2">
+        <code className="min-w-0 flex-1 truncate font-mono text-2xs">{url}</code>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={copy}
+          className="h-6 shrink-0 gap-1 px-1.5 text-2xs"
+          aria-label="Copy the link"
+        >
+          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function CommentRuleForm({
   defaultValues,
   isEditing,
@@ -172,6 +219,7 @@ export function CommentRuleForm({
   onCancel,
   onDelete,
   isSaving,
+  trackedLinkUrl = null,
 }: {
   defaultValues: RuleFormValues;
   isEditing: boolean;
@@ -179,6 +227,8 @@ export function CommentRuleForm({
   onCancel: () => void;
   onDelete?: () => void;
   isSaving: boolean;
+  /** The shortened address this rule hands out. Null until the rule has been saved once. */
+  trackedLinkUrl?: string | null;
 }) {
   const form = useForm<RuleFormValues>({
     resolver: zodResolver(ruleFormSchema),
@@ -337,6 +387,8 @@ export function CommentRuleForm({
               </FormItem>
             )}
           />
+
+          {trackedLinkUrl !== null && hasLink ? <TrackedLinkRow url={trackedLinkUrl} /> : null}
 
           {hasLink ? (
           <FormField

@@ -113,3 +113,75 @@ describe('CommentRulesList', () => {
     expect(screen.getByText('on 2 posts')).toBeDefined();
   });
 });
+
+describe('click totals', () => {
+  const LINK = '44444444-4444-4444-8444-444444444444';
+
+  function stats(clicks: number) {
+    return [
+      {
+        linkId: LINK,
+        code: 'aB3xK9mQ2pLn',
+        clicks,
+        firstClickAt: '2026-09-10T00:00:00.000Z',
+        lastClickAt: '2026-09-14T00:00:00.000Z',
+      },
+    ];
+  }
+
+  it('shows the click count on a rule that hands out a link', () => {
+    renderList({
+      rules: [rule({ trackedLinkId: LINK, destinationUrl: 'https://example.com' })],
+      linkStats: stats(62),
+    });
+    expect(screen.getAllByText('62').length).toBeGreaterThan(0);
+  });
+
+  it('shows a counted zero, because nobody clicking is a real answer', () => {
+    renderList({
+      rules: [rule({ trackedLinkId: LINK, destinationUrl: 'https://example.com' })],
+      linkStats: stats(0),
+    });
+    expect(screen.getByTitle('Nobody has opened this link yet')).toBeDefined();
+  });
+
+  it('says nothing for a rule with no link, rather than inventing a zero', () => {
+    renderList({ rules: [rule({ trackedLinkId: null })], linkStats: stats(62) });
+    expect(screen.queryByText('62')).toBeNull();
+  });
+
+  it('says nothing when the stats for a link never arrived', () => {
+    // The rule has a link, but no entry came back for it. Unknown is not zero.
+    renderList({
+      rules: [rule({ trackedLinkId: LINK, destinationUrl: 'https://example.com' })],
+      linkStats: [],
+    });
+    expect(screen.queryByTitle('Nobody has opened this link yet')).toBeNull();
+    expect(screen.queryByText('0')).toBeNull();
+  });
+
+  it('heads the list with the total across every link it has a count for', () => {
+    renderList({
+      rules: [rule({ trackedLinkId: LINK, destinationUrl: 'https://example.com' })],
+      linkStats: [
+        ...stats(62),
+        {
+          linkId: '55555555-5555-4555-8555-555555555555',
+          code: 'zZ9yX8wV7uT6',
+          clicks: 3,
+          firstClickAt: null,
+          lastClickAt: null,
+        },
+      ],
+    });
+    expect(screen.getByText('65 clicks')).toBeDefined();
+  });
+
+  it('writes one click in the singular', () => {
+    renderList({
+      rules: [rule({ trackedLinkId: LINK, destinationUrl: 'https://example.com' })],
+      linkStats: stats(1),
+    });
+    expect(screen.getByText('1 click')).toBeDefined();
+  });
+});
