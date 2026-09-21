@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { hexColorSchema } from './_shared';
 import {
+  BRAND_BIBLE_SECTIONS,
   type BrandDna,
   brandDnaBannedWords,
   renderBrandBibleMarkdown,
@@ -145,6 +146,53 @@ export const brandMdSaveRequestSchema = z
     }
   });
 export type BrandMdSaveRequest = z.infer<typeof brandMdSaveRequestSchema>;
+
+// What the Brand Brain writes ONLY as prose in the body: whole sections (positioning,
+// pillars, promise) and three `Prefix: a; b` lines of the Voice section, read back with the
+// registry's own headings and the prefixes its Voice renderer writes. Null = not in the body.
+export type BrandMdBodyFacts = {
+  sections: Record<'positioning' | 'brand_pillars' | 'promise', string[] | null>;
+  dos: string[] | null;
+  donts: string[] | null;
+  avoid_themes: string[] | null;
+};
+
+/**
+ * The Brand Brain's prose facts, read out of a brand.md body. Null when the body carries
+ * none of the Brand Book's headings — it is the user's own prose then, not a Brand Book.
+ */
+export function readBrandMdBody(body: string): BrandMdBodyFacts | null {
+  const lines = body.split('\n').map((line) => line.trimEnd());
+  if (!BRAND_BIBLE_SECTIONS.some((section) => lines.includes(section.title))) return null;
+  const section = (id: string): string[] | null => {
+    const title = BRAND_BIBLE_SECTIONS.find((candidate) => candidate.id === id)?.title;
+    const start = title ? lines.indexOf(title) : -1;
+    if (start === -1) return null;
+    const end = lines.findIndex((line, index) => index > start && line.startsWith('## '));
+    return lines
+      .slice(start + 1, end === -1 ? undefined : end)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  };
+  const voice = section('voice') ?? [];
+  const list = (prefix: string) =>
+    voice
+      .find((line) => line.startsWith(prefix))
+      ?.slice(prefix.length)
+      .split(';')
+      .map((item) => item.trim())
+      .filter(Boolean) ?? null;
+  return {
+    sections: {
+      positioning: section('positioning'),
+      brand_pillars: section('brand_pillars'),
+      promise: section('promise'),
+    },
+    dos: list('Do: '),
+    donts: list("Don't: "),
+    avoid_themes: list('Avoid themes: '),
+  };
+}
 
 function omitEmpty<T extends Record<string, unknown>>(obj: T): Partial<T> {
   const out: Record<string, unknown> = {};

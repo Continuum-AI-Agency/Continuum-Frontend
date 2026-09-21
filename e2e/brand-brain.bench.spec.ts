@@ -38,9 +38,6 @@ import { type LocalBackend, startLocalBackend } from './support/localBackend';
 //     covers the same save → getBrandDna → prompt chain against the hosted bench brand.
 //   · A real model writing a caption. The prompt block is composed exactly as a run composes
 //     it; no caption is generated.
-//   · "Themes to avoid" reaching the caption block. It is saved into brand.md (asserted),
-//     but getBrandDna only overlays front-matter tokens, so the caption block does not carry
-//     avoid themes from an edit. Named here so a green run is not read as covering it.
 
 const BENCH = 'brand:brain:fe:e2e:bench';
 const LOCAL_OWNER_EMAIL = 'local@continuum.test';
@@ -162,7 +159,6 @@ const graded: { step: string; grade: 'PASS' | 'FAIL' | 'SKIP'; detail?: string }
 const notes: string[] = [
   'Local stack: the fixture brand lives in local Postgres; the hosted hop is covered by brand:single-source:e2e:bench, not here.',
   'No caption is generated: the graded artifact is the brand block buildCopyVoiceGrounding composes for the next caption run.',
-  '"Themes to avoid" is saved into brand.md but does not reach the caption block — getBrandDna overlays front-matter tokens only.',
 ];
 const benchStartedAt = new Date().toISOString();
 const benchStartedMs = Date.now();
@@ -240,6 +236,12 @@ async function captionBlock(): Promise<string> {
     }
   }
   throw lastError;
+}
+
+// The block's `Avoid themes:` line — the Brand Brain's "Themes to avoid", `;`-separated.
+async function avoidThemesLine(): Promise<string> {
+  const block = await captionBlock();
+  return block.split('\n').find((candidate) => candidate.startsWith('Avoid themes: ')) ?? '';
 }
 
 // The banned-word list on the block's `Never use:` clause — the last clause of the voice line.
@@ -571,6 +573,11 @@ test.describe('Brand Brain', () => {
       expect(words).toContain(GENERATED_WORD);
       return GENERATED_WORD;
     });
+    await step('caption block Avoid themes: carries the new theme', async () => {
+      const line = await avoidThemesLine();
+      expect(line).toContain(NEW_THEME);
+      return line;
+    });
   });
 
   test('a reload shows the saved word back from the rebuilt book', async () => {
@@ -603,6 +610,11 @@ test.describe('Brand Brain', () => {
       expect(words).not.toContain(NEW_WORD);
       expect(words).toContain(GENERATED_WORD);
       return `Never use: ${words.join(', ')}`;
+    });
+    await step('caption block no longer carries the theme', async () => {
+      const line = await avoidThemesLine();
+      expect(line).not.toContain(NEW_THEME);
+      return line || 'no Avoid themes line';
     });
   });
 });

@@ -33,6 +33,10 @@ export const brandDnaSchema = z.object({
   audience: targetAudienceSchema.nullable().optional(),
   strategy: brandStrategySchema.nullable().optional(),
   guidelines: brandGuidelinesSchema.nullable().optional(),
+  // The user's own words for a grounding section, keyed by BRAND_BIBLE_SECTIONS id — set
+  // by getBrandDna from an edited brand.md body. A section listed here renders these lines
+  // in place of the report's projection; an empty list is a section the user cleared.
+  authored_sections: z.record(z.string(), z.array(z.string())).optional(),
 });
 export type BrandDna = z.infer<typeof brandDnaSchema>;
 
@@ -441,7 +445,8 @@ export function renderBrandDnaMarkdown(dna: BrandDna): string {
   if (dna.website_url) lines.push(`Website: ${dna.website_url}`);
   for (const section of BRAND_BIBLE_SECTIONS) {
     if (!section.includeInGrounding) continue;
-    pushSection(lines, section.title, section.render({ mode: 'lean', dna }));
+    const authored = dna.authored_sections?.[section.id];
+    pushSection(lines, section.title, authored ?? section.render({ mode: 'lean', dna }));
   }
   return lines.join('\n');
 }
