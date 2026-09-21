@@ -155,7 +155,11 @@ describe('PortfolioHero', () => {
     expect(text).toContain('On pace · day 12 of 30');
     expect(text).toContain('Stop $120/day going to Dead');
     expect(text).toContain('$120/day');
-    expect(text).toContain('Also worth a look');
+    // "Also worth a look" was a trailing sentence of names. The secondary candidates are
+    // now insight cards in the same vocabulary as the lead, so the assertion is on the card.
+    const insights = container.querySelectorAll('[data-testid="portfolio-news-insight"]');
+    expect(insights.length).toBe(1);
+    expect(insights[0]?.textContent).toContain('Creative on Warm');
     fireEvent.click(getByText('Review the pause'));
     expect(clicks).toEqual(['rec:1']);
   });

@@ -186,6 +186,15 @@ export const AdSetSnapshotSchema = z.object({
    *  delivery triggers read these; absent ⇒ they stay silent. */
   delivery: DeliverySignalsSchema.optional(),
   optimization_goal: z.string().optional(),
+  /** Meta's `bid_strategy` for this ad set, verbatim. Metadata, never scored: it is what
+   *  lets a check tell budget the auction refused to spend under a cost cap from budget an
+   *  ad set simply never had. Absent ⇒ the ad set declares none (Meta omits the field under
+   *  a CBO campaign, where the campaign owns it) — which is NOT "it runs the default".
+   *
+   *  It must be declared here or it never survives the boundary: `z.object` strips unknown
+   *  keys, so a snapshot the edge stamps and this schema does not name is silently dropped
+   *  on the way into the cycle. */
+  bid_strategy: z.string().optional(),
   /** Which WindowMetrics field this ad set's events are counted in — resolved at the
    *  ingest boundary from optimization_goal. USED IN SCORING (unlike `angle` below):
    *  it is the currency the ad set declared it was buying. Absent ⇒ the portfolio's.

@@ -511,6 +511,7 @@ export function PortfolioDetailWorkspace({
             explainHref={jainaPromptHref(
               `Explain today's top recommendation for the portfolio "${portfolio.name}" and how it is growing.`,
             )}
+            items={items}
             nextCycleAt={portfolio.next_realloc_at ?? null}
             onCta={onHeroCta}
             portfolioId={portfolio.id}
