@@ -1,15 +1,8 @@
 // House-modified: diverged from the upstream ai-elements component of the same name.
 // Re-running the ai-elements CLI would overwrite this file by filename and lose the changes.
 
-import type { EdgeProps, InternalNode, Node } from '@xyflow/react';
-import {
-  BaseEdge,
-  getBezierPath,
-  getSmoothStepPath,
-  getStraightPath,
-  Position,
-  useInternalNode,
-} from '@xyflow/react';
+import type { EdgeProps } from '@xyflow/react';
+import { BaseEdge, getBezierPath, getSmoothStepPath, getStraightPath } from '@xyflow/react';
 import type { CSSProperties } from 'react';
 import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
 
@@ -53,90 +46,38 @@ const Temporary = ({
   );
 };
 
-const getHandleCoordsByPosition = (node: InternalNode<Node>, handlePosition: Position) => {
-  const handleType = handlePosition === Position.Left ? 'target' : 'source';
-
-  const handle = node.internals.handleBounds?.[handleType]?.find(
-    (h) => h.position === handlePosition,
-  );
-
-  if (!handle) {
-    return [0, 0] as const;
-  }
-
-  let offsetX = handle.width / 2;
-  let offsetY = handle.height / 2;
-
-  switch (handlePosition) {
-    case Position.Left: {
-      offsetX = 0;
-      break;
-    }
-    case Position.Right: {
-      offsetX = handle.width;
-      break;
-    }
-    case Position.Top: {
-      offsetY = 0;
-      break;
-    }
-    case Position.Bottom: {
-      offsetY = handle.height;
-      break;
-    }
-    default: {
-      throw new Error(`Invalid handle position: ${handlePosition}`);
-    }
-  }
-
-  const x = node.internals.positionAbsolute.x + handle.x + offsetX;
-  const y = node.internals.positionAbsolute.y + handle.y + offsetY;
-
-  return [x, y] as const;
-};
-
-const getEdgeParams = (source: InternalNode<Node>, target: InternalNode<Node>) => {
-  const sourcePos = Position.Right;
-  const [sx, sy] = getHandleCoordsByPosition(source, sourcePos);
-  const targetPos = Position.Left;
-  const [tx, ty] = getHandleCoordsByPosition(target, targetPos);
-
-  return {
-    sourcePos,
-    sx,
-    sy,
-    targetPos,
-    tx,
-    ty,
-  };
-};
-
-const Animated = ({ id, source, target, markerEnd, style }: EdgeProps) => {
-  const sourceNode = useInternalNode(source);
-  const targetNode = useInternalNode(target);
+const Animated = ({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  markerEnd,
+  style,
+}: EdgeProps) => {
   const edgeStyle = useCampaignStore((state) => state.edgeStyle);
 
-  if (!(sourceNode && targetNode)) {
-    return null;
-  }
-
-  const { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(sourceNode, targetNode);
-
+  // Use the coordinates React Flow already computed from the actual handles.
+  // A previous version hardcoded Right→Left, which is the Studio convention;
+  // CampaignCanvas handles sit Top/Bottom, so that path collapsed to M0,0 and
+  // the edge was in the graph but invisible.
   const [edgePath] =
     edgeStyle === 'straight'
       ? getStraightPath({
-          sourceX: sx,
-          sourceY: sy,
-          targetX: tx,
-          targetY: ty,
+          sourceX,
+          sourceY,
+          targetX,
+          targetY,
         })
       : getBezierPath({
-          sourcePosition: sourcePos,
-          sourceX: sx,
-          sourceY: sy,
-          targetPosition: targetPos,
-          targetX: tx,
-          targetY: ty,
+          sourcePosition,
+          sourceX,
+          sourceY,
+          targetPosition,
+          targetX,
+          targetY,
         });
 
   return (

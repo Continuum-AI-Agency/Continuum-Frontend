@@ -22,11 +22,16 @@ export type NodeProps = ComponentProps<typeof Card> & {
 export const Node = ({ handles, className, selected, ...props }: NodeProps) => (
   <Card
     data-selected={selected ? 'true' : undefined}
-    className={cn('node-container relative size-full h-auto w-sm gap-0 rounded-md p-0', className)}
+    className={cn(
+      'node-container relative size-full h-auto w-sm gap-0 overflow-visible rounded-md p-0',
+      className,
+    )}
     {...props}
   >
-    {handles.target && <Handle position={Position.Top} type="target" />}
-    {handles.source && <Handle position={Position.Bottom} type="source" />}
+    {handles.target && <Handle className="!h-3.5 !w-3.5" position={Position.Top} type="target" />}
+    {handles.source && (
+      <Handle className="!h-3.5 !w-3.5" position={Position.Bottom} type="source" />
+    )}
     {props.children}
   </Card>
 );

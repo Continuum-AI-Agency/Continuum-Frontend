@@ -172,7 +172,7 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
           handles={{ target: true, source: true }}
           selected={selected}
           className={cn(
-            'hover:shadow-md transition-shadow cursor-pointer',
+            'overflow-visible hover:shadow-md transition-shadow cursor-pointer',
             data.validationStatus === 'error' && 'border-destructive',
           )}
         >

@@ -18,6 +18,117 @@ function createAdSetNode(id: string, position: Position): CampaignCanvasNode {
   };
 }
 
+describe('useCampaignStore.onConnect', () => {
+  beforeEach(() => {
+    useCampaignStore.setState({
+      nodes: [],
+      edges: [],
+      history: [],
+      redoStack: [],
+      edgeStyle: 'curved',
+      hydration: null,
+    });
+  });
+
+  it('connects a campaign to a new ad set', () => {
+    useCampaignStore.setState({
+      nodes: [
+        {
+          id: 'campaign-1',
+          type: 'campaign',
+          position: { x: 0, y: 0 },
+          data: {
+            label: 'Campaign',
+            objective: 'OUTCOME_SALES',
+            buyingType: 'AUCTION',
+            specialAdCategories: [],
+            validationStatus: 'valid',
+          },
+        },
+        {
+          id: 'adset-1',
+          type: 'ad-set',
+          position: { x: 0, y: 200 },
+          data: {
+            label: 'Ad set',
+            optimizationGoal: 'CONVERSIONS',
+            billingEvent: 'IMPRESSIONS',
+            validationStatus: 'valid',
+          },
+        },
+      ],
+    });
+
+    useCampaignStore.getState().onConnect({
+      source: 'campaign-1',
+      target: 'adset-1',
+      sourceHandle: null,
+      targetHandle: null,
+    });
+
+    const state = useCampaignStore.getState();
+    expect(state.edges).toHaveLength(1);
+    expect(state.edges[0]?.source).toBe('campaign-1');
+    expect(state.edges[0]?.target).toBe('adset-1');
+    expect(
+      state.connectionBlockReason({
+        source: 'campaign-1',
+        target: 'adset-1',
+        sourceHandle: null,
+        targetHandle: null,
+      }),
+    ).toBeNull();
+  });
+
+  it('refuses campaign → ad (skips the ad set)', () => {
+    useCampaignStore.setState({
+      nodes: [
+        {
+          id: 'campaign-1',
+          type: 'campaign',
+          position: { x: 0, y: 0 },
+          data: {
+            label: 'Campaign',
+            objective: 'OUTCOME_SALES',
+            buyingType: 'AUCTION',
+            specialAdCategories: [],
+            validationStatus: 'valid',
+          },
+        },
+        {
+          id: 'ad-1',
+          type: 'ad',
+          position: { x: 0, y: 200 },
+          data: {
+            label: 'Ad',
+            adFormat: 'IMAGE',
+            primaryText: 'Primary',
+            headline: 'Headline',
+            callToAction: 'SHOP_NOW',
+            validationStatus: 'valid',
+          },
+        },
+      ],
+    });
+
+    const reason = useCampaignStore.getState().connectionBlockReason({
+      source: 'campaign-1',
+      target: 'ad-1',
+      sourceHandle: null,
+      targetHandle: null,
+    });
+    expect(reason).toMatch(/cannot connect/);
+
+    useCampaignStore.getState().onConnect({
+      source: 'campaign-1',
+      target: 'ad-1',
+      sourceHandle: null,
+      targetHandle: null,
+    });
+    expect(useCampaignStore.getState().edges).toHaveLength(0);
+  });
+});
+
 describe('useCampaignStore.addConnectedNode', () => {
   beforeEach(() => {
     useCampaignStore.setState({

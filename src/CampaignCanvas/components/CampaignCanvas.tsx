@@ -1,8 +1,10 @@
 'use client';
 import {
+  type Connection as FlowConnection,
   MarkerType,
   MiniMap,
   type NodeTypes,
+  type OnConnect,
   type OnConnectEnd,
   type OnConnectStart,
   type OnConnectStartParams,
@@ -117,6 +119,7 @@ export const CampaignCanvas = () => {
     onNodesChange,
     onEdgesChange,
     onConnect,
+    connectionBlockReason,
     addNode,
     removeNode,
     duplicateNode,
@@ -165,6 +168,33 @@ export const CampaignCanvas = () => {
       addNode(type, {}, position);
     },
     [addNode, screenToFlowPosition],
+  );
+
+  const handleConnect = useCallback<OnConnect>(
+    (connection) => {
+      const reason = connectionBlockReason(connection);
+      if (reason) {
+        toast({ title: 'Connection blocked', description: reason });
+        return;
+      }
+      onConnect(connection);
+    },
+    [connectionBlockReason, onConnect, toast],
+  );
+
+  const isValidConnection = useCallback(
+    (connection: FlowConnection | { source: string | null; target: string | null }) => {
+      if (!connection.source || !connection.target) return true;
+      return (
+        connectionBlockReason({
+          source: connection.source,
+          target: connection.target,
+          sourceHandle: 'sourceHandle' in connection ? (connection.sourceHandle ?? null) : null,
+          targetHandle: 'targetHandle' in connection ? (connection.targetHandle ?? null) : null,
+        }) === null
+      );
+    },
+    [connectionBlockReason],
   );
 
   const handleConnectStart = useCallback<OnConnectStart>((_event, params) => {
@@ -221,7 +251,7 @@ export const CampaignCanvas = () => {
       const newNodeId = addNode(nodeTypeToCreate, {}, nodePosition);
 
       if (connectStart.handleType === 'source') {
-        onConnect({
+        handleConnect({
           source: connectStart.nodeId,
           sourceHandle: connectStart.handleId,
           target: newNodeId,
@@ -230,14 +260,14 @@ export const CampaignCanvas = () => {
         return;
       }
 
-      onConnect({
+      handleConnect({
         source: newNodeId,
         sourceHandle: null,
         target: connectStart.nodeId,
         targetHandle: connectStart.handleId,
       });
     },
-    [addNode, edges, nodes, onConnect, screenToFlowPosition, toast],
+    [addNode, edges, handleConnect, nodes, screenToFlowPosition, toast],
   );
 
   const confirmDelete = useCallback(() => {
@@ -336,15 +366,24 @@ export const CampaignCanvas = () => {
   return (
     <div ref={surfaceRef} className="relative h-full w-full">
       <ContextMenu>
-        <ContextMenuTrigger className="h-full w-full block">
+        {/*
+          `contents` so this trigger does not generate a box that sits on top of
+          React Flow. A `block h-full w-full` trigger ate pointer-down, which is
+          why dragging a handle never completed an edge.
+        */}
+        <ContextMenuTrigger className="contents">
           <Canvas
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
+            onConnect={handleConnect}
             onConnectStart={handleConnectStart}
             onConnectEnd={handleConnectEnd}
+            isValidConnection={isValidConnection}
+            nodesConnectable
+            panOnDrag
+            selectionOnDrag={false}
             nodeTypes={nodeTypes as unknown as NodeTypes}
             edgeTypes={edgeTypes}
             defaultEdgeOptions={defaultEdgeOptions}

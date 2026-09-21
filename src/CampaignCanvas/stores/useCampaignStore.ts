@@ -71,6 +71,12 @@ interface CampaignStore {
   onNodesChange: OnNodesChange;
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
+  /**
+   * Why this connection would be refused, or null if it would land.
+   * The canvas toasts this; React Flow uses it to refuse the snap.
+   * Silent `console.warn` was why a blocked edge looked like "can't connect".
+   */
+  connectionBlockReason: (connection: Connection) => string | null;
   addNode: (
     type: CampaignNodeType,
     data: Partial<CampaignCanvasNodeData>,
@@ -239,35 +245,32 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
     );
   },
 
-  onConnect: (connection: Connection) => {
-    const { nodes, edges, pushHistory } = get();
+  connectionBlockReason: (connection: Connection) => {
+    const { nodes, edges } = get();
     const sourceNode = nodes.find((n) => n.id === connection.source);
     const targetNode = nodes.find((n) => n.id === connection.target);
 
     if (sourceNode && targetNode) {
-      const isValid = validateConnection(sourceNode.type, targetNode.type);
-      if (!isValid) {
-        console.warn(`Invalid connection: ${sourceNode.type} -> ${targetNode.type}`);
-        return;
+      if (!validateConnection(sourceNode.type, targetNode.type)) {
+        return `${sourceNode.type} cannot connect to ${targetNode.type}. Campaign → ad set → ad → creative (audience hangs off an ad set).`;
       }
     }
 
-    const singleParentViolation = getSingleParentConnectionViolationMessage(
-      connection,
-      nodes,
-      edges,
-    );
-    if (singleParentViolation) {
-      console.warn(singleParentViolation);
-      return;
-    }
+    return getSingleParentConnectionViolationMessage(connection, nodes, edges);
+  },
 
+  onConnect: (connection: Connection) => {
+    const reason = get().connectionBlockReason(connection);
+    if (reason) return;
+
+    const { nodes, edges, pushHistory } = get();
     pushHistory();
     const nextEdges = addEdge(connection, edges);
     const nextNodes = applyCampaignGraphValidation(nodes, nextEdges);
     set({
       edges: nextEdges,
       nodes: nextNodes,
+      ...(get().hydration ? { isDirty: true } : {}),
     });
   },
 
