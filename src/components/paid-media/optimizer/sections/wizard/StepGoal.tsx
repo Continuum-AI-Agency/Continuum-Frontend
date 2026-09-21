@@ -15,6 +15,7 @@ import { allowedTargetMetrics, getOptimizationMetricDefinition } from '@continuu
 import {
   DownloadIcon,
   EyeIcon,
+  GoalIcon,
   HeartIcon,
   LinkIcon,
   type LucideIcon,
@@ -59,6 +60,9 @@ const OBJECTIVE_ICON: Record<OptimizationObjective, LucideIcon> = {
   post_engagement: HeartIcon,
   awareness: EyeIcon,
   clicks: MousePointerClickIcon,
+  // A conversion only the advertiser can name, so the icon says "a target you defined"
+  // rather than borrowing the glyph of whichever objective it happens to behave like.
+  custom: GoalIcon,
 };
 
 type StepGoalProps = {

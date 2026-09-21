@@ -43,6 +43,10 @@ export const DEFAULT_MODE_BY_OBJECTIVE: Record<OptimizationObjective, Optimizati
   thruplays: 'efficiency',
   post_engagement: 'efficiency',
   clicks: 'efficiency',
+  // A custom conversion inherits `lead`'s shape but is never backtested — there is no
+  // calibration for an event only this advertiser defines — so it belongs with the
+  // uncalibrated set above and gets the same cautious default.
+  custom: 'efficiency',
 };
 
 // Conversion objectives need tracked events to score; with 0 tracked conversions the
@@ -55,4 +59,8 @@ export const CONVERSION_OBJECTIVES = new Set<OptimizationObjective>([
   // A messaging thread is a tracked conversion like any other: with none recorded, the
   // first cycle has nothing to score and the same nudge applies.
   'conversations',
+  // So is an event only this advertiser defines. It is NOT in `OBJECTIVES` yet: the
+  // portfolios check constraint does not admit 'custom' until the catch-up migration is
+  // applied, so offering it in the wizard first would mean a create that fails.
+  'custom',
 ]);
