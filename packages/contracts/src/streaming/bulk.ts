@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { shaderStackV1Schema } from '../ai-studio/shader-stack';
 import { artDirectionSchema } from '../creative/art-direction';
+import { bestTimeSourceSchema } from '../organic/bestTimes';
 import { coerceLegacyHyperframeFormat } from './organic';
 import {
   organicHyperframeAspectRatioSchema,
@@ -107,6 +108,7 @@ export const bulkBestTimeSchema = z
   .object({
     platform: organicPipelinePlatformSchema,
     times: z.array(z.string().regex(/^\d{2}:\d{2}$/)).min(1),
+    source: bestTimeSourceSchema.optional(),
   })
   .strict();
 
@@ -175,6 +177,8 @@ export const bulkPlacementSpecSchema = z
     // Scheduling — populated by the AutoScheduler.
     dayId: z.string().nullable().optional(),
     scheduledAt: z.string().nullable().optional(),
+    // Whether scheduledAt is a slot learned from the brand's own posts or the static default.
+    bestTimeSource: bestTimeSourceSchema.optional(),
     // Multi-shot storyboard (reels). Null/absent for non-reel formats.
     shots: z.array(bulkReelShotSchema).nullable().optional(),
     // HyperFrames composition brief (production method on a reel placement).

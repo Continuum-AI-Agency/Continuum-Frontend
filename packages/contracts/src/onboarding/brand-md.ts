@@ -2,7 +2,12 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { z } from 'zod';
 
 import { hexColorSchema } from './_shared';
-import { type BrandDna, renderBrandBibleMarkdown, toBrandDna } from './brand-dna';
+import {
+  type BrandDna,
+  brandDnaBannedWords,
+  renderBrandBibleMarkdown,
+  toBrandDna,
+} from './brand-dna';
 import type { BrandReportResult } from './brand-report';
 import { emojiUsageSchema } from './brand-voice';
 import type { BrandPalette, BrandTypography } from './website-summary';
@@ -263,17 +268,21 @@ export function extractBrandFontTokens(
   return out;
 }
 
-function extractVoice(dna: BrandDna): z.input<typeof brandVoiceTokenSchema> | null {
+/**
+ * The DNA's voice as a brand.md voice token — the shape every `<brand_book>` renderer takes.
+ * Generation reads voice through this (never through `brand_tokens.voice` on its own), so
+ * the voice line in a prompt and the list `checkBrandVoice` enforces are the same list.
+ */
+export function brandVoiceTokenFromDna(dna: BrandDna): BrandVoiceToken | null {
   const tone = dna.voice?.tone ?? undefined;
   const style = dna.voice?.voice_style ?? undefined;
   const emoji_usage =
     dna.guidelines?.formatting?.emoji_usage ?? dna.voice?.emoji_usage ?? undefined;
   const power_verbs = dna.voice?.power_verbs ?? [];
-  const banned_words =
-    dna.guidelines?.messaging_guardrails?.banned_words ?? dna.voice?.banned_words ?? [];
+  const banned_words = brandDnaBannedWords(dna);
   if (!tone && !style && !emoji_usage && power_verbs.length === 0 && banned_words.length === 0)
     return null;
-  return { tone, style, emoji_usage, power_verbs, banned_words };
+  return brandVoiceTokenSchema.parse({ tone, style, emoji_usage, power_verbs, banned_words });
 }
 
 function extractPersonality(dna: BrandDna): z.input<typeof brandPersonalityTokenSchema> | null {
@@ -308,7 +317,7 @@ export function extractBrandTokens(
     colors: extractBrandColorTokens(dna.palette, kit?.colors ?? []),
     typography: extractBrandFontTokens(dna.typography),
     logo: logoPath ? { storage_path: logoPath, treatment_default: 'palette-only' } : null,
-    voice: extractVoice(dna),
+    voice: brandVoiceTokenFromDna(dna),
     personality: extractPersonality(dna),
     imagery: null,
     audience: extractAudience(dna),

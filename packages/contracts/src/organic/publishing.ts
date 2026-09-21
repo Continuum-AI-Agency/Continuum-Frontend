@@ -107,11 +107,29 @@ export interface CaptionCapability {
   readonly maxHashtags: number;
 }
 
+/**
+ * Which optional per-publish options (`publishOptions` on the publish body) a platform's API
+ * can actually honour. The publisher refuses an unsupported `firstComment` or `thumbnail`
+ * rather than dropping text a person wrote; `aiGeneratedLabel` is a disclosure, sent wherever
+ * the platform has a field for it.
+ */
+export interface PublishOptionCapability {
+  /** An account-authored comment posted right after the post goes live. */
+  readonly firstComment: boolean;
+  /** A chosen video cover by image URL. Video (REEL) posts only. */
+  readonly thumbnailUrl: boolean;
+  /** A chosen video cover by frame offset in ms. Video (REEL) posts only. */
+  readonly thumbnailOffset: boolean;
+  /** A native "AI-generated" label on the post. Video (REEL) posts only. */
+  readonly aiGeneratedLabel: boolean;
+}
+
 export interface PlatformCapability {
   readonly formats: Readonly<Record<PublishFormat, boolean>>;
   readonly carousel: { readonly min: number; readonly max: number };
   readonly mediaTransport: PublishMediaTransport;
   readonly caption: CaptionCapability;
+  readonly publishOptions: PublishOptionCapability;
 }
 
 export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCapability>> = {
@@ -121,6 +139,14 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
     mediaTransport: 'url',
     // Instagram Content Publishing API.
     caption: { maxLength: 2200, maxHashtags: 30 },
+    // POST /{ig-media-id}/comments (needs instagram_manage_comments); reel container
+    // `cover_url` / `thumb_offset`. Instagram has no API field for an AI label.
+    publishOptions: {
+      firstComment: true,
+      thumbnailUrl: true,
+      thumbnailOffset: true,
+      aiGeneratedLabel: false,
+    },
   },
   facebook: {
     formats: { POST: true, REEL: true, CAROUSEL: true },
@@ -128,6 +154,14 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
     mediaTransport: 'url',
     // Facebook's message field is effectively unbounded at the post level (63,206).
     caption: { maxLength: 63206, maxHashtags: 30 },
+    // POST /{post-id}/comments with the Page token. Reel covers are a separate upload
+    // (`/{video-id}/thumbnails`) that is not wired.
+    publishOptions: {
+      firstComment: true,
+      thumbnailUrl: false,
+      thumbnailOffset: false,
+      aiGeneratedLabel: false,
+    },
   },
   linkedin: {
     // REEL maps to a native video post; CAROUSEL maps to a native multiImage post.
@@ -136,6 +170,12 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
     mediaTransport: 'bytes',
     // LinkedIn ugcPost commentary.
     caption: { maxLength: 3000, maxHashtags: 30 },
+    publishOptions: {
+      firstComment: false,
+      thumbnailUrl: false,
+      thumbnailOffset: false,
+      aiGeneratedLabel: false,
+    },
   },
   youtube: {
     // YouTube has no photo or carousel surface at all: a video IS the post. POST and CAROUSEL
@@ -150,6 +190,12 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
     // The video DESCRIPTION. The title is a separate, shorter field the publisher derives —
     // see `youtubePublisher.ts`. YouTube ignores tags past the first 15 in a description.
     caption: { maxLength: 5000, maxHashtags: 15 },
+    publishOptions: {
+      firstComment: false,
+      thumbnailUrl: false,
+      thumbnailOffset: false,
+      aiGeneratedLabel: false,
+    },
   },
   tiktok: {
     // REEL is the native shape (a video). POST is a single-image photo post and CAROUSEL a
@@ -165,6 +211,15 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
     mediaTransport: 'url',
     // TikTok caps the video caption ("title") at 2,200 UTF-16 runes.
     caption: { maxLength: 2200, maxHashtags: 30 },
+    // `/business/video/publish/`: `custom_thumbnail_url`, `post_info.thumbnail_offset` and
+    // `post_info.is_ai_generated`. The photo endpoint has none of the three, and the
+    // Accounts API has no comment-create route.
+    publishOptions: {
+      firstComment: false,
+      thumbnailUrl: true,
+      thumbnailOffset: true,
+      aiGeneratedLabel: true,
+    },
   },
 };
 
@@ -214,11 +269,23 @@ export function toPublishPlatform(value: string | null | undefined): PublishPlat
   return parsed.success ? parsed.data : null;
 }
 
+/**
+ * What became of a requested first comment. The post is already live when the comment is
+ * attempted, so a failure here never fails the publish — it is reported (and recorded as a
+ * `first_comment_failed` publish attempt) instead.
+ */
+export const firstCommentOutcomeSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('posted'), commentId: z.string() }),
+  z.object({ status: z.literal('failed'), error: z.string() }),
+]);
+export type FirstCommentOutcome = z.infer<typeof firstCommentOutcomeSchema>;
+
 export const publishResultSchema = z.object({
   postId: z.string(),
   format: publishFormatSchema,
   platform: publishPlatformSchema,
   accountId: z.string(),
+  firstComment: firstCommentOutcomeSchema.optional(),
 });
 export type PublishResult = z.infer<typeof publishResultSchema>;
 
@@ -302,6 +369,7 @@ export const publishEventSchema = z.discriminatedUnion('type', [
     postId: z.string(),
     format: publishFormatSchema,
     accountId: z.string(),
+    firstComment: firstCommentOutcomeSchema.optional(),
   }),
   z.object({
     type: z.literal('failed'),

@@ -12,8 +12,56 @@
  * so a carousel draft rendered as a carousel in the UI and published as a single image.
  * One mapping, matched loosely, is the fix.
  */
+import { z } from 'zod';
 import { buildPlatformCaption, type HashtagTiers } from '../media/instagram-caption';
-import type { PublishFormat, PublishPlatform } from './publishing';
+import { PLATFORM_CAPABILITIES, type PublishFormat, type PublishPlatform } from './publishing';
+
+/**
+ * Optional per-platform options for one publish. A publish body targets exactly one
+ * platform, so this block IS that platform's options; what each platform can honour is
+ * `PLATFORM_CAPABILITIES[platform].publishOptions`, checked by `unsupportedPublishOptions`.
+ *
+ * `aiGenerated` can only ever ADD the AI label. The publisher sets it on its own, from the
+ * media's provenance, whenever the media came out of a generation pipeline — a caller cannot
+ * switch that off by sending `false`.
+ */
+export const publishOptionsSchema = z
+  .object({
+    /** Posted as the account's own comment right after the post goes live. */
+    firstComment: z.string().trim().min(1).max(2200).optional(),
+    /** The video cover: an image URL, or a frame of the video by offset in ms. */
+    thumbnail: z
+      .union([
+        z.object({ url: z.string().url() }).strict(),
+        z.object({ offsetMs: z.number().int().min(0) }).strict(),
+      ])
+      .optional(),
+    aiGenerated: z.boolean().optional(),
+  })
+  .strict();
+export type PublishOptions = z.infer<typeof publishOptionsSchema>;
+
+/**
+ * The options in `options` that `platform` cannot honour for `format` — empty when all of
+ * them can be. `aiGenerated` is never listed: it is a disclosure, sent where the platform has
+ * a field for it, and asking for it on a platform without one is not an error.
+ */
+export function unsupportedPublishOptions(
+  platform: PublishPlatform,
+  format: PublishFormat,
+  options: PublishOptions | null | undefined,
+): Array<'firstComment' | 'thumbnail'> {
+  const can = PLATFORM_CAPABILITIES[platform].publishOptions;
+  const unsupported: Array<'firstComment' | 'thumbnail'> = [];
+  if (options?.firstComment && !can.firstComment) unsupported.push('firstComment');
+  const thumbnail = options?.thumbnail;
+  if (thumbnail) {
+    const supported =
+      format === 'REEL' && ('url' in thumbnail ? can.thumbnailUrl : can.thumbnailOffset);
+    if (!supported) unsupported.push('thumbnail');
+  }
+  return unsupported;
+}
 
 /** The draft fields the publish body is built from. The planner's richer draft satisfies it. */
 export interface PublishableDraft {
@@ -45,6 +93,7 @@ interface PublishTarget {
   platform?: PublishPlatform;
   accountId?: string;
   brandId?: string;
+  publishOptions?: PublishOptions;
 }
 
 interface PostPublishBody extends PublishTarget {
@@ -165,6 +214,7 @@ export function buildPublishBody(
   platform: PublishPlatform | null,
   accountId: string | null,
   brandId: string | null,
+  publishOptions?: PublishOptions | null,
 ): PublishRequestBody {
   const postType = inferPostType(draft);
   const caption = buildFullCaption(draft, platform ?? undefined) || undefined;
@@ -174,6 +224,7 @@ export function buildPublishBody(
     ...(platform ? { platform } : {}),
     ...(accountId ? { accountId } : {}),
     ...(brandId ? { brandId } : {}),
+    ...(publishOptions ? { publishOptions } : {}),
   };
 
   if (postType === 'REEL') {

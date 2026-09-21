@@ -46,6 +46,19 @@ describe('parseOrganicStreamEvent — bulk frames', () => {
     }
   });
 
+  it('parses a bulk plan card placed on learned best times', () => {
+    const learned = {
+      ...bulkPlan,
+      schedule: {
+        ...bulkPlan.schedule,
+        bestTimes: [{ platform: 'instagram', times: ['15:00', '17:00'], source: 'learned' }],
+      },
+      placements: [{ ...bulkPlan.placements[0], bestTimeSource: 'learned' }],
+    };
+    const parsed = parseOrganicStreamEvent({ type: 'ui.plan_card', data: learned });
+    expect(parsed.kind === 'uiCard' && parsed.card.type).toBe('bulk_plan_card');
+  });
+
   it('still parses a single (non-bulk) ui.plan_card as plan_card', () => {
     const parsed = parseOrganicStreamEvent({
       type: 'ui.plan_card',

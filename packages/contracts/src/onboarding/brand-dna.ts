@@ -44,9 +44,54 @@ function extractLogoUrl(profile: BrandProfile): string | null {
   return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate : null;
 }
 
+// Case-insensitive dedupe, first-seen casing kept.
+function dedupeTerms(terms: readonly string[]): string[] {
+  const seen = new Set<string>();
+  return terms
+    .map((term) => term.trim())
+    .filter((term) => {
+      const key = term.toLowerCase();
+      if (!term || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+// Both banned-word fields share this bound.
+const MAX_BANNED_WORDS = 30;
+
+/**
+ * The brand's ONE banned-word list.
+ *
+ * The report states it twice — `guidelines.messaging_guardrails` and `brand_voice` — and the
+ * two disagree on 20 of the 44 brands with a brand.md. `toBrandDna` unions them into both
+ * fields, and a brand.md edit overwrites both (getBrandDna), so whichever one a reader
+ * reaches it gets the same list — and a word a user removes is gone from every surface.
+ */
+export function brandDnaBannedWords(dna: BrandDna): string[] {
+  return dna.guidelines?.messaging_guardrails.banned_words ?? dna.voice?.banned_words ?? [];
+}
+
+// Write one banned-word list into every field that carries one. A missing voice or
+// guidelines stays missing — the list is never the reason either one exists.
+export function withBannedWords(dna: BrandDna, words: readonly string[]): BrandDna {
+  // ponytail: past 30 the tail is dropped; the widest union in production is 25.
+  const banned = dedupeTerms(words).slice(0, MAX_BANNED_WORDS);
+  return {
+    ...dna,
+    voice: dna.voice ? { ...dna.voice, banned_words: banned } : dna.voice,
+    guidelines: dna.guidelines
+      ? {
+          ...dna.guidelines,
+          messaging_guardrails: { ...dna.guidelines.messaging_guardrails, banned_words: banned },
+        }
+      : dna.guidelines,
+  };
+}
+
 export function toBrandDna(result: BrandReportResult): BrandDna {
   const { brand_profile, structured, understanding } = result;
-  return brandDnaSchema.parse({
+  const dna = brandDnaSchema.parse({
     brand_id: brand_profile.id ?? null,
     brand_name: brand_profile.brand_name,
     website_url: structured.website?.website_url ?? brand_profile.website_url ?? null,
@@ -62,6 +107,10 @@ export function toBrandDna(result: BrandReportResult): BrandDna {
     strategy: structured.strategy ?? null,
     guidelines: structured.guidelines ?? null,
   });
+  return withBannedWords(dna, [
+    ...(dna.guidelines?.messaging_guardrails.banned_words ?? []),
+    ...(dna.voice?.banned_words ?? []),
+  ]);
 }
 
 function pushSection(lines: string[], heading: string, body: string[]): void {
@@ -160,9 +209,13 @@ export const BRAND_BIBLE_SECTIONS: readonly BrandBibleSection[] = [
       const vr = dna.guidelines?.voice_rules;
       if (vr && vr.dos.length > 0) out.push(`Do: ${vr.dos.join('; ')}`);
       if (vr && vr.donts.length > 0) out.push(`Don't: ${vr.donts.join('; ')}`);
-      const banned =
-        dna.guidelines?.messaging_guardrails.banned_words ?? dna.voice?.banned_words ?? [];
+      const banned = brandDnaBannedWords(dna);
       if (banned.length > 0) out.push(`Banned words: ${banned.join(', ')}`);
+      const guardrails = dna.guidelines?.messaging_guardrails;
+      if (guardrails && guardrails.avoid_themes.length > 0)
+        out.push(`Avoid themes: ${guardrails.avoid_themes.join('; ')}`);
+      if (guardrails && guardrails.required_themes.length > 0)
+        out.push(`Required themes: ${guardrails.required_themes.join('; ')}`);
       return out;
     },
   },
