@@ -231,3 +231,62 @@ describe('the host, which is what actually wires the resolver', () => {
     expect(getByTestId('optimizer-cleared').textContent).toContain('From an earlier read');
   });
 });
+
+// Four absences, not one. `resolve` answers null in every non-ready state, and they were all
+// wearing the same sentence — so a citation still LOADING, and one whose RPC refused, both
+// told the reader their figures came from an earlier read. Two of those three were false.
+describe('the three ways a citation can fail to resolve', () => {
+  const card = { read_id: 'read-abc', candidate_ids: ['dead_tail:acct'], size: 'card' as const };
+
+  it('says nothing about the finding while the read is still in flight', () => {
+    const { getByTestId, queryByTestId } = render(
+      <OptimizerCardBlock card={card} currency={null} readDate={null} resolve={() => null} status="loading" />,
+    );
+    expect(getByTestId('optimizer-pending').textContent).toContain('resolving');
+    expect(queryByTestId('optimizer-cleared')).toBeNull();
+  });
+
+  it('says it could not reach the read when the RPC refused', () => {
+    const { getByTestId } = render(
+      <OptimizerCardBlock card={card} currency={null} readDate={null} resolve={() => null} status="unavailable" />,
+    );
+    const note = getByTestId('optimizer-cleared').textContent ?? '';
+    expect(note).toContain('Could not reach');
+    expect(note).not.toContain('earlier read');
+    expect(note).not.toContain('cleared');
+  });
+
+  it('keeps the earlier-read sentence for a read that answered and is simply not the one cited', () => {
+    const { getByTestId } = render(
+      <OptimizerCardBlock card={card} currency={null} readDate={null} resolve={() => null} status="ready" />,
+    );
+    expect(getByTestId('optimizer-cleared').textContent).toContain('From an earlier read');
+  });
+
+  it('keeps "cleared" only when the cited read IS the one served', () => {
+    const { getByTestId } = render(
+      <OptimizerCardBlock
+        card={card}
+        currency={null}
+        readDate="20 Sep"
+        resolve={() => null}
+        servingCitedRead
+        status="ready"
+      />,
+    );
+    expect(getByTestId('optimizer-cleared').textContent).toContain('cleared');
+  });
+});
+
+describe('what the resolver reports in each query state', () => {
+  it('is loading, unavailable and ready — never silently ready', () => {
+    expect(resolutionFrom(null, 'read-abc', 'loading').status).toBe('loading');
+    expect(resolutionFrom(null, 'read-abc', 'unavailable').status).toBe('unavailable');
+    expect(resolutionFrom(storedRead(), 'read-abc', 'ready').status).toBe('ready');
+  });
+
+  it('resolves nothing in a non-ready state even when the read is already in hand', () => {
+    // A cached read from a previous citation must not answer for one that is still loading.
+    expect(resolutionFrom(storedRead(), 'read-abc', 'loading').resolve('dead_tail:acct')).toBeNull();
+  });
+});

@@ -42,7 +42,7 @@ describe('a cited card reaches the transcript', () => {
   it('keeps every citation in the turn, in the order they were emitted', () => {
     const message = uiMessage([
       citationPart(wellFormed),
-      citationPart({ ...wellFormed, candidate_ids: ['budget_drift:acct'], size: 'chip' }),
+      citationPart({ ...wellFormed, candidate_ids: ['audience_overlap:acct'], size: 'chip' }),
     ]);
 
     expect(optimizerCitationsOf(message).map((card) => card.size)).toEqual(['card', 'chip']);
@@ -70,7 +70,7 @@ describe('the digit gate holds at the Frontend boundary too', () => {
     expect(
       optimizerCitationsOf(
         uiMessage([
-          citationPart({ ...wellFormed, size: 'strip', candidate_ids: ['a', 'b', 'c', 'd'] }),
+          citationPart({ ...wellFormed, size: 'strip', candidate_ids: ['dead_tail:1', 'audience_overlap:2', 'new_vs_returning:3', 'decision_window:4'] }),
         ]),
       ),
     ).toEqual([]);
@@ -101,7 +101,7 @@ describe('a malformed citation is passed ON, not swallowed', () => {
   it('keeps a card that names two candidates', () => {
     expect(
       optimizerCitationsOf(
-        uiMessage([citationPart({ ...wellFormed, candidate_ids: ['a:1', 'b:2'] })]),
+        uiMessage([citationPart({ ...wellFormed, candidate_ids: ['dead_tail:1', 'audience_overlap:2'] })]),
       ),
     ).toHaveLength(1);
   });

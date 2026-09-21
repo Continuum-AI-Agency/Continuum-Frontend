@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { JAINA_UI_DATA_PART } from '../streaming/jaina-ui';
+import { accountDetectorSchema } from './account-strategy';
 import {
   CITATION_CLEARED_NOTE,
   citationIsWellFormed,
@@ -36,18 +37,18 @@ describe('a citation carries an id and cannot carry a figure', () => {
 
 describe('a strip means three, and four is not an answer', () => {
   it('accepts one, two or three ids and refuses a fourth', () => {
-    expect(card({ candidate_ids: ['a', 'b', 'c'], size: 'strip' }).candidate_ids).toHaveLength(3);
-    expect(() => card({ candidate_ids: ['a', 'b', 'c', 'd'], size: 'strip' })).toThrow();
+    expect(card({ candidate_ids: ['dead_tail:1', 'audience_overlap:2', 'new_vs_returning:3'], size: 'strip' }).candidate_ids).toHaveLength(3);
+    expect(() => card({ candidate_ids: ['dead_tail:1', 'audience_overlap:2', 'new_vs_returning:3', 'decision_window:4'], size: 'strip' })).toThrow();
     expect(() => card({ candidate_ids: [] })).toThrow();
   });
 
   it('holds each size to its own count', () => {
-    expect(citationIsWellFormed(card({ size: 'strip', candidate_ids: ['a', 'b', 'c'] }))).toBe(
+    expect(citationIsWellFormed(card({ size: 'strip', candidate_ids: ['dead_tail:1', 'audience_overlap:2', 'new_vs_returning:3'] }))).toBe(
       true,
     );
-    expect(citationIsWellFormed(card({ size: 'strip', candidate_ids: ['a'] }))).toBe(false);
+    expect(citationIsWellFormed(card({ size: 'strip', candidate_ids: ['dead_tail:1'] }))).toBe(false);
     expect(citationIsWellFormed(card({ size: 'chip' }))).toBe(true);
-    expect(citationIsWellFormed(card({ size: 'card', candidate_ids: ['a', 'b'] }))).toBe(false);
+    expect(citationIsWellFormed(card({ size: 'card', candidate_ids: ['dead_tail:1', 'audience_overlap:2'] }))).toBe(false);
   });
 
   it('offers exactly three sizes — more than three cards is the account read, not an answer', () => {
@@ -65,5 +66,36 @@ describe('the part is declared where both sides import it from', () => {
     // now looks invented.
     expect(CITATION_CLEARED_NOTE.length).toBeGreaterThan(0);
     expect(CITATION_CLEARED_NOTE).toContain('cleared');
+  });
+});
+
+// `.strict()` keeps a NUMBER out of every field, and then `candidate_ids` was a free string
+// that the renderer splits on ':' and prints. A figure smuggled into the printed half rode
+// the wire intact and rendered on screen under a sentence claiming it came from the stored
+// read — which is the one thing a figure-free payload exists to prevent.
+describe('the half of an id that gets printed', () => {
+  const card = (over: Record<string, unknown>) =>
+    jainaOptimizerCardSchema.parse({ read_id: 'r1', candidate_ids: ['dead_tail:acct'], size: 'card', ...over });
+
+  it('refuses prose where a detector belongs', () => {
+    expect(() => card({ candidate_ids: ['$4,200/day wasted:acct'] })).toThrow();
+    expect(() => card({ candidate_ids: ['CPA is 3.4x target:acct'] })).toThrow();
+  });
+
+  it('refuses an id with no detector at all', () => {
+    expect(() => card({ candidate_ids: ['acct'] })).toThrow();
+    expect(() => card({ candidate_ids: [':acct'] })).toThrow();
+  });
+
+  it('still admits a numeric scope, because a Meta object id is one', () => {
+    expect(card({ candidate_ids: ['dead_tail:120210000000000'] }).candidate_ids[0]).toContain(
+      '120210000000000',
+    );
+  });
+
+  it('admits every detector in the catalogue', () => {
+    for (const detector of accountDetectorSchema.options) {
+      expect(card({ candidate_ids: [`${detector}:acct`] }).candidate_ids).toHaveLength(1);
+    }
   });
 });

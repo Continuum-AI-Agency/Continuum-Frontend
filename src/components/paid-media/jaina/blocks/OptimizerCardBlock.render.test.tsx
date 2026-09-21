@@ -103,17 +103,20 @@ describe('a citation that no longer resolves still renders', () => {
         resolve={resolves(null)}
       />,
     );
-    expect(getByTestId('optimizer-cleared').textContent).toContain('cleared');
+    // No `servingCitedRead`, so this is the read-we-cannot-serve branch, not the cleared one.
+    // The assertion said 'cleared' back when one sentence covered both, and stayed behind
+    // when they were split — passing in neither world after the split, which is how it was found.
+    expect(getByTestId('optimizer-cleared').textContent).toContain('From an earlier read');
     expect(queryByTestId('optimizer-card')).toBeTruthy();
   });
 
   it('keeps the other two when one of a strip has cleared', () => {
     const { getAllByTestId, container } = render(
       <OptimizerCardBlock
-        card={part({ size: 'strip', candidate_ids: ['a:1', 'b:2', 'c:3'] })}
+        card={part({ size: 'strip', candidate_ids: ['dead_tail:1', 'audience_overlap:2', 'new_vs_returning:3'] })}
         currency="USD"
         readDate="20 Sep"
-        resolve={(id) => (id === 'b:2' ? null : candidate({ id }))}
+        resolve={(id) => (id === 'audience_overlap:2' ? null : candidate({ id }))}
       />,
     );
     expect(getAllByTestId('optimizer-cleared')).toHaveLength(1);
@@ -142,7 +145,7 @@ describe('the three sizes', () => {
   it('renders a strip of exactly three', () => {
     const { getByTestId } = render(
       <OptimizerCardBlock
-        card={part({ size: 'strip', candidate_ids: ['a:1', 'b:2', 'c:3'] })}
+        card={part({ size: 'strip', candidate_ids: ['dead_tail:1', 'audience_overlap:2', 'new_vs_returning:3'] })}
         currency="USD"
         readDate="20 Sep"
         resolve={(id) => candidate({ id })}
@@ -157,7 +160,7 @@ describe('the three sizes', () => {
     // A strip carrying one id is a bug upstream. Rendering a one-third strip would hide it.
     const { getByTestId } = render(
       <OptimizerCardBlock
-        card={part({ size: 'strip', candidate_ids: ['a:1'] })}
+        card={part({ size: 'strip', candidate_ids: ['dead_tail:1'] })}
         currency="USD"
         readDate="20 Sep"
         resolve={(id) => candidate({ id })}

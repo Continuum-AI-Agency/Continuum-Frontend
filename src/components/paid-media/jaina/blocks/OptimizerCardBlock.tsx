@@ -26,6 +26,7 @@ import {
   CHART_SHAPE_READING,
   CITATION_CLEARED_NOTE,
   CITATION_NOT_SERVED_NOTE,
+  CITATION_UNREACHABLE_NOTE,
   chartShapeFor,
   citationIsWellFormed,
   IMPACT_CLASS_COPY,
@@ -41,6 +42,8 @@ export type OptimizerCardBlockProps = {
   resolve: (candidateId: string) => AccountCandidate | null;
   /** Whether the read being served is the one cited. Decides WHICH absence is reported. */
   servingCitedRead?: boolean;
+  /** How far the read got. Three absences, three sentences. */
+  status?: 'loading' | 'unavailable' | 'ready';
   currency: string | null;
   /** The day the cited read was taken. Shown on every size — a citation without a date lies. */
   readDate: string | null;
@@ -141,14 +144,29 @@ function Chart({ candidate, currency }: { candidate: AccountCandidate; currency:
 function Cleared({
   candidateId,
   servingCitedRead,
+  status = 'ready',
 }: {
   candidateId: string;
   servingCitedRead?: boolean;
+  status?: 'loading' | 'unavailable' | 'ready';
 }) {
+  // While the read is still in flight nothing is known yet, and the one thing that must NOT
+  // happen is a sentence about the finding. The detector's name holds the space.
+  if (status === 'loading') {
+    return (
+      <p className="text-2xs text-muted-foreground" data-testid="optimizer-pending">
+        <span className="font-mono">{candidateId.split(':')[0]}</span> — resolving…
+      </p>
+    );
+  }
   return (
     <p className="text-2xs text-muted-foreground" data-testid="optimizer-cleared">
       <span className="font-mono">{candidateId.split(':')[0]}</span> —{' '}
-      {servingCitedRead ? CITATION_CLEARED_NOTE : CITATION_NOT_SERVED_NOTE}
+      {status === 'unavailable'
+        ? CITATION_UNREACHABLE_NOTE
+        : servingCitedRead
+          ? CITATION_CLEARED_NOTE
+          : CITATION_NOT_SERVED_NOTE}
     </p>
   );
 }
@@ -157,6 +175,7 @@ export function OptimizerCardBlock({
   card,
   resolve,
   servingCitedRead,
+  status,
   currency,
   readDate,
   onOpenRead,
@@ -175,7 +194,7 @@ export function OptimizerCardBlock({
 
   if (card.size === 'chip') {
     const first = resolved[0];
-    if (!first?.candidate) return <Cleared candidateId={first?.id ?? ''} servingCitedRead={servingCitedRead} />;
+    if (!first?.candidate) return <Cleared candidateId={first?.id ?? ''} servingCitedRead={servingCitedRead} status={status} />;
     return (
       <Chip
         candidate={first.candidate}
@@ -222,7 +241,7 @@ export function OptimizerCardBlock({
                   </div>
                 </>
               ) : (
-                <Cleared candidateId={id} servingCitedRead={servingCitedRead} />
+                <Cleared candidateId={id} servingCitedRead={servingCitedRead} status={status} />
               )}
             </div>
           ))}
@@ -245,7 +264,7 @@ export function OptimizerCardBlock({
         </div>
       ) : (
         <div className="p-4">
-          <Cleared candidateId={only?.id ?? ''} servingCitedRead={servingCitedRead} />
+          <Cleared candidateId={only?.id ?? ''} servingCitedRead={servingCitedRead} status={status} />
         </div>
       )}
       {foot}

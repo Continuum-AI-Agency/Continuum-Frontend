@@ -20,6 +20,8 @@
 
 import { z } from 'zod';
 
+import { accountDetectorSchema } from './account-strategy';
+
 /**
  * How much of the frame a citation takes.
  *
@@ -30,6 +32,20 @@ import { z } from 'zod';
 export const jainaCardSizeSchema = z.enum(['chip', 'card', 'strip']);
 export type JainaCardSize = z.infer<typeof jainaCardSizeSchema>;
 
+/**
+ * The half of a candidate id that gets PRINTED must be a detector we know.
+ *
+ * `.strict()` is a shape gate, not a digit gate: it keeps a number out of every field, and
+ * then `candidate_ids` is a free string that the renderer splits on ':' and shows. So
+ * `['$4,200/day wasted:acct']` rode the wire intact and rendered a figure on screen, under a
+ * sentence claiming it came from the stored read — the one thing the whole figure-free
+ * payload exists to prevent. The scope after the colon may legitimately be numeric (a Meta
+ * object id), so it stays free; the detector may not.
+ */
+function hasKnownDetectorPrefix(id: string): boolean {
+  return accountDetectorSchema.safeParse(id.split(':')[0]).success;
+}
+
 export const jainaOptimizerCardSchema = z
   .object({
     /** The stored read this citation is pinned to. */
@@ -38,7 +54,7 @@ export const jainaOptimizerCardSchema = z
      * '<detector>:<scope>' — the same stable id a cooldown recognises. A strip carries three;
      * never four, and the schema is where that is enforced rather than in a renderer.
      */
-    candidate_ids: z.array(z.string().min(1)).min(1).max(3),
+    candidate_ids: z.array(z.string().min(1).refine(hasKnownDetectorPrefix)).min(1).max(3),
     size: jainaCardSizeSchema,
   })
   .strict();
@@ -64,6 +80,16 @@ export const CITATION_CLEARED_NOTE = 'This one cleared — the figures are from 
  * "this one cleared" there tells the reader the finding was FIXED, which is a claim about
  * the account rather than an absence of data, and it would be wrong nearly every time.
  */
+/**
+ * We could not ask. An RLS denial, a function that is not deployed, a dropped request.
+ *
+ * This is a third thing, and it used to wear the sentence below — so a failure whose reason
+ * the resolver deliberately preserves was reported to the reader as a stale citation, and a
+ * citation still LOADING said the same. Three states, one sentence, two of them false.
+ */
+export const CITATION_UNREACHABLE_NOTE =
+  'Could not reach the read this cites — the figures are not lost, just not on hand right now.';
+
 export const CITATION_NOT_SERVED_NOTE =
   'From an earlier read — only today’s is kept, so its figures are no longer on hand.';
 

@@ -58,6 +58,12 @@ export type CitedReadResolution = {
    * only the latest ready read — and it is NOT the same fact as a finding that cleared.
    */
   servingCitedRead: boolean;
+  /**
+   * How far the read got. `resolve` answers null in all three non-ready states, and they do
+   * NOT mean the same thing to a reader: `loading` is "not yet", `unavailable` is "we could
+   * not ask", and only `ready` licenses a sentence about the finding itself.
+   */
+  status: 'loading' | 'unavailable' | 'ready';
   /** The day the cited read was taken, formatted short. Null when nothing was resolved. */
   readDate: string | null;
   currency: string | null;
@@ -66,6 +72,7 @@ export type CitedReadResolution = {
 const NOTHING_RESOLVES: CitedReadResolution = {
   resolve: () => null,
   servingCitedRead: false,
+  status: 'ready',
   readDate: null,
   currency: null,
 };
@@ -94,7 +101,12 @@ function shortDay(utcDay: string | null): string | null {
  * match resolves NOTHING and claims NO date — every candidate renders "cleared", which is true
  * (these are not the figures it cites) where drawing today's numbers would not be.
  */
-export function resolutionFrom(read: CitedRead | null, readId: string | null): CitedReadResolution {
+export function resolutionFrom(
+  read: CitedRead | null,
+  readId: string | null,
+  status: CitedReadResolution['status'] = 'ready',
+): CitedReadResolution {
+  if (status !== 'ready') return { ...NOTHING_RESOLVES, status };
   if (!read || !readId || read.id !== readId || !read.read) return NOTHING_RESOLVES;
 
   const byId = new Map<string, AccountCandidate>();
@@ -107,6 +119,7 @@ export function resolutionFrom(read: CitedRead | null, readId: string | null): C
     // We reached this line only because `read.id === readId`, so anything unresolved from
     // here really is gone from the read it was cited from.
     servingCitedRead: true,
+    status: 'ready',
     readDate: shortDay(read.utc_day),
     currency: read.read.currency,
   };
@@ -174,7 +187,11 @@ export function useCitedOptimizerRead(
   const brandId = scope?.brandId ?? '';
   const adAccountId = scope?.adAccountId ?? null;
 
-  const { data } = useQuery({
+  // `isPending` and `error` were thrown away here, so a fetch in flight and an RPC that
+  // refused both rendered the "from an earlier read" sentence — telling the reader something
+  // about their account that was not true, twice over, and burying the reason `readThrough`
+  // goes to real trouble to preserve.
+  const { data, isPending, isError } = useQuery({
     queryKey: ['jaina', 'optimizer-cited-read', brandId, adAccountId ?? 'none'],
     queryFn: () => fetchCitedRead(brandId, adAccountId as string),
     enabled: Boolean(brandId && adAccountId && readId),
@@ -182,5 +199,14 @@ export function useCitedOptimizerRead(
     retry: 1,
   });
 
-  return resolutionFrom(data ?? null, readId);
+  const enabled = Boolean(brandId && adAccountId && readId);
+  // A disabled query is `pending` forever and has asked nothing; that is not "loading".
+  const status: CitedReadResolution['status'] = !enabled
+    ? 'ready'
+    : isError
+      ? 'unavailable'
+      : isPending
+        ? 'loading'
+        : 'ready';
+  return resolutionFrom(data ?? null, readId, status);
 }
