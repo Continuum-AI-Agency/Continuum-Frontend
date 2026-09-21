@@ -1,4 +1,11 @@
 import type {
+  AdminAccessRefusal,
+  AdminBrandAccess,
+  AdminProductGrant,
+  PlanCode,
+  ProductCode,
+} from '@continuum/contracts';
+import type {
   AdminAuditLogEntry,
   AdminBrandOption,
   AdminWorkflowLibraryRow,
@@ -184,7 +191,7 @@ export function buildAdminTabParams(currentParams: string, tab: AdminTab): strin
 // Admin audit log ----------------------------------------------------------
 
 // The admin.* action keys the audit writers emit today (impersonate-user,
-// admin-set-admin, admin-access-actions, admin-update-tier,
+// admin-set-admin, admin-access-actions, admin-update-tier, admin-update-access,
 // admin-workflow-library). Drives the audit filter dropdown. A new writer
 // action must be added here to be filterable — keep in sync with the edge
 // functions under supabase/functions/admin-*.
@@ -193,6 +200,8 @@ export const ADMIN_AUDIT_ACTIONS = [
   'admin.user.impersonation_link',
   'admin.member.remove',
   'admin.brand.update_tier',
+  'admin.brand.set_product',
+  'admin.brand.set_contract',
   'admin.workflow.migrate_global_to_brand',
   'admin.workflow.duplicate_to_brand',
   'admin.workflow.promote_to_global',
@@ -273,4 +282,54 @@ export function auditActorLabel(actor: AuditActor): string {
 // destinations, so an absent count reads as zero.
 export function brandsWithWorkflows(brands: AdminBrandOption[]): AdminBrandOption[] {
   return brands.filter((brand) => (brand.workflowCount ?? 0) > 0);
+}
+
+// Brand access grid ----------------------------------------------------------
+
+// The admin grid's columns, in display order, with the names customers see.
+export const ACCESS_PRODUCTS: ReadonlyArray<{ product: ProductCode; label: string }> = [
+  { product: 'studio', label: 'Canvas' },
+  { product: 'organic_agent', label: 'Organic' },
+  { product: 'paid_media', label: 'Performance' },
+  { product: 'trends', label: 'Trends' },
+  { product: 'mcp', label: 'MCP' },
+];
+
+const PLAN_LABELS: Record<PlanCode, string> = {
+  organic_studio: 'Organic Plus',
+  paid_media: 'Performance Plus',
+};
+
+export function productGrant(
+  access: AdminBrandAccess | null,
+  product: ProductCode,
+): AdminProductGrant | null {
+  return access?.products.find((grant) => grant.product === product) ?? null;
+}
+
+// Stripe owns an active Stripe-sourced product: admin-update-access refuses to turn it off
+// (409 stripe_managed), so the grid shows it checked and locked.
+export function isStripeManaged(access: AdminBrandAccess | null, product: ProductCode): boolean {
+  return productGrant(access, product)?.source === 'stripe';
+}
+
+// The read-only billing line under a brand: 'Contract', 'Organic Plus · active', 'No plan'.
+export function describeBillingPlan(access: AdminBrandAccess | null): string {
+  if (access?.billingModel === 'contract') return 'Contract';
+  if (access?.billingModel === 'stripe') {
+    const plans = access.plans.map((plan) => PLAN_LABELS[plan]).join(' + ') || 'Stripe';
+    return `${plans} · ${access.status.replace('_', ' ')}`;
+  }
+  return 'No plan';
+}
+
+const ACCESS_REFUSALS: Record<AdminAccessRefusal['error'], string> = {
+  stripe_managed:
+    'That product is paid for through Stripe. Cancel it in Stripe, or set the brand to Contract first.',
+  billing_not_live: 'Product access activates at billing go-live.',
+};
+
+// readEdgeErrorMessage surfaces the body's `error` code; turn the two refusals into sentences.
+export function describeAccessError(message: string): string {
+  return ACCESS_REFUSALS[message as AdminAccessRefusal['error']] ?? message;
 }

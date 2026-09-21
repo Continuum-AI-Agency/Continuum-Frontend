@@ -21,6 +21,12 @@ import {
   UserCog,
   XCircle,
 } from 'lucide-react';
+import {
+  type AdminAccessUpdateRequest,
+  type AdminBrandAccess,
+  adminAccessUpdateResponseSchema,
+  type ProductCode,
+} from '@continuum/contracts';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { AdminActionConfirmation } from '@/components/admin/AdminActionConfirmation';
@@ -34,6 +40,7 @@ import {
   buildAdminUserListPaginationParams,
   buildAdminUserListSearchParams,
   canBulkTransfer,
+  describeAccessError,
   describeWorkflowNames,
   formatAuditActionLabel,
   formatBrandDisambiguationLabel,
@@ -52,6 +59,7 @@ import type {
   AdminWorkflowTransferResult,
   PermissionRow,
 } from '@/components/admin/adminUserTypes';
+import { BrandAccessEditor } from '@/components/admin/BrandAccessEditor';
 import { BrandTransferCombobox } from '@/components/admin/BrandTransferCombobox';
 import { BrandsTab } from '@/components/admin/tabs/BrandsTab';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -105,6 +113,8 @@ type Props = {
   permissions: PermissionRow[];
   pagination: AdminPagination;
   searchQuery: string;
+  /** billing-cutover: false while billing is not exposed — the Tier control stays in charge. */
+  billingLive?: boolean;
 };
 
 type PendingActions = Record<string, boolean>;
@@ -207,7 +217,13 @@ function formatAuditJson(value: unknown): string | null {
   }
 }
 
-export function AdminUserList({ users, permissions, pagination, searchQuery }: Props) {
+export function AdminUserList({
+  users,
+  permissions,
+  pagination,
+  searchQuery,
+  billingLive = false,
+}: Props) {
   const { show } = useToast();
   const [isNavPending, startNavTransition] = useTransition();
   const supabase = createSupabaseBrowserClient();
@@ -224,6 +240,8 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   const [selectedUserId, setSelectedUserId] = useState(users[0]?.id ?? null);
   const [pendingActions, setPendingActions] = useState<PendingActions>({});
   const [tierOverrides, setTierOverrides] = useState<Record<string, string>>({});
+  // Keyed by brand: several of the selected user's memberships can share one brand.
+  const [accessOverrides, setAccessOverrides] = useState<Record<string, AdminBrandAccess>>({});
   const [impersonationDialog, setImpersonationDialog] = useState<ImpersonationDialogState | null>(
     null,
   );
@@ -279,6 +297,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
 
   useEffect(() => {
     setTierOverrides({});
+    setAccessOverrides({});
   }, [permissions]);
 
   const permissionsByUserId = useMemo(() => groupPermissionsByUserId(permissions), [permissions]);
@@ -553,6 +572,39 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
       show({
         title: 'Failed to update brand tier',
         description: error instanceof Error ? error.message : 'Unable to save brand tier.',
+        variant: 'error',
+      });
+    } finally {
+      setActionPending(actionId, false);
+    }
+  }
+
+  async function handleAccessChange(
+    membership: PermissionRow,
+    change: Pick<AdminAccessUpdateRequest, 'products' | 'contract'>,
+  ) {
+    const brandId = membership.brand_profile_id;
+    const actionId = `access:${brandId}`;
+    setActionPending(actionId, true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-update-access', {
+        method: 'POST',
+        body: { brandId, ...change },
+      });
+      if (error) {
+        throw new Error(
+          describeAccessError(await adminEdgeError(error, 'Unable to save brand access.')),
+        );
+      }
+      const parsed = adminAccessUpdateResponseSchema.safeParse(data);
+      if (!parsed.success) throw new Error('The access update returned an unexpected response.');
+      setAccessOverrides((prev) => ({ ...prev, [brandId]: parsed.data.access }));
+      show({ title: 'Brand access updated', description: parsed.data.note, variant: 'success' });
+      router.refresh();
+    } catch (error) {
+      show({
+        title: 'Failed to update brand access',
+        description: error instanceof Error ? error.message : 'Unable to save brand access.',
         variant: 'error',
       });
     } finally {
@@ -1339,10 +1391,11 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                     <p className="text-sm text-muted-foreground">No memberships for this user.</p>
                   ) : (
                     selectedMemberships.map((membership) => {
-                      const tierValue = String(membership.brand_tier);
+                      const tierValue = String(membership.brand_tier ?? 0);
                       const tierActionId = `tier:${membership.user_id}:${membership.brand_profile_id}`;
                       const currentTier = tierOverrides[tierActionId] ?? tierValue;
                       const removeActionId = `remove:${membership.user_id}:${membership.brand_profile_id}`;
+                      const accessActionId = `access:${membership.brand_profile_id}`;
                       const isOwner = membership.role === 'owner';
 
                       return (
@@ -1359,7 +1412,9 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                                 <Badge variant={roleVariant(membership.role)}>
                                   {membership.role ?? 'unknown'}
                                 </Badge>
-                                <Badge variant="outline">Tier {currentTier}</Badge>
+                                {billingLive ? null : (
+                                  <Badge variant="outline">Tier {currentTier}</Badge>
+                                )}
                                 {isOwner ? (
                                   <Badge variant="outline" className="gap-1">
                                     <Lock className="size-3" />
@@ -1368,29 +1423,48 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                                 ) : null}
                               </div>
                             </div>
-                            <Select
-                              value={currentTier}
-                              onValueChange={(value) => {
-                                if (value === currentTier) return;
-                                void handleTierChange({
-                                  membership,
-                                  nextTier: value,
-                                  previousTier: currentTier,
-                                });
-                              }}
-                              disabled={Boolean(pendingActions[tierActionId])}
-                            >
-                              <SelectTrigger size="sm" className="w-[130px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="0">Tier 0</SelectItem>
-                                <SelectItem value="1">Tier 1</SelectItem>
-                                <SelectItem value="2">Tier 2</SelectItem>
-                                <SelectItem value="3">Tier 3</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            {/* billing-cutover: the Tier control until billing is live. */}
+                            {billingLive ? null : (
+                              <Select
+                                value={currentTier}
+                                onValueChange={(value) => {
+                                  if (value === currentTier) return;
+                                  void handleTierChange({
+                                    membership,
+                                    nextTier: value,
+                                    previousTier: currentTier,
+                                  });
+                                }}
+                                disabled={Boolean(pendingActions[tierActionId])}
+                              >
+                                <SelectTrigger size="sm" className="w-[130px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="0">Tier 0</SelectItem>
+                                  <SelectItem value="1">Tier 1</SelectItem>
+                                  <SelectItem value="2">Tier 2</SelectItem>
+                                  <SelectItem value="3">Tier 3</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
                           </div>
+                          <BrandAccessEditor
+                            brandId={membership.brand_profile_id}
+                            brandName={membership.brand_name ?? 'this brand'}
+                            access={
+                              accessOverrides[membership.brand_profile_id] ??
+                              membership.brand_access
+                            }
+                            live={billingLive}
+                            pending={Boolean(pendingActions[accessActionId])}
+                            onToggleProduct={(product: ProductCode, next: boolean) =>
+                              void handleAccessChange(membership, { products: { [product]: next } })
+                            }
+                            onSetContract={(next) =>
+                              void handleAccessChange(membership, { contract: next })
+                            }
+                          />
                           <div className="mt-3 flex justify-end">
                             {isOwner ? (
                               <Button size="sm" variant="outline" disabled className="gap-2">

@@ -2,7 +2,7 @@
 
 import { Loader2, RefreshCw, Search, Workflow } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { formatDate } from '@/components/admin/adminUserListUtils';
+import { ACCESS_PRODUCTS, formatDate } from '@/components/admin/adminUserListUtils';
 import type { AdminBrandOption } from '@/components/admin/adminUserTypes';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,8 +31,12 @@ type BrandsTabProps = {
 // The whole list is already in memory for the transfer pickers (315 rows), so
 // this filters in place instead of paginating -- searching is instant and costs
 // no round trip. Revisit if the roster ever outgrows a single response.
+const PRODUCT_LABEL = new Map(ACCESS_PRODUCTS.map(({ product, label }) => [product, label]));
+
 export function BrandsTab({ brands, isLoading, onRefresh, onViewWorkflows }: BrandsTabProps) {
   const [query, setQuery] = useState('');
+  // billing-cutover: list_brands sends `access` once billing is live, the tier until then.
+  const billingLive = brands.some((brand) => brand.access);
 
   const visibleBrands = useMemo(
     () =>
@@ -82,7 +86,9 @@ export function BrandsTab({ brands, isLoading, onRefresh, onViewWorkflows }: Bra
               <TableRow>
                 <TableHead>Brand</TableHead>
                 <TableHead>Owner</TableHead>
-                <TableHead className="w-20">Tier</TableHead>
+                <TableHead className={billingLive ? 'w-56' : 'w-20'}>
+                  {billingLive ? 'Access' : 'Tier'}
+                </TableHead>
                 <TableHead className="w-24">Members</TableHead>
                 <TableHead className="w-24">Canvases</TableHead>
                 <TableHead className="w-36">Created</TableHead>
@@ -116,7 +122,25 @@ export function BrandsTab({ brands, isLoading, onRefresh, onViewWorkflows }: Bra
                       {brand.ownerEmail ?? 'No owner'}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary">T{brand.tier}</Badge>
+                      {brand.access ? (
+                        <div className="flex flex-wrap gap-1">
+                          {brand.access.billingModel === 'contract' ? (
+                            <Badge variant="secondary">Contract</Badge>
+                          ) : null}
+                          {brand.access.products.length === 0 ? (
+                            <span className="text-xs text-muted-foreground">None</span>
+                          ) : (
+                            brand.access.products.map((grant) => (
+                              <Badge key={grant.product} variant="outline">
+                                {PRODUCT_LABEL.get(grant.product) ?? grant.product}
+                                {grant.source === 'stripe' ? ' · Stripe' : ''}
+                              </Badge>
+                            ))
+                          )}
+                        </div>
+                      ) : (
+                        <Badge variant="secondary">T{brand.tier ?? 0}</Badge>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm tabular-nums text-primary">
                       {brand.memberCount ?? 0}

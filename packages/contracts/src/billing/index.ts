@@ -291,3 +291,100 @@ export const billingPaymentRequiredSchema = z
   })
   .strict();
 export type BillingPaymentRequired = z.infer<typeof billingPaymentRequiredSchema>;
+
+/* -- Admin access grid: admin-list-users, admin-workflow-library, admin-update-access -- */
+
+/** Mirrors the `billing.brand_products.source` check constraint. */
+export const PRODUCT_SOURCES = [
+  'stripe',
+  'admin',
+  'contract',
+  'trial',
+  'onboarding_pending',
+] as const;
+export const productSourceSchema = z.enum(PRODUCT_SOURCES);
+export type ProductSource = z.infer<typeof productSourceSchema>;
+
+export const adminProductGrantSchema = z
+  .object({ product: productCodeSchema, source: productSourceSchema })
+  .strict();
+export type AdminProductGrant = z.infer<typeof adminProductGrantSchema>;
+
+/** One brand's access as the admin panel shows it: active products and where each came from. */
+export const adminBrandAccessSchema = z
+  .object({
+    billingModel: billingModelSchema,
+    planCode: z.string().min(1),
+    /** Plans on the brand's Stripe subscription (`plan_codes`), shown read-only. */
+    plans: z.array(planCodeSchema),
+    status: brandEntitlementsSchema.shape.status,
+    products: z.array(adminProductGrantSchema),
+  })
+  .strict();
+export type AdminBrandAccess = z.infer<typeof adminBrandAccessSchema>;
+
+export const adminAccessUpdateRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    products: z.partialRecord(productCodeSchema, z.boolean()).optional(),
+    contract: z.boolean().optional(),
+    reason: z.string().trim().max(500).optional(),
+  })
+  .strict()
+  .refine(
+    (body) => body.contract !== undefined || Object.keys(body.products ?? {}).length > 0,
+    'nothing to change: send products and/or contract',
+  );
+export type AdminAccessUpdateRequest = z.infer<typeof adminAccessUpdateRequestSchema>;
+
+const productStateSchema = z.object({ active: z.boolean(), source: productSourceSchema }).strict();
+const contractStateSchema = z
+  .object({ billingModel: z.string(), planCode: z.string(), status: z.string() })
+  .strict();
+
+/** One audited change; `before` is null when no row existed. */
+export const adminAccessChangeSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('contract'),
+      before: contractStateSchema.nullable(),
+      after: contractStateSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('product'),
+      product: productCodeSchema,
+      before: productStateSchema.nullable(),
+      after: productStateSchema,
+    })
+    .strict(),
+]);
+export type AdminAccessChange = z.infer<typeof adminAccessChangeSchema>;
+
+export const adminAccessUpdateResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    brandId: z.string().uuid(),
+    changes: z.array(adminAccessChangeSchema),
+    access: adminBrandAccessSchema,
+    entitlements: brandEntitlementsSchema,
+    note: z.string().optional(),
+  })
+  .strict();
+export type AdminAccessUpdateResponse = z.infer<typeof adminAccessUpdateResponseSchema>;
+
+/**
+ * 409 refusals from admin-update-access. `stripe_managed`: the toggle would overwrite an
+ * active Stripe-sourced product (allowed only on a Contract brand). `billing_not_live`:
+ * PostgREST does not expose `billing` yet (PGRST106) — nothing was written.
+ */
+export const ADMIN_ACCESS_REFUSALS = ['stripe_managed', 'billing_not_live'] as const;
+export const adminAccessRefusalSchema = z
+  .object({
+    error: z.enum(ADMIN_ACCESS_REFUSALS),
+    product: productCodeSchema.optional(),
+    message: z.string(),
+  })
+  .strict();
+export type AdminAccessRefusal = z.infer<typeof adminAccessRefusalSchema>;

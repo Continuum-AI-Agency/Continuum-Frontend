@@ -6,9 +6,11 @@ import type { AdminPagination, AdminUser, PermissionRow } from '@/components/adm
 let searchParamsValue = 'query=a&page=1&pageSize=50';
 const pushMock = mock((_href: string) => {});
 const replaceMock = mock((_href: string, _options?: { scroll?: boolean }) => {});
+const refreshMock = mock(() => {});
 const routerMock = {
   push: pushMock,
   replace: replaceMock,
+  refresh: refreshMock,
 };
 
 mock.module('next/navigation', () => ({
@@ -20,11 +22,15 @@ mock.module('@/components/ui/ToastProvider', () => ({
   useToast: () => ({ show: () => {} }),
 }));
 
+type InvokeReply = { data: unknown; error: unknown };
+const noReply = async (_name: string, _options?: { body?: unknown }): Promise<InvokeReply> => ({
+  data: null,
+  error: null,
+});
+const invokeMock = mock(noReply);
 mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => ({
-    functions: {
-      invoke: async () => ({ data: null, error: null }),
-    },
+    functions: { invoke: invokeMock },
   }),
 }));
 
@@ -229,6 +235,7 @@ describe('AdminUserList search', () => {
         brand_name: 'Starbucks Coffee Company',
         role: 'operator',
         brand_tier: 3,
+        brand_access: null,
       },
       {
         user_id: 'user-1',
@@ -236,6 +243,7 @@ describe('AdminUserList search', () => {
         brand_name: 'Knowledge Navigator 2.0',
         role: 'owner',
         brand_tier: 3,
+        brand_access: null,
       },
     ];
     render(
@@ -252,5 +260,149 @@ describe('AdminUserList search', () => {
     expect(summary).toBeDefined();
     expect(summary?.getAttribute('title')).toContain('Knowledge Navigator 2.0');
     expect(summary?.textContent).toBe(summary?.getAttribute('title'));
+  });
+});
+
+describe('AdminUserList brand access', () => {
+  const BRAND = '6f9619ff-8b86-4011-b42d-00c04fc964ff';
+  const stripeAccess = {
+    billingModel: 'stripe' as const,
+    planCode: 'paid_media',
+    plans: ['paid_media' as const],
+    status: 'active' as const,
+    products: [{ product: 'paid_media' as const, source: 'stripe' as const }],
+  };
+  const membership = (overrides: Partial<PermissionRow>): PermissionRow[] => [
+    {
+      user_id: 'user-1',
+      brand_profile_id: BRAND,
+      brand_name: 'Easy Fit',
+      role: 'owner',
+      brand_tier: null,
+      brand_access: null,
+      ...overrides,
+    },
+  ];
+  const renderList = (permissions: PermissionRow[], billingLive: boolean) =>
+    render(
+      <AdminUserList
+        users={visibleUsers}
+        permissions={permissions}
+        pagination={{ ...pagination, totalCount: 1, totalPages: 1, lastPage: 1 }}
+        searchQuery=""
+        billingLive={billingLive}
+      />,
+    );
+
+  beforeEach(() => {
+    searchParamsValue = 'page=1&pageSize=50';
+    invokeMock.mockClear();
+    invokeMock.mockImplementation(noReply);
+    refreshMock.mockClear();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('billing-cutover: keeps the Tier control and disables the grid until billing is live', async () => {
+    renderList(membership({ brand_tier: 3 }), false);
+    await settleRenderedEffects();
+
+    expect(screen.getAllByText('Tier 3').length).toBeGreaterThan(0);
+    expect(screen.getByText('Product access activates at billing go-live.')).toBeDefined();
+    for (const name of ['Canvas', 'Organic', 'Performance', 'Trends', 'MCP']) {
+      expect(screen.getByRole('checkbox', { name }).getAttribute('aria-disabled')).toBe('true');
+    }
+    expect(screen.getByRole('switch').getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('replaces the Tier control with the product grid once billing is live', async () => {
+    renderList(membership({ brand_access: stripeAccess }), true);
+    await settleRenderedEffects();
+
+    expect(screen.queryByText(/^Tier \d$/)).toBeNull();
+    expect(screen.queryByText('Product access activates at billing go-live.')).toBeNull();
+    expect(screen.getByTestId('brand-billing-plan').textContent).toBe('Performance Plus · active');
+    const performance = screen.getByRole('checkbox', { name: 'Performance' });
+    expect(performance.getAttribute('aria-checked')).toBe('true');
+    expect(performance.getAttribute('aria-disabled')).toBe('true');
+    expect(screen.getByText('Stripe')).toBeDefined();
+    const canvas = screen.getByRole('checkbox', { name: 'Canvas' });
+    expect(canvas.getAttribute('aria-checked')).toBe('false');
+    expect(canvas.getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('sends a product toggle to admin-update-access and shows the saved access', async () => {
+    const saved = {
+      ...stripeAccess,
+      products: [
+        { product: 'paid_media' as const, source: 'stripe' as const },
+        { product: 'studio' as const, source: 'admin' as const },
+      ],
+    };
+    invokeMock.mockImplementation(async (name) => {
+      if (name !== 'admin-update-access') return { data: null, error: null };
+      return {
+      data: {
+        ok: true,
+        brandId: BRAND,
+        changes: [
+          {
+            kind: 'product',
+            product: 'studio',
+            before: null,
+            after: { active: true, source: 'admin' },
+          },
+        ],
+        access: saved,
+        entitlements: {
+          brandId: BRAND,
+          planCode: 'paid_media',
+          status: 'active',
+          billingModel: 'stripe',
+          plans: ['paid_media'],
+          products: ['paid_media', 'studio'],
+          addons: [],
+          trendsTier: null,
+          buckets: [],
+          creditBalance: { totalCredits: 0, purchasedCredits: 0, rolloverCredits: 0 },
+        },
+      },
+      error: null,
+      };
+    });
+    renderList(membership({ brand_access: stripeAccess }), true);
+    await settleRenderedEffects();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Canvas' }));
+
+    const accessCalls = () =>
+      invokeMock.mock.calls.filter(([name]) => name === 'admin-update-access');
+    await waitFor(() => expect(accessCalls()).toHaveLength(1));
+    expect(accessCalls()[0]?.[1]?.body).toEqual({ brandId: BRAND, products: { studio: true } });
+    await waitFor(() =>
+      expect(screen.getByRole('checkbox', { name: 'Canvas' }).getAttribute('aria-checked')).toBe(
+        'true',
+      ),
+    );
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for confirmation before setting Contract, then sends contract=true', async () => {
+    renderList(membership({ brand_access: stripeAccess }), true);
+    await settleRenderedEffects();
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Contract' }));
+    const confirm = await screen.findByRole('button', { name: 'Set Contract' });
+    expect(invokeMock.mock.calls.some(([name]) => name === 'admin-update-access')).toBe(false);
+
+    fireEvent.click(confirm);
+
+    await waitFor(() =>
+      expect(
+        invokeMock.mock.calls.find(([name]) => name === 'admin-update-access')?.[1]?.body,
+      ).toEqual({ brandId: BRAND, contract: true }),
+    );
   });
 });

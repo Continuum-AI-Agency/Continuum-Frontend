@@ -18,7 +18,13 @@ import { Label } from '@/components/ui/label';
 
 type AdminActionConfirmationProps = {
   /** Single element: it becomes the alert-dialog trigger via Base UI `render`. */
-  trigger: ReactElement;
+  trigger?: ReactElement;
+  /**
+   * Controlled open state, for a control that must keep its own role — a Switch passed as
+   * `trigger` would be re-rendered as a button. Omit both to let `trigger` open the dialog.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   title: string;
   description: string;
   confirmLabel: string;
@@ -29,6 +35,8 @@ type AdminActionConfirmationProps = {
 
 export function AdminActionConfirmation({
   trigger,
+  open: controlledOpen,
+  onOpenChange,
   title,
   description,
   confirmLabel,
@@ -36,20 +44,20 @@ export function AdminActionConfirmation({
   requireTypedEmail = false,
   onConfirm,
 }: AdminActionConfirmationProps) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
   const [typedEmail, setTypedEmail] = useState('');
+  const setOpen = (nextOpen: boolean) => {
+    setUncontrolledOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+    if (!nextOpen) setTypedEmail('');
+  };
   const needsEmail = requireTypedEmail && Boolean(targetEmail);
   const confirmed = !needsEmail || typedEmail === targetEmail;
 
   return (
-    <AlertDialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
-        if (!nextOpen) setTypedEmail('');
-      }}
-    >
-      <AlertDialogTrigger render={trigger} />
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      {trigger ? <AlertDialogTrigger render={trigger} /> : null}
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
@@ -69,7 +77,14 @@ export function AdminActionConfirmation({
         ) : null}
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction disabled={!confirmed} onClick={onConfirm}>
+          {/* AlertDialogAction is a plain Button, not a Close: confirming closes explicitly. */}
+          <AlertDialogAction
+            disabled={!confirmed}
+            onClick={() => {
+              setOpen(false);
+              onConfirm();
+            }}
+          >
             {confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
