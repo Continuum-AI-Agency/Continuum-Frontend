@@ -2,6 +2,7 @@ import type {
   OrganicMediaStage,
   OrganicUgcSpec,
   PlannerComposition,
+  PublishOptionsByPlatform,
   ShaderStackV1,
 } from '@continuum/contracts';
 import type { CalendarGenerationEvent } from '@/lib/organic/calendar-generation';
@@ -315,6 +316,8 @@ export type OrganicCalendarDraft = {
     role: string;
     suggestion: string;
   }>;
+  /** First comment / cover / AI label per destination, from content_json.publishOptions. */
+  publishOptions?: PublishOptionsByPlatform;
   hashtags?: {
     high?: string[];
     medium?: string[];

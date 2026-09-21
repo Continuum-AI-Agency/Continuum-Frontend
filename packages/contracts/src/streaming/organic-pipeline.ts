@@ -3,6 +3,7 @@ import { imageSizeSchema } from '../ai-studio/image-size';
 import { shaderStackV1Schema } from '../ai-studio/shader-stack';
 import { artDirectionSchema } from '../creative/art-direction';
 import { organicUgcSpecSchema } from '../media/reel-video';
+import { publishOptionsByPlatformSchema } from '../organic/publish-body';
 import { organicGeneratablePlatformSchema } from '../organic/publishing';
 
 /**
@@ -657,6 +658,9 @@ export const organicCalendarPlacementSchema = z
     // so the calendar/list previews read a durable `storagePath`+`bucket` and re-sign on
     // read rather than relying on the 1h upload-time signed URL or large base64 blobs.
     publishingAssets: z.array(organicPublishingAssetSchema).optional(),
+    // What the user chose in the planner's Publish tab — first comment, cover, AI label —
+    // per destination platform. Every publish path reads its own platform's block.
+    publishOptions: publishOptionsByPlatformSchema.optional(),
   })
   .strict();
 

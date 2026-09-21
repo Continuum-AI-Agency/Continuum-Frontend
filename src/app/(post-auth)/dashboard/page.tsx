@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import { deriveDashboardSetup, hasAnyAccount } from '@/components/dashboard/first-run/setupState';
 import { HomeBaseDashboard } from '@/components/dashboard/HomeBaseDashboard';
+import { AllDashboardDataWrapper } from '@/components/dashboard/server/AllDashboardDataWrapper';
 import { OrganicDashboardDataWrapper } from '@/components/dashboard/server/OrganicDashboardDataWrapper';
 import {
   PaidWidgetSkeleton,
@@ -18,7 +19,7 @@ type DashboardPageProps = {
 };
 
 function resolveDashboardView(value: string | string[] | undefined) {
-  return value === 'paid' ? 'paid' : 'organic';
+  return value === 'paid' || value === 'all' ? value : 'organic';
 }
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
@@ -48,6 +49,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     activeView === 'paid' ? (
       <Suspense fallback={<PaidWidgetSkeleton />}>
         <PaidDashboardView brandId={activeBrandId} />
+      </Suspense>
+    ) : activeView === 'all' ? (
+      <Suspense fallback={<WidgetSkeleton />}>
+        <AllDashboardDataWrapper brandId={activeBrandId} />
       </Suspense>
     ) : (
       <Suspense fallback={<WidgetSkeleton />}>

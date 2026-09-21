@@ -16,6 +16,7 @@ import {
   YAxis,
 } from 'recharts';
 import { Gauge } from '@/components/charts/gauge';
+import { BestTimeTiles } from '@/components/organic/best-time/BestTimeTiles';
 import { Pill } from '@/components/kibo-ui/pill';
 import { DisabledControl } from '@/components/organic/DisabledControl';
 import { describeExportBlock, describeRefreshBlock } from '@/components/organic/disabledReasons';
@@ -1471,6 +1472,7 @@ function Dashboard({
   const {
     insights: organicInsights,
     awareness: awarenessReport,
+    bestTimes,
     isLoading: isAwarenessLoading,
     refresh: refreshAwareness,
   } = useOrganicInsights({
@@ -1712,6 +1714,8 @@ function Dashboard({
           ))}
         </motion.div>
       ) : null}
+
+      {isAccountView && bestTimes ? <BestTimeTiles bestTimes={bestTimes} /> : null}
 
       {isAccountView ? (
         <div className="bg-surface">

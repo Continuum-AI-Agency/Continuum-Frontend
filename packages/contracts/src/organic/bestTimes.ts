@@ -5,6 +5,12 @@
 
 import { z } from 'zod';
 
+/**
+ * Below this many posts in the window the slots are noise: bulk plans keep the static
+ * times, and the dashboard says so beside the slots it shows.
+ */
+export const ORGANIC_BEST_TIMES_MIN_POSTS = 20;
+
 /** Where a scheduled slot's time came from: the brand's own posts, or the static table. */
 export const bestTimeSourceSchema = z.enum(['learned', 'default']);
 export type BestTimeSource = z.infer<typeof bestTimeSourceSchema>;

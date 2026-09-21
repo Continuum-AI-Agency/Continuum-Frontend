@@ -14,7 +14,12 @@
  */
 import { z } from 'zod';
 import { buildPlatformCaption, type HashtagTiers } from '../media/instagram-caption';
-import { PLATFORM_CAPABILITIES, type PublishFormat, type PublishPlatform } from './publishing';
+import {
+  PLATFORM_CAPABILITIES,
+  type PublishFormat,
+  type PublishPlatform,
+  publishPlatformSchema,
+} from './publishing';
 
 /**
  * Optional per-platform options for one publish. A publish body targets exactly one
@@ -40,6 +45,27 @@ export const publishOptionsSchema = z
   })
   .strict();
 export type PublishOptions = z.infer<typeof publishOptionsSchema>;
+
+/**
+ * The options a user SAVED on a draft, one block per destination platform, held on
+ * `content_json.publishOptions`. Keyed because a draft can target several platforms
+ * until approve fans it out, and a first comment written for Instagram is not one for
+ * TikTok. Every publish path picks its own platform's block (see `savedPublishOptions`).
+ */
+export const publishOptionsByPlatformSchema = z.partialRecord(
+  publishPlatformSchema,
+  publishOptionsSchema,
+);
+export type PublishOptionsByPlatform = z.infer<typeof publishOptionsByPlatformSchema>;
+
+/** The block saved for `platform`, or undefined when there is none or it is malformed. */
+export function savedPublishOptions(
+  saved: unknown,
+  platform: PublishPlatform,
+): PublishOptions | undefined {
+  const parsed = publishOptionsByPlatformSchema.safeParse(saved);
+  return parsed.success ? parsed.data[platform] : undefined;
+}
 
 /**
  * The options in `options` that `platform` cannot honour for `format` — empty when all of

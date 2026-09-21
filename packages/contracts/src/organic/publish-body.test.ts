@@ -5,6 +5,7 @@ import {
   inferPostType,
   type PublishableDraft,
   resolvePublishFormat,
+  savedPublishOptions,
   unsupportedPublishOptions,
 } from './publish-body';
 
@@ -217,5 +218,23 @@ describe('unsupportedPublishOptions', () => {
       aiGenerated: true,
     });
     expect(body.publishOptions).toEqual({ aiGenerated: true });
+  });
+});
+
+describe('savedPublishOptions', () => {
+  const saved = {
+    instagram: { firstComment: 'Link in bio', thumbnail: { offsetMs: 1500 } },
+    tiktok: { aiGenerated: true },
+  };
+
+  it('returns only the block saved for the platform being published', () => {
+    expect(savedPublishOptions(saved, 'instagram')).toEqual(saved.instagram);
+    expect(savedPublishOptions(saved, 'tiktok')).toEqual({ aiGenerated: true });
+    expect(savedPublishOptions(saved, 'linkedin')).toBeUndefined();
+  });
+
+  it('reads nothing from an absent or malformed map rather than publishing a guess', () => {
+    expect(savedPublishOptions(undefined, 'instagram')).toBeUndefined();
+    expect(savedPublishOptions({ instagram: { firstComment: 42 } }, 'instagram')).toBeUndefined();
   });
 });

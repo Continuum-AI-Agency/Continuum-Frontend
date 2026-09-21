@@ -1,6 +1,6 @@
 'use client';
 
-import type { OrganicAwarenessReportPayload } from '@continuum/contracts';
+import type { OrganicAwarenessReportPayload, OrganicBestTimes } from '@continuum/contracts';
 import * as React from 'react';
 import type {
   OrganicComputedInsight,
@@ -19,6 +19,7 @@ type UseOrganicInsightsParams = {
 type UseOrganicInsightsReturn = {
   insights: OrganicComputedInsight[];
   awareness: OrganicAwarenessReportPayload | null;
+  bestTimes: OrganicBestTimes | null;
   generatedAt: string | null;
   expiresAt: string | null;
   isLoading: boolean;
@@ -122,6 +123,7 @@ export function useOrganicInsights(params: UseOrganicInsightsParams): UseOrganic
   return {
     insights: data?.insights ?? [],
     awareness: data?.awareness ?? null,
+    bestTimes: data?.bestTimes ?? null,
     generatedAt: data?.generated_at ?? null,
     expiresAt: data?.expires_at ?? null,
     isLoading,

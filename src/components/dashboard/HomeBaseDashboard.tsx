@@ -16,7 +16,7 @@ type Props = {
   brandBookRefreshedAt?: string | null;
 };
 
-type DashboardView = 'paid' | 'organic';
+type DashboardView = 'paid' | 'organic' | 'all';
 
 const DASHBOARD_VIEWS: Record<
   DashboardView,
@@ -35,6 +35,11 @@ const DASHBOARD_VIEWS: Record<
     label: 'Paid',
     title: 'Performance & DCO actions',
     microcopy: 'Ad performance, budget pacing, and DCO actions.',
+  },
+  all: {
+    label: 'All',
+    title: 'Organic & paid',
+    microcopy: 'Organic reach beside paid spend for the same period.',
   },
 };
 

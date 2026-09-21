@@ -73,6 +73,17 @@ describe('HomeBaseDashboard', () => {
     expect(panel?.textContent).toContain('Paid slot');
   });
 
+  it('renders the all view with its title, active slot and a pressed All toggle', () => {
+    const { container } = render(
+      <HomeBaseDashboard activeView="all" activeViewSlot={<div>All slot</div>} />,
+    );
+
+    expect(container.textContent).toContain('Organic & paid');
+    const panel = container.querySelector('[data-dashboard-panel="all"]');
+    expect(panel?.textContent).toContain('All slot');
+    expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('shows mode microcopy near the toggle for the active view', () => {
     const { container } = render(
       <HomeBaseDashboard activeView="organic" activeViewSlot={<div>Organic slot</div>} />,

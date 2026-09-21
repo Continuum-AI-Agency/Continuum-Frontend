@@ -5,6 +5,7 @@
 
 import { z } from "zod";
 import { organicAwarenessReportPayloadSchema } from "./awareness";
+import { organicBestTimesSchema } from "./bestTimes";
 
 export const organicInsightCategorySchema = z.enum([
   "growth",
@@ -49,5 +50,9 @@ export const organicInsightsResponseSchema = z.object({
   // report alongside the inline insights (one round-trip). Optional so older
   // cached responses without it still validate.
   awareness: organicAwarenessReportPayloadSchema.optional(),
+  // The account's learned best posting times and cadence (public.organic_best_times),
+  // read fresh on every call — never from the insights cache — so it is optional only
+  // for responses from an edge deploy that predates it.
+  bestTimes: organicBestTimesSchema.optional(),
 });
 export type OrganicInsightsResponse = z.infer<typeof organicInsightsResponseSchema>;

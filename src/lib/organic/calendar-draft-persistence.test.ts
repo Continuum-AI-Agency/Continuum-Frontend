@@ -717,6 +717,26 @@ describe('field-edit read derivations', () => {
     expect(mapped?.draft.hashtags?.high).toEqual(['#fresh']);
   });
 
+  it('carries the per-platform publish options saved on content_json onto the draft', () => {
+    const publishOptions = {
+      instagram: { firstComment: 'Link in bio', thumbnail: { offsetMs: 2500 } },
+      tiktok: { aiGenerated: true },
+    };
+    const mapped = mapPersistedRowToCalendarEntry(
+      rowWith({ content_json: { publishOptions } }),
+      days(),
+    );
+    expect(mapped?.draft.publishOptions).toEqual(publishOptions);
+  });
+
+  it('drops a malformed publish options map rather than handing publish a guess', () => {
+    const mapped = mapPersistedRowToCalendarEntry(
+      rowWith({ content_json: { publishOptions: { instagram: { firstComment: 7 } } } }),
+      days(),
+    );
+    expect(mapped?.draft.publishOptions).toBeUndefined();
+  });
+
   it('creative direction falls back to content_json for an agent draft', () => {
     const mapped = mapPersistedRowToCalendarEntry(
       rowWith({ content_json: { creative: { creativeDirectionPrompt: 'moody, wide' } } }),
