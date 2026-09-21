@@ -71,7 +71,15 @@ afterEach(() => {
 describe('BrandColorField', () => {
   test('offers each resolvable palette colour once, as six-digit hex', async () => {
     renderField(null);
-    expect(screen.queryByRole('button', { name: 'Background: --brand-orange' })).toBeNull();
+    // Whether the content element has been REMOVED yet depends on that animation finishing,
+    // which happy-dom decides at random. So: either it is gone, or it is still mounted and
+    // already marked closed. What must never hold is a palette still standing open.
+    const lingering = screen.queryByRole('button', { name: 'Background: --brand-orange' });
+    if (lingering) {
+      expect(
+        lingering.closest('[data-slot="popover-content"]')?.hasAttribute('data-closed'),
+      ).toBe(true);
+    }
     await openPalette();
     const orange = await screen.findByRole('button', { name: 'Background: --brand-orange' });
     expect(orange.getAttribute('title')).toBe('--brand-orange #ff6600');
@@ -92,9 +100,27 @@ describe('BrandColorField', () => {
     expect(orange.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(orange);
     expect(onChange).toHaveBeenCalledWith('#ff6600');
-    await waitFor(() =>
-      expect(screen.queryByRole('button', { name: 'Background: --brand-orange' })).toBeNull(),
-    );
+    // Picking closes the palette. Wait on the TRIGGER's `aria-expanded`, not on the swatch
+    // disappearing: Base UI keeps the popover content mounted through its exit animation, and
+    // a `waitFor` that only ever reads the removed element gets no mutation to re-check
+    // against under happy-dom — this used to burn the whole 5s timeout and fail. Once the
+    // trigger reports closed, the content is gone and the swatch with it.
+    await waitFor(() => {
+      expect(
+        screen
+          .getByRole('button', { name: 'Background brand palette' })
+          .getAttribute('aria-expanded'),
+      ).toBe('false');
+    });
+    // Whether the content element has been REMOVED yet depends on that animation finishing,
+    // which happy-dom decides at random. So: either it is gone, or it is still mounted and
+    // already marked closed. What must never hold is a palette still standing open.
+    const lingering = screen.queryByRole('button', { name: 'Background: --brand-orange' });
+    if (lingering) {
+      expect(
+        lingering.closest('[data-slot="popover-content"]')?.hasAttribute('data-closed'),
+      ).toBe(true);
+    }
   });
 
   test('keeps the free hex field beside the palette', async () => {

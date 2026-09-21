@@ -1,8 +1,13 @@
 import { beforeEach, expect, test, vi } from 'bun:test';
-import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { AdminPagination, AdminUser, PermissionRow } from '@/components/admin/adminUserTypes';
+
+// lucide-react used to be mocked here with a hand-written allowlist of glyph names. That
+// allowlist could only ever be a snapshot: every icon a new child component reached for
+// resolved against the real CJS bundle instead and threw `Export named 'X' not found`,
+// which failed the whole file before a single assertion ran. The real package renders
+// fine under renderToStaticMarkup, so there is nothing to mock.
 
 const routerPushSpy = vi.fn<(path: string) => void>();
 let searchParams = new URLSearchParams();
@@ -14,41 +19,6 @@ vi.mock('next/navigation', () => ({
     toString: () => searchParams.toString(),
   }),
 }));
-
-vi.mock('lucide-react', () => {
-  const icon = (name: string) => {
-    const MockIcon = (props: Record<string, unknown>) =>
-      React.createElement('span', { 'data-icon': name, ...props });
-    MockIcon.displayName = `${name}Icon`;
-    return MockIcon;
-  };
-
-  return {
-    Search: icon('search'),
-    ChevronDown: icon('chevron-down'),
-    ShieldAlert: icon('shield-alert'),
-    UserCog: icon('user-cog'),
-    Building2: icon('building'),
-    Library: icon('library'),
-    History: icon('history'),
-    Copy: icon('copy'),
-    Globe2: icon('globe'),
-    Trash2: icon('trash'),
-    Lock: icon('lock'),
-    RefreshCw: icon('refresh'),
-    CheckCircle2: icon('check-circle'),
-    Loader2: icon('loader'),
-    ChevronLeft: icon('chevron-left'),
-    ChevronRight: icon('chevron-right'),
-    MoreHorizontal: icon('more-horizontal'),
-    Mail: icon('mail'),
-    PlayCircle: icon('play-circle'),
-    CheckIcon: icon('check'),
-    ChevronDownIcon: icon('chevron-down'),
-    ChevronUpIcon: icon('chevron-up'),
-    XIcon: icon('x'),
-  };
-});
 
 vi.mock('@/components/ui/ToastProvider', () => ({
   useToast: () => ({ show: vi.fn() }),

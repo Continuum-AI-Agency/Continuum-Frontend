@@ -24,6 +24,11 @@ describe('fetchBrandProfileDetails', () => {
           updated_at: '2026-02-02T00:00:00.000Z',
           created_by: 'user-1',
           completed_at: '2026-02-03T00:00:00.000Z',
+          // `email_report_opt_in` and `content_language` joined the selected columns when
+          // brand-level report delivery and localisation shipped; the mapper defaults them
+          // to `true` / `null`, so the row carries non-default values to prove it reads them.
+          email_report_opt_in: false,
+          content_language: 'es',
         },
         error: null,
       }),
@@ -53,6 +58,8 @@ describe('fetchBrandProfileDetails', () => {
       updatedAt: '2026-02-02T00:00:00.000Z',
       createdBy: 'user-1',
       completedAt: '2026-02-03T00:00:00.000Z',
+      emailReportOptIn: false,
+      contentLanguage: 'es',
     });
   });
 

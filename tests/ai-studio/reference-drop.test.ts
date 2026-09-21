@@ -58,8 +58,11 @@ test('infers mime type from plain text urls and paths', () => {
   assert.equal(resolveReferenceMimeType(parsed), 'video/webm');
 });
 
+// The image ceiling was 5 MiB until `feat(frontend): ship organic analytics and media
+// workflows` (730d1ad9) raised it to 100 MiB — Studio references stopped being thumbnails
+// and started being source creatives. The video ceiling was not moved.
 test('exports MiB-based attachment limits', () => {
   assert.equal(MEBIBYTE_BYTES, 1024 * 1024);
-  assert.equal(IMAGE_REFERENCE_MAX_BYTES, 5 * 1024 * 1024);
+  assert.equal(IMAGE_REFERENCE_MAX_BYTES, 100 * 1024 * 1024);
   assert.equal(VIDEO_REFERENCE_MAX_BYTES, 50 * 1024 * 1024);
 });

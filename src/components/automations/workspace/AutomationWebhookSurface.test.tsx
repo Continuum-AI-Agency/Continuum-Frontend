@@ -176,9 +176,13 @@ describe('outbound webhook node configuration', () => {
     expect(picker.getAttribute('disabled')).toBeNull();
 
     // And the disable switch is two-way again, not greyed forever.
-    const disableSwitch = screen.getByRole('switch') as HTMLButtonElement;
-    expect(disableSwitch.id).toBe('node-disabled-outbound-1');
-    expect(disableSwitch.disabled).toBe(false);
+    // Base UI's Switch keeps the caller's `id` on its hidden form input and gives the
+    // role="switch" element a generated one, tying the two together with aria-labelledby.
+    // So the switch is addressed through the label of THIS node, not through that id, and
+    // the enabled state reads off `data-disabled` rather than a button's `disabled`.
+    const disableSwitch = screen.getByRole('switch');
+    expect(disableSwitch.getAttribute('aria-labelledby')).toBe('node-disabled-outbound-1-label');
+    expect(disableSwitch.hasAttribute('data-disabled')).toBe(false);
     expect(disableSwitch.getAttribute('aria-checked')).toBe('false');
   });
 

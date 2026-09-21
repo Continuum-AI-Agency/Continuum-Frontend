@@ -3,6 +3,7 @@ import type {
   OrganicCalendarDay,
   OrganicCalendarDraft,
 } from '@/components/organic/primitives/types';
+import { UNSCHEDULED_DAY_ID } from '@/components/organic/primitives/calendar-utils';
 import { useCalendarStore } from '@/lib/organic/store';
 
 const mockDrafts: OrganicCalendarDraft[] = [
@@ -53,9 +54,13 @@ const mockDays: OrganicCalendarDay[] = [
   },
 ];
 
+// The store used to keep a separate `unscheduledDrafts` array with its own
+// `setUnscheduledDrafts` setter. `feat(organic): support slot-level generation failures
+// and retry flows` (e5b5d212) folded it into `days` as the `UNSCHEDULED_DAY_ID` sentinel
+// day, so an undated draft is an ordinary slot on one more day and every mover, deleter
+// and updater works on it without a second code path.
 beforeEach(() => {
   useCalendarStore.getState().setDays(mockDays);
-  useCalendarStore.getState().setUnscheduledDrafts([]);
 });
 
 test('bulkMoveDrafts moves multiple drafts to a target day', () => {
@@ -85,10 +90,11 @@ test('bulkDeleteDrafts removes multiple drafts', () => {
 test('bulkMoveDrafts to unscheduled', () => {
   const store = useCalendarStore.getState();
 
-  store.bulkMoveDrafts(['draft-1'], 'unscheduled');
+  store.bulkMoveDrafts(['draft-1'], UNSCHEDULED_DAY_ID);
 
   const state = useCalendarStore.getState();
   expect(state.days.find((d) => d.id === 'day-1')!.slots.length).toBe(0);
-  expect(state.unscheduledDrafts.length).toBe(1);
-  expect(state.unscheduledDrafts[0].id).toBe('draft-1');
+  const unscheduled = state.days.find((d) => d.id === UNSCHEDULED_DAY_ID);
+  expect(unscheduled?.slots.length).toBe(1);
+  expect(unscheduled?.slots[0]?.id).toBe('draft-1');
 });

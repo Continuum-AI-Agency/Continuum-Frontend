@@ -247,21 +247,35 @@ describe('TimeGridCanvas', () => {
     });
   });
 
-  it('renders published content on a read-only platform without a create control', async () => {
+  // This case used to pin "published YouTube content, and no + on its row", because YouTube
+  // was the planner's read-only channel: it could carry published posts but had no publisher.
+  // A YouTube publisher has since shipped — `PLATFORM_CAPABILITIES.youtube` is populated and
+  // `planner-platforms.test` pins "gives a platform with a publisher a creatable row from its
+  // posts alone" — so a YouTube row is now correctly creatable, and the old assertion was
+  // asserting the opposite of the product. Every platform that can carry posted content
+  // (`OrganicPlatformTag`) is publishable now, so the "no create affordance where you cannot
+  // post" guard moves to the one channel that still has no publisher: X, which the planner
+  // only surfaces when coming-soon rows are asked for.
+  it('renders published content, and offers no create control on a channel with no publisher', async () => {
     const days = buildWeekDays();
-    const platforms = buildPlannerPlatforms([], days, [
-      {
-        id: 'youtube-post',
-        source: 'external',
-        platform: 'youtube',
-        timestamp: '2026-02-23T15:00:00.000Z',
-        dayId: '2026-02-23',
-        timeLabel: '3:00 PM',
-        title: 'Published video',
-        caption: 'A published cross-platform calendar entry.',
-        permalink: 'https://youtube.example.com/watch/123',
-      },
-    ]);
+    const platforms = buildPlannerPlatforms(
+      [],
+      days,
+      [
+        {
+          id: 'youtube-post',
+          source: 'external',
+          platform: 'youtube',
+          timestamp: '2026-02-23T15:00:00.000Z',
+          dayId: '2026-02-23',
+          timeLabel: '3:00 PM',
+          title: 'Published video',
+          caption: 'A published cross-platform calendar entry.',
+          permalink: 'https://youtube.example.com/watch/123',
+        },
+      ],
+      { includeComingSoon: true },
+    );
 
     render(
       <TimeGridCanvas
@@ -302,7 +316,10 @@ describe('TimeGridCanvas', () => {
     expect(screen.getByRole('link', { name: /Open post/ }).getAttribute('href')).toBe(
       'https://youtube.example.com/watch/123',
     );
-    expect(screen.queryByRole('button', { name: /Add post.*YouTube/ })).toBeNull();
+    // YouTube has a publisher, so its row IS creatable — that is the behaviour change.
+    expect(screen.getByRole('button', { name: 'Add post for 2026-02-23 YouTube' })).toBeDefined();
+    // X has none, so its row must never offer one.
+    expect(screen.queryByRole('button', { name: /Add post for .* X$/ })).toBeNull();
   });
 
   it('keeps posted-content loading and retry states inside the week surface', () => {

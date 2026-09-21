@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, render as rtlRender, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { ToastProvider } from '@/components/ui/ToastProvider';
 import type { GoalWorkspaceView } from '@/lib/goals/models';
 import {
   buildStructuredGoalFormResponse,
@@ -64,6 +66,11 @@ const goal: GoalWorkspaceView = {
   supervisor: null,
   lastEventSequence: 0,
 };
+
+// The rail composes `useChatAttachments` for evidence uploads, and that hook calls
+// `useToast` — so the rail only renders under the same ToastProvider the post-auth layout
+// wraps the app in.
+const render = (ui: ReactNode) => rtlRender(<ToastProvider>{ui}</ToastProvider>);
 
 describe('GoalEvidenceRail', () => {
   it('records money in integer minor units and approvals as explicit booleans', () => {

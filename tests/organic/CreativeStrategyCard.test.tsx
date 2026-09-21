@@ -106,29 +106,42 @@ describe('CreativeStrategyCard', () => {
     // 3 hooks + 1 angle.
     expect(chips).toHaveLength(4);
 
+    // The rank tones are Badge variants (violet / teal / muted). They used to be solid
+    // `bg-*/10` fills; the base-nova badge is outline-and-tinted-text now, so the fill
+    // classes survive only as `[a&]:hover:` states — which is why `bg-primary/10` and
+    // `bg-secondary/10` still matched as substrings while `bg-muted` did not, and the
+    // first two assertions were passing for the wrong reason. Pin the text tone, which
+    // is what actually distinguishes the three ranks.
     const [winner, runnerUp, third] = chips;
     expect(winner?.textContent).toContain('#1');
     expect(winner?.textContent).toContain('Cold open question');
     expect(winner?.textContent).toContain('6');
-    expect(winner?.className).toContain('bg-primary/10');
+    expect(winner?.className).toContain('text-primary');
 
     expect(runnerUp?.textContent).toContain('#2');
-    expect(runnerUp?.className).toContain('bg-secondary/10');
+    expect(runnerUp?.className).toContain('text-sky-700');
 
     expect(third?.textContent).toContain('#3');
-    expect(third?.className).toContain('bg-muted');
+    expect(third?.className).toContain('text-muted-foreground');
 
     // Each leaderboard restarts at #1 — rank is per-board, not per-card.
     expect(chips[3]?.textContent).toContain('#1');
     expect(chips[3]?.textContent).toContain('Founder POV');
   });
 
-  test('opens no scroll container of its own — the metrics body is the only scroller', () => {
+  // This used to pin the opposite — no scroller at all, the table growing with its rows.
+  // `feat(frontend): improve organic, paid media, and app workflows` (6aea9972) capped the
+  // insight table at 420px with a sticky header so a long mined list scrolls in place
+  // instead of stretching the card down the tab. The invariant worth keeping is that the
+  // card opens exactly ONE scroller, and it is the table body.
+  test('opens exactly one scroll container — the capped insight table', () => {
     const { container } = renderReady();
 
-    expect(container.querySelectorAll('.overflow-y-auto')).toHaveLength(0);
-    // The insight table must grow with its rows instead of capping at a height.
+    const scrollers = container.querySelectorAll('.overflow-y-auto');
+    expect(scrollers).toHaveLength(1);
+
     const tableContainer = container.querySelector('[data-slot="table-container"]');
-    expect(tableContainer?.getAttribute('style') ?? '').not.toContain('max-height');
+    expect(scrollers[0]).toBe(tableContainer);
+    expect(tableContainer?.getAttribute('style') ?? '').toContain('max-height');
   });
 });

@@ -173,6 +173,10 @@ describe('action.ai_studio_generate editor', () => {
       instructions: 'Generate a creative from the workflow context.',
       maxOutputs: 1,
       pipelineId: null,
+      // The node gained `pipelineInputs` — the text fed to the published pipeline's own
+      // input ports, edited by the field the last test in this block pins. It defaults to
+      // empty and rides along on every config write.
+      pipelineInputs: [],
     });
     expectParses(node, onChange.mock.calls.at(-1)?.[0]);
   });
@@ -194,6 +198,7 @@ describe('action.ai_studio_generate editor', () => {
       instructions: 'Generate a creative from the workflow context.',
       maxOutputs: 1,
       pipelineId: PIPELINE_ID,
+      pipelineInputs: [],
     });
     expectParses(node, onChange.mock.calls.at(-1)?.[0]);
   });

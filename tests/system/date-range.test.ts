@@ -3,8 +3,11 @@ import test from 'node:test';
 
 import { DEFAULT_DATE_RANGE_DAYS, getDateRangeFromDays } from '@/lib/dco/dateRange';
 
-test('DEFAULT_DATE_RANGE_DAYS is 7', () => {
-  assert.equal(DEFAULT_DATE_RANGE_DAYS, 7);
+// The DCO action log opened on 7 days until `feat(dco): enrich action log details`
+// (bacccac5) widened the default window to 30 — a week of actions was too thin a slice
+// to read a trend from. 7 is still a valid `DateRangeDays`, just no longer the default.
+test('DEFAULT_DATE_RANGE_DAYS is 30', () => {
+  assert.equal(DEFAULT_DATE_RANGE_DAYS, 30);
 });
 
 test('getDateRangeFromDays returns ISO dates based on provided days', () => {

@@ -7,7 +7,6 @@ import {
   resolveBrandInsightsEventsUrl,
   subscribeToBrandInsightsJob,
 } from '../../src/lib/api/brandInsights.client.ts';
-import { BRAND_TRENDS_SCHEMA } from '../../src/lib/schemas/brandInsights.ts';
 
 function createProcessingResponse() {
   return new Response(
@@ -63,7 +62,12 @@ test('generateBrandInsights sends required window fields when caller omits them'
     new Date(String(capturedBody.window_end)).getTime() -
     new Date(String(capturedBody.window_start)).getTime();
   assert.equal(rangeMs, 7 * 24 * 60 * 60 * 1000);
-  assert.equal(capturedHeaders.get('x-supabase-schema'), BRAND_TRENDS_SCHEMA);
+  // This client used to attach `X-Supabase-Schema: brand_trends` to every call, from when it
+  // spoke to PostgREST directly. `refactor(onboarding): use agent scrape endpoint` (6c0af346)
+  // dropped it: the trends routes are Fastify endpoints on the agents backend now, and a
+  // PostgREST schema header means nothing there. The header still belongs on the two callers
+  // that DO hit Supabase directly — brandInsights.server.ts and brand-insights/citations.ts.
+  assert.equal(capturedHeaders.get('x-supabase-schema'), null);
 });
 
 test('generateBrandInsights derives ISO window bounds from weekStartDate', async () => {

@@ -4,7 +4,7 @@
 // Base UI expresses it as `keepMounted`.)
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useEffect, useState } from 'react';
 import { type RightRailTab, RightRailTabs } from './RightRailTabs';
 
@@ -54,7 +54,7 @@ describe('RightRailTabs', () => {
     expect(screen.getByText('runs-body')).toBeTruthy();
   });
 
-  test('switching to Runs reveals it without remounting the inspector', () => {
+  test('switching to Runs reveals it without remounting the inspector', async () => {
     render(<ControlledRail />);
 
     expect(screen.getByTestId('inspector-body-mounts').textContent).toBe('mounted');
@@ -62,7 +62,13 @@ describe('RightRailTabs', () => {
     fireEvent.click(screen.getByRole('tab', { name: /runs/ }));
 
     expect(panelFor('runs').hasAttribute('hidden')).toBe(false);
-    expect(panelFor('inspector').hasAttribute('hidden')).toBe(true);
+    // The outgoing panel is `inert` immediately but only takes `hidden` once Base UI's
+    // exit transition completes a frame later, so this has to be awaited rather than read
+    // in the same tick as the click.
+    expect(panelFor('inspector').hasAttribute('inert')).toBe(true);
+    await waitFor(() => {
+      expect(panelFor('inspector').hasAttribute('hidden')).toBe(true);
+    });
     // A remount would reset the effect-written marker back to a single 'mounted'
     // after re-running; an unmount/remount cycle would clear it first.
     expect(screen.getByTestId('inspector-body-mounts').textContent).toBe('mounted');

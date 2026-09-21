@@ -52,9 +52,13 @@ describe('getActiveBrandContext', () => {
       gt: mock(() => Promise.resolve({ data: invites, error: null })),
     };
 
+    // The brand read ends `.in('id', ids).eq('active', true)` — the `eq` excludes
+    // soft-deleted brands, whose permissions rows are retained — so the double has to
+    // resolve on `eq`, not on `in`.
     const brandsQuery: any = {
       select: mock(() => brandsQuery),
-      in: mock(() => Promise.resolve({ data: brands, error: null })),
+      in: mock(() => brandsQuery),
+      eq: mock(() => Promise.resolve({ data: brands, error: null })),
     };
 
     const schemaBuilder = {
@@ -131,9 +135,13 @@ describe('getActiveBrandContext', () => {
       gt: mock(() => Promise.resolve({ data: [], error: null })),
     };
 
+    // The brand read ends `.in('id', ids).eq('active', true)` — the `eq` excludes
+    // soft-deleted brands, whose permissions rows are retained — so the double has to
+    // resolve on `eq`, not on `in`.
     const brandsQuery: any = {
       select: mock(() => brandsQuery),
-      in: mock(() => Promise.resolve({ data: brands, error: null })),
+      in: mock(() => brandsQuery),
+      eq: mock(() => Promise.resolve({ data: brands, error: null })),
     };
 
     const schemaBuilder = {

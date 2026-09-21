@@ -43,7 +43,12 @@ mock.module('@/lib/supabase/client', () => ({
   createSupabaseBrowserClient: () => ({ schema: schemaDocuments }),
 }));
 mock.module('@/lib/supabase/realtime', () => ({ subscribeToPostgresChanges }));
-mock.module('@/components/documents/useDocuments', () => ({ STALE_PROCESSING_MS: 100 }));
+// The stale window is shortened so the timeout test does not take two minutes. 100ms left
+// no slack at all — the whole render/effect cycle had to finish inside ~40ms or the
+// heartbeat landed after the deadline it was meant to push back, which made the test fail
+// about four runs in five on a loaded machine. 900ms keeps it sub-two-seconds with 300ms of
+// slack on either side of every checkpoint.
+mock.module('@/components/documents/useDocuments', () => ({ STALE_PROCESSING_MS: 900 }));
 
 const { MAX_ATTACHMENT_BYTES, useChatAttachments } = await import('./useChatAttachments');
 
@@ -240,7 +245,9 @@ describe('useChatAttachments', () => {
     await waitFor(() => expect(result.current.files[0]?.status).toBe('indexing'));
     expect(realtimeSubscription).not.toBeNull();
 
-    await new Promise((resolve) => setTimeout(resolve, 60));
+    // A progress heartbeat two thirds of the way through the window pushes the deadline out
+    // by a fresh full window.
+    await new Promise((resolve) => setTimeout(resolve, 600));
     act(() => {
       realtimeSubscription?.bindings[0]?.onRow({
         id: 'document-1',
@@ -249,10 +256,12 @@ describe('useChatAttachments', () => {
         updated_at: new Date().toISOString(),
       });
     });
-    await new Promise((resolve) => setTimeout(resolve, 60));
+    await new Promise((resolve) => setTimeout(resolve, 600));
 
+    // Past the ORIGINAL deadline (900ms) and still indexing — which only holds because the
+    // heartbeat moved it. Without it this would already read 'error'.
     expect(result.current.files[0]?.status).toBe('indexing');
-    await waitFor(() => expect(result.current.files[0]?.status).toBe('error'), { timeout: 150 });
+    await waitFor(() => expect(result.current.files[0]?.status).toBe('error'), { timeout: 900 });
     expect(result.current.files[0]?.error).toBe('Indexing timed out');
   });
 

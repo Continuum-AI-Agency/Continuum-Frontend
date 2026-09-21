@@ -388,8 +388,12 @@ describe('RenderJobsGrid', () => {
     await renderLedger([pinned, revised, { ...BASE, id: 'job-legacy', label: 'Legacy' }], []);
     expect(screen.getByRole('columnheader', { name: /Template version/ })).toBeTruthy();
     // The source revision and the day the render ran, the full digest one hover away.
-    expect(screen.getByText('Rev 2 · Sep 10').getAttribute('title')).toBe(
-      `Template version ${OTHER_SHA}`,
+    // `feat(forge): the ledger names the variant a render used, or says unchecked` (6104ec94)
+    // wrapped the label so the variant can sit beside it, and the title moved to that
+    // wrapper — so the hover text is read off the labelled ancestor, not the label itself,
+    // and it now also says whether a variant was recorded (this fixture records none).
+    expect(screen.getByText('Rev 2 · Sep 10').closest('[title]')?.getAttribute('title')).toBe(
+      `Template version ${OTHER_SHA} — variant unchecked`,
     );
     // No revision read back: the digest, elided the same way the lineage panel elides it.
     expect(screen.getByText('a1b2c3d4e5…')).toBeTruthy();

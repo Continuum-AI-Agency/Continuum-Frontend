@@ -172,7 +172,11 @@ describe('Jaina thinking UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /thinking/i }));
 
-    expect(screen.getByText('Budget Analyst')).toBeTruthy();
+    // `feat(jaina): the transcript is the AI SDK's, and only the AI SDK's` (947caec7) gave a
+    // sub-agent two surfaces while it runs: a row in the live status rail above the trace,
+    // and its own card in the transcript below. The name is on both on purpose, so this
+    // counts them instead of demanding a single match.
+    expect(screen.getAllByText('Budget Analyst')).toHaveLength(2);
     expect(screen.getByText('fetch budget pacing')).toBeTruthy();
     expect(screen.queryByText(/hidden/i)).toBeNull();
   });
