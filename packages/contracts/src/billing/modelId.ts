@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
 /**
- * Billing model ids — the keys `billing_private.canvas_credit_costs` is priced on.
+ * Billing model ids — the keys `billing.model_pricing` is priced on, and the `p_model_id`
+ * every Canvas generation passes to `billing.record_usage_event`.
  *
  * There are three id spaces in play and they do not agree:
  *
@@ -9,15 +10,14 @@ import { z } from 'zod';
  *   backend wire id    'gemini-3.1-flash-image-preview'  (zod enums, provider calls)
  *   billing id         'nano-banana-2@2k'                (this file, cost table)
  *
- * A cost row keyed on the wrong space silently falls through to the `'*'` wildcard,
- * which is priced fail-expensive — so a drifted id overcharges rather than leaks. Both
- * inbound spaces are accepted here and collapse to one billing id; anything unrecognised
- * throws rather than guessing, because an unpriced model must never reach a provider.
+ * A usage row keyed on the wrong space finds no price and is recorded at $0 with
+ * `unpriced: true` — a leak. Both inbound spaces are accepted here and collapse to one
+ * billing id; anything unrecognised throws rather than guessing, because an unpriced model
+ * must never reach a provider.
  *
- * Resolution is folded INTO the id rather than carried as a separate column: the cost
- * table is already keyed `(action_code, model_id)` and prefers an exact row over `'*'`,
- * so per-resolution pricing needs no schema change — `nano-banana-2@1k` and
- * `nano-banana-2@4k` are simply two rows.
+ * Resolution is folded INTO the id rather than carried as a separate column, so
+ * per-resolution pricing needs no schema change — `nano-banana-2@1k` and
+ * `nano-banana-2@4k` are simply two `model_pricing` rows.
  */
 
 export const CANVAS_CREDIT_ACTION_CODES = [
@@ -28,10 +28,9 @@ export const CANVAS_CREDIT_ACTION_CODES = [
   'canvas_video_extend',
   'canvas_omni_generate',
   'canvas_hyperframes',
-  // Reserved, not yet emitted. Organic generation runs through the same services but is
-  // covered by the Organic Agent entitlement and stays off the meter until that feature
-  // settles. Reserved now because widening a shipped enum later ripples across both
-  // projects, and reserving costs nothing. See UNMETERED_GENERATION_SITES.
+  // Reserved, not yet emitted. Organic media is metered as `studio` usage tagged
+  // `meta.surface = 'organic'`, not under these codes; kept because widening a shipped
+  // enum later ripples across both projects, and reserving costs nothing.
   'organic_image_generate',
   'organic_reel_scene',
   'jaina_health_report',
@@ -75,6 +74,9 @@ const BILLING_MODEL_ALIASES: Readonly<Record<string, string>> = {
   'nano-banana': 'nano-banana',
   'gemini-2.5-flash-image': 'nano-banana',
   'nano-banana-2': 'nano-banana-2',
+  'nano-banana-2-lite': 'nano-banana-2-lite',
+  'gemini-3.1-flash-lite-image': 'nano-banana-2-lite',
+  'gemini-3.1-flash-lite-image-preview': 'nano-banana-2-lite',
   'gemini-3.1-flash-image-preview': 'nano-banana-2',
   'gemini-3.1-flash-image': 'nano-banana-2',
   'nano-banana-pro': 'nano-banana-pro',
@@ -91,13 +93,19 @@ const BILLING_MODEL_ALIASES: Readonly<Record<string, string>> = {
   'veo-3.1': 'veo-3.1',
   'veo-3-1': 'veo-3.1',
   'veo-3.1-generate-preview': 'veo-3.1',
+  // Vertex GA wire ids (ai-sdk-google-media.ts resolves to these).
+  'veo-3.1-generate-001': 'veo-3.1',
   'veo-3.1-fast': 'veo-3.1-fast',
   'veo-3-1-fast': 'veo-3.1-fast',
   'veo-3.1-fast-generate-preview': 'veo-3.1-fast',
+  'veo-3.1-fast-generate-001': 'veo-3.1-fast',
+  'veo-3.1-flash-generate-preview': 'veo-3.1-fast',
   'veo-3.1-lite': 'veo-3.1-lite',
   'veo-3-1-lite': 'veo-3.1-lite',
   'veo-3.1-lite-generate-preview': 'veo-3.1-lite',
   'kling-omni': 'kling-omni',
+  'kling-omni-video': 'kling-omni',
+  'kling-omni-v1': 'kling-omni',
   'fal-ai/kling-video/o3/standard/image-to-video': 'kling-omni',
   'pixverse-v6': 'pixverse-v6',
   'fal-ai/pixverse/v6/image-to-video': 'pixverse-v6',
@@ -105,6 +113,7 @@ const BILLING_MODEL_ALIASES: Readonly<Record<string, string>> = {
   'bytedance/seedance-2.0/image-to-video': 'seedance-2.0',
   'gemini-omni-flash': 'gemini-omni-flash',
   'gemini-omni-flash-preview': 'gemini-omni-flash',
+  'gemini-omni-1.1-flash': 'gemini-omni-flash',
 };
 
 /**
@@ -117,6 +126,8 @@ const BILLING_MODEL_ALIASES: Readonly<Record<string, string>> = {
 const BILLING_MODEL_TIERS: Readonly<Record<string, readonly string[]>> = {
   'nano-banana': [],
   'nano-banana-2': IMAGE_BILLING_TIERS,
+  // requiredImageSizeFor clamps it to 1K whatever the request asks.
+  'nano-banana-2-lite': [],
   'nano-banana-pro': ['1k', '2k', '4k'],
   'gpt-image-2': [],
   'flux-2-pro': [],
@@ -138,6 +149,12 @@ const BILLING_MODEL_TIERS: Readonly<Record<string, readonly string[]>> = {
 export function canonicalizeBillingTier(tier: string): string {
   return tier.trim().toLowerCase();
 }
+
+/**
+ * The video wire schema also accepts `1K`, which no video model prices. It bills as 1080p —
+ * never below what the model can render at that setting (fail-expensive, like `'*'`).
+ */
+const VIDEO_TIER_ALIASES: Readonly<Record<string, string>> = { '1k': '1080p' };
 
 /** The billing base id, without any tier suffix. Throws on an unmapped id. */
 export function toBillingModelBase(modelId: string): string {
@@ -175,7 +192,8 @@ export function toBillingModelId({ modelId, tier }: BillingModelInput): string {
     throw new UnsupportedBillingTierError(base, '(none supplied)');
   }
 
-  const canonical = canonicalizeBillingTier(tier);
+  const raw = canonicalizeBillingTier(tier);
+  const canonical = tiers.includes(raw) ? raw : (VIDEO_TIER_ALIASES[raw] ?? raw);
   if (!tiers.includes(canonical)) {
     throw new UnsupportedBillingTierError(base, tier);
   }
@@ -194,17 +212,13 @@ export function allBillingModelIds(): readonly string[] {
 }
 
 /**
- * Generation call sites deliberately left off the meter.
+ * Generation call sites deliberately left off the meter — none. Every provider
+ * construction opens a meter through the Backend's `startGenerationMeter` (Organic media
+ * as `studio` with `meta.surface = 'organic'`).
  *
  * A named list rather than an absence: an omitted call site is indistinguishable from a
- * forgotten one. The seam test asserts every generation construction is either behind the
- * credits helper or named here, so adding a new organic generator fails loudly, and
- * switching metering on is deleting an entry.
+ * forgotten one. The seam test (Continuum-Backend/App/billing/__tests__/meteredSites.spec.ts)
+ * asserts every generation construction is either metered in its own file or named here,
+ * so a new unmetered generator fails loudly — naming it here is the only way to exempt one.
  */
-export const UNMETERED_GENERATION_SITES = [
-  'App/organic/creation/calendarGenerator.ts',
-  'App/organic/creation/tools/draftImageTool.ts',
-  'App/organic/creative/tools/generatePostImage.ts',
-  'App/organic/creative/tools/generateHyperframeCover.ts',
-  'App/organic/creative/reel/sceneGenerator.ts',
-] as const;
+export const UNMETERED_GENERATION_SITES: readonly string[] = [];

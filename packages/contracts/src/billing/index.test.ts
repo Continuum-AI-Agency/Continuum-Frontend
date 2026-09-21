@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  allowanceResultSchema,
+  billedCreditsForBaseCost,
   billingCheckoutRequestSchema,
   billingOverviewSchema,
   billingPaymentRequiredSchema,
   billingPlanChangeRequestSchema,
   brandEntitlementsSchema,
+  usageRecordResultSchema,
   usdToCredits,
 } from './index';
 
@@ -101,5 +104,48 @@ describe('billing contracts', () => {
     expect(usdToCredits(10)).toBe(1000);
     expect(usdToCredits(0.29)).toBe(29);
     expect(usdToCredits(0.005)).toBe(0);
+  });
+});
+
+describe('usage metering contracts', () => {
+  it('parses the record_usage_event and check_allowance outputs from the local stack', () => {
+    // Verbatim jsonb from billing.record_usage_event / billing.check_allowance.
+    expect(
+      usageRecordResultSchema.parse({
+        bucket: 'studio',
+        recorded: true,
+        unpriced: false,
+        overageUsd: 0.92,
+        baseCostUsd: 0.8,
+        billedCostUsd: 0.92,
+      }).overageUsd,
+    ).toBe(0.92);
+    expect(
+      allowanceResultSchema.parse({
+        capUsd: 100,
+        reason: 'overage_cap_reached',
+        allowed: false,
+        overageUsd: 100.4,
+        creditsAvailable: 0,
+      }).reason,
+    ).toBe('overage_cap_reached');
+    expect(() =>
+      usageRecordResultSchema.parse({
+        bucket: 'studio',
+        recorded: true,
+        unpriced: false,
+        overageUsd: 0,
+        baseCostUsd: 0,
+        billedCostUsd: 0,
+        belowThreshold: false,
+      }),
+    ).toThrow();
+  });
+
+  it('bills whole credits, rounded up, without float noise', () => {
+    expect(billedCreditsForBaseCost(0.039)).toBe(5); // 4.485 → 5
+    expect(billedCreditsForBaseCost(0.04)).toBe(5); // 4.6 → 5, never 6
+    expect(billedCreditsForBaseCost(0.8)).toBe(92); // exactly 92
+    expect(billedCreditsForBaseCost(0)).toBe(0);
   });
 });

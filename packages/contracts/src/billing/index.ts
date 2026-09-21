@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export * from './modelId';
+export * from './usage';
 
 /**
  * Self-serve billing contracts — the one model: prod `billing.*` (USD ledger).
