@@ -16,13 +16,31 @@ export interface TimelineEncodingSupport {
 export type TimelineEncodingProbe = () => Promise<TimelineEncodingSupport>;
 
 let cached: WebCodecsSupport | null = null;
+let aacEncoderReady: Promise<void> | null = null;
+
+/**
+ * Mediabunny with an AAC encoder guaranteed. Chrome on Linux — the headless browser inside
+ * the Continuum Render service — and Firefox ship no native AAC encoder, so every stitch with
+ * sound failed there; the WASM encoder is registered, and downloaded, only where it is missing.
+ */
+export async function loadMediabunny(): Promise<typeof import('mediabunny')> {
+  const mb = await import('mediabunny');
+  aacEncoderReady ??= mb
+    .canEncodeAudio('aac')
+    .catch(() => false)
+    .then(async (native) => {
+      if (!native) (await import('@mediabunny/aac-encoder')).registerAacEncoder();
+    });
+  await aacEncoderReady;
+  return mb;
+}
 
 export function resetWebcodecsSupportCache(): void {
   cached = null;
 }
 
 async function probeTimelineEncoding(): Promise<TimelineEncodingSupport> {
-  const { canEncodeAudio, canEncodeVideo } = await import('mediabunny');
+  const { canEncodeAudio, canEncodeVideo } = await loadMediabunny();
   const [video, audio] = await Promise.all([
     canEncodeVideo('avc', {
       width: H264_BASELINE_CONFIG.width,
