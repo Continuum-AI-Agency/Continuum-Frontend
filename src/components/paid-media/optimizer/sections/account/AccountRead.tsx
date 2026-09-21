@@ -24,11 +24,13 @@
 import type { AccountCandidate, AccountDetector, BlockedCategory } from '@continuum/contracts';
 import {
   ACCOUNT_DETECTOR_META,
+  ACTION_FAMILY_COPY,
   accountGuards,
   BLOCKED_CATEGORY_COPY,
   blockedCategorySchema,
   CHART_SHAPE_READING,
   chartShapeFor,
+  DETECTOR_ACTION_FAMILY,
   DETECTOR_BLOCKED_ON,
   IMPACT_CLASS_COPY,
   IMPACT_TIER_COPY,
@@ -118,6 +120,34 @@ function ChartWithReading({
   );
 }
 
+/**
+ * What this card will actually do, and whether that is less than someone asked for.
+ *
+ * `null` means nobody has been asked — a read composed before approvals existed. It renders
+ * nothing rather than claiming 'recommend', because "we did not look" and "it recommends" are
+ * different facts.
+ *
+ * The lowered case is the one that earns the pixels: without it, someone sets a detector to
+ * autopilot, watches nothing happen, and concludes the switch is broken.
+ */
+function StateNote({ candidate }: { candidate: AccountCandidate }) {
+  if (!candidate.state) return null;
+  const family = ACTION_FAMILY_COPY[DETECTOR_ACTION_FAMILY[candidate.detector]].label;
+  if (candidate.state_lowered) {
+    return (
+      <p className="text-3xs text-amber-600 dark:text-amber-400" data-testid="state-lowered">
+        Set to act on its own, but “{family}” does not allow it yet — it will recommend instead.
+      </p>
+    );
+  }
+  if (candidate.state === 'autopilot') {
+    return (
+      <p className="text-3xs text-muted-foreground">Acts on its own, inside your guardrails.</p>
+    );
+  }
+  return null;
+}
+
 /** Why the figure is smaller than the gap the chart draws. Silence reads as weakness. */
 function CapNote({ candidate }: { candidate: AccountCandidate }) {
   if (!candidate.capped_by) return null;
@@ -200,6 +230,7 @@ function LeadColumn({
       <Money candidate={candidate} currency={currency} large />
       <p className="text-2xs text-muted-foreground">{candidate.impact_basis}</p>
       <CapNote candidate={candidate} />
+      <StateNote candidate={candidate} />
       {target && onOpenPortfolio ? (
         <Button
           className="mt-auto"
@@ -256,6 +287,7 @@ function RestRow({
         <p className="text-2xs text-muted-foreground">{candidate.impact_basis}</p>
         <Money candidate={candidate} currency={currency} />
         <CapNote candidate={candidate} />
+        <StateNote candidate={candidate} />
         {target && onOpenPortfolio ? (
           <Button
             className="mt-1"

@@ -16,6 +16,10 @@
 import { z } from 'zod';
 import { accountChartSchema } from './account-chart';
 import type { OptimizationObjective } from './engine-contracts';
+// A VALUE import, and insight-approval imports AccountDetector back as a TYPE. The type-only
+// side erases, so there is no runtime cycle — the same arrangement account-chart already uses.
+// Keep the direction: a value import both ways would deadlock module init.
+import { insightStateSchema } from './insight-approval';
 
 export const accountDetectorSchema = z.enum([
   'portfolio_reallocation',
@@ -328,6 +332,23 @@ export const accountCandidateSchema = z.object({
    * $39.48 messaging thread gets read as a $255.98 failed lead.
    */
   result_label: z.string().default('results'),
+  /**
+   * What happens when this fires, after its family's ceiling is applied.
+   *
+   * Null when nobody has been asked — a read composed before approvals existed, or a caller
+   * that does not resolve them. Null is not 'recommend': "we did not look" and "it recommends"
+   * are different facts, and a card that claims a state nobody chose is worse than one that
+   * says nothing.
+   */
+  state: insightStateSchema.nullable().default(null),
+  /**
+   * True when someone asked for MORE than the family allows and got less.
+   *
+   * The whole reason this rides on the candidate rather than being recomputed in the UI: a
+   * state that was asked for and did not take must be visible, or someone sets a detector to
+   * autopilot, sees nothing happen, and stops trusting the switch.
+   */
+  state_lowered: z.boolean().default(false),
   /** Where the card sends a person. */
   cta: z
     .object({
@@ -494,42 +515,43 @@ export const DETECTOR_RETERM: Partial<Record<AccountDetector, string>> = {
  * So: absent means `on`. Adding an objective costs nothing; adding a detector
  * costs only the exceptions someone can actually argue for.
  */
-export const DETECTOR_MUTES: Partial<Record<AccountDetector, Partial<Record<OptimizationObjective, string>>>> =
-  {
-    funnel_coverage: {
-      awareness: 'no upper-funnel step to talk about — the KPI is the top of the funnel',
-    },
-    optimization_event: {
-      awareness: 'the KPI is the goal; there is nothing downstream to mismatch against',
-      traffic: 'the KPI is the goal; there is nothing downstream to mismatch against',
-      clicks: 'the KPI is the goal; there is nothing downstream to mismatch against',
-      link_clicks: 'the KPI is the goal; there is nothing downstream to mismatch against',
-      thruplays: 'the KPI is the goal; there is nothing downstream to mismatch against',
-      post_engagement: 'the KPI is the goal; there is nothing downstream to mismatch against',
-    },
-    post_click: {
-      // traffic KEEPS this one: its KPI is the landing-page view and its
-      // upper-funnel step is the click, so the gap between them IS the question.
-      awareness: 'nothing happens after a click that this objective counts',
-      thruplays: 'nothing happens after a click that this objective counts',
-      post_engagement: 'nothing happens after a click that this objective counts',
-      conversations: 'the conversation IS the conversion — there is no landing page',
-      link_clicks: 'the click is the conversion',
-      clicks: 'the click is the conversion',
-    },
-    new_vs_returning: {
-      app_install: 'an install is new by definition',
-      awareness: 'no customer concept',
-      traffic: 'no customer concept',
-      link_clicks: 'no customer concept',
-      clicks: 'no customer concept',
-      thruplays: 'no customer concept',
-      post_engagement: 'no customer concept',
-    },
-    account_saturation: {
-      awareness: 'frequency rising against flat reach is the GOAL of this buy, not its failure',
-    },
-  };
+export const DETECTOR_MUTES: Partial<
+  Record<AccountDetector, Partial<Record<OptimizationObjective, string>>>
+> = {
+  funnel_coverage: {
+    awareness: 'no upper-funnel step to talk about — the KPI is the top of the funnel',
+  },
+  optimization_event: {
+    awareness: 'the KPI is the goal; there is nothing downstream to mismatch against',
+    traffic: 'the KPI is the goal; there is nothing downstream to mismatch against',
+    clicks: 'the KPI is the goal; there is nothing downstream to mismatch against',
+    link_clicks: 'the KPI is the goal; there is nothing downstream to mismatch against',
+    thruplays: 'the KPI is the goal; there is nothing downstream to mismatch against',
+    post_engagement: 'the KPI is the goal; there is nothing downstream to mismatch against',
+  },
+  post_click: {
+    // traffic KEEPS this one: its KPI is the landing-page view and its
+    // upper-funnel step is the click, so the gap between them IS the question.
+    awareness: 'nothing happens after a click that this objective counts',
+    thruplays: 'nothing happens after a click that this objective counts',
+    post_engagement: 'nothing happens after a click that this objective counts',
+    conversations: 'the conversation IS the conversion — there is no landing page',
+    link_clicks: 'the click is the conversion',
+    clicks: 'the click is the conversion',
+  },
+  new_vs_returning: {
+    app_install: 'an install is new by definition',
+    awareness: 'no customer concept',
+    traffic: 'no customer concept',
+    link_clicks: 'no customer concept',
+    clicks: 'no customer concept',
+    thruplays: 'no customer concept',
+    post_engagement: 'no customer concept',
+  },
+  account_saturation: {
+    awareness: 'frequency rising against flat reach is the GOAL of this buy, not its failure',
+  },
+};
 
 /**
  * What this detector does for this objective.

@@ -51,7 +51,10 @@ export const ACTION_FAMILY_COPY: Record<ActionFamily, { label: string; body: str
     body: 'The new ad set is created paused; the current one keeps running.',
   },
   new_audience: { label: 'Add an audience', body: 'Created paused, beside the current one.' },
-  new_creatives: { label: 'Flash creatives', body: 'Generates into the Library; nothing is published.' },
+  new_creatives: {
+    label: 'Flash creatives',
+    body: 'Generates into the Library; nothing is published.',
+  },
   structure: {
     label: 'Structure changes',
     body: 'Pauses, merges and consolidates. It turns things OFF, which is why it is its own family.',
@@ -177,3 +180,42 @@ export function shippedCeilings(args: {
  * special case naming it.
  */
 export const AUTOPILOT_PREDICTIVENESS_FLOOR = 0.6;
+
+/**
+ * Apply stored approvals to a whole run's candidates.
+ *
+ * Kept here rather than in the worker so the screen, the worker and any future caller get the
+ * SAME answer to "what will this do" — the one rule about a family ceiling is only one rule if
+ * it lives in one place.
+ *
+ * `families` and `insights` are what someone deliberately changed; anything absent falls back
+ * to `defaults`, which the caller builds from the objective's own profile. An empty pair of
+ * maps therefore means "nobody has changed anything", never "everything is off".
+ */
+export function applyApprovals<T extends { detector: AccountDetector }>(
+  candidates: readonly T[],
+  args: {
+    families: Record<string, string>;
+    insights: Record<string, string>;
+    defaults: Record<Exclude<ActionFamily, 'measurement'>, InsightState>;
+  },
+): Array<T & { state: InsightState; state_lowered: boolean }> {
+  const asState = (value: string | undefined): InsightState | null => {
+    const parsed = insightStateSchema.safeParse(value);
+    return parsed.success ? parsed.data : null;
+  };
+  return candidates.map((candidate) => {
+    const family = DETECTOR_ACTION_FAMILY[candidate.detector];
+    const ceiling =
+      family === 'measurement'
+        ? null
+        : (asState(args.families[family]) ??
+          args.defaults[family as Exclude<ActionFamily, 'measurement'>]);
+    const resolved = resolveInsightState({
+      detector: candidate.detector,
+      insight: asState(args.insights[candidate.detector]),
+      familyCeiling: ceiling,
+    });
+    return { ...candidate, state: resolved.effective, state_lowered: resolved.lowered };
+  });
+}

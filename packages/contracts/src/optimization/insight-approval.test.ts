@@ -2,9 +2,10 @@ import { describe, expect, it } from 'bun:test';
 import { accountDetectorSchema, isGuardDetector } from './account-strategy';
 import {
   ACTION_FAMILY_COPY,
-  actionFamilySchema,
+  applyApprovals,
   APPROVABLE_FAMILIES,
   AUTOPILOT_PREDICTIVENESS_FLOOR,
+  actionFamilySchema,
   DETECTOR_ACTION_FAMILY,
   insightStateSchema,
   resolveInsightState,
@@ -117,13 +118,19 @@ describe('autopilot is only offered where the profile was measured', () => {
 
   it('refuses a borrowed prior, however high the number looks', () => {
     // An uncalibrated profile's predictiveness is somebody else's Spearman.
-    expect(shippedCeilings({ calibrated: false, predictiveness: 0.88, rung: 'person' }).budget).toBe('recommend');
+    expect(
+      shippedCeilings({ calibrated: false, predictiveness: 0.88, rung: 'person' }).budget,
+    ).toBe('recommend');
   });
 
   it('excludes the noisiest measured objective by the number, not by naming it', () => {
     // lead and conversations sit at 0.45; the floor is above them and below signup's 0.75.
-    expect(shippedCeilings({ calibrated: true, predictiveness: 0.45, rung: 'person' }).budget).toBe('recommend');
-    expect(shippedCeilings({ calibrated: true, predictiveness: 0.75, rung: 'person' }).budget).toBe('autopilot');
+    expect(shippedCeilings({ calibrated: true, predictiveness: 0.45, rung: 'person' }).budget).toBe(
+      'recommend',
+    );
+    expect(shippedCeilings({ calibrated: true, predictiveness: 0.75, rung: 'person' }).budget).toBe(
+      'autopilot',
+    );
     expect(AUTOPILOT_PREDICTIVENESS_FLOOR).toBeGreaterThan(0.45);
     expect(AUTOPILOT_PREDICTIVENESS_FLOOR).toBeLessThan(0.75);
   });
@@ -148,9 +155,88 @@ describe('autopilot is only offered where the profile was measured', () => {
 
   it('leaves each exclusion its OWN reason rather than one blanket rule', () => {
     // borrowed prior · too noisy · buying a proxy — three different failures, three tests.
-    expect(shippedCeilings({ calibrated: false, predictiveness: 0.9, rung: 'money' }).budget).toBe('recommend');
-    expect(shippedCeilings({ calibrated: true, predictiveness: 0.45, rung: 'money' }).budget).toBe('recommend');
-    expect(shippedCeilings({ calibrated: true, predictiveness: 0.9, rung: 'intent' }).budget).toBe('recommend');
-    expect(shippedCeilings({ calibrated: true, predictiveness: 0.9, rung: 'money' }).budget).toBe('autopilot');
+    expect(shippedCeilings({ calibrated: false, predictiveness: 0.9, rung: 'money' }).budget).toBe(
+      'recommend',
+    );
+    expect(shippedCeilings({ calibrated: true, predictiveness: 0.45, rung: 'money' }).budget).toBe(
+      'recommend',
+    );
+    expect(shippedCeilings({ calibrated: true, predictiveness: 0.9, rung: 'intent' }).budget).toBe(
+      'recommend',
+    );
+    expect(shippedCeilings({ calibrated: true, predictiveness: 0.9, rung: 'money' }).budget).toBe(
+      'autopilot',
+    );
+  });
+});
+
+describe('applyApprovals — one answer to "what will this do"', () => {
+  const defaults = shippedCeilings({ calibrated: true, predictiveness: 0.8, rung: 'money' });
+  const run = (
+    detectors: Array<(typeof accountDetectorSchema.options)[number]>,
+    over: Partial<{ families: Record<string, string>; insights: Record<string, string> }> = {},
+  ) =>
+    applyApprovals(
+      detectors.map((detector) => ({ detector })),
+      { families: {}, insights: {}, defaults, ...over },
+    );
+
+  it('falls back to the shipped default when nobody has changed anything', () => {
+    const [budget, structure] = run(['portfolio_reallocation', 'dead_tail']);
+    expect(budget?.state).toBe('autopilot');
+    expect(structure?.state).toBe('recommend');
+    expect(budget?.state_lowered).toBe(false);
+  });
+
+  it('an empty pair of maps is "nobody changed anything", never "everything off"', () => {
+    // This is the failure mode that matters: a read that cannot reach the table must not
+    // silence the account.
+    for (const c of run([...accountDetectorSchema.options])) {
+      expect(c.state).not.toBe('off');
+    }
+  });
+
+  it('a stored family ceiling beats the shipped default', () => {
+    const [c] = run(['portfolio_reallocation'], { families: { budget: 'recommend' } });
+    expect(c?.state).toBe('recommend');
+  });
+
+  it('lowers a per-insight autopilot under a recommend family, and flags it', () => {
+    const [c] = run(['portfolio_reallocation'], {
+      families: { budget: 'recommend' },
+      insights: { portfolio_reallocation: 'autopilot' },
+    });
+    expect(c?.state).toBe('recommend');
+    expect(c?.state_lowered).toBe(true);
+  });
+
+  it('keeps the stored autopilot so raising the family later restores it', () => {
+    // The stored value is NOT rewritten — resolveInsightState lowers it for today only.
+    const asked = { insights: { portfolio_reallocation: 'autopilot' } };
+    expect(run(['portfolio_reallocation'], { ...asked, families: { budget: 'recommend' } })[0]?.state).toBe('recommend');
+    expect(run(['portfolio_reallocation'], { ...asked, families: { budget: 'autopilot' } })[0]?.state).toBe('autopilot');
+  });
+
+  it('cannot silence measurement, whatever is stored', () => {
+    const [c] = run(['measurement_integrity'], {
+      families: { measurement: 'off' },
+      insights: { measurement_integrity: 'off' },
+    });
+    expect(c?.state).toBe('recommend');
+  });
+
+  it('ignores a stored value that is not a state, rather than trusting it', () => {
+    const [c] = run(['portfolio_reallocation'], { families: { budget: 'ludicrous' } });
+    expect(c?.state).toBe('autopilot'); // falls back to the shipped default
+  });
+
+  it('carries every other field of the candidate through untouched', () => {
+    const [c] = applyApprovals([{ detector: 'dead_tail' as const, id: 'dead_tail:x', money: 102 }], {
+      families: {},
+      insights: {},
+      defaults,
+    });
+    expect(c?.id).toBe('dead_tail:x');
+    expect(c?.money).toBe(102);
   });
 });

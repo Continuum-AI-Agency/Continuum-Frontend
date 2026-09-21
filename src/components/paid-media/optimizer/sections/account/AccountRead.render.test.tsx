@@ -302,3 +302,53 @@ describe('AccountRead — a short deck should not look like a broken one', () =>
     expect(getByTestId('account-deck-note').textContent).toContain('20 of 25');
   });
 });
+
+describe('AccountRead — the card says what it will actually do', () => {
+  it('shows nothing when nobody has been asked', () => {
+    // A read composed before approvals existed. "We did not look" is not "it recommends".
+    const { container } = render(
+      <AccountRead candidates={many(1)} currency="USD" dailySpend={5000} />,
+    );
+    expect(container.textContent).not.toContain('Acts on its own');
+    expect(container.textContent).not.toContain('does not allow it yet');
+  });
+
+  it('says so when a card acts unattended', () => {
+    const { container } = render(
+      <AccountRead
+        candidates={[candidate({ state: 'autopilot' })]}
+        currency="USD"
+        dailySpend={5000}
+      />,
+    );
+    expect(container.textContent).toContain('Acts on its own');
+  });
+
+  it('names the family standing in the way when a choice was lowered', () => {
+    // Without this, someone sets a detector to autopilot, watches nothing happen, and
+    // concludes the switch is broken.
+    const { getByTestId } = render(
+      <AccountRead
+        candidates={[candidate({ state: 'recommend', state_lowered: true })]}
+        currency="USD"
+        dailySpend={5000}
+      />,
+    );
+    const note = getByTestId('state-lowered').textContent ?? '';
+    expect(note).toContain('does not allow it yet');
+    // dead_tail belongs to the structure family, and the reader is told which one to raise
+    expect(note).toContain('Structure changes');
+  });
+
+  it('stays quiet on a plain recommend — the common case is not worth a line', () => {
+    const { container } = render(
+      <AccountRead
+        candidates={[candidate({ state: 'recommend' })]}
+        currency="USD"
+        dailySpend={5000}
+      />,
+    );
+    expect(container.textContent).not.toContain('Acts on its own');
+    expect(container.textContent).not.toContain('does not allow it yet');
+  });
+});
