@@ -21,7 +21,12 @@
 // discounted value while the card shows the real money — which is exactly what the class chip
 // says out loud.
 
-import type { AccountCandidate, AccountDetector, BlockedCategory } from '@continuum/contracts';
+import type {
+  AccountCandidate,
+  AccountDetector,
+  BlockedCategory,
+  InsightState,
+} from '@continuum/contracts';
 import {
   ACCOUNT_DETECTOR_META,
   ACTION_FAMILY_COPY,
@@ -72,6 +77,8 @@ export type AccountReadProps = {
    * every day until the gap list reads as noise.
    */
   deck?: { applies: number; total: number } | null;
+  /** Promote or demote one insight from its own card. Absent renders no control. */
+  onSetState?: (detector: AccountDetector, state: InsightState) => void;
   /** One line over the whole list. Absent on a fallback read, and that is fine. */
   sentence?: string | null;
   onOpenPortfolio?: (portfolioId: string) => void;
@@ -148,6 +155,41 @@ function StateNote({ candidate }: { candidate: AccountCandidate }) {
   return null;
 }
 
+/**
+ * "Always do this" — promoting one insight from the card itself.
+ *
+ * This is where autopilot actually gets adopted. The settings grid is where it gets configured
+ * AFTERWARDS; nobody opens a settings screen to decide they trust a recommendation. The moment
+ * that happens is three weeks into watching the same card be right, looking at it.
+ *
+ * Absent for the measurement family, which approves nothing, and absent when nobody has
+ * resolved a state — offering a control whose effect we cannot predict is worse than offering
+ * none.
+ */
+function AlwaysDoThis({
+  candidate,
+  onSetState,
+}: {
+  candidate: AccountCandidate;
+  onSetState?: (detector: AccountDetector, state: InsightState) => void;
+}) {
+  if (!onSetState || !candidate.state) return null;
+  if (DETECTOR_ACTION_FAMILY[candidate.detector] === 'measurement') return null;
+  const on = candidate.state === 'autopilot';
+  return (
+    <Button
+      className="text-3xs"
+      data-testid="always-do-this"
+      onClick={() => onSetState(candidate.detector, on ? 'recommend' : 'autopilot')}
+      size="sm"
+      type="button"
+      variant="ghost"
+    >
+      {on ? 'Stop doing this on its own' : 'Always do this'}
+    </Button>
+  );
+}
+
 /** Why the figure is smaller than the gap the chart draws. Silence reads as weakness. */
 function CapNote({ candidate }: { candidate: AccountCandidate }) {
   if (!candidate.capped_by) return null;
@@ -192,12 +234,14 @@ function LeadColumn({
   dailySpend,
   doubted,
   onOpenPortfolio,
+  onSetState,
 }: {
   candidate: AccountCandidate;
   currency: string | null;
   dailySpend: number | null;
   doubted: boolean;
   onOpenPortfolio?: (portfolioId: string) => void;
+  onSetState?: (detector: AccountDetector, state: InsightState) => void;
 }) {
   const meta = ACCOUNT_DETECTOR_META[candidate.detector];
   const tier = impactTier(candidate.impact_per_day, dailySpend);
@@ -231,6 +275,7 @@ function LeadColumn({
       <p className="text-2xs text-muted-foreground">{candidate.impact_basis}</p>
       <CapNote candidate={candidate} />
       <StateNote candidate={candidate} />
+      <AlwaysDoThis candidate={candidate} onSetState={onSetState} />
       {target && onOpenPortfolio ? (
         <Button
           className="mt-auto"
@@ -253,12 +298,14 @@ function RestRow({
   dailySpend,
   doubted,
   onOpenPortfolio,
+  onSetState,
 }: {
   candidate: AccountCandidate;
   currency: string | null;
   dailySpend: number | null;
   doubted: boolean;
   onOpenPortfolio?: (portfolioId: string) => void;
+  onSetState?: (detector: AccountDetector, state: InsightState) => void;
 }) {
   const meta = ACCOUNT_DETECTOR_META[candidate.detector];
   const tier = impactTier(candidate.impact_per_day, dailySpend);
@@ -288,6 +335,7 @@ function RestRow({
         <Money candidate={candidate} currency={currency} />
         <CapNote candidate={candidate} />
         <StateNote candidate={candidate} />
+        <AlwaysDoThis candidate={candidate} onSetState={onSetState} />
         {target && onOpenPortfolio ? (
           <Button
             className="mt-1"
@@ -315,6 +363,7 @@ export function AccountRead({
   source = 'fallback',
   sentence = null,
   deck = null,
+  onSetState,
   onOpenPortfolio,
 }: AccountReadProps) {
   const [showRest, setShowRest] = useState(false);
@@ -390,6 +439,7 @@ export function AccountRead({
                 doubted={doubted.has(candidate.detector)}
                 key={candidate.id}
                 onOpenPortfolio={onOpenPortfolio}
+                onSetState={onSetState}
               />
             ))}
           </div>
@@ -421,6 +471,7 @@ export function AccountRead({
                       doubted={doubted.has(candidate.detector)}
                       key={candidate.id}
                       onOpenPortfolio={onOpenPortfolio}
+                      onSetState={onSetState}
                     />
                   ))}
                 </div>

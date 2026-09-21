@@ -9,6 +9,7 @@
 import {
   type AccountEnrollment,
   AccountEnrollmentSchema,
+  type ActionFamily,
   type AdAccount,
   AdAccountSchema,
   type AdDailyTrend,
@@ -47,6 +48,7 @@ import {
   type EnrollRequest,
   type EnrollResult,
   EnrollResultSchema,
+  type InsightState,
   OptimizerActionRowSchema,
   OptimizerAdsetInventoryEnvelopeSchema,
   type OptimizerAdsetInventoryItem,
@@ -1233,6 +1235,51 @@ export function useOptimizerAccountRead(brandId: string, adAccountId: string | n
     enabled: Boolean(brandId && adAccountId),
     staleTime: FIVE_MINUTES,
   });
+}
+
+/**
+ * Changing what an insight is allowed to do.
+ *
+ * Two RPCs rather than one polymorphic call, mirroring the migration: a family and a detector
+ * are different namespaces, and conflating them is how a mistyped detector name silently
+ * becomes a family nobody asked for.
+ *
+ * Both invalidate the account read, because the resolved state rides on each candidate — the
+ * worker applied the ceiling, so the card cannot recompute it locally and be sure it agrees.
+ */
+export function useInsightApprovalMutations(brandId: string, adAccountId: string | null) {
+  const queryClient = useQueryClient();
+  const refresh = () => {
+    void queryClient.invalidateQueries({
+      queryKey: optimizerQueryKeys.accountRead(brandId, adAccountId ?? 'none'),
+    });
+  };
+  const setInsight = useMutation({
+    mutationFn: async (input: { detector: string; state: InsightState }) => {
+      const { error } = await getClient().rpc('optimizer_set_insight_approval', {
+        p_brand_id: brandId,
+        p_ad_account_id: adAccountId,
+        p_detector: input.detector,
+        p_state: input.state,
+      } as never);
+      if (error) throw new Error(`Could not change this insight: ${rpcErrorText(error)}`);
+    },
+    onSuccess: refresh,
+  });
+  const setFamily = useMutation({
+    mutationFn: async (input: { family: ActionFamily; state: InsightState }) => {
+      const { error } = await getClient().rpc('optimizer_set_family_ceiling', {
+        p_brand_id: brandId,
+        p_ad_account_id: adAccountId,
+        p_family: input.family,
+        p_state: input.state,
+      } as never);
+      if (error)
+        throw new Error(`Could not change what this family may do: ${rpcErrorText(error)}`);
+    },
+    onSuccess: refresh,
+  });
+  return { setInsight, setFamily };
 }
 
 export function useOptimizerSpendByObjective(brandId: string, days = 14) {

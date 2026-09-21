@@ -18,7 +18,11 @@ import { KpiTile } from '../components/KpiTile';
 import { StatusChip, type StatusTone } from '../components/StatusChip';
 import { formatCurrency, humanize } from '../format';
 import { pendingWorkCount } from '../reportModel';
-import { useOptimizerAccountRead, useOptimizerSpendByObjective } from '../useOptimizerData';
+import {
+  useInsightApprovalMutations,
+  useOptimizerAccountRead,
+  useOptimizerSpendByObjective,
+} from '../useOptimizerData';
 import { AccountRead } from './account/AccountRead';
 import { OptimizerPanel } from './OptimizerPanel';
 import { PortfolioRowCard } from './PortfolioRowCard';
@@ -89,6 +93,7 @@ export function OptimizerOverview({
   // The account read opens the screen when the worker has written one. Absent is absent:
   // no spinner, no empty shell — the rest of the overview stands on its own.
   const accountRead = useOptimizerAccountRead(brandId, adAccountId);
+  const approvals = useInsightApprovalMutations(brandId, adAccountId);
 
   const dailyTotal = portfolios.reduce((sum, portfolio) => sum + (portfolio.daily_total ?? 0), 0);
   const autopilot = portfolios.filter((portfolio) => portfolio.apply_mode === 'autopilot');
@@ -116,6 +121,7 @@ export function OptimizerOverview({
           currency={read.currency ?? currency ?? null}
           dailySpend={read.scale_per_day ?? dailyTotal}
           onOpenPortfolio={onSelectPortfolio}
+          onSetState={(detector, state) => approvals.setInsight.mutate({ detector, state })}
           deck={read.deck ?? null}
           source={read.model === 'deterministic' ? 'fallback' : 'brief'}
           starved={read.starved as never}

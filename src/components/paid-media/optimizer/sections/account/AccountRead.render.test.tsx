@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { AccountCandidate } from '@continuum/contracts';
 import { accountCandidateSchema } from '@continuum/contracts';
 import { cleanup, render } from '@testing-library/react';
@@ -350,5 +350,70 @@ describe('AccountRead — the card says what it will actually do', () => {
     );
     expect(container.textContent).not.toContain('Acts on its own');
     expect(container.textContent).not.toContain('does not allow it yet');
+  });
+});
+
+describe('AccountRead — promoting an insight from its own card', () => {
+  it('offers the control and reports the detector and the new state', () => {
+    // This is where autopilot actually gets adopted. Nobody opens a settings screen to decide
+    // they trust a recommendation; that happens looking at the card, weeks in.
+    const onSetState = mock();
+    const { getByTestId } = render(
+      <AccountRead
+        candidates={[candidate({ state: 'recommend' })]}
+        currency="USD"
+        dailySpend={5000}
+        onSetState={onSetState}
+      />,
+    );
+    fireEvent.click(getByTestId('always-do-this'));
+    expect(onSetState).toHaveBeenCalledWith('dead_tail', 'autopilot');
+  });
+
+  it('offers the way back out, with the opposite state', () => {
+    const onSetState = mock();
+    const { getByTestId } = render(
+      <AccountRead
+        candidates={[candidate({ state: 'autopilot' })]}
+        currency="USD"
+        dailySpend={5000}
+        onSetState={onSetState}
+      />,
+    );
+    expect(getByTestId('always-do-this').textContent).toContain('Stop doing this');
+    fireEvent.click(getByTestId('always-do-this'));
+    expect(onSetState).toHaveBeenCalledWith('dead_tail', 'recommend');
+  });
+
+  it('never offers it for a family that approves nothing', () => {
+    const { queryByTestId } = render(
+      <AccountRead
+        candidates={[
+          candidate({
+            id: 'measurement_integrity:x',
+            detector: 'measurement_integrity',
+            state: 'recommend',
+            chart: null,
+          }),
+        ]}
+        currency="USD"
+        dailySpend={5000}
+        onSetState={mock()}
+      />,
+    );
+    expect(queryByTestId('always-do-this')).toBeNull();
+  });
+
+  it('never offers it when no state was resolved', () => {
+    // Offering a control whose effect we cannot predict is worse than offering none.
+    const { queryByTestId } = render(
+      <AccountRead
+        candidates={many(1)}
+        currency="USD"
+        dailySpend={5000}
+        onSetState={mock()}
+      />,
+    );
+    expect(queryByTestId('always-do-this')).toBeNull();
   });
 });
