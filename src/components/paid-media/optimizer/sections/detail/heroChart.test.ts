@@ -30,7 +30,9 @@ const cand = (over: Partial<BriefCandidate>): BriefCandidate =>
 
 describe('heroChart — what it refuses to draw', () => {
   it('draws nothing from a window with fewer than two priceable days', () => {
-    expect(heroChart({ candidate: cand({}), series: days([12]), target: 10, resultLabel: 'Leads' })).toBeNull();
+    expect(
+      heroChart({ candidate: cand({}), series: days([12]), target: 10, resultLabel: 'Leads' }),
+    ).toBeNull();
     expect(heroChart({ candidate: null, series: [], target: 10, resultLabel: 'Leads' })).toBeNull();
   });
 
@@ -113,7 +115,12 @@ describe('heroChart — it speaks the objective’s own language', () => {
 
 describe('heroChart — every chart it emits is a valid one', () => {
   it('parses against the shared schema, both shapes', () => {
-    const rates = heroChart({ candidate: null, series: days([12, 14, 16]), target: 10, resultLabel: 'Leads' });
+    const rates = heroChart({
+      candidate: null,
+      series: days([12, 14, 16]),
+      target: 10,
+      resultLabel: 'Leads',
+    });
     const interval = heroChart({
       candidate: cand({ module: 'pause', impact_per_day: 210, results_per_day: 0 }),
       series: days([12, 14]),
@@ -125,7 +132,12 @@ describe('heroChart — every chart it emits is a valid one', () => {
   });
 
   it('gives a reading line for what it drew, and none for nothing', () => {
-    const chart = heroChart({ candidate: null, series: days([12, 14]), target: 10, resultLabel: 'Leads' });
+    const chart = heroChart({
+      candidate: null,
+      series: days([12, 14]),
+      target: 10,
+      resultLabel: 'Leads',
+    });
     expect(heroChartReading(chart)).toContain('cost per result');
     expect(heroChartReading(null)).toBeNull();
   });

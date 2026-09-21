@@ -23,7 +23,11 @@ import { DeliveryPill } from '../DeliveryPill';
 import { formatCpa, formatCurrency } from '../format';
 import { HeldPill } from '../HeldPill';
 import { LookbackToggle } from './LookbackToggle';
-import { buildReallocationStory, type StoryLookback, type StoryRow } from './reallocationStoryModel';
+import {
+  buildReallocationStory,
+  type StoryLookback,
+  type StoryRow,
+} from './reallocationStoryModel';
 
 const STANDING_TONE: Record<StoryRow['standing'], StatusTone> = {
   below: 'success',

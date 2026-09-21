@@ -29,8 +29,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { resolveAdsetName } from './adsetName';
 import { AdSetIdLabel } from './charts/AdSetIdLabel';
 import { pct } from './charts/chartScale';
-import { deriveEfficiency, formatCpa } from './format';
 import { DeliveryPill } from './DeliveryPill';
+import { deriveEfficiency, formatCpa } from './format';
 import { HeldPill } from './HeldPill';
 import { freezeLabel } from './reportModel';
 

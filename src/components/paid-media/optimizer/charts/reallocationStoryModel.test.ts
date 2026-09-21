@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'bun:test';
 import type { AdSetSnapshot, CycleItemRow } from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
-import { blendedCost, buildReallocationStory, defaultStoryLookback } from './reallocationStoryModel';
+import {
+  blendedCost,
+  buildReallocationStory,
+  defaultStoryLookback,
+} from './reallocationStoryModel';
 
 const lead = getOptimizationMetricDefinition('lead');
 

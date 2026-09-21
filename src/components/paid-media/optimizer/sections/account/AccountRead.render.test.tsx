@@ -238,3 +238,67 @@ describe('AccountRead — what could not be asked, grouped by its blocker', () =
     expect(container.textContent).toContain('Unit economics');
   });
 });
+
+describe('AccountRead — a short deck should not look like a broken one', () => {
+  it('says how much of the catalogue this account can even ask', () => {
+    const { getByTestId } = render(
+      <AccountRead
+        candidates={many(1)}
+        currency="USD"
+        dailySpend={5000}
+        deck={{ applies: 20, total: 25 }}
+      />,
+    );
+    const note = getByTestId('account-deck-note').textContent ?? '';
+    expect(note).toContain('20 of 25');
+    expect(note).toContain('no question to ask');
+  });
+
+  it('says so plainly when the whole catalogue applies', () => {
+    const { getByTestId } = render(
+      <AccountRead
+        candidates={many(1)}
+        currency="USD"
+        dailySpend={5000}
+        deck={{ applies: 25, total: 25 }}
+      />,
+    );
+    expect(getByTestId('account-deck-note').textContent).toContain('All 25');
+  });
+
+  it('never names the muted detectors inside the gap list', () => {
+    // Naming them there would invite reading them as missing, and they are not missing.
+    const { getByTestId, container } = render(
+      <AccountRead
+        candidates={many(1)}
+        currency="USD"
+        dailySpend={5000}
+        deck={{ applies: 24, total: 25 }}
+        starved={[{ detector: 'target_economics', missing: 'neither margin nor lifetime value' }]}
+      />,
+    );
+    expect(container.textContent).toContain('1 checks could not run today');
+    expect(getByTestId('account-deck-note').textContent).toContain('24 of 25');
+    expect(getByTestId('account-deck-note').textContent).not.toContain('target_economics');
+  });
+
+  it('stays silent on a read written before the worker carried a deck', () => {
+    const { queryByTestId } = render(
+      <AccountRead candidates={many(1)} currency="USD" dailySpend={5000} />,
+    );
+    expect(queryByTestId('account-deck-note')).toBeNull();
+  });
+
+  it('shows the note even on a quiet day, when the screen is otherwise empty', () => {
+    // A quiet day plus a short deck is exactly when a reader assumes the thing is broken.
+    const { getByTestId } = render(
+      <AccountRead
+        candidates={[]}
+        currency="USD"
+        dailySpend={5000}
+        deck={{ applies: 20, total: 25 }}
+      />,
+    );
+    expect(getByTestId('account-deck-note').textContent).toContain('20 of 25');
+  });
+});

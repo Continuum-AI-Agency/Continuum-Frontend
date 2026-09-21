@@ -61,6 +61,15 @@ export type AccountReadProps = {
   starved?: Array<{ detector: AccountDetector; missing: string }>;
   /** 'brief' when Jaina wrote today's words, 'fallback' when the read is code-composed. */
   source?: 'brief' | 'fallback';
+  /**
+   * How much of the catalogue applies to what this account buys.
+   *
+   * Rendered as ONE line beside the starved list and never inside it. A muted detector is not
+   * a gap: `new_vs_returning` on an app-install account has no question to ask, because an
+   * install is new by definition. Listing it as a gap would print a permanent non-problem
+   * every day until the gap list reads as noise.
+   */
+  deck?: { applies: number; total: number } | null;
   /** One line over the whole list. Absent on a fallback read, and that is fine. */
   sentence?: string | null;
   onOpenPortfolio?: (portfolioId: string) => void;
@@ -273,6 +282,7 @@ export function AccountRead({
   starved = [],
   source = 'fallback',
   sentence = null,
+  deck = null,
   onOpenPortfolio,
 }: AccountReadProps) {
   const [showRest, setShowRest] = useState(false);
@@ -295,6 +305,7 @@ export function AccountRead({
           Every check ran and none of them found money worth moving across this account.
         </p>
         {starved.length > 0 ? <Starved starved={starved} /> : null}
+        <DeckNote deck={deck} />
       </section>
     );
   }
@@ -389,6 +400,7 @@ export function AccountRead({
 
       {/* 5 — what could not be asked, grouped by what would unblock it */}
       {starved.length > 0 ? <Starved starved={starved} /> : null}
+      <DeckNote deck={deck} />
     </section>
   );
 }
@@ -435,5 +447,24 @@ function Starved({ starved }: { starved: Array<{ detector: AccountDetector; miss
           ))}
       </div>
     </details>
+  );
+}
+
+/**
+ * One line saying how much of the catalogue this account's objectives can even ask.
+ *
+ * Deliberately not a list. Naming the muted detectors would invite reading them as missing,
+ * and they are not missing — they do not apply. The count is the whole useful fact, and it is
+ * what stops a short read from looking like a broken one.
+ */
+function DeckNote({ deck }: { deck?: { applies: number; total: number } | null }) {
+  if (!deck || deck.total <= 0) return null;
+  const full = deck.applies >= deck.total;
+  return (
+    <p className="text-3xs text-muted-foreground" data-testid="account-deck-note">
+      {full
+        ? `All ${deck.total} checks apply to what this account buys.`
+        : `${deck.applies} of ${deck.total} checks apply to what this account buys — the rest have no question to ask here.`}
+    </p>
   );
 }

@@ -116,6 +116,7 @@ export function OptimizerOverview({
           currency={read.currency ?? currency ?? null}
           dailySpend={read.scale_per_day ?? dailyTotal}
           onOpenPortfolio={onSelectPortfolio}
+          deck={read.deck ?? null}
           source={read.model === 'deterministic' ? 'fallback' : 'brief'}
           starved={read.starved as never}
         />

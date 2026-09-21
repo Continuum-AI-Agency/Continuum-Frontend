@@ -4,6 +4,7 @@
 // reads the same whether Jaina has written today's words yet or not.
 
 import type {
+  AccountChart,
   BriefCandidate,
   BriefGrowth,
   OptimizationMetricDefinition,
@@ -12,10 +13,9 @@ import type {
   PortfolioListItem,
 } from '@continuum/contracts';
 import { deterministicBrief, readPortfolioBrief } from '@continuum/contracts';
-import type { AccountChart } from '@continuum/contracts';
 import type { FlightPacingModel } from '../../charts/flightPacingModel';
-import { heroChart, heroChartReading } from './heroChart';
 import { impactPerDay } from '../recQueueModel';
+import { heroChart, heroChartReading } from './heroChart';
 import type { RecapModel } from './recapModel';
 
 export type HeroTile = {
@@ -313,8 +313,7 @@ export function buildHeroView(args: {
           promptVersion: 'fallback',
           generatedAt: args.now ?? new Date().toISOString(),
         });
-  const heroCandidate =
-    brief.candidates.find((c) => c.id === brief.hero.candidate_id) ?? null;
+  const heroCandidate = brief.candidates.find((c) => c.id === brief.hero.candidate_id) ?? null;
   const chart = heroChart({
     candidate: heroCandidate,
     series: recap.series,

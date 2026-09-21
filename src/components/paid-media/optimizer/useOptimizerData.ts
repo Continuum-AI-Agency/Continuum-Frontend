@@ -1190,6 +1190,17 @@ const AccountReadEnvelopeSchema = z
         justification_if_not_max: z.string().nullable().catch(null),
         conflicts: z.array(z.object({ a: z.string(), b: z.string(), why: z.string() })).catch([]),
         starved: z.array(z.object({ detector: z.string(), missing: z.string() })).catch([]),
+        // How much of the catalogue applies to what this account buys. Tolerant like the rest
+        // of this envelope: a read written before the worker carried it must still render, and
+        // the screen simply says nothing rather than claiming a deck size it was not told.
+        deck: z
+          .object({
+            applies: z.number(),
+            total: z.number(),
+            muted: z.array(z.string()).catch([]),
+          })
+          .nullable()
+          .catch(null),
         scale_per_day: z.number().nullable().catch(null),
         currency: z.string().nullable().catch(null),
         model: z.string().catch('deterministic'),
