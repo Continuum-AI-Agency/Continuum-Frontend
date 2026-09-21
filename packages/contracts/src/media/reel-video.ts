@@ -45,6 +45,13 @@ export const organicUgcSpecSchema = z
     captionsEnabled: z.boolean().default(true),
     characterDescription: z.string().min(1).max(1_000).nullable().optional(),
     /**
+     * The recurring creator: a person Element (`media.asset_groups`, category
+     * `character`). Its default reference is the character image, its `voice` fact is
+     * the voice, and its id keys the identity seed — so every post that names the same
+     * Element gets the same face, seed and voice. Its rights note is the rights basis.
+     */
+    personaElementId: databaseUuidSchema.optional(),
+    /**
      * How each shot leaves its storyboard panel. `match` closes every shot on the
      * NEXT shot's panel, so the clips flow seamlessly; `cut` (default) lets each
      * clip end where the model takes it, which is the native UGC jump cut.

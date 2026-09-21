@@ -38,6 +38,14 @@ describe('organicUgcSpecSchema', () => {
     });
   });
 
+  it('carries a persona Element id and refuses one that is not a uuid', () => {
+    const personaElementId = '6f1c2a4e-9b7d-4c3a-8e21-0d5f7a9b3c11';
+    expect(organicUgcSpecSchema.parse({ personaElementId }).personaElementId).toBe(
+      personaElementId,
+    );
+    expect(organicUgcSpecSchema.safeParse({ personaElementId: 'persona-1' }).success).toBe(false);
+  });
+
   it('rejects more than three provider asset references', () => {
     expect(
       organicUgcSpecSchema.safeParse({
