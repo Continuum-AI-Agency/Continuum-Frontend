@@ -24,6 +24,7 @@ import {
 } from '@/lib/onboarding/agentClient';
 import { resolveSafeBrandName } from '@/lib/onboarding/brandName';
 import { persistOnboardingBrandKit } from '@/lib/onboarding/inspirationsClient';
+import { PLAN_SCREEN, resumeScreenFor, type ScreenIndex } from '@/lib/onboarding/resumeScreen';
 import { useBrandProfileRevealCache } from '@/lib/onboarding/revealCache';
 import { prepareOnboardingStarter } from '@/lib/onboarding/starterKit';
 import type { OnboardingState } from '@/lib/onboarding/state';
@@ -42,6 +43,7 @@ import { DocumentsScreen } from './screens/DocumentsScreen';
 import { InspirationGenerationScreen } from './screens/InspirationGenerationScreen';
 import { IntegrationsScreen } from './screens/IntegrationsScreen';
 import { InvitesScreen } from './screens/InvitesScreen';
+import { PlanScreen } from './screens/PlanScreen';
 import { UrlScreen } from './screens/UrlScreen';
 import { hasSeenWelcome, WelcomeScreen } from './screens/WelcomeScreen';
 import {
@@ -53,8 +55,6 @@ import {
 import { BackgroundJobsProvider, useBackgroundJobs } from './state/BackgroundJobsProvider';
 import { JobPersistor } from './state/JobPersistor';
 import { runScrape } from './state/jobRunners';
-
-type ScreenIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 const TOTAL_STEPS = 6;
 
@@ -73,6 +73,12 @@ type OnboardingExperienceProps = {
   brandId: string;
   initialState: OnboardingState;
   defaultUrl: string | null;
+  /**
+   * Billing is live, so onboarding ends on "Choose your plan" and completes only once the brand
+   * has a product. False while PostgREST does not expose `billing`: onboarding completes exactly
+   * as it did before billing (billing-cutover).
+   */
+  planRequired: boolean;
 };
 
 export function OnboardingExperience(props: OnboardingExperienceProps) {
@@ -86,18 +92,19 @@ export function OnboardingExperience(props: OnboardingExperienceProps) {
   );
 }
 
-function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps) {
+function ExperienceInner({ initialState, defaultUrl, planRequired }: OnboardingExperienceProps) {
   const router = useRouter();
   const { show } = useToast();
-  const [screen, setScreen] = useState<ScreenIndex>(resumeScreenFor(initialState));
+  const totalSteps = planRequired ? TOTAL_STEPS + 1 : TOTAL_STEPS;
+  const [screen, setScreen] = useState<ScreenIndex>(resumeScreenFor(initialState, planRequired));
   const [welcomeVisible, setWelcomeVisible] = useState(false);
   const persistedStepRef = useRef<ScreenIndex>(screen);
 
   useEffect(() => {
-    if (resumeScreenFor(initialState) === 0 && !hasSeenWelcome()) {
+    if (resumeScreenFor(initialState, planRequired) === 0 && !hasSeenWelcome()) {
       setWelcomeVisible(true);
     }
-  }, [initialState]);
+  }, [initialState, planRequired]);
   const directionRef = useRef<1 | -1>(1);
   const [domain, setDomain] = useState<string>(initialState.brand.website ?? defaultUrl ?? '');
   const { start, patch, jobs, reset } = useBackgroundJobs();
@@ -197,6 +204,23 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
 
     const launchTimer = timing();
     startLaunch(async () => {
+      if (planRequired) {
+        // Approve and start the analysis now; completion waits for a plan on the next screen.
+        try {
+          await approveOnboardingAndStartAnalysisAction(brandId, {
+            idempotencyKey: launchKeyRef.current ?? undefined,
+          });
+          await navigate(PLAN_SCREEN);
+        } catch (error) {
+          show({
+            title: "Couldn't continue",
+            description: error instanceof Error ? error.message : 'Please try again.',
+            variant: 'error',
+          });
+        }
+        launchInFlightRef.current = false;
+        return;
+      }
       try {
         await approveAndLaunchOnboardingAction(brandId, {
           idempotencyKey: launchKeyRef.current ?? undefined,
@@ -253,6 +277,22 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
           });
         }
         await navigate(skipInspirations ? 7 : 6);
+      } catch (error) {
+        show({
+          title: "Couldn't continue",
+          description: error instanceof Error ? error.message : 'Please try again.',
+          variant: 'error',
+        });
+      }
+    });
+  };
+
+  // With billing live, the finale leads to "Choose your plan" instead of completing.
+  const handleContinueToPlan = () => {
+    startLaunch(async () => {
+      try {
+        await updateState({ emailReportOptIn: emailReportOptInRef.current });
+        await navigate(PLAN_SCREEN);
       } catch (error) {
         show({
           title: "Couldn't continue",
@@ -444,8 +484,19 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
         description: 'Review and launch',
         state: stepState(screen, 5),
       },
+      ...(planRequired
+        ? [
+            {
+              id: 'plan' as const,
+              label: 'Choose your plan',
+              description: 'Pick a plan to start',
+              // The finale (screens 6–7) still belongs to Brand DNA; only the plan screen lights this.
+              state: (screen === PLAN_SCREEN ? 'active' : 'pending') as StepperState,
+            },
+          ]
+        : []),
     ],
-    [screen],
+    [screen, planRequired],
   );
 
   const onStepClick = (id: ShellPillId) => {
@@ -463,6 +514,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
     onChangeUrl: () => void navigate(0),
     onLaunch: handleLaunch,
     onContinueToInspirations: handleContinueToInspirations,
+    planRequired,
     designSystemBusy,
     catalogBusy,
     inspirationsEnabled: INSPIRATIONS_ENABLED,
@@ -637,16 +689,16 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
             />
           ) : screen === 1 ? (
             <DocumentsScreen
-              totalSteps={TOTAL_STEPS}
+              totalSteps={totalSteps}
               brandId={brandId}
               onDesignSystemBusyChange={setDesignSystemBusy}
             />
           ) : screen === 2 ? (
-            <CatalogScreen totalSteps={TOTAL_STEPS} onBusyChange={setCatalogBusy} />
+            <CatalogScreen totalSteps={totalSteps} onBusyChange={setCatalogBusy} />
           ) : screen === 3 ? (
             <IntegrationsScreen onAdvance={() => void navigate(4)} />
           ) : screen === 4 ? (
-            <InvitesScreen totalSteps={TOTAL_STEPS} />
+            <InvitesScreen totalSteps={totalSteps} />
           ) : screen === 5 ? (
             <BrandDnaScreen
               agentBuckets={agentBuckets}
@@ -661,10 +713,11 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
               onContinue={() => void navigate(7)}
               onBack={() => void navigate(5)}
             />
-          ) : (
+          ) : screen === 7 ? (
             <InspirationGenerationScreen
               brandId={brandId}
-              onFinish={handleFinishToDashboard}
+              onFinish={planRequired ? handleContinueToPlan : handleFinishToDashboard}
+              finishLabel={planRequired ? 'Choose your plan →' : undefined}
               finishing={launching}
               onBack={() => void navigate(hasConnectedInstagram(state) ? 6 : 5)}
               emailReportOptIn={state.emailReportOptIn ?? true}
@@ -673,6 +726,13 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
                 void updateState({ emailReportOptIn: value });
               }}
               selectedInspiration={selectedInspiration}
+            />
+          ) : (
+            <PlanScreen
+              brandId={brandId}
+              onBack={() => void navigate(INSPIRATIONS_ENABLED ? 7 : 5)}
+              onComplete={handleFinishToDashboard}
+              completing={launching}
             />
           )}
         </motion.div>
@@ -702,27 +762,6 @@ function countSelectedAccounts(state: OnboardingState): number {
   return count;
 }
 
-function resumeScreenFor(state: OnboardingState): ScreenIndex {
-  const brand = state.brand;
-  const hasAnyConnection = Object.values(state.connections).some((c) => c.connected);
-  const hasDna = Boolean(brand.overview) || brand.colors.length > 0 || Boolean(brand.brandVoice);
-  const hasInvites = (state.invites?.length ?? 0) > 0;
-  const hasDocuments = (state.documents?.length ?? 0) > 0;
-
-  // No catalog floor: whether the brand imported products is not derivable from
-  // OnboardingState (the products are Elements, read over HTTP), and a floor that
-  // guessed would skip the step for a brand that never saw it.
-  let dataFloor: ScreenIndex = 0;
-  if (brand.website) dataFloor = 1;
-  if (hasDocuments) dataFloor = 2;
-  if (hasAnyConnection) dataFloor = 4;
-  if (hasInvites) dataFloor = 5;
-  if (hasDna) dataFloor = 5;
-
-  const persistedStep = Math.min(7, Math.max(0, state.step ?? 0)) as ScreenIndex;
-  return Math.max(persistedStep, dataFloor) as ScreenIndex;
-}
-
 function stepState(screen: ScreenIndex, pillIndex: 0 | 1 | 2 | 3 | 4 | 5): StepperState {
   if (pillIndex < screen) return 'done';
   if (pillIndex === screen) return 'active';
@@ -736,6 +775,7 @@ function useBottomBar({
   onLaunch,
   onContinueToInspirations,
   inspirationsEnabled,
+  planRequired,
   launching,
   designSystemBusy,
   catalogBusy,
@@ -746,6 +786,7 @@ function useBottomBar({
   onLaunch: () => void;
   onContinueToInspirations: () => void;
   inspirationsEnabled: boolean;
+  planRequired: boolean;
   launching: boolean;
   designSystemBusy: boolean;
   catalogBusy: boolean;
@@ -874,11 +915,11 @@ function useBottomBar({
       hint: '',
       actions: (
         <Button variant="success" size="sm" onClick={onLaunch} disabled={launching}>
-          {launching ? 'Launching…' : 'Launch Continuum ✦'}
+          {launching ? 'Launching…' : planRequired ? 'Choose your plan →' : 'Launch Continuum ✦'}
         </Button>
       ),
     };
   }
-  // Screens 6 (inspirations) and 7 (generation) render their own footer CTAs.
+  // Screens 6 (inspirations), 7 (generation) and 8 (plan) render their own footer CTAs.
   return { hint: '', actions: null };
 }

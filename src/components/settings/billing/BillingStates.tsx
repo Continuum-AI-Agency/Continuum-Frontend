@@ -1,4 +1,4 @@
-import { Building2, Check, Lock, RotateCw, TriangleAlert } from 'lucide-react';
+import { Building2, Check, Clock, Lock, RotateCw, TriangleAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -40,6 +40,23 @@ export function BillingLockedState({ brandName }: { brandName: string }) {
       <p className="max-w-[65ch] text-sm text-muted-foreground">
         Plans, payment details and invoices for {brandName} are managed by its owner. Ask them to
         change a plan or buy Canvas credits.
+      </p>
+    </StateBlock>
+  );
+}
+
+// billing-cutover: shown while PostgREST does not expose `billing`. Nothing here calls
+// billing-api, which is not deployed until the same cutover.
+export function BillingNotLiveState() {
+  return (
+    <StateBlock
+      testId="billing-not-live"
+      icon={<Clock className="size-4" aria-hidden />}
+      title="Billing isn't available yet"
+    >
+      <p className="max-w-[65ch] text-sm text-muted-foreground">
+        Plans, payment details and invoices will appear here once self-serve billing opens.
+        Nothing about your current access changes in the meantime.
       </p>
     </StateBlock>
   );

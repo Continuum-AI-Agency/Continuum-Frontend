@@ -46,6 +46,7 @@
     "command-palette:e2e:bench": "playwright test --config playwright.command-palette.config.ts --workers=1",
     "brands:dedupe:e2e:bench": "playwright test --config playwright.brand-dedupe.config.ts --workers=1",
     "billing:settings:e2e:bench": "playwright test --config playwright.billing-settings.config.ts --workers=1",
+    "billing:gates:fe:bench": "playwright test --config playwright.billing-gates.config.ts --workers=1",
     "brands:session-tenancy:e2e:bench": "set -a; . ./.env.local; set +a; playwright test --config playwright.brand-session-tenancy.config.ts --workers=1",
     "optimizer:tooltip:e2e:bench": "playwright test --config playwright.optimizer-tooltip.config.ts --workers=1",
     "integrations:google-assets-render:e2e:bench": "bun run src/lib/integrations/google-assets-render.bench.ts",

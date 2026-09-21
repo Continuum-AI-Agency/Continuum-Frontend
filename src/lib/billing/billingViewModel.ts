@@ -29,10 +29,13 @@ export type PlanAction = 'checkout' | 'add' | 'remove' | 'none';
 export type PlanCardView = {
   planCode: PlanCode;
   name: string;
+  monthlyPriceUsd: number;
   priceLabel: string;
   features: string[];
   status: PlanStatus;
   action: PlanAction;
+  /** The plan grants the product a gated page sent the user here for (`?need=`). */
+  highlighted: boolean;
 };
 
 export type CanvasCreditsView = {
@@ -136,7 +139,19 @@ export function isBrandOwner(
   );
 }
 
-export function toBillingView(overview: BillingOverview): BillingView {
+/** What a highlighted plan says it unlocks, per `?need=` product. */
+export const NEED_LABEL: Record<ProductCode, string> = {
+  studio: 'AI Canvas',
+  organic_agent: 'Organic',
+  paid_media: 'paid media',
+  trends: 'Trends',
+  mcp: 'MCP connections',
+};
+
+export function toBillingView(
+  overview: BillingOverview,
+  need: ProductCode | null = null,
+): BillingView {
   const { entitlements, subscription } = overview;
   if (entitlements.billingModel === 'contract') {
     return { kind: 'contract', features: featuresFor(entitlements.products) };
@@ -152,6 +167,7 @@ export function toBillingView(overview: BillingOverview): BillingView {
     .map<PlanCardView>((plan) => ({
       planCode: plan.planCode,
       name: plan.displayName,
+      monthlyPriceUsd: plan.monthlyPriceUsd,
       priceLabel: formatUsd(plan.monthlyPriceUsd),
       features: featuresFor(plan.products, plan.includedCanvasCredits),
       status: entitlements.plans.includes(plan.planCode)
@@ -160,6 +176,7 @@ export function toBillingView(overview: BillingOverview): BillingView {
           ? 'activating'
           : 'available',
       action: planAction(plan.planCode, livePlans),
+      highlighted: need !== null && plan.products.includes(need),
     }));
 
   return {

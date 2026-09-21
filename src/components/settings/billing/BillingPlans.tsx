@@ -3,7 +3,7 @@
 import type { PlanCode } from '@continuum/contracts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import {
   AlertDialog,
@@ -34,9 +34,19 @@ type BillingPlansProps = {
   brandId: string;
   plans: PlanCardView[];
   onPlanChanged: (change: PendingBillingChange) => void;
+  /** What a gated page sent the user here for (`?need=`), named on the highlighted plan. */
+  needLabel?: string | null;
 };
 
-export function BillingPlans({ brandId, plans, onPlanChanged }: BillingPlansProps) {
+export function BillingPlans({ brandId, plans, onPlanChanged, needLabel }: BillingPlansProps) {
+  const highlightedRef = useRef<HTMLLIElement>(null);
+  // A gated page sent the user here: bring the plan that unlocks it into view (on a phone the
+  // two plans stack, and the one they need may be the second).
+  useEffect(() => {
+    highlightedRef.current?.scrollIntoView({ block: 'nearest' });
+  }, []);
+  const anyHighlighted = plans.some((plan) => plan.highlighted);
+
   return (
     <ul
       aria-label="Plans"
@@ -45,7 +55,9 @@ export function BillingPlans({ brandId, plans, onPlanChanged }: BillingPlansProp
       {plans.map((plan) => (
         <li
           key={plan.planCode}
+          ref={plan.highlighted ? highlightedRef : undefined}
           aria-label={plan.name}
+          data-highlighted={plan.highlighted || undefined}
           className="flex min-w-0 flex-col gap-3 py-4 first:pt-0 last:pb-0 @[36rem]/settings-section:px-[var(--card-pad)] @[36rem]/settings-section:py-0 @[36rem]/settings-section:first:pl-0 @[36rem]/settings-section:last:pr-0"
         >
           <div className="flex items-start justify-between gap-3">
@@ -61,6 +73,15 @@ export function BillingPlans({ brandId, plans, onPlanChanged }: BillingPlansProp
             </div>
             <PlanStatusPill status={plan.status} />
           </div>
+          {plan.highlighted && needLabel ? (
+            <p
+              data-testid="billing-plan-needed"
+              className="flex items-center gap-1.5 text-xs font-medium text-primary"
+            >
+              <span aria-hidden className="size-1.5 rounded-full bg-primary" />
+              Unlocks {needLabel}
+            </p>
+          ) : null}
           <ul className="flex-1 space-y-1.5">
             {plan.features.map((feature) => (
               <li key={feature} className="flex gap-2 text-sm text-muted-foreground">
@@ -69,7 +90,12 @@ export function BillingPlans({ brandId, plans, onPlanChanged }: BillingPlansProp
               </li>
             ))}
           </ul>
-          <PlanAction brandId={brandId} plan={plan} onPlanChanged={onPlanChanged} />
+          <PlanAction
+            brandId={brandId}
+            plan={plan}
+            onPlanChanged={onPlanChanged}
+            emphasis={anyHighlighted ? plan.highlighted : true}
+          />
         </li>
       ))}
     </ul>
@@ -93,14 +119,17 @@ function PlanAction({
   brandId,
   plan,
   onPlanChanged,
+  emphasis,
 }: {
   brandId: string;
   plan: PlanCardView;
   onPlanChanged: (change: PendingBillingChange) => void;
+  /** False for the plan that is NOT the one a gated page asked for — it steps back to outline. */
+  emphasis: boolean;
 }) {
   switch (plan.action) {
     case 'checkout':
-      return <CheckoutButton brandId={brandId} plan={plan} />;
+      return <CheckoutButton brandId={brandId} plan={plan} emphasis={emphasis} />;
     case 'add':
     case 'remove':
       return (
@@ -120,7 +149,15 @@ function PlanAction({
   }
 }
 
-function CheckoutButton({ brandId, plan }: { brandId: string; plan: PlanCardView }) {
+function CheckoutButton({
+  brandId,
+  plan,
+  emphasis,
+}: {
+  brandId: string;
+  plan: PlanCardView;
+  emphasis: boolean;
+}) {
   const { show } = useToast();
   const checkout = useMutation({
     mutationFn: (planCode: PlanCode) => {
@@ -139,7 +176,7 @@ function CheckoutButton({ brandId, plan }: { brandId: string; plan: PlanCardView
 
   return (
     <Button
-      variant="cta"
+      variant={emphasis ? 'cta' : 'outline'}
       className="w-full @[36rem]/settings-section:w-fit"
       disabled={redirecting}
       aria-busy={redirecting}

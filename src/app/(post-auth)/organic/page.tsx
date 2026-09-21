@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
+import { ProductGate } from '@/components/billing/ProductGate';
 import type { OrganicAgentMentionContext } from '@/components/organic/agent/OrganicAgentPanel';
 import { OrganicAgentPanelLazy } from '@/components/organic/agent/OrganicAgentPanelLazy';
 import { OrganicMetricsDashboardLazy } from '@/components/organic/OrganicMetricsDashboardLazy';
@@ -415,6 +416,9 @@ const VALID_VIEWS = ['week', 'month', 'list'] as const;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function OrganicPage({ searchParams }: OrganicPageProps) {
+  // Before the Suspense boundary, so a brand without Organic never sees the planner skeleton.
+  const denied = await ProductGate('organic');
+  if (denied) return denied;
   const resolvedSearchParams = (searchParams ? await searchParams : undefined) ?? {};
   const initialSelectedDraftIdRaw = resolvedSearchParams.draftId;
   const initialWeekStartRaw = resolvedSearchParams.weekStartId ?? resolvedSearchParams.weekStart;

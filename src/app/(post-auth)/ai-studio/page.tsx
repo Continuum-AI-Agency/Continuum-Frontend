@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
-import { TierAccessRedirect } from '@/components/ui/TierAccessRedirect';
+import { ProductGate } from '@/components/billing/ProductGate';
 import { resolveInitialCanvasRoomId } from '@/lib/ai-studio/canvas-room.server';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import AIStudioClient from './AIStudioClient';
@@ -25,17 +25,14 @@ type AIStudioPageProps = {
 
 export default async function AIStudioPage({ searchParams }: AIStudioPageProps) {
   const { roomId, focusNodeId } = await searchParams;
-  const { activeBrandId, brandSummaries, activeBrandTier } = await getActiveBrandContext();
+  const { activeBrandId, brandSummaries } = await getActiveBrandContext();
 
   if (!activeBrandId) {
     redirect('/onboarding');
   }
 
-  if (activeBrandTier === 0) {
-    return (
-      <TierAccessRedirect description="AI Studio is a paid feature. Please contact an Administrator." />
-    );
-  }
+  const denied = await ProductGate('ai-studio');
+  if (denied) return denied;
 
   const brandName =
     brandSummaries.find((brand) => brand.id === activeBrandId)?.name ?? 'Untitled brand';

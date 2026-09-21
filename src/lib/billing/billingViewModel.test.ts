@@ -166,6 +166,20 @@ describe('toBillingView — states', () => {
     expect(view.plans[0]?.status).toBe('activating');
   });
 
+  test('?need= highlights exactly the plan that grants the product', () => {
+    const highlightedFor = (need: Parameters<typeof toBillingView>[1]) => {
+      const view = toBillingView(overview({}), need);
+      if (view.kind !== 'self_serve') throw new Error('expected self_serve');
+      return view.plans.filter((plan) => plan.highlighted).map((plan) => plan.planCode);
+    };
+    expect(highlightedFor('paid_media')).toEqual(['paid_media']);
+    expect(highlightedFor('studio')).toEqual(['organic_studio']);
+    expect(highlightedFor('organic_agent')).toEqual(['organic_studio']);
+    // No plan sells Trends self-serve, and no need highlights nothing.
+    expect(highlightedFor('trends')).toEqual([]);
+    expect(highlightedFor(null)).toEqual([]);
+  });
+
   test('a canceled subscription goes back to Checkout', () => {
     const view = selfServe(
       overview({ subscription: subscription(['organic_studio'], 'canceled') }),

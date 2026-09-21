@@ -1,3 +1,5 @@
+import { notifyPaymentRequired } from '@/lib/billing/paymentRequired';
+
 export type ApiErrorPayload = {
   message?: string;
   code?: string;
@@ -25,6 +27,9 @@ export async function toApiError(response: Response): Promise<ApiError> {
   } catch {
     // ignore non-JSON errors
   }
+  // A billing 402 gets its upgrade / buy-credits CTA here, the one place every Backend error
+  // passes through; the ApiError still throws so the caller's own handling is unchanged.
+  notifyPaymentRequired(response.status, payload);
   let message = payload?.message;
   if (!message && typeof payload?.error === 'string') {
     message = payload.error;

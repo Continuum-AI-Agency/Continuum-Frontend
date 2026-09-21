@@ -1,7 +1,9 @@
 'use client';
 
+import { productCodeSchema } from '@continuum/contracts';
 import { useMutation } from '@tanstack/react-query';
 import { CreditCard } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
@@ -11,6 +13,7 @@ import {
   BillingContractState,
   BillingErrorState,
   BillingLockedState,
+  BillingNotLiveState,
   BillingSkeleton,
 } from '@/components/settings/billing/BillingStates';
 import {
@@ -22,6 +25,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { isBillingManagerRequired, openBillingPortal } from '@/lib/billing/billingApi';
 import {
   isBrandOwner,
+  NEED_LABEL,
   type PendingBillingChange,
   type SelfServeBillingView,
   toBillingView,
@@ -31,18 +35,21 @@ import { billingReturnUrl, useBillingOverviewWithPendingChange } from '@/lib/bil
 // Settings → Billing for the active brand. Only its owner sees plans, the card and invoices;
 // everyone else gets the locked state without a request (billing-api 403s them anyway).
 //
-// `tier` is still passed by the settings page and deliberately ignored: access is read from
-// billing entitlements now, and the prop leaves the mount point when the page stops reading tier.
+// A gated page sends the user here as `?section=billing&need=<product>`; the plan that grants
+// that product is highlighted.
 
 type BrandBillingPanelProps = {
-  tier: number;
+  /** False while PostgREST does not expose `billing` — the settings page reads it server-side. */
+  billingLive: boolean;
 };
 
-export function BrandBillingPanel(_props: BrandBillingPanelProps) {
+export function BrandBillingPanel({ billingLive }: BrandBillingPanelProps) {
   const { activeBrandId, brandSummaries, permissions } = useActiveBrandContext();
   const brandName =
     brandSummaries.find((brand) => brand.id === activeBrandId)?.name ?? 'this brand';
 
+  // billing-cutover: before go-live there is no billing-api to ask.
+  if (!billingLive) return <BillingNotLiveState />;
   if (!isBrandOwner(permissions, activeBrandId)) {
     return <BillingLockedState brandName={brandName} />;
   }
@@ -51,22 +58,25 @@ export function BrandBillingPanel(_props: BrandBillingPanelProps) {
 
 function OwnerBillingPanel({ brandId, brandName }: { brandId: string; brandName: string }) {
   const { overview, pending, track } = useBillingOverviewWithPendingChange(brandId);
+  const need = productCodeSchema.safeParse(useSearchParams().get('need'));
 
   if (overview.isPending) return <BillingSkeleton />;
   if (overview.isError) {
-    if (isBillingManagerRequired(overview.error)) return <BillingLockedState brandName={brandName} />;
+    if (isBillingManagerRequired(overview.error))
+      return <BillingLockedState brandName={brandName} />;
     return (
       <BillingErrorState message={overview.error.message} onRetry={() => void overview.refetch()} />
     );
   }
 
-  const view = toBillingView(overview.data);
+  const view = toBillingView(overview.data, need.success ? need.data : null);
   if (view.kind === 'contract') return <BillingContractState features={view.features} />;
 
   return (
     <SelfServeBilling
       brandId={brandId}
       view={view}
+      needLabel={need.success ? NEED_LABEL[need.data] : null}
       waitingOnStripe={pending !== null}
       onPlanChanged={track}
     />
@@ -87,18 +97,25 @@ function PanelRow({ title, children }: { title: string; children: ReactNode }) {
 function SelfServeBilling({
   brandId,
   view,
+  needLabel,
   waitingOnStripe,
   onPlanChanged,
 }: {
   brandId: string;
   view: SelfServeBillingView;
+  needLabel: string | null;
   waitingOnStripe: boolean;
   onPlanChanged: (change: PendingBillingChange) => void;
 }) {
   return (
     <div className="divide-y divide-border" aria-busy={waitingOnStripe}>
       <PanelRow title="Plans">
-        <BillingPlans brandId={brandId} plans={view.plans} onPlanChanged={onPlanChanged} />
+        <BillingPlans
+          brandId={brandId}
+          plans={view.plans}
+          onPlanChanged={onPlanChanged}
+          needLabel={needLabel}
+        />
       </PanelRow>
       <PanelRow title="Payment method">
         <PaymentMethodRow brandId={brandId} view={view} />
@@ -175,7 +192,9 @@ function PaymentMethodRow({ brandId, view }: { brandId: string; view: SelfServeB
           {redirecting ? 'Opening Stripe…' : 'Manage payment method'}
         </Button>
       ) : (
-        <p className="text-xs text-muted-foreground">Checkout asks for a card when you choose a plan.</p>
+        <p className="text-xs text-muted-foreground">
+          Checkout asks for a card when you choose a plan.
+        </p>
       )}
     </div>
   );

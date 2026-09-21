@@ -1,5 +1,9 @@
 'use client';
 
+// billing-cutover: the tier-era gate — a warning toast and a replace to the dashboard — kept
+// verbatim so every gated page behaves exactly as before while billing is not live. ProductGate
+// renders it only on that branch; wave 4 deletes this file with the rest of the tier fallback.
+
 import { ShieldAlert } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef } from 'react';
@@ -10,17 +14,17 @@ import { useToast } from '@/components/ui/ToastProvider';
 const DEFAULT_REDIRECT = '/dashboard';
 const DEFAULT_TITLE = 'Access Restricted';
 
-type TierAccessRedirectProps = {
+type LegacyTierRedirectProps = {
   description: string;
   title?: string;
   redirectTo?: string;
 };
 
-export function TierAccessRedirect({
+export function LegacyTierRedirect({
   description,
   title = DEFAULT_TITLE,
   redirectTo = DEFAULT_REDIRECT,
-}: TierAccessRedirectProps) {
+}: LegacyTierRedirectProps) {
   const { show } = useToast();
   const router = useRouter();
   const hasTriggered = useRef(false);

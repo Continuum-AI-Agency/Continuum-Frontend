@@ -200,9 +200,12 @@ export const brandInviteSchema = z.object({
   expiresAt: z.union([isoDateString, z.null()]).optional(),
 });
 
+// The last screen index: 8 is "Choose your plan", reached only once billing is live.
+export const LAST_ONBOARDING_STEP = 8;
+
 const onboardingStateSchema = z.object({
   catalogCompleted: z.boolean().default(false),
-  step: z.number().int().min(0).max(7),
+  step: z.number().int().min(0).max(LAST_ONBOARDING_STEP),
   brand: brandSchema,
   documents: z.array(onboardingDocumentSchema),
   connections: z.object(connectionShape),
@@ -222,7 +225,7 @@ const onboardingStateSchema = z.object({
 
 const onboardingPatchSchema = z.object({
   catalogCompleted: z.boolean().optional(),
-  step: z.number().int().min(0).max(7).optional(),
+  step: z.number().int().min(0).max(LAST_ONBOARDING_STEP).optional(),
   brand: brandSchema.partial().optional(),
   documents: z.array(onboardingDocumentSchema).optional(),
   connections: z.object(connectionPatchShape).partial().optional(),
@@ -450,7 +453,7 @@ export function createBrandId(): string {
 function clampStep(step: number): number {
   if (Number.isNaN(step)) return 0;
   if (step < 0) return 0;
-  if (step > 7) return 7;
+  if (step > LAST_ONBOARDING_STEP) return LAST_ONBOARDING_STEP;
   return step;
 }
 

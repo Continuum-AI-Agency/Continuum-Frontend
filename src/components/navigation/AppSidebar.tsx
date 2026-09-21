@@ -1,5 +1,6 @@
 'use client';
 
+import type { ProductCode } from '@continuum/contracts';
 import { ChevronRight, Lock, LogOut, Moon, Search, Sun } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'motion/react';
 import Link from 'next/link';
@@ -38,6 +39,7 @@ import {
   type AutomationDeploymentEnvironment,
   canAccessAutomations,
 } from '@/lib/automations/access';
+import { PLAN_NAME_FOR_PRODUCT } from '@/lib/billing/productAccess';
 import { isAdminUser } from '@/lib/brands/brand-switcher-utils';
 import { cn } from '@/lib/utils';
 import { BrandSwitcher } from './BrandSwitcher';
@@ -131,8 +133,10 @@ function RouteAwareCollapsible({
 
 function AppSidebarInner({
   automationEnvironment,
+  lockedProducts,
 }: {
   automationEnvironment: AutomationDeploymentEnvironment;
+  lockedProducts: readonly ProductCode[];
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -413,12 +417,20 @@ function AppSidebarInner({
       );
     }
 
+    // Still a live link: the page's ProductGate sends a brand without the product to Billing,
+    // with the plan that unlocks it highlighted. The lock only says so before the click.
+    const lockedBy =
+      item.product && lockedProducts.includes(item.product)
+        ? (PLAN_NAME_FOR_PRODUCT[item.product] ?? 'an upgrade')
+        : null;
+    const lockedLabel = lockedBy ? `${item.label} (needs ${lockedBy})` : undefined;
+
     return (
       <SidebarMenuItem key={item.href}>
         <SidebarMenuButton
           asChild
           isActive={active}
-          tooltip={item.label}
+          tooltip={lockedLabel ?? item.label}
           size="default"
           onMouseEnter={() => router.prefetch(item.href)}
           className={cn(
@@ -426,7 +438,11 @@ function AppSidebarInner({
             active ? 'text-[var(--sidebar-foreground)]' : 'text-[var(--sidebar-muted)]',
           )}
         >
-          <Link href={item.href}>
+          <Link
+            href={item.href}
+            aria-label={lockedLabel}
+            data-locked={lockedBy ? 'true' : undefined}
+          >
             {active ? (
               <ActiveMarker layoutId="nav-active-marker" animate={!reduce} className="h-4 w-0.5" />
             ) : null}
@@ -434,6 +450,12 @@ function AppSidebarInner({
             <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
               {item.label}
             </span>
+            {lockedBy ? (
+              <Lock
+                aria-hidden
+                className="ml-auto !h-3.5 !w-3.5 stroke-[1.8] text-[var(--sidebar-muted-dim)] group-data-[collapsible=icon]:hidden"
+              />
+            ) : null}
           </Link>
         </SidebarMenuButton>
         {item.badge ? (
@@ -634,12 +656,18 @@ function AppSidebarInner({
 
 export function AppSidebar({
   automationEnvironment,
+  lockedProducts = [],
 }: {
   automationEnvironment: AutomationDeploymentEnvironment;
+  /** Products the active brand lacks (computed server-side). Empty until billing is live. */
+  lockedProducts?: readonly ProductCode[];
 }) {
   return (
     <Suspense fallback={null}>
-      <AppSidebarInner automationEnvironment={automationEnvironment} />
+      <AppSidebarInner
+        automationEnvironment={automationEnvironment}
+        lockedProducts={lockedProducts}
+      />
     </Suspense>
   );
 }

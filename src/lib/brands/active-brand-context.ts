@@ -3,6 +3,8 @@ import 'server-only';
 import { cache } from 'react';
 import { requireClaimsIdentity } from '@/lib/auth/claims';
 import type { AuthIdentity } from '@/lib/auth/identity';
+import { type BrandAccessClient, readBrandAccess } from '@/lib/billing/brandAccess.server';
+import type { BrandAccess } from '@/lib/billing/productAccess';
 import { setActiveBrandPreference } from '@/lib/brands/preferences';
 import { resolveActiveBrandId } from '@/lib/brands/resolve-active-brand';
 import type { BrandSummary } from '@/lib/repositories/brandProfile';
@@ -37,9 +39,15 @@ export type ActiveBrandContext = {
     brand_profile_id: string;
     role: string | null;
   }>;
-  activeBrandTier: number;
+  /**
+   * What the active brand may open: its billing products, whether billing is live, and (until
+   * the go-live cutover) the tier that decides access while it is not.
+   */
+  brandAccess: BrandAccess;
   user: AuthIdentity | null;
 };
+
+const NO_BRAND_ACCESS: BrandAccess = { billingLive: false, products: [], legacyTier: 0 };
 
 type BrandPermissionRow = {
   brand_profile_id: string;
@@ -150,7 +158,7 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
 
   let brandMap = new Map<
     string,
-    { name: string; logoPath: string | null; tier: number; completedAt: string | null }
+    { name: string; logoPath: string | null; completedAt: string | null }
   >();
 
   // Run brand_profiles lookup and get_active_brand_id RPC in parallel — both only need
@@ -160,7 +168,7 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
       ? supabase
           .schema('brand_profiles')
           .from('brand_profiles')
-          .select('id, brand_name, logo_path, tier, completed_at')
+          .select('id, brand_name, logo_path, completed_at')
           .in('id', allBrandIds)
           // Exclude soft-deleted brands (delete_brand_profile sets active=false).
           // Without this, a deleted brand reappears because its permissions row
@@ -171,7 +179,6 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
             id: string;
             brand_name: string | null;
             logo_path: string | null;
-            tier: number;
             completed_at: string | null;
           }>,
           error: null,
@@ -194,7 +201,6 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
         {
           name: brand.brand_name ?? 'Untitled brand',
           logoPath: brand.logo_path ?? null,
-          tier: brand.tier,
           completedAt: brand.completed_at ?? null,
         },
       ]),
@@ -206,6 +212,23 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
   // a deleted brand from lingering as the active pointer or blocking the
   // onboarding redirect when it was the user's only brand.
   const visiblePermittedIds = permittedIds.filter((id) => brandMap.has(id));
+
+  const { data: activeBrandData, error: activeBrandError } = activeBrandResult;
+  if (activeBrandError && visiblePermittedIds.length > 0) {
+    console.error('[activeBrand] active brand rpc failed', activeBrandError);
+  }
+  const { activeBrandId, shouldPersist } =
+    visiblePermittedIds.length > 0
+      ? resolveActiveBrandId({
+          candidateBrandId: typeof activeBrandData === 'string' ? activeBrandData : null,
+          permittedBrandIds: visiblePermittedIds,
+        })
+      : { activeBrandId: null, shouldPersist: false };
+
+  // Started now so the entitlements read overlaps logo signing instead of queueing behind it.
+  const brandAccessPromise = activeBrandId
+    ? readBrandAccess(activeBrandId, supabase as unknown as BrandAccessClient)
+    : Promise.resolve(NO_BRAND_ACCESS);
 
   // Batch logo signing: one request for all brands instead of N individual calls.
   const pathsToSign = allBrandIds
@@ -247,27 +270,6 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
     ];
   });
 
-  if (visiblePermittedIds.length === 0) {
-    return {
-      activeBrandId: null,
-      brandSummaries,
-      permissions: perms ?? [],
-      activeBrandTier: 0,
-      user,
-    };
-  }
-
-  const { data: activeBrandData, error: activeBrandError } = activeBrandResult;
-
-  if (activeBrandError) {
-    console.error('[activeBrand] active brand rpc failed', activeBrandError);
-  }
-
-  const { activeBrandId, shouldPersist } = resolveActiveBrandId({
-    candidateBrandId: typeof activeBrandData === 'string' ? activeBrandData : null,
-    permittedBrandIds: visiblePermittedIds,
-  });
-
   if (activeBrandId && shouldPersist) {
     try {
       await setActiveBrandPreference(activeBrandId);
@@ -276,6 +278,11 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
     }
   }
 
-  const activeBrandTier = activeBrandId ? (brandMap.get(activeBrandId)?.tier ?? 0) : 0;
-  return { activeBrandId, brandSummaries, permissions: perms ?? [], activeBrandTier, user };
+  return {
+    activeBrandId,
+    brandSummaries,
+    permissions: perms ?? [],
+    brandAccess: await brandAccessPromise,
+    user,
+  };
 });

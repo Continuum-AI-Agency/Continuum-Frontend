@@ -1,3 +1,4 @@
+import type { ProductCode } from '@continuum/contracts';
 import {
   Activity,
   BookOpen,
@@ -44,6 +45,9 @@ export type AppNavigationItem = {
   // tooltip + accessible name). Required reading for disabled items so they
   // never read as an unexplained dead affordance.
   disabledReason?: string;
+  // The billing product the destination needs. A brand without it sees a lock on
+  // the entry, but the link still goes to the page — which sends it to Billing.
+  product?: ProductCode;
 };
 
 export type AppNavigationGroup = {
@@ -62,18 +66,21 @@ const ORGANIC_ITEMS: AppNavigationItem[] = [
     href: '/organic?tab=agent',
     icon: Bot,
     accentColor: 'text-emerald-500',
+    product: 'organic_agent',
   },
   {
     label: 'Organic Analytics',
     href: '/organic?tab=metrics',
     icon: ChartColumn,
     accentColor: 'text-emerald-500',
+    product: 'organic_agent',
   },
   {
     label: 'Calendar',
     href: '/organic?tab=planner',
     icon: CalendarDays,
     accentColor: 'text-emerald-500',
+    product: 'organic_agent',
   },
 ];
 
@@ -82,18 +89,26 @@ const ORGANIC_ITEMS: AppNavigationItem[] = [
 // ambiguous across areas. "Paid Optimization" is the campaign performance
 // surface (the Scale page tab keyed as "performance").
 const SCALE_ITEMS: AppNavigationItem[] = [
-  { label: 'Jaina', href: '/scale?tab=jaina', icon: Bot, accentColor: 'text-amber-500' },
+  {
+    label: 'Jaina',
+    href: '/scale?tab=jaina',
+    icon: Bot,
+    accentColor: 'text-amber-500',
+    product: 'paid_media',
+  },
   {
     label: 'Paid Analytics',
     href: '/scale?tab=dashboard',
     icon: Activity,
     accentColor: 'text-amber-500',
+    product: 'paid_media',
   },
   {
     label: 'Paid Optimization',
     href: '/scale?tab=performance',
     icon: Gauge,
     accentColor: 'text-amber-500',
+    product: 'paid_media',
   },
 ];
 
@@ -103,6 +118,7 @@ const CANVAS: AppNavigationItem = {
   href: '/ai-studio',
   icon: Frame,
   accentColor: 'text-violet-500',
+  product: 'studio',
 };
 const AUTOMATIONS: AppNavigationItem = {
   label: 'Automations',
@@ -149,18 +165,16 @@ const SCALE: AppNavigationItem = {
 // This slot was the locked `Developers` placeholder: an entry with no route behind it, greyed out
 // for everyone. It now leads somewhere.
 //
-// Gated at the PAGE rather than here, like every other tier-restricted destination (`/ai-studio`,
-// `/scale`): the nav array is a module-level constant and the tier is per-brand and runtime, and
-// the client brand context does not carry a tier. Threading one through a provider every screen
-// mounts, to grey out one link, is a worse trade than the redirect those destinations already use.
-// The gate that actually matters is on the server anyway — `assertTemplateForgeTier` — because a
-// page-level redirect has never been a boundary.
+// Like every product destination it stays a live link: `product` only adds a lock for a brand
+// without Performance Plus, and the page's ProductGate sends that brand to Billing. The gate that
+// actually matters is on the server — a page-level redirect has never been a boundary.
 const FORGE: AppNavigationItem = {
   label: 'Forge',
   href: '/forge',
   icon: Hammer,
   accentColor: 'text-orange-500',
   description: 'Turn an After Effects project into a template you can render.',
+  product: 'paid_media',
 };
 
 // The canonical sidebar IA: the three PRODUCTS, each named the way it is sold.

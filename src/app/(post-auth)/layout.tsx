@@ -6,6 +6,7 @@ import { GalaxyBackgroundLazy } from '@/components/ui/GalaxyBackgroundLazy';
 import { NavigationTransition } from '@/components/ui/NavigationTransition';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { resolveAutomationDeploymentEnvironment } from '@/lib/automations/access';
+import { lockedProducts } from '@/lib/billing/productAccess';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { getServerChangelog } from '@/lib/changelog/server';
 import { ReactQueryProvider } from '@/lib/react-query/provider';
@@ -19,7 +20,8 @@ export const metadata: Metadata = {
 };
 
 async function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
-  const { activeBrandId, brandSummaries, user, permissions } = await getActiveBrandContext();
+  const { activeBrandId, brandSummaries, user, permissions, brandAccess } =
+    await getActiveBrandContext();
 
   if (!activeBrandId) {
     redirect('/onboarding');
@@ -45,6 +47,7 @@ async function DashboardLayoutContent({ children }: { children: React.ReactNode 
       permissions={permissions}
       changelogEntries={changelogEntries}
       automationEnvironment={automationEnvironment}
+      lockedProducts={lockedProducts(brandAccess)}
     >
       <NavigationTransition>{children}</NavigationTransition>
     </DashboardLayoutShell>

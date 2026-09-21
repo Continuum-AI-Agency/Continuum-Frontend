@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { OnboardingExperience } from '@/components/onboarding/v2/OnboardingExperience';
 import { ActiveBrandProvider } from '@/components/providers/ActiveBrandProvider';
+import { readBrandAccess } from '@/lib/billing/brandAccess.server';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { isOnboardingComplete } from '@/lib/onboarding/state';
 import { ensureOnboardingState } from '@/lib/onboarding/storage';
@@ -32,6 +33,8 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   if (isOnboardingComplete(state)) {
     redirect('/dashboard');
   }
+  // The brand being onboarded, which need not be the active one (?brand=).
+  const { billingLive } = await readBrandAccess(brandId);
 
   const defaultUrl = inferDomainFromEmail(user.email);
 
@@ -42,7 +45,12 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
       user={user}
       permissions={permissions}
     >
-      <OnboardingExperience brandId={brandId} initialState={state} defaultUrl={defaultUrl} />
+      <OnboardingExperience
+        brandId={brandId}
+        initialState={state}
+        defaultUrl={defaultUrl}
+        planRequired={billingLive}
+      />
     </ActiveBrandProvider>
   );
 }

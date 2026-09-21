@@ -18,6 +18,8 @@ import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import { LibraryViewer } from '@/components/library/LibraryViewer';
 import { fetchBrandStyle } from '@/lib/ai-studio/brandStyle.server';
+import { readBrandAccess } from '@/lib/billing/brandAccess.server';
+import { isPaidBrand } from '@/lib/billing/productAccess';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { setActiveBrandPreference } from '@/lib/brands/preferences';
 import { buildCaptionStyle } from '@/lib/clips/clipCaptionStyle';
@@ -30,7 +32,6 @@ import {
 import { kindToMediaType, parseTagsParam } from '@/lib/media/filters';
 import { fetchLibrarySavedViews } from '@/lib/media/saved-views.server';
 import { parseLibrarySection } from '@/lib/media/sections';
-import { isPaidTier } from '@/lib/media/tier';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export const metadata: Metadata = {
@@ -152,7 +153,7 @@ function parseBrowseQuery(brandId: string, params: LibrarySearchParams) {
 async function LibraryContent({ searchParams }: { searchParams: LibrarySearchParams }) {
   const context = await getActiveBrandContext();
   let activeBrandId = context.activeBrandId;
-  let activeBrandTier = context.activeBrandTier;
+  let brandAccess = context.brandAccess;
 
   if (!activeBrandId) {
     redirect('/onboarding');
@@ -167,13 +168,13 @@ async function LibraryContent({ searchParams }: { searchParams: LibrarySearchPar
     const { data: requestedBrand } = await supabase
       .schema('brand_profiles')
       .from('brand_profiles')
-      .select('tier')
+      .select('id')
       .eq('id', requestedBrandId)
       .eq('active', true)
       .maybeSingle();
     if (requestedBrand) {
       activeBrandId = requestedBrandId;
-      activeBrandTier = requestedBrand.tier;
+      brandAccess = await readBrandAccess(requestedBrandId);
       try {
         await setActiveBrandPreference(requestedBrandId);
       } catch (error) {
@@ -205,7 +206,7 @@ async function LibraryContent({ searchParams }: { searchParams: LibrarySearchPar
   return (
     <LibraryViewer
       brandId={activeBrandId}
-      isPaid={isPaidTier(activeBrandTier)}
+      isPaid={isPaidBrand(brandAccess)}
       initialAssets={page.items}
       initialNextCursor={page.nextCursor}
       initialCollections={collections}

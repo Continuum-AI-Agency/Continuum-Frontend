@@ -1,14 +1,26 @@
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { parseEnv } from 'node:util';
-import { brandEntitlementsSchema } from '@continuum/contracts';
 import { expect, type Page, test } from '@playwright/test';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { Client as PgClient } from 'pg';
-import Stripe from 'stripe';
 import { replaySandboxEventsToWebhook } from '../../packages/billing/src/replayEvents';
-import { assertStripeTestSecretKey } from '../../packages/billing/src/testModeGuard';
 import { mintSessionBundleForEmail } from './support/auth';
+import {
+  assertBillingApiServed,
+  BILLING_API_URL,
+  brandEntitlements,
+  cleanupBillingBench,
+  createBenchRecorder,
+  createBrand,
+  createUser,
+  DESKTOP,
+  describeError,
+  grantContract,
+  HIDE_TOASTS,
+  MOBILE,
+  payWithTestCard,
+  sandboxStripe,
+  serviceClient,
+  WEBHOOK_URL,
+} from './support/billingBench';
 
 // billing:settings:e2e:bench — Settings → Billing, end to end, nothing mocked.
 //
@@ -25,17 +37,9 @@ import { mintSessionBundleForEmail } from './support/auth';
 //
 // Cleanup is by id: only the users, brands and sandbox customer this run created.
 
-const REPO_ROOT = path.resolve(process.cwd(), '..');
 const SCREENSHOT_DIR = path.join(process.cwd(), 'e2e/__screenshots__/billing');
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-const WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/stripe-billing-webhook`;
-const BILLING_API_URL = `${SUPABASE_URL}/functions/v1/billing-api`;
-// billing_private is not exposed over PostgREST; its idempotency rows are cleaned directly.
-const LOCAL_DB_URL = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
 const RUN_ID = Date.now().toString(36);
 const PASSWORD = `Bench-${RUN_ID}-pw1!`;
-const DESKTOP = { width: 1280, height: 800 };
-const MOBILE = { width: 390, height: 844 };
 
 const EMAILS = {
   owner: `billing-owner-${RUN_ID}@continuum.test`,
@@ -43,162 +47,13 @@ const EMAILS = {
   contract: `billing-contract-${RUN_ID}@continuum.test`,
 };
 
-/* -- the Recorder envelope (same shape as the Backend `_bench` Recorder) ---------- */
-const graded: { step: string; grade: 'PASS' | 'FAIL' | 'SKIP'; detail?: string }[] = [];
-const notes: string[] = [
+const recorder = createBenchRecorder('billing:settings:e2e:bench', [
   'unexercised hop: Stripe delivering webhooks to our URL — the real sandbox events are replayed through the locally served stripe-billing-webhook instead',
-];
-const benchStartedAt = new Date().toISOString();
-const benchStartedMs = Date.now();
+]);
+const { step, notes } = recorder;
 
-async function step<T>(name: string, run: () => Promise<T>): Promise<T> {
-  try {
-    const result = await run();
-    graded.push({ step: name, grade: 'PASS' });
-    return result;
-  } catch (error) {
-    graded.push({
-      step: name,
-      grade: 'FAIL',
-      detail: error instanceof Error ? error.message.split('\n')[0] : String(error),
-    });
-    throw error;
-  }
-}
-
-function printBenchEnvelope(): void {
-  const counts = { pass: 0, warn: 0, skip: 0, fail: 0 };
-  for (const result of graded) {
-    if (result.grade === 'PASS') counts.pass += 1;
-    else if (result.grade === 'SKIP') counts.skip += 1;
-    else counts.fail += 1;
-  }
-  console.log(
-    JSON.stringify({
-      bench: 'billing:settings:e2e:bench',
-      startedAt: benchStartedAt,
-      durationMs: Date.now() - benchStartedMs,
-      results: graded,
-      notes,
-      counts,
-      exitCode: counts.fail > 0 ? 1 : 0,
-    }),
-  );
-}
-
-/* -- clients ------------------------------------------------------------------------ */
-function serviceClient(): SupabaseClient {
-  const host = new URL(SUPABASE_URL).hostname;
-  if (host !== '127.0.0.1' && host !== 'localhost') {
-    throw new Error(
-      `[billing-settings] SUPABASE_URL host "${host}" is not local — refusing to write`,
-    );
-  }
-  return createClient(SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY as string, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
-
-// Only the sandbox keys, and only from the gitignored functions env file — never root .env,
-// which holds the live keys.
-function sandboxStripe(): { stripe: Stripe; webhookSecret: string } {
-  const env = parseEnv(
-    readFileSync(path.join(REPO_ROOT, 'supabase/functions/.env.billing.local'), 'utf8'),
-  );
-  const secretKey = env.STRIPE_BENCH_SECRET_KEY ?? '';
-  const webhookSecret = env.STRIPE_BENCH_WEBHOOK_SECRET ?? '';
-  assertStripeTestSecretKey(secretKey);
-  if (!webhookSecret) throw new Error('[billing-settings] STRIPE_BENCH_WEBHOOK_SECRET is unset');
-  return {
-    stripe: new Stripe(secretKey, { apiVersion: '2025-08-27.basil' }),
-    webhookSecret,
-  };
-}
-
-function describeError(error: {
-  code?: string;
-  message?: string;
-  details?: string;
-  hint?: string;
-}) {
-  return [error.code, error.message, error.details, error.hint].filter(Boolean).join(' · ');
-}
-
-/* -- seeding ------------------------------------------------------------------------ */
-async function createUser(db: SupabaseClient, email: string): Promise<string> {
-  const { data, error } = await db.auth.admin.createUser({
-    email,
-    password: PASSWORD,
-    email_confirm: true,
-  });
-  if (error || !data.user) throw new Error(`createUser ${email}: ${error?.message}`);
-  return data.user.id;
-}
-
-async function createBrand(db: SupabaseClient, ownerId: string, name: string): Promise<string> {
-  const { data, error } = await db
-    .schema('brand_profiles')
-    .from('brand_profiles')
-    .insert({
-      brand_name: name,
-      created_by: ownerId,
-      active: true,
-      completed_at: new Date().toISOString(),
-    })
-    .select('id')
-    .single();
-  if (error) throw new Error(`brand insert: ${describeError(error)}`);
-  const brandId = (data as { id: string }).id;
-  // A trigger grants the creator owner; the upsert asserts it without caring who wrote it.
-  const { error: permissionError } = await db
-    .schema('brand_profiles')
-    .from('permissions')
-    .upsert(
-      { brand_profile_id: brandId, user_id: ownerId, role: 'owner' },
-      { onConflict: 'brand_profile_id,user_id' },
-    );
-  if (permissionError) throw new Error(`owner permission: ${describeError(permissionError)}`);
-  return brandId;
-}
-
-async function brandEntitlements(db: SupabaseClient, brandId: string) {
-  const { data, error } = await db
-    .schema('billing')
-    .rpc('get_brand_entitlements', { p_brand_id: brandId });
-  if (error) throw new Error(`get_brand_entitlements: ${describeError(error)}`);
-  return brandEntitlementsSchema.parse(data);
-}
-
-/* -- Stripe-hosted Checkout ---------------------------------------------------------- */
-async function payWithTestCard(page: Page, email: string): Promise<void> {
-  // Checkout lists several methods as an accordion; the card radio reveals the card fields.
-  const cardOption = page.locator('#payment-method-accordion-item-title-card');
-  await cardOption.or(page.locator('#cardNumber')).first().waitFor({ timeout: 60_000 });
-  // The brand's Stripe customer carries no email, so Checkout asks for one.
-  const emailField = page.locator('#email');
-  if ((await emailField.isVisible()) && !(await emailField.inputValue())) {
-    await emailField.fill(email);
-  }
-  if (await cardOption.count()) await cardOption.check({ force: true });
-  await page.locator('#cardNumber').fill('4242424242424242');
-  await page.locator('#cardExpiry').fill('12 / 34');
-  await page.locator('#cardCvc').fill('123');
-  const name = page.locator('#billingName');
-  if (await name.isVisible()) await name.fill('Billing Bench');
-  const country = page.locator('#billingCountry');
-  if (await country.isVisible()) await country.selectOption('US');
-  const postal = page.locator('#billingPostalCode');
-  if (await postal.isVisible()) await postal.fill('10001');
-  // Link would otherwise ask for a phone number to save the card.
-  const link = page.locator('#enableStripePass');
-  if ((await link.isVisible()) && (await link.isChecked())) await link.uncheck();
-  await page.getByTestId('hosted-payment-submit-button').click();
-}
-
-// Toasts float over the panel, so the toast viewport (ToastProvider) is hidden for the capture
-// only — the screenshots show the layout itself. Each state is shot at the top of the panel
-// and, when it has one, at the invoices list.
-const HIDE_TOASTS = '.fixed.bottom-4.right-4.z-\\[9999\\] { visibility: hidden !important; }';
+// Toasts are hidden for the capture only — the screenshots show the layout itself. Each state is
+// shot at the top of the panel and, when it has one, at the invoices list.
 
 async function shoot(page: Page, name: string): Promise<void> {
   mkdirSync(SCREENSHOT_DIR, { recursive: true });
@@ -230,29 +85,20 @@ const purchaseButtons = /^(Choose|Add|Remove) .*Plus$|^Buy credits$/;
 test.describe.configure({ mode: 'serial' });
 
 test.describe('billing:settings:e2e:bench', () => {
-  const db = serviceClient();
-  const { stripe, webhookSecret } = sandboxStripe();
+  const db = serviceClient('billing-settings');
+  const { stripe, webhookSecret } = sandboxStripe('billing-settings');
   const since = Math.floor(Date.now() / 1000) - 5;
   const created = { userIds: [] as string[], brandIds: [] as string[] };
   let ownerBrandId = '';
   let contractBrandId = '';
 
   test.beforeAll(async () => {
-    await step('billing-api is served locally', async () => {
-      const response = await fetch(`${BILLING_API_URL}/brands/${crypto.randomUUID()}/overview`);
-      // No bearer → the function itself answers 401. Anything else means it is not serving.
-      if (response.status !== 401) {
-        throw new Error(
-          `billing-api answered ${response.status}; start it from the repo root with ` +
-            '`supabase functions serve --env-file supabase/functions/.env.billing.local --no-verify-jwt`',
-        );
-      }
-    });
+    await step('billing-api is served locally', assertBillingApiServed);
 
     await step('seed owner, member and contract brands', async () => {
-      const ownerId = await createUser(db, EMAILS.owner);
-      const memberId = await createUser(db, EMAILS.member);
-      const contractOwnerId = await createUser(db, EMAILS.contract);
+      const ownerId = await createUser(db, EMAILS.owner, PASSWORD);
+      const memberId = await createUser(db, EMAILS.member, PASSWORD);
+      const contractOwnerId = await createUser(db, EMAILS.contract, PASSWORD);
       created.userIds.push(ownerId, memberId, contractOwnerId);
 
       ownerBrandId = await createBrand(db, ownerId, `Billing Bench ${RUN_ID}`);
@@ -265,30 +111,7 @@ test.describe('billing:settings:e2e:bench', () => {
 
       contractBrandId = await createBrand(db, contractOwnerId, `Billing Contract ${RUN_ID}`);
       created.brandIds.push(contractBrandId);
-      // What the admin Contract override writes: an off-Stripe subscription row plus products.
-      const { error: subscriptionError } = await db
-        .schema('billing')
-        .from('brand_subscriptions')
-        .insert({
-          brand_id: contractBrandId,
-          plan_code: 'contract',
-          status: 'active',
-          billing_model: 'contract',
-        });
-      if (subscriptionError)
-        throw new Error(`contract subscription: ${describeError(subscriptionError)}`);
-      const { error: productsError } = await db
-        .schema('billing')
-        .from('brand_products')
-        .insert(
-          ['studio', 'organic_agent', 'paid_media'].map((product) => ({
-            brand_id: contractBrandId,
-            product,
-            source: 'contract',
-            active: true,
-          })),
-        );
-      if (productsError) throw new Error(`contract products: ${describeError(productsError)}`);
+      await grantContract(db, contractBrandId);
 
       const fresh = await brandEntitlements(db, ownerBrandId);
       expect(fresh.billingModel).toBe('none');
@@ -299,75 +122,25 @@ test.describe('billing:settings:e2e:bench', () => {
   });
 
   test.afterAll(async () => {
-    const deleted: string[] = [];
+    let deleted: string[] = [];
     try {
-      const customerIds = new Set<string>();
-      for (const brandId of created.brandIds) {
-        const { data } = await db
-          .schema('billing')
-          .from('brand_subscriptions')
-          .select('stripe_customer_id')
-          .eq('brand_id', brandId)
-          .maybeSingle();
-        const persisted = (data as { stripe_customer_id: string | null } | null)
-          ?.stripe_customer_id;
-        if (persisted) customerIds.add(persisted);
-      }
-      // Belt and braces: any sandbox customer created during the run for one of our brands.
-      for await (const customer of stripe.customers.list({ created: { gte: since }, limit: 100 })) {
-        if (created.brandIds.includes(customer.metadata?.continuum_brand_id ?? '')) {
-          customerIds.add(customer.id);
-        }
-      }
-      for (const customerId of customerIds) {
-        const customer = await stripe.customers.retrieve(customerId);
-        if (customer.livemode !== false) throw new Error(`customer ${customerId} is live-mode`);
-        if (!('deleted' in customer && customer.deleted)) {
-          await stripe.customers.del(customerId);
-          deleted.push(`stripe customer ${customerId}`);
-        }
-      }
-      const pg = new PgClient({ connectionString: LOCAL_DB_URL });
-      await pg.connect();
-      try {
-        const { rowCount } = await pg.query(
-          'delete from billing_private.stripe_webhook_events where brand_id = any($1::uuid[]) or customer_id = any($2::text[])',
-          [created.brandIds, [...customerIds]],
-        );
-        deleted.push(`${rowCount ?? 0} stripe_webhook_events rows`);
-      } finally {
-        await pg.end();
-      }
-      for (const brandId of created.brandIds) {
-        // Permissions first: pause_automations_for_ineligible_member() looks the brand up.
-        await db
-          .schema('brand_profiles')
-          .from('permissions')
-          .delete()
-          .eq('brand_profile_id', brandId);
-        const { error } = await db
-          .schema('brand_profiles')
-          .from('brand_profiles')
-          .delete()
-          .eq('id', brandId);
-        if (error) throw new Error(`delete brand ${brandId}: ${describeError(error)}`);
-        deleted.push(`brand ${brandId}`);
-      }
-      for (const userId of created.userIds) {
-        const { error } = await db.auth.admin.deleteUser(userId);
-        if (error) throw new Error(`delete user ${userId}: ${error.message}`);
-        deleted.push(`user ${userId}`);
-      }
-      graded.push({ step: 'cleanup by id', grade: 'PASS', detail: `${deleted.length} objects` });
-    } catch (error) {
-      graded.push({
-        step: 'cleanup by id',
-        grade: 'FAIL',
-        detail: error instanceof Error ? error.message : String(error),
+      deleted = await cleanupBillingBench({
+        db,
+        stripe,
+        since,
+        brandIds: created.brandIds,
+        userIds: created.userIds,
       });
+      recorder.record('cleanup by id', 'PASS', `${deleted.length} objects`);
+    } catch (error) {
+      recorder.record(
+        'cleanup by id',
+        'FAIL',
+        error instanceof Error ? error.message : String(error),
+      );
     }
     notes.push(`deleted: ${deleted.join(', ') || 'nothing'}`);
-    printBenchEnvelope();
+    recorder.print();
   });
 
   test('owner buys Organic Plus through Stripe-hosted Checkout', async ({ browser }) => {
