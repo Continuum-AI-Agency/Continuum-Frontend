@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { trackedLinkDestinationSchema } from '../tracking/links';
+import { trackedLinkDestinationSchema, trackedLinkStatsSchema } from '../tracking/links';
 
 // Comment triggers: the ManyChat half of the feature.
 //
@@ -211,5 +211,15 @@ export type SaveCommentTriggerRuleRequest = z.infer<typeof saveCommentTriggerRul
 
 export const listCommentTriggerRulesResponseSchema = z.object({
   rules: z.array(commentTriggerRuleSchema),
+  /**
+   * Clicks for the links these rules hand out, one entry per link that exists.
+   * A rule with no link has no entry, and a link nobody clicked has an entry
+   * reading zero — absent and zero are different answers.
+   *
+   * Defaulted rather than required: a Frontend that ships before the Backend
+   * would otherwise fail the whole parse and blank the screen over a field it
+   * only uses to draw a number.
+   */
+  linkStats: z.array(trackedLinkStatsSchema).default([]),
 });
 export type ListCommentTriggerRulesResponse = z.infer<typeof listCommentTriggerRulesResponseSchema>;
