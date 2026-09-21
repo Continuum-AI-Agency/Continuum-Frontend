@@ -18,6 +18,7 @@ import {
   type AdhocSuggestionsEnvelope,
   adhocSuggestionAdoptResultSchema,
   adhocSuggestionGateSchema,
+  adhocSuggestionImplementResultSchema,
   adhocSuggestionRowSchema,
 } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -129,6 +130,22 @@ export function useAdhocSuggestionMutations(portfolioId: string | null) {
     onSuccess: refresh,
   });
 
+  // Building what the adopted plan described. One RPC, and it opens no write path of its
+  // own: it mints the pending recommendation the plan names against the portfolio's latest
+  // cycle run and then calls the SAME `optimizer_request_audience_proposal` the audience
+  // card has always called. It is idempotent — a second press returns the first handoff
+  // with `reused: true` — so a double-tap cannot build twice.
+  const implement = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await getClient().rpc('optimizer_implement_adhoc_suggestion', {
+        p_id: id,
+      });
+      if (error) throw new Error(`Could not build this: ${errorText(error)}`);
+      return adhocSuggestionImplementResultSchema.parse(data ?? {});
+    },
+    onSuccess: refresh,
+  });
+
   const dismiss = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await getClient().rpc('optimizer_dismiss_adhoc_suggestion', { p_id: id });
@@ -137,5 +154,5 @@ export function useAdhocSuggestionMutations(portfolioId: string | null) {
     onSuccess: refresh,
   });
 
-  return { ask, adopt, dismiss, refresh };
+  return { ask, adopt, implement, dismiss, refresh };
 }

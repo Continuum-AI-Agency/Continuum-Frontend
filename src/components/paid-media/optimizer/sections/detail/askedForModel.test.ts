@@ -102,3 +102,105 @@ describe('buildAskedForRows', () => {
     expect(buildAskedForRows([{ ...base, status: 'dismissed' }], 500)).toHaveLength(0);
   });
 });
+
+// The trail after adopting. Before this, an adopted plan that proposed something NEW carried
+// no `target_id` and fell through to "Open Manage", which cannot build anything — so the
+// interesting half of the feature ended on a dead end. Each case below pins one step of what
+// replaced it.
+describe('buildAskedForRows — after adopting', () => {
+  const adopted = (over: Record<string, unknown> = {}, row: Record<string, unknown> = {}) => ({
+    ...base,
+    status: 'adopted' as const,
+    suggestion: plan(over),
+    ...row,
+  });
+
+  const handoff = {
+    kind: 'audience_proposal',
+    recommendation_id: '44444444-4444-4444-8444-444444444444',
+    proposal_id: '55555555-5555-4555-8555-555555555555',
+    adset_id: '120210',
+    adset_name: 'Retargeting 30d',
+    reused: false,
+    built_at: '2026-09-21T10:05:00Z',
+  };
+
+  it('offers the build on an adopted plan that named an ad set and no existing row', () => {
+    const [row] = buildAskedForRows(
+      [adopted({ category: 'audience' }, { category: 'audience' })],
+      500,
+    );
+    expect(row?.cta.kind).toBe('build');
+    expect(row?.cta.label).toBe('Build the audience proposal');
+    expect(row?.handoff).toBeNull();
+  });
+
+  it('promises nothing goes live BEFORE the press, not after it', () => {
+    const [row] = buildAskedForRows(
+      [adopted({ category: 'audience' }, { category: 'audience' })],
+      500,
+    );
+    expect(row?.nextNote).toContain('arrive paused');
+    expect(row?.nextNote).toContain('read back');
+  });
+
+  it('never offers a build for work the cycle already scored — it hands off to that row', () => {
+    const [row] = buildAskedForRows(
+      [adopted({ cta: { kind: 'queue_row', target_id: 'rec:abc' } })],
+      500,
+    );
+    expect(row?.cta.kind).toBe('queue_row');
+    expect(row?.cta.rowKey).toBe('rec:abc');
+    expect(row?.nextNote).toBeNull();
+  });
+
+  it('says why instead of offering a button when the plan named no ad set', () => {
+    const [row] = buildAskedForRows([adopted({ adset_id: null })], 500);
+    expect(row?.cta.kind).toBe('manage');
+    expect(row?.nextNote).toContain('names no ad set');
+  });
+
+  it('lands a built row on the recommendation it made, and says it is not delivering', () => {
+    const [row] = buildAskedForRows(
+      [adopted({ category: 'audience' }, { category: 'audience', handoff })],
+      500,
+    );
+    expect(row?.cta.kind).toBe('queue_row');
+    expect(row?.cta.rowKey).toBe(`rec:${handoff.recommendation_id}`);
+    expect(row?.cta.label).toBe('Open the audience proposal');
+    expect(row?.tierLabel).toBe('Handed off');
+    expect(row?.nextNote).toContain('audience proposal is being built');
+    expect(row?.nextNote).toContain('arrive paused');
+  });
+
+  it('builds nothing for a budget move and sends the person to the queue row instead', () => {
+    const [row] = buildAskedForRows(
+      [
+        adopted(
+          {},
+          {
+            category: 'budget',
+            handoff: {
+              kind: 'budget_queue',
+              recommendation_id: null,
+              proposal_id: null,
+              adset_id: '120210',
+              adset_name: 'Retargeting 30d',
+              reused: false,
+              built_at: '2026-09-21T10:05:00Z',
+            },
+          },
+        ),
+      ],
+      500,
+    );
+    expect(row?.cta.rowKey).toBe('budget:120210');
+    expect(row?.nextNote).toContain('Nothing is created');
+  });
+
+  it('reads a handoff the schema does not recognise as "not built" rather than crashing', () => {
+    const [row] = buildAskedForRows([adopted({}, { handoff: { kind: 'nonsense' } })], 500);
+    expect(row?.handoff).toBeNull();
+    expect(row?.cta.kind).toBe('build');
+  });
+});

@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '../../format';
+import { CalmRule } from '../account/candidateHeadline';
 import type { DailyReadRow } from './dailyReadModel';
 import type { HeroCta } from './heroModel';
 
@@ -33,6 +34,9 @@ type DailyReadListProps = {
   busyRowId?: string | null;
   /** True while the row is still with the worker: the CTA is inert and the row breathes. */
   isWaiting?: (row: DailyReadRow) => boolean;
+  /** Why the last build on a row did not happen, printed on that row. A refusal nobody can
+   *  see is the dead end this list exists to close, wearing a different hat. */
+  failure?: { rowId: string; message: string } | null;
 };
 
 function formatFigure(figure: AdhocSuggestionFigure, currency: string | null): string {
@@ -52,7 +56,12 @@ function formatFigure(figure: AdhocSuggestionFigure, currency: string | null): s
 
 /** Jaina's daily read as a list: one row per category, impact in words, a way in — and, in
  *  the same list, the suggestions a person asked for. One inbox, one CTA handler; an asked
- *  row whose plan names a queue row focuses that row exactly as a brief row does. */
+ *  row whose plan names a queue row focuses that row exactly as a brief row does.
+ *
+ *  A row whose control BUILDS something says what that will be and that nothing goes live,
+ *  beside the button rather than after the press, and carries the shared `CalmRule` on its
+ *  ~5s rhythm while the build is in flight — the one thing on this surface allowed to move.
+ *  Every other state is still. */
 export function DailyReadList({
   rows,
   source,
@@ -61,6 +70,7 @@ export function DailyReadList({
   onDismiss,
   busyRowId = null,
   isWaiting,
+  failure = null,
 }: DailyReadListProps) {
   if (rows.length === 0) return null;
   const asked = rows.filter((row) => row.origin === 'asked').length;
@@ -135,30 +145,48 @@ export function DailyReadList({
                     ))}
                   </ol>
                 ) : null}
+                {failure?.rowId === row.id ? (
+                  <p className="text-2xs text-destructive" data-testid={`read-failure:${row.id}`}>
+                    {failure.message}
+                  </p>
+                ) : null}
+                {row.nextNote ? (
+                  <p
+                    className="text-2xs text-secondary opacity-70"
+                    data-testid={`read-next-note:${row.id}`}
+                  >
+                    {row.nextNote}
+                  </p>
+                ) : null}
               </div>
-              <div className="flex items-center gap-1.5 justify-self-start sm:justify-self-end">
-                {onDismiss && row.origin === 'asked' && !waiting ? (
+              <div className="flex flex-col items-start gap-1.5 justify-self-start sm:items-end sm:justify-self-end">
+                {busy && row.cta.kind === 'build' ? (
+                  <CalmRule play testId="read-build-rule" />
+                ) : null}
+                <div className="flex items-center gap-1.5">
+                  {onDismiss && row.origin === 'asked' && !waiting ? (
+                    <Button
+                      className="h-7 text-2xs"
+                      disabled={busy}
+                      onClick={() => onDismiss(row)}
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      Dismiss
+                    </Button>
+                  ) : null}
                   <Button
                     className="h-7 text-2xs"
-                    disabled={busy}
-                    onClick={() => onDismiss(row)}
+                    disabled={waiting || busy}
+                    onClick={() => onCta(row.cta, row)}
                     size="sm"
                     type="button"
-                    variant="ghost"
+                    variant="secondary"
                   >
-                    Dismiss
+                    {busy ? 'Working…' : row.cta.label}
                   </Button>
-                ) : null}
-                <Button
-                  className="h-7 text-2xs"
-                  disabled={waiting || busy}
-                  onClick={() => onCta(row.cta, row)}
-                  size="sm"
-                  type="button"
-                  variant="secondary"
-                >
-                  {busy ? 'Working…' : row.cta.label}
-                </Button>
+                </div>
               </div>
             </li>
           );

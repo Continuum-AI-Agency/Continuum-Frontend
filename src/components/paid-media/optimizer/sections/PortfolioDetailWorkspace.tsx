@@ -15,7 +15,9 @@
 // lazy and a portfolio can hold dozens of ad sets.
 
 import {
+  ADHOC_IMPLEMENT_REFUSAL_COPY,
   type AdhocSuggestionCategory,
+  adhocHandoffRowKey,
   getOptimizationMetricDefinition,
   type OptimizationObjective,
   type PortfolioLevel,
@@ -297,15 +299,17 @@ export function PortfolioDetailWorkspace({
   useHeroBriefWatch(portfolio.id, Boolean(latestRun) && heroView.source === 'fallback');
   const dailyRead = buildDailyRead(heroView, portfolio.daily_total);
   const [focusRowKey, setFocusRowKey] = useState<string | null>(null);
-  /** The asked-for row whose adopt/dismiss is mid-write. */
+  /** The asked-for row whose adopt/build/dismiss is mid-write. */
   const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null);
+  /** Why the last build did not happen, on the row that asked for it. */
+  const [buildFailure, setBuildFailure] = useState<{ rowId: string; message: string } | null>(null);
 
   // Suggestions someone asked for, in this portfolio, per category. They are NOT a second
   // inbox: `buildAskedForRows` emits rows of the same shape the day's read does, and the
   // two are concatenated into the ONE list below. A suggestion whose plan names a queue row
   // focuses that row in the group underneath, exactly as a brief candidate does.
   const suggestionsQuery = useAdhocSuggestions(portfolio.id);
-  const { ask, adopt, dismiss } = useAdhocSuggestionMutations(portfolio.id);
+  const { ask, adopt, implement, dismiss } = useAdhocSuggestionMutations(portfolio.id);
   const [asking, setAsking] = useState<AdhocSuggestionCategory | null>(null);
   const askedRows = useMemo(
     () => buildAskedForRows(suggestionsQuery.data.rows, portfolio.daily_total),
@@ -318,24 +322,70 @@ export function PortfolioDetailWorkspace({
   // show yet. The asked-for half does not — asking is exactly what a person does when the
   // cycle has said nothing.
   const readRows: DailyReadRow[] = [...askedRows, ...(heroView.state === 'ready' ? dailyRead : [])];
-  const busyRowId = adopt.isPending || dismiss.isPending ? (activeSuggestionId ?? null) : null;
+  const busyRowId =
+    adopt.isPending || implement.isPending || dismiss.isPending
+      ? (activeSuggestionId ?? null)
+      : null;
 
   const onAsk = (category: AdhocSuggestionCategory) => {
     setAsking(category);
     ask.mutate(category, { onSettled: () => setAsking(null) });
   };
 
-  /** A read row's action. An asked-for row with a live grant is TAKEN ON here — a stamp,
-   *  nothing written to Meta — and one without a grant falls through to the shared CTA, so
-   *  a plan that named a queue row lands on that row. */
+  /**
+   * A read row's action, in the order the row's own life runs.
+   *
+   *   TAKE IT ON — a live grant on an un-adopted row: a decision stamp, nothing written to
+   *     Meta, exactly as before.
+   *   BUILD IT — an ADOPTED row that proposed something new. One RPC mints the pending
+   *     recommendation the plan names and, for audiences, calls the audience-proposal
+   *     request that already exists; when it lands, the person is taken straight to the row
+   *     it made. Nothing here writes to Meta either — the build feeds the approved path,
+   *     which creates everything PAUSED and reads it back.
+   *   Anything else falls through to the shared CTA, so a plan that named a queue row (or a
+   *     build that already happened) lands on that row.
+   */
   const onReadCta = (cta: HeroCta, row?: DailyReadRow) => {
     const asked = row ? askedById.get(row.id) : undefined;
+    // Any new press retires the last refusal: a message about a press somebody has moved on
+    // from is a figure with no date on it.
+    setBuildFailure(null);
     if (asked?.adoptToken && asked.cta.kind === 'manage') {
       setActiveSuggestionId(asked.id);
       adopt.mutate(
         { id: asked.suggestionId, token: asked.adoptToken },
         { onSettled: () => setActiveSuggestionId(null) },
       );
+      return;
+    }
+    if (asked && cta.kind === 'build') {
+      setActiveSuggestionId(asked.id);
+      implement.mutate(asked.suggestionId, {
+        onSuccess: (result) => {
+          if (!result.ok) {
+            // A refusal is an answer and has to be printed on the row that asked for it.
+            // Silence here would rebuild the dead end this press exists to close.
+            setBuildFailure({
+              rowId: asked.id,
+              message: result.reason
+                ? ADHOC_IMPLEMENT_REFUSAL_COPY[result.reason]
+                : 'That did not go through.',
+            });
+            return;
+          }
+          const rowKey = adhocHandoffRowKey(result.handoff, null);
+          if (rowKey) {
+            setFocusRowKey(rowKey);
+            onSectionChange('activity');
+          }
+        },
+        onError: (error) =>
+          setBuildFailure({
+            rowId: asked.id,
+            message: error instanceof Error ? error.message : 'That did not go through.',
+          }),
+        onSettled: () => setActiveSuggestionId(null),
+      });
       return;
     }
     onHeroCta(cta);
@@ -916,6 +966,7 @@ export function PortfolioDetailWorkspace({
             <DailyReadList
               busyRowId={busyRowId}
               currency={currency}
+              failure={buildFailure}
               isWaiting={isReadRowWaiting}
               onCta={onReadCta}
               onDismiss={onReadDismiss}

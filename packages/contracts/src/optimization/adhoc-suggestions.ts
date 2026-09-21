@@ -131,6 +131,68 @@ export const adhocSuggestionPlanSchema = z.object({
 });
 export type AdhocSuggestionPlan = z.infer<typeof adhocSuggestionPlanSchema>;
 
+/**
+ * WHAT ADOPTING BUILDS, AND WHY IT IS ALWAYS A PATH THAT ALREADY EXISTS.
+ *
+ * Adopting stays what it was: a decision stamp that writes nothing. IMPLEMENTING is the
+ * second press, and it does exactly one new thing — it mints the `optimizer.recommendations`
+ * row the adopted plan describes, against the portfolio's LATEST `optimizer.cycle_runs` row.
+ * That is the whole trick, and it is why no second write path is opened here:
+ *
+ *   * The obstacle was never `recommendations` itself. It was that `run_id` is NOT NULL
+ *     against `cycle_runs`, which is uniquely keyed `(portfolio_id, utc_day)` with
+ *     `optimizer_record_cycle` ending in `on conflict do nothing`. You cannot mint a RUN.
+ *     But an active portfolio ALREADY HAS today's run, so the rec hangs off the run that
+ *     exists and the unique key is never fought.
+ *   * With a real rec id in hand, `optimizer_request_audience_proposal(p_rec_id)` and
+ *     `optimizer_request_flash_creatives(p_rec_id, …)` are called UNCHANGED. No adhoc-aware
+ *     variant, no parallel insert, no second Meta writer.
+ *   * The rec is `pending`, so it appears in the portfolio's own queue as a row like any
+ *     other, and `optimizer_supersede_recommendations` expires it when the next cycle does
+ *     not re-assert it. An adopted suggestion is a day's decision; that is the correct
+ *     lifetime, not a leak.
+ *
+ * NOTHING IS BORN SWITCHED ON, and this changes none of it. The audience proposal's execute
+ * phase and the creative swap's publish both bottom out in `metaScaffoldGateway`, where
+ * `createAd` always sends `status: 'PAUSED'` and `assertPaused` re-reads the object from
+ * Meta and raises if it came back live. Budget builds no object at all: its handoff is the
+ * queue row the optimizer's own apply path already owns.
+ */
+export const adhocSuggestionHandoffKindSchema = z.enum([
+  /** A real `optimizer.audience_proposals` row the existing execute path runs. */
+  'audience_proposal',
+  /** A pending creative recommendation, with its existing card's flash request on it. */
+  'creative_recommendation',
+  /** Nothing built: the move is taken on the budget row the queue already carries. */
+  'budget_queue',
+]);
+export type AdhocSuggestionHandoffKind = z.infer<typeof adhocSuggestionHandoffKindSchema>;
+
+export const adhocSuggestionHandoffSchema = z.object({
+  kind: adhocSuggestionHandoffKindSchema,
+  /** The recommendation the adopted plan became. Null for budget, which mints nothing. */
+  recommendation_id: z.string().nullable().default(null),
+  /** The audience proposal the existing request RPC opened. Null for the other two. */
+  proposal_id: z.string().nullable().default(null),
+  adset_id: z.string().nullable().default(null),
+  adset_name: z.string().nullable().default(null),
+  /** True when the press found the work already open and did NOT build a second one. A
+   *  second press must be a no-op that lands you on the same place, not a duplicate. */
+  reused: z.boolean().default(false),
+  built_at: z.string(),
+});
+export type AdhocSuggestionHandoff = z.infer<typeof adhocSuggestionHandoffSchema>;
+
+export const adhocSuggestionImplementResultSchema = z.object({
+  ok: z.boolean(),
+  handoff: adhocSuggestionHandoffSchema.nullable().default(null),
+  reason: z
+    .enum(['not_adopted', 'no_adset', 'no_cycle_run', 'portfolio_inactive'])
+    .nullable()
+    .default(null),
+});
+export type AdhocSuggestionImplementResult = z.infer<typeof adhocSuggestionImplementResultSchema>;
+
 export const adhocSuggestionRowSchema = z
   .object({
     id: z.string().uuid(),
@@ -148,6 +210,8 @@ export const adhocSuggestionRowSchema = z
     prompt_version: z.string().nullable().default(null),
     ready_at: z.string().nullable().default(null),
     adopted_at: z.string().nullable().default(null),
+    /** What implementing the adopted plan built, once it has been built. */
+    handoff: z.record(z.string(), z.unknown()).nullable().default(null),
     dismissed_at: z.string().nullable().default(null),
     error: z.record(z.string(), z.unknown()).nullable().default(null),
     created_at: z.string(),
@@ -276,4 +340,88 @@ export function adhocSuggestionGateNote(gate: AdhocSuggestionGate): string | nul
     default:
       return 'Not right now.';
   }
+}
+
+/** What implementing built, or null when it has not been built yet. Never throws, for the
+ *  same reason `readAdhocSuggestion` does not: a stored handoff is DB-derived data, and one
+ *  the schema cannot read must show as "not built", not as a crashed page. */
+export function readAdhocHandoff(
+  row: Pick<AdhocSuggestionRow, 'handoff'> | null | undefined,
+): AdhocSuggestionHandoff | null {
+  if (!row?.handoff) return null;
+  const parsed = adhocSuggestionHandoffSchema.safeParse(row.handoff);
+  return parsed.success ? parsed.data : null;
+}
+
+/**
+ * What the screen says at each step, per category — written once here so the button, the
+ * sentence under it and the SQL cannot tell three versions of the same story.
+ *
+ * `build` is the label on the second press. `paused` is the promise made BEFORE the press,
+ * not after: a person deciding whether to build something is owed the fact that it will not
+ * deliver, at the moment they are deciding, without having to ask.
+ */
+export const ADHOC_HANDOFF_COPY: Record<
+  AdhocSuggestionCategory,
+  { build: string; paused: string; open: string; built: string }
+> = {
+  audience: {
+    build: 'Build the audience proposal',
+    paused:
+      'Nothing is switched on: the ad set this creates and its ads arrive paused, and Meta is read back to prove it.',
+    open: 'Open the audience proposal',
+    built: 'An audience proposal is being built for this ad set.',
+  },
+  creative: {
+    build: 'Open a creative iteration',
+    paused:
+      'Nothing is switched on: any ad this produces arrives paused, and Meta is read back to prove it.',
+    open: 'Open the creative recommendation',
+    built: 'A creative recommendation is on the queue below, ready for variants.',
+  },
+  budget: {
+    build: 'Review the budget moves',
+    paused: 'Nothing is created. A budget move changes an amount, and only once you approve it.',
+    open: 'Review the budget moves',
+    built: 'The move is taken on the budget row below, where it is approved and applied.',
+  },
+};
+
+/** The sentence under the row once the work exists: what was made, and that it is not
+ *  delivering. Both halves, always — "built" without "paused" is the half a person would
+ *  have to ask about, which is the thing this feature is not allowed to make them do. */
+export function adhocHandoffBuiltNote(category: AdhocSuggestionCategory): string {
+  const copy = ADHOC_HANDOFF_COPY[category];
+  return `${copy.built} ${copy.paused}`;
+}
+
+/** Why the build did not happen, in the words the row prints. A refusal that says nothing
+ *  is the same dead end this whole hop exists to close. */
+export const ADHOC_IMPLEMENT_REFUSAL_COPY: Record<
+  NonNullable<AdhocSuggestionImplementResult['reason']>,
+  string
+> = {
+  not_adopted: 'Take this on first — building is what adopting earns.',
+  no_adset: 'This suggestion names no ad set, so there is nothing here to build from.',
+  no_cycle_run: 'This portfolio has not run a cycle yet, so there is nothing to build against.',
+  portfolio_inactive: 'This portfolio is not running.',
+};
+
+/** Whether this category builds an object at all. Budget does not — saying it "arrives
+ *  paused" would be a promise about a thing that never exists. */
+export function adhocHandoffCreatesAnObject(category: AdhocSuggestionCategory): boolean {
+  return category !== 'budget';
+}
+
+/** Where the built handoff takes the person, in the queue's own row-key vocabulary
+ *  (`rec:<id>` / `budget:<adset>`) — the same strings the daily brief already uses, so the
+ *  Activity list focuses the row rather than opening a surface of its own. */
+export function adhocHandoffRowKey(
+  handoff: AdhocSuggestionHandoff | null,
+  plan: Pick<AdhocSuggestionPlan, 'adset_id'> | null,
+): string | null {
+  if (!handoff) return null;
+  if (handoff.recommendation_id) return `rec:${handoff.recommendation_id}`;
+  const adset = handoff.adset_id ?? plan?.adset_id ?? null;
+  return adset ? `budget:${adset}` : null;
 }

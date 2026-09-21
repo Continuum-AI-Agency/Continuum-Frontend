@@ -38,6 +38,10 @@ export type DailyReadRow = {
   /** What an asked-for row adds under the sentence: how to do it, and the figures it was
    *  read off. Absent on a brief row, whose argument is already its one reason line. */
   detail?: { steps: string[]; figures: AdhocSuggestionFigure[] };
+  /** The line beside the control: what pressing it will do and that nothing goes live, or
+   *  what the press already built. Absent on a brief row — the queue row it focuses carries
+   *  its own approve/execute wording. See askedForModel.ts. */
+  nextNote?: string | null;
   cta: HeroCta;
 };
 

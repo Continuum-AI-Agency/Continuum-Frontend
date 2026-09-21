@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  ADHOC_HANDOFF_COPY,
   ADHOC_SUGGESTION_CATEGORIES,
   ADHOC_SUGGESTION_DAILY_CAP,
   type AdhocSuggestionGate,
+  adhocHandoffBuiltNote,
+  adhocHandoffCreatesAnObject,
+  adhocHandoffRowKey,
   adhocSuggestionGateFor,
   adhocSuggestionGateNote,
   adhocSuggestionPlanSchema,
+  readAdhocHandoff,
   readAdhocSuggestion,
 } from './adhoc-suggestions';
 
@@ -99,5 +104,70 @@ describe('readAdhocSuggestion', () => {
 describe('the three categories', () => {
   it('are the product vocabulary, in order', () => {
     expect([...ADHOC_SUGGESTION_CATEGORIES]).toEqual(['audience', 'budget', 'creative']);
+  });
+});
+
+describe('the handoff — what implementing an adopted plan built', () => {
+  const built = {
+    kind: 'audience_proposal' as const,
+    recommendation_id: '44444444-4444-4444-8444-444444444444',
+    proposal_id: '55555555-5555-4555-8555-555555555555',
+    adset_id: '120210',
+    adset_name: 'Retargeting 30d',
+    reused: false,
+    built_at: '2026-09-21T10:05:00Z',
+  };
+
+  it('reads a stored handoff back', () => {
+    expect(readAdhocHandoff({ handoff: built })?.proposal_id).toBe(built.proposal_id);
+  });
+
+  it('reads a handoff it cannot parse as "not built", never as a throw', () => {
+    expect(readAdhocHandoff({ handoff: { kind: 'nonsense' } })).toBeNull();
+    expect(readAdhocHandoff({ handoff: null })).toBeNull();
+    expect(readAdhocHandoff(null)).toBeNull();
+  });
+
+  it('lands on the recommendation it minted, in the queue own row-key vocabulary', () => {
+    expect(adhocHandoffRowKey(built, null)).toBe(`rec:${built.recommendation_id}`);
+  });
+
+  it('lands a budget handoff on the ad set budget row, because it minted nothing', () => {
+    expect(
+      adhocHandoffRowKey(
+        { ...built, kind: 'budget_queue', recommendation_id: null, proposal_id: null },
+        null,
+      ),
+    ).toBe('budget:120210');
+  });
+
+  it('has nowhere to land when nothing was built and nothing was named', () => {
+    expect(adhocHandoffRowKey(null, null)).toBeNull();
+    expect(
+      adhocHandoffRowKey(
+        { ...built, kind: 'budget_queue', recommendation_id: null, adset_id: null },
+        { adset_id: null },
+      ),
+    ).toBeNull();
+  });
+
+  it('says what exists AND that it is not delivering — never only the first half', () => {
+    for (const category of ADHOC_SUGGESTION_CATEGORIES) {
+      const note = adhocHandoffBuiltNote(category);
+      expect(note).toContain(ADHOC_HANDOFF_COPY[category].built);
+      expect(note).toContain(ADHOC_HANDOFF_COPY[category].paused);
+    }
+  });
+
+  it('does not promise a budget move arrives paused — a budget move creates no object', () => {
+    expect(adhocHandoffCreatesAnObject('budget')).toBe(false);
+    expect(adhocHandoffCreatesAnObject('audience')).toBe(true);
+    expect(adhocHandoffCreatesAnObject('creative')).toBe(true);
+    expect(ADHOC_HANDOFF_COPY.budget.paused).not.toContain('paused');
+  });
+
+  it('promises the read-back, not just the intent, wherever an object IS created', () => {
+    expect(ADHOC_HANDOFF_COPY.audience.paused).toContain('read back');
+    expect(ADHOC_HANDOFF_COPY.creative.paused).toContain('read back');
   });
 });

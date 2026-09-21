@@ -10,19 +10,35 @@
 //
 // A row still with the worker is in the list too, as itself. The alternative is a spinner
 // somewhere else on the screen, which is a second place to look by another name.
+//
+// AND THE ROW DOES NOT END AT ADOPTING. Adopting is a decision stamp that writes nothing, so
+// a plan proposing something NEW — three audiences worth testing, a creative iteration to
+// try — carries no `target_id` and used to fall through to "Open Manage", which cannot build
+// anything. The same row now carries the real next step: one press turns the adopted plan
+// into work the EXISTING approved path runs (`optimizer_implement_adhoc_suggestion` mints a
+// pending recommendation against the portfolio's latest cycle run and, for audiences, calls
+// `optimizer_request_audience_proposal` unchanged), and afterwards the row says what was
+// made and that it is not delivering. No second inbox and no second write path — the card
+// that asked the question is the card that finishes it.
 
 import type {
   AdhocSuggestionCategory,
   AdhocSuggestionFigure,
+  AdhocSuggestionHandoff,
+  AdhocSuggestionPlan,
   AdhocSuggestionRow,
   HeroModule,
   ImpactTier,
 } from '@continuum/contracts';
 import {
+  ADHOC_HANDOFF_COPY,
   ADHOC_SUGGESTION_CATEGORY_COPY,
+  adhocHandoffBuiltNote,
+  adhocHandoffRowKey,
   HERO_MODULE_COPY,
   IMPACT_TIER_COPY,
   impactTier,
+  readAdhocHandoff,
   readAdhocSuggestion,
 } from '@continuum/contracts';
 import type { DailyReadRow } from './dailyReadModel';
@@ -39,6 +55,12 @@ export type AskedForRow = DailyReadRow & {
   figures: AdhocSuggestionFigure[];
   /** Present only on a `ready` row whose grant has not been burned. */
   adoptToken: string | null;
+  /** What implementing built, once it has been. Null before the build. */
+  handoff: AdhocSuggestionHandoff | null;
+  /** The sentence under the control: what pressing it will do and that nothing goes live,
+   *  or — once built — what exists now and that it is not delivering. Null when the row has
+   *  nothing to add beyond its own basis line. */
+  nextNote: string | null;
 };
 
 const MODULE_BY_CATEGORY: Record<AdhocSuggestionCategory, Exclude<HeroModule, 'none'>> = {
@@ -80,6 +102,8 @@ function waitingRow(row: AdhocSuggestionRow): AskedForRow {
     steps: [],
     figures: [],
     adoptToken: null,
+    handoff: null,
+    nextNote: null,
     cta: { kind: 'manage', rowKey: null, label: 'Working…' },
   };
 }
@@ -114,6 +138,8 @@ function settledRow(row: AdhocSuggestionRow, dailyTotal: number | null | undefin
       steps: [],
       figures: [],
       adoptToken: null,
+      handoff: null,
+      nextNote: null,
       cta: { kind: 'manage', rowKey: null, label: 'Open Manage' },
     };
   }
@@ -123,6 +149,7 @@ function settledRow(row: AdhocSuggestionRow, dailyTotal: number | null | undefin
   const sized = plan.impact_per_day != null && plan.impact_per_day > 0;
   const tier: ImpactTier = sized ? impactTier(plan.impact_per_day ?? 0, dailyTotal) : 'low';
   const adopted = row.status === 'adopted';
+  const handoff = readAdhocHandoff(row);
 
   return {
     id: `asked:${row.id}`,
@@ -132,7 +159,13 @@ function settledRow(row: AdhocSuggestionRow, dailyTotal: number | null | undefin
     module,
     category: copy.label,
     tier,
-    tierLabel: adopted ? 'Taken on' : sized ? IMPACT_TIER_COPY[tier] : 'Not sized',
+    tierLabel: adopted
+      ? handoff
+        ? 'Handed off'
+        : 'Taken on'
+      : sized
+        ? IMPACT_TIER_COPY[tier]
+        : 'Not sized',
     title: plan.headline,
     reason: plan.why || null,
     basis: plan.impact_basis ?? plan.confidence_note ?? copy.blurb,
@@ -142,17 +175,56 @@ function settledRow(row: AdhocSuggestionRow, dailyTotal: number | null | undefin
     figures: plan.figures,
     detail: { steps: plan.steps, figures: plan.figures },
     adoptToken: adopted ? null : (plan.adopt?.token ?? null),
-    cta: ctaFor(plan.cta, module, adopted),
+    handoff,
+    nextNote: nextNoteFor(row.category, plan, handoff, adopted),
+    cta: ctaFor(plan, module, row.category, adopted, handoff),
   };
 }
 
-/** Where the card takes the person. A plan that names a queue row goes THERE — the decision
- *  is taken on the row that already exists, not twice. */
-function ctaFor(
-  cta: { kind: 'queue_row' | 'audience_card' | 'manage'; target_id: string | null } | null,
-  module: Exclude<HeroModule, 'none'>,
+/**
+ * What the row says under its control.
+ *
+ * Before the build, the paused promise — stated at the moment somebody is deciding whether
+ * to press, not discovered afterwards. After the build, what exists and that it is not
+ * delivering. And on an adopted plan with nothing to build from, the reason, so a row that
+ * cannot go further says why instead of offering a button that goes nowhere.
+ */
+function nextNoteFor(
+  category: AdhocSuggestionCategory,
+  plan: AdhocSuggestionPlan,
+  handoff: AdhocSuggestionHandoff | null,
   adopted: boolean,
+): string | null {
+  if (handoff) return adhocHandoffBuiltNote(category);
+  if (!adopted) return null;
+  if (plan.cta?.target_id) return null;
+  if (!plan.adset_id) {
+    return 'This suggestion names no ad set, so there is nothing here to build from.';
+  }
+  return ADHOC_HANDOFF_COPY[category].paused;
+}
+
+/**
+ * Where the card takes the person, in the order the row's own life runs.
+ *
+ * 1. THE WORK ALREADY EXISTS. A plan naming a queue row goes THERE — the decision is taken
+ *    on the row that already exists, not twice. This outranks everything below, including
+ *    the build: a suggestion that recognised work the cycle already scored must never mint
+ *    a second copy of it.
+ * 2. IT HAS BEEN BUILT. Land on what the build made, by the queue's own row key.
+ * 3. IT WAS ADOPTED AND NAMES AN AD SET. Offer the build. This is the case that used to
+ *    dead-end on "Open Manage".
+ * 4. Otherwise: take it on, or — adopted with nothing to build from — say so in `nextNote`
+ *    and leave Manage as the way out rather than a button that does nothing.
+ */
+function ctaFor(
+  plan: Pick<AdhocSuggestionPlan, 'cta' | 'adset_id'>,
+  module: Exclude<HeroModule, 'none'>,
+  category: AdhocSuggestionCategory,
+  adopted: boolean,
+  handoff: AdhocSuggestionHandoff | null,
 ): HeroCta {
+  const cta = plan.cta;
   if (cta?.kind === 'queue_row' && cta.target_id) {
     return {
       kind: 'queue_row',
@@ -163,6 +235,19 @@ function ctaFor(
   if (cta?.kind === 'audience_card' && cta.target_id) {
     return { kind: 'audience_card', rowKey: cta.target_id, label: 'Open the audience proposal' };
   }
+
+  if (handoff) {
+    const rowKey = adhocHandoffRowKey(handoff, plan);
+    if (rowKey) {
+      return { kind: 'queue_row', rowKey, label: ADHOC_HANDOFF_COPY[category].open };
+    }
+    return { kind: 'manage', rowKey: null, label: 'Open Manage' };
+  }
+
+  if (adopted && plan.adset_id) {
+    return { kind: 'build', rowKey: null, label: ADHOC_HANDOFF_COPY[category].build };
+  }
+
   return {
     kind: 'manage',
     rowKey: null,
