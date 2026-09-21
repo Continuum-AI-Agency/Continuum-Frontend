@@ -1,238 +1,292 @@
 import { z } from 'zod';
 
-import { canvasCreditActionCodeSchema } from './modelId';
-
 export * from './modelId';
 
-export const BILLING_MVP_CATALOG_VERSION = 'billing-mvp-v1' as const;
-export const billingOperationIdSchema = z.string().uuid();
+/**
+ * Self-serve billing contracts — the one model: prod `billing.*` (USD ledger).
+ *
+ * `billing.brand_products` is the access grid; `billing.get_brand_entitlements` is the
+ * single read. Stripe writes it only through `stripe-billing-webhook` →
+ * `billing.apply_stripe_projection`; admins and Contract clients write it directly.
+ */
 
-export const catalogCodeSchema = z.enum([
-  'library_storage',
-  'canvas',
-  'canvas_credits',
-  'organic_agent',
-  'jaina',
-  'trends',
-  // Trends Plus is a single sellable add-on SKU whose grant expands to the three
-  // provider entitlement codes below. Customers see one "Trends Plus"; the
-  // providers stay as entitlement codes but are no longer sold individually.
-  'trends_plus',
+export const PRODUCT_CODES = ['studio', 'organic_agent', 'paid_media', 'trends', 'mcp'] as const;
+export const productCodeSchema = z.enum(PRODUCT_CODES);
+export type ProductCode = z.infer<typeof productCodeSchema>;
+
+export const ADDON_CODES = [
   'provider_exa',
   'provider_serpapi',
   'provider_apify',
-]);
-export type CatalogCode = z.infer<typeof catalogCodeSchema>;
+  'provider_x',
+  'provider_firecrawl',
+] as const;
+export const addonCodeSchema = z.enum(ADDON_CODES);
+export type AddonCode = z.infer<typeof addonCodeSchema>;
 
-export const catalogVersionSchema = z.string().min(1);
-export type CatalogVersion = z.infer<typeof catalogVersionSchema>;
+/** The two plans sold self-serve. Codes are the `billing.plan_definitions` keys. */
+export const PLAN_CODES = ['organic_studio', 'paid_media'] as const;
+export const planCodeSchema = z.enum(PLAN_CODES);
+export type PlanCode = z.infer<typeof planCodeSchema>;
 
-export const billingCatalogItemSchema = z
+/** 1 credit = $0.01 of billed usage (provider cost × 1.15, rounded up per generation). */
+export const USD_PER_CREDIT = 0.01;
+export const CREDIT_PACK_CREDITS = 1_000;
+export const CREDIT_PACK_PRICE_USD = 10;
+export const MAX_CREDIT_PACKS = 50;
+
+export function usdToCredits(usd: number): number {
+  return Math.floor(usd / USD_PER_CREDIT + 1e-6);
+}
+
+export const planCatalogEntrySchema = z
   .object({
-    code: catalogCodeSchema,
+    planCode: planCodeSchema,
     displayName: z.string().min(1),
-    kind: z.enum(['access', 'capacity', 'credit']),
-    availability: z.enum(['baseline', 'invite', 'available', 'deferred']),
-    dependencyCodes: z.array(catalogCodeSchema),
-    metadata: z.record(z.string(), z.unknown()),
+    monthlyPriceUsd: z.number().nonnegative(),
+    products: z.array(productCodeSchema).min(1),
+    includedCanvasCredits: z.number().int().nonnegative(),
   })
   .strict();
-export type BillingCatalogItem = z.infer<typeof billingCatalogItemSchema>;
+export type PlanCatalogEntry = z.infer<typeof planCatalogEntrySchema>;
 
-export const billingCatalogSchema = z
+export const creditPackOfferSchema = z
   .object({
-    version: catalogVersionSchema,
-    items: z.array(billingCatalogItemSchema),
+    credits: z.number().int().positive(),
+    priceUsd: z.number().positive(),
+    maxPacks: z.number().int().positive(),
   })
   .strict();
-export type BillingCatalog = z.infer<typeof billingCatalogSchema>;
+export type CreditPackOffer = z.infer<typeof creditPackOfferSchema>;
 
-export const entitlementSourceSchema = z.enum([
-  'admin',
-  'trial',
-  'stripe',
-  'manual_invoice',
-  'compatibility',
-]);
-export type EntitlementSource = z.infer<typeof entitlementSourceSchema>;
+export const CREDIT_PACK_OFFER: CreditPackOffer = {
+  credits: CREDIT_PACK_CREDITS,
+  priceUsd: CREDIT_PACK_PRICE_USD,
+  maxPacks: MAX_CREDIT_PACKS,
+};
 
-export const entitlementGrantSchema = z
+/** `none` = never bought, `stripe` = self-serve, `contract` = billed off-Stripe (never metered or blocked). */
+export const BILLING_MODELS = ['none', 'stripe', 'contract'] as const;
+export const billingModelSchema = z.enum(BILLING_MODELS);
+export type BillingModel = z.infer<typeof billingModelSchema>;
+
+export const usageBucketSchema = z
   .object({
-    entitlementCode: catalogCodeSchema,
-    effect: z.enum(['allow', 'deny']),
-    source: entitlementSourceSchema,
-    sourceKey: z.string().min(1),
-    startsAt: z.string().datetime({ offset: true }),
-    expiresAt: z.string().datetime({ offset: true }).nullable(),
+    bucket: z.enum(['agent', 'studio']),
+    periodStart: z.string().datetime({ offset: true }),
+    periodEnd: z.string().datetime({ offset: true }),
+    includedUsd: z.number().nonnegative(),
+    capUsd: z.number().nonnegative().nullable(),
+    consumedUsd: z.number().nonnegative(),
+    overageAction: z.enum(['bill', 'block']),
   })
   .strict();
-export type EntitlementGrant = z.infer<typeof entitlementGrantSchema>;
+export type UsageBucket = z.infer<typeof usageBucketSchema>;
 
-export const capacityGrantSchema = z
+/** Purchased packs + last period's rollover, in whole credits. */
+export const creditBalanceSchema = z
   .object({
-    capacityCode: z.literal('library_storage_bytes'),
-    amountBytes: z.number().int().positive(),
-    source: entitlementSourceSchema,
-    sourceKey: z.string().min(1),
-    startsAt: z.string().datetime({ offset: true }),
-    expiresAt: z.string().datetime({ offset: true }).nullable(),
+    totalCredits: z.number().int().nonnegative(),
+    purchasedCredits: z.number().int().nonnegative(),
+    rolloverCredits: z.number().int().nonnegative(),
   })
   .strict();
-export type CapacityGrant = z.infer<typeof capacityGrantSchema>;
+export type CreditBalance = z.infer<typeof creditBalanceSchema>;
 
-export const canvasCreditGrantSchema = z
-  .object({
-    grantId: z.string().uuid(),
-    brandId: z.string().uuid(),
-    grantedCredits: z.number().int().positive(),
-    remainingCredits: z.number().int().nonnegative(),
-    expiresAt: z.string().datetime({ offset: true }).nullable(),
-  })
-  .strict();
-export type CanvasCreditGrant = z.infer<typeof canvasCreditGrantSchema>;
-
-export const canvasCreditBalanceSchema = z
-  .object({
-    available: z.number().int().nonnegative(),
-    expiringWithin30Days: z.number().int().nonnegative(),
-    nextExpirationAt: z.string().datetime({ offset: true }).nullable(),
-  })
-  .strict();
-export type CanvasCreditBalance = z.infer<typeof canvasCreditBalanceSchema>;
-
-export const intelligenceProviderSchema = z.enum([
-  'provider_exa',
-  'provider_serpapi',
-  'provider_apify',
-]);
-export type IntelligenceProvider = z.infer<typeof intelligenceProviderSchema>;
-
-export const effectiveEntitlementsSchema = z
+/** Exactly the output of `billing.get_brand_entitlements(p_brand_id)`. */
+export const brandEntitlementsSchema = z
   .object({
     brandId: z.string().uuid(),
-    tier: z.number().int().nonnegative(),
-    tierMode: z.enum(['emergency_lock', 'payment', 'manual_invoice', 'friends_family']),
-    compatibilityProfile: z.boolean(),
-    features: z.array(catalogCodeSchema),
-    access: z
+    /** `free` | `contract` | the plan that funds the studio bucket (`organic_studio` wins over `paid_media`). */
+    planCode: z.string().min(1),
+    status: z.enum(['inactive', 'trialing', 'active', 'past_due', 'canceled']),
+    billingModel: billingModelSchema,
+    /** Self-serve plans currently on the brand's Stripe subscription. Empty for Contract. */
+    plans: z.array(planCodeSchema),
+    products: z.array(productCodeSchema),
+    addons: z.array(addonCodeSchema),
+    trendsTier: z.enum(['base', 'pro']).nullable(),
+    buckets: z.array(usageBucketSchema),
+    creditBalance: creditBalanceSchema,
+  })
+  .strict();
+export type BrandEntitlements = z.infer<typeof brandEntitlementsSchema>;
+
+export const billingSubscriptionViewSchema = z
+  .object({
+    id: z.string().min(1),
+    status: z.string().min(1),
+    plans: z.array(planCodeSchema),
+    cancelAtPeriodEnd: z.boolean(),
+    currentPeriodStart: z.string().datetime({ offset: true }).nullable(),
+    currentPeriodEnd: z.string().datetime({ offset: true }).nullable(),
+  })
+  .strict();
+export type BillingSubscriptionView = z.infer<typeof billingSubscriptionViewSchema>;
+
+/** PCI: amounts and links only — never card brand, last4, expiry or PAN. */
+export const billingInvoiceViewSchema = z
+  .object({
+    id: z.string().min(1),
+    number: z.string().nullable(),
+    status: z.string().nullable(),
+    currency: z.string().min(1),
+    amountDue: z.number().int(),
+    amountPaid: z.number().int(),
+    total: z.number().int(),
+    createdAt: z.string().datetime({ offset: true }),
+    hostedInvoiceUrl: z.string().nullable(),
+    invoicePdf: z.string().nullable(),
+  })
+  .strict();
+export type BillingInvoiceView = z.infer<typeof billingInvoiceViewSchema>;
+
+/** The Canvas meter for the current period, in USD (1 credit = $0.01 → `usdToCredits`). */
+export const billingCanvasUsageSchema = z
+  .object({
+    studioBucket: usageBucketSchema.nullable(),
+    rolloverUsd: z.number().nonnegative(),
+    purchasedBalanceUsd: z.number().nonnegative(),
+    /** Accrued metered overage this period. 0 until wave 2 adds `usage_events.overage_usd`. */
+    overageUsd: z.number().nonnegative(),
+  })
+  .strict();
+export type BillingCanvasUsage = z.infer<typeof billingCanvasUsageSchema>;
+
+/** `GET /billing-api/brands/:id/overview` (owner only). */
+export const billingOverviewSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    entitlements: brandEntitlementsSchema,
+    hasPaymentMethod: z.boolean(),
+    subscription: billingSubscriptionViewSchema.nullable(),
+    invoices: z.array(billingInvoiceViewSchema),
+    canvas: billingCanvasUsageSchema,
+    /** Plan cards come from `billing.plan_definitions`, never hardcoded. */
+    catalog: z
       .object({
-        canvas: z.boolean(),
-        organicAgent: z.boolean(),
-        jaina: z.boolean(),
-        trends: z.boolean(),
+        plans: z.array(planCatalogEntrySchema),
+        creditPack: creditPackOfferSchema,
       })
       .strict(),
-    intelligenceProviders: z.array(intelligenceProviderSchema),
-    libraryCapacityBytes: z.number().int().nonnegative(),
-    canvasCredits: canvasCreditBalanceSchema,
-    explicitDenies: z.array(catalogCodeSchema),
-    resolvedAt: z.string().datetime({ offset: true }),
+    livemode: z.literal(false),
   })
   .strict();
-export type EffectiveEntitlements = z.infer<typeof effectiveEntitlementsSchema>;
+export type BillingOverview = z.infer<typeof billingOverviewSchema>;
 
-export const storageUsageSummarySchema = z
+const returnUrlSchema = z.string().url();
+
+/** `POST /billing-api/brands/:id/checkout` — first plan purchase (Stripe Checkout, subscription mode). */
+export const billingCheckoutRequestSchema = z
   .object({
-    usedBytes: z.number().int().nonnegative(),
-    capacityBytes: z.number().int().nonnegative(),
-    availableBytes: z.number().int().nonnegative(),
-    utilizationPercent: z.number().min(0),
+    plans: z
+      .array(planCodeSchema)
+      .min(1)
+      .max(PLAN_CODES.length)
+      .refine((plans) => new Set(plans).size === plans.length, 'plans must be unique'),
+    successUrl: returnUrlSchema,
+    cancelUrl: returnUrlSchema,
   })
   .strict();
-export type StorageUsageSummary = z.infer<typeof storageUsageSummarySchema>;
+export type BillingCheckoutRequest = z.infer<typeof billingCheckoutRequestSchema>;
 
-export const canvasUsageHealthSchema = z.enum([
-  'not_entitled',
-  'unfunded',
-  'depleted',
-  'low',
-  'unused',
-  'healthy',
-]);
-export type CanvasUsageHealth = z.infer<typeof canvasUsageHealthSchema>;
-
-export const usageSummarySchema = z
-  .object({
-    health: canvasUsageHealthSchema,
-    creditsSpent7Days: z.number().int().nonnegative(),
-    creditsSpent30Days: z.number().int().nonnegative(),
-    lastSpendAt: z.string().datetime({ offset: true }).nullable(),
-  })
-  .strict();
-export type UsageSummary = z.infer<typeof usageSummarySchema>;
-
-export const billingSummarySchema = z
-  .object({
-    entitlements: effectiveEntitlementsSchema,
-    storage: storageUsageSummarySchema,
-    canvasUsage: usageSummarySchema,
-  })
-  .strict();
-export type BillingSummary = z.infer<typeof billingSummarySchema>;
-
-export const storageCapacityCheckSchema = z
-  .object({
-    allowed: z.boolean(),
-    usedBytes: z.number().int().nonnegative(),
-    reservedBytes: z.number().int().nonnegative(),
-    additionalBytes: z.number().int().nonnegative(),
-    capacityBytes: z.number().int().nonnegative(),
-    availableBytes: z.number().int().nonnegative(),
-  })
-  .strict();
-export type StorageCapacityCheck = z.infer<typeof storageCapacityCheckSchema>;
-
-export const canvasCreditSpendRequestSchema = z
+export const billingCheckoutResponseSchema = z
   .object({
     brandId: z.string().uuid(),
-    userId: z.string().uuid().nullable(),
-    actionCode: canvasCreditActionCodeSchema,
-    modelId: z.string().min(1),
-    quantity: z.number().int().positive().default(1),
-    idempotencyKey: z.string().min(1),
-    runId: z.string().min(1).nullable().default(null),
-    sessionId: z.string().min(1).nullable().default(null),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    url: z.string().url(),
+    sessionId: z.string().min(1),
+    customerId: z.string().min(1),
+    plans: z.array(planCodeSchema),
   })
   .strict();
-export type CanvasCreditSpendRequest = z.infer<typeof canvasCreditSpendRequestSchema>;
+export type BillingCheckoutResponse = z.infer<typeof billingCheckoutResponseSchema>;
 
-const declinedCanvasCreditSpendSchema = z
+/** `POST /billing-api/brands/:id/plans` — add/remove a plan on the existing subscription (card on file). */
+export const billingPlanChangeRequestSchema = z
   .object({
-    allowed: z.literal(false),
-    recorded: z.literal(false),
-    idempotentReplay: z.literal(false),
-    reason: z.enum(['canvas_not_entitled', 'insufficient_credits']),
-    creditsRequired: z.number().int().nonnegative(),
-    creditsAvailable: z.number().int().nonnegative(),
+    add: planCodeSchema.optional(),
+    remove: planCodeSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine((body) => Boolean(body.add) !== Boolean(body.remove), 'exactly one of add or remove');
+export type BillingPlanChangeRequest = z.infer<typeof billingPlanChangeRequestSchema>;
 
-const acceptedCanvasCreditSpendSchema = z
+export const billingPlanChangeResponseSchema = z
   .object({
-    allowed: z.literal(true),
-    recorded: z.boolean(),
-    idempotentReplay: z.boolean(),
-    reservationStatus: z.enum(['reserved', 'settled', 'released']),
-    spendId: z.string().uuid(),
-    creditsSpent: z.number().int().positive(),
-    creditsAvailable: z.number().int().nonnegative().optional(),
+    brandId: z.string().uuid(),
+    subscriptionId: z.string().min(1),
+    status: z.string().min(1),
+    plans: z.array(planCodeSchema),
   })
   .strict();
+export type BillingPlanChangeResponse = z.infer<typeof billingPlanChangeResponseSchema>;
 
-export const canvasCreditSpendResponseSchema = z.discriminatedUnion('allowed', [
-  declinedCanvasCreditSpendSchema,
-  acceptedCanvasCreditSpendSchema,
-]);
-export type CanvasCreditSpendResponse = z.infer<typeof canvasCreditSpendResponseSchema>;
-
-export const canvasCreditSettlementSchema = z
+/** `POST /billing-api/brands/:id/credits/checkout` — one-time Canvas credit packs ($10 / 1,000). */
+export const billingCreditCheckoutRequestSchema = z
   .object({
-    spendId: z.string().uuid(),
-    status: z.enum(['settled', 'released']),
-    creditsSpent: z.number().int().positive().optional(),
-    creditsReleased: z.number().int().positive().optional(),
-    settledAt: z.string().datetime({ offset: true }).nullable().optional(),
+    packs: z.number().int().min(1).max(MAX_CREDIT_PACKS),
+    successUrl: returnUrlSchema,
+    cancelUrl: returnUrlSchema,
   })
   .strict();
-export type CanvasCreditSettlement = z.infer<typeof canvasCreditSettlementSchema>;
+export type BillingCreditCheckoutRequest = z.infer<typeof billingCreditCheckoutRequestSchema>;
+
+export const billingCreditCheckoutResponseSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    url: z.string().url(),
+    sessionId: z.string().min(1),
+    customerId: z.string().min(1),
+    packs: z.number().int().positive(),
+    credits: z.number().int().positive(),
+  })
+  .strict();
+export type BillingCreditCheckoutResponse = z.infer<typeof billingCreditCheckoutResponseSchema>;
+
+/** `POST /billing-api/brands/:id/portal` — Stripe Customer Portal (payment-method update). */
+export const billingPortalRequestSchema = z.object({ returnUrl: returnUrlSchema }).strict();
+export type BillingPortalRequest = z.infer<typeof billingPortalRequestSchema>;
+
+export const billingPortalResponseSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    url: z.string().url(),
+    customerId: z.string().min(1),
+    portalSessionId: z.string().min(1),
+  })
+  .strict();
+export type BillingPortalResponse = z.infer<typeof billingPortalResponseSchema>;
+
+export const BILLING_API_ERROR_CODES = [
+  'unauthorized',
+  'billing_manager_required',
+  'invalid_request',
+  'route_not_found',
+  'method_not_allowed',
+  'contract_managed',
+  'use_plan_change',
+  'no_subscription',
+  'plan_already_active',
+  'plan_not_active',
+  /** Removing the only plan — cancel from the Customer Portal instead. */
+  'last_plan',
+  'stripe_not_configured',
+  'billing_api_failed',
+] as const;
+export const billingApiErrorSchema = z
+  .object({
+    error: z.enum(BILLING_API_ERROR_CODES),
+    message: z.string().optional(),
+  })
+  .passthrough();
+export type BillingApiError = z.infer<typeof billingApiErrorSchema>;
+
+/** HTTP 402 body for a server-gated product or an exhausted Canvas balance. */
+export const billingPaymentRequiredSchema = z
+  .object({
+    error: z.enum(['product_required', 'credits_exhausted']),
+    product: productCodeSchema,
+    planCode: planCodeSchema.nullable(),
+  })
+  .strict();
+export type BillingPaymentRequired = z.infer<typeof billingPaymentRequiredSchema>;
