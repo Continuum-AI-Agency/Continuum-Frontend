@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { AccountCandidate } from '@continuum/contracts';
-import { accountCandidateSchema } from '@continuum/contracts';
-import { cleanup, render } from '@testing-library/react';
+import { ACCOUNT_DETECTOR_META, accountCandidateSchema } from '@continuum/contracts';
+import { cleanup, fireEvent, render } from '@testing-library/react';
 import { AccountRead } from './AccountRead';
 
 afterEach(cleanup);
@@ -352,7 +352,14 @@ describe('AccountRead — a short deck should not look like a broken one', () =>
     );
     expect(container.textContent).toContain('1 checks could not run today');
     expect(getByTestId('account-deck-note').textContent).toContain('24 of 25');
-    expect(getByTestId('account-deck-note').textContent).not.toContain('target_economics');
+    // The third assertion here used to be `deck-note does not contain 'target_economics'`,
+    // which no rendering could ever violate — the deck note is counts and prose, and no
+    // detector name can appear in it. What the test is actually about is that the STARVED
+    // list and the deck line stay separate surfaces, so that is what it asks: the starved
+    // detector is named in the gap list, and the two elements are not one another.
+    const gap = getByTestId('account-starved');
+    expect(gap.textContent).toContain(ACCOUNT_DETECTOR_META.target_economics.label);
+    expect(gap.contains(getByTestId('account-deck-note'))).toBe(false);
   });
 
   it('stays silent on a read written before the worker carried a deck', () => {
@@ -458,13 +465,17 @@ describe('AccountRead — promoting an insight from its own card', () => {
     expect(onSetState).toHaveBeenCalledWith('dead_tail', 'recommend');
   });
 
+  // This used `measurement_integrity`, which is a GUARD — `rankAccountCandidates` filters
+  // guards out, so it renders no card at all and the assertion held whether or not the
+  // measurement rule existed. Deleting the rule from `AlwaysDoThis` left the file green.
+  // `decision_window` is measurement AND not a guard, so it actually renders a card.
   it('never offers it for a family that approves nothing', () => {
-    const { queryByTestId } = render(
+    const { getByTestId, queryByTestId } = render(
       <AccountRead
         candidates={[
           candidate({
-            id: 'measurement_integrity:x',
-            detector: 'measurement_integrity',
+            id: 'decision_window:x',
+            detector: 'decision_window',
             state: 'recommend',
             chart: null,
           }),
@@ -474,7 +485,21 @@ describe('AccountRead — promoting an insight from its own card', () => {
         onSetState={mock()}
       />,
     );
+    // The card IS on screen — otherwise the absence below proves nothing.
+    expect(getByTestId('account-lead')).toBeTruthy();
     expect(queryByTestId('always-do-this')).toBeNull();
+  });
+
+  it('does offer it for a family that approves something, on the same path', () => {
+    const { getByTestId } = render(
+      <AccountRead
+        candidates={[candidate({ id: 'dead_tail:x', detector: 'dead_tail', state: 'recommend' })]}
+        currency="USD"
+        dailySpend={5000}
+        onSetState={mock()}
+      />,
+    );
+    expect(getByTestId('always-do-this')).toBeTruthy();
   });
 
   it('never offers it when no state was resolved', () => {
@@ -520,5 +545,63 @@ describe('what the read assumed', () => {
       <AccountRead candidates={many(3)} currency="USD" dailySpend={5000} />,
     );
     expect(queryByTestId('account-assumptions')).toBeNull();
+  });
+});
+
+// Every test above this point renders three candidates or fewer, so every card lands in a
+// LeadColumn and nothing has ever rendered a RestRow. That is the exact shape of the defect
+// this wave already shipped once: the approval control was added to both, its tests covered
+// one, and the control rendered nowhere on the path they did not cover. Deleting StateNote
+// and AlwaysDoThis from RestRow left this file green.
+describe('the rest, behind the disclosure', () => {
+  const withState = (n: number) =>
+    Array.from({ length: n }, (_, i) =>
+      candidate({
+        id: `dead_tail:r${i}`,
+        impact_per_day: 1000 - i * 10,
+        state: 'recommend',
+        state_lowered: i === 4,
+      }),
+    );
+
+  function openRest(candidates: AccountCandidate[], onSetState = mock()) {
+    const view = render(
+      <AccountRead
+        candidates={candidates}
+        currency="USD"
+        dailySpend={5000}
+        onSetState={onSetState}
+      />,
+    );
+    fireEvent.click(view.getByRole('button', { name: /more ·/ }));
+    return view;
+  }
+
+  it('renders a row per candidate past the first three', () => {
+    const { getAllByTestId } = openRest(withState(6));
+    expect(getAllByTestId('account-rest-row').length).toBe(3);
+  });
+
+  it('offers the approval control on a rest row, not only on a lead card', () => {
+    const { getAllByTestId } = openRest(withState(6));
+    const rows = getAllByTestId('account-rest-row');
+    const controls = rows.filter((row) => row.querySelector('[data-testid="always-do-this"]'));
+    expect(controls.length).toBe(3);
+  });
+
+  it('asks for the detector of the row that was clicked', () => {
+    const onSetState = mock((_d: string, _s: string) => {});
+    const { getAllByTestId } = openRest(withState(6), onSetState);
+    const row = getAllByTestId('account-rest-row')[0];
+    fireEvent.click(row.querySelector('[data-testid="always-do-this"]') as HTMLElement);
+    expect(onSetState).toHaveBeenCalledWith('dead_tail', 'autopilot');
+  });
+
+  it('says a rest row was lowered by its family, same as a lead card would', () => {
+    const { getAllByTestId } = openRest(withState(6));
+    const lowered = getAllByTestId('account-rest-row').filter((row) =>
+      row.querySelector('[data-testid="state-lowered"]'),
+    );
+    expect(lowered.length).toBe(1);
   });
 });

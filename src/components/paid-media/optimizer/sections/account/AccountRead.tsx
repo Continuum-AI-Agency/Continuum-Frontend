@@ -530,7 +530,10 @@ function Starved({ starved }: { starved: Array<{ detector: AccountDetector; miss
   if (uncategorised.length > 0) groups.push({ key: 'other', detectors: uncategorised });
 
   return (
-    <details className="mt-3 rounded-lg border border-border/60 bg-muted/10 p-3">
+    <details
+      className="mt-3 rounded-lg border border-border/60 bg-muted/10 p-3"
+      data-testid="account-starved"
+    >
       <summary className="cursor-pointer text-2xs text-muted-foreground">
         {starved.length} checks could not run today
       </summary>
