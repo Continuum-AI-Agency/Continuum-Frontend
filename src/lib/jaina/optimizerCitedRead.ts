@@ -101,16 +101,52 @@ export function resolutionFrom(read: CitedRead | null, readId: string | null): C
   };
 }
 
+type CitedReadClient = {
+  rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+};
+
+/** The read, given a client. Exported so a test can drive the failure paths. */
+export async function fetchCitedReadForTest(
+  client: CitedReadClient,
+  brandId: string,
+  adAccountId: string,
+): Promise<CitedRead | null> {
+  return readThrough(client, brandId, adAccountId);
+}
+
 async function fetchCitedRead(brandId: string, adAccountId: string): Promise<CitedRead | null> {
-  const client = createSupabaseBrowserClient() as unknown as {
-    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
-  };
+  return readThrough(
+    createSupabaseBrowserClient() as unknown as CitedReadClient,
+    brandId,
+    adAccountId,
+  );
+}
+
+async function readThrough(
+  client: CitedReadClient,
+  brandId: string,
+  adAccountId: string,
+): Promise<CitedRead | null> {
   const { data, error } = await client.rpc('optimizer_get_account_read', {
     p_brand_id: brandId,
     p_ad_account_id: adAccountId,
   });
-  if (error) throw new Error('optimizer_get_account_read unreachable');
-  return citedReadSchema.catch(null).parse(data ?? null);
+  // The reason travels. An RLS denial, a function that is not deployed and a dropped network
+  // are one sentence otherwise — and a citation that cannot be resolved renders as
+  // "this one cleared", which tells the reader the finding was FIXED. That is not a missing
+  // answer, it is a wrong one, so the cause has to survive the throw.
+  if (error) {
+    const detail = error as { message?: string; code?: string; details?: string };
+    const named = [detail.code, detail.message, detail.details].filter(Boolean).join(' · ');
+    throw new Error(`optimizer_get_account_read unreachable${named ? `: ${named}` : ''}`, {
+      cause: error,
+    });
+  }
+  // A top-level `.catch(null)` here would turn a CONTRACT break — the read arriving in a
+  // shape this build cannot read — into the same confident "this one cleared". The nested
+  // catches already keep a partially-moved row renderable; a whole row that does not parse
+  // is a defect, and it belongs in the query's error state where it can be seen.
+  return citedReadSchema.parse(data ?? null);
 }
 
 /**

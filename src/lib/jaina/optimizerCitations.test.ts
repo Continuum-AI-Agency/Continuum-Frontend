@@ -106,3 +106,36 @@ describe('a malformed citation is passed ON, not swallowed', () => {
     ).toHaveLength(1);
   });
 });
+
+// An unresolvable citation renders CITATION_CLEARED_NOTE — "this one cleared" — which tells
+// the reader the finding was FIXED. When the real cause is an RLS denial or a function that
+// is not deployed, that is not a missing answer, it is a wrong one. So the reason has to
+// survive the throw rather than collapsing into one sentence.
+describe('what a failed cited read says about itself', () => {
+  it('names the code, the message and the details it was given', async () => {
+    const { fetchCitedReadForTest } = await import('./optimizerCitedRead');
+    const failing = {
+      rpc: async () => ({
+        data: null,
+        error: { code: '42501', message: 'permission denied for function', details: 'RLS' },
+      }),
+    };
+    let caught: unknown = null;
+    try {
+      await fetchCitedReadForTest(failing as never, 'b1', 'act_1');
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    const message = (caught as Error).message;
+    expect(message).toContain('42501');
+    expect(message).toContain('permission denied for function');
+    expect((caught as Error).cause).toBeTruthy();
+  });
+
+  it('refuses a row whose whole shape it cannot read, instead of calling it cleared', async () => {
+    const { fetchCitedReadForTest } = await import('./optimizerCitedRead');
+    const wrongShape = { rpc: async () => ({ data: { id: 42 }, error: null }) };
+    await expect(fetchCitedReadForTest(wrongShape as never, 'b1', 'act_1')).rejects.toThrow();
+  });
+});
