@@ -2,6 +2,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
+  apiRenderTemplateContractSchema,
   type TemplateSource,
   type TemplateSourceSummary,
   templateSourceSchema,
@@ -19,6 +20,7 @@ import {
 import { createClient } from '@supabase/supabase-js';
 import { type MintedSession, mintSessionBundleForEmail } from './support/auth';
 import {
+  BINDING_ID,
   FORGE_FIXTURE,
   type ForgeFixtures,
   installForgeFixtures,
@@ -144,12 +146,17 @@ function printEnvelope(): void {
   console.log(
     JSON.stringify({
       bench: 'forge:studio:e2e:bench · template-sheet',
-      mode: 'fixtures',
+      mode: LIVE ? 'live' : 'fixtures',
       results,
-      notes: [
-        'FIXTURES: every /api/ai-studio/** call was answered in the browser by contract-parsed fixtures; the template list and font readiness were overridden in this spec; the backend URL is a dead port.',
-        'NOT exercised: the Fastify backend, the forge engine and the render fleet. Real: Chrome, the minted StarCraft session, the server-rendered brand context, and the template sheet components.',
-      ],
+      notes: LIVE
+        ? [
+            `LIVE: the local backend (${process.env.FORGE_STUDIO_API_URL}) against production data — StarCraft's real grants and contracts; no fixtures.`,
+            'NOT exercised: the forge engine and the render fleet.',
+          ]
+        : [
+            'FIXTURES: every /api/ai-studio/** call was answered in the browser by contract-parsed fixtures; the template list and font readiness were overridden in this spec; the backend URL is a dead port.',
+            'NOT exercised: the Fastify backend, the forge engine and the render fleet. Real: Chrome, the minted StarCraft session, the server-rendered brand context, and the template sheet components.',
+          ],
       counts,
       exitCode: counts.fail > 0 ? 1 : 0,
     }),
@@ -292,6 +299,48 @@ async function overrideSheetRoutes(context: BrowserContext): Promise<void> {
             parseState: 'parsed',
           })
         : route.fallback(),
+  );
+}
+
+/** The shared fixture template's contract: the shared fixtures only answer the promo's. */
+async function overrideSharedContract(context: BrowserContext): Promise<void> {
+  const contract = apiRenderTemplateContractSchema.parse({
+    template: {
+      key: FORGE_FIXTURE.shared.templateKey,
+      name: FORGE_FIXTURE.shared.templateKey,
+      bindingId: BINDING_ID,
+      environment: 'Continuum_app',
+      contractVersion: '1',
+      contractHash: 'sc-zerg-v1-contract-hash',
+      contractSource: 'template_forge',
+      outputKinds: ['image'],
+      variableCount: 3,
+      previewUrl: null,
+      updatedAt: '2026-09-11T09:00:00.000Z',
+      ratios: ['1:1', '9:16'],
+    },
+    variables: [
+      { key: 'headline', label: 'Headline', kind: 'text', required: true },
+      { key: 'swarm', label: 'Swarm size', kind: 'enum', required: false, options: ['12', '48'] },
+      { key: 'watermark_logo', label: 'Brand logo', kind: 'image', required: true, reserved: true },
+    ],
+  });
+  await context.route(
+    (url) =>
+      url.pathname ===
+      `/api/ai-studio/renders/templates/${encodeURIComponent(FORGE_FIXTURE.shared.templateKey)}/contract`,
+    async (route) => {
+      const origin = (await route.request().headerValue('origin')) ?? '*';
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'access-control-allow-origin': origin,
+          'access-control-allow-credentials': 'true',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(contract),
+      });
+    },
   );
 }
 
@@ -513,4 +562,93 @@ test.describe('Forge Studio — template sheet', () => {
       expect([...fixtures.brandIds]).toEqual([STARCRAFT_BRAND_ID]);
     });
   }
+
+  test('SHARED 1440x900 · a shared card opens its variables, and Templates goes back', async ({
+    browser,
+  }) => {
+    if (!session) throw new Error('[template-sheet-bench] no minted session');
+    const context = await browser.newContext({
+      storageState: session.state,
+      viewport: { width: 1440, height: 900 },
+    });
+    opened.push(context);
+    const fixtures = await installForgeFixtures(context);
+    await overrideSheetRoutes(context);
+    await overrideSharedContract(context);
+    const page = await context.newPage();
+    await page.goto('/forge', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { level: 1, name: 'Forge' })).toBeVisible({
+      timeout: 180_000,
+    });
+
+    const name = FORGE_FIXTURE.shared.displayName;
+    const card = page.getByRole('button', { name: `Open ${name}`, exact: true });
+    const title = page.getByRole('heading', { level: 2, name, exact: true });
+    await expect(async () => {
+      await card.click();
+      await expect(title).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 60_000 });
+
+    const variables = page.getByRole('list', { name: 'Variables' });
+    await expect(variables.getByRole('listitem')).toHaveCount(2);
+    await expect(variables.getByText('Headline', { exact: true })).toBeVisible();
+    await expect(variables.getByText('One of: 12, 48', { exact: true })).toBeVisible();
+    await expect(page.getByText('Brand logo', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Shared with you', { exact: false }).first()).toBeVisible();
+    await shoot(page, '1440-shared');
+
+    await page.getByRole('button', { name: 'Templates', exact: true }).click();
+    await expect(title).toHaveCount(0);
+    await expect(card).toBeVisible();
+
+    expect(fixtures.violations, 'a body the real contract refuses').toEqual([]);
+    expect([...fixtures.brandIds]).toEqual([STARCRAFT_BRAND_ID]);
+  });
+});
+
+// LIVE: the local backend against production data. The fixtures above prove the view; this proves
+// StarCraft's REAL shared grant opens with its REAL contract, and that another tenant's templates
+// (Vivo47's Parsed_app 463, the carrousel, the Inyogo upload) are nowhere on the page.
+test.describe('Forge Studio — shared templates, LIVE', () => {
+  test.skip(!LIVE, 'runs with FORGE_STUDIO_LIVE=1 against a local backend');
+
+  // biome-ignore lint/correctness/noEmptyPattern: Playwright hook signature
+  test.afterEach(async ({}, testInfo) => {
+    await Promise.all(opened.splice(0).map((context) => context.close().catch(() => undefined)));
+    recordGrade(testInfo);
+  });
+
+  test('LIVE SHARED 1440x900 · a real grant opens with its real variables; no other tenant is listed', async ({
+    browser,
+  }) => {
+    if (!session) throw new Error('[template-sheet-bench] no minted session');
+    const context = await browser.newContext({
+      storageState: session.state,
+      viewport: { width: 1440, height: 900 },
+    });
+    opened.push(context);
+    const page = await context.newPage();
+    await page.goto('/forge', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { level: 1, name: 'Forge' })).toBeVisible({
+      timeout: 180_000,
+    });
+
+    const name = 'StarCraft API Render Proof Collected';
+    const card = page.getByRole('button', { name: `Open ${name}`, exact: true });
+    await expect(card).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByRole('button', { name: /vivo47|carrouselle|inyogo/i })).toHaveCount(0);
+
+    const title = page.getByRole('heading', { level: 2, name, exact: true });
+    await expect(async () => {
+      await card.click();
+      await expect(title).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 60_000 });
+    const variables = page.getByRole('list', { name: 'Variables' });
+    await expect(variables.getByRole('listitem').first()).toBeVisible({ timeout: 60_000 });
+    await shoot(page, '1440-shared-live');
+
+    await page.getByRole('button', { name: 'Templates', exact: true }).click();
+    await expect(title).toHaveCount(0);
+    await expect(card).toBeVisible();
+  });
 });

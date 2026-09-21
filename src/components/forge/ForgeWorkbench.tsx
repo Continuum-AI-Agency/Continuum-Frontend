@@ -16,6 +16,7 @@ import {
   sharedTemplateId,
   sourceDisplayName,
 } from '@/components/forge/TemplateCard';
+import { SharedTemplateDetail } from '@/components/forge/SharedTemplateDetail';
 import { TemplateDetail } from '@/components/forge/TemplateDetail';
 import { TemplateGallery } from '@/components/forge/TemplateGallery';
 import { useTemplateMorphSwap } from '@/components/forge/TemplateWireframe';
@@ -101,6 +102,9 @@ export function ForgeWorkbench({
   onOpenRender?: (intent: ForgeRenderIntent) => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
+  // The `sharedTemplateId` of the open shared template. Keyed by id, not held as an object, so a
+  // grant switched off elsewhere drops the detail back to the gallery on the next list read.
+  const [selectedShared, setSelectedShared] = useState<string | null>(null);
   const [adopting, setAdopting] = useState<string | null>(null);
   // Dropped files named like a template already here, waiting for "revision or new template?".
   const [sameName, setSameName] = useState<Array<{ file: File; source: TemplateSourceSummary }>>(
@@ -245,8 +249,13 @@ export function ForgeWorkbench({
 
   const morph = useTemplateMorphSwap();
   const open = (assetId: string | null) => morph(() => setSelected(assetId));
+  const openShared = (template: SharedTemplate | null) =>
+    morph(() => setSelectedShared(template ? sharedTemplateId(template) : null));
 
   const current = sources.find((source) => source.assetId === selected) ?? null;
+  const currentShared = current
+    ? null
+    : (shared.find((template) => sharedTemplateId(template) === selectedShared) ?? null);
 
   // A drop never makes a second copy by accident: the same bytes open the template that holds them,
   // and a known file name asks whether this is its next revision.
@@ -324,6 +333,17 @@ export function ForgeWorkbench({
           revisionFile={revision?.assetId === current.assetId ? revision.file : undefined}
           onRevisionTaken={() => setRevision(null)}
         />
+      ) : currentShared ? (
+        <SharedTemplateDetail
+          key={sharedTemplateId(currentShared)}
+          brandId={brandId}
+          brandName={brandName}
+          template={currentShared}
+          busy={adopting === sharedTemplateId(currentShared)}
+          onBack={() => openShared(null)}
+          onToggle={() => void toggleShared(currentShared)}
+          onOpenRender={onOpenRender}
+        />
       ) : (
         <TemplateGallery
           brandId={brandId}
@@ -332,6 +352,7 @@ export function ForgeWorkbench({
           shared={shared}
           adopting={adopting}
           onOpen={open}
+          onOpenShared={openShared}
           onRename={(assetId, title) => void rename(assetId, title)}
           onToggleShared={(template) => void toggleShared(template)}
           onOpenRender={onOpenRender}
