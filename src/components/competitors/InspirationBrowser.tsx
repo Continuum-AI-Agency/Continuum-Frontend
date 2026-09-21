@@ -2,11 +2,12 @@
 
 // The one Inspiration surface, shared by the Library tab, the Brand Spy
 // workspace, and the dashboard organic widget. Sorts competitor content by
-// source (Organic | Paid | All), scopes it to a tracked competitor via the
+// source (Organic | Paid | All | Saved), scopes it to a tracked competitor via the
 // health-aware rail, pulls fresh content with Sync (server-side Instagram
 // business-discovery unwrap + cache), and saves/freezes any item to a board.
 // Per-source bodies reuse the existing organic explorer and paid grid; the "All"
-// body interleaves both. `compact` trims chrome for the dashboard widget.
+// body interleaves both, and "Saved" is the brand's Library of saved posts.
+// `compact` trims chrome for the dashboard widget.
 
 import { RefreshCw, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -28,16 +29,19 @@ import { cn } from '@/lib/utils';
 import { CompetitorOrganicExplorer } from './CompetitorOrganicExplorer';
 import type { CompetitorPostView } from './competitorPostView';
 import { InspirationFeedGrid } from './InspirationFeedGrid';
+import { Segmented } from './inspirationControls';
 import { buildInspirationFeed } from './inspirationFeed';
+import { SavedInspiration } from './SavedInspiration';
 import { SaveToLibraryButton } from './SaveToLibraryButton';
 
-type Source = 'organic' | 'paid' | 'all';
+type Source = 'organic' | 'paid' | 'all' | 'saved';
 type PaidStatus = 'active' | 'paused' | undefined;
 
 const SOURCE_OPTIONS: Array<{ id: Source; label: string }> = [
   { id: 'organic', label: 'Organic' },
   { id: 'paid', label: 'Paid' },
   { id: 'all', label: 'All' },
+  { id: 'saved', label: 'Saved' },
 ];
 
 const STATUS_OPTIONS: Array<{ id: 'all' | 'active' | 'paused'; label: string }> = [
@@ -45,43 +49,6 @@ const STATUS_OPTIONS: Array<{ id: 'all' | 'active' | 'paused'; label: string }> 
   { id: 'active', label: 'Active' },
   { id: 'paused', label: 'Paused' },
 ];
-
-function Segmented<T extends string>({
-  value,
-  options,
-  onChange,
-  size = 'md',
-}: {
-  value: T;
-  options: Array<{ id: T; label: string }>;
-  onChange: (id: T) => void;
-  size?: 'sm' | 'md';
-}) {
-  return (
-    <div className="inline-flex items-center gap-0.5 rounded-lg border border-border p-0.5">
-      {options.map((option) => {
-        const active = value === option.id;
-        return (
-          <button
-            key={option.id}
-            type="button"
-            aria-pressed={active}
-            onClick={() => onChange(option.id)}
-            className={cn(
-              'rounded-md font-medium transition-colors',
-              size === 'sm' ? 'px-2 py-0.5 text-2xs' : 'px-2.5 py-1 text-xs',
-              active
-                ? 'bg-foreground text-background'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {option.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 function SyncButton({
   brandId,
@@ -235,13 +202,14 @@ export function InspirationBrowser({
   }, [query]);
 
   const manage = onManageCompetitors ?? (() => router.push('/competitor-spy?tab=competitors'));
-  const showKeyword = source !== 'organic';
+  const showKeyword = source === 'paid' || source === 'all';
   const q = debounced || undefined;
 
   return (
     <div className={cn('flex min-w-0 flex-col', compact ? 'gap-2' : 'gap-4', className)}>
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <Segmented
+          label="Source"
           value={source}
           options={SOURCE_OPTIONS}
           onChange={setSource}
@@ -250,6 +218,7 @@ export function InspirationBrowser({
         {showKeyword && !compact ? <KeywordSearch value={query} onChange={setQuery} /> : null}
         {source === 'paid' && !compact ? (
           <Segmented
+            label="Ad status"
             value={status ?? 'all'}
             options={STATUS_OPTIONS}
             onChange={(next) => setStatus(next === 'all' ? undefined : next)}
@@ -295,6 +264,16 @@ export function InspirationBrowser({
               competitorId={competitorId}
               feedLimit={feedLimit}
               gridClassName={gridClassName}
+              renderActions={OrganicSave({ brandId })}
+              compact={compact}
+            />
+          ) : null}
+
+          {source === 'saved' ? (
+            <SavedInspiration
+              brandId={brandId}
+              gridClassName={gridClassName}
+              compact={compact}
               renderActions={OrganicSave({ brandId })}
             />
           ) : null}

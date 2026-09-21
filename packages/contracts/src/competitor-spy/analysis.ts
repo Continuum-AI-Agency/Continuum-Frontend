@@ -108,6 +108,8 @@ export const competitorPostVideoDescriptionSchema = z.object({
       'skit',
       'product_demo',
       'trend_remix',
+      'split_screen',
+      'prop',
       'other',
     ])
     .describe('Best-fit creator format.'),

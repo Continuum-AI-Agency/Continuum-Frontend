@@ -307,6 +307,8 @@ export * from './recommended';
 export * from './savedBoards';
 // Save a competitor post into the media Library as a tagged, re-fetchable asset.
 export * from './saveToLibrary';
+// The Inspiration Library: analysed, ranked posts and the act routes on one post.
+export * from './inspiration';
 // Discovery smart search + swipe-file saved boards (foreplay-style surfaces).
 export * from './smartSearch';
 // Durable top-posts-of-top-competitors digest (Pulse email + organic agent grounding).

@@ -36,6 +36,17 @@ export const competitorPostSlideRefSchema = z.object({
 });
 export type CompetitorPostSlideRef = z.infer<typeof competitorPostSlideRefSchema>;
 
+export const competitorPostSnapshotSchema = z.object({
+  likeCount: z.number().int().nonnegative().nullable(),
+  commentsCount: z.number().int().nonnegative().nullable(),
+  viewCount: z.number().int().nonnegative().nullable(),
+  outlierScore: z.number().nonnegative().nullable(),
+  baselineEngagement: z.number().nonnegative().nullable(),
+  postedAt: z.string().nullable(),
+  capturedAt: z.string(),
+});
+export type CompetitorPostSnapshot = z.infer<typeof competitorPostSnapshotSchema>;
+
 // Stored in media.assets.origin_ref — the durable re-fetch key. `kind` discriminates
 // the origin_ref union alongside canvas/inspiration refs. Carousels save one row
 // per slide: every row carries slideIndex/slideCount; the cover (slideIndex 0)
@@ -53,6 +64,9 @@ export const competitorPostOriginRefSchema = z.object({
   slideCount: z.number().int().positive().optional(),
   slideKind: instagramMediaKindSchema.optional(),
   slides: z.array(competitorPostSlideRefSchema).optional(),
+  // The post's public metrics as captured at save time (Library items keep no live
+  // metrics). Absent on rows saved before 2026-09-21.
+  snapshot: competitorPostSnapshotSchema.optional(),
 });
 export type CompetitorPostOriginRef = z.infer<typeof competitorPostOriginRefSchema>;
 
