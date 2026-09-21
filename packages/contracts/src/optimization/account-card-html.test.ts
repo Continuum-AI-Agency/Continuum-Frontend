@@ -2,12 +2,16 @@ import { describe, expect, it } from 'bun:test';
 import {
   accountCardHtml,
   CARD_COMPOSITIONS,
+  COMPOSITION_BY_DETECTOR,
   cardFigures,
   clipLine,
-  COMPOSITION_BY_DETECTOR,
   LINE_BUDGET,
 } from './account-card-html';
-import { type AccountCandidate, accountCandidateSchema, accountDetectorSchema } from './account-strategy';
+import {
+  type AccountCandidate,
+  accountCandidateSchema,
+  accountDetectorSchema,
+} from './account-strategy';
 
 const candidate = (over: Partial<AccountCandidate> = {}): AccountCandidate =>
   accountCandidateSchema.parse({
@@ -56,7 +60,12 @@ describe('accountCardHtml — a compiler cannot hallucinate, but it can carry a 
     const html = accountCardHtml(c, opts);
     const allowed = new Set<string>();
     for (const figure of cardFigures(c)) {
-      for (const form of [String(figure), figure.toFixed(0), figure.toFixed(1), figure.toFixed(2)]) {
+      for (const form of [
+        String(figure),
+        figure.toFixed(0),
+        figure.toFixed(1),
+        figure.toFixed(2),
+      ]) {
         for (const piece of form.split('.')) allowed.add(piece);
       }
     }
@@ -203,7 +212,10 @@ describe('accountCardHtml — every shape draws its own marks', () => {
   }
 
   it('renders the line alone when there is no chart, rather than an empty frame', () => {
-    const html = accountCardHtml(candidate({ chart: null }), { ...opts, line: 'no chart for this one' });
+    const html = accountCardHtml(candidate({ chart: null }), {
+      ...opts,
+      line: 'no chart for this one',
+    });
     expect(html).toContain('no chart for this one');
     expect(html).not.toContain('<svg');
   });

@@ -86,9 +86,15 @@ export type JainaUIDataTypes = {
    */
   'jaina-notice': Record<string, unknown>;
   /**
-   * An optimizer card, CITED. The payload addresses a candidate in a stored read and carries
-   * NO figures, because there is no field for one — the digit gate becomes a property of the
-   * wire rather than a regex over the model's prose.
+   * An optimizer card, CITED.
+   *
+   * The payload addresses a candidate that already exists in a stored read. It carries NO
+   * figures, because there is no field for one — which turns the digit gate from a regex over
+   * the model's prose into a property of the wire. Jaina chooses WHICH comparison to show and
+   * writes the sentence around it; she cannot author what the chart says.
+   *
+   * The renderer resolves it against the stored read and draws the same card the account
+   * screen draws. Canonical shape: `jainaOptimizerCardSchema` in ../optimization.
    */
   'jaina-optimizer-card': Record<string, unknown>;
 };

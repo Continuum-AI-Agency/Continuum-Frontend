@@ -626,7 +626,8 @@ export function deckForAccount(objectives: readonly OptimizationObjective[]): {
   // cannot say, so the whole catalogue stands rather than claiming a narrower deck.
   if (objectives.length === 0) return { applies: total, total, muted: [] };
   const applies = new Set<AccountDetector>();
-  for (const objective of objectives) for (const detector of deckFor(objective)) applies.add(detector);
+  for (const objective of objectives)
+    for (const detector of deckFor(objective)) applies.add(detector);
   return {
     applies: applies.size,
     total,

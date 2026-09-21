@@ -1,13 +1,10 @@
 // Optimizer execution is backend-owned. Only its validated wire shapes belong
 // in the shared FE<->BE contract package.
 
+export * from './account-card-html';
 // The portfolio brief: the growth read and the one highest-impact thing to do today.
 export * from './account-chart';
-export * from './account-card-html';
 export * from './account-strategy';
-export * from './custom-conversion';
-export * from './insight-approval';
-export * from './jaina-card';
 // One normalized row of public.continuum_action_stream, and the fold that makes a change
 // and its undo read as ONE entry. Shared by every surface that narrates what we did.
 export * from './action-stream';
@@ -20,9 +17,12 @@ export * from './audience-proposals';
 // Meta currency MAJOR->MINOR scaling, shared by the FE guardrail inputs, the apply
 // ledger/audit keys, and the Graph budget write. Never hardcode *100.
 export * from './currency';
+export * from './custom-conversion';
 export * from './engine-contracts';
 export * from './flash-creatives';
 export * from './flash-pipeline-template';
+export * from './insight-approval';
+export * from './jaina-card';
 // Which trailing window a portfolio's read surfaces report on, and how to recommend one.
 export * from './lookback';
 // MCP umbrella IO contracts (optimizer_query read + optimizer_manage write).
@@ -32,6 +32,7 @@ export * from './onboarding';
 export * from './portfolio-brief';
 // Optimizer-service orchestration DTOs (enrollment, run requests, FE read model).
 export * from './service';
+export * from './stored-account-read';
 // Target metric per objective + daily/monthly/period budget derivation, shared by the
 // wizard, Manage, MCP and the scheduler.
 export * from './targetMetric';

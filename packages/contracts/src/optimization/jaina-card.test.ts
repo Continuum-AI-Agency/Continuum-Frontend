@@ -42,7 +42,9 @@ describe('a strip means three, and four is not an answer', () => {
   });
 
   it('holds each size to its own count', () => {
-    expect(citationIsWellFormed(card({ size: 'strip', candidate_ids: ['a', 'b', 'c'] }))).toBe(true);
+    expect(citationIsWellFormed(card({ size: 'strip', candidate_ids: ['a', 'b', 'c'] }))).toBe(
+      true,
+    );
     expect(citationIsWellFormed(card({ size: 'strip', candidate_ids: ['a'] }))).toBe(false);
     expect(citationIsWellFormed(card({ size: 'chip' }))).toBe(true);
     expect(citationIsWellFormed(card({ size: 'card', candidate_ids: ['a', 'b'] }))).toBe(false);

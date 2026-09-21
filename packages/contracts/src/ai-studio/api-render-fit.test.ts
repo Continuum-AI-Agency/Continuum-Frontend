@@ -165,7 +165,60 @@ describe('the escalation rule is what makes the judge automatic', () => {
   test('anything unmeasurable is escalated — that is the whole point of unknown', () => {
     const report = planFitCheck({ comp, slots: [ok, unknown] });
     expect(report.escalate).toBe(true);
-    expect(report.why).toContain('could not be measured');
+    // Assert the machine-readable fact, not the sentence: a message reworded later must not
+    // silently green this test while the escalation itself breaks.
+    expect(report.repairable).toEqual(['x']);
+  });
+
+  test('a rig-placed slot escalates but is NEVER offered as repairable', () => {
+    const rigged = checkAssetSwap({
+      key: 'ref_imagen_producto',
+      placement: {
+        comp: 'DPLV 1080x1440',
+        compSize: [1080, 1440],
+        box: [0, 0, 100, 100],
+        boxSource: null,
+        source: [100, 100],
+        sourceKind: null,
+        rigged: true,
+      },
+      asset: { w: 100, h: 100 },
+    });
+    expect(rigged.unknownReason).toBe('rigged');
+    const report = planFitCheck({ comp, slots: [ok, rigged] });
+    expect(report.escalate).toBe(true);
+    // The production case: eight of ten escalations were this, and sending someone to re-parse
+    // the template for it would be a wild goose chase — the rig fits the asset at render time.
+    expect(report.repairable).toEqual([]);
+    expect(report.why).toContain('expected, not a fault');
+  });
+
+  test('a repairable gap stays visible when a rig is escalating alongside it', () => {
+    const rigged = checkAssetSwap({
+      key: 'rig',
+      placement: {
+        comp: 'DPLV 1080x1440',
+        compSize: [1080, 1440],
+        box: [0, 0, 100, 100],
+        boxSource: null,
+        source: [100, 100],
+        sourceKind: null,
+        rigged: true,
+      },
+      asset: { w: 100, h: 100 },
+    });
+    const report = planFitCheck({ comp, slots: [rigged, unknown] });
+    // The whole bug: before `unknownReason` these two read identically as "2 slots could not be
+    // measured", so the one worth fixing was invisible inside the one that never can be.
+    expect(report.repairable).toEqual(['x']);
+    expect(report.why).toContain('re-parsing the template');
+  });
+
+  test('a verdict written before unknownReason existed still escalates, and is not repairable', () => {
+    const legacy = { ...unknown, unknownReason: null };
+    const report = planFitCheck({ comp, slots: [legacy] });
+    expect(report.escalate).toBe(true);
+    expect(report.repairable).toEqual([]);
   });
 
   test('a template with no media slots needs nothing', () => {

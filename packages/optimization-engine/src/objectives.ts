@@ -309,6 +309,37 @@ export const OBJECTIVE_PROFILES: Record<OptimizationObjective, ObjectiveProfile>
     calibrated: false,
     note: 'UNCALIBRATED fallback — ALL clicks, the weakest proxy there is. Raises deliberately capped tighter than `traffic`: cheap clicks are the classic way an ad that never converted anything looks like it deserves more budget.',
   },
+  /**
+   * A conversion the business names itself.
+   *
+   * Every number here is `lead`'s, borrowed whole and marked uncalibrated — the same thing
+   * `conversations` does. `lead` is the conservative choice for a placeholder because it is
+   * the hardest profile in the set: a significance gate, EWMA smoothing, three-day data
+   * de-weighted to nearly nothing, and the tightest caps in the catalogue. A custom event that
+   * turns out to be dense and same-day gets `signup`'s profile instead, resolved per account
+   * from its descriptor — this entry is only what the type demands when nobody has resolved
+   * one yet, and being wrong in the CAUTIOUS direction is the whole point of choosing it.
+   */
+  custom: {
+    objective: 'custom',
+    kpiField: 'leads',
+    upperFunnelField: 'landingPageViews',
+    upperFunnelLabel: 'landing-page view',
+    weights: {
+      neutral: { d3: 0.1, d7: 0.4, d14: 0.5 },
+      positive: { d3: 0.2, d7: 0.5, d14: 0.3 },
+      negative: { d3: 0.05, d7: 0.35, d14: 0.6 },
+    },
+    saturationGamma: 1,
+    velocityUpPct: 0.25,
+    velocityDownPct: 0.35,
+    significanceGate: true,
+    minEventsPerWindow: 5,
+    ewmaAlpha: 0.5,
+    predictiveness: 0.45,
+    calibrated: false,
+    note: "UNCALIBRATED — inherits `lead` until a descriptor resolves the real analog. predictiveness 0.45 is lead's measured Spearman, NOT one measured for any custom event.",
+  },
 };
 
 export function getObjectiveProfile(objective: OptimizationObjective): ObjectiveProfile {

@@ -5,6 +5,8 @@ import {
   analogObjectiveSchema,
   conversionDescriptorSchema,
   inferAnalog,
+  measuredObjective,
+  resolveConversionDescriptor,
   SLOW_EVENT_DAYS,
   SPARSE_EVENTS_PER_WEEK,
 } from './custom-conversion';
@@ -109,5 +111,49 @@ describe('a custom conversion sits on its analog’s rung, not on a fixed one', 
       if (objective === 'custom') continue;
       expect(resultRungFor(objective, 'purchase')).toBe(RESULT_RUNG[objective]);
     }
+  });
+});
+
+describe('resolving what is stored on the row', () => {
+  it('re-infers an inferred analog, so a stale one cannot outlive the figures', () => {
+    // Written as 'signup' the day it was named; four days of lag says lead now.
+    const resolved = resolveConversionDescriptor(
+      descriptor({ analog: 'signup', analog_source: 'inferred', typical_lag_days: 4 }),
+    );
+    expect(resolved?.analog).toBe('lead');
+  });
+
+  it('never re-infers over a correction', () => {
+    const resolved = resolveConversionDescriptor(
+      descriptor({ analog: 'purchase', analog_source: 'declared', typical_lag_days: 4 }),
+    );
+    expect(resolved?.analog).toBe('purchase');
+  });
+
+  it('answers null for the absent column, the empty value and a malformed blob', () => {
+    // All three mean the same thing downstream: read this account the way we read it today.
+    expect(resolveConversionDescriptor(undefined)).toBeNull();
+    expect(resolveConversionDescriptor(null)).toBeNull();
+    expect(
+      resolveConversionDescriptor({ event_id: 'crm_mql', typical_lag_days: 'soon' }),
+    ).toBeNull();
+  });
+});
+
+describe('the objective an account is measured against', () => {
+  it('is the analog for a described custom conversion', () => {
+    expect(measuredObjective('custom', descriptor({ analog: 'purchase' }))).toBe('purchase');
+  });
+
+  it('stays custom when nobody has said what the event is', () => {
+    expect(measuredObjective('custom', null)).toBe('custom');
+  });
+
+  it('leaves every other objective, and an unreadable one, exactly as it is', () => {
+    for (const objective of OptimizationObjectiveSchema.options) {
+      if (objective === 'custom') continue;
+      expect(measuredObjective(objective, descriptor({ analog: 'purchase' }))).toBe(objective);
+    }
+    expect(measuredObjective(null, null)).toBeNull();
   });
 });

@@ -30,8 +30,8 @@ export type RenderApprovalFile = z.infer<typeof renderApprovalFileSchema>;
 /**
  * `pending` is the state this whole feature exists to create.
  * `previewed` is an approval whose Meta writes were refused (a dry run, or a
- * tenant whose delivery_config.meta_writes_allowed is off) — a real outcome,
- * not a failure and not a publish.
+ * brand that is not armed in Continuum) — a real outcome, not a failure and
+ * not a publish.
  * `rejected` is terminal and stays listed: the Forge page shows who said no.
  */
 export const renderApprovalStatusSchema = z.enum([

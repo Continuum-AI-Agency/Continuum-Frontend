@@ -20,9 +20,18 @@ const EPOCH_DAY_MS = 86_400_000;
 
 /** Reverse of `OBJECTIVE_PROFILES[o].kpiField`. Each objective declares a DISTINCT
  *  kpiField, so a snapshot's declared kpiField maps back to exactly one objective. Built
- *  once from the profiles so it can never drift from them. */
+ *  once from the profiles so it can never drift from them.
+ *
+ *  `custom` is excluded, and it has to be: a custom conversion BORROWS an analog's kpiField,
+ *  so including it would make the reverse ambiguous — `leads` would map to both `lead` and
+ *  `custom`, and whichever came last in the object would silently win. That is not a gap in
+ *  this map, it is the nature of the objective: a custom event is identified by the event id
+ *  in its descriptor, never by the field it happens to be counted in. A snapshot carrying
+ *  `leads` IS a lead snapshot; only the portfolio's own descriptor can say otherwise. */
 export const KPI_FIELD_TO_OBJECTIVE = Object.fromEntries(
-  Object.values(OBJECTIVE_PROFILES).map((p) => [p.kpiField, p.objective]),
+  Object.values(OBJECTIVE_PROFILES)
+    .filter((p) => p.objective !== 'custom')
+    .map((p) => [p.kpiField, p.objective]),
 ) as Record<keyof WindowMetrics, OptimizationObjective>;
 
 export type SnapshotsToSeriesOptions = {

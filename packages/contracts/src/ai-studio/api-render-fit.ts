@@ -63,6 +63,30 @@ export type SlotPlacement = z.infer<typeof slotPlacementSchema>;
 export const apiRenderFitStateSchema = z.enum(['ok', 'clipped', 'unknown']);
 export type ApiRenderFitState = z.infer<typeof apiRenderFitStateSchema>;
 
+/**
+ * WHY a slot came back `unknown` — because the four reasons are not the same problem and
+ * collapsing them hid the only one anybody can fix.
+ *
+ * `rigged` is permanent: a rig fits the asset at render time, so no arithmetic here will ever
+ * answer it and the judge is the instrument, forever. `unplaced` and `unsized` are a DATA gap —
+ * a template nobody parsed, a layer with no footage size — and re-parsing repairs them.
+ * `unpinned` is not a fault at all, just a slot nobody has chosen an asset for yet.
+ *
+ * Measured on production 2026-09-19: of ten escalated renders, eight were `rigged` (the product
+ * image) and two were `unplaced`. Both reported as "could not be measured", so the two
+ * repairable ones were invisible inside the eight that never can be.
+ */
+export const apiRenderFitUnknownReasonSchema = z.enum([
+  'rigged',
+  'unplaced',
+  'unsized',
+  'unpinned',
+]);
+export type ApiRenderFitUnknownReason = z.infer<typeof apiRenderFitUnknownReasonSchema>;
+
+/** The reasons a re-parse would clear. `rigged` is not one of them, and never will be. */
+export const REPAIRABLE_FIT_REASONS: readonly ApiRenderFitUnknownReason[] = ['unplaced', 'unsized'];
+
 export const apiRenderFitCoverSchema = z
   .object({ key: z.string(), label: z.string(), coverage: z.number().min(0).max(1) })
   .strict();
@@ -78,6 +102,8 @@ export const apiRenderFitVerdictSchema = z
     insideFraction: z.number().min(0).max(1).nullable().default(null),
     scale: z.tuple([z.number(), z.number()]).nullable().default(null),
     covers: z.array(apiRenderFitCoverSchema).default([]),
+    /** Set only when `state` is `unknown`. Defaulted for rows written before it existed. */
+    unknownReason: apiRenderFitUnknownReasonSchema.nullable().default(null),
     why: z.string(),
   })
   .strict();
@@ -103,6 +129,13 @@ export const apiRenderFitReportSchema = z
      * keeps the judge from being a per-render tax on renders nobody had a question about.
      */
     escalate: z.boolean(),
+    /**
+     * Slot keys whose `unknown` a re-parse would clear — never the rig-placed ones.
+     *
+     * This is the list worth acting on. Empty means every escalation on this frame is expected,
+     * and the judge is doing the job nothing else can.
+     */
+    repairable: z.array(z.string()).default([]),
     why: z.string(),
   })
   .strict();
@@ -211,6 +244,7 @@ export function checkAssetSwap(args: {
 }): ApiRenderFitVerdict {
   const base = {
     key: args.key,
+    unknownReason: null,
     shapeClass: null,
     box: null,
     clippedPx: null,
@@ -225,22 +259,28 @@ export function checkAssetSwap(args: {
     return {
       ...base,
       state: 'unknown',
+      unknownReason: 'rigged',
       shapeClass: args.asset ? shapeClass(args.asset.w, args.asset.h) : null,
       box: args.placement.box,
       why: 'placed by a rig in the template, which fits the asset at render time — checked on the finished frame',
     };
   }
   if (!args.asset) {
-    return { ...base, state: 'unknown', why: 'no asset is chosen for this slot yet' };
+    return {
+      ...base,
+      state: 'unknown',
+      unknownReason: 'unpinned',
+      why: 'no asset is chosen for this slot yet',
+    };
   }
   const klass = shapeClass(args.asset.w, args.asset.h);
   if (!args.placement) {
     return {
       ...base,
       state: 'unknown',
+      unknownReason: 'unplaced',
       shapeClass: klass,
-      // The honest reason, not a shrug: this is what a fit-rigged slot and an unparsed template
-      // both look like from here, and it is exactly the case the judge is escalated for.
+      // Repairable, unlike a rig: the template simply has no measured placement yet.
       why: 'this template has no measured placement for the slot, so where the asset lands cannot be said — the render will be judged instead',
     };
   }
@@ -249,6 +289,7 @@ export function checkAssetSwap(args: {
     return {
       ...base,
       state: 'unknown',
+      unknownReason: 'unsized',
       shapeClass: klass,
       why: 'the slot has no footage size to take an effective scale from (a text or shape layer, or a rig-placed one)',
     };
@@ -269,6 +310,7 @@ export function checkAssetSwap(args: {
   return {
     key: args.key,
     state: clips ? 'clipped' : 'ok',
+    unknownReason: null,
     shapeClass: klass,
     box: predicted.box,
     clippedPx: clipped,
@@ -297,20 +339,55 @@ export function planFitCheck(args: {
 }): ApiRenderFitReport {
   const unknown = args.slots.filter((slot) => slot.state === 'unknown');
   const clipped = args.slots.filter((slot) => slot.state === 'clipped');
+  const of = (reason: ApiRenderFitUnknownReason) =>
+    unknown.filter((slot) => slot.unknownReason === reason);
+  const rigged = of('rigged');
+  const repairable = unknown.filter(
+    (slot) =>
+      slot.unknownReason !== null && REPAIRABLE_FIT_REASONS.includes(slot.unknownReason),
+  );
+  const unpinned = of('unpinned');
+  // A verdict written before `unknownReason` existed carries null; it is still an unknown and
+  // still escalates, it just cannot be sorted into a bucket. Counting it as repairable would
+  // send someone to re-parse a template that is merely rigged.
+  const unclassified = unknown.filter((slot) => slot.unknownReason === null);
+
+  // Unchanged on purpose: what gets judged is a safety property, and this change is about what
+  // the report SAYS, not about quietly judging fewer frames.
   const escalate = unknown.length > 0 || clipped.length > 0;
+
+  const plural = (n: number) => (n === 1 ? '' : 's');
   const why = !escalate
     ? args.slots.length === 0
       ? 'this template has no media slots to place'
-      : `every slot lands inside the canvas; the frame does not need a judge`
+      : 'every slot lands inside the canvas; the frame does not need a judge'
     : [
-        clipped.length
-          ? `${clipped.length} slot${clipped.length === 1 ? '' : 's'} would clip`
+        clipped.length ? `${clipped.length} slot${plural(clipped.length)} would clip` : null,
+        rigged.length
+          ? `${rigged.length} rig-placed slot${plural(rigged.length)} can only be checked on the ` +
+            'finished frame (expected, not a fault)'
           : null,
-        unknown.length
-          ? `${unknown.length} slot${unknown.length === 1 ? '' : 's'} could not be measured`
+        repairable.length
+          ? `${repairable.length} slot${plural(repairable.length)} (${repairable
+              .map((slot) => slot.key)
+              .join(', ')}) ${repairable.length === 1 ? 'has' : 'have'} no measured placement — ` +
+            're-parsing the template would clear this'
+          : null,
+        unpinned.length
+          ? `${unpinned.length} slot${plural(unpinned.length)} ${unpinned.length === 1 ? 'has' : 'have'} no asset pinned`
+          : null,
+        unclassified.length
+          ? `${unclassified.length} slot${plural(unclassified.length)} could not be measured`
           : null,
       ]
         .filter(Boolean)
-        .join(' and ') + ' — the finished frame goes to the judge';
-  return { comp: args.comp, slots: args.slots, escalate, why };
+        .join('; ') + ' — the finished frame goes to the judge';
+
+  return {
+    comp: args.comp,
+    slots: args.slots,
+    escalate,
+    repairable: repairable.map((slot) => slot.key),
+    why,
+  };
 }
