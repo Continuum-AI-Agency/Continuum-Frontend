@@ -136,3 +136,75 @@ describe('deriveMetricTrendValue — GA4 daily chart series derivation', () => {
     ]);
   });
 });
+
+// The metric-card deltas used to be coloured by sign: `delta > 0 ? success : destructive`.
+// CPC is one of these eight cards, and a CPC that came DOWN — the good outcome — rendered
+// in the destructive colour beside a ROAS that rose in green.
+describe('MetricsPanel — delta colour follows the metric, not the sign', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  function withComparison(metricKey: string, percentageChange: number): PaidMetricsResponse {
+    return {
+      ...baseData,
+      comparison: { [metricKey]: { current: 1, previous: 2, percentageChange } },
+    };
+  }
+
+  function deltaClassFor(text: string): string {
+    return screen.getByText(text).className;
+  }
+
+  it('colours a rising ROAS green and a falling one destructive', () => {
+    const { rerender } = render(
+      <MetricsPanel
+        data={withComparison('roas', 6.5)}
+        expandedMetric="spend"
+        onMetricSelect={() => {}}
+      />,
+    );
+    expect(deltaClassFor('+6.5%')).toContain('text-success');
+
+    rerender(
+      <MetricsPanel
+        data={withComparison('roas', -6.5)}
+        expandedMetric="spend"
+        onMetricSelect={() => {}}
+      />,
+    );
+    expect(deltaClassFor('-6.5%')).toContain('text-destructive');
+  });
+
+  it('colours a FALLING CPC green and a rising one destructive', () => {
+    const { rerender } = render(
+      <MetricsPanel
+        data={withComparison('cpc', -6.5)}
+        expandedMetric="spend"
+        onMetricSelect={() => {}}
+      />,
+    );
+    // The sign still says which way it moved; only the colour changed sides.
+    expect(deltaClassFor('-6.5%')).toContain('text-success');
+
+    rerender(
+      <MetricsPanel
+        data={withComparison('cpc', 6.5)}
+        expandedMetric="spend"
+        onMetricSelect={() => {}}
+      />,
+    );
+    expect(deltaClassFor('+6.5%')).toContain('text-destructive');
+  });
+
+  it('keeps a flat window quiet rather than calling it good news', () => {
+    render(
+      <MetricsPanel
+        data={withComparison('cpc', 0)}
+        expandedMetric="spend"
+        onMetricSelect={() => {}}
+      />,
+    );
+    expect(deltaClassFor('+0.0%')).toContain('text-muted-foreground');
+  });
+});

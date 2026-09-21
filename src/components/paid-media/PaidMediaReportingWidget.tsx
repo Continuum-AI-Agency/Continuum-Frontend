@@ -4,6 +4,7 @@ import { PieChart, RotateCw } from 'lucide-react';
 import React, { useCallback, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { Pill } from '@/components/kibo-ui/pill';
+import { paidDeltaIsGood } from '@/components/paid-media/metricDelta';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -754,14 +755,14 @@ export function MetricsPanel({
             const delta = comparison?.[item.key]?.percentageChange;
             const formattedDelta = formatPercent(delta);
             const isActive = expandedKey === item.key;
+            // Colour by what the move MEANS, not by its sign. CPC is one of these cards and
+            // a CPC that fell — the good outcome — used to render destructive-red.
             const deltaToneClass =
-              delta === undefined
+              delta === undefined || delta === 0
                 ? 'text-muted-foreground'
-                : delta > 0
+                : paidDeltaIsGood(item.key, delta)
                   ? 'text-success'
-                  : delta < 0
-                    ? 'text-destructive'
-                    : 'text-muted-foreground';
+                  : 'text-destructive';
 
             return (
               <button

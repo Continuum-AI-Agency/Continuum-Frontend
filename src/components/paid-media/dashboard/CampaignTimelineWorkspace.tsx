@@ -19,7 +19,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-
+import { paidDeltaIsGood } from '@/components/paid-media/metricDelta';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -279,6 +279,35 @@ function labelForMetric(metric: MetricKey): string {
     default:
       return metric;
   }
+}
+
+// A period-over-period change, coloured by what the move MEANS rather than by its sign: a
+// CPA or CPC that fell is good news and used to render red everywhere in this workspace. The
+// sign is untouched — it still says which way the number actually moved.
+//
+// Exported so the colour rule has a render test of its own; the surrounding workspace owns
+// Supabase fetching and four levels of campaign/ad-set/ad state, which would make testing
+// this one span through it disproportionately heavy.
+export function MetricDeltaText({
+  metric,
+  deltaPct,
+  className,
+}: {
+  metric: MetricKey;
+  deltaPct: number;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        paidDeltaIsGood(metric, deltaPct) ? 'text-emerald-600' : 'text-rose-600',
+        className,
+      )}
+    >
+      {deltaPct >= 0 ? '+' : ''}
+      {deltaPct.toFixed(2)}%
+    </span>
+  );
 }
 
 function getCampaignMetricValue(campaign: Campaign, metric: MetricKey): number {
@@ -696,8 +725,15 @@ type ContextMetricCardProps = {
   onClick: () => void;
 };
 
-function ContextMetricCard({ metric, value, delta, selected, onClick }: ContextMetricCardProps) {
-  const isPositive = delta >= 0;
+export function ContextMetricCard({
+  metric,
+  value,
+  delta,
+  selected,
+  onClick,
+}: ContextMetricCardProps) {
+  // Not `delta >= 0`: on CPA/CPC the good move is downwards, and this pill painted it red.
+  const isGood = paidDeltaIsGood(metric, delta);
   return (
     <button
       type="button"
@@ -716,10 +752,10 @@ function ContextMetricCard({ metric, value, delta, selected, onClick }: ContextM
       <div
         className={cn(
           'mt-1 inline-flex items-center rounded-sm px-1.5 py-0.5 text-2xs font-medium',
-          isPositive ? 'bg-emerald-500/12 text-emerald-600' : 'bg-rose-500/12 text-rose-600',
+          isGood ? 'bg-emerald-500/12 text-emerald-600' : 'bg-rose-500/12 text-rose-600',
         )}
       >
-        {isPositive ? '+' : ''}
+        {delta >= 0 ? '+' : ''}
         {delta.toFixed(2)}%
       </div>
     </button>
@@ -742,6 +778,7 @@ function EntityRadarTooltip({
   const radarData = KPI_COLUMNS.map((metric) => {
     const deltaPct = getEntityDeltaPct(metric, comparison, isDcoEnabled, dcoDeltas);
     return {
+      metric,
       kpi: labelForMetric(metric),
       baseline: 50,
       delta: normalizeRadarValue(deltaPct),
@@ -779,9 +816,7 @@ function EntityRadarTooltip({
                 <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
                 <span>{item.kpi}</span>
               </div>
-              <span className={cn(item.deltaPct >= 0 ? 'text-emerald-500' : 'text-red-500')}>
-                {item.deltaPct.toFixed(2)}%
-              </span>
+              <MetricDeltaText metric={item.metric} deltaPct={item.deltaPct} />
             </div>
           ))}
         </div>
@@ -2997,14 +3032,12 @@ export function CampaignTimelineWorkspace({
                                                     Target baseline: {adSetDenominatorSummary}
                                                   </span>
                                                 ) : null}
-                                                <span
-                                                  className={cn(
-                                                    adSetDeltaForSelected >= 0
-                                                      ? 'text-emerald-500'
-                                                      : 'text-red-500',
-                                                  )}
-                                                >
-                                                  Delta: {adSetDeltaForSelected.toFixed(2)}%
+                                                <span>
+                                                  Delta:{' '}
+                                                  <MetricDeltaText
+                                                    metric={selectedMetric}
+                                                    deltaPct={adSetDeltaForSelected}
+                                                  />
                                                 </span>
                                               </div>
                                             </div>
@@ -3246,15 +3279,11 @@ export function CampaignTimelineWorkspace({
                     <div className="mt-0.5 text-xs font-semibold">
                       {formatMetricValue(item.metric, item.value)}
                     </div>
-                    <div
-                      className={cn(
-                        'text-2xs',
-                        item.delta >= 0 ? 'text-emerald-600' : 'text-rose-600',
-                      )}
-                    >
-                      {item.delta >= 0 ? '+' : ''}
-                      {item.delta.toFixed(2)}%
-                    </div>
+                    <MetricDeltaText
+                      metric={item.metric}
+                      deltaPct={item.delta}
+                      className="block text-2xs"
+                    />
                   </div>
                 ))}
               </div>
@@ -3384,15 +3413,11 @@ export function CampaignTimelineWorkspace({
                                 getCampaignMetricValue(campaign, sortMetric),
                               )}
                             </span>
-                            <span
-                              className={cn(
-                                'text-2xs font-medium',
-                                delta >= 0 ? 'text-emerald-600' : 'text-rose-600',
-                              )}
-                            >
-                              {delta >= 0 ? '+' : ''}
-                              {delta.toFixed(2)}%
-                            </span>
+                            <MetricDeltaText
+                              metric={sortMetric}
+                              deltaPct={delta}
+                              className="text-2xs font-medium"
+                            />
                           </button>
                         );
                       })}

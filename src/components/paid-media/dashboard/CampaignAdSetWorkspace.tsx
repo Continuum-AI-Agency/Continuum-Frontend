@@ -14,6 +14,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import * as React from 'react';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
+import { paidDeltaIsGood } from '@/components/paid-media/metricDelta';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -250,6 +251,34 @@ function labelForMetric(metric: MetricKey): string {
     default:
       return metric;
   }
+}
+
+// The change chip under a metric card. Coloured by what the move MEANS, not by its sign:
+// this used to test `changePct >= 0`, which painted a CPA or CPC that FELL — the good
+// outcome — in the destructive colour on both the campaign and the ad-set card rows.
+//
+// Exported so the colour rule is render-testable on its own; the surrounding workspace owns
+// Supabase fetching and the whole campaign/ad-set/ad selection tree.
+export function MetricCardDelta({
+  metric,
+  changePct,
+}: {
+  metric: MetricKey;
+  changePct: number | null | undefined;
+}) {
+  if (changePct == null) {
+    return <span className="text-2xs font-medium text-muted-foreground">No change data</span>;
+  }
+  return (
+    <span
+      className={cn(
+        'text-2xs font-medium',
+        paidDeltaIsGood(metric, changePct) ? 'text-emerald-600' : 'text-destructive',
+      )}
+    >
+      {formatDeltaPercent(changePct)}
+    </span>
+  );
 }
 
 function isActiveStatus(status: string | undefined): boolean {
@@ -2018,20 +2047,7 @@ export function CampaignAdSetWorkspace({
                             </span>
                           </div>
                           <div className="mt-1 flex items-center justify-between gap-2">
-                            <span
-                              className={cn(
-                                'text-2xs font-medium',
-                                card.changePct == null
-                                  ? 'text-muted-foreground'
-                                  : card.changePct >= 0
-                                    ? 'text-emerald-600'
-                                    : 'text-destructive',
-                              )}
-                            >
-                              {card.changePct == null
-                                ? 'No change data'
-                                : formatDeltaPercent(card.changePct)}
-                            </span>
+                            <MetricCardDelta metric={card.metric} changePct={card.changePct} />
                           </div>
                           {card.spark.length > 0 ? (
                             <div className="mt-1 h-8">
@@ -2786,20 +2802,7 @@ export function CampaignAdSetWorkspace({
                               </span>
                             </div>
                             <div className="mt-1 flex items-center justify-between gap-2">
-                              <span
-                                className={cn(
-                                  'text-2xs font-medium',
-                                  card.changePct == null
-                                    ? 'text-muted-foreground'
-                                    : card.changePct >= 0
-                                      ? 'text-emerald-600'
-                                      : 'text-destructive',
-                                )}
-                              >
-                                {card.changePct == null
-                                  ? 'No change data'
-                                  : formatDeltaPercent(card.changePct)}
-                              </span>
+                              <MetricCardDelta metric={card.metric} changePct={card.changePct} />
                             </div>
                             {card.spark.length > 0 ? (
                               <div className="mt-1 h-8">

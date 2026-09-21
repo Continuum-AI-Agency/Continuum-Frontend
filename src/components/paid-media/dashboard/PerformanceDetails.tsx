@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
+import { paidDeltaIsGood } from '@/components/paid-media/metricDelta';
 import { cn } from '@/lib/utils';
 import type { DailyMetric } from '@/types/timeline';
 
@@ -154,7 +155,13 @@ export function PerformanceDetails({ comparison, trends, className }: Performanc
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">{COMPARISON_LABELS[metricKey]}</span>
                 <span
-                  className={metric.percentageChange >= 0 ? 'text-emerald-600' : 'text-destructive'}
+                  className={
+                    // Not the sign: CPC and CPA are in this grid, and a cost that FELL is
+                    // the good outcome — it used to render destructive-red here.
+                    paidDeltaIsGood(metricKey, metric.percentageChange)
+                      ? 'text-emerald-600'
+                      : 'text-destructive'
+                  }
                 >
                   {formatPercent(metric.percentageChange)}
                 </span>
