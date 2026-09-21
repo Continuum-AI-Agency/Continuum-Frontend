@@ -11,41 +11,47 @@
 //                 between them. An equation meeting at its own equals sign.
 //   'bounded'     diverging  — the words sit at the left edge, the figure at the right, and
 //                 the interval is literally drawn as the rule spanning the gap between them.
-//   'open'        mirrored   — the figure moves to the LEFT and the words to its right, and
-//                 the bar has no closing end. The shape says what the sentence says.
+//   'open'        mirrored   — the figure moves to the LEFT and its formula to the right, and
+//                 an interval here has no closing end. The shape says what the sentence says.
 //
-// The only motion is the connector: a 5s breath on the glyph or rule that joins the halves.
-// No sheen, nothing that moves while a person is reading a number.
+// The leading figure, the from → to pair and the money line follow `../account/candidateHeadline`
+// exactly — money leads only when no headline exists, and the support line then carries the
+// MONTH alone rather than repeating the day. Those components are typed on `AccountCandidate`
+// and a portfolio brief carries `BriefCandidate`, so the rules are mirrored here rather than
+// imported; `CalmRule`, which is generic, IS imported, so every surface breathes on one rhythm.
 
-import { motion, useReducedMotion } from 'motion/react';
-import type * as React from 'react';
+import type { CandidateHeadline } from '@continuum/contracts';
+import { perPeriod } from '@continuum/contracts';
+import * as React from 'react';
 import { cn } from '@/lib/utils';
-import { formatCurrency, formatHeadline, formatPerPeriod } from '../../../format';
+import { formatCurrency, formatHeadline, formatPercent, formatPerPeriod } from '../../../format';
+import { CalmRule } from '../../account/candidateHeadline';
 import type { JustificationModel, NewsCardModel } from './justification';
 import { pickJustification } from './justification';
 
-/**
- * The connector, breathing on a ~5s rhythm.
- *
- * The only motion on the card, and it is on the JOIN between the two halves — never on a
- * figure. A number that fades while someone is reading it is a number they read twice.
- */
-function Breath({ children, className }: { children: React.ReactNode; className?: string }) {
-  const reduce = useReducedMotion();
-  if (reduce) return <span className={className}>{children}</span>;
-  return (
-    <motion.span
-      animate={{ opacity: [0.45, 1, 0.45] }}
-      className={className}
-      data-testid="news-breath"
-      transition={{ duration: 5, repeat: Number.POSITIVE_INFINITY, ease: 'easeInOut' }}
-    >
-      {children}
-    </motion.span>
-  );
+/** How large the leading figure sits — the lead card leads a screen, an insight leads a column. */
+const FIGURE_SIZE: Record<'lead' | 'insight', string> = {
+  lead: 'text-3xl',
+  insight: 'text-xl',
+};
+
+/** One side of a `from → to`, printed in the headline's OWN unit. */
+function sideFigure(
+  unit: CandidateHeadline['unit'],
+  value: number,
+  currency: string | null,
+): string {
+  if (unit === 'percent') return formatPercent(value);
+  if (unit === 'currency_per_day') return formatCurrency(value, currency);
+  return value.toLocaleString('en-US');
 }
 
-/** The big number and the words that belong to it. Nothing is appended to the label. */
+/**
+ * The figure the card leads with, and the words after it.
+ *
+ * No headline means money leads — which is what every card in production renders today, and it
+ * is a finished card, not a hole: `impact_per_day` is on every candidate ever written.
+ */
 function Figure({
   card,
   currency,
@@ -57,22 +63,27 @@ function Figure({
   size: 'lead' | 'insight';
   align: 'left' | 'right';
 }) {
-  const headline = card.headline ? formatHeadline(card.headline, currency) : null;
-  if (!headline) return null;
+  const lead = card.headline
+    ? formatHeadline(card.headline, currency)
+    : card.impactPerDay != null && card.impactPerDay > 0
+      ? { figure: formatCurrency(card.impactPerDay, currency), label: '/day' }
+      : null;
+  if (!lead) return null;
   return (
     <p
-      className={cn('flex flex-col gap-0.5', align === 'right' ? 'sm:text-right' : 'text-left')}
+      className={cn(
+        'flex flex-wrap items-baseline gap-x-1.5 text-2xs text-muted-foreground',
+        align === 'right' ? 'sm:justify-end sm:text-right' : 'text-left',
+      )}
+      data-headline={card.headline?.kind ?? 'money_fallback'}
       data-testid="news-figure"
     >
       <span
-        className={cn(
-          'font-semibold text-foreground tabular-nums leading-none tracking-tight',
-          size === 'lead' ? 'text-3xl' : 'text-xl',
-        )}
+        className={cn('font-mono font-semibold text-foreground tabular-nums', FIGURE_SIZE[size])}
       >
-        {headline.figure}
+        {lead.figure}
       </span>
-      <span className="text-2xs text-muted-foreground">{headline.label}</span>
+      <span className="text-foreground">{lead.label}</span>
     </p>
   );
 }
@@ -96,7 +107,7 @@ function IntervalRule({
       : null;
   return (
     <div className="flex flex-col gap-1" data-testid="news-interval">
-      <Breath className="relative block h-1.5 w-full">
+      <span className="relative block h-1.5 w-full">
         <span
           aria-hidden
           className={cn(
@@ -111,7 +122,7 @@ function IntervalRule({
             style={{ left: `calc(${at}% - 1px)` }}
           />
         ) : null}
-      </Breath>
+      </span>
       <p className="flex items-baseline justify-between gap-2 text-3xs text-muted-foreground tabular-nums">
         <span>{formatCurrency(interval.low, currency)}</span>
         <span>{open ? 'no upper bound' : formatCurrency(interval.high, currency)}</span>
@@ -120,14 +131,35 @@ function IntervalRule({
   );
 }
 
-/** The support line every card carries: the same money, said at both sizes a person uses. */
+/**
+ * The money, as the support line.
+ *
+ * Day AND month while a headline leads; the MONTH alone when money itself led, because the day
+ * would then only be repeating the figure above it.
+ */
 function Support({ card, currency }: { card: NewsCardModel; currency: string | null }) {
-  if (card.moneyPerDay == null) return null;
+  if (card.moneyPerDay != null) {
+    return (
+      <p className="text-2xs text-muted-foreground tabular-nums" data-testid="news-support">
+        <span className="text-foreground">{formatPerPeriod(card.moneyPerDay, currency)}</span>
+      </p>
+    );
+  }
+  if (card.impactPerDay == null || !(card.impactPerDay > 0)) return null;
+  const { month } = perPeriod(card.impactPerDay);
   return (
     <p className="text-2xs text-muted-foreground tabular-nums" data-testid="news-support">
-      {formatPerPeriod(card.moneyPerDay, currency)}
+      <span className="text-foreground">{formatCurrency(month, currency)}/mo</span>
     </p>
   );
+}
+
+/** The argument beside the figure when there is no pair and no range: the formula itself. */
+function OpenReading({ card }: { card: NewsCardModel }) {
+  const words = card.interval
+    ? 'It bought nothing, so there is no cost per result — only a floor.'
+    : (card.basis ?? 'No point estimate to give.');
+  return <p className="max-w-[65ch] text-2xs text-muted-foreground">{words}</p>;
 }
 
 export type JustificationBlockProps = {
@@ -147,10 +179,15 @@ export function JustificationBlock({ card, currency, size = 'lead' }: Justificat
           className="grid items-end gap-x-5 gap-y-3 sm:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)]"
           data-justification="arithmetic"
         >
-          <p className="flex flex-wrap items-baseline gap-2 text-sm text-foreground tabular-nums sm:justify-end sm:text-right">
-            <span className="text-muted-foreground">{formatCurrency(headline.from, currency)}</span>
-            <Breath className="text-muted-foreground">→</Breath>
-            <span className="font-medium">{formatCurrency(headline.to, currency)}</span>
+          <p
+            className="text-balance text-foreground text-sm tabular-nums sm:text-right"
+            data-testid="news-comparison"
+          >
+            <span className="text-muted-foreground">
+              {sideFigure(headline.unit, headline.from, currency)}
+            </span>{' '}
+            <span className="text-muted-foreground">→</span>{' '}
+            <span className="font-medium">{sideFigure(headline.unit, headline.to, currency)}</span>
           </p>
           <div aria-hidden className="hidden bg-border sm:block sm:h-10 sm:w-px" />
           <Figure align="left" card={card} currency={currency} size={size} />
@@ -163,9 +200,7 @@ export function JustificationBlock({ card, currency, size = 'lead' }: Justificat
           className="grid items-end gap-x-6 gap-y-3 sm:grid-cols-[minmax(0,1fr)_auto]"
           data-justification="bounded"
         >
-          <div className="flex flex-col gap-2">
-            <IntervalRule card={card} currency={currency} open={false} />
-          </div>
+          <IntervalRule card={card} currency={currency} open={false} />
           <Figure align="right" card={card} currency={currency} size={size} />
         </div>
       );
@@ -178,11 +213,7 @@ export function JustificationBlock({ card, currency, size = 'lead' }: Justificat
         <Figure align="left" card={card} currency={currency} size={size} />
         <div className="flex flex-col gap-1.5">
           {card.interval ? <IntervalRule card={card} currency={currency} open /> : null}
-          <p className="max-w-[65ch] text-2xs text-muted-foreground">
-            {card.interval
-              ? 'It bought nothing, so there is no cost per result — only a floor.'
-              : 'No point estimate to give.'}
-          </p>
+          <OpenReading card={card} />
         </div>
       </div>
     );
@@ -190,6 +221,7 @@ export function JustificationBlock({ card, currency, size = 'lead' }: Justificat
 
   return (
     <div className="flex flex-col gap-2" data-testid="news-justification">
+      <CalmRule play testId="news-calm-rule" />
       {body}
       <Support card={card} currency={currency} />
       {card.cappedBy ? (

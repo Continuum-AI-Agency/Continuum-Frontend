@@ -71,7 +71,6 @@ export function NewsCard({
       {card.reason ? (
         <p className="max-w-[65ch] text-muted-foreground text-xs">{card.reason}</p>
       ) : null}
-      {card.basis ? <p className="text-3xs text-muted-foreground">{card.basis}</p> : null}
       {card.chosenOver ? (
         <p className="max-w-[65ch] text-2xs text-muted-foreground" data-testid="news-chosen-over">
           <span className="font-medium text-foreground">Chosen over the biggest number:</span>{' '}

@@ -197,6 +197,7 @@ describe('buildPortfolioNews', () => {
     const news = buildPortfolioNews({ view: view(), items: [item()], target: 70 });
     expect(news.lead?.claim).toBe('Move $66/day onto Cold, which buys leads cheaper.');
     expect(news.lead?.headline?.from).toBe(120);
+    // A headline leads, so the money drops to day · month underneath it.
     expect(news.lead?.moneyPerDay).toBe(14);
     expect(news.lead?.impactPerDay).toBe(14);
     expect(news.lead?.cta?.label).toBe('Review the budget moves');
@@ -267,10 +268,13 @@ describe('buildPortfolioNews', () => {
     expect(news.insights[0]?.claim).toBe('Creative on Warm');
   });
 
-  it('renders every card with no cycle items at all — the sentence carries it', () => {
+  it('renders every card with no cycle items at all — money leads, month alone beneath', () => {
+    // The production state today: no candidate carries a headline, so the money is the figure
+    // and the support line must not print the same day figure a second time.
     const news = buildPortfolioNews({ view: view(), items: [], target: 70 });
     expect(news.lead?.headline).toBeNull();
     expect(news.lead?.interval).toBeNull();
-    expect(news.lead?.moneyPerDay).toBe(14);
+    expect(news.lead?.moneyPerDay).toBeNull();
+    expect(news.lead?.impactPerDay).toBe(14);
   });
 });

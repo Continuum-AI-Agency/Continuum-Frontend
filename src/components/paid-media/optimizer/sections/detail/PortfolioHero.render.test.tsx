@@ -5,11 +5,17 @@ mock.module('motion/react', () => {
   const React = require('react');
   const passthrough = (tag: string) =>
     React.forwardRef((props: Record<string, unknown>, ref: unknown) => {
-      const { variants: _v, initial: _i, animate: _a, ...rest } = props;
+      const { variants: _v, initial: _i, animate: _a, transition: _t, ...rest } = props;
       return React.createElement(tag, { ...rest, ref });
     });
   return {
-    motion: { section: passthrough('section'), div: passthrough('div'), p: passthrough('p') },
+    motion: {
+      section: passthrough('section'),
+      div: passthrough('div'),
+      p: passthrough('p'),
+      // CalmRule — the shared 5s rhythm imported from ../account/candidateHeadline.
+      span: passthrough('span'),
+    },
     useReducedMotion: () => true,
     useMotionValue: (v: number) => ({ get: () => v, set: () => undefined }),
     useMotionValueEvent: () => undefined,

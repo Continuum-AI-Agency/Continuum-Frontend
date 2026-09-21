@@ -130,10 +130,17 @@ export function capFor(item: CycleItemRow | null): string | null {
   return null;
 }
 
-/** Money is a support line. When it would only repeat the headline, it is not a line at all. */
+/**
+ * The money as a support line in day · month, or null when the day would be said twice.
+ *
+ * Two ways that happens. A card with NO headline leads with the money itself (the production
+ * state today — no candidate carries a headline yet), and a card whose headline IS the money
+ * has already printed the figure. In both cases the renderer falls back to the month alone.
+ */
 function supportMoney(headline: CandidateHeadline | null, perDay: number | null): number | null {
   if (perDay == null || !Number.isFinite(perDay) || perDay <= 0) return null;
-  if (headline?.unit === 'currency_per_day' && Math.abs(headline.value - perDay) < 0.5) return null;
+  if (headline == null) return null;
+  if (headline.unit === 'currency_per_day' && Math.abs(headline.value - perDay) < 0.5) return null;
   return round2(perDay);
 }
 

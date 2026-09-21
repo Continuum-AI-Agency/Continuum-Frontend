@@ -54,8 +54,9 @@ describe('the arithmetic, shown', () => {
     );
     expect(angle(container)).toBe('arithmetic');
     const text = container.textContent ?? '';
-    expect(text).toContain('$120');
-    expect(text).toContain('$186');
+    expect(container.querySelector('[data-testid="news-comparison"]')?.textContent).toBe(
+      '$120 → $186',
+    );
     expect(text).toContain('$66');
     expect(text).toContain('a day moved onto it');
   });
@@ -66,6 +67,50 @@ describe('the arithmetic, shown', () => {
     );
     const support = container.querySelector('[data-testid="news-support"]');
     expect(support?.textContent).toBe('$14/day · $420/mo');
+  });
+});
+
+describe('the arithmetic, shown — in the headline\u2019s own unit', () => {
+  it('prints a percentage pair as percentages, not as money', () => {
+    const { container } = render(
+      <JustificationBlock
+        card={card({
+          headline: {
+            kind: 'share',
+            value: 30,
+            unit: 'percent',
+            label: 'of spend at the top',
+            from: 90,
+            to: 60,
+          },
+        })}
+        currency="USD"
+      />,
+    );
+    expect(angle(container)).toBe('arithmetic');
+    expect(container.querySelector('[data-testid="news-comparison"]')?.textContent).toBe(
+      '90% → 60%',
+    );
+    expect(container.querySelector('[data-testid="news-figure"]')?.textContent).toContain('30%');
+  });
+
+  it('prints a count pair as counts', () => {
+    const { container } = render(
+      <JustificationBlock
+        card={card({
+          headline: {
+            kind: 'count',
+            value: 4,
+            unit: 'count',
+            label: 'ad sets, combined',
+            from: 6,
+            to: 2,
+          },
+        })}
+        currency="USD"
+      />,
+    );
+    expect(container.querySelector('[data-testid="news-comparison"]')?.textContent).toBe('6 → 2');
   });
 });
 
@@ -140,27 +185,47 @@ describe('no point estimate to give', () => {
     expect(rule?.textContent).toContain('no upper bound');
     expect(rule?.querySelector('span[style]')).toBeNull();
     expect(container.textContent).toContain('no cost per result');
-    // The money would say $120 twice; the model suppressed it.
-    expect(container.querySelector('[data-testid="news-support"]')).toBeNull();
+    // The headline already said $120 a day; the support line carries the month alone.
+    expect(container.querySelector('[data-testid="news-support"]')?.textContent).toBe('$3,600/mo');
   });
 
-  it('carries a card that holds no figure at all on its sentence alone', () => {
-    const { container } = render(<JustificationBlock card={card()} currency="USD" />);
+  it('lets money lead when the detector declared no headline — the state production renders', () => {
+    const { container } = render(
+      <JustificationBlock
+        card={card({ moneyPerDay: null, basis: 'spend/day on the ad set' })}
+        currency="USD"
+      />,
+    );
     expect(angle(container)).toBe('open');
+    const figure = container.querySelector('[data-testid="news-figure"]');
+    expect(figure?.getAttribute('data-headline')).toBe('money_fallback');
+    expect(figure?.textContent).toContain('$14');
+    expect(figure?.textContent).toContain('/day');
+    // The formula IS the argument beside the figure — not a canned apology.
+    expect(container.textContent).toContain('spend/day on the ad set');
+    expect(container.querySelector('[data-testid="news-support"]')?.textContent).toBe('$420/mo');
+  });
+
+  it('says so plainly when there is no formula either', () => {
+    const { container } = render(
+      <JustificationBlock card={card({ moneyPerDay: null, impactPerDay: null })} currency="USD" />,
+    );
     expect(container.querySelector('[data-testid="news-figure"]')).toBeNull();
-    expect(container.querySelector('[data-testid="news-interval"]')).toBeNull();
+    expect(container.querySelector('[data-testid="news-support"]')).toBeNull();
     expect(container.textContent).toContain('No point estimate to give.');
   });
 });
 
 describe('the register', () => {
-  it('breathes on the connector, and nowhere near a figure', () => {
+  it('breathes on the shared calm rule, and nowhere near a figure', () => {
     const { container } = render(
       <JustificationBlock card={card({ headline: pair })} currency="USD" />,
     );
-    const breath = container.querySelector('[data-testid="news-breath"]');
-    expect(breath?.textContent).toBe('→');
-    expect(breath?.querySelector('[data-testid="news-figure"]')).toBeNull();
+    // The SAME CalmRule the account surface uses, so two surfaces cannot drift into two rhythms.
+    const rule = container.querySelector('[data-testid="news-calm-rule"]');
+    expect(rule).toBeTruthy();
+    expect(rule?.textContent).toBe('');
+    expect(rule?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('lines the digits up', () => {
