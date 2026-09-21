@@ -51,6 +51,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '../../format';
 import { AccountChartView } from './AccountChartView';
+import { doubtedBy } from './guardScope';
 
 /** How many lead the read. Three is what someone carries away from a screen. */
 const LEAD_COUNT = 3;
@@ -95,29 +96,6 @@ export type AccountReadProps = {
   sentence?: string | null;
   onOpenPortfolio?: (portfolioId: string) => void;
 };
-
-/** Detectors a fired guard casts doubt over. Named, or the guard is decoration. */
-function affectedBy(guards: AccountCandidate[]): Set<AccountDetector> {
-  const affected = new Set<AccountDetector>();
-  if (guards.some((guard) => guard.detector === 'measurement_integrity')) {
-    // Everything priced off a conversion count is reading the broken instrument.
-    for (const detector of [
-      'dead_tail',
-      'portfolio_reallocation',
-      'account_pacing',
-      'scale_readiness',
-      'decision_window',
-    ] as AccountDetector[]) {
-      affected.add(detector);
-    }
-  }
-  if (guards.some((guard) => guard.detector === 'target_economics')) {
-    for (const detector of ['scale_readiness', 'portfolio_reallocation'] as AccountDetector[]) {
-      affected.add(detector);
-    }
-  }
-  return affected;
-}
 
 function ChartWithReading({
   candidate,
@@ -384,7 +362,7 @@ export function AccountRead({
   const [showRest, setShowRest] = useState(false);
   const guards = accountGuards(candidates);
   const ranked = rankAccountCandidates(candidates);
-  const doubted = affectedBy(guards);
+  const doubted = doubtedBy(guards);
 
   const lead = ranked.slice(0, LEAD_COUNT);
   const rest = ranked.slice(LEAD_COUNT);

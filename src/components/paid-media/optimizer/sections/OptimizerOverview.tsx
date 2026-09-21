@@ -25,6 +25,7 @@ import {
   useOptimizerAccountRead,
   useOptimizerSpendByObjective,
 } from '../useOptimizerData';
+import { AccountLeadCard } from './account/AccountLeadCard';
 import { AccountRead } from './account/AccountRead';
 import { FamilyCeilings } from './account/FamilyCeilings';
 import { OptimizerPanel } from './OptimizerPanel';
@@ -182,6 +183,21 @@ export function OptimizerOverview({
 
   return (
     <div className="space-y-3">
+      {/* The lead card answers the question the screen is opened with — what is the ONE thing
+       *  worth attention across this account, and can it be believed. The ranked strip below
+       *  answers "what else", which is a different question and never led the screen well. */}
+      {shown && hasSomethingToSay(shown) ? (
+        <AccountLeadCard
+          candidates={[...shown.candidates, ...shown.guards]}
+          currency={shown.currency ?? currency ?? null}
+          dailySpend={shown.scale_per_day ?? dailyTotal}
+          deck={shown.deck ?? null}
+          objective={dominantObjective(portfolios)}
+          onOpenPortfolio={onSelectPortfolio}
+          source={shown.model === 'deterministic' ? 'fallback' : 'brief'}
+          starved={shown.starved}
+        />
+      ) : null}
       {/* A read with nothing to act on still has things to say: what it assumed, how much of
        *  the catalogue applies, and which checks could not run. Gating on candidates alone
        *  meant the component's "Nothing to move today" branch could never appear on screen —
