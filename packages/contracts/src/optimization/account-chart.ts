@@ -80,6 +80,21 @@ export const ratesChartSchema = z.object({
 export const intervalChartSchema = z.object({
   shape: z.literal('interval'),
   unit: z.enum(['currency', 'count']).default('currency'),
+  /**
+   * What the value axis measures, in the detector's own words — "Cost per lead",
+   * "Spend with nothing to show for it".
+   *
+   * The axis is otherwise anonymous: `unit` says money-or-count and `reference_label` names
+   * the LINE, neither of which says what the numbers along the axis are. A view with no name
+   * for its value axis either prints nothing or makes one up, and a made-up axis name is the
+   * first thing to contradict the data when a detector changes its metric. So the producer
+   * says it here, once, next to the figures it is describing.
+   *
+   * Optional rather than defaulted, because two detectors already ship this shape without it.
+   * Absent means "this producer did not name its axis" — a fact the view can act on — where a
+   * default string would be exactly the invented label this field exists to prevent.
+   */
+  value_label: label.nullish(),
   estimate: z.number().nullable(),
   low: z.number(),
   high: z.number(),
@@ -203,6 +218,37 @@ export function chartAgreesWithImpact(chart: AccountChart, impactPerDay: number)
     Math.abs(chart.saving_per_day - impactPerDay) <= tolerance
   );
 }
+
+/**
+ * Does this chart ARGUE, or is it the arithmetic the sentence already made?
+ *
+ * A trend and an interval each say something the sentence cannot: how a figure has been
+ * moving across a window, and how much of the estimate is uncertainty. A reader gets a fact
+ * out of them that is not in the words.
+ *
+ * The other five draw the arithmetic itself. "This costs X, that costs Y, move M, keep the
+ * difference" is a complete argument as a sentence; a picture of it is the same claim again
+ * in a shape, and a surface that opens on ONE recommendation — the portfolio's news card —
+ * pays for that decoration in the space the justification needed. So the news card draws a
+ * chart only when the chart argues, and stays with the sentence when it does not.
+ *
+ * Surfaces that list MANY candidates side by side (the account read, a Jaina card) are a
+ * different question and keep drawing every shape: there the picture is how a reader tells
+ * two candidates apart at a glance. This predicate is the rule, not the enforcement — it
+ * names which shapes argue so the one surface that cares can ask.
+ */
+export const ARGUING_SHAPES = ['rates', 'interval'] as const satisfies readonly AccountChartShape[];
+
+/** A chart that argues — the only two shapes a one-recommendation surface may draw. */
+export type ArguingChart = Extract<AccountChart, { shape: (typeof ARGUING_SHAPES)[number] }>;
+
+/**
+ * A type guard on purpose: a surface that gates on this gets `ArguingChart` back, so the
+ * rule is carried by its return type rather than by a runtime check someone can quietly
+ * delete. Take the gate out of `heroChart` and the Frontend stops compiling.
+ */
+export const chartArgues = (chart: AccountChart | null | undefined): chart is ArguingChart =>
+  chart != null && (ARGUING_SHAPES as readonly AccountChartShape[]).includes(chart.shape);
 
 /** Every detector has a shape; the test that proves it imports the enum itself. */
 export const CHART_SHAPES: readonly AccountChartShape[] = [

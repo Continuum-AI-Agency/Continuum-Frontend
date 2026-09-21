@@ -450,6 +450,11 @@ function Rates({
               onBlur={() => setActive(null)}
               onFocus={() => setActive(i)}
               onKeyDown={(event) => onKeyDown(event, i)}
+              // Hovering a mark reads THAT mark's datum. The figure-wide pointer handler
+              // above interpolates an index from the cursor's x, which is right for the
+              // space between marks and wrong on top of one — a reader pointing at a dot
+              // is asking about the dot, not about the nearest round fraction of the axis.
+              onPointerEnter={() => setActive(i)}
               ref={(el) => {
                 dots.current[i] = el;
               }}
@@ -508,10 +513,16 @@ function Rates({
 /**
  * An estimate with its uncertainty, against the line it has to beat.
  *
- * The shape carries no name for its value axis — only `unit` and `reference_label` — so the
- * axis is named by what the drawing actually reaches: its two ends, printed as money. The
- * two marks a reader can interrogate (the interval, and the reference) are buttons, so the
- * readout can be opened with a pointer or with the Tab key.
+ * The value axis is named by the CONTRACT (`value_label`) and never by this view. `unit`
+ * says money-or-count and `reference_label` names the line; neither says what the numbers
+ * along the axis are, and a view that fills that gap with a plausible word is a view that
+ * contradicts the data the first time a detector changes its metric. A producer that did
+ * not name its axis gets an axis with no name — its two ends, printed — which is the honest
+ * shape of "nobody said".
+ *
+ * The two marks a reader can interrogate (the interval, and the reference) are buttons, so
+ * the readout can be opened with a pointer or with the Tab key, and both put the same words
+ * in the same place.
  */
 function Interval({
   chart,
@@ -555,6 +566,11 @@ function Interval({
         <button
           aria-label={`the interval: ${bandReading}`}
           className="absolute top-6 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          // Which mark the readout is currently speaking for, on the mark itself — the
+          // readout says the same words wherever it came from, so without this there is
+          // nothing to tell a reader (or a test) that the pointer reached the band at all.
+          data-active={active === 'band'}
+          data-testid="interval-band"
           onBlur={() => setActive(null)}
           onFocus={() => setActive('band')}
           onPointerEnter={() => setActive('band')}
@@ -592,6 +608,7 @@ function Interval({
           <button
             aria-label={referenceReading ?? referenceLabel}
             className="-translate-x-1/2 absolute top-0 flex h-11 w-4 flex-col items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            data-active={active === 'reference'}
             data-testid="interval-reference"
             onBlur={() => setActive(null)}
             onFocus={() => setActive('reference')}
@@ -613,10 +630,19 @@ function Interval({
         ) : null}
       </div>
 
-      {/* The axis, named by the two ends the drawing actually reaches. */}
-      <div className="flex justify-between font-mono text-3xs text-muted-foreground tabular-nums">
-        <span>{fmt(0)}</span>
-        <span>{fmt(max)}</span>
+      {/* The axis: what it measures, between the two ends the drawing actually reaches. */}
+      <div className="flex items-baseline justify-between gap-2 text-3xs text-muted-foreground">
+        <span className="font-mono tabular-nums" data-testid="interval-axis-low">
+          {fmt(0)}
+        </span>
+        {chart.value_label ? (
+          <span className="min-w-0 truncate" data-testid="interval-axis-label">
+            {chart.value_label}
+          </span>
+        ) : null}
+        <span className="font-mono tabular-nums" data-testid="interval-axis-high">
+          {fmt(max)}
+        </span>
       </div>
     </div>
   );
