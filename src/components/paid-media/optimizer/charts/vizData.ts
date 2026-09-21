@@ -75,10 +75,30 @@ const FUNNEL_STEPS: Record<string, FunnelStep[]> = {
   app_install: [IMPRESSIONS, CLICKS, { key: 'appInstalls', label: 'Installs' }],
   traffic: [IMPRESSIONS, CLICKS, { key: 'landingPageViews', label: 'Landing views' }],
   awareness: [IMPRESSIONS, { key: 'reach', label: 'Reach' }],
+  // The six that were missing. Falling through to the purchase funnel drew a messaging,
+  // video or custom portfolio an "Impressions → Clicks → Add to cart → Purchases" chart of
+  // zeros, which does not read as "we have no funnel for this" — it reads as a business
+  // that sells nothing.
+  conversations: [IMPRESSIONS, CLICKS, { key: 'conversations', label: 'Conversations' }],
+  link_clicks: [IMPRESSIONS, { key: 'linkClicks', label: 'Link clicks' }],
+  thruplays: [IMPRESSIONS, { key: 'thruplays', label: 'ThruPlays' }],
+  post_engagement: [IMPRESSIONS, { key: 'postEngagement', label: 'Engagements' }],
+  clicks: [IMPRESSIONS, CLICKS],
+  // A custom conversion has no column of its own in the window, so the honest funnel stops
+  // where the data stops. The event itself is counted through its analog elsewhere; drawing
+  // a third bar here would need a figure this shape does not carry.
+  custom: [IMPRESSIONS, CLICKS],
 };
 
+/**
+ * The steps for an objective, or the two everything shares.
+ *
+ * The fallback is deliberately NOT the purchase funnel: an objective the map has forgotten
+ * would then be drawn as an e-commerce funnel of zeros, and a chart of zeros is a claim.
+ * Impressions and clicks exist for every objective, so they are the honest floor.
+ */
 export function funnelStepsFor(objective: string | null | undefined): FunnelStep[] {
-  return FUNNEL_STEPS[(objective ?? '').toLowerCase()] ?? FUNNEL_STEPS.purchase;
+  return FUNNEL_STEPS[(objective ?? '').toLowerCase()] ?? [IMPRESSIONS, CLICKS];
 }
 
 /** Build objective-aware funnel stages with step conversion % + heat color. */

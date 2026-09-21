@@ -77,14 +77,23 @@ describe('buildConversionFunnel', () => {
     expect(stages[1].displayValue).toBe('0');
   });
 
-  it('falls back to the purchase funnel for an unknown objective', () => {
+  // This used to assert the PURCHASE funnel, which is what the code did and what was wrong:
+  // an objective the map had forgotten was drawn an "Add to cart → Purchases" chart of zeros.
+  // That is not an absence of data, it is a claim about the business — and six objectives
+  // (conversations, link_clicks, thruplays, post_engagement, clicks, custom) were landing on
+  // it. Impressions and clicks exist for every objective, so they are the honest floor.
+  it('gives an unknown objective the shared floor, never an e-commerce funnel of zeros', () => {
     const stages = buildConversionFunnel({ impressions: 100, clicks: 10 }, 'mystery');
-    expect(stages.map((s) => s.label)).toEqual([
-      'Impressions',
-      'Clicks',
-      'Add to cart',
-      'Purchases',
-    ]);
+    expect(stages.map((s) => s.label)).toEqual(['Impressions', 'Clicks']);
+  });
+
+  it('draws a messaging account the thing it actually buys', () => {
+    const stages = buildConversionFunnel(
+      { impressions: 1000, clicks: 100, conversations: 12 },
+      'conversations',
+    );
+    expect(stages.map((s) => s.label)).toEqual(['Impressions', 'Clicks', 'Conversations']);
+    expect(stages[2].displayValue).toBe('12');
   });
 });
 

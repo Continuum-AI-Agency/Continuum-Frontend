@@ -30,6 +30,11 @@ export const OBJECTIVE_COLOR: Record<string, string> = {
   thruplays: 'var(--chart-4)',
   post_engagement: 'var(--chart-3)',
   clicks: 'var(--chart-5)',
+  // A custom conversion is whatever the advertiser defined, so it gets a swatch of its own
+  // rather than borrowing one. It fell through to the `?? 'var(--chart-1)'` fallback, which
+  // is PURCHASE's — a custom portfolio was drawn indistinguishably from a purchase one in
+  // every optimizer chart, and the fallback made it look deliberate.
+  custom: 'var(--chart-6, var(--primary))',
 };
 
 /** Momentum trajectory → semantic feedback color. */
@@ -43,8 +48,12 @@ export function statusColor(status: string | null | undefined): string {
   return STATUS_COLOR[(status ?? '').toLowerCase()] ?? 'var(--muted-foreground)';
 }
 
+/**
+ * The fallback is deliberately NOT an objective's own swatch. It used to be chart-1, which is
+ * purchase's, so anything the map had forgotten was silently drawn AS a purchase portfolio.
+ */
 export function objectiveColor(objective: string | null | undefined): string {
-  return OBJECTIVE_COLOR[(objective ?? '').toLowerCase()] ?? 'var(--chart-1)';
+  return OBJECTIVE_COLOR[(objective ?? '').toLowerCase()] ?? 'var(--muted-foreground)';
 }
 
 export function trajectoryColor(state: string | null | undefined): string {
