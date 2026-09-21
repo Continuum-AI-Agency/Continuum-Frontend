@@ -489,13 +489,13 @@ describe('objective awareness', () => {
     expect(mismatched.adsets[0].mismatch).toBe(true);
   });
 
-  it('never throws through the metric-definition lookup for any of the 11 objectives', () => {
+  it('never throws through the metric-definition lookup for any of the 12 objectives', () => {
     const snapshots = [
       snap({ id: 'buys-convos', campaignId: 'c1', campaignName: 'C', kpiField: 'conversations' }),
       snap({ id: 'buys-purchases', campaignId: 'c1', campaignName: 'C', kpiField: 'purchases' }),
       snap({ id: 'inherits', campaignId: 'c1', campaignName: 'C' }),
     ];
-    expect(OptimizationObjectiveSchema.options).toHaveLength(11);
+    expect(OptimizationObjectiveSchema.options).toHaveLength(12);
     for (const objective of OptimizationObjectiveSchema.options) {
       expect(() => buildCampaignSections(snapshots, 'adset', objective)).not.toThrow();
       const def = getOptimizationMetricDefinition(objective);
