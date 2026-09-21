@@ -12,6 +12,7 @@ mock.module('../charts/SpendByObjectiveStream', () => ({
 mock.module('../ApplyModePill', () => ({ ApplyModePill: () => null }));
 // Spread the real module: `mock.module` replaces it for the whole PROCESS and bun runs
 // every test file in one, so a partial replacement here reaches the next file in the run.
+let approvalFailure: Error | null = null;
 const realOptimizerData = await import('../useOptimizerData');
 mock.module('../useOptimizerData', () => ({
   ...realOptimizerData,
@@ -19,6 +20,16 @@ mock.module('../useOptimizerData', () => ({
   // The account read is written by a worker on its own clock; absent is the normal case
   // and the overview has to stand on its own without it.
   useOptimizerAccountRead: () => ({ data: null, isLoading: false, isError: false }),
+  // The real hook asks for a QueryClient, and these tests deliberately mount no provider —
+  // the overview's own behaviour is what is under test, not React Query's wiring.
+  // `mock.module` replaces the module for the whole process, so the failure case is driven
+  // by a mutable handle rather than by a second, competing mock.
+  useInsightApprovalMutations: () => ({
+    setInsight: approvalFailure
+      ? { mutate: () => {}, isError: true, error: approvalFailure }
+      : { mutate: () => {}, isError: false, error: null },
+    setFamily: { mutate: () => {}, isError: false, error: null },
+  }),
 }));
 
 const { OptimizerOverview, sortPortfolios } = await import('./OptimizerOverview');
@@ -45,9 +56,46 @@ function portfolio(
 const ZEBRA = portfolio({ id: 'z', name: 'Zebra', daily_total: 100 });
 const ALPHA = portfolio({ id: 'a', name: 'Alpha', daily_total: 900 });
 
-afterEach(cleanup);
+afterEach(() => {
+  approvalFailure = null;
+  cleanup();
+});
 
 describe('OptimizerOverview', () => {
+  // A write that fails and says nothing leaves the card looking like it accepted the
+  // change. Until the approval RPCs exist in a given database, this is the normal path.
+  it('says so when changing an insight was refused, instead of failing silently', () => {
+    approvalFailure = new Error('Could not change this insight: function does not exist');
+    const { getByTestId, queryByTestId } = render(
+      <OptimizerOverview
+        brandId="b1"
+        portfolios={[ALPHA]}
+        pendingCount={0}
+        currency="USD"
+        onOpenActions={() => {}}
+        onSelectPortfolio={() => {}}
+        onCreatePortfolio={() => {}}
+      />,
+    );
+    expect(getByTestId('approval-error').textContent).toContain('function does not exist');
+    expect(queryByTestId('approval-error')).not.toBeNull();
+  });
+
+  it('shows no approval note while nothing has been refused', () => {
+    const { queryByTestId } = render(
+      <OptimizerOverview
+        brandId="b1"
+        portfolios={[ALPHA]}
+        pendingCount={0}
+        currency="USD"
+        onOpenActions={() => {}}
+        onSelectPortfolio={() => {}}
+        onCreatePortfolio={() => {}}
+      />,
+    );
+    expect(queryByTestId('approval-error')).toBeNull();
+  });
+
   it('fires onCreatePortfolio when the primary New portfolio button is clicked', () => {
     const onCreate = mock(() => {});
     const { getByRole } = render(

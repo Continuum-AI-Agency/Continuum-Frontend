@@ -127,6 +127,16 @@ export function OptimizerOverview({
           starved={read.starved as never}
         />
       ) : null}
+      {/* A control that silently does nothing is worse than one that is absent. Until the
+       *  approval RPCs are applied to a database, this write fails — say so where the
+       *  person tapped, rather than leaving the card looking like it accepted the change. */}
+      {approvals.setInsight.isError ? (
+        <p className="text-2xs text-destructive" data-testid="approval-error">
+          {approvals.setInsight.error instanceof Error
+            ? approvals.setInsight.error.message
+            : 'Could not change this insight.'}
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-semibold text-foreground">
           {portfolios.length} {portfolios.length === 1 ? 'portfolio' : 'portfolios'} ·{' '}
