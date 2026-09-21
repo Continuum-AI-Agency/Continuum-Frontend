@@ -36,6 +36,10 @@ export type FunnelWindow = {
   signups?: number | null;
   landingPageViews?: number | null;
   reach?: number | null;
+  conversations?: number | null;
+  linkClicks?: number | null;
+  thruplays?: number | null;
+  postEngagement?: number | null;
 };
 
 export type FunnelStageOut = {
@@ -536,6 +540,10 @@ const FUNNEL_KEYS: (keyof FunnelWindow)[] = [
   'signups',
   'landingPageViews',
   'reach',
+  'conversations',
+  'linkClicks',
+  'thruplays',
+  'postEngagement',
 ];
 
 /** Sum the 7-day WindowMetrics of a portfolio's ENROLLED ad sets into one funnel

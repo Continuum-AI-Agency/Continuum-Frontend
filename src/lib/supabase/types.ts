@@ -26355,6 +26355,7 @@ export type Database = {
           brand_id: string
           budget_source: string
           config: Json
+          conversion_descriptor: Json
           cpa_target: number
           creative_analysis: string
           daily_total: number
@@ -26374,6 +26375,16 @@ export type Database = {
           scale_max_daily: number
           target_metric: string
         }[]
+      }
+      optimizer_claim_next_account_read: {
+        Args: { p_lease_ttl_sec?: number; p_worker_id: string }
+        Returns: unknown[]
+        SetofOptions: {
+          from: "*"
+          to: "account_daily_reads"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       optimizer_claim_next_audience_proposal: {
         Args: { p_lease_ttl_sec?: number; p_phase: string; p_worker_id: string }
@@ -26414,6 +26425,18 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      optimizer_complete_account_read_owned: {
+        Args: {
+          p_error?: Json
+          p_id: string
+          p_model?: string
+          p_prompt_version?: string
+          p_read?: Json
+          p_status: string
+          p_worker_id: string
+        }
+        Returns: boolean
       }
       optimizer_complete_audience_proposal_owned: {
         Args: {
@@ -26526,6 +26549,7 @@ export type Database = {
         Args: { p_brand_id: string; p_insight_key: string }
         Returns: undefined
       }
+      optimizer_enqueue_account_reads: { Args: never; Returns: number }
       optimizer_enqueue_audience_proposals: {
         Args: { p_cooldown_days?: number; p_since_days?: number }
         Returns: number
@@ -26549,6 +26573,18 @@ export type Database = {
       optimizer_fulfill_renewal_task: {
         Args: { p_asset_id: string; p_task_id: string }
         Returns: undefined
+      }
+      optimizer_get_account_approvals: {
+        Args: { p_ad_account_id: string; p_brand_id: string }
+        Returns: Json
+      }
+      optimizer_get_account_business_read: {
+        Args: { p_brand_id: string }
+        Returns: Json
+      }
+      optimizer_get_account_read: {
+        Args: { p_ad_account_id: string; p_brand_id: string }
+        Returns: Json
       }
       optimizer_get_adset_snapshots: {
         Args: { p_cycles?: number; p_portfolio_id: string }
@@ -26714,6 +26750,10 @@ export type Database = {
         Args: { p_rec_id: string; p_rule_id: string }
         Returns: boolean
       }
+      optimizer_heartbeat_account_read: {
+        Args: { p_id: string; p_lease_ttl_sec?: number; p_worker_id: string }
+        Returns: boolean
+      }
       optimizer_heartbeat_audience_proposal: {
         Args: { p_id: string; p_lease_ttl_sec?: number; p_worker_id: string }
         Returns: boolean
@@ -26829,6 +26869,7 @@ export type Database = {
           brand_id: string
           budget_source: string
           config: Json
+          conversion_descriptor: Json
           cpa_target: number
           creative_analysis: string
           daily_total: number
@@ -26876,6 +26917,15 @@ export type Database = {
       optimizer_patch_audience_proposal_result_owned: {
         Args: { p_id: string; p_patch: Json; p_worker_id: string }
         Returns: boolean
+      }
+      optimizer_put_account_business_read: {
+        Args: {
+          p_brand_id: string
+          p_business: Json
+          p_model?: string
+          p_prompt_version?: string
+        }
+        Returns: undefined
       }
       optimizer_reconcile_cycle_items: {
         Args: { p_run_id: string }
@@ -26977,6 +27027,24 @@ export type Database = {
       optimizer_set_autopilot_paused: {
         Args: { p_paused: boolean; p_portfolio_id: string; p_reason?: string }
         Returns: Json
+      }
+      optimizer_set_family_ceiling: {
+        Args: {
+          p_ad_account_id: string
+          p_brand_id: string
+          p_family: string
+          p_state: string
+        }
+        Returns: undefined
+      }
+      optimizer_set_insight_approval: {
+        Args: {
+          p_ad_account_id: string
+          p_brand_id: string
+          p_detector: string
+          p_state: string
+        }
+        Returns: undefined
       }
       optimizer_set_recommendation_status: {
         Args: { p_rec_id: string; p_route?: string; p_status: string }
