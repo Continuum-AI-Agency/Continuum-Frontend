@@ -50,7 +50,7 @@ import {
   reachDeltaLabel,
   targetingSummaryLine,
 } from './audienceCardModel';
-import { evidenceLine } from './recQueueModel';
+import { evidenceLine, queueHeadlineLine } from './recQueueModel';
 
 export type AudienceRecommendationCardProps = {
   rec: RecommendationRow;
@@ -97,7 +97,7 @@ function CurrentAudience({
   resultWord: string;
 }) {
   const line = plan ? targetingSummaryLine(plan.previous_spec) : null;
-  const evidence = evidenceLine(rec.evidence, currency);
+  const evidence = queueHeadlineLine(rec, currency) ?? evidenceLine(rec.evidence, currency);
   return (
     <section className="space-y-2">
       <p className="flex items-center gap-1 text-3xs text-muted-foreground uppercase tracking-wide">
