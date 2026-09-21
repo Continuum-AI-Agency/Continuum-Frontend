@@ -1,7 +1,7 @@
-// The durable "top posts of the brand's top competitors" digest. Engagement-ranked
-// (likes + comments — Instagram business_discovery exposes NO impressions/reach/plays
-// for other accounts, so engagement is the only available signal). Written by the
-// backend warm step into brand_profiles.reporting_cache (scope_type
+// The durable "top posts of the brand's top competitors" digest. Each post carries
+// its outlierScore — likes + comments over its own account's median — and posts
+// are ranked by it (raw engagement for accounts with too few posts to score).
+// Written by the backend warm step into brand_profiles.reporting_cache (scope_type
 // 'competitor_top_posts') and read by BOTH the Continuum Pulse / onboarding email
 // (edge) and the organic agent's calendar-generation grounding (backend). One source
 // of truth across Backend (write) ↔ edge email + Backend agent (read).
@@ -25,8 +25,11 @@ export const competitorTopPostSchema = z.object({
   timestamp: z.string().nullable(),
   likeCount: z.number().nullable(),
   commentsCount: z.number().nullable(),
-  // Rank key = likeCount + commentsCount (null when both are unknown).
+  // likeCount + commentsCount (null when both are unknown).
   engagement: z.number().nullable(),
+  viewCount: z.number().nullable().optional(),
+  // Rank key: engagement ÷ the account's median engagement (null below 12 posts).
+  outlierScore: z.number().nullable().optional(),
 });
 export type CompetitorTopPost = z.infer<typeof competitorTopPostSchema>;
 

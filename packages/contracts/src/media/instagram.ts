@@ -46,8 +46,16 @@ export const instagramPostSchema = z
     timestamp: z.string().nullable().optional(),
     likeCount: z.number().int().nonnegative().nullable().optional(),
     commentsCount: z.number().int().nonnegative().nullable().optional(),
+    // Business Discovery exposes view_count on reels only; null/absent otherwise.
+    viewCount: z.number().int().nonnegative().nullable().optional(),
     mediaCount: z.number().int().positive(),
     items: z.array(instagramMediaItemSchema),
+    // Competitor posts only: engagement (likes + comments) divided by the median
+    // engagement over the account's recent window (>= 12 scorable posts, else
+    // null). baselineEngagement is that median. A post whose owner hid its likes
+    // is not scored. Views are not in the score because only reels carry them.
+    outlierScore: z.number().nonnegative().nullable().optional(),
+    baselineEngagement: z.number().nonnegative().nullable().optional(),
   })
   .strict();
 export type InstagramPost = z.infer<typeof instagramPostSchema>;
