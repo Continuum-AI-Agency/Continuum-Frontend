@@ -15,7 +15,10 @@ mock.module('@/components/ui/ToastProvider', () => ({
 }));
 
 mock.module('@/components/ui/SafeMarkdownLazy', () => ({
-  SafeMarkdown: ({ content }: { content: string }) => <p>{content}</p>,
+  // Keeps `className`: the ink the answer is set in is the thing under test below.
+  SafeMarkdown: ({ content, className }: { content: string; className?: string }) => (
+    <p className={className}>{content}</p>
+  ),
 }));
 
 mock.module('@/components/ai-elements/suggestion', () => ({
@@ -237,5 +240,28 @@ describe('JainaReportV2 module controls', () => {
     await waitFor(() => expect(downloadHtmlMock).toHaveBeenCalledTimes(1));
     const blocks = downloadHtmlMock.mock.calls[0][0].blocks as Array<{ block_id: string }>;
     expect(blocks.map((block) => block.block_id)).toEqual(['wins', 'risks']);
+  });
+});
+
+describe('JainaReportV2 — the answer reads as the answer', () => {
+  it('sets the executive summary in reading ink, not the unjudged muted ink', () => {
+    // It used to render `text-sm leading-relaxed text-muted-foreground`. Streamdown sets no
+    // colour of its own on headings, bold runs or table cells, so that single class muted the
+    // whole answer — and by `reading.ts`'s law muted ink means "nobody judged this", applied
+    // to the one paragraph somebody did.
+    render(<JainaReportV2 report={report} isStreaming={false} />);
+    const summary = screen.getByText('Account performance summary');
+    expect(summary.className).toContain('text-foreground');
+    expect(summary.className).toContain('text-base');
+    expect(summary.className).not.toContain('text-muted-foreground');
+  });
+
+  it('puts the answer above the module controls that operate on its evidence', () => {
+    render(<JainaReportV2 report={report} isStreaming={false} />);
+    const summary = screen.getByText('Account performance summary');
+    const controls = screen.getByRole('group', { name: 'Report modules' });
+    expect(
+      summary.compareDocumentPosition(controls) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
   });
 });

@@ -22,6 +22,8 @@ import { cn } from '@/lib/utils';
 import { BlockRenderer } from '../blocks/BlockRenderer';
 import { countBlockCitations } from '../blocks/citations';
 import { MediaMapProvider } from '../blocks/mediaText';
+import { normalizeJainaMarkdownTables } from '../jainaUtils';
+import { JAINA_ANSWER_PROSE, JAINA_EVIDENCE_PROSE } from '../reading';
 import {
   buildJainaReportV2SheetsExportRequest,
   createJainaReportV2HtmlFile,
@@ -91,7 +93,7 @@ function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) 
           </summary>
           <SafeMarkdown
             content={reasoning}
-            className="mt-2 text-xs leading-relaxed text-muted-foreground/80"
+            className={cn('mt-2', JAINA_EVIDENCE_PROSE)}
             mode="static"
           />
         </details>
@@ -249,32 +251,6 @@ export function JainaReportV2({
 
   const content = (
     <section className="mt-4 space-y-4">
-      {!isStreaming && sortedBlocks.length > 0 ? (
-        <fieldset
-          aria-label="Report modules"
-          className="flex flex-wrap items-center gap-2 rounded-lg border border-border/50 bg-muted/20 p-2"
-        >
-          <legend className="px-1 text-xs font-medium text-muted-foreground">Report modules</legend>
-          {sortedBlocks.map((block) => {
-            const isVisible = !hiddenBlockIds.has(block.block_id);
-            return (
-              <Button
-                key={block.block_id}
-                type="button"
-                size="xs"
-                variant={isVisible ? 'secondary' : 'outline'}
-                aria-label={`${isVisible ? 'Hide' : 'Show'} ${block.title} module`}
-                aria-pressed={isVisible}
-                onClick={() => toggleBlock(block.block_id)}
-              >
-                {isVisible ? <EyeIcon aria-hidden="true" /> : <EyeOffIcon aria-hidden="true" />}
-                {block.title}
-              </Button>
-            );
-          })}
-        </fieldset>
-      ) : null}
-
       <div className="space-y-4">
         {citationCount > 0 ? (
           <div className="flex items-center">
@@ -289,17 +265,64 @@ export function JainaReportV2({
           </div>
         ) : null}
 
+        {/* Jaina's answer, set as an answer.
+         *
+         *  This was `text-sm leading-relaxed text-muted-foreground` — smaller and quieter
+         *  than the very same sentence rendered by the plain-prose path in
+         *  `JainaMessageItem`, and, by `reading.ts`'s own law, in the ink that means NOBODY
+         *  JUDGED THIS. Streamdown sets no colour of its own on headings, bold runs or
+         *  table cells, so that one class muted the entire answer: every `###`, every
+         *  figure, every row. `JAINA_ANSWER_PROSE` is the one constant both routes now
+         *  share, so the answer reads the same whether the turn shipped a report or not. */}
         {report.executive_summary ? (
           <SafeMarkdown
-            content={report.executive_summary}
-            className="text-sm leading-relaxed text-muted-foreground"
+            content={normalizeJainaMarkdownTables(report.executive_summary)}
+            className={JAINA_ANSWER_PROSE}
             mode={isStreaming ? 'streaming' : 'static'}
           />
         ) : null}
 
-        {visibleBlocks.map((block) => (
-          <BlockRenderer key={block.block_id} block={block} isStreaming={isStreaming} />
-        ))}
+        {/* The evidence under the answer, marked as such. Without a rule here the blocks
+         *  read as further paragraphs of the same statement rather than as what they are —
+         *  the figures it rests on. */}
+        {visibleBlocks.length > 0 ? (
+          <div className="space-y-4 border-l border-border/50 pl-3">
+            {visibleBlocks.map((block) => (
+              <BlockRenderer key={block.block_id} block={block} isStreaming={isStreaming} />
+            ))}
+          </div>
+        ) : null}
+
+        {/* Chrome, so it sits under the thing it controls. A row of toggles named after
+         *  every block used to be the first element in the report — the reader met the
+         *  table of contents before the answer. */}
+        {!isStreaming && sortedBlocks.length > 0 ? (
+          <fieldset
+            aria-label="Report modules"
+            className="flex flex-wrap items-center gap-2 rounded-lg border border-border/50 bg-muted/20 p-2"
+          >
+            <legend className="px-1 text-xs font-medium text-muted-foreground">
+              Report modules
+            </legend>
+            {sortedBlocks.map((block) => {
+              const isVisible = !hiddenBlockIds.has(block.block_id);
+              return (
+                <Button
+                  key={block.block_id}
+                  type="button"
+                  size="xs"
+                  variant={isVisible ? 'secondary' : 'outline'}
+                  aria-label={`${isVisible ? 'Hide' : 'Show'} ${block.title} module`}
+                  aria-pressed={isVisible}
+                  onClick={() => toggleBlock(block.block_id)}
+                >
+                  {isVisible ? <EyeIcon aria-hidden="true" /> : <EyeOffIcon aria-hidden="true" />}
+                  {block.title}
+                </Button>
+              );
+            })}
+          </fieldset>
+        ) : null}
 
         {!isStreaming ? <ReportSupplementaryDetails report={report} /> : null}
       </div>
