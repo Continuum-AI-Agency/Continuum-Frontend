@@ -130,6 +130,112 @@ describe('the headline a queue row leads with', () => {
   });
 });
 
+// The shapes below are PRODUCTION rows, copied verbatim from
+// `optimizer_get_portfolio_performance` on the Easy Fit account (2026-09-21, MXN), together
+// with the headline `optimizer:queue:headline:bench` proved the engine now writes for each
+// one. A fixture invented here would agree with itself; these do not get that luxury —
+// the engine is a different package in a different repo and the only thing joining the two
+// ends is `candidateHeadlineSchema`.
+describe('a real production row, before and after the engine carries a headline', () => {
+  const live = {
+    F1: {
+      value: 0.007450050795800881,
+      metric: 'ctr',
+      source: 'engine',
+      window: 'd3' as const,
+      threshold: 0.01031055900621118,
+      comparator: 'down 28% vs 14d, CPA up 156%',
+      estImpactPerDay: 32.76571428571428,
+    },
+    P2: {
+      value: 193.215,
+      metric: 'cpp',
+      source: 'engine',
+      window: 'd14' as const,
+      threshold: 114.084375,
+      comparator: 'vs 2.5× the robust reference ($46)',
+      estImpactPerDay: 27.60214285714286,
+    },
+    P1: {
+      value: 76.62,
+      metric: 'spend',
+      source: 'engine',
+      window: 'd3' as const,
+      threshold: 5,
+      comparator: 'with 0 leads, landing-page view cost 77 vs 14 avg',
+      estImpactPerDay: 25.540000000000003,
+    },
+  };
+
+  it('reads as finished on its money today, because no live row carries a headline yet', () => {
+    for (const row of Object.values(live)) {
+      expect(queueHeadline({ evidence: row })).toBeNull();
+      expect(queueHeadlineLine({ evidence: row }, 'MXN')).toBeNull();
+      // The fallback is not a hole: the money line is still there to lead with.
+      expect(impactLabel({ evidence: row }, 'MXN')).not.toBeNull();
+    }
+  });
+
+  it('leads with the trigger’s own figure once the engine writes one onto the same row', () => {
+    expect(
+      queueHeadlineLine(
+        {
+          evidence: {
+            ...live.F1,
+            headline: {
+              kind: 'drift',
+              value: 28,
+              unit: 'percent',
+              label: 'less click-through than 14d',
+              from: null,
+              to: null,
+            },
+          },
+        },
+        'MXN',
+      ),
+    ).toBe('28% less click-through than 14d');
+
+    expect(
+      queueHeadlineLine(
+        {
+          evidence: {
+            ...live.P2,
+            headline: {
+              kind: 'efficiency',
+              value: 323,
+              unit: 'percent',
+              label: 'more per result than best',
+              from: 193.22,
+              to: 45.63,
+            },
+          },
+        },
+        'MXN',
+      ),
+    ).toBe('323% more per result than best');
+
+    expect(
+      queueHeadlineLine(
+        {
+          evidence: {
+            ...live.P1,
+            headline: {
+              kind: 'avoided',
+              value: 25.54,
+              unit: 'currency_per_day',
+              label: 'a day buying nothing',
+              from: null,
+              to: null,
+            },
+          },
+        },
+        'MXN',
+      ),
+    ).toBe('MX$26 a day buying nothing');
+  });
+});
+
 describe('queueSummary', () => {
   it('groups pending rows by kind + trigger, sums the money, biggest first', () => {
     const rows = [
