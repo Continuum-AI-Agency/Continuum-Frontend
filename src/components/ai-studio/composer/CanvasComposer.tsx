@@ -22,6 +22,7 @@ import { PromptInput } from '@/components/chat/prompt-input';
 import { useChatAttachments } from '@/components/chat/useChatAttachments';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { warmLaya } from '@/lib/api/layaWarm';
 import { isSessionStreaming, useAgentRunStore } from '@/lib/agents/runStore';
 import {
   ELEMENT_CATEGORY_LABEL,
@@ -173,6 +174,9 @@ export function CanvasComposer({
     <PromptInput
       variant="canvas"
       disabled={!brandProfileId || !roomId}
+      // Wakes the Laya decision service behind the composer's fast path: a cold instance
+      // takes ~90s to load, so waiting for the first edit means that edit always falls back.
+      onFocus={() => warmLaya()}
       isStreaming={isRunning}
       onStop={cancel}
       mentionProvider={mentionProvider}

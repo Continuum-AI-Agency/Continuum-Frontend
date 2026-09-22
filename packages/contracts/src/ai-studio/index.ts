@@ -8,6 +8,7 @@ export * from './batch-node';
 export * from './brand-direction-pieces';
 export * from './brand-enforcement';
 export * from './canvas-compose';
+export * from './canvas-fastpath';
 export * from './canvas-graph-change';
 export * from './canvas-media-signing';
 export * from './canvas-publishing';

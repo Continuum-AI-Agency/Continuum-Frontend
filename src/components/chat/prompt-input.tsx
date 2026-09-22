@@ -50,6 +50,8 @@ type PromptInputProps = {
   attachmentOnlyPrompt?: string;
   /** Keep large text pastes in the next turn instead of uploading and indexing them. */
   inlinePastedText?: boolean;
+  /** Fires when the editor gains focus — e.g. to wake a model before the first send. */
+  onFocus?: () => void;
   variant?: 'chat' | 'canvas';
   disabled?: boolean;
   placeholder?: string;
@@ -433,6 +435,7 @@ export function PromptInput({
   variant = 'chat',
   attachmentOnlyPrompt,
   inlinePastedText = false,
+  onFocus,
 }: PromptInputProps) {
   const [plainValue, setPlainValue] = React.useState('');
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
@@ -864,6 +867,7 @@ export function PromptInput({
               onInput={() => {
                 refreshActiveMention();
               }}
+              onFocus={() => onFocus?.()}
               onKeyDown={handleKeyDown}
               onKeyUp={() => refreshActiveMention()}
               onMouseUp={() => refreshActiveMention()}
