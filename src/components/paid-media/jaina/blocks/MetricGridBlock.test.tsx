@@ -96,7 +96,31 @@ describe('MetricGridBlock — figures a reader can scan down a column', () => {
     expect(screen.getByRole('img', { name: 'Down 19%, good' })).toBeTruthy();
   });
 
-  it('leaves a figure with no judgement in the ink colour, never a decorative one', () => {
+  it('leaves a MODEL-JUDGED unremarkable figure in the ink colour, never a decorative one', () => {
+    // `dataset_id: null` is a grid the model wrote itself, which is every turn whose
+    // registry holds no scalar_group. Its `neutral` is a reading — "we looked and it is
+    // normal" — and `reading.ts` sets that in the ink, deliberately louder than muted.
+    render(
+      <MetricGridBlock
+        block={{
+          ...gridOf([metric({ change: null, change_direction: null })]),
+          dataset_id: null,
+        }}
+        isStreaming={false}
+      />,
+    );
+    const figure = document.querySelector('dd > span:first-child');
+    expect(figure?.className).toContain('text-foreground');
+    expect(figure?.className).not.toContain('text-success');
+  });
+
+  it('does not claim a COMPOSED figure was judged, because no model saw it', () => {
+    // A grid carrying a `dataset_id` was built by `materializeMetricGridBlock`, which
+    // writes `severity: 'neutral' as const` on every metric — and the Phase B instruction
+    // forbids the model from emitting this category at all when the registry composes it.
+    // Rendering that in ink asserts "we looked and it is normal" about a figure nobody
+    // looked at. Measured on a live strategy turn: seven composed figures, seven neutrals,
+    // one of them a ROAS the same report's insight block called a `risk`.
     render(
       <MetricGridBlock
         block={gridOf([metric({ change: null, change_direction: null })])}
@@ -104,7 +128,21 @@ describe('MetricGridBlock — figures a reader can scan down a column', () => {
       />,
     );
     const figure = document.querySelector('dd > span:first-child');
-    expect(figure?.className).toContain('text-foreground');
-    expect(figure?.className).not.toContain('text-success');
+    expect(figure?.className).toContain('text-muted-foreground');
+    expect(figure?.className).not.toContain('text-foreground');
+  });
+
+  it('keeps an explicit judgement on a composed grid, if one ever arrives', () => {
+    // The read is "`neutral` on a composed grid is silence", not "a composed grid is never
+    // judged". The day `materializeMetricGridBlock` derives a severity from the objective's
+    // target, that judgement must survive this component untouched.
+    render(
+      <MetricGridBlock
+        block={gridOf([metric({ change: null, change_direction: null, severity: 'risk' })])}
+        isStreaming={false}
+      />,
+    );
+    const figure = document.querySelector('dd > span:first-child');
+    expect(figure?.className).toContain('text-destructive');
   });
 });

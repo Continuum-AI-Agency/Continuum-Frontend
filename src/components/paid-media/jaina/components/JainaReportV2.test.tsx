@@ -230,16 +230,25 @@ describe('JainaReportV2 module controls', () => {
     );
   });
 
-  // The export receives blocks in PRIORITY order, not authoring order — that is what
-  // puts the primary modules on page one.
-  it('exports the visible modules as HTML, highest priority first', async () => {
+  // The export receives blocks in the order the report carries them — which is the order
+  // `selectBlocksForPresentation` built: framing, then the plan's modules in plan order,
+  // then the closing blocks that read what is above them.
+  //
+  // It used to re-sort by `priority`, and so did the screen. `priority` is an EMPHASIS rank,
+  // not a position: `priorityFor` gives `primary` to the plan's FIRST module and `secondary`
+  // to everything else including the opening `data_scope` frame, which is hard-coded
+  // `secondary`. Measured on a live strategy turn, that sort rendered
+  // [metric_grid, insight_list, actions, data_scope] from a report the backend emitted as
+  // [data_scope, metric_grid, insight_list, actions] — the figures hoisted above the reading
+  // and the window strip pushed below the closing moves, on screen and in the PDF alike.
+  it('exports the visible modules as HTML in the report’s own reading order', async () => {
     downloadHtmlMock.mockClear();
     render(<JainaReportV2 report={report} isStreaming={false} runId="run_42" />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Export report as HTML' }));
     await waitFor(() => expect(downloadHtmlMock).toHaveBeenCalledTimes(1));
     const blocks = downloadHtmlMock.mock.calls[0][0].blocks as Array<{ block_id: string }>;
-    expect(blocks.map((block) => block.block_id)).toEqual(['wins', 'risks']);
+    expect(blocks.map((block) => block.block_id)).toEqual(['risks', 'wins']);
   });
 });
 

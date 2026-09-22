@@ -6,6 +6,7 @@ import { formatValue, resolveMetricDisplayFormat } from '@/lib/jaina/formatValue
 import type { MetricGridBlockV2, MetricItemV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
 import {
+  explicitSeverity,
   fallsAreGood,
   JUDGEMENT_LABEL,
   JUDGEMENT_TEXT,
@@ -31,7 +32,7 @@ type Figure = {
   judgement: Judgement;
 };
 
-function toFigure(metric: MetricItemV2): Figure {
+function toFigure(metric: MetricItemV2, composed: boolean): Figure {
   const displayFormat = resolveMetricDisplayFormat({
     label: metric.label,
     format: metric.format,
@@ -51,8 +52,8 @@ function toFigure(metric: MetricItemV2): Figure {
     goodWhenDown: fallsAreGood(metric.label),
     // The contract has carried `severity` with four values all along and this block threw it
     // away. It is the model's own judgement of the figure; nothing downstream is entitled to
-    // re-derive it.
-    judgement: judgeValue(metric.severity),
+    // re-derive it — WHEN a model wrote it. On a composed grid nobody did: see `composed`.
+    judgement: judgeValue(composed ? explicitSeverity(metric.severity) : metric.severity),
   };
 }
 
@@ -72,7 +73,30 @@ function toFigure(metric: MetricItemV2): Figure {
  * metric's polarity, and a figure nobody judged stays in the ink colour.
  */
 export default function MetricGridBlock({ block }: MetricGridBlockProps) {
-  const figures = block.metrics.map(toFigure);
+  // `dataset_id` is the witness that no model saw these figures.
+  //
+  // A grid carrying one was built by `materializeMetricGridBlock` from a registered
+  // `scalar_group` dataset — values verbatim from tool output, which is deliberate and
+  // right (model-typed grid values are how a "1-12 Julio" grid once carried 30-day totals).
+  // But that same function writes `severity: 'neutral' as const` and `change: null` on EVERY
+  // metric, and the Phase B instruction forbids the model from emitting this category at all
+  // when the registry composes it. So `neutral` here is a literal in composer code, not a
+  // reading — and by this module's own law, painting it in ink asserts "we looked and it is
+  // normal" about a figure nobody looked at.
+  //
+  // Measured on a live strategy turn (2026-09-21, `jaina:report:blocks:e2e:bench`): seven
+  // composed figures, seven `neutral`s, zero deltas — including a ROAS of 0.84 that the same
+  // report's insight block called a `risk` two blocks below. Reading them as `unjudged`
+  // (muted, "nobody judged this") is the only true statement available here.
+  //
+  // A MODEL-AUTHORED grid — `dataset_id` null, which is every turn whose registry holds no
+  // scalar_group — is untouched: its `neutral` is a judgement and keeps the ink.
+  //
+  // The durable fix is upstream and outside this component: the composer should leave
+  // `severity` unset, and `metricItemSchema.severity` should stop defaulting to `'neutral'`
+  // so "unjudged" is expressible on the wire at all.
+  const composed = typeof block.dataset_id === 'string' && block.dataset_id.length > 0;
+  const figures = block.metrics.map((metric) => toFigure(metric, composed));
   if (figures.length === 0) return null;
 
   return (

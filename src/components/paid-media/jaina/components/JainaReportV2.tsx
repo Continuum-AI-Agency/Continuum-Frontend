@@ -131,13 +131,30 @@ export function JainaReportV2({
   const { show } = useToast();
   const [hiddenBlockIds, setHiddenBlockIds] = useState<Set<string>>(() => new Set());
   const [exporting, setExporting] = useState<'sheets' | 'share' | 'pdf' | 'html' | null>(null);
-  const sortedBlocks = useMemo(
-    () => [...report.blocks].sort((a, b) => a.priority - b.priority),
-    [report.blocks],
-  );
+  // READING ORDER IS THE BACKEND'S, and re-sorting here destroyed it.
+  //
+  // `selectBlocksForPresentation` emits a report in exactly the order it is meant to be
+  // read: the framing block that states the window, then the plan's modules in the order
+  // the plan names them, then the closing blocks that read what is above them. Sorting that
+  // array by `priority` threw all three away, because `priority` is an EMPHASIS rank
+  // (primary/secondary), not a position — and `priorityFor` gives `primary` to the plan's
+  // first module and `secondary` to everything else, including the opening `data_scope`
+  // frame, which `composeDataScopeBlock` hard-codes to `secondary`.
+  //
+  // Measured on a live strategy turn (2026-09-21): the backend emitted
+  // [data_scope, metric_grid, insight_list, actions] with ranks [1, 0, 0, 0], and this sort
+  // rendered [metric_grid, insight_list, actions, data_scope] — the metric grid promoted to
+  // the top of every answer, and the scope strip, whose whole job is to say what window the
+  // figures cover BEFORE the figures, pushed below the closing actions. The Backend bench
+  // asserts "the data_scope frame opens the report" and was green throughout, because it
+  // grades the array and this component reordered it afterwards.
+  //
+  // `priority` is still projected to a numeric rank at the schema (persisted reports and the
+  // export path read it); nothing renders position from it any more.
+  const orderedBlocks = report.blocks;
   const visibleBlocks = useMemo(
-    () => sortedBlocks.filter((block) => !hiddenBlockIds.has(block.block_id)),
-    [hiddenBlockIds, sortedBlocks],
+    () => orderedBlocks.filter((block) => !hiddenBlockIds.has(block.block_id)),
+    [hiddenBlockIds, orderedBlocks],
   );
 
   const hasMedia = report._meta.has_media && Object.keys(report.media_map).length > 0;
@@ -296,7 +313,7 @@ export function JainaReportV2({
         {/* Chrome, so it sits under the thing it controls. A row of toggles named after
          *  every block used to be the first element in the report — the reader met the
          *  table of contents before the answer. */}
-        {!isStreaming && sortedBlocks.length > 0 ? (
+        {!isStreaming && orderedBlocks.length > 0 ? (
           <fieldset
             aria-label="Report modules"
             className="flex flex-wrap items-center gap-2 rounded-lg border border-border/50 bg-muted/20 p-2"
@@ -304,7 +321,7 @@ export function JainaReportV2({
             <legend className="px-1 text-xs font-medium text-muted-foreground">
               Report modules
             </legend>
-            {sortedBlocks.map((block) => {
+            {orderedBlocks.map((block) => {
               const isVisible = !hiddenBlockIds.has(block.block_id);
               return (
                 <Button
