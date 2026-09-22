@@ -830,3 +830,95 @@ describe('report blocks once the final report lands', () => {
     expect(reportOf(message)).not.toHaveProperty('block_order');
   });
 });
+
+describe('a scaffold card for a turn that never proposed', () => {
+  // Only `paid_scaffold_propose` emits a proposal. "Build it" a turn later carries a gate, then
+  // progress and a receipt, for a version this message never saw proposed.
+  const VERSION = '44444444-4444-4444-8444-444444444444';
+
+  it('seeds the card from progress and a receipt', () => {
+    const projected = toJainaChatMessage(
+      uiMessage([
+        data(JAINA_UI_DATA_PART.scaffold, 'run_2:scaffold:progress:c0', {
+          scaffoldId: VERSION,
+          pathKey: 'c0',
+          step: 'campaign',
+          status: 'succeeded',
+        }),
+        data(JAINA_UI_DATA_PART.scaffold, 'run_2:scaffold:receipt', {
+          scaffoldId: VERSION,
+          status: 'completed',
+          completedAt: '2026-09-21T00:00:00.000Z',
+        }),
+      ]),
+      { isStreaming: false },
+    );
+
+    expect(projected.scaffold?.scaffoldId).toBe(VERSION);
+    expect(projected.scaffold?.progressByNode.c0?.status).toBe('succeeded');
+    expect(projected.scaffold?.receipt?.status).toBe('completed');
+  });
+
+  it('seeds the card from the gate input when the approval is all the turn has', () => {
+    const projected = toJainaChatMessage(
+      uiMessage([
+        toolPart({
+          state: 'approval-requested',
+          toolCallId: 'call_build',
+          toolName: 'paid_scaffold_build',
+          input: { scaffold_version_id: VERSION, content_hash: 'abc' },
+          approval: { id: 'appr_build' },
+        }),
+      ]),
+      { isStreaming: true },
+    );
+
+    expect(projected.scaffold?.scaffoldId).toBe(VERSION);
+    expect(projected.pendingToolApprovals?.[0]?.toolName).toBe('paid_scaffold_build');
+  });
+
+  it('keeps the card after a denial, when no scaffold frame ever arrived', () => {
+    const projected = toJainaChatMessage(
+      uiMessage([
+        toolPart({
+          state: 'output-denied',
+          toolCallId: 'call_build',
+          toolName: 'paid_scaffold_build',
+          input: { scaffold_version_id: VERSION, content_hash: 'abc' },
+          approval: { id: 'appr_build', approved: false },
+        }),
+      ]),
+      { isStreaming: false },
+    );
+
+    expect(projected.scaffold?.scaffoldId).toBe(VERSION);
+    expect(projected.resolvedApprovals?.appr_build?.decision).toBe('denied');
+  });
+
+  it('ignores a receipt for a different version than the one proposed', () => {
+    const projected = toJainaChatMessage(
+      uiMessage([
+        data(JAINA_UI_DATA_PART.scaffold, 'run_1:scaffold', {
+          scaffoldId: VERSION,
+          plan: {},
+          summary: { campaigns: 1, adSets: 1, ads: 1 },
+        }),
+        data(JAINA_UI_DATA_PART.scaffold, 'run_1:scaffold:receipt', {
+          scaffoldId: 'some-other-version',
+          status: 'failed',
+        }),
+      ]),
+      { isStreaming: false },
+    );
+
+    expect(projected.scaffold?.scaffoldId).toBe(VERSION);
+    expect(projected.scaffold?.receipt).toBeNull();
+  });
+
+  it('invents no card for a turn with no scaffold in it', () => {
+    const projected = toJainaChatMessage(uiMessage([text('Spend is flat.')]), {
+      isStreaming: false,
+    });
+    expect(projected.scaffold).toBeUndefined();
+  });
+});

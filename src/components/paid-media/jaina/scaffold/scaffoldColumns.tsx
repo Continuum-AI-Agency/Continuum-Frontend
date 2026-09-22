@@ -8,6 +8,7 @@ import {
 } from '@/lib/paid-media/scaffoldTree';
 import { DerivedEmpty, DerivedValue } from './DerivedValue';
 import { ScaffoldStatusPill } from './ScaffoldStatusPill';
+import { formatDailyBudget } from './scaffoldBudget';
 
 /**
  * The ad-set columns.
@@ -17,9 +18,10 @@ import { ScaffoldStatusPill } from './ScaffoldStatusPill';
  * a disabled prop someone can flip. Genuine choices render in the foreground colour;
  * everything the server derives goes through <DerivedValue>.
  *
- * `daily_budget` has no column at all: the migration's `scaffold_node_carries_no_budget`
- * CHECK makes a budget key structurally impossible in `payload`, so a column would
- * always be empty and would imply a control that must not exist.
+ * The budget is read-only like everything derived: `daily_budget_minor_units` is a typed
+ * column (never a `payload` key — `scaffold_node_carries_no_budget` still forbids that)
+ * sized at propose time from the account's measured CPA, and the content hash a human
+ * approves covers it.
  */
 
 const NAME_REASON =
@@ -31,7 +33,9 @@ const placementLabel = (placement: string[] | undefined) => {
   return placement.length > 2 ? `${shown} +${placement.length - 2}` : shown;
 };
 
-export const buildScaffoldAdSetColumns = (): InsightColumn<ScaffoldAdSetRow>[] => [
+export const buildScaffoldAdSetColumns = (
+  currency: string | null = null,
+): InsightColumn<ScaffoldAdSetRow>[] => [
   {
     id: 'status',
     header: 'Status',
@@ -54,6 +58,24 @@ export const buildScaffoldAdSetColumns = (): InsightColumn<ScaffoldAdSetRow>[] =
           </span>
         ) : null}
       </div>
+    ),
+  },
+  {
+    id: 'budget',
+    header: 'Budget',
+    align: 'right',
+    sortValue: (row) => row.dailyBudgetMinorUnits ?? -1,
+    cell: (row) => (
+      <DerivedValue
+        reason={
+          typeof row.dailyBudgetMinorUnits !== 'number'
+            ? 'No measured CPA on this account, so build uses the placeholder budget.'
+            : "Sized at propose time from the account's measured CPA."
+        }
+        className="whitespace-nowrap tabular-nums"
+      >
+        {formatDailyBudget(row.dailyBudgetMinorUnits, currency)}
+      </DerivedValue>
     ),
   },
   {

@@ -115,6 +115,7 @@ export const layoutScaffoldTree = (tree: ScaffoldTree): ScaffoldLayout => {
         angleKey: adSet.angleKey,
         status: adSet.status,
         adCount: adSet.ads.length,
+        dailyBudgetMinorUnits: adSet.dailyBudgetMinorUnits,
         metaObjectId: adSet.metaObjectId,
         errorMessage: adSet.errorMessage,
         choices: adSet.choices,

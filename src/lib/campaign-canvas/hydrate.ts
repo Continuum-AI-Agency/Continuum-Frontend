@@ -240,11 +240,12 @@ export function buildHydratedCanvasGraph(read: CanvasScaffoldRead): HydratedCanv
       validationStatus: 'valid',
       optimizationGoal: adSet.choices.optimizationGoal ?? 'CONVERSIONS',
       billingEvent: adSet.derived.billingEvent ?? 'IMPRESSIONS',
-      // A scaffold node carries NO budget: the schema has a
-      // `check (not (payload ?| array['daily_budget', …]))` that forbids it, because
-      // budget is set at build time from the account, never proposed by a model.
+      // Jaina's opening budget, from the typed `daily_budget_minor_units` column (never a
+      // payload key — that CHECK still holds). Null means no measured CPA: build uses the
+      // Backend placeholder, which is shown as 0 rather than as a figure nobody derived.
       budgetType: 'DAILY',
-      budgetAmount: 0,
+      budgetAmount:
+        typeof adSet.dailyBudgetMinorUnits === 'number' ? adSet.dailyBudgetMinorUnits / 100 : 0,
       budgetCurrency: 'USD',
       pacingType: adSet.choices.placement ?? [],
       ...(adSet.metaObjectId ? { metaId: adSet.metaObjectId } : {}),

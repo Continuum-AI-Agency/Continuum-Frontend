@@ -42,6 +42,10 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: 0,
   reporter: 'list',
+  // Its own output directory, as the jaina-approval-card and transcript-scroll configs do.
+  // Playwright wipes `outputDir` when a run starts; sharing `test-results/` let a concurrent
+  // agent's bench delete this run's trace files mid-turn (ENOENT on the recording).
+  outputDir: '.playwright/jaina-canvas',
   // The propose test drives a real model turn behind a real approval gate, and the dev
   // server compiles /scale/campaign-canvas on first hit. Generous, but bounded — a hang
   // must still fail, not wait forever.

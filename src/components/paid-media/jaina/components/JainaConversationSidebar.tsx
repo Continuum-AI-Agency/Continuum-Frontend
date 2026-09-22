@@ -51,8 +51,10 @@ const AGENT_OPTIONS = [
   { value: 'canvas', label: 'AI Studio' },
 ];
 
+// Breakpoints are `@3xl/jaina` — the chat surface's own width — never viewport `md:`. The same
+// sidebar sits in a full-width tab and in a 420px floating panel on a desktop screen.
 const SIDEBAR_BASE_CLASS =
-  'flex w-full shrink-0 flex-col border-b border-border/60 bg-background/60 backdrop-blur md:border-b-0 md:border-r';
+  'flex w-full shrink-0 flex-col border-b border-border/60 bg-background/60 backdrop-blur @3xl/jaina:border-b-0 @3xl/jaina:border-r';
 
 function formatSessionTimestamp(value: string | null): string {
   if (!value) return 'No activity';
@@ -126,7 +128,7 @@ export function JainaConversationSidebar({
 
   if (isCollapsed && onToggleCollapsed) {
     return (
-      <aside className={cn(SIDEBAR_BASE_CLASS, 'md:w-14')}>
+      <aside className={cn(SIDEBAR_BASE_CLASS, '@3xl/jaina:w-14')}>
         <CollapsedConversationsRail
           onExpand={onToggleCollapsed}
           onNewSession={onCreateConversation}
@@ -137,7 +139,7 @@ export function JainaConversationSidebar({
   }
 
   return (
-    <aside className={cn(SIDEBAR_BASE_CLASS, 'md:w-72')}>
+    <aside className={cn(SIDEBAR_BASE_CLASS, '@3xl/jaina:w-72')}>
       <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
         <div className="flex items-center gap-1">
           {onToggleCollapsed ? <CollapseConversationsButton onToggle={onToggleCollapsed} /> : null}
@@ -208,8 +210,8 @@ export function JainaConversationSidebar({
               isSearching={search.isSearching}
             />
           ) : null}
-          <ScrollArea className="max-h-44 md:max-h-none md:flex-1 md:min-h-0">
-            <div className="flex gap-2 p-2 md:flex-col">
+          <ScrollArea className="max-h-44 @3xl/jaina:max-h-none @3xl/jaina:flex-1 @3xl/jaina:min-h-0">
+            <div className="flex gap-2 p-2 @3xl/jaina:flex-col">
               {isLoading && visibleSessions.length === 0 && !search.isActive ? (
                 <span className="text-xs px-2 py-3 text-muted-foreground">
                   Loading conversations…
@@ -236,7 +238,7 @@ export function JainaConversationSidebar({
                   <div
                     key={session.sessionId}
                     className={cn(
-                      'flex min-w-[220px] items-start gap-1 rounded-md border text-left transition-colors md:min-w-0',
+                      'flex min-w-[220px] items-start gap-1 rounded-md border text-left transition-colors @3xl/jaina:min-w-0',
                       isActive
                         ? 'border-primary/70 bg-primary/10'
                         : 'border-border/60 bg-background/40 hover:border-border hover:bg-background/70',
@@ -247,6 +249,7 @@ export function JainaConversationSidebar({
                       type="button"
                       onClick={() => onSelectConversation(session.sessionId)}
                       disabled={isInteractionDisabled || isActive || isDeleting}
+                      data-testid={`jaina-conversation-${session.sessionId}`}
                       className={cn(
                         'flex flex-1 flex-col items-start gap-1 px-3 py-2 text-left',
                         isInteractionDisabled || isDeleting

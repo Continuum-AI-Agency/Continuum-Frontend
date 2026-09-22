@@ -10,7 +10,9 @@ import type { JainaScaffoldNodeProgress } from '@/lib/jaina/scaffoldTypes';
 import {
   buildScaffoldTree,
   effectiveScaffoldStatus,
+  openingDailyBudgetOf,
   type PaidScaffoldNodeRow,
+  scaffoldBlockersOf,
 } from '../scaffoldTree';
 
 const row = (overrides: Partial<PaidScaffoldNodeRow>): PaidScaffoldNodeRow => ({
@@ -31,6 +33,7 @@ const row = (overrides: Partial<PaidScaffoldNodeRow>): PaidScaffoldNodeRow => ({
   attempt: 0,
   creativeAssetId: null,
   creativeMedia: null,
+  dailyBudgetMinorUnits: null,
   ...overrides,
 });
 
@@ -214,5 +217,55 @@ describe('buildScaffoldTree', () => {
     expect(tree.campaign).toBeNull();
     expect(tree.adSets).toHaveLength(0);
     expect(tree.counts.adSets).toBe(0);
+  });
+});
+
+describe('what the card tells a person before build', () => {
+  const campaign = row({ id: 'c', level: 'campaign', pathKey: 'c0', name: 'Summer', ordinal: 0 });
+  const targeted = row({
+    id: 'a1',
+    parentId: 'c',
+    pathKey: 'c0/a1',
+    name: 'Prospecting',
+    payload: { targeting: { geo_locations: { countries: ['US'] } } },
+    dailyBudgetMinorUnits: 6199,
+  });
+  const untargeted = row({
+    id: 'a2',
+    parentId: 'c',
+    pathKey: 'c0/a2',
+    ordinal: 2,
+    name: 'Retargeting',
+    dailyBudgetMinorUnits: null,
+  });
+  const adWithout = row({ id: 'd1', parentId: 'a1', level: 'ad', pathKey: 'c0/a1/ad1' });
+  const adWith = row({
+    id: 'd2',
+    parentId: 'a2',
+    level: 'ad',
+    pathKey: 'c0/a2/ad1',
+    creativeAssetId: 'asset-1',
+  });
+
+  it('sums the derived budgets and names the ad sets left on the placeholder', () => {
+    const tree = buildScaffoldTree([campaign, targeted, untargeted, adWithout, adWith]);
+    expect(openingDailyBudgetOf(tree)).toEqual({ totalMinorUnits: 6199, placeholders: 1 });
+  });
+
+  it('flags the ad set build would stop at, and the ad populate cannot fill', () => {
+    const tree = buildScaffoldTree([campaign, targeted, untargeted, adWithout, adWith]);
+    expect(scaffoldBlockersOf(tree)).toEqual({
+      adSetsWithoutAudience: ['Retargeting'],
+      adsWithoutCreative: 1,
+    });
+  });
+
+  it('stops flagging a node once it exists on Meta', () => {
+    const tree = buildScaffoldTree([
+      campaign,
+      { ...untargeted, status: 'created' },
+      { ...adWithout, parentId: 'a2', status: 'created' },
+    ]);
+    expect(scaffoldBlockersOf(tree)).toEqual({ adSetsWithoutAudience: [], adsWithoutCreative: 0 });
   });
 });

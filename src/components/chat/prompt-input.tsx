@@ -621,8 +621,17 @@ export function PromptInput({
     onQueuedMentionSuggestionsConsumed?.();
   }, [appendMentionSuggestion, onQueuedMentionSuggestionsConsumed, queuedMentionSuggestions]);
 
+  // Idempotent per queued value. The effect re-runs on StrictMode's double mount and whenever a
+  // caller's inline `onQueuedTextConsumed` changes identity before it has cleared the text — and
+  // each re-run used to insert again. Cleared back to null, the same text can be queued again.
+  const insertedQueuedTextRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!queuedText || !editorRef.current) return;
+    if (!queuedText) {
+      insertedQueuedTextRef.current = null;
+      return;
+    }
+    if (!editorRef.current || insertedQueuedTextRef.current === queuedText) return;
+    insertedQueuedTextRef.current = queuedText;
     insertTextAtSelection(editorRef.current, queuedText);
     syncFromEditor();
     onQueuedTextConsumed?.();

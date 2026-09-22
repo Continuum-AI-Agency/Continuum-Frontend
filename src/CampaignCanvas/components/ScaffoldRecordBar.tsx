@@ -41,10 +41,16 @@ const lifecycleTone = (lifecycle: string): 'success' | 'info' | 'warning' =>
 
 export function ScaffoldRecordBar({
   brandId,
+  requestedScaffoldId = null,
   onAdAccountChange,
   onPropose,
 }: {
   brandId: string;
+  /**
+   * Set by a chat card's "Open on canvas" (via `?scaffold=`). Part of the list effect's deps
+   * because the scaffold it names was usually proposed AFTER this list loaded.
+   */
+  requestedScaffoldId?: string | null;
   /** The ad account the chat should run against: the loaded scaffold owns it. */
   onAdAccountChange: (adAccountId: string | null) => void;
   onPropose: () => void;
@@ -59,34 +65,9 @@ export function ScaffoldRecordBar({
   const [isLoadingGraph, setIsLoadingGraph] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    let cancelled = false;
-    setScaffolds(null);
-    setSelectedId('');
-    fetchBrandScaffolds({ brandId })
-      .then((rows) => {
-        if (cancelled) return;
-        setScaffolds(rows);
-        setError(null);
-        // Before anything is loaded the newest scaffold still names the account this
-        // brand runs paid media on — which is what the chat needs to accept a turn.
-        onAdAccountChange(rows[0]?.adAccountId ?? null);
-      })
-      .catch((cause: unknown) => {
-        if (cancelled) return;
-        setScaffolds([]);
-        setError(cause instanceof Error ? cause.message : 'Could not load this brand’s proposals.');
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [brandId, onAdAccountChange]);
-
-  const handleSelect = React.useCallback(
-    (scaffoldId: string) => {
-      const scaffold = scaffolds?.find((entry) => entry.id === scaffoldId);
-      if (!scaffold) return;
-      setSelectedId(scaffoldId);
+  const loadScaffold = React.useCallback(
+    (scaffold: ScaffoldSummary) => {
+      setSelectedId(scaffold.id);
       setIsLoadingGraph(true);
       setError(null);
       fetchCanvasScaffoldRead({ brandId, scaffold })
@@ -99,13 +80,47 @@ export function ScaffoldRecordBar({
         })
         .finally(() => setIsLoadingGraph(false));
     },
-    [brandId, loadHydratedGraph, onAdAccountChange, scaffolds],
+    [brandId, loadHydratedGraph, onAdAccountChange],
+  );
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setScaffolds(null);
+    setSelectedId('');
+    fetchBrandScaffolds({ brandId })
+      .then((rows) => {
+        if (cancelled) return;
+        setScaffolds(rows);
+        setError(null);
+        const requested = rows.find((row) => row.id === requestedScaffoldId);
+        if (requested) {
+          loadScaffold(requested);
+          return;
+        }
+        // Before anything is loaded the newest scaffold still names the account this
+        // brand runs paid media on — which is what the chat needs to accept a turn.
+        onAdAccountChange(rows[0]?.adAccountId ?? null);
+      })
+      .catch((cause: unknown) => {
+        if (cancelled) return;
+        setScaffolds([]);
+        setError(cause instanceof Error ? cause.message : 'Could not load this brand’s proposals.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, onAdAccountChange, requestedScaffoldId, loadScaffold]);
+
+  const handleSelect = React.useCallback(
+    (scaffoldId: string) => {
+      const scaffold = scaffolds?.find((entry) => entry.id === scaffoldId);
+      if (scaffold) loadScaffold(scaffold);
+    },
+    [loadScaffold, scaffolds],
   );
 
   const proposeBlockedBecause =
-    nodeCount === 0
-      ? 'Load a proposal or add a node — there is nothing to propose yet.'
-      : null;
+    nodeCount === 0 ? 'Load a proposal or add a node — there is nothing to propose yet.' : null;
 
   return (
     <div
@@ -121,7 +136,11 @@ export function ScaffoldRecordBar({
       ) : (
         <Select value={selectedId} onValueChange={handleSelect}>
           <SelectTrigger className="w-[260px]" data-testid="canvas-scaffold-picker">
-            <SelectValue placeholder="Load a proposal…" />
+            {/* Without `items` the closed trigger renders the raw uuid, not the name. */}
+            <SelectValue
+              placeholder="Load a proposal…"
+              items={Object.fromEntries(scaffolds.map((scaffold) => [scaffold.id, scaffold.name]))}
+            />
           </SelectTrigger>
           <SelectContent>
             {scaffolds.map((scaffold) => (

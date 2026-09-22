@@ -314,12 +314,26 @@ const scaffoldProgressKey = (progress: {
 }): string => progress.pathKey ?? `${progress.step}#${progress.index ?? 0}`;
 
 /**
- * The scaffold, folded across every scaffold part on the message.
- *
- * The three `paid.scaffold_*` events share ONE part id on the Backend today, so a progress event
- * replaces the proposal and the fold sees a single starved part. That is a Backend addressing gap
- * (see the report accompanying this change), not something to paper over here: the fold is written
- * for the ids the events deserve, so it becomes correct the moment they get them.
+ * A card for a version this message has no proposal for. Only `paid_scaffold_propose` emits a
+ * proposal, so a gate run in a LATER turn (propose, then "build it") carries progress and a
+ * receipt for a version it never proposed — and a reload replays the receipt without the
+ * approval. The version id is all the card needs: the tree comes from Postgres.
+ */
+export const seededScaffoldState = (scaffoldId: string): JainaScaffoldState => ({
+  scaffoldId,
+  adAccountId: null,
+  approvalId: null,
+  plan: null,
+  progressByNode: {},
+  lastProgress: null,
+  receipt: null,
+});
+
+/**
+ * The scaffold, folded across every scaffold part on the message. The Backend gives the three
+ * `paid.scaffold_*` events their own part ids (`uiMessageChunks.ts`), so the fold sees each one.
+ * A frame for a DIFFERENT version than the one already folded is ignored; a frame with nothing
+ * folded yet seeds the card rather than being dropped.
  */
 export const scaffoldOf = (message: JainaUIMessage): JainaScaffoldState | undefined => {
   let scaffold: JainaScaffoldState | undefined;
@@ -327,11 +341,13 @@ export const scaffoldOf = (message: JainaUIMessage): JainaScaffoldState | undefi
   for (const data of partsOfType(message, JAINA_UI_DATA_PART.scaffold)) {
     if ('step' in data) {
       const progress = paidScaffoldProgressPayloadSchema.safeParse(data);
-      if (!progress.success || scaffold?.scaffoldId !== progress.data.scaffoldId) continue;
+      if (!progress.success) continue;
+      if (scaffold && scaffold.scaffoldId !== progress.data.scaffoldId) continue;
+      const base = scaffold ?? seededScaffoldState(progress.data.scaffoldId);
       scaffold = {
-        ...scaffold,
+        ...base,
         progressByNode: {
-          ...scaffold.progressByNode,
+          ...base.progressByNode,
           [scaffoldProgressKey(progress.data)]: {
             step: progress.data.step,
             status: progress.data.status,
@@ -351,8 +367,9 @@ export const scaffoldOf = (message: JainaUIMessage): JainaScaffoldState | undefi
 
     if ('created' in data || 'completedAt' in data || ('status' in data && !('plan' in data))) {
       const receipt = paidScaffoldReceiptPayloadSchema.safeParse(data);
-      if (!receipt.success || scaffold?.scaffoldId !== receipt.data.scaffoldId) continue;
-      scaffold = { ...scaffold, receipt: receipt.data };
+      if (!receipt.success) continue;
+      if (scaffold && scaffold.scaffoldId !== receipt.data.scaffoldId) continue;
+      scaffold = { ...(scaffold ?? seededScaffoldState(receipt.data.scaffoldId)), receipt: receipt.data };
       continue;
     }
 
@@ -375,7 +392,25 @@ export const scaffoldOf = (message: JainaUIMessage): JainaScaffoldState | undefi
     };
   }
 
-  return scaffold;
+  return scaffold ?? scaffoldFromGateInput(message);
+};
+
+/**
+ * The last resort: a scaffold tool's own input names the version, whatever state its
+ * approval is in. A denied later-turn gate has no frame at all — no proposal, no progress,
+ * no receipt — and without this the card, and the "Declined" it owes the reader, vanish.
+ * `tool.call` is replayed on reload, so this holds after a refresh too.
+ */
+const scaffoldFromGateInput = (message: JainaUIMessage): JainaScaffoldState | undefined => {
+  for (const part of toolPartsOf(message)) {
+    const toolName = part.toolName ?? part.type.replace(/^tool-/, '');
+    if (!toolName.startsWith('paid_scaffold_')) continue;
+    const input = part.input as { scaffold_version_id?: unknown } | undefined;
+    if (typeof input?.scaffold_version_id === 'string' && input.scaffold_version_id) {
+      return seededScaffoldState(input.scaffold_version_id);
+    }
+  }
+  return undefined;
 };
 
 export const clarificationOf = (

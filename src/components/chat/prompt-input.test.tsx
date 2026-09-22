@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { PromptInput } from './prompt-input';
 import type { ChatAttachmentsController } from './useChatAttachments';
 
@@ -67,5 +68,26 @@ describe('PromptInput pasted text attachments', () => {
       true,
     );
     expect(add).not.toHaveBeenCalled();
+  });
+});
+
+describe('PromptInput queued text', () => {
+  // The campaign canvas opens the chat and queues its prompt in the same render, so the composer
+  // MOUNTS holding queued text — and StrictMode runs a mount effect twice. The prompt went to Jaina
+  // doubled (~1,400 characters of canvas said twice) until the insertion was made idempotent.
+  it('inserts queued text once, even when its mount effect runs twice', () => {
+    const queued = 'Propose the campaign on my canvas.';
+    render(
+      <StrictMode>
+        <PromptInput
+          attachments={attachmentController()}
+          onSubmit={mock()}
+          queuedText={queued}
+          onQueuedTextConsumed={() => {}}
+        />
+      </StrictMode>,
+    );
+
+    expect(screen.getByRole('textbox').textContent).toBe(queued);
   });
 });
