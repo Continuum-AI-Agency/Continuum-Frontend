@@ -169,26 +169,6 @@ const capabilityV2 = {
       max_items: 1,
     },
   ],
-  controls: [
-    {
-      control_id: 'blur_radius',
-      kind: 'number',
-      label: 'Background blur',
-      required: false,
-      minimum: 0,
-      maximum: 40,
-      step: 1,
-      default: 8,
-    },
-    {
-      control_id: 'grade',
-      kind: 'enum',
-      label: 'Color grade',
-      required: false,
-      options: ['neutral', 'warm'],
-      default: 'neutral',
-    },
-  ],
   outputs: [
     {
       output_id: 'hero',
@@ -225,18 +205,28 @@ const capabilityV2 = {
 } as const;
 
 describe('pipelineCapabilityV2Schema', () => {
-  it('publishes immutable identity, semantic inputs, approved controls, outputs, and policy', () => {
+  it('publishes immutable identity, semantic inputs, outputs, and policy', () => {
     const parsed = pipelineCapabilityV2Schema.parse(capabilityV2);
 
     expect(parsed.identity).toEqual(identity);
     expect(parsed.inputs.map((item) => item.kind)).toEqual(['text', 'element']);
-    expect(parsed.controls.map((item) => item.control_id)).toEqual(['blur_radius', 'grade']);
+    expect(parsed).not.toHaveProperty('controls');
     expect(parsed.outputs.map((item) => item.kind)).toEqual(['asset', 'element_candidate']);
     expect(parsed.quality_policy.on_failure).toBe('refuse');
     expect(parsed.agent_guide?.input_guidance.map((item) => item.input_id)).toEqual([
       'brief',
       'product',
     ]);
+  });
+
+  it('tolerates the empty controls list a pre-deletion peer sends, and refuses any control', () => {
+    expect(pipelineCapabilityV2Schema.parse({ ...capabilityV2, controls: [] }).controls).toEqual([]);
+    expect(() =>
+      pipelineCapabilityV2Schema.parse({
+        ...capabilityV2,
+        controls: [{ control_id: 'grade', kind: 'enum', label: 'Grade', required: false }],
+      }),
+    ).toThrow();
   });
 
   it('keeps the guide optional for existing V2 rows and rejects guidance for undeclared inputs', () => {
@@ -297,7 +287,6 @@ describe('pipelineInvocationRequestSchema', () => {
           element_id: uuid('4'),
         },
       },
-      controls: { blur_radius: 12, grade: 'warm' },
     });
 
     expect(request.identity.revision).toBe(7);
@@ -324,6 +313,19 @@ describe('pipelineInvocationRequestSchema', () => {
         controls: {},
       }),
     ).toThrow();
+  });
+
+  it('accepts a pre-deletion caller\'s empty controls and refuses any control value', () => {
+    const base = {
+      brand_profile_id: uuid('3'),
+      pipeline_id: capabilityV2.pipeline_id,
+      identity,
+      idempotency_key: 'launch-hero-04',
+      origin: 'client',
+      inputs: { brief: { kind: 'text', value: 'A precise launch brief.' } },
+    } as const;
+    expect(pipelineInvocationRequestSchema.parse({ ...base, controls: {} }).controls).toEqual({});
+    expect(() => pipelineInvocationRequestSchema.parse({ ...base, controls: { grade: 'warm' } })).toThrow();
   });
 
   it('rejects undeclared object-shaped control patches', () => {

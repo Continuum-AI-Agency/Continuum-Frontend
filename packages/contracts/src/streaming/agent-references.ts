@@ -13,6 +13,10 @@ export const agentMentionReferenceTypeSchema = z.enum([
   // A saved Canvas workflow attached as reference material — the agent reads its shape,
   // it does not land on the canvas. Loading one is a separate, explicit act.
   'workflow',
+  // A PUBLISHED pipeline tagged from the context picker. Its id is the pipeline id; the
+  // Backend re-reads the capability for the active brand and grounds the turn on it, so a
+  // tag is a pointer, never trusted content.
+  'pipeline',
   'link',
   'skill',
   'document',
