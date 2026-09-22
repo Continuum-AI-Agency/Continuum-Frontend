@@ -145,7 +145,9 @@ const capabilityV2 = {
         instruction: 'Choose the exact approved product Element that must remain recognizable.',
       },
     ],
-    invocation_notes: ['The pipeline applies its published product-photography craft automatically.'],
+    invocation_notes: [
+      'The pipeline applies its published product-photography craft automatically.',
+    ],
   },
   source: 'brand',
   inputs: [
@@ -220,11 +222,38 @@ describe('pipelineCapabilityV2Schema', () => {
   });
 
   it('tolerates the empty controls list a pre-deletion peer sends, and refuses any control', () => {
-    expect(pipelineCapabilityV2Schema.parse({ ...capabilityV2, controls: [] }).controls).toEqual([]);
+    expect(pipelineCapabilityV2Schema.parse({ ...capabilityV2, controls: [] }).controls).toEqual(
+      [],
+    );
     expect(() =>
       pipelineCapabilityV2Schema.parse({
         ...capabilityV2,
         controls: [{ control_id: 'grade', kind: 'enum', label: 'Grade', required: false }],
+      }),
+    ).toThrow();
+  });
+
+  it('states each gate with the media it judges and its own floor, and still reads the old single floor', () => {
+    const perCheck = {
+      checks: [
+        { check_id: 'no_legible_text', media: ['image'], minimum_score: null },
+        { check_id: 'video_contact_sheet', media: ['video'], minimum_score: 0.8 },
+      ],
+      on_failure: 'refuse',
+    };
+    expect(
+      pipelineCapabilityV2Schema.parse({ ...capabilityV2, quality_policy: perCheck })
+        .quality_policy,
+    ).toEqual(perCheck);
+    // A not-yet-redeployed Backend still sends the single-floor shape; the new Frontend reads it.
+    expect(pipelineCapabilityV2Schema.parse(capabilityV2).quality_policy).toEqual(
+      capabilityV2.quality_policy,
+    );
+    // One or the other, never a blend of both.
+    expect(() =>
+      pipelineCapabilityV2Schema.parse({
+        ...capabilityV2,
+        quality_policy: { ...perCheck, minimum_score: 0.8 },
       }),
     ).toThrow();
   });
@@ -315,7 +344,7 @@ describe('pipelineInvocationRequestSchema', () => {
     ).toThrow();
   });
 
-  it('accepts a pre-deletion caller\'s empty controls and refuses any control value', () => {
+  it("accepts a pre-deletion caller's empty controls and refuses any control value", () => {
     const base = {
       brand_profile_id: uuid('3'),
       pipeline_id: capabilityV2.pipeline_id,
@@ -325,7 +354,9 @@ describe('pipelineInvocationRequestSchema', () => {
       inputs: { brief: { kind: 'text', value: 'A precise launch brief.' } },
     } as const;
     expect(pipelineInvocationRequestSchema.parse({ ...base, controls: {} }).controls).toEqual({});
-    expect(() => pipelineInvocationRequestSchema.parse({ ...base, controls: { grade: 'warm' } })).toThrow();
+    expect(() =>
+      pipelineInvocationRequestSchema.parse({ ...base, controls: { grade: 'warm' } }),
+    ).toThrow();
   });
 
   it('rejects undeclared object-shaped control patches', () => {

@@ -238,7 +238,34 @@ describe('SaveWorkflowDialog mounted without a trigger', () => {
     expect(payload.description).toBe('Creates approved character launch images.');
   });
 
-  it('refuses to publish a pipeline with a blank description', async () => {
+  it('says when the Backend derived the guide by rule, so the author reviews it', async () => {
+    draftPipelineGuide.mockImplementationOnce(async () => ({
+      description: 'One static image from Brief (text).',
+      agent_guide: {
+        version: 1 as const,
+        use_when: ['A request for exactly one static image per brief'],
+        avoid_when: ['Video, reels or motion: every output is a still'],
+        input_guidance: [],
+        invocation_notes: [],
+      },
+      source: 'fallback' as const,
+    }));
+    renderPanel([GEN]);
+    const pipeline = screen.getByRole('button', { name: 'Pipeline' });
+    fireEvent.pointerDown(pipeline);
+    fireEvent.pointerUp(pipeline);
+    fireEvent.click(pipeline);
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Character launch' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Draft guide' }));
+
+    expect(await screen.findByText(/Drafted from the pipeline's inputs and outputs/)).toBeDefined();
+    expect(
+      screen.getByDisplayValue('A request for exactly one static image per brief'),
+    ).toBeDefined();
+  });
+
+  it('shows why a draft was refused and invents no guide in its place', async () => {
     draftPipelineGuide.mockImplementationOnce(async () => {
       throw new Error('draft unavailable');
     });
@@ -250,10 +277,30 @@ describe('SaveWorkflowDialog mounted without a trigger', () => {
 
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Character launch' } });
     fireEvent.click(screen.getByRole('button', { name: 'Draft guide' }));
-    await screen.findByText(/automatic draft failed/);
+    // The refusal is shown as-is; no generic "Supply X as text" guide is invented in its place.
+    await screen.findByText('draft unavailable');
+    expect(screen.queryByLabelText('Use when · one per line')).toBeNull();
+    expect(screen.queryByText(/Supply/)).toBeNull();
     expect(
-      (screen.getByLabelText('What it makes and when to use it') as HTMLTextAreaElement).value,
-    ).toBe('');
+      (screen.getByRole('button', { name: 'Publish pipeline' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(publishPipeline).not.toHaveBeenCalled();
+  });
+
+  it('refuses to publish a pipeline with a blank description', async () => {
+    renderPanel([GEN]);
+    const pipeline = screen.getByRole('button', { name: 'Pipeline' });
+    fireEvent.pointerDown(pipeline);
+    fireEvent.pointerUp(pipeline);
+    fireEvent.click(pipeline);
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Character launch' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Draft guide' }));
+    const description = (await screen.findByLabelText(
+      'What it makes and when to use it',
+    )) as HTMLTextAreaElement;
+    await waitFor(() => expect(description.value).not.toBe(''));
+    fireEvent.change(description, { target: { value: '  ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Publish pipeline' }));
 
     expect(

@@ -80,7 +80,6 @@ export function scoreFlashPipeline(
     score += 1;
     reasons.push(`${outputCount} images per run`);
   }
-  score += Math.min(1, capability.quality_policy.minimum_score);
   // Null = no measured price table; every pipeline then scores the same here.
   const cents = capability.cost_policy.max_amount_minor;
   if (cents !== null) score += cents <= 100 ? 1 : cents <= 500 ? 0.5 : 0;
