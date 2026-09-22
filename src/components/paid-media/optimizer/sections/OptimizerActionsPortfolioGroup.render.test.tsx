@@ -819,3 +819,58 @@ describe('two decisions on one ad set are separately nameable', () => {
     expect(selectionLabel(rows[0])).toBe('Select budget move for as-nameless');
   });
 });
+
+// The queue and the account cards are two views of one finding. Before this, a row led with
+// the structured line while the card led with the detector's own figure, so the same finding
+// read two ways depending on where you were standing.
+//
+// The evidence below satisfies RecommendationEvidenceSchema exactly. It has to: the report is
+// parsed at the boundary, so an invalid `window` takes the whole group off the screen rather
+// than degrading one line — which is the schema working, and worth knowing while reading this.
+describe('a queue row leads with the trigger own headline', () => {
+  const withHeadline = (headline: unknown) =>
+    ({
+      ...report,
+      recommendations: report.recommendations.map((rec, index) =>
+        index === 0
+          ? {
+              ...rec,
+              evidence: {
+                metric: 'ctr',
+                value: 0.00745,
+                comparator: 'vs 1.03%',
+                threshold: 0.01031,
+                window: 'd14',
+                estImpactPerDay: 25.54,
+                source: 'F1_creative_fatigue',
+                ...(headline === undefined ? {} : { headline }),
+              },
+            }
+          : rec,
+      ),
+    }) as never;
+
+  it('prints the headline the engine declared', () => {
+    activeReport = withHeadline({
+      kind: 'drift',
+      value: 28,
+      unit: 'percent',
+      label: 'less click-through than 14d',
+    });
+    expect(renderGroup().container.textContent).toContain('28% less click-through than 14d');
+  });
+
+  it('falls back to the structured line when the engine declared none', () => {
+    activeReport = withHeadline(undefined);
+    const text = renderGroup().container.textContent ?? '';
+    expect(text).not.toContain('less click-through than 14d');
+    expect(text).toContain('CTR 0.74% vs 1.03%');
+  });
+
+  it('treats a malformed headline as no headline, never as an invented figure', () => {
+    activeReport = withHeadline({ kind: 'not_a_kind', value: 'lots' });
+    const text = renderGroup().container.textContent ?? '';
+    expect(text).not.toContain('lots');
+    expect(text).toContain('CTR 0.74% vs 1.03%');
+  });
+});

@@ -5,10 +5,12 @@
 
 import type {
   AdSetSnapshot,
+  CandidateHeadline,
   RecommendationEvidence,
   RecommendationRow,
 } from '@continuum/contracts';
-import { formatCurrency } from '../format';
+import { candidateHeadlineSchema } from '@continuum/contracts';
+import { formatCurrency, formatHeadline, formatPercent, formatPerPeriod } from '../format';
 import { recommendationLabel } from '../reportModel';
 
 export { jainaPromptHref } from '@/lib/jaina/deepLink';
@@ -31,7 +33,7 @@ function formatMetricValue(metric: string, value: number, currency: string | nul
     case 'cpa':
       return formatCurrency(value, currency);
     case 'ctr':
-      return `${(value * 100).toFixed(2)}%`;
+      return formatPercent(value * 100, { fractionDigits: 2 });
     case 'reach_expansion':
       return `${value.toFixed(2)}×`;
     default:
@@ -58,13 +60,45 @@ export function impactPerDay(rec: Pick<RecommendationRow, 'evidence'>): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
 }
 
-/** "$120/day at stake" — null when the engine gave no sizing. */
+/** "$120/day · $3,600/mo at stake" — null when the engine gave no sizing.
+ *
+ *  The period pair, not a bare "/day": the queue and the account cards are two views of the
+ *  same money, and until this went through one helper they printed it two different ways. */
 export function impactLabel(
   rec: Pick<RecommendationRow, 'evidence'>,
   currency: string | null,
 ): string | null {
   const value = impactPerDay(rec);
-  return value > 0 ? `${formatCurrency(value, currency)}/day at stake` : null;
+  return value > 0 ? `${formatPerPeriod(value, currency)} at stake` : null;
+}
+
+/**
+ * The headline a queue row leads with, when the engine declared one.
+ *
+ * `RecommendationEvidenceSchema` is deliberately loose, so a detector that already writes the
+ * account vocabulary can carry it straight into a recommendation. It is parsed rather than
+ * trusted: this is the boundary between an engine row and a render surface, and a malformed
+ * headline must read as "no headline", never as a card printing a figure nobody computed.
+ *
+ * Null is the normal case today and is not a defect — the row falls back to its money, exactly
+ * as a candidate with no headline does.
+ */
+export function queueHeadline(rec: Pick<RecommendationRow, 'evidence'>): CandidateHeadline | null {
+  const raw = (rec.evidence as { headline?: unknown } | null | undefined)?.headline;
+  if (!raw) return null;
+  const parsed = candidateHeadlineSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
+
+/** "33% cheaper per result" — the queue row's lead line, or null when it has no headline. */
+export function queueHeadlineLine(
+  rec: Pick<RecommendationRow, 'evidence'>,
+  currency: string | null,
+): string | null {
+  const headline = queueHeadline(rec);
+  if (!headline) return null;
+  const { figure, label } = formatHeadline(headline, currency);
+  return `${figure} ${label}`;
 }
 
 export type QueueSummaryGroup = {
@@ -164,7 +198,8 @@ export function formatSettingsValue(
   currency: string | null,
 ): string {
   if (value == null) return 'not set';
-  if (field === 'max_change_pct_per_cycle') return `${Math.round(value * 100)}%`;
+  // The stored field is a fraction; `formatPercent` takes display units and never multiplies.
+  if (field === 'max_change_pct_per_cycle') return formatPercent(value * 100);
   return formatCurrency(value, currency);
 }
 
@@ -281,7 +316,7 @@ export function formatEvidenceValue(
     case 'money':
       return formatCurrency(value, currency);
     case 'percent':
-      return `${(value * 100).toFixed(2)}%`;
+      return formatPercent(value * 100, { fractionDigits: 2 });
     case 'multiple':
       return `${value.toFixed(2)}×`;
     default:

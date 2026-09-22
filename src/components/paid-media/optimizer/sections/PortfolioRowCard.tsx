@@ -3,15 +3,26 @@
 // One portfolio card for the Overview: what it buys and at what target, how it applies
 // moves, its daily budget, where it is in its flight, and whether anything waits on a
 // decision. Everything on it comes from the list read — no per-portfolio fetch.
+//
+// It also carries the one thing today's account read found INSIDE this portfolio, in the same
+// register as the account lead card above it: one sentence, one figure, the shared money line,
+// and no second opinion. A list of portfolios that says only "$500/day, 2 ad sets" makes the
+// reader open every one of them to discover which is the one worth opening.
 
-import type { PortfolioListItem } from '@continuum/contracts';
-import { getOptimizationMetricDefinition } from '@continuum/contracts';
+import type { AccountCandidate, PortfolioListItem } from '@continuum/contracts';
+import {
+  ACCOUNT_DETECTOR_META,
+  clipLine,
+  getOptimizationMetricDefinition,
+  rankAccountCandidates,
+} from '@continuum/contracts';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ApplyModePill } from '../ApplyModePill';
 import { StatusChip } from '../components/StatusChip';
 import { formatCpa, formatCurrency, humanize, portfolioLevelLabel } from '../format';
 import { pendingWorkCount } from '../reportModel';
+import { CalmRule, HeadlineFigure, MoneyLine } from './account/candidateHeadline';
 import { daysBetween, isIsoDate, todayIso } from './detail/rangeModel';
 
 type PortfolioRowCardProps = {
@@ -21,7 +32,36 @@ type PortfolioRowCardProps = {
   onSelect?: () => void;
   // Warm the portfolio's detail reads on hover/focus so opening it paints from cache.
   onPrefetch?: () => void;
+  /** Today's best finding inside this portfolio. Absent renders no band at all — a portfolio
+   *  with nothing to say says nothing, rather than an empty frame where a figure belongs. */
+  lead?: AccountCandidate | null;
+  /** True on the single portfolio holding the account's top finding: the one card whose rule
+   *  breathes. Twenty cards breathing at once is not a calm screen, it is a flicker. */
+  emphasis?: boolean;
 };
+
+/**
+ * Which portfolio each of today's findings belongs to, and which one leads the account.
+ *
+ * Ranked order decides both, so a portfolio named by two findings shows the stronger, and the
+ * emphasised card is the one the lead card above is already about. Guards are excluded by
+ * `rankAccountCandidates` — a guard says the figures cannot be trusted, which is a statement
+ * about the whole account and never a portfolio's recommendation.
+ */
+export function portfolioLeads(candidates: readonly AccountCandidate[]): {
+  leads: Map<string, AccountCandidate>;
+  emphasised: string | null;
+} {
+  const leads = new Map<string, AccountCandidate>();
+  let emphasised: string | null = null;
+  for (const candidate of rankAccountCandidates(candidates)) {
+    for (const portfolioId of candidate.portfolio_ids) {
+      if (!leads.has(portfolioId)) leads.set(portfolioId, candidate);
+      emphasised ??= portfolioId;
+    }
+  }
+  return { leads, emphasised };
+}
 
 /** Day X of N for a portfolio inside its flight; null outside one. */
 export function flightProgress(
@@ -43,6 +83,8 @@ export function PortfolioRowCard({
   selected,
   onSelect,
   onPrefetch,
+  lead = null,
+  emphasis = false,
 }: PortfolioRowCardProps) {
   const pending = pendingWorkCount(portfolio);
   const metric = getOptimizationMetricDefinition(
@@ -119,6 +161,21 @@ export function PortfolioRowCard({
       {flight ? (
         <div aria-hidden className="h-1 w-full overflow-hidden rounded-full bg-muted">
           <div className="h-full rounded-full bg-primary/60" style={{ width: `${flight.pct}%` }} />
+        </div>
+      ) : null}
+
+      {lead ? (
+        <div
+          className="mt-1 w-full space-y-1 border-border/60 border-t pt-2"
+          data-detector={lead.detector}
+          data-testid="portfolio-lead"
+        >
+          <p className="truncate text-2xs text-muted-foreground">
+            {clipLine(ACCOUNT_DETECTOR_META[lead.detector]?.label ?? lead.detector)}
+          </p>
+          <HeadlineFigure candidate={lead} currency={currency ?? null} size="row" />
+          <CalmRule play={emphasis} testId="portfolio-lead-rule" />
+          <MoneyLine candidate={lead} currency={currency ?? null} />
         </div>
       ) : null}
     </button>

@@ -142,6 +142,36 @@ describe('denormalized columns', () => {
     ]);
     expect(templateParseRatios(parse)).toEqual(['1200x628', '3:4', '9:16']);
   });
+
+  it('leaves out a face no delivery layer renders — the column is the render gate', () => {
+    // Template 133 in production: three faces demanded, one actually used. `fleetFontsFor`
+    // refuses the whole render when the brand does not hold every name here, so the two
+    // unused ones could block a render that never needed them.
+    const parse = templateParseSchema.parse({
+      ...REAL_PARSE,
+      fonts: [
+        { family: 'Poppins-SemiBold', layers: 9 },
+        { family: 'Poppins-Bold', layers: 0 },
+        { family: 'Poppins-Light', layers: 0 },
+      ],
+    });
+    expect(templateParseFontFamilies(parse)).toEqual(['Poppins-SemiBold']);
+  });
+
+  it('keeps every face when the tally counted nothing, rather than emptying the gate', () => {
+    // The parse tallies text off DELIVERY layers, so a design whose copy all lives one precomp
+    // down reports zero everywhere. An empty gate list would let that render go out in a
+    // substituted face — the exact failure the gate exists to prevent — so an untrustworthy
+    // tally has to fail towards demanding too much, never towards demanding nothing.
+    const parse = templateParseSchema.parse({
+      ...REAL_PARSE,
+      fonts: [
+        { family: 'Poppins-SemiBold', layers: 0 },
+        { family: 'Poppins-Bold', layers: 0 },
+      ],
+    });
+    expect(templateParseFontFamilies(parse)).toEqual(['Poppins-Bold', 'Poppins-SemiBold']);
+  });
 });
 
 describe('templateFontStatuses', () => {

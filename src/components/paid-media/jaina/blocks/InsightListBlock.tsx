@@ -4,6 +4,7 @@ import { EyeIcon, HelpCircleIcon, LightbulbIcon, ZapIcon } from 'lucide-react';
 import type { ComponentType } from 'react';
 import type { InsightListBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
+import { JUDGEMENT_LABEL, JUDGEMENT_RULE, judgeValue } from '../reading';
 import { BlockSourcesFooter, CitationChips } from './citations';
 import { EvidenceTooltip } from './EvidenceTooltip';
 import { MediaText } from './mediaText';
@@ -19,13 +20,6 @@ const itemTypeIcon: Record<ItemType, IconComponent> = {
   insight: EyeIcon,
   action: ZapIcon,
   question: HelpCircleIcon,
-};
-
-const severityBorderClass: Record<Severity, string> = {
-  positive: 'border-l-emerald-500',
-  watch: 'border-l-amber-500',
-  risk: 'border-l-red-500',
-  neutral: 'border-l-border',
 };
 
 export default function InsightListBlock({ block }: InsightListBlockProps) {
@@ -44,16 +38,18 @@ export default function InsightListBlock({ block }: InsightListBlockProps) {
       <div className="space-y-2">
         {block.items.map((item, index) => {
           const Icon: IconComponent = itemTypeIcon[item.item_type as ItemType] ?? LightbulbIcon;
-          const borderClass =
-            severityBorderClass[(item.severity as Severity) ?? 'neutral'] ?? 'border-l-border';
+          // Through `reading.ts` rather than a local emerald/amber/red map: one answer to
+          // "why is this rule red", and design tokens that follow the theme.
+          const judgement = judgeValue(item.severity as Severity | null | undefined);
 
           return (
             <div
               key={index}
               className={cn(
                 'rounded-lg border border-border/60 border-l-2 bg-background/80 px-3 py-2.5',
-                borderClass,
+                JUDGEMENT_RULE[judgement],
               )}
+              title={`${item.title}: ${JUDGEMENT_LABEL[judgement]}`}
             >
               <div className="flex items-start gap-1.5">
                 <Icon className="size-3.5 shrink-0 text-muted-foreground" />

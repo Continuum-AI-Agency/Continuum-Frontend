@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'bun:test';
-import { fallsAreGood, JUDGEMENT_LABEL, JUDGEMENT_TEXT, judgeDelta, judgeValue } from './reading';
+import {
+  explicitSeverity,
+  fallsAreGood,
+  JAINA_ANSWER_PROSE,
+  JUDGEMENT_LABEL,
+  JUDGEMENT_RULE,
+  JUDGEMENT_TEXT,
+  judgeDelta,
+  judgeValue,
+} from './reading';
 
 describe('judgeDelta — the colour is a judgement, not a sign', () => {
   it('reads a rising value as good by default', () => {
@@ -62,14 +71,31 @@ describe('the palette says what it means', () => {
 
 describe('fallsAreGood — narrow on purpose', () => {
   it('recognises the cost family', () => {
-    for (const label of ['Cost per result', 'Cost/lead', 'CPA', 'CPL', 'CPM', 'CPC', 'CPI', 'Bounce rate']) {
+    for (const label of [
+      'Cost per result',
+      'Cost/lead',
+      'CPA',
+      'CPL',
+      'CPM',
+      'CPC',
+      'CPI',
+      'Bounce rate',
+    ]) {
       expect(fallsAreGood(label)).toBe(true);
     }
   });
 
   it('refuses to guess about anything else', () => {
     // A broad guess that paints a metric the wrong colour is worse than no colour at all.
-    for (const label of ['Spend', 'Results', 'ROAS', 'CTR', 'Impressions', 'Conversations', 'Reach']) {
+    for (const label of [
+      'Spend',
+      'Results',
+      'ROAS',
+      'CTR',
+      'Impressions',
+      'Conversations',
+      'Reach',
+    ]) {
       expect(fallsAreGood(label)).toBe(false);
     }
   });
@@ -77,5 +103,60 @@ describe('fallsAreGood — narrow on purpose', () => {
   it('is case and whitespace insensitive, because labels come from a model', () => {
     expect(fallsAreGood('  cost per purchase ')).toBe(true);
     expect(fallsAreGood('CPa')).toBe(true);
+  });
+});
+
+describe('explicitSeverity — a default is not a judgement', () => {
+  it("treats the schema's `neutral` default as silence", () => {
+    // `metricItemSchema` and `comparisonPairSchema` both `.default('neutral')`, so every
+    // item arrives judged-looking. Measured against the last six production reports: all
+    // of them, every metric, `severity: "neutral"` — not one an actual judgement.
+    expect(explicitSeverity('neutral')).toBeNull();
+    expect(explicitSeverity(null)).toBeNull();
+    expect(explicitSeverity(undefined)).toBeNull();
+  });
+
+  it('passes a real judgement straight through', () => {
+    expect(explicitSeverity('risk')).toBe('risk');
+    expect(explicitSeverity('positive')).toBe('positive');
+    expect(explicitSeverity('watch')).toBe('watch');
+  });
+
+  it('is what lets the polarity rule run at all on a defaulted delta', () => {
+    // Without it, the truthy `'neutral'` wins in judgeDelta and a cost that fell reads as
+    // unremarkable ink — the polarity rule never executes.
+    expect(judgeDelta({ change: -18, goodWhenDown: true, severity: 'neutral' })).toBe('neutral');
+    expect(
+      judgeDelta({ change: -18, goodWhenDown: true, severity: explicitSeverity('neutral') }),
+    ).toBe('positive');
+  });
+});
+
+describe('JUDGEMENT_RULE — the same law, as a left rule', () => {
+  it('uses design tokens, never raw palette literals', () => {
+    // The maps this replaced were `border-emerald-500 / border-amber-500 / border-red-500`,
+    // which do not follow the dark theme's redefinition of --success and --warning.
+    for (const value of Object.values(JUDGEMENT_RULE)) {
+      expect(value).toMatch(/^border-l-(success|destructive|warning|border)$/);
+    }
+  });
+
+  it('leaves an unjudged item uncoloured, exactly like the ink', () => {
+    expect(JUDGEMENT_RULE.unjudged).toBe('border-l-border');
+    expect(JUDGEMENT_RULE.neutral).toBe('border-l-border');
+  });
+});
+
+describe("JAINA_ANSWER_PROSE — the answer is not 'nobody judged this'", () => {
+  it('sets the answer in reading ink at reading size', () => {
+    expect(JAINA_ANSWER_PROSE).toContain('text-foreground');
+    expect(JAINA_ANSWER_PROSE).toContain('text-base');
+    // The regression it exists to prevent: the report path set the executive summary in
+    // muted ink, which by this module's own law means nobody judged it.
+    expect(JAINA_ANSWER_PROSE).not.toContain('text-muted-foreground');
+  });
+
+  it('lines up the digits in a markdown table, which Streamdown does not', () => {
+    expect(JAINA_ANSWER_PROSE).toContain('tabular-nums');
   });
 });

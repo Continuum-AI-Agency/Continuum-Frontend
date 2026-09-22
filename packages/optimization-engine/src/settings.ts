@@ -76,6 +76,17 @@ export function evaluateSettings(
           threshold: CAP_BINDING_SHARE,
           window: 'd3',
           estImpactPerDay: null,
+          // A settings recommendation has no money on it — the cost of a bound cap is the
+          // moves that did not happen, which nothing here can price. Leading with a blank
+          // is why the headline exists: the share IS the finding, and it is measured.
+          headline: {
+            kind: 'share',
+            value: Math.round(share * 100),
+            unit: 'percent',
+            label: 'of moves hit the cap',
+            from: null,
+            to: null,
+          },
           source: 'engine',
         },
         ...(canRaise
@@ -105,6 +116,14 @@ export function evaluateSettings(
           threshold: FLOOR_RELAXED_SHARE,
           window: 'd3',
           estImpactPerDay: null,
+          headline: {
+            kind: 'share',
+            value: Math.round(share * 100),
+            unit: 'percent',
+            label: 'of floors had to be relaxed',
+            from: null,
+            to: null,
+          },
           source: 'engine',
         },
         needsApproval: true,
@@ -131,6 +150,17 @@ export function evaluateSettings(
           threshold: UNDERSPEND_SHARE,
           window: 'd3',
           estImpactPerDay: reallocation.residual,
+          // Money in play that is NOT a saving: the residual is budget the inventory could
+          // not absorb, so `avoided` would read as money the account stops losing. `from →
+          // to` is the plan against what actually got placed — the patch, in figures.
+          headline: {
+            kind: 'money',
+            value: round2(reallocation.residual),
+            unit: 'currency_per_day',
+            label: 'a day left unplaced',
+            from: round2(reallocation.totalBudget),
+            to: round2(reallocation.allocatedTotal),
+          },
           source: 'engine',
         },
         patch: {
@@ -169,6 +199,18 @@ export function evaluateSettings(
         threshold: cfg.cpaTarget,
         window: 'd14',
         estImpactPerDay: spend / 14,
+        // The count is the finding and the money is the exposure. Deliberately NOT
+        // `avoided`: this is the reading in which the ad sets are working and the pixel is
+        // not, and a headline saying "a day buying nothing" would argue the opposite case.
+        headline: {
+          kind: 'count',
+          value: untracked.length,
+          unit: 'count',
+          label:
+            untracked.length === 1 ? 'ad set spending untracked' : 'ad sets spending untracked',
+          from: null,
+          to: null,
+        },
         source: 'engine',
       },
       needsApproval: true,

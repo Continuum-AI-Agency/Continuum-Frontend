@@ -100,6 +100,83 @@ describe('AccountRead', () => {
     expect(container.textContent).toContain('what a result is worth');
   });
 
+  // ── The headline vocabulary, on the ranked list ────────────────────────────
+  // The RANK is untouched — `rankAccountCandidates` still orders on money. What changes is
+  // what a row says first, and a screen where every row leads with "$X/day" says the same
+  // small sentence twenty-five times and buries the finding underneath it.
+
+  it('leads a row with the detector’s own figure and keeps money as the support line', () => {
+    const { getByTestId } = render(
+      <AccountRead
+        candidates={[
+          candidate({
+            id: 'portfolio_reallocation:p1>p2',
+            detector: 'portfolio_reallocation',
+            impact_per_day: 66.67,
+            impact_class: 'better_price',
+            result_label: 'leads',
+            headline: {
+              kind: 'efficiency',
+              value: 33,
+              unit: 'percent',
+              label: 'cheaper per result',
+              from: 90,
+              to: 60,
+            },
+          }),
+        ]}
+        currency="USD"
+        dailySpend={1200}
+      />,
+    );
+    const row = getByTestId('account-lead');
+    expect(row.textContent).toContain('33%');
+    expect(row.textContent).toContain('cheaper per result');
+    expect(row.textContent).toContain('90% → 60%');
+    expect(row.textContent).toContain('$67/day · $2,000/mo');
+    expect(row.textContent).toContain('leads');
+  });
+
+  it('still reads as finished for a detector holding no headline — money leads', () => {
+    const { getByTestId } = render(
+      <AccountRead candidates={[candidate({})]} currency="USD" dailySpend={1200} />,
+    );
+    const row = getByTestId('account-lead');
+    expect(row.textContent).toContain('$102');
+    expect(row.textContent).toContain('/day');
+    // The month is the half the reader has not been given; the day is not said twice.
+    expect(row.textContent).toContain('$3,060/mo');
+  });
+
+  it('keeps the ranking on money even when the headlines are not comparable', () => {
+    const { getAllByTestId } = render(
+      <AccountRead
+        candidates={[
+          candidate({
+            id: 'platform_diversification:acct',
+            detector: 'platform_diversification',
+            impact_per_day: 40,
+            impact_class: 'recoverable',
+            // A big-looking percentage on a small amount of money must not overtake.
+            headline: {
+              kind: 'share',
+              value: 92,
+              unit: 'percent',
+              label: 'of spend on one platform',
+              from: null,
+              to: null,
+            },
+          }),
+          candidate({ impact_per_day: 400 }),
+        ]}
+        currency="USD"
+        dailySpend={1200}
+      />,
+    );
+    const rows = getAllByTestId('account-lead');
+    expect(rows[0]?.getAttribute('data-detector')).toBe('dead_tail');
+  });
+
   it('says so plainly when every check ran and found nothing', () => {
     const { container } = render(<AccountRead candidates={[]} currency="USD" dailySpend={1200} />);
     expect(container.textContent).toContain('Nothing to move today');
@@ -109,8 +186,6 @@ describe('AccountRead', () => {
 // ---------------------------------------------------------------------------
 // The zones: three lead, the rest behind a disclosure, the blocked list grouped.
 // ---------------------------------------------------------------------------
-
-import { fireEvent } from '@testing-library/react';
 
 const many = (n: number): AccountCandidate[] =>
   Array.from({ length: n }, (_, i) =>

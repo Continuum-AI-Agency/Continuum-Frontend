@@ -17,18 +17,21 @@ import { lastFullDay, spendStream } from '../charts/chartData';
 import { SpendByObjectiveStream } from '../charts/SpendByObjectiveStream';
 import { KpiTile } from '../components/KpiTile';
 import { StatusChip, type StatusTone } from '../components/StatusChip';
-import { formatCurrency, humanize } from '../format';
+import { formatCurrency, formatPercent, humanize } from '../format';
 import { pendingWorkCount } from '../reportModel';
 import {
   useAccountApprovals,
   useInsightApprovalMutations,
   useOptimizerAccountRead,
   useOptimizerSpendByObjective,
+  useRequestAccountRead,
 } from '../useOptimizerData';
+import { AccountLeadCard } from './account/AccountLeadCard';
 import { AccountRead } from './account/AccountRead';
+import { AccountReadFreshness } from './account/AccountReadFreshness';
 import { FamilyCeilings } from './account/FamilyCeilings';
 import { OptimizerPanel } from './OptimizerPanel';
-import { PortfolioRowCard } from './PortfolioRowCard';
+import { PortfolioRowCard, portfolioLeads } from './PortfolioRowCard';
 
 type SortKey = 'name' | 'daily' | 'pending';
 type SortDir = 'asc' | 'desc';
@@ -109,9 +112,10 @@ export function spendVsPlan(
   if (spent == null || plan <= 0) return null;
   const ratio = spent / plan;
   const pct = Math.round(ratio * 100);
-  if (ratio > 1.1) return { pct, tone: 'warning', label: `${pct}% of plan · over` };
-  if (ratio < 0.9) return { pct, tone: 'info', label: `${pct}% of plan · under` };
-  return { pct, tone: 'success', label: `${pct}% of plan` };
+  const share = formatPercent(pct);
+  if (ratio > 1.1) return { pct, tone: 'warning', label: `${share} of plan · over` };
+  if (ratio < 0.9) return { pct, tone: 'info', label: `${share} of plan · under` };
+  return { pct, tone: 'success', label: `${share} of plan` };
 }
 
 type OptimizerOverviewProps = {
@@ -147,6 +151,7 @@ export function OptimizerOverview({
   const accountRead = useOptimizerAccountRead(brandId, adAccountId);
   const approvals = useInsightApprovalMutations(brandId, adAccountId);
   const approvalMaps = useAccountApprovals(brandId, adAccountId);
+  const requestRead = useRequestAccountRead(brandId, adAccountId);
 
   const dailyTotal = portfolios.reduce((sum, portfolio) => sum + (portfolio.daily_total ?? 0), 0);
   const autopilot = portfolios.filter((portfolio) => portfolio.apply_mode === 'autopilot');
@@ -180,8 +185,45 @@ export function OptimizerOverview({
     };
   }, [read, approvalMaps.data]);
 
+  // The same read the lead card is built from, resolved per portfolio. Pure — no second fetch,
+  // no hook: the portfolios list shows what today already found rather than asking again.
+  const { leads, emphasised } = useMemo(
+    () => portfolioLeads(shown?.candidates ?? []),
+    [shown?.candidates],
+  );
+
   return (
     <div className="space-y-3">
+      {/* The lead card answers the question the screen is opened with — what is the ONE thing
+       *  worth attention across this account, and can it be believed. The ranked strip below
+       *  answers "what else", which is a different question and never led the screen well. */}
+      {shown && hasSomethingToSay(shown) ? (
+        <AccountLeadCard
+          candidates={[...shown.candidates, ...shown.guards]}
+          currency={shown.currency ?? currency ?? null}
+          dailySpend={shown.scale_per_day ?? dailyTotal}
+          deck={shown.deck ?? null}
+          objective={dominantObjective(portfolios)}
+          onOpenPortfolio={onSelectPortfolio}
+          source={shown.model === 'deterministic' ? 'fallback' : 'brief'}
+          starved={shown.starved}
+        />
+      ) : null}
+      {/* Outside the has-something-to-say gate on purpose: a quiet day and a first read still
+       *  queueing are exactly when a reader most needs to know WHEN this was taken. A figure
+       *  without its date cannot be checked, and a row composed before a deploy is
+       *  indistinguishable from a current one without this line. */}
+      {accountRead.data ? (
+        <AccountReadFreshness
+          error={requestRead.error instanceof Error ? requestRead.error.message : null}
+          onRequest={() => requestRead.mutate()}
+          readyAt={accountRead.data.ready_at}
+          refresh={accountRead.data.refresh}
+          requesting={requestRead.isPending}
+          utcDay={accountRead.data.utc_day}
+        />
+      ) : null}
+
       {/* A read with nothing to act on still has things to say: what it assumed, how much of
        *  the catalogue applies, and which checks could not run. Gating on candidates alone
        *  meant the component's "Nothing to move today" branch could never appear on screen —
@@ -391,7 +433,9 @@ export function OptimizerOverview({
           {sorted.map((portfolio) => (
             <PortfolioRowCard
               currency={currency}
+              emphasis={portfolio.id === emphasised}
               key={portfolio.id}
+              lead={leads.get(portfolio.id) ?? null}
               onPrefetch={onPrefetchPortfolio ? () => onPrefetchPortfolio(portfolio.id) : undefined}
               onSelect={() => onSelectPortfolio(portfolio.id)}
               portfolio={portfolio}

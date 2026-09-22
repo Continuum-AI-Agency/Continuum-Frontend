@@ -97,6 +97,15 @@ export type JainaUIDataTypes = {
    * screen draws. Canonical shape: `jainaOptimizerCardSchema` in ../optimization.
    */
   'jaina-optimizer-card': Record<string, unknown>;
+  /**
+   * A COMPILED optimizer card — the whole animated document, not a reference into a read.
+   *
+   * `accountCardHtml` builds it from the detector's own figures with no model call, and it is
+   * uploaded whole; the payload carries the durable bucket and path, never a signed url,
+   * because a signed url expires in an hour and a transcript lives for months. The reader's
+   * surface signs on demand. Canonical shape: `jainaHyperframeSetSchema` in ../optimization.
+   */
+  'jaina-optimizer-hyperframe': Record<string, unknown>;
 };
 
 /** Jaina's tools are discovered at run time, so they cross the wire as DYNAMIC tool parts. */
@@ -126,4 +135,5 @@ export const JAINA_UI_DATA_PART = {
   plan: 'data-jaina-plan',
   notice: 'data-jaina-notice',
   optimizerCard: 'data-jaina-optimizer-card',
+  optimizerHyperframe: 'data-jaina-optimizer-hyperframe',
 } as const satisfies Record<string, JainaUIDataPartType>;

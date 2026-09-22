@@ -116,6 +116,7 @@ import {
   formatSettingsValue,
   impactLabel,
   impactPerDay,
+  queueHeadlineLine,
   queueSummary,
   type SettingsPatch,
   settingsFieldLabel,
@@ -1531,9 +1532,13 @@ function QueueRowView({
 
 /** The justification, in the row, always visible — never only behind a hover. The
  *  structured line first (metric · value · comparison · window, then the money per day),
- *  the prose reason under it. A trader should be able to act from this line alone. */
+ *  the prose reason under it. A trader should be able to act from this line alone.
+ *
+ *  The trigger's own headline leads when it declared one — the same figure, in the same words,
+ *  that the account card prints for this finding. Without it the row falls back to the
+ *  structured line, which is what every row shows until the engine emitting headlines ships. */
 function RecEvidenceLine({ rec, currency }: { rec: RecommendationRow; currency: string | null }) {
-  const line = evidenceLine(rec.evidence, currency);
+  const line = queueHeadlineLine(rec, currency) ?? evidenceLine(rec.evidence, currency);
   const money = impactLabel(rec, currency);
   if (!line && !rec.reason) return null;
   return (

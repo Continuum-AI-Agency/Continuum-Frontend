@@ -8,6 +8,9 @@ export * from './account-strategy';
 // One normalized row of public.continuum_action_stream, and the fold that makes a change
 // and its undo read as ONE entry. Shared by every surface that narrates what we did.
 export * from './action-stream';
+// On-demand suggestions: a person asks inside a portfolio, per category, and the plan that
+// comes back joins the SAME queue the cycle's own work lives in.
+export * from './adhoc-suggestions';
 // Setup advisor — what a selection will actually DO under an objective/budget/target, said
 // before the portfolio is created. Shared so an agent gets the same warnings a human does.
 export * from './advisor';
@@ -23,6 +26,7 @@ export * from './flash-creatives';
 export * from './flash-pipeline-template';
 export * from './insight-approval';
 export * from './jaina-card';
+export * from './jaina-hyperframe';
 // Which trailing window a portfolio's read surfaces report on, and how to recommend one.
 export * from './lookback';
 // MCP umbrella IO contracts (optimizer_query read + optimizer_manage write).

@@ -34,8 +34,11 @@ export type HeroTile = {
 };
 
 export type HeroCta = {
-  kind: 'queue_row' | 'audience_card' | 'manage';
-  /** The queue row key to focus (rec:<id> / budget:<adset>) — null for manage. */
+  /** `build` belongs to an ADOPTED asked-for suggestion that proposed something new: the
+   *  press turns it into work the existing approved path can run (see askedForModel.ts).
+   *  Nothing else in the optimizer emits it, and it never reaches `onHeroCta`. */
+  kind: 'queue_row' | 'audience_card' | 'manage' | 'build';
+  /** The queue row key to focus (rec:<id> / budget:<adset>) — null for manage and build. */
   rowKey: string | null;
   label: string;
 };

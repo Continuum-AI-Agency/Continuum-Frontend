@@ -13,6 +13,26 @@ import type { AdSetSnapshot, Recommendation } from './types';
 
 const isEvaluable = (s: AdSetSnapshot): boolean => s.status !== 'frozen' && s.status !== 'flagged';
 
+/** Money, in the display units a headline is required to already be in. */
+const round2 = (x: number): number => Math.round(x * 100) / 100;
+
+/**
+ * What a pause is worth is the spend it STOPS.
+ *
+ * P1 and P3 are the same finding through two windows — spend with nothing to show for it —
+ * and neither holds an efficiency percentage, because zero results has no cost per result.
+ * Inventing one would mean inventing a denominator, so both lead with the money avoided,
+ * in the same words `dead_tail` already leads with on the account read.
+ */
+const avoidedHeadline = (perDay: number): NonNullable<Recommendation['evidence']>['headline'] => ({
+  kind: 'avoided',
+  value: round2(perDay),
+  unit: 'currency_per_day',
+  label: 'a day buying nothing',
+  from: null,
+  to: null,
+});
+
 /** Lower-percentile ("robust best") of a sorted-ascending numeric array. */
 function percentile(values: number[], p: number): number {
   if (values.length === 0) return 0;
@@ -91,6 +111,7 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
           threshold: floor,
           window: 'd3',
           estImpactPerDay: d3.spend / 3,
+          headline: avoidedHeadline(d3.spend / 3),
           source: 'engine',
         },
         needsApproval: true,
@@ -116,6 +137,18 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
             threshold: cfg.sustainedPoorMultiplier * robustBestCpp,
             window: 'd14',
             estImpactPerDay: d14.spend / 14,
+            // The price gap IS the finding; the money is what acting on it is worth. Both
+            // sides are priced and held, so the headline reaches for nothing it was not
+            // given. Direction lives in the label, never in a minus sign, and `from → to`
+            // reads where this ad set is against where the account's own best already sits.
+            headline: {
+              kind: 'efficiency',
+              value: Math.round((cpp14 / robustBestCpp - 1) * 100),
+              unit: 'percent',
+              label: 'more per result than best',
+              from: round2(cpp14),
+              to: round2(robustBestCpp),
+            },
             source: 'engine',
           },
           needsApproval: true,
@@ -144,6 +177,7 @@ export function evaluateTriggers(snapshots: AdSetSnapshot[], cfg: EngineConfig):
           threshold: cfg.cpaTarget,
           window: 'd14',
           estImpactPerDay: d14.spend / 14,
+          headline: avoidedHeadline(d14.spend / 14),
           source: 'engine',
         },
         needsApproval: true,

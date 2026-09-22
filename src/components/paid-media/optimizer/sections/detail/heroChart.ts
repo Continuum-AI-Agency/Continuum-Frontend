@@ -23,7 +23,12 @@
 // recommendation keeps its sentence. Inventing a from/to pair to fill the shape is exactly the
 // failure this comment exists to prevent.
 
-import type { AccountChart, BriefCandidate } from '@continuum/contracts';
+import {
+  type AccountChart,
+  type ArguingChart,
+  type BriefCandidate,
+  chartArgues,
+} from '@continuum/contracts';
 import type { RecapDay } from './recapModel';
 
 /** Cost per result for one day; null when the day bought nothing to divide by. */
@@ -39,13 +44,22 @@ function costOf(day: RecapDay): number | null {
  * unbounded above and is the entire argument for pausing. A pause candidate that DID produce
  * results is a different recommendation and does not get this chart.
  */
-function pauseInterval(candidate: BriefCandidate, target: number | null): AccountChart | null {
+function pauseInterval(
+  candidate: BriefCandidate,
+  target: number | null,
+  resultLabel: string,
+): AccountChart | null {
   if (candidate.module !== 'pause') return null;
   if (candidate.results_per_day != null && candidate.results_per_day > 0) return null;
   if (!(candidate.impact_per_day > 0)) return null;
   return {
     shape: 'interval',
     unit: 'currency',
+    // The axis is a cost per result, and says so rather than leaving the view to work it
+    // out. With zero results the floor is what a single result would ALREADY have cost —
+    // the only figure the spend proves, and the one the target is comparable to. Same words
+    // as the growth read's own axis, because it is the same quantity.
+    value_label: `Cost per ${resultLabel.toLowerCase()}`,
     // No results means no point estimate exists. Saying so is the point.
     estimate: null,
     low: candidate.impact_per_day,
@@ -93,6 +107,13 @@ function growthRates(
  * Order is deliberate: the candidate's own argument wins when it can be drawn, and the growth
  * read is the fallback rather than the other way round. A reader looking at a pause card should
  * see the pause's arithmetic, not the portfolio's average.
+ *
+ * And the last word belongs to `chartArgues`: the news card draws a chart only when the chart
+ * ARGUES — a trend, or an interval — because a drawing of arithmetic the sentence already made
+ * is decoration, and it is paid for out of the space the justification needed. The gate sits
+ * here, at the one place the hero's chart is chosen, rather than inside the renderer: the same
+ * renderer draws all seven shapes for the surfaces that list many candidates at once, where the
+ * picture is how a reader tells two of them apart.
  */
 export function heroChart(args: {
   candidate: BriefCandidate | null;
@@ -100,13 +121,11 @@ export function heroChart(args: {
   target: number | null;
   /** The objective's own word, so the axis never says "results" on a conversations account. */
   resultLabel: string;
-}): AccountChart | null {
+}): ArguingChart | null {
   const { candidate, series, target, resultLabel } = args;
-  if (candidate) {
-    const own = pauseInterval(candidate, target);
-    if (own) return own;
-  }
-  return growthRates(series, target, resultLabel, candidate?.impact_per_day ?? null);
+  const own = candidate ? pauseInterval(candidate, target, resultLabel) : null;
+  const drawn = own ?? growthRates(series, target, resultLabel, candidate?.impact_per_day ?? null);
+  return chartArgues(drawn) ? drawn : null;
 }
 
 /** One line under the chart saying which of the two a reader is looking at. */

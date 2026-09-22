@@ -28,7 +28,7 @@ import {
   subjectAds,
 } from './creativeCardModel';
 import type { ImplementTarget } from './flashCreativesModel';
-import { evidenceLine, impactLabel } from './recQueueModel';
+import { evidenceLine, impactLabel, queueHeadlineLine } from './recQueueModel';
 
 type CreativeRecommendationCardProps = {
   rec: RecommendationRow;
@@ -179,7 +179,7 @@ export function CreativeRecommendationCard({
   const subjects = subjectAds(rec, ads);
   const angle = angleWords(rec);
   const audience = audienceWords(rec, audienceType);
-  const evidence = evidenceLine(rec.evidence, currency);
+  const evidence = queueHeadlineLine(rec, currency) ?? evidenceLine(rec.evidence, currency);
   const money = impactLabel(rec, currency);
   const slots = flashSlots(flashCreativesFor(rec, jobs));
   const signed = useSignedAssetUrls(

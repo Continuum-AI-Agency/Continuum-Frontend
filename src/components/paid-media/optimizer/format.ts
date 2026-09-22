@@ -5,6 +5,8 @@
 // USD. The engine already reasons/scales in the account currency; the FE only
 // displays — no math here.
 
+import { type CandidateHeadline, perPeriod } from '@continuum/contracts';
+
 const FALLBACK_CURRENCY = 'USD';
 
 export function formatCurrency(
@@ -117,4 +119,66 @@ export function soonestNextCycle(portfolios: { next_realloc_at: string | null }[
     .filter((value) => !Number.isNaN(new Date(value).getTime()))
     .sort();
   return times[0] ?? null;
+}
+
+// ── The impact vocabulary ─────────────────────────────────────────────────
+//
+// Every "/day" on the optimizer surface used to be its own template string, and every
+// percentage its own `Math.round(x * 100)` at the call site. Two figures the product says
+// constantly, formatted a dozen different ways, which is how one screen ends up saying
+// "33%" and the next "33.0 %" about the same finding.
+
+/**
+ * A daily figure in the two periods a person actually thinks in.
+ *
+ * Money per day is the scale the ranking uses, but "$2/day" is a figure the reader has to
+ * finish in their head before it means anything. The month is the same money, said at the
+ * size a budget is set at. The multiplier is `perPeriod` in contracts — the compiled
+ * HyperFrame card uses the same one, so a card and the screen behind it cannot disagree.
+ */
+export function formatPerPeriod(
+  perDay: number | null | undefined,
+  currency: string | null | undefined = FALLBACK_CURRENCY,
+): string {
+  if (perDay == null || Number.isNaN(perDay) || !Number.isFinite(perDay)) return '—';
+  const { day, month } = perPeriod(perDay);
+  return `${formatCurrency(day, currency)}/day · ${formatCurrency(month, currency)}/mo`;
+}
+
+/**
+ * A percentage already in display units — 33 for 33%, never 0.33.
+ *
+ * Deliberately does NOT multiply: every figure that reaches a render surface as a percentage
+ * is already `*_pct` by the time a detector has recorded it, and a formatter that multiplies
+ * is a formatter that will one day be handed a figure that was multiplied already.
+ */
+export function formatPercent(
+  value: number | null | undefined,
+  options: { signed?: boolean; fractionDigits?: number } = {},
+): string {
+  if (value == null || Number.isNaN(value) || !Number.isFinite(value)) return '—';
+  const body = value.toFixed(options.fractionDigits ?? 0);
+  return options.signed && value > 0 ? `+${body}%` : `${body}%`;
+}
+
+/**
+ * A candidate's headline as the figure and the words that follow it.
+ *
+ * `unit` decides the figure and nothing else. The words are the detector's own `label`,
+ * which already carries its period and its direction ("a day undelivered", "under plan"), so
+ * nothing is appended here — gluing "/day" onto a label that ends in one is how a screen
+ * ships "12% cheaper /day".
+ */
+export function formatHeadline(
+  headline: CandidateHeadline,
+  currency: string | null | undefined = FALLBACK_CURRENCY,
+): { figure: string; label: string } {
+  switch (headline.unit) {
+    case 'percent':
+      return { figure: formatPercent(headline.value), label: headline.label };
+    case 'currency_per_day':
+      return { figure: formatCurrency(headline.value, currency), label: headline.label };
+    case 'count':
+      return { figure: headline.value.toLocaleString('en-US'), label: headline.label };
+  }
 }
