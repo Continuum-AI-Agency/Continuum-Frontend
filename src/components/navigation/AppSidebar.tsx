@@ -39,6 +39,8 @@ import {
   type AutomationDeploymentEnvironment,
   canAccessAutomations,
 } from '@/lib/automations/access';
+import { isBrandOwner } from '@/lib/billing/billingViewModel';
+import { useLowCreditsNudge } from '@/lib/billing/lowCreditsNudge';
 import { PLAN_NAME_FOR_PRODUCT } from '@/lib/billing/productAccess';
 import type { SidebarBillingView } from '@/lib/billing/sidebarBilling';
 import { isAdminUser } from '@/lib/brands/brand-switcher-utils';
@@ -147,7 +149,15 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
   const router = useRouter();
   const { isMobile, state, collapseHover } = useSidebar();
   const { logout, isPending } = useAuth();
-  const { user } = useActiveBrandContext();
+  const { user, activeBrandId, permissions } = useActiveBrandContext();
+  useLowCreditsNudge({
+    view: billing,
+    brandId: activeBrandId,
+    owner: isBrandOwner(permissions, activeBrandId),
+    pathname,
+    section: searchParams.get('section'),
+    navigate: router.push,
+  });
   const { appearance, toggle } = useTheme();
   const { setOpen: openPalette } = useCommandPalette();
   const reduce = useReducedMotion();

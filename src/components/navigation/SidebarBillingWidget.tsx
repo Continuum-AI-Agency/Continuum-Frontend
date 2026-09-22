@@ -19,16 +19,17 @@ const periodEndFormat = new Intl.DateTimeFormat('en-US', { month: 'short', day: 
 function accessibleName(view: SidebarBillingView): string {
   switch (view.kind) {
     case 'metered':
-      return `Billing: ${view.planLabel}, ${formatCredits(view.remainingCredits)} credits remaining`;
+      return `Billing: ${view.planLabel}, ${formatCredits(view.remainingCredits)} credits remaining${view.paymentFailed ? ', payment failed' : ''}`;
     case 'managed':
       return 'Billing: Managed plan · unmetered';
     case 'no_plan':
-      return 'Billing: No plan';
+      return view.paymentFailed ? 'Billing: No plan, payment failed' : 'Billing: No plan';
   }
 }
 
 export function SidebarBillingWidget({ view }: { view: SidebarBillingView }) {
-  const warn = view.kind === 'metered' && view.low;
+  const paymentFailed = view.kind !== 'managed' && view.paymentFailed === true;
+  const warn = (view.kind === 'metered' && view.low) || paymentFailed;
   const Icon = view.kind === 'metered' ? Coins : view.kind === 'managed' ? Building2 : CircleDashed;
 
   return (
@@ -95,8 +96,13 @@ function WidgetLines({ view }: { view: SidebarBillingView }) {
     case 'metered':
       return (
         <>
-          <span className="truncate text-[0.72rem] font-medium tracking-[0.01em] text-[var(--sidebar-muted)]">
-            {view.planLabel}
+          <span
+            className={cn(
+              'truncate text-[0.72rem] font-medium tracking-[0.01em]',
+              view.paymentFailed ? 'text-warning' : 'text-[var(--sidebar-muted)]',
+            )}
+          >
+            {view.paymentFailed ? 'Payment failed' : view.planLabel}
           </span>
           <span
             className={cn(
@@ -127,8 +133,13 @@ function WidgetLines({ view }: { view: SidebarBillingView }) {
           <span className="truncate text-[0.78rem] font-medium tracking-[0.01em] text-[var(--sidebar-foreground)]">
             No plan
           </span>
-          <span className="truncate text-[0.7rem] text-[var(--sidebar-muted)]">
-            Choose one in Billing
+          <span
+            className={cn(
+              'truncate text-[0.7rem]',
+              view.paymentFailed ? 'text-warning' : 'text-[var(--sidebar-muted)]',
+            )}
+          >
+            {view.paymentFailed ? 'Payment failed · update card' : 'Choose one in Billing'}
           </span>
         </>
       );
@@ -207,12 +218,14 @@ function MeteredPreview({ view }: { view: MeteredSidebarBilling }) {
       <p
         className={cn(
           'border-t border-border px-4 py-2.5 text-xs',
-          view.exhausted ? 'text-warning' : 'text-muted-foreground',
+          view.exhausted || view.paymentFailed ? 'text-warning' : 'text-muted-foreground',
         )}
       >
-        {view.exhausted
-          ? 'Out of credits. Buy a pack or turn on auto-billing to keep generating.'
-          : 'Click to buy credit packs in Billing.'}
+        {view.paymentFailed
+          ? "The last payment didn't go through. Update your card in Billing."
+          : view.exhausted
+            ? 'Out of credits. Add a credit pack in Billing to keep generating.'
+            : 'Click to buy credit packs in Billing.'}
       </p>
     </div>
   );
