@@ -30,6 +30,7 @@ import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
+import { BillingErrorAction } from '@/components/billing/BillingErrorAction';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -548,18 +549,20 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                         <EmptyDescription>{errorCopy.guidance}</EmptyDescription>
                       </EmptyHeader>
                     </Empty>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="nodrag"
-                      onMouseDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleDismissError();
-                      }}
-                    >
-                      Dismiss
-                    </Button>
+                    <div className="nodrag flex items-center gap-2">
+                      <BillingErrorAction errorCode={data.errorCode} />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleDismissError();
+                        }}
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
                   </div>
                 ) : showVariationGrid ? (
                   <div className="grid h-full w-full grid-cols-2 grid-rows-2 gap-0.5 bg-muted">

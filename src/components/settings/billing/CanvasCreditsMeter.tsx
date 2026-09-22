@@ -1,26 +1,11 @@
 'use client';
 
 import type { CreditPackOffer } from '@continuum/contracts';
-import { useMutation } from '@tanstack/react-query';
-import { Minus, Plus } from 'lucide-react';
 import { useState } from 'react';
+import { TopUpPackPicker, useCreditCheckout } from '@/components/billing/TopUpDialog';
 import { Button } from '@/components/ui/button';
-import {
-  NumberFieldDecrement,
-  NumberFieldGroup,
-  NumberFieldIncrement,
-  NumberFieldInput,
-  NumberFieldRoot,
-} from '@/components/ui/number-field';
-import { useToast } from '@/components/ui/ToastProvider';
-import { startCreditCheckout } from '@/lib/billing/billingApi';
-import {
-  type CanvasCreditsView,
-  checkoutReturnParams,
-  formatCredits,
-  formatUsd,
-} from '@/lib/billing/billingViewModel';
-import { billingReturnUrl } from '@/lib/billing/useBilling';
+import { type CanvasCreditsView, formatCredits, formatUsd } from '@/lib/billing/billingViewModel';
+import { DEFAULT_TOP_UP_PACKS } from '@/lib/billing/topUp';
 import { cn } from '@/lib/utils';
 
 // The Canvas meter is one bar split in the order generations actually spend credits —
@@ -133,6 +118,7 @@ export function CanvasCreditsMeter({ credits }: { credits: CanvasCreditsView }) 
   );
 }
 
+/** The same pack picker as the Top up dialog, returning to Billing after Checkout. */
 export function BuyCreditsControl({
   brandId,
   offer,
@@ -142,68 +128,22 @@ export function BuyCreditsControl({
   offer: CreditPackOffer;
   purchasedCredits: number;
 }) {
-  const { show } = useToast();
-  const [packs, setPacks] = useState(1);
-  const checkout = useMutation({
-    mutationFn: (count: number) => {
-      const query = checkoutReturnParams({
-        kind: 'credits_added',
-        purchasedCreditsBefore: purchasedCredits,
-      });
-      return startCreditCheckout(brandId, {
-        packs: count,
-        successUrl: billingReturnUrl(query.success),
-        cancelUrl: billingReturnUrl(query.cancel),
-      });
-    },
-    onSuccess: (session) => window.location.assign(session.url),
-    onError: (error) =>
-      show({ title: 'Could not open checkout', description: error.message, variant: 'error' }),
-  });
-  const redirecting = checkout.isPending || checkout.isSuccess;
+  const [packs, setPacks] = useState(DEFAULT_TOP_UP_PACKS);
+  const { buy, redirecting } = useCreditCheckout(brandId, purchasedCredits);
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <NumberFieldRoot
-        value={packs}
-        min={1}
-        max={offer.maxPacks}
-        step={1}
-        onValueChange={(next) => setPacks(next ?? 1)}
-        className="shrink-0"
-      >
-        <NumberFieldGroup className="flex h-8 items-center rounded-md border border-input bg-background focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/45 dark:bg-input/30">
-          <NumberFieldDecrement
-            aria-label="Fewer packs"
-            className="flex h-full items-center px-2 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/45 disabled:opacity-40"
-          >
-            <Minus className="size-3.5" />
-          </NumberFieldDecrement>
-          <NumberFieldInput
-            aria-label="Credit packs"
-            className="h-full w-10 bg-transparent text-center text-sm tabular-nums text-foreground outline-none"
-          />
-          <NumberFieldIncrement
-            aria-label="More packs"
-            className="flex h-full items-center px-2 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/45 disabled:opacity-40"
-          >
-            <Plus className="size-3.5" />
-          </NumberFieldIncrement>
-        </NumberFieldGroup>
-      </NumberFieldRoot>
-      <p className="text-sm text-muted-foreground tabular-nums">
-        {packs === 1 ? 'pack' : 'packs'} · {formatCredits(packs * offer.credits)} credits ·{' '}
-        <span className="text-foreground">{formatUsd(packs * offer.priceUsd)}</span>
-      </p>
-      <Button
-        variant="default"
-        disabled={redirecting}
-        aria-busy={redirecting}
-        onClick={() => checkout.mutate(packs)}
-        className="ml-auto"
-      >
-        {redirecting ? 'Opening checkout…' : 'Buy credits'}
-      </Button>
+    <div className="space-y-3">
+      <TopUpPackPicker
+        packs={packs}
+        onPacksChange={setPacks}
+        offer={offer}
+        className="@[36rem]/settings-section:grid-cols-3"
+      />
+      <div className="flex justify-end">
+        <Button disabled={redirecting} aria-busy={redirecting} onClick={() => buy(packs)}>
+          {redirecting ? 'Opening checkout…' : `Buy credits · ${formatUsd(packs * offer.priceUsd)}`}
+        </Button>
+      </div>
     </div>
   );
 }
