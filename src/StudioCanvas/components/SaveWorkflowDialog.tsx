@@ -304,6 +304,7 @@ export function SaveWorkflowDialog({
   const [error, setError] = React.useState<string | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
   const [isDraftingGuide, setIsDraftingGuide] = React.useState(false);
+  const [guideSource, setGuideSource] = React.useState<'model' | 'fallback' | null>(null);
   const [kind, setKind] = React.useState<SaveKind>('workflow');
   const [pipelineBindings, setPipelineBindings] = React.useState<PipelineBindings>({});
   const [editorConfigurations, setEditorConfigurations] = React.useState<
@@ -474,6 +475,7 @@ export function SaveWorkflowDialog({
     setPipelineBindings({});
     setEditorConfigurations({});
     setAgentGuide(null);
+    setGuideSource(null);
   }, [form, setOpen]);
 
   const draftGuide = async () => {
@@ -494,18 +496,17 @@ export function SaveWorkflowDialog({
       });
       form.setValue('description', draft.description, { shouldDirty: true });
       setAgentGuide(draft.agent_guide);
+      setGuideSource(draft.source ?? 'model');
     } catch (err) {
-      setAgentGuide({
-        version: 1,
-        use_when: [`The task matches the declared inputs and outputs of ${values.name.trim()}.`],
-        avoid_when: [],
-        input_guidance: pipelineMetadata.inputPorts.map((port) => ({
-          input_id: port.id,
-          instruction: `Supply ${port.label ?? port.id} as ${port.dataType ?? 'text'}.`,
-        })),
-        invocation_notes: [],
+      // No invented guide: the Backend already falls back to a rule-based one when its writer
+      // model fails, so reaching here means the request itself was refused (e.g. an input on
+      // an occupied handle). Say why, and let the author fix it and redraft.
+      const toastOptions = coerceToastOptions(err, {
+        title: 'Could not draft the guide',
+        description: err instanceof Error ? err.message : 'Try again.',
+        variant: 'error',
       });
-      setError('The automatic draft failed. A manual guide is ready for review below.');
+      setError(toastOptions.description ?? toastOptions.title);
     } finally {
       setIsDraftingGuide(false);
     }
@@ -746,6 +747,11 @@ export function SaveWorkflowDialog({
           </div>
           {agentGuide ? (
             <>
+              {guideSource === 'fallback' ? (
+                <p className="text-xs text-muted-foreground">
+                  Drafted from the pipeline's inputs and outputs. Review it before publishing.
+                </p>
+              ) : null}
               <div className="grid gap-1">
                 <Label htmlFor="pipeline-use-when">Use when · one per line</Label>
                 <Textarea

@@ -218,20 +218,49 @@ export const pipelineCostPolicySchema = z
      * that only looks like one. Spend is bounded by `execution_policy.max_generations` per run.
      */
     max_amount_minor: z.number().int().nonnegative().nullable(),
+    /**
+     * The limit is `execution_policy.max_generations`: the generators the published graph
+     * starts, fixed at publish. `within_limit` needs no approval beyond the calling surface's
+     * own (Jaina asks before every run; MCP requires the operator role). A graph asking one
+     * unattended run for more than the headless cap is refused before anything generates.
+     */
     approval: z.enum(['within_limit', 'always']),
     on_exceed: z.literal('refuse'),
   })
   .strict();
 export type PipelineCostPolicy = z.infer<typeof pipelineCostPolicySchema>;
 
+/** One gate a run's outputs pass through, and the score floor it adds on top of its verdict. */
+export const pipelineQualityCheckSchema = z
+  .object({
+    check_id: capabilityKeySchema,
+    /** Which produced media this gate judges. */
+    media: z.array(pipelineMediaSchema).min(1).max(5),
+    /** Null when the gate's pass/fail verdict alone decides; otherwise the score it must reach. */
+    minimum_score: z.number().min(0).max(1).nullable(),
+  })
+  .strict();
+export type PipelineQualityCheck = z.infer<typeof pipelineQualityCheckSchema>;
+
 export const pipelineQualityPolicySchema = z
+  .object({
+    checks: z.array(pipelineQualityCheckSchema).min(1).max(24),
+    on_failure: z.literal('refuse'),
+  })
+  .strict();
+export type PipelineQualityPolicy = z.infer<typeof pipelineQualityPolicySchema>;
+
+/**
+ * The single-threshold shape a not-yet-redeployed Backend still sends. It claimed one score
+ * floor for every output, which only the video gate applies. Drop once both sides deploy.
+ */
+export const legacyPipelineQualityPolicySchema = z
   .object({
     minimum_score: z.number().min(0).max(1),
     required_checks: z.array(capabilityKeySchema).min(1).max(24),
     on_failure: z.literal('refuse'),
   })
   .strict();
-export type PipelineQualityPolicy = z.infer<typeof pipelineQualityPolicySchema>;
 
 export const pipelineAgentGuideSchema = z
   .object({
@@ -271,7 +300,7 @@ export const pipelineCapabilityV2Schema = z
     outputs: z.array(pipelineCapabilityOutputSchema).min(1).max(24),
     execution_policy: pipelineExecutionPolicySchema,
     cost_policy: pipelineCostPolicySchema,
-    quality_policy: pipelineQualityPolicySchema,
+    quality_policy: z.union([pipelineQualityPolicySchema, legacyPipelineQualityPolicySchema]),
   })
   .strict()
   .superRefine((capability, context) => {

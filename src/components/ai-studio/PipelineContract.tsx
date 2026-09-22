@@ -93,9 +93,25 @@ function spendCeiling(capability: PipelineCapabilityV2): string {
   return `Up to ${moneyFormatter.format(max_amount_minor / 100)} ${currency}`;
 }
 
+// Each gate with the media it judges, and its floor where it has one: an image passes on
+// the gate's verdict alone, a video must also reach its score. The single-floor branch reads
+// a Backend that has not redeployed yet; drop it with the contract's legacy shape.
+function qualityLine(policy: PipelineCapabilityV2['quality_policy']): string {
+  if (!('checks' in policy)) {
+    const checks = policy.required_checks.map(readableToken).join(', ');
+    return `${Math.round(policy.minimum_score * 100)}% minimum${checks ? ` · ${checks}` : ''}`;
+  }
+  return policy.checks
+    .map((check) => {
+      const floor =
+        check.minimum_score === null ? '' : ` ≥ ${Math.round(check.minimum_score * 100)}%`;
+      return `${readableToken(check.check_id)}${floor} (${check.media.join(', ')})`;
+    })
+    .join(' · ');
+}
+
 function V2PipelineContract({ capability }: { capability: PipelineCapabilityV2 }) {
   const requiredInputs = capability.inputs.filter((input) => input.required);
-  const qualityChecks = capability.quality_policy.required_checks.map(readableToken).join(', ');
 
   return (
     <>
@@ -144,8 +160,7 @@ function V2PipelineContract({ capability }: { capability: PipelineCapabilityV2 }
       </p>
       <p className="text-muted-foreground">
         <span className="font-medium text-foreground">Quality:</span>{' '}
-        {Math.round(capability.quality_policy.minimum_score * 100)}% minimum
-        {qualityChecks ? ` · ${qualityChecks}` : ''}
+        {qualityLine(capability.quality_policy)}
       </p>
       <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
         <Pill variant="success">
