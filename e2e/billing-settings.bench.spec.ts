@@ -1,6 +1,11 @@
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import {
+  CLIENT_PROMO_COUPON_ID,
+  CLIENT_PROMO_DEFAULT_CODE,
+  ensureClientPromoCodes,
+} from '../../scripts/billing-client-promo-codes';
 import { mintSessionBundleForEmail } from './support/auth';
 import {
   activeSubscription,
@@ -40,6 +45,11 @@ import {
 //             but the widget, read from member-readable entitlements, still shows the credits.
 //   contract  the owner of a Contract brand: "Managed by Continuum", nothing to buy, the
 //             auto-billing switch disabled, and the widget reads "Managed plan · unmetered".
+//   promo     scripts/billing-client-promo-codes.ts (sandbox) gives the owner brand and the
+//             Contract brand each their own CONTINUUM200 code; it finds the customer billing-api
+//             created, never a second one. The owner buys 20 packs on hosted Checkout with the
+//             code, pays $0, and the panel and the ledger both gain exactly 20,000 credits; a
+//             second 20-pack Checkout with the same code is refused by Stripe.
 //
 // The one hop NOT exercised: Stripe's own webhook delivery to our URL. The local
 // stripe-billing-webhook has no public endpoint, so the bench replays the REAL sandbox events
@@ -213,7 +223,11 @@ test.describe('billing:settings:e2e:bench', () => {
   const db = serviceClient('billing-settings');
   const { stripe, webhookSecret } = sandboxStripe('billing-settings');
   const since = Math.floor(Date.now() / 1000) - 5;
-  const created = { userIds: [] as string[], brandIds: [] as string[] };
+  const created = {
+    userIds: [] as string[],
+    brandIds: [] as string[],
+    promotionCodeIds: [] as string[],
+  };
   let ownerBrandId = '';
   let contractBrandId = '';
 
@@ -262,13 +276,22 @@ test.describe('billing:settings:e2e:bench', () => {
   test.afterAll(async () => {
     let deleted: string[] = [];
     try {
-      deleted = await cleanupBillingBench({
+      // A redeemed code is already inactive; deactivating is idempotent. The fixed-id coupon
+      // stays: it is shared by every run, exactly as the live one is.
+      for (const id of created.promotionCodeIds) {
+        const code = await stripe.promotionCodes.update(id, { active: false });
+        if (code.livemode !== false) throw new Error(`promotion code ${id} is live-mode`);
+        deleted.push(`promotion code ${id} (deactivated)`);
+      }
+      deleted.push(
+        ...(await cleanupBillingBench({
         db,
         stripe,
         since,
-        brandIds: created.brandIds,
-        userIds: created.userIds,
-      });
+          brandIds: created.brandIds,
+          userIds: created.userIds,
+        })),
+      );
       recorder.record('cleanup by id', 'PASS', `${deleted.length} objects`);
     } catch (error) {
       recorder.record(
@@ -555,6 +578,215 @@ test.describe('billing:settings:e2e:bench', () => {
         await expect(card).toContainText("Canvas use isn't metered");
         await shootWidget(page, 'widget-contract');
         await shootWidgetMobile(page, 'widget-contract');
+      });
+    } finally {
+      await context.close();
+    }
+  });
+
+  // Last on purpose: the member test above reads the owner brand's 1,000 credits.
+  test('a client redeems the $200 promo code once, on 20 credit packs', async ({ browser }) => {
+    // Two hosted Checkouts and a webhook replay.
+    test.setTimeout(480_000);
+    const { data: row, error: rowError } = await db
+      .schema('billing')
+      .from('brand_subscriptions')
+      .select('stripe_customer_id')
+      .eq('brand_id', ownerBrandId)
+      .single();
+    if (rowError) throw new Error(`brand_subscriptions: ${describeError(rowError)}`);
+    const customerId = String(row.stripe_customer_id);
+
+    const promotionCodeId = await step(
+      'promo script (sandbox) gives each client brand its own CONTINUUM200 code',
+      async () => {
+        const run = await ensureClientPromoCodes({
+          stripe,
+          live: false,
+          brands: [
+            { brandId: ownerBrandId, name: `Billing Bench ${RUN_ID}` },
+            { brandId: contractBrandId, name: `Billing Contract ${RUN_ID}` },
+          ],
+          write: true,
+        });
+        created.promotionCodeIds.push(
+          ...run.rows.flatMap((r) =>
+            r.promotionCodeStatus === 'created' && r.promotionCodeId ? [r.promotionCodeId] : [],
+          ),
+        );
+        const [owner, contract] = run.rows;
+        // The customer billing-api created and persisted — found, never duplicated.
+        expect(owner).toMatchObject({ customerId, customerStatus: 'existing' });
+        expect(owner?.promotionCodeStatus).toBe('created');
+        expect(contract).toMatchObject({ customerStatus: 'created', promotionCodeStatus: 'created' });
+
+        const codes = await Promise.all(
+          run.rows.map((r) =>
+            stripe.promotionCodes.retrieve(String(r.promotionCodeId), {
+              expand: ['coupon.applies_to'],
+            }),
+          ),
+        );
+        for (const code of codes) {
+          expect(code.livemode).toBe(false);
+          expect(code.code).toBe(CLIENT_PROMO_DEFAULT_CODE);
+          expect(code.max_redemptions).toBe(1);
+          expect(code.expires_at).toBeNull();
+          expect(code.restrictions.minimum_amount).toBe(20_000);
+          expect(code.restrictions.minimum_amount_currency).toBe('usd');
+          expect(code.coupon).toMatchObject({
+            id: CLIENT_PROMO_COUPON_ID,
+            amount_off: 20_000,
+            currency: 'usd',
+            duration: 'once',
+            redeem_by: null,
+          });
+        }
+        expect(codes[0]?.customer).toBe(customerId);
+        expect(codes[1]?.customer).toBe(contract?.customerId);
+        const [pack] = (
+          await stripe.prices.list({
+            lookup_keys: ['continuum_v1_canvas_credits_1000'],
+            active: true,
+          })
+        ).data;
+        expect(codes[0]?.coupon.applies_to?.products).toEqual([String(pack?.product)]);
+
+        const again = await ensureClientPromoCodes({
+          stripe,
+          live: false,
+          brands: [{ brandId: ownerBrandId, name: `Billing Bench ${RUN_ID}` }],
+          write: true,
+        });
+        expect(again).toMatchObject({
+          couponStatus: 'existing',
+          rows: [{ customerStatus: 'existing', promotionCodeStatus: 'existing' }],
+        });
+        notes.push(`promo: ${run.rows.map((r) => `${r.customerId}→${r.promotionCodeId}`).join(', ')}`);
+        return String(owner?.promotionCodeId);
+      },
+    );
+
+    const owner = await mintSessionBundleForEmail(EMAILS.owner);
+    const context = await browser.newContext({ storageState: owner.state, viewport: DESKTOP });
+    const page = await context.newPage();
+    const packsField = page.getByRole('textbox', { name: 'Credit packs' });
+    const credits = page.locator('#credits');
+    const openPackCheckout = async (): Promise<string> => {
+      await page.goto(billingSettingsPath);
+      await expect(credits.getByRole('button', { name: 'Buy credits' })).toBeVisible({
+        timeout: 120_000,
+      });
+      await packsField.fill('20');
+      await packsField.blur();
+      await expect(packsField).toHaveValue('20');
+      await expect(credits).toContainText('packs · 20,000 credits · $200');
+      await credits.getByRole('button', { name: 'Buy credits' }).click();
+      await page.waitForURL(/^https:\/\/checkout\.stripe\.com\//, { timeout: 60_000 });
+      const id = page.url().match(/cs_test_[A-Za-z0-9]+/)?.[0];
+      if (!id) throw new Error(`no test-mode session id in ${page.url()}`);
+      const session = await stripe.checkout.sessions.retrieve(id);
+      expect(session).toMatchObject({
+        livemode: false,
+        mode: 'payment',
+        customer: customerId,
+        amount_subtotal: 20_000,
+        metadata: { continuum_brand_id: ownerBrandId, continuum_credit_pack: '20' },
+      });
+      const promo = page.locator('#promotionCode');
+      await promo.waitFor({ timeout: 60_000 });
+      await promo.fill(CLIENT_PROMO_DEFAULT_CODE);
+      await promo.press('Enter');
+      return id;
+    };
+
+    try {
+      const before = await step('read the balance before', async () => {
+        const entitlements = await brandEntitlements(db, ownerBrandId);
+        await page.goto(billingSettingsPath);
+        const available = page.getByTestId('canvas-credits-available');
+        await expect(available).toBeVisible({ timeout: 120_000 });
+        return {
+          purchasedCredits: entitlements.creditBalance.purchasedCredits,
+          availableCredits: Number((await available.innerText()).replace(/,/g, '')),
+        };
+      });
+
+      const sessionId = await step('20 packs with the code come to $0 on hosted Checkout', async () => {
+        const id = await openPackCheckout();
+        await expect(page.getByText('$200.00 off')).toBeVisible({ timeout: 30_000 });
+        await expect(page.locator('body')).toContainText(/Total due\s*\$0\.00/);
+        const email = page.locator('#email');
+        if ((await email.isVisible()) && !(await email.inputValue())) {
+          await email.fill(EMAILS.owner);
+        }
+        await page.getByTestId('hosted-payment-submit-button').click();
+        await page.waitForURL(/\/settings\?section=billing&checkout=success/, {
+          timeout: 120_000,
+        });
+        return id;
+      });
+
+      await step('Stripe completed it at $0 with our code and no PaymentIntent', async () => {
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+        expect(session).toMatchObject({
+          status: 'complete',
+          payment_status: 'paid',
+          amount_subtotal: 20_000,
+          amount_total: 0,
+          payment_intent: null,
+          total_details: { amount_discount: 20_000 },
+        });
+        expect(session.discounts?.[0]?.promotion_code).toBe(promotionCodeId);
+        const code = await stripe.promotionCodes.retrieve(promotionCodeId);
+        expect(code.times_redeemed).toBe(1);
+        notes.push(`promo code after redemption: active=${code.active}`);
+      });
+
+      await step('replay ⇒ the ledger gains exactly 20,000 credits, keyed on the session', async () => {
+        const { attempts, types } = await replayUntil({
+          db,
+          stripe,
+          webhookSecret,
+          customerId,
+          brandId: ownerBrandId,
+          since,
+          settled: (entitlements) =>
+            entitlements.creditBalance.purchasedCredits > before.purchasedCredits,
+          what: '20,000 promo credits',
+        });
+        notes.push(`promo pack: replayed on attempt ${attempts} (${types.join(', ')})`);
+        const after = await brandEntitlements(db, ownerBrandId);
+        expect(after.creditBalance.purchasedCredits - before.purchasedCredits).toBe(20_000);
+        const { data: topups, error } = await db
+          .schema('billing')
+          .from('credit_transactions')
+          .select('delta_usd, ref, meta')
+          .eq('brand_id', ownerBrandId)
+          .eq('kind', 'topup');
+        if (error) throw new Error(`credit_transactions: ${describeError(error)}`);
+        expect(topups).toHaveLength(1);
+        expect(topups?.[0]).toMatchObject({ ref: sessionId, meta: { packs: 20, credits: 20_000 } });
+        expect(Number(topups?.[0]?.delta_usd)).toBe(200);
+      });
+
+      await step('the panel shows the 20,000 purchased credits', async () => {
+        await expect(page.getByTestId('canvas-credits-available')).toHaveText(
+          (before.availableCredits + 20_000).toLocaleString('en-US'),
+          { timeout: 60_000 },
+        );
+        await expect(credits.getByRole('img', { name: /Purchased 20,000/ })).toBeVisible();
+        await shoot(page, 'promo-credits-added');
+      });
+
+      await step('a second 20-pack Checkout with the same code is refused by Stripe', async () => {
+        const id = await openPackCheckout();
+        await expect(page.getByText('This code is invalid.')).toBeVisible({ timeout: 30_000 });
+        await expect(page.locator('body')).toContainText(/Total due\s*\$200\.00/);
+        const expired = await stripe.checkout.sessions.expire(id);
+        expect(expired.status).toBe('expired');
+        const after = await brandEntitlements(db, ownerBrandId);
+        expect(after.creditBalance.purchasedCredits - before.purchasedCredits).toBe(20_000);
       });
     } finally {
       await context.close();

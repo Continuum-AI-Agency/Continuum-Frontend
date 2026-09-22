@@ -25,7 +25,8 @@ export async function ProductGate(surface: GatedSurface): Promise<ReactNode | nu
     case 'billing':
       return redirect(decision.href);
     case 'legacy':
-      // billing-cutover: billing is not live, so the tier gate this page had before applies.
+      // The tier gate this page had before billing: billing is not live, or a grandfathered
+      // brand opened Forge below tier 3.
       return <LegacyTierRedirect description={decision.description} />;
   }
 }

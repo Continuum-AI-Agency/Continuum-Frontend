@@ -202,6 +202,9 @@ export const ADMIN_AUDIT_ACTIONS = [
   'admin.brand.update_tier',
   'admin.brand.set_product',
   'admin.brand.set_contract',
+  'admin.brand.set_addon',
+  'admin.brand.set_client',
+  'admin.brand.grant_credits',
   'admin.workflow.migrate_global_to_brand',
   'admin.workflow.duplicate_to_brand',
   'admin.workflow.promote_to_global',
@@ -327,9 +330,10 @@ const ACCESS_REFUSALS: Record<AdminAccessRefusal['error'], string> = {
   stripe_managed:
     'That product is paid for through Stripe. Cancel it in Stripe, or set the brand to Contract first.',
   billing_not_live: 'Product access activates at billing go-live.',
+  not_staff_brand: 'Only a brand created by a staff account can be marked as a client brand.',
 };
 
-// readEdgeErrorMessage surfaces the body's `error` code; turn the two refusals into sentences.
+// readEdgeErrorMessage surfaces the body's `error` code; turn the refusals into sentences.
 export function describeAccessError(message: string): string {
   return ACCESS_REFUSALS[message as AdminAccessRefusal['error']] ?? message;
 }

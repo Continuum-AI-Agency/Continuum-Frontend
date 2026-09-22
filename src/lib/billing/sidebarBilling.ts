@@ -25,9 +25,12 @@ export type MeteredSidebarBilling = {
   exhausted: boolean;
 };
 
+/** The label of a metered brand with products but no self-serve plan (grandfathered, admin grant). */
+export const NO_PLAN_CREDITS_LABEL = 'Canvas credits';
+
 export type SidebarBillingView =
   | MeteredSidebarBilling
-  /** Contract, or products granted without a Stripe plan (admin / grandfathered): unmetered. */
+  /** Contract (internal brands read as Contract): the only unmetered brands. */
   | { kind: 'managed'; href: string }
   | { kind: 'no_plan'; href: string };
 
@@ -40,11 +43,8 @@ export function toSidebarBilling(
   const { billingModel, plans, products, buckets, creditBalance } = access.entitlements;
 
   if (billingModel === 'contract') return { kind: 'managed', href: billingHref() };
-  if (plans.length === 0) {
-    return products.length > 0
-      ? { kind: 'managed', href: billingHref() }
-      : { kind: 'no_plan', href: billingHref() };
-  }
+  // Products without a plan (grandfathered, admin-granted) are metered too: credits only.
+  if (plans.length === 0 && products.length === 0) return { kind: 'no_plan', href: billingHref() };
 
   const studio = buckets.find((bucket) => bucket.bucket === 'studio') ?? null;
   const includedCredits = studio ? usdToCredits(studio.includedUsd) : 0;
@@ -61,10 +61,13 @@ export function toSidebarBilling(
   return {
     kind: 'metered',
     href: CREDITS_HREF,
-    planLabel: [...plans]
-      .sort((a, b) => PLAN_CODES.indexOf(a) - PLAN_CODES.indexOf(b))
-      .map((plan) => PLAN_NAME[plan])
-      .join(' + '),
+    planLabel:
+      plans.length === 0
+        ? NO_PLAN_CREDITS_LABEL
+        : [...plans]
+            .sort((a, b) => PLAN_CODES.indexOf(a) - PLAN_CODES.indexOf(b))
+            .map((plan) => PLAN_NAME[plan])
+            .join(' + '),
     remainingCredits,
     includedRemainingCredits,
     includedCredits,

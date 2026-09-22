@@ -301,7 +301,7 @@ describe('toBillingView — auto-billing overage (opt-in)', () => {
     expect(selfServe(canceled).autoBilling.disabledReason).toBe(AUTO_BILLING_NEEDS_PLAN);
   });
 
-  test('out of credits only with a live plan, nothing left and nothing billed to the card', () => {
+  test('out of credits only when packs are on sale, nothing left and nothing billed to the card', () => {
     const spent = { studioBucket: { ...studioBucket(10, 10), overageAction: 'block' as const } };
     expect(selfServe(organicPlus({ canvas: spent })).outOfCredits).toBe(true);
     expect(
@@ -311,6 +311,45 @@ describe('toBillingView — auto-billing overage (opt-in)', () => {
       selfServe(organicPlus({ canvas: { studioBucket: studioBucket(10, 10) } })).outOfCredits,
     ).toBe(false);
     expect(selfServe(overview({})).outOfCredits).toBe(false);
+  });
+});
+
+describe('toBillingView — credit packs for a brand with Canvas but no subscription', () => {
+  const grandfathered = (purchasedBalanceUsd: number) =>
+    overview({
+      entitlements: {
+        planCode: 'grandfathered',
+        status: 'active',
+        products: ['organic_agent', 'paid_media', 'studio'],
+      },
+      canvas: { purchasedBalanceUsd },
+    });
+
+  test('a grandfathered brand can buy packs, has no auto-billing, and runs out at 0', () => {
+    const view = selfServe(grandfathered(0));
+    expect(view).toMatchObject({ hasLiveSubscription: false, canBuyCredits: true });
+    expect(view.outOfCredits).toBe(true);
+    expect(view.autoBilling.disabledReason).toBe(AUTO_BILLING_NEEDS_PLAN);
+  });
+
+  test('a grandfathered brand with a balance can buy more and is not out of credits', () => {
+    const view = selfServe(grandfathered(220));
+    expect(view).toMatchObject({ canBuyCredits: true, outOfCredits: false });
+    expect(view.credits.purchasedCredits).toBe(22_000);
+  });
+
+  test('without Canvas and without a subscription there is nothing to buy credits for', () => {
+    const view = selfServe(overview({ entitlements: { products: ['paid_media'] } }));
+    expect(view).toMatchObject({ canBuyCredits: false, outOfCredits: false });
+    expect(selfServe(overview({})).canBuyCredits).toBe(false);
+  });
+
+  test('a live subscription can always buy packs, Canvas or not', () => {
+    const performance = overview({
+      entitlements: { products: ['paid_media'], plans: ['paid_media'], billingModel: 'stripe' },
+      subscription: subscription(['paid_media']),
+    });
+    expect(selfServe(performance).canBuyCredits).toBe(true);
   });
 });
 
