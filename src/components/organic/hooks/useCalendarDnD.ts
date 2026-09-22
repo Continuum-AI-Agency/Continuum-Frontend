@@ -142,7 +142,11 @@ export function useCalendarDnD(
             updateDraft(draftId, (draft) => ({
               ...draft,
               platforms: [destPlatform],
-              targetAccountId: platformAccountIds[destPlatform] ?? draft.targetAccountId,
+              // Never the source row's account: an Instagram id on a TikTok draft is refused at publish.
+              targetAccountId:
+                destPlatform === draft.platforms[0]
+                  ? draft.targetAccountId
+                  : platformAccountIds[destPlatform],
             }));
           }
 

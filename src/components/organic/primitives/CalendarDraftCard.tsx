@@ -646,10 +646,16 @@ export function CalendarDraftCard({
             <ContextMenuItem
               key={option}
               onSelect={() =>
-                applyQuickEdit((currentDraft) => ({
-                  ...currentDraft,
-                  platforms: [option],
-                }))
+                applyQuickEdit((currentDraft) =>
+                  currentDraft.platforms[0] === option
+                    ? currentDraft
+                    : {
+                        ...currentDraft,
+                        platforms: [option],
+                        // An account belongs to one platform; persistence re-picks this one's default.
+                        targetAccountId: undefined,
+                      },
+                )
               }
             >
               Platform: {POST_PLATFORMS[option].label}
