@@ -29,6 +29,8 @@ export const IMAGE_GENERATOR_MODELS = [
   'nano-banana-2',
   'nano-banana-2-lite',
   'gpt-image-2',
+  'gpt-image-2.5-sunburst',
+  'gpt-image-2.5-flare',
   'flux-2-pro',
   'flux-2-max',
 ] as const;
@@ -40,6 +42,20 @@ export const DEFAULT_IMAGE_GENERATOR_MODEL: ImageGeneratorModel = 'nano-banana-2
 
 export const isImageGeneratorModel = (value: unknown): value is ImageGeneratorModel =>
   typeof value === 'string' && (IMAGE_GENERATOR_MODELS as readonly string[]).includes(value);
+
+/**
+ * The OpenAI image models, served from our Azure AI Foundry resource. Each id is also its
+ * Foundry deployment name, so the Backend sends it as-is.
+ */
+export const GPT_IMAGE_MODELS = [
+  'gpt-image-2',
+  'gpt-image-2.5-sunburst',
+  'gpt-image-2.5-flare',
+] as const satisfies readonly ImageGeneratorModel[];
+export type GptImageModel = (typeof GPT_IMAGE_MODELS)[number];
+
+export const isGptImageModel = (value: unknown): value is GptImageModel =>
+  typeof value === 'string' && (GPT_IMAGE_MODELS as readonly string[]).includes(value);
 
 /**
  * The sizes each generator actually ACCEPTS.
@@ -59,7 +75,7 @@ export const isImageGeneratorModel = (value: unknown): value is ImageGeneratorMo
  * model`, including `512px`. It is genuinely 1K-only, so offering any other tier
  * would ship a guaranteed 400 rather than a silent downgrade.
  *
- * GPT Image 2 and the fal-hosted FLUX models size by aspect ratio alone.
+ * The GPT Image models and the fal-hosted FLUX models size by aspect ratio alone.
  */
 export const IMAGE_MODEL_SIZES: Record<ImageGeneratorModel, readonly ImageSize[]> = {
   'nano-banana': [],
@@ -67,6 +83,8 @@ export const IMAGE_MODEL_SIZES: Record<ImageGeneratorModel, readonly ImageSize[]
   'nano-banana-2': ['512px', '1K', '2K', '4K'],
   'nano-banana-2-lite': ['1K'],
   'gpt-image-2': [],
+  'gpt-image-2.5-sunburst': [],
+  'gpt-image-2.5-flare': [],
   'flux-2-pro': [],
   'flux-2-max': [],
 };
@@ -82,7 +100,8 @@ export const DEFAULT_IMAGE_SIZE: Partial<Record<ImageGeneratorModel, ImageSize>>
   'nano-banana-2-lite': '1K',
 };
 
-export const GPT_IMAGE_2_RESOLUTIONS = {
+/** Every GPT Image model renders these exact sizes (2.5 Sunburst and Flare measured on Foundry). */
+export const GPT_IMAGE_RESOLUTIONS = {
   '1:1': '1024x1024',
   '16:9': '1344x768',
   '9:16': '768x1344',
@@ -111,6 +130,8 @@ export const IMAGE_MODEL_INFO: Record<
   'nano-banana-2': { label: 'Nano Banana 2', status: 'available' },
   'nano-banana-2-lite': { label: 'Nano Banana 2 Lite', status: 'available' },
   'gpt-image-2': { label: 'GPT Image 2', status: 'available', note: 'Azure' },
+  'gpt-image-2.5-sunburst': { label: 'GPT Image 2.5 Sunburst', status: 'available', note: 'Azure' },
+  'gpt-image-2.5-flare': { label: 'GPT Image 2.5 Flare', status: 'available', note: 'Azure' },
   'flux-2-pro': { label: 'FLUX.2 Pro', status: 'beta', note: 'Needs fal credits' },
   'flux-2-max': { label: 'FLUX.2 Max', status: 'beta', note: 'Needs fal credits' },
 };
@@ -216,10 +237,10 @@ export function imageResolutionFor(
   size: ImageSize | undefined,
   aspectRatio?: string,
 ): string {
-  if (model === 'gpt-image-2') {
+  if (isGptImageModel(model)) {
     return (
-      GPT_IMAGE_2_RESOLUTIONS[aspectRatio as keyof typeof GPT_IMAGE_2_RESOLUTIONS] ??
-      GPT_IMAGE_2_RESOLUTIONS['16:9']
+      GPT_IMAGE_RESOLUTIONS[aspectRatio as keyof typeof GPT_IMAGE_RESOLUTIONS] ??
+      GPT_IMAGE_RESOLUTIONS['16:9']
     );
   }
   if (isImageGeneratorModel(model) && !supportsImageSize(model)) {

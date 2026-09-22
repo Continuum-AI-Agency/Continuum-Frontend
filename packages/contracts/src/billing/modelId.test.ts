@@ -39,7 +39,14 @@ describe('toBillingModelId', () => {
 
   it('omits a tier for models that take no size parameter', () => {
     // nano-banana renders 1024 whatever it is asked for; fal models size by aspect only.
-    for (const modelId of ['nano-banana', 'flux-2-pro', 'flux-2-max', 'gpt-image-2']) {
+    for (const modelId of [
+      'nano-banana',
+      'flux-2-pro',
+      'flux-2-max',
+      'gpt-image-2',
+      'gpt-image-2.5-sunburst',
+      'gpt-image-2.5-flare',
+    ]) {
       expect(supportsBillingTier(modelId)).toBe(false);
       expect(toBillingModelId({ modelId })).toBe(toBillingModelBase(modelId));
       // A stray tier on an unsized model is ignored, not an error — the canvas may send

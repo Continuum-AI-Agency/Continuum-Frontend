@@ -84,6 +84,8 @@ const BILLING_MODEL_ALIASES: Readonly<Record<string, string>> = {
   'gemini-3-pro-image': 'nano-banana-pro',
   'gpt-image-2': 'gpt-image-2',
   'openai/gpt-image-2/edit': 'gpt-image-2',
+  'gpt-image-2.5-sunburst': 'gpt-image-2.5-sunburst',
+  'gpt-image-2.5-flare': 'gpt-image-2.5-flare',
   'flux-2-pro': 'flux-2-pro',
   'fal-ai/flux-2-pro/edit': 'flux-2-pro',
   'flux-2-max': 'flux-2-max',
@@ -130,6 +132,8 @@ const BILLING_MODEL_TIERS: Readonly<Record<string, readonly string[]>> = {
   'nano-banana-2-lite': [],
   'nano-banana-pro': ['1k', '2k', '4k'],
   'gpt-image-2': [],
+  'gpt-image-2.5-sunburst': [],
+  'gpt-image-2.5-flare': [],
   'flux-2-pro': [],
   'flux-2-max': [],
 

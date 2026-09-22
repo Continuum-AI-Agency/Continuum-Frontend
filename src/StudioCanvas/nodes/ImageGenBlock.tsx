@@ -10,6 +10,7 @@ import {
   imageModelLabel,
   imageModelOptions,
   imageSizesForModel,
+  isGptImageModel,
   supportsImageSize,
   variationIndexFromHandle,
 } from '@continuum/contracts';
@@ -146,7 +147,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
           // none, the same size when it still supports it, its default when it does not.
           imageSize: coerceImageSize(model, (node.data as NanoGenNodeData).imageSize),
           maxReferenceImages:
-            model === 'gpt-image-2' || model === 'flux-2-pro' || model === 'flux-2-max'
+            isGptImageModel(model) || model === 'flux-2-pro' || model === 'flux-2-max'
               ? 1
               : undefined,
         },
