@@ -118,6 +118,28 @@ describe('PipelineContract', () => {
     cleanup();
   });
 
+  it('states each gate with the media it judges, and a floor only where the gate has one', () => {
+    render(
+      <PipelineContract
+        manifest={capability({
+          quality_policy: {
+            checks: [
+              { check_id: 'no_legible_text', media: ['image'], minimum_score: null },
+              { check_id: 'video_contact_sheet', media: ['video'], minimum_score: 0.8 },
+            ],
+            on_failure: 'refuse',
+          },
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByText(/no legible text \(image\) · video contact sheet ≥ 80% \(video\)/),
+    ).toBeDefined();
+    expect(screen.queryByText(/% minimum/)).toBeNull();
+    cleanup();
+  });
+
   it('bounds spend by the generation cap when no money cap is published', () => {
     render(
       <PipelineContract
