@@ -1,10 +1,12 @@
-import type { ProductCode } from '@continuum/contracts';
+import type { BrandEntitlements, PlanCode, ProductCode } from '@continuum/contracts';
 
 export type BrandAccess = {
   /** False while PostgREST does not expose `billing` (PGRST106). */
   billingLive: boolean;
   /** The brand's active products. Empty when billing is not live or the read failed. */
   products: ProductCode[];
+  /** The full `get_brand_entitlements` read. Null when billing is not live or the read failed. */
+  entitlements: BrandEntitlements | null;
   // billing-cutover: today's access rule (`brand_profiles.tier`), consulted only while billing is
   // not live. Wave 4 deletes this field and the tier read in brandAccess.server.ts.
   legacyTier: number;
@@ -62,10 +64,22 @@ export const PLAN_NAME_FOR_PRODUCT: Partial<Record<ProductCode, string>> = {
   paid_media: 'Performance Plus',
 };
 
+/** The self-serve plans' display names (`billing.plan_definitions.display_name`). */
+export const PLAN_NAME: Record<PlanCode, string> = {
+  organic_studio: 'Organic Plus',
+  paid_media: 'Performance Plus',
+};
+
 /** Settings → Billing, with the plan that grants `product` highlighted. */
 export function billingHref(product?: ProductCode): string {
   return product ? `/settings?section=billing&need=${product}` : '/settings?section=billing';
 }
+
+/** The id of Settings → Billing's credit-pack section, which scrolls into view on that anchor. */
+export const CREDITS_ANCHOR = 'credits';
+
+/** Settings → Billing at the credit-pack section. */
+export const CREDITS_HREF = `/settings?section=billing#${CREDITS_ANCHOR}`;
 
 export type ProductGateDecision =
   | { kind: 'allow' }

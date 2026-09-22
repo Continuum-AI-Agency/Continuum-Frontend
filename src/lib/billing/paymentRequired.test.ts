@@ -36,7 +36,7 @@ describe('paymentRequiredToast', () => {
     expect(visited).toEqual(['/settings?section=billing&need=paid_media']);
   });
 
-  test('credits_exhausted offers Buy credits', () => {
+  test('credits_exhausted offers Buy credits at the credit-pack section, naming auto-billing', () => {
     const visited: string[] = [];
     const toast = paymentRequiredToast(
       { error: 'credits_exhausted', product: 'studio', planCode: 'organic_studio' },
@@ -44,10 +44,11 @@ describe('paymentRequiredToast', () => {
     );
     expect(toast).toMatchObject({
       title: 'Out of Canvas credits',
+      description: 'Buy a credit pack, or turn on auto-billing, to keep generating.',
       action: { label: 'Buy credits' },
     });
     toast.action?.onClick();
-    expect(visited).toEqual(['/settings?section=billing']);
+    expect(visited).toEqual(['/settings?section=billing#credits']);
   });
 
   test('a product no plan sells has nothing to buy, so no button', () => {

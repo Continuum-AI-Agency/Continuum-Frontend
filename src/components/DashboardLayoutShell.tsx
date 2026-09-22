@@ -50,6 +50,7 @@ const BrandWelcomeBanner = dynamic(() =>
 
 import type { AuthIdentity } from '@/lib/auth/identity';
 import type { AutomationDeploymentEnvironment } from '@/lib/automations/access';
+import type { SidebarBillingView } from '@/lib/billing/sidebarBilling';
 import type { ChangelogEntry } from '@/lib/changelog/schema';
 
 export type BrandSummary = {
@@ -81,6 +82,8 @@ type DashboardLayoutShellProps = {
   automationEnvironment: AutomationDeploymentEnvironment;
   /** Billing products the active brand lacks — their sidebar entries carry a lock. */
   lockedProducts: ProductCode[];
+  /** The sidebar's plan + credits widget. Null while billing is not live. */
+  billing: SidebarBillingView | null;
 };
 
 export default function DashboardLayoutShell({
@@ -92,6 +95,7 @@ export default function DashboardLayoutShell({
   changelogEntries,
   automationEnvironment,
   lockedProducts,
+  billing,
 }: DashboardLayoutShellProps) {
   return (
     <ActiveBrandProvider
@@ -119,6 +123,7 @@ export default function DashboardLayoutShell({
                   <AppSidebar
                     automationEnvironment={automationEnvironment}
                     lockedProducts={lockedProducts}
+                    billing={billing}
                   />
                   <SidebarInset className="flex h-dvh flex-col overflow-hidden bg-transparent">
                     <DashboardHeader changelogEntries={changelogEntries} />

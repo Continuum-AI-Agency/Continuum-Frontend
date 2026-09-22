@@ -138,16 +138,20 @@ test.describe('billing:admin:e2e:bench UI', () => {
     await step('Contract on (confirmed) → billingModel contract, every product', async () => {
       await uiEditor.getByRole('switch', { name: 'Contract' }).click();
       await page.getByRole('button', { name: 'Set Contract' }).click();
+      // admin-update-access writes the subscription row before the product rows, so poll the
+      // whole state: a read between the two writes sees Contract with the old products.
       await expect
-        .poll(async () => (await entitlements()).billingModel, { timeout: 30_000 })
-        .toBe('contract');
-      expect((await entitlements()).products).toEqual([
-        'mcp',
-        'organic_agent',
-        'paid_media',
-        'studio',
-        'trends',
-      ]);
+        .poll(
+          async () => {
+            const { billingModel, products } = await entitlements();
+            return { billingModel, products };
+          },
+          { timeout: 30_000 },
+        )
+        .toEqual({
+          billingModel: 'contract',
+          products: ['mcp', 'organic_agent', 'paid_media', 'studio', 'trends'],
+        });
       await expect(uiEditor.getByRole('switch', { name: 'Contract' })).toHaveAttribute(
         'aria-checked',
         'true',

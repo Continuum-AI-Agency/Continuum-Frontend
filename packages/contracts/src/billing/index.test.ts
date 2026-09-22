@@ -4,6 +4,8 @@ import {
   allowanceResultSchema,
   billedCreditsForBaseCost,
   billingCheckoutRequestSchema,
+  billingOverageRequestSchema,
+  billingOverageResponseSchema,
   billingOverviewSchema,
   billingPaymentRequiredSchema,
   billingPlanChangeRequestSchema,
@@ -49,6 +51,8 @@ describe('billing contracts', () => {
       brandId,
       entitlements,
       hasPaymentMethod: true,
+      overageEnabled: false,
+      overageCapUsd: 100,
       subscription: {
         id: 'sub_1',
         status: 'active',
@@ -75,6 +79,23 @@ describe('billing contracts', () => {
     };
     expect(billingOverviewSchema.parse(overview).subscription?.plans).toEqual(['organic_studio']);
     expect(billingOverviewSchema.safeParse({ ...overview, livemode: true }).success).toBe(false);
+    const { overageEnabled: _dropped, ...withoutOptIn } = overview;
+    expect(billingOverviewSchema.safeParse(withoutOptIn).success).toBe(false);
+    expect(billingOverviewSchema.parse({ ...overview, overageCapUsd: null }).overageCapUsd).toBeNull();
+  });
+
+  it('takes only a boolean overage opt-in and echoes the subscription state', () => {
+    expect(billingOverageRequestSchema.parse({ enabled: true }).enabled).toBe(true);
+    expect(billingOverageRequestSchema.safeParse({}).success).toBe(false);
+    expect(billingOverageRequestSchema.safeParse({ enabled: 'yes' }).success).toBe(false);
+    expect(
+      billingOverageResponseSchema.parse({
+        brandId,
+        subscriptionId: 'sub_1',
+        status: 'active',
+        overageEnabled: true,
+      }).overageEnabled,
+    ).toBe(true);
   });
 
   it('accepts only unique self-serve plans at checkout', () => {

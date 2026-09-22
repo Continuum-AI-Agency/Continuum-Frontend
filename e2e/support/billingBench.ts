@@ -1,11 +1,13 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
-import { brandEntitlementsSchema } from '@continuum/contracts';
+import { type BrandEntitlements, brandEntitlementsSchema } from '@continuum/contracts';
 import type { Page } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Client as PgClient } from 'pg';
 import Stripe from 'stripe';
+import { CANVAS_OVERAGE_PRICE_LOOKUP_KEY } from '../../../packages/billing/src/catalogDefinition';
+import { replaySandboxEventsToWebhook } from '../../../packages/billing/src/replayEvents';
 import { assertStripeTestSecretKey } from '../../../packages/billing/src/testModeGuard';
 
 // The shared harness for the billing Playwright benches (billing:settings:e2e:bench,
@@ -199,6 +201,75 @@ export async function brandEntitlements(db: SupabaseClient, brandId: string) {
     .rpc('get_brand_entitlements', { p_brand_id: brandId });
   if (error) throw new Error(`get_brand_entitlements: ${describeError(error)}`);
   return brandEntitlementsSchema.parse(data);
+}
+
+/* -- the webhook delivery hop ------------------------------------------------------------ */
+/**
+ * Replays the customer's REAL sandbox events through the local stripe-billing-webhook until
+ * `settled` holds for the brand's entitlements. Stripe emits invoice/subscription events a
+ * moment after the API call that caused them, so one replay can land before they exist; the
+ * webhook is idempotent per event id, so re-replaying is safe. Returns what was delivered.
+ */
+export async function replayUntil(input: {
+  db: SupabaseClient;
+  stripe: Stripe;
+  webhookSecret: string;
+  customerId: string;
+  brandId: string;
+  since: number;
+  settled: (entitlements: BrandEntitlements) => boolean;
+  what: string;
+}): Promise<{ attempts: number; types: string[] }> {
+  const types = new Set<string>();
+  for (let attempt = 1; attempt <= 8; attempt += 1) {
+    const { delivered } = await replaySandboxEventsToWebhook({
+      stripe: input.stripe,
+      customerId: input.customerId,
+      since: input.since,
+      webhookUrl: WEBHOOK_URL,
+      secret: input.webhookSecret,
+    });
+    const rejected = delivered.filter((event) => event.status >= 300);
+    if (rejected.length > 0) {
+      throw new Error(
+        `webhook rejected ${rejected.map((e) => `${e.type}=${e.status} ${JSON.stringify(e.body)}`).join('; ')}`,
+      );
+    }
+    for (const event of delivered) types.add(event.type);
+    if (input.settled(await brandEntitlements(input.db, input.brandId))) {
+      return { attempts: attempt, types: [...types] };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+  }
+  throw new Error(`the ledger never showed ${input.what}`);
+}
+
+export const studioBucketOf = (entitlements: BrandEntitlements) =>
+  entitlements.buckets.find((bucket) => bucket.bucket === 'studio') ?? null;
+
+/** The customer's one active sandbox subscription (live mode refused). */
+export async function activeSubscription(
+  stripe: Stripe,
+  customerId: string,
+): Promise<Stripe.Subscription> {
+  const { data } = await stripe.subscriptions.list({ customer: customerId, status: 'active' });
+  const [subscription] = data;
+  if (data.length !== 1 || !subscription) {
+    throw new Error(`expected 1 active subscription, found ${data.length}`);
+  }
+  if (subscription.livemode !== false) throw new Error('subscription is live-mode');
+  return subscription;
+}
+
+/** Whether the customer's live sandbox subscription carries the metered overage price. */
+export async function subscriptionHasOverageItem(
+  stripe: Stripe,
+  customerId: string,
+): Promise<boolean> {
+  const subscription = await activeSubscription(stripe, customerId);
+  return subscription.items.data.some(
+    (item) => item.price.lookup_key === CANVAS_OVERAGE_PRICE_LOOKUP_KEY,
+  );
 }
 
 /* -- Stripe-hosted Checkout ---------------------------------------------------------- */

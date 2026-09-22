@@ -115,7 +115,7 @@ mock.module('@/lib/brands/active-brand-context', () => ({
     activeBrandId,
     brandSummaries: [],
     permissions: [],
-    brandAccess: { billingLive: false, products: [], legacyTier: 0 },
+    brandAccess: { billingLive: false, products: [], entitlements: null, legacyTier: 0 },
     user: null,
   }),
 }));

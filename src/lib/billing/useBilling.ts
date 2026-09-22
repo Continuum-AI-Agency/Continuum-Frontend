@@ -36,11 +36,18 @@ function useBillingOverview(brandId: string, pollIntervalMs: number | false) {
 // One toast slot for the whole wait: the outcome replaces "Payment received" in place.
 const PENDING_TOAST_KEY = 'billing-pending-change';
 
-const SETTLED_TITLE: Record<PendingBillingChange['kind'], string> = {
-  plan_added: 'Your plan is active',
-  plan_removed: 'Plan removed',
-  credits_added: 'Canvas credits added',
-};
+function settledTitle(change: PendingBillingChange): string {
+  switch (change.kind) {
+    case 'plan_added':
+      return 'Your plan is active';
+    case 'plan_removed':
+      return 'Plan removed';
+    case 'credits_added':
+      return 'Canvas credits added';
+    case 'overage_changed':
+      return change.enabled ? 'Auto-billing is on' : 'Auto-billing is off';
+  }
+}
 
 /**
  * The brand's billing overview, plus any change Stripe has confirmed that our webhook may not
@@ -86,9 +93,11 @@ export function useBillingOverviewWithPendingChange(brandId: string) {
 
   useEffect(() => {
     if (!pending || !data || !isChangeSettled(pending, data)) return;
-    show({ title: SETTLED_TITLE[pending.kind], variant: 'success', dedupeKey: PENDING_TOAST_KEY });
+    show({ title: settledTitle(pending), variant: 'success', dedupeKey: PENDING_TOAST_KEY });
     setPending(null);
-  }, [data, pending, show]);
+    // The sidebar's credits widget is server-rendered from the entitlements; re-render it.
+    router.refresh();
+  }, [data, pending, router, show]);
 
   useEffect(() => {
     if (!pending) return;

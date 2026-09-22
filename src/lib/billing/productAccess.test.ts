@@ -12,11 +12,13 @@ import {
 const live = (products: ProductCode[]): BrandAccess => ({
   billingLive: true,
   products,
+  entitlements: null,
   legacyTier: 0,
 });
 const notLive = (legacyTier: number): BrandAccess => ({
   billingLive: false,
   products: [],
+  entitlements: null,
   legacyTier,
 });
 

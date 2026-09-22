@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { type BillingOverview, billingOverviewSchema } from '@continuum/contracts';
 import {
+  AUTO_BILLING_CONTRACT,
+  AUTO_BILLING_NEEDS_PLAN,
   checkoutReturnParams,
   isBrandOwner,
   isChangeSettled,
@@ -17,6 +19,8 @@ function overview(patch: {
   subscription?: BillingOverview['subscription'];
   canvas?: Partial<BillingOverview['canvas']>;
   hasPaymentMethod?: boolean;
+  overageEnabled?: boolean;
+  overageCapUsd?: number | null;
   invoices?: BillingOverview['invoices'];
 }): BillingOverview {
   return billingOverviewSchema.parse({
@@ -35,6 +39,10 @@ function overview(patch: {
       ...patch.entitlements,
     },
     hasPaymentMethod: patch.hasPaymentMethod ?? false,
+    overageEnabled: patch.overageEnabled ?? false,
+    // billing-api answers the plan's cap for a live subscription, null without one.
+    overageCapUsd:
+      patch.overageCapUsd !== undefined ? patch.overageCapUsd : patch.subscription ? 100 : null,
     subscription: patch.subscription ?? null,
     invoices: patch.invoices ?? [],
     canvas: {
@@ -114,6 +122,7 @@ describe('toBillingView — states', () => {
         'Organic agent, calendar and posting',
         'Jaina, Forge ad creation, approvals and optimizer',
       ],
+      autoBilling: { enabled: false, capUsd: null, disabledReason: AUTO_BILLING_CONTRACT },
     });
   });
 
@@ -255,6 +264,56 @@ describe('toBillingView — Canvas credits', () => {
   });
 });
 
+describe('toBillingView — auto-billing overage (opt-in)', () => {
+  const organicPlus = (patch: Parameters<typeof overview>[0] = {}) =>
+    overview({
+      entitlements: { billingModel: 'stripe', plans: ['organic_studio'] },
+      subscription: subscription(['organic_studio']),
+      hasPaymentMethod: true,
+      ...patch,
+    });
+
+  test('off by default on a live subscription, quoting the cap it would apply', () => {
+    expect(selfServe(organicPlus()).autoBilling).toEqual({
+      enabled: false,
+      capUsd: 100,
+      disabledReason: null,
+    });
+  });
+
+  test('reads the subscription opt-in (overageEnabled), not the bucket', () => {
+    const view = selfServe(
+      organicPlus({
+        overageEnabled: true,
+        canvas: { studioBucket: { ...studioBucket(10, 0), overageAction: 'block' } },
+      }),
+    );
+    expect(view.autoBilling.enabled).toBe(true);
+  });
+
+  test('no live subscription: disabled, asking for a plan first', () => {
+    expect(selfServe(overview({})).autoBilling).toEqual({
+      enabled: false,
+      capUsd: null,
+      disabledReason: AUTO_BILLING_NEEDS_PLAN,
+    });
+    const canceled = overview({ subscription: subscription(['organic_studio'], 'canceled') });
+    expect(selfServe(canceled).autoBilling.disabledReason).toBe(AUTO_BILLING_NEEDS_PLAN);
+  });
+
+  test('out of credits only with a live plan, nothing left and nothing billed to the card', () => {
+    const spent = { studioBucket: { ...studioBucket(10, 10), overageAction: 'block' as const } };
+    expect(selfServe(organicPlus({ canvas: spent })).outOfCredits).toBe(true);
+    expect(
+      selfServe(organicPlus({ canvas: { ...spent, purchasedBalanceUsd: 10 } })).outOfCredits,
+    ).toBe(false);
+    expect(
+      selfServe(organicPlus({ canvas: { studioBucket: studioBucket(10, 10) } })).outOfCredits,
+    ).toBe(false);
+    expect(selfServe(overview({})).outOfCredits).toBe(false);
+  });
+});
+
 describe('toBillingView — invoices', () => {
   test('maps hosted invoice rows with the amount in dollars and falls back to the id', () => {
     const view = selfServe(
@@ -362,6 +421,27 @@ describe('isChangeSettled', () => {
     const change = { kind: 'plan_removed', plan: 'organic_studio' } as const;
     expect(isChangeSettled(change, organicActive)).toBe(false);
     expect(isChangeSettled(change, overview({}))).toBe(true);
+  });
+
+  test('an auto-billing change settles once the subscription AND the studio bucket agree', () => {
+    const on = { kind: 'overage_changed', enabled: true } as const;
+    const bucket = (overageAction: 'bill' | 'block') => ({
+      entitlements: { buckets: [{ ...studioBucket(10, 0), overageAction }] },
+    });
+    // POST /overage returned, but Stripe's webhook has not switched the bucket yet.
+    expect(isChangeSettled(on, overview({ overageEnabled: true, ...bucket('block') }))).toBe(false);
+    expect(isChangeSettled(on, overview({ overageEnabled: false, ...bucket('bill') }))).toBe(false);
+    expect(isChangeSettled(on, overview({ overageEnabled: true, ...bucket('bill') }))).toBe(true);
+    // No studio bucket (Performance Plus only): the subscription alone decides.
+    expect(isChangeSettled(on, overview({ overageEnabled: true }))).toBe(true);
+
+    const off = { kind: 'overage_changed', enabled: false } as const;
+    expect(isChangeSettled(off, overview({ overageEnabled: false, ...bucket('bill') }))).toBe(
+      false,
+    );
+    expect(isChangeSettled(off, overview({ overageEnabled: false, ...bucket('block') }))).toBe(
+      true,
+    );
   });
 
   test('a credit pack settles once the purchased balance rises above where it started', () => {

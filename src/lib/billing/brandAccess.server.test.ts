@@ -57,6 +57,7 @@ describe('readBrandAccess', () => {
     expect(await readBrandAccess(BRAND_ID, client)).toEqual({
       billingLive: false,
       products: [],
+      entitlements: null,
       legacyTier: 3,
     });
     expect(calls).toEqual([
@@ -66,13 +67,12 @@ describe('readBrandAccess', () => {
   });
 
   test('a readable billing schema is live and resolves exactly the active products', async () => {
-    const { client } = fakeClient({
-      data: entitlements(['organic_agent', 'studio']),
-      error: null,
-    });
+    const read = entitlements(['organic_agent', 'studio']);
+    const { client } = fakeClient({ data: read, error: null });
     expect(await readBrandAccess(BRAND_ID, client)).toEqual({
       billingLive: true,
       products: ['organic_agent', 'studio'],
+      entitlements: read,
       legacyTier: 3,
     });
   });
@@ -93,6 +93,7 @@ describe('readBrandAccess', () => {
     expect(await readBrandAccess(BRAND_ID, client)).toEqual({
       billingLive: true,
       products: [],
+      entitlements: null,
       legacyTier: 3,
     });
     expect(String(consoleError.mock.calls[0]?.[1])).toBe('42501 · not authorized for brand');
@@ -104,6 +105,7 @@ describe('readBrandAccess', () => {
     expect(await readBrandAccess(BRAND_ID, client)).toMatchObject({
       billingLive: true,
       products: [],
+      entitlements: null,
     });
     expect(String(consoleError.mock.calls[0]?.[1])).toBe('fetch failed');
   });
@@ -114,6 +116,7 @@ describe('readBrandAccess', () => {
     expect(await readBrandAccess(BRAND_ID, client)).toMatchObject({
       billingLive: true,
       products: [],
+      entitlements: null,
     });
   });
 

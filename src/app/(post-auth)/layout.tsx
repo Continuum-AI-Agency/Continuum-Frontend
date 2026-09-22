@@ -7,6 +7,7 @@ import { NavigationTransition } from '@/components/ui/NavigationTransition';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { resolveAutomationDeploymentEnvironment } from '@/lib/automations/access';
 import { lockedProducts } from '@/lib/billing/productAccess';
+import { toSidebarBilling } from '@/lib/billing/sidebarBilling';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { getServerChangelog } from '@/lib/changelog/server';
 import { ReactQueryProvider } from '@/lib/react-query/provider';
@@ -48,6 +49,7 @@ async function DashboardLayoutContent({ children }: { children: React.ReactNode 
       changelogEntries={changelogEntries}
       automationEnvironment={automationEnvironment}
       lockedProducts={lockedProducts(brandAccess)}
+      billing={toSidebarBilling(brandAccess)}
     >
       <NavigationTransition>{children}</NavigationTransition>
     </DashboardLayoutShell>

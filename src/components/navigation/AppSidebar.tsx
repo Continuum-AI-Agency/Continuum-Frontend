@@ -40,6 +40,7 @@ import {
   canAccessAutomations,
 } from '@/lib/automations/access';
 import { PLAN_NAME_FOR_PRODUCT } from '@/lib/billing/productAccess';
+import type { SidebarBillingView } from '@/lib/billing/sidebarBilling';
 import { isAdminUser } from '@/lib/brands/brand-switcher-utils';
 import { cn } from '@/lib/utils';
 import { BrandSwitcher } from './BrandSwitcher';
@@ -50,6 +51,7 @@ import {
   type AppNavigationItem,
   isRouteActive,
 } from './routes';
+import { SidebarBillingWidget } from './SidebarBillingWidget';
 
 type NavBadgeTone = NonNullable<NonNullable<AppNavigationItem['badge']>['tone']>;
 
@@ -131,13 +133,15 @@ function RouteAwareCollapsible({
   return <Collapsible open={open} onOpenChange={setOpen} {...props} />;
 }
 
-function AppSidebarInner({
-  automationEnvironment,
-  lockedProducts,
-}: {
+type AppSidebarProps = {
   automationEnvironment: AutomationDeploymentEnvironment;
+  /** Products the active brand lacks (computed server-side). Empty until billing is live. */
   lockedProducts: readonly ProductCode[];
-}) {
+  /** The bottom-left plan + credits widget (computed server-side). Null until billing is live. */
+  billing: SidebarBillingView | null;
+};
+
+function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: AppSidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -543,6 +547,7 @@ function AppSidebarInner({
         </SidebarContent>
 
         <SidebarFooter className="px-3 pb-3">
+          {billing ? <SidebarBillingWidget view={billing} /> : null}
           <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
             {APP_NAVIGATION_FOOTER.map((item) => {
               if (item.adminOnly && !isAdmin) return null;
@@ -654,20 +659,10 @@ function AppSidebarInner({
   );
 }
 
-export function AppSidebar({
-  automationEnvironment,
-  lockedProducts = [],
-}: {
-  automationEnvironment: AutomationDeploymentEnvironment;
-  /** Products the active brand lacks (computed server-side). Empty until billing is live. */
-  lockedProducts?: readonly ProductCode[];
-}) {
+export function AppSidebar(props: AppSidebarProps) {
   return (
     <Suspense fallback={null}>
-      <AppSidebarInner
-        automationEnvironment={automationEnvironment}
-        lockedProducts={lockedProducts}
-      />
+      <AppSidebarInner {...props} />
     </Suspense>
   );
 }

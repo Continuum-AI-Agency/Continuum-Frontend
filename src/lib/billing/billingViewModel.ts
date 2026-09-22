@@ -2,8 +2,8 @@ import {
   type BillingOverview,
   type CreditPackOffer,
   PLAN_CODES,
-  PRODUCT_CODES,
   type PlanCode,
+  PRODUCT_CODES,
   type ProductCode,
   planCodeSchema,
   usdToCredits,
@@ -61,6 +61,21 @@ export type InvoiceRowView = {
   href: string | null;
 };
 
+/** The owner's "Auto-bill overage to card" switch. */
+export type AutoBillingView = {
+  /** The live subscription carries the metered overage price (`overview.overageEnabled`). */
+  enabled: boolean;
+  /** The monthly ceiling auto-billing applies; null when there is no live subscription. */
+  capUsd: number | null;
+  /** Why the switch cannot be flipped, or null when the owner can flip it. */
+  disabledReason: string | null;
+};
+
+export const AUTO_BILLING_NEEDS_PLAN =
+  'Choose a plan first — auto-billing charges overage to the card on your subscription.';
+export const AUTO_BILLING_CONTRACT =
+  'Contract brands are billed through their agreement and never metered.';
+
 export type SelfServeBillingView = {
   kind: 'self_serve';
   hasLiveSubscription: boolean;
@@ -69,11 +84,18 @@ export type SelfServeBillingView = {
   hasPaymentMethod: boolean;
   plans: PlanCardView[];
   credits: CanvasCreditsView;
+  /** Nothing left and nothing billed to the card: generation is refused until the owner acts. */
+  outOfCredits: boolean;
+  autoBilling: AutoBillingView;
   creditPack: CreditPackOffer;
   invoices: InvoiceRowView[];
 };
 
-export type ContractBillingView = { kind: 'contract'; features: string[] };
+export type ContractBillingView = {
+  kind: 'contract';
+  features: string[];
+  autoBilling: AutoBillingView;
+};
 
 export type BillingView = SelfServeBillingView | ContractBillingView;
 
@@ -154,7 +176,11 @@ export function toBillingView(
 ): BillingView {
   const { entitlements, subscription } = overview;
   if (entitlements.billingModel === 'contract') {
-    return { kind: 'contract', features: featuresFor(entitlements.products) };
+    return {
+      kind: 'contract',
+      features: featuresFor(entitlements.products),
+      autoBilling: { enabled: false, capUsd: null, disabledReason: AUTO_BILLING_CONTRACT },
+    };
   }
 
   const liveSubscription =
@@ -179,6 +205,7 @@ export function toBillingView(
       highlighted: need !== null && plan.products.includes(need),
     }));
 
+  const credits = toCreditsView(overview);
   return {
     kind: 'self_serve',
     hasLiveSubscription: liveSubscription !== null,
@@ -186,7 +213,14 @@ export function toBillingView(
     renewsAt: liveSubscription?.currentPeriodEnd ?? null,
     hasPaymentMethod: overview.hasPaymentMethod,
     plans,
-    credits: toCreditsView(overview),
+    credits,
+    outOfCredits:
+      liveSubscription !== null && credits.availableCredits === 0 && !credits.billsOverageToCard,
+    autoBilling: {
+      enabled: overview.overageEnabled,
+      capUsd: overview.overageCapUsd,
+      disabledReason: liveSubscription ? null : AUTO_BILLING_NEEDS_PLAN,
+    },
     creditPack: overview.catalog.creditPack,
     invoices: overview.invoices.map((invoice) => ({
       id: invoice.id,
@@ -211,7 +245,8 @@ export const CHANGE_POLL_WINDOW_MS = 60_000;
 export type PendingBillingChange =
   | { kind: 'plan_added'; plan: PlanCode }
   | { kind: 'plan_removed'; plan: PlanCode }
-  | { kind: 'credits_added'; purchasedCreditsBefore: number };
+  | { kind: 'credits_added'; purchasedCreditsBefore: number }
+  | { kind: 'overage_changed'; enabled: boolean };
 
 export type CheckoutReturn =
   | { outcome: 'cancel' }
@@ -258,5 +293,14 @@ export function isChangeSettled(change: PendingBillingChange, overview: BillingO
       return !overview.entitlements.plans.includes(change.plan);
     case 'credits_added':
       return usdToCredits(overview.canvas.purchasedBalanceUsd) > change.purchasedCreditsBefore;
+    case 'overage_changed': {
+      // The subscription flips at once; the studio bucket only once Stripe's webhook lands, and
+      // that bucket is what the meter enforces and the sidebar widget reads.
+      const studio = overview.entitlements.buckets.find((bucket) => bucket.bucket === 'studio');
+      return (
+        overview.overageEnabled === change.enabled &&
+        (!studio || (studio.overageAction === 'bill') === change.enabled)
+      );
+    }
   }
 }

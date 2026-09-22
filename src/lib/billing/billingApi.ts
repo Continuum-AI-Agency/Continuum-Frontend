@@ -1,6 +1,7 @@
 import {
   type BillingCheckoutResponse,
   type BillingCreditCheckoutResponse,
+  type BillingOverageResponse,
   type BillingOverview,
   type BillingPlanChangeRequest,
   type BillingPlanChangeResponse,
@@ -10,6 +11,8 @@ import {
   billingCheckoutResponseSchema,
   billingCreditCheckoutRequestSchema,
   billingCreditCheckoutResponseSchema,
+  billingOverageRequestSchema,
+  billingOverageResponseSchema,
   billingOverviewSchema,
   billingPlanChangeRequestSchema,
   billingPlanChangeResponseSchema,
@@ -113,6 +116,17 @@ export function changePlan(
   return callBillingApi(`brands/${brandId}/plans`, billingPlanChangeResponseSchema, {
     method: 'POST',
     body: billingPlanChangeRequestSchema.parse(input),
+  });
+}
+
+/** Auto-bill Canvas overage to the card on file: adds or removes the metered subscription item. */
+export function setOverageBilling(
+  brandId: string,
+  input: { enabled: boolean },
+): Promise<BillingOverageResponse> {
+  return callBillingApi(`brands/${brandId}/overage`, billingOverageResponseSchema, {
+    method: 'POST',
+    body: billingOverageRequestSchema.parse(input),
   });
 }
 

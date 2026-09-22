@@ -47,7 +47,12 @@ export type ActiveBrandContext = {
   user: AuthIdentity | null;
 };
 
-const NO_BRAND_ACCESS: BrandAccess = { billingLive: false, products: [], legacyTier: 0 };
+const NO_BRAND_ACCESS: BrandAccess = {
+  billingLive: false,
+  products: [],
+  entitlements: null,
+  legacyTier: 0,
+};
 
 type BrandPermissionRow = {
   brand_profile_id: string;

@@ -120,14 +120,14 @@ export function CanvasCreditsMeter({ credits }: { credits: CanvasCreditsView }) 
 
       <p className="max-w-[70ch] text-xs text-muted-foreground">
         Each generation spends rollover credits first, then this month&apos;s included credits, then
-        purchased credits.{' '}
+        purchased packs.{' '}
         {credits.billsOverageToCard
           ? `After that, usage is billed to your card at ${formatUsd(0.01)} per credit${
               credits.overageCapUsd !== null
                 ? `, up to ${formatUsd(credits.overageCapUsd)} a month`
                 : ''
             }.`
-          : 'After that, generation pauses until you buy more credits.'}
+          : 'When credits run out, generation pauses until you buy a pack — or turn on auto-billing.'}
       </p>
     </div>
   );

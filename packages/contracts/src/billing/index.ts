@@ -160,6 +160,18 @@ export const billingOverviewSchema = z
     brandId: z.string().uuid(),
     entitlements: brandEntitlementsSchema,
     hasPaymentMethod: z.boolean(),
+    /**
+     * The owner opted in to auto-billing Canvas overage to the card: the brand's live Stripe
+     * subscription carries the metered overage price. Off → exhausted credits are refused
+     * (402 `credits_exhausted`) until a pack is bought.
+     */
+    overageEnabled: z.boolean(),
+    /**
+     * The monthly overage ceiling opting in applies — the studio plan's
+     * `studio_overage_cap_usd` (organic_studio wins over paid_media), whether or not the owner
+     * has opted in yet. Null when there is no live subscription.
+     */
+    overageCapUsd: z.number().nonnegative().nullable(),
     subscription: billingSubscriptionViewSchema.nullable(),
     invoices: z.array(billingInvoiceViewSchema),
     canvas: billingCanvasUsageSchema,
@@ -221,6 +233,24 @@ export const billingPlanChangeResponseSchema = z
   })
   .strict();
 export type BillingPlanChangeResponse = z.infer<typeof billingPlanChangeResponseSchema>;
+
+/**
+ * `POST /billing-api/brands/:id/overage` — opt in/out of metered Canvas overage (owner only).
+ * Adds or removes the metered price on the brand's live subscription; the studio bucket
+ * switches to `bill` (up to the plan's cap) / `block` once Stripe's webhook lands.
+ */
+export const billingOverageRequestSchema = z.object({ enabled: z.boolean() }).strict();
+export type BillingOverageRequest = z.infer<typeof billingOverageRequestSchema>;
+
+export const billingOverageResponseSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    subscriptionId: z.string().min(1),
+    status: z.string().min(1),
+    overageEnabled: z.boolean(),
+  })
+  .strict();
+export type BillingOverageResponse = z.infer<typeof billingOverageResponseSchema>;
 
 /** `POST /billing-api/brands/:id/credits/checkout` — one-time Canvas credit packs ($10 / 1,000). */
 export const billingCreditCheckoutRequestSchema = z

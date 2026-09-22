@@ -73,14 +73,14 @@ export async function readBrandAccess(
 
   const rpcError = entitlementsReply.error as { code?: unknown } | null;
   if (rpcError?.code === SCHEMA_NOT_EXPOSED) {
-    return { billingLive: false, products: [], legacyTier };
+    return { billingLive: false, products: [], entitlements: null, legacyTier };
   }
   if (rpcError) {
     console.error(
       `[billing] get_brand_entitlements failed for brand ${brandId}; treating it as no products`,
       describeSupabaseError(rpcError),
     );
-    return { billingLive: true, products: [], legacyTier };
+    return { billingLive: true, products: [], entitlements: null, legacyTier };
   }
 
   const parsed = brandEntitlementsSchema.safeParse(entitlementsReply.data);
@@ -89,7 +89,12 @@ export async function readBrandAccess(
       `[billing] get_brand_entitlements returned an unexpected shape for brand ${brandId}; treating it as no products`,
       parsed.error.message,
     );
-    return { billingLive: true, products: [], legacyTier };
+    return { billingLive: true, products: [], entitlements: null, legacyTier };
   }
-  return { billingLive: true, products: parsed.data.products, legacyTier };
+  return {
+    billingLive: true,
+    products: parsed.data.products,
+    entitlements: parsed.data,
+    legacyTier,
+  };
 }

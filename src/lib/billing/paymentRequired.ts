@@ -5,7 +5,7 @@ import {
 } from '@continuum/contracts';
 import type { ToastOptions } from '@/components/ui/ToastProvider';
 import { toast } from '@/components/ui/toast-imperative';
-import { billingHref, PLAN_NAME_FOR_PRODUCT } from './productAccess';
+import { billingHref, CREDITS_HREF, PLAN_NAME_FOR_PRODUCT } from './productAccess';
 
 // The Backend (and any edge function) answers a product the brand has not bought, or a spent
 // Canvas balance, with HTTP 402 and the contracts body. This turns that body into the one CTA
@@ -32,11 +32,11 @@ export function paymentRequiredToast(
   if (body.error === 'credits_exhausted') {
     return {
       title: 'Out of Canvas credits',
-      description: 'Buy credits or add a card to keep generating.',
+      description: 'Buy a credit pack, or turn on auto-billing, to keep generating.',
       variant: 'warning',
       durationMs: 10_000,
       dedupeKey: 'billing-402-credits',
-      action: { label: 'Buy credits', onClick: () => navigate(billingHref()) },
+      action: { label: 'Buy credits', onClick: () => navigate(CREDITS_HREF) },
     };
   }
   const planName = PLAN_NAME_FOR_PRODUCT[body.product];
