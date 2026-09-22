@@ -1,5 +1,6 @@
 'use client';
 
+import type { ProductCode } from '@continuum/contracts';
 import dynamic from 'next/dynamic';
 import type React from 'react';
 import { ActiveProjectProvider } from '@/components/projects';
@@ -49,6 +50,7 @@ const BrandWelcomeBanner = dynamic(() =>
 
 import type { AuthIdentity } from '@/lib/auth/identity';
 import type { AutomationDeploymentEnvironment } from '@/lib/automations/access';
+import type { SidebarBillingView } from '@/lib/billing/sidebarBilling';
 import type { ChangelogEntry } from '@/lib/changelog/schema';
 
 export type BrandSummary = {
@@ -78,6 +80,10 @@ type DashboardLayoutShellProps = {
   permissions: BrandPermission[];
   changelogEntries: ChangelogEntry[];
   automationEnvironment: AutomationDeploymentEnvironment;
+  /** Billing products the active brand lacks — their sidebar entries carry a lock. */
+  lockedProducts: ProductCode[];
+  /** The sidebar's plan + credits widget. Null while billing is not live. */
+  billing: SidebarBillingView | null;
 };
 
 export default function DashboardLayoutShell({
@@ -88,6 +94,8 @@ export default function DashboardLayoutShell({
   permissions,
   changelogEntries,
   automationEnvironment,
+  lockedProducts,
+  billing,
 }: DashboardLayoutShellProps) {
   return (
     <ActiveBrandProvider
@@ -112,7 +120,11 @@ export default function DashboardLayoutShell({
                 <div className="particle-layer bottom" aria-hidden="true" />
 
                 <SidebarProvider defaultOpen={false}>
-                  <AppSidebar automationEnvironment={automationEnvironment} />
+                  <AppSidebar
+                    automationEnvironment={automationEnvironment}
+                    lockedProducts={lockedProducts}
+                    billing={billing}
+                  />
                   <SidebarInset className="flex h-dvh flex-col overflow-hidden bg-transparent">
                     <DashboardHeader changelogEntries={changelogEntries} />
                     {/* No inline gutter: surfaces are full-bleed panes and the

@@ -245,7 +245,7 @@ function describeVideoModels(): string {
     '',
     `IMAGE GENERATOR MODELS — the ONLY values a nanoGen \`data.model\` accepts: ${IMAGE_GENERATOR_MODELS.join(', ')}.`,
     'DO NOT set `model` on a nanoGen at all unless the user names one — the default',
-    '(nano-banana-2) is the first-party model. gpt-image-2 / flux-2-* are external',
+    '(nano-banana-2) is the first-party model. gpt-image-* / flux-2-* are external',
     'paid providers reserved for an explicit user request.',
     '',
     'IMAGE SIZES — a nanoGen `data.imageSize` is only legal for the models that take one:',

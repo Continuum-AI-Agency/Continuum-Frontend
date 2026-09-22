@@ -1,6 +1,12 @@
 'use client';
 
-import { type MediaAsset, publishFormatForAssetKinds } from '@continuum/contracts';
+import {
+  type MediaAsset,
+  type PublishFormat,
+  type PublishOptionsByPlatform,
+  publishFormatForAssetKinds,
+  resolvePublishFormat,
+} from '@continuum/contracts';
 import {
   DndContext,
   type DragEndEvent,
@@ -35,13 +41,17 @@ import { useDraftWithFreshMedia } from '@/components/organic/hooks/useDraftWithF
 import { useFanOutDraft } from '@/components/organic/hooks/useFanOutDraft';
 import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
 import { usePublishDraft } from '@/components/organic/hooks/usePublishDraft';
+import {
+  type PublishOptionsChange,
+  PublishOptionsPanel,
+} from '@/components/organic/publish-options/PublishOptionsPanel';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DraftHookViralityBadge } from '@/components/virality/DraftHookViralityBadge';
 import { uploadDraftCreatives } from '@/lib/creative-assets/uploadDraftCreative';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isOrganicPlatformKey } from '@/lib/organic/platforms';
-import { POST_PLATFORMS } from '@/lib/organic/postPlatforms';
+import { isPostPlatform, POST_PLATFORMS } from '@/lib/organic/postPlatforms';
 import { inferPublishPlatform, publishPlatformLabel } from '@/lib/organic/publish-utils';
 import { useCalendarStore } from '@/lib/organic/store';
 import { cn } from '@/lib/utils';
@@ -741,6 +751,11 @@ export function OrganicDraftPreview({
     previewSlides.length > 0
       ? publishFormatForAssetKinds(previewSlides.map((slide) => slide.kind)) === 'CAROUSEL'
       : draft.format.toLowerCase() === 'carousel';
+  const publishFormat: PublishFormat = isCarouselFormat
+    ? 'CAROUSEL'
+    : resolvePublishFormat(draft.format);
+  // The post itself, or what each platform does with it beyond the caption.
+  const [panelTab, setPanelTab] = React.useState<'post' | 'publish'>('post');
 
   // Active carousel slide POSITION (shared between preview and strip).
   const [activeSlideIndex, setActiveSlideIndex] = React.useState(0);
@@ -881,6 +896,39 @@ export function OrganicDraftPreview({
       });
     },
     [fieldEditor],
+  );
+
+  // The map as this panel last wrote it. Every save sends the WHOLE map, so it must be
+  // composed from the newest one — and the `draft` prop was observed (organic:ship bench,
+  // a deep-linked draft) still lacking a first comment saved seconds earlier, which made
+  // the next cover pick overwrite it. Composing from what this panel wrote cannot lag.
+  const [writtenOptions, setWrittenOptions] = React.useState<{
+    draftId: string;
+    map: PublishOptionsByPlatform;
+  } | null>(null);
+  const publishOptions =
+    writtenOptions?.draftId === draft.id ? writtenOptions.map : draft.publishOptions;
+
+  // The whole per-platform map travels on every edit (see plannerDraftFieldPatchSchema).
+  // A typed first comment coalesces; a discrete pick first flushes any pending typing, whose
+  // older map would otherwise land after it and undo the pick.
+  const handlePublishOptionsChange = React.useCallback<PublishOptionsChange>(
+    (next, mode) => {
+      const previous = publishOptions;
+      setWrittenOptions({ draftId: draft.id, map: next });
+      const patch = { publishOptions: next };
+      if (mode === 'typing') {
+        fieldEditor.queueFieldEdit(patch, ['publishOptions'], { publishOptions: next });
+        return;
+      }
+      void fieldEditor
+        .flush()
+        .then(() => fieldEditor.editField(patch, ['publishOptions'], { publishOptions: next }))
+        .then((saved) => {
+          if (!saved) setWrittenOptions({ draftId: draft.id, map: previous ?? {} });
+        });
+    },
+    [draft.id, fieldEditor, publishOptions],
   );
 
   const isApproveDisabled = draft.status === 'scheduled' || draft.status === 'streaming';
@@ -1215,6 +1263,81 @@ export function OrganicDraftPreview({
       />
     ) : null;
 
+  // The payoff of multi-select: check how ONE copy lands on each surface before
+  // committing, or set each surface's own publish options. Purely a view switch — it
+  // never edits the post.
+  const platformSwitch = (legend: string) =>
+    selectedPlatforms.length > 1 ? (
+      <fieldset className="flex items-center gap-1.5 border-0 p-0">
+        <legend className="float-left mr-1.5 text-2xs uppercase tracking-wide text-muted-foreground">
+          {legend}
+        </legend>
+        {selectedPlatforms.map((value) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={value === framePlatform}
+            onClick={() => setPreviewFramePlatform(value)}
+            className={cn(
+              'rounded-md border px-2 py-0.5 text-2xs font-medium transition-colors duration-150',
+              value === framePlatform
+                ? 'border-primary/40 bg-primary/10 text-primary'
+                : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground',
+            )}
+          >
+            {POST_PLATFORMS[value].abbr}
+          </button>
+        ))}
+      </fieldset>
+    ) : null;
+
+  const panelTabs = (
+    <div
+      role="tablist"
+      aria-label="Preview or publish options"
+      className="flex items-center gap-0.5 self-start rounded-md border border-border/60 bg-background p-0.5"
+    >
+      {(['post', 'publish'] as const).map((tab) => (
+        <button
+          key={tab}
+          type="button"
+          role="tab"
+          aria-selected={panelTab === tab}
+          onClick={() => setPanelTab(tab)}
+          className={cn(
+            'h-6 rounded px-2.5 text-xs font-medium transition-colors duration-150',
+            panelTab === tab
+              ? 'bg-muted/70 text-foreground'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {tab === 'post' ? 'Preview' : 'Publish'}
+        </button>
+      ))}
+    </div>
+  );
+
+  const publishTab = (
+    <div className="flex flex-col gap-3">
+      {platformSwitch('Options for')}
+      {isPostPlatform(framePlatform) ? (
+        <PublishOptionsPanel
+          draft={draftForPreview}
+          publishOptions={publishOptions}
+          platform={framePlatform}
+          format={publishFormat}
+          brandId={brandProfileId}
+          disabled={isPublished || draft.status === 'streaming'}
+          onChange={handlePublishOptionsChange}
+        />
+      ) : (
+        <p className="rounded-xl border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+          Publishing to {framePlatform} is not supported yet, so it has no publish options.
+        </p>
+      )}
+    </div>
+  );
+
   const editToggle = (
     <button
       type="button"
@@ -1338,90 +1461,80 @@ export function OrganicDraftPreview({
             className="mx-auto flex w-full flex-col gap-3"
             style={{ maxWidth: `${previewMaxWidth}px` }}
           >
-            {draftHook && brandProfileId ? (
-              <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-background/90 px-3 py-2">
-                <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Hook
-                </span>
-                <p className="min-w-0 flex-1 truncate text-sm text-foreground" title={draftHook}>
-                  {draftHook}
-                </p>
-                <DraftHookViralityBadge brandId={brandProfileId} hook={draftHook} />
-              </div>
-            ) : null}
+            {panelTabs}
 
-            {creativeOpen && (
-              <ContextualPanel title="Creative direction" onClose={() => setCreativeOpen(false)}>
-                <InlinePreviewTextarea
-                  value={creativeDirection}
-                  onChange={(event) => handleCreativeDirectionChange(event.target.value)}
-                  onBlur={() => {
-                    void fieldEditor.flush();
-                  }}
-                  placeholder="Describe the hook, visual intent, and mood."
-                  className="min-h-[5rem] text-sm leading-relaxed"
-                />
-              </ContextualPanel>
-            )}
-
-            {hashtagsOpen && (
-              <ContextualPanel title="Hashtags" onClose={() => setHashtagsOpen(false)}>
-                <HashtagTiers draft={draft} onHashtagsChange={handleHashtagsChange} />
-              </ContextualPanel>
-            )}
-
-            {/* The payoff of multi-select: check how ONE copy lands on each surface
-                before committing. Purely a view switch — it never edits the post. */}
-            {selectedPlatforms.length > 1 && (
-              <fieldset className="flex items-center gap-1.5 border-0 p-0">
-                <legend className="float-left mr-1.5 text-2xs uppercase tracking-wide text-muted-foreground">
-                  See it on
-                </legend>
-                {selectedPlatforms.map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={value === framePlatform}
-                    onClick={() => setPreviewFramePlatform(value)}
-                    className={cn(
-                      'rounded-md border px-2 py-0.5 text-2xs font-medium transition-colors duration-150',
-                      value === framePlatform
-                        ? 'border-primary/40 bg-primary/10 text-primary'
-                        : 'border-border/60 text-muted-foreground hover:border-border hover:text-foreground',
-                    )}
-                  >
-                    {POST_PLATFORMS[value].abbr}
-                  </button>
-                ))}
-              </fieldset>
-            )}
-
-            {isHyperframeFormat ? (
-              <div className="flex flex-col gap-3">
-                <HyperFramePlayer draft={draftForPreview} brandId={brandProfileId ?? ''} />
-                <div className="rounded-xl border border-border/70 bg-background/90 p-3">
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Caption
-                  </p>
-                  <EditableCaption
-                    value={draft.captionPreview}
-                    onChange={handleCaptionChange}
-                    platform={framePlatform}
-                    editable={isEditing}
-                  />
-                </div>
-              </div>
+            {panelTab === 'publish' ? (
+              publishTab
             ) : (
-              <SocialPostFrame
-                draft={draftForPreview}
-                onCaptionChange={handleCaptionChange}
-                brandName={brandName}
-                platform={framePlatform}
-                mediaNode={mediaNode}
-                isEditing={isEditing}
-                onEditCreativeDirection={() => setCreativeOpen(true)}
-                onEditHashtags={() => setHashtagsOpen(true)}
-              />
+              <>
+                {draftHook && brandProfileId ? (
+                  <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-background/90 px-3 py-2">
+                    <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Hook
+                    </span>
+                    <p
+                      className="min-w-0 flex-1 truncate text-sm text-foreground"
+                      title={draftHook}
+                    >
+                      {draftHook}
+                    </p>
+                    <DraftHookViralityBadge brandId={brandProfileId} hook={draftHook} />
+                  </div>
+                ) : null}
+
+                {creativeOpen && (
+                  <ContextualPanel
+                    title="Creative direction"
+                    onClose={() => setCreativeOpen(false)}
+                  >
+                    <InlinePreviewTextarea
+                      value={creativeDirection}
+                      onChange={(event) => handleCreativeDirectionChange(event.target.value)}
+                      onBlur={() => {
+                        void fieldEditor.flush();
+                      }}
+                      placeholder="Describe the hook, visual intent, and mood."
+                      className="min-h-[5rem] text-sm leading-relaxed"
+                    />
+                  </ContextualPanel>
+                )}
+
+                {hashtagsOpen && (
+                  <ContextualPanel title="Hashtags" onClose={() => setHashtagsOpen(false)}>
+                    <HashtagTiers draft={draft} onHashtagsChange={handleHashtagsChange} />
+                  </ContextualPanel>
+                )}
+
+                {platformSwitch('See it on')}
+
+                {isHyperframeFormat ? (
+                  <div className="flex flex-col gap-3">
+                    <HyperFramePlayer draft={draftForPreview} brandId={brandProfileId ?? ''} />
+                    <div className="rounded-xl border border-border/70 bg-background/90 p-3">
+                      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Caption
+                      </p>
+                      <EditableCaption
+                        value={draft.captionPreview}
+                        onChange={handleCaptionChange}
+                        platform={framePlatform}
+                        editable={isEditing}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <SocialPostFrame
+                    draft={draftForPreview}
+                    onCaptionChange={handleCaptionChange}
+                    brandName={brandName}
+                    platform={framePlatform}
+                    mediaNode={mediaNode}
+                    isEditing={isEditing}
+                    onEditCreativeDirection={() => setCreativeOpen(true)}
+                    onEditHashtags={() => setHashtagsOpen(true)}
+                  />
+                )}
+              </>
             )}
           </div>
         </ScrollArea>

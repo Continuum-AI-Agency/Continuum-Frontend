@@ -125,7 +125,8 @@ export type DraftEditField =
   | 'schedule'
   | 'media'
   | 'platforms'
-  | 'status';
+  | 'status'
+  | 'publishOptions';
 
 export type PendingDraftEdit = {
   fields: DraftEditField[];

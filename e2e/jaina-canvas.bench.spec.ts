@@ -24,8 +24,12 @@ import { loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 //      assertion is on the DATABASE ROW, re-read after the edit, not on the absence of
 //      a request: the browser holds no grant on these tables and this is what says so.
 //   3. PROPOSE — "Propose via Jaina" on a brand with a live ad account puts the canvas
-//      in the composer, the turn reaches `paid_scaffold_propose`, and the next step
-//      pauses on the REAL approval card, which this bench DENIES.
+//      in the composer and the turn reaches `paid_scaffold_propose`.
+//   4. THE CARD IN CHAT — graded against the rows it reads: counts per level, the opening
+//      budget, what would stop build/populate, the outline at the 420px panel width, the
+//      link back onto the canvas. Then the build gate is asked for in a SECOND turn (no
+//      proposal frame on it), which this bench DENIES, and a reload must bring the card
+//      back without a live Approve. Screenshots: artifacts/jaina-canvas-bench/.
 //
 // ── MONEY SAFETY — this bench cannot write to an ad account ──
 //   * `paid_scaffold_propose` is UNGATED BY DESIGN (scaffoldApproval.ts:24) because it
@@ -33,7 +37,7 @@ import { loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 //     is `paid_scaffold_build`, and this bench answers it DENY. Nothing is approved
 //     anywhere in this file; there is no `'approve'` in it.
 //   * A denied gate never reaches `claim_paid_scaffold_gate`, so no Meta object is
-//     created. Step 3 additionally asserts every node it created has a NULL
+//     created. Step 4 additionally asserts every node it created has a NULL
 //     `meta_object_id` before deleting them.
 //   * Rows written to OUR store for the client brand are id-diffed before and after and
 //     deleted by id — never by time window, which has already hit a real user's row in
@@ -166,6 +170,17 @@ async function startBackend(): Promise<void> {
       ...process.env,
       PORT: String(BACKEND_PORT),
       HOST: '127.0.0.1',
+      // The page is http://127.0.0.1:3117. Jaina's stream is cross-origin, and a
+      // preflight that 204s without this origin never sends the POST — which looks
+      // exactly like "the turn never left the browser".
+      ALLOWED_ORIGINS: [
+        process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3117',
+        'http://127.0.0.1:3117',
+        'http://localhost:3117',
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        'https://app.trycontinuum.ai',
+      ].join(','),
       // Job workers on a bench process would pick up production queue work that
       // belongs to the deployed Backend. Off, exactly as the peer benches run them.
       MCP_JOB_WORKER_ENABLED: 'false',
@@ -465,6 +480,110 @@ async function latestRun(
   return { runId: row.run_id, status: String(row.status), events: count ?? 0 };
 }
 
+/**
+ * Every scaffold a conversation proposed, read off its own `paid.scaffold_proposed` frames.
+ * Attribution by the conversation that wrote it, not by time: asked to build "the scaffold you
+ * just proposed", Jaina has proposed a SECOND scaffold in the later turn — and an id-diff taken
+ * after turn 1 leaked that row into a real client's account.
+ */
+async function scaffoldsProposedInSession(sessionId: string, since: string): Promise<string[]> {
+  const { data: runs } = await admin
+    .schema('jaina')
+    .from('jaina_conversation_runs')
+    .select('run_id')
+    .eq('session_id', sessionId)
+    .gte('created_at', since);
+  const runIds = (runs ?? []).map((row) => String((row as { run_id: string }).run_id));
+  if (runIds.length === 0) return [];
+  const { data: events } = await admin
+    .schema('jaina')
+    .from('jaina_conversation_run_events')
+    .select('payload')
+    .in('run_id', runIds)
+    .eq('event_type', 'paid.scaffold_proposed');
+  return (events ?? []).flatMap((row) => {
+    const id = (row as { payload: { parentScaffoldId?: unknown } | null }).payload
+      ?.parentScaffoldId;
+    return typeof id === 'string' ? [id] : [];
+  });
+}
+
+/** The newest run's session, so a reload can reopen the exact conversation. */
+async function latestSessionId(brandId: string, since: string): Promise<string | null> {
+  const { data } = await admin
+    .schema('jaina')
+    .from('jaina_conversation_runs')
+    .select('session_id')
+    .eq('brand_id', brandId)
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  return ((data ?? [])[0] as { session_id: string | null } | undefined)?.session_id ?? null;
+}
+
+/**
+ * Did a run since `since` open the build gate? Separates "the model never asked" (a SKIP about
+ * model behaviour) from "it asked and no card rendered" (the chat defect this bench exists for).
+ */
+async function buildGateOpenedSince(brandId: string, since: string): Promise<string | null> {
+  const { data: runs } = await admin
+    .schema('jaina')
+    .from('jaina_conversation_runs')
+    .select('run_id')
+    .eq('brand_id', brandId)
+    .gte('created_at', since);
+  const runIds = (runs ?? []).map((row) => String((row as { run_id: string }).run_id));
+  if (runIds.length === 0) return null;
+  const { data: events } = await admin
+    .schema('jaina')
+    .from('jaina_conversation_run_events')
+    .select('run_id,payload')
+    .in('run_id', runIds)
+    .eq('event_type', 'tool.approval_required');
+  const opened = (events ?? []).find(
+    (row) =>
+      (row as { payload: { toolName?: string } | null }).payload?.toolName ===
+      'paid_scaffold_build',
+  );
+  return opened ? String((opened as { run_id: string }).run_id) : null;
+}
+
+/**
+ * What the ROWS say the chat card must show. The card reads the same rows, so every number it
+ * renders is graded against the database, never against what the model said about them.
+ */
+async function scaffoldTruth(versionIds: string[]) {
+  const { data, error } = await brandProfiles()
+    .from('paid_scaffold_nodes')
+    .select('level,payload,daily_budget_minor_units,creative_asset_id,creative_media')
+    .in('version_id', versionIds);
+  if (error) throw new Error(`[canvas-bench] scaffold truth read: ${error.message}`);
+  const rows = (data ?? []) as {
+    level: string;
+    payload: { targeting?: unknown } | null;
+    daily_budget_minor_units: number | null;
+    creative_asset_id: string | null;
+    creative_media: unknown;
+  }[];
+  const adSets = rows.filter((row) => row.level === 'adset');
+  const ads = rows.filter((row) => row.level === 'ad');
+  return {
+    campaigns: rows.filter((row) => row.level === 'campaign').length,
+    adSets: adSets.length,
+    ads: ads.length,
+    budgeted: adSets.filter((row) => typeof row.daily_budget_minor_units === 'number').length,
+    budgetMinorUnits: adSets.reduce((total, row) => total + (row.daily_budget_minor_units ?? 0), 0),
+    adSetsWithoutAudience: adSets.filter((row) => !row.payload?.targeting).length,
+    adsWithoutCreative: ads.filter((row) => !row.creative_asset_id && !row.creative_media).length,
+  };
+}
+
+const plural = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? '' : 's'}`;
+
+/** Screenshots land beside the other bench artifacts at the monorepo root (gitignored). */
+const shotPath = (name: string): string =>
+  path.join(process.cwd(), '..', 'artifacts', 'jaina-canvas-bench', `${RUN_ID}-${name}.png`);
+
 /* -- brand + session ------------------------------------------------------------- */
 
 const previousBrandByUser = new Map<string, string | null>();
@@ -648,10 +767,11 @@ test.describe('campaign flow canvas', () => {
     grade('hitl.no-write', true, 'paid_scaffold_nodes.name unchanged after the edit');
   });
 
-  test('propose via Jaina reaches the real approval gate, and the gate is denied', async ({
+  test('propose via Jaina, the card in chat, the gate a turn later, denied', async ({
     browser,
   }, testInfo) => {
-    testInfo.setTimeout(420_000);
+    // Two model turns, a 240s window for the gate, and a reload: 420s ran out mid-reload.
+    testInfo.setTimeout(660_000);
 
     // The propose hop runs as the CLIENT brand's own member: the bench brand has no
     // linked ad account and the chat 409s there before any turn begins. The member's
@@ -700,14 +820,29 @@ test.describe('campaign flow canvas', () => {
     let createdIds: string[] = [];
     try {
       await openCanvas(page);
+      // Base UI ignores a click that did not pointerdown on the item, and a
+      // center click misses because the label is one unwrapped line. Typeahead
+      // highlights the live-account scaffold; Enter commits it.
       await page.getByTestId('canvas-scaffold-picker').click();
-      const realOption = page
-        .getByRole('option')
-        .filter({ hasText: CLIENT_SCAFFOLD_NAME_FRAGMENT })
-        .first();
-      await expect(realOption).toBeVisible({ timeout: 30_000 });
-      await realOption.click();
+      await expect(page.getByRole('listbox')).toBeVisible({ timeout: 15_000 });
+      await page.keyboard.type(CLIENT_SCAFFOLD_NAME_FRAGMENT);
+      await page.keyboard.press('Enter');
       await expect(page.getByTestId('canvas-record-version')).toBeVisible({ timeout: 90_000 });
+
+      // A FRESH conversation. The panel reopens the newest one on mount, and on this shared
+      // brand that was an earlier bench's turn asking for the build gate — so the model opened
+      // the gate unasked and every card grade read the old turn. Wait for that async restore
+      // to land (the newest row goes active, i.e. disabled) or "new" is silently overridden.
+      await page.getByRole('button', { name: 'Open Jaina' }).click();
+      await page.getByRole('button', { name: 'Maximize chat' }).click();
+      const newestConversation = page.locator('[data-testid^="jaina-conversation-"]').first();
+      if (await newestConversation.isVisible({ timeout: 30_000 }).catch(() => false)) {
+        await expect(newestConversation).toBeDisabled({ timeout: 60_000 });
+      }
+      await page.getByRole('button', { name: 'Create new conversation' }).click();
+      // Maximized, the panel covers the record bar's Propose button. Minimize — never close:
+      // closing unmounts the surface and the remount restores the old conversation again.
+      await page.getByRole('button', { name: 'Minimize chat' }).click();
 
       // The real affordance, driven the way a human drives it.
       await page.getByTestId('canvas-propose-via-jaina').click();
@@ -732,12 +867,12 @@ test.describe('campaign flow canvas', () => {
       // stalled at `status=pending, 0 events`, which is the stream never reaching the
       // model. That is a Jaina-runtime condition, not a keystroke one, and it is why the
       // steps below grade SKIP with the run id rather than failing the canvas.
-      await composer.click();
-      await page.keyboard.press('End');
-      await page.keyboard.type(
-        ' Then open the build gate for it so I can review it before anything is created.',
-      );
-      await page.keyboard.press('Enter');
+      // Propose ONLY. The gate is asked for in a SECOND turn below, because that is how a
+      // person does it — review the proposal, then say "build it" — and it is the path where
+      // the gate turn carries no proposal frame of its own.
+      // Enter on this contenteditable has already failed to dispatch (no run row).
+      // The send button is the control a pointer actually uses.
+      await page.getByRole('button', { name: 'Send message' }).click();
 
       // The propose anchor is the ROW, not the prose: `paid_scaffold_propose` is
       // ungated (it writes Continuum rows only) so it produces no card of its own.
@@ -776,22 +911,211 @@ test.describe('campaign flow canvas', () => {
         );
       }
 
-      // The first gate on this chain is `paid_scaffold_build`. Whether the model goes
-      // on to open it in the same turn is JAINA's behaviour, not the canvas's — so a
-      // missing card is reported as an un-exercised hop by name rather than failing a
-      // bench about the canvas. A card that DOES appear is always denied, never
-      // approved.
+      const versionIdsOf = async (): Promise<string[]> =>
+        (
+          (
+            await brandProfiles()
+              .from('paid_scaffold_versions')
+              .select('id')
+              .in('scaffold_id', createdIds)
+          ).data ?? []
+        ).map((row) => String((row as { id: string }).id));
+
+      // ---- the chat presentation: graded against the rows, never the prose -----------
+      // Scoped to THIS run's version: an older turn's card is not evidence about this one.
+      const proposedVersionIds = proposed ? await versionIdsOf() : [];
+      const cards = page.locator(
+        proposedVersionIds
+          .map((id) => `[data-testid="paid-scaffold-card"][data-scaffold-version="${id}"]`)
+          .join(', ') || '[data-testid="paid-scaffold-card"][data-scaffold-version="none"]',
+      );
+      let expectedSummary: string | null = null;
+      // Did turn 1 open the gate on its own? Then the card must SAY so — that is the truthful
+      // pill for that card — and the later-turn gate below has nothing left to ask for.
+      let gateOpenedInTurn1: string | null = null;
+      if (proposed) {
+        await expect
+          .poll(async () => (await latestRun(CLIENT_BRAND_ID, turnStartedAt))?.status, {
+            timeout: 300_000,
+            intervals: [3_000, 5_000],
+          })
+          .toMatch(/completed|failed|paused|awaiting|cancel/);
+        gateOpenedInTurn1 = await buildGateOpenedSince(CLIENT_BRAND_ID, turnStartedAt);
+        const truth = await scaffoldTruth(proposedVersionIds);
+        expectedSummary = [
+          plural(truth.campaigns, 'campaign'),
+          plural(truth.adSets, 'ad set'),
+          plural(truth.ads, 'ad'),
+        ].join(' · ');
+        const card = cards.first();
+        await expect(card).toBeVisible({ timeout: 120_000 });
+        await expect(card).toContainText(expectedSummary);
+        if (gateOpenedInTurn1) {
+          await expect(card).toContainText('Awaiting your approval');
+          grade('chat.card', true, `${expectedSummary}, gate opened in the same turn and says so`);
+        } else {
+          await expect(card).toContainText('Proposed — nothing on Meta yet');
+          await expect(card).not.toContainText('Awaiting your approval');
+          grade('chat.card', true, `${expectedSummary}, called a proposal (no gate is open)`);
+        }
+
+        if (truth.budgeted > 0) {
+          const total = card.getByTestId('scaffold-opening-budget-total');
+          await expect(total).toBeVisible();
+          const shown = (await total.textContent()) ?? '';
+          expect(Number(shown.replace(/[^\d]/g, ''))).toBe(
+            Math.round(truth.budgetMinorUnits / 100),
+          );
+          grade('chat.budget', true, `"${shown}" == ${truth.budgetMinorUnits} minor units in rows`);
+        } else {
+          await expect(card.getByTestId('scaffold-opening-budget')).toContainText(
+            'placeholder budget',
+          );
+          grade('chat.budget', true, 'no measured CPA in the rows; the card names the placeholder');
+        }
+
+        const audienceBlocker = card.getByTestId('scaffold-blocker-audience');
+        if (truth.adSetsWithoutAudience > 0) {
+          await expect(audienceBlocker).toContainText(
+            plural(truth.adSetsWithoutAudience, 'ad set'),
+          );
+        } else {
+          await expect(audienceBlocker).toHaveCount(0);
+        }
+        const creativeBlocker = card.getByTestId('scaffold-blocker-creative');
+        if (truth.adsWithoutCreative > 0) {
+          await expect(creativeBlocker).toContainText(plural(truth.adsWithoutCreative, 'ad'));
+        } else {
+          await expect(creativeBlocker).toHaveCount(0);
+        }
+        grade(
+          'chat.blockers',
+          true,
+          `${truth.adSetsWithoutAudience} ad set(s) without audience, ` +
+            `${truth.adsWithoutCreative} ad(s) without creative — as the rows say`,
+        );
+
+        // Both widths a person actually gets: Propose opens the panel maximized, and the
+        // header button drops it to the 420px default.
+        await card.screenshot({ path: shotPath('card-maximized') });
+        await page.getByRole('button', { name: 'Minimize chat' }).click();
+        await expect(card.getByTestId('scaffold-outline')).toBeVisible({ timeout: 15_000 });
+        await card.screenshot({ path: shotPath('card-420') });
+        // Present is not readable: an earlier run "passed" here with the card crushed to 25px
+        // wide behind a 288px conversations sidebar. The width is the grade. 260, not the panel's
+        // 420: the panel padding and transcript gutters take ~137px at any width (measured 283px
+        // once the sidebar stacked), and 260 still fails the crush by a factor of ten.
+        const narrowWidth = (await card.boundingBox())?.width ?? 0;
+        expect(narrowWidth, 'the card is too narrow to read in the 420px panel').toBeGreaterThan(
+          260,
+        );
+        grade(
+          'chat.narrow',
+          true,
+          `outline at ${Math.round(narrowWidth)}px wide in the 420px panel`,
+        );
+        await page.getByRole('button', { name: 'Maximize chat' }).click();
+
+        // Chat -> canvas: the card's link loads THIS scaffold as the canvas record.
+        const { data: proposedScaffold } = await brandProfiles()
+          .from('paid_scaffolds')
+          .select('id,name')
+          .in('id', createdIds)
+          .limit(1)
+          .single();
+        const proposedRow = proposedScaffold as { id: string; name: string } | null;
+        expect(proposedRow, 'the proposed scaffold row could not be read back').toBeTruthy();
+        if (proposedRow) {
+          await card.getByTestId('scaffold-open-canvas').click();
+          await expect(page).toHaveURL(new RegExp(`scaffold=${proposedRow.id}`), {
+            timeout: 30_000,
+          });
+          await expect(page.getByTestId('canvas-scaffold-picker')).toContainText(proposedRow.name, {
+            timeout: 90_000,
+          });
+          await expect(page.getByTestId('canvas-record-version')).toContainText('proposed');
+          grade('chat.open-canvas', true, `canvas now shows "${proposedRow.name}"`);
+        }
+      }
+
+      // ---- the build gate, asked for a turn LATER ---------------------------------------
+      // That turn carries no proposal frame, which is exactly the case that used to render no
+      // card and no buttons. A card that appears is always DENIED, never approved.
       const approveButton = page.getByRole('button', { name: 'Approve & create (paused)' });
-      const gateAppeared = !proposed
-        ? false
-        : await approveButton
-            .waitFor({ state: 'visible', timeout: 210_000 })
-            .then(() => true)
-            .catch(() => false);
+      let gateAppeared = false;
+      if (proposed && gateOpenedInTurn1) {
+        gateAppeared = await approveButton.isVisible();
+        graded.push({
+          step: 'chat.gate-next-turn',
+          grade: 'SKIP',
+          detail: `run ${gateOpenedInTurn1} opened the gate in turn 1, unasked; nothing to ask for`,
+        });
+        notes.push(
+          'UN-EXERCISED: the later-turn gate. Jaina opened paid_scaffold_build in the proposing ' +
+            'turn without being asked, so the gate is graded (and denied) on that card instead.',
+        );
+      } else if (proposed) {
+        const gateAskedAt = new Date().toISOString();
+        await composer.click();
+        await page.keyboard.type(
+          'Call paid_scaffold_build for the scaffold you just proposed so its approval card ' +
+            'opens. I will review and answer the card myself. Do not summarise the scaffold.',
+        );
+        await page.getByRole('button', { name: 'Send message' }).click();
+        gateAppeared = await approveButton
+          .waitFor({ state: 'visible', timeout: 240_000 })
+          .then(() => true)
+          .catch(() => false);
+        if (!gateAppeared) {
+          const openedBy = await buildGateOpenedSince(CLIENT_BRAND_ID, gateAskedAt);
+          if (openedBy) {
+            grade(
+              'chat.gate-next-turn',
+              false,
+              `run ${openedBy} opened paid_scaffold_build, and no approval card rendered`,
+            );
+          } else {
+            graded.push({
+              step: 'chat.gate-next-turn',
+              grade: 'SKIP',
+              detail: 'the second turn did not open paid_scaffold_build; no card to deny',
+            });
+            notes.push(
+              'UN-EXERCISED: the build gate in a later turn. No tool.approval_required for ' +
+                'paid_scaffold_build was logged, so this is model behaviour, not a missing card. ' +
+                'Nothing was approved.',
+            );
+          }
+        }
+      }
 
       if (gateAppeared) {
-        await expect(page.getByText('Awaiting your approval')).toBeVisible();
-        grade('propose.gate', true, 'paid_scaffold_build paused on the real approval card');
+        // The card that HOLDS the Approve — not "the last card": the later turn may propose a
+        // scaffold of its own and gate that one instead.
+        const gateCard = page.locator('[data-testid="paid-scaffold-card"]', { has: approveButton });
+        await expect(gateCard).toContainText('Awaiting your approval');
+        const sessionId = await latestSessionId(CLIENT_BRAND_ID, turnStartedAt);
+        if (sessionId) {
+          const ours = await scaffoldsProposedInSession(sessionId, turnStartedAt);
+          createdIds = [...new Set([...createdIds, ...ours.filter((id) => !idsBefore.has(id))])];
+        }
+        const gateVersion = (await gateCard.getAttribute('data-scaffold-version')) ?? '';
+        expect(await versionIdsOf(), 'the gated card is not a scaffold this run wrote').toContain(
+          gateVersion,
+        );
+        // The duplicate re-propose, graded: the gate must open on the scaffold turn 1 wrote.
+        // That also makes this the live run of the seeded card path — a gate turn that
+        // carries no proposal frame of its own.
+        const reproposed = !gateOpenedInTurn1 && !proposedVersionIds.includes(gateVersion);
+        if (!gateOpenedInTurn1) {
+          grade(
+            'chat.gate-next-turn',
+            !reproposed,
+            reproposed
+              ? 'turn 2 proposed a DUPLICATE scaffold and gated it instead of building the one on screen'
+              : 'the gate opened on the turn-1 scaffold; its card rendered with no proposal frame',
+          );
+        }
         // DENY. Never approve: a denied gate never reaches `claim_paid_scaffold_gate`,
         // so no Meta object is created. `Dismiss` is this card's reject label.
         //
@@ -808,32 +1132,36 @@ test.describe('campaign flow canvas', () => {
         await denyButton.scrollIntoViewIfNeeded();
         await denyButton.click();
         await expect(page.getByText('Declined — nothing created')).toBeVisible({ timeout: 60_000 });
-        grade('propose.denied', true, 'gate answered deny; nothing was created');
-      } else {
-        graded.push({
-          step: 'propose.gate',
-          grade: 'SKIP',
-          detail: 'paid_scaffold_build was not opened in this turn; no card to deny',
-        });
-        notes.push(
-          'UN-EXERCISED: the paid_scaffold_build approval card. The canvas hop it belongs to ' +
-            'is proven (propose ran and persisted a scaffold from the canvas graph), but whether ' +
-            'Jaina opens the build gate in the same turn is model behaviour outside this ' +
-            "feature's control. The gate itself is covered by the scaffold card's own surface. " +
-            'Nothing was approved.',
-        );
+        grade('chat.denied', true, 'gate answered deny; the card says nothing was created');
+        // Asserted only after the deny, so a failing run still leaves nothing approvable.
+        expect(reproposed, 'turn 2 re-proposed a duplicate scaffold instead of building').toBe(false);
+      }
+
+      // ---- a reload brings the card back, and never the Approve beside it ------------------
+      if (proposed && expectedSummary) {
+        const sessionId = await latestSessionId(CLIENT_BRAND_ID, turnStartedAt);
+        expect(sessionId, 'the proposing run has no session id').toBeTruthy();
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        // Not the record bar: it is in the server HTML, and the tree swaps to a loading skeleton
+        // after first paint — a click there is lost. The version pill needs a hydrated client
+        // AND a real fetch of the `?scaffold=` the card linked to.
+        await expect(page.getByTestId('canvas-record-version')).toBeVisible({ timeout: 180_000 });
+        await page.getByRole('button', { name: 'Open Jaina' }).click();
+        await page.getByRole('button', { name: 'Maximize chat' }).click();
+        // The panel restores the newest conversation on mount — usually this one, whose row is
+        // then disabled as active. Click only if it did not; a disabled click waits forever.
+        const conversation = page.getByTestId(`jaina-conversation-${sessionId}`);
+        await conversation.waitFor({ state: 'visible', timeout: 60_000 });
+        if (await conversation.isEnabled()) await conversation.click();
+        await expect(cards.first()).toContainText(expectedSummary, { timeout: 90_000 });
+        await expect(approveButton).toHaveCount(0);
+        await cards.first().screenshot({ path: shotPath('card-after-reload') });
+        grade('chat.reload', true, `the card came back (${expectedSummary}) with no live Approve`);
       }
 
       // The Meta fence, asserted rather than assumed, and asserted whether or not the
       // gate card appeared: nothing this turn created carries a Meta id.
-      const versionIds = (
-        (
-          await brandProfiles()
-            .from('paid_scaffold_versions')
-            .select('id')
-            .in('scaffold_id', createdIds)
-        ).data ?? []
-      ).map((row) => String((row as { id: string }).id));
+      const versionIds = await versionIdsOf();
       const { data: createdNodes } = await brandProfiles()
         .from('paid_scaffold_nodes')
         .select('meta_object_id,meta_creative_id')
@@ -859,15 +1187,42 @@ test.describe('campaign flow canvas', () => {
         `${(createdNodes ?? []).length} node(s) created, every Meta id null`,
       );
     } finally {
+      // Re-read here rather than trusted from turn 1: a later turn can write a scaffold of its
+      // own. Only what THIS conversation proposed, and nothing that existed before it.
+      const sessionId = await latestSessionId(CLIENT_BRAND_ID, turnStartedAt).catch(() => null);
+      const proposedHere = sessionId
+        ? await scaffoldsProposedInSession(sessionId, turnStartedAt).catch(() => [])
+        : [];
+      const toDelete = new Set([...createdIds, ...proposedHere.filter((id) => !idsBefore.has(id))]);
       // One delete per scaffold: `scaffold_id`, `version_id` and the node self-FK are
       // all ON DELETE CASCADE, and `current_version_id` is ON DELETE SET NULL.
-      for (const scaffoldId of createdIds) {
+      for (const scaffoldId of toDelete) {
         const { error } = await brandProfiles()
           .from('paid_scaffolds')
           .delete()
           .eq('id', scaffoldId);
         if (error)
           console.warn(`[canvas-bench] cleanup paid_scaffolds/${scaffoldId}: ${error.message}`);
+      }
+      // The conversation this run STARTED sits in a real client's sidebar. Deleted through the
+      // app's own route (runs, events, messages, session) as the trash icon does — and only when
+      // it was created during this run, never one the panel happened to restore.
+      if (sessionId) {
+        const { data: session } = await admin
+          .schema('jaina')
+          .from('jaina_conversation_sessions')
+          .select('created_at')
+          .eq('session_id', sessionId)
+          .maybeSingle();
+        const createdAt = (session as { created_at: string } | null)?.created_at;
+        if (createdAt && Date.parse(createdAt) >= Date.parse(turnStartedAt)) {
+          const response = await page.request
+            .delete(`/api/agents/jaina/chat/conversations/${encodeURIComponent(sessionId)}`)
+            .catch(() => null);
+          if (!response?.ok()) {
+            console.warn(`[canvas-bench] cleanup conversation ${sessionId}: ${response?.status()}`);
+          }
+        }
       }
       await context.close();
     }

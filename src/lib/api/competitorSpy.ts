@@ -1,13 +1,17 @@
 'use client';
 
 import type {
+  AnalyseInspirationPostResponse,
   AwarenessReportPayload,
   Competitor,
-  CompetitorOrganicPost,
+  CompetitorInspirationPost,
   CompetitorSearchResult,
   CompetitorSmartSearchResult,
+  DevelopInspirationPostResponse,
   DismissRecommendationRequest,
   DismissRecommendationResponse,
+  InspirationPostsResponse,
+  InspirationSort,
   InstagramCompetitorSearchResult,
   MetaPageResolution,
   MetaPageResolutionCandidate,
@@ -18,16 +22,28 @@ import type {
   SaveCompetitorPostToLibraryResponse,
   SavedBoard,
   SavedCompetitorPostIdsResponse,
+  SavedInspirationPost,
+  SavedInspirationPostsResponse,
   SavedItem,
+  SaveInspirationTemplateResponse,
+  SaveInspirationUrlResponse,
   SaveItemRequest,
+  Skill,
   TimelineEntry,
 } from '@continuum/contracts';
 import {
+  analyseInspirationPostResponseSchema,
   type CompetitiveReportResponse,
   competitiveReportResponseSchema,
+  developInspirationPostResponseSchema,
+  inspirationPostsResponseSchema,
+  savedInspirationPostsResponseSchema,
+  saveInspirationTemplateResponseSchema,
+  saveInspirationUrlResponseSchema,
 } from '@continuum/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/lib/api/http';
+import { brandSkillsQueryKey } from '@/lib/organic/skills';
 
 const BASE = '/api/competitor-ad-spy';
 export const MAX_INSTAGRAM_POSTS = 50;
@@ -88,12 +104,15 @@ export async function fetchInstagramPosts(params: {
   brandId: string;
   competitorId?: string;
   limit?: number;
-}): Promise<CompetitorOrganicPost[]> {
+  sort?: InspirationSort;
+}): Promise<CompetitorInspirationPost[]> {
   const qs = new URLSearchParams({ brandId: params.brandId });
   if (params.competitorId) qs.set('competitorId', params.competitorId);
   qs.set('limit', String(clampInstagramPostsLimit(params.limit)));
-  const res = await request<{ items: CompetitorOrganicPost[] }>({
+  if (params.sort && params.sort !== 'recent') qs.set('sort', params.sort);
+  const res = await request<InspirationPostsResponse>({
     path: `${BASE}/instagram/posts?${qs.toString()}`,
+    schema: inspirationPostsResponseSchema,
   });
   return res.items;
 }
@@ -196,6 +215,64 @@ export async function fetchSavedCompetitorPostIds(brandId: string): Promise<stri
     path: `${BASE}/inspiration/saved-ids?brandId=${encodeURIComponent(brandId)}`,
   });
   return res.postIds;
+}
+
+// --- Inspiration act routes: every one addresses a post by its IG id ---------
+
+export async function analyseInspirationPost(
+  brandId: string,
+  postId: string,
+): Promise<CompetitorInspirationPost> {
+  const res = await request<AnalyseInspirationPostResponse>({
+    path: `${BASE}/inspiration/analyse`,
+    method: 'POST',
+    body: { brandId, postId },
+    schema: analyseInspirationPostResponseSchema,
+  });
+  return res.post;
+}
+
+export async function developInspirationPost(input: {
+  brandId: string;
+  postId: string;
+  note: string | null;
+}): Promise<DevelopInspirationPostResponse> {
+  return request({
+    path: `${BASE}/inspiration/develop`,
+    method: 'POST',
+    body: input,
+    schema: developInspirationPostResponseSchema,
+  });
+}
+
+export async function saveInspirationTemplate(brandId: string, postId: string): Promise<Skill> {
+  const res = await request<SaveInspirationTemplateResponse>({
+    path: `${BASE}/inspiration/save-as-template`,
+    method: 'POST',
+    body: { brandId, postId },
+    schema: saveInspirationTemplateResponseSchema,
+  });
+  return res.skill;
+}
+
+export async function fetchSavedInspirationPosts(brandId: string): Promise<SavedInspirationPost[]> {
+  const res = await request<SavedInspirationPostsResponse>({
+    path: `${BASE}/inspiration/saved?brandId=${encodeURIComponent(brandId)}`,
+    schema: savedInspirationPostsResponseSchema,
+  });
+  return res.items;
+}
+
+export async function saveInspirationUrl(
+  brandId: string,
+  url: string,
+): Promise<SaveInspirationUrlResponse> {
+  return request({
+    path: `${BASE}/inspiration/save-url`,
+    method: 'POST',
+    body: { brandId, url },
+    schema: saveInspirationUrlResponseSchema,
+  });
 }
 
 export async function fetchAwareness(brandId: string): Promise<AwarenessReportPayload | null> {
@@ -310,8 +387,21 @@ const keys = {
     ['competitor-spy', 'competitor-search', brandId, q] as const,
   instagramSearch: (brandId: string, q: string) =>
     ['competitor-spy', 'instagram-search', brandId, q] as const,
-  instagramPosts: (brandId: string, competitorId?: string, limit?: number) =>
-    ['competitor-spy', 'instagram-posts', brandId, competitorId ?? null, limit ?? null] as const,
+  instagramPosts: (
+    brandId: string,
+    competitorId?: string,
+    limit?: number,
+    sort?: InspirationSort,
+  ) =>
+    [
+      'competitor-spy',
+      'instagram-posts',
+      brandId,
+      competitorId ?? null,
+      limit ?? null,
+      sort ?? 'recent',
+    ] as const,
+  savedInspiration: (brandId: string) => ['competitor-spy', 'inspiration-saved', brandId] as const,
   smartSearch: (brandId: string, q: string) =>
     ['competitor-spy', 'smart-search', brandId, q] as const,
   adCounts: (brandId: string) => ['competitor-spy', 'ad-counts', brandId] as const,
@@ -341,9 +431,10 @@ export function useInstagramPosts(params: {
   brandId: string;
   competitorId?: string;
   limit?: number;
+  sort?: InspirationSort;
 }) {
   return useQuery({
-    queryKey: keys.instagramPosts(params.brandId, params.competitorId, params.limit),
+    queryKey: keys.instagramPosts(params.brandId, params.competitorId, params.limit, params.sort),
     queryFn: () => fetchInstagramPosts(params),
     enabled: Boolean(params.brandId),
     staleTime: 10 * 60_000,
@@ -593,6 +684,7 @@ export function useSaveCompetitorPostToLibrary(brandId: string) {
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: keys.savedPostIds(brandId) });
+      void qc.invalidateQueries({ queryKey: keys.savedInspiration(brandId) });
     },
   });
 }
@@ -605,6 +697,77 @@ export function useRemoveBoardItem(brandId: string) {
     onSettled: (_data, _err, vars) => {
       void qc.invalidateQueries({ queryKey: keys.boardItems(vars.boardId) });
       void qc.invalidateQueries({ queryKey: keys.boards(brandId) });
+    },
+  });
+}
+
+// --- Inspiration Library: saved view + the act routes -----------------------
+
+export function useSavedInspirationPosts(brandId: string, enabled = true) {
+  return useQuery({
+    queryKey: keys.savedInspiration(brandId),
+    queryFn: () => fetchSavedInspirationPosts(brandId),
+    enabled: Boolean(brandId) && enabled,
+  });
+}
+
+// Swaps a freshly analysed post into every cached feed and the saved view, so the
+// open panel and its tile update in place instead of waiting on a refetch.
+function replaceCachedPost(
+  qc: ReturnType<typeof useQueryClient>,
+  brandId: string,
+  next: CompetitorInspirationPost,
+) {
+  const swap = <T extends CompetitorInspirationPost>(items: T[] | undefined): T[] | undefined =>
+    items?.map((item) =>
+      item.post.id === next.post.id
+        ? { ...item, analysis: next.analysis, format: next.format, whyItWorked: next.whyItWorked }
+        : item,
+    );
+  qc.setQueriesData<CompetitorInspirationPost[]>(
+    { queryKey: ['competitor-spy', 'instagram-posts', brandId] },
+    swap,
+  );
+  qc.setQueryData<SavedInspirationPost[]>(keys.savedInspiration(brandId), swap);
+}
+
+export function useAnalyseInspirationPost(brandId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (postId: string) => analyseInspirationPost(brandId, postId),
+    onSuccess: (post) => replaceCachedPost(qc, brandId, post),
+  });
+}
+
+export function useDevelopInspirationPost(brandId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { postId: string; note: string | null }) =>
+      developInspirationPost({ brandId, ...vars }),
+    onSettled: () => {
+      // Develop saves the post to the Library first when it was not already there.
+      void qc.invalidateQueries({ queryKey: keys.savedPostIds(brandId) });
+      void qc.invalidateQueries({ queryKey: keys.savedInspiration(brandId) });
+    },
+  });
+}
+
+export function useSaveInspirationTemplate(brandId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (postId: string) => saveInspirationTemplate(brandId, postId),
+    // The template is a brand skill; the skill picker reads this list.
+    onSettled: () => void qc.invalidateQueries({ queryKey: brandSkillsQueryKey(brandId) }),
+  });
+}
+
+export function useSaveInspirationUrl(brandId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (url: string) => saveInspirationUrl(brandId, url),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: keys.savedPostIds(brandId) });
+      void qc.invalidateQueries({ queryKey: keys.savedInspiration(brandId) });
     },
   });
 }

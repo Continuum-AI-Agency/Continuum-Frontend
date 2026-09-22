@@ -13,6 +13,7 @@
         "@dnd-kit/utilities": "^3.2.2",
         "@heroicons/react": "^2.2.0",
         "@hookform/resolvers": "^5.2.2",
+        "@mediabunny/aac-encoder": "~1.57.0",
         "@number-flow/react": "^0.6.1",
         "@onboardjs/core": "^1.0.0-rc.3",
         "@onboardjs/react": "^1.0.0-rc.3",
@@ -487,6 +488,8 @@
     "@maplibre/mlt": ["@maplibre/mlt@1.1.12", "", { "dependencies": { "@mapbox/point-geometry": "^1.1.0" } }, "sha512-ZeK5w2TTeHOajcLaEQs1KZXw2V9wIKo1PmThlxlsHoXsQsYlBqLJzPOd6tJHRtGTChUY3DPPmjXRArYVvAbmZw=="],
 
     "@maplibre/vt-pbf": ["@maplibre/vt-pbf@4.3.2", "", { "dependencies": { "@mapbox/point-geometry": "^1.1.0", "@types/geojson": "^7946.0.16", "pbf": "^5.1.0" } }, "sha512-j6p0AdjvAR19Z3XaCysle7A4ZSo08tYOzxD0Y9NQylwPAkwJJeYub5b2eVucdeDh7erhv69DahoLOevDRERRUw=="],
+
+    "@mediabunny/aac-encoder": ["@mediabunny/aac-encoder@1.57.0", "", { "peerDependencies": { "mediabunny": "^1.0.0" } }, "sha512-wVCzHcA9JXONHpkILZ1+Ot+Gc+G34yliPIHu+rOiucgn7pru9q4nbS03kDoUOXpMvVKMZytD96Vch1TfOSelNQ=="],
 
     "@mediapipe/tasks-vision": ["@mediapipe/tasks-vision@0.10.17", "", {}, "sha512-CZWV/q6TTe8ta61cZXjfnnHsfWIdFhms03M9T7Cnd5y2mdpylJM0rF1qRq+wsQVRMLz1OYPVEBU9ph2Bx8cxrg=="],
 

@@ -1,17 +1,24 @@
 import { describe, expect, it } from 'bun:test';
 
+import type { AdminBrandAccess } from '@continuum/contracts';
 import {
+  ACCESS_PRODUCTS,
+  ADMIN_AUDIT_ACTIONS,
   auditActorLabel,
   brandsWithWorkflows,
   buildAdminAuditRequestBody,
   buildAdminTabParams,
   buildAdminUserListSearchParams,
   canBulkTransfer,
+  describeAccessError,
+  describeBillingPlan,
   describeWorkflowNames,
   formatAuditActionLabel,
   formatBrandDisambiguationLabel,
   formatBrandDisambiguationLines,
+  isStripeManaged,
   membershipLabel,
+  productGrant,
   resolveAdminTab,
 } from '@/components/admin/adminUserListUtils';
 import type { AdminBrandOption, AdminWorkflowLibraryRow } from '@/components/admin/adminUserTypes';
@@ -283,5 +290,78 @@ describe('#277 brandsWithWorkflows', () => {
       'ALA Applied Technologies',
       'Cortado',
     ]);
+  });
+});
+
+describe('brand access grid helpers', () => {
+  const access = (overrides: Partial<AdminBrandAccess>): AdminBrandAccess => ({
+    billingModel: 'none',
+    planCode: 'free',
+    plans: [],
+    status: 'inactive',
+    products: [],
+    ...overrides,
+  });
+
+  it('lists the five products under the names customers see', () => {
+    expect(ACCESS_PRODUCTS.map(({ label }) => label)).toEqual([
+      'Canvas',
+      'Organic',
+      'Performance',
+      'Trends',
+      'MCP',
+    ]);
+  });
+
+  it('finds a grant and locks only Stripe-sourced ones', () => {
+    const grid = access({
+      products: [
+        { product: 'paid_media', source: 'stripe' },
+        { product: 'studio', source: 'admin' },
+      ],
+    });
+    expect(productGrant(grid, 'studio')).toEqual({ product: 'studio', source: 'admin' });
+    expect(productGrant(grid, 'mcp')).toBeNull();
+    expect(productGrant(null, 'studio')).toBeNull();
+    expect(isStripeManaged(grid, 'paid_media')).toBe(true);
+    expect(isStripeManaged(grid, 'studio')).toBe(false);
+    expect(isStripeManaged(null, 'paid_media')).toBe(false);
+  });
+
+  it('describes the billing plan read-only', () => {
+    expect(describeBillingPlan(null)).toBe('No plan');
+    expect(describeBillingPlan(access({}))).toBe('No plan');
+    expect(describeBillingPlan(access({ billingModel: 'contract', planCode: 'contract' }))).toBe(
+      'Contract',
+    );
+    expect(
+      describeBillingPlan(
+        access({ billingModel: 'stripe', plans: ['organic_studio', 'paid_media'], status: 'past_due' }),
+      ),
+    ).toBe('Organic Plus + Performance Plus · past due');
+    expect(describeBillingPlan(access({ billingModel: 'stripe', status: 'canceled' }))).toBe(
+      'Stripe · canceled',
+    );
+  });
+
+  it('turns the refusal codes into sentences and passes anything else through', () => {
+    expect(describeAccessError('stripe_managed')).toContain('paid for through Stripe');
+    expect(describeAccessError('billing_not_live')).toBe(
+      'Product access activates at billing go-live.',
+    );
+    expect(describeAccessError('not_staff_brand')).toContain('created by a staff account');
+    expect(describeAccessError('Forbidden')).toBe('Forbidden');
+  });
+
+  it('makes every admin-update-access audit action filterable', () => {
+    for (const action of [
+      'admin.brand.set_product',
+      'admin.brand.set_contract',
+      'admin.brand.set_addon',
+      'admin.brand.set_client',
+      'admin.brand.grant_credits',
+    ]) {
+      expect(ADMIN_AUDIT_ACTIONS).toContain(action);
+    }
   });
 });

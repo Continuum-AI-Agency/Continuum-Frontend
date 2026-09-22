@@ -26,9 +26,7 @@ const TARGET_SAMPLE_RATE = 48_000;
 const TARGET_CHANNEL_COUNT = 2;
 const SILENCE_CHUNK_SECONDS = 0.5;
 
-export async function loadMediabunny(): Promise<MediabunnyModule> {
-  return import('mediabunny');
-}
+export { loadMediabunny } from './webcodecsSupport';
 
 export function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) {

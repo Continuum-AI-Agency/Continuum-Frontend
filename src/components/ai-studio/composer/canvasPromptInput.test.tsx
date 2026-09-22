@@ -69,6 +69,16 @@ const setEditorText = (editor: HTMLElement, text: string): void => {
 };
 
 describe('canvas PromptInput context grabber', () => {
+  it('reports focus with no arguments, so a caller like warmLaya never receives the event', () => {
+    const onFocus = mock();
+    render(<PromptInput variant="canvas" onSubmit={mock()} onFocus={onFocus} />);
+
+    fireEvent.focus(screen.getByRole('textbox'));
+
+    expect(onFocus).toHaveBeenCalledTimes(1);
+    expect(onFocus.mock.calls[0]).toEqual([]);
+  });
+
   it('submits a visible default prompt when a ready Library image is the only input', async () => {
     const onSubmit = mock();
     const clear = mock();

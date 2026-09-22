@@ -74,6 +74,7 @@ export function TemplateGallery({
   shared,
   adopting,
   onOpen,
+  onOpenShared,
   onRename,
   onToggleShared,
   onOpenRender,
@@ -87,6 +88,7 @@ export function TemplateGallery({
   /** The `sharedTemplateId` of the shared template whose adoption is in flight. */
   adopting: string | null;
   onOpen: (assetId: string) => void;
+  onOpenShared: (template: SharedTemplate) => void;
   onRename: (assetId: string, title: string) => void;
   onToggleShared: (template: SharedTemplate) => void;
   onOpenRender?: (intent: ForgeRenderIntent) => void;
@@ -247,6 +249,7 @@ export function TemplateGallery({
                 renders={rendersOf(item.shared.templateKey)}
                 emptyLabel={emptyLabel}
                 busy={adopting === sharedTemplateId(item.shared)}
+                onOpen={() => onOpenShared(item.shared)}
                 onToggle={() => onToggleShared(item.shared)}
                 onRender={
                   onOpenRender

@@ -1,91 +1,172 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
-  BILLING_MVP_CATALOG_VERSION,
-  billingCatalogSchema,
-  billingSummarySchema,
-  canvasCreditSpendResponseSchema,
+  allowanceResultSchema,
+  billedCreditsForBaseCost,
+  billingCheckoutRequestSchema,
+  billingOverageRequestSchema,
+  billingOverageResponseSchema,
+  billingOverviewSchema,
+  billingPaymentRequiredSchema,
+  billingPlanChangeRequestSchema,
+  brandEntitlementsSchema,
+  usageRecordResultSchema,
+  usdToCredits,
 } from './index';
 
 const brandId = '00000000-0000-4000-8000-0000000000b2';
 
-describe('billing MVP contracts', () => {
-  it('parses the focused catalog without an Optimizer SKU', () => {
-    const catalog = billingCatalogSchema.parse({
-      version: BILLING_MVP_CATALOG_VERSION,
-      items: [
-        {
-          code: 'canvas_credits',
-          displayName: 'Canvas generation credits',
-          kind: 'credit',
-          availability: 'invite',
-          dependencyCodes: ['canvas'],
-          metadata: { unit: 'generation' },
-        },
-      ],
-    });
+// Verbatim `billing.get_brand_entitlements` output from the local stack (timestamps as
+// Postgres renders them in jsonb).
+const entitlements = {
+  brandId,
+  planCode: 'organic_studio',
+  status: 'active',
+  billingModel: 'stripe',
+  plans: ['organic_studio'],
+  products: ['organic_agent', 'studio'],
+  addons: [],
+  trendsTier: null,
+  buckets: [
+    {
+      bucket: 'studio',
+      periodStart: '2026-09-21T19:40:02+00:00',
+      periodEnd: '2026-10-21T19:40:02+00:00',
+      includedUsd: 10.0,
+      capUsd: 100.0,
+      consumedUsd: 0,
+      overageAction: 'bill',
+    },
+  ],
+  creditBalance: { totalCredits: 1000, purchasedCredits: 1000, rolloverCredits: 0 },
+};
 
-    expect(catalog.items.map((item) => item.code)).not.toContain('paid_optimizer');
+describe('billing contracts', () => {
+  it('parses the get_brand_entitlements output', () => {
+    expect(brandEntitlementsSchema.parse(entitlements).billingModel).toBe('stripe');
   });
 
-  it('parses a normalized entitlement and usage-health summary', () => {
-    const summary = billingSummarySchema.parse({
-      entitlements: {
+  it('parses a full overview in either Stripe mode', () => {
+    const overview = {
+      brandId,
+      entitlements,
+      hasPaymentMethod: true,
+      overageEnabled: false,
+      overageCapUsd: 100,
+      subscription: {
+        id: 'sub_1',
+        status: 'active',
+        plans: ['organic_studio'],
+        cancelAtPeriodEnd: false,
+        currentPeriodStart: '2026-09-21T19:40:02.000Z',
+        currentPeriodEnd: '2026-10-21T19:40:02.000Z',
+      },
+      invoices: [],
+      canvas: { studioBucket: entitlements.buckets[0], rolloverUsd: 0, purchasedBalanceUsd: 10, overageUsd: 0 },
+      catalog: {
+        plans: [
+          {
+            planCode: 'organic_studio',
+            displayName: 'Organic Plus',
+            monthlyPriceUsd: 30,
+            products: ['studio', 'organic_agent'],
+            includedCanvasCredits: 1000,
+          },
+        ],
+        creditPack: { credits: 1000, priceUsd: 10, maxPacks: 50 },
+      },
+      livemode: false,
+    };
+    expect(billingOverviewSchema.parse(overview).subscription?.plans).toEqual(['organic_studio']);
+    expect(billingOverviewSchema.parse({ ...overview, livemode: true }).livemode).toBe(true);
+    const { overageEnabled: _dropped, ...withoutOptIn } = overview;
+    expect(billingOverviewSchema.safeParse(withoutOptIn).success).toBe(false);
+    expect(billingOverviewSchema.parse({ ...overview, overageCapUsd: null }).overageCapUsd).toBeNull();
+  });
+
+  it('takes only a boolean overage opt-in and echoes the subscription state', () => {
+    expect(billingOverageRequestSchema.parse({ enabled: true }).enabled).toBe(true);
+    expect(billingOverageRequestSchema.safeParse({}).success).toBe(false);
+    expect(billingOverageRequestSchema.safeParse({ enabled: 'yes' }).success).toBe(false);
+    expect(
+      billingOverageResponseSchema.parse({
         brandId,
-        tier: 1,
-        tierMode: 'payment',
-        compatibilityProfile: true,
-        features: ['canvas', 'organic_agent', 'jaina', 'trends', 'provider_exa'],
-        access: { canvas: true, organicAgent: true, jaina: true, trends: true },
-        intelligenceProviders: ['provider_exa'],
-        libraryCapacityBytes: 107_374_182_400,
-        canvasCredits: {
-          available: 99,
-          expiringWithin30Days: 0,
-          nextExpirationAt: null,
-        },
-        explicitDenies: [],
-        resolvedAt: '2026-07-16T09:30:00.000Z',
-      },
-      storage: {
-        usedBytes: 1024,
-        capacityBytes: 107_374_182_400,
-        availableBytes: 107_374_181_376,
-        utilizationPercent: 0,
-      },
-      canvasUsage: {
-        health: 'healthy',
-        creditsSpent7Days: 1,
-        creditsSpent30Days: 1,
-        lastSpendAt: '2026-07-16T09:30:00.000Z',
-      },
-    });
-
-    expect(summary.entitlements.access.jaina).toBe(true);
-    expect(summary.entitlements.canvasCredits.available).toBe(99);
+        subscriptionId: 'sub_1',
+        status: 'active',
+        overageEnabled: true,
+      }).overageEnabled,
+    ).toBe(true);
   });
 
-  it('keeps declined and idempotent spend results distinguishable', () => {
+  it('accepts only unique self-serve plans at checkout', () => {
+    const urls = { successUrl: 'http://localhost:3000/ok', cancelUrl: 'http://localhost:3000/no' };
+    expect(billingCheckoutRequestSchema.safeParse({ plans: ['organic_studio'], ...urls }).success).toBe(true);
+    expect(billingCheckoutRequestSchema.safeParse({ plans: ['trends'], ...urls }).success).toBe(false);
     expect(
-      canvasCreditSpendResponseSchema.parse({
-        allowed: false,
-        recorded: false,
-        idempotentReplay: false,
-        reason: 'insufficient_credits',
-        creditsRequired: 1,
-        creditsAvailable: 0,
-      }).allowed,
+      billingCheckoutRequestSchema.safeParse({ plans: ['paid_media', 'paid_media'], ...urls }).success,
     ).toBe(false);
+  });
 
+  it('takes exactly one of add or remove on plan change', () => {
+    expect(billingPlanChangeRequestSchema.safeParse({ add: 'paid_media' }).success).toBe(true);
+    expect(billingPlanChangeRequestSchema.safeParse({}).success).toBe(false);
     expect(
-      canvasCreditSpendResponseSchema.parse({
-        allowed: true,
-        recorded: false,
-        idempotentReplay: true,
-        reservationStatus: 'settled',
-        spendId: '10000000-0000-4000-8000-000000000001',
-        creditsSpent: 1,
-      }).idempotentReplay,
-    ).toBe(true);
+      billingPlanChangeRequestSchema.safeParse({ add: 'paid_media', remove: 'organic_studio' }).success,
+    ).toBe(false);
+  });
+
+  it('parses the 402 body', () => {
+    expect(
+      billingPaymentRequiredSchema.parse({ error: 'credits_exhausted', product: 'studio', planCode: null }).error,
+    ).toBe('credits_exhausted');
+  });
+
+  it('converts USD to whole credits without float drift', () => {
+    expect(usdToCredits(10)).toBe(1000);
+    expect(usdToCredits(0.29)).toBe(29);
+    expect(usdToCredits(0.005)).toBe(0);
+  });
+});
+
+describe('usage metering contracts', () => {
+  it('parses the record_usage_event and check_allowance outputs from the local stack', () => {
+    // Verbatim jsonb from billing.record_usage_event / billing.check_allowance.
+    expect(
+      usageRecordResultSchema.parse({
+        bucket: 'studio',
+        recorded: true,
+        unpriced: false,
+        overageUsd: 0.92,
+        baseCostUsd: 0.8,
+        billedCostUsd: 0.92,
+      }).overageUsd,
+    ).toBe(0.92);
+    expect(
+      allowanceResultSchema.parse({
+        capUsd: 100,
+        reason: 'overage_cap_reached',
+        allowed: false,
+        overageUsd: 100.4,
+        creditsAvailable: 0,
+      }).reason,
+    ).toBe('overage_cap_reached');
+    expect(() =>
+      usageRecordResultSchema.parse({
+        bucket: 'studio',
+        recorded: true,
+        unpriced: false,
+        overageUsd: 0,
+        baseCostUsd: 0,
+        billedCostUsd: 0,
+        belowThreshold: false,
+      }),
+    ).toThrow();
+  });
+
+  it('bills whole credits, rounded up, without float noise', () => {
+    expect(billedCreditsForBaseCost(0.039)).toBe(5); // 4.485 → 5
+    expect(billedCreditsForBaseCost(0.04)).toBe(5); // 4.6 → 5, never 6
+    expect(billedCreditsForBaseCost(0.8)).toBe(92); // exactly 92
+    expect(billedCreditsForBaseCost(0)).toBe(0);
   });
 });

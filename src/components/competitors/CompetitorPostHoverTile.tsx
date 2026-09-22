@@ -1,335 +1,124 @@
 'use client';
 
-import type { InstagramMediaItem, InstagramPost } from '@continuum/contracts';
-import { ExternalLink, Heart, Images, MessageCircle, Play } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
-import {
-  Carousel,
-  type CarouselApi,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from '@/components/ui/carousel';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+// One Inspiration card. Everything a user scans for sits on the face — the format,
+// how far the post beat its own account ('3.2x'), and its views/likes/comments —
+// so nothing needs a hover. Hovering a reel only plays it. Clicking opens the
+// Analyse panel beside the grid, where the saved/board actions live.
+
+import { COMPETITOR_POST_FORMAT_LABELS } from '@continuum/contracts';
+import { Images, Play } from 'lucide-react';
+import { type ReactNode, useState } from 'react';
+import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
-import { type CompetitorPostView, carouselSlides } from './competitorPostView';
+import type { CompetitorPostView } from './competitorPostView';
+import { InspirationAnalysePanel } from './InspirationAnalysePanel';
+import { PostThumb, ReelVideo, reelVideoUrl } from './postMedia';
+import { OutlierBadge, PostMetrics } from './postStats';
 
-const numberFormatter = new Intl.NumberFormat('en', {
-  notation: 'compact',
-  maximumFractionDigits: 1,
-});
-
-function formatCount(value: number | null | undefined): string | null {
-  return typeof value === 'number' ? numberFormatter.format(value) : null;
-}
-
-function formatDate(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(
-    date,
-  );
-}
-
-/** First playable video URL on a reel (or null when the post has no video item). */
-function reelVideoUrl(post: InstagramPost): string | null {
-  if (post.kind !== 'reel') return null;
-  const video = post.items.find((item) => item.kind === 'video');
-  return video?.url ?? null;
-}
-
-function KindGlyph({ kind }: { kind: CompetitorPostView['post']['kind'] }) {
-  if (kind === 'reel') return <Play className="h-2.5 w-2.5 fill-current" aria-hidden />;
-  if (kind === 'carousel') return <Images className="h-2.5 w-2.5" aria-hidden />;
-  return null;
-}
-
-function PostThumb({
-  coverUrl,
-  alt,
-  className,
+function KindGlyph({
+  kind,
+  mediaCount,
 }: {
-  coverUrl: string | null;
-  alt: string;
-  className?: string;
+  kind: CompetitorPostView['post']['kind'];
+  mediaCount: number;
 }) {
-  const [errored, setErrored] = useState(false);
-  if (!coverUrl || errored) {
-    return (
-      <div
-        className={cn(
-          'flex aspect-square items-center justify-center bg-muted text-2xs text-muted-foreground',
-          className,
-        )}
-      >
-        No preview
-      </div>
-    );
-  }
+  if (kind === 'post') return null;
   return (
-    // eslint-disable-next-line @next/next/no-img-element -- remote Instagram CDN preview, not static at build time
-    <img
-      src={coverUrl}
-      alt={alt}
-      loading="lazy"
-      onError={() => setErrored(true)}
-      className={cn('w-full object-cover', className)}
-    />
+    <span className="pointer-events-none absolute bottom-1.5 left-1.5 inline-flex items-center gap-0.5 rounded-full bg-black/60 px-1.5 py-0.5 text-2xs font-medium text-white">
+      {kind === 'reel' ? (
+        <Play className="size-2.5 fill-current" aria-hidden />
+      ) : (
+        <Images className="size-2.5" aria-hidden />
+      )}
+      {kind === 'carousel' ? mediaCount : 'Reel'}
+    </span>
   );
 }
 
-// Muted looping reel player. Parent sets `playing` (tile hover) or `autoPlay`
-// (hover-card open) to start/stop. Falls back to the cover still on load error.
-function ReelVideo({
-  src,
-  poster,
-  alt,
-  className,
-  playing = false,
-  autoPlay = false,
-  controls = false,
-}: {
-  src: string;
-  poster: string | null;
-  alt: string;
-  className?: string;
-  playing?: boolean;
-  autoPlay?: boolean;
-  controls?: boolean;
-}) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [errored, setErrored] = useState(false);
-  const shouldPlay = playing || autoPlay;
-
-  useEffect(() => {
-    if (errored) return;
-    const video = videoRef.current;
-    if (!video) return;
-    if (shouldPlay) {
-      void video.play().catch(() => {
-        // Autoplay can be blocked by policy; poster still shows.
-      });
-      return;
-    }
-    video.pause();
-    try {
-      video.currentTime = 0;
-    } catch {
-      // Seeking before metadata is ready can throw; leave at pause position.
-    }
-  }, [shouldPlay, errored, src]);
-
-  if (errored) {
-    return <PostThumb coverUrl={poster} alt={alt} className={className} />;
-  }
-
-  return (
-    <video
-      ref={videoRef}
-      src={src}
-      poster={poster ?? undefined}
-      muted
-      loop
-      playsInline
-      controls={controls}
-      preload={shouldPlay ? 'auto' : 'metadata'}
-      aria-label={alt}
-      onError={() => setErrored(true)}
-      className={cn('w-full bg-black object-cover', className)}
-    />
-  );
-}
-
-function SlideMedia({
-  item,
-  poster,
-  alt,
-}: {
-  item: InstagramMediaItem;
-  poster: string | null;
-  alt: string;
-}) {
-  if (item.kind === 'video') {
-    return (
-      <video
-        src={item.url}
-        poster={poster ?? undefined}
-        muted
-        playsInline
-        controls
-        className="aspect-square w-full bg-black object-cover"
-      />
-    );
-  }
-  return <PostThumb coverUrl={item.url} alt={alt} className="aspect-square" />;
-}
-
-// The enlarged, pageable preview for carousels: click the inward arrows to move
-// between slides while the pointer stays inside the hover card.
-function PostCarousel({
-  slides,
-  poster,
-  alt,
-}: {
-  slides: InstagramMediaItem[];
-  poster: string | null;
-  alt: string;
-}) {
-  const [api, setApi] = useState<CarouselApi | null>(null);
-  const [current, setCurrent] = useState(0);
-
-  useEffect(() => {
-    if (!api) return;
-    const syncCurrent = () => setCurrent(api.selectedScrollSnap());
-    syncCurrent();
-    api.on('select', syncCurrent);
-    api.on('reInit', syncCurrent);
-    return () => {
-      api.off('select', syncCurrent);
-      api.off('reInit', syncCurrent);
-    };
-  }, [api]);
-
-  const arrowClass =
-    'h-7 w-7 border-0 bg-black/55 text-white backdrop-blur-sm hover:bg-black/75 hover:text-white disabled:opacity-30';
-
-  return (
-    <div className="relative">
-      <Carousel setApi={setApi} opts={{ loop: false }} className="w-full">
-        <CarouselContent className="ml-0">
-          {slides.map((item, index) => (
-            <CarouselItem key={`${item.url}-${index}`} className="pl-0">
-              <SlideMedia item={item} poster={poster} alt={`${alt} slide ${index + 1}`} />
-            </CarouselItem>
-          ))}
-        </CarouselContent>
-        <CarouselPrevious className={cn('left-2', arrowClass)} />
-        <CarouselNext className={cn('right-2', arrowClass)} />
-      </Carousel>
-      <span className="pointer-events-none absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-2xs font-medium text-white backdrop-blur-sm">
-        {current + 1}/{slides.length}
-      </span>
-    </div>
-  );
-}
-
-// A compact square thumbnail that expands on hover into a blown-up preview with the
-// post copy and engagement metrics. Carousels become a pageable slideshow inside the
-// hover card. Mirrors the paid-media CreativeTile pattern.
 export function CompetitorPostHoverTile({
+  brandId,
   view,
   actions,
 }: {
+  brandId: string;
   view: CompetitorPostView;
   actions?: ReactNode;
 }) {
   const { post } = view;
-  const likeCount = formatCount(post.likeCount);
-  const commentsCount = formatCount(post.commentsCount);
-  const postDate = formatDate(post.timestamp);
+  const [hovering, setHovering] = useState(false);
+  const [open, setOpen] = useState(false);
   const altText = `${view.competitorName} ${post.kind}`;
-  const slides = carouselSlides(post);
   const videoUrl = reelVideoUrl(post);
-  const [tileHovering, setTileHovering] = useState(false);
+  const age = post.timestamp ? formatRelativeTime(post.timestamp) : null;
   const mediaClassName =
-    'aspect-square h-full transition-transform duration-200 motion-safe:group-hover/tile:scale-105';
+    'aspect-[4/5] h-full transition-transform duration-200 motion-safe:group-hover/tile:scale-[1.03]';
 
   return (
-    <HoverCard openDelay={180} closeDelay={100}>
-      <HoverCardTrigger
-        render={
-          <a
-            href={post.permalink}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`Open ${view.competitorName} ${post.kind} on Instagram`}
-            className="group/tile relative block overflow-hidden rounded-md border border-transparent bg-muted transition hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onPointerEnter={() => setTileHovering(true)}
-            onPointerLeave={() => setTileHovering(false)}
-          >
-            {videoUrl ? (
-              <ReelVideo
-                src={videoUrl}
-                poster={post.coverUrl}
-                alt={altText}
-                playing={tileHovering}
-                className={mediaClassName}
-              />
-            ) : (
-              <PostThumb coverUrl={post.coverUrl} alt={altText} className={mediaClassName} />
-            )}
-            {(post.kind !== 'post' || post.mediaCount > 1) && (
-              <span className="pointer-events-none absolute left-1.5 top-1.5 inline-flex items-center gap-0.5 rounded-full bg-black/60 px-1.5 py-0.5 text-2xs font-medium text-white backdrop-blur-sm">
-                <KindGlyph kind={post.kind} />
-                {post.mediaCount > 1 ? post.mediaCount : post.kind === 'reel' ? 'Reel' : null}
-              </span>
-            )}
-          </a>
-        }
-      />
-
-      <HoverCardContent align="start" className="w-80 overflow-hidden p-0">
-        {slides.length > 0 ? (
-          <PostCarousel slides={slides} poster={post.coverUrl} alt={altText} />
-        ) : videoUrl ? (
+    <article
+      data-testid="inspiration-tile"
+      data-post-id={post.id}
+      data-post-type={post.kind}
+      data-format={view.format}
+      data-outlier={post.outlierScore ?? ''}
+      className={cn(
+        'group/tile flex min-w-0 flex-col overflow-hidden rounded-lg border bg-card transition-colors',
+        open ? 'border-primary' : 'border-border hover:border-foreground/25',
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        onPointerEnter={() => setHovering(true)}
+        onPointerLeave={() => setHovering(false)}
+        aria-label={`Analyse ${view.competitorName} ${post.kind}`}
+        className="relative block overflow-hidden bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+      >
+        {videoUrl ? (
           <ReelVideo
             src={videoUrl}
             poster={post.coverUrl}
             alt={altText}
-            autoPlay
-            controls
-            className="max-h-72 aspect-square"
+            playing={hovering}
+            className={mediaClassName}
           />
         ) : (
-          <PostThumb coverUrl={post.coverUrl} alt={altText} className="max-h-72" />
+          <PostThumb coverUrl={post.coverUrl} alt={altText} className={mediaClassName} />
         )}
-        <div className="flex flex-col gap-2 p-3">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-foreground">{view.competitorName}</p>
-              <p className="truncate text-xs text-muted-foreground">@{view.instagramUsername}</p>
-            </div>
-            {postDate ? (
-              <span className="shrink-0 text-2xs text-muted-foreground">{postDate}</span>
-            ) : null}
-          </div>
+        <span
+          data-testid="format-label"
+          className="pointer-events-none absolute left-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-2xs font-medium text-white"
+        >
+          {COMPETITOR_POST_FORMAT_LABELS[view.format]}
+        </span>
+        <OutlierBadge view={view} className="pointer-events-none absolute right-1.5 top-1.5" />
+        <KindGlyph kind={post.kind} mediaCount={post.mediaCount} />
+      </button>
 
-          {post.caption ? (
-            <p className="line-clamp-4 whitespace-pre-line text-xs leading-relaxed text-muted-foreground">
-              {post.caption}
-            </p>
-          ) : null}
+      <div className="flex min-w-0 flex-col gap-1.5 p-2.5">
+        <p className="flex min-w-0 items-baseline gap-1 text-xs">
+          <span className="truncate font-medium text-foreground">{view.competitorName}</span>
+          {age ? <span className="shrink-0 text-muted-foreground">· {age}</span> : null}
+        </p>
+        {post.caption ? (
+          <p className="line-clamp-2 text-xs leading-snug text-muted-foreground">{post.caption}</p>
+        ) : null}
+        {view.relevance && view.relevance.matchedTerms.length > 0 ? (
+          <p data-testid="relevance-reason" className="truncate text-2xs text-muted-foreground">
+            Fits your brand: {view.relevance.matchedTerms.join(', ')}
+          </p>
+        ) : null}
+        <PostMetrics view={view} />
+      </div>
 
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            {likeCount ? (
-              <span className="inline-flex items-center gap-1">
-                <Heart className="h-3.5 w-3.5 text-red-500" /> {likeCount}
-              </span>
-            ) : null}
-            {commentsCount ? (
-              <span className="inline-flex items-center gap-1">
-                <MessageCircle className="h-3.5 w-3.5 text-blue-500" /> {commentsCount}
-              </span>
-            ) : null}
-            <span className="ml-auto capitalize">{post.kind}</span>
-          </div>
-
-          <div className="flex items-center justify-between gap-2 pt-0.5">
-            <a
-              href={post.permalink}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Open on Instagram
-            </a>
-            {actions}
-          </div>
-        </div>
-      </HoverCardContent>
-    </HoverCard>
+      {open ? (
+        <InspirationAnalysePanel
+          brandId={brandId}
+          view={view}
+          open={open}
+          onOpenChange={setOpen}
+          actions={actions}
+        />
+      ) : null}
+    </article>
   );
 }

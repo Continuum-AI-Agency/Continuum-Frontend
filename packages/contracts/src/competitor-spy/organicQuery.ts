@@ -49,8 +49,11 @@ export const competitorOrganicPostSummarySchema = z.object({
   timestamp: z.string().nullable(),
   likeCount: z.number().nullable(),
   commentsCount: z.number().nullable(),
+  viewCount: z.number().nullable().optional(),
   mediaCount: z.number(),
   engagement: z.number().nullable(),
+  // engagement ÷ the account's median engagement; null below 12 scorable posts.
+  outlierScore: z.number().nullable().optional(),
 });
 export type CompetitorOrganicPostSummary = z.infer<typeof competitorOrganicPostSummarySchema>;
 
@@ -106,8 +109,10 @@ function toPostSummary(row: CompetitorOrganicPost): CompetitorOrganicPostSummary
     timestamp: post.timestamp ?? null,
     likeCount,
     commentsCount,
+    viewCount: post.viewCount ?? null,
     mediaCount: post.mediaCount,
     engagement: deriveEngagement(likeCount, commentsCount),
+    outlierScore: post.outlierScore ?? null,
   };
 }
 

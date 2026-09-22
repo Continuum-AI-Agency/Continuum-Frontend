@@ -1,5 +1,6 @@
 'use client';
 
+import type { ProductCode } from '@continuum/contracts';
 import { ChevronRight, Lock, LogOut, Moon, Search, Sun } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'motion/react';
 import Link from 'next/link';
@@ -38,6 +39,8 @@ import {
   type AutomationDeploymentEnvironment,
   canAccessAutomations,
 } from '@/lib/automations/access';
+import { PLAN_NAME_FOR_PRODUCT } from '@/lib/billing/productAccess';
+import type { SidebarBillingView } from '@/lib/billing/sidebarBilling';
 import { isAdminUser } from '@/lib/brands/brand-switcher-utils';
 import { cn } from '@/lib/utils';
 import { BrandSwitcher } from './BrandSwitcher';
@@ -48,6 +51,7 @@ import {
   type AppNavigationItem,
   isRouteActive,
 } from './routes';
+import { SidebarBillingWidget } from './SidebarBillingWidget';
 
 type NavBadgeTone = NonNullable<NonNullable<AppNavigationItem['badge']>['tone']>;
 
@@ -129,11 +133,15 @@ function RouteAwareCollapsible({
   return <Collapsible open={open} onOpenChange={setOpen} {...props} />;
 }
 
-function AppSidebarInner({
-  automationEnvironment,
-}: {
+type AppSidebarProps = {
   automationEnvironment: AutomationDeploymentEnvironment;
-}) {
+  /** Products the active brand lacks (computed server-side). Empty until billing is live. */
+  lockedProducts: readonly ProductCode[];
+  /** The bottom-left plan + credits widget (computed server-side). Null until billing is live. */
+  billing: SidebarBillingView | null;
+};
+
+function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: AppSidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -413,12 +421,20 @@ function AppSidebarInner({
       );
     }
 
+    // Still a live link: the page's ProductGate sends a brand without the product to Billing,
+    // with the plan that unlocks it highlighted. The lock only says so before the click.
+    const lockedBy =
+      item.product && lockedProducts.includes(item.product)
+        ? (PLAN_NAME_FOR_PRODUCT[item.product] ?? 'an upgrade')
+        : null;
+    const lockedLabel = lockedBy ? `${item.label} (needs ${lockedBy})` : undefined;
+
     return (
       <SidebarMenuItem key={item.href}>
         <SidebarMenuButton
           asChild
           isActive={active}
-          tooltip={item.label}
+          tooltip={lockedLabel ?? item.label}
           size="default"
           onMouseEnter={() => router.prefetch(item.href)}
           className={cn(
@@ -426,7 +442,11 @@ function AppSidebarInner({
             active ? 'text-[var(--sidebar-foreground)]' : 'text-[var(--sidebar-muted)]',
           )}
         >
-          <Link href={item.href}>
+          <Link
+            href={item.href}
+            aria-label={lockedLabel}
+            data-locked={lockedBy ? 'true' : undefined}
+          >
             {active ? (
               <ActiveMarker layoutId="nav-active-marker" animate={!reduce} className="h-4 w-0.5" />
             ) : null}
@@ -434,6 +454,12 @@ function AppSidebarInner({
             <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
               {item.label}
             </span>
+            {lockedBy ? (
+              <Lock
+                aria-hidden
+                className="ml-auto !h-3.5 !w-3.5 stroke-[1.8] text-[var(--sidebar-muted-dim)] group-data-[collapsible=icon]:hidden"
+              />
+            ) : null}
           </Link>
         </SidebarMenuButton>
         {item.badge ? (
@@ -521,6 +547,7 @@ function AppSidebarInner({
         </SidebarContent>
 
         <SidebarFooter className="px-3 pb-3">
+          {billing ? <SidebarBillingWidget view={billing} /> : null}
           <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
             {APP_NAVIGATION_FOOTER.map((item) => {
               if (item.adminOnly && !isAdmin) return null;
@@ -632,14 +659,10 @@ function AppSidebarInner({
   );
 }
 
-export function AppSidebar({
-  automationEnvironment,
-}: {
-  automationEnvironment: AutomationDeploymentEnvironment;
-}) {
+export function AppSidebar(props: AppSidebarProps) {
   return (
     <Suspense fallback={null}>
-      <AppSidebarInner automationEnvironment={automationEnvironment} />
+      <AppSidebarInner {...props} />
     </Suspense>
   );
 }

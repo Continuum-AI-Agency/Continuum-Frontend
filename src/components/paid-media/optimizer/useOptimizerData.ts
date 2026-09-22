@@ -1144,7 +1144,8 @@ export function useOptimizerAdAccounts(brandId: string) {
 export function useAdAccountCurrency(brandId: string, adAccountId: string | null): string | null {
   const { data } = useOptimizerAdAccounts(brandId);
   if (!adAccountId) return null;
-  return data.find((account) => account.account_id === adAccountId)?.currency ?? null;
+  const wanted = bareAccountId(adAccountId);
+  return data.find((account) => bareAccountId(account.account_id) === wanted)?.currency ?? null;
 }
 
 export function useOptimizerPerformance(portfolioId: string | null) {

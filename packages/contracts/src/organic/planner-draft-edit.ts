@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { publishOptionsByPlatformSchema } from './publish-body';
 import { plannerDayIdSchema, plannerTimeOfDaySchema } from './planner-schedule';
 
 /**
@@ -67,6 +68,7 @@ export const PLANNER_EDITABLE_FIELDS = [
   'dayId',
   'timeOfDay',
   'media',
+  'publishOptions',
 ] as const;
 export type PlannerEditableField = (typeof PLANNER_EDITABLE_FIELDS)[number];
 
@@ -87,6 +89,11 @@ export const plannerDraftFieldPatchSchema = z
     dayId: plannerDayIdSchema.optional(),
     timeOfDay: plannerTimeOfDaySchema.optional(),
     media: plannerDraftMediaPatchSchema.optional(),
+    /**
+     * The whole per-platform options map, replacing the saved one. Sent whole rather
+     * than per platform so clearing a field is expressible: the absent key IS the clear.
+     */
+    publishOptions: publishOptionsByPlatformSchema.optional(),
     /**
      * Optimistic-concurrency token: the `updated_at` the caller last saw. The
      * write RPC fails the item with `stale_state` when the row has moved on, so a
@@ -144,6 +151,8 @@ export function plannerFieldPatchToContentJson(
   if (patch.media !== undefined) {
     contentJson.publishingAssets = patch.media.publishingAssets;
   }
+
+  if (patch.publishOptions !== undefined) contentJson.publishOptions = patch.publishOptions;
 
   return contentJson;
 }

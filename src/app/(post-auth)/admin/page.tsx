@@ -19,6 +19,7 @@ type AdminData = {
   users: AdminUser[];
   permissions: PermissionRow[];
   pagination: AdminPagination;
+  billingLive?: boolean;
   loadError?: string;
 };
 
@@ -129,7 +130,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   );
   const query = parseStringParam(resolvedSearchParams.query).trim();
 
-  const { users, permissions, pagination, loadError } = await fetchAdminUsers({
+  const { users, permissions, pagination, billingLive, loadError } = await fetchAdminUsers({
     page,
     pageSize,
     query,
@@ -158,6 +159,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               permissions={permissions}
               pagination={pagination}
               searchQuery={query}
+              billingLive={billingLive ?? false}
             />
           </CardContent>
         </Card>

@@ -36,6 +36,22 @@ describe('plannerDraftFieldPatchSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('accepts per-platform publish options and refuses an option on an unknown platform', () => {
+    expect(
+      plannerDraftFieldPatchSchema.safeParse({
+        publishOptions: { instagram: { firstComment: 'first!' } },
+      }).success,
+    ).toBe(true);
+    expect(
+      plannerDraftFieldPatchSchema.safeParse({ publishOptions: { threads: { firstComment: 'x' } } })
+        .success,
+    ).toBe(false);
+    expect(
+      plannerDraftFieldPatchSchema.safeParse({ publishOptions: { instagram: { firstComment: '' } } })
+        .success,
+    ).toBe(false);
+  });
+
   it('rejects a malformed day or time', () => {
     expect(plannerDraftFieldPatchSchema.safeParse({ dayId: '30-07-2026' }).success).toBe(false);
     expect(plannerDraftFieldPatchSchema.safeParse({ timeOfDay: '9:00 AM' }).success).toBe(false);
@@ -114,6 +130,14 @@ describe('plannerFieldPatchToContentJson', () => {
 
   it('emits nothing for the schedule half — planner-schedule composes that instant', () => {
     expect(plannerFieldPatchToContentJson({ dayId: '2026-07-30', timeOfDay: '17:30' })).toEqual({});
+  });
+
+  it('maps the per-platform publish options map to content_json.publishOptions whole', () => {
+    const publishOptions = {
+      instagram: { firstComment: '#launch', thumbnail: { offsetMs: 3200 } },
+      tiktok: { aiGenerated: true },
+    };
+    expect(plannerFieldPatchToContentJson({ publishOptions })).toEqual({ publishOptions });
   });
 
   it('never emits a key the patch did not name, so the merge cannot clobber siblings', () => {

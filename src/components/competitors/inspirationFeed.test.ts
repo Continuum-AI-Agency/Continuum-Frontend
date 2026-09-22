@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import type { CompetitorOrganicPost, InstagramPost, TimelineEntry } from '@continuum/contracts';
+import type { CompetitorInspirationPost, InstagramPost, TimelineEntry } from '@continuum/contracts';
 
 import { buildInspirationFeed } from './inspirationFeed';
 
@@ -20,12 +20,16 @@ function makePost(over: Partial<InstagramPost> = {}): InstagramPost {
   };
 }
 
-function makeOrganic(over: Partial<CompetitorOrganicPost> = {}): CompetitorOrganicPost {
+function makeOrganic(over: Partial<CompetitorInspirationPost> = {}): CompetitorInspirationPost {
   return {
     competitorId: 'c1',
     competitorName: 'Nike',
     instagramUsername: 'nike',
     post: makePost(),
+    format: 'photo',
+    analysis: null,
+    relevance: null,
+    whyItWorked: null,
     ...over,
   };
 }

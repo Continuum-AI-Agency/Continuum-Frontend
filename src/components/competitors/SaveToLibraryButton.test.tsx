@@ -30,7 +30,12 @@ const requestMock = mock((args: RequestArgs) => {
   }
   return Promise.reject(new Error(`unexpected path ${args.path}`));
 });
-mock.module('@/lib/api/http', () => ({ request: (args: RequestArgs) => requestMock(args) }));
+// The full module surface: competitorSpy reaches modules that import `http`, and a
+// partial mock deletes every export it leaves out.
+mock.module('@/lib/api/http', () => {
+  const request = (args: RequestArgs) => requestMock(args);
+  return { request, http: { request } };
+});
 
 const { SaveToLibraryButton } = await import('./SaveToLibraryButton');
 
@@ -47,6 +52,10 @@ const view: CompetitorPostView = {
     mediaCount: 1,
     items: [],
   },
+  format: 'reel',
+  analysis: null,
+  relevance: null,
+  whyItWorked: null,
 };
 
 function renderButton(node: ReactNode) {

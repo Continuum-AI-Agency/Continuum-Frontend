@@ -164,9 +164,13 @@ function JainaMessageItemImpl({
   const toolApprovals = pendingApprovals.filter(
     (entry) => !entry.toolName.startsWith('paid_scaffold_'),
   );
+  // Once answered, the approval leaves `pending`, so the decision is read back from the
+  // resolved map — otherwise a denied gate would lose its "Declined" the moment it was clicked.
   const scaffoldResolution = scaffoldApproval
     ? (resolvedApprovals[scaffoldApproval.approvalId] ?? null)
-    : null;
+    : (Object.values(resolvedApprovals).find((entry) =>
+        entry.toolName?.startsWith('paid_scaffold_'),
+      ) ?? null);
   const scaffoldDenial =
     (message.deniedToolOutputs ?? []).find((entry) =>
       entry.toolName.startsWith('paid_scaffold_'),

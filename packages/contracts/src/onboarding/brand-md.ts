@@ -2,7 +2,13 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { z } from 'zod';
 
 import { hexColorSchema } from './_shared';
-import { type BrandDna, renderBrandBibleMarkdown, toBrandDna } from './brand-dna';
+import {
+  BRAND_BIBLE_SECTIONS,
+  type BrandDna,
+  brandDnaBannedWords,
+  renderBrandBibleMarkdown,
+  toBrandDna,
+} from './brand-dna';
 import type { BrandReportResult } from './brand-report';
 import { emojiUsageSchema } from './brand-voice';
 import type { BrandPalette, BrandTypography } from './website-summary';
@@ -141,6 +147,53 @@ export const brandMdSaveRequestSchema = z
   });
 export type BrandMdSaveRequest = z.infer<typeof brandMdSaveRequestSchema>;
 
+// What the Brand Brain writes ONLY as prose in the body: whole sections (positioning,
+// pillars, promise) and three `Prefix: a; b` lines of the Voice section, read back with the
+// registry's own headings and the prefixes its Voice renderer writes. Null = not in the body.
+export type BrandMdBodyFacts = {
+  sections: Record<'positioning' | 'brand_pillars' | 'promise', string[] | null>;
+  dos: string[] | null;
+  donts: string[] | null;
+  avoid_themes: string[] | null;
+};
+
+/**
+ * The Brand Brain's prose facts, read out of a brand.md body. Null when the body carries
+ * none of the Brand Book's headings — it is the user's own prose then, not a Brand Book.
+ */
+export function readBrandMdBody(body: string): BrandMdBodyFacts | null {
+  const lines = body.split('\n').map((line) => line.trimEnd());
+  if (!BRAND_BIBLE_SECTIONS.some((section) => lines.includes(section.title))) return null;
+  const section = (id: string): string[] | null => {
+    const title = BRAND_BIBLE_SECTIONS.find((candidate) => candidate.id === id)?.title;
+    const start = title ? lines.indexOf(title) : -1;
+    if (start === -1) return null;
+    const end = lines.findIndex((line, index) => index > start && line.startsWith('## '));
+    return lines
+      .slice(start + 1, end === -1 ? undefined : end)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  };
+  const voice = section('voice') ?? [];
+  const list = (prefix: string) =>
+    voice
+      .find((line) => line.startsWith(prefix))
+      ?.slice(prefix.length)
+      .split(';')
+      .map((item) => item.trim())
+      .filter(Boolean) ?? null;
+  return {
+    sections: {
+      positioning: section('positioning'),
+      brand_pillars: section('brand_pillars'),
+      promise: section('promise'),
+    },
+    dos: list('Do: '),
+    donts: list("Don't: "),
+    avoid_themes: list('Avoid themes: '),
+  };
+}
+
 function omitEmpty<T extends Record<string, unknown>>(obj: T): Partial<T> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
@@ -263,17 +316,21 @@ export function extractBrandFontTokens(
   return out;
 }
 
-function extractVoice(dna: BrandDna): z.input<typeof brandVoiceTokenSchema> | null {
+/**
+ * The DNA's voice as a brand.md voice token — the shape every `<brand_book>` renderer takes.
+ * Generation reads voice through this (never through `brand_tokens.voice` on its own), so
+ * the voice line in a prompt and the list `checkBrandVoice` enforces are the same list.
+ */
+export function brandVoiceTokenFromDna(dna: BrandDna): BrandVoiceToken | null {
   const tone = dna.voice?.tone ?? undefined;
   const style = dna.voice?.voice_style ?? undefined;
   const emoji_usage =
     dna.guidelines?.formatting?.emoji_usage ?? dna.voice?.emoji_usage ?? undefined;
   const power_verbs = dna.voice?.power_verbs ?? [];
-  const banned_words =
-    dna.guidelines?.messaging_guardrails?.banned_words ?? dna.voice?.banned_words ?? [];
+  const banned_words = brandDnaBannedWords(dna);
   if (!tone && !style && !emoji_usage && power_verbs.length === 0 && banned_words.length === 0)
     return null;
-  return { tone, style, emoji_usage, power_verbs, banned_words };
+  return brandVoiceTokenSchema.parse({ tone, style, emoji_usage, power_verbs, banned_words });
 }
 
 function extractPersonality(dna: BrandDna): z.input<typeof brandPersonalityTokenSchema> | null {
@@ -308,7 +365,7 @@ export function extractBrandTokens(
     colors: extractBrandColorTokens(dna.palette, kit?.colors ?? []),
     typography: extractBrandFontTokens(dna.typography),
     logo: logoPath ? { storage_path: logoPath, treatment_default: 'palette-only' } : null,
-    voice: extractVoice(dna),
+    voice: brandVoiceTokenFromDna(dna),
     personality: extractPersonality(dna),
     imagery: null,
     audience: extractAudience(dna),

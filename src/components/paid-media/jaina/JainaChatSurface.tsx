@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import {
   DownloadIcon,
   Edit2Icon,
@@ -68,6 +69,7 @@ import { useChatAttachments } from '@/components/chat/useChatAttachments';
 import { prependUnseen, useEarlierHistory } from '@/components/chat/useEarlierHistory';
 import type { ToolApprovalDecision } from '@/components/paid-media/jaina/components/JainaToolApprovalCard';
 import type { ScaffoldDecision } from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
+import { PAID_SCAFFOLD_TREE_QUERY_ROOT } from '@/components/paid-media/jaina/scaffold/usePaidScaffoldTree';
 import { useActiveProjectOptional } from '@/components/projects';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -944,6 +946,7 @@ export function JainaChatSurface({
   const [editingQueueMessageId, setEditingQueueMessageId] = React.useState<string | null>(null);
   const [queueEditDraft, setQueueEditDraft] = React.useState('');
   const processedToolResultIdsRef = React.useRef<Set<string>>(new Set());
+  const queryClient = useQueryClient();
   const processedCanvasEnvelopeKeysRef = React.useRef<Set<string>>(new Set());
   const processedReportArtifactJobIdsRef = React.useRef<Set<string>>(new Set());
   const persistedAssistantResponseIdsRef = React.useRef<Set<string>>(new Set());
@@ -1644,6 +1647,12 @@ export function JainaChatSurface({
       }
       processedToolResultIdsRef.current.add(toolResult.id);
 
+      // An attach changes a node row but emits no scaffold frame, so an open card would keep
+      // saying "no creative" until some later gate's receipt. One refetch per attach.
+      if (toolResult.name === 'paid_scaffold_attach_creative') {
+        void queryClient.invalidateQueries({ queryKey: [PAID_SCAFFOLD_TREE_QUERY_ROOT] });
+      }
+
       if (!toolResult.ok || !toolResult.output) {
         continue;
       }
@@ -1720,6 +1729,7 @@ export function JainaChatSurface({
     brandProfileId,
     onCanvasActionApplied,
     processAIAction,
+    queryClient,
     show,
     liveChatMessage?.toolResults,
     liveMessage,
@@ -2655,250 +2665,265 @@ export function JainaChatSurface({
         />
       ) : null}
 
-      <div className="relative z-0 flex min-h-0 flex-1 flex-col md:flex-row">
-        <JainaConversationSidebar
-          sessions={conversationSessions}
-          activeSessionId={sessionId}
-          sessionTitleById={sessionTitleById}
-          generatingSessionIds={generatingSessionIdsForSidebar}
-          isLoading={isHistoryLoading}
-          isInteractionDisabled={isConversationSwitching || Boolean(deletingSessionId)}
-          deletingSessionId={deletingSessionId}
-          brandId={brandProfileId}
-          goalsAccessEnabled={goalsAccessEnabled}
-          isCollapsed={isSidebarCollapsed}
-          onToggleCollapsed={toggleSidebarCollapsed}
-          onCreateConversation={handleClearConversation}
-          onSelectConversation={handleSelectConversation}
-          onDeleteConversation={handleDeleteConversation}
-          onSearchConversations={searchConversations}
-          onUpdateConversationTags={updateConversationTags}
-        />
-        <AutomationSheets agent="jaina" brandId={brandProfileId} />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <ChatTranscript
-              anchors={anchors}
-              hasEarlier={hasEarlier}
-              isLoadingEarlier={isLoadingEarlier}
-              onLoadEarlier={loadEarlier}
-            >
-              {isConversationSwitching ? <ConversationSkeleton /> : null}
+      {/* Sized by the CONTAINER, not the viewport: this surface also lives in the canvas page's
+          420px floating panel, where a viewport `md:` row put a 288px sidebar beside the
+          transcript and crushed every card to ~25px. `jaina` names it for the sidebar below. */}
+      <div className="@container/jaina relative z-0 flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col @3xl/jaina:flex-row">
+          <JainaConversationSidebar
+            sessions={conversationSessions}
+            activeSessionId={sessionId}
+            sessionTitleById={sessionTitleById}
+            generatingSessionIds={generatingSessionIdsForSidebar}
+            isLoading={isHistoryLoading}
+            isInteractionDisabled={isConversationSwitching || Boolean(deletingSessionId)}
+            deletingSessionId={deletingSessionId}
+            brandId={brandProfileId}
+            goalsAccessEnabled={goalsAccessEnabled}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapsed={toggleSidebarCollapsed}
+            onCreateConversation={handleClearConversation}
+            onSelectConversation={handleSelectConversation}
+            onDeleteConversation={handleDeleteConversation}
+            onSearchConversations={searchConversations}
+            onUpdateConversationTags={updateConversationTags}
+          />
+          <AutomationSheets agent="jaina" brandId={brandProfileId} />
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <ChatTranscript
+                anchors={anchors}
+                hasEarlier={hasEarlier}
+                isLoadingEarlier={isLoadingEarlier}
+                onLoadEarlier={loadEarlier}
+              >
+                {isConversationSwitching ? <ConversationSkeleton /> : null}
 
-              {!isConversationSwitching && messages.length === 0 && (
-                <JainaEmptyState
-                  adAccountId={adAccountId}
-                  onExampleClick={(q) => handleSubmit(q)}
-                />
-              )}
-
-              {messages.map((message) => (
-                <React.Fragment key={message.id}>
-                  <JainaMessageItem
-                    message={message}
-                    onSuggestionClick={submitFromTranscript}
-                    onPlanFeedback={planFeedbackFromTranscript}
-                    onFocusInput={handleFocusInput}
-                    onApprovalDecision={approvalDecisionFromTranscript}
-                    optimisticApprovalDecisions={optimisticApprovalDecisions}
-                    onRegenerate={submitFromTranscript}
-                    regeneratePrompt={regeneratePromptByMessageId.get(message.id)}
-                    onOpenAccountRead={onOpenAccountRead}
+                {!isConversationSwitching && messages.length === 0 && (
+                  <JainaEmptyState
+                    adAccountId={adAccountId}
+                    onExampleClick={(q) => handleSubmit(q)}
                   />
-                  {milestonesForJainaMessage(message).map((milestone) => (
-                    <ChatMarker
-                      key={milestone.id}
-                      id={milestone.id}
-                      kind="milestone"
-                      label={milestone.label}
+                )}
+
+                {messages.map((message) => (
+                  <React.Fragment key={message.id}>
+                    <JainaMessageItem
+                      message={message}
+                      onSuggestionClick={submitFromTranscript}
+                      onPlanFeedback={planFeedbackFromTranscript}
+                      onFocusInput={handleFocusInput}
+                      onApprovalDecision={approvalDecisionFromTranscript}
+                      optimisticApprovalDecisions={optimisticApprovalDecisions}
+                      onRegenerate={submitFromTranscript}
+                      regeneratePrompt={regeneratePromptByMessageId.get(message.id)}
+                      onOpenAccountRead={onOpenAccountRead}
                     />
-                  ))}
-                </React.Fragment>
-              ))}
-            </ChatTranscript>
-          </div>
+                    {milestonesForJainaMessage(message).map((milestone) => (
+                      <ChatMarker
+                        key={milestone.id}
+                        id={milestone.id}
+                        kind="milestone"
+                        label={milestone.label}
+                      />
+                    ))}
+                  </React.Fragment>
+                ))}
+              </ChatTranscript>
+            </div>
 
-          <div ref={promptInputWrapperRef} className="shrink-0">
-            <div className="px-2 py-2 sm:px-3">
-              {queuedMessages.length > 0 ? (
-                <div className="mx-auto mb-2 w-full max-w-[1600px] px-1 sm:px-2">
-                  <Queue className="border-border/70 bg-card/80 shadow-none">
-                    <QueueSection defaultOpen>
-                      <QueueSectionTrigger>
-                        <QueueSectionLabel count={queuedMessages.length} label="queued messages" />
-                        <span className="text-xs text-muted-foreground">
-                          {isQueueStreaming ? 'waiting for current response' : 'next will send now'}
-                        </span>
-                      </QueueSectionTrigger>
-                      <QueueSectionContent className="pt-2">
-                        <QueueList className="h-[120px]">
-                          {queuedMessages.map((queuedMessage, index) => {
-                            const isEditing = editingQueueMessageId === queuedMessage.id;
-                            return (
-                              <QueueItem key={queuedMessage.id}>
-                                <div className="flex items-start gap-2">
-                                  <QueueItemIndicator completed={false} />
-                                  <div className="flex min-w-0 flex-1 flex-col gap-2">
-                                    {isEditing ? (
-                                      <Textarea
-                                        value={queueEditDraft}
-                                        onChange={(event) => setQueueEditDraft(event.target.value)}
-                                        className="min-h-[74px] resize-none"
-                                        aria-label="Edit queued message"
-                                      />
-                                    ) : (
-                                      <QueueItemContent>{queuedMessage.content}</QueueItemContent>
-                                    )}
-                                    <div className="text-xs text-muted-foreground/90">
-                                      #{index + 1} in queue
-                                      {queuedMessage.canvas ? ' • plan mode' : ''}
-                                      {queuedMessage.forceReportArtifact ? ' • Jaina Pro' : ''}
-                                      {queuedMessage.clarificationId ? ' • clarification' : ''}
-                                    </div>
-                                  </div>
-                                  <QueueItemActions>
-                                    {isEditing ? (
-                                      <>
-                                        <QueueItemAction
-                                          aria-label="Save queued message"
-                                          onClick={handleQueueEditSave}
-                                        >
-                                          <SaveIcon className="size-3.5" />
-                                        </QueueItemAction>
-                                        <QueueItemAction
-                                          aria-label="Cancel queued message edit"
-                                          onClick={handleQueueEditCancel}
-                                        >
-                                          <XIcon className="size-3.5" />
-                                        </QueueItemAction>
-                                      </>
-                                    ) : (
-                                      <>
-                                        {index === 0 && canStartQueuedNow ? (
-                                          <QueueItemAction
-                                            aria-label="Send queued message now"
-                                            onClick={() => {
-                                              if (queueDispatchInFlightRef.current) return;
-                                              queueDispatchInFlightRef.current = true;
-                                              void (async () => {
-                                                const started = await dispatchMessage({
-                                                  query: queuedMessage.content,
-                                                  canvas: queuedMessage.canvas,
-                                                  clarificationId: queuedMessage.clarificationId,
-                                                  references: queuedMessage.references,
-                                                  forceReportArtifact:
-                                                    queuedMessage.forceReportArtifact,
-                                                });
-                                                if (started) {
-                                                  setQueuedMessages((previous) =>
-                                                    removeQueuedMessage(previous, queuedMessage.id),
-                                                  );
-                                                }
-                                                queueDispatchInFlightRef.current = false;
-                                              })();
-                                            }}
-                                          >
-                                            <PlayIcon className="size-3.5" />
-                                          </QueueItemAction>
-                                        ) : null}
-                                        <QueueItemAction
+            <div ref={promptInputWrapperRef} className="shrink-0">
+              <div className="px-2 py-2 sm:px-3">
+                {queuedMessages.length > 0 ? (
+                  <div className="mx-auto mb-2 w-full max-w-[1600px] px-1 sm:px-2">
+                    <Queue className="border-border/70 bg-card/80 shadow-none">
+                      <QueueSection defaultOpen>
+                        <QueueSectionTrigger>
+                          <QueueSectionLabel
+                            count={queuedMessages.length}
+                            label="queued messages"
+                          />
+                          <span className="text-xs text-muted-foreground">
+                            {isQueueStreaming
+                              ? 'waiting for current response'
+                              : 'next will send now'}
+                          </span>
+                        </QueueSectionTrigger>
+                        <QueueSectionContent className="pt-2">
+                          <QueueList className="h-[120px]">
+                            {queuedMessages.map((queuedMessage, index) => {
+                              const isEditing = editingQueueMessageId === queuedMessage.id;
+                              return (
+                                <QueueItem key={queuedMessage.id}>
+                                  <div className="flex items-start gap-2">
+                                    <QueueItemIndicator completed={false} />
+                                    <div className="flex min-w-0 flex-1 flex-col gap-2">
+                                      {isEditing ? (
+                                        <Textarea
+                                          value={queueEditDraft}
+                                          onChange={(event) =>
+                                            setQueueEditDraft(event.target.value)
+                                          }
+                                          className="min-h-[74px] resize-none"
                                           aria-label="Edit queued message"
-                                          onClick={() => handleQueueEditStart(queuedMessage)}
-                                        >
-                                          <Edit2Icon className="size-3.5" />
-                                        </QueueItemAction>
-                                        <QueueItemAction
-                                          aria-label="Remove queued message"
-                                          onClick={() => handleQueueRemove(queuedMessage.id)}
-                                        >
-                                          <Trash2Icon className="size-3.5" />
-                                        </QueueItemAction>
-                                      </>
-                                    )}
-                                  </QueueItemActions>
-                                </div>
-                              </QueueItem>
-                            );
-                          })}
-                        </QueueList>
-                      </QueueSectionContent>
-                    </QueueSection>
-                  </Queue>
-                </div>
-              ) : null}
+                                        />
+                                      ) : (
+                                        <QueueItemContent>{queuedMessage.content}</QueueItemContent>
+                                      )}
+                                      <div className="text-xs text-muted-foreground/90">
+                                        #{index + 1} in queue
+                                        {queuedMessage.canvas ? ' • plan mode' : ''}
+                                        {queuedMessage.forceReportArtifact ? ' • Jaina Pro' : ''}
+                                        {queuedMessage.clarificationId ? ' • clarification' : ''}
+                                      </div>
+                                    </div>
+                                    <QueueItemActions>
+                                      {isEditing ? (
+                                        <>
+                                          <QueueItemAction
+                                            aria-label="Save queued message"
+                                            onClick={handleQueueEditSave}
+                                          >
+                                            <SaveIcon className="size-3.5" />
+                                          </QueueItemAction>
+                                          <QueueItemAction
+                                            aria-label="Cancel queued message edit"
+                                            onClick={handleQueueEditCancel}
+                                          >
+                                            <XIcon className="size-3.5" />
+                                          </QueueItemAction>
+                                        </>
+                                      ) : (
+                                        <>
+                                          {index === 0 && canStartQueuedNow ? (
+                                            <QueueItemAction
+                                              aria-label="Send queued message now"
+                                              onClick={() => {
+                                                if (queueDispatchInFlightRef.current) return;
+                                                queueDispatchInFlightRef.current = true;
+                                                void (async () => {
+                                                  const started = await dispatchMessage({
+                                                    query: queuedMessage.content,
+                                                    canvas: queuedMessage.canvas,
+                                                    clarificationId: queuedMessage.clarificationId,
+                                                    references: queuedMessage.references,
+                                                    forceReportArtifact:
+                                                      queuedMessage.forceReportArtifact,
+                                                  });
+                                                  if (started) {
+                                                    setQueuedMessages((previous) =>
+                                                      removeQueuedMessage(
+                                                        previous,
+                                                        queuedMessage.id,
+                                                      ),
+                                                    );
+                                                  }
+                                                  queueDispatchInFlightRef.current = false;
+                                                })();
+                                              }}
+                                            >
+                                              <PlayIcon className="size-3.5" />
+                                            </QueueItemAction>
+                                          ) : null}
+                                          <QueueItemAction
+                                            aria-label="Edit queued message"
+                                            onClick={() => handleQueueEditStart(queuedMessage)}
+                                          >
+                                            <Edit2Icon className="size-3.5" />
+                                          </QueueItemAction>
+                                          <QueueItemAction
+                                            aria-label="Remove queued message"
+                                            onClick={() => handleQueueRemove(queuedMessage.id)}
+                                          >
+                                            <Trash2Icon className="size-3.5" />
+                                          </QueueItemAction>
+                                        </>
+                                      )}
+                                    </QueueItemActions>
+                                  </div>
+                                </QueueItem>
+                              );
+                            })}
+                          </QueueList>
+                        </QueueSectionContent>
+                      </QueueSection>
+                    </Queue>
+                  </div>
+                ) : null}
 
-              <div data-tour-id="paid-jaina-chat" className="w-full">
-                <div className="mb-1 px-1">
-                  <AgentDataScopePicker
-                    label="Meta accounts"
-                    options={accountScopeOptions}
-                    selectedIds={selectedAdAccountIds}
-                    requiredIds={[adAccountId]}
-                    maxSelected={JAINA_MAX_AD_ACCOUNTS}
-                    disabled={isInputDisabled || isViewedStreaming}
-                    onChange={setSelectedAdAccountIds}
+                <div data-tour-id="paid-jaina-chat" className="w-full">
+                  <div className="mb-1 px-1">
+                    <AgentDataScopePicker
+                      label="Meta accounts"
+                      options={accountScopeOptions}
+                      selectedIds={selectedAdAccountIds}
+                      requiredIds={[adAccountId]}
+                      maxSelected={JAINA_MAX_AD_ACCOUNTS}
+                      disabled={isInputDisabled || isViewedStreaming}
+                      onChange={setSelectedAdAccountIds}
+                    />
+                  </div>
+                  <PromptInput
+                    onSubmit={(value, submitted, references) =>
+                      handleSubmit(value, submitted, references)
+                    }
+                    attachments={attachments}
+                    inlinePastedText
+                    attachmentOnlyPrompt="Analyze the attached media in the context of my paid media."
+                    disabled={isInputDisabled}
+                    ariaLabel="Message Jaina"
+                    mentionProvider={jainaMentionProvider}
+                    mentionSource="jaina"
+                    queuedText={initialPrompt}
+                    onQueuedTextConsumed={onInitialPromptConsumed}
+                    placeholder={
+                      pendingClarificationId ? "Reply to Jaina's question…" : 'Ask Jaina anything…'
+                    }
+                    actions={
+                      <TooltipProvider delay={180}>
+                        <div className="flex items-center gap-1.5">
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={
+                                    reportArtifactJob?.status === 'failed'
+                                      ? 'destructive'
+                                      : isJainaProMode || reportArtifactJob
+                                        ? 'default'
+                                        : 'secondary'
+                                  }
+                                  disabled={reportArtifactButtonDisabled}
+                                  aria-pressed={isJainaProMode}
+                                  aria-label={reportArtifactTooltip}
+                                  onClick={handleReportArtifactAction}
+                                  className="gap-1.5"
+                                >
+                                  <ReportArtifactButtonIcon
+                                    className={cn(
+                                      'size-3.5',
+                                      (hasPendingReportArtifactRequest ||
+                                        reportArtifactJob?.status === 'pending' ||
+                                        reportArtifactJob?.status === 'running' ||
+                                        isReportArtifactDownloading) &&
+                                        'animate-spin',
+                                    )}
+                                  />
+                                  {reportArtifactStatusLabel}
+                                </Button>
+                              }
+                            />
+                            <TooltipContent side="top" className="text-xs">
+                              {reportArtifactTooltip}
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </TooltipProvider>
+                    }
                   />
                 </div>
-                <PromptInput
-                  onSubmit={(value, submitted, references) =>
-                    handleSubmit(value, submitted, references)
-                  }
-                  attachments={attachments}
-                  inlinePastedText
-                  attachmentOnlyPrompt="Analyze the attached media in the context of my paid media."
-                  disabled={isInputDisabled}
-                  ariaLabel="Message Jaina"
-                  mentionProvider={jainaMentionProvider}
-                  mentionSource="jaina"
-                  queuedText={initialPrompt}
-                  onQueuedTextConsumed={onInitialPromptConsumed}
-                  placeholder={
-                    pendingClarificationId ? "Reply to Jaina's question…" : 'Ask Jaina anything…'
-                  }
-                  actions={
-                    <TooltipProvider delay={180}>
-                      <div className="flex items-center gap-1.5">
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant={
-                                  reportArtifactJob?.status === 'failed'
-                                    ? 'destructive'
-                                    : isJainaProMode || reportArtifactJob
-                                      ? 'default'
-                                      : 'secondary'
-                                }
-                                disabled={reportArtifactButtonDisabled}
-                                aria-pressed={isJainaProMode}
-                                aria-label={reportArtifactTooltip}
-                                onClick={handleReportArtifactAction}
-                                className="gap-1.5"
-                              >
-                                <ReportArtifactButtonIcon
-                                  className={cn(
-                                    'size-3.5',
-                                    (hasPendingReportArtifactRequest ||
-                                      reportArtifactJob?.status === 'pending' ||
-                                      reportArtifactJob?.status === 'running' ||
-                                      isReportArtifactDownloading) &&
-                                      'animate-spin',
-                                  )}
-                                />
-                                {reportArtifactStatusLabel}
-                              </Button>
-                            }
-                          />
-                          <TooltipContent side="top" className="text-xs">
-                            {reportArtifactTooltip}
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </TooltipProvider>
-                  }
-                />
               </div>
             </div>
           </div>

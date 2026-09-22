@@ -86,6 +86,7 @@ export function InspirationFeedGrid({
         ) : (
           <Cell key={item.key} label="Organic">
             <CompetitorPostHoverTile
+              brandId={brandId}
               view={item.view}
               actions={
                 item.view.competitorId ? (

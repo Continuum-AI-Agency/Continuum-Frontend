@@ -12,7 +12,8 @@ export function CompetitorInspirationPanel({ brandId }: { brandId: string }) {
       <div className="min-w-0">
         <h1 className="text-base font-semibold">Inspiration</h1>
         <p className="text-xs text-muted-foreground">
-          Competitor organic posts and paid ad creatives, indexed for ideas.
+          Competitor posts and ads. Sort by how far a post beat its own account, then open it to
+          see why it worked and develop it into a draft.
         </p>
       </div>
       <InspirationBrowser brandId={brandId} defaultSource="all" showRail showSync />

@@ -13,6 +13,7 @@
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { JainaUIMessage } from '@continuum/contracts';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
@@ -292,5 +293,50 @@ describe('a finished turn that produced no answer', () => {
   it('still says a finished empty turn completed', () => {
     render(<JainaMessageItem message={emptyTurn('done')} />, { wrapper });
     expect(screen.getByText('Response complete.')).toBeTruthy();
+  });
+});
+
+describe('a build gate asked for a turn after the proposal', () => {
+  // Only propose emits a proposal frame, and scaffold approvals are routed to the scaffold card
+  // rather than the generic one — so a turn holding nothing but the gate used to render NO card and
+  // NO buttons: the Approve the user asked for, invisible.
+  const VERSION = '66666666-6666-4666-8666-666666666666';
+
+  const withTree = ({ children }: { children: ReactNode }) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(['paid-scaffold-tree', VERSION], {
+      versionId: VERSION,
+      rows: [],
+      header: { scaffoldId: 'scaffold-1', brandId: '', adAccountId: null },
+    });
+    return <QueryClientProvider client={client}>{wrapper({ children })}</QueryClientProvider>;
+  };
+
+  it('renders the scaffold card with the gate’s Approve button', () => {
+    const message = toJainaChatMessage(
+      {
+        id: 'msg_gate',
+        role: 'assistant',
+        parts: [
+          {
+            type: 'dynamic-tool',
+            toolName: 'paid_scaffold_build',
+            toolCallId: 'call_build',
+            state: 'approval-requested',
+            input: { scaffold_version_id: VERSION, content_hash: 'abc' },
+            approval: { id: 'appr_build' },
+          },
+        ],
+      } as unknown as JainaUIMessage,
+      { isStreaming: false },
+    );
+
+    render(<JainaMessageItem message={message} onApprovalDecision={() => {}} />, {
+      wrapper: withTree,
+    });
+
+    expect(screen.getByText('Paid campaign scaffold')).toBeTruthy();
+    expect(screen.getByText('Awaiting your approval')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Approve & create (paused)' })).toBeTruthy();
   });
 });

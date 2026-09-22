@@ -51,6 +51,8 @@ type AdSetData = {
   angleKey: string | null;
   status: ScaffoldNodeStatus;
   adCount: number;
+  /** Formatted by the canvas from `dailyBudgetMinorUnits` and the account currency. */
+  budgetLabel?: string;
   metaObjectId: string | null;
   errorMessage: string | null;
   choices?: ScaffoldChoices;
@@ -148,7 +150,10 @@ export const ScaffoldAdSetNode = memo(function ScaffoldAdSetNode({
             {[data.productKey, data.angleKey].filter(Boolean).join(' · ') || '—'}
           </span>
           <div className="flex items-center justify-between gap-2">
-            <span className="text-muted-foreground text-xs">{data.adCount} ads</span>
+            <span className="truncate text-muted-foreground text-xs tabular-nums">
+              {data.budgetLabel ? `${data.budgetLabel} · ` : ''}
+              {data.adCount} ads
+            </span>
             <ScaffoldStatusPill status={data.status} />
           </div>
           {data.errorMessage ? (

@@ -100,7 +100,12 @@ function renderGallery(
   {
     shared = SHARED,
     adopting = null,
-  }: { shared?: SharedTemplate[]; adopting?: string | null } = {},
+    onOpenShared = () => undefined,
+  }: {
+    shared?: SharedTemplate[];
+    adopting?: string | null;
+    onOpenShared?: (template: SharedTemplate) => void;
+  } = {},
 ) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
@@ -112,6 +117,7 @@ function renderGallery(
         shared={shared}
         adopting={adopting}
         onOpen={() => undefined}
+        onOpenShared={onOpenShared}
         onRename={() => undefined}
         onToggleShared={onToggleShared}
         onFiles={() => undefined}
@@ -220,6 +226,20 @@ describe('TemplateGallery', () => {
     expect(within(card).queryByRole('button', { name: 'Use in StarCraft' })).toBeNull();
     fireEvent.click(within(card).getByRole('button', { name: 'Remove Hero offer from StarCraft' }));
     expect(onToggleShared).toHaveBeenCalledWith(granted);
+  });
+
+  test('a shared card opens its detail, and its own buttons do not', () => {
+    const onOpenShared = mock((_template: SharedTemplate) => undefined);
+    const onToggleShared = renderGallery(undefined, { onOpenShared });
+    fireEvent.click(screen.getByRole('button', { name: /^Shared with you/ }));
+    const card = screen.getAllByRole('article')[0]!;
+
+    fireEvent.click(within(card).getByRole('button', { name: 'Use in StarCraft' }));
+    expect(onToggleShared).toHaveBeenCalledTimes(1);
+    expect(onOpenShared).not.toHaveBeenCalled();
+
+    fireEvent.click(within(card).getByRole('button', { name: 'Open Hero offer' }));
+    expect(onOpenShared).toHaveBeenCalledWith(SHARED[0]);
   });
 
   test('one template id in two workspaces is two cards, and only the one being added spins', () => {

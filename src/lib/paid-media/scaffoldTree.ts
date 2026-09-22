@@ -39,6 +39,8 @@ export type PaidScaffoldNodeRow = {
   attempt: number;
   creativeAssetId: string | null;
   creativeMedia: Record<string, unknown> | null;
+  /** Ad sets only. Jaina's opening budget; null builds on the placeholder. */
+  dailyBudgetMinorUnits: number | null;
 };
 
 /**
@@ -91,6 +93,8 @@ export type ScaffoldAdSetRow = {
   metaObjectId: string | null;
   errorMessage: string | null;
   attempt: number;
+  /** Derived from the account's measured CPA at propose time; null = build placeholder. */
+  dailyBudgetMinorUnits: number | null;
   choices: ScaffoldChoices;
   derived: ScaffoldDerived;
   ads: ScaffoldAdRow[];
@@ -260,6 +264,7 @@ export const buildScaffoldTree = (
       metaObjectId: row.metaObjectId,
       errorMessage: row.errorMessage,
       attempt: row.attempt,
+      dailyBudgetMinorUnits: row.dailyBudgetMinorUnits,
       choices: choicesOf(row.payload),
       derived: derivedOf(row.payload),
       ads: [],
@@ -317,5 +322,42 @@ export const buildScaffoldTree = (
       ).length,
       pending: everyNodeStatus.filter((status) => status === 'pending').length,
     },
+  };
+};
+
+/**
+ * The opening daily spend a build would commit, summed over ad sets (ABO: the campaign
+ * carries none). `placeholders` counts ad sets Jaina had no measured CPA for — those
+ * build on the Backend placeholder, which is a number nobody derived, so it is named
+ * rather than folded into the total.
+ */
+export const openingDailyBudgetOf = (
+  tree: ScaffoldTree,
+): { totalMinorUnits: number; placeholders: number } => ({
+  totalMinorUnits: tree.adSets.reduce(
+    (total, adSet) => total + (adSet.dailyBudgetMinorUnits ?? 0),
+    0,
+  ),
+  placeholders: tree.adSets.filter((adSet) => typeof adSet.dailyBudgetMinorUnits !== 'number')
+    .length,
+});
+
+/**
+ * What stops this scaffold short on Meta, read from the rows rather than told by the
+ * model. Build parses every ad set's `targeting` and throws on a missing one AFTER the
+ * campaign exists; populate needs a Library creative on each ad. Only nodes not yet on
+ * Meta count — a created ad set has already cleared its gate.
+ */
+export const scaffoldBlockersOf = (
+  tree: ScaffoldTree,
+): { adSetsWithoutAudience: string[]; adsWithoutCreative: number } => {
+  const pending = (status: ScaffoldNodeStatus) => status !== 'created' && status !== 'active';
+  return {
+    adSetsWithoutAudience: tree.adSets
+      .filter((adSet) => pending(adSet.status) && !adSet.derived.targeting)
+      .map((adSet) => adSet.name),
+    adsWithoutCreative: tree.adSets
+      .flatMap((adSet) => adSet.ads)
+      .filter((ad) => pending(ad.status) && !ad.creativeAssetId && !ad.creativeMedia).length,
   };
 };

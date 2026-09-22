@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { TierAccessRedirect } from '@/components/ui/TierAccessRedirect';
+import { ProductGate } from '@/components/billing/ProductGate';
 import { resolveAutomationDeploymentEnvironment } from '@/lib/automations/access';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { resolveInitialMetaAdAccountId } from '@/lib/paid-media/accountId';
@@ -10,18 +10,14 @@ import {
 import PaidMediaClientPage from './PaidMediaClient';
 
 export default async function PaidMediaPage() {
-  const { activeBrandId, activeBrandTier, brandSummaries } = await getActiveBrandContext();
+  const { activeBrandId, brandSummaries } = await getActiveBrandContext();
 
   if (!activeBrandId) {
     redirect('/onboarding');
   }
 
-  // Permission gate: allow only tiers 1,2,3; tier 0 (or missing) is blocked.
-  if (activeBrandTier === 0) {
-    return (
-      <TierAccessRedirect description="Paid Media is a paid feature. Please contact an Administrator." />
-    );
-  }
+  const denied = await ProductGate('scale');
+  if (denied) return denied;
 
   const brandName =
     brandSummaries.find((brand) => brand.id === activeBrandId)?.name ?? 'Untitled brand';

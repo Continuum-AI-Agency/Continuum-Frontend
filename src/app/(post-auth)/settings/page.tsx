@@ -64,7 +64,7 @@ type SettingsPageProps = {
 };
 
 export default async function SettingsPage({ searchParams }: SettingsPageProps) {
-  const { activeBrandId, brandSummaries, permissions, activeBrandTier, user } =
+  const { activeBrandId, brandSummaries, permissions, brandAccess, user } =
     await getActiveBrandContext();
   const params = await searchParams;
   const initialSection = resolveSection(params?.section);
@@ -369,9 +369,9 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         {createBrandHeader(defaultBrandName)}
         <SettingsSection
           title="Billing & credits"
-          description="AI Studio tier, credits, and plan management."
+          description="Your plans, card, Canvas credits and invoices."
         >
-          <BrandBillingPanel tier={activeBrandTier} />
+          <BrandBillingPanel billingLive={brandAccess.billingLive} />
         </SettingsSection>
       </>
     );

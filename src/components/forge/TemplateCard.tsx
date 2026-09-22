@@ -462,12 +462,7 @@ export function TemplateCard({
   );
 }
 
-/**
- * A template someone else built into the shared workspace, which this brand can add.
- *
- * ponytail: no detail panel — without a Library source there are no variables, history or revisions
- * to show. Give it one when shared templates carry settings a brand can change.
- */
+/** A template someone else built into the shared workspace, which this brand can add. */
 export type SharedTemplate = {
   templateKey: string;
   name: string;
@@ -494,6 +489,7 @@ export function SharedTemplateCard({
   renders,
   emptyLabel,
   busy,
+  onOpen,
   onToggle,
   onRender,
 }: {
@@ -503,6 +499,7 @@ export function SharedTemplateCard({
   renders: readonly ApiRenderJob[];
   emptyLabel: string | null;
   busy: boolean;
+  onOpen: () => void;
   onToggle: () => void;
   onRender?: () => void;
 }) {
@@ -510,8 +507,15 @@ export function SharedTemplateCard({
   const brand = brandName ?? 'this brand';
   const render = latestCardRender(renders, []);
   return (
-    <article className="flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card">
-      <div className="aspect-[4/3] border-b bg-muted/40">
+    <article className="group relative flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card transition-colors hover:border-primary/40">
+      {/* The whole card opens the detail; the Use / Remove / Render controls sit above this layer. */}
+      <button
+        type="button"
+        aria-label={`Open ${name}`}
+        onClick={onOpen}
+        className="absolute inset-0 z-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
+      <div className="pointer-events-none aspect-[4/3] border-b bg-muted/40">
         <CardPicture
           key={render?.file.url ?? 'none'}
           name={name}
@@ -526,7 +530,7 @@ export function SharedTemplateCard({
           />
         </CardPicture>
       </div>
-      <div className="flex min-w-0 flex-col gap-2 p-3">
+      <div className="pointer-events-none flex min-w-0 flex-col gap-2 p-3">
         <p className="truncate text-sm font-medium" title={name}>
           {name}
         </p>
@@ -535,7 +539,7 @@ export function SharedTemplateCard({
           <span className="text-2xs text-muted-foreground">Shared with you</span>
         </div>
         {/* Using one is a permission, not a copy: a grant this brand can take back. */}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <div className="pointer-events-auto relative z-10 flex flex-wrap items-center gap-x-2 gap-y-1">
           {template.granted ? (
             <>
               <span className="inline-flex items-center gap-1 text-xs">

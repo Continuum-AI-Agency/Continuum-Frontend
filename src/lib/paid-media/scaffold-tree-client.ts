@@ -22,7 +22,7 @@ import type { PaidScaffoldNodeRow, ScaffoldNodeStatus } from '@/lib/paid-media/s
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 const NODE_COLUMNS =
-  'id,parent_id,level,ordinal,path_key,name,product_key,angle_key,concept_key,payload,status,meta_object_id,meta_creative_id,error_message,attempt,creative_asset_id,creative_media';
+  'id,parent_id,level,ordinal,path_key,name,product_key,angle_key,concept_key,payload,status,meta_object_id,meta_creative_id,error_message,attempt,creative_asset_id,creative_media,daily_budget_minor_units';
 
 const NODE_STATUSES: readonly ScaffoldNodeStatus[] = [
   'pending',
@@ -76,6 +76,8 @@ const toNodeRow = (raw: Record<string, unknown>): PaidScaffoldNodeRow => ({
   attempt: typeof raw.attempt === 'number' ? raw.attempt : 0,
   creativeAssetId: asNullableString(raw.creative_asset_id),
   creativeMedia: raw.creative_media === null ? null : asRecord(raw.creative_media),
+  dailyBudgetMinorUnits:
+    typeof raw.daily_budget_minor_units === 'number' ? raw.daily_budget_minor_units : null,
 });
 
 /**
@@ -104,5 +106,40 @@ export async function fetchPaidScaffoldTreeRows(params: {
   return {
     versionId: params.scaffoldVersionId,
     rows: (data ?? []).map((entry) => toNodeRow(entry as unknown as Record<string, unknown>)),
+  };
+}
+
+export type PaidScaffoldHeader = {
+  /** `paid_scaffolds.id` — what the canvas record bar selects on. */
+  scaffoldId: string;
+  brandId: string;
+  adAccountId: string | null;
+};
+
+/**
+ * Who a version belongs to. A card seeded from an approval or a replayed receipt knows
+ * only the version id, and the account (currency) and the canvas link both hang off
+ * the parent scaffold — one embedded read rather than trusting a frame to carry them.
+ */
+export async function fetchPaidScaffoldHeader(params: {
+  scaffoldVersionId: string;
+}): Promise<PaidScaffoldHeader | null> {
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .schema('brand_profiles')
+    .from('paid_scaffold_versions')
+    // `!scaffold_id` names the FK: `paid_scaffolds.current_version_id` points back the other
+    // way, and PostgREST refuses an embed it cannot disambiguate.
+    .select('scaffold_id,brand_id,paid_scaffolds!scaffold_id(ad_account_id)')
+    .eq('id', params.scaffoldVersionId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Could not load the campaign scaffold: ${error.message}`);
+  if (!data) return null;
+  const raw = data as unknown as Record<string, unknown>;
+  return {
+    scaffoldId: String(raw.scaffold_id ?? ''),
+    brandId: String(raw.brand_id ?? ''),
+    adAccountId: asNullableString(asRecord(raw.paid_scaffolds).ad_account_id),
   };
 }

@@ -9,6 +9,8 @@ import { SafeMarkdown } from '@/components/ui/SafeMarkdown';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { resetBrandMd, saveBrandMd } from '@/lib/api/brandBook.client';
+import { BrandBrainSections } from './BrandBrain/BrandBrainSections';
+import { readBrainDoc, writeBrainDoc } from './BrandBrain/brandBrain';
 import { useBrandMdDirty } from './BrandMdDirtyContext';
 
 type Props = {
@@ -23,7 +25,8 @@ export function canSaveBrandMd(draft: string): boolean {
   return !hasFrontMatter || parseBrandMd(draft).tokens !== null;
 }
 
-// Raw textarea + live preview editor for brand.md (YAML front matter + prose body).
+// brand.md editor: the Brand Brain sections by default, the raw document (YAML front
+// matter + prose body) as the escape hatch, and a preview. All three edit one draft string.
 // Front-matter validity is derived via parseBrandMd and shown as a non-blocking hint.
 // Save/reset write through saveBrandMd / resetBrandMd and then router.refresh() so
 // the parent RSC re-fetches the updated envelope.
@@ -53,6 +56,9 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
   }, [initialBrandMd]);
 
   const parsed = parseBrandMd(draft);
+  const brainDoc = parsed.tokens ? { tokens: parsed.tokens, body: parsed.body } : null;
+  // Chosen once: a document the sections cannot parse opens on the raw view.
+  const [initialTab] = useState(() => (readBrainDoc(initialBrandMd ?? '') ? 'sections' : 'raw'));
   const frontMatterValid = parsed.tokens !== null;
   // If there is no front-matter fence at all, show "not present" rather than "invalid".
   const hasFrontMatter = draft.trimStart().startsWith('---');
@@ -116,7 +122,7 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
       {/* Header row: title + badges + actions */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-foreground">brand.md</span>
+          <span className="text-sm font-medium text-foreground">Brand Brain</span>
           {isEdited && !dirty ? <Pill variant="warning">Edited</Pill> : null}
           {dirty ? <Pill variant="teal">Unsaved changes</Pill> : null}
           {hasFrontMatter ? (
@@ -153,14 +159,29 @@ export function BrandMdEditor({ brandId, initialBrandMd, isEdited }: Props) {
         </p>
       ) : null}
 
-      {/* Tab: Edit | Preview */}
-      <Tabs defaultValue="edit">
+      <Tabs defaultValue={initialTab}>
         <TabsList>
-          <TabsTrigger value="edit">Edit</TabsTrigger>
+          <TabsTrigger value="sections">Sections</TabsTrigger>
+          <TabsTrigger value="raw">Raw brand.md</TabsTrigger>
           <TabsTrigger value="preview">Preview</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="edit" className="pt-3">
+        <TabsContent value="sections" className="pt-3">
+          {brainDoc ? (
+            <BrandBrainSections
+              doc={brainDoc}
+              onChange={(next) => setDraft(writeBrainDoc(next))}
+              disabled={isBusy}
+            />
+          ) : (
+            <p className="rounded-md border border-border/60 bg-muted/20 px-4 py-6 text-sm text-muted-foreground">
+              The sections read the document's front matter, which is missing or invalid. Fix it
+              under Raw brand.md, or revert to the generated document.
+            </p>
+          )}
+        </TabsContent>
+
+        <TabsContent value="raw" className="pt-3">
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}

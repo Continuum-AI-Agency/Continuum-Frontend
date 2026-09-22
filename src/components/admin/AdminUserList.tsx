@@ -21,6 +21,13 @@ import {
   UserCog,
   XCircle,
 } from 'lucide-react';
+import {
+  type AdminAccessUpdateRequest,
+  type AdminAccessUpdateResponse,
+  type AdminBrandAccess,
+  adminAccessUpdateResponseSchema,
+  type ProductCode,
+} from '@continuum/contracts';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { AdminActionConfirmation } from '@/components/admin/AdminActionConfirmation';
@@ -34,6 +41,7 @@ import {
   buildAdminUserListPaginationParams,
   buildAdminUserListSearchParams,
   canBulkTransfer,
+  describeAccessError,
   describeWorkflowNames,
   formatAuditActionLabel,
   formatBrandDisambiguationLabel,
@@ -52,6 +60,7 @@ import type {
   AdminWorkflowTransferResult,
   PermissionRow,
 } from '@/components/admin/adminUserTypes';
+import { BrandAccessEditor } from '@/components/admin/BrandAccessEditor';
 import { BrandTransferCombobox } from '@/components/admin/BrandTransferCombobox';
 import { BrandsTab } from '@/components/admin/tabs/BrandsTab';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -105,9 +114,13 @@ type Props = {
   permissions: PermissionRow[];
   pagination: AdminPagination;
   searchQuery: string;
+  /** billing-cutover: false while billing is not exposed — the Tier control stays in charge. */
+  billingLive?: boolean;
 };
 
 type PendingActions = Record<string, boolean>;
+
+type FullAccessResult = { brandId: string; brandName: string; ok: boolean; message?: string };
 
 type ImpersonationDialogState = {
   email: string;
@@ -207,7 +220,13 @@ function formatAuditJson(value: unknown): string | null {
   }
 }
 
-export function AdminUserList({ users, permissions, pagination, searchQuery }: Props) {
+export function AdminUserList({
+  users,
+  permissions,
+  pagination,
+  searchQuery,
+  billingLive = false,
+}: Props) {
   const { show } = useToast();
   const [isNavPending, startNavTransition] = useTransition();
   const supabase = createSupabaseBrowserClient();
@@ -224,6 +243,13 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   const [selectedUserId, setSelectedUserId] = useState(users[0]?.id ?? null);
   const [pendingActions, setPendingActions] = useState<PendingActions>({});
   const [tierOverrides, setTierOverrides] = useState<Record<string, string>>({});
+  // Keyed by brand: several of the selected user's memberships can share one brand.
+  const [accessOverrides, setAccessOverrides] = useState<Record<string, AdminBrandAccess>>({});
+  const accessInFlight = useRef(new Set<string>());
+  const [fullAccessResults, setFullAccessResults] = useState<{
+    userId: string;
+    results: FullAccessResult[];
+  } | null>(null);
   const [impersonationDialog, setImpersonationDialog] = useState<ImpersonationDialogState | null>(
     null,
   );
@@ -279,6 +305,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
 
   useEffect(() => {
     setTierOverrides({});
+    setAccessOverrides({});
   }, [permissions]);
 
   const permissionsByUserId = useMemo(() => groupPermissionsByUserId(permissions), [permissions]);
@@ -556,6 +583,99 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
         variant: 'error',
       });
     } finally {
+      setActionPending(actionId, false);
+    }
+  }
+
+  // One admin-update-access call. Throws a sentence (refusal codes described) on failure.
+  async function updateAccess(
+    brandId: string,
+    change: Omit<AdminAccessUpdateRequest, 'brandId'>,
+  ): Promise<AdminAccessUpdateResponse> {
+    const { data, error } = await supabase.functions.invoke('admin-update-access', {
+      method: 'POST',
+      body: { brandId, ...change },
+    });
+    if (error) {
+      throw new Error(
+        describeAccessError(await adminEdgeError(error, 'Unable to save brand access.')),
+      );
+    }
+    const parsed = adminAccessUpdateResponseSchema.safeParse(data);
+    if (!parsed.success) throw new Error('The access update returned an unexpected response.');
+    setAccessOverrides((prev) => ({ ...prev, [brandId]: parsed.data.access }));
+    return parsed.data;
+  }
+
+  // Resolves true once saved. One request per brand at a time: a double click on "Add credits"
+  // must not grant twice, and each server call is a fresh grant.
+  async function handleAccessChange(
+    membership: PermissionRow,
+    change: Omit<AdminAccessUpdateRequest, 'brandId'>,
+  ): Promise<boolean> {
+    const brandId = membership.brand_profile_id;
+    const actionId = `access:${brandId}`;
+    if (accessInFlight.current.has(actionId)) return false;
+    accessInFlight.current.add(actionId);
+    setActionPending(actionId, true);
+    try {
+      const saved = await updateAccess(brandId, change);
+      show({ title: 'Brand access updated', description: saved.note, variant: 'success' });
+      router.refresh();
+      return true;
+    } catch (error) {
+      show({
+        title: 'Failed to update brand access',
+        description: error instanceof Error ? error.message : 'Unable to save brand access.',
+        variant: 'error',
+      });
+      return false;
+    } finally {
+      accessInFlight.current.delete(actionId);
+      setActionPending(actionId, false);
+    }
+  }
+
+  // "Full access for all brands": the user's brands one by one through the same endpoint (each
+  // change audited server-side), then a per-brand ok/failed list.
+  async function handleFullAccessForUser(user: AdminUser, memberships: PermissionRow[]) {
+    const actionId = `full-access:${user.id}`;
+    if (accessInFlight.current.has(actionId)) return;
+    accessInFlight.current.add(actionId);
+    setActionPending(actionId, true);
+    const brands = [
+      ...new Map(
+        memberships.map((membership) => [
+          membership.brand_profile_id,
+          membership.brand_name ?? membership.brand_profile_id,
+        ]),
+      ),
+    ];
+    const results: FullAccessResult[] = [];
+    try {
+      for (const [brandId, brandName] of brands) {
+        try {
+          await updateAccess(brandId, { fullAccess: true });
+          results.push({ brandId, brandName, ok: true });
+        } catch (error) {
+          results.push({
+            brandId,
+            brandName,
+            ok: false,
+            message: error instanceof Error ? error.message : 'Unable to save brand access.',
+          });
+        }
+        setFullAccessResults({ userId: user.id, results: [...results] });
+      }
+      const failed = results.filter((result) => !result.ok).length;
+      show({
+        title: failed ? `Full access failed on ${failed} of ${results.length} brands` : 'Full access granted',
+        description: `${results.length - failed} of ${results.length} brands updated.`,
+        variant: failed ? 'error' : 'success',
+      });
+      router.refresh();
+    } finally {
+      accessInFlight.current.delete(actionId);
       setActionPending(actionId, false);
     }
   }
@@ -1328,7 +1448,59 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                       requireTypedEmail={!selectedUser.isAdmin}
                       onConfirm={() => void handleAdminToggle(selectedUser)}
                     />
+                    <AdminActionConfirmation
+                      trigger={
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            !billingLive ||
+                            selectedMemberships.length === 0 ||
+                            Boolean(pendingActions[`full-access:${selectedUser.id}`])
+                          }
+                        >
+                          {pendingActions[`full-access:${selectedUser.id}`] ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : null}
+                          Full access for all brands
+                        </Button>
+                      }
+                      title={`Give every brand of ${selectedUser.email} full access?`}
+                      description={`Turns on every product, Trends Pro and its providers on each of this user's ${membershipLabel(selectedMemberships.length)}, one brand at a time. Stripe and Contract grants stay as they are, and Canvas stays metered. Each change is written to the admin audit log.`}
+                      confirmLabel="Give full access"
+                      onConfirm={() =>
+                        void handleFullAccessForUser(selectedUser, selectedMemberships)
+                      }
+                    />
                   </div>
+                  {fullAccessResults?.userId === selectedUser.id ? (
+                    <ul
+                      className="mt-3 space-y-1 text-xs"
+                      aria-label="Full access results"
+                      data-testid="full-access-results"
+                    >
+                      {fullAccessResults.results.map((result) => (
+                        <li
+                          key={result.brandId}
+                          data-brand-id={result.brandId}
+                          data-ok={result.ok}
+                          className="flex items-start gap-1.5"
+                        >
+                          {result.ok ? (
+                            <CheckCircle2 className="mt-px size-3.5 shrink-0 text-emerald-500" />
+                          ) : (
+                            <XCircle className="mt-px size-3.5 shrink-0 text-destructive" />
+                          )}
+                          <span className="min-w-0">
+                            <span className="text-primary">{result.brandName}</span>{' '}
+                            <span className="text-muted-foreground">
+                              {result.ok ? 'ok' : `failed — ${result.message}`}
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
 
                 <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
@@ -1339,10 +1511,11 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                     <p className="text-sm text-muted-foreground">No memberships for this user.</p>
                   ) : (
                     selectedMemberships.map((membership) => {
-                      const tierValue = String(membership.brand_tier);
+                      const tierValue = String(membership.brand_tier ?? 0);
                       const tierActionId = `tier:${membership.user_id}:${membership.brand_profile_id}`;
                       const currentTier = tierOverrides[tierActionId] ?? tierValue;
                       const removeActionId = `remove:${membership.user_id}:${membership.brand_profile_id}`;
+                      const accessActionId = `access:${membership.brand_profile_id}`;
                       const isOwner = membership.role === 'owner';
 
                       return (
@@ -1359,7 +1532,9 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                                 <Badge variant={roleVariant(membership.role)}>
                                   {membership.role ?? 'unknown'}
                                 </Badge>
-                                <Badge variant="outline">Tier {currentTier}</Badge>
+                                {billingLive ? null : (
+                                  <Badge variant="outline">Tier {currentTier}</Badge>
+                                )}
                                 {isOwner ? (
                                   <Badge variant="outline" className="gap-1">
                                     <Lock className="size-3" />
@@ -1368,29 +1543,57 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                                 ) : null}
                               </div>
                             </div>
-                            <Select
-                              value={currentTier}
-                              onValueChange={(value) => {
-                                if (value === currentTier) return;
-                                void handleTierChange({
-                                  membership,
-                                  nextTier: value,
-                                  previousTier: currentTier,
-                                });
-                              }}
-                              disabled={Boolean(pendingActions[tierActionId])}
-                            >
-                              <SelectTrigger size="sm" className="w-[130px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="0">Tier 0</SelectItem>
-                                <SelectItem value="1">Tier 1</SelectItem>
-                                <SelectItem value="2">Tier 2</SelectItem>
-                                <SelectItem value="3">Tier 3</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            {/* billing-cutover: the Tier control until billing is live. */}
+                            {billingLive ? null : (
+                              <Select
+                                value={currentTier}
+                                onValueChange={(value) => {
+                                  if (value === currentTier) return;
+                                  void handleTierChange({
+                                    membership,
+                                    nextTier: value,
+                                    previousTier: currentTier,
+                                  });
+                                }}
+                                disabled={Boolean(pendingActions[tierActionId])}
+                              >
+                                <SelectTrigger size="sm" className="w-[130px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="0">Tier 0</SelectItem>
+                                  <SelectItem value="1">Tier 1</SelectItem>
+                                  <SelectItem value="2">Tier 2</SelectItem>
+                                  <SelectItem value="3">Tier 3</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
                           </div>
+                          <BrandAccessEditor
+                            brandId={membership.brand_profile_id}
+                            brandName={membership.brand_name ?? 'this brand'}
+                            access={
+                              accessOverrides[membership.brand_profile_id] ??
+                              membership.brand_access
+                            }
+                            live={billingLive}
+                            pending={Boolean(pendingActions[accessActionId])}
+                            onToggleProduct={(product: ProductCode, next: boolean) =>
+                              void handleAccessChange(membership, { products: { [product]: next } })
+                            }
+                            onSetContract={(next) =>
+                              void handleAccessChange(membership, { contract: next })
+                            }
+                            onFullAccess={() =>
+                              void handleAccessChange(membership, { fullAccess: true })
+                            }
+                            onAddCredits={(usd, reason) =>
+                              handleAccessChange(membership, { addCreditsUsd: usd, reason })
+                            }
+                            onSetClient={(next) =>
+                              void handleAccessChange(membership, { client: next })
+                            }
+                          />
                           <div className="mt-3 flex justify-end">
                             {isOwner ? (
                               <Button size="sm" variant="outline" disabled className="gap-2">

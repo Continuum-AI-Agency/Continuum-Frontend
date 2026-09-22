@@ -1,3 +1,5 @@
+import type { AdminBrandAccess } from '@continuum/contracts';
+
 export type AdminUser = {
   id: string;
   email: string;
@@ -10,14 +12,19 @@ export type PermissionRow = {
   user_id: string;
   brand_profile_id: string;
   role: string | null;
-  brand_tier: number;
+  // billing-cutover: admin-list-users sends the tier only while billing is not live (PGRST106)
+  // and the product grid (brand_access) only once it is. Wave 4 deletes brand_tier.
+  brand_tier: number | null;
+  brand_access: AdminBrandAccess | null;
   brand_name: string | null;
 };
 
 export type AdminBrandOption = {
   id: string;
   brand_name: string;
-  tier: number;
+  // billing-cutover: set only while billing is not live; `access` replaces it once live.
+  tier: number | null;
+  access?: AdminBrandAccess | null;
   active: boolean;
   ownerEmail: string | null;
   // Populated by list_brands for the Brands tab. Optional because the synthetic
@@ -111,4 +118,6 @@ export type AdminListResponse = {
   users: AdminUser[];
   permissions: PermissionRow[];
   pagination: AdminPagination;
+  /** False (or absent) while PostgREST does not expose `billing` — the Tier control stays. */
+  billingLive?: boolean;
 };

@@ -12,6 +12,7 @@ import {
   plannerDraftHasCopy,
   plannerInstantFromDayTime,
   plannerTimeOfDayInZone,
+  publishOptionsByPlatformSchema,
   resolvePlannerTimeZone,
   toPlannerTimeLabel,
 } from '@continuum/contracts';
@@ -816,6 +817,7 @@ export function mapPersistedRowToCalendarEntry(
     // snapshot is why they published with a caption but no hashtag block.
     hashtags: restoreHashtags(placementCopy.hashtags) ?? restoreHashtags(snapshot.hashtags),
     assetHints: restoreAssetHints(snapshot.assetHints),
+    publishOptions: publishOptionsByPlatformSchema.safeParse(placement.publishOptions).data,
   };
 
   return { dayId, draft };

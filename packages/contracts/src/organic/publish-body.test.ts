@@ -5,6 +5,8 @@ import {
   inferPostType,
   type PublishableDraft,
   resolvePublishFormat,
+  savedPublishOptions,
+  unsupportedPublishOptions,
 } from './publish-body';
 
 const draft = (overrides: Partial<PublishableDraft> = {}): PublishableDraft => ({
@@ -187,5 +189,52 @@ describe('buildPublishBody caption', () => {
     // No platform resolved yet → the tightest ceiling, so nothing over-reports.
     const untargeted = buildPublishBody(captioned, null, null, null);
     expect(untargeted.caption).toBe(instagramBody.caption);
+  });
+});
+
+describe('unsupportedPublishOptions', () => {
+  it('names what a platform cannot honour, and never the AI label', () => {
+    const options = {
+      firstComment: 'Link in bio',
+      thumbnail: { offsetMs: 1200 },
+      aiGenerated: true,
+    };
+    expect(unsupportedPublishOptions('instagram', 'REEL', options)).toEqual([]);
+    expect(unsupportedPublishOptions('tiktok', 'REEL', options)).toEqual(['firstComment']);
+    expect(unsupportedPublishOptions('linkedin', 'REEL', options)).toEqual([
+      'firstComment',
+      'thumbnail',
+    ]);
+  });
+
+  it('refuses a cover on anything but a video', () => {
+    expect(
+      unsupportedPublishOptions('instagram', 'POST', { thumbnail: { url: 'https://x/c.jpg' } }),
+    ).toEqual(['thumbnail']);
+  });
+
+  it('carries the options onto the body the planner sends', () => {
+    const body = buildPublishBody(draft({ format: 'reel' }), 'tiktok', 'acct', null, {
+      aiGenerated: true,
+    });
+    expect(body.publishOptions).toEqual({ aiGenerated: true });
+  });
+});
+
+describe('savedPublishOptions', () => {
+  const saved = {
+    instagram: { firstComment: 'Link in bio', thumbnail: { offsetMs: 1500 } },
+    tiktok: { aiGenerated: true },
+  };
+
+  it('returns only the block saved for the platform being published', () => {
+    expect(savedPublishOptions(saved, 'instagram')).toEqual(saved.instagram);
+    expect(savedPublishOptions(saved, 'tiktok')).toEqual({ aiGenerated: true });
+    expect(savedPublishOptions(saved, 'linkedin')).toBeUndefined();
+  });
+
+  it('reads nothing from an absent or malformed map rather than publishing a guess', () => {
+    expect(savedPublishOptions(undefined, 'instagram')).toBeUndefined();
+    expect(savedPublishOptions({ instagram: { firstComment: 42 } }, 'instagram')).toBeUndefined();
   });
 });

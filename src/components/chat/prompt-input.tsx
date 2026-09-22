@@ -50,6 +50,8 @@ type PromptInputProps = {
   attachmentOnlyPrompt?: string;
   /** Keep large text pastes in the next turn instead of uploading and indexing them. */
   inlinePastedText?: boolean;
+  /** Fires when the editor gains focus — e.g. to wake a model before the first send. */
+  onFocus?: () => void;
   variant?: 'chat' | 'canvas';
   disabled?: boolean;
   placeholder?: string;
@@ -433,6 +435,7 @@ export function PromptInput({
   variant = 'chat',
   attachmentOnlyPrompt,
   inlinePastedText = false,
+  onFocus,
 }: PromptInputProps) {
   const [plainValue, setPlainValue] = React.useState('');
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
@@ -618,8 +621,17 @@ export function PromptInput({
     onQueuedMentionSuggestionsConsumed?.();
   }, [appendMentionSuggestion, onQueuedMentionSuggestionsConsumed, queuedMentionSuggestions]);
 
+  // Idempotent per queued value. The effect re-runs on StrictMode's double mount and whenever a
+  // caller's inline `onQueuedTextConsumed` changes identity before it has cleared the text — and
+  // each re-run used to insert again. Cleared back to null, the same text can be queued again.
+  const insertedQueuedTextRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!queuedText || !editorRef.current) return;
+    if (!queuedText) {
+      insertedQueuedTextRef.current = null;
+      return;
+    }
+    if (!editorRef.current || insertedQueuedTextRef.current === queuedText) return;
+    insertedQueuedTextRef.current = queuedText;
     insertTextAtSelection(editorRef.current, queuedText);
     syncFromEditor();
     onQueuedTextConsumed?.();
@@ -864,6 +876,7 @@ export function PromptInput({
               onInput={() => {
                 refreshActiveMention();
               }}
+              onFocus={() => onFocus?.()}
               onKeyDown={handleKeyDown}
               onKeyUp={() => refreshActiveMention()}
               onMouseUp={() => refreshActiveMention()}

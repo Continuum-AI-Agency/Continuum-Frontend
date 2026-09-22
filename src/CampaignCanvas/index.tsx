@@ -21,7 +21,12 @@ import { useCampaignStore } from './stores/useCampaignStore';
 const PROPOSE_PROMPT =
   'Propose the campaign on my canvas as a new paid scaffold. Use the structure and names in the canvas block below exactly as given.';
 
-const CampaignFlowCanvasPage = () => {
+const CampaignFlowCanvasPage = ({
+  requestedScaffoldId = null,
+}: {
+  /** From `?scaffold=`: the scaffold a Jaina card asked this canvas to load. */
+  requestedScaffoldId?: string | null;
+}) => {
   const [isJainaOpen, setIsJainaOpen] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [initialPrompt, setInitialPrompt] = useState<string | null>(null);
@@ -90,6 +95,7 @@ const CampaignFlowCanvasPage = () => {
           <div className="pointer-events-none absolute top-3 left-1/2 z-40 -translate-x-1/2">
             <ScaffoldRecordBar
               brandId={activeBrandId}
+              requestedScaffoldId={requestedScaffoldId}
               onAdAccountChange={setAdAccountId}
               onPropose={handlePropose}
             />
@@ -137,6 +143,7 @@ const CampaignFlowCanvasPage = () => {
                       variant="ghost"
                       size="icon"
                       className="h-10 w-10"
+                      aria-label={isMaximized ? 'Minimize chat' : 'Maximize chat'}
                       onClick={() => setIsMaximized(!isMaximized)}
                     >
                       {isMaximized ? (
@@ -149,6 +156,7 @@ const CampaignFlowCanvasPage = () => {
                       variant="ghost"
                       size="icon"
                       className="h-10 w-10 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      aria-label="Close chat"
                       onClick={() => setIsJainaOpen(false)}
                     >
                       <X className="h-4 w-4" />
@@ -177,6 +185,7 @@ const CampaignFlowCanvasPage = () => {
               size="lg"
               variant={isJainaOpen ? 'outline' : 'default'}
               className={`relative h-14 w-14 rounded-full shadow-2xl transition-transform transition-shadow duration-200 ease-[cubic-bezier(0.2,0,0,1)] active:scale-[0.96] ${!isJainaOpen ? 'hover:scale-105' : ''}`}
+              aria-label={isJainaOpen ? 'Hide Jaina' : 'Open Jaina'}
               onClick={() => setIsJainaOpen(!isJainaOpen)}
             >
               <MessageSquareText

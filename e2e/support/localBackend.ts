@@ -86,6 +86,8 @@ type StartOptions = {
    * this is one option rather than two independent env vars.
    */
   supabase?: 'local' | 'hosted';
+  /** How long boot may take before the run gives up. A loaded machine can need over 2 min. */
+  readyTimeoutMs?: number;
 };
 
 // A file-scope `beforeAll` runs once per SERIAL describe group, not once per file, so
@@ -123,7 +125,7 @@ export async function startLocalBackend(options: StartOptions): Promise<LocalBac
 }
 
 async function spawnLocalBackend(options: StartOptions): Promise<LocalBackend> {
-  const { port, browserOrigin, supabase } = options;
+  const { port, browserOrigin, supabase, readyTimeoutMs = READY_TIMEOUT_MS } = options;
   const label = options.label ?? 'e2e';
   const url = `http://127.0.0.1:${port}`;
 
@@ -190,7 +192,7 @@ async function spawnLocalBackend(options: StartOptions): Promise<LocalBackend> {
 
   if (child.pid) fs.writeFileSync(pidFile(port), String(child.pid));
 
-  const deadline = Date.now() + READY_TIMEOUT_MS;
+  const deadline = Date.now() + readyTimeoutMs;
   while (Date.now() < deadline) {
     if (await isHealthy(url)) {
       return {

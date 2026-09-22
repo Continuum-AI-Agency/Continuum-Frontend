@@ -36,6 +36,24 @@ describe('AdminActionConfirmation', () => {
     expect(confirm).toHaveBeenCalledTimes(1);
   });
 
+  it('opens from a controlled state and reports the close on confirm', () => {
+    const confirm = vi.fn();
+    const openChange = vi.fn();
+    render(
+      <AdminActionConfirmation
+        open
+        onOpenChange={openChange}
+        title="Set Easy Fit to Contract?"
+        description="Every product on, billed off Stripe."
+        confirmLabel="Set Contract"
+        onConfirm={confirm}
+      />,
+    );
+    fireEvent.click(screen.getByText('Set Contract'));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(openChange).toHaveBeenCalledWith(false);
+  });
+
   it('supports an explicit confirmation without typed input', () => {
     render(
       <AdminActionConfirmation

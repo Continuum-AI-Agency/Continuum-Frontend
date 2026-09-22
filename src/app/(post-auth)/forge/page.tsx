@@ -1,9 +1,8 @@
 import { redirect } from 'next/navigation';
+import { ProductGate } from '@/components/billing/ProductGate';
 import { ForgeTabs } from '@/components/forge/ForgeTabs';
 import { MetaWritesSwitch } from '@/components/forge/MetaWritesSwitch';
-import { TierAccessRedirect } from '@/components/ui/TierAccessRedirect';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
-import { isTemplateForgeTier } from '@/lib/media/tier';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export const metadata = {
@@ -12,22 +11,17 @@ export const metadata = {
 };
 
 export default async function ForgePage() {
-  const { activeBrandId, activeBrandTier, brandSummaries, permissions } =
-    await getActiveBrandContext();
+  const { activeBrandId, brandSummaries, permissions } = await getActiveBrandContext();
 
   if (!activeBrandId) {
     redirect('/onboarding');
   }
 
-  // The courtesy, not the boundary. Every route this page calls checks the tier again on the
-  // server (`assertTemplateForgeTier`), because a redirect has never stopped anyone holding a
-  // bearer token and a brand id — and this capability provisions collections and workflows in a
-  // shared render workspace.
-  if (!isTemplateForgeTier(activeBrandTier)) {
-    return (
-      <TierAccessRedirect description="Forge is available on Tier 3. Please contact an Administrator." />
-    );
-  }
+  // The courtesy, not the boundary. Every route this page calls checks paid_media again on the
+  // server, because a redirect has never stopped anyone holding a bearer token and a brand id —
+  // and this capability provisions collections and workflows in a shared render workspace.
+  const denied = await ProductGate('forge');
+  if (denied) return denied;
 
   // Whether this brand may publish to its own ad account. Read here, on the page that asks the
   // question, rather than threaded through the tabs: it is one indexed row and the switch is the

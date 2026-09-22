@@ -2,6 +2,7 @@ export * from './aeo';
 export * from './agent-jobs';
 export * from './annotatedTrend';
 export * from './awareness';
+export * from './bestTimes';
 export * from './calendar-draft';
 export * from './calendar-plan';
 export * from './competitorSeed';

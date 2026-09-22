@@ -11,6 +11,8 @@ type Props = {
   brandId: string;
   onFinish: () => void;
   finishing: boolean;
+  /** The finish button's label — "Choose your plan" when a plan step follows. */
+  finishLabel?: string;
   onBack: () => void;
   emailReportOptIn: boolean;
   onEmailReportOptInChange: (value: boolean) => void;
@@ -21,6 +23,7 @@ export function InspirationGenerationScreen({
   brandId,
   onFinish,
   finishing,
+  finishLabel = 'Go to dashboard',
   onBack,
   emailReportOptIn,
   onEmailReportOptInChange,
@@ -85,7 +88,7 @@ export function InspirationGenerationScreen({
           </label>
         </div>
         <Button variant="success" size="sm" onClick={onFinish} disabled={finishing}>
-          {finishing ? 'Finishing…' : 'Go to dashboard'}
+          {finishing ? 'Finishing…' : finishLabel}
         </Button>
       </footer>
     </div>

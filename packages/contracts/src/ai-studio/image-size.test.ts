@@ -76,9 +76,11 @@ describe('model capabilities', () => {
 });
 
 describe('imageResolutionFor', () => {
-  it('maps GPT Image 2 aspect ratios to the exact Azure dimensions', () => {
-    expect(imageResolutionFor('gpt-image-2', undefined, '16:9')).toBe('1344x768');
-    expect(imageResolutionFor('gpt-image-2', undefined, '3:4')).toBe('864x1152');
+  it('maps every GPT Image model aspect ratio to the exact Azure dimensions', () => {
+    for (const model of ['gpt-image-2', 'gpt-image-2.5-sunburst', 'gpt-image-2.5-flare']) {
+      expect(imageResolutionFor(model, undefined, '16:9')).toBe('1344x768');
+      expect(imageResolutionFor(model, undefined, '3:4')).toBe('864x1152');
+    }
   });
 
   it('reports the fixed 1024px a size-less model always renders at', () => {
@@ -118,8 +120,10 @@ describe('imageModelOptions', () => {
   });
 
   it('names the provider needed by each external model', () => {
-    expect(optionFor('gpt-image-2').note).toBe('Azure');
-    expect(optionFor('gpt-image-2').selectable).toBe(true);
+    for (const model of ['gpt-image-2', 'gpt-image-2.5-sunburst', 'gpt-image-2.5-flare']) {
+      expect(optionFor(model).note).toBe('Azure');
+      expect(optionFor(model).selectable).toBe(true);
+    }
     for (const model of ['flux-2-pro', 'flux-2-max']) {
       expect(optionFor(model).note).toBe('Needs fal credits');
       expect(optionFor(model).selectable).toBe(true);

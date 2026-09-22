@@ -5,8 +5,8 @@
 // against the right kind. Timestamps are epoch ms (0 when unknown) so missing
 // dates sort to the end without special-casing.
 
-import type { CompetitorOrganicPost, TimelineEntry } from '@continuum/contracts';
-import { type CompetitorPostView, organicPostToView } from './competitorPostView';
+import type { TimelineEntry } from '@continuum/contracts';
+import type { CompetitorPostView } from './competitorPostView';
 
 export type InspirationFeedItem =
   | { source: 'organic'; ts: number; key: string; view: CompetitorPostView }
@@ -18,8 +18,7 @@ function toTime(iso: string | null | undefined): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-function organicItem(post: CompetitorOrganicPost): InspirationFeedItem {
-  const view = organicPostToView(post);
+function organicItem(view: CompetitorPostView): InspirationFeedItem {
   return {
     source: 'organic',
     ts: toTime(view.post.timestamp),
@@ -39,7 +38,7 @@ function paidItem(entry: TimelineEntry): InspirationFeedItem {
 
 // Newest first; organic and paid interleave purely by timestamp.
 export function buildInspirationFeed(
-  posts: CompetitorOrganicPost[],
+  posts: CompetitorPostView[],
   timeline: TimelineEntry[],
 ): InspirationFeedItem[] {
   return [...posts.map(organicItem), ...timeline.map(paidItem)].sort((a, b) => b.ts - a.ts);

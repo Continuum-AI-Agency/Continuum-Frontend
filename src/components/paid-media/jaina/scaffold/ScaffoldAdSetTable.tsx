@@ -22,11 +22,13 @@ import { buildScaffoldAdSetColumns, scaffoldAdSetSearchValue } from './scaffoldC
 export function ScaffoldAdSetTable({
   tree,
   isLoading,
+  currency = null,
 }: {
   tree: ScaffoldTree | null;
   isLoading: boolean;
+  currency?: string | null;
 }) {
-  const columns = React.useMemo(() => buildScaffoldAdSetColumns(), []);
+  const columns = React.useMemo(() => buildScaffoldAdSetColumns(currency), [currency]);
   const rows = tree?.adSets ?? [];
   const counts = tree?.counts;
 

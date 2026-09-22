@@ -23,6 +23,10 @@ describe('toBillingModelId', () => {
       'veo-3.1-fast@1080p',
     );
     expect(toBillingModelId({ modelId: 'veo-3-1-fast', tier: '1080p' })).toBe('veo-3.1-fast@1080p');
+    expect(toBillingModelId({ modelId: 'veo-3.1-fast-generate-001', tier: '1080p' })).toBe(
+      'veo-3.1-fast@1080p',
+    );
+    expect(toBillingModelId({ modelId: 'veo-3.1-generate-001', tier: '4K' })).toBe('veo-3.1@4k');
   });
 
   it('canonicalizes tier casing so one tier is never two cost rows', () => {
@@ -35,7 +39,14 @@ describe('toBillingModelId', () => {
 
   it('omits a tier for models that take no size parameter', () => {
     // nano-banana renders 1024 whatever it is asked for; fal models size by aspect only.
-    for (const modelId of ['nano-banana', 'flux-2-pro', 'flux-2-max', 'gpt-image-2']) {
+    for (const modelId of [
+      'nano-banana',
+      'flux-2-pro',
+      'flux-2-max',
+      'gpt-image-2',
+      'gpt-image-2.5-sunburst',
+      'gpt-image-2.5-flare',
+    ]) {
       expect(supportsBillingTier(modelId)).toBe(false);
       expect(toBillingModelId({ modelId })).toBe(toBillingModelBase(modelId));
       // A stray tier on an unsized model is ignored, not an error — the canvas may send
@@ -49,7 +60,9 @@ describe('toBillingModelId', () => {
     expect(() => toBillingModelId({ modelId: 'sora-2', tier: '1080p' })).toThrow(
       UnknownBillingModelError,
     );
-    expect(() => toBillingModelId({ modelId: '', tier: '1080p' })).toThrow(UnknownBillingModelError);
+    expect(() => toBillingModelId({ modelId: '', tier: '1080p' })).toThrow(
+      UnknownBillingModelError,
+    );
   });
 
   it('throws when a sized model is given a tier it does not price', () => {
@@ -67,6 +80,28 @@ describe('toBillingModelId', () => {
     expect(toBillingModelId({ modelId: 'nano-banana-2', tier: '512px' })).toBe(
       'nano-banana-2@512px',
     );
+  });
+
+  it('knows every wire id the backend emits today', () => {
+    // Each of these threw before, which refuses the generation outright.
+    expect(toBillingModelId({ modelId: 'gemini-3.1-flash-lite-image', tier: '1K' })).toBe(
+      'nano-banana-2-lite',
+    );
+    expect(toBillingModelId({ modelId: 'gemini-3.1-flash-lite-image-preview' })).toBe(
+      'nano-banana-2-lite',
+    );
+    expect(toBillingModelId({ modelId: 'veo-3.1-flash-generate-preview', tier: '720p' })).toBe(
+      'veo-3.1-fast@720p',
+    );
+    expect(toBillingModelId({ modelId: 'gemini-omni-1.1-flash' })).toBe('gemini-omni-flash');
+    expect(toBillingModelId({ modelId: 'kling-omni-video' })).toBe('kling-omni');
+    expect(toBillingModelId({ modelId: 'kling-omni-v1' })).toBe('kling-omni');
+  });
+
+  it('bills a video 1K request as 1080p, and leaves the image 1k tier alone', () => {
+    expect(toBillingModelId({ modelId: 'veo-3.1', tier: '1K' })).toBe('veo-3.1@1080p');
+    expect(toBillingModelId({ modelId: 'veo-3.1-lite', tier: '1k' })).toBe('veo-3.1-lite@1080p');
+    expect(toBillingModelId({ modelId: 'nano-banana-2', tier: '1K' })).toBe('nano-banana-2@1k');
   });
 
   it('throws when a sized model is given no tier at all', () => {

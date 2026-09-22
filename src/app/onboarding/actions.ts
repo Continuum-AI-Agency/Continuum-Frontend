@@ -6,6 +6,8 @@ import { revalidatePath } from 'next/cache';
 import { after } from 'next/server';
 import { PLATFORM_KEYS, type PlatformKey } from '@/components/onboarding/platforms';
 import { getClaimsIdentity } from '@/lib/auth/claims';
+import { readBrandAccess } from '@/lib/billing/brandAccess.server';
+import { onboardingNeedsPlan } from '@/lib/billing/productAccess';
 import { mapIntegrationTypeToPlatformKey } from '@/lib/integrations/platform';
 import { log } from '@/lib/observability/logger';
 import {
@@ -19,7 +21,7 @@ import type {
   OnboardingPatch,
   OnboardingState,
 } from '@/lib/onboarding/state';
-import { createBrandId } from '@/lib/onboarding/state';
+import { createBrandId, LAST_ONBOARDING_STEP } from '@/lib/onboarding/state';
 import {
   appendDocument,
   applyOnboardingPatch,
@@ -105,14 +107,23 @@ export async function resetOnboardingStateAction(brandId: string): Promise<Onboa
   return resetOnboardingState(brandId);
 }
 
+const PLAN_REQUIRED_MESSAGE = 'Choose a plan to finish setting up this brand.';
+
 export async function completeOnboardingAction(brandId: string): Promise<OnboardingState> {
   const user = await getClaimsIdentity();
+  // No skip: once billing is live a brand finishes onboarding only with a product — bought
+  // through Checkout or granted as a Contract. The plan screen never calls this without one;
+  // this is the boundary for anything that does.
+  const access = await readBrandAccess(brandId);
+  if (onboardingNeedsPlan(access)) {
+    throw new Error(PLAN_REQUIRED_MESSAGE);
+  }
   const state = await applyOnboardingPatch(brandId, {
     completedAt: new Date().toISOString(),
     // The last screen. Bumped with the wizard when the product-catalog step landed —
     // completing at anything short of the final index resumes a completed brand onto a
-    // screen it already finished.
-    step: 7,
+    // screen it already finished. The plan screen is last only once billing is live.
+    step: access.billingLive ? LAST_ONBOARDING_STEP : 7,
   });
 
   // Completion analytics are emitted only after the durable completion write.

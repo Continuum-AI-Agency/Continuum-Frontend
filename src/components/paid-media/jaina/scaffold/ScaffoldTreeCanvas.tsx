@@ -7,6 +7,7 @@ import { Controls } from '@/components/ai-elements/controls';
 import { layoutScaffoldTree } from '@/lib/paid-media/scaffoldLayout';
 import type { ScaffoldTree } from '@/lib/paid-media/scaffoldTree';
 import { SCAFFOLD_NODE_TYPES } from './ScaffoldFlowNodes';
+import { formatDailyBudget } from './scaffoldBudget';
 
 /**
  * The scaffold hierarchy as a graph. Read-only: nothing drags, nothing connects.
@@ -20,11 +21,14 @@ import { SCAFFOLD_NODE_TYPES } from './ScaffoldFlowNodes';
  */
 export function ScaffoldTreeCanvas({
   tree,
+  currency = null,
   selectedPathKey,
   onSelect,
   inline = false,
 }: {
   tree: ScaffoldTree;
+  /** The ad account's currency, for the opening budget on each ad-set node. */
+  currency?: string | null;
   selectedPathKey?: string | null;
   onSelect?: (pathKey: string) => void;
   /**
@@ -38,7 +42,29 @@ export function ScaffoldTreeCanvas({
 }) {
   // Recomputed only when the merged tree identity changes — not per progress frame,
   // because buildScaffoldTree is itself memoized on (rows, overlay).
-  const layout = React.useMemo(() => layoutScaffoldTree(tree), [tree]);
+  // The budget label is added here rather than in the pure layout, which stays free of
+  // formatting; doing it inside this memo keeps each node's `data` identity stable across
+  // selection changes, which is what the memo'd node components key on.
+  const layout = React.useMemo(() => {
+    const base = layoutScaffoldTree(tree);
+    return {
+      ...base,
+      nodes: base.nodes.map((node) =>
+        node.type === 'scaffoldAdSet'
+          ? {
+              ...node,
+              data: {
+                ...node.data,
+                budgetLabel: formatDailyBudget(
+                  node.data.dailyBudgetMinorUnits as number | null,
+                  currency,
+                ),
+              },
+            }
+          : node,
+      ),
+    };
+  }, [tree, currency]);
 
   const nodes = React.useMemo(
     () =>

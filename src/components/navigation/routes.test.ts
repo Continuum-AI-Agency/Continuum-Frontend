@@ -143,11 +143,32 @@ describe('navigation structure', () => {
     // BUG-009 was about.
     expect(forge!.disabled).toBeUndefined();
     expect(forge!.locked).toBeUndefined();
-    // Tier 3 is enforced at the page (TierAccessRedirect) and on the server
-    // (assertTemplateForgeTier), the same shape /ai-studio and /scale use.
+    // Paid media is enforced at the page (ProductGate) and on the server, the same shape
+    // /ai-studio and /scale use; the nav only carries the product for its lock badge.
     expect(
       APP_NAVIGATION_GROUPS.flatMap((g) => g.items).find((i) => i.label === 'Developers'),
     ).toBeUndefined();
+  });
+
+  it('tags every product destination with the billing product its page gates on', () => {
+    const byProduct = (product: string) =>
+      APP_NAVIGATION_GROUPS.flatMap((g) => g.items)
+        .filter((i) => i.product === product)
+        .map((i) => i.label);
+    expect(byProduct('paid_media')).toEqual([
+      'Jaina',
+      'Paid Analytics',
+      'Paid Optimization',
+      'Forge',
+    ]);
+    expect(byProduct('organic_agent')).toEqual(['Organic Agent', 'Organic Analytics', 'Calendar']);
+    expect(byProduct('studio')).toEqual(['Canvas']);
+    // Free surfaces never lock.
+    for (const label of ['Home', 'Automations', 'Library', 'Brand Spy']) {
+      expect(
+        APP_NAVIGATION_GROUPS.flatMap((g) => g.items).find((i) => i.label === label)?.product,
+      ).toBeUndefined();
+    }
   });
 
   it('footer is Settings + admin-gated Admin', () => {
