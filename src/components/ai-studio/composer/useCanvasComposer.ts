@@ -6,6 +6,7 @@ import type {
   AgentMentionReference,
   AiStudioComposerDoneFrame,
   AiStudioComposerFrame,
+  AiStudioComposerPipelineProposalFrame,
   CanvasComposerReference,
   CanvasEditorContext,
   ComposerHistoryMessage,
@@ -40,6 +41,15 @@ import { collectVisualEvidence } from './visualEvidence';
 
 export type ComposerStatus = 'idle' | 'running' | 'done' | 'error';
 
+/**
+ * A pipeline the agent built and checked but did NOT publish. Nothing is published until
+ * the user approves the card; `outcome` records what they did so the card survives the
+ * collapsed/expanded remount without offering Publish twice.
+ */
+export type ComposerPipelineProposal = AiStudioComposerPipelineProposalFrame['data'] & {
+  outcome?: 'published' | 'dismissed';
+};
+
 export interface ComposerGraphSummary {
   nodeCount: number;
   edgeCount: number;
@@ -64,6 +74,8 @@ export interface CanvasComposerState {
    * (the graph line, Run) stay off and the turn reads as prose.
    */
   changed: AiStudioComposerDoneFrame['data']['changed'] | null;
+  /** The latest pipeline proposal this turn made, if any. */
+  pipelineProposal: ComposerPipelineProposal | null;
   error: string | null;
 }
 
@@ -83,6 +95,7 @@ export const IDLE_COMPOSER_STATE: CanvasComposerState = {
   summary: '',
   graph: null,
   changed: null,
+  pipelineProposal: null,
   error: null,
 };
 
@@ -127,6 +140,8 @@ export function applyComposerFrame(
     // is ONE card whose status changes, not two.
     case 'agent.delegated':
       return { ...previous, delegations: foldDelegation(previous.delegations, frame.data) };
+    case 'composer.pipeline_proposal':
+      return { ...previous, pipelineProposal: frame.data };
     case 'response.done':
       return {
         ...previous,
@@ -293,6 +308,25 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
     updateLastTurn(() => ({ ...IDLE_COMPOSER_STATE }));
   }, [cancel, updateLastTurn]);
 
+  const resolvePipelineProposal = useCallback(
+    (turnId: string, outcome: NonNullable<ComposerPipelineProposal['outcome']>) => {
+      setTurns((previous) =>
+        previous.map((turn) =>
+          turn.id === turnId && turn.state.pipelineProposal
+            ? {
+                ...turn,
+                state: {
+                  ...turn.state,
+                  pipelineProposal: { ...turn.state.pipelineProposal, outcome },
+                },
+              }
+            : turn,
+        ),
+      );
+    },
+    [],
+  );
+
   const submit = useCallback(
     async (
       prompt: string,
@@ -420,5 +454,6 @@ export function useCanvasComposer(brandProfileId: string | undefined, roomId: st
     cancel,
     clear,
     dismiss,
+    resolvePipelineProposal,
   };
 }

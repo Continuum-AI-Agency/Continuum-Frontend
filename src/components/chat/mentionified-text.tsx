@@ -50,6 +50,8 @@ function typeLabel(type: AgentMentionReference['type']): string {
       return 'Media';
     case 'canvas_node':
       return 'Canvas';
+    case 'pipeline':
+      return 'Pipeline';
     case 'skill':
       return 'Skill';
     case 'document':
@@ -91,6 +93,7 @@ function TypeIcon({
     case 'media_asset':
       return <ImageIcon className={cls} />;
     case 'canvas_node':
+    case 'pipeline':
       return <Workflow className={cls} />;
     case 'skill':
       return <Sparkles className={cls} />;

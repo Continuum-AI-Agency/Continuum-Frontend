@@ -67,17 +67,6 @@ const capability = (over: Partial<PipelineCapabilityV2> = {}): PipelineCapabilit
         max_items: 1,
       },
     ],
-    controls: [
-      {
-        control_id: 'blur_radius',
-        kind: 'number',
-        label: 'Background blur',
-        required: false,
-        minimum: 0,
-        maximum: 40,
-        default: 8,
-      },
-    ],
     outputs: [
       { output_id: 'hero', kind: 'asset', label: 'Hero image', media: 'image', count: 2 },
       {
@@ -126,6 +115,58 @@ describe('PipelineContract', () => {
     expect(screen.getByText(/Up to \$5.00 USD/)).toBeDefined();
     expect(screen.getByText(/90% minimum/)).toBeDefined();
     expect(screen.getByText(/product identity match/)).toBeDefined();
+    cleanup();
+  });
+
+  it('bounds spend by the generation cap when no money cap is published', () => {
+    render(
+      <PipelineContract
+        manifest={capability({
+          cost_policy: {
+            currency: 'USD',
+            max_amount_minor: null,
+            approval: 'within_limit',
+            on_exceed: 'refuse',
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/Up to 3 generations per run/)).toBeDefined();
+    expect(screen.queryByText(/\$/)).toBeNull();
+    cleanup();
+  });
+
+  it('names the authored aspect ratio and duration on an output', () => {
+    render(
+      <PipelineContract
+        manifest={capability({
+          outputs: [
+            {
+              output_id: 'hero',
+              kind: 'asset',
+              label: 'Hero',
+              media: 'image',
+              count: 1,
+              aspect_ratio: '9:16',
+            },
+            {
+              output_id: 'cut',
+              kind: 'asset',
+              label: 'Cutdown',
+              media: 'video',
+              count: 2,
+              aspect_ratio: '1:1',
+              duration_seconds: 6,
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByText(/Hero \(image · 9:16\), Cutdown \(2 videos · 1:1 · 6s\)/),
+    ).toBeDefined();
     cleanup();
   });
 
