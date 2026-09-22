@@ -337,7 +337,7 @@ function reaches(marks: readonly number[], value: number): boolean {
 }
 
 /**
- * Does the chart draw the figures the headline is computed from?
+ * Is the headline drawn on THESE marks?
  *
  * Three cases, and they are a statement about how much the card can PROVE, not a fallback
  * chain:
@@ -353,19 +353,33 @@ function reaches(marks: readonly number[], value: number): boolean {
  *                         mismatch sits, which is the finding rather than a coincidence: a
  *                         headline with no pair was never checked against its own picture.
  *
- * A card with no headline, or no chart, agrees vacuously — there is no second claim to
- * contradict. Returning true there is not leniency: it is the absence of a disagreement.
+ * Takes marks rather than a chart because an `AccountChart` is not the only thing a card
+ * draws beside its figure. The optimizer's justification block draws the engine's confidence
+ * interval on cost per result, from its own structure, and it had exactly the same disease —
+ * so it asks the same question through this function rather than through a second rule that
+ * would drift from this one.
+ *
+ * A card with no headline agrees vacuously: there is no second claim to contradict. Returning
+ * true there is not leniency, it is the absence of a disagreement.
  */
-export function headlineAgreesWithChart(
+export function headlineIsDrawnOn(
   headline: CandidateHeadline | null | undefined,
-  chart: AccountChart | null | undefined,
+  marks: readonly number[],
 ): boolean {
-  if (!headline || !chart) return true;
-  const marks = chartMarks(chart);
+  if (!headline) return true;
   if (headline.from != null && headline.to != null) {
     return reaches(marks, headline.from) && reaches(marks, headline.to);
   }
   if (headline.from != null) return reaches(marks, headline.from);
   if (headline.to != null) return reaches(marks, headline.to);
   return reaches(marks, headline.value);
+}
+
+/** Does the chart draw the figures the headline is computed from? */
+export function headlineAgreesWithChart(
+  headline: CandidateHeadline | null | undefined,
+  chart: AccountChart | null | undefined,
+): boolean {
+  if (!headline || !chart) return true;
+  return headlineIsDrawnOn(headline, chartMarks(chart));
 }

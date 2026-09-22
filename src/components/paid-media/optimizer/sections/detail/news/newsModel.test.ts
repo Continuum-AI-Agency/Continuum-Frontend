@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import type { CycleItemRow, PortfolioBrief } from '@continuum/contracts';
 import type { HeroView } from '../heroModel';
+import type { NewsCardModel } from './justification';
+import { pickJustification } from './justification';
 import { buildPortfolioNews, capFor, headlineFor, intervalFor } from './newsModel';
 
 type BriefCandidate = PortfolioBrief['candidates'][number];
@@ -381,5 +383,123 @@ describe('the lead draws a chart only when the chart is about the lead', () => {
     });
     expect(news.lead?.headline?.value).toBe(96);
     expect(news.leadChart?.shape).toBe('interval');
+  });
+});
+
+describe('the bracket beside the figure has to be about the figure', () => {
+  // Straight off the screenshot that started this: a pause card leading with "$26 a day
+  // buying nothing" and drawing the engine's cost-per-result interval underneath it —
+  // $71 on the left, $339,700,000 on the right, on a portfolio whose whole daily budget
+  // is $324. Three quantities in one border and the upper bound wrong by nine orders.
+  const blownCi = { lo: 71, hi: 339_700_000, cpa: 4_900_000, events: 2 };
+
+  const pauseHero = (ci: Record<string, number>) =>
+    buildPortfolioNews({
+      view: view({
+        brief: brief({
+          hero: {
+            ...brief().hero,
+            module: 'pause',
+            candidate_id: 'rec:1',
+            headline: 'Stop $26/day going to Dead',
+            impact_per_day: 26,
+            impact_basis: 'spend/day on an ad set with 0 results in 7 days',
+          },
+          candidates: [
+            candidate({
+              id: 'rec:1',
+              module: 'pause',
+              kind: 'pause',
+              adset_id: 'as-1',
+              impact_per_day: 26,
+              results_per_day: 0,
+              impact_basis: 'spend/day on an ad set with 0 results in 7 days',
+              cta: { kind: 'queue_row', target_id: 'rec:1' },
+            }),
+          ],
+        }),
+      }),
+      items: [item({ adset_id: 'as-1', diagnostics: { ci } })],
+      target: 35,
+    });
+
+  it('withholds a cost-per-result interval from a money-per-day figure', () => {
+    const news = pauseHero(blownCi);
+    expect(news.lead?.headline?.value).toBe(26);
+    expect(news.lead?.headline?.unit).toBe('currency_per_day');
+    // The engine measured it and the row still holds it — the CARD is what refuses to draw it.
+    expect(intervalFor(item({ diagnostics: { ci: blownCi } }), 35)).not.toBeNull();
+    expect(news.lead?.interval).toBeNull();
+  });
+
+  it('leaves the card with a reading rather than a hole', () => {
+    // No bracket means no bounded layout, so the card says its formula instead.
+    const news = pauseHero(blownCi);
+    expect(pickJustification(news.lead as NewsCardModel)).toBe('open');
+    expect(news.lead?.basis).toContain('0 results');
+  });
+
+  it('keeps an interval the leading figure actually sits inside', () => {
+    const news = pauseHero({ lo: 18, hi: 44, cpa: 26, events: 9 });
+    expect(news.lead?.interval).toEqual({
+      low: 18,
+      high: 44,
+      estimate: 26,
+      referenceLabel: 'target',
+      reference: 35,
+    });
+    expect(pickJustification(news.lead as NewsCardModel)).toBe('bounded');
+  });
+
+  it('does not let the target stand in for a mark — it is carried, never drawn', () => {
+    // `IntervalRule` draws low, high and the estimate's tick. `reference` reaches no ink,
+    // so a figure that only matches the target is not a figure the reader sees agreeing.
+    const news = pauseHero({ lo: 71, hi: 339_700_000, cpa: 4_900_000, events: 2 });
+    expect(news.lead?.interval).toBeNull();
+    const onTarget = buildPortfolioNews({
+      view: view({
+        brief: brief({
+          hero: { ...brief().hero, module: 'pause', candidate_id: 'rec:1', impact_per_day: 35 },
+          candidates: [
+            candidate({
+              id: 'rec:1',
+              module: 'pause',
+              kind: 'pause',
+              adset_id: 'as-1',
+              impact_per_day: 35,
+              results_per_day: 0,
+              cta: { kind: 'queue_row', target_id: 'rec:1' },
+            }),
+          ],
+        }),
+      }),
+      items: [item({ adset_id: 'as-1', diagnostics: { ci: blownCi } })],
+      target: 35,
+    });
+    expect(onTarget.lead?.interval).toBeNull();
+  });
+
+  it('checks the money a headline-less card leads with, not just the headline', () => {
+    // Without a headline the card still prints `impact_per_day` beside the rule, so a
+    // vacuous pass here would let every card written before the vocabulary back in.
+    const news = buildPortfolioNews({
+      view: view({
+        brief: brief({
+          hero: { ...brief().hero, module: 'creative', candidate_id: 'rec:9', impact_per_day: 14 },
+          candidates: [
+            candidate({
+              id: 'rec:9',
+              module: 'creative',
+              kind: 'variate_creative',
+              adset_id: 'as-1',
+            }),
+          ],
+        }),
+      }),
+      items: [item({ adset_id: 'as-1', diagnostics: { ci: blownCi } })],
+      target: 35,
+    });
+    expect(news.lead?.headline).toBeNull();
+    expect(news.lead?.interval).toBeNull();
   });
 });

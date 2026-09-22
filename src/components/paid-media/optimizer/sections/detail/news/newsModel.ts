@@ -18,7 +18,7 @@ import type {
   CycleItemRow,
   PortfolioBrief,
 } from '@continuum/contracts';
-import { chartArgues, headlineAgreesWithChart } from '@continuum/contracts';
+import { chartArgues, headlineAgreesWithChart, headlineIsDrawnOn } from '@continuum/contracts';
 import { humanize } from '../../../format';
 import type { HeroView } from '../heroModel';
 import { ctaForCandidate } from '../heroModel';
@@ -150,6 +150,54 @@ function supportMoney(headline: CandidateHeadline | null, perDay: number | null)
   return round2(perDay);
 }
 
+/**
+ * The interval the card may DRAW, which is not the same question as whether one was measured.
+ *
+ * `intervalFor` passes the engine's confidence interval through untouched, and it should: the
+ * cycle measured it and the row holds it. But the rule is the chart's rule — a card draws
+ * beside its figure only what argues THAT figure — and the engine's interval is a cost per
+ * RESULT while the figure beside it is money per DAY. On the live screen that produced a rule
+ * running from $71 to $339,700,000 sitting under "$26 a day buying nothing", on a portfolio
+ * whose whole daily budget is $324. Three unrelated quantities in one border, with the upper
+ * bound wrong by nine orders of magnitude, and nothing anywhere asked whether they met.
+ *
+ * `IntervalRule` draws `low`, `high` and the estimate's tick, and nothing else — `reference`
+ * is carried and never drawn, so it is an annotation and not a mark, exactly as
+ * `at_stake_per_day` is on a chart.
+ *
+ * Withholding it is not a loss of information: with no interval the card holds no bracket, so
+ * `pickJustification` reads 'open' and the card prints its own `basis` instead — the formula,
+ * in the detector's words. A sentence that is true beats a bar that is not.
+ */
+function drawableInterval(
+  interval: NewsInterval | null,
+  headline: CandidateHeadline | null,
+  impactPerDay: number | null,
+): NewsInterval | null {
+  if (!interval) return null;
+  // What the card LEADS with, which is the headline or — when there is none — the money that
+  // stands in for it. Checking only the headline would let every headline-less card back in,
+  // and a headline-less card still prints a figure beside the rule.
+  const lead: CandidateHeadline | null =
+    headline ??
+    (impactPerDay != null && impactPerDay > 0
+      ? {
+          kind: 'money',
+          value: round2(impactPerDay),
+          unit: 'currency_per_day',
+          label: 'a day',
+          from: null,
+          to: null,
+        }
+      : null);
+  const marks = [
+    interval.low,
+    interval.high,
+    ...(interval.estimate != null ? [interval.estimate] : []),
+  ];
+  return headlineIsDrawnOn(lead, marks) ? interval : null;
+}
+
 /** A secondary candidate's sentence: its own persisted reason, else what it is and where. */
 function claimFor(candidate: BriefCandidate): string {
   const where = candidate.adset_name ?? candidate.adset_id ?? 'the portfolio';
@@ -206,7 +254,7 @@ export function buildPortfolioNews(args: {
     impactPerDay: hero.impact_per_day,
     basis: hero.impact_basis,
     chosenOver: hero.justification,
-    interval: intervalFor(heroItem, target),
+    interval: drawableInterval(intervalFor(heroItem, target), heroHeadline, hero.impact_per_day),
     cappedBy: capFor(heroItem),
     cta: view.cta,
   };
@@ -235,7 +283,7 @@ export function buildPortfolioNews(args: {
       impactPerDay: candidate.impact_per_day,
       basis: candidate.impact_basis,
       chosenOver: null,
-      interval: intervalFor(item, target),
+      interval: drawableInterval(intervalFor(item, target), headline, candidate.impact_per_day),
       cappedBy: capFor(item),
       cta: ctaForCandidate(candidate, view.observe),
     });
