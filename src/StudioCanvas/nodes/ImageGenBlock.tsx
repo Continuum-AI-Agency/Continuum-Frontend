@@ -405,7 +405,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
   const sizeOptions = imageSizesForModel(model);
   const currentImageSize = coerceImageSize(model, data.imageSize);
   const modelLabel = imageModelLabel(model);
-  const modelOptions = imageModelOptions(sessionUnavailableModels);
+  const modelOptions = imageModelOptions(sessionUnavailableModels, model);
   // A model with no size parameter still renders at SOME size. Saying nothing let
   // users believe the node had chosen one; say the size it actually produces.
   const fixedPixels = FIXED_IMAGE_PIXELS[model];

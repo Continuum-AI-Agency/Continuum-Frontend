@@ -120,21 +120,30 @@ export const GPT_IMAGE_RESOLUTIONS = {
  * workspace runs them fine — the note names the provider, and a run
  * that comes back `model_unavailable` disables that model for the rest of the session
  * (see `imageModelOptions`).
+ *
+ * `hidden` takes a model out of the picker and the agent's vocabulary while leaving it
+ * legal node data, so a saved canvas that holds it still runs.
  */
 export const IMAGE_MODEL_INFO: Record<
   ImageGeneratorModel,
-  { label: string; status: ModelStatus; note?: string }
+  { label: string; status: ModelStatus; note?: string; hidden?: true }
 > = {
   'nano-banana': { label: 'Nano Banana', status: 'available' },
   'nano-banana-pro': { label: 'Nano Banana Pro', status: 'available' },
   'nano-banana-2': { label: 'Nano Banana 2', status: 'available' },
   'nano-banana-2-lite': { label: 'Nano Banana 2 Lite', status: 'available' },
-  'gpt-image-2': { label: 'GPT Image 2', status: 'available', note: 'Azure' },
+  // GPT Image 2.5 renders the same brief for a quarter of the output tokens (983 vs 4,003
+  // at quality high, measured 2026-09-21), so 2.5 replaces it in the picker.
+  'gpt-image-2': { label: 'GPT Image 2', status: 'available', note: 'Azure', hidden: true },
   'gpt-image-2.5-sunburst': { label: 'GPT Image 2.5 Sunburst', status: 'available', note: 'Azure' },
   'gpt-image-2.5-flare': { label: 'GPT Image 2.5 Flare', status: 'available', note: 'Azure' },
   'flux-2-pro': { label: 'FLUX.2 Pro', status: 'beta', note: 'Needs fal credits' },
   'flux-2-max': { label: 'FLUX.2 Max', status: 'beta', note: 'Needs fal credits' },
 };
+
+/** The models a user or the agent may newly pick. */
+export const PICKABLE_IMAGE_GENERATOR_MODELS: readonly ImageGeneratorModel[] =
+  IMAGE_GENERATOR_MODELS.filter((model) => !IMAGE_MODEL_INFO[model].hidden);
 
 export const imageModelLabel = (model: unknown): string =>
   isImageGeneratorModel(model)
@@ -166,11 +175,17 @@ const NOTHING_UNAVAILABLE: ReadonlySet<string> = new Set();
  * `unavailableModels` is what the session has LEARNED: a run that came back
  * `model_unavailable` proves this workspace cannot reach that model, so the picker
  * greys it out rather than letting the user retry into the same wall.
+ *
+ * A hidden model is offered only when it is `current` — the node's own model — so a saved
+ * canvas still shows what it runs and can switch away from it.
  */
 export function imageModelOptions(
   unavailableModels: ReadonlySet<string> = NOTHING_UNAVAILABLE,
+  current?: unknown,
 ): readonly ImageModelOption[] {
-  return IMAGE_GENERATOR_MODELS.map((model) => {
+  return IMAGE_GENERATOR_MODELS.filter(
+    (model) => !IMAGE_MODEL_INFO[model].hidden || model === current,
+  ).map((model) => {
     const info = IMAGE_MODEL_INFO[model];
     const status: ModelStatus = unavailableModels.has(model) ? 'unavailable' : info.status;
     return {

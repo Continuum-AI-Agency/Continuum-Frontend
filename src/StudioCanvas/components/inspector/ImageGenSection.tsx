@@ -49,7 +49,7 @@ export function ImageGenSection({
         <OptionRow<ImageGeneratorModel>
           label="Generator"
           value={model}
-          options={imageModelOptions().map((option) => ({
+          options={imageModelOptions(undefined, model).map((option) => ({
             value: option.model,
             label: option.label,
             note: option.note,
