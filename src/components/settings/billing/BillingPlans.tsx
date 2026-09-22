@@ -102,15 +102,19 @@ export function BillingPlans({ brandId, plans, onPlanChanged, needLabel }: Billi
   );
 }
 
+const PLAN_STATUS_PILL = {
+  active: { label: 'Active', tone: 'success', pulse: false },
+  activating: { label: 'Activating', tone: 'warning', pulse: true },
+  payment_failed: { label: 'Payment failed', tone: 'error', pulse: false },
+} as const;
+
 function PlanStatusPill({ status }: { status: PlanCardView['status'] }) {
   if (status === 'available') return null;
+  const { label, tone, pulse } = PLAN_STATUS_PILL[status];
   return (
     <Pill className="shrink-0">
-      <PillIndicator
-        variant={status === 'active' ? 'success' : 'warning'}
-        pulse={status !== 'active'}
-      />
-      {status === 'active' ? 'Active' : 'Activating'}
+      <PillIndicator variant={tone} pulse={pulse} />
+      {label}
     </Pill>
   );
 }

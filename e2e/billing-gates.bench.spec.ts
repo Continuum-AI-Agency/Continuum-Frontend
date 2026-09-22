@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
+import { createNodeData } from '@continuum/contracts';
 import { expect, type Page, test } from '@playwright/test';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { replaySandboxEventsToWebhook } from '../../packages/billing/src/replayEvents';
@@ -40,6 +41,16 @@ import {
 //                 `prepaid`, every product from an admin, $220 granted) opens Canvas; /forge
 //                 gives the tier-3 toast and returns to the dashboard; the sidebar shows its
 //                 22,000 credits (metered, not "Managed"); Settings → Billing sells it packs.
+//   (f) refusal   the same brand at 0 credits runs a real Canvas image node: the LOCAL Backend
+//                 answers 402 before any provider call, and the canvas shows "Out of Canvas
+//                 credits" with Buy credits — never "Generation failed" or the raw JSON — the node
+//                 keeps its prompt and says why, nothing is metered, and Buy credits lands on the
+//                 credit-pack section remembering the canvas (`from=`). One pack is then bought
+//                 on SANDBOX Checkout (the way back rides Stripe's success URL); once the real
+//                 events are replayed, "Canvas credits added" offers Back to where you were, which
+//                 returns to the same canvas room. Needs the local Backend
+//                 allowing this origin (`ALLOWED_ORIGINS=http://127.0.0.1:3126 bun run
+//                 dev:be:local-supabase`); without it the test is skipped and says so.
 //
 // Cleanup is by id: only the users this run created and the brands they own.
 
@@ -52,7 +63,11 @@ const EMAILS = {
   grandfathered: `gates-grandfathered-${RUN_ID}@continuum.test`,
 };
 const FORGE_TIER_TOAST = 'Forge is available on Tier 3. Please contact an Administrator.';
-const BILLING_NEED_PAID_MEDIA = /\/settings\?section=billing&need=paid_media$/;
+const BILLING_NEED_PAID_MEDIA = /\/settings\?section=billing&need=paid_media&from=%2F[\w%-]+$/;
+const API_URL = process.env.BILLING_GATES_API_URL ?? 'http://localhost:4000';
+const REFUSAL_ROOM_ID = crypto.randomUUID();
+const REFUSAL_NODE_ID = 'refusal-image';
+const REFUSAL_PROMPT = 'A red bicycle leaning on a white wall';
 const PAID_MEDIA_LOCKS = [
   'Forge (needs Performance Plus)',
   'Jaina (needs Performance Plus)',
@@ -148,6 +163,7 @@ test.describe('billing:gates:fe:bench', () => {
   let payingBrandId = '';
   let contractUserId = '';
   let grandfatheredUserId = '';
+  let grandfatheredBrandId = '';
 
   test.beforeAll(async () => {
     await step('billing-api is served locally', assertBillingApiServed);
@@ -482,6 +498,7 @@ test.describe('billing:gates:fe:bench', () => {
           return id;
         },
       );
+      grandfatheredBrandId = brandId;
 
       await step('(e) /ai-studio opens and no sidebar entry is locked', async () => {
         await page.goto('/ai-studio');
@@ -522,6 +539,190 @@ test.describe('billing:gates:fe:bench', () => {
         await expect(credits).toContainText('22,000');
         await shoot(page, 'grandfathered-billing-credits', [DESKTOP]);
       });
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('(f) out of credits, a real Canvas run sells credits and keeps the node', async ({
+    browser,
+  }) => {
+    // The browser calls the Backend cross-origin, so it must be up AND allow this origin.
+    const origin = new URL(test.info().project.use.baseURL ?? '').origin;
+    const backendUp = await fetch(`${API_URL}/healthz`, { headers: { Origin: origin } })
+      .then((response) => response.headers.get('access-control-allow-origin') === origin)
+      .catch(() => false);
+    if (!backendUp) {
+      notes.push(
+        `(f) SKIPPED — unexercised hop: no local Backend at ${API_URL} allowing ${origin}. ` +
+          `Start it with ALLOWED_ORIGINS=${origin} bun run dev:be:local-supabase.`,
+      );
+    }
+    test.skip(!backendUp, `needs the local Backend at ${API_URL} allowing ${origin}`);
+    expect(grandfatheredBrandId, '(e) must have run').not.toBe('');
+    const brandId = grandfatheredBrandId;
+    const billing = db.schema('billing');
+
+    await step(
+      '(f) the grandfathered brand spends its balance and holds a Canvas room',
+      async () => {
+        const { error: spendError } = await billing
+          .from('brand_credit_balance')
+          .update({ balance_usd: 0, last_month_rollover_usd: 0 })
+          .eq('brand_id', brandId);
+        if (spendError) throw new Error(describeError(spendError));
+        expect((await brandEntitlements(db, brandId)).creditBalance.totalCredits).toBe(0);
+
+        const node = createNodeData('nanoGen', { positivePrompt: REFUSAL_PROMPT });
+        const { error: roomError } = await db.schema('brand_profiles').from('canvas_rooms').insert({
+          id: REFUSAL_ROOM_ID,
+          brand_profile_id: brandId,
+          name: 'Billing refusal bench',
+          created_by: grandfatheredUserId,
+        });
+        if (roomError) throw new Error(describeError(roomError));
+        const { error: sessionError } = await db
+          .schema('brand_profiles')
+          .from('canvas_sessions')
+          .insert({
+            brand_profile_id: brandId,
+            room_id: REFUSAL_ROOM_ID,
+            nodes: [
+              {
+                id: REFUSAL_NODE_ID,
+                type: 'nanoGen',
+                position: { x: 0, y: 0 },
+                data: node.data,
+                ...(node.style
+                  ? { style: node.style, width: node.style.width, height: node.style.height }
+                  : {}),
+              },
+            ],
+            edges: [],
+            deleted_node_ids: [],
+            deleted_edge_ids: [],
+            editor_session_id: crypto.randomUUID(),
+            editor_user_id: grandfatheredUserId,
+          });
+        if (sessionError) throw new Error(describeError(sessionError));
+      },
+    );
+
+    const session = await mintSessionBundleForEmail(EMAILS.grandfathered);
+    const context = await browser.newContext({ storageState: session.state, viewport: DESKTOP });
+    const page = await context.newPage();
+    try {
+      const notifications = page.getByRole('region', { name: 'Notifications' });
+      const node = page.locator(`.react-flow__node[data-id="${REFUSAL_NODE_ID}"]`);
+
+      await step('(f) Run on the image node is refused with the Buy credits toast', async () => {
+        await page.goto(`/ai-studio?roomId=${REFUSAL_ROOM_ID}`, { waitUntil: 'domcontentloaded' });
+        await expect(page.getByTestId('studio-canvas-header')).toBeVisible({ timeout: 180_000 });
+        await expect(node).toBeVisible({ timeout: 60_000 });
+        // Run Node lives on the node's hover toolbar, outside the node's own DOM. Hover, never
+        // select: selecting opens the inspector over the toolbar.
+        await node.hover();
+        await page.getByRole('button', { name: 'Run Node' }).click({ timeout: 30_000 });
+        await expect(notifications.getByText('Out of Canvas credits')).toBeVisible({
+          timeout: 60_000,
+        });
+        await expect(notifications.getByRole('button', { name: 'Buy credits' })).toBeVisible();
+        await expect(notifications.getByText(/Generation failed|API request failed/)).toHaveCount(
+          0,
+        );
+        await shoot(page, 'refusal-canvas-toast', [DESKTOP]);
+      });
+
+      await step('(f) the node says why, keeps its prompt, and nothing was metered', async () => {
+        await expect(node).toContainText('Out of Canvas credits');
+        await expect(node).not.toContainText('credits_exhausted');
+        const { data: saved, error: savedError } = await db
+          .schema('brand_profiles')
+          .from('canvas_sessions')
+          .select('nodes')
+          .eq('room_id', REFUSAL_ROOM_ID)
+          .single();
+        if (savedError) throw new Error(describeError(savedError));
+        const savedNode = (saved.nodes as { id: string; data: Record<string, unknown> }[]).find(
+          (candidate) => candidate.id === REFUSAL_NODE_ID,
+        );
+        expect(savedNode?.data.positivePrompt).toBe(REFUSAL_PROMPT);
+        const { count, error: usageError } = await billing
+          .from('usage_events')
+          .select('id', { count: 'exact', head: true })
+          .eq('brand_id', brandId);
+        if (usageError) throw new Error(describeError(usageError));
+        expect(count).toBe(0);
+      });
+
+      await step(
+        '(f) Buy credits opens the credit-pack section, remembering the canvas',
+        async () => {
+          await notifications.getByRole('button', { name: 'Buy credits' }).click();
+          await page.waitForURL(
+            (url) =>
+              url.pathname === '/settings' &&
+              url.searchParams.get('section') === 'billing' &&
+              url.searchParams.get('from') === `/ai-studio?roomId=${REFUSAL_ROOM_ID}` &&
+              url.hash === '#credits',
+            { timeout: 180_000 },
+          );
+          await expect(
+            page.locator('#credits').getByRole('button', { name: 'Buy credits' }),
+          ).toBeVisible({ timeout: 120_000 });
+        },
+      );
+
+      const sessionId = await step(
+        '(f) one pack opens sandbox Checkout, carrying the way back',
+        async () => {
+          await page.locator('#credits').getByRole('button', { name: 'Buy credits' }).click();
+          await page.waitForURL(/^https:\/\/checkout\.stripe\.com\//, { timeout: 60_000 });
+          const id = page.url().match(/cs_test_[A-Za-z0-9]+/)?.[0];
+          if (!id) throw new Error(`no test-mode session id in ${page.url()}`);
+          const checkout = await stripe.checkout.sessions.retrieve(id);
+          expect(checkout.livemode).toBe(false);
+          expect(checkout.mode).toBe('payment');
+          const successUrl = new URL(checkout.success_url ?? '');
+          expect(successUrl.searchParams.get('from')).toBe(`/ai-studio?roomId=${REFUSAL_ROOM_ID}`);
+          return id;
+        },
+      );
+
+      await step(
+        '(f) paid: the credits land and the toast offers the way back to the canvas',
+        async () => {
+          await payWithTestCard(page, EMAILS.grandfathered);
+          await page.waitForURL(/\/settings\?/, { timeout: 120_000 });
+          const checkout = await stripe.checkout.sessions.retrieve(sessionId);
+          const customerId =
+            typeof checkout.customer === 'string' ? checkout.customer : checkout.customer?.id;
+          if (!customerId) throw new Error('completed session has no customer');
+          for (let attempt = 1; attempt <= 8; attempt += 1) {
+            await replaySandboxEventsToWebhook({
+              stripe,
+              customerId,
+              since,
+              webhookUrl: WEBHOOK_URL,
+              secret: webhookSecret,
+            });
+            if ((await brandEntitlements(db, brandId)).creditBalance.purchasedCredits > 0) break;
+            await page.waitForTimeout(2_000);
+          }
+          expect((await brandEntitlements(db, brandId)).creditBalance.purchasedCredits).toBe(1_000);
+          await expect(notifications.getByText('Canvas credits added')).toBeVisible({
+            timeout: 60_000,
+          });
+          await shoot(page, 'refusal-credits-added', [DESKTOP]);
+          await notifications.getByRole('button', { name: 'Back to where you were' }).click();
+          await page.waitForURL(
+            (url) =>
+              url.pathname === '/ai-studio' && url.searchParams.get('roomId') === REFUSAL_ROOM_ID,
+            { timeout: 180_000 },
+          );
+          await expect(node).toBeVisible({ timeout: 120_000 });
+        },
+      );
     } finally {
       await context.close();
     }

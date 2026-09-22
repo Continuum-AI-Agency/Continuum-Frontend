@@ -23,6 +23,8 @@ export type MeteredSidebarBilling = {
   low: boolean;
   /** Nothing left and no auto-billing: generation is refused until a pack is bought. */
   exhausted: boolean;
+  /** Stripe declined the renewal and is retrying (or gave up). Present only when true. */
+  paymentFailed?: true;
 };
 
 /** The label of a metered brand with products but no self-serve plan (grandfathered, admin grant). */
@@ -32,7 +34,7 @@ export type SidebarBillingView =
   | MeteredSidebarBilling
   /** Contract (internal brands read as Contract): the only unmetered brands. */
   | { kind: 'managed'; href: string }
-  | { kind: 'no_plan'; href: string };
+  | { kind: 'no_plan'; href: string; paymentFailed?: true };
 
 export function toSidebarBilling(
   access: Pick<BrandAccess, 'billingLive' | 'entitlements'>,
@@ -40,11 +42,14 @@ export function toSidebarBilling(
   // billing-cutover: not live ⇒ nothing, exactly as before billing. A failed read shows nothing
   // either — the widget never claims "No plan" for a brand it could not read.
   if (!access.billingLive || !access.entitlements) return null;
-  const { billingModel, plans, products, buckets, creditBalance } = access.entitlements;
+  const { billingModel, plans, products, buckets, creditBalance, status } = access.entitlements;
+  const paymentFailed = status === 'past_due' ? { paymentFailed: true as const } : {};
 
   if (billingModel === 'contract') return { kind: 'managed', href: billingHref() };
   // Products without a plan (grandfathered, admin-granted) are metered too: credits only.
-  if (plans.length === 0 && products.length === 0) return { kind: 'no_plan', href: billingHref() };
+  if (plans.length === 0 && products.length === 0) {
+    return { kind: 'no_plan', href: billingHref(), ...paymentFailed };
+  }
 
   const studio = buckets.find((bucket) => bucket.bucket === 'studio') ?? null;
   const includedCredits = studio ? usdToCredits(studio.includedUsd) : 0;
@@ -79,5 +84,6 @@ export function toSidebarBilling(
       remainingCredits < LOW_CREDITS_FLOOR ||
       remainingCredits < includedCredits * LOW_CREDITS_SHARE,
     exhausted: remainingCredits === 0 && !autoBilling.on,
+    ...paymentFailed,
   };
 }

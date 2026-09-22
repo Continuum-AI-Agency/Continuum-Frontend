@@ -22,7 +22,8 @@ const PRODUCT_FEATURES: Record<ProductCode, string> = {
   mcp: 'MCP connections',
 };
 
-export type PlanStatus = 'active' | 'activating' | 'available';
+/** `payment_failed`: on the subscription, but Stripe is retrying a declined renewal. */
+export type PlanStatus = 'active' | 'activating' | 'payment_failed' | 'available';
 /** `none` when the plan is the subscription's only one: cancelling lives in the Stripe portal. */
 export type PlanAction = 'checkout' | 'add' | 'remove' | 'none';
 
@@ -91,6 +92,11 @@ export type SelfServeBillingView = {
   credits: CanvasCreditsView;
   /** Nothing left and nothing billed to the card: generation is refused until the owner acts. */
   outOfCredits: boolean;
+  /**
+   * Stripe could not charge the renewal (`past_due`). `retrying`: access holds while Stripe
+   * retries. `lapsed`: Stripe gave up (unpaid, stored as past_due) and the plan's products are off.
+   */
+  paymentFailed: 'retrying' | 'lapsed' | null;
   autoBilling: AutoBillingView;
   creditPack: CreditPackOffer;
   invoices: InvoiceRowView[];
@@ -156,6 +162,17 @@ function toCreditsView(overview: BillingOverview): CanvasCreditsView {
   };
 }
 
+/**
+ * Past due, is the plan still on? Entitlements list no `plans` while past_due, but the grace
+ * period keeps the plan's products active — gone once Stripe gives up (unpaid).
+ */
+function accessHeld(overview: BillingOverview, livePlans: readonly PlanCode[] | null): boolean {
+  return (livePlans ?? []).some((planCode) => {
+    const plan = overview.catalog.plans.find((candidate) => candidate.planCode === planCode);
+    return plan?.products.every((product) => overview.entitlements.products.includes(product));
+  });
+}
+
 /** Only the owner manages billing; billing-api enforces the same rule with a 403. */
 export function isBrandOwner(
   permissions: readonly { brand_profile_id: string; role: string | null }[],
@@ -191,6 +208,7 @@ export function toBillingView(
   const liveSubscription =
     subscription && LIVE_SUBSCRIPTION_STATUSES.has(subscription.status) ? subscription : null;
   const livePlans = liveSubscription?.plans ?? null;
+  const paymentFailed = liveSubscription?.status === 'past_due';
   const catalogOrder = (plan: PlanCode) => PLAN_CODES.indexOf(plan);
 
   const plans = [...overview.catalog.plans]
@@ -201,11 +219,15 @@ export function toBillingView(
       monthlyPriceUsd: plan.monthlyPriceUsd,
       priceLabel: formatUsd(plan.monthlyPriceUsd),
       features: featuresFor(plan.products, plan.includedCanvasCredits),
-      status: entitlements.plans.includes(plan.planCode)
-        ? 'active'
-        : livePlans?.includes(plan.planCode)
-          ? 'activating'
-          : 'available',
+      status: !livePlans?.includes(plan.planCode)
+        ? entitlements.plans.includes(plan.planCode)
+          ? 'active'
+          : 'available'
+        : paymentFailed
+          ? 'payment_failed'
+          : entitlements.plans.includes(plan.planCode)
+            ? 'active'
+            : 'activating',
       action: planAction(plan.planCode, livePlans),
       highlighted: need !== null && plan.products.includes(need),
     }));
@@ -222,6 +244,7 @@ export function toBillingView(
     plans,
     credits,
     outOfCredits: canBuyCredits && credits.availableCredits === 0 && !credits.billsOverageToCard,
+    paymentFailed: !paymentFailed ? null : accessHeld(overview, livePlans) ? 'retrying' : 'lapsed',
     autoBilling: {
       enabled: overview.overageEnabled,
       capUsd: overview.overageCapUsd,

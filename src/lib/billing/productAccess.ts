@@ -25,6 +25,8 @@ export type GatedSurface = 'ai-studio' | 'organic' | 'scale' | 'approvals' | 'fo
 
 type SurfaceRule = {
   product: ProductCode;
+  /** The page, so a brand sent to Billing from it is offered the way back after buying. */
+  path: string;
   // Today's tier rule for this page; `null` = the page had no gate before billing. billing-cutover:
   // used only while billing is not live — except Forge's, which grandfathered brands keep (below).
   legacy: { minTier: number; description: string } | null;
@@ -35,14 +37,16 @@ type SurfaceRule = {
 const SURFACES: Record<GatedSurface, SurfaceRule> = {
   'ai-studio': {
     product: 'studio',
+    path: '/ai-studio',
     legacy: {
       minTier: 1,
       description: 'AI Studio is a paid feature. Please contact an Administrator.',
     },
   },
-  organic: { product: 'organic_agent', legacy: null },
+  organic: { product: 'organic_agent', path: '/organic', legacy: null },
   scale: {
     product: 'paid_media',
+    path: '/scale',
     legacy: {
       minTier: 1,
       description: 'Paid Media is a paid feature. Please contact an Administrator.',
@@ -50,6 +54,7 @@ const SURFACES: Record<GatedSurface, SurfaceRule> = {
   },
   approvals: {
     product: 'paid_media',
+    path: '/scale/approvals',
     legacy: {
       minTier: 1,
       description: 'Approvals is a paid feature. Please contact an Administrator.',
@@ -57,6 +62,7 @@ const SURFACES: Record<GatedSurface, SurfaceRule> = {
   },
   forge: {
     product: 'paid_media',
+    path: '/forge',
     legacy: {
       minTier: 3,
       description: 'Forge is available on Tier 3. Please contact an Administrator.',
@@ -78,9 +84,32 @@ export const PLAN_NAME: Record<PlanCode, string> = {
   paid_media: 'Performance Plus',
 };
 
+/**
+ * `?from=`: the page someone left for Billing. It rides through Stripe Checkout (see
+ * `billingReturnUrl`) so the purchase toast can offer the way back — an offer, never a redirect.
+ */
+export const FROM_PARAM = 'from';
+
+/**
+ * A `from` worth offering: a same-origin path, never `//host` or `/\host` (an open redirect), and
+ * never Settings itself.
+ */
+export function safeReturnPath(value: string | null | undefined): string | null {
+  if (!value?.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) return null;
+  if (value === '/settings' || value.startsWith('/settings?') || value.startsWith('/settings/')) {
+    return null;
+  }
+  return value;
+}
+
+function withFrom(query: string, from: string | undefined): string {
+  const safe = safeReturnPath(from);
+  return safe ? `${query}&${FROM_PARAM}=${encodeURIComponent(safe)}` : query;
+}
+
 /** Settings → Billing, with the plan that grants `product` highlighted. */
-export function billingHref(product?: ProductCode): string {
-  return product ? `/settings?section=billing&need=${product}` : '/settings?section=billing';
+export function billingHref(product?: ProductCode, from?: string): string {
+  return `/settings?${withFrom(product ? `section=billing&need=${product}` : 'section=billing', from)}`;
 }
 
 /** The id of Settings → Billing's credit-pack section, which scrolls into view on that anchor. */
@@ -88,6 +117,11 @@ export const CREDITS_ANCHOR = 'credits';
 
 /** Settings → Billing at the credit-pack section. */
 export const CREDITS_HREF = `/settings?section=billing#${CREDITS_ANCHOR}`;
+
+/** `CREDITS_HREF`, remembering the page the buyer came from. */
+export function creditsHref(from?: string): string {
+  return `/settings?${withFrom('section=billing', from)}#${CREDITS_ANCHOR}`;
+}
 
 export type ProductGateDecision =
   | { kind: 'allow' }
@@ -99,9 +133,11 @@ export function decideProductGate(
   surface: GatedSurface,
   access: Pick<BrandAccess, 'billingLive' | 'products' | 'legacyTier' | 'entitlements'>,
 ): ProductGateDecision {
-  const { product, legacy, keepsTierForGrandfathered } = SURFACES[surface];
+  const { product, path, legacy, keepsTierForGrandfathered } = SURFACES[surface];
   if (access.billingLive) {
-    if (!access.products.includes(product)) return { kind: 'billing', href: billingHref(product) };
+    if (!access.products.includes(product)) {
+      return { kind: 'billing', href: billingHref(product, path) };
+    }
     const tierStillGates =
       keepsTierForGrandfathered && access.entitlements && keepsTierGate(access.entitlements);
     if (!tierStillGates) return { kind: 'allow' };
