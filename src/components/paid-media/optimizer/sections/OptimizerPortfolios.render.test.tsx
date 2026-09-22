@@ -150,7 +150,7 @@ describe('OptimizerPortfolios', () => {
     const band = getByTestId('portfolio-lead');
     expect(band.getAttribute('data-detector')).toBe('dead_tail');
     expect(band.textContent).toContain('Spending on nothing');
-    expect(band.textContent).toContain('$70');
+    expect(band.textContent).toContain('$69.75');
     expect(band.textContent).toContain('a day buying nothing');
     // Money drops to the support line, in both periods, and names what the account buys.
     expect(band.textContent).toContain('$2,093/mo');

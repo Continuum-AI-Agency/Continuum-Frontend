@@ -612,11 +612,11 @@ describe('a conserved rebalance reads as ONE decision without losing per-ad-set 
     const { container } = renderGroup();
 
     fireEvent.click(screen.getByLabelText('Select budget move for Retarget 30d'));
-    expect(container.textContent).toContain('Net +$15/day');
+    expect(container.textContent).toContain('Net +$15.00/day');
 
     fireEvent.click(screen.getByLabelText('Select budget move for Cold Lookalike'));
     expect(container.textContent).toContain('Spend stays flat');
-    expect(container.textContent).not.toContain('Net +$15/day');
+    expect(container.textContent).not.toContain('Net +$15.00/day');
   });
 
   it('selects the whole group from the header checkbox, then clears it', () => {
@@ -671,7 +671,7 @@ describe('a conserved rebalance reads as ONE decision without losing per-ad-set 
     activeReport = rebalanceReport;
     const { container } = renderGroup();
     fireEvent.click(screen.getAllByLabelText('Show detail')[1]);
-    expect(container.textContent).toContain('Before → after: $50 → $65');
+    expect(container.textContent).toContain('Before → after: $50.00 → $65.00');
     // The row's own detail carries no why; the story above may still explain the donor.
     const detail = screen.getByText(/Before → after/).closest('.rounded-md');
     expect(detail?.textContent ?? '').not.toContain('Why:');

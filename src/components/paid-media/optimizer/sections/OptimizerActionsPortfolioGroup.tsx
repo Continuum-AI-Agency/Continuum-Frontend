@@ -909,7 +909,7 @@ export function OptimizerActionsPortfolioGroup({
               <span className="text-muted-foreground">· {triggerWords(group.trigger)}</span>
               {group.impactPerDay > 0 ? (
                 <span className="text-muted-foreground tabular-nums">
-                  · {formatCurrency(group.impactPerDay, null)}/day
+                  · {formatCurrency(group.impactPerDay, currency)}/day
                 </span>
               ) : null}
             </li>
@@ -924,6 +924,7 @@ export function OptimizerActionsPortfolioGroup({
         applyBudgetCount={approvedBudgetCount}
         approvedPauseCount={approvedPauseCount}
         busyApprove={busyApprove}
+        currency={currency}
         hasSelection={selected.size > 0}
         onApproveAll={() => runApprove(selectableVisible.map((row) => row.key))}
         onApproveSelected={() => runApprove([...selected])}
@@ -961,7 +962,7 @@ export function OptimizerActionsPortfolioGroup({
       {hasBudgetRows && report ? (
         <div className="rounded-lg border border-border/70 bg-muted/10 p-3">
           <ReallocationStory
-            currency={null}
+            currency={currency}
             defaultLookback={defaultStoryLookback(portfolio.lookback_window)}
             items={report.latest_items}
             metric={metric}
@@ -985,7 +986,7 @@ export function OptimizerActionsPortfolioGroup({
               <BudgetTransferHeader
                 allSelected={budgetGroupSelected}
                 attribution={attribution}
-                currency={null}
+                currency={currency}
                 mode={report?.latest_run?.mode ?? null}
                 nameById={transferNameById}
                 onToggleGroup={toggleBudgetGroup}
@@ -999,7 +1000,7 @@ export function OptimizerActionsPortfolioGroup({
               counterparty={
                 row.route === 'budget' ? (counterpartyById.get(row.adsetId) ?? null) : null
               }
-              currency={null}
+              currency={currency}
               expanded={expanded === row.key}
               failed={failedAdsets.has(row.adsetId)}
               approving={approving.has(row.key)}
@@ -1036,7 +1037,7 @@ export function OptimizerActionsPortfolioGroup({
         </AlertDialogContent>
       </AlertDialog>
 
-      <PortfolioRecentActions brandId={brandId} portfolioId={portfolio.id} currency={null} />
+      <PortfolioRecentActions brandId={brandId} portfolioId={portfolio.id} currency={currency} />
 
       {/* Nothing above clears selection on refetch — a mutation's invalidate rebuilds the rows,
           and a stale key would silently point at nothing. */}
@@ -1173,6 +1174,7 @@ function QueueToolbar({
   applyBudgetCount,
   approvedPauseCount,
   busyApprove,
+  currency,
   hasSelection,
   onApproveAll,
   onApproveSelected,
@@ -1191,6 +1193,7 @@ function QueueToolbar({
   applyBudgetCount: number;
   approvedPauseCount: number;
   busyApprove: boolean;
+  currency: string | null;
   hasSelection: boolean;
   onApproveAll: () => void;
   onApproveSelected: () => void;
@@ -1243,7 +1246,7 @@ function QueueToolbar({
         ) : (
           <span className="text-2xs text-warning tabular-nums">
             Net {selectionNetDelta > 0 ? '+' : '−'}
-            {formatCurrency(Math.abs(selectionNetDelta), null)}/day
+            {formatCurrency(Math.abs(selectionNetDelta), currency)}/day
           </span>
         )}
         <Button

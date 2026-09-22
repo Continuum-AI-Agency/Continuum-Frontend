@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  currencyFieldSuffix,
   currencySymbol,
   deriveCpa,
   deriveEfficiency,
@@ -15,40 +16,86 @@ import {
 } from './format';
 
 describe('formatCurrency', () => {
-  it('formats whole-dollar USD', () => {
-    expect(formatCurrency(4200)).toBe('$4,200');
+  it('formats a USD figure at or above 100 whole', () => {
+    expect(formatCurrency(4200, 'USD')).toBe('$4,200');
   });
-  it('returns a dash for null/NaN', () => {
-    expect(formatCurrency(null)).toBe('—');
-    expect(formatCurrency(Number.NaN)).toBe('—');
+  it('returns a dash for null/NaN/non-finite', () => {
+    expect(formatCurrency(null, 'USD')).toBe('—');
+    expect(formatCurrency(Number.NaN, 'USD')).toBe('—');
+    expect(formatCurrency(Number.POSITIVE_INFINITY, 'USD')).toBe('—');
   });
-  it('labels the account currency (a JPY account never reads as USD)', () => {
-    expect(formatCurrency(4200, 'JPY')).toBe('¥4,200');
+
+  // The whole point. Four live production accounts are Mexican and carry no currency code;
+  // printing "$324" beside a peso figure tells a client they spent twenty dollars a day when
+  // they spent twenty pesos. A bare figure is the same answer the compiled card gives.
+  describe('an unknown currency is never asserted as dollars', () => {
+    it('prints the bare figure for a null, blank or malformed code', () => {
+      expect(formatCurrency(4200, null)).toBe('4,200');
+      expect(formatCurrency(4200, undefined)).toBe('4,200');
+      expect(formatCurrency(4200, '')).toBe('4,200');
+      expect(formatCurrency(4200, 'not-a-code')).toBe('4,200');
+    });
+    it('appends the ISO code for a currency that is not dollars', () => {
+      expect(formatCurrency(324, 'MXN')).toBe('324 MXN');
+      expect(formatCurrency(4200, 'jpy')).toBe('4,200 JPY');
+    });
   });
-  it('falls back to USD for a null/blank/malformed currency code', () => {
-    expect(formatCurrency(4200, null)).toBe('$4,200');
-    expect(formatCurrency(4200, '')).toBe('$4,200');
-    expect(formatCurrency(4200, 'not-a-code')).toBe('$4,200');
+
+  // `money()` in @continuum/contracts — the compiled card of the same finding — uses 2
+  // decimals under 100 and 0 at or above it. Same rule here, or the screen prints "$26/day"
+  // beside the card's "$25.54/day" for one number.
+  describe('the digit rule is the compiled card\u2019s', () => {
+    it('keeps cents under 100 and drops them at 100 and above', () => {
+      expect(formatCurrency(25.540000000000003, 'USD')).toBe('$25.54');
+      expect(formatCurrency(99.999, 'USD')).toBe('$100.00');
+      expect(formatCurrency(100, 'USD')).toBe('$100');
+      expect(formatCurrency(766.2, 'USD')).toBe('$766');
+    });
+    it('carries the rule through to a bare and a coded figure', () => {
+      expect(formatCurrency(25.54, null)).toBe('25.54');
+      expect(formatCurrency(25.54, 'MXN')).toBe('25.54 MXN');
+    });
+    it('keeps the sign outside the unit', () => {
+      expect(formatCurrency(-25.54, 'USD')).toBe('-$25.54');
+      expect(formatCurrency(-4200, 'MXN')).toBe('-4,200 MXN');
+      expect(formatCurrency(-4200, null)).toBe('-4,200');
+    });
   });
 });
 
 describe('currencySymbol', () => {
   it('returns the currency prefix for an input adornment', () => {
     expect(currencySymbol('USD')).toBe('$');
-    expect(currencySymbol('JPY')).toBe('¥');
   });
-  it('falls back to the USD symbol for a missing code', () => {
-    expect(currencySymbol(null)).toBe('$');
+  it('uses the ISO code for a non-dollar account, the spelling the figures use', () => {
+    expect(currencySymbol('MXN')).toBe('MXN');
+  });
+  it('returns nothing at all for a missing code', () => {
+    expect(currencySymbol(null)).toBe('');
+    expect(currencySymbol('not-a-code')).toBe('');
+  });
+});
+
+describe('currencyFieldSuffix', () => {
+  it('parenthesises a known unit', () => {
+    expect(currencyFieldSuffix('USD')).toBe(' ($)');
+    expect(currencyFieldSuffix('MXN')).toBe(' (MXN)');
+  });
+  it('leaves a label alone when the account carries no code', () => {
+    expect(currencyFieldSuffix(null)).toBe('');
   });
 });
 
 describe('formatCpa', () => {
-  it('rounds and formats', () => {
-    expect(formatCpa(28.6)).toBe('$29');
+  it('prints a sub-100 cost to the cent rather than rounding it away', () => {
+    expect(formatCpa(28.6, 'USD')).toBe('$28.60');
+  });
+  it('honours an unknown currency', () => {
+    expect(formatCpa(28.6, null)).toBe('28.60');
   });
   it('guards non-finite', () => {
-    expect(formatCpa(Number.POSITIVE_INFINITY)).toBe('—');
-    expect(formatCpa(null)).toBe('—');
+    expect(formatCpa(Number.POSITIVE_INFINITY, 'USD')).toBe('—');
+    expect(formatCpa(null, 'USD')).toBe('—');
   });
 });
 
@@ -141,17 +188,25 @@ describe('soonestNextCycle', () => {
 
 describe('the impact vocabulary', () => {
   it('says a daily figure in the two periods a person thinks in', () => {
-    expect(formatPerPeriod(96)).toBe('$96/day · $2,880/mo');
+    expect(formatPerPeriod(96, 'USD')).toBe('$96.00/day · $2,880/mo');
   });
 
   it('honours the ad account\u2019s own currency on both halves', () => {
-    expect(formatPerPeriod(100, 'EUR')).toContain('/day');
-    expect(formatPerPeriod(100, 'EUR')).toContain('/mo');
+    expect(formatPerPeriod(100, 'EUR')).toBe('100 EUR/day · 3,000 EUR/mo');
+  });
+
+  // The pair used to read "$26/day · $766/mo": `perPeriod` passes the day through unrounded
+  // and cent-rounds the month, and a formatter fixed at 0 decimals rounded 25.54 to 26. A
+  // reader who multiplied got 780. The day is not rounded to fix it — six render sites share
+  // `perPeriod` with the compiled card, which prints $25.54 correctly.
+  it('states a day and a month that multiply', () => {
+    expect(formatPerPeriod(25.54, 'USD')).toBe('$25.54/day · $766/mo');
+    expect(formatPerPeriod(25.54, null)).toBe('25.54/day · 766/mo');
   });
 
   it('returns a dash rather than inventing a month for a figure it does not have', () => {
-    expect(formatPerPeriod(null)).toBe('—');
-    expect(formatPerPeriod(Number.POSITIVE_INFINITY)).toBe('—');
+    expect(formatPerPeriod(null, 'USD')).toBe('—');
+    expect(formatPerPeriod(Number.POSITIVE_INFINITY, 'USD')).toBe('—');
   });
 
   it('prints a percentage that is ALREADY a percentage, and never multiplies', () => {
@@ -164,36 +219,59 @@ describe('the impact vocabulary', () => {
 
   it('formats a headline by its unit and leaves the detector\u2019s words alone', () => {
     expect(
-      formatHeadline({
-        kind: 'efficiency',
-        value: 33,
-        unit: 'percent',
-        label: 'cheaper per result',
-        from: 90,
-        to: 60,
-      }),
+      formatHeadline(
+        {
+          kind: 'efficiency',
+          value: 33,
+          unit: 'percent',
+          label: 'cheaper per result',
+          from: 90,
+          to: 60,
+        },
+        'USD',
+      ),
     ).toEqual({ figure: '33%', label: 'cheaper per result' });
 
     expect(
-      formatHeadline({
-        kind: 'avoided',
-        value: 96,
-        unit: 'currency_per_day',
-        label: 'a day buying nothing',
-        from: null,
-        to: null,
-      }),
-    ).toEqual({ figure: '$96', label: 'a day buying nothing' });
+      formatHeadline(
+        {
+          kind: 'avoided',
+          value: 96,
+          unit: 'currency_per_day',
+          label: 'a day buying nothing',
+          from: null,
+          to: null,
+        },
+        'USD',
+      ),
+    ).toEqual({ figure: '$96.00', label: 'a day buying nothing' });
 
     expect(
-      formatHeadline({
-        kind: 'count',
-        value: 1200,
-        unit: 'count',
-        label: 'results a week, combined',
-        from: null,
-        to: 50,
-      }),
+      formatHeadline(
+        {
+          kind: 'avoided',
+          value: 96,
+          unit: 'currency_per_day',
+          label: 'a day buying nothing',
+          from: null,
+          to: null,
+        },
+        null,
+      ),
+    ).toEqual({ figure: '96.00', label: 'a day buying nothing' });
+
+    expect(
+      formatHeadline(
+        {
+          kind: 'count',
+          value: 1200,
+          unit: 'count',
+          label: 'results a week, combined',
+          from: null,
+          to: 50,
+        },
+        null,
+      ),
     ).toEqual({ figure: '1,200', label: 'results a week, combined' });
   });
 });

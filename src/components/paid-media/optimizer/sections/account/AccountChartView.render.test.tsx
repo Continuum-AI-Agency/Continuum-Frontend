@@ -47,7 +47,7 @@ const draw = (chart: AccountChart) => render(<AccountChartView chart={chart} cur
 describe('AccountChartView — rates says which values, and when', () => {
   it('opens on the newest point, naming the value, its label and its day', () => {
     const { getByTestId, container } = draw(rates());
-    expect(getByTestId('rates-readout-value').textContent).toBe('$74');
+    expect(getByTestId('rates-readout-value').textContent).toBe('$74.00');
     expect(getByTestId('rates-readout-day').textContent).toBe('Sep 19');
     expect(container.textContent).toContain('Cost per lead');
   });
@@ -62,8 +62,8 @@ describe('AccountChartView — rates says which values, and when', () => {
   it('names the value axis at both ends of the scale it actually draws', () => {
     const { container } = draw(rates());
     // min is pinned at 0 and max at the series maximum — the same domain as before.
-    expect(container.textContent).toContain('$83');
-    expect(container.textContent).toContain('$0');
+    expect(container.textContent).toContain('$83.00');
+    expect(container.textContent).toContain('$0.00');
   });
 
   it('gives every point an accessible name carrying its date, label and value', () => {
@@ -71,8 +71,8 @@ describe('AccountChartView — rates says which values, and when', () => {
     const points = container.querySelectorAll('button[data-point]');
     expect(points).toHaveLength(3);
     expect(points[0]?.getAttribute('aria-label')).toContain('September 17, 2026');
-    expect(points[0]?.getAttribute('aria-label')).toContain('Cost per lead $83');
-    expect(points[0]?.getAttribute('aria-label')).toContain('Target $70');
+    expect(points[0]?.getAttribute('aria-label')).toContain('Cost per lead $83.00');
+    expect(points[0]?.getAttribute('aria-label')).toContain('Target $70.00');
   });
 
   it('reads the mark under the pointer, and reads its own datum', () => {
@@ -114,7 +114,7 @@ describe('AccountChartView — rates says which values, and when', () => {
       getByTestId('rates-readout-value').textContent,
       getByTestId('rates-readout-day').textContent,
     ]).toEqual(byPointer);
-    expect(byPointer).toEqual(['$83', 'Sep 17']);
+    expect(byPointer).toEqual(['$83.00', 'Sep 17']);
   });
 
   it('is reachable by keyboard: one tab stop, and arrows walk the window', () => {
@@ -128,7 +128,7 @@ describe('AccountChartView — rates says which values, and when', () => {
       fireEvent.keyDown(newest, { key: 'ArrowLeft' });
     });
     expect(getByTestId('rates-readout-day').textContent).toBe('Sep 18');
-    expect(getByTestId('rates-readout-value').textContent).toBe('$79');
+    expect(getByTestId('rates-readout-value').textContent).toBe('$79.00');
     act(() => {
       fireEvent.keyDown(container.querySelectorAll('button[data-point]')[1] as HTMLButtonElement, {
         key: 'Home',
@@ -139,7 +139,7 @@ describe('AccountChartView — rates says which values, and when', () => {
 
   it('draws a target that never moves as the LINE, wearing its own name and value', () => {
     const { getByTestId } = draw(rates());
-    expect(getByTestId('rates-reference').textContent).toBe('Target $70');
+    expect(getByTestId('rates-reference').textContent).toBe('Target $70.00');
   });
 
   it('refuses to call a moving b a reference line — that is a second series', () => {
@@ -197,20 +197,20 @@ describe('AccountChartView — interval says what the interval is, and what the 
   it('makes the reference identifiable as the line, by name and by value', () => {
     const { getByTestId } = draw(interval);
     const reference = getByTestId('interval-reference');
-    expect(reference.textContent).toBe('target $70');
-    expect(reference.getAttribute('aria-label')).toBe('target $70');
+    expect(reference.textContent).toBe('target $70.00');
+    expect(reference.getAttribute('aria-label')).toBe('target $70.00');
   });
 
   it('swaps the readout to the reference on focus — keyboard, not just pointer', () => {
     const { getByTestId } = draw(interval);
     act(() => (getByTestId('interval-reference') as HTMLButtonElement).focus());
-    expect(getByTestId('interval-readout').textContent).toBe('target $70');
+    expect(getByTestId('interval-readout').textContent).toBe('target $70.00');
   });
 
   it('names the axis by the two ends the drawing actually reaches', () => {
     const { getByTestId } = draw(interval);
     // Both ends are drawn: 0 is where the track starts, $840 is where the interval stops.
-    expect(getByTestId('interval-axis-low').textContent).toBe('$0');
+    expect(getByTestId('interval-axis-low').textContent).toBe('$0.00');
     expect(getByTestId('interval-axis-high').textContent).toBe('$840');
   });
 
@@ -262,7 +262,7 @@ describe('AccountChartView — interval says what the interval is, and what the 
     act(() => reference.focus());
     expect(reference.getAttribute('data-active')).toBe('true');
     expect(getByTestId('interval-readout').textContent).toBe(byPointer);
-    expect(byPointer).toBe('target $70');
+    expect(byPointer).toBe('target $70.00');
   });
 
   it('draws the point estimate when the candidate carries one, and says it first', () => {

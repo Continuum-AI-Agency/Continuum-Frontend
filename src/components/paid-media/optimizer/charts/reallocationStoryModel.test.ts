@@ -106,9 +106,27 @@ describe('buildReallocationStory', () => {
     expect(story.blendedBefore).toBeCloseTo(200 / 12, 6);
     expect(story.blendedAfter).toBeCloseTo(200 / 15.2, 6);
     expect(story.summary).toMatch(
-      /^Moving \$40\/day from 1 ad set \(1 above target\) to 1 ad set \(1 below target\)\./,
+      /^Moving \$40\.00\/day from 1 ad set \(1 above target\) to 1 ad set \(1 below target\)\./,
     );
-    expect(story.summary).toMatch(/Blended CPL improves from \$17 to \$13/);
+    expect(story.summary).toMatch(/Blended CPL improves from \$16\.67 to \$13\.16/);
+  });
+
+  // The story sentence used to build its own Intl formatter defaulting to USD, so an account
+  // with no currency code narrated a peso reallocation in dollars. It goes through the one
+  // optimizer formatter now: no code, no symbol.
+  it('never narrates an unknown currency in dollars', () => {
+    const story = buildReallocationStory({
+      items,
+      metric: lead,
+      snapshotById,
+      nameById,
+      lookback: 7,
+      target: 30,
+      currency: null,
+    });
+    expect(story.summary).toStartWith('Moving 40.00/day from');
+    expect(story.summary).toContain('improves from 16.67 to 13.16');
+    expect(story.summary).not.toContain('$');
   });
 
   it('uses the 14-day engine interval only on the 14-day lookback', () => {

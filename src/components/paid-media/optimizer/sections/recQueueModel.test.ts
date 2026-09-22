@@ -106,7 +106,7 @@ describe('the headline a queue row leads with', () => {
         },
         'USD',
       ),
-    ).toBe('$96 a day buying nothing');
+    ).toBe('$96.00 a day buying nothing');
   });
 
   it('reads a malformed headline as no headline, rather than printing a figure nobody computed', () => {
@@ -232,7 +232,9 @@ describe('a real production row, before and after the engine carries a headline'
         },
         'MXN',
       ),
-    ).toBe('MX$26 a day buying nothing');
+      // 25.54 is not 26, and pesos are not dollars: the queue line says both, exactly as the
+      // compiled card of the same finding does.
+    ).toBe('25.54 MXN a day buying nothing');
   });
 });
 
@@ -343,7 +345,8 @@ describe('evidenceSeries', () => {
     expect(evidenceSeries(evidence({ metric: 'cap_binding_share' }), snapshot, 'leads')).toBeNull();
   });
   it('formats by unit', () => {
-    expect(formatEvidenceValue('money', 40, 'USD')).toBe('$40');
+    expect(formatEvidenceValue('money', 40, 'USD')).toBe('$40.00');
+    expect(formatEvidenceValue('money', 40, null)).toBe('40.00');
     expect(formatEvidenceValue('percent', 0.0125, null)).toBe('1.25%');
     expect(formatEvidenceValue('number', 3.4, null)).toBe('3.4');
   });

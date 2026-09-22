@@ -1,58 +1,76 @@
-// Small formatting helpers shared across the optimizer surface. Budgets and CPA
-// are whole-unit (no cents) per the spec. Currency is the AD ACCOUNT's real
-// currency (AdAccount.currency from plugin_mcp.list_brand_ad_accounts — the same
-// path the MCP account_map tool uses), passed in so a JPY account never reads as
-// USD. The engine already reasons/scales in the account currency; the FE only
-// displays — no math here.
+// Small formatting helpers shared across the optimizer surface. Currency is the AD ACCOUNT's
+// real currency (AdAccount.currency from plugin_mcp.list_brand_ad_accounts — the same path the
+// MCP account_map tool uses), passed in so a JPY account never reads as USD. The engine already
+// reasons/scales in the account currency; the FE only displays — no math here.
+//
+// AN UNKNOWN CURRENCY IS NOT DOLLARS. `account.currency` is null on real accounts, and every
+// live one here is Mexican. A formatter that answers a missing code with "$" does not fail
+// loudly — it silently relabels pesos as dollars on a card a client reads. So a code that is
+// not a 3-letter ISO code prints the bare figure: `324`, not `$324`. This is the rule
+// `money()` in `@continuum/contracts/optimization/account-card-html` already follows for the
+// COMPILED card of the same finding ("Null prints bare figures"), the rule the portfolio
+// briefs follow (the model may not emit a symbol at all), and the rule Jaina follows
+// ("N (currency unknown)"). It is adopted here rather than reinvented, so the card and the
+// screen behind it cannot disagree about what money a figure is in.
+//
+// THE DIGIT RULE IS ALSO THEIRS. `perPeriod` passes the day through unrounded and cent-rounds
+// the month, so a screen that printed both at 0 decimals rendered "$26/day · $766/mo" — a
+// reader who multiplies gets 780. `money()` uses 2 decimals under 100 and 0 at or above it,
+// which is why the compiled card already read "$25.54/day · $766/mo". Same rule here. The
+// grouping separator stays (a screen has room for "$2,000"; a 320px frame does not).
 
 import { type CandidateHeadline, perPeriod } from '@continuum/contracts';
 
-const FALLBACK_CURRENCY = 'USD';
+const ISO_CURRENCY = /^[A-Z]{3}$/;
 
 export function formatCurrency(
   value: number | null | undefined,
-  currency: string | null | undefined = FALLBACK_CURRENCY,
+  currency: string | null | undefined,
 ): string {
-  if (value == null || Number.isNaN(value)) return '—';
+  if (value == null || !Number.isFinite(value)) return '—';
   const code = normalizeCurrency(currency);
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: code,
-      maximumFractionDigits: 0,
-    }).format(value);
-  } catch {
-    // Guard against a malformed ISO code from an upstream account row.
-    return `${Math.round(value).toLocaleString('en-US')} ${code}`;
-  }
+  const digits = Math.abs(value) >= 100 ? 0 : 2;
+  const body = new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(Math.abs(value));
+  // The sign stays outside the unit: "-$25.54" reads as a debit, "$-25.54" reads as a typo.
+  const sign = value < 0 ? '-' : '';
+  if (!code) return `${sign}${body}`;
+  return code === 'USD' ? `${sign}$${body}` : `${sign}${body} ${code}`;
 }
 
+/** Cost per result, in the account's own currency. The digit rule owns the precision — a
+ *  cost of 28.60 is not usefully reported as 29, and rounding before formatting would print
+ *  "29.00" under the sub-100 rule. */
 export function formatCpa(
   value: number | null | undefined,
-  currency: string | null | undefined = FALLBACK_CURRENCY,
+  currency: string | null | undefined,
 ): string {
-  if (value == null || Number.isNaN(value) || !Number.isFinite(value)) return '—';
-  return formatCurrency(Math.round(value), currency);
+  return formatCurrency(value, currency);
 }
 
-/** The currency symbol/prefix for an account, for input adornments (e.g. "$"). */
+/** The currency prefix for an input adornment (e.g. "$"). EMPTY when the account carries no
+ *  code — a field labelled "Daily budget ($)" on a peso account is the same lie the figures
+ *  used to tell. Non-USD gets the ISO code, the same spelling `formatCurrency` appends. */
 export function currencySymbol(currency: string | null | undefined): string {
   const code = normalizeCurrency(currency);
-  try {
-    const parts = new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: code,
-      maximumFractionDigits: 0,
-    }).formatToParts(0);
-    return parts.find((part) => part.type === 'currency')?.value ?? code;
-  } catch {
-    return code;
-  }
+  if (!code) return '';
+  return code === 'USD' ? '$' : code;
 }
 
-function normalizeCurrency(currency: string | null | undefined): string {
+/** A field label's parenthetical currency hint, or nothing at all when the code is unknown.
+ *  One definition so three forms cannot each decide differently what "()" means. */
+export function currencyFieldSuffix(currency: string | null | undefined): string {
+  const symbol = currencySymbol(currency);
+  return symbol ? ` (${symbol})` : '';
+}
+
+/** The account's ISO code, or null when the row does not carry a usable one. Null is the
+ *  answer, never a fallback: see the note at the top of this file. */
+function normalizeCurrency(currency: string | null | undefined): string | null {
   const trimmed = (currency ?? '').trim().toUpperCase();
-  return trimmed.length === 3 ? trimmed : FALLBACK_CURRENCY;
+  return ISO_CURRENCY.test(trimmed) ? trimmed : null;
 }
 
 /** Derive an objective's cost efficiency from spend / result count. Awareness
@@ -138,7 +156,7 @@ export function soonestNextCycle(portfolios: { next_realloc_at: string | null }[
  */
 export function formatPerPeriod(
   perDay: number | null | undefined,
-  currency: string | null | undefined = FALLBACK_CURRENCY,
+  currency: string | null | undefined,
 ): string {
   if (perDay == null || Number.isNaN(perDay) || !Number.isFinite(perDay)) return '—';
   const { day, month } = perPeriod(perDay);
@@ -171,7 +189,7 @@ export function formatPercent(
  */
 export function formatHeadline(
   headline: CandidateHeadline,
-  currency: string | null | undefined = FALLBACK_CURRENCY,
+  currency: string | null | undefined,
 ): { figure: string; label: string } {
   switch (headline.unit) {
     case 'percent':

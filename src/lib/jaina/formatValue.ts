@@ -71,12 +71,20 @@ export function formatValue(
   if (Number.isNaN(num)) return String(value);
 
   switch (format) {
-    case 'currency':
+    // A missing code is NOT dollars. Every block that renders money already says
+    // "N (currency unknown)" when its `currency_code` is null — the backend's dataset
+    // materializer names that spelling too — and defaulting to USD here was the one place a
+    // peso figure could still reach a reader wearing a dollar sign.
+    case 'currency': {
+      const code = (options?.currency ?? '').trim().toUpperCase();
+      if (!/^[A-Z]{3}$/.test(code))
+        return `${formatValue(num, 'number', options)} (currency unknown)`;
       return new Intl.NumberFormat(locale, {
         style: 'currency',
-        currency: options?.currency ?? 'USD',
+        currency: code,
         maximumFractionDigits: 2,
       }).format(num);
+    }
 
     case 'percent': {
       const basis = options?.percentBasis ?? null;

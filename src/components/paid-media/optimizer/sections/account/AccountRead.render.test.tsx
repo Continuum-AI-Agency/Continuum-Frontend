@@ -133,7 +133,7 @@ describe('AccountRead', () => {
     expect(row.textContent).toContain('33%');
     expect(row.textContent).toContain('cheaper per result');
     expect(row.textContent).toContain('90% → 60%');
-    expect(row.textContent).toContain('$67/day · $2,000/mo');
+    expect(row.textContent).toContain('$66.67/day · $2,000/mo');
     expect(row.textContent).toContain('leads');
   });
 

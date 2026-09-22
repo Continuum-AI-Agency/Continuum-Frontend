@@ -1139,8 +1139,8 @@ export function useOptimizerAdAccounts(brandId: string) {
   });
 }
 
-/** Resolve the display currency for a specific ad account (falls back to USD in
- *  the formatter when the account row has no currency yet). */
+/** Resolve the display currency for a specific ad account. Null when the account row carries
+ *  none — the formatters print bare figures for it rather than claiming dollars. */
 export function useAdAccountCurrency(brandId: string, adAccountId: string | null): string | null {
   const { data } = useOptimizerAdAccounts(brandId);
   if (!adAccountId) return null;

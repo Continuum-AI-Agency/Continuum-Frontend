@@ -384,7 +384,7 @@ describe('the portfolios list, in the same vocabulary as the card above it', () 
     expect(bands).toHaveLength(1);
     expect(bands[0]?.textContent).toContain('Move budget between portfolios');
     expect(bands[0]?.textContent).toContain('33%');
-    expect(bands[0]?.textContent).toContain('$67/day · $2,000/mo');
+    expect(bands[0]?.textContent).toContain('$66.67/day · $2,000/mo');
   });
 
   it('leaves every card bare when the read found nothing inside a portfolio', () => {

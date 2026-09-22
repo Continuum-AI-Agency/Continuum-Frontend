@@ -43,7 +43,7 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { TargetHint } from '../../advisor/SetupAdvisor';
-import { currencySymbol, formatCurrency, humanize } from '../../format';
+import { currencyFieldSuffix, currencySymbol, formatCurrency, humanize } from '../../format';
 import { acceptSuggestionOnTab, suggestionPlaceholder } from '../../suggestInput';
 import { MODES, OBJECTIVES } from '../suggestionModel';
 import { ANALOG_LABEL, buildConversionDescriptor } from './conversionDescriptor';
@@ -82,6 +82,7 @@ type StepGoalProps = {
 
 export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGoalProps) {
   const symbol = currencySymbol(currency);
+  const unit = currencyFieldSuffix(currency);
   const allowed = allowedTargetMetrics(draft.objective);
   const targetMetric = effectiveTargetMetric(draft);
   const metric = getOptimizationMetricDefinition(targetMetric);
@@ -264,7 +265,8 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="wizard-target">
-            {metric.targetLabel} ({symbol})
+            {metric.targetLabel}
+            {unit}
           </Label>
           <Input
             disabled={disabled}
@@ -366,7 +368,9 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="wizard-scale-ceiling">Up to ({symbol}/day, optional)</Label>
+                <Label htmlFor="wizard-scale-ceiling">
+                  Up to ({symbol ? `${symbol}/day` : 'per day'}, optional)
+                </Label>
                 <Input
                   disabled={disabled}
                   id="wizard-scale-ceiling"

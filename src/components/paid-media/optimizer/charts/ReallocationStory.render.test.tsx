@@ -57,7 +57,7 @@ describe('ReallocationStory', () => {
     );
     const text = container.textContent ?? '';
     expect(text).toMatch(
-      /Moving \$40\/day from 1 ad set \(1 above target\) to 1 ad set \(1 below target\)/,
+      /Moving \$40\.00\/day from 1 ad set \(1 above target\) to 1 ad set \(1 below target\)/,
     );
     const rows = getAllByRole('listitem');
     expect(rows).toHaveLength(2);

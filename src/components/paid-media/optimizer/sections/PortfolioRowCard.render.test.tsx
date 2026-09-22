@@ -86,7 +86,7 @@ describe('PortfolioRowCard — the portfolio carries today’s finding', () => {
     expect(band.textContent).toContain('33%');
     expect(band.textContent).toContain('cheaper per result');
     // And the money line every surface in this vocabulary carries.
-    expect(band.textContent).toContain('$67/day');
+    expect(band.textContent).toContain('$66.67/day');
     expect(band.textContent).toContain('$2,000/mo');
   });
 

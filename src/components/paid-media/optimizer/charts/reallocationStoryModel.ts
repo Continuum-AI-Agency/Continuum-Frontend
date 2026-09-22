@@ -15,7 +15,7 @@ import type {
   OptimizationMetricDefinition,
 } from '@continuum/contracts';
 import { resolveAdsetName } from '../adsetName';
-import { deriveEfficiency } from '../format';
+import { deriveEfficiency, formatCurrency } from '../format';
 
 export type StoryLookback = 3 | 7 | 14;
 export const STORY_LOOKBACKS: readonly StoryLookback[] = [3, 7, 14];
@@ -83,18 +83,6 @@ export function blendedCost(rows: Array<{ budget: number; cost: number | null }>
     results += row.budget / row.cost;
   }
   return results > 0 ? spend / results : null;
-}
-
-function currencyLabel(value: number, currency: string | null | undefined): string {
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: (currency ?? 'USD').toUpperCase(),
-      maximumFractionDigits: 0,
-    }).format(value);
-  } catch {
-    return `${Math.round(value)}`;
-  }
 }
 
 export function buildReallocationStory(args: {
@@ -189,9 +177,9 @@ export function buildReallocationStory(args: {
         : 'back to the pool';
     const blend =
       blendedBefore != null && blendedAfter != null && Math.abs(blendedBefore - blendedAfter) >= 0.5
-        ? ` Blended ${metric.costLabel} ${blendedAfter < blendedBefore ? 'improves' : 'moves'} from ${currencyLabel(blendedBefore, currency)} to ${currencyLabel(blendedAfter, currency)} if each ad set keeps its ${lookback}-day cost.`
+        ? ` Blended ${metric.costLabel} ${blendedAfter < blendedBefore ? 'improves' : 'moves'} from ${formatCurrency(blendedBefore, currency)} to ${formatCurrency(blendedAfter, currency)} if each ad set keeps its ${lookback}-day cost.`
         : '';
-    summary = `Moving ${currencyLabel(moved, currency)}/day ${fromPart} ${toPart}.${blend}`;
+    summary = `Moving ${formatCurrency(moved, currency)}/day ${fromPart} ${toPart}.${blend}`;
   }
 
   return {

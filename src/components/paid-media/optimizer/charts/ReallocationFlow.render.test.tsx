@@ -30,8 +30,8 @@ describe('ReallocationFlow', () => {
     expect(getByText('act_1::adset_loser')).toBeTruthy();
     // Gainers, losers AND the net — a cut that used to read as "$40 moved" now reads as a
     // net, which is the number that tells you whether spend is being reallocated or reduced.
-    expect(container.textContent).toContain('+$40 to 1');
-    expect(container.textContent).toContain('−$40 from 1');
+    expect(container.textContent).toContain('+$40.00 to 1');
+    expect(container.textContent).toContain('−$40.00 from 1');
     expect(container.textContent).toContain('net +$0');
     expect(container.textContent).toContain('across 2 ad sets');
     expect(container.innerHTML).toContain('bg-success');
