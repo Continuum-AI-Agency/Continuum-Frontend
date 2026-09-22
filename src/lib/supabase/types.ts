@@ -9098,6 +9098,78 @@ export type Database = {
           },
         ]
       }
+      report_schedules: {
+        Row: {
+          brand_id: string
+          cadence: string
+          created_at: string
+          created_by: string | null
+          day_of_month: number | null
+          day_of_week: number | null
+          enabled: boolean
+          external_emails: string[]
+          hour: number
+          id: string
+          last_run_at: string | null
+          next_run_at: string
+          presentation: string
+          recipient_user_ids: string[]
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          cadence: string
+          created_at?: string
+          created_by?: string | null
+          day_of_month?: number | null
+          day_of_week?: number | null
+          enabled?: boolean
+          external_emails?: string[]
+          hour?: number
+          id?: string
+          last_run_at?: string | null
+          next_run_at: string
+          presentation?: string
+          recipient_user_ids?: string[]
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          cadence?: string
+          created_at?: string
+          created_by?: string | null
+          day_of_month?: number | null
+          day_of_week?: number | null
+          enabled?: boolean
+          external_emails?: string[]
+          hour?: number
+          id?: string
+          last_run_at?: string | null
+          next_run_at?: string
+          presentation?: string
+          recipient_user_ids?: string[]
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_schedules_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "report_schedules_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       report_send_receipts: {
         Row: {
           brand_id: string
@@ -11909,6 +11981,17 @@ export type Database = {
           surface: string
           tags: string[]
         }[]
+      }
+      next_report_schedule_run_at: {
+        Args: {
+          p_after: string
+          p_cadence: string
+          p_dom: number
+          p_dow: number
+          p_hour: number
+          p_tz: string
+        }
+        Returns: string
       }
       open_jaina_tool_gate: {
         Args: {
@@ -20579,6 +20662,9 @@ export type Database = {
       }
       organic_published_posts: {
         Row: {
+          angle_id: string | null
+          angle_provenance: Json | null
+          angle_vocab_version: number
           brand_id: string
           caption: string | null
           content_snapshot: Json | null
@@ -20596,6 +20682,9 @@ export type Database = {
           published_at: string
         }
         Insert: {
+          angle_id?: string | null
+          angle_provenance?: Json | null
+          angle_vocab_version?: number
           brand_id: string
           caption?: string | null
           content_snapshot?: Json | null
@@ -20613,6 +20702,9 @@ export type Database = {
           published_at: string
         }
         Update: {
+          angle_id?: string | null
+          angle_provenance?: Json | null
+          angle_vocab_version?: number
           brand_id?: string
           caption?: string | null
           content_snapshot?: Json | null
@@ -26274,6 +26366,10 @@ export type Database = {
         Returns: undefined
       }
       optimizer_action_count: { Args: { p_since?: string }; Returns: number }
+      optimizer_adopt_adhoc_suggestion: {
+        Args: { p_confirm_token: string; p_id: string }
+        Returns: Json
+      }
       optimizer_append_logs: { Args: { p_rows: Json }; Returns: number }
       optimizer_approve_audience_proposal: {
         Args: {
@@ -26386,6 +26482,16 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      optimizer_claim_next_adhoc_suggestion: {
+        Args: { p_lease_ttl_sec?: number; p_worker_id: string }
+        Returns: unknown[]
+        SetofOptions: {
+          from: "*"
+          to: "adhoc_suggestions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       optimizer_claim_next_audience_proposal: {
         Args: { p_lease_ttl_sec?: number; p_phase: string; p_worker_id: string }
         Returns: unknown[]
@@ -26434,6 +26540,18 @@ export type Database = {
           p_prompt_version?: string
           p_read?: Json
           p_status: string
+          p_worker_id: string
+        }
+        Returns: boolean
+      }
+      optimizer_complete_adhoc_suggestion_owned: {
+        Args: {
+          p_error?: Json
+          p_id: string
+          p_model?: string
+          p_prompt_version?: string
+          p_status: string
+          p_suggestion?: Json
           p_worker_id: string
         }
         Returns: boolean
@@ -26549,6 +26667,10 @@ export type Database = {
         Args: { p_brand_id: string; p_insight_key: string }
         Returns: undefined
       }
+      optimizer_dismiss_adhoc_suggestion: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
       optimizer_enqueue_account_reads: { Args: never; Returns: number }
       optimizer_enqueue_audience_proposals: {
         Args: { p_cooldown_days?: number; p_since_days?: number }
@@ -26584,6 +26706,10 @@ export type Database = {
       }
       optimizer_get_account_read: {
         Args: { p_ad_account_id: string; p_brand_id: string }
+        Returns: Json
+      }
+      optimizer_get_adhoc_suggestions: {
+        Args: { p_limit?: number; p_portfolio_id: string }
         Returns: Json
       }
       optimizer_get_adset_snapshots: {
@@ -26754,6 +26880,10 @@ export type Database = {
         Args: { p_id: string; p_lease_ttl_sec?: number; p_worker_id: string }
         Returns: boolean
       }
+      optimizer_heartbeat_adhoc_suggestion: {
+        Args: { p_id: string; p_lease_ttl_sec?: number; p_worker_id: string }
+        Returns: boolean
+      }
       optimizer_heartbeat_audience_proposal: {
         Args: { p_id: string; p_lease_ttl_sec?: number; p_worker_id: string }
         Returns: boolean
@@ -26769,6 +26899,10 @@ export type Database = {
       optimizer_heartbeat_portfolio_brief: {
         Args: { p_id: string; p_lease_ttl_sec?: number; p_worker_id: string }
         Returns: boolean
+      }
+      optimizer_implement_adhoc_suggestion: {
+        Args: { p_id: string }
+        Returns: Json
       }
       optimizer_implement_flash_creative: {
         Args: {
@@ -26952,6 +27086,14 @@ export type Database = {
         Args: { p_job_id: string; p_reason?: string }
         Returns: undefined
       }
+      optimizer_request_account_read: {
+        Args: { p_ad_account_id: string; p_brand_id: string }
+        Returns: Json
+      }
+      optimizer_request_adhoc_suggestion: {
+        Args: { p_category: string; p_portfolio_id: string }
+        Returns: Json
+      }
       optimizer_request_apply_item: {
         Args: { p_adset_id: string; p_run_id: string }
         Returns: undefined
@@ -27096,6 +27238,10 @@ export type Database = {
       optimizer_upsert_snapshots: {
         Args: { p_cycle_ts: string; p_portfolio_id: string; p_snapshots: Json }
         Returns: number
+      }
+      organic_best_times: {
+        Args: { p_brand_id: string; p_platform: string; p_window_days?: number }
+        Returns: Json
       }
       paid_media_get_ad_angles: {
         Args: { p_adset_ids?: string[]; p_brand_id: string }
