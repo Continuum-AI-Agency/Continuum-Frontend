@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import type { AdminPagination, AdminUser, PermissionRow } from '@/components/admin/adminUserTypes';
@@ -315,6 +316,16 @@ describe('AdminUserList brand access', () => {
       expect(screen.getByRole('checkbox', { name }).getAttribute('aria-disabled')).toBe('true');
     }
     expect(screen.getByRole('switch').getAttribute('aria-disabled')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Full access' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: 'Add credits' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('textbox', { name: 'Reason for the credits' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    expect(screen.getByRole('button', { name: 'Full access for all brands' })).toHaveProperty(
+      'disabled',
+      true,
+    );
   });
 
   it('replaces the Tier control with the product grid once billing is live', async () => {
@@ -403,6 +414,173 @@ describe('AdminUserList brand access', () => {
       expect(
         invokeMock.mock.calls.find(([name]) => name === 'admin-update-access')?.[1]?.body,
       ).toEqual({ brandId: BRAND, contract: true }),
+    );
+  });
+
+  const accessCalls = () =>
+    invokeMock.mock.calls.filter(([name]) => name === 'admin-update-access');
+  const savedReply = (brandId: string, access: Record<string, unknown>) => ({
+    data: {
+      ok: true,
+      brandId,
+      changes: [],
+      access,
+      entitlements: {
+        brandId,
+        planCode: 'free',
+        status: 'inactive',
+        billingModel: 'none',
+        plans: [],
+        products: [],
+        addons: [],
+        trendsTier: null,
+        buckets: [],
+        creditBalance: { totalCredits: 0, purchasedCredits: 0, rolloverCredits: 0 },
+      },
+    },
+    error: null,
+  });
+  const noPlan = {
+    billingModel: 'none' as const,
+    planCode: 'free',
+    plans: [],
+    status: 'inactive' as const,
+    products: [],
+    internalAuthored: false,
+    internal: false,
+    canvasCredits: 2000,
+  };
+
+  it('gives one brand full access after confirming', async () => {
+    invokeMock.mockImplementation(async (_name, options) =>
+      savedReply(BRAND, noPlan as unknown as Record<string, unknown>),
+    );
+    renderList(membership({ brand_access: noPlan }), true);
+    await settleRenderedEffects();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Full access' }));
+    const confirm = await screen.findByRole('button', { name: 'Give full access' });
+    expect(accessCalls()).toHaveLength(0);
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(accessCalls()).toHaveLength(1));
+    expect(accessCalls()[0]?.[1]?.body).toEqual({ brandId: BRAND, fullAccess: true });
+  });
+
+  it('adds credits once with the reason, even on a double click, then clears the form', async () => {
+    let release: () => void = () => {};
+    invokeMock.mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return savedReply(BRAND, { ...noPlan, canvasCredits: 4500 });
+    });
+    renderList(membership({ brand_access: noPlan }), true);
+    await settleRenderedEffects();
+
+    expect(screen.getByTestId('brand-canvas-credits').textContent).toBe('2,000 credits');
+    const amount = screen.getByRole('spinbutton', { name: 'Credits to add (USD)' });
+    const reason = screen.getByRole('textbox', { name: 'Reason for the credits' });
+    const add = screen.getByRole('button', { name: 'Add credits' });
+    fireEvent.change(amount, { target: { value: '25' } });
+    expect(add).toHaveProperty('disabled', true);
+    fireEvent.change(reason, { target: { value: 'launch promo' } });
+    expect(add).toHaveProperty('disabled', false);
+
+    fireEvent.click(add);
+    fireEvent.click(add);
+    await waitFor(() => expect(accessCalls()).toHaveLength(1));
+    expect(add).toHaveProperty('disabled', true);
+    await act(async () => release());
+
+    await waitFor(() =>
+      expect(screen.getByTestId('brand-canvas-credits').textContent).toBe('4,500 credits'),
+    );
+    expect(accessCalls()).toHaveLength(1);
+    expect(accessCalls()[0]?.[1]?.body).toEqual({
+      brandId: BRAND,
+      addCreditsUsd: 25,
+      reason: 'launch promo',
+    });
+    expect((amount as HTMLInputElement).value).toBe('');
+    expect((reason as HTMLInputElement).value).toBe('');
+  });
+
+  it('refuses an amount over the 1000 USD cap in the form', async () => {
+    renderList(membership({ brand_access: noPlan }), true);
+    await settleRenderedEffects();
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Credits to add (USD)' }), {
+      target: { value: '1000.01' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Reason for the credits' }), {
+      target: { value: 'x' },
+    });
+    expect(screen.getByRole('button', { name: 'Add credits' })).toHaveProperty('disabled', true);
+  });
+
+  it('shows the Client switch and Internal badge only for a staff-created brand', async () => {
+    const internalAccess = { ...noPlan, internalAuthored: true, internal: true };
+    renderList(membership({ brand_access: internalAccess }), true);
+    await settleRenderedEffects();
+
+    expect(screen.getByTestId('brand-internal-badge').textContent).toBe('Internal · unmetered');
+    const client = screen.getByRole('switch', { name: 'Client (metered)' });
+    expect(client.getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(client);
+    await waitFor(() => expect(accessCalls()).toHaveLength(1));
+    expect(accessCalls()[0]?.[1]?.body).toEqual({ brandId: BRAND, client: true });
+    cleanup();
+
+    renderList(membership({ brand_access: noPlan }), true);
+    await settleRenderedEffects();
+    expect(screen.queryByRole('switch', { name: 'Client (metered)' })).toBeNull();
+    expect(screen.queryByTestId('brand-internal-badge')).toBeNull();
+  });
+
+  it('gives every brand of the user full access one by one and lists each result', async () => {
+    const OTHER = '7f9619ff-8b86-4011-b42d-00c04fc964ff';
+    invokeMock.mockImplementation(async (name, options) => {
+      if (name !== 'admin-update-access') return { data: null, error: null };
+      const brandId = (options?.body as { brandId: string }).brandId;
+      if (brandId === OTHER) {
+        return {
+          data: null,
+          error: new FunctionsHttpError(
+            new Response(JSON.stringify({ error: 'billing_not_live' }), { status: 409 }),
+          ),
+        };
+      }
+      return savedReply(brandId, noPlan as unknown as Record<string, unknown>);
+    });
+    renderList(
+      [
+        ...membership({ brand_access: noPlan }),
+        {
+          user_id: 'user-1',
+          brand_profile_id: OTHER,
+          brand_name: 'Home | Vivo47',
+          role: 'admin',
+          brand_tier: null,
+          brand_access: noPlan,
+        },
+      ],
+      true,
+    );
+    await settleRenderedEffects();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Full access for all brands' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Give full access' }));
+
+    await waitFor(() => expect(screen.getByTestId('full-access-results').children).toHaveLength(2));
+    expect(accessCalls().map(([, options]) => options?.body)).toEqual([
+      { brandId: BRAND, fullAccess: true },
+      { brandId: OTHER, fullAccess: true },
+    ]);
+    const results = screen.getByTestId('full-access-results');
+    expect(results.querySelector(`[data-brand-id="${BRAND}"]`)?.textContent).toBe('Easy Fit ok');
+    expect(results.querySelector(`[data-brand-id="${OTHER}"]`)?.textContent).toBe(
+      'Home | Vivo47 failed — Product access activates at billing go-live.',
     );
   });
 });

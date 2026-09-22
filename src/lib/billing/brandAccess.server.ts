@@ -59,7 +59,8 @@ export async function readBrandAccess(
 
   const [entitlementsReply, tierReply] = await Promise.all([
     settle(supabase.schema('billing').rpc('get_brand_entitlements', { p_brand_id: brandId })),
-    // billing-cutover: read in parallel so prod pays no extra round trip before go-live.
+    // grandfathered: the tier read outlives the cutover (a grandfathered brand's Forge needs
+    // tier 3). Read in parallel so it costs no extra round trip.
     settle(
       supabase
         .schema('brand_profiles')

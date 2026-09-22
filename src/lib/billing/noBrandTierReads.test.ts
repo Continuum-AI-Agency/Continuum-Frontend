@@ -2,9 +2,10 @@ import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-// "No page reads the brand tier." Access comes from billing products; the tier survives only as
-// the not-live fallback, read in exactly ONE place and marked `billing-cutover` so wave 4 can
-// delete it. This walks src/ and fails on any other read — a regression shows up by file and line.
+// "No page reads the brand tier." Access comes from billing products; the tier survives as the
+// not-live fallback and as a grandfathered brand's Forge rule, read in exactly ONE place and marked
+// `grandfathered` so the cutover cleanup (which deletes every `billing-cutover:` branch) keeps it.
+// This walks src/ and fails on any other read — a regression shows up by file and line.
 //
 // The admin panel is out of scope: it is the tool that manages access, and keeps its Tier
 // control until go-live (owned by the admin access grid).
@@ -42,7 +43,7 @@ describe('no src/ file reads the brand tier', () => {
     expect(files).toContain(ALLOWED_TIER_READ);
   });
 
-  test('every brand-tier read is the one billing-cutover fallback', () => {
+  test('every brand-tier read is the one grandfathered read', () => {
     const offenders: string[] = [];
     for (const file of files) {
       const lines = readFileSync(path.join(SRC, file), 'utf8').split('\n');
@@ -57,10 +58,12 @@ describe('no src/ file reads the brand tier', () => {
     expect(offenders).toEqual([]);
   });
 
-  test('the one fallback read is marked for the cutover', () => {
+  test('the one read is marked grandfathered, not billing-cutover, so the cleanup keeps it', () => {
     const source = readFileSync(path.join(SRC, ALLOWED_TIER_READ), 'utf8');
     const tierSelect = source.indexOf(".select('tier')");
     expect(tierSelect).toBeGreaterThan(-1);
-    expect(source.slice(Math.max(0, tierSelect - 200), tierSelect)).toContain('billing-cutover');
+    const marker = source.slice(Math.max(0, tierSelect - 300), tierSelect);
+    expect(marker).toContain('grandfathered:');
+    expect(marker).not.toContain('billing-cutover');
   });
 });

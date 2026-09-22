@@ -35,7 +35,11 @@ import {
 //   (c) gates     the Organic Plus brand from (a) opens /ai-studio and /organic; /scale, /forge
 //                 and /scale/approvals send it to Settings → Billing with Performance Plus
 //                 highlighted; the sidebar locks exactly the paid-media entries.
-//   (d) tier      no src/ file reads the brand tier outside the one billing-cutover fallback.
+//   (d) tier      no src/ file reads the brand tier outside the one `grandfathered` read.
+//   (e) grandfathered  a tier-2 brand kept on its tier-era access (plan `grandfathered`, model
+//                 `prepaid`, every product from an admin, $220 granted) opens Canvas; /forge
+//                 gives the tier-3 toast and returns to the dashboard; the sidebar shows its
+//                 22,000 credits (metered, not "Managed"); Settings → Billing sells it packs.
 //
 // Cleanup is by id: only the users this run created and the brands they own.
 
@@ -45,7 +49,9 @@ const PASSWORD = `Bench-${RUN_ID}-pw1!`;
 const EMAILS = {
   paying: `gates-paying-${RUN_ID}@continuum.test`,
   contract: `gates-contract-${RUN_ID}@continuum.test`,
+  grandfathered: `gates-grandfathered-${RUN_ID}@continuum.test`,
 };
+const FORGE_TIER_TOAST = 'Forge is available on Tier 3. Please contact an Administrator.';
 const BILLING_NEED_PAID_MEDIA = /\/settings\?section=billing&need=paid_media$/;
 const PAID_MEDIA_LOCKS = [
   'Forge (needs Performance Plus)',
@@ -141,6 +147,7 @@ test.describe('billing:gates:fe:bench', () => {
   let payingUserId = '';
   let payingBrandId = '';
   let contractUserId = '';
+  let grandfatheredUserId = '';
 
   test.beforeAll(async () => {
     await step('billing-api is served locally', assertBillingApiServed);
@@ -154,10 +161,11 @@ test.describe('billing:gates:fe:bench', () => {
       notes.push(`tier grep: ${output.trim().split('\n').pop() ?? 'ok'}`);
     });
 
-    await step('seed two fresh signup-equivalent users', async () => {
+    await step('seed three fresh signup-equivalent users', async () => {
       payingUserId = await createUser(db, EMAILS.paying, PASSWORD);
       contractUserId = await createUser(db, EMAILS.contract, PASSWORD);
-      created.userIds.push(payingUserId, contractUserId);
+      grandfatheredUserId = await createUser(db, EMAILS.grandfathered, PASSWORD);
+      created.userIds.push(payingUserId, contractUserId, grandfatheredUserId);
     });
   });
 
@@ -414,6 +422,105 @@ test.describe('billing:gates:fe:bench', () => {
         await page.locator('a[href="/ai-studio"]').first().hover();
         await page.waitForTimeout(600);
         await shoot(page, 'sidebar-locks', [DESKTOP]);
+      });
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('(e) a grandfathered tier-2 brand: Canvas opens, Forge keeps tier 3, credits are metered', async ({
+    browser,
+  }) => {
+    const session = await mintSessionBundleForEmail(EMAILS.grandfathered);
+    const context = await browser.newContext({ storageState: session.state, viewport: DESKTOP });
+    const page = await context.newPage();
+
+    try {
+      const brandId = await step(
+        '(e) a fresh brand is grandfathered at tier 2 with $220',
+        async () => {
+          const id = await startOnboarding(page, db, grandfatheredUserId);
+          created.brandIds.push(id);
+          const billing = db.schema('billing');
+          const { error: subscriptionError } = await billing.from('brand_subscriptions').insert({
+            brand_id: id,
+            plan_code: 'grandfathered',
+            status: 'active',
+            billing_model: 'prepaid',
+          });
+          if (subscriptionError) throw new Error(describeError(subscriptionError));
+          const { error: productsError } = await billing.from('brand_products').insert(
+            ['studio', 'organic_agent', 'paid_media', 'trends', 'mcp'].map((product) => ({
+              brand_id: id,
+              product,
+              tier: product === 'trends' ? 'pro' : null,
+              source: 'admin',
+            })),
+          );
+          if (productsError) throw new Error(describeError(productsError));
+          const { error: tierError } = await db
+            .schema('brand_profiles')
+            .from('brand_profiles')
+            .update({ tier: 2 })
+            .eq('id', id);
+          if (tierError) throw new Error(describeError(tierError));
+          const { error: grantError } = await billing.rpc('admin_grant_credits', {
+            p_brand_id: id,
+            p_usd: 220,
+            p_ref: `gates-fe-bench-${RUN_ID}`,
+            p_meta: { bench: 'billing:gates:fe:bench' },
+          });
+          if (grantError) throw new Error(describeError(grantError));
+          const entitlements = await brandEntitlements(db, id);
+          expect(entitlements.planCode).toBe('grandfathered');
+          expect(entitlements.billingModel).toBe('none');
+          expect(entitlements.creditBalance.totalCredits).toBe(22_000);
+          // Its products let the plan step finish onboarding on its own.
+          await setOnboardingStep(db, grandfatheredUserId, 8);
+          await page.reload();
+          await waitForDashboard(page);
+          return id;
+        },
+      );
+
+      await step('(e) /ai-studio opens and no sidebar entry is locked', async () => {
+        await page.goto('/ai-studio');
+        await expect(page.getByRole('heading', { name: 'AI Studio' })).toBeVisible({
+          timeout: 180_000,
+        });
+        expect(new URL(page.url()).pathname).toBe('/ai-studio');
+        await expect(page.locator('a[data-locked="true"]')).toHaveCount(0);
+      });
+
+      await step('(e) the sidebar shows its 22,000 credits, metered — not "Managed"', async () => {
+        const widget = page.getByTestId('sidebar-billing');
+        await expect(widget).toHaveAccessibleName(
+          'Billing: Canvas credits, 22,000 credits remaining',
+          { timeout: 60_000 },
+        );
+        await expect(widget).toHaveAttribute('data-kind', 'metered');
+        await shoot(page, 'grandfathered-sidebar', [DESKTOP]);
+      });
+
+      await step('(e) /forge gives the tier-3 toast and returns to the dashboard', async () => {
+        await page.goto('/forge');
+        // The toast lives 6s; a cold dev compile of /dashboard can outlast it, so read it first.
+        await expect(
+          page.getByRole('region', { name: 'Notifications' }).getByText(FORGE_TIER_TOAST),
+        ).toBeVisible({ timeout: 180_000 });
+        await page.waitForURL(/\/dashboard$/, { timeout: 180_000 });
+        expect((await brandEntitlements(db, brandId)).products).toContain('paid_media');
+        await shoot(page, 'grandfathered-forge-toast', [DESKTOP]);
+      });
+
+      await step('(e) Settings → Billing sells it credit packs (no plan needed)', async () => {
+        await page.goto('/settings?section=billing#credits');
+        const credits = page.locator('#credits');
+        await expect(credits.getByRole('button', { name: 'Buy credits' })).toBeVisible({
+          timeout: 120_000,
+        });
+        await expect(credits).toContainText('22,000');
+        await shoot(page, 'grandfathered-billing-credits', [DESKTOP]);
       });
     } finally {
       await context.close();

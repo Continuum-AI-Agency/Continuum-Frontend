@@ -8,7 +8,9 @@ import { mintSessionBundleForEmail } from './support/auth';
 // billing:admin:e2e:bench, UI half — an admin opens /admin, finds the customer, and on the
 // customer's UI brand turns Canvas on and sets Contract. After each click the real
 // get_brand_entitlements must change. The Stripe brand's paid_media is shown checked, locked,
-// with a Stripe pill. Seeding and cleanup belong to scripts/billing-admin-e2e-bench.ts.
+// with a Stripe pill. Then the admin tools: the Client switch on a staff-made brand, "Full
+// access for all brands" on a seeded account user, and a double-clicked "Add credits" that must
+// grant once. Seeding and cleanup belong to scripts/billing-admin-e2e-bench.ts.
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 const SCREENSHOT_DIR = path.join(process.cwd(), 'e2e/__screenshots__/billing-admin');
@@ -71,14 +73,40 @@ test.describe('billing:admin:e2e:bench UI', () => {
   const customerEmail = required('BILLING_ADMIN_CUSTOMER_EMAIL');
   const uiBrand = required('BILLING_ADMIN_UI_BRAND_ID');
   const stripeBrand = required('BILLING_ADMIN_STRIPE_BRAND_ID');
+  const staffEmail = required('BILLING_ADMIN_STAFF_EMAIL');
+  const staffBrand = required('BILLING_ADMIN_STAFF_BRAND_ID');
+  const accountEmail = required('BILLING_ADMIN_ACCOUNT_EMAIL');
+  const accountBrands = required('BILLING_ADMIN_ACCOUNT_BRAND_IDS').split(',');
 
-  async function entitlements() {
+  async function entitlements(brandId = uiBrand) {
     const { data, error } = await db
       .schema('billing')
-      .rpc('get_brand_entitlements', { p_brand_id: uiBrand });
+      .rpc('get_brand_entitlements', { p_brand_id: brandId });
     if (error) throw new Error(`get_brand_entitlements: ${error.code} · ${error.message}`);
     return brandEntitlementsSchema.parse(data);
   }
+
+  async function isInternal(brandId: string): Promise<boolean> {
+    const { data, error } = await db
+      .schema('billing')
+      .rpc('is_internal_brand', { p_brand_id: brandId });
+    if (error) throw new Error(`is_internal_brand: ${error.code} · ${error.message}`);
+    return data === true;
+  }
+
+  async function grantCount(brandId: string): Promise<number> {
+    const { count, error } = await db
+      .schema('billing')
+      .from('credit_transactions')
+      .select('id', { count: 'exact', head: true })
+      .eq('brand_id', brandId)
+      .eq('kind', 'grant');
+    if (error) throw new Error(`credit_transactions: ${error.code} · ${error.message}`);
+    return count ?? 0;
+  }
+
+  const editorFor = (page: Page, brandId: string) =>
+    page.locator(`[data-testid="brand-access-editor"][data-brand-id="${brandId}"]`);
 
   test.afterAll(() => {
     const fail = graded.filter((result) => result.grade === 'FAIL').length;
@@ -158,6 +186,86 @@ test.describe('billing:admin:e2e:bench UI', () => {
       );
       await expect(uiEditor.getByTestId('brand-billing-plan')).toHaveText('Contract');
       await shoot(page, uiEditor, 'grid-contract');
+    });
+
+    await context.close();
+  });
+
+  test('admin tools: Client switch, full access for all brands, add credits', async ({
+    browser,
+  }) => {
+    const admin = await mintSessionBundleForEmail(adminEmail);
+    const context = await browser.newContext({ storageState: admin.state, viewport: VIEWPORT });
+    const page = await context.newPage();
+    const staffEditor = editorFor(page, staffBrand);
+
+    await step('the staff-made brand reads Internal · unmetered, Client switch off', async () => {
+      await page.goto(`/admin?query=${encodeURIComponent(staffEmail)}`);
+      await expect(staffEditor).toBeVisible({ timeout: 240_000 });
+      await expect(staffEditor.getByTestId('brand-internal-badge')).toHaveText(
+        'Internal · unmetered',
+      );
+      await expect(staffEditor.getByRole('switch', { name: 'Client (metered)' })).toHaveAttribute(
+        'aria-checked',
+        'false',
+      );
+      expect(await isInternal(staffBrand)).toBe(true);
+    });
+
+    await step('Client (metered) on → is_internal_brand false, billing model none', async () => {
+      await staffEditor.getByRole('switch', { name: 'Client (metered)' }).click();
+      await expect.poll(() => isInternal(staffBrand), { timeout: 30_000 }).toBe(false);
+      expect((await entitlements(staffBrand)).billingModel).toBe('none');
+      await expect(staffEditor.getByRole('switch', { name: 'Client (metered)' })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      );
+      await expect(staffEditor.getByTestId('brand-internal-badge')).toHaveCount(0);
+      await shoot(page, staffEditor, 'client-switch');
+    });
+
+    await step(`Full access for all brands → ${accountBrands.length} brands ok`, async () => {
+      await page.goto(`/admin?query=${encodeURIComponent(accountEmail)}`);
+      for (const brandId of accountBrands) {
+        await expect(editorFor(page, brandId)).toBeVisible({ timeout: 240_000 });
+      }
+      await page.getByRole('button', { name: 'Full access for all brands' }).click();
+      await page.getByRole('button', { name: 'Give full access' }).click();
+      const results = page.getByTestId('full-access-results').locator('li');
+      await expect(results).toHaveCount(accountBrands.length, { timeout: 60_000 });
+      await expect(results.and(page.locator('[data-ok="true"]'))).toHaveCount(accountBrands.length);
+      for (const brandId of accountBrands) {
+        await expect
+          .poll(
+            async () => {
+              const { products, trendsTier, addons, billingModel } = await entitlements(brandId);
+              return { products, trendsTier, addons, billingModel };
+            },
+            { timeout: 30_000 },
+          )
+          .toEqual({
+            products: ['mcp', 'organic_agent', 'paid_media', 'studio', 'trends'],
+            trendsTier: 'pro',
+            addons: ['provider_apify', 'provider_exa', 'provider_serpapi'],
+            billingModel: 'none',
+          });
+      }
+      await shoot(page, page.getByTestId('full-access-results'), 'full-access-all');
+    });
+
+    await step('a double-clicked Add credits grants once ($7.50 → 750 credits)', async () => {
+      const editor = editorFor(page, accountBrands[0] as string);
+      await editor.getByRole('spinbutton', { name: 'Credits to add (USD)' }).fill('7.50');
+      await editor.getByRole('textbox', { name: 'Reason for the credits' }).fill('bench ui grant');
+      await editor.getByRole('button', { name: 'Add credits' }).dblclick();
+      await expect.poll(() => grantCount(accountBrands[0] as string), { timeout: 30_000 }).toBe(1);
+      await expect(editor.getByTestId('brand-canvas-credits')).toHaveText('750 credits', {
+        timeout: 30_000,
+      });
+      // A second grant would land within the same round trip; give it one more.
+      await page.waitForTimeout(2_000);
+      expect(await grantCount(accountBrands[0] as string)).toBe(1);
+      await shoot(page, editor, 'credits');
     });
 
     await context.close();

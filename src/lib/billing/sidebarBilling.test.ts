@@ -170,15 +170,54 @@ describe('toSidebarBilling', () => {
     ).toEqual({ kind: 'managed', href: '/settings?section=billing' });
   });
 
-  test('products without a Stripe plan (admin-granted / grandfathered) are managed too', () => {
-    expect(live(entitlements({ products: ['studio'] }))).toEqual({
-      kind: 'managed',
-      href: '/settings?section=billing',
+  test('an internal brand reads as Contract (even on the grandfathered plan) and is managed', () => {
+    expect(
+      live(
+        entitlements({
+          planCode: 'grandfathered',
+          billingModel: 'contract',
+          products: ['mcp', 'organic_agent', 'paid_media', 'studio', 'trends'],
+          creditBalance: { totalCredits: 2000, purchasedCredits: 2000, rolloverCredits: 0 },
+        }),
+      ),
+    ).toEqual({ kind: 'managed', href: '/settings?section=billing' });
+  });
+
+  test('a grandfathered brand (products, no plan) is metered: its purchased + rollover credits', () => {
+    expect(
+      live(
+        entitlements({
+          planCode: 'grandfathered',
+          products: ['organic_agent', 'paid_media', 'studio'],
+          creditBalance: { totalCredits: 22_000, purchasedCredits: 21_950, rolloverCredits: 50 },
+        }),
+      ),
+    ).toEqual({
+      kind: 'metered',
+      href: '/settings?section=billing#credits',
+      planLabel: 'Canvas credits',
+      remainingCredits: 22_000,
+      includedRemainingCredits: 0,
+      includedCredits: 0,
+      rolloverCredits: 50,
+      purchasedCredits: 21_950,
+      periodEnd: null,
+      autoBilling: { on: false },
+      low: false,
+      exhausted: false,
     });
-    // A cancelled subscription whose admin grant outlived it.
+  });
+
+  test('a grandfathered brand at 0 credits is exhausted (no auto-billing without a plan)', () => {
+    expect(
+      live(entitlements({ planCode: 'grandfathered', products: ['studio'] })),
+    ).toMatchObject({ kind: 'metered', remainingCredits: 0, low: true, exhausted: true });
+  });
+
+  test('an admin grant that outlived a cancelled subscription is metered, not managed', () => {
     expect(
       live(entitlements({ billingModel: 'stripe', status: 'canceled', products: ['trends'] })),
-    ).toMatchObject({ kind: 'managed' });
+    ).toMatchObject({ kind: 'metered', planLabel: 'Canvas credits' });
   });
 
   test('no products and no plan reads "No plan" and links to Billing', () => {

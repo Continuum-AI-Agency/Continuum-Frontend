@@ -46,7 +46,7 @@ describe('billing contracts', () => {
     expect(brandEntitlementsSchema.parse(entitlements).billingModel).toBe('stripe');
   });
 
-  it('parses a full overview and refuses livemode', () => {
+  it('parses a full overview in either Stripe mode', () => {
     const overview = {
       brandId,
       entitlements,
@@ -78,7 +78,7 @@ describe('billing contracts', () => {
       livemode: false,
     };
     expect(billingOverviewSchema.parse(overview).subscription?.plans).toEqual(['organic_studio']);
-    expect(billingOverviewSchema.safeParse({ ...overview, livemode: true }).success).toBe(false);
+    expect(billingOverviewSchema.parse({ ...overview, livemode: true }).livemode).toBe(true);
     const { overageEnabled: _dropped, ...withoutOptIn } = overview;
     expect(billingOverviewSchema.safeParse(withoutOptIn).success).toBe(false);
     expect(billingOverviewSchema.parse({ ...overview, overageCapUsd: null }).overageCapUsd).toBeNull();

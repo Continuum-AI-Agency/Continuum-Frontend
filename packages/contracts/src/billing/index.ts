@@ -113,6 +113,21 @@ export const brandEntitlementsSchema = z
   .strict();
 export type BrandEntitlements = z.infer<typeof brandEntitlementsSchema>;
 
+/** `plan_code` of the brands kept on their tier-era access at go-live (owner decision 2026-09-22). */
+export const GRANDFATHERED_PLAN_CODE = 'grandfathered';
+
+/**
+ * A grandfathered brand keeps its tier-era gates (Forge needs tier 3) on top of its products.
+ * Contract and internal brands (internal reads as Contract) do not.
+ */
+export function keepsTierGate(
+  entitlements: Pick<BrandEntitlements, 'planCode' | 'billingModel'>,
+): boolean {
+  return (
+    entitlements.planCode === GRANDFATHERED_PLAN_CODE && entitlements.billingModel !== 'contract'
+  );
+}
+
 export const billingSubscriptionViewSchema = z
   .object({
     id: z.string().min(1),
@@ -182,7 +197,8 @@ export const billingOverviewSchema = z
         creditPack: creditPackOfferSchema,
       })
       .strict(),
-    livemode: z.literal(false),
+    /** The Stripe mode of the key billing-api runs with (sandbox locally, live in prod). */
+    livemode: z.boolean(),
   })
   .strict();
 export type BillingOverview = z.infer<typeof billingOverviewSchema>;
@@ -349,25 +365,59 @@ export const adminBrandAccessSchema = z
     plans: z.array(planCodeSchema),
     status: brandEntitlementsSchema.shape.status,
     products: z.array(adminProductGrantSchema),
+    /** Created by a staff account (@continuumai.agency, @trycontinuum.ai). */
+    internalAuthored: z.boolean().optional(),
+    /** Staff-created and not marked a client brand: every product, never metered. */
+    internal: z.boolean().optional(),
+    /** Purchased + granted + rollover Canvas credits. */
+    canvasCredits: z.number().int().nonnegative().optional(),
   })
   .strict();
 export type AdminBrandAccess = z.infer<typeof adminBrandAccessSchema>;
+
+/** The largest Canvas-credit grant one admin action may make. */
+export const ADMIN_CREDIT_GRANT_MAX_USD = 1000;
+
+/** What "Full access" turns on: every product, Trends Pro, and the providers Trends Pro uses. */
+export const FULL_ACCESS_ADDONS = ['provider_exa', 'provider_serpapi', 'provider_apify'] as const;
 
 export const adminAccessUpdateRequestSchema = z
   .object({
     brandId: z.string().uuid(),
     products: z.partialRecord(productCodeSchema, z.boolean()).optional(),
     contract: z.boolean().optional(),
+    /** Every product (source admin), Trends Pro and FULL_ACCESS_ADDONS. Canvas stays metered. */
+    fullAccess: z.literal(true).optional(),
+    /** Canvas credits to add, in USD (1 credit = $0.01). They never expire. Needs a reason. */
+    addCreditsUsd: z.number().positive().max(ADMIN_CREDIT_GRANT_MAX_USD).optional(),
+    /** Staff-created brands only: true = a client brand (metered), false = internal again. */
+    client: z.boolean().optional(),
     reason: z.string().trim().max(500).optional(),
   })
   .strict()
   .refine(
-    (body) => body.contract !== undefined || Object.keys(body.products ?? {}).length > 0,
-    'nothing to change: send products and/or contract',
+    (body) =>
+      body.contract !== undefined ||
+      body.fullAccess !== undefined ||
+      body.addCreditsUsd !== undefined ||
+      body.client !== undefined ||
+      Object.keys(body.products ?? {}).length > 0,
+    'nothing to change: send products, contract, fullAccess, addCreditsUsd and/or client',
+  )
+  .refine(
+    (body) => body.addCreditsUsd === undefined || (body.reason ?? '').length > 0,
+    'a credit grant needs a reason',
   );
 export type AdminAccessUpdateRequest = z.infer<typeof adminAccessUpdateRequestSchema>;
 
-const productStateSchema = z.object({ active: z.boolean(), source: productSourceSchema }).strict();
+const productStateSchema = z
+  .object({
+    active: z.boolean(),
+    source: productSourceSchema,
+    tier: z.enum(['base', 'pro']).nullable().optional(),
+  })
+  .strict();
+const addonStateSchema = z.object({ active: z.boolean(), source: productSourceSchema }).strict();
 const contractStateSchema = z
   .object({ billingModel: z.string(), planCode: z.string(), status: z.string() })
   .strict();
@@ -389,6 +439,28 @@ export const adminAccessChangeSchema = z.discriminatedUnion('kind', [
       after: productStateSchema,
     })
     .strict(),
+  z
+    .object({
+      kind: z.literal('addon'),
+      addon: addonCodeSchema,
+      before: addonStateSchema.nullable(),
+      after: addonStateSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('credits'),
+      deltaUsd: z.number().positive(),
+      balanceUsd: z.number(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('client'),
+      before: z.boolean(),
+      after: z.boolean(),
+    })
+    .strict(),
 ]);
 export type AdminAccessChange = z.infer<typeof adminAccessChangeSchema>;
 
@@ -407,9 +479,10 @@ export type AdminAccessUpdateResponse = z.infer<typeof adminAccessUpdateResponse
 /**
  * 409 refusals from admin-update-access. `stripe_managed`: the toggle would overwrite an
  * active Stripe-sourced product (allowed only on a Contract brand). `billing_not_live`:
- * PostgREST does not expose `billing` yet (PGRST106) — nothing was written.
+ * PostgREST does not expose `billing` yet (PGRST106) — nothing was written. `not_staff_brand`:
+ * `client` was sent for a brand no staff account created.
  */
-export const ADMIN_ACCESS_REFUSALS = ['stripe_managed', 'billing_not_live'] as const;
+export const ADMIN_ACCESS_REFUSALS = ['stripe_managed', 'billing_not_live', 'not_staff_brand'] as const;
 export const adminAccessRefusalSchema = z
   .object({
     error: z.enum(ADMIN_ACCESS_REFUSALS),

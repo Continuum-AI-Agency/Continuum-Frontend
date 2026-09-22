@@ -1,8 +1,8 @@
 'use client';
 
-// billing-cutover: the tier-era gate — a warning toast and a replace to the dashboard — kept
-// verbatim so every gated page behaves exactly as before while billing is not live. ProductGate
-// renders it only on that branch; wave 4 deletes this file with the rest of the tier fallback.
+// grandfathered: the tier-era gate — a warning toast and a replace to the dashboard — kept
+// verbatim. ProductGate renders it while billing is not live (every gated page, exactly as before)
+// and, once live, when a grandfathered brand below tier 3 opens Forge. Keep it at the cutover.
 
 import { ShieldAlert } from 'lucide-react';
 import { useRouter } from 'next/navigation';

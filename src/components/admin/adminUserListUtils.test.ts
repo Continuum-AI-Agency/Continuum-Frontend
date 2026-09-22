@@ -344,16 +344,24 @@ describe('brand access grid helpers', () => {
     );
   });
 
-  it('turns the two refusal codes into sentences and passes anything else through', () => {
+  it('turns the refusal codes into sentences and passes anything else through', () => {
     expect(describeAccessError('stripe_managed')).toContain('paid for through Stripe');
     expect(describeAccessError('billing_not_live')).toBe(
       'Product access activates at billing go-live.',
     );
+    expect(describeAccessError('not_staff_brand')).toContain('created by a staff account');
     expect(describeAccessError('Forbidden')).toBe('Forbidden');
   });
 
-  it('makes the two new audit actions filterable', () => {
-    expect(ADMIN_AUDIT_ACTIONS).toContain('admin.brand.set_product');
-    expect(ADMIN_AUDIT_ACTIONS).toContain('admin.brand.set_contract');
+  it('makes every admin-update-access audit action filterable', () => {
+    for (const action of [
+      'admin.brand.set_product',
+      'admin.brand.set_contract',
+      'admin.brand.set_addon',
+      'admin.brand.set_client',
+      'admin.brand.grant_credits',
+    ]) {
+      expect(ADMIN_AUDIT_ACTIONS).toContain(action);
+    }
   });
 });
