@@ -12,12 +12,20 @@ import {
   type PendingBillingChange,
   parseCheckoutReturn,
 } from './billingViewModel';
+import { FROM_PARAM, safeReturnPath } from './productAccess';
+import { trackBillingEvent } from './telemetry';
 
 export const billingOverviewKey = (brandId: string) => ['billing', 'overview', brandId] as const;
 
-/** An absolute URL back to this settings page, for Stripe's success/cancel/return redirects. */
+/**
+ * An absolute URL back to this settings page, for Stripe's success/cancel/return redirects. It
+ * keeps `?from=` (the page that sent the buyer here), so the way back survives Checkout.
+ */
 export function billingReturnUrl(query: string): string {
-  return `${window.location.origin}${window.location.pathname}?${query}`;
+  const params = new URLSearchParams(query);
+  const from = safeReturnPath(new URLSearchParams(window.location.search).get(FROM_PARAM));
+  if (from) params.set(FROM_PARAM, from);
+  return `${window.location.origin}${window.location.pathname}?${params}`;
 }
 
 function useBillingOverview(brandId: string, pollIntervalMs: number | false) {
@@ -63,6 +71,8 @@ export function useBillingOverviewWithPendingChange(brandId: string) {
   const [pending, setPending] = useState<PendingBillingChange | null>(null);
   const deadlineRef = useRef(0);
   const handledReturnRef = useRef(false);
+  // A Checkout return, and where the buyer came from: the success toast offers the way back.
+  const checkoutReturnRef = useRef<{ from: string | null } | null>(null);
   const overview = useBillingOverview(brandId, pending ? CHANGE_POLL_INTERVAL_MS : false);
   const data = overview.data;
 
@@ -76,6 +86,7 @@ export function useBillingOverviewWithPendingChange(brandId: string) {
     const checkoutReturn = parseCheckoutReturn(searchParams);
     if (!checkoutReturn) return;
     handledReturnRef.current = true;
+    const from = safeReturnPath(searchParams.get(FROM_PARAM));
     // Drop the query so a reload does not replay the toast or restart the wait.
     router.replace(`${pathname}?section=billing`, { scroll: false });
     if (checkoutReturn.outcome === 'cancel') {
@@ -88,12 +99,28 @@ export function useBillingOverviewWithPendingChange(brandId: string) {
       variant: 'info',
       dedupeKey: PENDING_TOAST_KEY,
     });
+    checkoutReturnRef.current = { from };
     track(checkoutReturn.change);
   }, [pathname, router, searchParams, show, track]);
 
   useEffect(() => {
     if (!pending || !data || !isChangeSettled(pending, data)) return;
-    show({ title: settledTitle(pending), variant: 'success', dedupeKey: PENDING_TOAST_KEY });
+    const checkoutReturn = checkoutReturnRef.current;
+    checkoutReturnRef.current = null;
+    const from = checkoutReturn?.from ?? null;
+    show({
+      title: settledTitle(pending),
+      variant: 'success',
+      dedupeKey: PENDING_TOAST_KEY,
+      // An offer, never a redirect: the buyer may want to look at what they bought first.
+      ...(from
+        ? {
+            durationMs: 10_000,
+            action: { label: 'Back to where you were', onClick: () => router.push(from) },
+          }
+        : {}),
+    });
+    if (checkoutReturn) trackBillingEvent('checkout_completed', { kind: pending.kind });
     setPending(null);
     // The sidebar's credits widget is server-rendered from the entitlements; re-render it.
     router.refresh();

@@ -4,8 +4,9 @@ import { productCodeSchema } from '@continuum/contracts';
 import { useMutation } from '@tanstack/react-query';
 import { CreditCard, TriangleAlert } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
-import { useSearchParams } from 'next/navigation';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { type ReactNode, useEffect, useRef, useState, useTransition } from 'react';
+import { switchActiveBrandAction } from '@/app/(post-auth)/settings/actions';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { AutoBillingControl } from '@/components/settings/billing/AutoBillingControl';
@@ -35,6 +36,7 @@ import {
   toBillingView,
 } from '@/lib/billing/billingViewModel';
 import { CREDITS_ANCHOR } from '@/lib/billing/productAccess';
+import { trackBillingEvent } from '@/lib/billing/telemetry';
 import { billingReturnUrl, useBillingOverviewWithPendingChange } from '@/lib/billing/useBilling';
 import { cn } from '@/lib/utils';
 
@@ -57,13 +59,87 @@ export function BrandBillingPanel({ billingLive }: BrandBillingPanelProps) {
   const { activeBrandId, brandSummaries, permissions } = useActiveBrandContext();
   const brandName =
     brandSummaries.find((brand) => brand.id === activeBrandId)?.name ?? 'this brand';
+  usePaywallViewed(billingLive, isBrandOwner(permissions, activeBrandId));
+  // A credit-alert email names its brand (`?brand=`); the app opens the ACTIVE one.
+  const linkedBrand = brandToOffer(useSearchParams().get('brand'), activeBrandId, brandSummaries);
 
   // billing-cutover: before go-live there is no billing-api to ask.
   if (!billingLive) return <BillingNotLiveState />;
-  if (!isBrandOwner(permissions, activeBrandId)) {
-    return <BillingLockedState brandName={brandName} />;
-  }
-  return <OwnerBillingPanel key={activeBrandId} brandId={activeBrandId} brandName={brandName} />;
+  return (
+    <>
+      {linkedBrand ? (
+        <SwitchBrandNotice
+          brandId={linkedBrand.id}
+          name={linkedBrand.name}
+          activeName={brandName}
+        />
+      ) : null}
+      {isBrandOwner(permissions, activeBrandId) ? (
+        <OwnerBillingPanel key={activeBrandId} brandId={activeBrandId} brandName={brandName} />
+      ) : (
+        <BillingLockedState brandName={brandName} />
+      )}
+    </>
+  );
+}
+
+/** The linked brand, when it is not the active one and the viewer can open it. */
+export function brandToOffer<Brand extends { id: string }>(
+  linkedBrandId: string | null,
+  activeBrandId: string,
+  brands: readonly Brand[],
+): Brand | undefined {
+  if (!linkedBrandId || linkedBrandId === activeBrandId) return undefined;
+  return brands.find((brand) => brand.id === linkedBrandId);
+}
+
+/** Offered, never automatic: switching brand changes what every page shows. */
+function SwitchBrandNotice({
+  brandId,
+  name,
+  activeName,
+}: {
+  brandId: string;
+  name: string;
+  activeName: string;
+}) {
+  const router = useRouter();
+  const [switching, startSwitch] = useTransition();
+  return (
+    <div
+      role="status"
+      data-testid="billing-switch-brand"
+      className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/40 px-3 py-2.5 text-sm text-foreground"
+    >
+      <p>
+        This link is about <span className="font-medium">{name}</span>. You're viewing {activeName}.
+      </p>
+      <Button
+        variant="outline"
+        disabled={switching}
+        aria-busy={switching}
+        onClick={() =>
+          startSwitch(async () => {
+            await switchActiveBrandAction(brandId);
+            router.refresh();
+          })
+        }
+      >
+        {switching ? 'Switching…' : `Switch to ${name}`}
+      </Button>
+    </div>
+  );
+}
+
+/** A gate sent someone here (`?need=`): the top of the billing funnel. Once per page view. */
+function usePaywallViewed(billingLive: boolean, owner: boolean) {
+  const need = useSearchParams().get('need');
+  const trackedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!billingLive || !need || trackedRef.current === need) return;
+    trackedRef.current = need;
+    trackBillingEvent('paywall_viewed', { product: need, owner });
+  }, [billingLive, need, owner]);
 }
 
 function OwnerBillingPanel({ brandId, brandName }: { brandId: string; brandName: string }) {
@@ -174,6 +250,9 @@ function SelfServeBilling({
 }) {
   return (
     <div className="divide-y divide-border" aria-busy={waitingOnStripe}>
+      {view.paymentFailed ? (
+        <PaymentFailedNotice brandId={brandId} state={view.paymentFailed} />
+      ) : null}
       <PanelRow title="Plans">
         <BillingPlans
           brandId={brandId}
@@ -253,7 +332,8 @@ const renewalFormat = new Intl.DateTimeFormat('en-US', {
   year: 'numeric',
 });
 
-function PaymentMethodRow({ brandId, view }: { brandId: string; view: SelfServeBillingView }) {
+/** Stripe's portal, where the card is updated. Pending until the browser has left the page. */
+function useBillingPortal(brandId: string) {
   const { show } = useToast();
   const portal = useMutation({
     mutationFn: () =>
@@ -266,7 +346,50 @@ function PaymentMethodRow({ brandId, view }: { brandId: string; view: SelfServeB
         variant: 'error',
       }),
   });
-  const redirecting = portal.isPending || portal.isSuccess;
+  return { open: () => portal.mutate(), redirecting: portal.isPending || portal.isSuccess };
+}
+
+/**
+ * A declined renewal. Access holds while Stripe retries, so this informs rather than alarms: one
+ * notice with the one action that fixes it. Stripe emails the owner as well.
+ */
+function PaymentFailedNotice({
+  brandId,
+  state,
+}: {
+  brandId: string;
+  state: NonNullable<SelfServeBillingView['paymentFailed']>;
+}) {
+  const { open, redirecting } = useBillingPortal(brandId);
+  return (
+    <div
+      role="status"
+      data-testid="billing-payment-failed"
+      className="flex flex-wrap items-center justify-between gap-3 py-4"
+    >
+      <p className="flex min-w-0 gap-2.5 text-sm text-foreground">
+        <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
+        {state === 'retrying' ? (
+          <span>
+            <span className="font-medium">Your last payment didn't go through.</span> Your plan
+            stays on while Stripe retries. Update your card to keep it running.
+          </span>
+        ) : (
+          <span>
+            <span className="font-medium">Your plan is paused</span> because the last payment didn't
+            go through. Update your card in Stripe to turn it back on.
+          </span>
+        )}
+      </p>
+      <Button variant="outline" disabled={redirecting} aria-busy={redirecting} onClick={open}>
+        {redirecting ? 'Opening Stripe…' : 'Update card'}
+      </Button>
+    </div>
+  );
+}
+
+function PaymentMethodRow({ brandId, view }: { brandId: string; view: SelfServeBillingView }) {
+  const { open, redirecting } = useBillingPortal(brandId);
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -286,12 +409,7 @@ function PaymentMethodRow({ brandId, view }: { brandId: string; view: SelfServeB
         ) : null}
       </div>
       {view.hasLiveSubscription || view.hasPaymentMethod ? (
-        <Button
-          variant="outline"
-          disabled={redirecting}
-          aria-busy={redirecting}
-          onClick={() => portal.mutate()}
-        >
+        <Button variant="outline" disabled={redirecting} aria-busy={redirecting} onClick={open}>
           {redirecting ? 'Opening Stripe…' : 'Manage payment method'}
         </Button>
       ) : (

@@ -175,6 +175,27 @@ describe('toBillingView — states', () => {
     expect(view.plans[0]?.status).toBe('activating');
   });
 
+  test('a declined renewal reads as payment failed, never as activating', () => {
+    // get_brand_entitlements lists no plans while past_due; the grace keeps the products on.
+    const retrying = selfServe(
+      overview({
+        entitlements: { billingModel: 'stripe', plans: [], products: ['studio', 'organic_agent'] },
+        subscription: subscription(['organic_studio'], 'past_due'),
+      }),
+    );
+    expect(retrying.paymentFailed).toBe('retrying');
+    expect(retrying.plans[0]?.status).toBe('payment_failed');
+    // Stripe gave up (unpaid, stored as past_due): products are off, and it still says why.
+    const lapsed = selfServe(
+      overview({ subscription: subscription(['organic_studio'], 'past_due') }),
+    );
+    expect(lapsed.paymentFailed).toBe('lapsed');
+    expect(lapsed.plans[0]?.status).toBe('payment_failed');
+    expect(
+      selfServe(overview({ subscription: subscription(['organic_studio']) })).paymentFailed,
+    ).toBeNull();
+  });
+
   test('?need= highlights exactly the plan that grants the product', () => {
     const highlightedFor = (need: Parameters<typeof toBillingView>[1]) => {
       const view = toBillingView(overview({}), need);

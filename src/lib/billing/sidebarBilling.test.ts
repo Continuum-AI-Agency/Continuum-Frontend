@@ -220,6 +220,19 @@ describe('toSidebarBilling', () => {
     ).toMatchObject({ kind: 'metered', planLabel: 'Canvas credits' });
   });
 
+  test('a declined renewal is flagged, on the metered view and once the plan has lapsed', () => {
+    expect(live(organicPlus({ status: 'past_due' }))).toMatchObject({
+      kind: 'metered',
+      paymentFailed: true,
+    });
+    expect(live(entitlements({ status: 'past_due' }))).toEqual({
+      kind: 'no_plan',
+      href: '/settings?section=billing',
+      paymentFailed: true,
+    });
+    expect(live(organicPlus())).not.toHaveProperty('paymentFailed');
+  });
+
   test('no products and no plan reads "No plan" and links to Billing', () => {
     expect(live(entitlements({}))).toEqual({ kind: 'no_plan', href: '/settings?section=billing' });
   });

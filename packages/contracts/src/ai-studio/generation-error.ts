@@ -17,11 +17,16 @@ import { z } from 'zod';
  * "Generation failed — Forbidden"
  * (Airtable #248). The message names the model; the canvas disables that model for the
  * session on this code.
+ *
+ * `credits_exhausted` / `product_required` are the billing refusal (`BillingPaymentRequired`)
+ * arriving mid-stream: the allowance ran out between the route's pre-check and the provider call.
  */
 export const STUDIO_GENERATION_ERROR_CODES = [
   'image_blocked',
   'image_empty_response',
   'model_unavailable',
+  'credits_exhausted',
+  'product_required',
 ] as const;
 
 export const studioGenerationErrorCodeSchema = z.enum(STUDIO_GENERATION_ERROR_CODES);

@@ -23,6 +23,7 @@ import {
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import type { z } from 'zod';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { trackBillingEvent } from './telemetry';
 
 // Typed client for the `billing-api` edge function. Every call runs as the signed-in user
 // (supabase-js attaches the session bearer), every request body is built through its
@@ -103,6 +104,7 @@ export function startPlanCheckout(
   brandId: string,
   input: { plans: PlanCode[]; successUrl: string; cancelUrl: string },
 ): Promise<BillingCheckoutResponse> {
+  trackBillingEvent('checkout_started', { kind: 'plan', plans: input.plans.join(',') });
   return callBillingApi(`brands/${brandId}/checkout`, billingCheckoutResponseSchema, {
     method: 'POST',
     body: billingCheckoutRequestSchema.parse(input),
@@ -134,6 +136,7 @@ export function startCreditCheckout(
   brandId: string,
   input: { packs: number; successUrl: string; cancelUrl: string },
 ): Promise<BillingCreditCheckoutResponse> {
+  trackBillingEvent('checkout_started', { kind: 'credits', packs: input.packs });
   return callBillingApi(`brands/${brandId}/credits/checkout`, billingCreditCheckoutResponseSchema, {
     method: 'POST',
     body: billingCreditCheckoutRequestSchema.parse(input),
