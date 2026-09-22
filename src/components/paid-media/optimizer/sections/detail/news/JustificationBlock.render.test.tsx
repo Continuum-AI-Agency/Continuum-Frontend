@@ -66,7 +66,7 @@ describe('the arithmetic, shown', () => {
       <JustificationBlock card={card({ headline: pair })} currency="USD" />,
     );
     const support = container.querySelector('[data-testid="news-support"]');
-    expect(support?.textContent).toBe('$14/day · $420/mo');
+    expect(support?.textContent).toBe('$14.00/day · $420/mo');
   });
 });
 

@@ -62,7 +62,7 @@ describe('NewsCard — the lead', () => {
     expect(text).toContain('High impact');
     expect(text).toContain('Move $66/day onto Cold');
     expect(text).toContain('$66');
-    expect(text).toContain('$14/day · $420/mo');
+    expect(text).toContain('$14.00/day · $420/mo');
     expect(text).toContain('As of Sep 19 at 6:10 AM');
     fireEvent.click(getByText('Review the budget moves'));
     expect(clicks).toEqual(['budget:as-1']);
