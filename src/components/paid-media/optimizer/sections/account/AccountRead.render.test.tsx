@@ -508,10 +508,35 @@ describe('AccountRead — the card says what it will actually do', () => {
   });
 });
 
-describe('AccountRead — promoting an insight from its own card', () => {
+describe('AccountRead — the control that would promote an insight from its own card', () => {
+  // The control is hidden while `ADOPTING_A_DETECTOR_IS_ENFORCED` is false in AccountRead.tsx:
+  // the state it writes is read only to LABEL the next report, and no apply path consults it.
+  // This is the test that goes red if someone unhides the button before wiring enforcement.
+  it('is offered nowhere — not on a lead card, not on a rest row', () => {
+    const { container, getAllByTestId, getByRole } = render(
+      <AccountRead
+        candidates={Array.from({ length: 6 }, (_, i) =>
+          candidate({ id: `dead_tail:h${i}`, impact_per_day: 1000 - i, state: 'recommend' }),
+        )}
+        currency="USD"
+        dailySpend={5000}
+        onSetState={mock()}
+      />,
+    );
+    // The cards ARE on screen — otherwise the absence below proves nothing.
+    expect(getAllByTestId('account-lead').length).toBe(3);
+    fireEvent.click(getByRole('button', { name: /more ·/ }));
+    expect(container.querySelectorAll('[data-testid="always-do-this"]').length).toBe(0);
+    expect(container.textContent).not.toContain('Always do this');
+  });
+});
+
+// Parked, not deleted: these are the behaviours the control had, and they are what has to pass
+// again the day `ADOPTING_A_DETECTOR_IS_ENFORCED` flips to true.
+describe.skip('AccountRead — promoting an insight from its own card', () => {
   it('offers the control and reports the detector and the new state', () => {
-    // This is where autopilot actually gets adopted. Nobody opens a settings screen to decide
-    // they trust a recommendation; that happens looking at the card, weeks in.
+    // This is where autopilot gets adopted, once adoption means something. Nobody opens a
+    // settings screen to decide they trust a recommendation; that happens looking at the card.
     const onSetState = mock();
     const { getByTestId } = render(
       <AccountRead
@@ -657,14 +682,15 @@ describe('the rest, behind the disclosure', () => {
     expect(getAllByTestId('account-rest-row').length).toBe(3);
   });
 
-  it('offers the approval control on a rest row, not only on a lead card', () => {
+  // Parked with the control itself — see ADOPTING_A_DETECTOR_IS_ENFORCED in AccountRead.tsx.
+  it.skip('offers the approval control on a rest row, not only on a lead card', () => {
     const { getAllByTestId } = openRest(withState(6));
     const rows = getAllByTestId('account-rest-row');
     const controls = rows.filter((row) => row.querySelector('[data-testid="always-do-this"]'));
     expect(controls.length).toBe(3);
   });
 
-  it('asks for the detector of the row that was clicked', () => {
+  it.skip('asks for the detector of the row that was clicked', () => {
     const onSetState = mock((_d: string, _s: string) => {});
     const { getAllByTestId } = openRest(withState(6), onSetState);
     const row = getAllByTestId('account-rest-row')[0];

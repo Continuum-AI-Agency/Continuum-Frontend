@@ -385,6 +385,7 @@ function JainaMessageItemImpl({
                   isStreaming={isStreaming}
                   runId={message.runId}
                   deliverySource={message.deliverySource}
+                  sourcePrompt={regeneratePrompt}
                   onSuggestionClick={onSuggestionClick}
                 />
               </motion.div>
@@ -413,7 +414,6 @@ function JainaMessageItemImpl({
             ) : (
               <CreativesSection creatives={allCreatives} />
             )}
-
 
             {paidCreativeRenders.map((render) => (
               <PaidCreativeRenderStatus key={render.render_job_id} render={render} />

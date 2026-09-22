@@ -480,26 +480,30 @@ describe('an approval made today, against a read composed last night', () => {
     );
   }
 
+  // The observable is the card's own state note, not the "Always do this" control: that
+  // control is hidden while `ADOPTING_A_DETECTOR_IS_ENFORCED` is false in AccountRead.tsx.
+  // The overlay these tests are about — today's approval applied to last night's read — is
+  // unchanged, and the note says the same three things the button's label did.
   it('shows the new state at once, without waiting for tomorrow to re-compose the row', () => {
     accountReadData = frozen('recommend');
     approvalMaps = { families: { structure: 'autopilot' }, insights: { dead_tail: 'autopilot' } };
-    const { getByTestId } = mount();
-    expect(getByTestId('always-do-this').textContent).toContain('Stop doing this on its own');
+    const { container } = mount();
+    expect(container.textContent).toContain('Acts on its own');
   });
 
   it('still refuses to exceed the family, and says it was lowered', () => {
     accountReadData = frozen('recommend');
     // Asked for autopilot on the insight, but the family it belongs to only allows recommend.
     approvalMaps = { families: {}, insights: { dead_tail: 'autopilot' } };
-    const { getByTestId } = mount();
+    const { container, getByTestId } = mount();
     expect(getByTestId('state-lowered')).toBeTruthy();
-    expect(getByTestId('always-do-this').textContent).toContain('Always do this');
+    expect(container.textContent).not.toContain('Acts on its own');
   });
 
   it('leaves the stored state alone when nobody has approved anything', () => {
     accountReadData = frozen('recommend');
-    const { getByTestId, queryByTestId } = mount();
-    expect(getByTestId('always-do-this').textContent).toContain('Always do this');
+    const { container, queryByTestId } = mount();
+    expect(container.textContent).not.toContain('Acts on its own');
     expect(queryByTestId('state-lowered')).toBeNull();
   });
 });

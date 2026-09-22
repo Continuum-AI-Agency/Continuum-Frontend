@@ -56,6 +56,31 @@ const rec = {
   seed: null,
 };
 
+/** The row the engine synthesises for a portfolio with NO declared flight: nothing was
+ *  planned, so there is nothing to be on or off track of. */
+const pacingWithoutAFlight = {
+  dailyTotal: 500,
+  idealCumulative: 0,
+  pacingRatio: 1,
+  status: 'on_track',
+  note: 'No pacing state: using the provided total.',
+  source: 'observed',
+};
+
+/** A real flight far enough in for the plan to have expected spend. */
+const pacingFromAFlight = {
+  dailyTotal: 500,
+  idealCumulative: 3500,
+  pacingRatio: 1.04,
+  status: 'overpacing',
+  note: 'Ahead of plan.',
+  source: 'pacing',
+  periodBudget: 15000,
+  periodDays: 30,
+  dayIndex: 7,
+  actualSpendToDate: 3640,
+};
+
 describe('buildHeroView', () => {
   it('composes the fallback from the report when no brief is stored', () => {
     const view = buildHeroView({
@@ -187,5 +212,65 @@ describe('buildHeroView', () => {
       firstCycle: false,
     });
     expect(observe.cta?.kind).toBe('manage');
+  });
+  it('reports no pacing verdict when the engine had no flight to measure against', () => {
+    const view = buildHeroView({
+      report: {
+        portfolio: null,
+        latest_run: {
+          id: 'run1',
+          cycle_ts: '2026-09-19T06:10:00Z',
+          pacing: pacingWithoutAFlight,
+        } as never,
+        latest_items: [],
+        recommendations: [rec as never],
+        history: [],
+      },
+      recap,
+      flightPacing: { kind: 'no_flight' },
+      metric,
+      currency: 'USD',
+      portfolio,
+      target: 70,
+      window: 'd7',
+      firstCycle: false,
+    });
+    expect(view.source).toBe('fallback');
+    expect(view.brief.growth.pacing.status).toBeNull();
+    expect(view.brief.growth.pacing.ratio).toBeNull();
+    // The reason for the absence survives; only the invented verdict is dropped.
+    expect(view.brief.growth.pacing.note).toBe('No pacing state: using the provided total.');
+    expect(view.brief.growth_sentence).not.toContain('on track');
+    expect(view.brief.growth_sentence).toContain('over target');
+  });
+
+  it('keeps the verdict when the engine measured it against a real flight', () => {
+    const view = buildHeroView({
+      report: {
+        portfolio: null,
+        latest_run: {
+          id: 'run1',
+          cycle_ts: '2026-09-19T06:10:00Z',
+          pacing: pacingFromAFlight,
+        } as never,
+        latest_items: [],
+        recommendations: [rec as never],
+        history: [],
+      },
+      recap,
+      flightPacing: { kind: 'no_flight' },
+      metric,
+      currency: 'USD',
+      portfolio,
+      target: 70,
+      window: 'd7',
+      firstCycle: false,
+    });
+    expect(view.brief.growth.pacing).toEqual({
+      status: 'overpacing',
+      ratio: 1.04,
+      note: 'Ahead of plan.',
+    });
+    expect(view.brief.growth_sentence).toContain('overpacing');
   });
 });

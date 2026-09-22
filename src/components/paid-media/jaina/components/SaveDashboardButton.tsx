@@ -23,10 +23,24 @@ import type { CheckpointBlockV2, CheckpointReportV2 } from '@/lib/jaina/schemas'
 type SaveDashboardButtonProps = {
   report: CheckpointReportV2;
   blocks: CheckpointBlockV2[];
+  /**
+   * The question this report answered — the user turn that preceded it.
+   *
+   * It is what "Ask Jaina to refresh" sends. Stored as null, the saved-dashboards panel falls
+   * back to `Refresh the analysis "<title>" with today's data`, which is a generic template
+   * standing in for whatever the person actually asked; the report then comes back answering a
+   * different question from the one saved under that name.
+   */
+  sourcePrompt?: string | null;
   disabled?: boolean;
 };
 
-export function SaveDashboardButton({ report, blocks, disabled }: SaveDashboardButtonProps) {
+export function SaveDashboardButton({
+  report,
+  blocks,
+  sourcePrompt,
+  disabled,
+}: SaveDashboardButtonProps) {
   const scope = useJainaBrandScope();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -46,8 +60,10 @@ export function SaveDashboardButton({ report, blocks, disabled }: SaveDashboardB
         ad_account_id: scope.adAccountId,
         name: name.trim() || defaultTitle,
         source_title: defaultTitle,
-        source_prompt: null,
+        source_prompt: sourcePrompt?.trim() || null,
         scope: report._meta?.primary_scope ?? 'account',
+        // A V2 report carries no window of its own — `_meta` has scope and counts, nothing
+        // dated — so there is nothing here to name honestly. Null, not a guess.
         window_label: null,
         blocks,
       });

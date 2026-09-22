@@ -147,11 +147,31 @@ function StateNote({ candidate }: { candidate: AccountCandidate }) {
 }
 
 /**
+ * Whether adopting a detector from its card actually enforces anything.
+ *
+ * It does not, today. `onSetState` writes the family-ceiling and insight-approval tables, and
+ * the only reader of those tables is the Backend's account-strategy poller, which uses them to
+ * LABEL candidates in the next read. No apply path consults them: not `applyBudgets`, not the
+ * autopilot sweeper (keyed on `portfolio.autopilot_scopes`), not the swap publisher. Pressing
+ * "Always do this" therefore changed a word on a future report and nothing else, under a
+ * control that told the person the detector now acts on its own. A disabled button or a
+ * "coming soon" label would still leave them believing they had adopted it, so the control is
+ * absent instead.
+ *
+ * Flip this to `true` when an apply path reads the adopted state — concretely, when the
+ * autopilot sweeper resolves a detector's insight approval instead of reading
+ * `portfolio.autopilot_scopes` alone. Everything below is left in place so that is the only
+ * change this file needs.
+ */
+const ADOPTING_A_DETECTOR_IS_ENFORCED = false;
+
+/**
  * "Always do this" — promoting one insight from the card itself.
  *
- * This is where autopilot actually gets adopted. The settings grid is where it gets configured
- * AFTERWARDS; nobody opens a settings screen to decide they trust a recommendation. The moment
- * that happens is three weeks into watching the same card be right, looking at it.
+ * This is where autopilot gets adopted, once adoption means something. The settings grid is
+ * where it gets configured AFTERWARDS; nobody opens a settings screen to decide they trust a
+ * recommendation. The moment that happens is three weeks into watching the same card be right,
+ * looking at it.
  *
  * Absent for the measurement family, which approves nothing, and absent when nobody has
  * resolved a state — offering a control whose effect we cannot predict is worse than offering
@@ -164,6 +184,7 @@ function AlwaysDoThis({
   candidate: AccountCandidate;
   onSetState?: (detector: AccountDetector, state: InsightState) => void;
 }) {
+  if (!ADOPTING_A_DETECTOR_IS_ENFORCED) return null;
   if (!onSetState || !candidate.state) return null;
   if (DETECTOR_ACTION_FAMILY[candidate.detector] === 'measurement') return null;
   const on = candidate.state === 'autopilot';

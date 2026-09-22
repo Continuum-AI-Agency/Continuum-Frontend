@@ -118,6 +118,8 @@ type JainaReportV2Props = {
   isStreaming: boolean;
   runId?: string;
   deliverySource?: 'live_render' | 'hydration_replay';
+  /** The user turn this report answered, so saving it keeps the question with the blocks. */
+  sourcePrompt?: string | null;
   onSuggestionClick?: (query: string) => void;
 };
 
@@ -126,6 +128,7 @@ export function JainaReportV2({
   isStreaming,
   runId,
   deliverySource,
+  sourcePrompt,
   onSuggestionClick,
 }: JainaReportV2Props) {
   const { show } = useToast();
@@ -367,6 +370,7 @@ export function JainaReportV2({
             blocks={visibleBlocks}
             disabled={isStreaming || exporting !== null}
             report={report}
+            sourcePrompt={sourcePrompt}
           />
           <Button
             type="button"

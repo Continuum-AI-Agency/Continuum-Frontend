@@ -7,6 +7,7 @@ import type {
   AccountChart,
   BriefCandidate,
   BriefGrowth,
+  CycleRunPacing,
   OptimizationMetricDefinition,
   ParsedCycleRunReport,
   PortfolioBrief,
@@ -98,6 +99,36 @@ function pacingLineOf(flight: FlightPacingModel | null): {
   }
 }
 
+/**
+ * Mirrors `pacingVerdict` in the Backend's portfolio-brief packet: a status is only a verdict
+ * when the engine measured it against a real flight window. With no declared flight the engine
+ * still writes a row — `status: 'on_track'`, `pacingRatio: 1`, `idealCumulative: 0`,
+ * `source: 'observed'` — and that row means there was no plan to be on or off. Rendered
+ * verbatim it becomes the literal words "on track" in the growth sentence, beside prose that
+ * correctly says the portfolio is over its cost target.
+ *
+ * Both halves are required: `source === 'pacing'` for a real window, and `idealCumulative > 0`
+ * because on day one the plan expects nothing and `pacingRatio` is 1 by construction. Rows
+ * written before `source` existed carry neither and read as no verdict. The `note` survives
+ * either way — it is the only field that says WHY there is no verdict.
+ */
+function pacingVerdict(pacing: CycleRunPacing | null | undefined): BriefGrowth['pacing'] {
+  const note = pacing?.note ?? null;
+  const status = pacing?.status;
+  const measuredAgainstAPlan = pacing?.source === 'pacing' && (pacing.idealCumulative ?? 0) > 0;
+  if (
+    !measuredAgainstAPlan ||
+    (status !== 'on_track' && status !== 'underpacing' && status !== 'overpacing')
+  ) {
+    return { status: null, ratio: null, note };
+  }
+  return {
+    status,
+    ratio: typeof pacing.pacingRatio === 'number' ? round2(pacing.pacingRatio) : null,
+    note,
+  };
+}
+
 function growthFromRecap(args: {
   recap: RecapModel;
   metric: OptimizationMetricDefinition;
@@ -107,12 +138,6 @@ function growthFromRecap(args: {
   window: BriefGrowth['window'];
 }): BriefGrowth {
   const { recap } = args;
-  const pacing = (args.latestRun?.pacing ?? null) as {
-    status?: string;
-    pacingRatio?: number;
-    note?: string;
-  } | null;
-  const status = pacing?.status;
   return {
     spend: round2(recap.current.spend),
     results: Math.round(recap.current.results),
@@ -124,14 +149,7 @@ function growthFromRecap(args: {
       results: recap.delta.results != null ? round2(recap.delta.results) : null,
       cost_per_result: recap.delta.costPerResult != null ? round2(recap.delta.costPerResult) : null,
     },
-    pacing: {
-      status:
-        status === 'on_track' || status === 'underpacing' || status === 'overpacing'
-          ? status
-          : null,
-      ratio: typeof pacing?.pacingRatio === 'number' ? round2(pacing.pacingRatio) : null,
-      note: pacing?.note ?? null,
-    },
+    pacing: pacingVerdict(args.latestRun?.pacing),
     scale: null,
     window: args.window,
     as_of: args.latestRun?.cycle_ts ?? new Date().toISOString(),
