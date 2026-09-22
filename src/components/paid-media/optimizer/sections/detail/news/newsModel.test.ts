@@ -278,3 +278,108 @@ describe('buildPortfolioNews', () => {
     expect(news.lead?.impactPerDay).toBe(14);
   });
 });
+
+describe('the lead draws a chart only when the chart is about the lead', () => {
+  // A budget hero leads with the pair the cycle wrote down: 120 → 186 a day.
+  const budgetView = (chart: HeroView['chart']) => view({ chart });
+
+  it('withholds the portfolio-wide growth chart from a budget card', () => {
+    // `growthRates` is cost per result across the window. True, and about a different
+    // quantity than "66 a day moved onto it" — which is the confusion, drawn.
+    const news = buildPortfolioNews({
+      view: budgetView({
+        shape: 'rates',
+        unit: 'currency',
+        points: [
+          { t: '2026-09-18', a: 81.2, b: 70 },
+          { t: '2026-09-19', a: 77.45, b: 70 },
+        ],
+        a_label: 'Cost per lead',
+        b_label: 'Target',
+        projected_from: null,
+        gap_per_day: 14,
+      }),
+      items: [item()],
+      target: 70,
+    });
+    expect(news.lead?.headline?.from).toBe(120);
+    expect(news.leadChart).toBeNull();
+  });
+
+  it('keeps a chart that draws the pair the card leads with', () => {
+    const news = buildPortfolioNews({
+      view: budgetView({
+        shape: 'rates',
+        unit: 'currency',
+        points: [
+          { t: '2026-09-18', a: 120, b: null },
+          { t: '2026-09-19', a: 186, b: null },
+        ],
+        a_label: 'Daily budget',
+        b_label: 'Daily budget',
+        projected_from: null,
+        gap_per_day: null,
+      }),
+      items: [item()],
+      target: 70,
+    });
+    expect(news.leadChart?.shape).toBe('rates');
+  });
+
+  it('withholds a chart that does not argue at all, whatever it is about', () => {
+    const news = buildPortfolioNews({
+      view: budgetView({
+        shape: 'transfer',
+        unit: 'currency',
+        from: { label: 'Warm', cost_per_result: 120, spend_per_day: 400 },
+        to: { label: 'Cold', cost_per_result: 186, spend_per_day: 300 },
+        movable_per_day: 66,
+        saving_per_day: 0,
+      }),
+      items: [item()],
+      target: 70,
+    });
+    // The pair IS on it — and a transfer is the arithmetic the sentence already made.
+    expect(news.leadChart).toBeNull();
+  });
+
+  it('is null when there was no chart to begin with', () => {
+    const news = buildPortfolioNews({ view: view(), items: [item()], target: 70 });
+    expect(news.leadChart).toBeNull();
+  });
+
+  it('keeps a pause interval that reaches the avoided money it leads with', () => {
+    const pause = candidate({
+      id: 'rec:r-1',
+      module: 'pause',
+      kind: 'pause',
+      adset_id: 'as-9',
+      impact_per_day: 96,
+      results_per_day: 0,
+      cta: { kind: 'queue_row', target_id: 'rec:r-1' },
+    });
+    const news = buildPortfolioNews({
+      view: view({
+        brief: brief({
+          candidates: [pause],
+          hero: { ...brief().hero, module: 'pause', candidate_id: 'rec:r-1', impact_per_day: 96 },
+        }),
+        chart: {
+          shape: 'interval',
+          unit: 'currency',
+          estimate: null,
+          low: 96,
+          high: 192,
+          reference: 70,
+          reference_label: 'target',
+          at_stake_per_day: 96,
+          no_results: true,
+        },
+      }),
+      items: [],
+      target: 70,
+    });
+    expect(news.lead?.headline?.value).toBe(96);
+    expect(news.leadChart?.shape).toBe('interval');
+  });
+});

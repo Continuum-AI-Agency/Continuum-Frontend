@@ -19,6 +19,18 @@
 // MONTH alone rather than repeating the day. Those components are typed on `AccountCandidate`
 // and a portfolio brief carries `BriefCandidate`, so the rules are mirrored here rather than
 // imported; `CalmRule`, which is generic, IS imported, so every surface breathes on one rhythm.
+//
+// THE ANGLES ARE CONTAINER QUERIES, NOT BREAKPOINTS, and that correction is the whole reason
+// this file changed. They were written with `sm:`, which asks about the VIEWPORT. An insight
+// card is about 336px wide and on a desktop it matched `sm:` anyway, so the arithmetic angle
+// laid a 20px-gapped two-column grid inside 312px and squeezed both halves — the layouts read
+// as three variations of the same cramped thing instead of three different claims. `@container`
+// on the block and `@[28rem]` on the bodies means a block splits only when the BLOCK has room.
+//
+// Below the split the three are still distinguishable, and by the part that matters: ORDER.
+// Arithmetic puts the pair above its result, bounded puts the range above the estimate inside
+// it, and open leads with the figure and lets the words trail — nothing closes it, which is
+// what an open reading means.
 
 import type { CandidateHeadline } from '@continuum/contracts';
 import { perPeriod } from '@continuum/contracts';
@@ -73,7 +85,9 @@ function Figure({
     <p
       className={cn(
         'flex flex-wrap items-baseline gap-x-1.5 text-2xs text-muted-foreground',
-        align === 'right' ? 'sm:justify-end sm:text-right' : 'text-left',
+        align === 'right'
+          ? '@[28rem]/news-just:justify-end @[28rem]/news-just:text-right'
+          : 'text-left',
       )}
       data-headline={card.headline?.kind ?? 'money_fallback'}
       data-testid="news-figure"
@@ -176,11 +190,11 @@ export function JustificationBlock({ card, currency, size = 'lead' }: Justificat
     if (model === 'arithmetic' && headline?.from != null && headline.to != null) {
       return (
         <div
-          className="grid items-end gap-x-5 gap-y-3 sm:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)]"
+          className="grid items-end gap-x-5 gap-y-3 @[28rem]/news-just:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)]"
           data-justification="arithmetic"
         >
           <p
-            className="text-balance text-foreground text-sm tabular-nums sm:text-right"
+            className="text-balance text-foreground text-sm tabular-nums @[28rem]/news-just:text-right"
             data-testid="news-comparison"
           >
             <span className="text-muted-foreground">
@@ -189,7 +203,10 @@ export function JustificationBlock({ card, currency, size = 'lead' }: Justificat
             <span className="text-muted-foreground">→</span>{' '}
             <span className="font-medium">{sideFigure(headline.unit, headline.to, currency)}</span>
           </p>
-          <div aria-hidden className="hidden bg-border sm:block sm:h-10 sm:w-px" />
+          <div
+            aria-hidden
+            className="hidden bg-border @[28rem]/news-just:block @[28rem]/news-just:h-10 @[28rem]/news-just:w-px"
+          />
           <Figure align="left" card={card} currency={currency} size={size} />
         </div>
       );
@@ -197,7 +214,7 @@ export function JustificationBlock({ card, currency, size = 'lead' }: Justificat
     if (model === 'bounded') {
       return (
         <div
-          className="grid items-end gap-x-6 gap-y-3 sm:grid-cols-[minmax(0,1fr)_auto]"
+          className="grid items-end gap-x-6 gap-y-3 @[28rem]/news-just:grid-cols-[minmax(0,1fr)_auto]"
           data-justification="bounded"
         >
           <IntervalRule card={card} currency={currency} open={false} />
@@ -207,7 +224,7 @@ export function JustificationBlock({ card, currency, size = 'lead' }: Justificat
     }
     return (
       <div
-        className="grid items-end gap-x-6 gap-y-2 sm:grid-cols-[auto_minmax(0,1fr)]"
+        className="grid items-end gap-x-6 gap-y-2 @[28rem]/news-just:grid-cols-[auto_minmax(0,1fr)]"
         data-justification="open"
       >
         <Figure align="left" card={card} currency={currency} size={size} />
@@ -220,7 +237,7 @@ export function JustificationBlock({ card, currency, size = 'lead' }: Justificat
   })();
 
   return (
-    <div className="flex flex-col gap-2" data-testid="news-justification">
+    <div className="@container/news-just flex flex-col gap-2" data-testid="news-justification">
       <CalmRule play testId="news-calm-rule" />
       {body}
       <Support card={card} currency={currency} />

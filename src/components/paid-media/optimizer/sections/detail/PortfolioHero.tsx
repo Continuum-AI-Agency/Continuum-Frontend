@@ -12,6 +12,14 @@
 // The justification layouts live in ./news — three of them, picked from what a card holds.
 // Entrance is a short stagger; after that the only motion is the 5s breath on a connector.
 // Everything is static under prefers-reduced-motion.
+//
+// TWO THINGS THIS FILE NO LONGER DECIDES. The cards' shape: `CARD_FRAME` is on their own
+// roots, and the insight track (`INSIGHT_TRACK`) caps each column at an insight's own width,
+// so the leftover of a wide pane lands in the gutter instead of stretching two cards across
+// the screen. And whether the lead draws a chart: `buildPortfolioNews` hands back
+// `leadChart`, which is `view.chart` only when the chart draws the figure the lead leads
+// with. A chart that argues about a different quantity is withheld in silence — the card was
+// built to be complete without one.
 
 import type { CycleItemRow } from '@continuum/contracts';
 import { IMPACT_TIER_COPY, type ImpactTier, impactTier } from '@continuum/contracts';
@@ -21,6 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { AccountChartView } from '../account/AccountChartView';
 import { asOfLine } from '../recQueueModel';
 import type { HeroCta, HeroView } from './heroModel';
+import { INSIGHT_TRACK } from './news/cardShape';
 import { InsightCard } from './news/InsightCard';
 import type { NewsTier } from './news/NewsCard';
 import { NewsCard } from './news/NewsCard';
@@ -126,27 +135,37 @@ export function PortfolioHero({
   }
 
   // The chart belongs INSIDE the lead card: it is the same claim drawn, not a second panel
-  // beside it. When the window cannot be drawn honestly the sentence carries the read alone.
-  const chart = (
+  // beside it. Three outcomes, and only one of them is a box with a message in it:
+  //
+  //   the chart agrees   — drawn, with the line saying which reading it is.
+  //   no chart at all    — the window cannot be drawn honestly, and saying so is the honest
+  //                        thing to put in the space.
+  //   a chart that does
+  //   not argue THIS
+  //   card's argument    — nothing. Not a box, not an apology. The chart was about a
+  //                        different quantity, and a placeholder explaining its absence would
+  //                        only be a second thing on the card that is not the argument.
+  const chart = news.leadChart ? (
     <div
       className="rounded-md border border-border/50 bg-background/40 p-3"
       data-testid="hero-chart"
     >
-      {view.chart ? (
-        <>
-          <AccountChartView chart={view.chart} currency={currency} />
-          {view.chartReading ? (
-            <p className="mt-1.5 text-3xs text-muted-foreground">
-              {view.chartReading}
-              {view.chart.shape === 'interval' && asOfDay ? <> · as of {asOfDay}</> : null}
-            </p>
-          ) : null}
-        </>
-      ) : (
-        <p className="text-2xs text-muted-foreground">
-          Not enough priced days in this window to draw it yet.
+      <AccountChartView chart={news.leadChart} currency={currency} />
+      {view.chartReading ? (
+        <p className="mt-1.5 text-3xs text-muted-foreground">
+          {view.chartReading}
+          {news.leadChart.shape === 'interval' && asOfDay ? <> · as of {asOfDay}</> : null}
         </p>
-      )}
+      ) : null}
+    </div>
+  ) : view.chart ? null : (
+    <div
+      className="rounded-md border border-border/50 bg-background/40 p-3"
+      data-testid="hero-chart"
+    >
+      <p className="text-2xs text-muted-foreground">
+        Not enough priced days in this window to draw it yet.
+      </p>
     </div>
   );
 
@@ -196,7 +215,7 @@ export function PortfolioHero({
 
       {news.insights.length > 0 ? (
         <motion.div
-          className="grid gap-2 sm:grid-cols-2"
+          className={INSIGHT_TRACK}
           data-testid="portfolio-news-insights"
           variants={groupVariants}
         >

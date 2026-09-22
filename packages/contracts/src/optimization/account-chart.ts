@@ -20,7 +20,7 @@
 import { z } from 'zod';
 // Type-only on purpose: `account-strategy` imports this module's schema at RUNTIME, so a
 // runtime import back would be a cycle — and a cycle leaves one of the two uninitialised.
-import type { AccountDetector } from './account-strategy';
+import type { AccountDetector, CandidateHeadline } from './account-strategy';
 
 const money = z.number();
 const label = z.string().min(1).max(60);
@@ -260,3 +260,112 @@ export const CHART_SHAPES: readonly AccountChartShape[] = [
   'headroom',
   'quadrant',
 ] as const;
+
+// ---------------------------------------------------------------------------
+// Does the picture argue the same thing the words do?
+//
+// `chartArgues` above decides WHETHER a chart earns its space. It says nothing about whether
+// the chart argues the CARD'S argument, and that is the gap this section closes. A card
+// leading with "57% below the median rate" beside a drawing of spend over time is two true
+// statements that do not meet: the reader is handed a figure and a picture and left to work
+// out that they are about different quantities. Measured on the live Easy Fit account,
+// `dead_tail` ships exactly that — it leads with 69.75 a day buying nothing and draws an
+// interval of 188.19 to 376.38 against a target of 35, three different quantities in one card.
+//
+// THE TIE IS `from`/`to`. A headline's `value` is a summary — "57%", "33% cheaper" — computed
+// from two sides, and a summary is not a thing a chart can place. The SIDES are: `from` and
+// `to` are declared in the chart's own terms, which is why `portfolio_reallocation`'s
+// 60.85 → 40.56 are literally the two bars of its transfer. So a headline that declares its
+// pair can be checked against the drawing, and one that declares no pair has nothing tying it
+// to the drawing at all.
+// ---------------------------------------------------------------------------
+
+/**
+ * Every value a shape PLACES — a bar's height, a point, a line, an end of a band.
+ *
+ * What is deliberately absent is the whole point: `at_stake_per_day`, `gap_per_day`,
+ * `saving_per_day`, `movable_per_day` and `step_per_day` are annotations a producer hangs on
+ * a chart whose axis measures something else. No renderer draws them, and treating them as
+ * marks is precisely the hole a mismatch hides in — `dead_tail` carries its headline figure in
+ * `at_stake_per_day` and draws a band that never reaches it.
+ *
+ * Shares are emitted as percentages because that is the unit a `share` headline speaks in; the
+ * slice values are emitted too, because the widths are drawn from them.
+ */
+export function chartMarks(chart: AccountChart): number[] {
+  switch (chart.shape) {
+    case 'transfer':
+      return [chart.from.cost_per_result, chart.to.cost_per_result];
+    case 'threshold':
+      return [
+        chart.threshold,
+        ...chart.bars.map((bar) => bar.value),
+        ...(chart.combined ? [chart.combined.value] : []),
+      ];
+    case 'share':
+      return [
+        ...chart.slices.flatMap((slice) => [slice.share * 100, slice.value]),
+        ...(chart.band ? [chart.band.low * 100, chart.band.high * 100] : []),
+      ];
+    case 'rates':
+      return chart.points.flatMap((point) => (point.b == null ? [point.a] : [point.a, point.b]));
+    case 'interval':
+      return [
+        chart.low,
+        chart.high,
+        ...(chart.estimate != null ? [chart.estimate] : []),
+        ...(chart.reference != null ? [chart.reference] : []),
+      ];
+    case 'headroom':
+      return chart.gauges.flatMap((gauge) => [gauge.value, gauge.ceiling]);
+    case 'quadrant':
+      return [chart.x_split, chart.y_split, ...chart.points.flatMap((point) => [point.x, point.y])];
+  }
+}
+
+/**
+ * The tolerance a figure is recognised at.
+ *
+ * Headline values are rounded for display and chart values are rounded to cents, so exact
+ * equality would fail on arithmetic that agrees perfectly. A hundredth of the figure, with a
+ * floor of a hundredth, is tight enough that two genuinely different quantities never collide
+ * and loose enough that 26.65 and 26.6512 are the same number.
+ */
+function reaches(marks: readonly number[], value: number): boolean {
+  const tolerance = Math.max(Math.abs(value) * 0.01, 0.01);
+  return marks.some((mark) => Math.abs(mark - value) <= tolerance);
+}
+
+/**
+ * Does the chart draw the figures the headline is computed from?
+ *
+ * Three cases, and they are a statement about how much the card can PROVE, not a fallback
+ * chain:
+ *
+ *   both sides declared — the strong case. Both must be marks. This is every `efficiency`
+ *                         and every paired `drift` headline, and it is the case that holds:
+ *                         `portfolio_reallocation` 60.85 → 40.56 are its two bars, and
+ *                         `post_click` 11.43 → 26.65 are a point's y and the median line.
+ *   one side declared   — that side must be a mark. The `share` detectors live here: their
+ *                         `to` is the band edge the slice is read against.
+ *   neither declared    — nothing ties the two together, so the value itself has to be on the
+ *                         drawing. Across the twenty-five detectors this is where every real
+ *                         mismatch sits, which is the finding rather than a coincidence: a
+ *                         headline with no pair was never checked against its own picture.
+ *
+ * A card with no headline, or no chart, agrees vacuously — there is no second claim to
+ * contradict. Returning true there is not leniency: it is the absence of a disagreement.
+ */
+export function headlineAgreesWithChart(
+  headline: CandidateHeadline | null | undefined,
+  chart: AccountChart | null | undefined,
+): boolean {
+  if (!headline || !chart) return true;
+  const marks = chartMarks(chart);
+  if (headline.from != null && headline.to != null) {
+    return reaches(marks, headline.from) && reaches(marks, headline.to);
+  }
+  if (headline.from != null) return reaches(marks, headline.from);
+  if (headline.to != null) return reaches(marks, headline.to);
+  return reaches(marks, headline.value);
+}

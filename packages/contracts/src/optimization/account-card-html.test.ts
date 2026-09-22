@@ -3,6 +3,7 @@ import {
   accountCardHtml,
   CARD_COMPOSITIONS,
   COMPOSITION_BY_DETECTOR,
+  cardChart,
   cardFigures,
   clipLine,
   LINE_BUDGET,
@@ -137,9 +138,9 @@ describe('the headline — each detector leads with its own metric, money suppor
   });
 
   it('prints a count as a count and money per day as money', () => {
-    expect(accountCardHtml(withHeadline({ kind: 'count', value: 62, unit: 'count' }), opts)).toContain(
-      '<span class="fig">62</span>',
-    );
+    expect(
+      accountCardHtml(withHeadline({ kind: 'count', value: 62, unit: 'count' }), opts),
+    ).toContain('<span class="fig">62</span>');
     expect(
       accountCardHtml(
         withHeadline({ kind: 'avoided', value: 96.4, unit: 'currency_per_day' }),
@@ -149,10 +150,7 @@ describe('the headline — each detector leads with its own metric, money suppor
   });
 
   it('clips a label that would push the figure row out of its band', () => {
-    const html = accountCardHtml(
-      withHeadline({ label: 'cheaper per result than source' }),
-      opts,
-    );
+    const html = accountCardHtml(withHeadline({ label: 'cheaper per result than source' }), opts);
     expect(html).not.toContain('cheaper per result than source');
     expect(html).toContain('…');
   });
@@ -398,5 +396,75 @@ describe('every shape moves — a still frame in an animated set reads as broken
     for (const marker of markers) {
       expect(accountCardHtml(candidate(), opts)).toContain(`.${marker}{animation`);
     }
+  });
+});
+
+describe('a frame will not print a figure and a picture that are about different things', () => {
+  // The live `dead_tail` card: it leads with the money the pause stops and draws a band of the
+  // worst ad set's seven-day spend against a cost-per-result target. Three quantities, one
+  // border, and a reader who takes them as one argument.
+  const mismatched = () =>
+    candidate({
+      id: 'dead_tail:a-1',
+      detector: 'dead_tail',
+      impact_per_day: 69.75,
+      impact_class: 'recoverable',
+      impact_basis: '3 ad sets with 0 results in 7 days, together spending 69.75/day',
+      headline: {
+        kind: 'avoided',
+        value: 69.75,
+        unit: 'currency_per_day',
+        label: 'a day buying nothing',
+        from: null,
+        to: null,
+      },
+      chart: {
+        shape: 'interval',
+        estimate: null,
+        low: 188.19,
+        high: 376.38,
+        reference: 35,
+        reference_label: 'target',
+        at_stake_per_day: 69.75,
+        no_results: true,
+      },
+    });
+
+  const agreeing = () =>
+    candidate({
+      headline: {
+        kind: 'efficiency',
+        value: 33,
+        unit: 'percent',
+        label: 'cheaper per result',
+        from: 90,
+        to: 60,
+      },
+    });
+
+  it('keeps the chart when the headline is drawn on it', () => {
+    expect(cardChart(agreeing())).not.toBeNull();
+    expect(accountCardHtml(agreeing(), opts)).toContain('class="bar"');
+  });
+
+  it('withholds the chart when it is not', () => {
+    expect(cardChart(mismatched())).toBeNull();
+    const html = accountCardHtml(mismatched(), { ...opts, line: 'Three ad sets bought nothing' });
+    expect(html).not.toContain('class="iv"');
+    // The band carries the sentence instead. The card is still a whole card.
+    expect(html).toContain('Three ad sets bought nothing');
+    expect(html).toContain('69.75');
+  });
+
+  it('drops the withheld chart out of the digit allowlist too', () => {
+    // An allowlist naming numbers the card no longer prints has stopped describing the card.
+    expect(cardFigures(mismatched())).not.toContain(188.19);
+    expect(cardFigures(mismatched())).toContain(69.75);
+    expect(cardFigures(agreeing())).toContain(90);
+  });
+
+  it('leaves the composition alone, so nothing downstream has to know', () => {
+    expect(COMPOSITION_BY_DETECTOR.dead_tail).toBe('figure-top');
+    expect(accountCardHtml(mismatched(), opts)).toContain('c-figtop');
   });
 });

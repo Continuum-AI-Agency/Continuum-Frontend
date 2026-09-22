@@ -12,7 +12,13 @@
 // portfolio brief grows the field, this composition deletes and the card reads
 // `candidate.headline` directly — the card components already take the contract's type.
 
-import type { CandidateHeadline, CycleItemRow, PortfolioBrief } from '@continuum/contracts';
+import type {
+  ArguingChart,
+  CandidateHeadline,
+  CycleItemRow,
+  PortfolioBrief,
+} from '@continuum/contracts';
+import { chartArgues, headlineAgreesWithChart } from '@continuum/contracts';
 import { humanize } from '../../../format';
 import type { HeroView } from '../heroModel';
 import { ctaForCandidate } from '../heroModel';
@@ -153,6 +159,20 @@ function claimFor(candidate: BriefCandidate): string {
 
 export type PortfolioNews = {
   lead: NewsCardModel | null;
+  /**
+   * The chart the lead card may draw, which is not the same question as whether a chart exists.
+   *
+   * `heroChart` already answers whether a chart ARGUES — a trend or an interval, never a
+   * drawing of arithmetic the sentence has already made. It does not answer whether the chart
+   * argues THIS card's argument, and that is the gap a reader falls into: the lead leads with
+   * the pause's avoided money and the fallback chart draws the whole portfolio's cost per
+   * result across the window. Both are true. Together, inside one border, they read as one
+   * claim and they are not one claim.
+   *
+   * Null when the hero's own headline is nowhere on the chart. The card then keeps its
+   * sentence, which the whole vocabulary was built to make sufficient.
+   */
+  leadChart: ArguingChart | null;
   insights: NewsCardModel[];
 };
 
@@ -191,6 +211,13 @@ export function buildPortfolioNews(args: {
     cta: view.cta,
   };
 
+  // The chart the hero was given, kept only if it argues AND draws the figure the hero leads
+  // with. `chartArgues` is the type guard, so the narrowing to `ArguingChart` is the gate.
+  const leadChart =
+    chartArgues(view.chart) && headlineAgreesWithChart(heroHeadline, view.chart)
+      ? view.chart
+      : null;
+
   const insights: NewsCardModel[] = [];
   for (const id of brief.secondary) {
     if (insights.length >= 2) break;
@@ -213,5 +240,5 @@ export function buildPortfolioNews(args: {
       cta: ctaForCandidate(candidate, view.observe),
     });
   }
-  return { lead, insights };
+  return { lead, leadChart, insights };
 }

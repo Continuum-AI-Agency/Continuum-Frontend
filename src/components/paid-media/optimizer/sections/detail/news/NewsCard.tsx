@@ -1,10 +1,13 @@
 'use client';
 
-// The lead: the portfolio's main recommendation, wide, read like a piece of news.
+// The lead: the portfolio's main recommendation, read like a piece of news.
 //
 // One figure, one sentence, and the argument between them. The chart, when there is one that
-// argues, is passed in and sits UNDER the justification — it is the same claim drawn, so it
-// belongs inside this card rather than beside it.
+// argues THIS card's argument, is passed in and sits UNDER the justification — it is the same
+// claim drawn, so it belongs inside this card rather than beside it.
+//
+// The card's box is its own: `CARD_FRAME.lead` caps the width and floors the height, so the
+// slot it is mounted in can no longer decide its shape. See ./cardShape.
 
 import { ExternalLinkIcon, SparklesIcon } from 'lucide-react';
 import type * as React from 'react';
@@ -12,6 +15,7 @@ import { Pill } from '@/components/kibo-ui/pill';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { HeroCta } from '../heroModel';
+import { CARD_FRAME } from './cardShape';
 import { JustificationBlock } from './JustificationBlock';
 import type { NewsCardModel } from './justification';
 
@@ -46,7 +50,10 @@ export function NewsCard({
   const cta = card.cta;
   return (
     <article
-      className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card p-4"
+      className={cn(
+        'flex flex-col gap-3 rounded-lg border border-border/60 bg-card p-4',
+        CARD_FRAME.lead,
+      )}
       data-testid="portfolio-news-lead"
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -80,7 +87,7 @@ export function NewsCard({
 
       {chart ?? null}
 
-      <div className="flex flex-wrap items-center gap-2 pt-0.5">
+      <div className="mt-auto flex flex-wrap items-center gap-2 pt-0.5">
         {cta ? (
           <Button onClick={() => onCta(cta)} size="sm" type="button">
             {cta.label}

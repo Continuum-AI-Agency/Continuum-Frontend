@@ -32,6 +32,7 @@
 // head, which across twenty-five frames appears twice and therefore still interrupts.
 
 import type { AccountChart } from './account-chart';
+import { headlineAgreesWithChart } from './account-chart';
 import type {
   AccountCandidate,
   AccountDetector,
@@ -237,7 +238,9 @@ export function cardFigures(candidate: AccountCandidate): number[] {
     if (headline.from != null) out.push(headline.from);
     if (headline.to != null) out.push(headline.to);
   }
-  const chart = candidate.chart;
+  // `cardChart`, not `candidate.chart`: a chart the frame refuses to draw prints no figures,
+  // and an allowlist that still names them is an allowlist that has stopped describing the card.
+  const chart = cardChart(candidate);
   if (!chart) return out;
   switch (chart.shape) {
     case 'transfer':
@@ -544,6 +547,26 @@ function figureRow(candidate: AccountCandidate, currency: string | null): string
 }
 
 /**
+ * The chart this frame is allowed to draw — the candidate's, or none.
+ *
+ * A frame carries one figure and one drawing, and a reader takes them as one argument because
+ * they are inside one border. So the drawing has to be about the figure. When
+ * `headlineAgreesWithChart` cannot find the headline's own sides anywhere on the chart, the two
+ * are about different quantities, and printing both is worse than printing one: the reader is
+ * handed a number and a picture and left to discover they do not meet.
+ *
+ * Dropping the chart rather than the headline is deliberate. The headline is the detector's own
+ * finding and the whole point of the vocabulary; the chart is the part that wandered. The frame
+ * keeps its composition — the band falls back to the sentence, which is what `layout` already
+ * does for a chartless card — so nothing downstream has to know this happened, and the day the
+ * detector's chart draws its own headline again the picture comes straight back.
+ */
+export function cardChart(candidate: AccountCandidate): AccountChart | null {
+  if (!candidate.chart) return null;
+  return headlineAgreesWithChart(candidate.headline, candidate.chart) ? candidate.chart : null;
+}
+
+/**
  * One card, as a complete HTML document with no network dependency of any kind.
  *
  * Self-containment is asserted by its own test: no http:, no https:, no url(), no script,
@@ -557,12 +580,13 @@ export function accountCardHtml(
   const composition = COMPOSITION_BY_DETECTOR[candidate.detector];
   const narrow = composition === 'flank' || composition === 'stamp';
   const figure = figureRow(candidate, options.currency);
+  const chart = cardChart(candidate);
 
   const html = layout(composition, {
     kicker: esc(options.title),
     figure,
     line: esc(clipLine(options.line ?? '')),
-    chart: candidate.chart ? drawChart(candidate.chart, options.currency, narrow) : '',
+    chart: chart ? drawChart(chart, options.currency, narrow) : '',
     foot: `${options.isGuard ? 'Guard' : 'Trigger'} · ${esc(candidate.detector)}${options.readDate ? ` · ${esc(options.readDate)}` : ''}`,
   });
 

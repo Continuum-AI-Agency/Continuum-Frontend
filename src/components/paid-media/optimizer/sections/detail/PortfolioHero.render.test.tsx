@@ -298,3 +298,121 @@ describe('PortfolioHero — a chart with no dates of its own still says when', (
     expect(host?.textContent).toContain('Sep 19');
   });
 });
+
+describe('the lead card and its chart have to be about the same thing', () => {
+  /** A hero the news model can actually build a headline for: a pause that bought nothing. */
+  const withPauseCandidate = (over: Partial<HeroView> = {}): HeroView => {
+    const base = view();
+    return view({
+      brief: {
+        ...base.brief,
+        candidates: [
+          ...base.brief.candidates,
+          {
+            id: 'rec:1',
+            module: 'pause',
+            kind: 'pause',
+            trigger: null,
+            adset_id: 'as-1',
+            adset_name: 'Dead',
+            impact_per_day: 120,
+            impact_unit: 'currency',
+            results_per_day: 0,
+            impact_basis: 'spend/day on the ad set',
+            reason: null,
+            cta: { kind: 'queue_row', target_id: 'rec:1' },
+          },
+        ],
+      },
+      ...over,
+    });
+  };
+
+  const mount = (v: HeroView) =>
+    render(
+      <PortfolioHero
+        currency="USD"
+        dailyTotal={1000}
+        explainHref="/scale?tab=jaina"
+        nextCycleAt={null}
+        onCta={() => undefined}
+        portfolioId="p1"
+        view={v}
+      />,
+    );
+
+  it('shows nothing at all — not even a placeholder — when the chart is about something else', () => {
+    // The default `view()` chart is the portfolio's cost per result across the window. The
+    // card now leads with "$120 a day buying nothing". Both true, neither about the other.
+    const { container } = mount(withPauseCandidate());
+    expect(container.textContent).toContain('$120');
+    expect(container.querySelector('[data-testid="hero-chart"]')).toBeNull();
+    // And no apology for the missing chart: the sentence was always meant to be enough.
+    expect(container.textContent).not.toContain('Not enough priced days');
+  });
+
+  it('draws the chart when it reaches the figure the card leads with', () => {
+    const { container } = mount(
+      withPauseCandidate({
+        chart: {
+          shape: 'interval',
+          unit: 'currency',
+          estimate: null,
+          low: 120,
+          high: 240,
+          reference: 70,
+          reference_label: 'target',
+          at_stake_per_day: 120,
+          no_results: true,
+        },
+        chartReading: 'what it spent, against the line it had to beat',
+      }),
+    );
+    expect(container.querySelector('[data-testid="hero-chart"]')).toBeTruthy();
+    expect(container.textContent).toContain('what it spent');
+  });
+
+  it('still says so when there was no chart to draw in the first place', () => {
+    const { container } = mount(withPauseCandidate({ chart: null, chartReading: null }));
+    expect(container.textContent).toContain('Not enough priced days');
+  });
+});
+
+describe('a card cannot be stretched by the slot it is mounted in', () => {
+  it('carries its own cap and floor on its own root', () => {
+    const { container } = render(
+      <PortfolioHero
+        currency="USD"
+        dailyTotal={1000}
+        explainHref="/scale?tab=jaina"
+        nextCycleAt={null}
+        onCta={() => undefined}
+        portfolioId="p1"
+        view={view()}
+      />,
+    );
+    const lead = container.querySelector('[data-testid="portfolio-news-lead"]');
+    const insight = container.querySelector('[data-testid="portfolio-news-insight"]');
+    expect(lead?.className).toContain('max-w-[34rem]');
+    expect(lead?.className).toContain('min-h-[22.75rem]');
+    expect(insight?.className).toContain('max-w-[21rem]');
+    expect(insight?.className).toContain('min-h-[14rem]');
+  });
+
+  it('mounts the insights in a track whose columns are capped at one card', () => {
+    const { container } = render(
+      <PortfolioHero
+        currency="USD"
+        dailyTotal={1000}
+        explainHref="/scale?tab=jaina"
+        nextCycleAt={null}
+        onCta={() => undefined}
+        portfolioId="p1"
+        view={view()}
+      />,
+    );
+    const track = container.querySelector('[data-testid="portfolio-news-insights"]');
+    expect(track?.className).toContain('minmax(15rem,21rem)');
+    expect(track?.className).not.toContain('sm:grid-cols-2');
+  });
+});
