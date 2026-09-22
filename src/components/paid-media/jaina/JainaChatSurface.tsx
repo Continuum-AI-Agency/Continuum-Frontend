@@ -152,6 +152,7 @@ import { deriveJainaAnchors, milestonesForJainaMessage } from './deriveJainaAnch
 import { getReportSummary, hasReportContent } from './jainaUtils';
 import { normalizePersistedObjectiveStatus } from './objectiveStatus';
 import { parsePersistedReportV2Value, parsePersistedReportValue } from './persistedReport';
+import { withPipelineMentions } from './pipelineMentions';
 import {
   enqueueMessage,
   type QueuedJainaMessage,
@@ -906,7 +907,7 @@ export function JainaChatSurface({
   const promptInputWrapperRef = React.useRef<HTMLDivElement>(null);
   const mentionAdSetsCacheRef = React.useRef<Map<string, JainaMentionAdSet[]>>(new Map());
 
-  const jainaMentionProvider = React.useMemo<AgentMentionProvider>(
+  const campaignMentionProvider = React.useMemo<AgentMentionProvider>(
     () => ({
       getSuggestions: async ({ query }) => {
         if (!adAccountId) return [];
@@ -1006,6 +1007,10 @@ export function JainaChatSurface({
       },
     }),
     [adAccountId, brandProfileId, loadCampaignPerformance, supabase],
+  );
+  const jainaMentionProvider = React.useMemo(
+    () => withPipelineMentions(campaignMentionProvider, queryClient, brandProfileId),
+    [brandProfileId, campaignMentionProvider, queryClient],
   );
 
   const setConversationSessionsWithCache = React.useCallback(

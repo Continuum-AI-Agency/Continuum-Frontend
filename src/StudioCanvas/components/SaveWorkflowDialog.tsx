@@ -495,8 +495,6 @@ export function SaveWorkflowDialog({
       form.setValue('description', draft.description, { shouldDirty: true });
       setAgentGuide(draft.agent_guide);
     } catch (err) {
-      const summary = values.description?.trim() || `${values.name.trim()} creative pipeline.`;
-      form.setValue('description', summary, { shouldDirty: true });
       setAgentGuide({
         version: 1,
         use_when: [`The task matches the declared inputs and outputs of ${values.name.trim()}.`],
@@ -516,6 +514,15 @@ export function SaveWorkflowDialog({
   const onSubmit = form.handleSubmit(async (values) => {
     if (!brandProfileId) {
       setError('Select a brand profile to save workflows.');
+      return;
+    }
+    // The description is what another agent reads to decide whether to run this pipeline,
+    // so a filler line like "<name> creative pipeline." is worse than refusing.
+    const description = values.description?.trim() ?? '';
+    if (kind === 'pipeline' && !description) {
+      form.setError('description', {
+        message: 'Describe what this pipeline makes and when to use it.',
+      });
       return;
     }
 
@@ -541,7 +548,7 @@ export function SaveWorkflowDialog({
         await publishPipeline({
           brand_profile_id: brandProfileId,
           name: values.name.trim(),
-          description: values.description?.trim() || `${values.name.trim()} creative pipeline.`,
+          description,
           nodes: snapshot.nodes,
           edges: snapshot.edges,
           ...(roomId ? { source_room_id: roomId } : {}),
@@ -552,7 +559,7 @@ export function SaveWorkflowDialog({
         await createAiStudioWorkflowAction({
           brandProfileId,
           name: values.name.trim(),
-          description: values.description?.trim() || undefined,
+          description: description || undefined,
           nodes: snapshot.nodes,
           edges: snapshot.edges,
           metadata: {
@@ -699,13 +706,23 @@ export function SaveWorkflowDialog({
       </div>
 
       <div className="grid gap-2">
-        <Label htmlFor="workflow-description">Description</Label>
+        <Label htmlFor="workflow-description">
+          {kind === 'pipeline' ? 'What it makes and when to use it' : 'Description'}
+        </Label>
         <Textarea
           id="workflow-description"
-          placeholder="Optional notes for your team"
+          placeholder={
+            kind === 'pipeline'
+              ? 'Makes 9:16 launch images of a character. Use for product launches.'
+              : 'Optional notes for your team'
+          }
           rows={3}
+          aria-invalid={Boolean(form.formState.errors.description)}
           {...form.register('description')}
         />
+        {form.formState.errors.description?.message && (
+          <p className="text-xs text-danger">{form.formState.errors.description.message}</p>
+        )}
       </div>
 
       {kind === 'pipeline' ? (

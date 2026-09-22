@@ -103,7 +103,9 @@ async function chooseSelect(name: RegExp, optionName: string) {
   fireEvent.pointerDown(option);
   fireEvent.pointerUp(option);
   fireEvent.click(option);
-  await waitFor(() => expect(screen.queryByRole('option', { name: optionName })).toBeNull());
+  await waitFor(() =>
+    expect(screen.queryByRole('option', { name: optionName }) === null).toBe(true),
+  );
 }
 
 beforeEach(() => {
@@ -206,6 +208,58 @@ describe('SaveWorkflowDialog mounted without a trigger', () => {
       category: 'character',
       rightsNote: 'Brand-owned fictional character.',
     });
+  });
+
+  it('keeps the plain-workflow description optional', () => {
+    renderPanel();
+    expect(screen.getByLabelText('Description')).toBeDefined();
+    expect(screen.getByPlaceholderText('Optional notes for your team')).toBeDefined();
+  });
+
+  it('prefills the pipeline description from the guide draft and publishes it verbatim', async () => {
+    renderPanel([GEN]);
+    const pipeline = screen.getByRole('button', { name: 'Pipeline' });
+    fireEvent.pointerDown(pipeline);
+    fireEvent.pointerUp(pipeline);
+    fireEvent.click(pipeline);
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Character launch' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Draft guide' }));
+    const description = (await screen.findByLabelText(
+      'What it makes and when to use it',
+    )) as HTMLTextAreaElement;
+    await waitFor(() =>
+      expect(description.value).toBe('Creates approved character launch images.'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Publish pipeline' }));
+
+    await waitFor(() => expect(publishPipeline).toHaveBeenCalledTimes(1));
+    const payload = publishPipeline.mock.calls[0]?.[0] as unknown as { description: string };
+    expect(payload.description).toBe('Creates approved character launch images.');
+  });
+
+  it('refuses to publish a pipeline with a blank description', async () => {
+    draftPipelineGuide.mockImplementationOnce(async () => {
+      throw new Error('draft unavailable');
+    });
+    renderPanel([GEN]);
+    const pipeline = screen.getByRole('button', { name: 'Pipeline' });
+    fireEvent.pointerDown(pipeline);
+    fireEvent.pointerUp(pipeline);
+    fireEvent.click(pipeline);
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Character launch' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Draft guide' }));
+    await screen.findByText(/automatic draft failed/);
+    expect(
+      (screen.getByLabelText('What it makes and when to use it') as HTMLTextAreaElement).value,
+    ).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: 'Publish pipeline' }));
+
+    expect(
+      await screen.findByText('Describe what this pipeline makes and when to use it.'),
+    ).toBeDefined();
+    expect(publishPipeline).not.toHaveBeenCalled();
   });
 
   it('publishes the selected editor source slot with an exact project configuration', async () => {
