@@ -11,6 +11,7 @@ import {
   imageResolutionFor,
   imageSizeSchema,
   imageSizesForModel,
+  PICKABLE_IMAGE_GENERATOR_MODELS,
   supportsImageSize,
 } from './image-size';
 
@@ -107,8 +108,15 @@ describe('imageModelOptions', () => {
     return option;
   };
 
-  it('offers every model the node data can legally carry, and nothing else', () => {
-    expect(imageModelOptions().map((option) => option.model)).toEqual([...IMAGE_GENERATOR_MODELS]);
+  it('offers every pickable model, and a hidden one only as the node current model', () => {
+    expect(imageModelOptions().map((option) => option.model)).toEqual([
+      ...PICKABLE_IMAGE_GENERATOR_MODELS,
+    ]);
+    expect(PICKABLE_IMAGE_GENERATOR_MODELS).not.toContain('gpt-image-2');
+    expect(IMAGE_GENERATOR_MODELS).toContain('gpt-image-2');
+    expect(imageModelOptions(undefined, 'gpt-image-2').map((option) => option.model)).toContain(
+      'gpt-image-2',
+    );
   });
 
   it('labels every model, so the picker and the node caption cannot drift apart', () => {
@@ -120,7 +128,7 @@ describe('imageModelOptions', () => {
   });
 
   it('names the provider needed by each external model', () => {
-    for (const model of ['gpt-image-2', 'gpt-image-2.5-sunburst', 'gpt-image-2.5-flare']) {
+    for (const model of ['gpt-image-2.5-sunburst', 'gpt-image-2.5-flare']) {
       expect(optionFor(model).note).toBe('Azure');
       expect(optionFor(model).selectable).toBe(true);
     }
