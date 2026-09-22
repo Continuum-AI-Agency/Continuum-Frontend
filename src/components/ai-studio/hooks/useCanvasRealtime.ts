@@ -127,6 +127,9 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   const lastRevisionRef = useRef<number | null>(null);
   const isRemoteChangeRef = useRef<boolean>(false);
   const broadcastChannelRef = useRef<any>(null);
+  // Whether broadcastChannelRef's CURRENT channel has joined. `status` cannot say: on a
+  // re-render that recreates the channel, effects run in one commit with the old SUBSCRIBED.
+  const broadcastJoinedRef = useRef(false);
   const lastSyncAtRef = useRef<number>(0);
   const hasLoadedInitialDataRef = useRef<boolean>(false);
   const lastRemoteNodeIdsRef = useRef<Set<string>>(new Set());
@@ -600,6 +603,9 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
         channel.subscribe((subStatus, err) => {
           console.log('[Canvas Sync] Broadcast channel status:', subStatus);
           if (err) console.error('[Canvas Sync] Broadcast error:', err);
+          // A torn-down channel's late CLOSED must not overwrite its replacement's status.
+          if (cancelled) return;
+          broadcastJoinedRef.current = subStatus === 'SUBSCRIBED';
           setStatus(normalizeRealtimeStatus(subStatus));
         });
       });
@@ -608,6 +614,9 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
 
     return () => {
       cancelled = true;
+      // The replacement has not joined; resetting `status` makes its join re-fire presence.
+      broadcastJoinedRef.current = false;
+      setStatus('INITIALIZING');
       console.log('[Canvas Sync] Tearing down broadcast channel');
       supabase.removeChannel(channel);
       broadcastChannelRef.current = null;
@@ -678,7 +687,13 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   }, [brandProfileId, roomId, handleRemoteUpdate, syncLatestCanvasSession]);
 
   useEffect(() => {
-    if (status === 'SUBSCRIBED' && user && broadcastChannelRef.current) {
+    // Presence tracked before the join throws "tried to push 'presence' ... before joining".
+    if (
+      status === 'SUBSCRIBED' &&
+      user &&
+      broadcastChannelRef.current &&
+      broadcastJoinedRef.current
+    ) {
       broadcastChannelRef.current.track({
         user_id: user.id,
         full_name: user.user_metadata?.full_name || user.email || 'Anonymous',

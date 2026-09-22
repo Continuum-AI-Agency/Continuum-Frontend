@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { ComponentProps } from 'react';
 import { type ElementType, Suspense, useEffect, useState } from 'react';
+import { TopUpDialog } from '@/components/billing/TopUpDialog';
 import { CurrentUserAvatar } from '@/components/current-user-avatar';
 import { Pill } from '@/components/kibo-ui/pill';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
@@ -43,6 +44,7 @@ import { isBrandOwner } from '@/lib/billing/billingViewModel';
 import { useLowCreditsNudge } from '@/lib/billing/lowCreditsNudge';
 import { PLAN_NAME_FOR_PRODUCT } from '@/lib/billing/productAccess';
 import type { SidebarBillingView } from '@/lib/billing/sidebarBilling';
+import { openTopUp } from '@/lib/billing/topUp';
 import { isAdminUser } from '@/lib/brands/brand-switcher-utils';
 import { cn } from '@/lib/utils';
 import { BrandSwitcher } from './BrandSwitcher';
@@ -53,7 +55,7 @@ import {
   type AppNavigationItem,
   isRouteActive,
 } from './routes';
-import { SidebarBillingWidget } from './SidebarBillingWidget';
+import { SidebarBillingWidget, sidebarOpensTopUp } from './SidebarBillingWidget';
 
 type NavBadgeTone = NonNullable<NonNullable<AppNavigationItem['badge']>['tone']>;
 
@@ -150,10 +152,11 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
   const { isMobile, state, collapseHover } = useSidebar();
   const { logout, isPending } = useAuth();
   const { user, activeBrandId, permissions } = useActiveBrandContext();
+  const owner = isBrandOwner(permissions, activeBrandId);
   useLowCreditsNudge({
     view: billing,
     brandId: activeBrandId,
-    owner: isBrandOwner(permissions, activeBrandId),
+    owner,
     pathname,
     section: searchParams.get('section'),
     navigate: router.push,
@@ -484,188 +487,204 @@ function AppSidebarInner({ automationEnvironment, lockedProducts, billing }: App
   }
 
   return (
-    <Sidebar
-      collapsible="icon"
-      className="border-r border-[var(--color-border)] bg-[var(--sidebar)] [view-transition-name:app-sidebar]"
-    >
-      <LayoutGroup>
-        <SidebarHeader className="flex items-center justify-between gap-1 overflow-hidden px-3">
-          <div className="min-w-0 flex-1">
-            <BrandSwitcher />
-          </div>
-          <div className="flex shrink-0 items-center gap-0.5">
-            {state !== 'collapsed' && (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      onClick={() => openPalette(true)}
-                      className="btn-fill [--btn-fill:var(--sidebar-hover-bg)] flex h-7 w-7 min-h-[32px] min-w-[32px] items-center justify-center rounded-md text-[var(--sidebar-muted-dim)] hover:text-[var(--sidebar-foreground)]"
-                      aria-label="Search (⌘K)"
-                    >
-                      <Search className="h-[14px] w-[14px]" />
-                    </button>
-                  }
-                />
-                <TooltipContent side="bottom" className="flex items-center gap-2">
-                  Search
-                  <kbd className="pointer-events-none inline-flex h-4 select-none items-center gap-1 rounded border bg-muted px-1 font-mono text-2xs font-medium opacity-100">
-                    ⌘K
-                  </kbd>
-                </TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-        </SidebarHeader>
+    <>
+      {/* Outside <Sidebar>: the mobile sheet unmounts its content, and Top up must stay reachable. */}
+      <TopUpDialog view={billing} brandId={activeBrandId} owner={owner} />
+      <Sidebar
+        collapsible="icon"
+        className="border-r border-[var(--color-border)] bg-[var(--sidebar)] [view-transition-name:app-sidebar]"
+      >
+        <LayoutGroup>
+          <SidebarHeader className="flex items-center justify-between gap-1 overflow-hidden px-3">
+            <div className="min-w-0 flex-1">
+              <BrandSwitcher />
+            </div>
+            <div className="flex shrink-0 items-center gap-0.5">
+              {state !== 'collapsed' && (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        onClick={() => openPalette(true)}
+                        className="btn-fill [--btn-fill:var(--sidebar-hover-bg)] flex h-7 w-7 min-h-[32px] min-w-[32px] items-center justify-center rounded-md text-[var(--sidebar-muted-dim)] hover:text-[var(--sidebar-foreground)]"
+                        aria-label="Search (⌘K)"
+                      >
+                        <Search className="h-[14px] w-[14px]" />
+                      </button>
+                    }
+                  />
+                  <TooltipContent side="bottom" className="flex items-center gap-2">
+                    Search
+                    <kbd className="pointer-events-none inline-flex h-4 select-none items-center gap-1 rounded border bg-muted px-1 font-mono text-2xs font-medium opacity-100">
+                      ⌘K
+                    </kbd>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+          </SidebarHeader>
 
-        <SidebarContent className="px-3 py-4">
-          <motion.div
-            initial={reduce ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.2, ease: [0, 0, 0.2, 1] }}
-          >
-            {APP_NAVIGATION_GROUPS.map((group, index) => (
-              <SidebarGroup
-                key={group.label ?? `group-${index}`}
-                className={cn('p-1', index > 0 && 'mt-3 pt-3')}
-              >
-                {group.label ? (
-                  <SidebarGroupLabel className="px-2 text-xs font-medium uppercase tracking-[0.12em] text-[var(--sidebar-muted-dim)] group-data-[collapsible=icon]:hidden">
-                    {group.label}
-                  </SidebarGroupLabel>
-                ) : null}
-                <SidebarGroupContent>
-                  <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
-                    {group.items.map((item) =>
-                      renderNavItem(
-                        item.href === '/automations' && !hasAutomationAccess
-                          ? {
-                              ...item,
-                              disabled: true,
-                              locked: true,
-                              disabledReason: AUTOMATIONS_PRODUCTION_DISABLED_REASON,
-                            }
-                          : item,
-                      ),
-                    )}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            ))}
-          </motion.div>
-        </SidebarContent>
-
-        <SidebarFooter className="px-3 pb-3">
-          {billing ? <SidebarBillingWidget view={billing} /> : null}
-          <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
-            {APP_NAVIGATION_FOOTER.map((item) => {
-              if (item.adminOnly && !isAdmin) return null;
-              const active = isRouteActive(pathname, searchParams, item);
-
-              return (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={active}
-                    tooltip={item.label}
-                    size="default"
-                    onMouseEnter={() => router.prefetch(item.href)}
-                    className={cn(
-                      'group relative btn-fill [--btn-fill:var(--sidebar-hover-bg)] active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:text-[var(--sidebar-foreground)]',
-                      active ? 'text-[var(--sidebar-foreground)]' : 'text-[var(--sidebar-muted)]',
-                    )}
-                  >
-                    <Link href={item.href}>
-                      {active ? (
-                        <ActiveMarker
-                          layoutId="nav-active-marker"
-                          animate={!reduce}
-                          className="h-4 w-0.5"
-                        />
-                      ) : null}
-                      <NavIcon icon={item.icon} active={active} />
-                      <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
-                        {item.label}
-                      </span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              );
-            })}
-
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                tooltip="Sign out"
-                size="default"
-                disabled={isPending}
-                onClick={() => logout()}
-                className="group btn-fill [--btn-fill:var(--sidebar-destructive-bg)] text-[var(--destructive)] hover:text-[var(--destructive)]"
-              >
-                <LogOut className="!h-[18px] !w-[18px] stroke-[1.8]" />
-                <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
-                  {isPending ? 'Signing out...' : 'Sign out'}
-                </span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-
-          <SidebarSeparator className="my-2 bg-[var(--color-border)]" />
-          <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                tooltip={appearance === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-                size="default"
-                onClick={toggle}
-                className="group btn-fill [--btn-fill:var(--sidebar-hover-bg)] text-[var(--sidebar-muted)] hover:text-[var(--sidebar-foreground)]"
-              >
-                <span className="relative inline-flex h-[18px] w-[18px] items-center justify-center">
-                  <AnimatePresence initial={false} mode="popLayout">
-                    <motion.span
-                      key={appearance}
-                      initial={reduce ? false : { opacity: 0, scale: 0.25, filter: 'blur(4px)' }}
-                      animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-                      exit={
-                        reduce ? { opacity: 0 } : { opacity: 0, scale: 0.25, filter: 'blur(4px)' }
-                      }
-                      transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
-                      className="absolute inset-0 inline-flex items-center justify-center"
-                    >
-                      {appearance === 'dark' ? (
-                        <Sun className="!h-[18px] !w-[18px] stroke-[1.8]" />
-                      ) : (
-                        <Moon className="!h-[18px] !w-[18px] stroke-[1.8]" />
+          <SidebarContent className="px-3 py-4">
+            <motion.div
+              initial={reduce ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.2, ease: [0, 0, 0.2, 1] }}
+            >
+              {APP_NAVIGATION_GROUPS.map((group, index) => (
+                <SidebarGroup
+                  key={group.label ?? `group-${index}`}
+                  className={cn('p-1', index > 0 && 'mt-3 pt-3')}
+                >
+                  {group.label ? (
+                    <SidebarGroupLabel className="px-2 text-xs font-medium uppercase tracking-[0.12em] text-[var(--sidebar-muted-dim)] group-data-[collapsible=icon]:hidden">
+                      {group.label}
+                    </SidebarGroupLabel>
+                  ) : null}
+                  <SidebarGroupContent>
+                    <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
+                      {group.items.map((item) =>
+                        renderNavItem(
+                          item.href === '/automations' && !hasAutomationAccess
+                            ? {
+                                ...item,
+                                disabled: true,
+                                locked: true,
+                                disabledReason: AUTOMATIONS_PRODUCTION_DISABLED_REASON,
+                              }
+                            : item,
+                        ),
                       )}
-                    </motion.span>
-                  </AnimatePresence>
-                </span>
-                <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
-                  {appearance === 'dark' ? 'Light mode' : 'Dark mode'}
-                </span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                size="lg"
-                className="btn-fill [--btn-fill:var(--sidebar-hover-bg)] data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-              >
-                {/* Collapsed, the row is 27px with no padding, so a 32px avatar overflows and
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              ))}
+            </motion.div>
+          </SidebarContent>
+
+          <SidebarFooter className="px-3 pb-3">
+            {billing ? (
+              <SidebarBillingWidget
+                view={billing}
+                onTopUp={
+                  sidebarOpensTopUp(billing, owner)
+                    ? () => openTopUp('sidebar', () => router.push(billing.href))
+                    : undefined
+                }
+              />
+            ) : null}
+            <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
+              {APP_NAVIGATION_FOOTER.map((item) => {
+                if (item.adminOnly && !isAdmin) return null;
+                const active = isRouteActive(pathname, searchParams, item);
+
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={active}
+                      tooltip={item.label}
+                      size="default"
+                      onMouseEnter={() => router.prefetch(item.href)}
+                      className={cn(
+                        'group relative btn-fill [--btn-fill:var(--sidebar-hover-bg)] active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:text-[var(--sidebar-foreground)]',
+                        active ? 'text-[var(--sidebar-foreground)]' : 'text-[var(--sidebar-muted)]',
+                      )}
+                    >
+                      <Link href={item.href}>
+                        {active ? (
+                          <ActiveMarker
+                            layoutId="nav-active-marker"
+                            animate={!reduce}
+                            className="h-4 w-0.5"
+                          />
+                        ) : null}
+                        <NavIcon icon={item.icon} active={active} />
+                        <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
+                          {item.label}
+                        </span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Sign out"
+                  size="default"
+                  disabled={isPending}
+                  onClick={() => logout()}
+                  className="group btn-fill [--btn-fill:var(--sidebar-destructive-bg)] text-[var(--destructive)] hover:text-[var(--destructive)]"
+                >
+                  <LogOut className="!h-[18px] !w-[18px] stroke-[1.8]" />
+                  <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
+                    {isPending ? 'Signing out...' : 'Sign out'}
+                  </span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+
+            <SidebarSeparator className="my-2 bg-[var(--color-border)]" />
+            <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip={appearance === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                  size="default"
+                  onClick={toggle}
+                  className="group btn-fill [--btn-fill:var(--sidebar-hover-bg)] text-[var(--sidebar-muted)] hover:text-[var(--sidebar-foreground)]"
+                >
+                  <span className="relative inline-flex h-[18px] w-[18px] items-center justify-center">
+                    <AnimatePresence initial={false} mode="popLayout">
+                      <motion.span
+                        key={appearance}
+                        initial={reduce ? false : { opacity: 0, scale: 0.25, filter: 'blur(4px)' }}
+                        animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                        exit={
+                          reduce ? { opacity: 0 } : { opacity: 0, scale: 0.25, filter: 'blur(4px)' }
+                        }
+                        transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
+                        className="absolute inset-0 inline-flex items-center justify-center"
+                      >
+                        {appearance === 'dark' ? (
+                          <Sun className="!h-[18px] !w-[18px] stroke-[1.8]" />
+                        ) : (
+                          <Moon className="!h-[18px] !w-[18px] stroke-[1.8]" />
+                        )}
+                      </motion.span>
+                    </AnimatePresence>
+                  </span>
+                  <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
+                    {appearance === 'dark' ? 'Light mode' : 'Dark mode'}
+                  </span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  size="lg"
+                  className="btn-fill [--btn-fill:var(--sidebar-hover-bg)] data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                >
+                  {/* Collapsed, the row is 27px with no padding, so a 32px avatar overflows and
                     SidebarMenuButton's own overflow-hidden crops it flat top and bottom. The
                     important modifier is needed because the size arrives as an inline style. */}
-                <div className="flex items-center justify-center w-8 group-data-[collapsible=icon]:w-auto">
-                  <CurrentUserAvatar size={32} className="group-data-[collapsible=icon]:!size-6" />
-                </div>
-                <div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                  <span className="truncate text-[0.78rem] font-medium tracking-[0.01em]">
-                    {userDisplayName}
-                  </span>
-                </div>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarFooter>
-      </LayoutGroup>
-    </Sidebar>
+                  <div className="flex items-center justify-center w-8 group-data-[collapsible=icon]:w-auto">
+                    <CurrentUserAvatar
+                      size={32}
+                      className="group-data-[collapsible=icon]:!size-6"
+                    />
+                  </div>
+                  <div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                    <span className="truncate text-[0.78rem] font-medium tracking-[0.01em]">
+                      {userDisplayName}
+                    </span>
+                  </div>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarFooter>
+        </LayoutGroup>
+      </Sidebar>
+    </>
   );
 }
 

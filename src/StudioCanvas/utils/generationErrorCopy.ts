@@ -31,8 +31,7 @@ const COPY: Record<StudioGenerationErrorCode, GenerationErrorCopy> = {
   },
   credits_exhausted: {
     title: 'Out of Canvas credits',
-    guidance:
-      'Add credits in Settings → Billing, then run this node again — its prompt and settings are kept.',
+    guidance: 'Top up, then run this node again — its prompt and settings are kept.',
   },
   product_required: {
     title: "AI Canvas isn't on this brand's plan",
