@@ -1395,6 +1395,55 @@ export const apiRenderSuggestRowsRequestSchema = z
   });
 export type ApiRenderSuggestRowsRequest = z.infer<typeof apiRenderSuggestRowsRequestSchema>;
 
+/**
+ * The written rules every drafted row is checked against before the draft is answered. A rule is
+ * something a reader can verify from the row's own text, never taste: Laya (the self-hosted
+ * decision model) has none, and was measured to have none.
+ *
+ *   names_offer     the copy names the product the row's picture or locked data shows
+ *   fits_role       each value is the same kind of text as its slot's designer sample
+ *   brand_language  the copy is written in the brand's language
+ *
+ * The brand's avoid_themes are NOT a gate rule here: measured, Laya's "this states the theme"
+ * flags were right at most 2 times in 3 at any bar and flooded plain product copy. That check
+ * belongs to the brand compliance verifier.
+ */
+export const API_RENDER_ROW_GATE_RULES = ['names_offer', 'fits_role', 'brand_language'] as const;
+export const apiRenderRowGateRuleSchema = z.enum(API_RENDER_ROW_GATE_RULES);
+export type ApiRenderRowGateRule = z.infer<typeof apiRenderRowGateRuleSchema>;
+
+export const apiRenderRowGateCheckSchema = z
+  .object({
+    rule: apiRenderRowGateRuleSchema,
+    /** The variable key (fits_role); null for a row-wide rule. */
+    subject: z.string().nullable(),
+    /**
+     * P(the rule holds). Null when code decided it (a number where the sample is a price, the
+     * language of the copy's own words).
+     */
+    probability: z.number().min(0).max(1).nullable(),
+    verdict: z.enum(['pass', 'fail', 'unsure']),
+  })
+  .strict();
+export type ApiRenderRowGateCheck = z.infer<typeof apiRenderRowGateCheckSchema>;
+
+export const apiRenderRowGateSchema = z
+  .object({
+    /**
+     * passed: every check passed. flagged: a rule failed, still, after one rewrite. unsure: nothing
+     * failed but something could not be decided. unavailable: the checker did not answer — the row
+     * is NOT checked, and must never be read as passed.
+     */
+    status: z.enum(['passed', 'flagged', 'unsure', 'unavailable']),
+    /** The row failed a rule and was rewritten once with that rule named. */
+    regenerated: z.boolean(),
+    checks: z.array(apiRenderRowGateCheckSchema),
+    /** Why the checker could not judge this row; null otherwise. */
+    reason: z.string().nullable(),
+  })
+  .strict();
+export type ApiRenderRowGate = z.infer<typeof apiRenderRowGateSchema>;
+
 export const apiRenderSuggestRowsResponseSchema = z
   .object({
     /**
@@ -1409,6 +1458,8 @@ export const apiRenderSuggestRowsResponseSchema = z
           parentId: z.string().uuid().nullable(),
           label: z.string().min(1).max(200),
           overrides: apiRenderVariableMapSchema,
+          /** Absent only from a server older than the gate. */
+          gate: apiRenderRowGateSchema.optional(),
         })
         .strict(),
     ),

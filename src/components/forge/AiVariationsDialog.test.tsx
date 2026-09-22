@@ -28,6 +28,8 @@ const suggestRows = mock(async (_input: unknown): Promise<unknown> => ANSWER);
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: { suggestRows },
 }));
+const warmLaya = mock(() => undefined);
+mock.module('@/lib/api/layaWarm', () => ({ warmLaya }));
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
@@ -65,7 +67,10 @@ const CONTRACT = {
   outputs: [],
 } as never;
 
-beforeEach(() => suggestRows.mockClear());
+beforeEach(() => {
+  suggestRows.mockClear();
+  warmLaya.mockClear();
+});
 afterEach(cleanup);
 
 const brief = (text: string) =>
@@ -93,6 +98,8 @@ describe('AiDraftDialog', () => {
     expect(screen.getByText('20 rows in all')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Draft' }));
 
+    // The checker is woken the moment the dialog opens, not when the draft is sent.
+    expect(warmLaya).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(onDrafted).toHaveBeenCalledWith(ANSWER));
     expect(suggestRows.mock.calls[0]?.[0]).toEqual({
       brandId: BRAND,
@@ -176,6 +183,130 @@ describe('AiDraftDialog', () => {
     expect((await screen.findByRole('alert')).textContent).toContain(
       'Hero: no Library picture matched the brief',
     );
+  });
+});
+
+describe('AiDraftDialog — checked rows', () => {
+  const OK = '66666666-6666-4666-8666-666666666666';
+  const BAD = '77777777-7777-4777-8777-777777777777';
+  const FORK = '88888888-8888-4888-8888-888888888888';
+  const gate = (status: string, checks: unknown[] = [], reason: string | null = null) => ({
+    status,
+    regenerated: status === 'flagged',
+    checks,
+    reason,
+  });
+  const CHECKED = {
+    ...ANSWER,
+    rows: [
+      {
+        id: OK,
+        parentId: null,
+        label: 'Gym bag',
+        overrides: { headline: 'Gym bag' },
+        gate: gate('passed'),
+      },
+      {
+        id: BAD,
+        parentId: null,
+        label: 'Half price',
+        overrides: { headline: 'Half price' },
+        gate: gate('flagged', [
+          { rule: 'names_offer', subject: null, probability: 0.05, verdict: 'fail' },
+        ]),
+      },
+      {
+        id: FORK,
+        parentId: BAD,
+        label: 'Half price, blue',
+        overrides: { headline: 'Half price, blue' },
+        gate: gate(
+          'unavailable',
+          [],
+          'The checker did not answer in time — it may be starting up.',
+        ),
+      },
+    ],
+  };
+
+  test('each row shows its verdict; a failed row starts unticked and only kept rows reach the grid', async () => {
+    suggestRows.mockImplementationOnce(async () => CHECKED);
+    const onDrafted = mock((_response: unknown) => undefined);
+    render(
+      <AiDraftDialog
+        open
+        onOpenChange={() => undefined}
+        brandId={BRAND}
+        bindingId={null}
+        contract={CONTRACT}
+        parent={null}
+        onDrafted={onDrafted}
+      />,
+    );
+    brief('Two bags');
+    fireEvent.click(screen.getByRole('button', { name: 'Draft' }));
+    expect(
+      await screen.findByText('Fails: does not name the product in its picture (rewritten once)'),
+    ).toBeTruthy();
+    // A pass is right ~9 in 10 — not enough for a check mark — so it carries no mark either.
+    expect(screen.queryByText(/^Checked/)).toBeNull();
+    expect(
+      screen.getByText('Fails: does not name the product in its picture (rewritten once)'),
+    ).toBeTruthy();
+    // An undecided row (here: the checker did not answer) carries no mark at all.
+    expect(screen.queryByText(/Not checked|Could not tell|starting up/)).toBeNull();
+    // The failed row is unticked, and its variation cannot land without it.
+    fireEvent.click(screen.getByRole('button', { name: 'Add 1 row' }));
+    expect(onDrafted).toHaveBeenCalledWith({ ...CHECKED, rows: [CHECKED.rows[0]] });
+  });
+
+  test('ticking a failed row back keeps it and its variation', async () => {
+    suggestRows.mockImplementationOnce(async () => CHECKED);
+    const onDrafted = mock((_response: unknown) => undefined);
+    render(
+      <AiDraftDialog
+        open
+        onOpenChange={() => undefined}
+        brandId={BRAND}
+        bindingId={null}
+        contract={CONTRACT}
+        parent={null}
+        onDrafted={onDrafted}
+      />,
+    );
+    brief('Two bags');
+    fireEvent.click(screen.getByRole('button', { name: 'Draft' }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Half price' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add 3 rows' }));
+    expect(onDrafted).toHaveBeenCalledWith(CHECKED);
+  });
+});
+
+describe('AiDraftDialog — nothing decided', () => {
+  test('rows the checker could not decide go straight to the grid, with no step and no badge', async () => {
+    const undecided = {
+      ...ANSWER,
+      rows: ANSWER.rows.map((row) => ({
+        ...row,
+        gate: { status: 'unsure', regenerated: false, checks: [], reason: null },
+      })),
+    };
+    suggestRows.mockImplementationOnce(async () => undecided);
+    const onDrafted = mock((_response: unknown) => undefined);
+    render(
+      <AiDraftDialog
+        open
+        onOpenChange={() => undefined}
+        brandId={BRAND}
+        bindingId={null}
+        contract={CONTRACT}
+        parent={null}
+        onDrafted={onDrafted}
+      />,
+    );
+    brief('Anything');
+    fireEvent.click(screen.getByRole('button', { name: 'Draft' }));
+    await waitFor(() => expect(onDrafted).toHaveBeenCalledWith(undecided));
   });
 });
 

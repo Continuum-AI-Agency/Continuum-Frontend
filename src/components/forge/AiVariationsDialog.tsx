@@ -4,11 +4,12 @@ import {
   API_RENDER_SUGGEST_FORKS_MAX,
   API_RENDER_SUGGEST_ROWS_MAX,
   type ApiRenderInputValue,
+  type ApiRenderRowGate,
   type ApiRenderSuggestRowsResponse,
   type ApiRenderTemplateContract,
   readableLayerName,
 } from '@continuum/contracts';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { warmLaya } from '@/lib/api/layaWarm';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
 
@@ -35,6 +37,43 @@ import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/
 //
 // Called rows, not variants: a VARIANT is a sibling version of the template — a ratio, a language —
 // and lives in the Variants tab. See template-forge docs/TEMPLATE_IDENTITY.md.
+//
+// Every drafted row comes back checked against the brand's written rules (Laya, on the Backend).
+// Only a confident FAIL is shown: it is flagged and starts unticked — shown, never hidden, and the
+// person decides. Measured, those flags were right every time; a pass was right ~9 times in 10 at
+// any bar, which is not good enough to put a check mark on a row. So a pass, an unsure and a
+// checker that was down all show nothing — a badge on every undecided row is a badge people learn to
+// ignore. Every verdict stays in the contract for MCP and telemetry.
+
+type DraftedRow = ApiRenderSuggestRowsResponse['rows'][number];
+
+/** A flagged row's failure in words a person can act on; null for every other row. */
+function gateSentence(gate: ApiRenderRowGate, labels: Map<string, string>): string | null {
+  if (gate.status !== 'flagged') return null;
+  const rule = (check: ApiRenderRowGate['checks'][number]) => {
+    switch (check.rule) {
+      case 'names_offer':
+        return 'does not name the product in its picture';
+      case 'brand_language':
+        return "is not in the brand's language";
+      default:
+        return `“${readableLayerName(labels.get(check.subject ?? '') ?? check.subject ?? '')}” is not the kind of text its slot holds`;
+    }
+  };
+  const said = [...new Set(gate.checks.filter((check) => check.verdict === 'fail').map(rule))];
+  return `Fails: ${said.join('; ')}${gate.regenerated ? ' (rewritten once)' : ''}`;
+}
+
+const flaggedRow = (row: DraftedRow) => row.gate?.status === 'flagged';
+
+/** The rows a person kept: ticked, and every row above it ticked too — a variation needs its row. */
+function keptRows(rows: DraftedRow[], ticked: ReadonlySet<string>): DraftedRow[] {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const kept = (row: DraftedRow): boolean =>
+    ticked.has(row.id) &&
+    (!row.parentId || !byId.has(row.parentId) || kept(byId.get(row.parentId) as DraftedRow));
+  return rows.filter(kept);
+}
 
 export type AiDraftParent = {
   id: string;
@@ -76,11 +115,16 @@ export function AiDraftDialog({
   const [vary, setVary] = useState<string[]>(() => editable.map((variable) => variable.key));
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [drafted, setDrafted] = useState<ApiRenderSuggestRowsResponse | null>(null);
+  const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
 
   // A new opening starts from what it is for: variations ask for a few, new rows for five.
   // biome-ignore lint/correctness/useExhaustiveDependencies: only opening resets the form.
   useEffect(() => {
     if (!open) return;
+    // The checker scales to zero and takes about ninety seconds to wake: start it while they type.
+    warmLaya();
+    setDrafted(null);
     setCount(initialCount ?? (parent ? 3 : 5));
     setForks(0);
     setVary(initialVaryKeys?.length ? initialVaryKeys : editable.map((variable) => variable.key));
@@ -119,9 +163,18 @@ export function AiDraftDialog({
         );
         return;
       }
-      onDrafted(response);
       setPrompt('');
-      onOpenChange(false);
+      // Nothing flagged — every row passed, was unsure, or went unchecked: nothing to show, so the
+      // rows go straight in.
+      if (!response.rows.some(flaggedRow)) {
+        onDrafted(response);
+        onOpenChange(false);
+        return;
+      }
+      setTicked(
+        new Set(response.rows.filter((row) => row.gate?.status !== 'flagged').map((row) => row.id)),
+      );
+      setDrafted(response);
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
       setProblem(
@@ -133,6 +186,75 @@ export function AiDraftDialog({
       setBusy(false);
     }
   };
+
+  const addChecked = () => {
+    if (!drafted) return;
+    onDrafted({ ...drafted, rows: keptRows(drafted.rows, ticked) });
+    setDrafted(null);
+    onOpenChange(false);
+  };
+
+  if (drafted) {
+    const labels = new Map(contract.variables.map((variable) => [variable.key, variable.label]));
+    const byId = new Set(drafted.rows.map((row) => row.id));
+    const kept = keptRows(drafted.rows, ticked).length;
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Some rows failed your brand’s rules</DialogTitle>
+            <DialogDescription>
+              A row that failed a rule starts unticked — read why, and keep it if you disagree.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="flex max-h-80 flex-col gap-2 overflow-y-auto">
+            {drafted.rows.map((row) => {
+              const sentence = row.gate ? gateSentence(row.gate, labels) : null;
+              const nested = row.parentId !== null && byId.has(row.parentId);
+              return (
+                <li
+                  key={row.id}
+                  className={nested ? 'ml-6 flex items-start gap-2' : 'flex items-start gap-2'}
+                >
+                  <Checkbox
+                    id={`ai-draft-keep-${row.id}`}
+                    checked={ticked.has(row.id)}
+                    onCheckedChange={(checked) =>
+                      setTicked((current) => {
+                        const next = new Set(current);
+                        if (checked) next.add(row.id);
+                        else next.delete(row.id);
+                        return next;
+                      })
+                    }
+                  />
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <Label htmlFor={`ai-draft-keep-${row.id}`} className="text-sm font-normal">
+                      {row.label}
+                    </Label>
+                    {sentence ? (
+                      <p className="flex items-center gap-1 text-xs text-destructive">
+                        <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
+                        {sentence}
+                      </p>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDrafted(null)}>
+              Back
+            </Button>
+            <Button type="button" disabled={kept === 0} onClick={addChecked}>
+              Add {kept} {kept === 1 ? 'row' : 'rows'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={(next) => (busy ? undefined : onOpenChange(next))}>
