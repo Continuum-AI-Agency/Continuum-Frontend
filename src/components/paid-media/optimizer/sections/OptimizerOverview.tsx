@@ -203,8 +203,17 @@ export function OptimizerOverview({
           currency={shown.currency ?? currency ?? null}
           dailySpend={shown.scale_per_day ?? dailyTotal}
           deck={shown.deck ?? null}
+          // The same series the stream below draws, handed down rather than fetched again —
+          // and only when it HAS rows: a window of zeros is what "no snapshot history" looks
+          // like, and a card cannot tell that from an account that spent nothing.
+          delivery={
+            stream.hasData
+              ? stream.points.map((point) => ({ date: point.date, spend: point.total }))
+              : null
+          }
           objective={dominantObjective(portfolios)}
           onOpenPortfolio={onSelectPortfolio}
+          plannedPerDay={dailyTotal}
           source={shown.model === 'deterministic' ? 'fallback' : 'brief'}
           starved={shown.starved}
         />

@@ -23,10 +23,15 @@
 // It reads the CATALOGUE, not three familiar detectors: the label and the comparison come
 // from `ACCOUNT_DETECTOR_META`, the money class from the candidate, the rung from the
 // objective ladder, the action from the family map. Any of the twenty-five leads correctly.
+//
+// AND ON THE DAY NOTHING FIRED — the common case on a healthy account — the card answers the
+// question a person actually has next: so how are we doing. The account's own delivery holds
+// the figure; coverage is one line, not the headline. See `QuietFace`.
 
 import type {
   AccountCandidate,
   AccountDetector,
+  ArguingChart,
   OptimizationObjective,
   ResultRung,
 } from '@continuum/contracts';
@@ -48,7 +53,8 @@ import { AlertTriangleIcon } from 'lucide-react';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { formatPercent } from '../../format';
+import { formatCurrency, formatPercent } from '../../format';
+import { AccountChartView } from './AccountChartView';
 import { CalmRule, HeadlineComparison, HeadlineFigure, MoneyLine } from './candidateHeadline';
 import { doubtedBy, scopeOf } from './guardScope';
 
@@ -158,6 +164,17 @@ export type AccountLeadCardProps = {
   dailySpend: number | null;
   /** How much of the catalogue can even ask a question here. Absent on an older read. */
   deck?: { applies: number; total: number } | null;
+  /**
+   * What the account actually delivered, one point per day, oldest first.
+   *
+   * The screen's own spend series, handed down rather than fetched again: a quiet card that
+   * asked for its own data would be a second read of the same rows, free to disagree with
+   * the stream drawn below it. Absent — an account with no snapshot history — is a real
+   * case, and the card falls back to the scale the read measured itself at.
+   */
+  delivery?: DeliveryPoint[] | null;
+  /** The daily budgets these portfolios plan — the line the delivery is read against. */
+  plannedPerDay?: number | null;
   /** The checks that could not run, so a quiet day can say what would change that. */
   starved?: Array<{ detector: AccountDetector; missing: string }>;
   objective?: OptimizationObjective | null;
@@ -171,6 +188,8 @@ export function AccountLeadCard({
   currency,
   dailySpend,
   deck = null,
+  delivery = null,
+  plannedPerDay = null,
   starved = [],
   objective = null,
   objectiveAnalog = null,
@@ -183,6 +202,10 @@ export function AccountLeadCard({
   const ranked = rankAccountCandidates(candidates);
   const lead = ranked[0] ?? null;
   const mode: 'lead' | 'guard' | 'quiet' = lead ? 'lead' : guards.length > 0 ? 'guard' : 'quiet';
+  // Read ONCE and handed to both bands: the face's figure and the pacing share are the same
+  // fact, and two readings of one series are two figures free to drift apart.
+  const delivered = mode === 'quiet' ? readDelivery(delivery) : null;
+  const spendPerDay = delivered ? delivered.perDay : dailySpend;
   const provenance = source === 'brief' ? 'Jaina, from today’s run' : 'Draft read from today’s run';
 
   return (
@@ -232,8 +255,15 @@ export function AccountLeadCard({
 
         {mode === 'quiet' ? (
           <>
-            <QuietFace deck={deck} play={play} starved={starved} />
+            <QuietFace
+              currency={currency}
+              dailySpend={dailySpend}
+              delivered={delivered}
+              plannedPerDay={plannedPerDay}
+              play={play}
+            />
             <div className="divide-y divide-border/60">
+              <PacingRow currency={currency} perDay={spendPerDay} plannedPerDay={plannedPerDay} />
               <CheckedRow deck={deck} starved={starved} />
               <BlockedRow starved={starved} />
             </div>
@@ -347,45 +377,172 @@ function GuardFace({ guard, play }: { guard: AccountCandidate; play: boolean }) 
   );
 }
 
+/** One day of what the account actually delivered. Oldest first. */
+export type DeliveryPoint = { date: string; spend: number };
+
+/** Half of a fortnight: the window a person compares to "the week before" without counting. */
+const DELIVERY_WINDOW_DAYS = 7;
+
+export type DeliveryReading = {
+  /** Spend per day across the recent window. */
+  perDay: number;
+  /** The same figure over the window before it, when the series carries two of them. */
+  priorPerDay: number | null;
+  /** Which way it moved, in whole percent. Null when there is nothing to move from. */
+  deltaPct: number | null;
+  /** How many days each half covers, so the card can name the window it is quoting. */
+  days: number;
+  points: DeliveryPoint[];
+};
+
+/**
+ * What the account actually delivered, and which way it is going.
+ *
+ * Two halves of the same series rather than a fitted trend: a reader checks "this week
+ * against last week" in their head, and a slope they cannot reproduce is a figure they
+ * cannot argue with. A series that spent nothing at all returns null — zero-filled days are
+ * how a window with no rows in it looks, and "$0 a day" said as a measurement would be
+ * claiming we measured.
+ */
+export function readDelivery(points: DeliveryPoint[] | undefined | null): DeliveryReading | null {
+  const clean = (points ?? []).filter((point) => Number.isFinite(point.spend));
+  if (clean.length === 0) return null;
+  if (clean.reduce((sum, point) => sum + point.spend, 0) <= 0) return null;
+
+  const days = Math.min(DELIVERY_WINDOW_DAYS, Math.ceil(clean.length / 2));
+  const mean = (rows: DeliveryPoint[]) =>
+    rows.reduce((sum, point) => sum + point.spend, 0) / rows.length;
+  const perDay = mean(clean.slice(-days));
+  const priorPerDay = clean.length >= days * 2 ? mean(clean.slice(-days * 2, -days)) : null;
+  return {
+    perDay,
+    priorPerDay,
+    deltaPct:
+      priorPerDay != null && priorPerDay > 0
+        ? Math.round(((perDay - priorPerDay) / priorPerDay) * 100)
+        : null,
+    days,
+    points: clean,
+  };
+}
+
+/**
+ * The delivery, drawn against the plan.
+ *
+ * `rates` is one of the two shapes the catalogue calls ARGUING — the return type says so, so
+ * a later edit cannot quietly turn this into a picture of the sentence beside it. What it
+ * adds to the three figures is the only thing they cannot carry: whether the account has
+ * been steady, ramping or has fallen off a cliff inside the window. A constant `b` renders
+ * as the labelled rule the series is read against rather than as a second series, which is
+ * exactly what a daily plan is; with no plan to draw, the series stands alone.
+ */
+export function deliveryChart(
+  reading: DeliveryReading | null,
+  plannedPerDay: number | null,
+): ArguingChart | null {
+  if (!reading || reading.points.length < 2) return null;
+  const plan = plannedPerDay != null && plannedPerDay > 0 ? plannedPerDay : null;
+  return {
+    shape: 'rates',
+    unit: 'currency',
+    points: reading.points.map((point) => ({ t: point.date, a: point.spend, b: plan })),
+    a_label: 'Spent a day',
+    b_label: 'Planned',
+    projected_from: null,
+    gap_per_day: null,
+  };
+}
+
 /**
  * A quiet day is a reading, not an empty screen.
  *
- * The figure is the size of the deck, because on a day when nothing fired the only number
- * worth printing large is how many questions were actually asked. Without it the card
- * degrades to exactly the grey sentence this was built to replace.
+ * It used to print the DECK here — a large "18 checks asked, of 20 that apply here" — so on
+ * the day there was nothing to report, which is most days on a healthy account, the largest
+ * number on the optimizer's front page was how many times the product had checked itself.
+ * That is process trivia standing where the account's state belongs.
+ *
+ * Someone told there is nothing to move asks one thing next: so how are we doing. The figure
+ * answers it with the account's own delivery — what it is spending a day, which way that
+ * moved, and how it sits against the plan — because that is what this screen can actually
+ * prove. Cost per result would be the better answer and the stored read does not carry it;
+ * inventing one from a second source would put two numbers that disagree on one card.
+ *
+ * The figure and the picture come from ONE series, so they cannot contradict each other. A
+ * read written before the series existed falls back to the scale the read measured itself
+ * at, and says which of the two it is quoting.
  */
 function QuietFace({
-  deck,
+  currency,
+  dailySpend,
+  delivered,
+  plannedPerDay,
   play,
-  starved,
 }: {
-  deck: { applies: number; total: number } | null;
+  currency: string | null;
+  dailySpend: number | null;
+  delivered: DeliveryReading | null;
+  plannedPerDay: number | null;
   play: boolean;
-  starved: Array<{ detector: AccountDetector; missing: string }>;
 }) {
-  const ran = deck ? Math.max(0, deck.applies - starved.length) : null;
+  const chart = deliveryChart(delivered, plannedPerDay);
+  const perDay = delivered ? delivered.perDay : dailySpend;
   return (
     <Face>
       <Kicker>Across the account</Kicker>
       <h2 className="font-semibold text-base text-foreground">Nothing worth moving today</h2>
-      {deck && ran !== null ? (
+      {perDay != null ? (
         <p
           className="flex flex-wrap items-baseline gap-x-1.5 text-2xs text-muted-foreground"
+          data-reading={delivered ? 'window' : 'scale'}
           data-testid="account-lead-figure"
         >
           <span className="font-mono font-semibold text-3xl tabular-nums text-foreground">
-            {ran}
+            {formatCurrency(perDay, currency)}
           </span>
-          <span className="text-foreground">checks asked</span>
-          <span>· of {deck.applies} that apply here</span>
+          <span className="text-foreground">
+            {delivered ? `a day, last ${delivered.days} days` : 'a day across this account'}
+          </span>
+        </p>
+      ) : null}
+      {delivered?.priorPerDay != null && delivered.deltaPct != null ? (
+        <p className="text-3xs text-muted-foreground tabular-nums" data-testid="account-lead-trend">
+          {formatCurrency(delivered.priorPerDay, currency)} the {delivered.days} days before ·{' '}
+          {formatPercent(delivered.deltaPct, { signed: true })}
         </p>
       ) : null}
       <CalmRule play={play} testId="account-lead-rule" />
-      <p className="text-2xs text-muted-foreground">
-        Every check that could ask a question here compared this account against its own numbers and
-        found nothing worth moving.
-      </p>
+      {chart ? (
+        <div data-testid="account-lead-delivery">
+          <AccountChartView chart={chart} currency={currency} />
+        </div>
+      ) : null}
     </Face>
+  );
+}
+
+/**
+ * What the account is delivering against what it is planned to.
+ *
+ * The one comparison a quiet day is actually deciding something about: an account at a fifth
+ * of its plan has news, and it is not news any of the twenty-five detectors raise. Printed as
+ * the share and the plan itself, with no verdict attached — whether under-delivery is good
+ * or bad is the reader's call, and a tone here would be this card making it for them.
+ */
+function PacingRow({
+  currency,
+  perDay,
+  plannedPerDay,
+}: {
+  currency: string | null;
+  perDay: number | null;
+  plannedPerDay: number | null;
+}) {
+  if (perDay == null || plannedPerDay == null || plannedPerDay <= 0) return null;
+  const share = Math.round((perDay / plannedPerDay) * 100);
+  return (
+    <Row label="Pacing" testId="account-lead-pacing" value={`${formatPercent(share)} of plan`}>
+      <Sub>{formatCurrency(plannedPerDay, currency)} a day planned.</Sub>
+    </Row>
   );
 }
 
@@ -460,6 +617,14 @@ function AffectsRow({ guard }: { guard: AccountCandidate }) {
   );
 }
 
+/**
+ * Coverage, at the size coverage is worth.
+ *
+ * "Did we look" is a real question and it is answered once, in one line. It is not the
+ * headline: a reader who has just been told there is nothing to move is asking how the
+ * account is doing, not how many times it was asked. The count survives only where it is
+ * load-bearing — when some checks could not ask at all — and the row below names those.
+ */
 function CheckedRow({
   deck,
   starved,
@@ -468,17 +633,11 @@ function CheckedRow({
   starved: Array<{ detector: AccountDetector; missing: string }>;
 }) {
   const ran = deck ? Math.max(0, deck.applies - starved.length) : null;
-  return (
-    <Row
-      label="Checked"
-      testId="account-lead-checked"
-      value={
-        deck && ran !== null ? `${ran} of ${deck.applies} ran` : 'Every check that applies here ran'
-      }
-    >
-      <Sub>A check that finds nothing is a reading, not a gap in coverage.</Sub>
-    </Row>
-  );
+  const asked =
+    deck && ran !== null && starved.length > 0
+      ? `${ran} of ${deck.applies} checks asked, and found nothing`
+      : 'Every check that applies here ran and found nothing';
+  return <Row label="Checked" testId="account-lead-checked" value={asked} />;
 }
 
 /**
