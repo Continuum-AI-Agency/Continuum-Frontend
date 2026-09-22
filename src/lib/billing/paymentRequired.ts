@@ -7,6 +7,7 @@ import type { ToastOptions } from '@/components/ui/ToastProvider';
 import { toast } from '@/components/ui/toast-imperative';
 import { billingHref, creditsHref, PLAN_NAME_FOR_PRODUCT } from './productAccess';
 import { trackBillingEvent } from './telemetry';
+import { openTopUp } from './topUp';
 
 // The Backend (and any edge function) answers a product the brand has not bought, or a spent
 // Canvas balance, with HTTP 402 and the contracts body. This turns that body into the one CTA
@@ -39,7 +40,11 @@ export function paymentRequiredToast(
       variant: 'warning',
       durationMs: 10_000,
       dedupeKey: 'billing-402-credits',
-      action: { label: 'Buy credits', onClick: () => navigate(creditsHref(from)) },
+      // The Top up dialog where they are; Settings only when no dialog is mounted.
+      action: {
+        label: 'Buy credits',
+        onClick: () => openTopUp('toast', () => navigate(creditsHref(from))),
+      },
     };
   }
   const planName = PLAN_NAME_FOR_PRODUCT[body.product];
@@ -63,7 +68,10 @@ export function paymentRequiredToast(
  * Shows the upgrade / buy-credits toast when `status` + `body` are a billing 402, and returns
  * the refusal it showed. Browser only — on the server there is nobody to show a toast to.
  */
-export function notifyPaymentRequired(status: number, body: unknown): BillingPaymentRequired | null {
+export function notifyPaymentRequired(
+  status: number,
+  body: unknown,
+): BillingPaymentRequired | null {
   if (typeof window === 'undefined') return null;
   const paymentRequired = parsePaymentRequired(status, body);
   if (!paymentRequired) return null;

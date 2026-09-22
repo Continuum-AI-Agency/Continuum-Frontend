@@ -14,6 +14,7 @@ import {
 } from './billingViewModel';
 import { FROM_PARAM, safeReturnPath } from './productAccess';
 import { trackBillingEvent } from './telemetry';
+import { withoutCheckoutReturn } from './topUp';
 
 export const billingOverviewKey = (brandId: string) => ['billing', 'overview', brandId] as const;
 
@@ -28,9 +29,10 @@ export function billingReturnUrl(query: string): string {
   return `${window.location.origin}${window.location.pathname}?${params}`;
 }
 
-function useBillingOverview(brandId: string, pollIntervalMs: number | false) {
+function useBillingOverview(brandId: string, pollIntervalMs: number | false, enabled: boolean) {
   return useQuery({
     queryKey: billingOverviewKey(brandId),
+    enabled,
     queryFn: () => fetchBillingOverview(brandId),
     staleTime: 30_000,
     refetchInterval: pollIntervalMs,
@@ -62,8 +64,16 @@ function settledTitle(change: PendingBillingChange): string {
  * have applied yet — a Checkout return (?checkout=success|cancel) or a plan change made in the
  * panel. While one is pending the overview is polled until it shows, for at most
  * CHANGE_POLL_WINDOW_MS.
+ *
+ * `returnsOnly` is the app shell's use: a Top up bought from any page returns to that page, so
+ * the shell confirms it there. It reads the overview only while a return is pending (members
+ * never buy, so never read it), and `enabled: false` hands the return to the Billing page.
  */
-export function useBillingOverviewWithPendingChange(brandId: string) {
+export function useBillingOverviewWithPendingChange(
+  brandId: string,
+  options: { returnsOnly?: boolean; enabled?: boolean } = {},
+) {
+  const { returnsOnly = false, enabled = true } = options;
   const { show } = useToast();
   const router = useRouter();
   const pathname = usePathname();
@@ -73,7 +83,11 @@ export function useBillingOverviewWithPendingChange(brandId: string) {
   const handledReturnRef = useRef(false);
   // A Checkout return, and where the buyer came from: the success toast offers the way back.
   const checkoutReturnRef = useRef<{ from: string | null } | null>(null);
-  const overview = useBillingOverview(brandId, pending ? CHANGE_POLL_INTERVAL_MS : false);
+  const overview = useBillingOverview(
+    brandId,
+    pending ? CHANGE_POLL_INTERVAL_MS : false,
+    enabled && (!returnsOnly || pending !== null),
+  );
   const data = overview.data;
 
   const track = useCallback((change: PendingBillingChange) => {
@@ -82,13 +96,15 @@ export function useBillingOverviewWithPendingChange(brandId: string) {
   }, []);
 
   useEffect(() => {
-    if (handledReturnRef.current) return;
+    if (!enabled || handledReturnRef.current) return;
     const checkoutReturn = parseCheckoutReturn(searchParams);
     if (!checkoutReturn) return;
     handledReturnRef.current = true;
-    const from = safeReturnPath(searchParams.get(FROM_PARAM));
-    // Drop the query so a reload does not replay the toast or restart the wait.
-    router.replace(`${pathname}?section=billing`, { scroll: false });
+    // Only Billing offers a way back: a Top up returns to the page it was bought from.
+    const from = returnsOnly ? null : safeReturnPath(searchParams.get(FROM_PARAM));
+    // Drop the return's params so a reload does not replay the toast or restart the wait.
+    const rest = withoutCheckoutReturn(searchParams.toString(), returnsOnly ? [] : [FROM_PARAM]);
+    router.replace(`${pathname}${rest}`, { scroll: false });
     if (checkoutReturn.outcome === 'cancel') {
       show({ title: 'Checkout canceled', description: 'Nothing was charged.', variant: 'info' });
       return;
@@ -101,7 +117,7 @@ export function useBillingOverviewWithPendingChange(brandId: string) {
     });
     checkoutReturnRef.current = { from };
     track(checkoutReturn.change);
-  }, [pathname, router, searchParams, show, track]);
+  }, [enabled, returnsOnly, pathname, router, searchParams, show, track]);
 
   useEffect(() => {
     if (!pending || !data || !isChangeSettled(pending, data)) return;

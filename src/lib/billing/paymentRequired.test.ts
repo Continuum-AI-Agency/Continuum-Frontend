@@ -5,6 +5,7 @@ import {
   parsePaymentRequired,
   paymentRequiredToast,
 } from './paymentRequired';
+import { registerTopUpHost } from './topUp';
 
 describe('parsePaymentRequired', () => {
   test('reads the contracts 402 body', () => {
@@ -73,6 +74,23 @@ describe('paymentRequiredToast', () => {
       '/settings?section=billing&from=%2Fstudio%3Froom%3D1#credits',
       '/settings?section=billing&need=paid_media&from=%2Fforge',
     ]);
+  });
+
+  test('Buy credits opens the Top up dialog where the refusal happened, when one is mounted', () => {
+    const visited: string[] = [];
+    const opened: string[] = [];
+    const unregister = registerTopUpHost((source) => {
+      opened.push(source);
+      return true;
+    });
+    paymentRequiredToast(
+      { error: 'credits_exhausted', product: 'studio', planCode: 'organic_studio' },
+      (href) => visited.push(href),
+      '/studio?room=1',
+    ).action?.onClick();
+    unregister();
+    expect(opened).toEqual(['toast']);
+    expect(visited).toEqual([]);
   });
 
   test('a product no plan sells has nothing to buy, so no button', () => {

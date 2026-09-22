@@ -14,7 +14,9 @@ export type BillingEventName =
   /** The webhook's grant became visible after a Checkout return. */
   | 'checkout_completed'
   /** The once-per-low-spell credits toast. */
-  | 'low_credits_nudge_shown';
+  | 'low_credits_nudge_shown'
+  /** The Top up dialog opened, from `source` (toast, nudge, sidebar, node, billing). */
+  | 'top_up_opened';
 
 export function trackBillingEvent(event: BillingEventName, props?: EventProps): void {
   if (typeof window === 'undefined') return;

@@ -44,11 +44,11 @@ import {
 //   (f) refusal   the same brand at 0 credits runs a real Canvas image node: the LOCAL Backend
 //                 answers 402 before any provider call, and the canvas shows "Out of Canvas
 //                 credits" with Buy credits — never "Generation failed" or the raw JSON — the node
-//                 keeps its prompt and says why, nothing is metered, and Buy credits lands on the
-//                 credit-pack section remembering the canvas (`from=`). One pack is then bought
-//                 on SANDBOX Checkout (the way back rides Stripe's success URL); once the real
-//                 events are replayed, "Canvas credits added" offers Back to where you were, which
-//                 returns to the same canvas room. Needs the local Backend
+//                 keeps its prompt and says why, nothing is metered, and the node's Buy credits
+//                 opens the Top up dialog over the canvas (5 packs pre-selected). One pack is
+//                 bought on SANDBOX Checkout, whose success URL is the same canvas room; once the
+//                 real events are replayed, "Canvas credits added" shows there and the sidebar
+//                 reads 1,000 credits — no detour through Settings. Needs the local Backend
 //                 allowing this origin (`ALLOWED_ORIGINS=http://127.0.0.1:3126 bun run
 //                 dev:be:local-supabase`); without it the test is skipped and says so.
 //
@@ -656,27 +656,38 @@ test.describe('billing:gates:fe:bench', () => {
       });
 
       await step(
-        '(f) Buy credits opens the credit-pack section, remembering the canvas',
+        "(f) the node's Buy credits opens Top up over the canvas, 5 packs pre-selected",
         async () => {
-          await notifications.getByRole('button', { name: 'Buy credits' }).click();
-          await page.waitForURL(
-            (url) =>
-              url.pathname === '/settings' &&
-              url.searchParams.get('section') === 'billing' &&
-              url.searchParams.get('from') === `/ai-studio?roomId=${REFUSAL_ROOM_ID}` &&
-              url.hash === '#credits',
-            { timeout: 180_000 },
-          );
-          await expect(
-            page.locator('#credits').getByRole('button', { name: 'Buy credits' }),
-          ).toBeVisible({ timeout: 120_000 });
+          await node.getByTestId('node-buy-credits').click();
+          const dialog = page.getByTestId('top-up-dialog');
+          await expect(dialog).toBeVisible({ timeout: 30_000 });
+          await expect(page.getByTestId('top-up-balance')).toContainText('Out of credits');
+          await expect(page.getByTestId('top-up-pack-5')).toHaveAttribute('data-checked', '');
+          await expect(page.getByTestId('top-up-continue')).toContainText('$50');
+          expect(new URL(page.url()).pathname).toBe('/ai-studio');
+          await shoot(page, 'top-up-dialog', [DESKTOP, MOBILE]);
+          // The app ignores prefers-color-scheme unless the stored mode is `system`; set the
+          // same <html> attributes its theme bootstrap does, without reloading the dialog away.
+          const setAppearance = (appearance: 'dark' | 'light') =>
+            page.evaluate((mode) => {
+              const root = document.documentElement;
+              root.setAttribute('data-theme', mode);
+              root.style.colorScheme = mode;
+              root.classList.remove(mode === 'dark' ? 'light' : 'dark');
+              root.classList.add(mode);
+            }, appearance);
+          await setAppearance('dark');
+          await shoot(page, 'top-up-dialog-dark', [DESKTOP]);
+          await setAppearance('light');
         },
       );
 
       const sessionId = await step(
-        '(f) one pack opens sandbox Checkout, carrying the way back',
+        '(f) one pack opens sandbox Checkout that returns to the same canvas room',
         async () => {
-          await page.locator('#credits').getByRole('button', { name: 'Buy credits' }).click();
+          await page.getByTestId('top-up-pack-1').click();
+          await expect(page.getByTestId('top-up-continue')).toContainText('$10');
+          await page.getByTestId('top-up-continue').click();
           await page.waitForURL(/^https:\/\/checkout\.stripe\.com\//, { timeout: 60_000 });
           const id = page.url().match(/cs_test_[A-Za-z0-9]+/)?.[0];
           if (!id) throw new Error(`no test-mode session id in ${page.url()}`);
@@ -684,45 +695,51 @@ test.describe('billing:gates:fe:bench', () => {
           expect(checkout.livemode).toBe(false);
           expect(checkout.mode).toBe('payment');
           const successUrl = new URL(checkout.success_url ?? '');
-          expect(successUrl.searchParams.get('from')).toBe(`/ai-studio?roomId=${REFUSAL_ROOM_ID}`);
+          expect(successUrl.pathname).toBe('/ai-studio');
+          expect(successUrl.searchParams.get('roomId')).toBe(REFUSAL_ROOM_ID);
+          expect(successUrl.searchParams.get('checkout')).toBe('success');
+          expect(successUrl.searchParams.has('section')).toBe(false);
           return id;
         },
       );
 
-      await step(
-        '(f) paid: the credits land and the toast offers the way back to the canvas',
-        async () => {
-          await payWithTestCard(page, EMAILS.grandfathered);
-          await page.waitForURL(/\/settings\?/, { timeout: 120_000 });
-          const checkout = await stripe.checkout.sessions.retrieve(sessionId);
-          const customerId =
-            typeof checkout.customer === 'string' ? checkout.customer : checkout.customer?.id;
-          if (!customerId) throw new Error('completed session has no customer');
-          for (let attempt = 1; attempt <= 8; attempt += 1) {
-            await replaySandboxEventsToWebhook({
-              stripe,
-              customerId,
-              since,
-              webhookUrl: WEBHOOK_URL,
-              secret: webhookSecret,
-            });
-            if ((await brandEntitlements(db, brandId)).creditBalance.purchasedCredits > 0) break;
-            await page.waitForTimeout(2_000);
-          }
-          expect((await brandEntitlements(db, brandId)).creditBalance.purchasedCredits).toBe(1_000);
-          await expect(notifications.getByText('Canvas credits added')).toBeVisible({
-            timeout: 60_000,
+      await step('(f) paid: back on the canvas, the credits are confirmed in place', async () => {
+        await payWithTestCard(page, EMAILS.grandfathered);
+        await page.waitForURL(
+          (url) =>
+            url.pathname === '/ai-studio' && url.searchParams.get('roomId') === REFUSAL_ROOM_ID,
+          { timeout: 180_000 },
+        );
+        const checkout = await stripe.checkout.sessions.retrieve(sessionId);
+        const customerId =
+          typeof checkout.customer === 'string' ? checkout.customer : checkout.customer?.id;
+        if (!customerId) throw new Error('completed session has no customer');
+        for (let attempt = 1; attempt <= 8; attempt += 1) {
+          await replaySandboxEventsToWebhook({
+            stripe,
+            customerId,
+            since,
+            webhookUrl: WEBHOOK_URL,
+            secret: webhookSecret,
           });
-          await shoot(page, 'refusal-credits-added', [DESKTOP]);
-          await notifications.getByRole('button', { name: 'Back to where you were' }).click();
-          await page.waitForURL(
-            (url) =>
-              url.pathname === '/ai-studio' && url.searchParams.get('roomId') === REFUSAL_ROOM_ID,
-            { timeout: 180_000 },
-          );
-          await expect(node).toBeVisible({ timeout: 120_000 });
-        },
-      );
+          if ((await brandEntitlements(db, brandId)).creditBalance.purchasedCredits > 0) break;
+          await page.waitForTimeout(2_000);
+        }
+        expect((await brandEntitlements(db, brandId)).creditBalance.purchasedCredits).toBe(1_000);
+        await expect(notifications.getByText('Canvas credits added')).toBeVisible({
+          timeout: 60_000,
+        });
+        // They never left, so there is no way back to offer.
+        await expect(
+          notifications.getByRole('button', { name: 'Back to where you were' }),
+        ).toHaveCount(0);
+        await page.waitForURL((url) => !url.searchParams.has('checkout'), { timeout: 30_000 });
+        await expect(page.getByTestId('sidebar-billing')).toContainText('1,000 credits', {
+          timeout: 60_000,
+        });
+        await expect(node).toBeVisible({ timeout: 120_000 });
+        await shoot(page, 'refusal-credits-added', [DESKTOP]);
+      });
     } finally {
       await context.close();
     }

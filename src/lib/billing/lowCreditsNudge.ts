@@ -4,6 +4,7 @@ import { formatCredits } from './billingViewModel';
 import { creditsHref } from './productAccess';
 import type { SidebarBillingView } from './sidebarBilling';
 import { trackBillingEvent } from './telemetry';
+import { openTopUp } from './topUp';
 
 // One gentle heads-up when a brand's Canvas credits run low — before the 402 stops a generation,
 // not after. Once per brand per low spell: remembered in localStorage and forgotten once the
@@ -71,7 +72,10 @@ export function useLowCreditsNudge(args: {
       description: `${formatCredits(view.remainingCredits)} credits left on this brand.`,
       durationMs: 8_000,
       dedupeKey: 'billing-low-credits',
-      action: { label: 'Buy credits', onClick: () => navigate(creditsHref(from)) },
+      action: {
+        label: 'Top up',
+        onClick: () => openTopUp('nudge', () => navigate(creditsHref(from))),
+      },
     });
     trackBillingEvent('low_credits_nudge_shown', { remainingCredits: view.remainingCredits });
   }, [view, brandId, owner, onBillingPage, navigate]);
