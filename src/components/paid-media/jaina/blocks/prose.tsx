@@ -147,7 +147,7 @@ function segmentParagraph(
   paragraph: string,
   citations: readonly BlockCitation[] | undefined,
 ): ProseRun[] {
-  return parseNarrativeCitations(paragraph, citations).flatMap((segment) =>
+  return parseNarrativeCitations(paragraph, citations).flatMap((segment): ProseRun[] =>
     segment.kind === 'text' ? parseProseMarks(segment.value) : [segment],
   );
 }
@@ -184,7 +184,9 @@ export function JainaProse({
   // than passed through, because an unresolvable `[cite:id]` has already been dropped by
   // the citation parser and must never reach the reader as a literal.
   if (plain) {
-    const text = paragraphs.map((runs) => runs.map((run) => run.value).join('')).join('\n\n');
+    const text = paragraphs
+      .map((runs) => runs.map((run) => (run.kind === 'text' ? run.value : '')).join(''))
+      .join('\n\n');
     return (
       <SafeMarkdown
         content={text}
