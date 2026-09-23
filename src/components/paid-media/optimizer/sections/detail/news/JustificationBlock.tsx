@@ -41,9 +41,10 @@ import { CalmRule } from '../../account/candidateHeadline';
 import type { JustificationModel, NewsCardModel } from './justification';
 import { pickJustification } from './justification';
 
-/** How large the leading figure sits — the lead card leads a screen, an insight leads a column. */
+/** How large the leading figure sits — one step louder on the lead than on an insight. The
+ *  cards share a column now, so the lead's figure is a voice, not a size of box. */
 const FIGURE_SIZE: Record<'lead' | 'insight', string> = {
-  lead: 'text-3xl',
+  lead: 'text-2xl',
   insight: 'text-xl',
 };
 

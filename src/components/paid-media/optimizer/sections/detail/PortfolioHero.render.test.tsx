@@ -378,41 +378,145 @@ describe('the lead card and its chart have to be about the same thing', () => {
   });
 });
 
-describe('a card cannot be stretched by the slot it is mounted in', () => {
-  it('carries its own cap and floor on its own root', () => {
-    const { container } = render(
-      <PortfolioHero
-        currency="USD"
-        dailyTotal={1000}
-        explainHref="/scale?tab=jaina"
-        nextCycleAt={null}
-        onCta={() => undefined}
-        portfolioId="p1"
-        view={view()}
-      />,
-    );
-    const lead = container.querySelector('[data-testid="portfolio-news-lead"]');
-    const insight = container.querySelector('[data-testid="portfolio-news-insight"]');
-    expect(lead?.className).toContain('max-w-[34rem]');
-    expect(lead?.className).toContain('min-h-[22.75rem]');
-    expect(insight?.className).toContain('max-w-[21rem]');
-    expect(insight?.className).toContain('min-h-[14rem]');
+describe('the day’s news is one row, highest impact on the left', () => {
+  const candidate = (
+    id: string,
+    module: 'pause' | 'budget' | 'creative',
+    impact: number,
+    name: string,
+  ) => ({
+    id,
+    module,
+    kind: module === 'budget' ? 'budget_move' : module,
+    trigger: null,
+    adset_id: `as-${id}`,
+    adset_name: name,
+    impact_per_day: impact,
+    impact_unit: 'currency' as const,
+    results_per_day: null,
+    impact_basis: 'spend/day',
+    reason: null,
+    cta: { kind: 'queue_row' as const, target_id: id },
   });
 
-  it('mounts the insights in a track whose columns are capped at one card', () => {
-    const { container } = render(
+  /** Easy Fit, FORMULARIOS // TODOS, 2026-09-22: a pause hero, a second pause, a budget move. */
+  const threeCards = () =>
+    view({
+      brief: {
+        ...view().brief,
+        hero: {
+          ...view().brief.hero,
+          candidate_id: 'rec:aleira',
+          headline: 'Stop 28.68/day going to ALEIRA // AGOSTO - LKL with no leads',
+          impact_per_day: 28.68,
+        },
+        candidates: [
+          candidate('rec:aleira', 'pause', 28.68, 'ALEIRA // AGOSTO - LKL'),
+          candidate('rec:iteso', 'pause', 28.34, 'ITESO // AGOSTO - BROAD'),
+          candidate('budget:portfolio', 'budget', 6.52, 'ITESO // AGOSTO - RTG'),
+        ],
+        secondary: ['rec:iteso', 'budget:portfolio'],
+      },
+      cta: { kind: 'queue_row', rowKey: 'rec:aleira', label: 'Review the pause' },
+    });
+
+  const mount = (v: HeroView) =>
+    render(
       <PortfolioHero
         currency="USD"
-        dailyTotal={1000}
+        dailyTotal={324}
         explainHref="/scale?tab=jaina"
         nextCycleAt={null}
         onCta={() => undefined}
         portfolioId="p1"
-        view={view()}
+        view={v}
       />,
     );
-    const track = container.querySelector('[data-testid="portfolio-news-insights"]');
-    expect(track?.className).toContain('minmax(15rem,21rem)');
-    expect(track?.className).not.toContain('sm:grid-cols-2');
+
+  const cellsOf = (container: HTMLElement) => [
+    ...container.querySelectorAll(
+      '[data-testid="portfolio-news-row"] [data-testid="portfolio-news-cell"]',
+    ),
+  ];
+
+  it('fills the row in the brief’s ranking, three across, every card in the same frame', () => {
+    const { container } = mount(threeCards());
+    const cells = cellsOf(container);
+    expect(
+      cells.map((c) =>
+        c.textContent?.includes('ALEIRA')
+          ? 'aleira'
+          : c.textContent?.includes('BROAD')
+            ? 'iteso'
+            : 'budget',
+      ),
+    ).toEqual(['aleira', 'iteso', 'budget']);
+    const row = container.querySelector('[data-testid="portfolio-news-row"]');
+    expect(row?.className).toContain('@[56rem]/news:grid-cols-3');
+    expect(row?.className).toContain('@[36rem]/news:grid-cols-2');
+    const frames = [...container.querySelectorAll('article')].map((a) => a.className);
+    for (const frame of frames) {
+      expect(frame).toContain('h-full');
+      expect(frame).toContain('w-full');
+      expect(frame).not.toContain('max-w-[');
+    }
+  });
+
+  it('puts the maximum to the left of a lead Jaina chose over it', () => {
+    const v = threeCards();
+    v.brief = {
+      ...v.brief,
+      hero: {
+        ...v.brief.hero,
+        candidate_id: 'rec:iteso',
+        headline: 'Stop 28.34/day going to ITESO // AGOSTO - BROAD',
+        impact_per_day: 28.34,
+        justification: 'ALEIRA is already scheduled to end tomorrow.',
+      },
+      secondary: ['rec:aleira', 'budget:portfolio'],
+    };
+    const { container } = mount(v);
+    const cells = cellsOf(container);
+    expect(cells[0]?.querySelector('[data-testid="portfolio-news-insight"]')).toBeTruthy();
+    expect(cells[0]?.textContent).toContain('ALEIRA');
+    expect(cells[1]?.querySelector('[data-testid="portfolio-news-lead"]')).toBeTruthy();
+    expect(cells[1]?.textContent).toContain('Chosen over the biggest number');
+  });
+
+  it('keeps the recap as the row’s footer when the row is full', () => {
+    const { container } = mount(threeCards());
+    const recap = container.querySelector('[data-testid="portfolio-news-recap"]');
+    expect(recap?.getAttribute('data-placement')).toBe('footer');
+    expect(recap?.closest('[data-testid="portfolio-news-row"]')).toBeNull();
+    // Footer, not caption: the row comes first in the document.
+    const row = container.querySelector('[data-testid="portfolio-news-row"]');
+    expect(
+      row && recap ? row.compareDocumentPosition(recap) & Node.DOCUMENT_POSITION_FOLLOWING : 0,
+    ).toBeTruthy();
+  });
+
+  it('sits the recap beside a single card, spanning the columns it left empty', () => {
+    const { container } = mount(
+      view({ brief: { ...view().brief, candidates: [], secondary: [] } }),
+    );
+    expect(cellsOf(container).length).toBe(1);
+    const recap = container.querySelector('[data-testid="portfolio-news-recap"]');
+    expect(recap?.getAttribute('data-placement')).toBe('beside');
+    expect(recap?.closest('[data-testid="portfolio-news-row"]')).not.toBeNull();
+    expect(recap?.className).toContain('@[56rem]/news:col-span-2');
+  });
+
+  it('holds a fourth card behind "1 more finding" instead of stranding it on a second row', () => {
+    const v = threeCards();
+    v.brief = {
+      ...v.brief,
+      candidates: [...v.brief.candidates, candidate('rec:warm', 'creative', 4, 'Warm')],
+      secondary: ['rec:iteso', 'budget:portfolio', 'rec:warm'],
+    };
+    const { container } = mount(v);
+    expect(cellsOf(container).length).toBe(3);
+    const more = container.querySelector('[data-testid="portfolio-news-more"]');
+    expect(more?.textContent).toContain('1 more finding');
+    expect(more?.textContent).toContain('Warm');
   });
 });

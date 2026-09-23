@@ -13,10 +13,11 @@ import type {
   PortfolioBrief,
   PortfolioListItem,
 } from '@continuum/contracts';
-import { deterministicBrief, readPortfolioBrief } from '@continuum/contracts';
+import { deterministicBrief, growthSentence, readPortfolioBrief } from '@continuum/contracts';
 import type { FlightPacingModel } from '../../charts/flightPacingModel';
 import { impactPerDay } from '../recQueueModel';
 import { heroChart, heroChartReading } from './heroChart';
+import { stripPaceClaim } from './paceClaim';
 import type { RecapModel } from './recapModel';
 
 export type HeroTile = {
@@ -112,7 +113,7 @@ function pacingLineOf(flight: FlightPacingModel | null): {
  * written before `source` existed carry neither and read as no verdict. The `note` survives
  * either way — it is the only field that says WHY there is no verdict.
  */
-function pacingVerdict(pacing: CycleRunPacing | null | undefined): BriefGrowth['pacing'] {
+export function pacingVerdict(pacing: CycleRunPacing | null | undefined): BriefGrowth['pacing'] {
   const note = pacing?.note ?? null;
   const status = pacing?.status;
   const measuredAgainstAPlan = pacing?.source === 'pacing' && (pacing.idealCumulative ?? 0) > 0;
@@ -126,6 +127,31 @@ function pacingVerdict(pacing: CycleRunPacing | null | undefined): BriefGrowth['
     status,
     ratio: typeof pacing.pacingRatio === 'number' ? round2(pacing.pacingRatio) : null,
     note,
+  };
+}
+
+/**
+ * The stored brief with the verdict the latest run supports, in place of the one it carried.
+ *
+ * The brief was written from a packet, and a packet from a Backend older than
+ * `pacingVerdict` carried the engine's fallback row as a plain `on_track` — Easy Fit's
+ * FORMULARIOS // TODOS reads "above the 35 target, and is on track" on a portfolio with no
+ * flight at all. The run row on the report is the same fact the Backend reads, so the
+ * Frontend reads it too, and when it says there was no plan to be on or off, the brief's
+ * verdict goes and so does the clause in the prose that claimed it. A sentence that was
+ * nothing but the claim falls back to the deterministic line, which never invents a pace.
+ */
+function withPacingVerdict(
+  stored: PortfolioBrief,
+  runPacing: CycleRunPacing | null | undefined,
+): PortfolioBrief {
+  const growth: BriefGrowth = { ...stored.growth, pacing: pacingVerdict(runPacing) };
+  if (growth.pacing.status) return { ...stored, growth };
+  const sentence = stripPaceClaim(stored.growth_sentence);
+  return {
+    ...stored,
+    growth,
+    growth_sentence: sentence === '' ? growthSentence(growth) : sentence,
   };
 }
 
@@ -324,7 +350,7 @@ export function buildHeroView(args: {
       Date.now() - Date.parse(stored.generated_at) < 24 * 3_600_000);
   const brief =
     briefIsCurrent && stored
-      ? stored
+      ? withPacingVerdict(stored, report?.latest_run?.pacing)
       : deterministicBrief({
           growth,
           candidates: report

@@ -1,36 +1,50 @@
 'use client';
 
-// What a portfolio opens on: its main recommendation, wide, as a piece of news — then the
-// growth line, then two insights under it.
+// What a portfolio opens on: the day's news as ONE ROW — three cards across the pane, highest
+// impact on the left — and the growth recap as the row's footer. Then the rest of the modules.
+//
+// The row is the whole layout decision. Three equal columns on a desktop pane, two on a
+// tablet, one on a phone, measured on the pane and not the window (`NEWS_PANE` /
+// `NEWS_ROW` in ./news/cardShape). Every card fills its column and the cards in a row share
+// a height, so the pane holds no blank beside a card that was given less than it. The order
+// is the brief's own ranking — `buildPortfolioNews` hands the cards back sorted — and the
+// lead is not always first: when Jaina picked a lower candidate the maximum stands to its
+// left, and the lead's "chosen over the biggest number" line explains the pair.
+//
+// The first row is exactly one desktop row. A fourth card (a brief lists up to three
+// secondaries when the hero is not the maximum) does not wrap into a lone card with the
+// blank beside it that this file was rewritten to remove; it sits behind "N more", which
+// says it exists and, being the lowest-impact finding by construction, can wait a click.
+//
+// The recap is the row's FOOTER when the row is full — the owner's order was "the three
+// actions first, then the rest" — and sits BESIDE the cards when it is not, taking every
+// column they left empty, so one card and its recap are still a composed row. Its verdict
+// half is already honest: `heroModel` overlays the run's pacing verdict on the stored brief
+// and strips a pace clause the verdict does not support.
 //
 // The figure the lead card carries is the recommendation's OWN (the budget that moved, the
 // spend that bought nothing). Money per day moved to a support line and is printed day AND
-// month, because "$14/day" is a figure a reader has to finish in their head, and because
-// leading twenty-five different findings with the same small-business sentence was the
-// complaint this screen exists to answer.
-//
-// The justification layouts live in ./news — three of them, picked from what a card holds.
+// month, because "$14/day" is a figure a reader has to finish in their head. The
+// justification layouts live in ./news — three of them, picked from what a card holds.
 // Entrance is a short stagger; after that the only motion is the 5s breath on a connector.
 // Everything is static under prefers-reduced-motion.
 //
-// TWO THINGS THIS FILE NO LONGER DECIDES. The cards' shape: `CARD_FRAME` is on their own
-// roots, and the insight track (`INSIGHT_TRACK`) caps each column at an insight's own width,
-// so the leftover of a wide pane lands in the gutter instead of stretching two cards across
-// the screen. And whether the lead draws a chart: `buildPortfolioNews` hands back
+// Whether the lead draws a chart is not decided here either: `buildPortfolioNews` hands back
 // `leadChart`, which is `view.chart` only when the chart draws the figure the lead leads
-// with. A chart that argues about a different quantity is withheld in silence — the card was
-// built to be complete without one.
+// with. A chart that argues about a different quantity is withheld in silence.
 
 import type { CycleItemRow } from '@continuum/contracts';
 import { IMPACT_TIER_COPY, type ImpactTier, impactTier } from '@continuum/contracts';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
 import * as React from 'react';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import { AccountChartView } from '../account/AccountChartView';
 import { asOfLine } from '../recQueueModel';
 import type { HeroCta, HeroView } from './heroModel';
-import { INSIGHT_TRACK } from './news/cardShape';
+import { NEWS_CELL, NEWS_PANE, NEWS_ROW, NEWS_ROW_SIZE, RECAP_BESIDE_SPAN } from './news/cardShape';
 import { InsightCard } from './news/InsightCard';
+import type { NewsCardModel } from './news/justification';
 import type { NewsTier } from './news/NewsCard';
 import { NewsCard } from './news/NewsCard';
 import { buildPortfolioNews } from './news/newsModel';
@@ -91,6 +105,46 @@ export type PortfolioHeroProps = {
   onCta: (cta: HeroCta) => void;
   explainHref: string;
 };
+
+/** The growth read: the flight's pacing pill when there is a flight, and the sentence. */
+function Recap({
+  view,
+  placement,
+  className,
+}: {
+  view: HeroView;
+  placement: 'beside' | 'footer';
+  className?: string;
+}) {
+  return (
+    <motion.p
+      className={cn(
+        'flex flex-wrap items-center gap-2 text-2xs text-muted-foreground',
+        placement === 'beside' && 'self-center',
+        className,
+      )}
+      data-placement={placement}
+      data-testid="portfolio-news-recap"
+      variants={tileVariants}
+    >
+      {view.pacingLine ? (
+        <Badge
+          className="text-3xs"
+          variant={
+            view.pacingTone === 'success'
+              ? 'success'
+              : view.pacingTone === 'warning'
+                ? 'warning'
+                : 'muted'
+          }
+        >
+          {view.pacingLine}
+        </Badge>
+      ) : null}
+      <span className="max-w-[65ch]">{view.brief.growth_sentence}</span>
+    </motion.p>
+  );
+}
 
 export function PortfolioHero({
   view,
@@ -169,67 +223,72 @@ export function PortfolioHero({
     </div>
   );
 
+  const cell = (card: NewsCardModel) => (
+    <motion.div
+      className={NEWS_CELL}
+      data-testid="portfolio-news-cell"
+      key={card.id}
+      variants={card === news.lead ? heroVariants : tileVariants}
+    >
+      {card === news.lead ? (
+        <NewsCard
+          asOfLine={asOfLine(view.asOf, nextCycleAt) ?? 'Awaiting the first cycle'}
+          card={card}
+          chart={chart}
+          currency={currency}
+          draft={view.brief.model === 'deterministic'}
+          explainHref={explainHref}
+          onCta={onCta}
+          tier={tierOf(card.impactPerDay)}
+        />
+      ) : (
+        <InsightCard
+          card={card}
+          currency={currency}
+          onCta={onCta}
+          tier={tierOf(card.impactPerDay)}
+        />
+      )}
+    </motion.div>
+  );
+
+  const row = news.cards.slice(0, NEWS_ROW_SIZE);
+  const more = news.cards.slice(NEWS_ROW_SIZE);
+  const recapBeside = row.length < NEWS_ROW_SIZE;
+
   return (
     <motion.section
       animate="visible"
-      className="flex flex-col gap-3"
+      className={cn(NEWS_PANE, 'flex flex-col gap-3')}
       data-testid="portfolio-hero"
       initial={play ? 'hidden' : false}
       variants={groupVariants}
     >
-      <motion.div variants={heroVariants}>
-        {news.lead ? (
-          <NewsCard
-            asOfLine={asOfLine(view.asOf, nextCycleAt) ?? 'Awaiting the first cycle'}
-            card={news.lead}
-            chart={chart}
-            currency={currency}
-            draft={view.brief.model === 'deterministic'}
-            explainHref={explainHref}
-            onCta={onCta}
-            tier={tierOf(news.lead.impactPerDay)}
+      <motion.div className={NEWS_ROW} data-testid="portfolio-news-row" variants={groupVariants}>
+        {row.map(cell)}
+        {recapBeside ? (
+          <Recap
+            className={
+              row.length === 1 || row.length === 2 ? RECAP_BESIDE_SPAN[row.length] : 'col-span-full'
+            }
+            placement="beside"
+            view={view}
           />
         ) : null}
       </motion.div>
 
-      <motion.p
-        className="flex flex-wrap items-center gap-2 text-2xs text-muted-foreground"
-        variants={tileVariants}
-      >
-        {view.pacingLine ? (
-          <Badge
-            className="text-3xs"
-            variant={
-              view.pacingTone === 'success'
-                ? 'success'
-                : view.pacingTone === 'warning'
-                  ? 'warning'
-                  : 'muted'
-            }
-          >
-            {view.pacingLine}
-          </Badge>
-        ) : null}
-        <span className="max-w-[65ch]">{view.brief.growth_sentence}</span>
-      </motion.p>
+      {recapBeside ? null : <Recap placement="footer" view={view} />}
 
-      {news.insights.length > 0 ? (
-        <motion.div
-          className={INSIGHT_TRACK}
-          data-testid="portfolio-news-insights"
-          variants={groupVariants}
-        >
-          {news.insights.map((card) => (
-            <motion.div key={card.id} variants={tileVariants}>
-              <InsightCard
-                card={card}
-                currency={currency}
-                onCta={onCta}
-                tier={tierOf(card.impactPerDay)}
-              />
-            </motion.div>
-          ))}
-        </motion.div>
+      {more.length > 0 ? (
+        <details className="group" data-testid="portfolio-news-more">
+          <summary className="cursor-pointer list-none text-2xs text-muted-foreground hover:text-foreground">
+            <span className="group-open:hidden">
+              {more.length} more finding{more.length === 1 ? '' : 's'}
+            </span>
+            <span className="hidden group-open:inline">Fewer findings</span>
+          </summary>
+          <div className={cn(NEWS_ROW, 'mt-3')}>{more.map(cell)}</div>
+        </details>
       ) : null}
     </motion.section>
   );

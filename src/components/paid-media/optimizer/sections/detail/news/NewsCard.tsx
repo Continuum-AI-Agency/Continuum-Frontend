@@ -6,8 +6,11 @@
 // argues THIS card's argument, is passed in and sits UNDER the justification — it is the same
 // claim drawn, so it belongs inside this card rather than beside it.
 //
-// The card's box is its own: `CARD_FRAME.lead` caps the width and floors the height, so the
-// slot it is mounted in can no longer decide its shape. See ./cardShape.
+// Its box is the row's column, and the same box every other card in the row gets: `CARD_FRAME`
+// fills the cell, shares the row's height, and floors its own height against the cell's width
+// so it can never be a letterbox. The lead is louder than an insight in its type and in what
+// it carries — the chart, the chosen-over line, the Explain link — never in its size. See
+// ./cardShape.
 
 import { ExternalLinkIcon, SparklesIcon } from 'lucide-react';
 import type * as React from 'react';
@@ -50,10 +53,7 @@ export function NewsCard({
   const cta = card.cta;
   return (
     <article
-      className={cn(
-        'flex flex-col gap-3 rounded-lg border border-border/60 bg-card p-4',
-        CARD_FRAME.lead,
-      )}
+      className={cn('flex-col gap-3 rounded-lg border border-border/60 bg-card p-4', CARD_FRAME)}
       data-testid="portfolio-news-lead"
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -67,7 +67,7 @@ export function NewsCard({
       </div>
 
       <h2
-        className="max-w-[65ch] text-balance font-semibold text-foreground text-lg leading-snug"
+        className="max-w-[65ch] text-balance font-semibold text-base text-foreground leading-snug"
         data-testid="hero-headline"
       >
         {card.claim}

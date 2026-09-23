@@ -1,5 +1,12 @@
-// The portfolio's news: one lead card and two insights, composed from what the cycle
-// already persisted. Pure — no React, no fetch — so every state below is pinned by a test.
+// The portfolio's news: the lead card and the insights beside it, composed from what the
+// cycle already persisted, and handed back in ONE order — highest impact first — as `cards`.
+// Pure — no React, no fetch — so every state below is pinned by a test.
+//
+// The order is the brief's own: `rankCandidates` (money per day, then module, then id), the
+// same comparator that chose the maximum and decides whether the hero needs a justification.
+// The lead is not always first. When Jaina picked a lower candidate, the maximum stands to
+// its left and the lead's "chosen over the biggest number" line explains the pair; ranking
+// the lead first anyway would put the card that says "not the biggest" in the biggest slot.
 //
 // The one discipline that matters here: a figure is composed ONLY from numbers the report
 // literally holds. `current_budget → final_budget` is a pair the cycle wrote down; a
@@ -18,7 +25,12 @@ import type {
   CycleItemRow,
   PortfolioBrief,
 } from '@continuum/contracts';
-import { chartArgues, headlineAgreesWithChart, headlineIsDrawnOn } from '@continuum/contracts';
+import {
+  chartArgues,
+  headlineAgreesWithChart,
+  headlineIsDrawnOn,
+  rankCandidates,
+} from '@continuum/contracts';
 import { humanize } from '../../../format';
 import type { HeroView } from '../heroModel';
 import { ctaForCandidate } from '../heroModel';
@@ -222,10 +234,30 @@ export type PortfolioNews = {
    */
   leadChart: ArguingChart | null;
   insights: NewsCardModel[];
+  /**
+   * Every card of the day — the lead and the insights — highest impact first, in the
+   * brief's own ranking. This is the order the row shows them in; `lead` and `insights`
+   * remain for what each card IS, `cards` is where each one SITS.
+   */
+  cards: NewsCardModel[];
 };
 
 /**
- * The lead card and the two insights under it.
+ * The cards in the brief's order. A lead with no candidate behind it (`module: 'none'`,
+ * "nothing worth changing today") is the only card there is, so it simply leads.
+ */
+function rankCards(
+  lead: NewsCardModel,
+  insights: readonly NewsCardModel[],
+  candidates: readonly BriefCandidate[],
+): NewsCardModel[] {
+  const rank = new Map(rankCandidates(candidates).map((c, index) => [c.id, index]));
+  const position = (card: NewsCardModel): number => rank.get(card.id) ?? -1;
+  return [lead, ...insights].sort((a, b) => position(a) - position(b));
+}
+
+/**
+ * The lead card and every insight the brief listed beside it.
  *
  * `items` is the cycle's reallocation rows — the only place the budget pair and the engine's
  * interval live. Pass an empty array and every card still renders: it leads with its
@@ -268,7 +300,6 @@ export function buildPortfolioNews(args: {
 
   const insights: NewsCardModel[] = [];
   for (const id of brief.secondary) {
-    if (insights.length >= 2) break;
     const candidate = brief.candidates.find((c) => c.id === id);
     if (!candidate || candidate.id === hero.candidate_id) continue;
     const item = itemFor(candidate, items);
@@ -288,5 +319,5 @@ export function buildPortfolioNews(args: {
       cta: ctaForCandidate(candidate, view.observe),
     });
   }
-  return { lead, leadChart, insights };
+  return { lead, leadChart, insights, cards: rankCards(lead, insights, brief.candidates) };
 }

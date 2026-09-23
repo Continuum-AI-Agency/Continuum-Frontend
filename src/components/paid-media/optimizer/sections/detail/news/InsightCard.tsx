@@ -6,9 +6,9 @@
 // a second, smaller card designed on its own — is how two cards on one screen end up
 // arguing in two different registers about the same account.
 //
-// Its box is its own too. `CARD_FRAME.insight` is on this element, not on the grid the
-// caller writes, which is what makes "two insights stretched across the screen" unreachable
-// rather than merely discouraged. See ./cardShape.
+// Its box is the row's column — the same `CARD_FRAME` the lead gets, so the three cards in a
+// row share a width and a height, and the floor on the frame keeps the box inside the aspect
+// band at any column width. See ./cardShape.
 
 import * as React from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -31,10 +31,7 @@ export function InsightCard({ card, currency, tier, onCta }: InsightCardProps) {
   const cta = card.cta;
   return (
     <article
-      className={cn(
-        'flex flex-col gap-2.5 rounded-lg border border-border/60 bg-card p-3',
-        CARD_FRAME.insight,
-      )}
+      className={cn('flex-col gap-2.5 rounded-lg border border-border/60 bg-card p-3', CARD_FRAME)}
       data-testid="portfolio-news-insight"
     >
       <div className="flex flex-wrap items-center gap-2">

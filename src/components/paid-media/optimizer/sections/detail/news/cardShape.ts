@@ -1,65 +1,88 @@
-// How wide a news card is allowed to be, and why that is a property of the CARD.
+// The news row: how the day's cards share the width, and why the ROW decides it.
 //
-// THE BUG THIS EXISTS TO MAKE UNREACHABLE. Two insight cards were mounted in
-// `grid sm:grid-cols-2` with no cap, so each one was half of whatever the detail pane
-// happened to be. At a 1440px viewport that is a 700px-wide card holding about 140px of
-// content — a 5:1 letterbox. Nothing about the card asked for that width; the SLOT had it
-// and the card was stretched to fill it. A card whose shape is decided by where it was
-// mounted will be the wrong shape again the next time somebody mounts it somewhere else.
+// THE COMPLAINT THIS ANSWERS. The lead card sat alone on the left at 34rem with fourteen
+// hundred pixels of nothing beside it, then a line of prose, then two smaller cards that
+// again filled half the pane. Each card had been given its own width cap so that no grid
+// could stretch it into a letterbox — which was correct about the letterbox and wrong about
+// the screen: the cap moved the blank from inside the cards to beside them. A card that
+// cannot be stretched can still be stranded.
 //
-// So the cap and the floor live on the card's own root element, and neither card component
-// takes a `className`. A caller can mount a news card in a 2000px grid cell and get a
-// 336px card with 1664px of gutter beside it. "Two cards across the full width" is not
-// something a caller can ask for any more; there is no parameter for it.
+// So the width is now the row's to give. The row is three equal columns on a desktop pane,
+// two on a tablet, one on a phone — measured on the PANE (a container query), never the
+// viewport, because the detail pane is not the window and a side panel narrows it. Every
+// card fills its column, and the cards in one row share one height.
 //
-// The floor is the other half. A max-width alone still allows a 544px card holding 150px of
-// content, which is 3.6:1. `min-h` is the width divided by the widest ratio we will accept,
-// so the box cannot be flatter than the band no matter how little the card holds — and the
-// action row carries `mt-auto`, so the slack falls between the argument and the buttons
-// rather than trailing off the bottom.
+// The letterbox is still unreachable, by a different mechanism. Each cell is a container of
+// its own and the card floors its height against the CELL's width — `min-h` in `cqw` — so a
+// card can never be flatter than the aspect band no matter how wide the pane is. The band
+// is enforced on the card's own root; the row cannot switch it off.
 
 /**
  * The band a news card's box sits in, as width ÷ height.
  *
  * Below `min` a card is a tall ribbon and its figure has nowhere to sit beside its argument;
- * above `max` it is the letterbox this module exists to prevent. Square is 1. The lead is
- * allowed to be a little wider than an insight because it carries a chart, which is the one
- * element that genuinely wants horizontal room.
+ * above `max` it is the letterbox the floor exists to prevent. Square is 1.
  */
 export const CARD_ASPECT_BAND = { min: 0.5, max: 1.5 } as const;
 
-export type NewsCardRole = 'lead' | 'insight';
+/** The pane widths, in rem, at which the row earns another column. */
+export const NEWS_ROW_BREAKPOINT_REM = { tablet: 36, desktop: 56 } as const;
 
-/** The cap, in rem. The lead is a reading measure; an insight is a column. */
-export const CARD_MAX_WIDTH_REM: Record<NewsCardRole, number> = { lead: 34, insight: 21 };
+/** The columns the row holds at each width. */
+export const NEWS_ROW_COLUMNS = { phone: 1, tablet: 2, desktop: 3 } as const;
 
-/** The floor the cap implies: a card at its full width may not be flatter than the band. */
-export function cardMinHeightRem(role: NewsCardRole): number {
-  // Quarter-rem steps, rounded UP: rounding down would put the widest card a hair outside
-  // the band it is supposed to prove it sits in.
-  return Math.ceil((CARD_MAX_WIDTH_REM[role] / CARD_ASPECT_BAND.max) * 4) / 4;
+/** How many cards the first row shows before the rest go behind a disclosure. */
+export const NEWS_ROW_SIZE = NEWS_ROW_COLUMNS.desktop;
+
+/** The gap between cells, in rem, so a cell's width can be reasoned about. */
+export const NEWS_ROW_GAP_REM = 0.75;
+
+/**
+ * The name the pane registers under, so the row's breakpoints ask about the pane and not
+ * about the window.
+ */
+export const NEWS_PANE = '@container/news';
+
+/**
+ * The row's classes, written out because Tailwind reads source text and cannot see a
+ * template literal. `cardShape.test.ts` parses the rem values back out of this string and
+ * checks them against `NEWS_ROW_BREAKPOINT_REM`, so the two cannot drift apart silently.
+ */
+export const NEWS_ROW =
+  'grid items-stretch gap-3 grid-cols-1 @[36rem]/news:grid-cols-2 @[56rem]/news:grid-cols-3';
+
+/** A cell: a container, so the card inside can floor its height against the cell's width. */
+export const NEWS_CELL = '@container/news-cell min-w-0';
+
+/**
+ * How far the recap prose reaches when it sits BESIDE the cards rather than under them: it
+ * takes every column the cards left empty, so one card plus its recap is still a full row.
+ */
+export const RECAP_BESIDE_SPAN: Record<1 | 2, string> = {
+  1: '@[36rem]/news:col-span-1 @[56rem]/news:col-span-2',
+  2: '@[36rem]/news:col-span-2 @[56rem]/news:col-span-1',
+};
+
+/** The floor the band implies, as a share of the cell's width: 100 ÷ the widest ratio. */
+export function cardMinHeightCqw(): number {
+  return Math.round((100 / CARD_ASPECT_BAND.max) * 100) / 100;
 }
 
 /**
- * The frame classes, written out because Tailwind reads source text and cannot see a
- * template literal. `cardShape.test.ts` parses these strings back into numbers and checks
- * them against the constants above, so the two cannot drift apart silently.
+ * The frame on every card's root. One frame, because the cards in a row share a column
+ * width and a height; a lead is louder than an insight in its type, never in its box.
+ *
+ * `h-full` is what makes the cards in one row the same height, and `min-h` in `cqw` is what
+ * keeps a card inside the aspect band at any column width.
  */
-export const CARD_FRAME: Record<NewsCardRole, string> = {
-  lead: 'w-full max-w-[34rem] min-h-[22.75rem]',
-  insight: 'w-full max-w-[21rem] min-h-[14rem]',
-};
+export const CARD_FRAME = 'flex h-full w-full min-h-[66.67cqw]';
 
 /**
- * The track the insights sit in: as many columns as fit, each one capped at an insight's own
- * width, and the leftover pushed into the gutter rather than into the cards.
- *
- * `justify-start` is load-bearing. Without it a two-column `auto-fit` grid distributes the
- * slack into the tracks, and although the card's own `max-w` would still hold, the cards
- * would float apart with a ragged gap between them.
+ * The cell width, in rem, at a given pane width and column count.
  */
-export const INSIGHT_TRACK =
-  'grid justify-start gap-2 grid-cols-[repeat(auto-fit,minmax(15rem,21rem))]';
+export function cellWidthRem(paneRem: number, columns: number): number {
+  return (paneRem - NEWS_ROW_GAP_REM * (columns - 1)) / columns;
+}
 
 /**
  * The width at which a justification block earns its angled layout.
@@ -67,6 +90,7 @@ export const INSIGHT_TRACK =
  * A CONTAINER width, never the viewport. The three layouts were written with `sm:`, which is
  * a viewport query: on a desktop an insight card 336px wide still matched `sm:` and laid its
  * figure and its argument into two ~150px columns, which is the other half of "the cards did
- * not hold". A block only splits when the BLOCK has room to split.
+ * not hold". A block only splits when the BLOCK has room to split — which, in a three-column
+ * row, is a pane wider than about 85rem.
  */
 export const JUSTIFICATION_SPLIT_REM = 28;

@@ -237,7 +237,7 @@ describe('buildPortfolioNews', () => {
     expect(news.lead?.impactPerDay).toBe(120);
   });
 
-  it('takes at most two insights, and never repeats the hero as one', () => {
+  it('takes every secondary the brief listed, and never repeats the hero as one', () => {
     const many = brief({
       candidates: [
         candidate(),
@@ -266,7 +266,9 @@ describe('buildPortfolioNews', () => {
       secondary: ['budget:as-1', 'rec:2', 'rec:3', 'rec:4'],
     });
     const news = buildPortfolioNews({ view: view({ brief: many }), items: [item()], target: 70 });
-    expect(news.insights.map((c) => c.id)).toEqual(['rec:2', 'rec:3']);
+    // The hero (budget:as-1) is first in `secondary` and is skipped; the rest all come through.
+    // How many the ROW shows is the row's decision (NEWS_ROW_SIZE), not the model's.
+    expect(news.insights.map((c) => c.id)).toEqual(['rec:2', 'rec:3', 'rec:4']);
     expect(news.insights[0]?.claim).toBe('Creative on Warm');
   });
 
@@ -501,5 +503,85 @@ describe('the bracket beside the figure has to be about the figure', () => {
     });
     expect(news.lead?.headline).toBeNull();
     expect(news.lead?.interval).toBeNull();
+  });
+});
+
+describe('cards — the row order is the brief’s own ranking', () => {
+  const three = (over: Partial<PortfolioBrief> = {}) =>
+    brief({
+      candidates: [
+        candidate({ id: 'rec:aleira', module: 'pause', kind: 'pause', impact_per_day: 28.68 }),
+        candidate({ id: 'rec:iteso', module: 'pause', kind: 'pause', impact_per_day: 28.34 }),
+        candidate({ id: 'budget:portfolio', module: 'budget', impact_per_day: 6.52 }),
+      ],
+      ...over,
+    });
+  const viewOf = (b: PortfolioBrief): HeroView =>
+    ({ brief: b, cta: null, observe: false, chart: null }) as unknown as HeroView;
+
+  it('leads with the hero when the hero is the maximum, then the rest by money per day', () => {
+    const b = three({
+      hero: { ...brief().hero, candidate_id: 'rec:aleira', impact_per_day: 28.68 },
+      secondary: ['rec:iteso', 'budget:portfolio'],
+    });
+    const news = buildPortfolioNews({ view: viewOf(b), items: [], target: 35 });
+    expect(news.cards.map((c) => c.id)).toEqual(['rec:aleira', 'rec:iteso', 'budget:portfolio']);
+    expect(news.cards[0]).toBe(news.lead);
+  });
+
+  it('puts the maximum first and the chosen lead second when Jaina picked a lower one', () => {
+    const b = three({
+      hero: {
+        ...brief().hero,
+        candidate_id: 'rec:iteso',
+        impact_per_day: 28.34,
+        justification: 'ALEIRA ends tomorrow anyway.',
+      },
+      secondary: ['rec:aleira', 'budget:portfolio'],
+    });
+    const news = buildPortfolioNews({ view: viewOf(b), items: [], target: 35 });
+    expect(news.cards.map((c) => c.id)).toEqual(['rec:aleira', 'rec:iteso', 'budget:portfolio']);
+    expect(news.cards[1]).toBe(news.lead);
+    expect(news.cards[1]?.chosenOver).toBe('ALEIRA ends tomorrow anyway.');
+  });
+
+  it('keeps every secondary the brief listed — a fourth card is the row’s to place, not the model’s to drop', () => {
+    const b = three({
+      candidates: [
+        candidate({ id: 'rec:aleira', module: 'pause', kind: 'pause', impact_per_day: 28.68 }),
+        candidate({ id: 'rec:iteso', module: 'pause', kind: 'pause', impact_per_day: 28.34 }),
+        candidate({ id: 'budget:portfolio', module: 'budget', impact_per_day: 6.52 }),
+        candidate({
+          id: 'rec:warm',
+          module: 'creative',
+          kind: 'creative_refresh',
+          impact_per_day: 4,
+        }),
+      ],
+      hero: {
+        ...brief().hero,
+        candidate_id: 'rec:iteso',
+        impact_per_day: 28.34,
+        justification: 'j',
+      },
+      secondary: ['rec:aleira', 'budget:portfolio', 'rec:warm'],
+    });
+    const news = buildPortfolioNews({ view: viewOf(b), items: [], target: 35 });
+    expect(news.cards.map((c) => c.id)).toEqual([
+      'rec:aleira',
+      'rec:iteso',
+      'budget:portfolio',
+      'rec:warm',
+    ]);
+  });
+
+  it('a lead with no candidate behind it is the only card, and leads', () => {
+    const b = brief({
+      hero: { ...brief().hero, module: 'none', candidate_id: null, impact_per_day: null },
+      candidates: [],
+      secondary: [],
+    });
+    const news = buildPortfolioNews({ view: viewOf(b), items: [], target: 35 });
+    expect(news.cards.map((c) => c.id)).toEqual(['hero']);
   });
 });
