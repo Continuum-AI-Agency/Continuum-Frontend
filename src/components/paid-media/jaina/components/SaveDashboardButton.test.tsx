@@ -1,13 +1,18 @@
 /**
- * What a saved dashboard remembers about the question it answered.
+ * What a saved dashboard remembers about the report it came from.
  *
- * `source_prompt` is the whole point of the row: "Ask Jaina to refresh" sends it back as the
- * prompt. Hard-coded null, the panel fell back to `Refresh the analysis "<title>" with today's
- * data` — a template, not the question — so a dashboard saved from "compare Q3 spend by
- * placement against Q2" refreshed into a generic account summary under that name.
+ * `source_prompt` is what "Ask Jaina to refresh" sends. Hard-coded null, the panel fell back
+ * to `Refresh the analysis "<title>" with today's data` — a template, not the question — so a
+ * dashboard saved from "compare Q3 spend by placement against Q2" refreshed into a generic
+ * account summary under that name.
+ *
+ * The `data_scope` frame is what says which period the figures cover. Four production rows
+ * were saved without one and with `window_label` null; a reopened dashboard showed figures
+ * with no statement of their window. The save now keeps the report's own frame first even
+ * when the person hid it, persists its window, and refuses a report that has no frame.
  *
  * This renders the real chain a person clicks through — JainaMessageItem → JainaReportV2 →
- * SaveDashboardButton — so the two prop hops are covered by the same assertion as the write.
+ * SaveDashboardButton — so the prop hops are covered by the same assertion as the write.
  * Only the Supabase write itself is replaced.
  */
 
@@ -21,7 +26,8 @@ import {
 } from '@/components/ui/message-scroller';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { JainaBrandScopeProvider } from '@/lib/jaina/brandScope';
-import type { CheckpointReportV2 } from '@/lib/jaina/schemas';
+import { DASHBOARD_SCOPE_MISSING_MESSAGE } from '@/lib/jaina/dashboardBlocks';
+import type { CheckpointBlockV2, CheckpointReportV2 } from '@/lib/jaina/schemas';
 import type { JainaChatMessage } from '../types';
 
 const saveDashboardMock = mock(async (input: Record<string, unknown>) => ({
@@ -54,39 +60,54 @@ const { JainaMessageItem } = await import('./JainaMessageItem');
 afterEach(cleanup);
 
 const THE_QUESTION = 'Compare Q3 spend by placement against Q2, and say what moved.';
+const THE_WINDOW = '2026-08-23 → 2026-09-21';
 
-const reportV2 = {
-  language: 'en',
-  executive_summary: 'Placement spend shifted to Reels.',
-  reasoning_trace: '',
-  blocks: [
-    {
-      block_id: 'placements',
-      category: 'narrative',
-      scope: 'current_account',
-      title: 'Placement shift',
-      priority: 0,
-      provenance: null,
-      body: 'Reels took 18 points of share.',
-      highlights: [],
-      citations: [],
+const scopeFrame = {
+  block_id: 'scope',
+  category: 'data_scope',
+  scope: 'current_account',
+  title: 'Scope',
+  priority: 1,
+  provenance: null,
+  dates: THE_WINDOW,
+  timezone: 'America/Mexico_City',
+  source: 'api',
+  notes: [],
+} as unknown as CheckpointBlockV2;
+
+const placements = {
+  block_id: 'placements',
+  category: 'narrative',
+  scope: 'current_account',
+  title: 'Placement shift',
+  priority: 0,
+  provenance: null,
+  body: 'Reels took 18 points of share.',
+  highlights: [],
+  citations: [],
+} as unknown as CheckpointBlockV2;
+
+const reportWith = (blocks: CheckpointBlockV2[]) =>
+  ({
+    language: 'en',
+    executive_summary: 'Placement spend shifted to Reels.',
+    reasoning_trace: '',
+    blocks,
+    follow_up_questions: [],
+    media_map: {},
+    handoff_trace: [],
+    execution_objectives: [],
+    cached_sources: [],
+    _meta: {
+      schema_version: '2',
+      block_count: blocks.length,
+      has_charts: false,
+      has_media: false,
+      primary_scope: 'current_account',
     },
-  ],
-  follow_up_questions: [],
-  media_map: {},
-  handoff_trace: [],
-  execution_objectives: [],
-  cached_sources: [],
-  _meta: {
-    schema_version: '2',
-    block_count: 1,
-    has_charts: false,
-    has_media: false,
-    primary_scope: 'current_account',
-  },
-} as CheckpointReportV2;
+  }) as CheckpointReportV2;
 
-const message = (): JainaChatMessage =>
+const message = (reportV2: CheckpointReportV2): JainaChatMessage =>
   ({
     id: 'msg_1',
     role: 'assistant',
@@ -103,7 +124,7 @@ const message = (): JainaChatMessage =>
     reportV2,
   }) as unknown as JainaChatMessage;
 
-function mount(regeneratePrompt?: string) {
+function mount(reportV2: CheckpointReportV2, regeneratePrompt?: string) {
   return render(
     <ToastProvider>
       <JainaBrandScopeProvider adAccountId="act_99" brandId="0f1c1c1e-0000-4000-8000-00000000000b">
@@ -111,7 +132,7 @@ function mount(regeneratePrompt?: string) {
           <MessageScroller>
             <MessageScrollerViewport>
               <MessageScrollerContent>
-                <JainaMessageItem message={message()} regeneratePrompt={regeneratePrompt} />
+                <JainaMessageItem message={message(reportV2)} regeneratePrompt={regeneratePrompt} />
               </MessageScrollerContent>
             </MessageScrollerViewport>
           </MessageScroller>
@@ -121,34 +142,61 @@ function mount(regeneratePrompt?: string) {
   );
 }
 
-async function saveTheDashboard(): Promise<Record<string, unknown>> {
+function openTheDialog() {
   saveDashboardMock.mockClear();
   fireEvent.click(screen.getByRole('button', { name: 'Save the visible modules as a dashboard' }));
+}
+
+async function saveTheDashboard(): Promise<Record<string, unknown>> {
+  openTheDialog();
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(saveDashboardMock).toHaveBeenCalledTimes(1));
   return saveDashboardMock.mock.calls[0]?.[0] as Record<string, unknown>;
 }
 
+const categoriesOf = (payload: Record<string, unknown>) =>
+  (payload.blocks as Array<{ category: string }>).map((block) => block.category);
+
 describe('saving a Jaina report as a dashboard', () => {
   it('keeps the question the person actually asked, not a template', async () => {
-    mount(THE_QUESTION);
+    mount(reportWith([scopeFrame, placements]), THE_QUESTION);
     const payload = await saveTheDashboard();
     expect(payload.source_prompt).toBe(THE_QUESTION);
     // The title is the closest thing to a name, and it is NOT the question.
-    expect(payload.source_title).toBe('Placement shift');
+    expect(payload.source_title).toBe('Scope');
     expect(payload.source_prompt).not.toBe(payload.source_title);
   });
 
   it('stores null rather than an empty string when the turn carries no question', async () => {
-    mount(undefined);
+    mount(reportWith([scopeFrame, placements]));
     const payload = await saveTheDashboard();
     expect(payload.source_prompt).toBeNull();
   });
 
-  it('leaves the window unnamed, because a V2 report carries no window to name', async () => {
-    mount(THE_QUESTION);
+  it('keeps the scope frame first and names the window it states', async () => {
+    mount(reportWith([scopeFrame, placements]), THE_QUESTION);
     const payload = await saveTheDashboard();
-    expect(payload.window_label).toBeNull();
+    expect(categoriesOf(payload)).toEqual(['data_scope', 'narrative']);
+    expect(payload.window_label).toBe(THE_WINDOW);
     expect(payload.scope).toBe('current_account');
+  });
+
+  it('puts the frame back when the person hid it, so the figures are never saved naked', async () => {
+    mount(reportWith([scopeFrame, placements]), THE_QUESTION);
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Scope module' }));
+    await waitFor(() => expect(screen.queryByTestId('module-scope')).toBeNull());
+    const payload = await saveTheDashboard();
+    expect(categoriesOf(payload)).toEqual(['data_scope', 'narrative']);
+    expect(payload.window_label).toBe(THE_WINDOW);
+  });
+
+  it('refuses a report with no scope frame and says what is missing', async () => {
+    mount(reportWith([placements]), THE_QUESTION);
+    openTheDialog();
+    expect(screen.getByText(DASHBOARD_SCOPE_MISSING_MESSAGE)).toBeTruthy();
+    const save = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    fireEvent.click(save);
+    expect(saveDashboardMock).not.toHaveBeenCalled();
   });
 });
