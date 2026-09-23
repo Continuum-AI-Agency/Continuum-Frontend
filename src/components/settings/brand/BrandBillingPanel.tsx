@@ -7,6 +7,7 @@ import { useReducedMotion } from 'motion/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useEffect, useRef, useState, useTransition } from 'react';
 import { switchActiveBrandAction } from '@/app/(post-auth)/settings/actions';
+import { CheckoutReceiptDialog } from '@/components/billing/CheckoutReceiptDialog';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { AutoBillingControl } from '@/components/settings/billing/AutoBillingControl';
@@ -143,36 +144,49 @@ function usePaywallViewed(billingLive: boolean, owner: boolean) {
 }
 
 function OwnerBillingPanel({ brandId, brandName }: { brandId: string; brandName: string }) {
-  const { overview, pending, track } = useBillingOverviewWithPendingChange(brandId);
+  const { overview, pending, track, receipt, closeReceipt } =
+    useBillingOverviewWithPendingChange(brandId);
   const need = productCodeSchema.safeParse(useSearchParams().get('need'));
+  // The receipt prints over whatever the panel shows while the purchase lands.
+  const withReceipt = (panel: ReactNode) => (
+    <>
+      {panel}
+      {receipt ? (
+        <CheckoutReceiptDialog brandId={brandId} receipt={receipt} onClose={closeReceipt} />
+      ) : null}
+    </>
+  );
 
-  if (overview.isPending) return <BillingSkeleton />;
+  if (overview.isPending) return withReceipt(<BillingSkeleton />);
   if (overview.isError) {
     if (isBillingManagerRequired(overview.error))
       return <BillingLockedState brandName={brandName} />;
-    return (
-      <BillingErrorState message={overview.error.message} onRetry={() => void overview.refetch()} />
+    return withReceipt(
+      <BillingErrorState
+        message={overview.error.message}
+        onRetry={() => void overview.refetch()}
+      />,
     );
   }
 
   const view = toBillingView(overview.data, need.success ? need.data : null);
   if (view.kind === 'contract') {
-    return (
+    return withReceipt(
       <div className="space-y-6">
         <BillingContractState features={view.features} />
         <AutoBillingControl brandId={brandId} autoBilling={view.autoBilling} onChanged={track} />
-      </div>
+      </div>,
     );
   }
 
-  return (
+  return withReceipt(
     <SelfServeBilling
       brandId={brandId}
       view={view}
       needLabel={need.success ? NEED_LABEL[need.data] : null}
       waitingOnStripe={pending !== null}
       onPlanChanged={track}
-    />
+    />,
   );
 }
 

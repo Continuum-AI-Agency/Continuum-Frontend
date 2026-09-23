@@ -43,6 +43,9 @@ describe('withoutCheckoutReturn', () => {
   test('drops only the return params', () => {
     expect(withoutCheckoutReturn('room=1&checkout=success&balance=0')).toBe('?room=1');
     expect(withoutCheckoutReturn('checkout=cancel')).toBe('');
+    expect(withoutCheckoutReturn('room=1&checkout=success&balance=0&session_id=cs_test_a1')).toBe(
+      '?room=1',
+    );
     expect(
       withoutCheckoutReturn('section=billing&checkout=success&plan=paid_media&from=/x', ['from']),
     ).toBe('?section=billing');
