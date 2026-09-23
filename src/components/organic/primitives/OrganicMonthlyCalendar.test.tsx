@@ -2,7 +2,11 @@ import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
-import type { OrganicCalendarDay, OrganicCalendarDraft } from './types';
+import type {
+  OrganicCalendarDay,
+  OrganicCalendarDraft,
+  OrganicCalendarPostedContent,
+} from './types';
 
 // happy-dom does not expose SyntaxError on its window object, which crashes
 // @testing-library/dom's querySelectorAll internals.
@@ -12,6 +16,8 @@ import type { OrganicCalendarDay, OrganicCalendarDraft } from './types';
 // Every droppable the month grid registers, so the spec can assert the id GRAMMAR — the
 // contract `useCalendarDnD.parsePlannerCellId` reads on the other side.
 const registeredDroppableIds: string[] = [];
+const routerPush = mock((_href: string) => undefined);
+mock.module('next/navigation', () => ({ useRouter: () => ({ push: routerPush }) }));
 
 mock.module('@dnd-kit/core', () => ({
   useDroppable: ({ id }: { id: string }) => {
@@ -104,6 +110,8 @@ function renderMonth(
     slots?: OrganicCalendarDraft[];
     selectedDraftIds?: string[];
     onSelectDraft?: (id: string) => void;
+    onSelectPost?: (post: OrganicCalendarPostedContent, metricsHref: string | null) => void;
+    postedContent?: OrganicCalendarPostedContent[];
     onToggleSelection?: (id: string) => void;
   } = {},
 ) {
@@ -112,10 +120,11 @@ function renderMonth(
       days={days(overrides.slots ?? [draft()])}
       monthAnchorDate={ANCHOR}
       platforms={[]}
-      postedContent={[]}
+      postedContent={overrides.postedContent ?? []}
       selectedDraftId={null}
       selectedDraftIds={overrides.selectedDraftIds}
       onSelectDraft={overrides.onSelectDraft ?? NOOP}
+      onSelectPost={overrides.onSelectPost ?? NOOP}
       onToggleSelection={overrides.onToggleSelection}
       onCreatePost={NOOP}
       onPreviousMonth={NOOP}
@@ -203,5 +212,38 @@ describe('OrganicMonthlyCalendar status signal', () => {
 
     expect(screen.getByText('Failed')).toBeTruthy();
     expect(screen.getByTitle(/^Failed · /)).toBeTruthy();
+  });
+});
+
+describe('OrganicMonthlyCalendar published preview', () => {
+  beforeEach(() => {
+    cleanup();
+    registeredDroppableIds.length = 0;
+    isDragging = false;
+  });
+
+  it('selects a published chip for the side preview', () => {
+    const post: OrganicCalendarPostedContent = {
+      id: 'published:instagram:post-1',
+      source: 'published_posts',
+      platform: 'instagram',
+      integrationAccountId: 'account-1',
+      externalPostId: 'post-1',
+      timestamp: '2026-08-03T18:00:00.000Z',
+      dayId: DAY_ID,
+      timeLabel: '12:00 PM',
+      title: 'Published story',
+    };
+    const onSelectPost = mock(
+      (_post: OrganicCalendarPostedContent, _href: string | null) => undefined,
+    );
+    renderMonth({ slots: [], postedContent: [post], onSelectPost });
+
+    fireEvent.click(screen.getByRole('button', { name: /Published story/ }));
+
+    expect(onSelectPost).toHaveBeenCalledWith(
+      post,
+      '?tab=metrics&platform=instagram&accountId=account-1&postId=post-1',
+    );
   });
 });

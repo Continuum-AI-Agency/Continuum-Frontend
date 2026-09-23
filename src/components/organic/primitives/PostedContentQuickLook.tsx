@@ -3,18 +3,31 @@
 import { ExternalLink, GalleryHorizontalEnd } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
-import { buttonVariants } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { isCarouselMediaType } from '@/lib/organic/carousel';
 import { cn } from '@/lib/utils';
 import type { OrganicCalendarPostedContent } from './types';
 
-export function PostedContentPreview({ post }: { post: OrganicCalendarPostedContent }) {
+export function PostedContentPreview({
+  post,
+  onViewMetrics,
+  className,
+}: {
+  post: OrganicCalendarPostedContent;
+  onViewMetrics?: () => void;
+  className?: string;
+}) {
   const mediaUrl = post.thumbnailUrl ?? post.mediaUrl;
   const isCarousel = isCarouselMediaType(post.mediaType);
 
   return (
-    <div className="w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-border bg-card">
+    <div
+      className={cn(
+        'w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-border bg-card',
+        className,
+      )}
+    >
       {mediaUrl ? (
         <div className="aspect-video overflow-hidden bg-muted">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -50,6 +63,17 @@ export function PostedContentPreview({ post }: { post: OrganicCalendarPostedCont
             <ExternalLink data-icon="inline-end" />
           </a>
         ) : null}
+        {onViewMetrics && (
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            className="w-full justify-between"
+            onClick={onViewMetrics}
+          >
+            View post metrics <ExternalLink data-icon="inline-end" />
+          </Button>
+        )}
       </div>
     </div>
   );

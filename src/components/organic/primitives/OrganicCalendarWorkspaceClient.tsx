@@ -9,7 +9,7 @@ import {
 import { ChevronLeft, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import dynamic from 'next/dynamic';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
@@ -77,6 +77,7 @@ import { OrganicCreativesPicker } from './OrganicCreativesPicker';
 import { OrganicDraftPreview } from './OrganicDraftPreview';
 import { ListViewSkeleton, MonthGridSkeleton, PlannerViewSkeleton } from './PlannerViewSkeletons';
 import { PlannerWorkflowRail, resolvePlannerStage } from './PlannerWorkflowRail';
+import { PostedContentPreview } from './PostedContentQuickLook';
 import { usePlannerDateAnchors } from './planner-date-anchor';
 import {
   buildPlannerPlatforms,
@@ -89,6 +90,7 @@ import { TimeGridCanvas } from './TimeGridCanvas';
 import type {
   OrganicCalendarDay,
   OrganicCalendarDraft,
+  OrganicCalendarPostedContent,
   OrganicCreationStep,
   OrganicEditorSlide,
   OrganicPlatformTag,
@@ -298,6 +300,22 @@ function OrganicCalendarWorkspaceInner({
     expandPreview,
     isAutoSelectSuppressed,
   } = useCalendarSelection(calendarDays, { onDismiss: forgetDeepLinkedDraft });
+  const router = useRouter();
+  const [selectedPost, setSelectedPost] = React.useState<{
+    post: OrganicCalendarPostedContent;
+    metricsHref: string | null;
+  } | null>(null);
+  const handleSelectPost = React.useCallback(
+    (post: OrganicCalendarPostedContent, metricsHref: string | null) => {
+      clearAll();
+      setSelectedPost({ post, metricsHref });
+    },
+    [clearAll],
+  );
+  const closePreview = React.useCallback(() => {
+    setSelectedPost(null);
+    clearAll();
+  }, [clearAll]);
 
   const resolvedTrends = React.useMemo(() => {
     const merged = [
@@ -597,7 +615,9 @@ function OrganicCalendarWorkspaceInner({
   // panel silently blank until a reload. Gate on `selectedId` and bridge the
   // transient gap with the last-resolved draft so the panel never blanks and
   // re-renders with fresh content the moment the draft resolves again.
-  const hasSelection = Boolean(selectedId);
+  const previewPost = selectedId ? null : selectedPost;
+  const selectedPostMetricsHref = previewPost?.metricsHref;
+  const hasSelection = Boolean(selectedId || previewPost);
   // Selection keeps the workflow rail on the "review" stage; only an expanded
   // preview claims layout width.
   const isPreviewOpen = hasSelection && !isPreviewCollapsed;
@@ -612,6 +632,10 @@ function OrganicCalendarWorkspaceInner({
     (selectedId && lastResolvedDraftRef.current?.id === selectedId
       ? lastResolvedDraftRef.current
       : null);
+
+  React.useEffect(() => {
+    if (selectedId) setSelectedPost(null);
+  }, [selectedId]);
 
   const allDraftIds = React.useMemo(() => new Set(drafts.map((draft) => draft.id)), [drafts]);
 
@@ -654,7 +678,7 @@ function OrganicCalendarWorkspaceInner({
 
     // No current selection -- try to restore from initial prop / localStorage,
     // unless the user just dismissed that very draft from the preview panel.
-    if (!selectedId && typeof window !== 'undefined') {
+    if (!selectedId && !selectedPost && typeof window !== 'undefined') {
       const preferredDraftId =
         initialSelectedDraftId ??
         (lastDraftKey ? getLocalStorageJSON<string | null>(lastDraftKey, null) : null);
@@ -673,6 +697,7 @@ function OrganicCalendarWorkspaceInner({
     isAutoSelectSuppressed,
     isCalendarHydrated,
     selectedId,
+    selectedPost,
     selectedIds,
     setSelectedDraftId,
     setSelectedDraftIds,
@@ -1242,7 +1267,13 @@ function OrganicCalendarWorkspaceInner({
       {/* biome-ignore lint/a11y/noStaticElementInteractions: planner root is a keyboard-shortcut surface for the whole grid (delete/select), not a single control */}
       <div
         className="@container/organic relative h-full min-h-0 w-full overflow-hidden focus:outline-none"
-        onKeyDown={handleKeyDown}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && selectedPost) {
+            closePreview();
+            return;
+          }
+          handleKeyDown(event);
+        }}
         // biome-ignore lint/a11y/noNoninteractiveTabindex: focusable so grid-level key handlers fire without a child holding focus
         tabIndex={0}
       >
@@ -1276,11 +1307,8 @@ function OrganicCalendarWorkspaceInner({
               isPreviewOpen ? (
                 <motion.aside
                   role="complementary"
-                  aria-label="Draft preview"
+                  aria-label={previewPost ? 'Published post preview' : 'Draft preview'}
                   tabIndex={-1}
-                  onKeyDown={(e: React.KeyboardEvent) => {
-                    if (e.key === 'Escape') clearAll();
-                  }}
                   initial={{ opacity: 0, x: 28, scale: 0.98 }}
                   animate={{ opacity: 1, x: 0, scale: 1 }}
                   transition={previewTransition}
@@ -1289,6 +1317,7 @@ function OrganicCalendarWorkspaceInner({
                   <div className="mb-2 flex shrink-0 items-center justify-between pb-1.5">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Post Preview
+                      {previewPost ? ` · ${previewPost.post.dayId}` : ''}
                     </p>
                     <div className="flex items-center gap-1.5">
                       {previewDraft?.mediaSuggestion?.reel?.composition &&
@@ -1305,41 +1334,43 @@ function OrganicCalendarWorkspaceInner({
                             : 'Ready to render'}
                         </Button>
                       ) : null}
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <span>
-                                <Button
-                                  type="button"
-                                  variant="secondary"
-                                  size="sm"
-                                  disabled={!brandProfileId || !previewDraft}
-                                  onClick={handleOpenInAiStudio}
-                                  style={
-                                    !brandProfileId || !previewDraft
-                                      ? { pointerEvents: 'none' }
-                                      : undefined
-                                  }
-                                >
-                                  {previewDraft?.mediaSuggestion?.reel?.composition
-                                    ? 'Edit in AI Studio'
-                                    : 'Open in AI Studio'}
-                                </Button>
-                              </span>
-                            }
-                          />
-                          {!brandProfileId ? (
-                            <TooltipContent>Select a brand to use AI Studio</TooltipContent>
-                          ) : null}
-                        </Tooltip>
-                      </TooltipProvider>
+                      {previewDraft ? (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <span>
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled={!brandProfileId || !previewDraft}
+                                    onClick={handleOpenInAiStudio}
+                                    style={
+                                      !brandProfileId || !previewDraft
+                                        ? { pointerEvents: 'none' }
+                                        : undefined
+                                    }
+                                  >
+                                    {previewDraft?.mediaSuggestion?.reel?.composition
+                                      ? 'Edit in AI Studio'
+                                      : 'Open in AI Studio'}
+                                  </Button>
+                                </span>
+                              }
+                            />
+                            {!brandProfileId ? (
+                              <TooltipContent>Select a brand to use AI Studio</TooltipContent>
+                            ) : null}
+                          </Tooltip>
+                        </TooltipProvider>
+                      ) : null}
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon-xs"
                         aria-label="Close preview"
-                        onClick={clearAll}
+                        onClick={closePreview}
                       >
                         <X className="h-3.5 w-3.5" />
                       </Button>
@@ -1360,7 +1391,17 @@ function OrganicCalendarWorkspaceInner({
                   ) : null}
 
                   <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/45 bg-background/80">
-                    {previewDraft ? (
+                    {previewPost ? (
+                      <PostedContentPreview
+                        post={previewPost.post}
+                        className="h-full w-full overflow-y-auto border-0"
+                        onViewMetrics={
+                          selectedPostMetricsHref
+                            ? () => router.push(selectedPostMetricsHref)
+                            : undefined
+                        }
+                      />
+                    ) : previewDraft ? (
                       <OrganicDraftPreview
                         draft={previewDraft}
                         brandName={brandName}
@@ -1495,6 +1536,7 @@ function OrganicCalendarWorkspaceInner({
                           selectedDraftId={selectedId}
                           selectedDraftIds={selectedIds}
                           onSelectDraft={(id) => handleSelect(id, false)}
+                          onSelectPost={handleSelectPost}
                           onToggleSelection={(id) => handleSelect(id, true)}
                           onCreatePost={({ dayId, platformKey, status, mode, format }) =>
                             handleGoDraft({

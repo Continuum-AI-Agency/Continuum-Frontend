@@ -10,6 +10,7 @@ import {
   Trash2,
   Zap,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import * as React from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -49,6 +50,16 @@ const PLATFORM_CHIP_COLORS: Record<string, string> = {
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+function metricsPostHref(post: OrganicCalendarPostedContent): string | null {
+  if (!post.integrationAccountId || !post.externalPostId) return null;
+  return `?${new URLSearchParams({
+    tab: 'metrics',
+    platform: post.platform,
+    accountId: post.integrationAccountId,
+    postId: post.externalPostId,
+  })}`;
+}
+
 type OrganicMonthlyCalendarProps = {
   days: OrganicCalendarDay[];
   monthAnchorDate: Date;
@@ -59,6 +70,7 @@ type OrganicMonthlyCalendarProps = {
       move the whole set — the same contract the week grid already honours. */
   selectedDraftIds?: string[];
   onSelectDraft: (id: string) => void;
+  onSelectPost: (post: OrganicCalendarPostedContent, metricsHref: string | null) => void;
   onToggleSelection?: (id: string) => void;
   onCreatePost: (options: CreatePostOptions) => void;
   onPreviousMonth: () => void;
@@ -211,20 +223,34 @@ function DraftChip({
   );
 }
 
-function PostedContentChip({ post }: { post: OrganicCalendarPostedContent }) {
+function PostedContentChip({
+  post,
+  onSelect,
+}: {
+  post: OrganicCalendarPostedContent;
+  onSelect: (post: OrganicCalendarPostedContent, metricsHref: string | null) => void;
+}) {
   const colorClass = PLATFORM_CHIP_COLORS[post.platform] ?? 'bg-emerald-600/80 text-white';
   const isCarousel = isCarouselMediaType(post.mediaType);
+  const router = useRouter();
+  const [previewOpen, setPreviewOpen] = React.useState(false);
+  const metricsHref = metricsPostHref(post);
 
   return (
-    <HoverCard openDelay={300} closeDelay={100}>
+    <HoverCard open={previewOpen} onOpenChange={setPreviewOpen} openDelay={300} closeDelay={100}>
       <HoverCardTrigger
         render={
           <button
             type="button"
             className={cn(
-              'flex w-full cursor-default items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-2xs font-medium leading-tight opacity-90 ring-0 transition-opacity hover:opacity-100',
+              'flex w-full cursor-pointer items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-2xs font-medium leading-tight opacity-90 ring-0 transition-opacity hover:opacity-100',
               colorClass,
             )}
+            onClick={(event) => {
+              event.stopPropagation();
+              setPreviewOpen(false);
+              onSelect(post, metricsHref);
+            }}
             title={isCarousel ? `Carousel · ${post.title}` : post.title}
           >
             <span className="shrink-0 text-3xs font-bold uppercase">{post.timeLabel}</span>
@@ -240,7 +266,10 @@ function PostedContentChip({ post }: { post: OrganicCalendarPostedContent }) {
         align="start"
         className="p-0 border-none bg-transparent shadow-none"
       >
-        <PostedContentPreview post={post} />
+        <PostedContentPreview
+          post={post}
+          onViewMetrics={metricsHref ? () => router.push(metricsHref) : undefined}
+        />
       </HoverCardContent>
     </HoverCard>
   );
@@ -304,6 +333,7 @@ export function OrganicMonthlyCalendar({
   selectedDraftId,
   selectedDraftIds,
   onSelectDraft,
+  onSelectPost,
   onToggleSelection,
   onCreatePost,
   onPreviousMonth,
@@ -448,7 +478,7 @@ export function OrganicMonthlyCalendar({
                       />
                     ))}
                     {visiblePosts.map((post) => (
-                      <PostedContentChip key={post.id} post={post} />
+                      <PostedContentChip key={post.id} post={post} onSelect={onSelectPost} />
                     ))}
                     {overflowCount > 0 && (
                       <span className="pl-1 text-3xs text-muted-foreground/70">
