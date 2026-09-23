@@ -10,7 +10,13 @@
 // `provenance.period` on the individual blocks is not a substitute: on a real row three of
 // five blocks carried empty `since`/`until`. When the report has no scope frame, there is
 // nothing honest to derive one from, and the save says so instead of keeping naked numbers.
+//
+// A save also records, per block, what it would take to re-run it for another window —
+// the tool, the entity, the metric keys, the range, and whether the block is derived — so
+// a dashboard is more than frozen figures. That is `spec`, derived from the blocks by the
+// contracts package and never guessed.
 
+import { type DashboardSpec, deriveDashboardSpec } from '@continuum/contracts';
 import type { CheckpointBlockV2, CheckpointReportV2, DataScopeBlockV2 } from './schemas';
 
 export const DASHBOARD_SCOPE_MISSING_MESSAGE =
@@ -28,7 +34,7 @@ export function orderDashboardBlocks<T extends { category: string }>(blocks: rea
 }
 
 export type DashboardBlocksPlan =
-  | { ok: true; blocks: CheckpointBlockV2[]; windowLabel: string }
+  | { ok: true; blocks: CheckpointBlockV2[]; windowLabel: string; spec: DashboardSpec }
   | { ok: false; missing: 'data_scope'; message: string };
 
 /**
@@ -36,7 +42,8 @@ export type DashboardBlocksPlan =
  *
  * The report's own `data_scope` frame is kept whether or not it is among the visible blocks,
  * and it goes first; `windowLabel` is that frame's human-readable window, which is what the
- * saved-dashboards strip prints next to the name.
+ * saved-dashboards strip prints next to the name. `spec` pairs each kept block with its
+ * re-run spec, in the same order.
  */
 export function prepareDashboardBlocks(
   report: Pick<CheckpointReportV2, 'blocks'>,
@@ -47,5 +54,6 @@ export function prepareDashboardBlocks(
     return { ok: false, missing: 'data_scope', message: DASHBOARD_SCOPE_MISSING_MESSAGE };
   }
   const withoutScope = visibleBlocks.filter((block) => block.category !== 'data_scope');
-  return { ok: true, blocks: [scope, ...withoutScope], windowLabel: scope.dates };
+  const blocks = [scope, ...withoutScope];
+  return { ok: true, blocks, windowLabel: scope.dates, spec: deriveDashboardSpec(blocks) };
 }
