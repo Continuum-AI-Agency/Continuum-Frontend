@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { BlockRenderer } from '../blocks/BlockRenderer';
 import { countBlockCitations } from '../blocks/citations';
 import { MediaMapProvider } from '../blocks/mediaText';
+import { JainaProse } from '../blocks/prose';
 import { normalizeJainaMarkdownTables } from '../jainaUtils';
 import { JAINA_ANSWER_PROSE, JAINA_EVIDENCE_PROSE } from '../reading';
 import {
@@ -295,7 +296,7 @@ export function JainaReportV2({
          *  figure, every row. `JAINA_ANSWER_PROSE` is the one constant both routes now
          *  share, so the answer reads the same whether the turn shipped a report or not. */}
         {report.executive_summary ? (
-          <SafeMarkdown
+          <JainaProse
             content={normalizeJainaMarkdownTables(report.executive_summary)}
             className={JAINA_ANSWER_PROSE}
             mode={isStreaming ? 'streaming' : 'static'}

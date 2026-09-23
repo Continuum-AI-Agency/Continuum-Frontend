@@ -309,6 +309,61 @@ export const dataTableBlockSchema = dataTableBlockBaseSchema.superRefine(
 export type DataTableBlock = z.infer<typeof dataTableBlockBaseSchema>;
 
 // ---------------------------------------------------------------------------
+// Prose marks — the emphasis a sentence can carry INSIDE itself.
+//
+// Structured blocks carry `severity` and are coloured from it. Prose — the executive
+// summary, a narrative body, an insight's own sentence — is a plain string, and it
+// reached the screen as flat ink: the figure that carried the judgement looked like
+// every other word. Markdown has bold and nothing that means "this number is a
+// problem", so prose carries one small marker family, the severity vocabulary plus
+// the window:
+//
+//     [risk: 0.90 ROAS]  [watch: 1.7% CTR]  [positive: 21.83 MXN per lead]
+//     [neutral: 145 purchases]  [window: last 30 days]
+//
+// Same law as the renderer's `reading.ts`: colour carries judgement, so `neutral`
+// renders in the ink colour (a judgement, not a fallback) and `window` in the muted
+// one. A mark holds plain text only — no nested mark, no markdown inside it — and an
+// unknown keyword is not a mark, so `[cite:id]` and ordinary brackets pass untouched.
+//
+// Defined ONCE, here, because three things read it: the Backend prompt asks for it,
+// the Backend clips a summary around it, and the Frontend renders it or strips it.
+// ---------------------------------------------------------------------------
+
+export const PROSE_MARK_TONES = ['risk', 'watch', 'positive', 'neutral', 'window'] as const;
+export type ProseMarkTone = (typeof PROSE_MARK_TONES)[number];
+
+export type ProseSegment =
+  | { kind: 'text'; value: string }
+  | { kind: 'mark'; tone: ProseMarkTone; value: string };
+
+const PROSE_MARK_SOURCE = String.raw`\[(risk|watch|positive|neutral|window):\s*([^\[\]\n]+?)\s*\]`;
+
+/** A fresh matcher per call: a shared `/g` regex carries `lastIndex` between callers. */
+export const proseMarkPattern = (): RegExp => new RegExp(PROSE_MARK_SOURCE, 'g');
+
+export const hasProseMarks = (text: string): boolean => new RegExp(PROSE_MARK_SOURCE).test(text);
+
+/** The prose split into text runs and marks, in order. Empty input is no segments. */
+export function parseProseMarks(text: string): ProseSegment[] {
+  const segments: ProseSegment[] = [];
+  const pattern = proseMarkPattern();
+  let lastIndex = 0;
+  for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
+    if (match.index > lastIndex) {
+      segments.push({ kind: 'text', value: text.slice(lastIndex, match.index) });
+    }
+    segments.push({ kind: 'mark', tone: match[1] as ProseMarkTone, value: match[2] });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) segments.push({ kind: 'text', value: text.slice(lastIndex) });
+  return segments;
+}
+
+/** The prose with every mark replaced by its inner text — exports, previews, any surface without a renderer. */
+export const stripProseMarks = (text: string): string => text.replace(proseMarkPattern(), '$2');
+
+// ---------------------------------------------------------------------------
 // Insight list block
 // ---------------------------------------------------------------------------
 
@@ -319,6 +374,10 @@ export const insightListItemSchema = z.object({
   rationale: z.string().min(1),
   impact: z.string().min(1),
   severity: z.enum(['positive', 'neutral', 'watch', 'risk']).default('neutral'),
+  /** The figure in `summary` that carries this item's `severity`, copied verbatim
+   *  ("0.90 ROAS"). The renderer sets that span in the severity tone — the structured
+   *  twin of a prose mark (see `parseProseMarks`). Null when no single figure is judged. */
+  highlight: z.string().nullable().default(null),
   priority: z.string().default('now'),
   cite_ids: z.array(z.string()).default([]),
   evidence_refs: z.array(z.string().min(1)).optional(),

@@ -1,10 +1,10 @@
 'use client';
 
 import type { CheckpointBlockV2, CheckpointReportV2 } from '@/lib/jaina/schemas';
-import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { BlockRenderer } from '../blocks/BlockRenderer';
 import { countBlockCitations } from '../blocks/citations';
 import { MediaMapProvider } from '../blocks/mediaText';
+import { JainaProse } from '../blocks/prose';
 
 // The paper layout for a Jaina report.
 //
@@ -48,9 +48,9 @@ export function formatPeriod(period: Period): string | null {
 /** The entity the report is about, when the blocks agree on one. */
 export function resolveEntityLabel(blocks: CheckpointBlockV2[]): string | null {
   const labels = new Set(
-    blocks.map((block) => block.provenance?.entity_label).filter((value): value is string =>
-      Boolean(value),
-    ),
+    blocks
+      .map((block) => block.provenance?.entity_label)
+      .filter((value): value is string => Boolean(value)),
   );
   return labels.size === 1 ? [...labels][0] : null;
 }
@@ -84,7 +84,7 @@ export function JainaReportDocument({
       </header>
 
       {report.executive_summary ? (
-        <SafeMarkdown
+        <JainaProse
           content={report.executive_summary}
           className="jaina-export-summary text-sm leading-relaxed"
           mode="static"

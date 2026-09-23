@@ -24,6 +24,7 @@ import { formatValue } from '@/lib/jaina/formatValue';
 import type { ActionsBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
 import { BlockSourcesFooter, CitationChips } from './citations';
+import { InlineProse } from './prose';
 
 type ActionsBlockProps = { block: ActionsBlockV2; isStreaming: boolean };
 type ActionRow = ActionsBlockV2['rows'][number];
@@ -88,7 +89,7 @@ export default function ActionsBlock({ block }: ActionsBlockProps) {
                 <span className="text-muted-foreground"> ({row.entity.kind})</span>
               ) : null}
               {' — '}
-              {row.action}
+              <InlineProse text={row.action} />
               {row.sizing ? (
                 <span className="text-muted-foreground tabular-nums"> · {row.sizing}</span>
               ) : null}

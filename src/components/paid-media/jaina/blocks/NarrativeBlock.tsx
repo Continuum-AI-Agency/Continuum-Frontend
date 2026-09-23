@@ -1,47 +1,27 @@
 'use client';
 
-import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import type { NarrativeBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
 import { JUDGEMENT_LABEL, JUDGEMENT_RULE, judgeValue } from '../reading';
-import { BlockSourcesFooter, CitationChip, parseNarrativeCitations } from './citations';
+import { BlockSourcesFooter } from './citations';
 import { MediaText } from './mediaText';
+import { JainaProse } from './prose';
 
 type NarrativeBlockProps = {
   block: NarrativeBlockV2;
   isStreaming: boolean;
 };
 
+// Citations, severity marks and bold entities are all placed by `JainaProse`; this block
+// only says what ink its body is set in.
 function NarrativeBody({ block, isStreaming }: NarrativeBlockProps) {
-  const mode = isStreaming ? 'streaming' : 'static';
-  const segments = parseNarrativeCitations(block.body, block.citations);
-
-  // No resolvable `[cite:id]` markers → render the body exactly as before
-  // (single markdown pass). Unmatched markers are already stripped by the
-  // parser, so a raw `[cite:id]` literal is never handed to markdown.
-  if (segments.length === 1 && segments[0].kind === 'text') {
-    return (
-      <SafeMarkdown
-        content={segments[0].value}
-        mode={mode}
-        className="text-sm leading-relaxed text-muted-foreground"
-      />
-    );
-  }
-
-  // Mixed prose + inline citations: render each text run through markdown and
-  // drop the citation chip at the marker's position. `[&_p]:inline` keeps the
-  // per-run paragraphs flowing on one line so chips sit within the sentence.
   return (
-    <div className="text-sm leading-relaxed text-muted-foreground [&_p]:m-0 [&_p]:inline">
-      {segments.map((segment, index) =>
-        segment.kind === 'text' ? (
-          <SafeMarkdown key={`text-${index}`} content={segment.value} mode={mode} />
-        ) : (
-          <CitationChip key={segment.key} resolved={segment.resolved} />
-        ),
-      )}
-    </div>
+    <JainaProse
+      content={block.body}
+      citations={block.citations}
+      mode={isStreaming ? 'streaming' : 'static'}
+      className="text-sm leading-relaxed text-muted-foreground"
+    />
   );
 }
 

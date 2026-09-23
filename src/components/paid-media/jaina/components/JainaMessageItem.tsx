@@ -11,13 +11,13 @@ import { MentionifiedText } from '@/components/chat/mentionified-text';
 import { JainaOptimizerCitations } from '@/components/paid-media/jaina/blocks/JainaOptimizerCitations';
 import { JainaOptimizerHyperframes } from '@/components/paid-media/jaina/blocks/JainaOptimizerHyperframes';
 import { PaidScaffoldCard } from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
-import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import {
   type CreativeArtifact,
   frontendCheckpointReportSchema,
   hasReportContent,
   type ToolResultEventData,
 } from '@/lib/jaina/schemas';
+import { JainaProse } from '../blocks/prose';
 import {
   extractRenderableFallbackFromReport,
   extractRenderableFallbackFromStructuredContent,
@@ -258,7 +258,7 @@ function JainaMessageItemImpl({
           <>
             {hasRenderableContent ? (
               <div className="relative">
-                <SafeMarkdown
+                <JainaProse
                   content={normalizeJainaMarkdownTables(message.content)}
                   className="text-base leading-7 text-foreground"
                   mode={isStreaming ? 'streaming' : 'static'}
@@ -284,7 +284,7 @@ function JainaMessageItemImpl({
             ) : null}
 
             {structuredFallbackContent ? (
-              <SafeMarkdown
+              <JainaProse
                 content={normalizeJainaMarkdownTables(structuredFallbackContent)}
                 className="text-base leading-7 text-foreground"
                 mode="static"

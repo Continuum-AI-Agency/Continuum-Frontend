@@ -53,6 +53,24 @@ const block = (rows: Row[]): ActionsBlockV2 => ({
 });
 
 describe('ActionsBlock', () => {
+  it('sets an entity the model bolded inside the clause in ink, never as literal asterisks', () => {
+    const { container } = render(
+      <ActionsBlock
+        block={block([
+          row({ action: 'Shift 30% of budget into **CAÑADAS** at [positive: 1.50 ROAS]' }),
+        ])}
+        isStreaming={false}
+      />,
+    );
+    const sentence = container.querySelector('[data-testid="actions-sentence"]');
+    expect(sentence?.querySelector('strong')?.textContent).toBe('CAÑADAS');
+    expect(sentence?.querySelector('[data-prose-mark="positive"]')?.className).toContain(
+      'text-success',
+    );
+    expect(sentence?.textContent).not.toContain('**');
+    expect(sentence?.textContent).toContain('Shift 30% of budget into CAÑADAS at 1.50 ROAS');
+  });
+
   it('leads each move with its evidence figure, in the evidence’s own unit', () => {
     const { container } = render(<ActionsBlock block={block([row()])} isStreaming={false} />);
     const figure = container.querySelector('[data-testid="actions-figure"]');

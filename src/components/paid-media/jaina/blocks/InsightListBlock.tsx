@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { JUDGEMENT_LABEL, JUDGEMENT_RULE, judgeValue } from '../reading';
 import { BlockSourcesFooter, CitationChips } from './citations';
 import { EvidenceTooltip } from './EvidenceTooltip';
-import { MediaText } from './mediaText';
+import { InlineProse } from './prose';
 
 type InsightListBlockProps = { block: InsightListBlockV2; isStreaming: boolean };
 
@@ -69,14 +69,25 @@ export default function InsightListBlock({ block }: InsightListBlockProps) {
                   </span>
                 )}
               </div>
+              {/* The judged figure (`highlight`) takes the item's own severity tone; the
+               *  entity the model set in bold takes the ink. These three used to print the
+               *  raw string, so no emphasis the model wrote could ever have reached them. */}
               <div className="mt-1 text-xs leading-5 text-muted-foreground">
-                <MediaText>{item.summary}</MediaText>
+                <InlineProse
+                  text={item.summary}
+                  highlight={item.highlight}
+                  severity={item.severity as Severity | null | undefined}
+                />
               </div>
               {item.rationale && (
-                <p className="mt-1 text-xs italic text-muted-foreground/70">{item.rationale}</p>
+                <p className="mt-1 text-xs italic text-muted-foreground/70">
+                  <InlineProse text={item.rationale} />
+                </p>
               )}
               {item.impact && (
-                <p className="mt-1 text-xs font-medium text-foreground/80">Impact: {item.impact}</p>
+                <p className="mt-1 text-xs font-medium text-foreground/80">
+                  Impact: <InlineProse text={item.impact} />
+                </p>
               )}
               <CitationChips
                 citeIds={item.cite_ids}

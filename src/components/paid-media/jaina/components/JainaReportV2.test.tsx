@@ -120,6 +120,28 @@ const report = {
   },
 } as CheckpointReportV2;
 
+describe('JainaReportV2 executive summary', () => {
+  it('sets the judged figure of the answer in its severity tone, inside the sentence', () => {
+    render(
+      <JainaReportV2
+        report={{
+          ...report,
+          executive_summary:
+            'Over the [window: last 30 days] **ITESO** returned [risk: 0.49 ROAS] on its spend.',
+        }}
+        isStreaming={false}
+      />,
+    );
+    const risk = document.querySelector('[data-prose-mark="risk"]');
+    expect(risk?.textContent).toBe('0.49 ROAS');
+    expect(risk?.className).toContain('text-destructive');
+    expect(document.querySelector('[data-prose-mark="window"]')?.className).toContain(
+      'text-muted-foreground',
+    );
+    expect(document.body.textContent).not.toContain('[risk:');
+  });
+});
+
 describe('JainaReportV2 module controls', () => {
   it('shows every selected module by default and lets each one be hidden and shown', () => {
     render(<JainaReportV2 report={report} isStreaming={false} />);

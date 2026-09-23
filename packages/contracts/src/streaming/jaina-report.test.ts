@@ -6,7 +6,11 @@ import {
   checkpointBlockV2Schema,
   dataTableBlockSchema,
   degradeToNarrativeBlockV2,
+  hasProseMarks,
+  insightListItemSchema,
   narrativeBlockSchema,
+  parseProseMarks,
+  stripProseMarks,
   validateReport,
 } from './jaina-report';
 
@@ -300,5 +304,72 @@ describe('Prism blocks + validateReport', () => {
       },
     ] as never);
     expect(violations).toEqual([]);
+  });
+});
+
+// The emphasis prose carries inside a sentence. One grammar, three readers (the Backend
+// prompt, the Backend summary clip, the Frontend renderer) — so the grammar is pinned
+// here, where all three import it from.
+describe('prose marks', () => {
+  it('splits a sentence into text runs and marks, in order, keeping every character', () => {
+    const text = 'Spend on **ITESO** fell to [risk: 0.49 ROAS] over the [window: last 30 days].';
+    expect(parseProseMarks(text)).toEqual([
+      { kind: 'text', value: 'Spend on **ITESO** fell to ' },
+      { kind: 'mark', tone: 'risk', value: '0.49 ROAS' },
+      { kind: 'text', value: ' over the ' },
+      { kind: 'mark', tone: 'window', value: 'last 30 days' },
+      { kind: 'text', value: '.' },
+    ]);
+  });
+
+  it('knows every tone the renderer can colour, and trims the padding inside a mark', () => {
+    const tones = parseProseMarks(
+      '[risk:  a ] [watch: b] [positive: c] [neutral: d] [window: e]',
+    ).filter((segment) => segment.kind === 'mark');
+    expect(tones.map((segment) => (segment.kind === 'mark' ? segment.tone : null))).toEqual([
+      'risk',
+      'watch',
+      'positive',
+      'neutral',
+      'window',
+    ]);
+    expect(tones[0]).toEqual({ kind: 'mark', tone: 'risk', value: 'a' });
+  });
+
+  it('leaves citations and ordinary brackets alone — an unknown keyword is not a mark', () => {
+    const text = 'Spend rose 24% [cite:c1] (see [table 2]) and [alert: x].';
+    expect(hasProseMarks(text)).toBe(false);
+    expect(parseProseMarks(text)).toEqual([{ kind: 'text', value: text }]);
+  });
+
+  it('refuses a mark that spans a line or nests a bracket', () => {
+    expect(hasProseMarks('[risk: 0.9\nROAS]')).toBe(false);
+    expect(hasProseMarks('[risk: [cite:c1] 0.9]')).toBe(false);
+  });
+
+  it('strips marks down to their inner text for surfaces that cannot render them', () => {
+    expect(stripProseMarks('Fell to [risk: 0.49 ROAS] over the [window: last 30 days].')).toBe(
+      'Fell to 0.49 ROAS over the last 30 days.',
+    );
+  });
+
+  it('yields no segments for empty prose', () => {
+    expect(parseProseMarks('')).toEqual([]);
+  });
+});
+
+describe('insightListItemSchema.highlight', () => {
+  const item = {
+    item_type: 'insight',
+    title: 'ROAS trails break-even',
+    summary: 'Account ROAS sits at 0.90 on 80,405 MXN of spend.',
+    rationale: 'Below the 1.0 line the brand set.',
+    impact: 'Every peso spent returns less than a peso.',
+    severity: 'risk',
+  };
+
+  it('carries the judged figure the renderer colours, and defaults to null when absent', () => {
+    expect(insightListItemSchema.parse({ ...item, highlight: '0.90' }).highlight).toBe('0.90');
+    expect(insightListItemSchema.parse(item).highlight).toBeNull();
   });
 });
