@@ -2,7 +2,11 @@
 
 import type { CreditPackOffer } from '@continuum/contracts';
 import { useState } from 'react';
-import { TopUpPackPicker, useCreditCheckout } from '@/components/billing/TopUpDialog';
+import {
+  PromoCodeRedeem,
+  TopUpPackPicker,
+  useCreditCheckout,
+} from '@/components/billing/TopUpDialog';
 import { Button } from '@/components/ui/button';
 import { type CanvasCreditsView, formatCredits, formatUsd } from '@/lib/billing/billingViewModel';
 import { DEFAULT_TOP_UP_PACKS } from '@/lib/billing/topUp';
@@ -144,6 +148,7 @@ export function BuyCreditsControl({
           {redirecting ? 'Opening checkout…' : `Buy credits · ${formatUsd(packs * offer.priceUsd)}`}
         </Button>
       </div>
+      <PromoCodeRedeem brandId={brandId} purchasedCreditsBefore={purchasedCredits} />
     </div>
   );
 }

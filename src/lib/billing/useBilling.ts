@@ -59,6 +59,15 @@ function settledTitle(change: PendingBillingChange): string {
   }
 }
 
+/** A Checkout return being confirmed as a printed receipt (CheckoutReceiptDialog). */
+export type CheckoutReceiptState = {
+  sessionId: string;
+  /** Where the buyer came from: the receipt offers the way back. */
+  from: string | null;
+  /** Our webhook's grant: still polling, landed, or the wait ran out. */
+  status: 'waiting' | 'settled' | 'timed_out';
+};
+
 /**
  * The brand's billing overview, plus any change Stripe has confirmed that our webhook may not
  * have applied yet — a Checkout return (?checkout=success|cancel) or a plan change made in the
@@ -68,6 +77,9 @@ function settledTitle(change: PendingBillingChange): string {
  * `returnsOnly` is the app shell's use: a Top up bought from any page returns to that page, so
  * the shell confirms it there. It reads the overview only while a return is pending (members
  * never buy, so never read it), and `enabled: false` hands the return to the Billing page.
+ *
+ * A return that carries Stripe's session id prints a receipt instead of toasting: `receipt`
+ * tracks it until `closeReceipt`. An older return link without one keeps the toasts.
  */
 export function useBillingOverviewWithPendingChange(
   brandId: string,
@@ -79,10 +91,11 @@ export function useBillingOverviewWithPendingChange(
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [pending, setPending] = useState<PendingBillingChange | null>(null);
+  const [receipt, setReceipt] = useState<CheckoutReceiptState | null>(null);
   const deadlineRef = useRef(0);
   const handledReturnRef = useRef(false);
   // A Checkout return, and where the buyer came from: the success toast offers the way back.
-  const checkoutReturnRef = useRef<{ from: string | null } | null>(null);
+  const checkoutReturnRef = useRef<{ from: string | null; printsReceipt: boolean } | null>(null);
   const overview = useBillingOverview(
     brandId,
     pending ? CHANGE_POLL_INTERVAL_MS : false,
@@ -109,13 +122,18 @@ export function useBillingOverviewWithPendingChange(
       show({ title: 'Checkout canceled', description: 'Nothing was charged.', variant: 'info' });
       return;
     }
-    show({
-      title: 'Payment received',
-      description: 'Confirming with Stripe — this takes a few seconds.',
-      variant: 'info',
-      dedupeKey: PENDING_TOAST_KEY,
-    });
-    checkoutReturnRef.current = { from };
+    const { sessionId } = checkoutReturn;
+    if (sessionId) {
+      setReceipt({ sessionId, from, status: 'waiting' });
+    } else {
+      show({
+        title: 'Payment received',
+        description: 'Confirming with Stripe — this takes a few seconds.',
+        variant: 'info',
+        dedupeKey: PENDING_TOAST_KEY,
+      });
+    }
+    checkoutReturnRef.current = { from, printsReceipt: sessionId !== null };
     track(checkoutReturn.change);
   }, [enabled, returnsOnly, pathname, router, searchParams, show, track]);
 
@@ -124,18 +142,22 @@ export function useBillingOverviewWithPendingChange(
     const checkoutReturn = checkoutReturnRef.current;
     checkoutReturnRef.current = null;
     const from = checkoutReturn?.from ?? null;
-    show({
-      title: settledTitle(pending),
-      variant: 'success',
-      dedupeKey: PENDING_TOAST_KEY,
-      // An offer, never a redirect: the buyer may want to look at what they bought first.
-      ...(from
-        ? {
-            durationMs: 10_000,
-            action: { label: 'Back to where you were', onClick: () => router.push(from) },
-          }
-        : {}),
-    });
+    if (checkoutReturn?.printsReceipt) {
+      setReceipt((current) => current && { ...current, status: 'settled' });
+    } else {
+      show({
+        title: settledTitle(pending),
+        variant: 'success',
+        dedupeKey: PENDING_TOAST_KEY,
+        // An offer, never a redirect: the buyer may want to look at what they bought first.
+        ...(from
+          ? {
+              durationMs: 10_000,
+              action: { label: 'Back to where you were', onClick: () => router.push(from) },
+            }
+          : {}),
+      });
+    }
     if (checkoutReturn) trackBillingEvent('checkout_completed', { kind: pending.kind });
     setPending(null);
     // The sidebar's credits widget is server-rendered from the entitlements; re-render it.
@@ -146,12 +168,17 @@ export function useBillingOverviewWithPendingChange(
     if (!pending) return;
     const timer = setTimeout(
       () => {
-        show({
-          title: 'Still waiting on Stripe',
-          description: 'Your payment went through. Refresh in a minute to see it here.',
-          variant: 'warning',
-          dedupeKey: PENDING_TOAST_KEY,
-        });
+        if (checkoutReturnRef.current?.printsReceipt) {
+          setReceipt((current) => current && { ...current, status: 'timed_out' });
+        } else {
+          show({
+            title: 'Still waiting on Stripe',
+            description: 'Your payment went through. Refresh in a minute to see it here.',
+            variant: 'warning',
+            dedupeKey: PENDING_TOAST_KEY,
+          });
+        }
+        checkoutReturnRef.current = null;
         setPending(null);
       },
       Math.max(deadlineRef.current - Date.now(), 0),
@@ -159,5 +186,7 @@ export function useBillingOverviewWithPendingChange(
     return () => clearTimeout(timer);
   }, [pending, show]);
 
-  return { overview, pending, track };
+  const closeReceipt = useCallback(() => setReceipt(null), []);
+
+  return { overview, pending, track, receipt, closeReceipt };
 }

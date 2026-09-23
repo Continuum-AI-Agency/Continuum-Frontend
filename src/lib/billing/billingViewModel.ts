@@ -279,7 +279,10 @@ export type PendingBillingChange =
 
 export type CheckoutReturn =
   | { outcome: 'cancel' }
-  | { outcome: 'success'; change: PendingBillingChange };
+  /** `sessionId` is Stripe's substituted `{CHECKOUT_SESSION_ID}`; null on an older return link. */
+  | { outcome: 'success'; change: PendingBillingChange; sessionId: string | null };
+
+const CHECKOUT_SESSION_ID = /^cs_(test|live)_[A-Za-z0-9]+$/;
 
 type SearchParamsLike = { get(name: string): string | null };
 
@@ -300,8 +303,13 @@ export function parseCheckoutReturn(params: SearchParamsLike): CheckoutReturn | 
   if (outcome === 'cancel') return { outcome: 'cancel' };
   if (outcome !== 'success') return null;
 
+  const rawSessionId = params.get('session_id');
+  const sessionId = rawSessionId && CHECKOUT_SESSION_ID.test(rawSessionId) ? rawSessionId : null;
+
   const plan = planCodeSchema.safeParse(params.get('plan'));
-  if (plan.success) return { outcome: 'success', change: { kind: 'plan_added', plan: plan.data } };
+  if (plan.success) {
+    return { outcome: 'success', change: { kind: 'plan_added', plan: plan.data }, sessionId };
+  }
 
   const rawBalance = params.get('balance');
   const balance = Number(rawBalance);
@@ -309,9 +317,39 @@ export function parseCheckoutReturn(params: SearchParamsLike): CheckoutReturn | 
     return {
       outcome: 'success',
       change: { kind: 'credits_added', purchasedCreditsBefore: balance },
+      sessionId,
     };
   }
   return null;
+}
+
+// ── The printed receipt ──────────────────────────────────────────────────────────────────
+// A Checkout return with a session id prints a receipt instead of toasting. It prints once
+// Stripe says paid, our webhook has granted the purchase, and Stripe's invoice exists: the
+// receipt then never promises something the panel does not show yet.
+
+export type ReceiptPhase = 'processing' | 'printing' | 'complete' | 'delayed' | 'unavailable';
+
+export function receiptPhase(input: {
+  receipt: { paid: boolean; invoicePdf: string | null } | undefined;
+  /** The receipt could not be read (billing-api refused or failed). */
+  failed: boolean;
+  /** Our webhook has granted the purchase. */
+  settled: boolean;
+  /** The CHANGE_POLL_WINDOW_MS wait ran out. */
+  expired: boolean;
+  /** The paper has finished feeding. */
+  printed: boolean;
+}): ReceiptPhase {
+  const { receipt, failed, settled, expired, printed } = input;
+  if (failed) return 'unavailable';
+  const paid = receipt?.paid === true;
+  if (paid && settled && (receipt.invoicePdf !== null || expired)) {
+    return printed ? 'complete' : 'printing';
+  }
+  if (!expired) return 'processing';
+  if (!paid) return 'unavailable';
+  return printed ? 'delayed' : 'printing';
 }
 
 export function isChangeSettled(change: PendingBillingChange, overview: BillingOverview): boolean {
