@@ -108,6 +108,7 @@ import {
 } from './flashCreativesModel';
 import { ActionRow } from './OptimizerActionFeed';
 import { OptimizerReadError } from './OptimizerReadError';
+import { isStale, rosterLine, staleLine } from './portfolioStaleness';
 import { RecEvidenceChart } from './RecEvidenceChart';
 import { RecommendationInsight } from './RecommendationInsight';
 import {
@@ -123,6 +124,7 @@ import {
   settingsPatchOf,
   triggerWords,
 } from './recQueueModel';
+import { StalenessChips } from './StalenessChips';
 
 /** A budget move needing a decision — held by autopilot, approved and awaiting the drain,
  *  or a scored change not yet written (recommend mode). */
@@ -419,7 +421,9 @@ export function OptimizerActionsPortfolioGroup({
   const asOf = asOfLine(
     (report?.latest_run as { cycle_ts?: string } | null)?.cycle_ts ?? null,
     portfolio.next_realloc_at ?? null,
+    isStale(portfolio),
   );
+  const unwell = staleLine(portfolio) !== null || rosterLine(portfolio) !== null;
   const summary = React.useMemo(
     () => queueSummary(report?.recommendations ?? []),
     [report?.recommendations],
@@ -893,6 +897,14 @@ export function OptimizerActionsPortfolioGroup({
           belongs to the latest cycle (older ones are superseded server-side), so the cycle's
           time IS the queue's time. */}
       {asOf ? <p className="text-2xs text-muted-foreground">{asOf}</p> : null}
+
+      {/* A queue whose portfolio has missed a cycle, or whose roster left Meta, says so before
+          its rows — the rows below are from the last cycle that landed, however long ago. */}
+      {unwell ? (
+        <div className="flex flex-wrap items-center gap-1.5" data-testid="queue-staleness">
+          <StalenessChips portfolio={portfolio} />
+        </div>
+      ) : null}
 
       {/* What is in the queue, by reason, biggest money first — the summary a reader wants
           before ten rows that each say "Pause ad set · HIGH". */}

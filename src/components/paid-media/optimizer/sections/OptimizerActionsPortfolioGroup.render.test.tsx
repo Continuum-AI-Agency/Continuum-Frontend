@@ -874,3 +874,51 @@ describe('a queue row leads with the trigger own headline', () => {
     expect(text).toContain('CTR 0.74% vs 1.03%');
   });
 });
+
+describe('queue header — a portfolio dead on Meta says so before its rows', () => {
+  // "Citas Agosto - check leads" as the live bench read it on 2026-09-23.
+  const citas = {
+    name: 'Citas Agosto - check leads',
+    apply_mode: 'autopilot',
+    next_realloc_at: '2026-09-24T06:00:00Z',
+    adset_count: 12,
+    last_actual_cycle_at: '2026-08-05T12:00:00Z',
+    stale_for_days: 49,
+    roster_state: 'absent' as const,
+    roster_absent_since: '2026-08-06T12:00:00Z',
+    roster_missing_count: 12,
+  };
+
+  it('reads exactly as before when the row carries no staleness fields', () => {
+    const { container, queryByTestId } = renderGroup({
+      next_realloc_at: '2026-09-24T06:00:00Z',
+    });
+    expect(container.textContent).toMatch(/next cycle Sep 2[34]/);
+    expect(queryByTestId('queue-staleness')).toBeNull();
+  });
+
+  it('calls the next claim an attempt and wears the stale and roster chips', () => {
+    const { container, getByTestId } = renderGroup(citas);
+    const text = container.textContent ?? '';
+    expect(text).toMatch(/next attempt Sep 2[34]/);
+    expect(text).not.toContain('next cycle');
+    const header = getByTestId('queue-staleness');
+    expect(header.querySelector('[data-testid="stale-chip"]')?.textContent).toBe(
+      'last cycle 49 days ago',
+    );
+    expect(header.querySelector('[data-testid="roster-chip"]')?.textContent).toBe(
+      'roster gone since Aug 6 · 12 of 12 ad sets',
+    );
+  });
+
+  it('adds nothing to a fresh portfolio after the migration', () => {
+    const { container, queryByTestId } = renderGroup({
+      next_realloc_at: '2026-09-24T06:00:00Z',
+      stale_for_days: null,
+      roster_state: 'present',
+      roster_missing_count: 0,
+    });
+    expect(container.textContent).toMatch(/next cycle Sep 2[34]/);
+    expect(queryByTestId('queue-staleness')).toBeNull();
+  });
+});

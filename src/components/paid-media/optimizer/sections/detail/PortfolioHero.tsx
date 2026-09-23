@@ -102,6 +102,10 @@ export type PortfolioHeroProps = {
    */
   items?: readonly CycleItemRow[];
   nextCycleAt: string | null;
+  /** True once the portfolio has missed a cycle: the dateline then calls nextCycleAt an
+   *  attempt, because the scheduler will claim the portfolio then but no cycle has landed
+   *  on it in weeks. Absent reads as fresh. */
+  stale?: boolean;
   onCta: (cta: HeroCta) => void;
   explainHref: string;
 };
@@ -153,6 +157,7 @@ export function PortfolioHero({
   dailyTotal,
   items = [],
   nextCycleAt,
+  stale = false,
   onCta,
   explainHref,
 }: PortfolioHeroProps) {
@@ -232,7 +237,7 @@ export function PortfolioHero({
     >
       {card === news.lead ? (
         <NewsCard
-          asOfLine={asOfLine(view.asOf, nextCycleAt) ?? 'Awaiting the first cycle'}
+          asOfLine={asOfLine(view.asOf, nextCycleAt, stale) ?? 'Awaiting the first cycle'}
           card={card}
           chart={chart}
           currency={currency}

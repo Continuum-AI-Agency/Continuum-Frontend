@@ -39,8 +39,10 @@ import {
 } from '../useOptimizerData';
 import { CalmRule, HeadlineFigure, MoneyLine } from './account/candidateHeadline';
 import { OptimizerPortfolioBrowser } from './OptimizerPortfolioBrowser';
-import type { PortfolioAccountGroup, PortfolioOpenPlan } from './portfolioAccounts';
 import { portfolioLeads } from './PortfolioRowCard';
+import type { PortfolioAccountGroup, PortfolioOpenPlan } from './portfolioAccounts';
+import { rosterLine, staleLine } from './portfolioStaleness';
+import { StalenessChips } from './StalenessChips';
 
 /** Which portfolios the sub-view is showing: only the selected ad account's (default), or
  *  every portfolio the brand owns, grouped by account. */
@@ -95,32 +97,37 @@ function PortfolioCard({
       )}
     >
       <div className="flex w-full items-center justify-between gap-3">
-      <div className="min-w-0">
-        <p className="flex flex-wrap items-center gap-2 font-semibold text-sm tracking-tight">
-          <span className="truncate">{portfolio.name}</span>
-          <Badge variant="muted" className="text-3xs">
-            {portfolioLevelLabel(portfolio.level)}
-          </Badge>
-          <Badge variant="teal" className="text-3xs">
-            {humanize(portfolio.mode)}
-          </Badge>
-          <ApplyModePill
-            applyMode={portfolio.apply_mode}
-            autopilotPaused={portfolio.autopilot_paused}
-          />
-          {pendingWorkCount(portfolio) > 0 ? (
-            <Badge variant="secondary" className="text-3xs">
-              {pendingWorkCount(portfolio)} pending
+        <div className="min-w-0">
+          <p className="flex flex-wrap items-center gap-2 font-semibold text-sm tracking-tight">
+            <span className="truncate">{portfolio.name}</span>
+            <Badge variant="muted" className="text-3xs">
+              {portfolioLevelLabel(portfolio.level)}
             </Badge>
+            <Badge variant="teal" className="text-3xs">
+              {humanize(portfolio.mode)}
+            </Badge>
+            <ApplyModePill
+              applyMode={portfolio.apply_mode}
+              autopilotPaused={portfolio.autopilot_paused}
+            />
+            {pendingWorkCount(portfolio) > 0 ? (
+              <Badge variant="secondary" className="text-3xs">
+                {pendingWorkCount(portfolio)} pending
+              </Badge>
+            ) : null}
+          </p>
+          <p className="mt-1 text-muted-foreground text-xs tabular-nums">
+            {humanize(portfolio.objective)} · {portfolio.adset_count} ad{' '}
+            {portfolio.adset_count === 1 ? 'set' : 'sets'} ·{' '}
+            {formatCurrency(portfolio.daily_total, currency)}/d
+          </p>
+          {staleLine(portfolio) || rosterLine(portfolio) ? (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <StalenessChips portfolio={portfolio} />
+            </div>
           ) : null}
-        </p>
-        <p className="mt-1 text-muted-foreground text-xs tabular-nums">
-          {humanize(portfolio.objective)} · {portfolio.adset_count} ad{' '}
-          {portfolio.adset_count === 1 ? 'set' : 'sets'} ·{' '}
-          {formatCurrency(portfolio.daily_total, currency)}/d
-        </p>
-      </div>
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        </div>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       </div>
 
       {lead ? (

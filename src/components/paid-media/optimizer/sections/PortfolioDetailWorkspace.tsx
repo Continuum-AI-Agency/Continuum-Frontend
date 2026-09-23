@@ -99,8 +99,10 @@ import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup
 import { OptimizerPanel } from './OptimizerPanel';
 import { OptimizerReadError } from './OptimizerReadError';
 import { PortfolioManagePanel } from './PortfolioManagePanel';
+import { isStale, rosterLine, staleLine } from './portfolioStaleness';
 import { RunOutcomeNotice } from './RunOutcomeNotice';
 import { SignalReadinessCard } from './SignalReadinessCard';
+import { StalenessChips } from './StalenessChips';
 
 type PortfolioDetailWorkspaceProps = {
   portfolio: PortfolioListItem;
@@ -471,6 +473,17 @@ export function PortfolioDetailWorkspace({
               <p className="text-3xs text-muted-foreground">
                 {humanize(portfolio.objective)} · right-click for actions
               </p>
+              {/* The page's own verdict on whether the cycle instrument below is current: a
+                  portfolio dead on Meta for 49 days otherwise reads "Autopilot" and nothing
+                  else, and the hero's "next attempt" line has no room to say why. */}
+              {staleLine(portfolio) || rosterLine(portfolio) ? (
+                <div
+                  className="mt-1.5 flex flex-wrap items-center gap-1.5"
+                  data-testid="portfolio-staleness"
+                >
+                  <StalenessChips portfolio={portfolio} />
+                </div>
+              ) : null}
             </div>
           </AdsetActionMenu>
         </div>
@@ -564,6 +577,7 @@ export function PortfolioDetailWorkspace({
             items={items}
             nextCycleAt={portfolio.next_realloc_at ?? null}
             onCta={onHeroCta}
+            stale={isStale(portfolio)}
             portfolioId={portfolio.id}
             view={heroView}
           />

@@ -24,6 +24,8 @@ import { formatCpa, formatCurrency, humanize, portfolioLevelLabel } from '../for
 import { pendingWorkCount } from '../reportModel';
 import { CalmRule, HeadlineFigure, MoneyLine } from './account/candidateHeadline';
 import { daysBetween, isIsoDate, todayIso } from './detail/rangeModel';
+import { isStale, rosterTone } from './portfolioStaleness';
+import { StalenessChips } from './StalenessChips';
 
 type PortfolioRowCardProps = {
   portfolio: PortfolioListItem;
@@ -97,6 +99,10 @@ export function PortfolioRowCard({
       ? portfolio.cpa_target * metric.denominatorMultiplier
       : null;
   const flight = flightProgress(portfolio);
+  // "clean" means nothing waits on a decision, which is still true of a portfolio no cycle
+  // has touched in 49 days — but beside "last cycle 49 days ago" it reads as a bill of
+  // health. A row that has missed a cycle or lost its roster wears those chips instead.
+  const unwell = isStale(portfolio) || rosterTone(portfolio) !== null;
 
   return (
     <button
@@ -154,9 +160,10 @@ export function PortfolioRowCard({
           <StatusChip tone="warning">
             {pending} {pending === 1 ? 'decision' : 'decisions'} waiting
           </StatusChip>
-        ) : (
+        ) : unwell ? null : (
           <StatusChip tone="success">clean</StatusChip>
         )}
+        <StalenessChips portfolio={portfolio} />
       </div>
       {flight ? (
         <div aria-hidden className="h-1 w-full overflow-hidden rounded-full bg-muted">

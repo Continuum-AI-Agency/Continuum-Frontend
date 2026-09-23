@@ -29,6 +29,8 @@ import {
   OptimizerStatusSchema,
   ParsedCycleRunReportSchema,
   PortfolioConfigSchema,
+  PortfolioListItemSchema,
+  PortfolioRosterStateSchema,
   RecommendationRowSchema,
   RenewalTaskSchema,
   RenewalTaskStatusSchema,
@@ -998,6 +1000,107 @@ describe('RenewalTaskSchema / RenewalTaskStatusSchema', () => {
         status: 'open',
         created_at: '2026-07-02T09:00:00Z',
       }).success,
+    ).toBe(false);
+  });
+});
+
+describe('PortfolioListItemSchema — the staleness read (migration 20260923202000)', () => {
+  const baseRow = {
+    id: UUID,
+    name: 'Citas Agosto - check leads',
+    ad_account_id: 'act_1',
+    objective: 'lead',
+    mode: 'balanced',
+    apply_mode: 'autopilot',
+    daily_total: 500,
+    period_budget: null,
+    status: 'active',
+    next_realloc_at: '2026-09-24T06:00:00Z',
+    adset_count: 12,
+    pending_recommendations: 0,
+  };
+  test('a row from the RPC before the migration parses with none of the five fields', () => {
+    const row = PortfolioListItemSchema.parse(baseRow);
+    expect(row.last_actual_cycle_at).toBeUndefined();
+    expect(row.stale_for_days).toBeUndefined();
+    expect(row.roster_state).toBeUndefined();
+    expect(row.roster_absent_since).toBeUndefined();
+    expect(row.roster_missing_count).toBeUndefined();
+  });
+  test('a fresh row after the migration carries nulls, not stripped keys', () => {
+    const row = PortfolioListItemSchema.parse({
+      ...baseRow,
+      last_actual_cycle_at: '2026-09-23T06:00:00Z',
+      stale_for_days: null,
+      roster_state: 'present',
+      roster_absent_since: null,
+      roster_missing_count: 0,
+    });
+    expect(row.stale_for_days).toBeNull();
+    expect(row.roster_state).toBe('present');
+    expect(row.roster_missing_count).toBe(0);
+  });
+  // The three production portfolios the live bench named on 2026-09-23. Undeclared, z.object
+  // stripped every one of these keys and the screen read "active · next cycle tomorrow".
+  test('the three live dead-on-Meta shapes survive the parse with their staleness intact', () => {
+    const daniel = PortfolioListItemSchema.parse({
+      ...baseRow,
+      name: 'Daniel Gutierrez Buendia - Todas las campañas',
+      adset_count: 2,
+      last_actual_cycle_at: '2026-07-23T06:00:00Z',
+      stale_for_days: 61,
+      roster_state: 'absent',
+      roster_absent_since: '2026-07-24T06:00:00Z',
+      roster_missing_count: 2,
+    });
+    expect(daniel.stale_for_days).toBe(61);
+    expect(daniel.roster_state).toBe('absent');
+    expect(daniel.roster_missing_count).toBe(2);
+    const citas = PortfolioListItemSchema.parse({
+      ...baseRow,
+      last_actual_cycle_at: '2026-08-05T06:00:00Z',
+      stale_for_days: 49,
+      roster_state: 'absent',
+      roster_absent_since: '2026-08-06T06:00:00Z',
+      roster_missing_count: 12,
+    });
+    expect(citas.stale_for_days).toBe(49);
+    expect(citas.roster_absent_since).toBe('2026-08-06T06:00:00Z');
+    const reporte = PortfolioListItemSchema.parse({
+      ...baseRow,
+      name: 'Reporte Agosto - Citas y Mensajes',
+      adset_count: 0,
+      last_actual_cycle_at: '2026-08-06T06:00:00Z',
+      stale_for_days: 48,
+      roster_state: 'empty',
+      roster_absent_since: null,
+      roster_missing_count: 0,
+    });
+    expect(reporte.stale_for_days).toBe(48);
+    expect(reporte.roster_state).toBe('empty');
+  });
+  test('roster_state carries exactly empty | present | partial | absent', () => {
+    expect([...PortfolioRosterStateSchema.options].sort()).toEqual([
+      'absent',
+      'empty',
+      'partial',
+      'present',
+    ]);
+  });
+  test('an unknown roster_state costs the roster read, never the row', () => {
+    const row = PortfolioListItemSchema.parse({ ...baseRow, roster_state: 'vanished' });
+    expect(row.roster_state).toBeNull();
+    expect(row.name).toBe('Citas Agosto - check leads');
+  });
+  test('rejects a negative or fractional stale_for_days — the SQL floors whole days', () => {
+    expect(PortfolioListItemSchema.safeParse({ ...baseRow, stale_for_days: -1 }).success).toBe(
+      false,
+    );
+    expect(PortfolioListItemSchema.safeParse({ ...baseRow, stale_for_days: 1.5 }).success).toBe(
+      false,
+    );
+    expect(
+      PortfolioListItemSchema.safeParse({ ...baseRow, roster_missing_count: -2 }).success,
     ).toBe(false);
   });
 });

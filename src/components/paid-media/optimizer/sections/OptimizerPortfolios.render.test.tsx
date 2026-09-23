@@ -185,3 +185,85 @@ describe('OptimizerPortfolios', () => {
     expect(queryByTestId('portfolio-lead')).toBeNull();
   });
 });
+
+// The three production portfolios the live bench (stale:portfolios:live) named on 2026-09-23.
+// Days, last cycle, roster state and counts are the real figures; roster_absent_since is a
+// fixture value. Noon UTC so the "since" day reads the same in any test timezone.
+const DANIEL_OVER = {
+  adset_count: 2,
+  last_actual_cycle_at: '2026-07-23T12:00:00Z',
+  stale_for_days: 61,
+  roster_state: 'absent' as const,
+  roster_absent_since: '2026-07-24T12:00:00Z',
+  roster_missing_count: 2,
+};
+const CITAS_OVER = {
+  adset_count: 12,
+  last_actual_cycle_at: '2026-08-05T12:00:00Z',
+  stale_for_days: 49,
+  roster_state: 'absent' as const,
+  roster_absent_since: '2026-08-06T12:00:00Z',
+  roster_missing_count: 12,
+};
+const REPORTE_OVER = {
+  adset_count: 0,
+  last_actual_cycle_at: '2026-08-06T12:00:00Z',
+  stale_for_days: 48,
+  roster_state: 'empty' as const,
+  roster_absent_since: null,
+  roster_missing_count: 0,
+};
+const FRESH_OVER = {
+  adset_count: 12,
+  last_actual_cycle_at: '2026-09-23T06:00:00Z',
+  stale_for_days: null,
+  roster_state: 'present' as const,
+  roster_absent_since: null,
+  roster_missing_count: 0,
+};
+
+describe('OptimizerPortfolios — a portfolio dead on Meta reads stale', () => {
+  it('renders the card exactly as before when the row carries no staleness fields', () => {
+    const { queryByTestId, getByRole } = renderList();
+    expect(queryByTestId('stale-chip')).toBeNull();
+    expect(queryByTestId('roster-chip')).toBeNull();
+    expect(getByRole('button', { name: 'Open Prospecting' }).textContent).toContain('2 ad sets');
+  });
+
+  it('adds nothing to a fresh row after the migration', () => {
+    const { queryByTestId } = renderList({
+      portfolios: [portfolio({ id: 'p1', name: 'MENSAJES // TODOS', ...FRESH_OVER })],
+    });
+    expect(queryByTestId('stale-chip')).toBeNull();
+    expect(queryByTestId('roster-chip')).toBeNull();
+  });
+
+  it('says how long since the last cycle and that the roster is gone on the card', () => {
+    const { getByRole } = renderList({
+      portfolios: [
+        portfolio({ id: 'p1', name: 'Citas Agosto - check leads', ...CITAS_OVER }),
+        portfolio({ id: 'p2', name: 'Daniel Gutierrez Buendia', ...DANIEL_OVER }),
+        portfolio({ id: 'p3', name: 'Reporte Agosto - Citas y Mensajes', ...REPORTE_OVER }),
+      ],
+    });
+    const citas = getByRole('button', { name: 'Open Citas Agosto - check leads' });
+    expect(citas.querySelector('[data-testid="stale-chip"]')?.textContent).toBe(
+      'last cycle 49 days ago',
+    );
+    expect(citas.querySelector('[data-testid="roster-chip"]')?.textContent).toBe(
+      'roster gone since Aug 6 · 12 of 12 ad sets',
+    );
+    const daniel = getByRole('button', { name: 'Open Daniel Gutierrez Buendia' });
+    expect(daniel.querySelector('[data-testid="stale-chip"]')?.textContent).toBe(
+      'last cycle 61 days ago',
+    );
+    expect(daniel.querySelector('[data-testid="roster-chip"]')?.textContent).toBe(
+      'roster gone since Jul 24 · 2 of 2 ad sets',
+    );
+    const reporte = getByRole('button', { name: 'Open Reporte Agosto - Citas y Mensajes' });
+    expect(reporte.querySelector('[data-testid="stale-chip"]')?.textContent).toBe(
+      'last cycle 48 days ago',
+    );
+    expect(reporte.querySelector('[data-testid="roster-chip"]')).toBeNull();
+  });
+});

@@ -39,6 +39,7 @@ import { AccountRead } from './account/AccountRead';
 import { AccountReadFreshness } from './account/AccountReadFreshness';
 import { OptimizerPanel } from './OptimizerPanel';
 import { PortfolioRowCard, portfolioLeads } from './PortfolioRowCard';
+import { staleCount, underManagement } from './portfolioStaleness';
 
 type SortKey = 'name' | 'daily' | 'pending';
 type SortDir = 'asc' | 'desc';
@@ -185,6 +186,12 @@ export function OptimizerOverview({
   const dailyTotal = portfolios.reduce((sum, portfolio) => sum + (portfolio.daily_total ?? 0), 0);
   const autopilot = portfolios.filter((portfolio) => portfolio.apply_mode === 'autopilot');
   const paused = autopilot.filter((portfolio) => portfolio.autopilot_paused).length;
+  // An autopilot portfolio that has missed a cycle is not "applying within guardrails" — it
+  // is applying nothing. Counted from the read; a row without it counts as running.
+  const staleAutopilot = staleCount(autopilot);
+  // Enrollments minus the ad sets the rosters have lost on Meta: "24 under management" was
+  // counting 14 no cycle could touch.
+  const book = underManagement(portfolios);
   const stream = useMemo(
     () =>
       spendStream(spendQuery.data, STREAM_DAYS, lastFullDay(new Date().toISOString().slice(0, 10))),
@@ -227,10 +234,11 @@ export function OptimizerOverview({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-        <p className="text-xs font-semibold text-foreground">
-          {portfolios.length} {portfolioNoun} ·{' '}
-          {portfolios.reduce((sum, portfolio) => sum + portfolio.adset_count, 0)} ad sets under
-          management
+        <p className="text-xs font-semibold text-foreground" data-testid="book-line">
+          {portfolios.length} {portfolioNoun} · {book.managed} ad sets under management
+          {book.gone > 0 ? (
+            <span className="font-normal text-muted-foreground"> · {book.gone} gone</span>
+          ) : null}
         </p>
         <div className="flex items-center gap-2">
           {pendingCount > 0 ? (
@@ -322,6 +330,13 @@ export function OptimizerOverview({
             chip={
               paused > 0 ? (
                 <StatusChip tone="warning">{paused} stopped</StatusChip>
+              ) : staleAutopilot > 0 ? (
+                <StatusChip
+                  hint="No cycle has landed on these in at least two intervals; nothing is being applied."
+                  tone="warning"
+                >
+                  {staleAutopilot} stale
+                </StatusChip>
               ) : autopilot.length > 0 ? (
                 <StatusChip tone="success">applying within guardrails</StatusChip>
               ) : (
@@ -330,7 +345,11 @@ export function OptimizerOverview({
             }
             className={TILE_IN_BOARD}
             label="On autopilot"
-            sub={`of ${portfolios.length} ${portfolioNoun}`}
+            sub={
+              book.gone > 0
+                ? `of ${portfolios.length} ${portfolioNoun} · ${book.gone} ad ${book.gone === 1 ? 'set' : 'sets'} gone`
+                : `of ${portfolios.length} ${portfolioNoun}`
+            }
             value={String(autopilot.length)}
           />
           <KpiTile

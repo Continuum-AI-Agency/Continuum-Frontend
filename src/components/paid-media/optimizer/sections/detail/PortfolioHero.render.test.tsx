@@ -520,3 +520,31 @@ describe('the day’s news is one row, highest impact on the left', () => {
     expect(more?.textContent).toContain('Warm');
   });
 });
+
+describe('PortfolioHero — a stale portfolio is promised an attempt, not a cycle', () => {
+  const mount = (stale: boolean | undefined) =>
+    render(
+      <PortfolioHero
+        currency="USD"
+        dailyTotal={1000}
+        explainHref="/scale?tab=jaina"
+        nextCycleAt="2026-09-24T06:00:00Z"
+        onCta={() => undefined}
+        portfolioId="p1"
+        stale={stale}
+        view={view({ asOf: '2026-08-05T06:10:00Z' })}
+      />,
+    );
+
+  it('calls next_realloc_at the next cycle on a fresh portfolio, and by default', () => {
+    expect(mount(undefined).container.textContent).toMatch(/next cycle Sep 2[34]/);
+    cleanup();
+    expect(mount(false).container.textContent).toMatch(/next cycle Sep 2[34]/);
+  });
+
+  it('calls it the next attempt once a cycle has been missed', () => {
+    const text = mount(true).container.textContent ?? '';
+    expect(text).toMatch(/As of Aug [45].* · next attempt Sep 2[34]/);
+    expect(text).not.toContain('next cycle');
+  });
+});

@@ -171,3 +171,98 @@ describe('portfolioLeads', () => {
     expect(emphasised).toBeNull();
   });
 });
+
+// The three production portfolios the live bench (stale:portfolios:live) named on 2026-09-23.
+// Days, last cycle, roster state and counts are the real figures; roster_absent_since is a
+// fixture value. Noon UTC so the "since" day reads the same in any test timezone.
+const DANIEL_OVER = {
+  adset_count: 2,
+  last_actual_cycle_at: '2026-07-23T12:00:00Z',
+  stale_for_days: 61,
+  roster_state: 'absent' as const,
+  roster_absent_since: '2026-07-24T12:00:00Z',
+  roster_missing_count: 2,
+};
+const CITAS_OVER = {
+  adset_count: 12,
+  last_actual_cycle_at: '2026-08-05T12:00:00Z',
+  stale_for_days: 49,
+  roster_state: 'absent' as const,
+  roster_absent_since: '2026-08-06T12:00:00Z',
+  roster_missing_count: 12,
+};
+const REPORTE_OVER = {
+  adset_count: 0,
+  last_actual_cycle_at: '2026-08-06T12:00:00Z',
+  stale_for_days: 48,
+  roster_state: 'empty' as const,
+  roster_absent_since: null,
+  roster_missing_count: 0,
+};
+const FRESH_OVER = {
+  adset_count: 12,
+  last_actual_cycle_at: '2026-09-23T06:00:00Z',
+  stale_for_days: null,
+  roster_state: 'present' as const,
+  roster_absent_since: null,
+  roster_missing_count: 0,
+};
+
+describe('PortfolioRowCard — a portfolio dead on Meta reads stale, not clean', () => {
+  it('renders exactly as before when the row carries no staleness fields', () => {
+    const { container, queryByTestId } = render(
+      <PortfolioRowCard currency="USD" portfolio={portfolio()} />,
+    );
+    expect(queryByTestId('stale-chip')).toBeNull();
+    expect(queryByTestId('roster-chip')).toBeNull();
+    expect(container.textContent).toContain('clean');
+  });
+
+  it('keeps "clean" on a fresh row after the migration', () => {
+    const { container, queryByTestId } = render(
+      <PortfolioRowCard currency="USD" portfolio={portfolio(FRESH_OVER)} />,
+    );
+    expect(queryByTestId('stale-chip')).toBeNull();
+    expect(container.textContent).toContain('clean');
+  });
+
+  it('says how long since the last cycle and that the roster is gone, and drops "clean"', () => {
+    const { container, getByTestId } = render(
+      <PortfolioRowCard
+        currency="USD"
+        portfolio={portfolio({ name: 'Citas Agosto - check leads', ...CITAS_OVER })}
+      />,
+    );
+    expect(getByTestId('stale-chip').textContent).toBe('last cycle 49 days ago');
+    expect(getByTestId('roster-chip').textContent).toBe(
+      'roster gone since Aug 6 · 12 of 12 ad sets',
+    );
+    expect(container.textContent).not.toContain('clean');
+    // The count it still carries is the enrolled one — the roster chip says what is left.
+    expect(container.textContent).toContain('12 ad sets');
+  });
+
+  it('reads the 61-day and the 0-enrolled shapes each by their own facts', () => {
+    const daniel = render(<PortfolioRowCard currency="USD" portfolio={portfolio(DANIEL_OVER)} />);
+    expect(daniel.getByTestId('stale-chip').textContent).toBe('last cycle 61 days ago');
+    expect(daniel.getByTestId('roster-chip').textContent).toBe(
+      'roster gone since Jul 24 · 2 of 2 ad sets',
+    );
+    cleanup();
+    const reporte = render(<PortfolioRowCard currency="USD" portfolio={portfolio(REPORTE_OVER)} />);
+    expect(reporte.getByTestId('stale-chip').textContent).toBe('last cycle 48 days ago');
+    expect(reporte.queryByTestId('roster-chip')).toBeNull();
+    expect(reporte.container.textContent).not.toContain('clean');
+  });
+
+  it('still says what waits on a decision beside the staleness', () => {
+    const { container, getByTestId } = render(
+      <PortfolioRowCard
+        currency="USD"
+        portfolio={portfolio({ ...CITAS_OVER, pending_recommendations: 2 })}
+      />,
+    );
+    expect(container.textContent).toContain('2 decisions waiting');
+    expect(getByTestId('stale-chip')).toBeTruthy();
+  });
+});

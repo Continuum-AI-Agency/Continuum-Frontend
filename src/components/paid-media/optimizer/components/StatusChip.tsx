@@ -35,12 +35,18 @@ type StatusChipProps = {
   /** Plain-language reason, shown as the native tooltip. */
   hint?: string;
   className?: string;
+  testId?: string;
 };
 
-export function StatusChip({ tone, children, hint, className }: StatusChipProps) {
+export function StatusChip({ tone, children, hint, className, testId }: StatusChipProps) {
   const indicator = INDICATOR[tone];
   return (
-    <Pill className={cn('gap-1.5 text-2xs', className)} title={hint} variant={PILL_VARIANT[tone]}>
+    <Pill
+      className={cn('gap-1.5 text-2xs', className)}
+      data-testid={testId}
+      title={hint}
+      variant={PILL_VARIANT[tone]}
+    >
       {indicator ? (
         <PillIndicator variant={indicator} />
       ) : (

@@ -160,3 +160,33 @@ describe('AccountAutomations — autonomy per portfolio', () => {
     expect(onManage).toHaveBeenCalledWith('c');
   });
 });
+
+describe('AccountAutomations — autopilot that has missed a cycle is counted as stale', () => {
+  it('names the stale autopilot portfolios beside the stopped ones', () => {
+    const { getByTestId } = mount([
+      portfolio({
+        id: 'c',
+        name: 'Citas Agosto - check leads',
+        apply_mode: 'autopilot',
+        adset_count: 12,
+        last_actual_cycle_at: '2026-08-05T12:00:00Z',
+        stale_for_days: 49,
+        roster_state: 'absent',
+        roster_absent_since: '2026-08-06T12:00:00Z',
+        roster_missing_count: 12,
+      }),
+      portfolio({ id: 'b', name: 'Beta', apply_mode: 'autopilot', autopilot_paused: true }),
+      portfolio({ id: 'm', name: 'MENSAJES', apply_mode: 'autopilot', stale_for_days: null }),
+    ]);
+    const meta = getByTestId('portfolio-autonomy-meta').textContent ?? '';
+    expect(meta).toBe('3 of 3 on autopilot · 1 stopped · 1 stale');
+  });
+
+  it('says nothing about staleness when no row carries the read', () => {
+    const { getByTestId } = mount([
+      portfolio({ id: 'a', name: 'Alpha', apply_mode: 'autopilot' }),
+      portfolio({ id: 'g', name: 'Gamma', apply_mode: 'recommend' }),
+    ]);
+    expect(getByTestId('portfolio-autonomy-meta').textContent).toBe('1 of 2 on autopilot');
+  });
+});

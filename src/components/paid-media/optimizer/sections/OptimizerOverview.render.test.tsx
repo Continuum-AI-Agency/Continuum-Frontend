@@ -641,3 +641,129 @@ describe('accountMix', () => {
     expect(accountMix(spendStream([], 14, '2026-09-21'), [p('a', 'lead', 0)])).toBeNull();
   });
 });
+
+// The three production portfolios the live bench (stale:portfolios:live) named on 2026-09-23.
+// Days, last cycle, roster state and counts are the real figures; roster_absent_since is a
+// fixture value. Noon UTC so the "since" day reads the same in any test timezone.
+const DANIEL_OVER = {
+  adset_count: 2,
+  last_actual_cycle_at: '2026-07-23T12:00:00Z',
+  stale_for_days: 61,
+  roster_state: 'absent' as const,
+  roster_absent_since: '2026-07-24T12:00:00Z',
+  roster_missing_count: 2,
+};
+const CITAS_OVER = {
+  adset_count: 12,
+  last_actual_cycle_at: '2026-08-05T12:00:00Z',
+  stale_for_days: 49,
+  roster_state: 'absent' as const,
+  roster_absent_since: '2026-08-06T12:00:00Z',
+  roster_missing_count: 12,
+};
+const REPORTE_OVER = {
+  adset_count: 0,
+  last_actual_cycle_at: '2026-08-06T12:00:00Z',
+  stale_for_days: 48,
+  roster_state: 'empty' as const,
+  roster_absent_since: null,
+  roster_missing_count: 0,
+};
+const FRESH_OVER = {
+  adset_count: 12,
+  last_actual_cycle_at: '2026-09-23T06:00:00Z',
+  stale_for_days: null,
+  roster_state: 'present' as const,
+  roster_absent_since: null,
+  roster_missing_count: 0,
+};
+
+describe('OptimizerOverview — the book line and the autopilot tile do not count a lost roster', () => {
+  function mount(portfolios: PortfolioListItem[]) {
+    return render(
+      <OptimizerOverview
+        brandId="b1"
+        portfolios={portfolios}
+        pendingCount={0}
+        currency="USD"
+        onOpenActions={() => {}}
+        onSelectPortfolio={() => {}}
+        onCreatePortfolio={() => {}}
+      />,
+    );
+  }
+  const tileText = (root: HTMLElement, label: string) =>
+    Array.from(root.querySelectorAll('[data-testid="account-tiles"] > div')).find((tile) =>
+      tile.textContent?.includes(label),
+    )?.textContent ?? '';
+
+  it('counts every enrolled ad set as before when no row carries the read', () => {
+    const { getByTestId } = mount([
+      portfolio({ id: 'a', name: 'Alpha', adset_count: 8 }),
+      portfolio({ id: 'b', name: 'Beta', adset_count: 4, apply_mode: 'autopilot' }),
+    ]);
+    expect(getByTestId('book-line').textContent).toBe('2 portfolios · 12 ad sets under management');
+    expect(tileText(getByTestId('account-tiles') as HTMLElement, 'On autopilot')).toContain(
+      'of 2 portfolios',
+    );
+    expect(tileText(getByTestId('account-tiles') as HTMLElement, 'On autopilot')).toContain(
+      'applying within guardrails',
+    );
+  });
+
+  it('subtracts the ad sets the rosters have lost and names them as gone', () => {
+    // 2 + 12 + 0 + 12 enrolled across the four live rows; 2 + 12 of them gone from Meta.
+    const { getByTestId } = mount([
+      portfolio({
+        id: 'd',
+        name: 'Daniel Gutierrez Buendia',
+        apply_mode: 'autopilot',
+        ...DANIEL_OVER,
+      }),
+      portfolio({
+        id: 'c',
+        name: 'Citas Agosto - check leads',
+        apply_mode: 'autopilot',
+        ...CITAS_OVER,
+      }),
+      portfolio({ id: 'r', name: 'Reporte Agosto', apply_mode: 'recommend', ...REPORTE_OVER }),
+      portfolio({ id: 'm', name: 'MENSAJES // TODOS', apply_mode: 'autopilot', ...FRESH_OVER }),
+    ]);
+    expect(getByTestId('book-line').textContent).toBe(
+      '4 portfolios · 12 ad sets under management · 14 gone',
+    );
+    const tile = tileText(getByTestId('account-tiles') as HTMLElement, 'On autopilot');
+    expect(tile).toContain('3');
+    expect(tile).toContain('of 4 portfolios · 14 ad sets gone');
+    // Two of the three autopilot portfolios have missed a cycle: they are not "applying
+    // within guardrails", and the tile must not say they are.
+    expect(tile).toContain('2 stale');
+    expect(tile).not.toContain('applying within guardrails');
+  });
+
+  it('still leads with "stopped" when the kill-switch is on, stale or not', () => {
+    const { getByTestId } = mount([
+      portfolio({
+        id: 'c',
+        name: 'Citas',
+        apply_mode: 'autopilot',
+        autopilot_paused: true,
+        ...CITAS_OVER,
+      }),
+    ]);
+    const tile = tileText(getByTestId('account-tiles') as HTMLElement, 'On autopilot');
+    expect(tile).toContain('1 stopped');
+    expect(tile).not.toContain('stale');
+  });
+
+  it('says nothing about gone ad sets on a fresh book after the migration', () => {
+    const { getByTestId } = mount([
+      portfolio({ id: 'm', name: 'MENSAJES // TODOS', apply_mode: 'autopilot', ...FRESH_OVER }),
+    ]);
+    expect(getByTestId('book-line').textContent).toBe('1 portfolio · 12 ad sets under management');
+    const tile = tileText(getByTestId('account-tiles') as HTMLElement, 'On autopilot');
+    expect(tile).toContain('of 1 portfolio');
+    expect(tile).not.toContain('gone');
+    expect(tile).toContain('applying within guardrails');
+  });
+});
