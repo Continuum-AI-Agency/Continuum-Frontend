@@ -15,6 +15,9 @@
 // lazy and a portfolio can hold dozens of ad sets.
 
 import {
+  ADHOC_IMPLEMENT_REFUSAL_COPY,
+  type AdhocSuggestionCategory,
+  adhocHandoffRowKey,
   getOptimizationMetricDefinition,
   type OptimizationObjective,
   type PortfolioLevel,
@@ -80,13 +83,17 @@ import {
 import type { OptimizerAdMetric, WorkspaceSection } from '../useOptimizerUrlState';
 import { AdsetCreativeVerdicts } from './AdsetCreativeVerdicts';
 import { ApplyReallocationDialog } from './ApplyReallocationDialog';
+import { buildAskedForRows } from './detail/askedForModel';
 import { DailyReadList } from './detail/DailyReadList';
+import type { DailyReadRow } from './detail/dailyReadModel';
 import { buildDailyRead } from './detail/dailyReadModel';
 import { buildHeroView, type HeroCta } from './detail/heroModel';
 import { ObjectiveCostRecap } from './detail/ObjectiveCostRecap';
 import { PortfolioHero } from './detail/PortfolioHero';
 import { type RangeSpec, resolveRange, todayIso } from './detail/rangeModel';
 import { buildRecap } from './detail/recapModel';
+import { SuggestionAsk } from './detail/SuggestionAsk';
+import { useAdhocSuggestionMutations, useAdhocSuggestions } from './detail/useAdhocSuggestions';
 import { JainaEntryChips } from './JainaEntryChips';
 import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
 import { OptimizerPanel } from './OptimizerPanel';
@@ -292,6 +299,109 @@ export function PortfolioDetailWorkspace({
   useHeroBriefWatch(portfolio.id, Boolean(latestRun) && heroView.source === 'fallback');
   const dailyRead = buildDailyRead(heroView, portfolio.daily_total);
   const [focusRowKey, setFocusRowKey] = useState<string | null>(null);
+  /** The asked-for row whose adopt/build/dismiss is mid-write. */
+  const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null);
+  /** Why the last build did not happen, on the row that asked for it. */
+  const [buildFailure, setBuildFailure] = useState<{ rowId: string; message: string } | null>(null);
+
+  // Suggestions someone asked for, in this portfolio, per category. They are NOT a second
+  // inbox: `buildAskedForRows` emits rows of the same shape the day's read does, and the
+  // two are concatenated into the ONE list below. A suggestion whose plan names a queue row
+  // focuses that row in the group underneath, exactly as a brief candidate does.
+  const suggestionsQuery = useAdhocSuggestions(portfolio.id);
+  const { ask, adopt, implement, dismiss } = useAdhocSuggestionMutations(portfolio.id);
+  const [asking, setAsking] = useState<AdhocSuggestionCategory | null>(null);
+  const askedRows = useMemo(
+    () => buildAskedForRows(suggestionsQuery.data.rows, portfolio.daily_total),
+    [suggestionsQuery.data.rows, portfolio.daily_total],
+  );
+  const askedById = useMemo(() => new Map(askedRows.map((row) => [row.id, row])), [askedRows]);
+  // What you just asked for comes first, then the day's read. Sorting the two together by
+  // money would bury the answer to the button somebody pressed eight seconds ago.
+  // The brief half keeps its original gate: a portfolio on its first cycle has no read to
+  // show yet. The asked-for half does not — asking is exactly what a person does when the
+  // cycle has said nothing.
+  const readRows: DailyReadRow[] = [...askedRows, ...(heroView.state === 'ready' ? dailyRead : [])];
+  const busyRowId =
+    adopt.isPending || implement.isPending || dismiss.isPending
+      ? (activeSuggestionId ?? null)
+      : null;
+
+  const onAsk = (category: AdhocSuggestionCategory) => {
+    setAsking(category);
+    ask.mutate(category, { onSettled: () => setAsking(null) });
+  };
+
+  /**
+   * A read row's action, in the order the row's own life runs.
+   *
+   *   TAKE IT ON — a live grant on an un-adopted row: a decision stamp, nothing written to
+   *     Meta, exactly as before.
+   *   BUILD IT — an ADOPTED row that proposed something new. One RPC mints the pending
+   *     recommendation the plan names and, for audiences, calls the audience-proposal
+   *     request that already exists; when it lands, the person is taken straight to the row
+   *     it made. Nothing here writes to Meta either — the build feeds the approved path,
+   *     which creates everything PAUSED and reads it back.
+   *   Anything else falls through to the shared CTA, so a plan that named a queue row (or a
+   *     build that already happened) lands on that row.
+   */
+  const onReadCta = (cta: HeroCta, row?: DailyReadRow) => {
+    const asked = row ? askedById.get(row.id) : undefined;
+    // Any new press retires the last refusal: a message about a press somebody has moved on
+    // from is a figure with no date on it.
+    setBuildFailure(null);
+    if (asked?.adoptToken && asked.cta.kind === 'manage') {
+      setActiveSuggestionId(asked.id);
+      adopt.mutate(
+        { id: asked.suggestionId, token: asked.adoptToken },
+        { onSettled: () => setActiveSuggestionId(null) },
+      );
+      return;
+    }
+    if (asked && cta.kind === 'build') {
+      setActiveSuggestionId(asked.id);
+      implement.mutate(asked.suggestionId, {
+        onSuccess: (result) => {
+          if (!result.ok) {
+            // A refusal is an answer and has to be printed on the row that asked for it.
+            // Silence here would rebuild the dead end this press exists to close.
+            setBuildFailure({
+              rowId: asked.id,
+              message: result.reason
+                ? ADHOC_IMPLEMENT_REFUSAL_COPY[result.reason]
+                : 'That did not go through.',
+            });
+            return;
+          }
+          const rowKey = adhocHandoffRowKey(result.handoff, null);
+          if (rowKey) {
+            setFocusRowKey(rowKey);
+            onSectionChange('activity');
+          }
+        },
+        onError: (error) =>
+          setBuildFailure({
+            rowId: asked.id,
+            message: error instanceof Error ? error.message : 'That did not go through.',
+          }),
+        onSettled: () => setActiveSuggestionId(null),
+      });
+      return;
+    }
+    onHeroCta(cta);
+  };
+
+  const onReadDismiss = (row: DailyReadRow) => {
+    const asked = askedById.get(row.id);
+    if (!asked) return;
+    setActiveSuggestionId(asked.id);
+    dismiss.mutate(asked.suggestionId, { onSettled: () => setActiveSuggestionId(null) });
+  };
+
+  const isReadRowWaiting = (row: DailyReadRow): boolean => {
+    const asked = askedById.get(row.id);
+    return asked ? asked.status === 'queued' || asked.status === 'proposing' : false;
+  };
   const onHeroCta = (cta: HeroCta) => {
     if (cta.kind === 'manage') {
       onSectionChange('manage');
@@ -451,6 +561,7 @@ export function PortfolioDetailWorkspace({
             explainHref={jainaPromptHref(
               `Explain today's top recommendation for the portfolio "${portfolio.name}" and how it is growing.`,
             )}
+            items={items}
             nextCycleAt={portfolio.next_realloc_at ?? null}
             onCta={onHeroCta}
             portfolioId={portfolio.id}
@@ -838,9 +949,30 @@ export function PortfolioDetailWorkspace({
         </TabsContent>
 
         <TabsContent value="activity" className="min-h-0 overflow-y-auto p-3">
-          {/* Every category the brief weighed, not only the one the hero opened on. */}
-          {heroView.state === 'ready' ? (
-            <DailyReadList onCta={onHeroCta} rows={dailyRead} source={heroView.source} />
+          {/* Asking is always available — it is the door that exists precisely BECAUSE the
+              cycle raised nothing today, so gating it behind pending work would close it
+              exactly when it is wanted. The server owns the floor (90s cooldown, four per
+              category per UTC day); these controls read it rather than guess. */}
+          <SuggestionAsk
+            error={ask.error instanceof Error ? ask.error.message : null}
+            gates={suggestionsQuery.data.gates}
+            onAsk={onAsk}
+            pending={asking}
+          />
+          {/* ONE list: every category the brief weighed, and the suggestions this person
+              asked for, with one CTA handler between them. An asked row whose plan names a
+              queue row focuses that row in the group below instead of duplicating it. */}
+          {readRows.length > 0 ? (
+            <DailyReadList
+              busyRowId={busyRowId}
+              currency={currency}
+              failure={buildFailure}
+              isWaiting={isReadRowWaiting}
+              onCta={onReadCta}
+              onDismiss={onReadDismiss}
+              rows={readRows}
+              source={heroView.source}
+            />
           ) : null}
           {/* The same unified queue the account-wide Actions tab renders, scoped to THIS
               portfolio: budget moves + recommendations, approved and executed on Meta from

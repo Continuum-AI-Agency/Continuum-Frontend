@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { BriefCandidate } from '@continuum/contracts';
-import { accountChartSchema } from '@continuum/contracts';
+import { accountChartSchema, chartArgues } from '@continuum/contracts';
 import { heroChart, heroChartReading } from './heroChart';
 import type { RecapDay } from './recapModel';
 
@@ -75,6 +75,28 @@ describe('heroChart — the candidate’s own argument wins', () => {
     expect(chart.estimate).toBeNull();
     expect(chart.at_stake_per_day).toBe(210);
     expect(chart.reference).toBe(10);
+    // The axis is named by the producer, in the objective's own word, so the view never has
+    // to work out what the numbers along it are.
+    expect(chart.value_label).toBe('Cost per leads');
+  });
+
+  it('names the interval axis the same quantity the growth read names', () => {
+    const interval = heroChart({
+      candidate: cand({ module: 'pause', impact_per_day: 210, results_per_day: 0 }),
+      series: days([12, 14]),
+      target: 10,
+      resultLabel: 'Conversations',
+    });
+    const rates = heroChart({
+      candidate: null,
+      series: days([12, 14]),
+      target: 10,
+      resultLabel: 'Conversations',
+    });
+    if (interval?.shape !== 'interval' || rates?.shape !== 'rates') throw new Error('shape');
+    // Both are a cost per result against the same target. Two names for one quantity is how
+    // a reader ends up believing they are looking at two different things.
+    expect(interval.value_label).toBe(rates.a_label);
   });
 
   it('falls back to the growth read for a pause that DID produce results', () => {
@@ -140,5 +162,35 @@ describe('heroChart — every chart it emits is a valid one', () => {
     });
     expect(heroChartReading(chart)).toContain('cost per result');
     expect(heroChartReading(null)).toBeNull();
+  });
+});
+
+describe('heroChart — the news card draws a chart only when it argues', () => {
+  it('emits nothing that does not argue, whatever it is given', () => {
+    const cases = [
+      heroChart({ candidate: null, series: days([12, 14, 16]), target: 10, resultLabel: 'Leads' }),
+      heroChart({
+        candidate: cand({ module: 'pause', impact_per_day: 210, results_per_day: 0 }),
+        series: days([12, 14]),
+        target: 10,
+        resultLabel: 'Leads',
+      }),
+      heroChart({ candidate: cand({}), series: days([12]), target: 10, resultLabel: 'Leads' }),
+    ];
+    for (const chart of cases) {
+      if (chart === null) continue;
+      expect(chartArgues(chart)).toBe(true);
+    }
+    // and the RETURN TYPE says so: heroChart hands back `ArguingChart | null`, so the gate
+    // cannot be taken out without the Frontend ceasing to compile.
+    expect(cases.filter((c) => c === null)).toHaveLength(1);
+  });
+
+  it('refuses the five shapes that only redraw the arithmetic', () => {
+    for (const shape of ['transfer', 'threshold', 'share', 'headroom', 'quadrant'] as const) {
+      expect(chartArgues({ shape } as never)).toBe(false);
+    }
+    expect(chartArgues(null)).toBe(false);
+    expect(chartArgues(undefined)).toBe(false);
   });
 });

@@ -12,6 +12,7 @@ import {
   describeEncodeSettings,
   encodeContainerOf,
   mergeEncodeSettings,
+  outputFormatsOfParse,
   templateDisplayName,
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -60,6 +61,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
 import { fetchApprovalDestinations } from '@/lib/library/renderApprovals';
+import { fetchTemplateSources } from '@/lib/library/templateSources';
 import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
@@ -162,18 +164,18 @@ function describeFailure(error: unknown): { message: string; details: string[] }
 /**
  * What a row's files come out as, grouped: each distinct setting and the ratios that get it.
  * Only the row's own override is described — "Template default" means it asks for nothing more.
+ * `ratios` is what the row renders when the template publishes no outputs.
  */
 export function outputGroups(
   contract: ApiRenderTemplateContract,
   outputIds: string[],
   encode: ApiRenderEncodeOverride | undefined,
+  ratios: string[],
 ): Array<{ summary: string; ratios: string[] }> {
   const video = contract.template.outputKinds.includes('video');
   // A template that publishes no outputs renders its source's ratios together, as they are.
   if (contract.outputs.length === 0) {
-    return [
-      { summary: video ? 'Template default' : 'Still image', ratios: contract.template.ratios },
-    ];
+    return [{ summary: video ? 'Template default' : 'Still image', ratios }];
   }
   const picked = outputIds.length
     ? contract.outputs.filter((output) => outputIds.includes(output.id))
@@ -250,16 +252,38 @@ export function RenderReviewTray({
     }).data?.destinations ?? [];
 
   const outputs = contract.outputs;
+  // A template that authors no outputs (133) still delivers named comps, and preflight takes one
+  // as a replace's one `outputId` — so those are what a replacing row picks from.
+  const parse = useQuery({
+    queryKey: forgeQueryKeys.templateSources(brandId),
+    queryFn: () => fetchTemplateSources(brandId),
+    staleTime: FORGE_STALE_MS.lists,
+    enabled: outputs.length === 0,
+  }).data?.find((source) => source.templateKey === templateKey)?.parse;
+  const replaceFormats: Array<{ id: string; label: string; ratio: string | null }> = outputs.length
+    ? outputs
+    : outputFormatsOfParse(parse).map((format) => ({
+        id: format.id,
+        label: format.ratio ? `${format.ratio} · ${format.id}` : format.id,
+        ratio: format.ratio,
+      }));
   const variableLabel = (key: string | undefined) =>
     contract.variables.find((variable) => variable.key === key)?.label ?? key;
   const templateName = contract.template.displayName ?? templateDisplayName(contract.template.name);
 
   const rowOutputIds = (row: RenderPreflightRow): string[] => {
     if (row.delivery?.action === 'replace') {
-      const only = replaceOutputId(row, outputs, formatByRow);
+      const only = replaceOutputId(row, replaceFormats, formatByRow);
       return only ? [only] : [];
     }
     return row.outputIds;
+  };
+  /** The ratio of each file a row renders: a replace renders only its one chosen format. */
+  const rowRatios = (row: RenderPreflightRow): string[] => {
+    if (row.delivery?.action !== 'replace') return renderedRatios(contract, row.outputIds);
+    const [only] = rowOutputIds(row);
+    const format = replaceFormats.find((item) => item.id === only);
+    return format ? [format.ratio ?? format.label] : [];
   };
   const fileCount = rows.reduce((total, row) => total + rowFileCount(contract, row), 0);
 
@@ -342,7 +366,7 @@ export function RenderReviewTray({
       : typeof destinations === 'object' && 'meta' in destinations
         ? destinations.meta
         : 'unknown';
-  const deliverProblems = metaDeliveryProblems(rows, outputs, formatByRow, meta);
+  const deliverProblems = metaDeliveryProblems(rows, replaceFormats, formatByRow, meta);
   const replacements = rows.filter((row) => row.delivery?.action === 'replace');
   const newAds = rows.filter((row) => row.delivery?.action === 'create');
   // A Meta target is the one thing worth a separate look before rendering.
@@ -480,7 +504,12 @@ export function RenderReviewTray({
               {row.labelPath.length > 1 ? row.labelPath.join(' / ') : row.label}
             </span>
             <span className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-0.5">
-              {outputGroups(contract, rowOutputIds(row), records[index]?.encode).map((group) => (
+              {outputGroups(
+                contract,
+                rowOutputIds(row),
+                records[index]?.encode,
+                rowRatios(row),
+              ).map((group) => (
                 <span key={group.summary} className="flex items-center gap-1.5">
                   <RatioChips ratios={group.ratios} />
                   <span className="text-muted-foreground">{group.summary}</span>
@@ -649,12 +678,7 @@ export function RenderReviewTray({
                             finding.rowIndexes.includes(index),
                           )
                         : [];
-                    const replacing = row.delivery?.action === 'replace';
-                    const ratios = replacing
-                      ? rowOutputIds(row).length
-                        ? renderedRatios(contract, rowOutputIds(row))
-                        : []
-                      : renderedRatios(contract, row.outputIds);
+                    const ratios = rowRatios(row);
                     return (
                       <li
                         key={row.rowId}
@@ -758,7 +782,7 @@ export function RenderReviewTray({
                       brandId={brandId}
                       meta={meta}
                       rows={rows}
-                      outputs={outputs}
+                      outputs={replaceFormats}
                       formatByRow={formatByRow}
                       onDeliveryChange={onDeliveryChange}
                       onFormatChange={(rowId, outputId) =>
@@ -786,7 +810,7 @@ export function RenderReviewTray({
                         <span className="font-medium">{row.label}</span>
                         <span className="text-muted-foreground">
                           {row.delivery?.action === 'replace'
-                            ? `replaces ${row.delivery.adName ?? row.delivery.adId} · ${renderedRatios(contract, rowOutputIds(row)).join(', ')}`
+                            ? `replaces ${row.delivery.adName ?? row.delivery.adId} · ${rowRatios(row).join(', ')}`
                             : `new paused ad in ${row.delivery?.adsetName ?? row.delivery?.adsetId}`}
                         </span>
                       </li>

@@ -35,8 +35,8 @@ type OptimizerActionFeedProps = {
   brandId: string;
   /** The selected ad account's currency, for the minor-unit budget amounts. The feed is
    *  brand-scoped and a brand can own portfolios on more than one ad account, so this is the
-   *  currency of the account being viewed — not one carried per row. formatCurrency falls
-   *  back to the USD symbol when it is null; the amounts themselves are always exact. */
+   *  currency of the account being viewed — not one carried per row. Null prints the amounts
+   *  bare: an account whose currency nobody recorded is not an account that spends dollars. */
   currency: string | null;
   windowDays?: OptimizerFeedWindowDays;
 };
@@ -117,6 +117,7 @@ export function ActionRow({
               auditId={revert.auditId}
               portfolioId={revert.portfolioId}
               brandId={brandId}
+              currency={currency}
               scope={revertScopeOf(row)}
             />
           ) : revert.kind === 'reverted' ? (

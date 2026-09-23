@@ -5,9 +5,9 @@ import * as React from 'react';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
-import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { useToast } from '@/components/ui/ToastProvider';
 import { type FrontendCheckpointReport, hasReportContent } from '@/lib/jaina/schemas';
+import { JainaProse } from '../blocks/prose';
 import {
   buildLegacyJainaSheetsExportRequest,
   createJainaReportHtmlFile,
@@ -174,7 +174,7 @@ export function JainaInlineReport({
       {report.executive_summary ? (
         <div className="space-y-2">
           <span className="text-sm font-medium text-foreground/85">Executive Summary</span>
-          <SafeMarkdown
+          <JainaProse
             content={report.executive_summary}
             className="text-base leading-6 text-muted-foreground"
             mode={isStreaming ? 'streaming' : 'static'}

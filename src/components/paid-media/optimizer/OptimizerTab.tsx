@@ -2,8 +2,8 @@
 
 // Paid Media Optimizer surface — rebuilt from the reference-ui-preview.html
 // visual spec as native shadcn/Tailwind + Radix + @bklit charts. Rendered inside
-// the Scale page's "Optimization" (performance) tab slot. Four sub-views
-// (Overview / Portfolios / Actions / Activity) plus an onboarding/empty state when
+// the Scale page's "Optimization" (performance) tab slot. Five sub-views
+// (Automations / Overview / Portfolios / Actions / Activity) plus an onboarding/empty state when
 // the brand has no portfolios yet (or the optimizer backend is not reachable —
 // its edge functions deploy later, so reads degrade to onboarding rather than
 // erroring). Navigation is URL-backed; authenticated reads use React Query with
@@ -17,6 +17,7 @@ import {
   ListChecksIcon,
   RefreshCwIcon,
   ScrollTextIcon,
+  SlidersHorizontalIcon,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { OptimizerNotificationsSection } from '@/components/settings/account/OptimizerNotificationsSection';
@@ -26,6 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import { pendingWorkCount } from './reportModel';
+import { AccountAutomations } from './sections/account/AccountAutomations';
 import { OptimizerActions } from './sections/OptimizerActions';
 import { OptimizerActivity } from './sections/OptimizerActivity';
 import { OptimizerOffline } from './sections/OptimizerOffline';
@@ -152,6 +154,12 @@ export function OptimizerTab({
 
   const handleSelectPortfolio = (portfolioId: string) => {
     openPortfolio(portfolioId);
+  };
+
+  // The Automations tab shows autonomy per portfolio but changes it where it has always been
+  // changed — the portfolio's own Manage section — so there is one place that writes it.
+  const handleManagePortfolio = (portfolioId: string) => {
+    openPortfolio(portfolioId, { section: 'manage' });
   };
 
   // After a portfolio is created + enrolled, land the user on its detail workspace
@@ -312,6 +320,10 @@ export function OptimizerTab({
           }
           action={
             <TabsList className="h-8">
+              <TabsTrigger value="automations" className="gap-1.5 px-3 text-xs">
+                <SlidersHorizontalIcon className="size-3.5" />
+                Automations
+              </TabsTrigger>
               <TabsTrigger value="overview" className="gap-1.5 px-3 text-xs">
                 <LayersIcon className="size-3.5" />
                 Overview
@@ -341,6 +353,15 @@ export function OptimizerTab({
             </TabsList>
           }
         />
+
+        <TabsContent value="automations" className="min-h-0 overflow-y-auto p-2">
+          <AccountAutomations
+            adAccountId={adAccountId}
+            brandId={brandId}
+            onManagePortfolio={handleManagePortfolio}
+            portfolios={portfolios}
+          />
+        </TabsContent>
 
         <TabsContent value="overview" className="min-h-0 overflow-y-auto p-2">
           <OptimizerOverview

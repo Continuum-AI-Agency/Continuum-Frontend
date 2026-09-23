@@ -79,6 +79,11 @@ export const AUTO_BILLING_CONTRACT =
 export type SelfServeBillingView = {
   kind: 'self_serve';
   hasLiveSubscription: boolean;
+  /**
+   * Credit packs are on sale: a live subscription, or Canvas held without one (grandfathered or
+   * admin-granted brands, which are metered on packs alone).
+   */
+  canBuyCredits: boolean;
   cancelAtPeriodEnd: boolean;
   renewsAt: string | null;
   hasPaymentMethod: boolean;
@@ -206,16 +211,17 @@ export function toBillingView(
     }));
 
   const credits = toCreditsView(overview);
+  const canBuyCredits = liveSubscription !== null || entitlements.products.includes('studio');
   return {
     kind: 'self_serve',
     hasLiveSubscription: liveSubscription !== null,
+    canBuyCredits,
     cancelAtPeriodEnd: liveSubscription?.cancelAtPeriodEnd ?? false,
     renewsAt: liveSubscription?.currentPeriodEnd ?? null,
     hasPaymentMethod: overview.hasPaymentMethod,
     plans,
     credits,
-    outOfCredits:
-      liveSubscription !== null && credits.availableCredits === 0 && !credits.billsOverageToCard,
+    outOfCredits: canBuyCredits && credits.availableCredits === 0 && !credits.billsOverageToCard,
     autoBilling: {
       enabled: overview.overageEnabled,
       capUsd: overview.overageCapUsd,

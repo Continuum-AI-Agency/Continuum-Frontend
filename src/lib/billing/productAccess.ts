@@ -1,4 +1,9 @@
-import type { BrandEntitlements, PlanCode, ProductCode } from '@continuum/contracts';
+import {
+  type BrandEntitlements,
+  keepsTierGate,
+  type PlanCode,
+  type ProductCode,
+} from '@continuum/contracts';
 
 export type BrandAccess = {
   /** False while PostgREST does not expose `billing` (PGRST106). */
@@ -7,8 +12,8 @@ export type BrandAccess = {
   products: ProductCode[];
   /** The full `get_brand_entitlements` read. Null when billing is not live or the read failed. */
   entitlements: BrandEntitlements | null;
-  // billing-cutover: today's access rule (`brand_profiles.tier`), consulted only while billing is
-  // not live. Wave 4 deletes this field and the tier read in brandAccess.server.ts.
+  // grandfathered: the tier-era access rule (`brand_profiles.tier`). Consulted while billing is not
+  // live, and after go-live for a grandfathered brand's Forge. Kept at the cutover.
   legacyTier: number;
 };
 
@@ -20,9 +25,11 @@ export type GatedSurface = 'ai-studio' | 'organic' | 'scale' | 'approvals' | 'fo
 
 type SurfaceRule = {
   product: ProductCode;
-  // billing-cutover: today's tier rule for this page, used only while billing is not live.
-  // `null` = the page had no gate before billing.
+  // Today's tier rule for this page; `null` = the page had no gate before billing. billing-cutover:
+  // used only while billing is not live — except Forge's, which grandfathered brands keep (below).
   legacy: { minTier: number; description: string } | null;
+  /** grandfathered: the tier rule outlives go-live for a grandfathered brand (Forge, tier 3). */
+  keepsTierForGrandfathered?: true;
 };
 
 const SURFACES: Record<GatedSurface, SurfaceRule> = {
@@ -54,6 +61,7 @@ const SURFACES: Record<GatedSurface, SurfaceRule> = {
       minTier: 3,
       description: 'Forge is available on Tier 3. Please contact an Administrator.',
     },
+    keepsTierForGrandfathered: true,
   },
 };
 
@@ -84,20 +92,21 @@ export const CREDITS_HREF = `/settings?section=billing#${CREDITS_ANCHOR}`;
 export type ProductGateDecision =
   | { kind: 'allow' }
   | { kind: 'billing'; href: string }
-  // billing-cutover: the tier-era toast + redirect to the dashboard.
+  // The tier-era toast + redirect to the dashboard: not live, or a grandfathered brand's Forge.
   | { kind: 'legacy'; description: string };
 
 export function decideProductGate(
   surface: GatedSurface,
-  access: Pick<BrandAccess, 'billingLive' | 'products' | 'legacyTier'>,
+  access: Pick<BrandAccess, 'billingLive' | 'products' | 'legacyTier' | 'entitlements'>,
 ): ProductGateDecision {
-  const { product, legacy } = SURFACES[surface];
+  const { product, legacy, keepsTierForGrandfathered } = SURFACES[surface];
   if (access.billingLive) {
-    return access.products.includes(product)
-      ? { kind: 'allow' }
-      : { kind: 'billing', href: billingHref(product) };
+    if (!access.products.includes(product)) return { kind: 'billing', href: billingHref(product) };
+    const tierStillGates =
+      keepsTierForGrandfathered && access.entitlements && keepsTierGate(access.entitlements);
+    if (!tierStillGates) return { kind: 'allow' };
   }
-  // billing-cutover: not live ⇒ exactly the tier gate each page had before billing.
+  // Not live ⇒ exactly the tier gate each page had before billing; live ⇒ a grandfathered Forge.
   if (legacy && access.legacyTier < legacy.minTier) {
     return { kind: 'legacy', description: legacy.description };
   }

@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { BudgetHint } from '../../advisor/SetupAdvisor';
-import { currencySymbol, formatCurrency } from '../../format';
+import { currencyFieldSuffix, formatCurrency } from '../../format';
 import { acceptSuggestionOnTab, suggestionPlaceholder } from '../../suggestInput';
 import { TierCards } from '../fields/TierCards';
 import { planReadout, suggestedGuardrails, type WizardDraft } from './wizardModel';
@@ -47,7 +47,9 @@ export function StepPlan({
   advice,
   disabled,
 }: StepPlanProps) {
-  const symbol = currencySymbol(currency);
+  // Empty on an account with no currency code, and a label reading "Daily budget ()" is
+  // its own kind of wrong — the hint disappears with the unit.
+  const unit = currencyFieldSuffix(currency);
   const readout = planReadout(draft);
   const typedDaily = Number.parseFloat(draft.dailyTotal);
   const effectiveDaily =
@@ -83,7 +85,7 @@ export function StepPlan({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="wizard-daily">Daily budget ({symbol})</Label>
+          <Label htmlFor="wizard-daily">Daily budget{unit}</Label>
           <Input
             disabled={disabled}
             id="wizard-daily"
@@ -148,7 +150,7 @@ export function StepPlan({
           </div>
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <Label htmlFor="wizard-budget">Budget ({symbol})</Label>
+              <Label htmlFor="wizard-budget">Budget{unit}</Label>
               <ToggleGroup
                 aria-label="Budget granularity"
                 onValueChange={(next) => {
@@ -191,7 +193,7 @@ export function StepPlan({
         {draft.applyMode === 'autopilot' ? (
           <div className="grid gap-3 rounded-md border border-border/60 bg-muted/10 p-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="wizard-max-daily">Max autopilot spend/day ({symbol})</Label>
+              <Label htmlFor="wizard-max-daily">Max autopilot spend/day{unit}</Label>
               <Input
                 disabled={disabled}
                 id="wizard-max-daily"

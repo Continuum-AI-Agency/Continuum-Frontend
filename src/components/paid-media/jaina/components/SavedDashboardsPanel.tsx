@@ -10,6 +10,7 @@ import { ChevronDownIcon, ChevronRightIcon, RefreshCwIcon, Trash2Icon } from 'lu
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useJainaBrandScope } from '@/lib/jaina/brandScope';
+import { orderDashboardBlocks } from '@/lib/jaina/dashboardBlocks';
 import { deleteDashboard, listDashboards } from '@/lib/jaina/dashboards.client';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import { checkpointBlockV2Schema, degradeToNarrativeBlockV2 } from '@/lib/jaina/schemas';
@@ -88,6 +89,7 @@ export function SavedDashboardsPanel() {
                   <span className="text-muted-foreground text-xs">
                     saved {DATE_FMT.format(new Date(dashboard.created_at))} ·{' '}
                     {dashboard.blocks.length} module{dashboard.blocks.length === 1 ? '' : 's'}
+                    {dashboard.window_label ? ` · covers ${dashboard.window_label}` : ''}
                   </span>
                   <a
                     className="inline-flex items-center gap-1 text-primary text-xs hover:underline"
@@ -110,17 +112,20 @@ export function SavedDashboardsPanel() {
                     <p className="text-muted-foreground text-xs">
                       Figures as of the day this was saved. Refresh to get today's.
                     </p>
-                    {dashboard.blocks.map((raw, index) => {
-                      const parsed = checkpointBlockV2Schema.safeParse(raw);
-                      const block = parsed.success ? parsed.data : degradeToNarrativeBlockV2(raw);
-                      return (
-                        <BlockRenderer
-                          block={block}
-                          isStreaming={false}
-                          key={`${dashboard.id}:${block.block_id}:${index}`}
-                        />
-                      );
-                    })}
+                    {/* The scope frame first, as the live report reads: the window before
+                     *  the figures, even on a row saved before the save kept it in front. */}
+                    {orderDashboardBlocks(
+                      dashboard.blocks.map((raw) => {
+                        const parsed = checkpointBlockV2Schema.safeParse(raw);
+                        return parsed.success ? parsed.data : degradeToNarrativeBlockV2(raw);
+                      }),
+                    ).map((block, index) => (
+                      <BlockRenderer
+                        block={block}
+                        isStreaming={false}
+                        key={`${dashboard.id}:${block.block_id}:${index}`}
+                      />
+                    ))}
                   </div>
                 ) : null}
               </li>

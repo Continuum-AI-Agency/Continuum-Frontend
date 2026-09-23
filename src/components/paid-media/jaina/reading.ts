@@ -127,3 +127,72 @@ export function fallsAreGood(label: string): boolean {
     l.includes('bounce')
   );
 }
+
+/**
+ * The left rule a judgement earns on a highlight, an insight card or a callout.
+ *
+ * The same law as `JUDGEMENT_TEXT` and the same tokens. It exists because `NarrativeBlock`
+ * and `InsightListBlock` each hand-rolled `border-emerald-500 / border-amber-500 /
+ * border-red-500`. Raw palette literals are wrong here twice over: they put a second answer
+ * to "why is this red" back into the tree, and they are not theme-aware — the dark theme
+ * redefines `--success` to emerald-400 and `--warning` to amber-400, while a literal
+ * `emerald-500` keeps its light value and drifts away from every other judged figure on the
+ * same screen.
+ */
+export const JUDGEMENT_RULE: Record<Judgement, string> = {
+  positive: 'border-l-success',
+  risk: 'border-l-destructive',
+  watch: 'border-l-warning',
+  neutral: 'border-l-border',
+  // Same rule as the ink: "nobody judged this" is a statement, and a coloured rule would
+  // contradict it.
+  unjudged: 'border-l-border',
+};
+
+/**
+ * How Jaina's own answer is set, wherever it appears.
+ *
+ * One constant because the answer arrives by two routes that were drifting apart: a plain
+ * turn renders `message.content` through `SafeMarkdown` at reading size in the ink colour,
+ * while a report turn rendered `report.executive_summary` — the SAME sentence, the part the
+ * reader actually reads — at `text-sm` in `text-muted-foreground`. By this module's own law
+ * that second class is not "quieter styling": muted ink means *nobody judged this*, applied
+ * to the one paragraph somebody did.
+ *
+ * `tabular-nums` on the table cells is here because Streamdown's own table classes set
+ * padding and alignment and no numeric variant, so a markdown table of figures — which is
+ * how Jaina ships most of its evidence today — renders with proportional digits and columns
+ * that do not line up.
+ */
+export const JAINA_ANSWER_PROSE =
+  'text-base leading-7 text-foreground [&_td]:tabular-nums [&_th]:tabular-nums';
+
+/**
+ * Supporting prose: a reasoning trace, a block's own body, an aside. Quieter than the
+ * answer on purpose — this is the material the answer rests on, not the answer.
+ */
+export const JAINA_EVIDENCE_PROSE =
+  'text-sm leading-relaxed text-muted-foreground [&_td]:tabular-nums [&_th]:tabular-nums';
+
+/**
+ * A severity the model actually chose, as opposed to the one the schema filled in.
+ *
+ * `metricItemSchema` and `comparisonPairSchema` both declare
+ * `severity: z.enum([...]).default('neutral')`, so EVERY item arrives carrying `'neutral'`
+ * whether the model judged it or said nothing at all. `judgeDelta` gives an explicit
+ * severity top authority and `'neutral'` is truthy, so that default wins every time and
+ * rule 2 — the metric's polarity, the whole reason `goodWhenDown` exists — never runs.
+ *
+ * Measured, not supposed: across the last six structured reports in production, every
+ * metric in every block arrived `severity: "neutral"`. Not one was a judgement; all six
+ * were the default.
+ *
+ * So for a DELTA, read `'neutral'` as silence and let the polarity rule speak. This is not
+ * inventing a judgement — a change is a measured movement, and "cost per result fell 12%"
+ * is good news whether or not anyone annotated it. For a VALUE, `judgeValue` keeps taking
+ * `'neutral'` at face value: the ink colour is the right answer for a figure with no
+ * judgement attached, and a level, unlike a movement, has no direction to read.
+ */
+export function explicitSeverity(severity: Severity | null | undefined): Severity | null {
+  return severity && severity !== 'neutral' ? severity : null;
+}

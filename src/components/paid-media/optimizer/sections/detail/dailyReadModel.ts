@@ -3,7 +3,12 @@
 // money. The hero on the overview shows the single strongest of these; the activity view
 // shows the whole set, so a module that did not win the hero is still a recommendation.
 
-import type { BriefCandidate, HeroModule, ImpactTier } from '@continuum/contracts';
+import type {
+  AdhocSuggestionFigure,
+  BriefCandidate,
+  HeroModule,
+  ImpactTier,
+} from '@continuum/contracts';
 import {
   HERO_MODULE_COPY,
   IMPACT_TIER_COPY,
@@ -27,6 +32,16 @@ export type DailyReadRow = {
   basis: string;
   /** This row is the one the hero opened on. */
   isHero: boolean;
+  /** Where the row came from. 'brief' is the cycle's own read; 'asked' is a suggestion a
+   *  person requested just now. Both live in ONE list — see askedForModel.ts. */
+  origin: 'brief' | 'asked';
+  /** What an asked-for row adds under the sentence: how to do it, and the figures it was
+   *  read off. Absent on a brief row, whose argument is already its one reason line. */
+  detail?: { steps: string[]; figures: AdhocSuggestionFigure[] };
+  /** The line beside the control: what pressing it will do and that nothing goes live, or
+   *  what the press already built. Absent on a brief row — the queue row it focuses carries
+   *  its own approve/execute wording. See askedForModel.ts. */
+  nextNote?: string | null;
   cta: HeroCta;
 };
 
@@ -66,6 +81,7 @@ export function buildDailyRead(
       reason: candidate.reason,
       basis: candidate.impact_basis,
       isHero: candidate.id === heroId,
+      origin: 'brief',
       cta: ctaForCandidate(candidate, view.observe),
     };
   });

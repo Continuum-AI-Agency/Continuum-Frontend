@@ -17,16 +17,31 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useJainaBrandScope } from '@/lib/jaina/brandScope';
+import { prepareDashboardBlocks } from '@/lib/jaina/dashboardBlocks';
 import { saveDashboard } from '@/lib/jaina/dashboards.client';
 import type { CheckpointBlockV2, CheckpointReportV2 } from '@/lib/jaina/schemas';
 
 type SaveDashboardButtonProps = {
   report: CheckpointReportV2;
   blocks: CheckpointBlockV2[];
+  /**
+   * The question this report answered — the user turn that preceded it.
+   *
+   * It is what "Ask Jaina to refresh" sends. Stored as null, the saved-dashboards panel falls
+   * back to `Refresh the analysis "<title>" with today's data`, which is a generic template
+   * standing in for whatever the person actually asked; the report then comes back answering a
+   * different question from the one saved under that name.
+   */
+  sourcePrompt?: string | null;
   disabled?: boolean;
 };
 
-export function SaveDashboardButton({ report, blocks, disabled }: SaveDashboardButtonProps) {
+export function SaveDashboardButton({
+  report,
+  blocks,
+  sourcePrompt,
+  disabled,
+}: SaveDashboardButtonProps) {
   const scope = useJainaBrandScope();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
@@ -36,8 +51,13 @@ export function SaveDashboardButton({ report, blocks, disabled }: SaveDashboardB
   // A V2 report carries no title of its own; the first module's title is the closest thing
   // to what the person asked for.
   const defaultTitle = blocks[0]?.title ?? report.blocks[0]?.title ?? 'Jaina report';
+  // The report's own `data_scope` frame rides along whether or not it is visible, and it
+  // names the window; a report with no frame has no window to name, and the dialog says so
+  // instead of saving naked numbers.
+  const plan = prepareDashboardBlocks(report, blocks);
 
   const submit = async () => {
+    if (!plan.ok) return;
     setState('saving');
     setMessage(null);
     try {
@@ -46,10 +66,10 @@ export function SaveDashboardButton({ report, blocks, disabled }: SaveDashboardB
         ad_account_id: scope.adAccountId,
         name: name.trim() || defaultTitle,
         source_title: defaultTitle,
-        source_prompt: null,
+        source_prompt: sourcePrompt?.trim() || null,
         scope: report._meta?.primary_scope ?? 'account',
-        window_label: null,
-        blocks,
+        window_label: plan.windowLabel,
+        blocks: plan.blocks,
       });
       setState('saved');
       setMessage('Saved. It is listed under Saved dashboards above the chat.');
@@ -67,8 +87,8 @@ export function SaveDashboardButton({ report, blocks, disabled }: SaveDashboardB
         disabled={disabled || blocks.length === 0}
         onClick={() => {
           setName(defaultTitle);
-          setState('idle');
-          setMessage(null);
+          setState(plan.ok ? 'idle' : 'error');
+          setMessage(plan.ok ? null : plan.message);
           setOpen(true);
         }}
         size="sm"
@@ -83,8 +103,9 @@ export function SaveDashboardButton({ report, blocks, disabled }: SaveDashboardB
           <DialogHeader>
             <DialogTitle>Save as dashboard</DialogTitle>
             <DialogDescription>
-              Keeps these {blocks.length} module{blocks.length === 1 ? '' : 's'} exactly as they
-              are, for the whole brand. Refreshing means asking Jaina the same question again.
+              {plan.ok
+                ? `Keeps these ${plan.blocks.length} module${plan.blocks.length === 1 ? '' : 's'}, with the window they cover, exactly as they are, for the whole brand. Refreshing means asking Jaina the same question again.`
+                : 'A dashboard states the period its figures cover.'}
             </DialogDescription>
           </DialogHeader>
           <Input
@@ -111,7 +132,11 @@ export function SaveDashboardButton({ report, blocks, disabled }: SaveDashboardB
             <Button onClick={() => setOpen(false)} type="button" variant="ghost">
               Cancel
             </Button>
-            <Button disabled={state === 'saving'} onClick={() => void submit()} type="button">
+            <Button
+              disabled={!plan.ok || state === 'saving'}
+              onClick={() => void submit()}
+              type="button"
+            >
               {state === 'saving' ? 'Saving…' : 'Save'}
             </Button>
           </DialogFooter>

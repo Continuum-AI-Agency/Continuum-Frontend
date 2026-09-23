@@ -7,15 +7,17 @@ import type {
   AccountChart,
   BriefCandidate,
   BriefGrowth,
+  CycleRunPacing,
   OptimizationMetricDefinition,
   ParsedCycleRunReport,
   PortfolioBrief,
   PortfolioListItem,
 } from '@continuum/contracts';
-import { deterministicBrief, readPortfolioBrief } from '@continuum/contracts';
+import { deterministicBrief, growthSentence, readPortfolioBrief } from '@continuum/contracts';
 import type { FlightPacingModel } from '../../charts/flightPacingModel';
 import { impactPerDay } from '../recQueueModel';
 import { heroChart, heroChartReading } from './heroChart';
+import { stripPaceClaim } from './paceClaim';
 import type { RecapModel } from './recapModel';
 
 export type HeroTile = {
@@ -34,8 +36,11 @@ export type HeroTile = {
 };
 
 export type HeroCta = {
-  kind: 'queue_row' | 'audience_card' | 'manage';
-  /** The queue row key to focus (rec:<id> / budget:<adset>) — null for manage. */
+  /** `build` belongs to an ADOPTED asked-for suggestion that proposed something new: the
+   *  press turns it into work the existing approved path can run (see askedForModel.ts).
+   *  Nothing else in the optimizer emits it, and it never reaches `onHeroCta`. */
+  kind: 'queue_row' | 'audience_card' | 'manage' | 'build';
+  /** The queue row key to focus (rec:<id> / budget:<adset>) — null for manage and build. */
   rowKey: string | null;
   label: string;
 };
@@ -95,6 +100,61 @@ function pacingLineOf(flight: FlightPacingModel | null): {
   }
 }
 
+/**
+ * Mirrors `pacingVerdict` in the Backend's portfolio-brief packet: a status is only a verdict
+ * when the engine measured it against a real flight window. With no declared flight the engine
+ * still writes a row — `status: 'on_track'`, `pacingRatio: 1`, `idealCumulative: 0`,
+ * `source: 'observed'` — and that row means there was no plan to be on or off. Rendered
+ * verbatim it becomes the literal words "on track" in the growth sentence, beside prose that
+ * correctly says the portfolio is over its cost target.
+ *
+ * Both halves are required: `source === 'pacing'` for a real window, and `idealCumulative > 0`
+ * because on day one the plan expects nothing and `pacingRatio` is 1 by construction. Rows
+ * written before `source` existed carry neither and read as no verdict. The `note` survives
+ * either way — it is the only field that says WHY there is no verdict.
+ */
+export function pacingVerdict(pacing: CycleRunPacing | null | undefined): BriefGrowth['pacing'] {
+  const note = pacing?.note ?? null;
+  const status = pacing?.status;
+  const measuredAgainstAPlan = pacing?.source === 'pacing' && (pacing.idealCumulative ?? 0) > 0;
+  if (
+    !measuredAgainstAPlan ||
+    (status !== 'on_track' && status !== 'underpacing' && status !== 'overpacing')
+  ) {
+    return { status: null, ratio: null, note };
+  }
+  return {
+    status,
+    ratio: typeof pacing.pacingRatio === 'number' ? round2(pacing.pacingRatio) : null,
+    note,
+  };
+}
+
+/**
+ * The stored brief with the verdict the latest run supports, in place of the one it carried.
+ *
+ * The brief was written from a packet, and a packet from a Backend older than
+ * `pacingVerdict` carried the engine's fallback row as a plain `on_track` — Easy Fit's
+ * FORMULARIOS // TODOS reads "above the 35 target, and is on track" on a portfolio with no
+ * flight at all. The run row on the report is the same fact the Backend reads, so the
+ * Frontend reads it too, and when it says there was no plan to be on or off, the brief's
+ * verdict goes and so does the clause in the prose that claimed it. A sentence that was
+ * nothing but the claim falls back to the deterministic line, which never invents a pace.
+ */
+function withPacingVerdict(
+  stored: PortfolioBrief,
+  runPacing: CycleRunPacing | null | undefined,
+): PortfolioBrief {
+  const growth: BriefGrowth = { ...stored.growth, pacing: pacingVerdict(runPacing) };
+  if (growth.pacing.status) return { ...stored, growth };
+  const sentence = stripPaceClaim(stored.growth_sentence);
+  return {
+    ...stored,
+    growth,
+    growth_sentence: sentence === '' ? growthSentence(growth) : sentence,
+  };
+}
+
 function growthFromRecap(args: {
   recap: RecapModel;
   metric: OptimizationMetricDefinition;
@@ -104,12 +164,6 @@ function growthFromRecap(args: {
   window: BriefGrowth['window'];
 }): BriefGrowth {
   const { recap } = args;
-  const pacing = (args.latestRun?.pacing ?? null) as {
-    status?: string;
-    pacingRatio?: number;
-    note?: string;
-  } | null;
-  const status = pacing?.status;
   return {
     spend: round2(recap.current.spend),
     results: Math.round(recap.current.results),
@@ -121,14 +175,7 @@ function growthFromRecap(args: {
       results: recap.delta.results != null ? round2(recap.delta.results) : null,
       cost_per_result: recap.delta.costPerResult != null ? round2(recap.delta.costPerResult) : null,
     },
-    pacing: {
-      status:
-        status === 'on_track' || status === 'underpacing' || status === 'overpacing'
-          ? status
-          : null,
-      ratio: typeof pacing?.pacingRatio === 'number' ? round2(pacing.pacingRatio) : null,
-      note: pacing?.note ?? null,
-    },
+    pacing: pacingVerdict(args.latestRun?.pacing),
     scale: null,
     window: args.window,
     as_of: args.latestRun?.cycle_ts ?? new Date().toISOString(),
@@ -303,7 +350,7 @@ export function buildHeroView(args: {
       Date.now() - Date.parse(stored.generated_at) < 24 * 3_600_000);
   const brief =
     briefIsCurrent && stored
-      ? stored
+      ? withPacingVerdict(stored, report?.latest_run?.pacing)
       : deterministicBrief({
           growth,
           candidates: report

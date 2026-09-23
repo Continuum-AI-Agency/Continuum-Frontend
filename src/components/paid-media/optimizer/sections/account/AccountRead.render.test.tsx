@@ -96,21 +96,125 @@ describe('AccountRead', () => {
         ]}
       />,
     );
-    expect(container.textContent).toContain('1 checks could not run today');
+    expect(container.textContent).toContain('1 check could not run today');
     expect(container.textContent).toContain('what a result is worth');
   });
 
-  it('says so plainly when every check ran and found nothing', () => {
-    const { container } = render(<AccountRead candidates={[]} currency="USD" dailySpend={1200} />);
-    expect(container.textContent).toContain('Nothing to move today');
+  // ── The headline vocabulary, on the ranked list ────────────────────────────
+  // The RANK is untouched — `rankAccountCandidates` still orders on money. What changes is
+  // what a row says first, and a screen where every row leads with "$X/day" says the same
+  // small sentence twenty-five times and buries the finding underneath it.
+
+  it('leads a row with the detector’s own figure and keeps money as the support line', () => {
+    const { getByTestId } = render(
+      <AccountRead
+        candidates={[
+          candidate({
+            id: 'portfolio_reallocation:p1>p2',
+            detector: 'portfolio_reallocation',
+            impact_per_day: 66.67,
+            impact_class: 'better_price',
+            result_label: 'leads',
+            headline: {
+              kind: 'efficiency',
+              value: 33,
+              unit: 'percent',
+              label: 'cheaper per result',
+              from: 90,
+              to: 60,
+            },
+          }),
+        ]}
+        currency="USD"
+        dailySpend={1200}
+      />,
+    );
+    const row = getByTestId('account-lead');
+    expect(row.textContent).toContain('33%');
+    expect(row.textContent).toContain('cheaper per result');
+    expect(row.textContent).toContain('90% → 60%');
+    expect(row.textContent).toContain('$66.67/day · $2,000/mo');
+    expect(row.textContent).toContain('leads');
+  });
+
+  it('still reads as finished for a detector holding no headline — money leads', () => {
+    const { getByTestId } = render(
+      <AccountRead candidates={[candidate({})]} currency="USD" dailySpend={1200} />,
+    );
+    const row = getByTestId('account-lead');
+    expect(row.textContent).toContain('$102');
+    expect(row.textContent).toContain('/day');
+    // The month is the half the reader has not been given; the day is not said twice.
+    expect(row.textContent).toContain('$3,060/mo');
+  });
+
+  it('keeps the ranking on money even when the headlines are not comparable', () => {
+    const { getAllByTestId } = render(
+      <AccountRead
+        candidates={[
+          candidate({
+            id: 'platform_diversification:acct',
+            detector: 'platform_diversification',
+            impact_per_day: 40,
+            impact_class: 'recoverable',
+            // A big-looking percentage on a small amount of money must not overtake.
+            headline: {
+              kind: 'share',
+              value: 92,
+              unit: 'percent',
+              label: 'of spend on one platform',
+              from: null,
+              to: null,
+            },
+          }),
+          candidate({ impact_per_day: 400 }),
+        ]}
+        currency="USD"
+        dailySpend={1200}
+      />,
+    );
+    const rows = getAllByTestId('account-lead');
+    expect(rows[0]?.getAttribute('data-detector')).toBe('dead_tail');
+  });
+
+  // A quiet day used to open with "Nothing to move today — every check ran" and close with
+  // "All 25 checks apply", beside a fold saying three could not run. The lead card above now
+  // says how the account is doing; this may keep only the operator's footnotes.
+  it('renders nothing at all on a quiet day with nothing to footnote', () => {
+    const { container, queryByTestId } = render(
+      <AccountRead candidates={[]} currency="USD" dailySpend={1200} />,
+    );
+    expect(queryByTestId('account-read')).toBeNull();
+    expect(container.textContent).toBe('');
+  });
+
+  it('keeps only the footnotes on a quiet day — never a sentence about our own checks', () => {
+    const { getByTestId } = render(
+      <AccountRead
+        candidates={[]}
+        currency="USD"
+        dailySpend={1200}
+        starved={[
+          { detector: 'target_economics', missing: 'nobody has told us what a result is worth' },
+        ]}
+      />,
+    );
+    const read = getByTestId('account-read');
+    expect(read.getAttribute('data-quiet')).toBe('true');
+    expect(read.textContent).not.toContain('Nothing to move today');
+    expect(read.textContent).not.toContain('Every check ran');
+    expect(read.textContent).not.toContain('checks apply');
+    // The fold survives, as a footnote: no heading, no panel, one small line to open.
+    const fold = getByTestId('account-starved');
+    expect(fold.tagName).toBe('DETAILS');
+    expect(fold.textContent).toContain('1 check could not run today');
+    expect(read.querySelector('h2')).toBeNull();
   });
 });
 
 // ---------------------------------------------------------------------------
 // The zones: three lead, the rest behind a disclosure, the blocked list grouped.
 // ---------------------------------------------------------------------------
-
-import { fireEvent } from '@testing-library/react';
 
 const many = (n: number): AccountCandidate[] =>
   Array.from({ length: n }, (_, i) =>
@@ -312,74 +416,37 @@ describe('AccountRead — how far these figures sit from the money', () => {
   });
 });
 
-describe('AccountRead — a short deck should not look like a broken one', () => {
-  it('says how much of the catalogue this account can even ask', () => {
-    const { getByTestId } = render(
+describe('AccountRead — it does not count its own checks', () => {
+  // "All 25 checks apply to what this account buys" was the deck note, and beside a fold
+  // saying three could not run it read as a contradiction. Neither number is about the
+  // account; the reader was asked not to be told how many checks were reviewed.
+  it('prints no line about how many checks apply, on a busy day or a quiet one', () => {
+    const busy = render(
       <AccountRead
         candidates={many(1)}
         currency="USD"
         dailySpend={5000}
-        deck={{ applies: 20, total: 25 }}
-      />,
-    );
-    const note = getByTestId('account-deck-note').textContent ?? '';
-    expect(note).toContain('20 of 25');
-    expect(note).toContain('no question to ask');
-  });
-
-  it('says so plainly when the whole catalogue applies', () => {
-    const { getByTestId } = render(
-      <AccountRead
-        candidates={many(1)}
-        currency="USD"
-        dailySpend={5000}
-        deck={{ applies: 25, total: 25 }}
-      />,
-    );
-    expect(getByTestId('account-deck-note').textContent).toContain('All 25');
-  });
-
-  it('never names the muted detectors inside the gap list', () => {
-    // Naming them there would invite reading them as missing, and they are not missing.
-    const { getByTestId, container } = render(
-      <AccountRead
-        candidates={many(1)}
-        currency="USD"
-        dailySpend={5000}
-        deck={{ applies: 24, total: 25 }}
         starved={[{ detector: 'target_economics', missing: 'neither margin nor lifetime value' }]}
       />,
     );
-    expect(container.textContent).toContain('1 checks could not run today');
-    expect(getByTestId('account-deck-note').textContent).toContain('24 of 25');
-    // The third assertion here used to be `deck-note does not contain 'target_economics'`,
-    // which no rendering could ever violate — the deck note is counts and prose, and no
-    // detector name can appear in it. What the test is actually about is that the STARVED
-    // list and the deck line stay separate surfaces, so that is what it asks: the starved
-    // detector is named in the gap list, and the two elements are not one another.
-    const gap = getByTestId('account-starved');
-    expect(gap.textContent).toContain(ACCOUNT_DETECTOR_META.target_economics.label);
-    expect(gap.contains(getByTestId('account-deck-note'))).toBe(false);
-  });
-
-  it('stays silent on a read written before the worker carried a deck', () => {
-    const { queryByTestId } = render(
-      <AccountRead candidates={many(1)} currency="USD" dailySpend={5000} />,
+    expect(busy.container.textContent).not.toMatch(/checks apply/);
+    expect(busy.container.textContent).not.toMatch(/All \d+ checks/);
+    // The gap list still names the starved detector, for the operator who has to explain it.
+    expect(busy.getByTestId('account-starved').textContent).toContain(
+      ACCOUNT_DETECTOR_META.target_economics.label,
     );
-    expect(queryByTestId('account-deck-note')).toBeNull();
-  });
+    cleanup();
 
-  it('shows the note even on a quiet day, when the screen is otherwise empty', () => {
-    // A quiet day plus a short deck is exactly when a reader assumes the thing is broken.
-    const { getByTestId } = render(
+    const quiet = render(
       <AccountRead
         candidates={[]}
         currency="USD"
         dailySpend={5000}
-        deck={{ applies: 20, total: 25 }}
+        starved={[{ detector: 'target_economics', missing: 'neither margin nor lifetime value' }]}
       />,
     );
-    expect(getByTestId('account-deck-note').textContent).toContain('20 of 25');
+    expect(quiet.container.textContent).not.toMatch(/checks apply/);
+    expect(quiet.container.textContent).not.toMatch(/Every check/);
   });
 });
 
@@ -433,10 +500,35 @@ describe('AccountRead — the card says what it will actually do', () => {
   });
 });
 
-describe('AccountRead — promoting an insight from its own card', () => {
+describe('AccountRead — the control that would promote an insight from its own card', () => {
+  // The control is hidden while `ADOPTING_A_DETECTOR_IS_ENFORCED` is false in AccountRead.tsx:
+  // the state it writes is read only to LABEL the next report, and no apply path consults it.
+  // This is the test that goes red if someone unhides the button before wiring enforcement.
+  it('is offered nowhere — not on a lead card, not on a rest row', () => {
+    const { container, getAllByTestId, getByRole } = render(
+      <AccountRead
+        candidates={Array.from({ length: 6 }, (_, i) =>
+          candidate({ id: `dead_tail:h${i}`, impact_per_day: 1000 - i, state: 'recommend' }),
+        )}
+        currency="USD"
+        dailySpend={5000}
+        onSetState={mock()}
+      />,
+    );
+    // The cards ARE on screen — otherwise the absence below proves nothing.
+    expect(getAllByTestId('account-lead').length).toBe(3);
+    fireEvent.click(getByRole('button', { name: /more ·/ }));
+    expect(container.querySelectorAll('[data-testid="always-do-this"]').length).toBe(0);
+    expect(container.textContent).not.toContain('Always do this');
+  });
+});
+
+// Parked, not deleted: these are the behaviours the control had, and they are what has to pass
+// again the day `ADOPTING_A_DETECTOR_IS_ENFORCED` flips to true.
+describe.skip('AccountRead — promoting an insight from its own card', () => {
   it('offers the control and reports the detector and the new state', () => {
-    // This is where autopilot actually gets adopted. Nobody opens a settings screen to decide
-    // they trust a recommendation; that happens looking at the card, weeks in.
+    // This is where autopilot gets adopted, once adoption means something. Nobody opens a
+    // settings screen to decide they trust a recommendation; that happens looking at the card.
     const onSetState = mock();
     const { getByTestId } = render(
       <AccountRead
@@ -582,14 +674,15 @@ describe('the rest, behind the disclosure', () => {
     expect(getAllByTestId('account-rest-row').length).toBe(3);
   });
 
-  it('offers the approval control on a rest row, not only on a lead card', () => {
+  // Parked with the control itself — see ADOPTING_A_DETECTOR_IS_ENFORCED in AccountRead.tsx.
+  it.skip('offers the approval control on a rest row, not only on a lead card', () => {
     const { getAllByTestId } = openRest(withState(6));
     const rows = getAllByTestId('account-rest-row');
     const controls = rows.filter((row) => row.querySelector('[data-testid="always-do-this"]'));
     expect(controls.length).toBe(3);
   });
 
-  it('asks for the detector of the row that was clicked', () => {
+  it.skip('asks for the detector of the row that was clicked', () => {
     const onSetState = mock((_d: string, _s: string) => {});
     const { getAllByTestId } = openRest(withState(6), onSetState);
     const row = getAllByTestId('account-rest-row')[0];

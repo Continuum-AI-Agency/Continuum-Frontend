@@ -9,8 +9,9 @@
 //   - adset_budget → "Revert" restores the ad set's prior daily budget (current → restored).
 //   - adset_status → "Unpause" restarts the ad set's spend by restoring its prior status
 //                    (reverting a pause is an unpause). The preview names the status it restores.
-// Currency is not threaded from the log page, so budget amounts fall back to the USD symbol
-// (the amounts themselves are exact).
+// The account's currency IS threaded from the log page. It used to be left out, which was
+// invisible only because the formatter answered a missing code with "$" — on an account
+// whose currency nobody recorded, that dressed the figure in the wrong money.
 
 import { Loader2Icon, TriangleAlertIcon, Undo2Icon } from 'lucide-react';
 import * as React from 'react';
@@ -33,6 +34,9 @@ type RevertApplyDialogProps = {
   auditId: string;
   portfolioId: string;
   brandId: string;
+  /** The viewed ad account's currency. Null when the account row carries none — the preview
+   *  then shows bare figures rather than dressing pesos as dollars. */
+  currency: string | null;
   /** The audit row's scope. 'adset_status' switches the dialog to unpause copy; anything
    *  else (or absent) keeps the budget-revert copy. */
   scope?: string | null;
@@ -74,6 +78,7 @@ export function RevertApplyDialog({
   auditId,
   portfolioId,
   brandId,
+  currency,
   scope,
 }: RevertApplyDialogProps) {
   const revert = useRevertApply();
@@ -185,6 +190,7 @@ export function RevertApplyDialog({
           </p>
         ) : (
           <RevertPreviewBody
+            currency={currency}
             isPending={revert.isPending}
             isError={revert.isError}
             preview={preview}
@@ -209,11 +215,13 @@ export function RevertApplyDialog({
 }
 
 function RevertPreviewBody({
+  currency,
   isPending,
   isError,
   preview,
   would,
 }: {
+  currency: string | null;
   isPending: boolean;
   isError: boolean;
   preview: ReturnType<typeof useRevertApply>['data'];
@@ -263,8 +271,8 @@ function RevertPreviewBody({
       <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-sm">
         <span className="min-w-0 truncate font-mono text-xs">{move.adset_id}</span>
         <span className="shrink-0 tabular-nums">
-          {formatCurrency(move.current, null)} <span className="text-muted-foreground">→</span>{' '}
-          <span className="font-medium">{formatCurrency(move.proposed, null)}</span>/d
+          {formatCurrency(move.current, currency)} <span className="text-muted-foreground">→</span>{' '}
+          <span className="font-medium">{formatCurrency(move.proposed, currency)}</span>/d
         </span>
       </div>
     </div>

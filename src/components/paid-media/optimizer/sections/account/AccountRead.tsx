@@ -15,7 +15,14 @@
 //                      decision and not an accident. Three on screen is what a person carries
 //                      away; an inventory belongs behind a disclosure.
 //   5. could not ask — folded, grouped by what would unblock it. Nine symptoms read as nine
-//                      defects; four reasons read as four decisions.
+//                      defects; four reasons read as four decisions. An operator's footnote,
+//                      never a headline.
+//
+// ON A QUIET DAY this renders the footnotes and nothing else. It used to open with "Nothing to
+// move today — every check ran" and close with "All 25 checks apply", beside a fold saying
+// three could not run: a contradiction, and three sentences about our own checks on a screen
+// whose reader wants to know how the account is doing. The lead card above answers that; this
+// keeps only what an operator might need to explain a gap.
 //
 // Nothing here is written by a model. Every figure came from a detector, and the RANK used a
 // discounted value while the card shows the real money — which is exactly what the class chip
@@ -49,8 +56,10 @@ import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { formatCurrency } from '../../format';
+import { formatPerPeriod } from '../../format';
 import { AccountChartView } from './AccountChartView';
+import { HeadlineComparison, HeadlineFigure, MoneyLine } from './candidateHeadline';
+import { doubtedBy } from './guardScope';
 
 /** How many lead the read. Three is what someone carries away from a screen. */
 const LEAD_COUNT = 3;
@@ -70,15 +79,6 @@ export type AccountReadProps = {
   starved?: Array<{ detector: AccountDetector; missing: string }>;
   /** 'brief' when Jaina wrote today's words, 'fallback' when the read is code-composed. */
   source?: 'brief' | 'fallback';
-  /**
-   * How much of the catalogue applies to what this account buys.
-   *
-   * Rendered as ONE line beside the starved list and never inside it. A muted detector is not
-   * a gap: `new_vs_returning` on an app-install account has no question to ask, because an
-   * install is new by definition. Listing it as a gap would print a permanent non-problem
-   * every day until the gap list reads as noise.
-   */
-  deck?: { applies: number; total: number } | null;
   /** What the worker assumed in order to measure this account. Empty is the normal case. */
   assumptions?: string[];
   /**
@@ -95,29 +95,6 @@ export type AccountReadProps = {
   sentence?: string | null;
   onOpenPortfolio?: (portfolioId: string) => void;
 };
-
-/** Detectors a fired guard casts doubt over. Named, or the guard is decoration. */
-function affectedBy(guards: AccountCandidate[]): Set<AccountDetector> {
-  const affected = new Set<AccountDetector>();
-  if (guards.some((guard) => guard.detector === 'measurement_integrity')) {
-    // Everything priced off a conversion count is reading the broken instrument.
-    for (const detector of [
-      'dead_tail',
-      'portfolio_reallocation',
-      'account_pacing',
-      'scale_readiness',
-      'decision_window',
-    ] as AccountDetector[]) {
-      affected.add(detector);
-    }
-  }
-  if (guards.some((guard) => guard.detector === 'target_economics')) {
-    for (const detector of ['scale_readiness', 'portfolio_reallocation'] as AccountDetector[]) {
-      affected.add(detector);
-    }
-  }
-  return affected;
-}
 
 function ChartWithReading({
   candidate,
@@ -168,11 +145,31 @@ function StateNote({ candidate }: { candidate: AccountCandidate }) {
 }
 
 /**
+ * Whether adopting a detector from its card actually enforces anything.
+ *
+ * It does not, today. `onSetState` writes the family-ceiling and insight-approval tables, and
+ * the only reader of those tables is the Backend's account-strategy poller, which uses them to
+ * LABEL candidates in the next read. No apply path consults them: not `applyBudgets`, not the
+ * autopilot sweeper (keyed on `portfolio.autopilot_scopes`), not the swap publisher. Pressing
+ * "Always do this" therefore changed a word on a future report and nothing else, under a
+ * control that told the person the detector now acts on its own. A disabled button or a
+ * "coming soon" label would still leave them believing they had adopted it, so the control is
+ * absent instead.
+ *
+ * Flip this to `true` when an apply path reads the adopted state — concretely, when the
+ * autopilot sweeper resolves a detector's insight approval instead of reading
+ * `portfolio.autopilot_scopes` alone. Everything below is left in place so that is the only
+ * change this file needs.
+ */
+const ADOPTING_A_DETECTOR_IS_ENFORCED = false;
+
+/**
  * "Always do this" — promoting one insight from the card itself.
  *
- * This is where autopilot actually gets adopted. The settings grid is where it gets configured
- * AFTERWARDS; nobody opens a settings screen to decide they trust a recommendation. The moment
- * that happens is three weeks into watching the same card be right, looking at it.
+ * This is where autopilot gets adopted, once adoption means something. The settings grid is
+ * where it gets configured AFTERWARDS; nobody opens a settings screen to decide they trust a
+ * recommendation. The moment that happens is three weeks into watching the same card be right,
+ * looking at it.
  *
  * Absent for the measurement family, which approves nothing, and absent when nobody has
  * resolved a state — offering a control whose effect we cannot predict is worse than offering
@@ -185,6 +182,7 @@ function AlwaysDoThis({
   candidate: AccountCandidate;
   onSetState?: (detector: AccountDetector, state: InsightState) => void;
 }) {
+  if (!ADOPTING_A_DETECTOR_IS_ENFORCED) return null;
   if (!onSetState || !candidate.state) return null;
   if (DETECTOR_ACTION_FAMILY[candidate.detector] === 'measurement') return null;
   const on = candidate.state === 'autopilot';
@@ -214,28 +212,28 @@ function CapNote({ candidate }: { candidate: AccountCandidate }) {
   );
 }
 
-function Money({
+/**
+ * What a row leads with: the detector's own figure, then the money it is worth.
+ *
+ * The rank is unaffected — `rankAccountCandidates` still orders on `rankedValue`, which is
+ * money. Only what the reader sees first changes, and that is the point: the ORDER stays one
+ * comparable scale while each row finally says what it actually found.
+ */
+function Lead({
   candidate,
   currency,
-  large,
+  size,
 }: {
   candidate: AccountCandidate;
   currency: string | null;
-  large?: boolean;
+  size: 'row' | 'column';
 }) {
   return (
-    <p className="flex flex-wrap items-baseline gap-x-1.5 text-2xs text-muted-foreground">
-      <span
-        className={cn(
-          'font-mono font-semibold tabular-nums text-foreground',
-          large ? 'text-xl' : 'text-base',
-        )}
-      >
-        {formatCurrency(candidate.impact_per_day, currency)}
-      </span>
-      <span className="text-foreground">/day</span>
-      <span>· {candidate.result_label}</span>
-    </p>
+    <div className="space-y-0.5">
+      <HeadlineFigure candidate={candidate} currency={currency} size={size} />
+      <HeadlineComparison candidate={candidate} currency={currency} />
+      <MoneyLine candidate={candidate} currency={currency} />
+    </div>
   );
 }
 
@@ -283,7 +281,7 @@ function LeadColumn({
       <div className="flex min-h-[86px] flex-col justify-end gap-1">
         <ChartWithReading candidate={candidate} currency={currency} />
       </div>
-      <Money candidate={candidate} currency={currency} large />
+      <Lead candidate={candidate} currency={currency} size="column" />
       <p className="text-2xs text-muted-foreground">{candidate.impact_basis}</p>
       <CapNote candidate={candidate} />
       <StateNote candidate={candidate} />
@@ -344,7 +342,7 @@ function RestRow({
         </div>
         <h3 className="font-semibold text-foreground text-sm">{meta.label}</h3>
         <p className="text-2xs text-muted-foreground">{candidate.impact_basis}</p>
-        <Money candidate={candidate} currency={currency} />
+        <Lead candidate={candidate} currency={currency} size="row" />
         <CapNote candidate={candidate} />
         <StateNote candidate={candidate} />
         <AlwaysDoThis candidate={candidate} onSetState={onSetState} />
@@ -374,7 +372,6 @@ export function AccountRead({
   starved = [],
   source = 'fallback',
   sentence = null,
-  deck = null,
   assumptions = [],
   objective = null,
   objectiveAnalog = null,
@@ -384,25 +381,18 @@ export function AccountRead({
   const [showRest, setShowRest] = useState(false);
   const guards = accountGuards(candidates);
   const ranked = rankAccountCandidates(candidates);
-  const doubted = affectedBy(guards);
+  const doubted = doubtedBy(guards);
 
   const lead = ranked.slice(0, LEAD_COUNT);
   const rest = ranked.slice(LEAD_COUNT);
   const restWorth = rest.reduce((sum, candidate) => sum + candidate.impact_per_day, 0);
 
   if (guards.length === 0 && ranked.length === 0) {
+    if (starved.length === 0 && assumptions.length === 0) return null;
     return (
-      <section
-        className="rounded-lg border border-border/60 border-dashed bg-muted/10 p-5"
-        data-testid="account-read"
-      >
-        <h2 className="font-semibold text-foreground text-sm">Nothing to move today</h2>
-        <p className="mt-1 text-muted-foreground text-xs">
-          Every check ran and none of them found money worth moving across this account.
-        </p>
-        {starved.length > 0 ? <Starved starved={starved} /> : null}
+      <section className="space-y-1 px-1" data-quiet="true" data-testid="account-read">
         <AssumptionNote assumptions={assumptions} />
-        <DeckNote deck={deck} />
+        {starved.length > 0 ? <Starved starved={starved} /> : null}
       </section>
     );
   }
@@ -476,7 +466,7 @@ export function AccountRead({
                   className={cn('size-3.5 transition-transform', showRest && 'rotate-180')}
                 />
                 {showRest ? 'Hide the rest' : `${rest.length} more`} ·{' '}
-                {formatCurrency(restWorth, currency)}/day between them
+                {formatPerPeriod(restWorth, currency)} between them
               </Button>
               {showRest ? (
                 <div className="mt-2 overflow-hidden rounded-lg border border-border/60 bg-card">
@@ -499,9 +489,8 @@ export function AccountRead({
       ) : null}
 
       {/* 5 — what could not be asked, grouped by what would unblock it */}
-      {starved.length > 0 ? <Starved starved={starved} /> : null}
       <AssumptionNote assumptions={assumptions} />
-      <DeckNote deck={deck} />
+      {starved.length > 0 ? <Starved starved={starved} /> : null}
     </section>
   );
 }
@@ -512,6 +501,11 @@ export function AccountRead({
  * Nine separate one-line notes read as nine defects. The same nine grouped by their blocker read
  * as four decisions, and several detectors share one — which is the useful shape, because it is
  * the shape of the work.
+ *
+ * A footnote in size and in place: one small folded line, no panel around it. It is here for
+ * the operator who has to explain why a check is silent, not for the reader of the card
+ * above, who was told how the account is doing and does not need a count of our checks next
+ * to it.
  */
 function Starved({ starved }: { starved: Array<{ detector: AccountDetector; missing: string }> }) {
   const missingFor = new Map(starved.map((row) => [row.detector, row.missing]));
@@ -530,12 +524,9 @@ function Starved({ starved }: { starved: Array<{ detector: AccountDetector; miss
   if (uncategorised.length > 0) groups.push({ key: 'other', detectors: uncategorised });
 
   return (
-    <details
-      className="mt-3 rounded-lg border border-border/60 bg-muted/10 p-3"
-      data-testid="account-starved"
-    >
-      <summary className="cursor-pointer text-2xs text-muted-foreground">
-        {starved.length} checks could not run today
+    <details className="text-3xs text-muted-foreground" data-testid="account-starved">
+      <summary className="cursor-pointer">
+        {starved.length} {starved.length === 1 ? 'check' : 'checks'} could not run today
       </summary>
       <div className="mt-2 space-y-2">
         {groups.map(({ key, detectors }) => (
@@ -583,13 +574,6 @@ function RungNote({
 }
 
 /**
- * One line saying how much of the catalogue this account's objectives can even ask.
- *
- * Deliberately not a list. Naming the muted detectors would invite reading them as missing,
- * and they are not missing — they do not apply. The count is the whole useful fact, and it is
- * what stops a short read from looking like a broken one.
- */
-/**
  * What the worker had to assume in order to measure this account at all.
  *
  * A custom conversion has no calibration of its own, so it is read as the closest objective
@@ -605,17 +589,5 @@ function AssumptionNote({ assumptions }: { assumptions: string[] }) {
         <p key={line}>{line}</p>
       ))}
     </div>
-  );
-}
-
-function DeckNote({ deck }: { deck?: { applies: number; total: number } | null }) {
-  if (!deck || deck.total <= 0) return null;
-  const full = deck.applies >= deck.total;
-  return (
-    <p className="text-3xs text-muted-foreground" data-testid="account-deck-note">
-      {full
-        ? `All ${deck.total} checks apply to what this account buys.`
-        : `${deck.applies} of ${deck.total} checks apply to what this account buys — the rest have no question to ask here.`}
-    </p>
   );
 }

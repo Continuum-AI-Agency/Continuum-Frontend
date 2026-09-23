@@ -272,6 +272,26 @@ describe('JainaMessageItem renders parts and persistence identically', () => {
   });
 });
 
+describe('a turn whose prose carries emphasis', () => {
+  const marked = (): JainaChatMessage =>
+    ({
+      ...persistedMessage(),
+      content: 'Spend on **ITESO** fell to [risk: 0.49 ROAS] over the [window: last 30 days].',
+      pendingClarification: undefined,
+    }) as unknown as JainaChatMessage;
+
+  it('sets the judged figure in its severity tone rather than printing the mark', () => {
+    render(<JainaMessageItem message={marked()} />, { wrapper });
+    const risk = document.querySelector('[data-prose-mark="risk"]');
+    expect(risk?.textContent).toBe('0.49 ROAS');
+    expect(risk?.className).toContain('text-destructive');
+    expect(document.querySelector('[data-prose-mark="window"]')?.className).toContain(
+      'text-muted-foreground',
+    );
+    expect(document.body.textContent).not.toContain('[risk:');
+  });
+});
+
 describe('a finished turn that produced no answer', () => {
   const emptyTurn = (status: JainaChatMessage['status']): JainaChatMessage =>
     ({

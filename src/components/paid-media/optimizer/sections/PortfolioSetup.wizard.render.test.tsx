@@ -127,7 +127,7 @@ describe('PortfolioSetup — the four-step wizard', () => {
     const text = document.body.textContent ?? '';
     expect(text).toContain('Leads · Efficiency');
     expect(text).toContain('Why this group:');
-    expect(text).toContain('Cost per result spreads from $30 to $75');
+    expect(text).toContain('Cost per result spreads from $30.00 to $75.00');
     expect(screen.getByRole('button', { name: /Start from scratch/ })).toBeDefined();
   });
 

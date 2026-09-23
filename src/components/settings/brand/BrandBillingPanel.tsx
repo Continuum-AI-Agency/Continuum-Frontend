@@ -183,7 +183,7 @@ function SelfServeBilling({
         />
       </PanelRow>
       <CreditsRow>
-        {view.hasLiveSubscription || view.credits.availableCredits > 0 ? (
+        {view.canBuyCredits || view.credits.availableCredits > 0 ? (
           <CanvasCreditsMeter credits={view.credits} />
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -191,8 +191,8 @@ function SelfServeBilling({
             buy credit packs.
           </p>
         )}
-        {view.outOfCredits ? <OutOfCreditsNotice /> : null}
-        {view.hasLiveSubscription ? (
+        {view.outOfCredits ? <OutOfCreditsNotice canAutoBill={view.hasLiveSubscription} /> : null}
+        {view.canBuyCredits ? (
           <div className="space-y-2">
             <div>
               <p className="text-sm font-medium text-foreground">Top up with credit packs</p>
@@ -227,7 +227,8 @@ function SelfServeBilling({
   );
 }
 
-function OutOfCreditsNotice() {
+/** Auto-billing needs a subscription, so a brand on packs alone (grandfathered) is only told to buy. */
+function OutOfCreditsNotice({ canAutoBill }: { canAutoBill: boolean }) {
   return (
     <div
       role="status"
@@ -237,7 +238,10 @@ function OutOfCreditsNotice() {
       <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
       <p>
         <span className="font-medium">This brand is out of Canvas credits.</span> Generation is
-        paused. Buy a credit pack below, or turn on auto-billing to keep generating.
+        paused.{' '}
+        {canAutoBill
+          ? 'Buy a credit pack below, or turn on auto-billing to keep generating.'
+          : 'Buy a credit pack below to keep generating.'}
       </p>
     </div>
   );

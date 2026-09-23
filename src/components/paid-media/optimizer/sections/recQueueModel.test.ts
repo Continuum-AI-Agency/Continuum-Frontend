@@ -9,6 +9,8 @@ import {
   impactLabel,
   impactPerDay,
   jainaPromptHref,
+  queueHeadline,
+  queueHeadlineLine,
   queueSummary,
   settingsPatchOf,
   triggerWords,
@@ -53,9 +55,186 @@ describe('evidenceLine', () => {
 describe('impact', () => {
   it('reads the daily money and labels it, and is 0 / null when unknown', () => {
     expect(impactPerDay({ evidence: evidence() })).toBe(100);
-    expect(impactLabel({ evidence: evidence() }, 'USD')).toBe('$100/day at stake');
+    // Day AND month — the same pair the account cards print, from the same helper.
+    expect(impactLabel({ evidence: evidence() }, 'USD')).toBe('$100/day · $3,000/mo at stake');
     expect(impactPerDay({ evidence: null })).toBe(0);
     expect(impactLabel({ evidence: evidence({ estImpactPerDay: null }) }, 'USD')).toBeNull();
+  });
+});
+
+// The queue and the account cards are two views of the same findings. A row that carries the
+// engine's headline leads with it; one that does not falls back to its money, exactly as an
+// account candidate with no headline does.
+describe('the headline a queue row leads with', () => {
+  const headline = {
+    kind: 'efficiency',
+    value: 33,
+    unit: 'percent',
+    label: 'cheaper per result',
+    from: 90,
+    to: 60,
+  };
+
+  it('surfaces a headline the engine wrote onto the row', () => {
+    expect(queueHeadline({ evidence: evidence({ headline }) })).toEqual({
+      kind: 'efficiency',
+      value: 33,
+      unit: 'percent',
+      label: 'cheaper per result',
+      from: 90,
+      to: 60,
+    });
+    expect(queueHeadlineLine({ evidence: evidence({ headline }) }, 'USD')).toBe(
+      '33% cheaper per result',
+    );
+  });
+
+  it('prints money per day in the account currency, never multiplied', () => {
+    expect(
+      queueHeadlineLine(
+        {
+          evidence: evidence({
+            headline: {
+              kind: 'avoided',
+              value: 96,
+              unit: 'currency_per_day',
+              label: 'a day buying nothing',
+              from: null,
+              to: null,
+            },
+          }),
+        },
+        'USD',
+      ),
+    ).toBe('$96.00 a day buying nothing');
+  });
+
+  it('reads a malformed headline as no headline, rather than printing a figure nobody computed', () => {
+    // A label longer than the 32 characters the schema allows, and a value that is not a number.
+    expect(
+      queueHeadline({ evidence: evidence({ headline: { kind: 'efficiency', value: 'lots' } }) }),
+    ).toBeNull();
+    expect(
+      queueHeadline({
+        evidence: evidence({
+          headline: { ...headline, label: 'a label far longer than the thirty-two allowed' },
+        }),
+      }),
+    ).toBeNull();
+  });
+
+  it('is null on every row written before the engine carried one', () => {
+    expect(queueHeadline({ evidence: evidence() })).toBeNull();
+    expect(queueHeadline({ evidence: null })).toBeNull();
+    expect(queueHeadlineLine({ evidence: evidence() }, 'USD')).toBeNull();
+  });
+});
+
+// The shapes below are PRODUCTION rows, copied verbatim from
+// `optimizer_get_portfolio_performance` on the Easy Fit account (2026-09-21, MXN), together
+// with the headline `optimizer:queue:headline:bench` proved the engine now writes for each
+// one. A fixture invented here would agree with itself; these do not get that luxury —
+// the engine is a different package in a different repo and the only thing joining the two
+// ends is `candidateHeadlineSchema`.
+describe('a real production row, before and after the engine carries a headline', () => {
+  const live = {
+    F1: {
+      value: 0.007450050795800881,
+      metric: 'ctr',
+      source: 'engine',
+      window: 'd3' as const,
+      threshold: 0.01031055900621118,
+      comparator: 'down 28% vs 14d, CPA up 156%',
+      estImpactPerDay: 32.76571428571428,
+    },
+    P2: {
+      value: 193.215,
+      metric: 'cpp',
+      source: 'engine',
+      window: 'd14' as const,
+      threshold: 114.084375,
+      comparator: 'vs 2.5× the robust reference ($46)',
+      estImpactPerDay: 27.60214285714286,
+    },
+    P1: {
+      value: 76.62,
+      metric: 'spend',
+      source: 'engine',
+      window: 'd3' as const,
+      threshold: 5,
+      comparator: 'with 0 leads, landing-page view cost 77 vs 14 avg',
+      estImpactPerDay: 25.540000000000003,
+    },
+  };
+
+  it('reads as finished on its money today, because no live row carries a headline yet', () => {
+    for (const row of Object.values(live)) {
+      expect(queueHeadline({ evidence: row })).toBeNull();
+      expect(queueHeadlineLine({ evidence: row }, 'MXN')).toBeNull();
+      // The fallback is not a hole: the money line is still there to lead with.
+      expect(impactLabel({ evidence: row }, 'MXN')).not.toBeNull();
+    }
+  });
+
+  it('leads with the trigger’s own figure once the engine writes one onto the same row', () => {
+    expect(
+      queueHeadlineLine(
+        {
+          evidence: {
+            ...live.F1,
+            headline: {
+              kind: 'drift',
+              value: 28,
+              unit: 'percent',
+              label: 'less click-through than 14d',
+              from: null,
+              to: null,
+            },
+          },
+        },
+        'MXN',
+      ),
+    ).toBe('28% less click-through than 14d');
+
+    expect(
+      queueHeadlineLine(
+        {
+          evidence: {
+            ...live.P2,
+            headline: {
+              kind: 'efficiency',
+              value: 323,
+              unit: 'percent',
+              label: 'more per result than best',
+              from: 193.22,
+              to: 45.63,
+            },
+          },
+        },
+        'MXN',
+      ),
+    ).toBe('323% more per result than best');
+
+    expect(
+      queueHeadlineLine(
+        {
+          evidence: {
+            ...live.P1,
+            headline: {
+              kind: 'avoided',
+              value: 25.54,
+              unit: 'currency_per_day',
+              label: 'a day buying nothing',
+              from: null,
+              to: null,
+            },
+          },
+        },
+        'MXN',
+      ),
+      // 25.54 is not 26, and pesos are not dollars: the queue line says both, exactly as the
+      // compiled card of the same finding does.
+    ).toBe('25.54 MXN a day buying nothing');
   });
 });
 
@@ -119,6 +298,8 @@ describe('settings patch', () => {
   });
   it('formats a percentage knob and a money knob', () => {
     expect(formatSettingsValue('max_change_pct_per_cycle', 0.3, 'USD')).toBe('30%');
+    // The stored field is a fraction; the formatter it goes through never multiplies twice.
+    expect(formatSettingsValue('max_change_pct_per_cycle', 1, 'USD')).toBe('100%');
     expect(formatSettingsValue('daily_total', 340, 'USD')).toBe('$340');
     expect(formatSettingsValue('daily_total', null, 'USD')).toBe('not set');
   });
@@ -164,7 +345,8 @@ describe('evidenceSeries', () => {
     expect(evidenceSeries(evidence({ metric: 'cap_binding_share' }), snapshot, 'leads')).toBeNull();
   });
   it('formats by unit', () => {
-    expect(formatEvidenceValue('money', 40, 'USD')).toBe('$40');
+    expect(formatEvidenceValue('money', 40, 'USD')).toBe('$40.00');
+    expect(formatEvidenceValue('money', 40, null)).toBe('40.00');
     expect(formatEvidenceValue('percent', 0.0125, null)).toBe('1.25%');
     expect(formatEvidenceValue('number', 3.4, null)).toBe('3.4');
   });

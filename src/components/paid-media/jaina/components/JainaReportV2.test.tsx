@@ -15,7 +15,10 @@ mock.module('@/components/ui/ToastProvider', () => ({
 }));
 
 mock.module('@/components/ui/SafeMarkdownLazy', () => ({
-  SafeMarkdown: ({ content }: { content: string }) => <p>{content}</p>,
+  // Keeps `className`: the ink the answer is set in is the thing under test below.
+  SafeMarkdown: ({ content, className }: { content: string; className?: string }) => (
+    <p className={className}>{content}</p>
+  ),
 }));
 
 mock.module('@/components/ai-elements/suggestion', () => ({
@@ -116,6 +119,28 @@ const report = {
     primary_scope: 'current_account',
   },
 } as CheckpointReportV2;
+
+describe('JainaReportV2 executive summary', () => {
+  it('sets the judged figure of the answer in its severity tone, inside the sentence', () => {
+    render(
+      <JainaReportV2
+        report={{
+          ...report,
+          executive_summary:
+            'Over the [window: last 30 days] **ITESO** returned [risk: 0.49 ROAS] on its spend.',
+        }}
+        isStreaming={false}
+      />,
+    );
+    const risk = document.querySelector('[data-prose-mark="risk"]');
+    expect(risk?.textContent).toBe('0.49 ROAS');
+    expect(risk?.className).toContain('text-destructive');
+    expect(document.querySelector('[data-prose-mark="window"]')?.className).toContain(
+      'text-muted-foreground',
+    );
+    expect(document.body.textContent).not.toContain('[risk:');
+  });
+});
 
 describe('JainaReportV2 module controls', () => {
   it('shows every selected module by default and lets each one be hidden and shown', () => {
@@ -227,15 +252,47 @@ describe('JainaReportV2 module controls', () => {
     );
   });
 
-  // The export receives blocks in PRIORITY order, not authoring order — that is what
-  // puts the primary modules on page one.
-  it('exports the visible modules as HTML, highest priority first', async () => {
+  // The export receives blocks in the order the report carries them — which is the order
+  // `selectBlocksForPresentation` built: framing, then the plan's modules in plan order,
+  // then the closing blocks that read what is above them.
+  //
+  // It used to re-sort by `priority`, and so did the screen. `priority` is an EMPHASIS rank,
+  // not a position: `priorityFor` gives `primary` to the plan's FIRST module and `secondary`
+  // to everything else including the opening `data_scope` frame, which is hard-coded
+  // `secondary`. Measured on a live strategy turn, that sort rendered
+  // [metric_grid, insight_list, actions, data_scope] from a report the backend emitted as
+  // [data_scope, metric_grid, insight_list, actions] — the figures hoisted above the reading
+  // and the window strip pushed below the closing moves, on screen and in the PDF alike.
+  it('exports the visible modules as HTML in the report’s own reading order', async () => {
     downloadHtmlMock.mockClear();
     render(<JainaReportV2 report={report} isStreaming={false} runId="run_42" />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Export report as HTML' }));
     await waitFor(() => expect(downloadHtmlMock).toHaveBeenCalledTimes(1));
     const blocks = downloadHtmlMock.mock.calls[0][0].blocks as Array<{ block_id: string }>;
-    expect(blocks.map((block) => block.block_id)).toEqual(['wins', 'risks']);
+    expect(blocks.map((block) => block.block_id)).toEqual(['risks', 'wins']);
+  });
+});
+
+describe('JainaReportV2 — the answer reads as the answer', () => {
+  it('sets the executive summary in reading ink, not the unjudged muted ink', () => {
+    // It used to render `text-sm leading-relaxed text-muted-foreground`. Streamdown sets no
+    // colour of its own on headings, bold runs or table cells, so that single class muted the
+    // whole answer — and by `reading.ts`'s law muted ink means "nobody judged this", applied
+    // to the one paragraph somebody did.
+    render(<JainaReportV2 report={report} isStreaming={false} />);
+    const summary = screen.getByText('Account performance summary');
+    expect(summary.className).toContain('text-foreground');
+    expect(summary.className).toContain('text-base');
+    expect(summary.className).not.toContain('text-muted-foreground');
+  });
+
+  it('puts the answer above the module controls that operate on its evidence', () => {
+    render(<JainaReportV2 report={report} isStreaming={false} />);
+    const summary = screen.getByText('Account performance summary');
+    const controls = screen.getByRole('group', { name: 'Report modules' });
+    expect(
+      summary.compareDocumentPosition(controls) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
   });
 });

@@ -20,6 +20,7 @@ import type { OptimizationObjective } from './engine-contracts';
 // side erases, so there is no runtime cycle — the same arrangement account-chart already uses.
 // Keep the direction: a value import both ways would deadlock module init.
 import { insightStateSchema } from './insight-approval';
+import { DAYS_PER_MONTH } from './targetMetric';
 
 export const accountDetectorSchema = z.enum([
   'portfolio_reallocation',
@@ -31,6 +32,7 @@ export const accountDetectorSchema = z.enum([
   'account_pacing',
   'scale_readiness',
   'dead_tail',
+  'delivery_collapse',
   'measurement_integrity',
   'bid_strategy',
   'decision_window',
@@ -170,6 +172,13 @@ export const ACCOUNT_DETECTOR_META: Record<AccountDetector, AccountDetectorMeta>
     impactClass: 'recoverable',
     computable: true,
   },
+  delivery_collapse: {
+    label: 'The budget is not going out',
+    compares: 'spend per day over the window against the planned daily budget, per portfolio',
+    cadence: 'daily',
+    impactClass: 'recoverable',
+    computable: true,
+  },
   measurement_integrity: {
     label: 'The figures cannot be trusted',
     compares: 'event presence across sibling campaigns, and attribution windows across portfolios',
@@ -292,6 +301,92 @@ export const ACCOUNT_DETECTOR_META: Record<AccountDetector, AccountDetectorMeta>
   },
 };
 
+// ---------------------------------------------------------------------------
+// The headline: the figure a card LEADS with.
+//
+// Every detector is priced in money per day, because a ranking needs one comparable scale
+// and money is the only one twenty-five different questions share. But money per day is not
+// what most of these detectors FOUND. A transfer found that one side is 33% cheaper; a
+// pause found spend buying nothing; a share detector found 92% of the budget in one place.
+// Leading every card with "$14/day" says the same small-business sentence twenty-five times
+// and buries the finding underneath it.
+//
+// So the headline is the detector's own metric, and money moves to a support line every card
+// carries — day AND month, because a figure per day is the one a person most often halves in
+// their head. `impact_per_day` is untouched and `rankedValue` still sorts on it, so the ORDER
+// of the cards stays one comparable scale even though their headlines no longer are.
+//
+// The rule this exists to enforce: a detector declares the headline it HOLDS. It may not
+// reach for a denominator it was never given — `dead_tail` has no efficiency percentage,
+// because zero results has no cost per result, and its honest lead is the spend avoided.
+
+/**
+ * What KIND of figure leads, so a card can choose a treatment without parsing the label.
+ *
+ * Six, each earned by at least one detector:
+ *   efficiency — a price gap, as a percentage. "33% cheaper per result"
+ *   share      — a slice of a whole. "92% of spend on one platform"
+ *   drift      — a rate that MOVED from where it should be. "18% over plan"
+ *   count      — a count of the things the finding is about. "62 results a week, combined"
+ *   money      — money in play that is NOT the saving. "140/day of budget undelivered"
+ *   avoided    — money that stops going out. "96/day buying nothing"
+ *
+ * `share` and `drift` are both percentages and are deliberately not one kind: a share is a
+ * level and wants a band drawn around it, a drift is a deviation and wants a direction.
+ */
+export const headlineKindSchema = z.enum([
+  'efficiency',
+  'share',
+  'drift',
+  'count',
+  'money',
+  'avoided',
+]);
+export type HeadlineKind = z.infer<typeof headlineKindSchema>;
+
+/** How to print `value`. Three, because three is what the catalogue actually uses. */
+export const headlineUnitSchema = z.enum(['percent', 'currency_per_day', 'count']);
+export type HeadlineUnit = z.infer<typeof headlineUnitSchema>;
+
+export const candidateHeadlineSchema = z.object({
+  kind: headlineKindSchema,
+  /**
+   * Already in DISPLAY units and already rounded: 33 for 33%, never 0.33.
+   *
+   * The whole point of this descriptor is that a card prints it and does no arithmetic — a
+   * renderer that multiplies by 100 is a renderer that will one day do it twice.
+   */
+  value: z.number().finite(),
+  unit: headlineUnitSchema,
+  /**
+   * The words after the figure — "cheaper per result", "of spend at the top".
+   *
+   * Short because it sits beside a large figure, and it carries DIRECTION so the value never
+   * has to be negative to be understood: "under plan" and "over plan", not a minus sign.
+   */
+  label: z.string().min(1).max(32),
+  /**
+   * The two figures the headline compares — the priced sides of a move, a value and its
+   * ceiling — or null when the headline is one figure standing alone.
+   */
+  from: z.number().nullable().default(null),
+  to: z.number().nullable().default(null),
+});
+export type CandidateHeadline = z.infer<typeof candidateHeadlineSchema>;
+
+/**
+ * A daily figure in the periods a card shows it in. Money's support line, computed once.
+ *
+ * The month is the SAME thirty days the budget wizard normalises against
+ * (`DAYS_PER_MONTH`), not a second convention: a card that turned 2/day into 62/mo while
+ * Manage called the same money 60/mo would look like a bug in whichever one you read second.
+ */
+export function perPeriod(perDay: number): { day: number; month: number } {
+  // Rounded to cents: money, and a figure a digit gate has to recognise as the same number
+  // twice. 66.67 * 30 is 2000.1000000000001 in floating point and 2000.1 on a card.
+  return { day: perDay, month: Math.round(perDay * DAYS_PER_MONTH * 100) / 100 };
+}
+
 export const accountCandidateSchema = z.object({
   /** '<detector>:<scope>' — stable across runs so a cooldown can recognise it. */
   id: z.string().min(1),
@@ -301,6 +396,15 @@ export const accountCandidateSchema = z.object({
   /** Money per day, always, before any class weighting. */
   impact_per_day: z.number().nonnegative(),
   impact_class: impactClassSchema,
+  /**
+   * The figure this card LEADS with, in the detector's own terms.
+   *
+   * Nullable, and null is not a defect: a detector that does not hold the figure its natural
+   * headline would need declares nothing rather than inventing a denominator, and the card
+   * falls back to leading with the money. Nullable also keeps every render surface that has
+   * not adopted the vocabulary yet compiling untouched.
+   */
+  headline: candidateHeadlineSchema.nullable().default(null),
   /** 0..1 from sample size and consistency — the same reading the engine already makes. */
   confidence: z.number().min(0).max(1).default(1),
   /** The formula, code-authored: "M × (1 − CPA_b / CPA_a) over $420/day movable". */

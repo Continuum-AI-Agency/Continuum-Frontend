@@ -3,6 +3,10 @@
 // Unit of optimization for v1 = ad set.
 // ---------------------------------------------------------------------------
 
+// The ONE canonical descriptor for "the figure a card leads with", imported rather than
+// restated. Type-only, so the root entry stays runtime-pure: the import erases, and nothing
+// in `@continuum/contracts` (zod included) is loaded by an engine consumer.
+import type { CandidateHeadline } from '@continuum/contracts';
 import type { RuleEvaluation } from './rules/types';
 
 export type AdSetStatus =
@@ -213,6 +217,11 @@ export type AdSetSnapshot = {
    *  Meta's goal taxonomy onto a currency is a boundary concern and must agree with SQL
    *  (paid_media.kpi_for_goal) and the paid-creative-intel verdicts. */
   optimization_goal?: string;
+  /** Raw Meta `bid_strategy` (LOWEST_COST_WITHOUT_CAP, COST_CAP, LOWEST_COST_WITH_BID_CAP,
+   *  LOWEST_COST_WITH_MIN_ROAS). Metadata: the engine never reads it. It is carried so the
+   *  persisted snapshot can answer whether budget that went unspent was refused by a cap or
+   *  never there at all. Absent ⇒ the ad set declares none (Meta omits it under CBO). */
+  bid_strategy?: string;
   /** WHICH WindowMetrics field this ad set's events are counted in — resolved at ingest
    *  from `optimization_goal`. THIS IS USED IN SCORING: it is the currency the ad set
    *  declared it was buying, and judging it in any other one is how a creative that
@@ -575,6 +584,24 @@ export type RecommendationEvidence = {
   threshold: number | null;
   window: EvidenceWindow;
   estImpactPerDay: number | null;
+  /**
+   * The figure the queue row LEADS with, in the trigger's own terms.
+   *
+   * Money per day is the scale the queue SORTS on, because it is the only one every trigger
+   * shares. It is rarely what the trigger FOUND: P2 found an ad set paying 250% more per
+   * result than the account's own best, F3 found that doubling the window reached 4% more
+   * people. Leading every row with money says the same sentence ten times and buries the
+   * finding under it.
+   *
+   * Rides INSIDE `evidence` deliberately: `RecommendationEvidenceSchema` is `.loose()` and
+   * `optimizer_record_cycle` copies `r->'evidence'` whole into the jsonb column, so the
+   * vocabulary reaches the queue with no migration and no new column.
+   *
+   * Optional, and absent is not a defect: a trigger that does not hold the figure its natural
+   * headline would need declares nothing rather than inventing a denominator, and the row
+   * falls back to leading with the money — exactly as a candidate with no headline does.
+   */
+  headline?: CandidateHeadline;
   source: 'engine';
 };
 

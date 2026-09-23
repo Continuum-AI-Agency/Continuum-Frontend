@@ -85,7 +85,7 @@ import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import { ReallocationFlow } from '../charts/ReallocationFlow';
-import { currencySymbol, formatCurrency, humanize } from '../format';
+import { currencyFieldSuffix, currencySymbol, formatCurrency, humanize } from '../format';
 import { CampaignAdsetPicker } from '../picker/CampaignAdsetPicker';
 import { buildClaimMap, previewMoves } from '../picker/campaignGroups';
 import { buildPortfolioPickerEntities } from '../picker/portfolioPickerEntities';
@@ -607,6 +607,7 @@ export function PortfolioManagePanel({
   }
 
   const symbol = currencySymbol(currency);
+  const unit = currencyFieldSuffix(currency);
   const mismatchLabel = freezeLabel('kpi_mismatch')?.label ?? 'Held · different goal';
   const rootError = form.formState.errors.root?.message;
 
@@ -830,7 +831,7 @@ export function PortfolioManagePanel({
           <NumberField
             control={form.control}
             id={`manage-cpa-${portfolio.id}`}
-            label={`${metric.targetLabel} (${symbol})`}
+            label={`${metric.targetLabel}${unit}`}
             name="cpa_target"
           >
             <p className="text-2xs text-muted-foreground">
@@ -900,12 +901,12 @@ export function PortfolioManagePanel({
             control={form.control}
             disabled={budgetSource === 'observed'}
             id={`manage-daily-${portfolio.id}`}
-            label={`Daily budget (${symbol})`}
+            label={`Daily budget${unit}`}
             name="daily_total"
             suggested={suggestedDaily}
             suggestionLabel={
               suggestedDaily != null
-                ? `Match current ${symbol}${suggestedDaily.toLocaleString('en-US')}/day`
+                ? `Match current ${formatCurrency(suggestedDaily, currency)}/day`
                 : undefined
             }
           >
@@ -966,7 +967,7 @@ export function PortfolioManagePanel({
               <NumberField
                 control={form.control}
                 id={`manage-scale-ceiling-${portfolio.id}`}
-                label={`Up to (${symbol}/day, optional)`}
+                label={`Up to (${symbol ? `${symbol}/day` : 'per day'}, optional)`}
                 name="scale_max_daily"
               >
                 <p className="text-2xs text-muted-foreground">
@@ -1043,7 +1044,7 @@ export function PortfolioManagePanel({
           <div className="space-y-1.5 sm:col-span-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Label htmlFor={`manage-period-${portfolio.id}`}>
-                Budget ({symbol}) · {GRANULARITY_LABEL[budgetGranularity].toLowerCase()}
+                Budget{unit} · {GRANULARITY_LABEL[budgetGranularity].toLowerCase()}
               </Label>
               <ToggleGroup
                 aria-label="Budget granularity"
@@ -1079,9 +1080,9 @@ export function PortfolioManagePanel({
                 }
                 suggestionLabel={
                   budgetGranularity === 'daily' && hasDaily
-                    ? `Match ${symbol}${Math.round(dailyNum).toLocaleString('en-US')}/day`
+                    ? `Match ${formatCurrency(Math.round(dailyNum), currency)}/day`
                     : budgetGranularity === 'total' && suggestedPeriod != null
-                      ? `Suggest ${symbol}${suggestedPeriod.toLocaleString('en-US')} (${PACING_PERIOD_DAYS}d)`
+                      ? `Suggest ${formatCurrency(suggestedPeriod, currency)} (${PACING_PERIOD_DAYS}d)`
                       : undefined
                 }
               />
@@ -1189,12 +1190,12 @@ export function PortfolioManagePanel({
             <NumberField
               control={form.control}
               id={`manage-maxdaily-${portfolio.id}`}
-              label={`Max autopilot spend/day (${symbol})`}
+              label={`Max autopilot spend/day${unit}`}
               name="max_daily_apply_minor"
               suggested={suggestedMaxDaily}
               suggestionLabel={
                 suggestedMaxDaily != null
-                  ? `Suggest ${symbol}${suggestedMaxDaily.toLocaleString('en-US')}`
+                  ? `Suggest ${formatCurrency(suggestedMaxDaily, currency)}`
                   : undefined
               }
             />

@@ -1139,8 +1139,8 @@ export function useOptimizerAdAccounts(brandId: string) {
   });
 }
 
-/** Resolve the display currency for a specific ad account (falls back to USD in
- *  the formatter when the account row has no currency yet). */
+/** Resolve the display currency for a specific ad account. Null when the account row carries
+ *  none — the formatters print bare figures for it rather than claiming dollars. */
 export function useAdAccountCurrency(brandId: string, adAccountId: string | null): string | null {
   const { data } = useOptimizerAdAccounts(brandId);
   if (!adAccountId) return null;
@@ -1202,6 +1202,37 @@ function tolerantRows<T>(schema: z.ZodType<T>) {
     );
 }
 
+/**
+ * Whether today's read can be asked for again, and what it is doing right now.
+ *
+ * `state` describes TODAY's row, which is not necessarily the composition being shown: a
+ * re-read that is queued leaves yesterday's words on screen, dated, rather than blanking the
+ * section. `stalled` is a row a dead worker left behind that nothing will ever re-claim.
+ *
+ * The whole block defaults to null, and that is the deploy-ordering case, not a bug: the
+ * Frontend promotes before the migration is applied, `optimizer_get_account_read` answers
+ * without a `refresh` key, and a screen that cannot ask must offer nothing rather than a
+ * control that silently fails.
+ */
+export const AccountReadRefreshSchema = z
+  .object({
+    state: z.enum(['none', 'queued', 'generating', 'stalled', 'ready', 'failed']).catch('none'),
+    requested_at: z.string().nullable().catch(null),
+    requests_used: z.number().catch(0),
+    requests_left: z.number().catch(0),
+    can_request: z.boolean().catch(false),
+    /** When the cooldown lifts. Null unless `reason` is `too_soon`. */
+    retry_after: z.string().nullable().catch(null),
+    reason: z
+      .enum(['already_running', 'too_soon', 'daily_limit', 'no_active_portfolio'])
+      .nullable()
+      .catch(null),
+  })
+  .nullable()
+  .catch(null);
+
+export type AccountReadRefresh = z.infer<typeof AccountReadRefreshSchema>;
+
 export const AccountReadEnvelopeSchema = z
   .object({
     utc_day: z.string().nullable().default(null),
@@ -1239,10 +1270,14 @@ export const AccountReadEnvelopeSchema = z
       .nullable()
       .catch(null),
     ready_at: z.string().nullable().default(null),
+    refresh: AccountReadRefreshSchema.default(null),
   })
   .nullable();
 
 export type AccountReadEnvelope = z.infer<typeof AccountReadEnvelopeSchema>;
+
+/** A queued or running re-read is worth checking on; anything settled is not. */
+const REFRESH_IN_FLIGHT: ReadonlySet<string> = new Set(['queued', 'generating']);
 
 async function fetchAccountRead(
   brandId: string,
@@ -1256,13 +1291,74 @@ async function fetchAccountRead(
   return AccountReadEnvelopeSchema.catch(null).parse(data ?? null);
 }
 
+/** The worker sweeps every ACCOUNT_READ_SWEEP_MS (5 min), so a queued re-read is minutes
+ *  away, not seconds. Polling stops on its own: 45 ticks is a quarter of an hour, after which
+ *  a row that is still `queued` is a worker problem and no amount of asking will fix it. */
+const ACCOUNT_READ_POLL_MS = 20_000;
+const ACCOUNT_READ_POLL_MAX_TICKS = 45;
+
 export function useOptimizerAccountRead(brandId: string, adAccountId: string | null) {
-  return useOptimizerRead({
+  const queryClient = useQueryClient();
+  const query = useOptimizerRead({
     queryKey: optimizerQueryKeys.accountRead(brandId, adAccountId ?? 'none'),
     queryFn: () => fetchAccountRead(brandId, adAccountId as string),
     empty: null as AccountReadEnvelope,
     enabled: Boolean(brandId && adAccountId),
     staleTime: FIVE_MINUTES,
+  });
+
+  // A re-read someone asked for lands minutes later, in another process. Without this the
+  // screen would keep saying "re-reading" until the person reloaded the page — which reads
+  // exactly like a request that was swallowed.
+  const inFlight = REFRESH_IN_FLIGHT.has(query.data?.refresh?.state ?? 'none');
+  useEffect(() => {
+    if (!inFlight) return;
+    const key = optimizerQueryKeys.accountRead(brandId, adAccountId ?? 'none');
+    let ticks = 0;
+    const timer = globalThis.setInterval(() => {
+      ticks += 1;
+      if (ticks > ACCOUNT_READ_POLL_MAX_TICKS) {
+        globalThis.clearInterval(timer);
+        return;
+      }
+      // `exact` because the approvals query hangs off this key as a prefix, and it has not
+      // changed just because a read is being recomposed.
+      void queryClient.invalidateQueries({ queryKey: key, exact: true });
+    }, ACCOUNT_READ_POLL_MS);
+    return () => globalThis.clearInterval(timer);
+  }, [inFlight, brandId, adAccountId, queryClient]);
+
+  return query;
+}
+
+/**
+ * Asking for today's read to be composed again.
+ *
+ * The read is a daily snapshot written by a worker at ~00:03 UTC and then served frozen, so a
+ * fix deployed at any hour was invisible until the next nightly run. This is the door.
+ *
+ * It costs a model call, so the server keeps the floor — a 30-minute cooldown and three
+ * re-reads per account per UTC day — and answers with what it decided. The button reads
+ * `can_request` off the envelope rather than guessing, so it never offers a re-read the
+ * server will refuse.
+ */
+export function useRequestAccountRead(brandId: string, adAccountId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<AccountReadRefresh> => {
+      const { data, error } = await getClient().rpc('optimizer_request_account_read', {
+        p_brand_id: brandId,
+        p_ad_account_id: adAccountId,
+      } as never);
+      if (error) throw new Error(`Could not ask for a fresh read: ${rpcErrorText(error)}`);
+      return AccountReadRefreshSchema.parse(data ?? null);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: optimizerQueryKeys.accountRead(brandId, adAccountId ?? 'none'),
+        exact: true,
+      });
+    },
   });
 }
 

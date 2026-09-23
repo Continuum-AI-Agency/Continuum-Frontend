@@ -56,6 +56,31 @@ const rec = {
   seed: null,
 };
 
+/** The row the engine synthesises for a portfolio with NO declared flight: nothing was
+ *  planned, so there is nothing to be on or off track of. */
+const pacingWithoutAFlight = {
+  dailyTotal: 500,
+  idealCumulative: 0,
+  pacingRatio: 1,
+  status: 'on_track',
+  note: 'No pacing state: using the provided total.',
+  source: 'observed',
+};
+
+/** A real flight far enough in for the plan to have expected spend. */
+const pacingFromAFlight = {
+  dailyTotal: 500,
+  idealCumulative: 3500,
+  pacingRatio: 1.04,
+  status: 'overpacing',
+  note: 'Ahead of plan.',
+  source: 'pacing',
+  periodBudget: 15000,
+  periodDays: 30,
+  dayIndex: 7,
+  actualSpendToDate: 3640,
+};
+
 describe('buildHeroView', () => {
   it('composes the fallback from the report when no brief is stored', () => {
     const view = buildHeroView({
@@ -187,5 +212,168 @@ describe('buildHeroView', () => {
       firstCycle: false,
     });
     expect(observe.cta?.kind).toBe('manage');
+  });
+  it('reports no pacing verdict when the engine had no flight to measure against', () => {
+    const view = buildHeroView({
+      report: {
+        portfolio: null,
+        latest_run: {
+          id: 'run1',
+          cycle_ts: '2026-09-19T06:10:00Z',
+          pacing: pacingWithoutAFlight,
+        } as never,
+        latest_items: [],
+        recommendations: [rec as never],
+        history: [],
+      },
+      recap,
+      flightPacing: { kind: 'no_flight' },
+      metric,
+      currency: 'USD',
+      portfolio,
+      target: 70,
+      window: 'd7',
+      firstCycle: false,
+    });
+    expect(view.source).toBe('fallback');
+    expect(view.brief.growth.pacing.status).toBeNull();
+    expect(view.brief.growth.pacing.ratio).toBeNull();
+    // The reason for the absence survives; only the invented verdict is dropped.
+    expect(view.brief.growth.pacing.note).toBe('No pacing state: using the provided total.');
+    expect(view.brief.growth_sentence).not.toContain('on track');
+    expect(view.brief.growth_sentence).toContain('over target');
+  });
+
+  it('keeps the verdict when the engine measured it against a real flight', () => {
+    const view = buildHeroView({
+      report: {
+        portfolio: null,
+        latest_run: {
+          id: 'run1',
+          cycle_ts: '2026-09-19T06:10:00Z',
+          pacing: pacingFromAFlight,
+        } as never,
+        latest_items: [],
+        recommendations: [rec as never],
+        history: [],
+      },
+      recap,
+      flightPacing: { kind: 'no_flight' },
+      metric,
+      currency: 'USD',
+      portfolio,
+      target: 70,
+      window: 'd7',
+      firstCycle: false,
+    });
+    expect(view.brief.growth.pacing).toEqual({
+      status: 'overpacing',
+      ratio: 1.04,
+      note: 'Ahead of plan.',
+    });
+    expect(view.brief.growth_sentence).toContain('overpacing');
+  });
+});
+
+describe('a stored brief is read against the run it came from', () => {
+  /** Easy Fit, FORMULARIOS // TODOS, 2026-09-22 — the stored brief verbatim on the parts
+   *  that matter: a Backend from before `pacingVerdict` wrote the fallback row through as a
+   *  verdict, and the model wrote the words it was given. */
+  const storedWithInventedVerdict = {
+    version: 1,
+    growth: {
+      spend: 3594.41,
+      results: 78,
+      cost_per_result: 46.08,
+      target: 35,
+      deltas: { spend: null, results: null, cost_per_result: null },
+      pacing: { status: 'on_track', ratio: 1, note: 'No pacing state: using the provided total.' },
+      scale: null,
+      window: 'd14',
+      as_of: '2026-09-22T19:01:37Z',
+      currency: 'MXN',
+      result_label: 'leads',
+    },
+    hero: {
+      module: 'pause',
+      candidate_id: 'rec:aleira',
+      headline: 'Stop 28.68/day going to ALEIRA // AGOSTO - LKL with no leads',
+      why: 'w',
+      impact_per_day: 28.68,
+      impact_unit: 'currency',
+      impact_basis: 'b',
+      justification: null,
+      confidence_note: null,
+      cta: { kind: 'queue_row', target_id: 'rec:aleira' },
+    },
+    growth_sentence:
+      'Over the last 14 days, the portfolio spent 3594.41 to acquire 78 leads at a cost of 46.08 per lead, which is above the 35 target, and is on track.',
+    candidates: [
+      {
+        id: 'rec:aleira',
+        module: 'pause',
+        kind: 'pause',
+        trigger: null,
+        adset_id: 'as-1',
+        adset_name: 'ALEIRA // AGOSTO - LKL',
+        impact_per_day: 28.68,
+        impact_unit: 'currency',
+        results_per_day: null,
+        impact_basis: 'b',
+        reason: null,
+        cta: { kind: 'queue_row', target_id: 'rec:aleira' },
+      },
+    ],
+    secondary: [],
+    prompt_version: 'v1',
+    model: 'gemini-2.5-flash',
+    generated_at: '2026-09-22T19:05:00Z',
+  };
+  const reportWith = (pacing: unknown) => ({
+    portfolio: null,
+    latest_run: { id: 'run1', cycle_ts: '2026-09-22T19:01:37Z', pacing } as never,
+    latest_items: [],
+    recommendations: [],
+    history: [],
+    hero_brief: {
+      id: '2f1c1c1e-0000-4000-8000-000000000009',
+      portfolio_id: '2f1c1c1e-0000-4000-8000-000000000002',
+      brand_id: '2f1c1c1e-0000-4000-8000-000000000003',
+      cycle_run_id: 'run1',
+      utc_day: '2026-09-22',
+      status: 'ready',
+      brief: storedWithInventedVerdict,
+      created_at: 'x',
+      updated_at: 'x',
+    } as never,
+  });
+  const build = (pacing: unknown) =>
+    buildHeroView({
+      report: reportWith(pacing),
+      recap,
+      flightPacing: { kind: 'no_flight' },
+      metric,
+      currency: 'MXN',
+      portfolio,
+      target: 35,
+      window: 'd14',
+      firstCycle: false,
+      now: '2030-01-01T00:00:00Z',
+    });
+
+  it('drops the verdict and its clause when the run had no flight to measure against', () => {
+    const view = build(pacingWithoutAFlight);
+    expect(view.source).toBe('brief');
+    expect(view.brief.growth.pacing.status).toBeNull();
+    expect(view.brief.growth.pacing.note).toBe('No pacing state: using the provided total.');
+    expect(view.brief.growth_sentence).toBe(
+      'Over the last 14 days, the portfolio spent 3594.41 to acquire 78 leads at a cost of 46.08 per lead, which is above the 35 target.',
+    );
+  });
+
+  it('keeps the words when the run measured a real flight', () => {
+    const view = build(pacingFromAFlight);
+    expect(view.brief.growth.pacing.status).toBe('overpacing');
+    expect(view.brief.growth_sentence).toContain('and is on track');
   });
 });

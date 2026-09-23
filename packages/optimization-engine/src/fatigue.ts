@@ -83,6 +83,17 @@ export function evaluateFatigue(
           threshold: freqCap,
           window: 'd7',
           estImpactPerDay: excessPerDay,
+          // The frequency IS the finding — the money is what the decay it causes costs.
+          // `from → to` is the value and its ceiling, which is exactly the comparison the
+          // trigger fired on; one decimal because 3 and 3.2 are different verdicts here.
+          headline: {
+            kind: 'count',
+            value: Math.round(freq * 10) / 10,
+            unit: 'count',
+            label: 'times each person saw it',
+            from: Math.round(freq * 10) / 10,
+            to: freqCap,
+          },
           source: 'engine',
         },
         needsApproval: true,
@@ -114,6 +125,18 @@ export function evaluateFatigue(
           threshold: REACH_EXHAUSTED_EXPANSION,
           window: 'd14',
           estImpactPerDay: excessPerDay,
+          // A slice of a whole, not a movement: of everyone the 14-day window reached, this
+          // is the part the extra seven days added. No `from → to` — the threshold is a
+          // reach RATIO and the headline is a percentage, and printing one as the other is
+          // how a card ends up comparing 4% against 1.05.
+          headline: {
+            kind: 'share',
+            value: Math.round((reachExpansion - 1) * 100),
+            unit: 'percent',
+            label: 'of 14d reach is new',
+            from: null,
+            to: null,
+          },
           source: 'engine',
         },
         needsApproval: true,
@@ -139,6 +162,17 @@ export function evaluateFatigue(
           threshold: ctrBase,
           window: 'd3',
           estImpactPerDay: excessPerDay,
+          // The engagement drop is what this trigger found; the CPA rise is the consequence
+          // it is priced by. No `from → to`: both sides are CTRs near 1%, and a headline
+          // percentage prints whole, so "1% → 1%" would show a drop of nothing.
+          headline: {
+            kind: 'drift',
+            value: Math.round(decay.ctrDownPct),
+            unit: 'percent',
+            label: 'less click-through than 14d',
+            from: null,
+            to: null,
+          },
           source: 'engine',
         },
         needsApproval: true,

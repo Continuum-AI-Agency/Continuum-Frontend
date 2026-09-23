@@ -7,15 +7,17 @@
  * - pasted ad ids resolve to names (label⇥id lines and bare ids in row order), and a miss is an
  *   inline error on its line;
  * - a spreadsheet `{action:'replace', adId}` resolves on its own and blocks until it does;
- * - no ad account is a clear empty state, and a stale target there must be cleared.
+ * - no ad account is a clear empty state, and a stale target there must be cleared;
+ * - inside an ad set, "New paused ad" records a create target, which needs no format.
  */
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import type {
-  ApiRenderDeliveryDestinationsResponse,
-  ApiRenderDeliveryTarget,
-  ApiRenderTemplateContract,
-  PaidCanvasTarget,
+import {
+  type ApiRenderDeliveryDestinationsResponse,
+  type ApiRenderDeliveryTarget,
+  type ApiRenderTemplateContract,
+  apiRenderDeliveryTargetSchema,
+  type PaidCanvasTarget,
 } from '@continuum/contracts';
 
 const target = (
@@ -111,6 +113,7 @@ import {
   type MetaPickerState,
   metaDeliveryProblems,
   parseAdIdLines,
+  type ReplaceFormats,
   replaceTargetFor,
 } from './DeliveryTargetPicker';
 import type { RenderPreflightRow } from './RenderReviewTray';
@@ -136,7 +139,15 @@ let latest: { rows: RenderPreflightRow[]; formats: Record<string, string> } = {
   formats: {},
 };
 
-function Harness({ meta, rows = ROWS }: { meta: MetaPickerState; rows?: RenderPreflightRow[] }) {
+function Harness({
+  meta,
+  rows = ROWS,
+  outputs = OUTPUTS,
+}: {
+  meta: MetaPickerState;
+  rows?: RenderPreflightRow[];
+  outputs?: ReplaceFormats;
+}) {
   const [current, setCurrent] = useState(rows);
   const [formats, setFormats] = useState<Record<string, string>>({});
   latest = { rows: current, formats };
@@ -145,7 +156,7 @@ function Harness({ meta, rows = ROWS }: { meta: MetaPickerState; rows?: RenderPr
       brandId={BRAND}
       meta={meta}
       rows={current}
-      outputs={OUTPUTS}
+      outputs={outputs}
       formatByRow={formats}
       onDeliveryChange={(rowId, delivery) =>
         setCurrent((all) =>
@@ -261,6 +272,55 @@ describe('DeliveryTargetPicker', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove the ad target for Root' }));
     expect(latest.rows[0]?.delivery).toBeUndefined();
     expect(screen.queryByRole('combobox', { name: 'Format for Root' })).toBeNull();
+  }, 30_000);
+
+  test('inside an ad set, a new paused ad is a create target that needs no format', async () => {
+    render(<Harness meta={CONNECTED} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Replace an ad for Root' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Summer launch/ }));
+    // Campaign level: there is no ad set to add an ad to yet.
+    expect(screen.queryByRole('button', { name: /New paused ad/ })).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: /Spain 18–34/ }));
+    await screen.findByRole('button', { name: /Hero story/ });
+    fireEvent.click(screen.getByRole('button', { name: 'New paused ad in this ad set' }));
+
+    const created = {
+      action: 'create',
+      adAccountId: 'act_1',
+      campaignId: 'c1',
+      campaignName: 'Summer launch',
+      adsetId: 's1',
+      adsetName: 'Spain 18–34',
+      adStatus: 'PAUSED',
+    };
+    await waitFor(() => expect(latest.rows[0]?.delivery).toEqual(created));
+    expect(apiRenderDeliveryTargetSchema.parse(latest.rows[0]?.delivery)).toEqual(created);
+    expect(screen.getByText('New paused ad in Summer launch › Spain 18–34')).toBeTruthy();
+    // Root renders two formats; a new ad takes both, so nothing asks for one.
+    expect(screen.queryByRole('combobox', { name: 'Format for Root' })).toBeNull();
+    expect(metaDeliveryProblems(latest.rows, OUTPUTS, {}, CONNECTED)).toEqual([]);
+  }, 30_000);
+
+  test('one format to swap in is chosen already; a replace with none left says so and blocks', async () => {
+    const replace = replaceTargetFor('act_1', AD_ONE) as ApiRenderDeliveryTarget;
+    const rows = [{ ...ROWS[0]!, delivery: replace }];
+    // A template with no authored outputs: its one parse comp, by name.
+    const oneComp = [{ id: 'Promo 1:1', label: '1:1 · Promo 1:1' }];
+    render(<Harness meta={CONNECTED} rows={rows} outputs={oneComp} />);
+    expect(screen.getByText('1:1 · Promo 1:1 only')).toBeTruthy();
+    expect(screen.queryByRole('combobox', { name: 'Format for Root' })).toBeNull();
+    expect(metaDeliveryProblems(latest.rows, oneComp, {}, CONNECTED)).toEqual([]);
+    cleanup();
+
+    render(<Harness meta={CONNECTED} rows={rows} outputs={[]} />);
+    expect(screen.getByText('This template has no named format to swap in')).toBeTruthy();
+    expect(metaDeliveryProblems(latest.rows, [], {}, CONNECTED)).toEqual([
+      'Choose one format for each ad replacement.',
+    ]);
+    // A new paused ad needs no format, so the drill-down still opens.
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Change the ad for Root' }).disabled,
+    ).toBe(false);
   }, 30_000);
 
   test('a brand with several linked accounts picks one, and the next ad is searched and targeted there', async () => {

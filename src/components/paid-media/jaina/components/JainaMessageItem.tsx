@@ -9,14 +9,15 @@ import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
 import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
 import { MentionifiedText } from '@/components/chat/mentionified-text';
 import { JainaOptimizerCitations } from '@/components/paid-media/jaina/blocks/JainaOptimizerCitations';
+import { JainaOptimizerHyperframes } from '@/components/paid-media/jaina/blocks/JainaOptimizerHyperframes';
 import { PaidScaffoldCard } from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
-import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import {
   type CreativeArtifact,
   frontendCheckpointReportSchema,
   hasReportContent,
   type ToolResultEventData,
 } from '@/lib/jaina/schemas';
+import { JainaProse } from '../blocks/prose';
 import {
   extractRenderableFallbackFromReport,
   extractRenderableFallbackFromStructuredContent,
@@ -219,6 +220,7 @@ function JainaMessageItemImpl({
 
   const artifacts = message.artifacts;
   const optimizerCitations = message.optimizerCitations ?? [];
+  const optimizerHyperframes = message.optimizerHyperframes ?? [];
   const paidCreativeRenders = message.paidCreativeRenders ?? [];
   const toolCreatives = React.useMemo(() => {
     if (!toolResults) return [];
@@ -256,7 +258,7 @@ function JainaMessageItemImpl({
           <>
             {hasRenderableContent ? (
               <div className="relative">
-                <SafeMarkdown
+                <JainaProse
                   content={normalizeJainaMarkdownTables(message.content)}
                   className="text-base leading-7 text-foreground"
                   mode={isStreaming ? 'streaming' : 'static'}
@@ -282,7 +284,7 @@ function JainaMessageItemImpl({
             ) : null}
 
             {structuredFallbackContent ? (
-              <SafeMarkdown
+              <JainaProse
                 content={normalizeJainaMarkdownTables(structuredFallbackContent)}
                 className="text-base leading-7 text-foreground"
                 mode="static"
@@ -298,6 +300,12 @@ function JainaMessageItemImpl({
                 citations={optimizerCitations}
                 onOpenRead={onOpenAccountRead}
               />
+            ) : null}
+
+            {/* A compiled card is evidence for the same sentence, so it sits with the cited
+             *  ones rather than at the end of the turn. */}
+            {optimizerHyperframes.length > 0 ? (
+              <JainaOptimizerHyperframes sets={optimizerHyperframes} />
             ) : null}
 
             {message.pendingClarification ? (
@@ -381,6 +389,7 @@ function JainaMessageItemImpl({
                   isStreaming={isStreaming}
                   runId={message.runId}
                   deliverySource={message.deliverySource}
+                  sourcePrompt={regeneratePrompt}
                   onSuggestionClick={onSuggestionClick}
                 />
               </motion.div>
@@ -409,7 +418,6 @@ function JainaMessageItemImpl({
             ) : (
               <CreativesSection creatives={allCreatives} />
             )}
-
 
             {paidCreativeRenders.map((render) => (
               <PaidCreativeRenderStatus key={render.render_job_id} render={render} />

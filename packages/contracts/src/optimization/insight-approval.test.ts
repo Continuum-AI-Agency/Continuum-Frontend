@@ -13,11 +13,11 @@ import {
 } from './insight-approval';
 
 describe('every detector answers to exactly one family', () => {
-  it('places all twenty-five', () => {
+  it('places all twenty-six', () => {
     for (const detector of accountDetectorSchema.options) {
       expect(actionFamilySchema.options).toContain(DETECTOR_ACTION_FAMILY[detector]);
     }
-    expect(Object.keys(DETECTOR_ACTION_FAMILY)).toHaveLength(25);
+    expect(Object.keys(DETECTOR_ACTION_FAMILY)).toHaveLength(26);
   });
 
   it('puts both guards where nothing can be approved', () => {
