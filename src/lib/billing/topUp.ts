@@ -37,7 +37,7 @@ export function topUpPackPresets(offer: CreditPackOffer = CREDIT_PACK_OFFER): nu
   return TOP_UP_PACK_PRESETS.filter((packs) => packs <= offer.maxPacks);
 }
 
-const CHECKOUT_RETURN_PARAMS = ['checkout', 'plan', 'balance'] as const;
+const CHECKOUT_RETURN_PARAMS = ['checkout', 'plan', 'balance', 'session_id'] as const;
 
 /** `search` without a Checkout return's params: what the page reads as once the return is handled. */
 export function withoutCheckoutReturn(search: string, alsoDrop: readonly string[] = []): string {

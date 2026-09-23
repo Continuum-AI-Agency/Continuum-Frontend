@@ -290,6 +290,52 @@ export const billingCreditCheckoutResponseSchema = z
   .strict();
 export type BillingCreditCheckoutResponse = z.infer<typeof billingCreditCheckoutResponseSchema>;
 
+/**
+ * `POST /billing-api/brands/:id/credits/redeem` — a promo code, applied up front: Checkout for
+ * as many packs as the code needs (CONTINUUM200 → 20 packs, $0 due). Answers with
+ * `billingCreditCheckoutResponseSchema`.
+ */
+export const billingCreditRedeemRequestSchema = z
+  .object({
+    code: z.string().trim().min(1).max(64),
+    successUrl: returnUrlSchema,
+    cancelUrl: returnUrlSchema,
+  })
+  .strict();
+export type BillingCreditRedeemRequest = z.infer<typeof billingCreditRedeemRequestSchema>;
+
+/**
+ * `GET /billing-api/brands/:id/checkout-sessions/:sessionId` — the receipt for one Checkout
+ * purchase, read from Stripe. Amounts are minor units like the invoice view; lines are
+ * pre-discount. `invoicePdf` is Stripe's own invoice, and can trail `paid` by a moment.
+ * PCI: amounts and links only.
+ */
+export const billingCheckoutReceiptSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    sessionId: z.string().min(1),
+    /** Paid, or nothing to pay (a 100% promo). */
+    paid: z.boolean(),
+    createdAt: z.string().datetime({ offset: true }),
+    currency: z.string().min(1),
+    lines: z.array(
+      z
+        .object({
+          description: z.string(),
+          quantity: z.number().int().nonnegative(),
+          amount: z.number().int(),
+        })
+        .strict(),
+    ),
+    discount: z.number().int().nonnegative(),
+    tax: z.number().int().nonnegative(),
+    total: z.number().int(),
+    invoiceNumber: z.string().nullable(),
+    invoicePdf: z.string().nullable(),
+  })
+  .strict();
+export type BillingCheckoutReceipt = z.infer<typeof billingCheckoutReceiptSchema>;
+
 /** `POST /billing-api/brands/:id/portal` — Stripe Customer Portal (payment-method update). */
 export const billingPortalRequestSchema = z.object({ returnUrl: returnUrlSchema }).strict();
 export type BillingPortalRequest = z.infer<typeof billingPortalRequestSchema>;
@@ -317,6 +363,12 @@ export const BILLING_API_ERROR_CODES = [
   'plan_not_active',
   /** Removing the only plan — cancel from the Customer Portal instead. */
   'last_plan',
+  /** The session does not exist, or belongs to another brand's customer. */
+  'checkout_session_not_found',
+  /** No such promo code for this brand, or it is not for Canvas credits. */
+  'promo_code_not_found',
+  /** The promo code was already redeemed, expired, or needs more packs than allowed. */
+  'promo_code_used',
   'stripe_not_configured',
   'billing_api_failed',
 ] as const;
@@ -482,7 +534,11 @@ export type AdminAccessUpdateResponse = z.infer<typeof adminAccessUpdateResponse
  * PostgREST does not expose `billing` yet (PGRST106) — nothing was written. `not_staff_brand`:
  * `client` was sent for a brand no staff account created.
  */
-export const ADMIN_ACCESS_REFUSALS = ['stripe_managed', 'billing_not_live', 'not_staff_brand'] as const;
+export const ADMIN_ACCESS_REFUSALS = [
+  'stripe_managed',
+  'billing_not_live',
+  'not_staff_brand',
+] as const;
 export const adminAccessRefusalSchema = z
   .object({
     error: z.enum(ADMIN_ACCESS_REFUSALS),

@@ -7,7 +7,7 @@ import { useMutation } from '@tanstack/react-query';
 import { ArrowRight, Check } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Dialog,
@@ -17,8 +17,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/ToastProvider';
-import { startCreditCheckout } from '@/lib/billing/billingApi';
+import {
+  promoErrorMessage,
+  redeemCreditPromo,
+  startCreditCheckout,
+} from '@/lib/billing/billingApi';
 import { formatCredits, formatUsd } from '@/lib/billing/billingViewModel';
 import { creditsHref } from '@/lib/billing/productAccess';
 import {
@@ -34,6 +40,7 @@ import {
 } from '@/lib/billing/topUp';
 import { useBillingOverviewWithPendingChange } from '@/lib/billing/useBilling';
 import { cn } from '@/lib/utils';
+import { CheckoutReceiptDialog } from './CheckoutReceiptDialog';
 
 // The one place credits are bought from outside Settings. Every "Buy credits" (the 402 toast,
 // the low-credits nudge, a low sidebar meter, a canvas node that ran dry) opens this over the
@@ -111,6 +118,85 @@ export function useCreditCheckout(brandId: string, purchasedCreditsBefore: numbe
   };
 }
 
+/**
+ * "Have a promo code?": the code itself decides the order (CONTINUUM200 is 20 packs), so
+ * Checkout opens with it already applied and $0 due. Refusals show under the field.
+ */
+export function PromoCodeRedeem({
+  brandId,
+  purchasedCreditsBefore,
+}: {
+  brandId: string;
+  purchasedCreditsBefore: number;
+}) {
+  const inputId = useId();
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState('');
+  const redeem = useMutation({
+    mutationFn: (value: string) =>
+      redeemCreditPromo(brandId, {
+        code: value,
+        ...topUpReturnUrls(window.location.href, purchasedCreditsBefore),
+      }),
+    onSuccess: (session) => window.location.assign(session.url),
+  });
+  const redirecting = redeem.isPending || redeem.isSuccess;
+  const error = redeem.isError ? promoErrorMessage(redeem.error) : null;
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={cn(
+          buttonVariants({ variant: 'link' }),
+          'h-auto justify-start p-0 text-xs text-muted-foreground',
+        )}
+      >
+        Have a promo code?
+      </button>
+    );
+  }
+  return (
+    <form
+      className="max-w-sm"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (code.trim()) redeem.mutate(code.trim());
+      }}
+    >
+      <Field data-invalid={error ? true : undefined}>
+        <FieldLabel htmlFor={inputId}>Promo code</FieldLabel>
+        <div className="flex gap-2">
+          <Input
+            id={inputId}
+            value={code}
+            onChange={(event) => {
+              setCode(event.target.value);
+              if (redeem.isError) redeem.reset();
+            }}
+            autoFocus
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            aria-invalid={error ? true : undefined}
+            className="font-mono uppercase"
+          />
+          <Button
+            type="submit"
+            variant="outline"
+            disabled={redirecting || !code.trim()}
+            aria-busy={redirecting}
+          >
+            {redirecting ? 'Opening checkout…' : 'Redeem'}
+          </Button>
+        </div>
+        <FieldError>{error}</FieldError>
+      </Field>
+    </form>
+  );
+}
+
 function balanceLine(view: MeteredSidebarBilling): string {
   if (view.remainingCredits === 0) return 'Out of credits — generation is paused.';
   return `${formatCredits(view.remainingCredits)} credits left${view.low ? ' — running low' : ''}.`;
@@ -130,7 +216,13 @@ export function TopUpDialog({
   const section = useSearchParams().get('section');
   const onBillingPage = pathname.startsWith('/settings') && section === 'billing';
   // A Top up returns here; the Billing page confirms its own returns.
-  useBillingOverviewWithPendingChange(brandId, { returnsOnly: true, enabled: !onBillingPage });
+  const { receipt, closeReceipt } = useBillingOverviewWithPendingChange(brandId, {
+    returnsOnly: true,
+    enabled: !onBillingPage,
+  });
+  const receiptDialog = receipt ? (
+    <CheckoutReceiptDialog brandId={brandId} receipt={receipt} onClose={closeReceipt} />
+  ) : null;
 
   const metered = view?.kind === 'metered' ? view : null;
   const meteredRef = useRef(metered);
@@ -146,13 +238,16 @@ export function TopUpDialog({
     [],
   );
 
-  if (!metered) return null;
+  if (!metered) return receiptDialog;
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="gap-5 sm:max-w-sm" data-testid="top-up-dialog">
-        <TopUpBody view={metered} brandId={brandId} owner={owner} />
-      </DialogContent>
-    </Dialog>
+    <>
+      {receiptDialog}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="gap-5 sm:max-w-sm" data-testid="top-up-dialog">
+          <TopUpBody view={metered} brandId={brandId} owner={owner} />
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -182,7 +277,10 @@ function TopUpBody({
       </DialogHeader>
 
       {owner ? (
-        <TopUpPackPicker packs={packs} onPacksChange={setPacks} />
+        <div className="grid gap-3">
+          <TopUpPackPicker packs={packs} onPacksChange={setPacks} />
+          <PromoCodeRedeem brandId={brandId} purchasedCreditsBefore={view.purchasedCredits} />
+        </div>
       ) : (
         <p className="rounded-lg border border-border bg-muted/40 px-3.5 py-3 text-sm text-muted-foreground">
           Only the brand owner can buy credits. Let them know when this brand needs a top-up.
