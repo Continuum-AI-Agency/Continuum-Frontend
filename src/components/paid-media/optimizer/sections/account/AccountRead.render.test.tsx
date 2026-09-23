@@ -96,7 +96,7 @@ describe('AccountRead', () => {
         ]}
       />,
     );
-    expect(container.textContent).toContain('1 checks could not run today');
+    expect(container.textContent).toContain('1 check could not run today');
     expect(container.textContent).toContain('what a result is worth');
   });
 
@@ -177,9 +177,38 @@ describe('AccountRead', () => {
     expect(rows[0]?.getAttribute('data-detector')).toBe('dead_tail');
   });
 
-  it('says so plainly when every check ran and found nothing', () => {
-    const { container } = render(<AccountRead candidates={[]} currency="USD" dailySpend={1200} />);
-    expect(container.textContent).toContain('Nothing to move today');
+  // A quiet day used to open with "Nothing to move today — every check ran" and close with
+  // "All 25 checks apply", beside a fold saying three could not run. The lead card above now
+  // says how the account is doing; this may keep only the operator's footnotes.
+  it('renders nothing at all on a quiet day with nothing to footnote', () => {
+    const { container, queryByTestId } = render(
+      <AccountRead candidates={[]} currency="USD" dailySpend={1200} />,
+    );
+    expect(queryByTestId('account-read')).toBeNull();
+    expect(container.textContent).toBe('');
+  });
+
+  it('keeps only the footnotes on a quiet day — never a sentence about our own checks', () => {
+    const { getByTestId } = render(
+      <AccountRead
+        candidates={[]}
+        currency="USD"
+        dailySpend={1200}
+        starved={[
+          { detector: 'target_economics', missing: 'nobody has told us what a result is worth' },
+        ]}
+      />,
+    );
+    const read = getByTestId('account-read');
+    expect(read.getAttribute('data-quiet')).toBe('true');
+    expect(read.textContent).not.toContain('Nothing to move today');
+    expect(read.textContent).not.toContain('Every check ran');
+    expect(read.textContent).not.toContain('checks apply');
+    // The fold survives, as a footnote: no heading, no panel, one small line to open.
+    const fold = getByTestId('account-starved');
+    expect(fold.tagName).toBe('DETAILS');
+    expect(fold.textContent).toContain('1 check could not run today');
+    expect(read.querySelector('h2')).toBeNull();
   });
 });
 
@@ -387,74 +416,37 @@ describe('AccountRead — how far these figures sit from the money', () => {
   });
 });
 
-describe('AccountRead — a short deck should not look like a broken one', () => {
-  it('says how much of the catalogue this account can even ask', () => {
-    const { getByTestId } = render(
+describe('AccountRead — it does not count its own checks', () => {
+  // "All 25 checks apply to what this account buys" was the deck note, and beside a fold
+  // saying three could not run it read as a contradiction. Neither number is about the
+  // account; the reader was asked not to be told how many checks were reviewed.
+  it('prints no line about how many checks apply, on a busy day or a quiet one', () => {
+    const busy = render(
       <AccountRead
         candidates={many(1)}
         currency="USD"
         dailySpend={5000}
-        deck={{ applies: 20, total: 25 }}
-      />,
-    );
-    const note = getByTestId('account-deck-note').textContent ?? '';
-    expect(note).toContain('20 of 25');
-    expect(note).toContain('no question to ask');
-  });
-
-  it('says so plainly when the whole catalogue applies', () => {
-    const { getByTestId } = render(
-      <AccountRead
-        candidates={many(1)}
-        currency="USD"
-        dailySpend={5000}
-        deck={{ applies: 25, total: 25 }}
-      />,
-    );
-    expect(getByTestId('account-deck-note').textContent).toContain('All 25');
-  });
-
-  it('never names the muted detectors inside the gap list', () => {
-    // Naming them there would invite reading them as missing, and they are not missing.
-    const { getByTestId, container } = render(
-      <AccountRead
-        candidates={many(1)}
-        currency="USD"
-        dailySpend={5000}
-        deck={{ applies: 24, total: 25 }}
         starved={[{ detector: 'target_economics', missing: 'neither margin nor lifetime value' }]}
       />,
     );
-    expect(container.textContent).toContain('1 checks could not run today');
-    expect(getByTestId('account-deck-note').textContent).toContain('24 of 25');
-    // The third assertion here used to be `deck-note does not contain 'target_economics'`,
-    // which no rendering could ever violate — the deck note is counts and prose, and no
-    // detector name can appear in it. What the test is actually about is that the STARVED
-    // list and the deck line stay separate surfaces, so that is what it asks: the starved
-    // detector is named in the gap list, and the two elements are not one another.
-    const gap = getByTestId('account-starved');
-    expect(gap.textContent).toContain(ACCOUNT_DETECTOR_META.target_economics.label);
-    expect(gap.contains(getByTestId('account-deck-note'))).toBe(false);
-  });
-
-  it('stays silent on a read written before the worker carried a deck', () => {
-    const { queryByTestId } = render(
-      <AccountRead candidates={many(1)} currency="USD" dailySpend={5000} />,
+    expect(busy.container.textContent).not.toMatch(/checks apply/);
+    expect(busy.container.textContent).not.toMatch(/All \d+ checks/);
+    // The gap list still names the starved detector, for the operator who has to explain it.
+    expect(busy.getByTestId('account-starved').textContent).toContain(
+      ACCOUNT_DETECTOR_META.target_economics.label,
     );
-    expect(queryByTestId('account-deck-note')).toBeNull();
-  });
+    cleanup();
 
-  it('shows the note even on a quiet day, when the screen is otherwise empty', () => {
-    // A quiet day plus a short deck is exactly when a reader assumes the thing is broken.
-    const { getByTestId } = render(
+    const quiet = render(
       <AccountRead
         candidates={[]}
         currency="USD"
         dailySpend={5000}
-        deck={{ applies: 20, total: 25 }}
+        starved={[{ detector: 'target_economics', missing: 'neither margin nor lifetime value' }]}
       />,
     );
-    expect(getByTestId('account-deck-note').textContent).toContain('20 of 25');
+    expect(quiet.container.textContent).not.toMatch(/checks apply/);
+    expect(quiet.container.textContent).not.toMatch(/Every check/);
   });
 });
 

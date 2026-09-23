@@ -96,6 +96,21 @@ describe('useOptimizerUrlState', () => {
     );
   });
 
+  // The account-level autonomy controls have a tab of their own, first in the list. A link
+  // to it has to survive a reload and a share, the same as every other view.
+  it('round-trips the automations view through the URL', () => {
+    navigation.params = new URLSearchParams('tab=performance&optimizerView=automations');
+    const { result } = renderHook(() => useOptimizerUrlState());
+    expect(result.current.view).toBe('automations');
+
+    result.current.setView('automations');
+    expect(replaceState).toHaveBeenLastCalledWith(
+      null,
+      '',
+      '/scale?tab=performance&optimizerView=automations',
+    );
+  });
+
   it('pushes the create view with no portfolio param', () => {
     navigation.params = new URLSearchParams(
       'tab=performance&optimizerView=portfolios&portfolio=portfolio-1&adset=adset-1',

@@ -26,7 +26,7 @@ mock.module('motion/react', () => {
 
 import type { AccountCandidate } from '@continuum/contracts';
 import { accountCandidateSchema, LINE_BUDGET } from '@continuum/contracts';
-import { AccountLeadCard, type DeliveryPoint, readDelivery } from './AccountLeadCard';
+import { AccountLeadCard, type DeliveryPoint, peakDay, readDelivery } from './AccountLeadCard';
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -382,6 +382,10 @@ const days = (spend: number[]): DeliveryPoint[] =>
 
 const FORTNIGHT = days([300, 300, 300, 300, 300, 300, 300, 200, 200, 200, 200, 200, 200, 200]);
 
+// The same fortnight with one day that is nothing like the others: the 13th day (Sep 20)
+// spent 520 against an average of 273, and that is the day a reader wants named.
+const SWINGY = days([300, 300, 300, 300, 300, 300, 300, 200, 200, 200, 200, 200, 520, 200]);
+
 describe('AccountLeadCard — a quiet day is not an empty day', () => {
   it('leads with what the account is doing, never with a count of our own checks', () => {
     const { getByTestId } = render(
@@ -389,13 +393,8 @@ describe('AccountLeadCard — a quiet day is not an empty day', () => {
         candidates={[]}
         currency="USD"
         dailySpend={1200}
-        deck={{ applies: 20, total: 25 }}
         delivery={FORTNIGHT}
         plannedPerDay={400}
-        starved={[
-          { detector: 'audience_overlap', missing: 'true overlap needs a Meta call' },
-          { detector: 'seasonality', missing: 'a new account has nothing to compare against' },
-        ]}
       />,
     );
     const card = getByTestId('account-lead-card');
@@ -406,11 +405,31 @@ describe('AccountLeadCard — a quiet day is not an empty day', () => {
     expect(figure.textContent).toContain('$200');
     expect(figure.textContent).toContain('a day, last 7 days');
     expect(figure.getAttribute('data-reading')).toBe('window');
-    expect(figure.textContent).not.toContain('checks asked');
 
     // And nowhere on the card is a check count printed at headline size.
     const headline = card.querySelector('.text-3xl');
     expect(headline?.textContent).toBe('$200');
+  });
+
+  // The owner's complaint, pinned: the card may report how results and spend are going, and
+  // it may not report how many checks were reviewed. "22 of 25 checks asked", "3 could not
+  // run" and "Every check ran" were three rows of the product describing itself.
+  it('never counts its own checks anywhere on the card', () => {
+    const { getByTestId } = render(
+      <AccountLeadCard
+        candidates={[]}
+        currency="USD"
+        dailySpend={1200}
+        delivery={FORTNIGHT}
+        plannedPerDay={400}
+        mix={{ basis: 'spent', days: 14, slices: [{ label: 'Leads', share: 100 }] }}
+      />,
+    );
+    const text = getByTestId('account-lead-card').textContent ?? '';
+    expect(text).not.toMatch(/checks?/i);
+    expect(text).not.toContain('could not run');
+    expect(text).not.toContain('Nothing is waiting on us');
+    expect(text).not.toContain('found nothing');
   });
 
   it('says which way the account moved, against the window before it', () => {
@@ -419,7 +438,6 @@ describe('AccountLeadCard — a quiet day is not an empty day', () => {
         candidates={[]}
         currency="USD"
         dailySpend={1200}
-        deck={{ applies: 20, total: 25 }}
         delivery={FORTNIGHT}
         plannedPerDay={400}
       />,
@@ -429,6 +447,8 @@ describe('AccountLeadCard — a quiet day is not an empty day', () => {
     expect(trend).toContain('the 7 days before');
     // 200 against 300 is a third less, and the direction is stated rather than implied.
     expect(trend).toContain('-33%');
+    // Both figures the direction came from, so the verdict can be checked.
+    expect(trend).toContain('$200 a day now');
   });
 
   it('reads the delivery against the plan, and states the plan it was read against', () => {
@@ -437,7 +457,6 @@ describe('AccountLeadCard — a quiet day is not an empty day', () => {
         candidates={[]}
         currency="USD"
         dailySpend={1200}
-        deck={{ applies: 20, total: 25 }}
         delivery={FORTNIGHT}
         plannedPerDay={400}
       />,
@@ -445,6 +464,62 @@ describe('AccountLeadCard — a quiet day is not an empty day', () => {
     const pacing = getByTestId('account-lead-pacing').textContent ?? '';
     expect(pacing).toContain('50% of plan');
     expect(pacing).toContain('$400 a day planned');
+  });
+
+  it('names the day that strayed furthest from the account’s own average', () => {
+    const { getByTestId } = render(
+      <AccountLeadCard candidates={[]} currency="USD" dailySpend={1200} delivery={SWINGY} />,
+    );
+    const peak = getByTestId('account-lead-peak').textContent ?? '';
+    expect(peak).toContain('Sep 20');
+    expect(peak).toContain('$520');
+    // 520 against a 14-day average of 272.86 — up 91%, against the whole series, not the week.
+    expect(peak).toContain('+91%');
+    expect(peak).toContain('14-day average');
+  });
+
+  it('says what the money is split across, and whether that is spend or plan', () => {
+    const { getByTestId, rerender } = render(
+      <AccountLeadCard
+        candidates={[]}
+        currency="USD"
+        dailySpend={1200}
+        delivery={FORTNIGHT}
+        mix={{
+          basis: 'spent',
+          days: 14,
+          slices: [
+            { label: 'Leads', share: 62 },
+            { label: 'Purchases', share: 38 },
+          ],
+        }}
+      />,
+    );
+    let mix = getByTestId('account-lead-mix').textContent ?? '';
+    expect(mix).toContain('Leads · 62%');
+    expect(mix).toContain('Purchases 38%');
+    expect(mix).toContain('of spend, last 14 days');
+
+    // Before the first snapshot there is only the plan, and the row must not call it spend.
+    rerender(
+      <AccountLeadCard
+        candidates={[]}
+        currency="USD"
+        dailySpend={1200}
+        mix={{ basis: 'planned', slices: [{ label: 'Conversations', share: 59 }] }}
+      />,
+    );
+    mix = getByTestId('account-lead-mix').textContent ?? '';
+    expect(mix).toContain('Conversations · 59%');
+    expect(mix).toContain('of the daily plan');
+    expect(mix).not.toContain('spend');
+  });
+
+  it('holds the mix back when nothing carries any money', () => {
+    const { queryByTestId } = render(
+      <AccountLeadCard candidates={[]} currency="USD" dailySpend={1200} mix={null} />,
+    );
+    expect(queryByTestId('account-lead-mix')).toBeNull();
   });
 
   it('draws the window, because a shape is the one thing the three figures cannot carry', () => {
@@ -472,9 +547,10 @@ describe('AccountLeadCard — a quiet day is not an empty day', () => {
     expect(figure.textContent).toContain('$1,200');
     expect(figure.textContent).toContain('a day across this account');
     expect(figure.getAttribute('data-reading')).toBe('scale');
-    // No series, so nothing to draw and no direction to claim.
+    // No series, so nothing to draw, no direction to claim, and no odd day to name.
     expect(queryByTestId('account-lead-delivery')).toBeNull();
     expect(queryByTestId('account-lead-trend')).toBeNull();
+    expect(queryByTestId('account-lead-peak')).toBeNull();
     // The pacing still stands: the read's own scale against the plan is a real comparison.
     expect(getByTestId('account-lead-pacing').textContent).toContain('50% of plan');
   });
@@ -494,74 +570,40 @@ describe('AccountLeadCard — a quiet day is not an empty day', () => {
     expect(getByTestId('account-lead-card').textContent).toContain('Nothing worth moving today');
   });
 
-  it('says what would change it, grouped by the thing that unblocks it', () => {
+  it('can be seated inside a larger surface without a second border', () => {
     const { getByTestId } = render(
       <AccountLeadCard
         candidates={[]}
+        className="rounded-none border-0 border-b"
         currency="USD"
         dailySpend={1200}
-        deck={{ applies: 20, total: 25 }}
-        starved={[
-          { detector: 'audience_overlap', missing: 'true overlap needs a Meta call' },
-          { detector: 'account_saturation', missing: 'net reach deduplicated across portfolios' },
-          { detector: 'target_economics', missing: 'neither margin nor lifetime value is stored' },
-        ]}
       />,
     );
-    const blocked = getByTestId('account-lead-blocked').textContent ?? '';
-    expect(blocked).toContain('3 could not run');
-    // Two detectors waiting on the same platform call are one decision, not two defects.
-    expect(blocked).toContain('A platform call we do not make yet');
-    expect(blocked).toContain('Unit economics');
+    const card = getByTestId('account-lead-card');
+    expect(card.className).toContain('rounded-none');
+    expect(card.className).not.toContain('rounded-lg');
+  });
+});
+
+// The odd day, away from the DOM: which day the card is allowed to single out.
+describe('peakDay', () => {
+  it('names the day furthest from the average of the whole series, signed', () => {
+    const peak = peakDay(readDelivery(SWINGY));
+    expect(peak?.date).toBe('2026-09-20');
+    expect(peak?.spend).toBe(520);
+    expect(peak?.deltaPct).toBe(91);
+    expect(peak?.days).toBe(14);
   });
 
-  // ── Coverage, demoted ───────────────────────────────────────────────
-  // "Did we look" is still answered, in one line. A check that ASKED and found nothing and a
-  // check that could not ask at all stay different facts, and the count survives where that
-  // difference is what it is carrying.
-
-  it('answers coverage in one line, and keeps the count only where checks could not ask', () => {
-    const { getByTestId } = render(
-      <AccountLeadCard
-        candidates={[]}
-        currency="USD"
-        dailySpend={1200}
-        deck={{ applies: 20, total: 25 }}
-        starved={[
-          { detector: 'audience_overlap', missing: 'true overlap needs a Meta call' },
-          { detector: 'seasonality', missing: 'a new account has nothing to compare against' },
-        ]}
-      />,
-    );
-    const checked = getByTestId('account-lead-checked');
-    expect(checked.textContent).toContain('18 of 20 checks asked, and found nothing');
-    // One line: the coverage row carries no second sentence about coverage.
-    expect(checked.textContent).not.toContain('gap in coverage');
+  it('names a trough as readily as a spike', () => {
+    const peak = peakDay(readDelivery(days([300, 300, 300, 300, 40, 300, 300])));
+    expect(peak?.date).toBe('2026-09-12');
+    expect(peak?.deltaPct).toBeLessThan(0);
   });
 
-  it('says so plainly when every check that applies here was able to ask', () => {
-    const { getByTestId } = render(
-      <AccountLeadCard
-        candidates={[]}
-        currency="USD"
-        dailySpend={1200}
-        deck={{ applies: 25, total: 25 }}
-      />,
-    );
-    expect(getByTestId('account-lead-blocked').textContent).toContain('Nothing is waiting on us');
-    const checked = getByTestId('account-lead-checked').textContent ?? '';
-    expect(checked).toContain('Every check that applies here ran and found nothing');
-    expect(checked).not.toContain('25 of 25');
-  });
-
-  it('still stands on a read written before the worker carried a deck', () => {
-    const { getByTestId } = render(
-      <AccountLeadCard candidates={[]} currency="USD" dailySpend={1200} />,
-    );
-    expect(getByTestId('account-lead-checked').textContent).toContain(
-      'Every check that applies here ran',
-    );
-    expect(getByTestId('account-lead-card').textContent).toContain('Nothing worth moving today');
+  it('has no outlier to name on a series too short to average', () => {
+    expect(peakDay(readDelivery(days([100, 300])))).toBeNull();
+    expect(peakDay(null)).toBeNull();
   });
 });
 

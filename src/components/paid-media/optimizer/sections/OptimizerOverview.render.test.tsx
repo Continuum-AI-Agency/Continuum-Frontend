@@ -43,9 +43,10 @@ mock.module('../useOptimizerData', () => ({
   }),
 }));
 
-const { OptimizerOverview, sortPortfolios, dominantObjective } = await import(
+const { OptimizerOverview, sortPortfolios, dominantObjective, accountMix } = await import(
   './OptimizerOverview'
 );
+const { spendStream } = await import('../charts/chartData');
 const { AccountReadEnvelopeSchema } = await import('../useOptimizerData');
 
 function portfolio(
@@ -257,19 +258,73 @@ describe('the account read, on the screen that actually mounts it', () => {
     );
   }
 
-  it('renders a quiet read — one with nothing to act on still has things to say', () => {
+  // The Easyfit read on 2026-09-22, as the RPC returned it: no candidates, no guards, four
+  // starved, a deck of 25/25, a scale of 1695 a day against 8500 planned, and a narrative
+  // that says "Every check ran". The screen said "22 of 25 checks asked", "3 could not run"
+  // and "Every check ran" at once; the owner asked for none of it.
+  it('renders a quiet read as how the account is doing, and never counts the checks', () => {
+    accountReadData = envelope({
+      candidates: [],
+      guards: [],
+      starved: [
+        { detector: 'creative_supply', missing: 'no creative-level rows' },
+        { detector: 'scale_readiness', missing: 'no portfolio has a target to be under' },
+        {
+          detector: 'measurement_integrity',
+          missing: 'campaign-level event counts are not loaded',
+        },
+        { detector: 'auction_pressure', missing: 'no prior window to compare against' },
+      ],
+      assumptions: ['Demo funnel: measured like a purchase.'],
+      deck: { applies: 25, total: 25, muted: [] },
+      scale_per_day: 1695.49,
+      narrative:
+        'Every check ran and none of them found money worth moving across this account today.',
+      model: 'deterministic',
+    });
+    const { getByTestId, container } = mount();
+    const card = getByTestId('account-lead-card');
+    expect(card.getAttribute('data-mode')).toBe('quiet');
+    // ALPHA plans 900 a day; the read measured 1695 — the pacing row says so, from the packet.
+    expect(getByTestId('account-lead-pacing').textContent).toContain('188% of plan');
+    // No spend history yet, so the mix is the plan's split — and says it is the plan.
+    expect(getByTestId('account-lead-mix').textContent).toContain('Lead · 100%');
+    expect(getByTestId('account-lead-mix').textContent).toContain('of the daily plan');
+    // The footnotes survive, small, for an operator.
+    expect(getByTestId('account-assumptions').textContent).toContain('Demo funnel');
+    expect(getByTestId('account-starved').textContent).toContain('4 checks could not run today');
+
+    const text = container.textContent ?? '';
+    expect(text).not.toContain('checks asked');
+    expect(text).not.toContain('checks apply');
+    expect(text).not.toContain('Every check ran');
+    expect(text).not.toContain('Nothing to move today');
+  });
+
+  it('seats the lead card, the four tiles and the dateline on one board', () => {
     accountReadData = envelope({
       candidates: [],
       guards: [],
       starved: [],
-      assumptions: ['Demo funnel: measured like a purchase.'],
-      deck: { applies: 24, total: 25, muted: ['new_vs_returning'] },
+      scale_per_day: 1695.49,
       model: 'deterministic',
     });
     const { getByTestId } = mount();
-    expect(getByTestId('account-read')).toBeTruthy();
-    expect(getByTestId('account-assumptions').textContent).toContain('Demo funnel');
-    expect(getByTestId('account-deck-note').textContent).toContain('24 of 25');
+    const board = getByTestId('account-board');
+    expect(board.contains(getByTestId('account-lead-card'))).toBe(true);
+    expect(board.contains(getByTestId('account-tiles'))).toBe(true);
+    expect(board.contains(getByTestId('account-read-freshness'))).toBe(true);
+    // Inside the board the card drops its own frame — one border, not a card in a card.
+    expect(getByTestId('account-lead-card').className).toContain('rounded-none');
+    expect(getByTestId('account-tiles').children).toHaveLength(4);
+  });
+
+  it('still shows the tiles when no read has ever landed', () => {
+    accountReadData = null;
+    const { getByTestId, queryByTestId } = mount();
+    expect(getByTestId('account-tiles').children).toHaveLength(4);
+    expect(queryByTestId('account-lead-card')).toBeNull();
+    expect(queryByTestId('account-read')).toBeNull();
   });
 
   it('survives a starved row naming a detector this build has never heard of', () => {
@@ -508,8 +563,11 @@ describe('an approval made today, against a read composed last night', () => {
   });
 });
 
-describe('the family ceilings, on the screen that mounts them', () => {
-  it('appears beside the read, so the cap on every card has somewhere to be moved', () => {
+// The account-level autonomy controls have a tab of their own now. They used to be a folded
+// strip here, between the read and the portfolio list, and were the thing the owner said
+// "looks wrong where it is".
+describe('the family ceilings are not on Overview', () => {
+  it('renders no autonomy strip, whatever the read carries', () => {
     accountReadData = {
       utc_day: '2026-09-21',
       ready_at: '2026-09-21T06:00:00Z',
@@ -525,7 +583,7 @@ describe('the family ceilings, on the screen that mounts them', () => {
         },
       }).read,
     };
-    const { getByTestId } = render(
+    const { queryByTestId, container } = render(
       <OptimizerOverview
         brandId="b1"
         portfolios={[ALPHA]}
@@ -536,10 +594,50 @@ describe('the family ceilings, on the screen that mounts them', () => {
         onCreatePortfolio={() => {}}
       />,
     );
-    const grid = getByTestId('family-ceilings');
-    const structure = grid.querySelector('[data-family="structure"]');
-    expect(structure).toBeTruthy();
-    fireEvent.click(structure?.querySelector('[data-state-option="autopilot"]') as HTMLElement);
-    expect(setFamilyMutate).toHaveBeenCalledWith({ family: 'structure', state: 'autopilot' });
+    expect(queryByTestId('family-ceilings')).toBeNull();
+    expect(container.textContent).not.toContain('allowed to do on its own');
+    expect(setFamilyMutate).not.toHaveBeenCalled();
+  });
+});
+
+describe('accountMix', () => {
+  const p = (id: string, objective: string, daily: number) =>
+    portfolio({ id, name: id, daily_total: daily, objective });
+
+  it('splits the fortnight’s spend by objective when there is history, largest first', () => {
+    const stream = spendStream(
+      [
+        { date: '2026-09-20', objective: 'lead', spend: 300 },
+        { date: '2026-09-20', objective: 'purchase', spend: 100 },
+        { date: '2026-09-21', objective: 'lead', spend: 320 },
+        { date: '2026-09-21', objective: 'purchase', spend: 100 },
+      ],
+      14,
+      '2026-09-21',
+    );
+    // 620 of 820 went to leads, whatever the plan says — the plan here is all purchases.
+    expect(accountMix(stream, [p('a', 'purchase', 5000)])).toEqual({
+      basis: 'spent',
+      days: 14,
+      slices: [
+        { label: 'Lead', share: 76 },
+        { label: 'Purchase', share: 24 },
+      ],
+    });
+  });
+
+  it('falls back to the daily plan before the first snapshot, and says so', () => {
+    const stream = spendStream([], 14, '2026-09-21');
+    expect(accountMix(stream, [p('a', 'lead', 3500), p('b', 'conversations', 5000)])).toEqual({
+      basis: 'planned',
+      slices: [
+        { label: 'Conversations', share: 59 },
+        { label: 'Lead', share: 41 },
+      ],
+    });
+  });
+
+  it('has nothing to say when neither spend nor plan carries any money', () => {
+    expect(accountMix(spendStream([], 14, '2026-09-21'), [p('a', 'lead', 0)])).toBeNull();
   });
 });

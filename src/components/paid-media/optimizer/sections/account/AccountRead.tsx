@@ -15,7 +15,14 @@
 //                      decision and not an accident. Three on screen is what a person carries
 //                      away; an inventory belongs behind a disclosure.
 //   5. could not ask — folded, grouped by what would unblock it. Nine symptoms read as nine
-//                      defects; four reasons read as four decisions.
+//                      defects; four reasons read as four decisions. An operator's footnote,
+//                      never a headline.
+//
+// ON A QUIET DAY this renders the footnotes and nothing else. It used to open with "Nothing to
+// move today — every check ran" and close with "All 25 checks apply", beside a fold saying
+// three could not run: a contradiction, and three sentences about our own checks on a screen
+// whose reader wants to know how the account is doing. The lead card above answers that; this
+// keeps only what an operator might need to explain a gap.
 //
 // Nothing here is written by a model. Every figure came from a detector, and the RANK used a
 // discounted value while the card shows the real money — which is exactly what the class chip
@@ -72,15 +79,6 @@ export type AccountReadProps = {
   starved?: Array<{ detector: AccountDetector; missing: string }>;
   /** 'brief' when Jaina wrote today's words, 'fallback' when the read is code-composed. */
   source?: 'brief' | 'fallback';
-  /**
-   * How much of the catalogue applies to what this account buys.
-   *
-   * Rendered as ONE line beside the starved list and never inside it. A muted detector is not
-   * a gap: `new_vs_returning` on an app-install account has no question to ask, because an
-   * install is new by definition. Listing it as a gap would print a permanent non-problem
-   * every day until the gap list reads as noise.
-   */
-  deck?: { applies: number; total: number } | null;
   /** What the worker assumed in order to measure this account. Empty is the normal case. */
   assumptions?: string[];
   /**
@@ -374,7 +372,6 @@ export function AccountRead({
   starved = [],
   source = 'fallback',
   sentence = null,
-  deck = null,
   assumptions = [],
   objective = null,
   objectiveAnalog = null,
@@ -391,18 +388,11 @@ export function AccountRead({
   const restWorth = rest.reduce((sum, candidate) => sum + candidate.impact_per_day, 0);
 
   if (guards.length === 0 && ranked.length === 0) {
+    if (starved.length === 0 && assumptions.length === 0) return null;
     return (
-      <section
-        className="rounded-lg border border-border/60 border-dashed bg-muted/10 p-5"
-        data-testid="account-read"
-      >
-        <h2 className="font-semibold text-foreground text-sm">Nothing to move today</h2>
-        <p className="mt-1 text-muted-foreground text-xs">
-          Every check ran and none of them found money worth moving across this account.
-        </p>
-        {starved.length > 0 ? <Starved starved={starved} /> : null}
+      <section className="space-y-1 px-1" data-quiet="true" data-testid="account-read">
         <AssumptionNote assumptions={assumptions} />
-        <DeckNote deck={deck} />
+        {starved.length > 0 ? <Starved starved={starved} /> : null}
       </section>
     );
   }
@@ -499,9 +489,8 @@ export function AccountRead({
       ) : null}
 
       {/* 5 — what could not be asked, grouped by what would unblock it */}
-      {starved.length > 0 ? <Starved starved={starved} /> : null}
       <AssumptionNote assumptions={assumptions} />
-      <DeckNote deck={deck} />
+      {starved.length > 0 ? <Starved starved={starved} /> : null}
     </section>
   );
 }
@@ -512,6 +501,11 @@ export function AccountRead({
  * Nine separate one-line notes read as nine defects. The same nine grouped by their blocker read
  * as four decisions, and several detectors share one — which is the useful shape, because it is
  * the shape of the work.
+ *
+ * A footnote in size and in place: one small folded line, no panel around it. It is here for
+ * the operator who has to explain why a check is silent, not for the reader of the card
+ * above, who was told how the account is doing and does not need a count of our checks next
+ * to it.
  */
 function Starved({ starved }: { starved: Array<{ detector: AccountDetector; missing: string }> }) {
   const missingFor = new Map(starved.map((row) => [row.detector, row.missing]));
@@ -530,12 +524,9 @@ function Starved({ starved }: { starved: Array<{ detector: AccountDetector; miss
   if (uncategorised.length > 0) groups.push({ key: 'other', detectors: uncategorised });
 
   return (
-    <details
-      className="mt-3 rounded-lg border border-border/60 bg-muted/10 p-3"
-      data-testid="account-starved"
-    >
-      <summary className="cursor-pointer text-2xs text-muted-foreground">
-        {starved.length} checks could not run today
+    <details className="text-3xs text-muted-foreground" data-testid="account-starved">
+      <summary className="cursor-pointer">
+        {starved.length} {starved.length === 1 ? 'check' : 'checks'} could not run today
       </summary>
       <div className="mt-2 space-y-2">
         {groups.map(({ key, detectors }) => (
@@ -583,13 +574,6 @@ function RungNote({
 }
 
 /**
- * One line saying how much of the catalogue this account's objectives can even ask.
- *
- * Deliberately not a list. Naming the muted detectors would invite reading them as missing,
- * and they are not missing — they do not apply. The count is the whole useful fact, and it is
- * what stops a short read from looking like a broken one.
- */
-/**
  * What the worker had to assume in order to measure this account at all.
  *
  * A custom conversion has no calibration of its own, so it is read as the closest objective
@@ -605,17 +589,5 @@ function AssumptionNote({ assumptions }: { assumptions: string[] }) {
         <p key={line}>{line}</p>
       ))}
     </div>
-  );
-}
-
-function DeckNote({ deck }: { deck?: { applies: number; total: number } | null }) {
-  if (!deck || deck.total <= 0) return null;
-  const full = deck.applies >= deck.total;
-  return (
-    <p className="text-3xs text-muted-foreground" data-testid="account-deck-note">
-      {full
-        ? `All ${deck.total} checks apply to what this account buys.`
-        : `${deck.applies} of ${deck.total} checks apply to what this account buys — the rest have no question to ask here.`}
-    </p>
   );
 }

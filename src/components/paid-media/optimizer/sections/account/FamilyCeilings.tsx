@@ -8,6 +8,10 @@
 // switch is capped by something nobody can reach, and every account runs forever on the
 // shipped defaults.
 //
+// It is an open panel on the Automations tab, not a folded strip. It used to be a one-line
+// `<details>` between the account read and the portfolio list on Overview, and a control that
+// has to be found before it can be used is a control that stays on its defaults.
+//
 // `measurement` is absent on purpose. It approves nothing — it only ever tells you something.
 
 import {
@@ -17,6 +21,7 @@ import {
   type InsightState,
   insightStateSchema,
 } from '@continuum/contracts';
+import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -49,14 +54,19 @@ function stateOf(
 
 export function FamilyCeilings({ current, defaults, onSetFamily, error }: FamilyCeilingsProps) {
   return (
-    <details
-      className="mt-3 rounded-lg border border-border/60 bg-card"
+    <section
+      className="overflow-hidden rounded-lg border border-border/60 bg-card"
       data-testid="family-ceilings"
     >
-      <summary className="cursor-pointer list-none px-4 py-2.5 text-foreground text-xs">
-        What this account is allowed to do on its own
-      </summary>
-      <div className="space-y-1 border-border/60 border-t px-4 py-3">
+      <SectionHeader
+        meta={
+          <span className="text-3xs text-muted-foreground">
+            every portfolio on this account, unless its own settings say less
+          </span>
+        }
+        title="What this account is allowed to do on its own"
+      />
+      <div className="space-y-1 px-4 py-3">
         {APPROVABLE_FAMILIES.map((family) => {
           const active = stateOf(family, current, defaults);
           const untouched = !insightStateSchema.safeParse(current[family]).success;
@@ -103,6 +113,6 @@ export function FamilyCeilings({ current, defaults, onSetFamily, error }: Family
           </p>
         ) : null}
       </div>
-    </details>
+    </section>
   );
 }

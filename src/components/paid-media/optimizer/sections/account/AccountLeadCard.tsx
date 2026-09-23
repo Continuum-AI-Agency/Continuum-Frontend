@@ -26,11 +26,13 @@
 //
 // AND ON THE DAY NOTHING FIRED — the common case on a healthy account — the card answers the
 // question a person actually has next: so how are we doing. The account's own delivery holds
-// the figure; coverage is one line, not the headline. See `QuietFace`.
+// the figure, and the right band reads it four ways: against the plan, against the week
+// before, the day that strayed furthest, and what the money is split across. Nothing on the
+// card counts our own checks. It used to — "22 of 25 checks asked", "3 could not run" — and
+// that is the product reporting on itself where the account's state belongs. See `QuietFace`.
 
 import type {
   AccountCandidate,
-  AccountDetector,
   ArguingChart,
   OptimizationObjective,
   ResultRung,
@@ -39,8 +41,6 @@ import {
   ACCOUNT_DETECTOR_META,
   ACTION_FAMILY_COPY,
   accountGuards,
-  BLOCKED_CATEGORY_COPY,
-  blockedByCategory,
   clipLine,
   DETECTOR_ACTION_FAMILY,
   IMPACT_CLASS_COPY,
@@ -53,6 +53,7 @@ import { AlertTriangleIcon } from 'lucide-react';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { formatCurrency, formatPercent } from '../../format';
 import { AccountChartView } from './AccountChartView';
 import { CalmRule, HeadlineComparison, HeadlineFigure, MoneyLine } from './candidateHeadline';
@@ -132,7 +133,7 @@ function Row({
 }) {
   return (
     <div
-      className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-baseline gap-3 px-4 py-3"
+      className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-baseline gap-3 px-4 py-3"
       data-testid={testId}
     >
       <p className="text-3xs uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
@@ -162,8 +163,6 @@ export type AccountLeadCardProps = {
   currency: string | null;
   /** The account's daily spend, the scale the impact tier is read against. */
   dailySpend: number | null;
-  /** How much of the catalogue can even ask a question here. Absent on an older read. */
-  deck?: { applies: number; total: number } | null;
   /**
    * What the account actually delivered, one point per day, oldest first.
    *
@@ -175,26 +174,34 @@ export type AccountLeadCardProps = {
   delivery?: DeliveryPoint[] | null;
   /** The daily budgets these portfolios plan — the line the delivery is read against. */
   plannedPerDay?: number | null;
-  /** The checks that could not run, so a quiet day can say what would change that. */
-  starved?: Array<{ detector: AccountDetector; missing: string }>;
+  /**
+   * What the account's money is split across, largest first.
+   *
+   * The same split the spend-by-objective legend draws, handed down so the card and the
+   * legend cannot name a different leader. Spent when there is history, planned when there
+   * is not, and the card says which.
+   */
+  mix?: AccountMix | null;
   objective?: OptimizationObjective | null;
   objectiveAnalog?: OptimizationObjective | null;
   source?: 'brief' | 'fallback';
   onOpenPortfolio?: (portfolioId: string) => void;
+  /** Lets the Overview seat the card inside a larger surface without a second border. */
+  className?: string;
 };
 
 export function AccountLeadCard({
   candidates,
   currency,
   dailySpend,
-  deck = null,
   delivery = null,
   plannedPerDay = null,
-  starved = [],
+  mix = null,
   objective = null,
   objectiveAnalog = null,
   source = 'fallback',
   onOpenPortfolio,
+  className,
 }: AccountLeadCardProps) {
   const reduce = useReducedMotion();
   const play = !reduce;
@@ -211,7 +218,7 @@ export function AccountLeadCard({
   return (
     <motion.section
       animate={reduce ? undefined : 'shown'}
-      className="overflow-hidden rounded-lg border border-border/60 bg-card"
+      className={cn('overflow-hidden rounded-lg border border-border/60 bg-card', className)}
       data-mode={mode}
       data-testid="account-lead-card"
       initial={reduce ? undefined : 'hidden'}
@@ -264,8 +271,9 @@ export function AccountLeadCard({
             />
             <div className="divide-y divide-border/60">
               <PacingRow currency={currency} perDay={spendPerDay} plannedPerDay={plannedPerDay} />
-              <CheckedRow deck={deck} starved={starved} />
-              <BlockedRow starved={starved} />
+              <TrendRow currency={currency} delivered={delivered} />
+              <PeakDayRow currency={currency} delivered={delivered} />
+              <MixRow mix={mix} />
             </div>
           </>
         ) : null}
@@ -459,13 +467,15 @@ export function deliveryChart(
  * It used to print the DECK here — a large "18 checks asked, of 20 that apply here" — so on
  * the day there was nothing to report, which is most days on a healthy account, the largest
  * number on the optimizer's front page was how many times the product had checked itself.
- * That is process trivia standing where the account's state belongs.
+ * That is process trivia standing where the account's state belongs, and the band beside the
+ * face carried two more rows of it until it was taken out for the same reason.
  *
  * Someone told there is nothing to move asks one thing next: so how are we doing. The figure
- * answers it with the account's own delivery — what it is spending a day, which way that
- * moved, and how it sits against the plan — because that is what this screen can actually
- * prove. Cost per result would be the better answer and the stored read does not carry it;
- * inventing one from a second source would put two numbers that disagree on one card.
+ * answers it with the account's own delivery — what it is spending a day — and the rows
+ * beside it read that figure against the plan, against the week before, and across what it
+ * buys, because that is what this screen can actually prove. Cost per result would be the
+ * better answer and the stored read does not carry it; inventing one from a second source
+ * would put two numbers that disagree on one card.
  *
  * The figure and the picture come from ONE series, so they cannot contradict each other. A
  * read written before the series existed falls back to the scale the read measured itself
@@ -502,12 +512,6 @@ function QuietFace({
           <span className="text-foreground">
             {delivered ? `a day, last ${delivered.days} days` : 'a day across this account'}
           </span>
-        </p>
-      ) : null}
-      {delivered?.priorPerDay != null && delivered.deltaPct != null ? (
-        <p className="text-3xs text-muted-foreground tabular-nums" data-testid="account-lead-trend">
-          {formatCurrency(delivered.priorPerDay, currency)} the {delivered.days} days before ·{' '}
-          {formatPercent(delivered.deltaPct, { signed: true })}
         </p>
       ) : null}
       <CalmRule play={play} testId="account-lead-rule" />
@@ -618,57 +622,126 @@ function AffectsRow({ guard }: { guard: AccountCandidate }) {
 }
 
 /**
- * Coverage, at the size coverage is worth.
+ * Which way the account moved, against the window before it.
  *
- * "Did we look" is a real question and it is answered once, in one line. It is not the
- * headline: a reader who has just been told there is nothing to move is asking how the
- * account is doing, not how many times it was asked. The count survives only where it is
- * load-bearing — when some checks could not ask at all — and the row below names those.
+ * Whole percent and both figures: a direction without the two numbers it came from is a
+ * verdict, and the reader cannot check a verdict. Absent when the series is too short to have
+ * a "before" — a direction claimed from one window would be claiming we measured twice.
  */
-function CheckedRow({
-  deck,
-  starved,
+function TrendRow({
+  currency,
+  delivered,
 }: {
-  deck: { applies: number; total: number } | null;
-  starved: Array<{ detector: AccountDetector; missing: string }>;
+  currency: string | null;
+  delivered: DeliveryReading | null;
 }) {
-  const ran = deck ? Math.max(0, deck.applies - starved.length) : null;
-  const asked =
-    deck && ran !== null && starved.length > 0
-      ? `${ran} of ${deck.applies} checks asked, and found nothing`
-      : 'Every check that applies here ran and found nothing';
-  return <Row label="Checked" testId="account-lead-checked" value={asked} />;
+  if (!delivered || delivered.priorPerDay == null || delivered.deltaPct == null) return null;
+  const value =
+    delivered.deltaPct === 0
+      ? `Level with the ${delivered.days} days before`
+      : `${formatPercent(delivered.deltaPct, { signed: true })} on the ${delivered.days} days before`;
+  return (
+    <Row label="Trend" testId="account-lead-trend" value={value}>
+      <Sub>
+        {formatCurrency(delivered.priorPerDay, currency)} a day then ·{' '}
+        {formatCurrency(delivered.perDay, currency)} a day now.
+      </Sub>
+    </Row>
+  );
 }
 
+/** The day in the series that sat furthest from its average, and how far. */
+export type PeakDay = {
+  date: string;
+  spend: number;
+  /** Against the average of the whole series, in whole percent. Signed. */
+  deltaPct: number;
+  meanPerDay: number;
+  /** How many days the average was taken over, so the row can name it. */
+  days: number;
+};
+
 /**
- * What would change a quiet day.
+ * The day that strayed furthest from the account's own average.
  *
- * Grouped by the thing that unblocks it, the same way the folded list below groups it: nine
- * symptoms read as nine defects, four reasons read as four decisions.
+ * Deviation is read against the mean of the WHOLE series, not the recent window: a reader
+ * asking "which day was odd" is asking against everything they can see on the chart beside
+ * it. A series too short to have an average that means anything — fewer than three days — has
+ * no outlier to name, and a series that spent nothing has no average to stray from.
  */
-function BlockedRow({
-  starved,
+export function peakDay(reading: DeliveryReading | null): PeakDay | null {
+  if (!reading || reading.points.length < 3) return null;
+  const meanPerDay =
+    reading.points.reduce((sum, point) => sum + point.spend, 0) / reading.points.length;
+  if (meanPerDay <= 0) return null;
+  const peak = reading.points.reduce((best, point) =>
+    Math.abs(point.spend - meanPerDay) > Math.abs(best.spend - meanPerDay) ? point : best,
+  );
+  return {
+    date: peak.date,
+    spend: peak.spend,
+    deltaPct: Math.round(((peak.spend - meanPerDay) / meanPerDay) * 100),
+    meanPerDay,
+    days: reading.points.length,
+  };
+}
+
+const DAY_FMT = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+
+function PeakDayRow({
+  currency,
+  delivered,
 }: {
-  starved: Array<{ detector: AccountDetector; missing: string }>;
+  currency: string | null;
+  delivered: DeliveryReading | null;
 }) {
-  const groups = blockedByCategory(starved.map((row) => row.detector));
+  const peak = peakDay(delivered);
+  if (!peak) return null;
   return (
     <Row
-      label="Blocked"
-      testId="account-lead-blocked"
-      value={starved.length > 0 ? `${starved.length} could not run` : 'Nothing is waiting on us'}
+      label="Biggest swing"
+      testId="account-lead-peak"
+      value={`${DAY_FMT.format(new Date(`${peak.date}T00:00:00Z`))} · ${formatCurrency(peak.spend, currency)}`}
     >
-      {groups.length > 0 ? (
-        <ul className="space-y-0.5">
-          {groups.map((group) => (
-            <li className="text-2xs text-muted-foreground" key={group.category}>
-              {BLOCKED_CATEGORY_COPY[group.category]}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <Sub>Every check the catalogue offers this account was able to ask.</Sub>
-      )}
+      <Sub>
+        {formatPercent(peak.deltaPct, { signed: true })} against the {peak.days}-day average of{' '}
+        {formatCurrency(peak.meanPerDay, currency)} a day.
+      </Sub>
+    </Row>
+  );
+}
+
+/** One objective's share of the account's money, in whole percent. */
+export type MixSlice = { label: string; share: number };
+
+/**
+ * What the account's money is split across.
+ *
+ * `spent` is the split of what actually went out over the window; `planned` is the split of
+ * the daily budgets, which is all there is before the first snapshot lands. The card names
+ * which, because 60% of a plan and 60% of a fortnight's spend are different claims.
+ */
+export type AccountMix = { slices: MixSlice[] } & (
+  | { basis: 'spent'; days: number }
+  | { basis: 'planned' }
+);
+
+function MixRow({ mix }: { mix: AccountMix | null }) {
+  const top = mix?.slices[0];
+  if (!mix || !top) return null;
+  const rest = mix.slices.slice(1);
+  const basis = mix.basis === 'spent' ? `of spend, last ${mix.days} days` : 'of the daily plan';
+  return (
+    <Row label="Mix" testId="account-lead-mix" value={`${top.label} · ${formatPercent(top.share)}`}>
+      <Sub>
+        {rest.map((slice) => `${slice.label} ${formatPercent(slice.share)}`).join(' · ')}
+        {rest.length > 0 ? ' · ' : ''}
+        {basis}
+      </Sub>
     </Row>
   );
 }
