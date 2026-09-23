@@ -37,6 +37,8 @@ export * from './money';
 // Shared onboarding builders (suggestion→config, create→enroll) — the parity keystone.
 export * from './onboarding';
 export * from './portfolio-brief';
+// The one reporting range: presets, custom windows, and how a spec resolves to dates.
+export * from './range';
 // Optimizer-service orchestration DTOs (enrollment, run requests, FE read model).
 export * from './service';
 export * from './stored-account-read';

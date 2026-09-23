@@ -4,6 +4,7 @@
 // builder grammar: the creation flow stays conversational.
 
 import { z } from 'zod';
+import { dashboardSpecSchema } from './jaina-dashboard-spec';
 import { checkpointBlockV2LenientSchema } from './jaina-report';
 
 export const jainaDashboardSchema = z.object({
@@ -17,6 +18,10 @@ export const jainaDashboardSchema = z.object({
   window_label: z.string().nullable().default(null),
   /** Stored verbatim; the Frontend re-parses each block leniently on read. */
   blocks: z.array(checkpointBlockV2LenientSchema),
+  /** What each block would need to be re-run for another window (see jaina-dashboard-spec).
+   *  Null on rows saved before the spec existed, and on every row until the `spec` column
+   *  is applied (migration 20260923205040). */
+  spec: dashboardSpecSchema.nullable().default(null),
   created_by: z.string().uuid().nullable().default(null),
   created_at: z.string(),
   updated_at: z.string(),
@@ -33,6 +38,7 @@ export const jainaDashboardInsertSchema = jainaDashboardSchema
     scope: true,
     window_label: true,
     blocks: true,
+    spec: true,
   })
   .extend({ name: z.string().trim().min(1).max(120) });
 export type JainaDashboardInsert = z.infer<typeof jainaDashboardInsertSchema>;
