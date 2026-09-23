@@ -6893,6 +6893,67 @@ export type Database = {
           },
         ]
       }
+      comment_send_log: {
+        Row: {
+          author_platform_user_id: string
+          brand_id: string
+          channel: string
+          created_at: string
+          id: string
+          outcome: string
+          platform_comment_id: string
+          platform_post_id: string
+          reason: string | null
+          rule_id: string | null
+        }
+        Insert: {
+          author_platform_user_id: string
+          brand_id: string
+          channel: string
+          created_at?: string
+          id?: string
+          outcome: string
+          platform_comment_id: string
+          platform_post_id: string
+          reason?: string | null
+          rule_id?: string | null
+        }
+        Update: {
+          author_platform_user_id?: string
+          brand_id?: string
+          channel?: string
+          created_at?: string
+          id?: string
+          outcome?: string
+          platform_comment_id?: string
+          platform_post_id?: string
+          reason?: string | null
+          rule_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_send_log_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "comment_send_log_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comment_send_log_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "comment_trigger_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comment_trigger_rules: {
         Row: {
           active_from: string | null
@@ -7062,6 +7123,99 @@ export type Database = {
             columns: ["merged_into_id"]
             isOneToOne: false
             referencedRelation: "creative_concepts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creative_elements: {
+        Row: {
+          angle_id: string | null
+          angle_margin: number | null
+          brand_id: string
+          class_provenance: Json | null
+          class_vocab_version: number
+          content_format: string | null
+          content_format_margin: number | null
+          cta_class: string | null
+          cta_margin: number | null
+          cta_text: string | null
+          extracted_at: string
+          extractor_model: string
+          hook_class: string | null
+          hook_margin: number | null
+          hook_text: string | null
+          id: string
+          kev_state: Json
+          media_type: string | null
+          permalink: string | null
+          posted_at: string | null
+          source_account_id: string
+          source_kind: string
+          source_ref: string
+        }
+        Insert: {
+          angle_id?: string | null
+          angle_margin?: number | null
+          brand_id: string
+          class_provenance?: Json | null
+          class_vocab_version?: number
+          content_format?: string | null
+          content_format_margin?: number | null
+          cta_class?: string | null
+          cta_margin?: number | null
+          cta_text?: string | null
+          extracted_at?: string
+          extractor_model: string
+          hook_class?: string | null
+          hook_margin?: number | null
+          hook_text?: string | null
+          id?: string
+          kev_state: Json
+          media_type?: string | null
+          permalink?: string | null
+          posted_at?: string | null
+          source_account_id: string
+          source_kind: string
+          source_ref: string
+        }
+        Update: {
+          angle_id?: string | null
+          angle_margin?: number | null
+          brand_id?: string
+          class_provenance?: Json | null
+          class_vocab_version?: number
+          content_format?: string | null
+          content_format_margin?: number | null
+          cta_class?: string | null
+          cta_margin?: number | null
+          cta_text?: string | null
+          extracted_at?: string
+          extractor_model?: string
+          hook_class?: string | null
+          hook_margin?: number | null
+          hook_text?: string | null
+          id?: string
+          kev_state?: Json
+          media_type?: string | null
+          permalink?: string | null
+          posted_at?: string | null
+          source_account_id?: string
+          source_kind?: string
+          source_ref?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creative_elements_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "creative_elements_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -7711,6 +7865,7 @@ export type Database = {
           scope: string
           source_prompt: string | null
           source_title: string | null
+          spec: Json | null
           updated_at: string
           window_label: string | null
         }
@@ -7725,6 +7880,7 @@ export type Database = {
           scope?: string
           source_prompt?: string | null
           source_title?: string | null
+          spec?: Json | null
           updated_at?: string
           window_label?: string | null
         }
@@ -7739,6 +7895,7 @@ export type Database = {
           scope?: string
           source_prompt?: string | null
           source_title?: string | null
+          spec?: Json | null
           updated_at?: string
           window_label?: string | null
         }
@@ -18831,6 +18988,47 @@ export type Database = {
           },
         ]
       }
+      template_source_events: {
+        Row: {
+          asset_id: string
+          at: string
+          brand_id: string
+          detail: Json | null
+          id: string
+          level: string
+          message: string
+          stage: string
+        }
+        Insert: {
+          asset_id: string
+          at?: string
+          brand_id: string
+          detail?: Json | null
+          id?: string
+          level?: string
+          message: string
+          stage: string
+        }
+        Update: {
+          asset_id?: string
+          at?: string
+          brand_id?: string
+          detail?: Json | null
+          id?: string
+          level?: string
+          message?: string
+          stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_source_events_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "template_sources"
+            referencedColumns: ["asset_id"]
+          },
+        ]
+      }
       template_source_runs: {
         Row: {
           application: string | null
@@ -25966,6 +26164,14 @@ export type Database = {
         Args: { p_brand_id: string; p_window_days?: number }
         Returns: Json
       }
+      competitor_spy_get_whats_working: {
+        Args: {
+          p_brand_id: string
+          p_min_on_niche?: number
+          p_window_days?: number
+        }
+        Returns: Json
+      }
       competitor_spy_match_snapshot_neighbors: {
         Args: {
           p_image_threshold?: number
@@ -26001,6 +26207,18 @@ export type Database = {
           source: string
           target_id: string
           target_kind: string
+        }[]
+      }
+      creative_elements_get_whats_working: {
+        Args: { p_brand_id: string; p_source?: string; p_window_days?: number }
+        Returns: Json
+      }
+      creative_elements_own_organic_backlog: {
+        Args: { p_days?: number }
+        Returns: {
+          account_id: string
+          brand_id: string
+          pending: number
         }[]
       }
       decrypt_token: { Args: { token_to_decrypt: string }; Returns: string }
@@ -26453,9 +26671,13 @@ export type Database = {
           config: Json
           conversion_descriptor: Json
           cpa_target: number
+          created_at: string
           creative_analysis: string
+          currency: string
+          cycle_interval_seconds: number
           daily_total: number
           id: string
+          last_actual_cycle_at: string
           last_scaled_at: string
           level: string
           lookback_window: string
@@ -26605,6 +26827,8 @@ export type Database = {
           p_portfolio_id: string
           p_prior_status?: string
           p_recommendation_id?: string
+          p_run_id?: string
+          p_target_status?: string
         }
         Returns: undefined
       }
@@ -26623,6 +26847,8 @@ export type Database = {
           p_prior_status?: string
           p_recommendation_id?: string
           p_reverts_audit_id?: string
+          p_run_id?: string
+          p_target_status?: string
         }
         Returns: undefined
       }
@@ -26642,6 +26868,8 @@ export type Database = {
           p_prior_minor?: number
           p_recommendation_id?: string
           p_reverts_audit_id?: string
+          p_run_id?: string
+          p_target_minor?: number
         }
         Returns: undefined
       }
@@ -27006,6 +27234,7 @@ export type Database = {
           conversion_descriptor: Json
           cpa_target: number
           creative_analysis: string
+          currency: string
           daily_total: number
           id: string
           last_scaled_at: string
