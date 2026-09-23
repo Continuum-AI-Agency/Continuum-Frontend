@@ -109,10 +109,12 @@ function RuleRow({
         {window ? <span className="text-xs text-muted-foreground">· {window}</span> : null}
       </div>
       <div className="flex items-center gap-2.5">
-        {/* Not pinned right: a figure parked at the far edge of a wide row reads
-            as unrelated to the line it belongs to, and leaves a gap that makes
-            the row look empty. It sits next to what it is about. */}
-        <p className="line-clamp-1 min-w-0 text-xs text-muted-foreground">{rule.replyMessage}</p>
+        {/* Pinned right, with tabular figures: across a list of rules the counts
+            line up into a column that reads down at a glance, which is worth
+            more than sitting next to the sentence it belongs to. */}
+        <p className="line-clamp-1 min-w-0 flex-1 text-xs text-muted-foreground">
+          {rule.replyMessage}
+        </p>
         {clicks === null ? null : (
           <span
             className="flex shrink-0 items-center gap-1 text-sm font-medium tabular-nums text-foreground"
@@ -163,18 +165,24 @@ export function CommentRulesList({
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold">Comment rules</h2>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border">
+      {/* A header BAND, padded and ruled off, the same shape the form panel uses
+          on the other side. Floating this row above the list gave it no space of
+          its own, so its contents had nothing to be centred in.
+          leading-none on each label is what aligns them to each other: these are
+          three different type sizes, and centring their default line boxes
+          centres boxes of different heights, which reads as ragged. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <h2 className="text-sm font-semibold leading-none">Comment rules</h2>
           {liveCount > 0 ? (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs leading-none text-muted-foreground">
               {liveCount} sending automatically
             </span>
           ) : null}
           {linkStats.length > 0 ? (
-            <span className="flex items-center gap-1 text-sm font-medium tabular-nums text-foreground">
-              <MousePointerClick className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="flex items-center gap-1 text-sm font-medium leading-none tabular-nums text-foreground">
+              <MousePointerClick className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               {totalClicks} {totalClicks === 1 ? 'click' : 'clicks'}
             </span>
           ) : null}
@@ -199,7 +207,7 @@ export function CommentRulesList({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto rounded-md border">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
           <p className="px-4 py-8 text-center text-xs text-muted-foreground">Loading rules…</p>
         ) : rules.length === 0 ? (
