@@ -321,13 +321,13 @@ describe('accountCardHtml — hostile input cannot break out', () => {
   });
 });
 
-describe('twenty-five detectors, twenty-five compositions', () => {
+describe('twenty-six detectors, twenty-six compositions', () => {
   it('assigns every detector a layout, with none left out', () => {
     for (const detector of accountDetectorSchema.options) {
       expect(COMPOSITION_BY_DETECTOR[detector]).toBeDefined();
       expect(CARD_COMPOSITIONS).toContain(COMPOSITION_BY_DETECTOR[detector]);
     }
-    expect(Object.keys(COMPOSITION_BY_DETECTOR)).toHaveLength(25);
+    expect(Object.keys(COMPOSITION_BY_DETECTOR)).toHaveLength(26);
   });
 
   it('uses every layout it defines — an unused composition is dead code', () => {

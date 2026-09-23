@@ -181,6 +181,7 @@ export const CHART_SHAPE_BY_DETECTOR: Record<AccountDetector, AccountChartShape>
 
   scale_readiness: 'headroom',
   guardrail_bottleneck: 'headroom',
+  delivery_collapse: 'headroom',
 
   post_click: 'quadrant',
   target_economics: 'quadrant',

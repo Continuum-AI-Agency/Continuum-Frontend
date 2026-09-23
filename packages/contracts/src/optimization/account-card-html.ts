@@ -109,7 +109,7 @@ export const CARD_COMPOSITIONS = [
 ] as const;
 export type CardComposition = (typeof CARD_COMPOSITIONS)[number];
 
-/** Which layout each detector gets. Exhaustive by construction — the type demands all 25. */
+/** Which layout each detector gets. Exhaustive by construction — the type demands all 26. */
 export const COMPOSITION_BY_DETECTOR: Record<AccountDetector, CardComposition> = {
   portfolio_reallocation: 'figure-top',
   placement_mix: 'two-halves',
@@ -135,6 +135,8 @@ export const COMPOSITION_BY_DETECTOR: Record<AccountDetector, CardComposition> =
   audience_overlap: 'figure-top',
 
   dead_tail: 'figure-top',
+  // One figure and nothing on the other side of it: the empty half IS the finding.
+  delivery_collapse: 'centre',
   measurement_integrity: 'banner',
 
   scale_readiness: 'figure-foot',

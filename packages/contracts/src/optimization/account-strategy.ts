@@ -32,6 +32,7 @@ export const accountDetectorSchema = z.enum([
   'account_pacing',
   'scale_readiness',
   'dead_tail',
+  'delivery_collapse',
   'measurement_integrity',
   'bid_strategy',
   'decision_window',
@@ -167,6 +168,13 @@ export const ACCOUNT_DETECTOR_META: Record<AccountDetector, AccountDetectorMeta>
   dead_tail: {
     label: 'Spending on nothing',
     compares: 'spend against conversions in the window, with the confidence interval',
+    cadence: 'daily',
+    impactClass: 'recoverable',
+    computable: true,
+  },
+  delivery_collapse: {
+    label: 'The budget is not going out',
+    compares: 'spend per day over the window against the planned daily budget, per portfolio',
     cadence: 'daily',
     impactClass: 'recoverable',
     computable: true,
