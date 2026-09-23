@@ -31,6 +31,9 @@ export * from './jaina-hyperframe';
 export * from './lookback';
 // MCP umbrella IO contracts (optimizer_query read + optimizer_manage write).
 export * from './mcp';
+// Money in a sentence: the one symbol/code/digit rule for prose the Backend, the engine and a
+// prompted model compose, mirroring the Frontend's formatCurrency exactly.
+export * from './money';
 // Shared onboarding builders (suggestion→config, create→enroll) — the parity keystone.
 export * from './onboarding';
 export * from './portfolio-brief';

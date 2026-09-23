@@ -277,6 +277,8 @@ export const EngineConfigSchema = z
     velocityUpPct: z.number().min(0).max(5).optional(),
     velocityDownPct: z.number().min(0).max(1).optional(),
     ewmaAlpha: z.number().min(0).max(1).optional(),
+    /** The ad account's ISO currency the reasons print money in; null prints bare figures. */
+    currency: z.string().nullable().optional(),
   })
   // Sanity: weights for each trajectory state must sum to ~1.
   .refine(
