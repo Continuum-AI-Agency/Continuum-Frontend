@@ -59,5 +59,8 @@ describe('resolveAuthRedirectPath', () => {
     expect(resolveAuthRedirectPath({ requestedRedirect: '/api/secret', siteUrl: SITE })).toBe(
       '/dashboard',
     );
+    expect(resolveAuthRedirectPath({ requestedRedirect: '/\\evil.test', siteUrl: SITE })).toBe(
+      '/dashboard',
+    );
   });
 });
