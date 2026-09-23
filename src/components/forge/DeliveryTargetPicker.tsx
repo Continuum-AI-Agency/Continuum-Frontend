@@ -3,10 +3,9 @@
 import type {
   ApiRenderDeliveryDestinationsResponse,
   ApiRenderDeliveryTarget,
-  ApiRenderTemplateContract,
   PaidCanvasTarget,
 } from '@continuum/contracts';
-import { ChevronRight, ClipboardPaste, Loader2, X } from 'lucide-react';
+import { ChevronRight, ClipboardPaste, Loader2, Plus, X } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import type { RenderPreflightRow } from '@/components/forge/RenderReviewTray';
@@ -23,18 +22,24 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { publishingApi } from '@/StudioCanvas/nodes/publish/publishingApi';
 
-// Which Meta ad each row's render replaces, if any. Nothing here writes to Meta: the pick is a
-// target the delivery parks at `awaiting_approval`, and a person approves it in Slack or Forge.
+// Which Meta ad each row's render replaces, or which ad set gets it as a new paused ad, if any.
+// Nothing here writes to Meta: the pick is a target the delivery parks at `awaiting_approval`, and
+// a person approves it in Slack or Forge.
 //
 // A replace swaps exactly ONE creative, so a replacing row renders exactly one format — the
-// dialog owns that choice (`formatByRow`) and applies it to the record at confirm. Targets come
+// dialog owns that choice (`formatByRow`) and applies it to the record at confirm. A new ad takes
+// every format the row renders, one ad per file, so it asks for none. Targets come
 // from one of the brand's linked ad accounts — the assigned one unless another is picked — via
 // the paid targets route; the canvas Publishing block drills the same route (PublishingBlock.tsx),
 // but it is bound to the canvas store.
 
 export type MetaPickerState = 'loading' | 'unknown' | ApiRenderDeliveryDestinationsResponse['meta'];
 
-type Outputs = ApiRenderTemplateContract['outputs'];
+/**
+ * The formats a replace can swap in, by the id preflight takes as the one `outputId`: the
+ * contract's outputs, or the parse's delivery comps for a template that authors none.
+ */
+export type ReplaceFormats = ReadonlyArray<{ id: string; label: string }>;
 type Level = PaidCanvasTarget['level'];
 
 const INTEGRATIONS_HREF = '/settings?section=integrations';
@@ -45,14 +50,14 @@ export const APPROVAL_COPY =
 const AD_LOOKUP_PAGES = 10;
 
 /** The formats a row could render — its own pick, else every published format. */
-export function formatChoices(row: RenderPreflightRow, outputs: Outputs): string[] {
+export function formatChoices(row: RenderPreflightRow, outputs: ReplaceFormats): string[] {
   return row.outputIds.length ? row.outputIds : outputs.map((output) => output.id);
 }
 
 /** The one format a replacing row renders, or null while it has not been narrowed to one. */
 export function replaceOutputId(
   row: RenderPreflightRow,
-  outputs: Outputs,
+  outputs: ReplaceFormats,
   formatByRow: Record<string, string>,
 ): string | null {
   const choices = formatChoices(row, outputs);
@@ -72,7 +77,7 @@ export function isUnresolvedTarget(delivery: ApiRenderDeliveryTarget): boolean {
 /** What keeps the Deliver step from moving on, in words a person can act on. */
 export function metaDeliveryProblems(
   rows: RenderPreflightRow[],
-  outputs: Outputs,
+  outputs: ReplaceFormats,
   formatByRow: Record<string, string>,
   meta: MetaPickerState,
 ): string[] {
@@ -204,7 +209,7 @@ export function DeliveryTargetPicker({
   brandId: string;
   meta: MetaPickerState;
   rows: RenderPreflightRow[];
-  outputs: Outputs;
+  outputs: ReplaceFormats;
   formatByRow: Record<string, string>;
   onDeliveryChange: (rowId: string, delivery: ApiRenderDeliveryTarget | null) => void;
   onFormatChange: (rowId: string, outputId: string) => void;
@@ -465,7 +470,6 @@ function MetaRow({
           size="xs"
           variant="outline"
           aria-label={`${delivery ? 'Change the ad' : 'Replace an ad'} for ${name}`}
-          disabled={choices.length === 0}
           onClick={() => setPicking((current) => !current)}
         >
           {delivery ? 'Change' : 'Replace an ad'}
@@ -560,6 +564,20 @@ function AdDrillDown({
     return () => clearTimeout(timer);
   }, [brandId, level, parentId, query]);
 
+  // A new ad takes every format the row renders, so it needs no format and no ad to pick.
+  const createHere = () => {
+    if (!page || !campaign || !adset) return;
+    onPick({
+      action: 'create',
+      adAccountId: page.adAccountId,
+      campaignId: campaign.id,
+      campaignName: campaign.name,
+      adsetId: adset.id,
+      adsetName: adset.name,
+      adStatus: 'PAUSED',
+    });
+  };
+
   const pick = (item: PaidCanvasTarget) => {
     setQuery('');
     if (item.level === 'campaign') return setCampaign({ id: item.id, name: item.name || item.id });
@@ -613,6 +631,18 @@ function AdDrillDown({
           Close
         </Button>
       </div>
+      {adset ? (
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          className="gap-1"
+          disabled={!page}
+          onClick={createHere}
+        >
+          <Plus aria-hidden /> New paused ad in this ad set
+        </Button>
+      ) : null}
       <Input
         className="h-7 text-xs"
         aria-label={`Search ${noun}s`}
