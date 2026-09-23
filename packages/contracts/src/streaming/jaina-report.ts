@@ -48,6 +48,34 @@ export const citationSchema = z.object({
 export type Citation = z.infer<typeof citationSchema>;
 
 // ---------------------------------------------------------------------------
+// Claim grounding — what a sentence is ABOUT, and whether the turn could know it.
+//
+// Jaina's `summary`, `rationale`, `title` and `action` are free strings, and a report can
+// say "the video hook is weak" after a turn that read nothing but spend and CPA. A word
+// ban would be wrong here: Jaina CAN read creative copy (`get_ad_creative_details`,
+// `analyze_creative_image`) and audiences (`get_ad_sets`, `get_audience_demographics`).
+// So the rule is not "never mention the hook" — it is that a creative or audience claim
+// must sit on a tool call OF THAT KIND in the same turn, and cite it. The claim kinds
+// below are what the Backend maps its tool names onto; the violation shape is what a
+// block carries so the Frontend can show which sentence stands on nothing.
+// ---------------------------------------------------------------------------
+
+export const CLAIM_KINDS = ['creative', 'audience', 'landing', 'figure'] as const;
+export const claimKindSchema = z.enum(CLAIM_KINDS);
+export type ClaimKind = z.infer<typeof claimKindSchema>;
+
+export const GROUNDING_VIOLATION_REASONS = ['claim_without_source', 'claim_uncited'] as const;
+export const groundingViolationSchema = z.object({
+  kind: claimKindSchema,
+  /** The sentence that makes the claim, as the block carries it. */
+  span: z.string().min(1),
+  /** `claim_without_source`: no tool of that kind ran this turn. `claim_uncited`: one
+   *  did, and the row still carries no `cite_ids`. */
+  reason: z.enum(GROUNDING_VIOLATION_REASONS),
+});
+export type GroundingViolation = z.infer<typeof groundingViolationSchema>;
+
+// ---------------------------------------------------------------------------
 // Block base + enums
 // ---------------------------------------------------------------------------
 
@@ -106,6 +134,14 @@ export const blockBaseSchema = z.object({
   priority: blockPrioritySchema.default('secondary'),
   provenance: blockProvenanceSchema.nullable().default(null),
   evidence_refs: z.array(z.string().min(1)).optional(),
+  /**
+   * Claims in this block that stand on no tool call of their kind this turn, or on one
+   * they never cite. Written by the Backend's grounding pass on the array the Frontend
+   * renders; null on a block nothing was flagged in and on every legacy block. A flagged
+   * block still ships — the violation is a reason to fix the emitter, never to hide a
+   * block a reader would otherwise have had.
+   */
+  grounding: z.array(groundingViolationSchema).nullable().default(null),
 });
 
 // ---------------------------------------------------------------------------
@@ -638,7 +674,9 @@ export type ReportViolation = {
     | 'currency_missing'
     | 'table_truncation_undeclared'
     | 'table_totals_missing'
-    | 'action_entity_is_account';
+    | 'action_entity_is_account'
+    | 'claim_without_source'
+    | 'claim_uncited';
   block_id: string | null;
   message: string;
 };
@@ -718,6 +756,253 @@ export const entitiesNamedIn = (
   });
 };
 
+// ---------------------------------------------------------------------------
+// Claim classifier — the kind a sentence is about, in the two languages the reports are
+// written in (the clients are Mexican; the evidence is English). Vocabulary, not a
+// model: a word list is honest about what it can see, and both sides can pin it.
+// ---------------------------------------------------------------------------
+
+const wordPattern = (alternatives: string): RegExp =>
+  new RegExp(`(?:^|[^\\p{L}\\p{N}])(?:${alternatives})(?=$|[^\\p{L}\\p{N}])`, 'iu');
+
+/**
+ * Metric NAMES that happen to contain a claim word. "Video views fell 20%" reads a
+ * figure off the insights API and says nothing about the video; "landing page views"
+ * and "hook rate" are Meta metrics, not a read of the page or the hook. Removed before
+ * the vocabulary is matched, so a report that only quotes them is not asked for a
+ * creative read it never needed.
+ */
+const METRIC_PHRASES = new RegExp(
+  [
+    'video (?:views?|plays?|completions?|average[\\p{L} ]*)',
+    'thru ?plays?',
+    'cost per thru ?play',
+    'costo por thru ?play',
+    'reproducciones(?: de)? v[ií]deos?',
+    'visualizaciones(?: de)? v[ií]deos?',
+    'landing page views?',
+    'visitas a (?:la )?p[áa]gina de destino',
+    'vistas de (?:la )?p[áa]gina de destino',
+    'hook rates?',
+    'hold rates?',
+    'tasa de gancho',
+    'link clicks?',
+    'clics? en el enlace',
+  ].join('|'),
+  'giu',
+);
+
+const CLAIM_VOCABULARY: ReadonlyArray<{ kind: Exclude<ClaimKind, 'figure'>; pattern: RegExp }> = [
+  {
+    kind: 'creative',
+    pattern: wordPattern(
+      [
+        'hooks?',
+        'ganchos?',
+        'copy',
+        'ad copy',
+        'headlines?',
+        'titular(?:es)?',
+        'creatives?',
+        'creativ[oa]s?',
+        'creatividad(?:es)?',
+        'v[ií]deos?',
+        'images?',
+        'im[áa]gen(?:es)?',
+        'visual(?:es)?',
+        'angles?',
+        '[áa]ngulos?',
+        'captions?',
+        'thumbnails?',
+        'miniaturas?',
+        'carousels?',
+        'carrusel(?:es)?',
+        'reels?',
+        'primary text',
+        'texto principal',
+        'ugc',
+        'testimonials?',
+        'testimonios?',
+        'cta',
+        'fatiga creativa',
+      ].join('|'),
+    ),
+  },
+  {
+    kind: 'audience',
+    pattern: wordPattern(
+      [
+        'audiences?',
+        'audiencias?',
+        'p[úu]blicos?',
+        'targeting',
+        'segmentaci[óo]n',
+        'segmentos?',
+        'age',
+        'age ranges?',
+        'edad(?:es)?',
+        'rangos? de edad',
+        'gender',
+        'g[ée]nero',
+        'interests?',
+        'inter[ée]s(?:es)?',
+        'lookalikes?',
+        'retargeting',
+        'remarketing',
+        'demographics?',
+        'demogr[áa]fic[oa]s?',
+        'placements?',
+        'ubicaciones',
+        'women',
+        'men',
+        'mujeres',
+        'hombres',
+      ].join('|'),
+    ),
+  },
+  {
+    kind: 'landing',
+    pattern: wordPattern(
+      [
+        'landing pages?',
+        'landing',
+        'p[áa]ginas? de destino',
+        'p[áa]ginas? de aterrizaje',
+        'destination urls?',
+        'urls? de destino',
+        'links? de destino',
+      ].join('|'),
+    ),
+  },
+];
+
+export type Claim = { kind: ClaimKind; span: string };
+
+const SENTENCE_BOUNDARY = /(?<=[.!?])\s+|\n+/u;
+
+/**
+ * The sentence with everything that is not a claim taken out of it: bold spans (the
+ * entity the model is talking about — a campaign named "VIDEO Q3" is not a video claim),
+ * the entities the turn saw, citation markers, prose-mark brackets and the metric names
+ * above. What remains is judged by vocabulary.
+ */
+const claimableText = (sentence: string, entities: ReadonlyArray<ReportEntity>): string => {
+  let text = stripProseMarks(sentence)
+    .replace(/\*\*[^*\n]+?\*\*/g, ' ')
+    .replace(/\[cite:[^\]]*\]/gi, ' ');
+  for (const entity of entities) {
+    const needle = normalizeEntityName(entity.name);
+    if (needle.length < MIN_ENTITY_NAME_CHARS) continue;
+    text = text.replace(new RegExp(escapeRegExp(needle), 'giu'), ' ');
+  }
+  return text.replace(METRIC_PHRASES, ' ');
+};
+
+/**
+ * Every claim `text` makes, one per sentence per kind. A sentence carrying a number is
+ * also a `figure` claim; figures are classified so a reader can see them, and never
+ * flagged by the grounding gate — numbers have their own rule ("never invent numbers").
+ */
+export const classifyClaims = (
+  text: string,
+  options: { entities?: ReadonlyArray<ReportEntity> } = {},
+): Claim[] => {
+  const entities = options.entities ?? [];
+  const claims: Claim[] = [];
+  for (const raw of text.split(SENTENCE_BOUNDARY)) {
+    const sentence = raw.trim();
+    if (sentence.length === 0) continue;
+    const judged = claimableText(sentence, entities);
+    for (const { kind, pattern } of CLAIM_VOCABULARY) {
+      if (pattern.test(judged)) claims.push({ kind, span: sentence });
+    }
+    if (/\d/.test(judged)) claims.push({ kind: 'figure', span: sentence });
+  }
+  return claims;
+};
+
+export type GroundingOptions = {
+  /** The claim kinds the turn's tool calls could vouch for — the Backend maps tool names. */
+  toolKinds: ReadonlyArray<ClaimKind>;
+  entities?: ReadonlyArray<ReportEntity>;
+};
+
+type ClaimSource = { text: string; citeIds: ReadonlyArray<string> | null };
+
+const stringOf = (value: unknown): string => (typeof value === 'string' ? value : '');
+
+const citeIdsOf = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+
+const recordsOf = (value: unknown): Record<string, unknown>[] =>
+  Array.isArray(value)
+    ? value.filter(
+        (item): item is Record<string, unknown> =>
+          item !== null && typeof item === 'object' && !Array.isArray(item),
+      )
+    : [];
+
+/**
+ * The prose a block carries, each piece with the `cite_ids` slot it has (null where the
+ * contract gives it none — a narrative body cites at block level only). Read loosely on
+ * purpose: the Backend runs this on the array before its final parse.
+ */
+const claimSourcesOf = (block: Record<string, unknown>): ClaimSource[] => {
+  switch (block.category) {
+    case 'narrative':
+      return [
+        { text: stringOf(block.body), citeIds: null },
+        ...recordsOf(block.highlights).map((item) => ({
+          text: stringOf(item.text),
+          citeIds: null,
+        })),
+      ];
+    case 'insight_list':
+      return recordsOf(block.items).map((item) => ({
+        text: [item.title, item.summary, item.rationale, item.impact].map(stringOf).join('\n'),
+        citeIds: citeIdsOf(item.cite_ids),
+      }));
+    case 'actions':
+      return recordsOf(block.rows).map((row) => ({
+        text: stringOf(row.action),
+        citeIds: citeIdsOf(row.cite_ids),
+      }));
+    default:
+      return [];
+  }
+};
+
+/**
+ * The claims in one block that the turn cannot stand behind. A creative, audience or
+ * landing-page claim whose kind no tool call of this turn read is `claim_without_source`;
+ * one whose kind WAS read, on a row that still cites nothing, is `claim_uncited`. A figure
+ * is never flagged here. Nothing is fabricated: a missing citation is reported, not filled.
+ */
+export const groundingViolationsOf = (
+  block: Record<string, unknown>,
+  options: GroundingOptions,
+): GroundingViolation[] => {
+  const read = new Set(options.toolKinds);
+  const out: GroundingViolation[] = [];
+  const seen = new Set<string>();
+  for (const source of claimSourcesOf(block)) {
+    for (const claim of classifyClaims(source.text, { entities: options.entities })) {
+      if (claim.kind === 'figure') continue;
+      const reason = !read.has(claim.kind)
+        ? 'claim_without_source'
+        : source.citeIds !== null && source.citeIds.length === 0
+          ? 'claim_uncited'
+          : null;
+      if (reason === null) continue;
+      const key = `${claim.kind}|${reason}|${claim.span}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ kind: claim.kind, span: claim.span, reason });
+    }
+  }
+  return out;
+};
+
 export type ValidateReportOptions = {
   /**
    * The campaigns, ad sets and ads this turn's evidence carried. Without them the
@@ -725,6 +1010,13 @@ export type ValidateReportOptions = {
    * "shift budget into CAÑADAS" names a campaign the turn actually fetched.
    */
   entities?: ReadonlyArray<ReportEntity>;
+  /**
+   * The claim kinds this turn's tool calls read. When given, every creative, audience
+   * and landing-page sentence is graded against it (`claim_without_source`,
+   * `claim_uncited`); when absent the free text is not graded, because without the
+   * turn's tool calls there is nothing honest to grade it against.
+   */
+  toolKinds?: ReadonlyArray<ClaimKind>;
 };
 
 const mentionsTruncation = (notes: string | null): boolean =>
@@ -849,6 +1141,25 @@ export function validateReport(
           code: 'action_entity_is_account',
           block_id: b.block_id,
           message: `Action "${row.action.slice(0, 60)}" names ${names.join(', ')} but its entity is the account (${row.entity.name}).`,
+        });
+      }
+    }
+    // Free text is graded against what the turn READ, never against a word list alone:
+    // "the video hook is weak" is a finding after `analyze_creative_image` ran and a
+    // fabrication after a turn of spend and CPA. The Backend's grounding pass writes the
+    // same verdict onto `block.grounding`; this is the witness that names it by rule.
+    if (options.toolKinds) {
+      for (const violation of groundingViolationsOf(b as unknown as Record<string, unknown>, {
+        toolKinds: options.toolKinds,
+        entities,
+      })) {
+        out.push({
+          code: violation.reason,
+          block_id: b.block_id,
+          message:
+            violation.reason === 'claim_without_source'
+              ? `A ${violation.kind} claim, "${violation.span.slice(0, 60)}", with no ${violation.kind}-reading tool call this turn.`
+              : `A ${violation.kind} claim, "${violation.span.slice(0, 60)}", on a row that cites nothing.`,
         });
       }
     }

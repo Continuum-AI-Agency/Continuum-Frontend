@@ -4,8 +4,10 @@ import {
   chartBlockSchema,
   checkpointBlockV2LenientSchema,
   checkpointBlockV2Schema,
+  classifyClaims,
   dataTableBlockSchema,
   degradeToNarrativeBlockV2,
+  groundingViolationsOf,
   hasProseMarks,
   insightListItemSchema,
   narrativeBlockSchema,
@@ -509,5 +511,232 @@ describe('insightListItemSchema.highlight', () => {
   it('carries the judged figure the renderer colours, and defaults to null when absent', () => {
     expect(insightListItemSchema.parse({ ...item, highlight: '0.90' }).highlight).toBe('0.90');
     expect(insightListItemSchema.parse(item).highlight).toBeNull();
+  });
+});
+
+// A creative or audience sentence is a finding after the tool that reads creatives or
+// audiences ran, and a fabrication after a turn of spend and CPA. The gate is the tool
+// call, never the word — so the classifier is pinned in both languages and the gate is
+// pinned on both sides of the same sentence.
+describe('classifyClaims', () => {
+  const kindsOf = (text: string, entities?: Parameters<typeof classifyClaims>[1]['entities']) =>
+    classifyClaims(text, { entities }).map((claim) => claim.kind);
+
+  it('reads creative, audience and landing-page claims in English', () => {
+    expect(kindsOf('The video hook loses viewers in the first 3 seconds.')).toEqual([
+      'creative',
+      'figure',
+    ]);
+    expect(kindsOf('The headline copy promises a discount the ad never shows.')).toEqual([
+      'creative',
+    ]);
+    expect(kindsOf('Targeting women 25-34 with a lookalike of purchasers.')).toEqual([
+      'audience',
+      'figure',
+    ]);
+    expect(kindsOf('The landing page loads slowly on mobile.')).toEqual(['landing']);
+  });
+
+  it('reads the same claims in Spanish', () => {
+    expect(kindsOf('El gancho del video no retiene en los primeros segundos.')).toEqual([
+      'creative',
+    ]);
+    expect(kindsOf('El titular y el ángulo de la creatividad se sienten genéricos.')).toEqual([
+      'creative',
+    ]);
+    expect(kindsOf('La audiencia de intereses supera a la segmentación por edad.')).toEqual([
+      'audience',
+    ]);
+    expect(kindsOf('La página de destino tarda en cargar.')).toEqual(['landing']);
+    expect(kindsOf('El público de mujeres de 25 a 34 años convierte mejor.')).toEqual([
+      'audience',
+      'figure',
+    ]);
+  });
+
+  it('classifies a sentence that carries only a number as a figure', () => {
+    expect(kindsOf('Spend reached 80,405 MXN over the last 30 days.')).toEqual(['figure']);
+    expect(kindsOf('Nothing changed this week.')).toEqual([]);
+  });
+
+  it('does not mistake a metric name for a read of the thing it is named after', () => {
+    expect(kindsOf('Video views fell 20% while landing page views held.')).toEqual(['figure']);
+    expect(kindsOf('Hook rate sits at 18% on the account.')).toEqual(['figure']);
+    expect(kindsOf('Las reproducciones de video cayeron 12%.')).toEqual(['figure']);
+    expect(kindsOf('ThruPlays cost 0.40 MXN each.')).toEqual(['figure']);
+  });
+
+  it('does not read an entity name as a claim about its words', () => {
+    expect(kindsOf('**VIDEO Q3 - PROSPECTING** spent 12,000 MXN.')).toEqual(['figure']);
+    expect(
+      kindsOf('Audiencia Fria Interes spent the most.', [
+        { level: 'adset', id: '1', name: 'Audiencia Fria Interes' },
+      ]),
+    ).toEqual([]);
+  });
+
+  it('splits a paragraph into sentences and reports each claim on its own sentence', () => {
+    const claims = classifyClaims(
+      'ROAS sits at 0.90. The video hook is weak.\nThe audience is too broad.',
+    );
+    expect(claims).toEqual([
+      { kind: 'figure', span: 'ROAS sits at 0.90.' },
+      { kind: 'creative', span: 'The video hook is weak.' },
+      { kind: 'audience', span: 'The audience is too broad.' },
+    ]);
+  });
+});
+
+describe('groundingViolationsOf', () => {
+  const base = { block_id: 'ins', scope: 'account', title: 'Reading', priority: 'primary' };
+  const insight = (summary: string, cite_ids: string[] = []) => ({
+    ...base,
+    category: 'insight_list',
+    items: [
+      {
+        item_type: 'insight',
+        title: 'Reading',
+        summary,
+        rationale: 'Because.',
+        impact: 'Fix it.',
+        severity: 'risk',
+        cite_ids,
+      },
+    ],
+  });
+  const hook = 'The video hook loses viewers before the offer.';
+
+  it('flags a creative claim when no creative-reading tool ran this turn', () => {
+    expect(groundingViolationsOf(insight(hook, ['c1']), { toolKinds: ['figure'] })).toEqual([
+      { kind: 'creative', span: hook, reason: 'claim_without_source' },
+    ]);
+  });
+
+  it('is clean for the same sentence once a creative tool ran and the row cites it', () => {
+    expect(groundingViolationsOf(insight(hook, ['c1']), { toolKinds: ['creative'] })).toEqual([]);
+  });
+
+  it('flags the same sentence as uncited when the tool ran and the row cites nothing', () => {
+    expect(groundingViolationsOf(insight(hook), { toolKinds: ['creative'] })).toEqual([
+      { kind: 'creative', span: hook, reason: 'claim_uncited' },
+    ]);
+  });
+
+  it('never flags a figure, and never fabricates a citation', () => {
+    const block = insight('ROAS sits at 0.90 on 80,405 MXN of spend.');
+    expect(groundingViolationsOf(block, { toolKinds: [] })).toEqual([]);
+    expect(block.items[0].cite_ids).toEqual([]);
+  });
+
+  it('grades an action row on its clause and a narrative on its body, which has no cite slot', () => {
+    const action = {
+      ...base,
+      category: 'actions',
+      rows: [
+        {
+          priority: 'P1',
+          entity: { name: 'CAÑADAS // MENSAJES', level: 'campaign', id: '1' },
+          action: 'Refresh the creative angle on the carousel.',
+          evidence: { metric: 'CPA', value: 71, window: 'L14D' },
+          cite_ids: [],
+        },
+      ],
+    };
+    expect(groundingViolationsOf(action, { toolKinds: ['creative'] })).toEqual([
+      {
+        kind: 'creative',
+        span: 'Refresh the creative angle on the carousel.',
+        reason: 'claim_uncited',
+      },
+    ]);
+    const narrative = {
+      ...base,
+      category: 'narrative',
+      body: 'The audience skews older than the buyer. Spend is flat.',
+      highlights: [],
+    };
+    expect(groundingViolationsOf(narrative, { toolKinds: [] })).toEqual([
+      {
+        kind: 'audience',
+        span: 'The audience skews older than the buyer.',
+        reason: 'claim_without_source',
+      },
+    ]);
+    expect(groundingViolationsOf(narrative, { toolKinds: ['audience'] })).toEqual([]);
+  });
+
+  it('reports each ungrounded kind once per sentence, and a title that claims is a claim', () => {
+    const both = 'The video hook misses the audience it targets.';
+    expect(groundingViolationsOf(insight(both), { toolKinds: [] }).map((v) => v.kind)).toEqual([
+      'creative',
+      'audience',
+    ]);
+    const titled = {
+      ...insight('Spend is flat.'),
+      items: [{ ...insight('Spend is flat.').items[0], title: 'Creative fatigue' }],
+    };
+    expect(groundingViolationsOf(titled, { toolKinds: [] })).toEqual([
+      { kind: 'creative', span: 'Creative fatigue', reason: 'claim_without_source' },
+    ]);
+  });
+});
+
+describe('validateReport with the turn tool kinds', () => {
+  const base = { block_id: 'b', scope: 'account', title: 'T', priority: 'primary' as const };
+  const report = [
+    { ...base, block_id: 's', category: 'data_scope', dates: 'L14D', source: 'api', notes: [] },
+    {
+      ...base,
+      block_id: 'ins',
+      category: 'insight_list',
+      items: [
+        {
+          item_type: 'insight',
+          title: 'Reading',
+          summary: 'The video hook is weak.',
+          rationale: 'It loses 60% before the offer.',
+          impact: 'Fix it.',
+          severity: 'risk',
+          cite_ids: [],
+        },
+      ],
+      citations: [],
+    },
+  ] as never;
+
+  it('names claim_without_source and claim_uncited by block id, and stays silent without tool kinds', () => {
+    expect(validateReport(report).map((v) => v.code)).toEqual([]);
+    const without = validateReport(report, { toolKinds: ['figure'] });
+    expect(without.map((v) => [v.code, v.block_id])).toEqual([['claim_without_source', 'ins']]);
+    expect(without[0].message).toContain('no creative-reading tool call this turn');
+    const uncited = validateReport(report, { toolKinds: ['creative'] });
+    expect(uncited.map((v) => [v.code, v.block_id])).toEqual([['claim_uncited', 'ins']]);
+  });
+});
+
+describe('block grounding field', () => {
+  const base = { block_id: 'b', scope: 'account', title: 'T', priority: 'primary' as const };
+  it('defaults to null and carries the violations the Backend wrote', () => {
+    const plain = checkpointBlockV2Schema.parse({ ...base, category: 'narrative', body: 'x' });
+    expect(plain.grounding).toBeNull();
+    const flagged = checkpointBlockV2Schema.parse({
+      ...base,
+      category: 'narrative',
+      body: 'The video hook is weak.',
+      grounding: [
+        { kind: 'creative', span: 'The video hook is weak.', reason: 'claim_without_source' },
+      ],
+    });
+    expect(flagged.grounding).toEqual([
+      { kind: 'creative', span: 'The video hook is weak.', reason: 'claim_without_source' },
+    ]);
+    expect(
+      checkpointBlockV2Schema.safeParse({
+        ...base,
+        category: 'narrative',
+        body: 'x',
+        grounding: [{ kind: 'vibe', span: 'x', reason: 'claim_uncited' }],
+      }).success,
+    ).toBe(false);
   });
 });
