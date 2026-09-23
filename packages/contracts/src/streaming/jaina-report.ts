@@ -468,12 +468,27 @@ export const actionEvidenceSchema = z.object({
 });
 export type ActionEvidence = z.infer<typeof actionEvidenceSchema>;
 
+/**
+ * Where an action's entity sits in the Meta hierarchy. Resolved server-side against the
+ * entities the turn's tool calls actually returned (`resolveBlockEntities` on the Backend),
+ * never taken on the model's word alone: a row whose text names a campaign while its
+ * entity is the account is the defect this field exists to make visible. `account` is a
+ * legitimate value for an account-wide move — and the value a renderer must NOT deep-link,
+ * because there is nothing under it to open.
+ */
+export const ACTION_ENTITY_LEVELS = ['account', 'campaign', 'adset', 'ad'] as const;
+export const actionEntityLevelSchema = z.enum(ACTION_ENTITY_LEVELS);
+export type ActionEntityLevel = z.infer<typeof actionEntityLevelSchema>;
+
 export const actionRowSchema = z.object({
   priority: z.enum(['P1', 'P2', 'P3']),
   entity: z.object({
+    /** The Meta id of the entity the move is about; null when the turn never saw it. */
     id: z.string().nullable().default(null),
     name: z.string().min(1),
     kind: z.string().nullable().default(null),
+    /** Null when unresolved — a renderer treats null exactly like `account`: no link. */
+    level: actionEntityLevelSchema.nullable().default(null),
   }),
   action: z.string().min(1),
   /** The size of the move: "+$500/day", "pause", "−30%", "~$890/day recoverable". */
@@ -622,12 +637,95 @@ export type ReportViolation = {
     | 'percent_basis_missing'
     | 'currency_missing'
     | 'table_truncation_undeclared'
-    | 'table_totals_missing';
+    | 'table_totals_missing'
+    | 'action_entity_is_account';
   block_id: string | null;
   message: string;
 };
 
 type AnyBlock = z.infer<typeof checkpointBlockV2UnionSchema>;
+
+// ---------------------------------------------------------------------------
+// Entity naming — shared by the Backend resolver and the validator below, so the rule
+// that grades a row and the rule that fixes it cannot disagree about what "names" means.
+// ---------------------------------------------------------------------------
+
+/** An entity a turn's evidence actually carried: a campaign, ad set or ad by name. */
+export type ReportEntity = {
+  level: ActionEntityLevel;
+  id: string | null;
+  name: string;
+};
+
+/** Case-, width- and whitespace-insensitive; diacritics are kept (CAÑADAS ≠ CANADAS). */
+export const normalizeEntityName = (name: string): string =>
+  name.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+
+/** Names too short to be a mention rather than a coincidence ("A", "B", "Q3"). */
+const MIN_ENTITY_NAME_CHARS = 3;
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** True when `text` mentions `name` as a whole token, not as the inside of a longer word. */
+export const textNamesEntity = (text: string, name: string): boolean => {
+  const needle = normalizeEntityName(name);
+  if (needle.length < MIN_ENTITY_NAME_CHARS) return false;
+  const haystack = normalizeEntityName(text);
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(needle)}(?=$|[^\\p{L}\\p{N}])`, 'u').test(
+    haystack,
+  );
+};
+
+/**
+ * The account, however the model spelled it: the `account-<id>` label the tool layer
+ * mints, the `act_<id>` Meta id, a bare id, or the word itself.
+ */
+export const isAccountEntityName = (name: string): boolean =>
+  /^(?:the\s+)?(?:ad\s+)?account$/i.test(name.trim()) ||
+  /^(?:account[-_ ]?|act_)?\d{6,}$/i.test(name.trim());
+
+/** Every `**bold**` run in a clause — the model bolds the entity it is talking about. */
+export const boldSpans = (text: string): string[] =>
+  [...text.matchAll(/\*\*([^*\n]+?)\*\*/g)].map((match) => match[1].trim());
+
+/**
+ * The entities from `entities` that `text` names, in the order the text names them.
+ * Bold spans come first because they are the model's own declaration of its subject;
+ * plain mentions follow by position. A name mentioned twice is listed once.
+ */
+export const entitiesNamedIn = (
+  text: string,
+  entities: ReadonlyArray<ReportEntity>,
+): ReportEntity[] => {
+  const named = entities.filter((entity) => entity.level !== 'account');
+  const bolded = boldSpans(text).flatMap((span) =>
+    named.filter((entity) => normalizeEntityName(entity.name) === normalizeEntityName(span)),
+  );
+  const haystack = normalizeEntityName(text);
+  const mentioned = named
+    .filter((entity) => textNamesEntity(text, entity.name))
+    .sort(
+      (a, b) =>
+        haystack.indexOf(normalizeEntityName(a.name)) -
+        haystack.indexOf(normalizeEntityName(b.name)),
+    );
+  const seen = new Set<string>();
+  return [...bolded, ...mentioned].filter((entity) => {
+    const key = `${entity.level}|${entity.id ?? normalizeEntityName(entity.name)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+export type ValidateReportOptions = {
+  /**
+   * The campaigns, ad sets and ads this turn's evidence carried. Without them the
+   * account rule can only read the row's own bold spans; with them it can tell that
+   * "shift budget into CAÑADAS" names a campaign the turn actually fetched.
+   */
+  entities?: ReadonlyArray<ReportEntity>;
+};
 
 const mentionsTruncation = (notes: string | null): boolean =>
   typeof notes === 'string' && /truncat|top \d+|first \d+|showing \d+/i.test(notes);
@@ -635,9 +733,13 @@ const mentionsTruncation = (notes: string | null): boolean =>
 const hasTotalsRow = (rows: Record<string, string | number | null>[]): boolean =>
   rows.some((row) => Object.values(row).some((v) => typeof v === 'string' && /^total/i.test(v)));
 
-export function validateReport(blocks: readonly AnyBlock[]): ReportViolation[] {
+export function validateReport(
+  blocks: readonly AnyBlock[],
+  options: ValidateReportOptions = {},
+): ReportViolation[] {
   const out: ReportViolation[] = [];
   if (blocks.length === 0) return out;
+  const entities = options.entities ?? [];
 
   const scopeIndex = blocks.findIndex((b) => b.category === 'data_scope');
   if (scopeIndex < 0) {
@@ -730,6 +832,24 @@ export function validateReport(blocks: readonly AnyBlock[]): ReportViolation[] {
             message: `Comparison "${pair.label}" is a percent with no basis.`,
           });
         }
+      }
+    }
+    // The card built to be clicked must name something to click on. A row whose entity
+    // is the account while its own clause names a campaign or ad set is graded, never
+    // rewritten here: the Backend resolver is the fix, this is the witness.
+    if (b.category === 'actions') {
+      for (const row of b.rows) {
+        const isAccount = row.entity.level === 'account' || isAccountEntityName(row.entity.name);
+        if (!isAccount) continue;
+        const named = entitiesNamedIn(row.action, entities).map((entity) => entity.name);
+        const boldedOther = boldSpans(row.action).filter((span) => !isAccountEntityName(span));
+        const names = [...new Set([...named, ...boldedOther])];
+        if (names.length === 0) continue;
+        out.push({
+          code: 'action_entity_is_account',
+          block_id: b.block_id,
+          message: `Action "${row.action.slice(0, 60)}" names ${names.join(', ')} but its entity is the account (${row.entity.name}).`,
+        });
       }
     }
   }

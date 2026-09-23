@@ -305,6 +305,144 @@ describe('Prism blocks + validateReport', () => {
     ] as never);
     expect(violations).toEqual([]);
   });
+
+  // The actions block is the one built to be deep-linked, and live it shipped every row on
+  // `account-521903353286118` while the prose beside it named ITESO and CAÑADAS. The schema
+  // only ever required a non-empty string; this rule is the witness, the Backend resolver
+  // (`resolveBlockEntities`) is the fix, and both read the same name-matching helpers.
+  describe('action_entity_is_account', () => {
+    const actionsBlock = (entity: Record<string, unknown>, action: string) => ({
+      ...base,
+      block_id: 'a',
+      category: 'actions',
+      rows: [
+        {
+          priority: 'P1',
+          entity,
+          action,
+          sizing: null,
+          evidence: { metric: 'roas', value: 0.53, unit: null, window: 'L30D', comparator: null },
+          cite_ids: [],
+        },
+      ],
+      citations: [],
+    });
+    const scope = {
+      ...base,
+      block_id: 's',
+      category: 'data_scope',
+      dates: 'L30D',
+      timezone: 'UTC',
+      source: 'db',
+      notes: [],
+    };
+    const seen = [
+      {
+        level: 'campaign' as const,
+        id: '120230000000002',
+        name: 'ITESO // MENSAJES // AGOSTO 2026',
+      },
+      { level: 'adset' as const, id: '6650000000001', name: 'Broad 25-45' },
+    ];
+
+    it('flags an account row whose clause names a campaign the turn saw', () => {
+      const violations = validateReport(
+        [
+          scope,
+          actionsBlock(
+            { id: null, name: 'account-521903353286118', kind: null, level: null },
+            'Reduce budget on ITESO // MENSAJES // AGOSTO 2026 by 30%',
+          ),
+        ] as never,
+        { entities: seen },
+      );
+      expect(violations.map((v) => v.code)).toEqual(['action_entity_is_account']);
+      expect(violations[0].message).toContain('ITESO // MENSAJES // AGOSTO 2026');
+    });
+
+    it('flags it from the bold span alone when no entity list was passed', () => {
+      const violations = validateReport([
+        scope,
+        actionsBlock(
+          {
+            id: '521903353286118',
+            name: 'account-521903353286118',
+            kind: 'account',
+            level: 'account',
+          },
+          'Shift 30% of budget into **CAÑADAS**',
+        ),
+      ] as never);
+      expect(violations.map((v) => v.code)).toEqual(['action_entity_is_account']);
+    });
+
+    it('is clean for an account-wide move that names no entity, and for a row on a campaign', () => {
+      expect(
+        validateReport(
+          [
+            scope,
+            actionsBlock(
+              {
+                id: '521903353286118',
+                name: 'account-521903353286118',
+                kind: 'account',
+                level: 'account',
+              },
+              'Consolidate budgets into top-converting ad sets',
+            ),
+            actionsBlock(
+              {
+                id: '120230000000002',
+                name: 'ITESO // MENSAJES // AGOSTO 2026',
+                kind: 'campaign',
+                level: 'campaign',
+              },
+              'Reduce budget by 30%',
+            ),
+          ] as never,
+          { entities: seen },
+        ),
+      ).toEqual([]);
+    });
+  });
+
+  it('carries the entity level on an action row and defaults it to null', () => {
+    const parsed = checkpointBlockV2Schema.parse({
+      ...base,
+      category: 'actions',
+      rows: [
+        {
+          priority: 'P2',
+          entity: { name: 'Broad 25-45', level: 'adset', id: '6650000000001' },
+          action: 'Pause',
+          evidence: { metric: 'CPA', value: 71, window: 'L14D' },
+        },
+        {
+          priority: 'P3',
+          entity: { name: 'Cold Lookalike' },
+          action: 'Pause',
+          evidence: { metric: 'CPA', value: 71, window: 'L14D' },
+        },
+      ],
+    });
+    if (parsed.category !== 'actions') throw new Error('expected actions');
+    expect(parsed.rows[0].entity.level).toBe('adset');
+    expect(parsed.rows[1].entity.level).toBeNull();
+    expect(
+      checkpointBlockV2Schema.safeParse({
+        ...base,
+        category: 'actions',
+        rows: [
+          {
+            priority: 'P1',
+            entity: { name: 'X', level: 'portfolio' },
+            action: 'Pause',
+            evidence: { metric: 'CPA', value: 71, window: 'L14D' },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  });
 });
 
 // The emphasis prose carries inside a sentence. One grammar, three readers (the Backend

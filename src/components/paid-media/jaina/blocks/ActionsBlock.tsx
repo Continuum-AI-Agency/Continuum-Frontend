@@ -13,6 +13,15 @@
 // model gave one, is the `from → to` of this surface: the only line allowed to widen the
 // claim, and absent when the model widened nothing.
 //
+// The entity is NOT a link. `entity.level` and `entity.id` arrive resolved against the turn's
+// own evidence (Backend `resolveBlockEntities`), so the row knows whether it is about a
+// campaign, an ad set, an ad or the whole account — but nothing in this app addresses a
+// Meta campaign or ad set by its id: the optimizer's URL state addresses a PORTFOLIO
+// (`?optimizerView=portfolios&portfolio=…`) and an ad set only inside one. A link to a
+// route that does not exist is the same defect as an account named where a campaign
+// belongs, so the name is rendered plainly and the resolved level and id are carried on
+// the element for the surface that can honestly use them.
+//
 // The figure/label typography and the "nothing is appended to the label" rule follow
 // `optimizer/sections/account/candidateHeadline.tsx` exactly. Those components are typed on
 // `AccountCandidate` and an action row is not one, so the rules are mirrored here rather
@@ -28,6 +37,22 @@ import { InlineProse } from './prose';
 
 type ActionsBlockProps = { block: ActionsBlockV2; isStreaming: boolean };
 type ActionRow = ActionsBlockV2['rows'][number];
+
+/** What the level reads as beside the name when the model gave no `kind` of its own. */
+const LEVEL_LABEL: Record<NonNullable<ActionRow['entity']['level']>, string> = {
+  account: 'account',
+  campaign: 'campaign',
+  adset: 'ad set',
+  ad: 'ad',
+};
+
+/**
+ * The parenthetical after the entity: the model's `kind` when it gave one, else the
+ * resolved level. An account-wide move says so — "(account)" is the reader's cue that the
+ * row is about the whole account and not a campaign the card failed to name.
+ */
+const entityKindLabel = (entity: ActionRow['entity']): string | null =>
+  entity.kind ?? (entity.level ? LEVEL_LABEL[entity.level] : null);
 
 /** A currency unit is a three-letter code; anything else is a plain number's unit. */
 const isCurrencyCode = (unit: string | null): unit is string => !!unit && /^[A-Z]{3}$/.test(unit);
@@ -84,9 +109,16 @@ export default function ActionsBlock({ block }: ActionsBlockProps) {
               </span>
             </p>
             <p className="mt-0.5 text-foreground text-sm" data-testid="actions-sentence">
-              <span className="font-medium">{row.entity.name}</span>
-              {row.entity.kind ? (
-                <span className="text-muted-foreground"> ({row.entity.kind})</span>
+              <span
+                className="font-medium"
+                data-entity-id={row.entity.id ?? undefined}
+                data-entity-level={row.entity.level ?? undefined}
+                data-testid="actions-entity"
+              >
+                {row.entity.name}
+              </span>
+              {entityKindLabel(row.entity) ? (
+                <span className="text-muted-foreground"> ({entityKindLabel(row.entity)})</span>
               ) : null}
               {' — '}
               <InlineProse text={row.action} />
