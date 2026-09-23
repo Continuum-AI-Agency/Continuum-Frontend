@@ -357,14 +357,25 @@ async function selectTemplate(page: Page, template: ApiRenderTemplateSummary): P
 async function duplicateAndName(page: Page, source: ForgeRenderSet): Promise<ForgeRenderSet> {
   const show = page.getByRole('button', { name: 'Show render sets', exact: true });
   if (await show.isVisible()) await show.click();
-  const created = page.waitForResponse(
-    (response) =>
-      response.request().method() === 'POST' && pathOf(response) === API_RENDER_SETS_ROUTE,
-    { timeout: 60_000 },
-  );
-  await page.getByRole('button', { name: `Actions for ${source.name}`, exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Duplicate', exact: true }).click();
-  const response = await created;
+  // Duplicate is a no-op until the template's contract has loaded (the grid needs it to rebase
+  // the rows), and nothing on the page says when that is. So the press is repeated until the
+  // copy's POST actually leaves — a single early press waits forever on a request never sent.
+  let response: Response | null = null;
+  for (let attempt = 0; attempt < 12 && !response; attempt += 1) {
+    const created = page
+      .waitForResponse(
+        (candidate) =>
+          candidate.request().method() === 'POST' && pathOf(candidate) === API_RENDER_SETS_ROUTE,
+        { timeout: 10_000 },
+      )
+      .catch(() => null);
+    await page.getByRole('button', { name: `Actions for ${source.name}`, exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Duplicate', exact: true }).click();
+    response = await created;
+    if (!response) await page.keyboard.press('Escape');
+  }
+  if (!response)
+    throw new Error('Duplicate never sent the copy (the template contract never loaded)');
   expect(response.ok(), `duplicate → ${response.status()}`).toBe(true);
   const copy = forgeRenderSetSchema.parse(await response.json());
 
@@ -417,14 +428,20 @@ async function oneProvenRow(page: Page, label: string): Promise<string> {
 /** Exactly the one bench room, whatever the brand's defaults pre-selected. */
 async function onlyTheBenchRoom(tray: Locator): Promise<void> {
   const rooms = tray.getByRole('list', { name: 'Approval rooms' });
-  const room = rooms.getByRole('checkbox', { name: APPROVAL_ROOM.name, exact: true });
+  // A room's accessible name leads with the room and goes on to its platform ("#room Slack #room").
+  const named = new RegExp(`^${escapeRegExp(APPROVAL_ROOM.name)}\\b`);
+  const room = rooms.getByRole('checkbox', { name: named });
   await expect(room, `${APPROVAL_ROOM.name} is one of StarCraft's approval rooms`).toBeVisible({
     timeout: 60_000,
   });
   for (const box of await rooms.getByRole('checkbox').all()) {
-    const wanted = (await box.getAttribute('aria-label')) === APPROVAL_ROOM.name;
-    if (wanted !== ((await box.getAttribute('aria-checked')) === 'true')) await box.click();
-    await expect(box).toHaveAttribute('aria-checked', String(wanted));
+    const label = await box.evaluate((el) => el.getAttribute('aria-label') ?? el.textContent ?? '');
+    const wanted = named.test(label.trim());
+    const checked = async () =>
+      (await box.getAttribute('aria-checked')) === 'true' ||
+      (await box.isChecked().catch(() => false));
+    if (wanted !== (await checked())) await box.click();
+    await expect.poll(checked).toBe(wanted);
   }
 }
 
@@ -690,8 +707,24 @@ test('approve · the job’s own card is approved in the Forge and starts publis
   const file = approval.files[0]?.url;
   if (!file) throw new Error(`[forge-live-bench] approval ${approval.id} shows no file`);
 
+  // Pending approvals sit on the Render ledger in newer builds and atop Templates in older ones.
+  const anyApprove = page.getByRole('button', { name: 'Approve and publish paused' });
+  if (
+    !(await anyApprove
+      .first()
+      .isVisible({ timeout: 15_000 })
+      .catch(() => false))
+  ) {
+    await openTab(page, /^Templates$/);
+  }
+  // A folding section in newer builds, a plain heading in older ones: expand only when it folds.
   const section = page.getByRole('button', { name: /^Pending approvals/ });
-  if ((await section.getAttribute('aria-expanded')) === 'false') await section.click();
+  if (
+    (await section.count()) > 0 &&
+    (await section.first().getAttribute('aria-expanded')) === 'false'
+  ) {
+    await section.first().click();
+  }
   // The nearest block around this job's picture that holds an Approve button is its card.
   const approve = page
     .locator(`[src="${file.replace(/["\\]/g, '\\$&')}"]`)
