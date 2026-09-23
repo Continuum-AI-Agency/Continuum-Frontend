@@ -455,6 +455,52 @@ test.describe('organic planner status + agent chat speakers', () => {
     await page.screenshot({ path: `${SCREENSHOT_DIR}/chat-speaker-identity.png` });
   });
 
+  test('month published post opens a media side preview', async () => {
+    const supabase = admin();
+    const postId = `calendar-preview-bench-${Date.now()}`;
+    const dayId = formatDayId(new Date());
+    try {
+      await supabase
+        .schema('organic')
+        .from('organic_published_posts')
+        .insert({
+          brand_id: brandId,
+          post_type: 'POST',
+          platform: 'instagram',
+          platform_account_id: 'local-instagram-account',
+          platform_post_id: postId,
+          published_at: `${dayId}T18:00:00.000Z`,
+          caption: 'Calendar published preview bench',
+          media_urls: [`${process.env.PLAYWRIGHT_BASE_URL}/ContinuumAI.jpeg`],
+        })
+        .throwOnError();
+
+      await page.goto('/organic?tab=planner&view=month', { waitUntil: 'domcontentloaded' });
+      const chip = page.getByRole('button', { name: /Calendar published preview bench/ });
+      await expect(chip).toBeVisible({ timeout: 90_000 });
+      await chip.click();
+
+      const preview = page.getByRole('complementary', { name: 'Published post preview' });
+      await expect(preview).toContainText('Calendar published preview bench');
+      await expect(
+        preview.getByRole('img', { name: 'Calendar published preview bench' }),
+      ).toHaveJSProperty('naturalWidth', 1600);
+      await page.keyboard.press('Escape');
+      await expect(preview).toBeHidden();
+
+      await chip.click();
+      await preview.getByRole('button', { name: 'View post metrics' }).click();
+      await expect(page).toHaveURL(new RegExp(`postId=${postId}`));
+    } finally {
+      await supabase
+        .schema('organic')
+        .from('organic_published_posts')
+        .delete()
+        .eq('brand_id', brandId)
+        .eq('platform_post_id', postId);
+    }
+  });
+
   test('approve and schedule sends a bodyless POST and persists the scheduled draft', async () => {
     await openWeekPlanner(page);
 
