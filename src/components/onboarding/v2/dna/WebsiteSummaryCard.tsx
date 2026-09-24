@@ -5,19 +5,22 @@ import { ColorSwatch } from './ColorSwatch';
 
 type Props = {
   buckets: AgentPreviewBuckets | null;
+  settled?: boolean;
+  onRetry?: () => void;
 };
 
-export function WebsiteSummaryCard({ buckets }: Props) {
+export function WebsiteSummaryCard({ buckets, settled, onRetry }: Props) {
   const website = buckets?.website ?? null;
   const status = buckets?.sectionStatus.website ?? 'indeterminate';
-  const isEmpty = website === null;
 
   return (
     <CardSurface
       title="Website summary"
       badge="Source"
       status={status}
-      isEmpty={isEmpty}
+      isEmpty={website === null}
+      settled={settled}
+      onRetry={onRetry}
       minBodyHeight={140}
       skeleton={
         <div className="space-y-3">
@@ -79,11 +82,7 @@ export function WebsiteSummaryCard({ buckets }: Props) {
             </div>
           ) : null}
         </>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          Website analysis didn&apos;t produce data for this run.
-        </p>
-      )}
+      ) : null}
     </CardSurface>
   );
 }

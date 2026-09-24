@@ -274,6 +274,86 @@ describe('runOnboardingPreview SSE parser', () => {
     }
   });
 
+  it('marks a section whose payload fails its schema as error and logs the issue paths', async () => {
+    // The Backend follows every `data` with `status: done`; a rejected payload must not
+    // let that `done` stand, or the card renders as finished with nothing in it.
+    fetchSpy.mockImplementationOnce(async () =>
+      makeStreamResponse([
+        runHandshake(),
+        sse({ kind: 'data', section: 'business', data: { business_name: 42 } }, 1),
+        sse({ kind: 'status', section: 'business', status: 'done' }, 2),
+        sse({ kind: 'data', section: 'voice', data: 'not an object' }, 3),
+        sse({ kind: 'complete', phase: 'preview', status: 'partial' }, 4),
+      ]),
+    );
+
+    const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const events: OnboardingPreviewEvent[] = [];
+      await runOnboardingPreview({
+        payload: minimalPayload,
+        onEvent: (event: OnboardingPreviewEvent) => events.push(event),
+      });
+      const statuses = events.flatMap((e) =>
+        e.type === 'status' ? [`${e.section}:${e.status}`] : [],
+      );
+      expect(statuses).toEqual(['business:error', 'business:error', 'voice:error']);
+      expect(events.some((e) => e.type === 'business' || e.type === 'voice')).toBe(false);
+
+      const logged = warnSpy.mock.calls.find(
+        ([message, context]) =>
+          String(message).includes('failed its schema') &&
+          (context as { section?: string }).section === 'business',
+      );
+      const paths = (logged?.[1] as { issues: Array<{ path: string }> }).issues.map((i) => i.path);
+      expect(paths).toEqual(expect.arrayContaining(['business_name', 'business_description']));
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('degrades one bad field instead of dropping the section', async () => {
+    fetchSpy.mockImplementationOnce(async () =>
+      makeStreamResponse([
+        runHandshake(),
+        sse(
+          {
+            kind: 'data',
+            section: 'audience',
+            data: {
+              summary: 'Practice managers at physio clinics.',
+              segments: [{ name: 'Owners' }, { name: 1 }],
+              demographics: 7,
+            },
+          },
+          1,
+        ),
+        sse({ kind: 'status', section: 'audience', status: 'done' }, 2),
+      ]),
+    );
+
+    const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const events: OnboardingPreviewEvent[] = [];
+      await runOnboardingPreview({
+        payload: minimalPayload,
+        onEvent: (event: OnboardingPreviewEvent) => events.push(event),
+      });
+      const audience = events.find((e) => e.type === 'audience');
+      expect(audience?.type === 'audience' && audience.payload).toMatchObject({
+        summary: 'Practice managers at physio clinics.',
+        segments: [{ name: 'Owners' }],
+      });
+      expect(events.at(-1)).toMatchObject({ type: 'status', section: 'audience', status: 'done' });
+      const dropped = warnSpy.mock.calls.find(([message]) =>
+        String(message).includes('invalid fields dropped'),
+      )?.[1] as { dropped: string[] } | undefined;
+      expect(dropped?.dropped).toEqual(expect.arrayContaining(['segments.1.name']));
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
   it('does not throw on an error frame; dispatches it and lets the stream settle', async () => {
     fetchSpy.mockImplementationOnce(async () =>
       makeStreamResponse([
