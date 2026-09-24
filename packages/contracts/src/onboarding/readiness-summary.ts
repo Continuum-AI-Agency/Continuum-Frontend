@@ -21,6 +21,9 @@ export const readinessSummarySchema = z.object({
   band: readinessBandSchema,
   top_blocker: z.string().nullable(),
   next_action: z.string().nullable(),
+  // The brand profile or brand.md changed after the score was made, so the score is
+  // not current. Absent where the reader does not check freshness.
+  stale: z.boolean().optional(),
 });
 export type ReadinessSummary = z.infer<typeof readinessSummarySchema>;
 
