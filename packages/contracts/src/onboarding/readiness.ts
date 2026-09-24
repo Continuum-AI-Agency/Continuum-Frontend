@@ -68,6 +68,12 @@ export interface ReadinessCriterion {
   /** The brand-book field a fix lands in — what a finding's CTA opens. */
   target_field: string;
   unmet_headline: string;
+  /**
+   * The anchored scale the model answers against: what a quoted passage must
+   * show for `yes`, and for `partial`; anything less is `no`. A null `partial`
+   * makes the criterion yes/no only.
+   */
+  rubric: { yes: string; partial: string | null };
 }
 
 export const readinessCriterionResultSchema = z.object({
@@ -131,12 +137,7 @@ const dimensionsOf = <T extends z.ZodTypeAny>(dimension: T) =>
     brand_identity: dimension,
   });
 
-/**
- * The legacy freehand scorecard the model fills directly. Kept separate so the
- * criteria fields below never reach Gemini's responseSchema; deleted with the
- * legacy scorer.
- */
-export const readinessAnalysisCoreSchema = z.object({
+const readinessAnalysisCoreSchema = z.object({
   overall_score: z.number().int().min(0).max(100),
   dimensions: dimensionsOf(readinessDimensionCoreSchema),
   findings: z.array(readinessFindingCoreSchema).max(5).default([]),

@@ -18,6 +18,7 @@ export * from './business-summary';
 export * from './first-impression';
 export * from './inspirations';
 export * from './readiness';
+export * from './readiness-criteria';
 export * from './readiness-summary';
 export * from './scrape';
 export * from './sse-events';
