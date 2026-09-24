@@ -1,8 +1,8 @@
 // Coerce a checkpoint-report payload into something renderable.
 //
 // This is shape normalisation, not transport: several hundred lines that heal drifted report
-// payloads (legacy `sections`, a `report_assembly` envelope, loose KPI records, blocks-only
-// reports missing their derived legacy fields) into `FrontendCheckpointReport`. It lived inside
+// payloads (legacy `sections`, loose KPI records, blocks-only reports missing their derived
+// legacy fields) into `FrontendCheckpointReport`. It lived inside
 // the 4,122-line NDJSON reducer only because the reducer was the first caller; it is not reducer
 // logic and it outlived the reducer.
 //
@@ -18,8 +18,6 @@ import {
   frontendCheckpointReportSchema,
   type HandoffTraceEntry,
   type JainaObjectiveStatus,
-  type ReportAssembly,
-  reportAssemblySchema,
   reportPayloadSchema,
 } from './schemas';
 import { unwrapReportEnvelope } from './unwrapping';
@@ -64,68 +62,6 @@ function getNonEmptyString(value: unknown): string | undefined {
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
-}
-
-function normalizeReportAssemblyToSoT(reportAssembly: ReportAssembly): FrontendCheckpointReport {
-  const snapshot = reportAssembly.metrics.map((metric) => ({
-    metric: metric.label,
-    value: metric.actual,
-    change: metric.index_percent,
-    suffix: metric.unit === '%' ? '%' : undefined,
-    context: `Planned: ${metric.planned}`,
-    status:
-      metric.deviation_type === 'positive'
-        ? 'positive'
-        : metric.deviation_type === 'negative'
-          ? 'risk'
-          : 'neutral',
-  }));
-
-  const recommendations = reportAssembly.recommendations.map((entry) => {
-    if (typeof entry === 'string') {
-      return {
-        title: entry,
-        rationale: entry,
-        expected_impact: null,
-        priority: 'MEDIUM',
-      };
-    }
-
-    return {
-      title: entry.title,
-      rationale: entry.rationale,
-      expected_impact: entry.expected_impact,
-      priority: entry.priority,
-    };
-  });
-
-  return {
-    language: 'en',
-    report_title: reportAssembly.header.title,
-    executive_summary: reportAssembly.summary.narrative,
-    budget: null,
-    performance_snapshot: snapshot,
-    blocks: [],
-    sections: [
-      {
-        heading: reportAssembly.header.title,
-        scope: reportAssembly.header.period,
-        summary: reportAssembly.summary.principal_deviation || '',
-        highlights: reportAssembly.insights,
-        tables: [],
-        actions: recommendations,
-        confidence: null,
-        cached_sources: [],
-        graphs: reportAssembly.charts,
-      },
-    ],
-    strategic_recommendations: recommendations,
-    follow_up_questions: [],
-    handoff_trace: [],
-    execution_objectives: [],
-    cached_sources: [],
-    graphs: reportAssembly.charts,
-  };
 }
 
 function normalizeInsightSeverity(value: unknown): 'positive' | 'neutral' | 'watch' | 'risk' {
@@ -488,11 +424,6 @@ export function normalizeCheckpointReportPayload(value: unknown): FrontendCheckp
     const mergedStrict = mergeBlockDerivedCompatibility(strict.data);
     if (hasStructuredReportContent(mergedStrict)) return mergedStrict;
   }
-  const reportAssembly = reportAssemblySchema.safeParse(unwrappedValue);
-  if (reportAssembly.success) {
-    return normalizeReportAssemblyToSoT(reportAssembly.data);
-  }
-
   const payloadRecord = asRecord(unwrappedValue);
   if (!payloadRecord) return null;
   const summaryRecord = asRecord(payloadRecord.summary);

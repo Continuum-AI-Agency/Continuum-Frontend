@@ -48,7 +48,6 @@ export type JainaUIMessageMetadata = {
 export type JainaUIDataTypes = {
   'jaina-report-block': Record<string, unknown>;
   'jaina-report-meta': Record<string, unknown>;
-  'jaina-report-assembly': Record<string, unknown>;
   'jaina-report-error': Record<string, unknown>;
   'jaina-objective': Record<string, unknown>;
   'jaina-delegation': Record<string, unknown>;
@@ -119,7 +118,6 @@ export type JainaUIDataPartType = `data-${keyof JainaUIDataTypes & string}`;
 export const JAINA_UI_DATA_PART = {
   reportBlock: 'data-jaina-report-block',
   reportMeta: 'data-jaina-report-meta',
-  reportAssembly: 'data-jaina-report-assembly',
   reportError: 'data-jaina-report-error',
   objective: 'data-jaina-objective',
   delegation: 'data-jaina-delegation',

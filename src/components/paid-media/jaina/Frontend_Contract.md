@@ -467,10 +467,10 @@ type JainaResult =
   | { type: "clarification_request"; clarification: ClarificationRequest }
   | { type: "plan_ready"; plan: ObjectivePlan }
   | { type: "checkpoint_report"; report: FrontendCheckpointReport }   // PRIMARY
-  | { type: "report_assembly"; report: ReportAssembly; htmlPreview: string };
+  | { type: "report_artifact_job"; content: string; job: { job_id: string; status: string; report_model?: string; status_endpoint?: string; file_url_endpoint?: string } };
 ```
 
-**The primary result type is `checkpoint_report`.** `report_assembly` is a legacy PDF-style report used only by the report jobs worker. `text` is emitted for simple conversational answers.
+**The primary result type is `checkpoint_report`.** `report_artifact_job` is returned when a formal HTML report was queued through `create_formal_report_artifact`. `text` is emitted for simple conversational answers. (The former `report_assembly` result type was deleted on 2026-09-23.)
 
 ---
 

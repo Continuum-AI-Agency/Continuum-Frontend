@@ -685,56 +685,6 @@ export const checkpointReportV2Schema = z.object({
 });
 export type CheckpointReportV2 = z.infer<typeof checkpointReportV2Schema>;
 
-export const chartDatasetSchema = z.object({
-  label: z.string(),
-  data: z.array(z.number()),
-  backgroundColor: z.string().optional(),
-  borderColor: z.string().optional(),
-});
-
-export type ChartDataset = z.infer<typeof chartDatasetSchema>;
-
-export const chartSpecificationSchema = z.object({
-  title: z.string(),
-  chart_type: z.enum(['bar', 'line', 'pie', 'doughnut']),
-  labels: z.array(z.string()),
-  datasets: z.array(chartDatasetSchema),
-  options: z.record(z.string(), z.any()).optional(),
-});
-
-export type ChartSpecification = z.infer<typeof chartSpecificationSchema>;
-
-export const metricComparisonSchema = z.object({
-  label: z.string(),
-  planned: z.union([z.number(), z.string()]),
-  actual: z.union([z.number(), z.string()]),
-  index_percent: z.number(),
-  unit: z.string(),
-  deviation_type: z.enum(['positive', 'negative', 'neutral']),
-});
-
-export type MetricComparison = z.infer<typeof metricComparisonSchema>;
-
-export const reportAssemblySchema = z.object({
-  header: z.object({
-    title: z.string(),
-    subtitle: z.string().optional(),
-    period: z.string(),
-    report_tags: z.array(z.string()),
-  }),
-  summary: z.object({
-    narrative: z.string(),
-    principal_deviation: z.string().optional(),
-  }),
-  metrics: z.array(metricComparisonSchema),
-  charts: z.array(chartSpecificationSchema),
-  insights: z.array(insightSchema),
-  recommendations: z.array(z.union([recommendationItemSchema, z.string()])),
-  metadata: z.record(z.string(), z.any()).optional(),
-});
-
-export type ReportAssembly = z.infer<typeof reportAssemblySchema>;
-
 export const responseCreatedSchema = streamEventSchema(
   'response.created',
   z.object({
@@ -1010,16 +960,6 @@ export const responseBlockDeltaV2TolerantSchema = streamEventSchema(
   }),
 );
 
-export const responseReportAssemblySchema = streamEventSchema(
-  'response.report_assembly',
-  z.object({
-    item_id: z.string(),
-    part_id: z.string(),
-    report: reportAssemblySchema,
-    html_preview: z.string(),
-  }),
-);
-
 export const responseReportArtifactJobStartedSchema = streamEventSchema(
   'response.report_artifact_job.started',
   z
@@ -1178,7 +1118,6 @@ export type JainaStreamEvent =
   | z.infer<typeof responseCheckpointReportSchema>
   | z.infer<typeof responseBlockDeltaV2TolerantSchema>
   | z.infer<typeof responseBlockDeltaSchema>
-  | z.infer<typeof responseReportAssemblySchema>
   | z.infer<typeof responseReportArtifactJobStartedSchema>
   | z.infer<typeof responseOutputJsonDeltaSchema>
   | z.infer<typeof outputTextDeltaSchema>
@@ -1259,7 +1198,6 @@ export const jainaStreamEventSchema = z.union([
   responseCheckpointReportSchema,
   responseBlockDeltaV2TolerantSchema,
   responseBlockDeltaSchema,
-  responseReportAssemblySchema,
   responseReportArtifactJobStartedSchema,
   responseOutputJsonDeltaSchema,
   outputTextDeltaSchema,

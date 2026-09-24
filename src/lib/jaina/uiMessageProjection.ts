@@ -45,10 +45,7 @@ import type {
   JainaPlan,
   JainaProgressEntry,
 } from '@/components/paid-media/jaina/types';
-import {
-  interpretCheckpointReportPayload,
-  normalizeCheckpointReportPayload,
-} from '@/lib/jaina/reportPayload';
+import { interpretCheckpointReportPayload } from '@/lib/jaina/reportPayload';
 import type { JainaScaffoldState } from '@/lib/jaina/scaffoldTypes';
 import {
   type ArtifactDeltaEventData,
@@ -56,10 +53,8 @@ import {
   hasReportContent,
   type JainaObjective,
   jainaObjectiveSchema,
-  type ReportAssembly,
   type ReportPayload,
   type ResponseReportArtifactJobStartedEventData,
-  reportAssemblySchema,
   responseReportArtifactJobStartedSchema,
   type ToolCallEventData,
   type ToolResultEventData,
@@ -265,19 +260,6 @@ export const reportOf = (message: JainaUIMessage): Record<string, unknown> | und
   return { ...rest, blocks };
 };
 
-export const reportAssemblyOf = (
-  message: JainaUIMessage,
-): { report: ReportAssembly; htmlPreview?: string } | undefined => {
-  const data = partsOfType(message, JAINA_UI_DATA_PART.reportAssembly).at(-1);
-  if (!data) return undefined;
-  const parsed = reportAssemblySchema.safeParse(data.report);
-  if (!parsed.success) return undefined;
-  return {
-    report: parsed.data,
-    ...(typeof data.html_preview === 'string' ? { htmlPreview: data.html_preview } : {}),
-  };
-};
-
 export const reportArtifactJobOf = (
   message: JainaUIMessage,
 ): ResponseReportArtifactJobStartedEventData | undefined => {
@@ -371,7 +353,10 @@ export const scaffoldOf = (message: JainaUIMessage): JainaScaffoldState | undefi
       const receipt = paidScaffoldReceiptPayloadSchema.safeParse(data);
       if (!receipt.success) continue;
       if (scaffold && scaffold.scaffoldId !== receipt.data.scaffoldId) continue;
-      scaffold = { ...(scaffold ?? seededScaffoldState(receipt.data.scaffoldId)), receipt: receipt.data };
+      scaffold = {
+        ...(scaffold ?? seededScaffoldState(receipt.data.scaffoldId)),
+        receipt: receipt.data,
+      };
       continue;
     }
 
@@ -755,10 +740,7 @@ export const toJainaChatMessage = (
   if (role === 'user') return base;
 
   const interpreted = interpretCheckpointReportPayload(reportOf(message));
-  const assembly = reportAssemblyOf(message);
-  const report: ReportPayload | undefined =
-    interpreted?.report ??
-    (assembly ? (normalizeCheckpointReportPayload(assembly.report) ?? undefined) : undefined);
+  const report: ReportPayload | undefined = interpreted?.report;
 
   const reasoning = reasoningEntriesOf(message);
   const objectives = objectivesOf(message);
@@ -784,9 +766,7 @@ export const toJainaChatMessage = (
       report &&
       !('type' in report && report.type === 'direct_answer') &&
       hasReportContent(report) &&
-      (resolveReportSignal(reasoning, reportSignalRecordsOf(message)) ||
-        Boolean(interpreted) ||
-        Boolean(assembly)),
+      (resolveReportSignal(reasoning, reportSignalRecordsOf(message)) || Boolean(interpreted)),
   );
 
   return {
@@ -811,8 +791,6 @@ export const toJainaChatMessage = (
     ...(toolResults.length > 0 ? { toolResults } : {}),
     ...(report ? { report } : {}),
     ...(interpreted?.reportV2 ? { reportV2: interpreted.reportV2 } : {}),
-    ...(assembly ? { reportAssembly: assembly.report } : {}),
-    ...(assembly?.htmlPreview ? { reportAssemblyHtml: assembly.htmlPreview } : {}),
     ...(reportArtifactJob ? { reportArtifactJob } : {}),
     ...(plan ? { plan } : {}),
     ...(artifacts.creatives?.length || artifacts.images?.length ? { artifacts } : {}),

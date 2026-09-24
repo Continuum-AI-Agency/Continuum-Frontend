@@ -114,7 +114,6 @@ import {
   type JainaPlanAction,
   type JainaScaffoldAction,
   type JainaToolAction,
-  reportAssemblySchema,
 } from '@/lib/jaina/schemas';
 import {
   canvasActionsOf,
@@ -489,46 +488,6 @@ function parsePersistedReportV2(
     content: message.content,
     reasoning: message.reasoning,
   });
-}
-
-function parsePersistedReportAssembly(
-  message: JainaConversationMessage,
-): JainaChatMessage['reportAssembly'] | undefined {
-  const parsed = reportAssemblySchema.safeParse(message.reportAssembly);
-  return parsed.success ? parsed.data : undefined;
-}
-
-function parseReportAssemblyFromUnknown(
-  value: unknown,
-  depth = 0,
-): JainaChatMessage['reportAssembly'] | undefined {
-  if (depth > 5 || value == null) return undefined;
-
-  const direct = reportAssemblySchema.safeParse(value);
-  if (direct.success) return direct.data;
-
-  if (typeof value !== 'object' || Array.isArray(value)) return undefined;
-  const record = value as Record<string, unknown>;
-
-  const candidates = [
-    record.report_assembly,
-    record.reportAssembly,
-    record.result_payload,
-    record.report,
-    record.payload,
-    record.data,
-    record.content,
-    record.detail,
-    record.message,
-    record.response,
-  ];
-
-  for (const candidate of candidates) {
-    const parsed = parseReportAssemblyFromUnknown(candidate, depth + 1);
-    if (parsed) return parsed;
-  }
-
-  return undefined;
 }
 
 function deriveObjectivesFromReport(
