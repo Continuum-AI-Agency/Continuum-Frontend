@@ -269,6 +269,7 @@ export const templatePreviewSchema = z
         width: true,
         height: true,
         durationSec: true,
+        frameRate: true,
         isDelivery: true,
       }),
     ),
@@ -276,14 +277,18 @@ export const templatePreviewSchema = z
       templateRatioSchema.pick({ ratio: true, width: true, height: true, comps: true }),
     ),
     slots: z.array(
-      templateSlotSchema.pick({
-        key: true,
-        kind: true,
-        comps: true,
-        box: true,
-        placement: true,
-        instances: true,
-      }),
+      templateSlotSchema
+        .pick({
+          key: true,
+          kind: true,
+          comps: true,
+          box: true,
+          placement: true,
+          instances: true,
+        })
+        // The layer's own name, for the wireframe's hover label. Optional so a Frontend that
+        // ships before the Backend still reads the previews it is sent today.
+        .extend({ name: templateSlotSchema.shape.name.optional() }),
     ),
   })
   .strict();

@@ -6,7 +6,12 @@
  */
 
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import type { ApiRenderJob, ApiRenderOutput, TemplateSource } from '@continuum/contracts';
+import type {
+  ApiRenderJob,
+  ApiRenderOutput,
+  TemplateForgeNeed,
+  TemplateSource,
+} from '@continuum/contracts';
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
 const ASSET = '55555555-5555-4555-8555-555555555555';
@@ -67,7 +72,7 @@ const PUBLISHED_RUN = {
   ok: true,
   progress: null,
   findings: [],
-  needs: [],
+  needs: [] as TemplateForgeNeed[],
   error: null,
   root_table: 'tpl_starcraft_b17d81_starcraft_promo_root',
   application: 'Continuum_app',
@@ -80,6 +85,7 @@ let fontReadiness = {
   parseState: 'parsed' as const,
 };
 let jobs: ApiRenderJob[] = [];
+let variableParseState = 'parsed';
 
 const job = (overrides: Partial<ApiRenderJob>): ApiRenderJob => ({
   id: crypto.randomUUID(),
@@ -151,6 +157,12 @@ const pushTemplateFonts = mock(async (_brandId: string, _assetId: string, fire: 
       },
 );
 
+const healTemplateFonts = mock(async (_brandId: string, _assetId: string) => ({
+  fromPackage: [],
+  fromGoogle: ['Fresh Parsed Face'],
+  stillMissing: [],
+}));
+
 mock.module('@/lib/library/templateSources', () => ({
   fetchTemplateVariables: async () => ({
     variables: [
@@ -181,7 +193,7 @@ mock.module('@/lib/library/templateSources', () => ({
         updatedAt: '2026-09-12T00:00:00Z',
       },
     ],
-    parseState: 'parsed',
+    parseState: variableParseState,
   }),
   fetchRenderWorkspaces: async () => workspaces,
   fetchTemplateFonts: async () => fontReadiness,
@@ -204,6 +216,18 @@ mock.module('@/lib/library/templateSources', () => ({
   previewTemplateRebind: async () => null,
   confirmTemplateRebind: async () => null,
   fetchTemplateRun: async () => null,
+  healTemplateFonts,
+  fetchTemplateEvents: async () => [
+    {
+      id: 'e1',
+      at: '2026-09-22T01:01:09Z',
+      stage: 'parse',
+      level: 'info',
+      message: 'Read 9 variables in 4 format(s); it uses 3 font(s).',
+      detail: null,
+    },
+  ],
+  uploadTemplateFontFiles: async () => ({ stored: [], refused: [] }),
 }));
 mock.module('@/components/forge/useForgeRun', () => ({
   useForgeRun: () => ({
@@ -252,6 +276,8 @@ afterEach(() => {
     parseState: 'parsed',
   };
   jobs = [];
+  variableParseState = 'parsed';
+  healTemplateFonts.mockClear();
   pushTemplateFonts.mockClear();
   advanceTemplateForgeRun.mockClear();
 });
@@ -381,9 +407,52 @@ describe('TemplateDetail', () => {
     expect(check('Fonts').textContent).toContain('1 of 1 not uploaded: Fresh Parsed Face');
     expect(visibleText()).not.toContain('HeadingNow');
 
-    // The footer's next step opens the failing row onto each face's state.
-    fireEvent.click(screen.getByRole('button', { name: 'Investigate' }));
+    // A missing face is the common case, so the footer fixes it rather than pointing at it.
+    fireEvent.click(screen.getByRole('button', { name: 'Fix problems' }));
+    await waitFor(() => expect(healTemplateFonts).toHaveBeenCalledWith(BRAND, ASSET));
+    fireEvent.click(screen.getByRole('button', { name: 'Fonts details' }));
     expect(await screen.findByText('Fresh Parsed Face · not uploaded')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add font files' })).toBeTruthy();
+  });
+
+  test('with nothing to fix, Investigate opens the ingest trail', async () => {
+    run = { ...PUBLISHED_RUN, state: 'failed', ok: false };
+    renderDetail(undefined, { ...SOURCE, templateKey: null, forgeState: 'failed' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Investigate' }));
+    expect(
+      await screen.findByText('Read 9 variables in 4 format(s); it uses 3 font(s).', {
+        selector: 'ol span',
+      }),
+    ).toBeTruthy();
+  });
+
+  test('Fix retries a failed initial parse', async () => {
+    variableParseState = 'failed';
+    run = null;
+    renderDetail(undefined, { ...SOURCE, parse: null, parseState: 'failed', templateKey: null });
+    fireEvent.click(await screen.findByRole('button', { name: 'Fix problems' }));
+    await waitFor(() => expect(healTemplateFonts).toHaveBeenCalledWith(BRAND, ASSET));
+  });
+
+  test('Fix resumes a build waiting for packaged footage', async () => {
+    run = {
+      ...PUBLISHED_RUN,
+      state: 'needs_input',
+      needs: [
+        {
+          id: 'media:logo',
+          kind: 'asset',
+          reason: 'Upload failed',
+          slot: { stableKey: 'logo', type: 'mediaSource-image', label: 'Logo' },
+          options: [],
+        },
+      ],
+    };
+    renderDetail(undefined, { ...SOURCE, templateKey: null, forgeState: 'needs_input' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Fix problems' }));
+    await waitFor(() =>
+      expect(advanceTemplateForgeRun).toHaveBeenCalledWith(BRAND, ASSET, 'resume'),
+    );
   });
 
   test('reviews a dry plan before installing held faces', async () => {

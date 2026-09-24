@@ -66,14 +66,40 @@ export type RequestRowMedia = {
   thumbnailUrl?: string | null;
   /** What the cell calls the picked asset. */
   name?: string;
+  /** A picked video's length, when the Library stored one. */
+  durationSec?: number;
+  /** A picked video with no stored length, so the cell can read it from the file itself. */
+  clipUrl?: string;
 };
 
 /** What the grid keeps about a picked Library asset — none of it goes over the wire. */
 export const rowMediaOf = (asset: MediaAsset): RequestRowMedia => ({
   ...(asset.width && asset.height ? { w: asset.width, h: asset.height } : {}),
+  ...(asset.durationMs ? { durationSec: asset.durationMs / 1000 } : {}),
+  // Most Library videos carry no stored length (136 of 1,276 on 2026-09-22).
+  ...(asset.kind === 'video' && !asset.durationMs && asset.signedUrl
+    ? { clipUrl: asset.signedUrl }
+    : {}),
   thumbnailUrl: asset.thumbnailUrl ?? asset.signedUrl ?? null,
   name: asset.title || asset.fileName,
 });
+
+/** Under a frame at 24 fps: a clip this close to the slot's length is not "short". */
+const CLIP_SLACK_SEC = 0.04;
+
+/**
+ * Seconds a picked clip falls short of what its video slot plays, or null when it covers it or
+ * either length is unknown. A render keeps the layer's timing and swaps only the clip, so a short
+ * clip runs out and the layer is empty for the rest; a long one is simply cut.
+ */
+export function clipShortBy(
+  clip: ApiRenderVariable['clip'],
+  durationSec: number | undefined,
+): number | null {
+  if (!clip || durationSec === undefined) return null;
+  const short = clip.toSec - durationSec;
+  return short > CLIP_SLACK_SEC ? short : null;
+}
 
 /**
  * Where one row's render goes. A spreadsheet names a replace by ad id alone; pre-flight resolves

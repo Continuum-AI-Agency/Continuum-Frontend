@@ -8,6 +8,7 @@ import {
   buildTemplateCsv,
   canImportRows,
   clearKey,
+  clipShortBy,
   descendantsOf,
   discardProposed,
   duplicateLabel,
@@ -38,6 +39,7 @@ import {
   rowBreadcrumb,
   rowDepth,
   rowFileCount,
+  rowMediaOf,
   rowsFromMappedImport,
   rowsFromSuggestion,
   seedRow,
@@ -80,6 +82,33 @@ const logo = variable({
   required: true,
 });
 const all = [headline, price, onSale, size, hero, logo];
+
+describe('a video slot’s clip length', () => {
+  const clip = { fromSec: 4.6667, toSec: 10, playsSec: 5.3333 };
+
+  test('a clip short of the last second the slot plays is short by the difference', () => {
+    expect(clipShortBy(clip, 6)).toBe(4);
+    // A frame of slack: 9.97s of a 10s slot is the same clip, rounded.
+    expect(clipShortBy(clip, 9.97)).toBeNull();
+    expect(clipShortBy(clip, 12)).toBeNull();
+  });
+
+  test('says nothing when either length is unknown', () => {
+    expect(clipShortBy(null, 6)).toBeNull();
+    expect(clipShortBy(clip, undefined)).toBeNull();
+  });
+
+  test('a picked video keeps its stored length, or its file when none was stored', () => {
+    const video = {
+      kind: 'video',
+      fileName: 'bg.mp4',
+      signedUrl: 'https://cdn.test/bg.mp4',
+    } as Parameters<typeof rowMediaOf>[0];
+    expect(rowMediaOf({ ...video, durationMs: 12_500 })).toMatchObject({ durationSec: 12.5 });
+    expect(rowMediaOf({ ...video, durationMs: 12_500 }).clipUrl).toBeUndefined();
+    expect(rowMediaOf({ ...video, durationMs: null }).clipUrl).toBe('https://cdn.test/bg.mp4');
+  });
+});
 
 describe('seedRow', () => {
   test('takes the designer’s samples, typed, and never media or reserved slots', () => {

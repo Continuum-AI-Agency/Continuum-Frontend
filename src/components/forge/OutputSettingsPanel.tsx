@@ -14,6 +14,7 @@ import {
   encodeStyleFiles,
   encodeStyleOf,
   flattenEncodeSettings,
+  isMotion,
   mergeEncodeSettings,
   unflattenEncodeSettings,
 } from '@continuum/contracts';
@@ -161,7 +162,7 @@ export function isStillsOnly(contract: Pick<ApiRenderTemplateContract, 'outputs'
   const named = contract.outputs.filter((output) => output.mediaType != null);
   if (named.length) return named.every((output) => !encodeContainerOf(output.mediaType));
   const motion = contract.template.motion;
-  return motion != null && Math.round(motion.durationSec * motion.frameRate) <= 1;
+  return motion != null && !isMotion(motion.durationSec, motion.frameRate);
 }
 
 export function setEncodeLeaves(

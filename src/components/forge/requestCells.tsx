@@ -8,6 +8,7 @@ import {
   type ApiRenderTemplateContract,
   type ApiRenderVariable,
   checkAssetSwap,
+  clipRequirement,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   type MediaAsset,
   readableLayerName,
@@ -45,6 +46,7 @@ import { EncodeOverrideCell } from '@/components/forge/EncodeOverrideCell';
 import { ActionMenuItems, rowActions, takeFocusAfter } from '@/components/forge/gridActions';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import {
+  clipShortBy,
   effectiveMedia,
   effectiveOutputIds,
   effectiveValues,
@@ -157,6 +159,8 @@ function fitTone(verdict: ApiRenderFitVerdict | null) {
   return { variant: 'success' as const, text: 'Fits', title: verdict.why };
 }
 
+const secs = (value: number) => `${value.toFixed(1)}s`;
+
 function MediaPicker({
   variable,
   value,
@@ -183,6 +187,16 @@ function MediaPicker({
       ? `${pins.length} picked`
       : (media?.name ?? 'Picked')
     : 'Choose';
+  // A video slot plays a fixed stretch of its clip — the render keeps the layer's timing — so its
+  // length rides in the field like a text budget does. A length the Library never stored is read
+  // from the file's own metadata.
+  const clip = variable.clip;
+  const [measured, setMeasured] = useState<{ url: string; sec: number } | null>(null);
+  const clipSec =
+    media?.durationSec ?? (measured?.url === media?.clipUrl ? measured?.sec : undefined);
+  const shortBy = pins.length ? clipShortBy(clip, clipSec) : null;
+  // Same wording as the template editor's badge — one formatter, so the two cannot drift.
+  const clipNeed = clipRequirement(clip)?.detail ?? null;
   // One line whatever was picked: a fixed-width anchor that truncates, controls that never wrap.
   return (
     <div className="flex items-center gap-1.5">
@@ -197,7 +211,7 @@ function MediaPicker({
           <button
             type="button"
             aria-label={`${pins.length ? 'Change' : 'Choose'} ${variable.label}`}
-            title={pins.length ? picked : undefined}
+            title={[pins.length ? picked : null, clipNeed].filter(Boolean).join(' · ') || undefined}
             className="flex h-7 w-32 shrink-0 items-center gap-1.5 rounded-md border border-border/70 px-1.5 text-2xs text-muted-foreground hover:bg-muted/50"
             onClick={() => setOpen(true)}
           >
@@ -211,10 +225,43 @@ function MediaPicker({
               <Kind className="size-3 shrink-0" aria-hidden />
             )}
             <span className="min-w-0 flex-1 truncate text-left">{picked}</span>
-            {!pins.length ? <Library className="size-3 shrink-0" aria-hidden /> : null}
+            {clip ? (
+              <span
+                className={cn(
+                  'shrink-0 font-mono tabular-nums',
+                  shortBy !== null && 'text-warning',
+                )}
+              >
+                {clipRequirement(clip)?.chip}
+              </span>
+            ) : !pins.length ? (
+              <Library className="size-3 shrink-0" aria-hidden />
+            ) : null}
           </button>
         }
       />
+      {clip && pins.length && clipSec === undefined && media?.clipUrl ? (
+        // biome-ignore lint/a11y/useMediaCaption: read for its length, never shown
+        <video
+          src={media.clipUrl}
+          preload="metadata"
+          muted
+          hidden
+          onLoadedMetadata={(event) => {
+            const sec = event.currentTarget.duration;
+            if (Number.isFinite(sec) && media.clipUrl) setMeasured({ url: media.clipUrl, sec });
+          }}
+        />
+      ) : null}
+      {shortBy !== null && clipSec !== undefined && clip ? (
+        <Badge
+          variant="warning"
+          title={`This clip is ${secs(clipSec)}; the template plays it to ${secs(clip.toSec)}, so it runs out ${secs(shortBy)} early and the layer is empty for the rest.`}
+          className="shrink-0 px-1 py-0 text-2xs"
+        >
+          Short
+        </Badge>
+      ) : null}
       {fit ? (
         <Badge variant={fit.variant} title={fit.title} className="shrink-0 px-1 py-0 text-2xs">
           {fit.text}

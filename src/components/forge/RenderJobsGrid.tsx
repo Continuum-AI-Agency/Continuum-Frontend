@@ -135,6 +135,22 @@ function Thumbnail({ output }: { output: ApiRenderOutput | null }) {
       />
     );
   }
+  // A video shows its own first frame, the same way a template card does — an icon told you a
+  // video exists but nothing about what rendered, which is the whole point of a ledger thumbnail.
+  if (output?.kind === 'video' && !broken) {
+    return (
+      // biome-ignore lint/a11y/useMediaCaption: a silent preview frame has no captions to show
+      <video
+        src={`${output.url}#t=0.1`}
+        aria-label="Rendered video"
+        className="size-9 rounded-sm object-contain"
+        muted
+        playsInline
+        preload="metadata"
+        onError={() => setBroken(true)}
+      />
+    );
+  }
   if (output?.kind === 'video') {
     return (
       <div className="flex size-9 items-center justify-center rounded-sm bg-muted">

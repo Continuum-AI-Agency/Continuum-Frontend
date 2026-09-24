@@ -4,6 +4,7 @@ import { Accordion as AccordionPrimitive } from '@base-ui/react/accordion';
 import {
   type ApiRenderVariableKind,
   apiRenderVariableLabel,
+  clipRequirement,
   readableLayerName,
   SLOT_ROLE_KIND,
   SLOT_ROLES,
@@ -400,6 +401,7 @@ export function VariableEditor({
             savedDefaults[variable.key] ?? null,
           );
           const textLike = variable.kind === 'text' || variable.kind === 'enum';
+          const clipShown = clipRequirement(variable.clip);
           return (
             <AccordionItem key={variable.key} value={variable.key} render={<li />}>
               {/* The stock trigger adds chevrons and an underline; this row IS the trigger. */}
@@ -420,8 +422,11 @@ export function VariableEditor({
                     )}
                   </span>
                   <DefaultPreview variable={variable} value={defaultValue} />
-                  <span className="text-right font-mono tabular-nums text-muted-foreground">
-                    {textLike && budget !== null ? `${budget} ch` : null}
+                  <span
+                    className="text-right font-mono tabular-nums text-muted-foreground"
+                    title={clipShown?.detail}
+                  >
+                    {textLike && budget !== null ? `${budget} ch` : (clipShown?.chip ?? null)}
                   </span>
                   <span className="flex justify-end">
                     {required ? (

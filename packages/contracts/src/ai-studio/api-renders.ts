@@ -158,9 +158,45 @@ export const apiRenderVariableSchema = z
     sample: z.string().nullable().default(null),
     /** Where this slot lands, so a picked asset can be placed before a render is spent. */
     placement: slotPlacementSchema.nullable().default(null),
+    /**
+     * A video slot's clip, in the clip's own seconds: the template plays `fromSec..toSec` of
+     * whatever is picked (across every ratio), and shows it for `playsSec` at most. A render
+     * keeps the layer's timing and swaps only the clip, so a clip shorter than `toSec` runs out
+     * and the layer is empty for the rest. Null when unparsed, not a video, or time-remapped.
+     */
+    clip: z
+      .object({ fromSec: z.number(), toSec: z.number(), playsSec: z.number() })
+      .strict()
+      .nullable()
+      .default(null),
   })
   .strict();
 export type ApiRenderVariable = z.infer<typeof apiRenderVariableSchema>;
+
+/**
+ * How a video slot's clip requirement reads — the one wording every surface uses.
+ *
+ * `toSec` is a REQUIREMENT, not a duration: a clip shorter than it runs out before the layer
+ * does. Shown bare it reads as "this is 12 seconds long", which is how the template editor came
+ * to display a worse number than the render grid it feeds. The `\u2265` is what makes it a demand.
+ *
+ * Lives beside `clip` rather than beside `clipOfSlot`, so the field and its wording are mirrored
+ * into the Frontend's vendored contracts copy together and cannot deploy out of step.
+ *
+ * `chip` is sized for a 3.5rem column; `detail` is the sentence for its title.
+ */
+export function clipRequirement(
+  clip: ApiRenderVariable['clip'] | undefined,
+): { chip: string; detail: string } | null {
+  if (!clip) return null;
+  const sec = (value: number) => `${value.toFixed(1)}s`;
+  return {
+    chip: `\u2265${sec(clip.toSec)}`,
+    detail:
+      `Plays ${sec(clip.fromSec)}\u2013${sec(clip.toSec)} of the clip, on screen up to ` +
+      `${sec(clip.playsSec)}. A shorter clip runs out and leaves the layer empty.`,
+  };
+}
 
 export const apiRenderTemplateSummarySchema = z
   .object({
@@ -267,11 +303,19 @@ export function templateRefOf(template: { bindingId: string; key: string }): str
   return `${template.bindingId}:${template.key}`;
 }
 
+/**
+ * One frame is a still; anything longer is motion. THE rule — `motionLabel`, the gallery's
+ * Animated filter, `outputKindsOf` and the encode guard all defer to it, so a template cannot be
+ * a video in one place and a still in another.
+ */
+export function isMotion(durationSec: number, frameRate: number): boolean {
+  return Math.round(durationSec * frameRate) > 1;
+}
+
 /** `1 frame` for a still, `6.0s · 30 fps` for a video. The pane's whole motion vocabulary. */
 export function motionLabel(motion: ApiRenderTemplateSummary['motion']): string | null {
   if (!motion) return null;
-  const frames = Math.round(motion.durationSec * motion.frameRate);
-  return frames <= 1
+  return !isMotion(motion.durationSec, motion.frameRate)
     ? 'Still · 1 frame'
     : `${motion.durationSec.toFixed(1)}s · ${Math.round(motion.frameRate)} fps`;
 }
@@ -460,7 +504,8 @@ export function encodeContainerOf(mediaType: string | null | undefined): 'mp4' |
 export const ENCODE_FILE_CONTAINERS = ['mp4', 'mov', 'mxf', 'webm', 'gif'] as const;
 export type EncodeFileContainer = (typeof ENCODE_FILE_CONTAINERS)[number];
 
-const FILE_LABEL: Record<EncodeFileContainer, string> = {
+/** The display name of each container — the one spelling every surface and bench must use. */
+export const FILE_LABEL: Record<EncodeFileContainer, string> = {
   mp4: 'MP4',
   mov: 'MOV',
   mxf: 'MXF',

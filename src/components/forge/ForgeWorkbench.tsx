@@ -8,15 +8,14 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fileSha256, matchDroppedFile, uploadRefusal } from '@/components/forge/ForgeProjectDrop';
-import { PendingApprovals } from '@/components/forge/PendingApprovals';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
+import { SharedTemplateDetail } from '@/components/forge/SharedTemplateDetail';
 import {
   type SharedTemplate,
   sharedTemplateId,
   sourceDisplayName,
 } from '@/components/forge/TemplateCard';
-import { SharedTemplateDetail } from '@/components/forge/SharedTemplateDetail';
 import { TemplateDetail } from '@/components/forge/TemplateDetail';
 import { TemplateGallery } from '@/components/forge/TemplateGallery';
 import { useTemplateMorphSwap } from '@/components/forge/TemplateWireframe';
@@ -38,6 +37,7 @@ import {
   fetchTemplateSources,
   renameTemplateSource,
   setTemplateAdoption,
+  uploadTemplateFontFiles,
 } from '@/lib/library/templateSources';
 
 // Forge — bring your own After Effects project.
@@ -281,6 +281,12 @@ export function ForgeWorkbench({
     if (existing) open(existing.assetId);
   };
 
+  const receiveFonts = async (files: File[]) => {
+    const { stored, refused } = await uploadTemplateFontFiles(brandId, files);
+    if (stored.length) toast.success(`Fonts added: ${stored.join(', ')}`);
+    if (refused.length) toast.error(`Fonts not added: ${refused.join('; ')}`);
+  };
+
   const asking = sameName[0];
   const answer = (choice: 'revision' | 'template' | null) => {
     if (!asking) return;
@@ -300,10 +306,6 @@ export function ForgeWorkbench({
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      {/* Above everything: a batch waiting on a person is the most time-sensitive thing on this
-          page, and it belongs to no one template. Renders nothing when there is nothing waiting. */}
-      <PendingApprovals brandId={brandId} />
-
       {uploads.length ? (
         <div className="flex flex-col gap-1.5">
           <UploadStrip
@@ -357,9 +359,10 @@ export function ForgeWorkbench({
           onToggleShared={(template) => void toggleShared(template)}
           onOpenRender={onOpenRender}
           onFiles={(files) => void receive(files)}
+          onFonts={receiveFonts}
           onRejected={(files) =>
             toast.error(
-              `${files.map((file) => file.name).join(', ')}: use .aep, .aepx, .aet, or .zip files.`,
+              `${files.map((file) => file.name).join(', ')}: use .aep, .aepx, .aet or .zip, and .ttf or .otf for fonts.`,
             )
           }
         />

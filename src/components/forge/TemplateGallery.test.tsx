@@ -98,10 +98,12 @@ const SHARED: SharedTemplate[] = [
 function renderGallery(
   onToggleShared = mock((_template: SharedTemplate) => undefined),
   {
+    sources = SOURCES,
     shared = SHARED,
     adopting = null,
     onOpenShared = () => undefined,
   }: {
+    sources?: TemplateSource[];
     shared?: SharedTemplate[];
     adopting?: string | null;
     onOpenShared?: (template: SharedTemplate) => void;
@@ -113,7 +115,7 @@ function renderGallery(
       <TemplateGallery
         brandId={BRAND}
         brandName="StarCraft"
-        sources={SOURCES}
+        sources={sources}
         shared={shared}
         adopting={adopting}
         onOpen={() => undefined}
@@ -121,6 +123,7 @@ function renderGallery(
         onRename={() => undefined}
         onToggleShared={onToggleShared}
         onFiles={() => undefined}
+        onFonts={async () => undefined}
         onRejected={() => undefined}
       />
     </QueryClientProvider>,
@@ -263,6 +266,82 @@ describe('TemplateGallery', () => {
     } finally {
       logged.mockRestore();
     }
+  });
+
+  test('Animated and Static narrow by what a template delivers, stacked on the status filter', async () => {
+    const comp = (name: string, durationSec: number, isDelivery = true) => ({
+      name,
+      width: 1920,
+      height: 1080,
+      frameRate: 30,
+      durationSec,
+      layerCount: 3,
+      isTop: isDelivery,
+      isDelivery,
+    });
+    const parsed = (displayName: string, comps: ReturnType<typeof comp>[], updatedAt: string) => {
+      const base = source({ displayName, updatedAt });
+      return { ...base, parse: { ...base.parse!, comps } };
+    };
+    // A 15s precomp under a one-frame delivery comp is still a stills template (template 133).
+    const stills = parsed(
+      'Promo stills',
+      [comp('Main', 1 / 30), comp('Background', 15, false)],
+      '2026-09-11T00:00:00Z',
+    );
+    const card = parsed('Inyogo card', [comp('RENDER Card 1', 21.6)], '2026-09-12T00:00:00Z');
+    // Operator-built and unparsed: only its render says it is video.
+    const inyogo: SharedTemplate = {
+      templateKey: '298',
+      name: 'inyogo demo',
+      draft: false,
+      granted: true,
+      updatedAt: '2026-09-09T00:00:00Z',
+      workspaceId: 'six-app',
+    };
+    const unknown: SharedTemplate = { ...inyogo, templateKey: '88', name: 'Hero offer' };
+    jobs = [
+      apiRenderJobSchema.parse({
+        id: crypto.randomUUID(),
+        brandId: BRAND,
+        templateKey: '298',
+        templateName: 'inyogo demo',
+        contractHash: 'hash',
+        taskUid: 'T1',
+        status: 'finished',
+        outputs: [
+          {
+            id: 'card.mp4',
+            kind: 'video',
+            fileName: 'card.mp4',
+            mimeType: 'video/mp4',
+            url: 'https://cdn.test/card.mp4',
+            width: null,
+            height: null,
+          },
+        ],
+        delivery: [],
+        error: null,
+        createdAt: '2026-09-12T00:00:00Z',
+        updatedAt: '2026-09-12T00:00:00Z',
+      }),
+    ];
+    renderGallery(undefined, { sources: [stills, card], shared: [inyogo, unknown] });
+
+    const animated = await screen.findByRole('button', { name: 'Animated 2' });
+    fireEvent.click(animated);
+    expect(cardNames()).toEqual(['Inyogo card', 'Inyogo demo']);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Shared with you/ }));
+    expect(cardNames()).toEqual(['Inyogo demo']);
+
+    fireEvent.click(screen.getByRole('button', { name: /^All/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Static 1' }));
+    expect(cardNames()).toEqual(['Promo stills']);
+
+    // Pressing it again clears it; the template nothing can classify is back, under neither.
+    fireEvent.click(screen.getByRole('button', { name: 'Static 1' }));
+    expect(cardNames()).toEqual(['Inyogo card', 'Promo stills', 'Inyogo demo', 'Hero offer']);
   });
 
   test('no uuid, app name, draft marker or "template N" is on the page', () => {

@@ -1,6 +1,6 @@
 'use client';
 
-import type { ApiRenderJob, TemplateSourceSummary } from '@continuum/contracts';
+import type { ApiRenderJob, TemplatePreview, TemplateSourceSummary } from '@continuum/contracts';
 import { templateDisplayName } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
@@ -41,8 +41,45 @@ const FILTERS = [
 ] as const;
 type Filter = (typeof FILTERS)[number]['id'];
 
-const SORTS = { updated: 'Recently updated', name: 'Name' } as const;
+// Its own axis, so "Ready" and "Animated" narrow together rather than replacing each other.
+const MOTIONS = [
+  { id: 'animated', label: 'Animated' },
+  { id: 'static', label: 'Static' },
+] as const;
+type Motion = (typeof MOTIONS)[number]['id'];
+
+const SORTS = { updated: 'Recently updated', name: 'Name', motion: 'Animated first' } as const;
 type Sort = keyof typeof SORTS;
+const MOTION_RANK: Record<Motion | 'unknown', number> = { animated: 0, static: 1, unknown: 2 };
+
+const chipClass = (active: boolean) =>
+  cn(
+    'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs transition-colors',
+    active
+      ? 'border-primary bg-primary/10 text-foreground'
+      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+  );
+
+/**
+ * Whether a template delivers video or stills, from the best fact on hand: its own parse (any
+ * delivery comp longer than one frame is motion — template 133's comps are one frame, over a 15s
+ * precomp that is not a delivery), else what its finished renders came back as. Null when neither
+ * exists — an operator-built template nobody has rendered — so it sits under neither filter rather
+ * than under a guess.
+ */
+function templateMotion(
+  parse: Pick<TemplatePreview, 'comps'> | null,
+  renders: readonly ApiRenderJob[],
+): Motion | null {
+  const timed = (parse?.comps ?? []).flatMap(({ isDelivery, durationSec, frameRate }) =>
+    isDelivery && durationSec !== undefined && frameRate ? [durationSec * frameRate] : [],
+  );
+  if (timed.some((frames) => Math.round(frames) > 1)) return 'animated';
+  if (timed.length) return 'static';
+  const files = renders.flatMap((job) => job.outputs);
+  if (!files.length) return null;
+  return files.some((file) => file.kind === 'video') ? 'animated' : 'static';
+}
 
 // ponytail: one page of the brand's newest finished renders — the list route's page cap. A template
 // last rendered before them reads "No recent render" rather than a claim; page further if that bites.
@@ -56,6 +93,7 @@ type Item =
       name: string;
       group: string;
       updatedAt: string;
+      motion: Motion | null;
       source: TemplateSourceSummary;
     }
   | {
@@ -64,6 +102,7 @@ type Item =
       name: string;
       group: string;
       updatedAt: string;
+      motion: Motion | null;
       shared: SharedTemplate;
     };
 
@@ -79,6 +118,7 @@ export function TemplateGallery({
   onToggleShared,
   onOpenRender,
   onFiles,
+  onFonts,
   onRejected,
 }: {
   brandId: string;
@@ -93,11 +133,13 @@ export function TemplateGallery({
   onToggleShared: (template: SharedTemplate) => void;
   onOpenRender?: (intent: ForgeRenderIntent) => void;
   onFiles: (files: File[]) => void;
+  onFonts: (files: File[]) => Promise<void>;
   onRejected: (files: File[]) => void;
 }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('updated');
+  const [motion, setMotion] = useState<Motion | null>(null);
 
   // Every card's picture from ONE read, grouped here — never a read per card.
   const { data: finished } = useQuery({
@@ -126,6 +168,10 @@ export function TemplateGallery({
         name: sourceDisplayName(source),
         group: TEMPLATE_STATUS[templateStatus(source)].group,
         updatedAt: source.updatedAt ?? source.createdAt,
+        motion: templateMotion(
+          source.parse,
+          rendersByTemplate.get(source.templateKey ?? '') ?? NO_RENDERS,
+        ),
         source,
       })),
       ...shared.map((template) => ({
@@ -134,10 +180,11 @@ export function TemplateGallery({
         name: template.displayName ?? templateDisplayName(template.name),
         group: template.draft ? 'drafts' : 'ready',
         updatedAt: template.updatedAt ?? '',
+        motion: templateMotion(null, rendersByTemplate.get(template.templateKey) ?? NO_RENDERS),
         shared: template,
       })),
     ],
-    [sources, shared],
+    [sources, shared, rendersByTemplate],
   );
 
   const counts = useMemo(() => {
@@ -148,11 +195,13 @@ export function TemplateGallery({
       attention: 0,
       shared: 0,
     };
+    const byMotion: Record<Motion, number> = { animated: 0, static: 0 };
     for (const item of items) {
       byFilter[item.group as Filter] += 1;
       if (item.kind === 'shared') byFilter.shared += 1;
+      if (item.motion) byMotion[item.motion] += 1;
     }
-    return byFilter;
+    return { ...byFilter, ...byMotion };
   }, [items]);
 
   const visible = useMemo(() => {
@@ -162,12 +211,17 @@ export function TemplateGallery({
         (item) =>
           (filter === 'all' ||
             (filter === 'shared' ? item.kind === 'shared' : item.group === filter)) &&
+          (!motion || item.motion === motion) &&
           (!needle || item.name.toLowerCase().includes(needle)),
       )
-      .sort((a, b) =>
-        sort === 'name' ? a.name.localeCompare(b.name) : b.updatedAt.localeCompare(a.updatedAt),
+      .sort(
+        (a, b) =>
+          (sort === 'motion'
+            ? MOTION_RANK[a.motion ?? 'unknown'] - MOTION_RANK[b.motion ?? 'unknown']
+            : 0) ||
+          (sort === 'name' ? a.name.localeCompare(b.name) : b.updatedAt.localeCompare(a.updatedAt)),
       );
-  }, [items, query, filter, sort]);
+  }, [items, query, filter, sort, motion]);
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
@@ -193,12 +247,21 @@ export function TemplateGallery({
               type="button"
               aria-pressed={filter === id}
               onClick={() => setFilter(id)}
-              className={cn(
-                'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs transition-colors',
-                filter === id
-                  ? 'border-primary bg-primary/10 text-foreground'
-                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-              )}
+              className={chipClass(filter === id)}
+            >
+              {label}
+              <span className="tabular-nums text-muted-foreground">{counts[id]}</span>
+            </button>
+          ))}
+        </fieldset>
+        <fieldset className="flex flex-wrap gap-1" aria-label="Filter by motion">
+          {MOTIONS.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={motion === id}
+              onClick={() => setMotion(motion === id ? null : id)}
+              className={chipClass(motion === id)}
             >
               {label}
               <span className="tabular-nums text-muted-foreground">{counts[id]}</span>
@@ -227,7 +290,7 @@ export function TemplateGallery({
       >
         {filter === 'shared' ? null : (
           <li className="min-w-0">
-            <ForgeProjectDrop onFiles={onFiles} onRejected={onRejected} />
+            <ForgeProjectDrop onFiles={onFiles} onFonts={onFonts} onRejected={onRejected} />
           </li>
         )}
         {visible.map((item) => (

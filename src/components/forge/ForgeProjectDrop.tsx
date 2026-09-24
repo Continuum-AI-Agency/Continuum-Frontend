@@ -6,7 +6,7 @@ import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-export const FORGE_PROJECT_ACCEPT = '.aep,.aepx,.aet,.zip';
+export const FORGE_PROJECT_ACCEPT = '.aep,.aepx,.aet,.zip,.ttf,.otf';
 
 /** The Library upload records no checksum above this size, so a bigger file has nothing to match. */
 const HASHED_UP_TO_BYTES = 64 * 1024 * 1024;
@@ -60,33 +60,45 @@ export function uploadRefusal(
   return `${file.name} is ${megabytes} MB, over the ${FORGE_PROJECT_FILE_MAX_MB} MB upload limit, so it was not uploaded. Ask an admin to raise the limit.`;
 }
 
-export function partitionForgeProjectFiles(files: File[]): { accepted: File[]; rejected: File[] } {
-  return files.reduce<{ accepted: File[]; rejected: File[] }>(
+/**
+ * Packages to upload, fonts to store first, and the rest refused. Fonts are welcome beside a
+ * package because clients often send the typefaces next to the zip rather than inside it.
+ */
+export function partitionForgeProjectFiles(files: File[]): {
+  accepted: File[];
+  fonts: File[];
+  rejected: File[];
+} {
+  return files.reduce<{ accepted: File[]; fonts: File[]; rejected: File[] }>(
     (result, file) => {
       const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
-      (['.aep', '.aepx', '.aet', '.zip'].includes(extension)
-        ? result.accepted
-        : result.rejected
-      ).push(file);
+      if (['.aep', '.aepx', '.aet', '.zip'].includes(extension)) result.accepted.push(file);
+      else if (['.ttf', '.otf'].includes(extension)) result.fonts.push(file);
+      else result.rejected.push(file);
       return result;
     },
-    { accepted: [], rejected: [] },
+    { accepted: [], fonts: [], rejected: [] },
   );
 }
 
 export function ForgeProjectDrop({
   onFiles,
+  onFonts,
   onRejected,
 }: {
   onFiles: (files: File[]) => void;
+  onFonts: (files: File[]) => Promise<void>;
   onRejected: (files: File[]) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [dragDepth, setDragDepth] = useState(0);
   const choose = () => input.current?.click();
-  const receive = (files: File[]) => {
-    const { accepted, rejected } = partitionForgeProjectFiles(files);
+  const receive = async (files: File[]) => {
+    const { accepted, fonts, rejected } = partitionForgeProjectFiles(files);
     if (rejected.length) onRejected(rejected);
+    // Fonts before the package: it is parsed seconds after it lands, and that parse is what
+    // looks for them.
+    if (fonts.length) await onFonts(fonts);
     if (accepted.length) onFiles(accepted);
   };
 
@@ -101,7 +113,7 @@ export function ForgeProjectDrop({
         tabIndex={-1}
         aria-label="Project files"
         onChange={(event) => {
-          receive(Array.from(event.target.files ?? []));
+          void receive(Array.from(event.target.files ?? []));
           event.target.value = '';
         }}
       />
@@ -125,7 +137,7 @@ export function ForgeProjectDrop({
         onDrop={(event) => {
           event.preventDefault();
           setDragDepth(0);
-          receive(Array.from(event.dataTransfer.files));
+          void receive(Array.from(event.dataTransfer.files));
         }}
       >
         <span className="flex items-center gap-2 text-sm">
@@ -133,7 +145,8 @@ export function ForgeProjectDrop({
           New template
         </span>
         <span className="max-w-60 text-xs font-normal text-muted-foreground">
-          Drop an After Effects project (.aep, .aepx, .aet or .zip) or click to choose one.
+          Drop an After Effects project (.aep, .aepx, .aet or .zip), with its .ttf or .otf fonts if
+          they came separately, or click to choose.
         </span>
       </Button>
     </>

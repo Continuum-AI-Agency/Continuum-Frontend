@@ -7,8 +7,9 @@
  * Meta and approval rooms. Without a Meta target Deliver renders from there — Proof or Final, and
  * each row's output — with ONE batch preflight carrying `slack`, `final` and each row's delivery,
  * then the confirmed token, and Running follows the fired jobs. A Meta target adds Confirm, needs
- * an approval room first, carries the rooms and a replacing row narrowed to its one format, and the
- * preflight's approver warning shows in Running. A refusal keeps the tray where it was with the
+ * an approval room first, carries the rooms and a replacing row narrowed to its one format — for a
+ * template with no authored outputs, one of its parse comps by name — and the preflight's approver
+ * warning shows in Running. A refusal keeps the tray where it was with the
  * reason and nothing fired. One primary button moves it on. It is a docked region, never a
  * dialog: a change to the rows after review sends it back to Review and re-checks by itself.
  */
@@ -189,6 +190,7 @@ import {
 } from '@/components/automations/workspace/pickers/pickerTestHarness';
 import { registerToastSink } from '@/components/ui/toast-imperative';
 import { FORGE_APPROVAL_COPY } from './ApprovalDestinationsField';
+import { forgeQueryKeys } from './queryKeys';
 import { type RenderPreflightRow, RenderReviewTray } from './RenderReviewTray';
 
 // A sink per test, not a module mock: `mock.module` outlives this file in a multi-file run and
@@ -303,10 +305,13 @@ function renderTray(
     records?: ApiRenderBatchRecord[];
     contract?: ApiRenderTemplateContract;
     finalBlocked?: string | null;
+    /** The brand's template sources, as ForgeWorkbench has already read them. */
+    sources?: Array<{ templateKey: string | null; parse: unknown }>;
   } = {},
 ) {
   const handlers = trayHandlers();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  if (data.sources) client.setQueryData(forgeQueryKeys.templateSources(BRAND), data.sources);
   const ui = (snapshot: Snapshot) => (
     <QueryClientProvider client={client}>
       <Harness
@@ -843,6 +848,127 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
       slack: { destinationId: OPS.id },
       approvalDestinationIds: [ROOM.id],
     });
+  }, 30_000);
+
+  test('no authored outputs: a replace picks one parse comp, which is the record’s one outputId', async () => {
+    listDestinationsMock.mockImplementation(async () =>
+      destinations({}, { connected: true, adAccountId: 'act_1', adAccountName: 'StarCraft Ads' }),
+    );
+    // Template 133: `outputs: []`, every ratio rendered together.
+    const contract = {
+      ...CONTRACT,
+      template: { ...CONTRACT.template, outputKinds: ['image'], ratios: ['16:9', '1:1', '9:16'] },
+      outputs: [],
+    } as unknown as ApiRenderTemplateContract;
+    const comp = (name: string, width: number, height: number) => ({ name, width, height });
+    const parse = {
+      comps: [comp('Promo 16:9', 1920, 1080), comp('Promo 1:1', 1080, 1080)],
+      ratios: [
+        { ratio: '16:9', width: 1920, height: 1080, comps: ['Promo 16:9'] },
+        { ratio: '1:1', width: 1080, height: 1080, comps: ['Promo 1:1'] },
+        { ratio: '9:16', width: 1080, height: 1920, comps: ['Promo 9:16'] },
+      ],
+    };
+    const record: ApiRenderBatchRecord = {
+      label: 'Root',
+      renderSetId: SET,
+      renderSetRowId: 'root',
+      variables: { headline: 'Hola' },
+    };
+    const { onFired } = renderTray(BINDING, {
+      contract,
+      rows: [{ rowId: 'root', label: 'Root', labelPath: ['Root'], outputIds: [] }],
+      records: [record],
+      sources: [
+        // Another template's parse must not answer for this one.
+        { templateKey: '900', parse: { comps: [], ratios: [{ ratio: '4:5', comps: ['Other'] }] } },
+        { templateKey: '133', parse },
+      ],
+    });
+    expect(await screen.findByText('StarCraft Promo · 3 files')).toBeTruthy();
+    await press('Next: delivery');
+    await changeDelivery();
+    fireEvent.click(await screen.findByRole('button', { name: 'Replace an ad for Root' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Summer launch/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Spain 18–34/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Hero story/ }));
+
+    await screen.findByLabelText('Format for Root');
+    expect(screen.getByText('Choose one format for each ad replacement.')).toBeTruthy();
+    openSelect('Format for Root');
+    // One choice per delivery comp, by name; 9:16's comp takes its ratio's size.
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+      '16:9 · Promo 16:9',
+      '1:1 · Promo 1:1',
+      '9:16 · Promo 9:16',
+    ]);
+    chooseOption('1:1 · Promo 1:1');
+    expect(screen.getByText('StarCraft Promo · 1 file')).toBeTruthy();
+    expect(screen.queryByText('Choose one format for each ad replacement.')).toBeNull();
+
+    await press('Next: confirm');
+    expect(screen.getByText('replaces Hero story · 1:1')).toBeTruthy();
+    const output = within(screen.getByRole('list', { name: 'Output per row' }));
+    expect(
+      [...output.getByRole('listitem').querySelectorAll<HTMLElement>('[data-ratio]')].map(
+        (chip) => chip.dataset.ratio,
+      ),
+    ).toEqual(['1:1']);
+
+    await press('Render 1 file');
+    await waitFor(() => expect(onFired).toHaveBeenCalledWith(JOB_IDS));
+    const fired = batchPreflightMock.mock.calls[1]?.[0] as { records: ApiRenderBatchRecord[] };
+    expect(fired.records).toEqual([
+      {
+        ...record,
+        outputIds: ['Promo 1:1'],
+        delivery: {
+          ...HERO_STORY,
+          adStatus: 'PAUSED',
+          expectedCreativeId: 'cr_1',
+        },
+      },
+    ]);
+  }, 30_000);
+
+  test('a new paused ad renders every format, one ad per file, and asks for none', async () => {
+    listDestinationsMock.mockImplementation(async () =>
+      destinations({}, { connected: true, adAccountId: 'act_1', adAccountName: 'StarCraft Ads' }),
+    );
+    const { onFired } = renderTray();
+    await press('Next: delivery');
+    await changeDelivery();
+    fireEvent.click(await screen.findByRole('button', { name: 'Replace an ad for Root' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Summer launch/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Spain 18–34/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'New paused ad in this ad set' }));
+
+    expect(await screen.findByText('New paused ad in Summer launch › Spain 18–34')).toBeTruthy();
+    expect(screen.queryByLabelText('Format for Root')).toBeNull();
+    await press('Next: confirm');
+    expect(
+      screen.getByText('3 files · Library · Approval in Forge · 1 new paused ad held for approval'),
+    ).toBeTruthy();
+    expect(screen.getByText('new paused ad in Spain 18–34')).toBeTruthy();
+
+    await press('Render 3 files');
+    await waitFor(() => expect(onFired).toHaveBeenCalledWith(JOB_IDS));
+    const fired = batchPreflightMock.mock.calls[1]?.[0] as { records: ApiRenderBatchRecord[] };
+    expect(fired.records).toEqual([
+      {
+        ...RECORDS[0],
+        delivery: {
+          action: 'create',
+          adAccountId: 'act_1',
+          campaignId: 'c1',
+          campaignName: 'Summer launch',
+          adsetId: 's1',
+          adsetName: 'Spain 18–34',
+          adStatus: 'PAUSED',
+        },
+      },
+      RECORDS[1],
+    ]);
   }, 30_000);
 
   test('Meta replace with no approval room is approved in Forge and fires without rooms', async () => {
