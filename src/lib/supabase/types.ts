@@ -6374,6 +6374,7 @@ export type Database = {
           payload: Json
           preview_run_id: string
           status: Database["brand_profiles"]["Enums"]["brand_report_job_status"]
+          worker_fence: number | null
           worker_id: string | null
         }
         Insert: {
@@ -6388,6 +6389,7 @@ export type Database = {
           payload: Json
           preview_run_id: string
           status?: Database["brand_profiles"]["Enums"]["brand_report_job_status"]
+          worker_fence?: number | null
           worker_id?: string | null
         }
         Update: {
@@ -6402,6 +6404,7 @@ export type Database = {
           payload?: Json
           preview_run_id?: string
           status?: Database["brand_profiles"]["Enums"]["brand_report_job_status"]
+          worker_fence?: number | null
           worker_id?: string | null
         }
         Relationships: [
@@ -6421,8 +6424,8 @@ export type Database = {
           created_at: string
           dimensions: Json
           id: string
-          readiness_score_id: string | null
           overall_score: number | null
+          readiness_score_id: string | null
           recommendations: Json
           source_phase: string | null
           updated_at: string
@@ -6432,9 +6435,9 @@ export type Database = {
           brand_report_id?: string | null
           created_at?: string
           dimensions?: Json
-          readiness_score_id?: string | null
           id?: string
           overall_score?: number | null
+          readiness_score_id?: string | null
           recommendations?: Json
           source_phase?: string | null
           updated_at?: string
@@ -6443,10 +6446,10 @@ export type Database = {
           brand_profile_id?: string
           brand_report_id?: string | null
           created_at?: string
-          readiness_score_id?: string | null
           dimensions?: Json
           id?: string
           overall_score?: number | null
+          readiness_score_id?: string | null
           recommendations?: Json
           source_phase?: string | null
           updated_at?: string
@@ -6469,15 +6472,15 @@ export type Database = {
           {
             foreignKeyName: "brand_report_readiness_brand_report_id_fkey"
             columns: ["brand_report_id"]
+            isOneToOne: false
+            referencedRelation: "brand_reports"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "brand_report_readiness_readiness_score_id_fkey"
             columns: ["readiness_score_id"]
             isOneToOne: false
             referencedRelation: "readiness_scores"
-            referencedColumns: ["id"]
-          },
-            isOneToOne: false
-            referencedRelation: "brand_reports"
             referencedColumns: ["id"]
           },
         ]
@@ -6903,6 +6906,67 @@ export type Database = {
           },
         ]
       }
+      comment_send_log: {
+        Row: {
+          author_platform_user_id: string
+          brand_id: string
+          channel: string
+          created_at: string
+          id: string
+          outcome: string
+          platform_comment_id: string
+          platform_post_id: string
+          reason: string | null
+          rule_id: string | null
+        }
+        Insert: {
+          author_platform_user_id: string
+          brand_id: string
+          channel: string
+          created_at?: string
+          id?: string
+          outcome: string
+          platform_comment_id: string
+          platform_post_id: string
+          reason?: string | null
+          rule_id?: string | null
+        }
+        Update: {
+          author_platform_user_id?: string
+          brand_id?: string
+          channel?: string
+          created_at?: string
+          id?: string
+          outcome?: string
+          platform_comment_id?: string
+          platform_post_id?: string
+          reason?: string | null
+          rule_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_send_log_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "comment_send_log_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comment_send_log_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "comment_trigger_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comment_trigger_rules: {
         Row: {
           active_from: string | null
@@ -6991,6 +7055,30 @@ export type Database = {
           },
         ]
       }
+      continuum_meta_config: {
+        Row: {
+          access_token_encrypted: string
+          created_at: string
+          id: string
+          ig_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          access_token_encrypted: string
+          created_at?: string
+          id?: string
+          ig_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          access_token_encrypted?: string
+          created_at?: string
+          id?: string
+          ig_user_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       creative_concepts: {
         Row: {
           angle_id: string
@@ -7072,6 +7160,111 @@ export type Database = {
             columns: ["merged_into_id"]
             isOneToOne: false
             referencedRelation: "creative_concepts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creative_elements: {
+        Row: {
+          angle_id: string | null
+          angle_margin: number | null
+          brand_id: string
+          class_provenance: Json | null
+          class_vocab_version: number
+          content_format: string | null
+          content_format_margin: number | null
+          cta_class: string | null
+          cta_margin: number | null
+          cta_text: string | null
+          extracted_at: string
+          extractor_model: string
+          extractor_tags: Json | null
+          hook_class: string | null
+          hook_margin: number | null
+          hook_text: string | null
+          id: string
+          kev_state: Json
+          media_type: string | null
+          permalink: string | null
+          posted_at: string | null
+          prescore: number | null
+          prescore_outlier: number | null
+          prescore_provenance: Json | null
+          source_account_id: string
+          source_kind: string
+          source_ref: string
+        }
+        Insert: {
+          angle_id?: string | null
+          angle_margin?: number | null
+          brand_id: string
+          class_provenance?: Json | null
+          class_vocab_version?: number
+          content_format?: string | null
+          content_format_margin?: number | null
+          cta_class?: string | null
+          cta_margin?: number | null
+          cta_text?: string | null
+          extracted_at?: string
+          extractor_model: string
+          extractor_tags?: Json | null
+          hook_class?: string | null
+          hook_margin?: number | null
+          hook_text?: string | null
+          id?: string
+          kev_state: Json
+          media_type?: string | null
+          permalink?: string | null
+          posted_at?: string | null
+          prescore?: number | null
+          prescore_outlier?: number | null
+          prescore_provenance?: Json | null
+          source_account_id: string
+          source_kind: string
+          source_ref: string
+        }
+        Update: {
+          angle_id?: string | null
+          angle_margin?: number | null
+          brand_id?: string
+          class_provenance?: Json | null
+          class_vocab_version?: number
+          content_format?: string | null
+          content_format_margin?: number | null
+          cta_class?: string | null
+          cta_margin?: number | null
+          cta_text?: string | null
+          extracted_at?: string
+          extractor_model?: string
+          extractor_tags?: Json | null
+          hook_class?: string | null
+          hook_margin?: number | null
+          hook_text?: string | null
+          id?: string
+          kev_state?: Json
+          media_type?: string | null
+          permalink?: string | null
+          posted_at?: string | null
+          prescore?: number | null
+          prescore_outlier?: number | null
+          prescore_provenance?: Json | null
+          source_account_id?: string
+          source_kind?: string
+          source_ref?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creative_elements_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "creative_elements_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -7721,6 +7914,7 @@ export type Database = {
           scope: string
           source_prompt: string | null
           source_title: string | null
+          spec: Json | null
           updated_at: string
           window_label: string | null
         }
@@ -7735,6 +7929,7 @@ export type Database = {
           scope?: string
           source_prompt?: string | null
           source_title?: string | null
+          spec?: Json | null
           updated_at?: string
           window_label?: string | null
         }
@@ -7749,6 +7944,7 @@ export type Database = {
           scope?: string
           source_prompt?: string | null
           source_title?: string | null
+          spec?: Json | null
           updated_at?: string
           window_label?: string | null
         }
@@ -8886,7 +9082,6 @@ export type Database = {
             referencedRelation: "preview_runs"
             referencedColumns: ["id"]
           },
-          readiness_score_id: string | null
         ]
       }
       preview_runs: {
@@ -8898,8 +9093,8 @@ export type Database = {
           input_hash: string
           last_heartbeat_at: string | null
           prompt_version: number
+          readiness_score_id: string | null
           request_context: Json | null
-          readiness_score_id?: string | null
           result: Json | null
           started_at: string
           status: string
@@ -8926,6 +9121,7 @@ export type Database = {
           input_hash?: string
           last_heartbeat_at?: string | null
           prompt_version?: number
+          readiness_score_id?: string | null
           request_context?: Json | null
           result?: Json | null
           started_at?: string
@@ -9097,6 +9293,28 @@ export type Database = {
           name?: string
           prompt?: string
           slug?: string | null
+          source?: string
+          status?: string
+          tags?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_templates_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "prompt_templates_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       readiness_scores: {
         Row: {
           analysis: Json
@@ -9176,22 +9394,72 @@ export type Database = {
           },
         ]
       }
-          source?: string
-          status?: string
-          tags?: string[]
+      report_schedules: {
+        Row: {
+          brand_id: string
+          cadence: string
+          created_at: string
+          created_by: string | null
+          day_of_month: number | null
+          day_of_week: number | null
+          enabled: boolean
+          external_emails: string[]
+          hour: number
+          id: string
+          last_run_at: string | null
+          next_run_at: string
+          presentation: string
+          recipient_user_ids: string[]
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          cadence: string
+          created_at?: string
+          created_by?: string | null
+          day_of_month?: number | null
+          day_of_week?: number | null
+          enabled?: boolean
+          external_emails?: string[]
+          hour?: number
+          id?: string
+          last_run_at?: string | null
+          next_run_at: string
+          presentation?: string
+          recipient_user_ids?: string[]
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          cadence?: string
+          created_at?: string
+          created_by?: string | null
+          day_of_month?: number | null
+          day_of_week?: number | null
+          enabled?: boolean
+          external_emails?: string[]
+          hour?: number
+          id?: string
+          last_run_at?: string | null
+          next_run_at?: string
+          presentation?: string
+          recipient_user_ids?: string[]
+          timezone?: string
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "prompt_templates_brand_profile_id_fkey"
-            columns: ["brand_profile_id"]
+            foreignKeyName: "report_schedules_brand_id_fkey"
+            columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brand_account_directory"
             referencedColumns: ["brand_id"]
           },
           {
-            foreignKeyName: "prompt_templates_brand_profile_id_fkey"
-            columns: ["brand_profile_id"]
+            foreignKeyName: "report_schedules_brand_id_fkey"
+            columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brand_profiles"
             referencedColumns: ["id"]
@@ -11469,6 +11737,35 @@ export type Database = {
           payload: Json
           preview_run_id: string
           status: Database["brand_profiles"]["Enums"]["brand_report_job_status"]
+          worker_fence: number | null
+          worker_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "brand_report_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      claim_next_brand_report_job_fenced: {
+        Args: {
+          p_lease_ttl_sec: number
+          p_worker_fence: number
+          p_worker_id: string
+        }
+        Returns: {
+          attempts: number
+          brand_id: string
+          claimed_at: string | null
+          completed_at: string | null
+          enqueued_at: string
+          error: Json | null
+          heartbeat_at: string | null
+          job_id: string
+          payload: Json
+          preview_run_id: string
+          status: Database["brand_profiles"]["Enums"]["brand_report_job_status"]
+          worker_fence: number | null
           worker_id: string | null
         }
         SetofOptions: {
@@ -12009,6 +12306,17 @@ export type Database = {
           surface: string
           tags: string[]
         }[]
+      }
+      next_report_schedule_run_at: {
+        Args: {
+          p_after: string
+          p_cadence: string
+          p_dom: number
+          p_dow: number
+          p_hour: number
+          p_tz: string
+        }
+        Returns: string
       }
       open_jaina_tool_gate: {
         Args: {
@@ -18848,6 +19156,47 @@ export type Database = {
           },
         ]
       }
+      template_source_events: {
+        Row: {
+          asset_id: string
+          at: string
+          brand_id: string
+          detail: Json | null
+          id: string
+          level: string
+          message: string
+          stage: string
+        }
+        Insert: {
+          asset_id: string
+          at?: string
+          brand_id: string
+          detail?: Json | null
+          id?: string
+          level?: string
+          message: string
+          stage: string
+        }
+        Update: {
+          asset_id?: string
+          at?: string
+          brand_id?: string
+          detail?: Json | null
+          id?: string
+          level?: string
+          message?: string
+          stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_source_events_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "template_sources"
+            referencedColumns: ["asset_id"]
+          },
+        ]
+      }
       template_source_runs: {
         Row: {
           application: string | null
@@ -20679,6 +21028,9 @@ export type Database = {
       }
       organic_published_posts: {
         Row: {
+          angle_id: string | null
+          angle_provenance: Json | null
+          angle_vocab_version: number
           brand_id: string
           caption: string | null
           content_snapshot: Json | null
@@ -20696,6 +21048,9 @@ export type Database = {
           published_at: string
         }
         Insert: {
+          angle_id?: string | null
+          angle_provenance?: Json | null
+          angle_vocab_version?: number
           brand_id: string
           caption?: string | null
           content_snapshot?: Json | null
@@ -20713,6 +21068,9 @@ export type Database = {
           published_at: string
         }
         Update: {
+          angle_id?: string | null
+          angle_provenance?: Json | null
+          angle_vocab_version?: number
           brand_id?: string
           caption?: string | null
           content_snapshot?: Json | null
@@ -25974,6 +26332,14 @@ export type Database = {
         Args: { p_brand_id: string; p_window_days?: number }
         Returns: Json
       }
+      competitor_spy_get_whats_working: {
+        Args: {
+          p_brand_id: string
+          p_min_on_niche?: number
+          p_window_days?: number
+        }
+        Returns: Json
+      }
       competitor_spy_match_snapshot_neighbors: {
         Args: {
           p_image_threshold?: number
@@ -26009,6 +26375,57 @@ export type Database = {
           source: string
           target_id: string
           target_kind: string
+        }[]
+      }
+      creative_elements_get_whats_working: {
+        Args: { p_brand_id: string; p_source?: string; p_window_days?: number }
+        Returns: Json
+      }
+      creative_elements_latest_post_metrics: {
+        Args: { p_account_id: string }
+        Returns: {
+          interactions: number
+          media_id: string
+          reach: number
+        }[]
+      }
+      creative_elements_own_organic_backlog: {
+        Args: { p_days?: number }
+        Returns: {
+          account_id: string
+          brand_id: string
+          pending: number
+        }[]
+      }
+      creative_elements_pending_competitor_posts: {
+        Args: { p_days?: number; p_limit?: number }
+        Returns: {
+          brand_id: string
+          caption: string
+          competitor_id: string
+          cover_url: string
+          external_id: string
+          media_type: string
+          permalink: string
+          posted_at: string
+        }[]
+      }
+      creative_elements_pending_own_media: {
+        Args: { p_account_id: string; p_brand_id: string; p_days?: number }
+        Returns: string[]
+      }
+      creative_elements_pending_paid_creatives: {
+        Args: { p_limit?: number }
+        Returns: {
+          body: string
+          brand_id: string
+          created_at: string
+          cta_type: string
+          format: string
+          id: string
+          labels: Json
+          permalink_url: string
+          title: string
         }[]
       }
       decrypt_token: { Args: { token_to_decrypt: string }; Returns: string }
@@ -26374,6 +26791,10 @@ export type Database = {
         Returns: undefined
       }
       optimizer_action_count: { Args: { p_since?: string }; Returns: number }
+      optimizer_adopt_adhoc_suggestion: {
+        Args: { p_confirm_token: string; p_id: string }
+        Returns: Json
+      }
       optimizer_append_logs: { Args: { p_rows: Json }; Returns: number }
       optimizer_approve_audience_proposal: {
         Args: {
@@ -26457,9 +26878,13 @@ export type Database = {
           config: Json
           conversion_descriptor: Json
           cpa_target: number
+          created_at: string
           creative_analysis: string
+          currency: string
+          cycle_interval_seconds: number
           daily_total: number
           id: string
+          last_actual_cycle_at: string
           last_scaled_at: string
           level: string
           lookback_window: string
@@ -26482,6 +26907,16 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "account_daily_reads"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      optimizer_claim_next_adhoc_suggestion: {
+        Args: { p_lease_ttl_sec?: number; p_worker_id: string }
+        Returns: unknown[]
+        SetofOptions: {
+          from: "*"
+          to: "adhoc_suggestions"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -26538,6 +26973,18 @@ export type Database = {
         }
         Returns: boolean
       }
+      optimizer_complete_adhoc_suggestion_owned: {
+        Args: {
+          p_error?: Json
+          p_id: string
+          p_model?: string
+          p_prompt_version?: string
+          p_status: string
+          p_suggestion?: Json
+          p_worker_id: string
+        }
+        Returns: boolean
+      }
       optimizer_complete_audience_proposal_owned: {
         Args: {
           p_blocked_by?: Json
@@ -26587,6 +27034,8 @@ export type Database = {
           p_portfolio_id: string
           p_prior_status?: string
           p_recommendation_id?: string
+          p_run_id?: string
+          p_target_status?: string
         }
         Returns: undefined
       }
@@ -26605,6 +27054,8 @@ export type Database = {
           p_prior_status?: string
           p_recommendation_id?: string
           p_reverts_audit_id?: string
+          p_run_id?: string
+          p_target_status?: string
         }
         Returns: undefined
       }
@@ -26624,6 +27075,8 @@ export type Database = {
           p_prior_minor?: number
           p_recommendation_id?: string
           p_reverts_audit_id?: string
+          p_run_id?: string
+          p_target_minor?: number
         }
         Returns: undefined
       }
@@ -26647,6 +27100,10 @@ export type Database = {
       }
       optimizer_delete_recommendation_insight: {
         Args: { p_brand_id: string; p_insight_key: string }
+        Returns: undefined
+      }
+      optimizer_dismiss_adhoc_suggestion: {
+        Args: { p_id: string }
         Returns: undefined
       }
       optimizer_enqueue_account_reads: { Args: never; Returns: number }
@@ -26684,6 +27141,10 @@ export type Database = {
       }
       optimizer_get_account_read: {
         Args: { p_ad_account_id: string; p_brand_id: string }
+        Returns: Json
+      }
+      optimizer_get_adhoc_suggestions: {
+        Args: { p_limit?: number; p_portfolio_id: string }
         Returns: Json
       }
       optimizer_get_adset_snapshots: {
@@ -26854,6 +27315,10 @@ export type Database = {
         Args: { p_id: string; p_lease_ttl_sec?: number; p_worker_id: string }
         Returns: boolean
       }
+      optimizer_heartbeat_adhoc_suggestion: {
+        Args: { p_id: string; p_lease_ttl_sec?: number; p_worker_id: string }
+        Returns: boolean
+      }
       optimizer_heartbeat_audience_proposal: {
         Args: { p_id: string; p_lease_ttl_sec?: number; p_worker_id: string }
         Returns: boolean
@@ -26869,6 +27334,10 @@ export type Database = {
       optimizer_heartbeat_portfolio_brief: {
         Args: { p_id: string; p_lease_ttl_sec?: number; p_worker_id: string }
         Returns: boolean
+      }
+      optimizer_implement_adhoc_suggestion: {
+        Args: { p_id: string }
+        Returns: Json
       }
       optimizer_implement_flash_creative: {
         Args: {
@@ -26914,6 +27383,22 @@ export type Database = {
           reverted_by: string
           run_id: string
           ts: string
+        }[]
+      }
+      optimizer_list_apply_ledger: {
+        Args: { p_since: string; p_status?: string }
+        Returns: {
+          adset_id: string
+          audit_id: string
+          brand_id: string
+          confirmed_at: string
+          portfolio_id: string
+          portfolio_last_audit_at: string
+          reserved_at: string
+          run_id: string
+          status: string
+          target_minor: number
+          utc_day: string
         }[]
       }
       optimizer_list_archived_portfolios: {
@@ -26972,6 +27457,7 @@ export type Database = {
           conversion_descriptor: Json
           cpa_target: number
           creative_analysis: string
+          currency: string
           daily_total: number
           id: string
           last_scaled_at: string
@@ -27051,6 +27537,14 @@ export type Database = {
       optimizer_reject_creative_swap_publish: {
         Args: { p_job_id: string; p_reason?: string }
         Returns: undefined
+      }
+      optimizer_request_account_read: {
+        Args: { p_ad_account_id: string; p_brand_id: string }
+        Returns: Json
+      }
+      optimizer_request_adhoc_suggestion: {
+        Args: { p_category: string; p_portfolio_id: string }
+        Returns: Json
       }
       optimizer_request_apply_item: {
         Args: { p_adset_id: string; p_run_id: string }
@@ -27197,6 +27691,10 @@ export type Database = {
         Args: { p_cycle_ts: string; p_portfolio_id: string; p_snapshots: Json }
         Returns: number
       }
+      organic_best_times: {
+        Args: { p_brand_id: string; p_platform: string; p_window_days?: number }
+        Returns: Json
+      }
       paid_media_get_ad_angles: {
         Args: { p_adset_ids?: string[]; p_brand_id: string }
         Returns: Json
@@ -27248,6 +27746,18 @@ export type Database = {
         Returns: number
       }
       process_scheduled_reports: { Args: never; Returns: Json }
+      readiness_key_agreement_probe: {
+        Args: { p_since?: string }
+        Returns: number
+      }
+      readiness_prompt_control_probe: {
+        Args: { p_since?: string }
+        Returns: number
+      }
+      readiness_provenance_probe: {
+        Args: { p_since?: string }
+        Returns: number
+      }
       resolve_meta_context_by_brand_id: {
         Args: { p_brand_id: string }
         Returns: {
