@@ -27385,6 +27385,22 @@ export type Database = {
           ts: string
         }[]
       }
+      optimizer_list_apply_ledger: {
+        Args: { p_since: string; p_status?: string }
+        Returns: {
+          adset_id: string
+          audit_id: string
+          brand_id: string
+          confirmed_at: string
+          portfolio_id: string
+          portfolio_last_audit_at: string
+          reserved_at: string
+          run_id: string
+          status: string
+          target_minor: number
+          utc_day: string
+        }[]
+      }
       optimizer_list_archived_portfolios: {
         Args: { p_brand_id: string }
         Returns: Json

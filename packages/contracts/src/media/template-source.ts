@@ -17,24 +17,35 @@ import { type FontLicenceScope, fontLicenceScopeSchema } from './fonts';
 /**
  * The largest project file the Forge can actually accept, in bytes — the ONE number.
  *
- * There are four ceilings on this path and only the smallest is ever real:
+ * There are four ceilings on this path and only the smallest is ever real. Measured against the
+ * live project on 2026-09-23, via the Management API and `storage.buckets`:
  *
  * | Ceiling | Value | Binding? |
  * |---|---|---|
- * | Supabase **project-global** upload limit (Settings → Storage) | 50 MB | **yes, today** |
- * | `storage.buckets.file_size_limit` for `media-source` | 5 GB | no — the global silently overrides it |
- * | Template Forge's own package limit | 250 MB | only once the global is raised above it |
- * | `library-upload`'s register-time refusal | this constant | mirrors it by hand |
+ * | Supabase **project-global** upload limit (Settings → Storage) | 500 MB | no |
+ * | `storage.buckets.file_size_limit` for `media-source` | 5 GB | no |
+ * | Template Forge's own package limit | 250 MB | at the same number as this constant |
+ * | `library-upload`'s register-time refusal | this constant | **yes, once deployed** |
  *
- * The project-global cap is readable from neither SQL nor the browser — only the Management
- * API — which is why it was copied by hand into the drop zone and then drifted from the two
- * bench scripts and the edge function, giving four different answers to one question.
+ * The project-global cap was the binding one while it sat at 50 MB and nothing in this project
+ * had ever stored an object over 46.8 MB. It is readable from neither SQL nor the browser — only
+ * the Management API — which is why it was copied by hand into the drop zone and then drifted
+ * from the two bench scripts and the edge function, giving four different answers to one
+ * question. Read it before believing this table:
+ *
+ *   curl -H "Authorization: Bearer $TOKEN" \
+ *     https://api.supabase.com/v1/projects/<ref>/config/storage
+ *
+ * And the edge function's copy is only as real as its last deploy: on 2026-09-23 the LIVE
+ * function still held 5 GB (its pre-2026-09-20 value) while this repo had said 50 MB for days,
+ * so the only thing that ever refused an 85 MB package was the project-global cap. A committed
+ * ceiling is not an enforced one.
  *
  * So this number is NOT trusted: `forge:intake:e2e:bench` proves the effective ceiling
- * empirically by pushing one byte over it and requiring storage to refuse. Change this when
+ * empirically by pushing one byte over it and requiring the upload to refuse. Change this when
  * the dashboard changes and let the bench tell you if you are wrong.
  */
-export const FORGE_PROJECT_FILE_MAX_BYTES = 50 * 1024 * 1024;
+export const FORGE_PROJECT_FILE_MAX_BYTES = 250 * 1024 * 1024;
 
 /** The same ceiling in whole MB, for the sentence a refusal shows a person. */
 export const FORGE_PROJECT_FILE_MAX_MB = Math.floor(FORGE_PROJECT_FILE_MAX_BYTES / (1024 * 1024));
@@ -122,6 +133,22 @@ export const templateSlotSchema = z
             compSize: z.array(z.number()).length(2).nullish(),
             charBudget: z.number().int().nonnegative().nullish(),
             sample: z.string().nullish(),
+            /**
+             * Video only: when this layer is on screen in `comp` (`inSec..outSec`) and which
+             * seconds of its clip it plays (`clipInSec..clipOutSec`). A render swaps the clip and
+             * keeps the layer's timing, so a clip shorter than `clipOutSec` runs out early and the
+             * layer is empty for the rest. `clipWhy` says why a video instance has none.
+             */
+            clip: z
+              .object({
+                inSec: z.number(),
+                outSec: z.number(),
+                clipInSec: z.number(),
+                clipOutSec: z.number(),
+              })
+              .passthrough()
+              .nullish(),
+            clipWhy: z.string().nullish(),
           })
           .passthrough(),
       )
@@ -269,6 +296,7 @@ export const templatePreviewSchema = z
         width: true,
         height: true,
         durationSec: true,
+        frameRate: true,
         isDelivery: true,
       }),
     ),
@@ -276,14 +304,18 @@ export const templatePreviewSchema = z
       templateRatioSchema.pick({ ratio: true, width: true, height: true, comps: true }),
     ),
     slots: z.array(
-      templateSlotSchema.pick({
-        key: true,
-        kind: true,
-        comps: true,
-        box: true,
-        placement: true,
-        instances: true,
-      }),
+      templateSlotSchema
+        .pick({
+          key: true,
+          kind: true,
+          comps: true,
+          box: true,
+          placement: true,
+          instances: true,
+        })
+        // The layer's own name, for the wireframe's hover label. Optional so a Frontend that
+        // ships before the Backend still reads the previews it is sent today.
+        .extend({ name: templateSlotSchema.shape.name.optional() }),
     ),
   })
   .strict();
@@ -379,6 +411,21 @@ export const templateFontStatusSchema = z
      * face was reported missing for every brand, because no brand had "uploaded" it.
      */
     scope: fontLicenceScopeSchema.optional(),
+    /**
+     * How it resolved. `substitute` means nobody holds this NAME and a person accepted a face
+     * we do hold in its place — the chip must say so. A substitution that reads as a plain
+     * `uploaded` is the 2026-09-15 failure with a green tick on it.
+     */
+    via: z.enum(['direct', 'substitute']).optional(),
+    /** The face standing in, when `via` is `substitute`. For the chip, never for resolution. */
+    substitutedBy: z
+      .object({
+        fontId: z.string().uuid(),
+        family: z.string().min(1),
+        weight: z.number().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type TemplateFontStatus = z.infer<typeof templateFontStatusSchema>;
@@ -391,6 +438,57 @@ export const templateFontReadinessSchema = z
   })
   .strict();
 export type TemplateFontReadiness = z.infer<typeof templateFontReadinessSchema>;
+
+/**
+ * A face we hold that could stand in for one we do not.
+ *
+ * Identity only — no storage path, no bucket, no URL. The same rule the whole font subsystem
+ * runs on: a path in a browser is one signed-URL call away from redistributing a licensed face.
+ */
+export const templateFontCandidateSchema = z
+  .object({
+    fontId: z.string().uuid(),
+    family: z.string().min(1),
+    postScriptName: z.string().nullish(),
+    weight: z.number().int().nullish(),
+    style: z.string().nullish(),
+    scope: fontLicenceScopeSchema.optional(),
+    /** 90 same typeface and cut · 60 same typeface, different cut · 10 same cut, other typeface. */
+    score: z.number().int(),
+    why: z.string().min(1),
+  })
+  .strict();
+export type TemplateFontCandidate = z.infer<typeof templateFontCandidateSchema>;
+
+export const templateFontCandidatesResponseSchema = z
+  .object({
+    missing: z.array(
+      z
+        .object({
+          family: z.string().min(1),
+          candidates: z.array(templateFontCandidateSchema),
+          /** The one to pre-select, when exactly one is an unambiguous same-cut match. */
+          suggested: z.string().uuid().nullable(),
+          /** What already answers for this name, when a person has already decided. */
+          aliasedTo: z.string().uuid().nullable(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+export type TemplateFontCandidatesResponse = z.infer<typeof templateFontCandidatesResponseSchema>;
+
+/** Accept a held face in place of one the template asks for, or clear that decision. */
+export const templateFontAliasRequestSchema = z
+  .object({
+    requestedFamily: z.string().trim().min(1),
+    /** `null` clears the alias. */
+    fontId: z.string().uuid().nullable(),
+    /** `template` writes this template's override; `brand` the brand-wide default. */
+    scope: z.enum(['brand', 'template']).default('template'),
+  })
+  .strict();
+export type TemplateFontAliasRequest = z.infer<typeof templateFontAliasRequestSchema>;
 
 /** Browser-safe request for the explicit dry-run-then-install flow. */
 export const templateFontPushRequestSchema = z
@@ -493,16 +591,28 @@ export function templateFontStatuses(
    * working unchanged.
    */
   scopeByKey?: ReadonlyMap<string, FontLicenceScope>,
+  /**
+   * Which keys resolved only because a person aliased them, and to what. Optional, so the call
+   * sites that never ask about substitution keep reading the same as before.
+   */
+  substituteByKey?: ReadonlyMap<string, { fontId: string; family: string; weight?: number }>,
 ): TemplateFontStatus[] {
   const heldSet = new Set(held.map(normalizeTemplateFontFamily));
   return needed.map((font) => {
     const key = normalizeTemplateFontFamily(font.family);
     const scope = scopeByKey?.get(key);
+    const held = heldSet.has(key);
+    const substitutedBy = held ? substituteByKey?.get(key) : undefined;
     return {
       family: font.family,
       layers: font.layers,
-      held: heldSet.has(key),
+      held,
       ...(scope ? { scope } : {}),
+      // Only when it is a substitution. `templateFontStatusSchema` is strict, so a field on
+      // EVERY held face would be rejected outright by any client built before it existed —
+      // and `direct` tells a reader nothing the `held` flag has not already said.
+      ...(substitutedBy ? { via: 'substitute' as const } : {}),
+      ...(substitutedBy ? { substitutedBy } : {}),
     };
   });
 }

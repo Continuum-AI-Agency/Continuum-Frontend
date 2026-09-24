@@ -153,6 +153,31 @@ export function templateSlotDefaultFitsKind(
   }
 }
 
+/** A video slot's clip in the clip's own seconds, as `apiRenderVariableSchema.clip` carries it. */
+export type TemplateSlotClip = { fromSec: number; toSec: number; playsSec: number };
+
+const seconds = (value: number) => Math.round(value * 1e4) / 1e4;
+
+/**
+ * What a video slot asks of its clip across every comp it appears in: the clip seconds it plays
+ * and the longest it is on screen. `toSec` is the number that matters — a clip shorter than it
+ * runs out before the layer does. Null when no instance measured one: not a video, an older
+ * parse, or a time-remapped layer (whose `clipWhy` says so).
+ */
+export function clipOfSlot(slot: {
+  instances?: ReadonlyArray<{
+    clip?: { inSec: number; outSec: number; clipInSec: number; clipOutSec: number } | null;
+  }> | null;
+}): TemplateSlotClip | null {
+  const uses = (slot.instances ?? []).flatMap((instance) => (instance.clip ? [instance.clip] : []));
+  if (uses.length === 0) return null;
+  return {
+    fromSec: seconds(Math.min(...uses.map((use) => use.clipInSec))),
+    toSec: seconds(Math.max(...uses.map((use) => use.clipOutSec))),
+    playsSec: seconds(Math.max(...uses.map((use) => use.outSec - use.inSec))),
+  };
+}
+
 /**
  * A parsed slot, plus what the brand said about it, as the variable control the canvas already
  * knows how to render.
@@ -175,6 +200,7 @@ export function templateSlotAsRenderVariable(
     charBudget?: number | null;
     comps?: readonly string[];
     sample?: string | null;
+    instances?: Parameters<typeof clipOfSlot>[0]['instances'];
   },
   edit?: {
     publicName?: string | null;
@@ -198,6 +224,7 @@ export function templateSlotAsRenderVariable(
   comps: string[];
   sample: string | null;
   placement: null;
+  clip: TemplateSlotClip | null;
 } {
   return {
     key: slot.key,
@@ -219,5 +246,6 @@ export function templateSlotAsRenderVariable(
     // Placement comes from the parse's own slot boxes and is attached by the render path's
     // adapter, which has the fit math. A Library editor has no frame to place anything against.
     placement: null,
+    clip: clipOfSlot(slot),
   };
 }
