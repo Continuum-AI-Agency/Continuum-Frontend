@@ -165,3 +165,13 @@ export const readinessAnalysisSchema = readinessAnalysisCoreSchema.extend({
   scorer_version: z.string().min(1).max(40).optional(),
 });
 export type ReadinessAnalysis = z.infer<typeof readinessAnalysisSchema>;
+
+/**
+ * False when every dimension was scored on zero readable evidence (coverage 0):
+ * the brand's own material could not be read, so there is no readiness to show —
+ * never a score of 0. Rows scored before coverage existed count as assessable.
+ */
+export function readinessIsAssessable(analysis: Pick<ReadinessAnalysis, 'dimensions'>): boolean {
+  const dimensions = Object.values(analysis.dimensions);
+  return !(dimensions.length > 0 && dimensions.every((dimension) => dimension.coverage === 0));
+}

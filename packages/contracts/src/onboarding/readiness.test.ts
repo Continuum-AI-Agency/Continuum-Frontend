@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
-import { READINESS_DIMENSIONS, readinessAnalysisSchema, readinessSeverity } from './readiness';
+import {
+  READINESS_DIMENSIONS,
+  readinessAnalysisSchema,
+  readinessIsAssessable,
+  readinessSeverity,
+} from './readiness';
 
 const legacyRow = {
   overall_score: 62,
@@ -69,5 +74,22 @@ describe('readinessSeverity', () => {
       'low',
       'low',
     ]);
+  });
+});
+
+describe('readinessIsAssessable', () => {
+  const withCoverage = (coverage: number | undefined) => ({
+    dimensions: Object.fromEntries(
+      READINESS_DIMENSIONS.map((key) => [key, { score: 0, rationale: 'r', coverage }]),
+    ) as Parameters<typeof readinessIsAssessable>[0]['dimensions'],
+  });
+
+  test('no readable evidence in any dimension is not a score', () => {
+    expect(readinessIsAssessable(withCoverage(0))).toBe(false);
+  });
+
+  test('any measured dimension, or a legacy row without coverage, is assessable', () => {
+    expect(readinessIsAssessable(withCoverage(0.25))).toBe(true);
+    expect(readinessIsAssessable(withCoverage(undefined))).toBe(true);
   });
 });
