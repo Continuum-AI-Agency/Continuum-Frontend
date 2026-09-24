@@ -10,6 +10,7 @@
 import {
   coerceVideoGeneratorDuration,
   getVideoGeneratorReferenceModes,
+  getVideoGeneratorResolutions,
   resolveVideoGeneratorModel,
   resolveVideoGeneratorReferenceMode,
   VIDEO_GENERATOR_DURATIONS,
@@ -26,10 +27,6 @@ import type { VideoGenNodeData } from '../../types';
 import { InspectorNote, InspectorSection, OptionRow } from './controls';
 
 type Resolution = NonNullable<VideoGenNodeData['resolution']>;
-
-/** Veo 3.1 and Fast reach 4K; every other model on the roster tops out at 1080p. */
-const resolutionOptions = (model: VideoGeneratorModel): Resolution[] =>
-  model === 'veo-3.1' || model === 'veo-3.1-fast' ? ['720p', '1080p', '4k'] : ['720p', '1080p'];
 
 export function VideoGenSection({
   nodeId,
@@ -120,7 +117,7 @@ export function VideoGenSection({
         <OptionRow<Resolution>
           label="Resolution"
           value={resolution}
-          options={resolutionOptions(model).map((value) => ({ value, label: value }))}
+          options={getVideoGeneratorResolutions(model).map((value) => ({ value, label: value }))}
           onChange={(value) => onPatch({ resolution: value })}
         />
         {durationSeconds === undefined ? (

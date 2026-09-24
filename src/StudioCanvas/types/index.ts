@@ -21,6 +21,7 @@ import type {
   ImageSize,
   ShaderStackV1,
   StudioEmittedModality,
+  VideoGeneratorModel,
 } from '@continuum/contracts';
 import type {
   Connection,
@@ -269,13 +270,7 @@ export interface DocumentNodeData extends BaseNodeData {
 export interface VideoGenNodeData extends BaseNodeData {
   /** See `NanoGenNodeData.batchRun` — the fan-out branch runs for video generators too. */
   batchRun?: BatchRunRecord;
-  model:
-    | 'veo-3.1'
-    | 'veo-3.1-fast'
-    | 'veo-3.1-lite'
-    | 'kling-omni'
-    | 'pixverse-v6'
-    | 'seedance-2.0';
+  model: VideoGeneratorModel;
   prompt: string;
   negativePrompt?: string;
   enhancePrompt: boolean;
