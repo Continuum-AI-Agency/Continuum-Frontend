@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { type Attachment, Attachments } from './attachments';
 import { MentionPickerMenu, type MentionPlatformOption } from './mention-picker-menu';
 import type { MentionAnalyticsContext } from './mention-suggestion-hover';
+import { MENTION_DRAG_TYPE } from './SessionContentTray';
 import { SpeechInput } from './speech-input';
 import { ACCEPTED_ATTACHMENT_TYPES, type ChatAttachmentsController } from './useChatAttachments';
 
@@ -747,8 +748,12 @@ export function PromptInput({
 
   const handleDragOver = useCallback(
     (event: React.DragEvent<HTMLFormElement>) => {
-      if (!attachments || disabled || !event.dataTransfer.types.includes('Files')) return;
+      if (disabled) return;
+      const types = event.dataTransfer.types;
+      const isMention = types.includes(MENTION_DRAG_TYPE);
+      if (!isMention && !(attachments && types.includes('Files'))) return;
       event.preventDefault();
+      if (isMention) event.dataTransfer.dropEffect = 'copy';
       setIsDraggingOver(true);
     },
     [attachments, disabled],
@@ -762,13 +767,41 @@ export function PromptInput({
 
   const handleDrop = useCallback(
     (event: React.DragEvent<HTMLFormElement>) => {
-      if (!attachments || disabled) return;
+      if (disabled) return;
+      const mention = event.dataTransfer.getData(MENTION_DRAG_TYPE);
+      if (mention) {
+        event.preventDefault();
+        setIsDraggingOver(false);
+        const root = editorRef.current;
+        if (!root) return;
+        // Land the chip where it was dropped, else at the end — never wherever the page caret was.
+        const range = document.caretRangeFromPoint?.(event.clientX, event.clientY);
+        const at =
+          range && root.contains(range.startContainer)
+            ? range
+            : (() => {
+                const end = document.createRange();
+                end.selectNodeContents(root);
+                end.collapse(false);
+                return end;
+              })();
+        root.focus();
+        window.getSelection()?.removeAllRanges();
+        window.getSelection()?.addRange(at);
+        try {
+          insertTrackedMention(JSON.parse(mention) as AgentMentionSuggestion, false);
+        } catch {
+          // A foreign payload under our type is not a reference; drop nothing.
+        }
+        return;
+      }
+      if (!attachments) return;
       const dropped = Array.from(event.dataTransfer.files ?? []);
       event.preventDefault();
       setIsDraggingOver(false);
       if (dropped.length > 0) attachments.add(dropped);
     },
-    [attachments, disabled],
+    [attachments, disabled, insertTrackedMention],
   );
 
   const handleSpeechResult = useCallback(

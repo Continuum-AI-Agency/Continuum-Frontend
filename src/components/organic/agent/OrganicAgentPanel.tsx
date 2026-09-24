@@ -26,6 +26,7 @@ import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
 import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
 import { MentionifiedText } from '@/components/chat/mentionified-text';
 import { PromptInput } from '@/components/chat/prompt-input';
+import { SessionContentTray } from '@/components/chat/SessionContentTray';
 import { useChatAttachments } from '@/components/chat/useChatAttachments';
 import { useEarlierHistory } from '@/components/chat/useEarlierHistory';
 import { useCalendarRunStream } from '@/components/organic/hooks/useCalendarRunStream';
@@ -120,6 +121,7 @@ import type {
   ToolApproval,
   UiCard,
 } from './types';
+import { organicSessionContent } from './sessionContent';
 import { initialPanelState, panelReducer } from './useOrganicAgentReducer';
 import { useOrganicSessions } from './useOrganicSessions';
 import { useProjectedRun } from './useProjectedRun';
@@ -549,6 +551,10 @@ export function OrganicAgentPanel({
   const anchors = useMemo(
     () => deriveOrganicAnchors(state.messages, state.pipeline),
     [state.messages, state.pipeline],
+  );
+  const sessionContent = useMemo(
+    () => organicSessionContent(state.pipeline, state.jobs),
+    [state.pipeline, state.jobs],
   );
 
   // A restored page carries more than messages: the cards and bulk runs it replays have to reach
@@ -2103,6 +2109,10 @@ export function OrganicAgentPanel({
                   selectedIds={selectedAccountPlatforms}
                   onChange={setSelectedAccountPlatforms}
                   disabled={inputDisabled}
+                />
+                <SessionContentTray
+                  items={sessionContent}
+                  onInsert={(item) => setQueuedMentionSuggestions((current) => [...current, item])}
                 />
                 <SkillPickerButton
                   skills={brandSkills}
