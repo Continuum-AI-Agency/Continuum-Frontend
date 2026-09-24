@@ -15,7 +15,7 @@ export function ScorePip({ score, size = 12, color }: ScorePipProps) {
   const offset = circumference * (1 - clamped / 100);
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
       <circle
         cx={size / 2}
         cy={size / 2}
@@ -34,7 +34,7 @@ export function ScorePip({ score, size = 12, color }: ScorePipProps) {
         strokeWidth={stroke}
         strokeLinecap="round"
         strokeDasharray={circumference}
-        initial={{ strokeDashoffset: reduceMotion ? offset : circumference }}
+        initial={{ strokeDashoffset: circumference }}
         animate={{ strokeDashoffset: offset }}
         transition={{ duration: reduceMotion ? 0 : 0.7, ease: [0.16, 1, 0.3, 1] }}
         transform={`rotate(-90 ${size / 2} ${size / 2})`}
