@@ -111,3 +111,41 @@ describe('deriveReadinessSummary', () => {
     expect(summary.next_action).toBeNull();
   });
 });
+
+describe('deriveReadinessSummary on an unreadable site', () => {
+  it('an analysis with no readable evidence reads as not started, never a 0 score with a blocker', () => {
+    const unreadable = {
+      overall_score: 0,
+      dimensions: Object.fromEntries(
+        (
+          [
+            'value_proposition',
+            'icp_clarity',
+            'customer_pains',
+            'success_metrics',
+            'positioning',
+            'messaging_coherence',
+            'brand_identity',
+          ] as const
+        ).map((key) => [key, { score: 0, rationale: 'No readable evidence.', coverage: 0 }]),
+      ),
+      findings: [
+        {
+          dimension: 'success_metrics',
+          score: 0,
+          severity: 'high',
+          headline: 'h',
+          detail: 'd',
+          recommendation: 'r',
+        },
+      ],
+      generated_at: '2026-09-24T00:00:00.000Z',
+    } as unknown as ReadinessAnalysis;
+    expect(deriveReadinessSummary(unreadable)).toEqual({
+      score: 0,
+      band: 'not_started',
+      top_blocker: null,
+      next_action: null,
+    });
+  });
+});

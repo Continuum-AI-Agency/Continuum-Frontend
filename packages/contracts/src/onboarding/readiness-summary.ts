@@ -8,7 +8,7 @@
 
 import { z } from 'zod';
 
-import type { ReadinessAnalysis, ReadinessFinding } from './readiness';
+import { type ReadinessAnalysis, type ReadinessFinding, readinessIsAssessable } from './readiness';
 
 // Band thresholds mirror the BrandScorecard color buckets (>=75 green, >=50
 // yellow, >=1 red, 0 gray) so the readiness panel and the scorecard stay in
@@ -53,8 +53,9 @@ export function sortReadinessFindings(findings: readonly ReadinessFinding[]): Re
 export function deriveReadinessSummary(
   readiness: ReadinessAnalysis | null | undefined,
 ): ReadinessSummary {
-  const score = readiness?.overall_score ?? 0;
-  const [topBlocker] = sortReadinessFindings(readiness?.findings ?? []);
+  const scored = readiness && readinessIsAssessable(readiness) ? readiness : null;
+  const score = scored?.overall_score ?? 0;
+  const [topBlocker] = sortReadinessFindings(scored?.findings ?? []);
   return {
     score,
     band: readinessBandForScore(score),
