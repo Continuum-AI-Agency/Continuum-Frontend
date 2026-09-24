@@ -60,7 +60,14 @@ export type Citation = z.infer<typeof citationSchema>;
 // block carries so the Frontend can show which sentence stands on nothing.
 // ---------------------------------------------------------------------------
 
-export const CLAIM_KINDS = ['creative', 'audience', 'landing', 'figure'] as const;
+/**
+ * `breakdown` is the finer cut of `audience`: a SEGMENT SHARE ("18–24 is 41% of spend",
+ * "mujeres concentran el 58% del gasto") that only a breakdown read produces. A targeting
+ * read (`get_ad_sets`) vouches for an audience claim and never for a share — the golden
+ * bench printed age bands and a gender split from a turn that read targeting and key
+ * metrics only (JG-breakdown-without-tool).
+ */
+export const CLAIM_KINDS = ['creative', 'audience', 'breakdown', 'landing', 'figure'] as const;
 export const claimKindSchema = z.enum(CLAIM_KINDS);
 export type ClaimKind = z.infer<typeof claimKindSchema>;
 
@@ -876,6 +883,91 @@ const CLAIM_VOCABULARY: ReadonlyArray<{ kind: Exclude<ClaimKind, 'figure'>; patt
   },
 ];
 
+/**
+ * A breakdown claim is a segment WITH a measure beside it. The segment words are the
+ * dimensions Meta breaks delivery down by and the values those dimensions take; the
+ * measure is a share or a metric. Either alone is an audience claim ("targeting women
+ * 25-34" reads a targeting spec); together they are a split only a breakdown read shows.
+ */
+const BREAKDOWN_SEGMENT = wordPattern(
+  [
+    'age',
+    'age (?:bands?|ranges?|groups?)',
+    'edad(?:es)?',
+    '(?:rangos?|franjas?|grupos?) de edad',
+    'gender',
+    'g[ée]nero',
+    'women',
+    'men',
+    'female',
+    'male',
+    'mujeres',
+    'hombres',
+    'placements?',
+    'ubicaci(?:ón|on|ones)',
+    'devices?',
+    'dispositivos?',
+    'platforms?',
+    'plataformas?',
+    'countr(?:y|ies)',
+    'pa[ií]s(?:es)?',
+    'regions?',
+    'regi(?:ón|on|ones)',
+    'cit(?:y|ies)',
+    'ciudad(?:es)?',
+    '\\d{2}\\s?(?:[-–—]|to|a)\\s?\\d{2}',
+    '\\d{2}\\+',
+  ].join('|'),
+);
+const BREAKDOWN_MEASURE = new RegExp(
+  [
+    '%',
+    '(?:^|[^\\p{L}\\p{N}])(?:' +
+      [
+        'percent',
+        'por ciento',
+        'share',
+        'cuota',
+        'participaci[óo]n',
+        'accounts? for',
+        'concentran?',
+        'representan?',
+        'spend',
+        'gasto',
+        'gast[óo]',
+        'results?',
+        'resultados?',
+        'conversions?',
+        'conversiones',
+        'leads?',
+        'purchases?',
+        'compras',
+        'revenue',
+        'ingresos',
+        'cpa',
+        'roas',
+        'cpc',
+        'cpm',
+        'ctr',
+        'costs?',
+        'costos?',
+        'impressions?',
+        'impresiones',
+        'clicks?',
+        'clics?',
+        'reach',
+        'alcance',
+        'frequency',
+        'frecuencia',
+      ].join('|') +
+      ')(?=$|[^\\p{L}\\p{N}])',
+  ].join('|'),
+  'iu',
+);
+
+const isBreakdownClaim = (judged: string): boolean =>
+  BREAKDOWN_SEGMENT.test(judged) && BREAKDOWN_MEASURE.test(judged);
+
 export type Claim = { kind: ClaimKind; span: string };
 
 const SENTENCE_BOUNDARY = /(?<=[.!?])\s+|\n+/u;
@@ -915,6 +1007,9 @@ export const classifyClaims = (
     const judged = claimableText(sentence, entities);
     for (const { kind, pattern } of CLAIM_VOCABULARY) {
       if (pattern.test(judged)) claims.push({ kind, span: sentence });
+      if (kind === 'audience' && isBreakdownClaim(judged)) {
+        claims.push({ kind: 'breakdown', span: sentence });
+      }
     }
     if (/\d/.test(judged)) claims.push({ kind: 'figure', span: sentence });
   }
@@ -925,6 +1020,14 @@ export type GroundingOptions = {
   /** The claim kinds the turn's tool calls could vouch for — the Backend maps tool names. */
   toolKinds: ReadonlyArray<ClaimKind>;
   entities?: ReadonlyArray<ReportEntity>;
+  /**
+   * Every number the turn's tool results carry. When given, a figure a block RENDERS — a
+   * table cell, a grid value, a comparison leg, a chart point — that none of them matches
+   * is `claim_without_source`; when absent, figures are not graded, because there is no
+   * evidence to grade them against. The Backend derives it from the run cache, the one
+   * place a tool result is kept whole.
+   */
+  figures?: ReadonlyArray<number>;
 };
 
 type ClaimSource = { text: string; citeIds: ReadonlyArray<string> | null };
@@ -941,6 +1044,303 @@ const recordsOf = (value: unknown): Record<string, unknown>[] =>
           item !== null && typeof item === 'object' && !Array.isArray(item),
       )
     : [];
+
+// ---------------------------------------------------------------------------
+// Numbers as a report prints them — every way a model writes 73,712.61 — and every value
+// a block renders. Lifted from the golden grader (`eval/golden/grade.ts`) so the grounding
+// gate and the grader walk the SAME cells with the SAME readings: a figure a cell prints
+// is graded here against the turn's tool outputs and there against the live account.
+// ---------------------------------------------------------------------------
+
+const NUMBER_TOKEN = /(?<![\w.,])(\d[\d.,]*\d|\d)\s?(k|K|M|mil|million|millones)?(?![\w])/gu;
+
+/** One reading of a printed number and the precision it was printed at: "24.9k" is 24,900 to the hundred (decimals −2). */
+export type NumberReading = { value: number; decimals: number };
+
+/**
+ * The numeric readings of one token. A token with both separators reads the last one as
+ * the decimal mark ("73,712.61" and "73.712,61" both become 73712.61). A lone comma with
+ * three-digit groups is a thousands mark; a lone dot with three-digit groups is AMBIGUOUS
+ * (English "73.712" is a decimal, Spanish is a thousands group) so both readings are kept.
+ */
+export const numberReadingsOfToken = (digits: string, suffix?: string): NumberReading[] => {
+  const scale =
+    suffix === undefined
+      ? 1
+      : /^(k|mil)$/i.test(suffix)
+        ? 1_000
+        : /^(m|million|millones)$/i.test(suffix)
+          ? 1_000_000
+          : 1;
+  const hasComma = digits.includes(',');
+  const hasDot = digits.includes('.');
+  const readings: NumberReading[] = [];
+  const push = (text: string): void => {
+    const value = Number(text);
+    if (!Number.isFinite(value)) return;
+    const point = text.indexOf('.');
+    const fractionDigits = point < 0 ? 0 : text.length - point - 1;
+    readings.push({ value: value * scale, decimals: fractionDigits - Math.log10(scale) });
+  };
+  if (hasComma && hasDot) {
+    const decimalIsComma = digits.lastIndexOf(',') > digits.lastIndexOf('.');
+    push(decimalIsComma ? digits.replace(/\./g, '').replace(',', '.') : digits.replace(/,/g, ''));
+  } else if (hasComma) {
+    if (/^\d{1,3}(,\d{3})+$/.test(digits)) push(digits.replace(/,/g, ''));
+    else push(digits.replace(',', '.'));
+  } else if (hasDot) {
+    if (/^\d{1,3}(\.\d{3})+$/.test(digits)) {
+      push(digits.replace(/\./g, ''));
+      push(digits);
+    } else push(digits);
+  } else push(digits);
+  return readings;
+};
+
+export const readingsOfNumberToken = (digits: string, suffix?: string): number[] =>
+  numberReadingsOfToken(digits, suffix).map((reading) => reading.value);
+
+/** Each printed number in `text` with its readings — one entry per token, several readings when the token is ambiguous. */
+export const numberTokensInText = (text: string): NumberReading[][] => {
+  const out: NumberReading[][] = [];
+  for (const match of text.matchAll(NUMBER_TOKEN)) {
+    out.push(numberReadingsOfToken(match[1], match[2]));
+  }
+  return out;
+};
+
+export const numbersInText = (text: string): number[] =>
+  numberTokensInText(text).flatMap((readings) => readings.map((reading) => reading.value));
+
+/**
+ * One value a block shows, where (`top-ads.rows[2].cost`), under which label, in which
+ * format. The address never carries a cell's text, so an entity name in one column cannot
+ * leak into a verdict about another; the format says whether the cell is a measurement
+ * (`currency`, `number`, `percent`, `multiplier`) or a name (`text`, `creative`).
+ */
+export type BlockCell = {
+  value: unknown;
+  where: string;
+  label: string | null;
+  format: string | null;
+};
+
+const looseRecord = (value: unknown): Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+const looseArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+
+const formatOf = (value: unknown, fallback: string): string =>
+  typeof value === 'string' ? value : fallback;
+
+/** Every value a block carries where a renderer would show it: grid values, cells, pairs, evidence, chart points, pacing. */
+export const cellsOfBlocks = (blocks: readonly unknown[]): BlockCell[] => {
+  const out: BlockCell[] = [];
+  for (const raw of blocks) {
+    const block = looseRecord(raw);
+    const id = String(block.block_id ?? block.category ?? '?');
+    switch (block.category) {
+      case 'metric_grid':
+        looseArray(block.metrics).forEach((metric, i) => {
+          const item = looseRecord(metric);
+          out.push({
+            value: item.value,
+            where: `${id}.metrics[${i}].value`,
+            label: typeof item.label === 'string' ? item.label : null,
+            format: formatOf(item.format, 'number'),
+          });
+        });
+        break;
+      case 'data_table': {
+        const columns = looseArray(block.columns).map(looseRecord);
+        const columnOf = (key: string) => columns.find((column) => column.key === key);
+        looseArray(block.rows).forEach((row, i) => {
+          for (const [key, cell] of Object.entries(looseRecord(row))) {
+            const column = columnOf(key);
+            out.push({
+              value: cell,
+              where: `${id}.rows[${i}].${key}`,
+              label: typeof column?.label === 'string' ? column.label : key,
+              format: formatOf(column?.format, 'text'),
+            });
+          }
+        });
+        break;
+      }
+      case 'comparison':
+        looseArray(block.pairs).forEach((pair, i) => {
+          const rec = looseRecord(pair);
+          for (const leg of ['before', 'after', 'baseline'] as const) {
+            out.push({
+              value: rec[leg],
+              where: `${id}.pairs[${i}].${leg}`,
+              label: typeof rec.label === 'string' ? rec.label : leg,
+              format: formatOf(rec.format, 'number'),
+            });
+          }
+        });
+        break;
+      case 'actions':
+        looseArray(block.rows).forEach((row, i) => {
+          const evidence = looseRecord(looseRecord(row).evidence);
+          out.push({
+            value: evidence.value,
+            where: `${id}.rows[${i}].evidence.value`,
+            label: typeof evidence.metric === 'string' ? evidence.metric : 'evidence',
+            format: null,
+          });
+        });
+        break;
+      case 'chart': {
+        const categoryKey = typeof block.category_key === 'string' ? block.category_key : null;
+        looseArray(block.data).forEach((point, i) => {
+          for (const [key, cell] of Object.entries(looseRecord(point))) {
+            out.push({
+              value: cell,
+              where: `${id}.data[${i}].${key}`,
+              label: key,
+              // The category axis is a date or a name, never a measurement.
+              format: key === categoryKey ? 'text' : formatOf(block.value_format, 'number'),
+            });
+          }
+        });
+        break;
+      }
+      case 'goal_pacing':
+        out.push({ value: block.budget, where: `${id}.budget`, label: 'budget', format: null });
+        out.push({ value: block.spent, where: `${id}.spent`, label: 'spent', format: null });
+        out.push({
+          value: block.projected_end,
+          where: `${id}.projected_end`,
+          label: 'projected_end',
+          format: null,
+        });
+        break;
+      default:
+        break;
+    }
+  }
+  return out;
+};
+
+/** The headings a renderer prints over those values: column labels, metric and pair labels, chart axes. */
+export const headersOfBlocks = (blocks: readonly unknown[]): BlockCell[] => {
+  const out: BlockCell[] = [];
+  for (const raw of blocks) {
+    const block = looseRecord(raw);
+    const id = String(block.block_id ?? block.category ?? '?');
+    const labelled = (items: unknown[], field: string): void => {
+      items.forEach((item, i) => {
+        out.push({
+          value: looseRecord(item).label,
+          where: `${id}.${field}[${i}].label`,
+          label: null,
+          format: 'text',
+        });
+      });
+    };
+    if (block.category === 'data_table') labelled(looseArray(block.columns), 'columns');
+    if (block.category === 'metric_grid') labelled(looseArray(block.metrics), 'metrics');
+    if (block.category === 'comparison') labelled(looseArray(block.pairs), 'pairs');
+    if (block.category === 'chart') {
+      out.push({
+        value: block.x_axis_label,
+        where: `${id}.x_axis_label`,
+        label: null,
+        format: 'text',
+      });
+      out.push({
+        value: block.y_axis_label,
+        where: `${id}.y_axis_label`,
+        label: null,
+        format: 'text',
+      });
+    }
+  }
+  return out;
+};
+
+/** A cell whose format says it is a measurement, not a name — the only cells a figure verdict reads. */
+const isMeasuredCell = (cell: BlockCell): boolean =>
+  cell.format !== 'text' && cell.format !== 'creative';
+
+const decimalsOf = (value: number): number => {
+  const text = String(value);
+  if (/e/i.test(text)) return 6;
+  const point = text.indexOf('.');
+  return point < 0 ? 0 : text.length - point - 1;
+};
+
+/** The printed numbers of one cell, one entry per token; a numeric cell is one token at its own precision. */
+const numberTokensOfCell = (value: unknown): NumberReading[][] => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return [[{ value, decimals: decimalsOf(value) }]];
+  }
+  if (typeof value === 'string') return numberTokensInText(value);
+  return [];
+};
+
+/** A rendered figure may be rounded to its printed precision or to half a percent, and a ratio may be printed as a percent. */
+const FIGURE_RELATIVE_TOLERANCE = 0.005;
+
+const hasFigureNear = (
+  sorted: ReadonlyArray<number>,
+  value: number,
+  tolerance: number,
+): boolean => {
+  let low = 0;
+  let high = sorted.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (sorted[mid] < value - tolerance) low = mid + 1;
+    else high = mid;
+  }
+  return low < sorted.length && sorted[low] <= value + tolerance;
+};
+
+const readingIsMeasured = (reading: NumberReading, sorted: ReadonlyArray<number>): boolean =>
+  [
+    reading,
+    // A fraction the tool returned, printed as a percent — and the reverse.
+    { value: reading.value / 100, decimals: reading.decimals + 2 },
+    { value: reading.value * 100, decimals: reading.decimals - 2 },
+  ].some(({ value, decimals }) => {
+    const tolerance =
+      Math.max(0.5 * 10 ** -decimals, Math.abs(value) * FIGURE_RELATIVE_TOLERANCE) + 1e-9;
+    return hasFigureNear(sorted, value, tolerance);
+  });
+
+/**
+ * The rendered cells of one block whose printed figures the turn's tool outputs do not
+ * carry. A cell is grounded when every positive number it prints has one reading among
+ * the figures; a zero is an absence, never an invention. The span is what the reader
+ * sees: the cell's own text, or `label: value` for a bare number.
+ */
+const unmeasuredCellsOf = (
+  block: Record<string, unknown>,
+  figures: ReadonlyArray<number>,
+): Array<{ span: string }> => {
+  const sorted = [...new Set(figures)].sort((left, right) => left - right);
+  const out: Array<{ span: string }> = [];
+  for (const cell of cellsOfBlocks([block])) {
+    if (!isMeasuredCell(cell)) continue;
+    const tokens = numberTokensOfCell(cell.value).filter((readings) =>
+      readings.some((reading) => reading.value > 0),
+    );
+    if (tokens.length === 0) continue;
+    const measured = tokens.every((readings) =>
+      readings.some((reading) => readingIsMeasured(reading, sorted)),
+    );
+    if (measured) continue;
+    out.push({
+      span:
+        typeof cell.value === 'string' ? cell.value : `${cell.label ?? cell.where}: ${cell.value}`,
+    });
+  }
+  return out;
+};
 
 /**
  * The prose a block carries, each piece with the `cite_ids` slot it has (null where the
@@ -973,10 +1373,15 @@ const claimSourcesOf = (block: Record<string, unknown>): ClaimSource[] => {
 };
 
 /**
- * The claims in one block that the turn cannot stand behind. A creative, audience or
- * landing-page claim whose kind no tool call of this turn read is `claim_without_source`;
- * one whose kind WAS read, on a row that still cites nothing, is `claim_uncited`. A figure
- * is never flagged here. Nothing is fabricated: a missing citation is reported, not filled.
+ * The claims in one block that the turn cannot stand behind. A creative, audience,
+ * breakdown or landing-page claim whose kind no tool call of this turn read is
+ * `claim_without_source`; one whose kind WAS read, on a row that still cites nothing, is
+ * `claim_uncited`. A figure in PROSE is never flagged — a sentence carries windows, counts
+ * and deltas the model computes — but a figure a block RENDERS is a measurement, and when
+ * `figures` is given every rendered cell is held to the turn's tool outputs: a revenue
+ * cell on a leads account that no tool result carries is `claim_without_source` of kind
+ * `figure` (JG-invented-revenue). Nothing is fabricated: a missing citation is reported,
+ * not filled, and a flagged cell is annotated, never rewritten.
  */
 export const groundingViolationsOf = (
   block: Record<string, unknown>,
@@ -985,6 +1390,12 @@ export const groundingViolationsOf = (
   const read = new Set(options.toolKinds);
   const out: GroundingViolation[] = [];
   const seen = new Set<string>();
+  const report = (violation: GroundingViolation): void => {
+    const key = `${violation.kind}|${violation.reason}|${violation.span}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(violation);
+  };
   for (const source of claimSourcesOf(block)) {
     for (const claim of classifyClaims(source.text, { entities: options.entities })) {
       if (claim.kind === 'figure') continue;
@@ -994,10 +1405,12 @@ export const groundingViolationsOf = (
           ? 'claim_uncited'
           : null;
       if (reason === null) continue;
-      const key = `${claim.kind}|${reason}|${claim.span}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({ kind: claim.kind, span: claim.span, reason });
+      report({ kind: claim.kind, span: claim.span, reason });
+    }
+  }
+  if (options.figures) {
+    for (const cell of unmeasuredCellsOf(block, options.figures)) {
+      report({ kind: 'figure', span: cell.span, reason: 'claim_without_source' });
     }
   }
   return out;

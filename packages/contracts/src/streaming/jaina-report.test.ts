@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  cellsOfBlocks,
   chartBlockSchema,
   checkpointBlockV2LenientSchema,
   checkpointBlockV2Schema,
@@ -9,8 +10,11 @@ import {
   degradeToNarrativeBlockV2,
   groundingViolationsOf,
   hasProseMarks,
+  headersOfBlocks,
   insightListItemSchema,
   narrativeBlockSchema,
+  numberReadingsOfToken,
+  numbersInText,
   parseProseMarks,
   stripProseMarks,
   validateReport,
@@ -738,5 +742,183 @@ describe('block grounding field', () => {
         grounding: [{ kind: 'vibe', span: 'x', reason: 'claim_uncited' }],
       }).success,
     ).toBe(false);
+  });
+});
+
+// JG-breakdown-without-tool: a segment WITH a share or a metric beside it is a breakdown
+// claim, which only a breakdown read produces; a segment alone is an audience claim, which
+// a targeting read can stand behind.
+describe('classifyClaims — breakdown', () => {
+  const kindsOf = (text: string) => classifyClaims(text).map((claim) => claim.kind);
+
+  it('reads a segment share as a breakdown claim beside the audience claim, in both languages', () => {
+    expect(kindsOf('18–24 accounts for 41% of spend and women drive 63% of results.')).toEqual([
+      'audience',
+      'breakdown',
+      'figure',
+    ]);
+    expect(kindsOf('Mujeres de 25–34 concentran el 58% del gasto y convierten mejor.')).toEqual([
+      'audience',
+      'breakdown',
+      'figure',
+    ]);
+    expect(kindsOf('Instagram placements carried most of the spend.')).toEqual([
+      'audience',
+      'breakdown',
+    ]);
+  });
+
+  it('leaves a targeting statement an audience claim: no share, no metric', () => {
+    expect(kindsOf('Targeting women 25-34 with a lookalike of purchasers.')).toEqual([
+      'audience',
+      'figure',
+    ]);
+    expect(kindsOf('El público de mujeres de 25 a 34 años convierte mejor.')).toEqual([
+      'audience',
+      'figure',
+    ]);
+  });
+
+  it('is claim_without_source after a targeting read and clean after a breakdown read', () => {
+    const block = {
+      block_id: 'ins',
+      category: 'insight_list',
+      items: [
+        {
+          title: 'Split',
+          summary: '18–24 accounts for 41% of spend.',
+          rationale: '',
+          impact: '',
+          cite_ids: ['d1'],
+        },
+      ],
+    };
+    expect(groundingViolationsOf(block, { toolKinds: ['audience'] })).toEqual([
+      {
+        kind: 'breakdown',
+        span: '18–24 accounts for 41% of spend.',
+        reason: 'claim_without_source',
+      },
+    ]);
+    expect(groundingViolationsOf(block, { toolKinds: ['audience', 'breakdown'] })).toEqual([]);
+  });
+});
+
+// JG-invented-revenue: a figure a block RENDERS is graded against the numbers the turn's
+// tool outputs carry, when the caller supplies them. Prose figures stay ungraded.
+describe('groundingViolationsOf — rendered figures', () => {
+  const figures = [15986.35, 412_910, 9874, 0, 2.39, 1.62, 38.72, 0.0412, 24_900];
+  const table = {
+    block_id: 'roas',
+    category: 'data_table',
+    columns: [
+      { key: 'campaign', label: 'Campaign', format: 'text' },
+      { key: 'spend', label: 'Spend', format: 'currency' },
+      { key: 'revenue', label: 'Revenue', format: 'currency' },
+      { key: 'ctr', label: 'CTR', format: 'percent' },
+    ],
+    rows: [{ campaign: 'Leads 2024', spend: 15986.35, revenue: 'Revenue: $3,000.00', ctr: '2.4%' }],
+  };
+
+  it('flags the cell no tool output carries and leaves the measured cells alone', () => {
+    expect(groundingViolationsOf(table, { toolKinds: [], figures })).toEqual([
+      { kind: 'figure', span: 'Revenue: $3,000.00', reason: 'claim_without_source' },
+    ]);
+  });
+
+  it('grades nothing without a figure set', () => {
+    expect(groundingViolationsOf(table, { toolKinds: [] })).toEqual([]);
+  });
+
+  it('accepts rounding to the printed precision, a K suffix, and a ratio printed as a percent', () => {
+    const grid = {
+      block_id: 'g',
+      category: 'metric_grid',
+      metrics: [
+        { label: 'Spend', value: '16.0K', format: 'currency' },
+        { label: 'Clicks', value: 9_870, format: 'number' },
+        { label: 'CVR', value: '4.12%', format: 'percent' },
+        { label: 'Reach', value: '24.9k', format: 'number' },
+        { label: 'Revenue', value: 3000, format: 'currency' },
+      ],
+    };
+    expect(groundingViolationsOf(grid, { toolKinds: [], figures })).toEqual([
+      { kind: 'figure', span: 'Revenue: 3000', reason: 'claim_without_source' },
+    ]);
+  });
+
+  it('reads a text column, the chart category axis and a zero as no claim at all', () => {
+    const chart = {
+      block_id: 'c',
+      category: 'chart',
+      category_key: 'date',
+      value_format: 'currency',
+      data: [{ date: '2026-09-01', spend: 15986.35 }],
+    };
+    const zero = {
+      block_id: 'z',
+      category: 'metric_grid',
+      metrics: [{ label: 'Purchases', value: 0, format: 'number' }],
+    };
+    expect(groundingViolationsOf(chart, { toolKinds: [], figures })).toEqual([]);
+    expect(groundingViolationsOf(zero, { toolKinds: [], figures })).toEqual([]);
+  });
+
+  it('never grades a figure in prose, where windows, counts and deltas are computed', () => {
+    const narrative = { block_id: 'n', category: 'narrative', body: 'Revenue reached 3,000 MXN.' };
+    expect(groundingViolationsOf(narrative, { toolKinds: [], figures })).toEqual([]);
+  });
+});
+
+describe('cellsOfBlocks / headersOfBlocks', () => {
+  it('walks every rendered value with its label and format, in render order', () => {
+    const cells = cellsOfBlocks([
+      {
+        block_id: 'g',
+        category: 'metric_grid',
+        metrics: [{ label: 'Spend', value: 1, format: 'currency' }],
+      },
+      {
+        block_id: 't',
+        category: 'data_table',
+        columns: [{ key: 'name', label: 'Name', format: 'text' }],
+        rows: [{ name: 'A', cost: 2 }],
+      },
+      {
+        block_id: 'p',
+        category: 'comparison',
+        pairs: [{ label: 'CPA', before: 3, after: 4, format: 'currency' }],
+      },
+      { block_id: 'a', category: 'actions', rows: [{ evidence: { metric: 'CPA', value: 5 } }] },
+      { block_id: 'c', category: 'chart', category_key: 'day', data: [{ day: 'Mon', spend: 6 }] },
+      { block_id: 'gp', category: 'goal_pacing', budget: 7, spent: 8, projected_end: null },
+    ]);
+    expect(cells.map((cell) => [cell.where, cell.label, cell.format, cell.value])).toEqual([
+      ['g.metrics[0].value', 'Spend', 'currency', 1],
+      ['t.rows[0].name', 'Name', 'text', 'A'],
+      ['t.rows[0].cost', 'cost', 'text', 2],
+      ['p.pairs[0].before', 'CPA', 'currency', 3],
+      ['p.pairs[0].after', 'CPA', 'currency', 4],
+      ['p.pairs[0].baseline', 'CPA', 'currency', undefined],
+      ['a.rows[0].evidence.value', 'CPA', null, 5],
+      ['c.data[0].day', 'day', 'text', 'Mon'],
+      ['c.data[0].spend', 'spend', 'number', 6],
+      ['gp.budget', 'budget', null, 7],
+      ['gp.spent', 'spent', null, 8],
+      ['gp.projected_end', 'projected_end', null, null],
+    ]);
+    expect(
+      headersOfBlocks([
+        { block_id: 'c', category: 'chart', x_axis_label: 'Day', y_axis_label: 'Spend (MXN)' },
+      ]).map((header) => header.value),
+    ).toEqual(['Day', 'Spend (MXN)']);
+  });
+
+  it('reads printed numbers with their precision', () => {
+    expect(numberReadingsOfToken('24.9', 'k')).toEqual([{ value: 24_900, decimals: -2 }]);
+    expect(numberReadingsOfToken('3,000.00')).toEqual([{ value: 3000, decimals: 2 }]);
+    expect(numbersInText('Spend was MX$73,712.61 across 1,424,702 impressions.')).toEqual([
+      73712.61, 1424702,
+    ]);
   });
 });
