@@ -35,6 +35,15 @@ export const scrapeSchema = z
       .nullable()
       .optional(),
     nav_labels: z.array(z.string().min(1).max(60)).max(12).nullable().optional(),
+    /**
+     * Header / nav / footer anchors, absolutised. Readiness picks its about, pricing
+     * and customers subpages from these; bounded so a mega-menu cannot bloat a payload.
+     */
+    nav_links: z
+      .array(z.object({ label: z.string().max(80), href: z.string().min(1).max(2048) }))
+      .max(40)
+      .nullable()
+      .optional(),
     cta_text: z.array(z.string().min(1).max(80)).max(6).nullable().optional(),
     body_sample: z.string().max(2000).nullable().optional(),
     meta: z

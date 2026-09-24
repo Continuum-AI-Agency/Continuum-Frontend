@@ -6421,6 +6421,7 @@ export type Database = {
           created_at: string
           dimensions: Json
           id: string
+          readiness_score_id: string | null
           overall_score: number | null
           recommendations: Json
           source_phase: string | null
@@ -6431,6 +6432,7 @@ export type Database = {
           brand_report_id?: string | null
           created_at?: string
           dimensions?: Json
+          readiness_score_id?: string | null
           id?: string
           overall_score?: number | null
           recommendations?: Json
@@ -6441,6 +6443,7 @@ export type Database = {
           brand_profile_id?: string
           brand_report_id?: string | null
           created_at?: string
+          readiness_score_id?: string | null
           dimensions?: Json
           id?: string
           overall_score?: number | null
@@ -6466,6 +6469,13 @@ export type Database = {
           {
             foreignKeyName: "brand_report_readiness_brand_report_id_fkey"
             columns: ["brand_report_id"]
+          {
+            foreignKeyName: "brand_report_readiness_readiness_score_id_fkey"
+            columns: ["readiness_score_id"]
+            isOneToOne: false
+            referencedRelation: "readiness_scores"
+            referencedColumns: ["id"]
+          },
             isOneToOne: false
             referencedRelation: "brand_reports"
             referencedColumns: ["id"]
@@ -8876,6 +8886,7 @@ export type Database = {
             referencedRelation: "preview_runs"
             referencedColumns: ["id"]
           },
+          readiness_score_id: string | null
         ]
       }
       preview_runs: {
@@ -8888,6 +8899,7 @@ export type Database = {
           last_heartbeat_at: string | null
           prompt_version: number
           request_context: Json | null
+          readiness_score_id?: string | null
           result: Json | null
           started_at: string
           status: string
@@ -8900,6 +8912,7 @@ export type Database = {
           input_hash: string
           last_heartbeat_at?: string | null
           prompt_version: number
+          readiness_score_id?: string | null
           request_context?: Json | null
           result?: Json | null
           started_at?: string
@@ -8918,7 +8931,15 @@ export type Database = {
           started_at?: string
           status?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "preview_runs_readiness_score_id_fkey"
+            columns: ["readiness_score_id"]
+            isOneToOne: false
+            referencedRelation: "readiness_scores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       project_memberships: {
         Row: {
@@ -9076,6 +9097,85 @@ export type Database = {
           name?: string
           prompt?: string
           slug?: string | null
+      readiness_scores: {
+        Row: {
+          analysis: Json
+          attempt_winners: string[]
+          brand_profile_id: string | null
+          config: Json
+          created_at: string
+          criterion_flips: number
+          evidence: Json
+          evidence_hash: string
+          id: string
+          latency_ms: number
+          model_id: string
+          preview_run_id: string | null
+          prompt_hash: string
+          recovered: boolean
+          scorer_version: string
+          votes: number
+        }
+        Insert: {
+          analysis: Json
+          attempt_winners: string[]
+          brand_profile_id?: string | null
+          config: Json
+          created_at?: string
+          criterion_flips: number
+          evidence: Json
+          evidence_hash: string
+          id?: string
+          latency_ms: number
+          model_id: string
+          preview_run_id?: string | null
+          prompt_hash: string
+          recovered: boolean
+          scorer_version: string
+          votes: number
+        }
+        Update: {
+          analysis?: Json
+          attempt_winners?: string[]
+          brand_profile_id?: string | null
+          config?: Json
+          created_at?: string
+          criterion_flips?: number
+          evidence?: Json
+          evidence_hash?: string
+          id?: string
+          latency_ms?: number
+          model_id?: string
+          preview_run_id?: string | null
+          prompt_hash?: string
+          recovered?: boolean
+          scorer_version?: string
+          votes?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "readiness_scores_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_account_directory"
+            referencedColumns: ["brand_id"]
+          },
+          {
+            foreignKeyName: "readiness_scores_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "readiness_scores_preview_run_id_fkey"
+            columns: ["preview_run_id"]
+            isOneToOne: false
+            referencedRelation: "preview_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
           source?: string
           status?: string
           tags?: string[]
