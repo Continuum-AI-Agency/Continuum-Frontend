@@ -14,6 +14,14 @@ export interface RadarAreaProps {
   color?: string;
   /** Show data point circles. Default: true */
   showPoints?: boolean;
+  /** Only these metrics get a point; the rest are drawn without one. Default: all */
+  pointKeys?: ReadonlySet<string>;
+  /** Metrics left out of the polygon entirely: a value that was never measured. */
+  skipKeys?: ReadonlySet<string>;
+  /** Dash pattern for the outline, e.g. a projected rather than measured shape. */
+  strokeDasharray?: string;
+  /** Resting fill opacity. Default: 0.15 */
+  fillOpacity?: number;
   /** Show stroke outline on the polygon. Default: true */
   showStroke?: boolean;
   /** Show glow effect on hover. Default: true */
@@ -57,6 +65,7 @@ const RadarPoint = memo(function RadarPoint({
         cx={target.x}
         cy={target.y}
         fill={color}
+        data-radar-point={metricKey}
         key={metricKey}
         r={isHovered ? 6 : 4}
         stroke={radarCssVars.background}
@@ -69,6 +78,7 @@ const RadarPoint = memo(function RadarPoint({
     <motion.circle
       cx={cx}
       cy={cy}
+      data-radar-point={metricKey}
       fill={color}
       key={metricKey}
       r={isHovered ? 6 : 4}
@@ -85,6 +95,10 @@ export const RadarArea = memo(function RadarArea({
   index,
   color: colorProp,
   showPoints = true,
+  pointKeys,
+  skipKeys,
+  strokeDasharray,
+  fillOpacity = 0.15,
   showStroke = true,
   showGlow = true,
   className = '',
@@ -116,12 +130,17 @@ export const RadarArea = memo(function RadarArea({
     });
   }, [metrics, areaData, getPointPosition]);
 
-  const staticPath = useMemo(() => positionsToPath(targetPositions), [targetPositions]);
+  const polygonPositions = useMemo(
+    () => targetPositions.filter((_, i) => !skipKeys?.has(metrics[i]?.key ?? '')),
+    [targetPositions, skipKeys, metrics],
+  );
+  const staticPath = useMemo(() => positionsToPath(polygonPositions), [polygonPositions]);
 
   const gridStagger = 0.08 * staggerScale * durationFactor;
   const campaignBaseDelay = (levels * gridStagger + 0.2) * durationFactor;
   const campaignStagger = 0.15 * staggerScale * durationFactor;
-  const animationDelay = campaignBaseDelay + index * campaignStagger;
+  // With animation off the shape lands at once: no staggered wait on a blank chart.
+  const animationDelay = animate ? campaignBaseDelay + index * campaignStagger : 0;
 
   const mountProgress = useMountProgress(
     enterTransition,
@@ -131,7 +150,7 @@ export const RadarArea = memo(function RadarArea({
   const enterComplete = useEnterComplete(mountProgress);
 
   const animatedPositions = useTransform(mountProgress, (t) =>
-    targetPositions.map((p) => ({ x: p.x * t, y: p.y * t })),
+    polygonPositions.map((p) => ({ x: p.x * t, y: p.y * t })),
   );
 
   const pathD = useTransform(animatedPositions, positionsToPath);
@@ -164,8 +183,9 @@ export const RadarArea = memo(function RadarArea({
         <path
           d={staticPath}
           fill={color}
-          fillOpacity={isHovered ? 0.35 : 0.15}
+          fillOpacity={isHovered ? 0.35 : fillOpacity}
           stroke={showStroke ? color : 'none'}
+          strokeDasharray={strokeDasharray}
           strokeLinejoin="round"
           strokeWidth={showStroke ? getStrokeWidth(isHovered) : 0}
           style={{
@@ -175,12 +195,14 @@ export const RadarArea = memo(function RadarArea({
       ) : (
         <motion.path
           animate={{
-            fillOpacity: isHovered ? 0.35 : 0.15,
+            fillOpacity: isHovered ? 0.35 : fillOpacity,
             strokeWidth: showStroke ? getStrokeWidth(isHovered) : 0,
           }}
           d={pathD}
+          initial={{ fillOpacity, strokeWidth: showStroke ? getStrokeWidth(false) : 0 }}
           fill={color}
           stroke={showStroke ? color : 'none'}
+          strokeDasharray={strokeDasharray}
           strokeLinejoin="round"
           style={{
             filter: showGlow && isHovered ? `drop-shadow(0 0 12px ${color})` : 'none',
@@ -195,7 +217,7 @@ export const RadarArea = memo(function RadarArea({
       {showPoints &&
         metrics.map((metric, i) => {
           const target = targetPositions[i];
-          if (!target) {
+          if (!target || (pointKeys && !pointKeys.has(metric.key))) {
             return null;
           }
           return (

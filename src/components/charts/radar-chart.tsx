@@ -25,6 +25,8 @@ export interface RadarChartProps {
   levels?: number;
   /** Margin around the chart. Default: 60 */
   margin?: number;
+  /** Share of the radius kept empty at the centre, so 0 sits on a hub ring. Default: 0 */
+  innerRadiusRatio?: number;
   /** Enable animations. Default: true */
   animate?: boolean;
   /** Enter animation budget in ms. Default: 1100 */
@@ -52,6 +54,7 @@ interface RadarChartInnerProps {
   metrics: RadarMetric[];
   levels: number;
   margin: number;
+  innerRadiusRatio: number;
   animate: boolean;
   enterDurationMs: number;
   staggerScale: number;
@@ -69,6 +72,7 @@ function RadarChartInner({
   metrics,
   levels,
   margin,
+  innerRadiusRatio,
   animate,
   enterDurationMs,
   staggerScale,
@@ -102,12 +106,12 @@ function RadarChartInner({
   const yScale = useCallback(
     (value: number) => {
       const scale = scaleLinear<number>({
-        range: [0, radius],
+        range: [radius * innerRadiusRatio, radius],
         domain: [0, 100],
       });
       return scale(value) ?? 0;
     },
-    [radius],
+    [radius, innerRadiusRatio],
   );
 
   // Get angle for a metric index (rotated so first metric is at top)
@@ -186,6 +190,7 @@ export function RadarChart({
   size: fixedSize,
   levels = 5,
   margin = 60,
+  innerRadiusRatio = 0,
   animate = true,
   enterDurationMs = 1100,
   staggerScale = 1,
@@ -210,6 +215,7 @@ export function RadarChart({
           enterTransition={enterTransition}
           height={fixedSize}
           hoveredIndexProp={hoveredIndex}
+          innerRadiusRatio={innerRadiusRatio}
           levels={levels}
           margin={margin}
           metrics={metrics}
@@ -236,6 +242,7 @@ export function RadarChart({
             enterTransition={enterTransition}
             height={height}
             hoveredIndexProp={hoveredIndex}
+            innerRadiusRatio={innerRadiusRatio}
             levels={levels}
             margin={margin}
             metrics={metrics}

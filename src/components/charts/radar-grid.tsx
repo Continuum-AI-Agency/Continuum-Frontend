@@ -25,13 +25,13 @@ export function RadarGrid({
 }: RadarGridProps) {
   const {
     metrics,
-    radius,
     levels,
     animate,
     enterTransition,
     staggerScale,
     enterDurationMs,
     motionReplayKey,
+    yScale,
   } = useRadarStable();
 
   const durationFactor = enterDurationMs / 1100;
@@ -55,7 +55,7 @@ export function RadarGrid({
     <g className={className}>
       {/* Concentric grid circles */}
       {[...new Array(levels)].map((_, i) => {
-        const targetRadius = ((i + 1) * radius) / levels;
+        const targetRadius = yScale(((i + 1) * 100) / levels);
         return (
           <motion.g
             animate={{ scale: 1, opacity: 1 }}
@@ -108,7 +108,7 @@ export function RadarGrid({
               fontSize={9}
               textAnchor="start"
               x={4}
-              y={-((i + 1) * radius) / levels}
+              y={-yScale(((i + 1) * 100) / levels)}
             >
               {((i + 1) * 100) / levels}
             </text>
