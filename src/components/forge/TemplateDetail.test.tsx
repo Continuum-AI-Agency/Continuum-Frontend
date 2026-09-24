@@ -421,9 +421,20 @@ describe('TemplateDetail', () => {
     expect(screen.getByText('2 to do').getAttribute('role')).toBe('status');
 
     fireEvent.click(within(check('Test render')).getByRole('button', { name: 'Test render' }));
-    await waitFor(() =>
-      expect(advanceTemplateForgeRun).toHaveBeenCalledWith(BRAND, ASSET, 'smoke'),
-    );
+    await waitFor(() => expect(advanceTemplateForgeRun).toHaveBeenCalledTimes(2));
+    expect(advanceTemplateForgeRun).toHaveBeenNthCalledWith(1, BRAND, ASSET, 'draft');
+    expect(advanceTemplateForgeRun).toHaveBeenNthCalledWith(2, BRAND, ASSET, 'smoke');
+  });
+
+  test('a refused draft never starts a test render', async () => {
+    run = { ...PUBLISHED_RUN, state: 'draft_ready' };
+    advanceTemplateForgeRun.mockImplementationOnce(async () => {
+      throw new Error('Draft could not be created');
+    });
+    renderDetail(undefined, { ...SOURCE, templateKey: null, forgeState: 'draft_ready' });
+    fireEvent.click(within(check('Test render')).getByRole('button', { name: 'Test render' }));
+    await waitFor(() => expect(advanceTemplateForgeRun).toHaveBeenCalledTimes(1));
+    expect(advanceTemplateForgeRun).toHaveBeenCalledWith(BRAND, ASSET, 'draft');
   });
 
   test('facts read formats, unassigned variables, sets and the last render from cached reads', async () => {
