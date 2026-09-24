@@ -395,6 +395,21 @@ export const templateFontStatusSchema = z
      * face was reported missing for every brand, because no brand had "uploaded" it.
      */
     scope: fontLicenceScopeSchema.optional(),
+    /**
+     * How it resolved. `substitute` means nobody holds this NAME and a person accepted a face
+     * we do hold in its place — the chip must say so. A substitution that reads as a plain
+     * `uploaded` is the 2026-09-15 failure with a green tick on it.
+     */
+    via: z.enum(['direct', 'substitute']).optional(),
+    /** The face standing in, when `via` is `substitute`. For the chip, never for resolution. */
+    substitutedBy: z
+      .object({
+        fontId: z.string().uuid(),
+        family: z.string().min(1),
+        weight: z.number().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type TemplateFontStatus = z.infer<typeof templateFontStatusSchema>;
@@ -407,6 +422,57 @@ export const templateFontReadinessSchema = z
   })
   .strict();
 export type TemplateFontReadiness = z.infer<typeof templateFontReadinessSchema>;
+
+/**
+ * A face we hold that could stand in for one we do not.
+ *
+ * Identity only — no storage path, no bucket, no URL. The same rule the whole font subsystem
+ * runs on: a path in a browser is one signed-URL call away from redistributing a licensed face.
+ */
+export const templateFontCandidateSchema = z
+  .object({
+    fontId: z.string().uuid(),
+    family: z.string().min(1),
+    postScriptName: z.string().nullish(),
+    weight: z.number().int().nullish(),
+    style: z.string().nullish(),
+    scope: fontLicenceScopeSchema.optional(),
+    /** 90 same typeface and cut · 60 same typeface, different cut · 10 same cut, other typeface. */
+    score: z.number().int(),
+    why: z.string().min(1),
+  })
+  .strict();
+export type TemplateFontCandidate = z.infer<typeof templateFontCandidateSchema>;
+
+export const templateFontCandidatesResponseSchema = z
+  .object({
+    missing: z.array(
+      z
+        .object({
+          family: z.string().min(1),
+          candidates: z.array(templateFontCandidateSchema),
+          /** The one to pre-select, when exactly one is an unambiguous same-cut match. */
+          suggested: z.string().uuid().nullable(),
+          /** What already answers for this name, when a person has already decided. */
+          aliasedTo: z.string().uuid().nullable(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+export type TemplateFontCandidatesResponse = z.infer<typeof templateFontCandidatesResponseSchema>;
+
+/** Accept a held face in place of one the template asks for, or clear that decision. */
+export const templateFontAliasRequestSchema = z
+  .object({
+    requestedFamily: z.string().trim().min(1),
+    /** `null` clears the alias. */
+    fontId: z.string().uuid().nullable(),
+    /** `template` writes this template's override; `brand` the brand-wide default. */
+    scope: z.enum(['brand', 'template']).default('template'),
+  })
+  .strict();
+export type TemplateFontAliasRequest = z.infer<typeof templateFontAliasRequestSchema>;
 
 /** Browser-safe request for the explicit dry-run-then-install flow. */
 export const templateFontPushRequestSchema = z
@@ -509,16 +575,25 @@ export function templateFontStatuses(
    * working unchanged.
    */
   scopeByKey?: ReadonlyMap<string, FontLicenceScope>,
+  /**
+   * Which keys resolved only because a person aliased them, and to what. Optional, so the call
+   * sites that never ask about substitution keep reading the same as before.
+   */
+  substituteByKey?: ReadonlyMap<string, { fontId: string; family: string; weight?: number }>,
 ): TemplateFontStatus[] {
   const heldSet = new Set(held.map(normalizeTemplateFontFamily));
   return needed.map((font) => {
     const key = normalizeTemplateFontFamily(font.family);
     const scope = scopeByKey?.get(key);
+    const held = heldSet.has(key);
+    const substitutedBy = held ? substituteByKey?.get(key) : undefined;
     return {
       family: font.family,
       layers: font.layers,
-      held: heldSet.has(key),
+      held,
       ...(scope ? { scope } : {}),
+      ...(held ? { via: substitutedBy ? ('substitute' as const) : ('direct' as const) } : {}),
+      ...(substitutedBy ? { substitutedBy } : {}),
     };
   });
 }

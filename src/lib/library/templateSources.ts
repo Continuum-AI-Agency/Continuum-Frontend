@@ -13,8 +13,12 @@ import type {
 import {
   type RenameTemplateSourceRequest,
   readFontNames,
+  type TemplateFontAliasRequest,
+  type TemplateFontCandidatesResponse,
   type TemplateFontHealResult,
   type TemplateSourceEvent,
+  templateFontAliasRequestSchema,
+  templateFontCandidatesResponseSchema,
   templateFontHealResultSchema,
   templateFontPushRequestSchema,
   templateFontPushResponseSchema,
@@ -117,6 +121,32 @@ export async function fetchTemplateFonts(
     `/api/ai-studio/templates/${encodeURIComponent(assetId)}/fonts?brandId=${encodeURIComponent(brandId)}`,
   );
   return templateFontReadinessSchema.parse(await unwrap(response, 'Template font check'));
+}
+
+export async function fetchTemplateFontCandidates(
+  brandId: string,
+  assetId: string,
+): Promise<TemplateFontCandidatesResponse> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/fonts/candidates?brandId=${encodeURIComponent(brandId)}`,
+  );
+  return templateFontCandidatesResponseSchema.parse(
+    await unwrap(response, 'Template font candidates'),
+  );
+}
+
+/** Accept a held face for one the template asks for, or clear that decision with `fontId: null`. */
+export async function setTemplateFontAlias(
+  brandId: string,
+  assetId: string,
+  input: TemplateFontAliasRequest,
+): Promise<TemplateFontReadiness> {
+  const body = templateFontAliasRequestSchema.parse(input);
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/fonts/alias?brandId=${encodeURIComponent(brandId)}`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+  return templateFontReadinessSchema.parse(await unwrap(response, 'Template font substitution'));
 }
 
 export async function pushTemplateFonts(

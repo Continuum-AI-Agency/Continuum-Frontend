@@ -18036,6 +18036,57 @@ export type Database = {
           },
         ]
       }
+      font_aliases: {
+        Row: {
+          brand_id: string
+          created_at: string
+          decided_by: string | null
+          font_id: string
+          id: string
+          requested_family: string
+          requested_family_key: string
+          template_asset_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          decided_by?: string | null
+          font_id: string
+          id?: string
+          requested_family: string
+          requested_family_key: string
+          template_asset_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          decided_by?: string | null
+          font_id?: string
+          id?: string
+          requested_family?: string
+          requested_family_key?: string
+          template_asset_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "font_aliases_font_id_fkey"
+            columns: ["font_id"]
+            isOneToOne: false
+            referencedRelation: "fonts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "font_aliases_template_asset_id_fkey"
+            columns: ["template_asset_id"]
+            isOneToOne: false
+            referencedRelation: "template_sources"
+            referencedColumns: ["asset_id"]
+          },
+        ]
+      }
       fonts: {
         Row: {
           brand_id: string | null

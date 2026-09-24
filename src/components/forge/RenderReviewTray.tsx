@@ -239,6 +239,9 @@ export function RenderReviewTray({
   // reaches the tray instead of falling to <body>.
   const deliveryEditorRef = useRef<HTMLElement>(null);
   const [final, setFinal] = useState(false);
+  // Sticky for the rest of this tray: a person who accepted the missing faces to review must
+  // not have the render refused again when they fire it.
+  const [acceptMissingFonts, setAcceptMissingFonts] = useState(false);
   const [firing, setFiring] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [fired, setFired] = useState<ApiRenderJob[]>([]);
@@ -288,28 +291,47 @@ export function RenderReviewTray({
   const fileCount = rows.reduce((total, row) => total + rowFileCount(contract, row), 0);
 
   // Review reads the records exactly as the grid built them — no delivery, every format.
-  const runReview = useCallback(async () => {
-    setReview({ state: 'loading' });
-    try {
-      const response = await apiRendersApi.batchPreflight({
-        brandId,
-        ...(bindingId ? { bindingId } : {}),
-        templateKey,
-        contractHash,
-        ...(templateRef ? { templateRef } : {}),
-        records: records.map(({ delivery: _delivery, ...record }) => record),
-        ...(approvalDestinationIds.length ? { approvalDestinationIds } : {}),
-      });
-      setReview({ state: 'ready', readiness: response.readiness });
-    } catch (error) {
-      const { message, details } = describeFailure(error);
-      setReview(
-        error instanceof ApiError && error.status === 422
-          ? { state: 'refused', message, details }
-          : { state: 'failed', message },
-      );
-    }
-  }, [brandId, bindingId, templateKey, contractHash, templateRef, records, approvalDestinationIds]);
+  const runReview = useCallback(
+    async (acceptFonts = acceptMissingFonts) => {
+      setReview({ state: 'loading' });
+      try {
+        const response = await apiRendersApi.batchPreflight({
+          brandId,
+          ...(bindingId ? { bindingId } : {}),
+          templateKey,
+          contractHash,
+          ...(templateRef ? { templateRef } : {}),
+          records: records.map(({ delivery: _delivery, ...record }) => record),
+          ...(acceptFonts ? { acceptMissingFonts: true } : {}),
+          ...(approvalDestinationIds.length ? { approvalDestinationIds } : {}),
+        });
+        setReview({ state: 'ready', readiness: response.readiness });
+      } catch (error) {
+        const { message, details } = describeFailure(error);
+        setReview(
+          error instanceof ApiError && error.status === 422
+            ? { state: 'refused', message, details }
+            : { state: 'failed', message },
+        );
+      }
+    },
+    [
+      acceptMissingFonts,
+      brandId,
+      bindingId,
+      templateKey,
+      contractHash,
+      templateRef,
+      records,
+      approvalDestinationIds,
+    ],
+  );
+
+  // Only a font refusal offers a way past itself. Every other 422 — a stale revision, a
+  // delivery target that no longer exists — is a thing to fix, not a thing to override.
+  const refusedOnFonts =
+    review.state === 'refused' &&
+    [review.message, ...review.details].some((line) => /typeface/i.test(line));
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: one review per snapshot; Retry and Re-check re-run it.
   useEffect(() => {
@@ -420,6 +442,9 @@ export function RenderReviewTray({
             : { ...record, delivery: row.delivery };
         }),
         ...(slackDestination ? { slack: { destinationId: slackDestination.id } } : {}),
+        // Carried from the review: without it the fire is refused again on the same fonts the
+        // person already accepted, and the tray looks broken rather than protective.
+        ...(acceptMissingFonts ? { acceptMissingFonts: true } : {}),
         ...(approvalDestinationIds.length ? { approvalDestinationIds } : {}),
         // Signed into the token: a batch reviewed as a proof cannot be created as a final.
         ...(final ? { final: true } : {}),
@@ -652,7 +677,33 @@ export function RenderReviewTray({
                     {review.details.map((detail) => (
                       <p key={detail}>{detail}</p>
                     ))}
-                    <p className="text-muted-foreground">Fix the row in the grid, then re-check.</p>
+                    {refusedOnFonts ? (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant="outline"
+                          onClick={() => {
+                            setAcceptMissingFonts(true);
+                            void runReview(true);
+                          }}
+                        >
+                          Render anyway
+                        </Button>
+                        {/* Said plainly, because the file that comes back looks finished either
+                            way. A render in a face nobody chose is what this whole gate exists
+                            to stop, so taking the file is a choice, never a default. */}
+                        <span className="text-muted-foreground">
+                          The worker will pick the missing faces itself — the output will not be in
+                          the designed typeface. To choose them, substitute on the template&rsquo;s
+                          Fonts check.
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground">
+                        Fix the row in the grid, then re-check.
+                      </p>
+                    )}
                   </div>
                 ) : review.state === 'failed' ? (
                   <div

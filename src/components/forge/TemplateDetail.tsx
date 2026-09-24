@@ -3,6 +3,7 @@
 import {
   type ApiRenderJob,
   readableLayerName,
+  type TemplateFontCandidatesResponse,
   type TemplateFontPushResponse,
   type TemplateFontReadiness,
   type TemplateSourceSummary,
@@ -31,6 +32,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DraftWithAiButton } from '@/components/forge/AiVariationsDialog';
 import { type CheckRow, CheckTable, type CheckTick, TickBar } from '@/components/forge/CheckTable';
 import { FactList } from '@/components/forge/FactList';
+import {
+  type FontSubstitutionChoice,
+  FontSubstitutions,
+} from '@/components/forge/FontSubstitutions';
 import { ForgeRunProgress } from '@/components/forge/ForgeRunProgress';
 import { FormatPreview, previewFormats } from '@/components/forge/FormatPreview';
 import { LineagePanel } from '@/components/forge/LineagePanel';
@@ -64,12 +69,14 @@ import { toast } from '@/components/ui/toast-imperative';
 import {
   advanceTemplateForgeRun,
   type ForgeLadderAction,
+  fetchTemplateFontCandidates,
   fetchTemplateFonts,
   fetchTemplateVariables,
   healTemplateFonts,
   pushTemplateFonts,
   saveTemplateVariables,
   sendTemplateToForge,
+  setTemplateFontAlias,
   type TemplateSlotEdit,
   type TemplateVariable,
   uploadTemplateFontFiles,
@@ -240,6 +247,7 @@ export function TemplateDetail({
   // separate and can change any time; this one cannot.
   const [templateName, setTemplateName] = useState(() => buildNameSuggestion(source));
   const [fontReadiness, setFontReadiness] = useState<TemplateFontReadiness | null>(null);
+  const [fontCandidates, setFontCandidates] = useState<TemplateFontCandidatesResponse | null>(null);
   const [fontCheckFailed, setFontCheckFailed] = useState(false);
   const [fontPlan, setFontPlan] = useState<Extract<
     TemplateFontPushResponse,
@@ -296,13 +304,30 @@ export function TemplateDetail({
     [assetId, brandId, fontsKey, queryClient],
   );
 
+  // What we hold that could stand in for what is missing. Loaded alongside readiness rather than
+  // on demand, so the way forward is already on screen when the check goes red — a fix behind a
+  // button nobody presses is a fix nobody has.
+  const loadFontCandidates = useCallback(
+    async (isCurrent: () => boolean = () => true) => {
+      try {
+        const answer = await fetchTemplateFontCandidates(brandId, assetId);
+        if (isCurrent()) setFontCandidates(answer);
+      } catch {
+        // Silent: the substitution panel is the extra way out, never the reason the check fails.
+        if (isCurrent()) setFontCandidates(null);
+      }
+    },
+    [assetId, brandId],
+  );
+
   useEffect(() => {
     let current = true;
     void loadFonts(() => current);
+    void loadFontCandidates(() => current);
     return () => {
       current = false;
     };
-  }, [loadFonts, source.parseState, source.updatedAt, source.versionId]);
+  }, [loadFontCandidates, loadFonts, source.parseState, source.updatedAt, source.versionId]);
 
   const refreshEvents = useCallback(
     () => queryClient.invalidateQueries({ queryKey: templateEventsKey(brandId, assetId) }),
@@ -311,7 +336,8 @@ export function TemplateDetail({
   const reloadFonts = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: fontsKey, exact: true });
     await loadFonts();
-  }, [fontsKey, loadFonts, queryClient]);
+    await loadFontCandidates();
+  }, [fontsKey, loadFontCandidates, loadFonts, queryClient]);
 
   // Nothing pushes a finished parse to this page, so one opened in the seconds between upload and
   // parse said "Not opened yet" until reloaded while the build card moved on without it. Ask again
@@ -523,6 +549,27 @@ export function TemplateDetail({
     }
   };
 
+  const applyFontSubstitutions = async (choices: FontSubstitutionChoice[]) => {
+    setFontBusy(true);
+    try {
+      // One at a time and in order: each call returns the readiness AFTER it, and a person
+      // clearing one substitution while setting another must see the end state, not a race.
+      for (const choice of choices) {
+        await setTemplateFontAlias(brandId, assetId, {
+          requestedFamily: choice.requestedFamily,
+          fontId: choice.fontId,
+          scope: 'template',
+        });
+      }
+      await Promise.all([reloadFonts(), onChanged()]);
+      void refreshEvents();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not use those fonts');
+    } finally {
+      setFontBusy(false);
+    }
+  };
+
   const mappingNeeds =
     run?.state === 'needs_input' ? (run.needs ?? []).filter((need) => need.kind === 'mapping') : [];
   const otherNeeds = (run?.needs ?? []).filter((need) => need.kind !== 'mapping');
@@ -586,14 +633,23 @@ export function TemplateDetail({
                 <Pill
                   variant={font.held ? 'success' : 'warning'}
                   title={
-                    font.held
-                      ? font.scope === 'house'
-                        ? 'From the shared font repository'
-                        : "In this brand's fonts"
-                      : "Not in the package, this brand's fonts, the shared repository or Google Fonts"
+                    font.via === 'substitute'
+                      ? `Nobody holds ${font.family}. It will render with ${font.substitutedBy?.family ?? 'a face you accepted'}.`
+                      : font.held
+                        ? font.scope === 'house'
+                          ? 'From the shared font repository'
+                          : "In this brand's fonts"
+                        : "Not in the package, this brand's fonts, the shared repository or Google Fonts"
                   }
                 >
-                  {font.family} · {font.held ? 'uploaded' : 'not uploaded'}
+                  {/* A substitution never reads as a plain "uploaded". A green tick over a
+                      typeface somebody quietly swapped is the 2026-09-15 failure exactly. */}
+                  {font.family} ·{' '}
+                  {font.via === 'substitute'
+                    ? `${font.substitutedBy?.family ?? 'substituted'} (substituted)`
+                    : font.held
+                      ? 'uploaded'
+                      : 'not uploaded'}
                 </Pill>
               </li>
             ))}
@@ -601,36 +657,45 @@ export function TemplateDetail({
         ) : null}
         <p className="text-muted-foreground">
           Missing faces are looked for in the uploaded package, then on Google Fonts. Add the file
-          for any still missing. Installed means Forge linked it to this promoted template after
-          confirmation.
+          for any still missing, or substitute one you already hold. Installed means Forge linked it
+          to this promoted template after confirmation.
         </p>
+        {/* Always mounted, not gated on `missingFonts`: once a face is substituted the count is
+            zero while the panel still offers "Add the real files", and a button wired to an
+            input that is no longer in the tree silently does nothing. */}
+        <input
+          ref={fontInput}
+          type="file"
+          multiple
+          accept=".ttf,.otf"
+          className="sr-only"
+          tabIndex={-1}
+          aria-label="Font files"
+          onChange={(event) => {
+            void addFontFiles(Array.from(event.target.files ?? []));
+            event.target.value = '';
+          }}
+        />
         {missingFonts > 0 ? (
-          <>
-            <input
-              ref={fontInput}
-              type="file"
-              multiple
-              accept=".ttf,.otf"
-              className="sr-only"
-              tabIndex={-1}
-              aria-label="Font files"
-              onChange={(event) => {
-                void addFontFiles(Array.from(event.target.files ?? []));
-                event.target.value = '';
-              }}
-            />
-            <Button
-              type="button"
-              size="xs"
-              variant="outline"
-              className="w-fit"
-              disabled={fontBusy}
-              onClick={() => fontInput.current?.click()}
-            >
-              {fontBusy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
-              Add font files
-            </Button>
-          </>
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            className="w-fit"
+            disabled={fontBusy}
+            onClick={() => fontInput.current?.click()}
+          >
+            {fontBusy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
+            Add font files
+          </Button>
+        ) : null}
+        {fontCandidates && fontCandidates.missing.length > 0 ? (
+          <FontSubstitutions
+            candidates={fontCandidates}
+            busy={fontBusy}
+            onUpload={() => fontInput.current?.click()}
+            onApply={applyFontSubstitutions}
+          />
         ) : null}
         {templateKey && heldFamilies.length > 0 ? (
           <Button
