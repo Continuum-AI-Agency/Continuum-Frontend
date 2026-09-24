@@ -267,6 +267,15 @@ export function templateRefOf(template: { bindingId: string; key: string }): str
   return `${template.bindingId}:${template.key}`;
 }
 
+/**
+ * One frame is a still; anything longer is motion. THE rule — the gallery's Animated filter,
+ * `outputKindsOf` and the encode guard all defer to it, so a template cannot be a video in one
+ * place and a still in another.
+ */
+export function isMotion(durationSec: number, frameRate: number): boolean {
+  return Math.round(durationSec * frameRate) > 1;
+}
+
 /** `1 frame` for a still, `6.0s · 30 fps` for a video. The pane's whole motion vocabulary. */
 export function motionLabel(motion: ApiRenderTemplateSummary['motion']): string | null {
   if (!motion) return null;
@@ -918,6 +927,20 @@ export const apiRenderPreflightRequestSchema = z
     templateRef: z.string().min(1).optional(),
     /** Per-render output settings, keyed by public output id. Pinned into the signed trigger. */
     encode: apiRenderEncodeOverrideSchema.optional(),
+    /**
+     * Render even though a typeface is neither held nor substituted.
+     *
+     * The font gate exists because on 2026-09-15 an 18-variation batch rendered ~12 GiB of
+     * masters in faces a worker picked for itself, and nothing said so. It stays on by default
+     * and this does not weaken it: the caller has to ask, per render, and the run records that
+     * it was asked — so "we rendered in the wrong typeface" stops being a thing anyone has to
+     * reconstruct from a worker's log.
+     *
+     * What the output will actually contain is whatever After Effects resolves the missing
+     * family to, which is a substitution nobody chose. Use the template's Fonts check to pick
+     * the face deliberately; use this when a file now beats a file in the right typeface.
+     */
+    acceptMissingFonts: z.boolean().optional(),
     approvalDestinationIds: approvalDestinationIdsField,
     final: finalField,
   })
@@ -1011,6 +1034,14 @@ export const apiRenderBatchPreflightRequestSchema = z
      * confirmation token covers it: a destination swapped after review is a different request.
      */
     slack: z.object({ destinationId: z.string().uuid() }).strict().optional(),
+    /**
+     * Render every record even though a typeface is neither held nor substituted.
+     *
+     * Batch-level and not per record for the same reason `templateRef` is: every record renders
+     * from one design, so "accept the missing faces" is one decision about that design, and a
+     * batch half-refused on fonts is a batch nobody can reason about.
+     */
+    acceptMissingFonts: z.boolean().optional(),
     approvalDestinationIds: approvalDestinationIdsField,
     final: finalField,
   })

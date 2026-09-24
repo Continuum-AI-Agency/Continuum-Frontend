@@ -12,10 +12,19 @@ import type {
 } from '@continuum/contracts';
 import {
   type RenameTemplateSourceRequest,
+  readFontNames,
+  type TemplateFontAliasRequest,
+  type TemplateFontCandidatesResponse,
+  type TemplateFontHealResult,
+  type TemplateSourceEvent,
+  templateFontAliasRequestSchema,
+  templateFontCandidatesResponseSchema,
+  templateFontHealResultSchema,
   templateFontPushRequestSchema,
   templateFontPushResponseSchema,
   templateFontReadinessSchema,
   templateRebindPreviewSchema,
+  templateSourceEventsResponseSchema,
   templateSourceSchema,
   templateSourceSummarySchema,
 } from '@continuum/contracts';
@@ -112,6 +121,32 @@ export async function fetchTemplateFonts(
     `/api/ai-studio/templates/${encodeURIComponent(assetId)}/fonts?brandId=${encodeURIComponent(brandId)}`,
   );
   return templateFontReadinessSchema.parse(await unwrap(response, 'Template font check'));
+}
+
+export async function fetchTemplateFontCandidates(
+  brandId: string,
+  assetId: string,
+): Promise<TemplateFontCandidatesResponse> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/fonts/candidates?brandId=${encodeURIComponent(brandId)}`,
+  );
+  return templateFontCandidatesResponseSchema.parse(
+    await unwrap(response, 'Template font candidates'),
+  );
+}
+
+/** Accept a held face for one the template asks for, or clear that decision with `fontId: null`. */
+export async function setTemplateFontAlias(
+  brandId: string,
+  assetId: string,
+  input: TemplateFontAliasRequest,
+): Promise<TemplateFontReadiness> {
+  const body = templateFontAliasRequestSchema.parse(input);
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/fonts/alias?brandId=${encodeURIComponent(brandId)}`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+  return templateFontReadinessSchema.parse(await unwrap(response, 'Template font substitution'));
 }
 
 export async function pushTemplateFonts(
@@ -214,6 +249,64 @@ export async function uploadBrandFont(input: {
   return unwrap(response, 'Font upload');
 }
 
+/**
+ * Store font files a person handed Forge, each under the PostScript name its file carries.
+ *
+ * Package fonts arrive with hashed filenames, and a template asks for `PlusJakartaSans-Bold`,
+ * so a family guessed from the filename can never match. The PostScript name is also unique per
+ * face, which keeps two weights of one family from overwriting each other in the store.
+ */
+export async function uploadTemplateFontFiles(
+  brandId: string,
+  files: readonly File[],
+): Promise<{ stored: string[]; refused: string[] }> {
+  const stored: string[] = [];
+  const refused: string[] = [];
+  for (const file of files) {
+    const names = readFontNames(await file.arrayBuffer());
+    if (!names?.postScriptName) {
+      refused.push(`${file.name} (not a TrueType or OpenType font)`);
+      continue;
+    }
+    try {
+      await uploadBrandFont({
+        brandId,
+        family: names.postScriptName,
+        file,
+        ...(/italic|oblique/i.test(names.subfamily ?? '') ? { style: 'italic' as const } : {}),
+      });
+      stored.push(names.postScriptName);
+    } catch (error) {
+      refused.push(`${file.name} (${error instanceof Error ? error.message : 'upload failed'})`);
+    }
+  }
+  return { stored, refused };
+}
+
+/** Look for this template's missing faces in its package, then on Google Fonts. */
+export async function healTemplateFonts(
+  brandId: string,
+  assetId: string,
+): Promise<TemplateFontHealResult> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/fonts/heal?brandId=${encodeURIComponent(brandId)}`,
+    { method: 'POST' },
+  );
+  return templateFontHealResultSchema.parse(await unwrap(response, 'Font repair'));
+}
+
+/** What happened to this template on its way in, newest first. */
+export async function fetchTemplateEvents(
+  brandId: string,
+  assetId: string,
+): Promise<TemplateSourceEvent[]> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/events?brandId=${encodeURIComponent(brandId)}`,
+  );
+  return templateSourceEventsResponseSchema.parse(await unwrap(response, 'Template activity'))
+    .events;
+}
+
 export type BrandFontSummary = {
   family: string;
   weight: number | null;
@@ -250,6 +343,8 @@ export type TemplateVariable = {
   comps: string[];
   sample: string | null;
   placement: null;
+  /** A video slot's clip seconds — see `apiRenderVariableSchema.clip`. Null for anything else. */
+  clip: { fromSec: number; toSec: number; playsSec: number } | null;
 };
 
 export type TemplateSlotEdit = {

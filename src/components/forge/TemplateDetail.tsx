@@ -3,6 +3,7 @@
 import {
   type ApiRenderJob,
   readableLayerName,
+  type TemplateFontCandidatesResponse,
   type TemplateFontPushResponse,
   type TemplateFontReadiness,
   type TemplateSourceSummary,
@@ -25,19 +26,26 @@ import {
   TestTube2,
   Type,
   Variable,
+  Wrench,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DraftWithAiButton } from '@/components/forge/AiVariationsDialog';
 import { type CheckRow, CheckTable, type CheckTick, TickBar } from '@/components/forge/CheckTable';
 import { FactList } from '@/components/forge/FactList';
+import {
+  type FontSubstitutionChoice,
+  FontSubstitutions,
+} from '@/components/forge/FontSubstitutions';
 import { ForgeRunProgress } from '@/components/forge/ForgeRunProgress';
 import { FormatPreview, previewFormats } from '@/components/forge/FormatPreview';
 import { LineagePanel } from '@/components/forge/LineagePanel';
+import { MappingQuestions } from '@/components/forge/MappingQuestions';
 import { OutputSettingsPanel } from '@/components/forge/OutputSettingsPanel';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
+import { TemplateActivity, templateEventsKey } from '@/components/forge/TemplateActivity';
 import { TemplateRenders } from '@/components/forge/TemplateRenders';
 import { useForgeRun } from '@/components/forge/useForgeRun';
 import { VariableEditor } from '@/components/forge/VariableEditor';
@@ -61,13 +69,17 @@ import { toast } from '@/components/ui/toast-imperative';
 import {
   advanceTemplateForgeRun,
   type ForgeLadderAction,
+  fetchTemplateFontCandidates,
   fetchTemplateFonts,
   fetchTemplateVariables,
+  healTemplateFonts,
   pushTemplateFonts,
   saveTemplateVariables,
   sendTemplateToForge,
+  setTemplateFontAlias,
   type TemplateSlotEdit,
   type TemplateVariable,
+  uploadTemplateFontFiles,
 } from '@/lib/library/templateSources';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
@@ -209,7 +221,21 @@ export function TemplateDetail({
   const [formatId, setFormatId] = useState<string | undefined>(undefined);
   // Read once: the dropped file is handed off moments after mount, and the tab must not follow it.
   const [firstTab] = useState(revisionFile ? 'source' : 'variables');
-  const format = formats.find((entry) => entry.id === formatId) ?? formats[0];
+  // Open on a format that has something to show. A parse can list a precomp as a format (KAMAY's
+  // "Gradient Background 1" came first), and landing on its empty frame reads as a broken preview.
+  const boxedRatios = useMemo(
+    () =>
+      new Set(
+        wireframeFrames(source.parse)
+          .filter((frame) => frame.boxes.length > 0)
+          .map((frame) => frame.ratio),
+      ),
+    [source.parse],
+  );
+  const format =
+    formats.find((entry) => entry.id === formatId) ??
+    formats.find((entry) => entry.ratio && boxedRatios.has(entry.ratio)) ??
+    formats[0];
   const rendered = useLatestRenderFrame(brandId, templateKey, formats, format?.id);
   const [variables, setVariables] = useState<TemplateVariable[]>([]);
   const [savedDefaults, setSavedDefaults] = useState<Record<string, unknown>>({});
@@ -221,6 +247,7 @@ export function TemplateDetail({
   // separate and can change any time; this one cannot.
   const [templateName, setTemplateName] = useState(() => buildNameSuggestion(source));
   const [fontReadiness, setFontReadiness] = useState<TemplateFontReadiness | null>(null);
+  const [fontCandidates, setFontCandidates] = useState<TemplateFontCandidatesResponse | null>(null);
   const [fontCheckFailed, setFontCheckFailed] = useState(false);
   const [fontPlan, setFontPlan] = useState<Extract<
     TemplateFontPushResponse,
@@ -231,6 +258,11 @@ export function TemplateDetail({
     { fired: true }
   > | null>(null);
   const [fontBusy, setFontBusy] = useState(false);
+  const [fixing, setFixing] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [parseSlow, setParseSlow] = useState(false);
+  const activityTrigger = useRef<HTMLButtonElement>(null);
+  const fontInput = useRef<HTMLInputElement>(null);
 
   const loadVariables = useCallback(async () => {
     try {
@@ -272,13 +304,73 @@ export function TemplateDetail({
     [assetId, brandId, fontsKey, queryClient],
   );
 
+  // What we hold that could stand in for what is missing. Loaded alongside readiness rather than
+  // on demand, so the way forward is already on screen when the check goes red — a fix behind a
+  // button nobody presses is a fix nobody has.
+  const loadFontCandidates = useCallback(
+    async (isCurrent: () => boolean = () => true) => {
+      try {
+        const answer = await fetchTemplateFontCandidates(brandId, assetId);
+        if (isCurrent()) setFontCandidates(answer);
+      } catch {
+        // Silent: the substitution panel is the extra way out, never the reason the check fails.
+        if (isCurrent()) setFontCandidates(null);
+      }
+    },
+    [assetId, brandId],
+  );
+
   useEffect(() => {
     let current = true;
     void loadFonts(() => current);
+    void loadFontCandidates(() => current);
     return () => {
       current = false;
     };
-  }, [loadFonts, source.parseState, source.updatedAt, source.versionId]);
+  }, [loadFontCandidates, loadFonts, source.parseState, source.updatedAt, source.versionId]);
+
+  const refreshEvents = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: templateEventsKey(brandId, assetId) }),
+    [assetId, brandId, queryClient],
+  );
+  const reloadFonts = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: fontsKey, exact: true });
+    await loadFonts();
+    await loadFontCandidates();
+  }, [fontsKey, loadFontCandidates, loadFonts, queryClient]);
+
+  // Nothing pushes a finished parse to this page, so one opened in the seconds between upload and
+  // parse said "Not opened yet" until reloaded while the build card moved on without it. Ask again
+  // while it is pending, for two minutes at most — past that the Activity log says why.
+  useEffect(() => {
+    if (parseState !== 'pending') return;
+    let tries = 0;
+    const timer = setInterval(() => {
+      tries += 1;
+      if (tries > 40) {
+        clearInterval(timer);
+        setParseSlow(true);
+        return;
+      }
+      void queryClient
+        .invalidateQueries({ queryKey: variablesKey, exact: true })
+        .then(loadVariables);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [loadVariables, parseState, queryClient, variablesKey]);
+
+  // The parse landed while this page was open: re-read everything that was read against the
+  // pending row. Once, whatever `onChanged`'s identity does between renders.
+  const openedPending = useRef(source.parseState === 'pending');
+  useEffect(() => {
+    if (!openedPending.current || parseState === 'pending') return;
+    openedPending.current = false;
+    void Promise.all([reloadFonts(), onChanged(), refreshEvents()]);
+  }, [onChanged, parseState, refreshEvents, reloadFonts]);
+
+  useEffect(() => {
+    if (run?.state) void refreshEvents();
+  }, [refreshEvents, run?.state]);
 
   const onSave = async (edits: TemplateSlotEdit[]) => {
     setSaving(true);
@@ -326,6 +418,7 @@ export function TemplateDetail({
       toast.error(error instanceof Error ? error.message : `Could not ${action}`);
     } finally {
       setBusy(null);
+      void refreshEvents();
     }
   };
 
@@ -433,6 +526,103 @@ export function TemplateDetail({
     );
   };
 
+  const addFontFiles = async (files: File[]) => {
+    if (!files.length) return;
+    setFontBusy(true);
+    try {
+      const { stored, refused } = await uploadTemplateFontFiles(brandId, files);
+      if (stored.length) toast.success(`Fonts added: ${stored.join(', ')}`);
+      if (refused.length) toast.error(`Fonts not added: ${refused.join('; ')}`);
+      // The file is read again with the faces just added, so its text is measured now rather
+      // than after someone finds a Fix button that nothing else is asking them to press.
+      if (stored.length) {
+        await healTemplateFonts(brandId, assetId).catch((error: unknown) =>
+          toast.error(
+            `Fonts are stored, but the file was not read again: ${error instanceof Error ? error.message : 'unknown error'}. Press Fix to retry.`,
+          ),
+        );
+        void refreshEvents();
+      }
+      await Promise.all([reloadFonts(), onChanged()]);
+    } finally {
+      setFontBusy(false);
+    }
+  };
+
+  const applyFontSubstitutions = async (choices: FontSubstitutionChoice[]) => {
+    setFontBusy(true);
+    try {
+      // One at a time and in order: each call returns the readiness AFTER it, and a person
+      // clearing one substitution while setting another must see the end state, not a race.
+      for (const choice of choices) {
+        await setTemplateFontAlias(brandId, assetId, {
+          requestedFamily: choice.requestedFamily,
+          fontId: choice.fontId,
+          scope: 'template',
+        });
+      }
+      await Promise.all([reloadFonts(), onChanged()]);
+      void refreshEvents();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not use those fonts');
+    } finally {
+      setFontBusy(false);
+    }
+  };
+
+  const mappingNeeds =
+    run?.state === 'needs_input' ? (run.needs ?? []).filter((need) => need.kind === 'mapping') : [];
+  const otherNeeds = (run?.needs ?? []).filter((need) => need.kind !== 'mapping');
+  const retryableBuild =
+    run?.state === 'needs_input' &&
+    (run.needs ?? []).some((need) => need.kind === 'mapping' || need.kind === 'asset');
+  const fixable =
+    missingFonts > 0 ||
+    retryableBuild ||
+    parseState === 'failed' ||
+    (parseState === 'pending' && parseSlow);
+
+  // The problems every new upload hits, fixed without asking: faces from the package or Google
+  // Fonts, and a build re-planned against the columns it made for itself.
+  const onFix = async () => {
+    setFixing(true);
+    try {
+      // Always: besides finding missing faces, this reads the file again with every face the
+      // brand holds — the formats the forge now ships and text it can now measure.
+      const healed = await healTemplateFonts(brandId, assetId);
+      const found = [...healed.fromPackage, ...healed.fromGoogle];
+      if (found.length) toast.success(`Fonts found: ${found.join(', ')}`);
+      if (healed.stillMissing.length) {
+        toast.error(
+          `Still missing: ${healed.stillMissing.join(', ')}. Add the font files on the Fonts check.`,
+        );
+      }
+      await Promise.all([reloadFonts(), onChanged()]);
+      if (retryableBuild) {
+        await advanceTemplateForgeRun(brandId, assetId, 'resume');
+        await refreshRun();
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not fix this template');
+    } finally {
+      setFixing(false);
+      void refreshEvents();
+    }
+  };
+
+  const onAnswer = async (decisions: unknown) => {
+    setBusy('decisions');
+    try {
+      await advanceTemplateForgeRun(brandId, assetId, 'decisions', { decisions });
+      await Promise.all([refreshRun(), onChanged()]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not apply the answers');
+    } finally {
+      setBusy(null);
+      void refreshEvents();
+    }
+  };
+
   const fontsDetail =
     (fontReadiness?.parseState === 'parsed' && fontReadiness.fonts.length > 0) || fontResult ? (
       <div className="flex flex-col gap-2">
@@ -440,17 +630,73 @@ export function TemplateDetail({
           <ul className="flex flex-wrap gap-1" aria-label="Typefaces">
             {fontReadiness.fonts.map((font) => (
               <li key={font.family}>
-                <Pill variant={font.held ? 'success' : 'warning'}>
-                  {font.family} · {font.held ? 'uploaded' : 'not uploaded'}
+                <Pill
+                  variant={font.held ? 'success' : 'warning'}
+                  title={
+                    font.via === 'substitute'
+                      ? `Nobody holds ${font.family}. It will render with ${font.substitutedBy?.family ?? 'a face you accepted'}.`
+                      : font.held
+                        ? font.scope === 'house'
+                          ? 'From the shared font repository'
+                          : "In this brand's fonts"
+                        : "Not in the package, this brand's fonts, the shared repository or Google Fonts"
+                  }
+                >
+                  {/* A substitution never reads as a plain "uploaded". A green tick over a
+                      typeface somebody quietly swapped is the 2026-09-15 failure exactly. */}
+                  {font.family} ·{' '}
+                  {font.via === 'substitute'
+                    ? `${font.substitutedBy?.family ?? 'substituted'} (substituted)`
+                    : font.held
+                      ? 'uploaded'
+                      : 'not uploaded'}
                 </Pill>
               </li>
             ))}
           </ul>
         ) : null}
         <p className="text-muted-foreground">
-          Uploaded means the brand holds the file privately. Installed means Forge linked it to this
-          promoted template after confirmation.
+          Missing faces are looked for in the uploaded package, then on Google Fonts. Add the file
+          for any still missing, or substitute one you already hold. Installed means Forge linked it
+          to this promoted template after confirmation.
         </p>
+        {/* Always mounted, not gated on `missingFonts`: once a face is substituted the count is
+            zero while the panel still offers "Add the real files", and a button wired to an
+            input that is no longer in the tree silently does nothing. */}
+        <input
+          ref={fontInput}
+          type="file"
+          multiple
+          accept=".ttf,.otf"
+          className="sr-only"
+          tabIndex={-1}
+          aria-label="Font files"
+          onChange={(event) => {
+            void addFontFiles(Array.from(event.target.files ?? []));
+            event.target.value = '';
+          }}
+        />
+        {missingFonts > 0 ? (
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            className="w-fit"
+            disabled={fontBusy}
+            onClick={() => fontInput.current?.click()}
+          >
+            {fontBusy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
+            Add font files
+          </Button>
+        ) : null}
+        {fontCandidates && fontCandidates.missing.length > 0 ? (
+          <FontSubstitutions
+            candidates={fontCandidates}
+            busy={fontBusy}
+            onUpload={() => fontInput.current?.click()}
+            onApply={applyFontSubstitutions}
+          />
+        ) : null}
         {templateKey && heldFamilies.length > 0 ? (
           <Button
             type="button"
@@ -529,15 +775,25 @@ export function TemplateDetail({
         </div>
       ) : null}
       {run ? <ForgeRunProgress run={run} /> : null}
-      {run?.needs?.length ? (
+      {mappingNeeds.length ? (
+        <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2">
+          <MappingQuestions
+            key={mappingNeeds.map((need) => need.id).join('|')}
+            needs={mappingNeeds}
+            busy={busy !== null}
+            onAnswer={onAnswer}
+          />
+        </div>
+      ) : null}
+      {otherNeeds.length ? (
         <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2">
           {/*
-            Two different stops wear `needs_input`, and they ask for opposite things. An `asset`
-            need is where EVERY from-scratch build lands — the table is built, the graph is built,
-            and nobody has chosen the pictures yet. It is answered in the Variables tab.
+            An `asset` need is where EVERY from-scratch build lands — the table is built, the
+            graph is built, and nobody has chosen the pictures yet. It is answered in the
+            Variables tab, then Build again.
           */}
           <ul className="flex flex-col gap-0.5 text-muted-foreground">
-            {run.needs.map((need) => (
+            {otherNeeds.map((need) => (
               <li key={need.id}>
                 {need.slot?.label ? readableLayerName(need.slot.label) : need.id}
                 {need.reason ? ` — ${need.reason}` : null}
@@ -549,7 +805,15 @@ export function TemplateDetail({
     </div>
   );
 
+  const parseDetail = source.parseError ? (
+    <p className="text-destructive">{source.parseError}</p>
+  ) : parseState === 'pending' && parseSlow ? (
+    <p className="text-muted-foreground">
+      Opening the file is taking longer than it should. Activity below says what happened.
+    </p>
+  ) : undefined;
   const detailOf: Record<string, CheckRow['detail']> = {
+    parse: parseDetail,
     fonts: fontsDetail,
     build: buildDetail,
   };
@@ -577,6 +841,41 @@ export function TemplateDetail({
     detail: detailOf[check.id],
     action: ladderButton(check.action),
   }));
+
+  const hasProblem = checks.some((check) => check.state === 'fail' || check.state === 'warn');
+  // Investigate used to open the first failing row, which was already open, so pressing it did
+  // nothing visible. Now it fixes what can be fixed, and otherwise opens the trail of what happened.
+  const footerAction = fixable ? (
+    <Button
+      type="button"
+      size="xs"
+      variant="outline"
+      className="gap-1"
+      title="Retries reading the file, finds missing fonts and packaged footage, and re-plans the build."
+      disabled={fixing || busy !== null}
+      onClick={() => void onFix()}
+    >
+      {fixing ? (
+        <Loader2 className="size-3 animate-spin" aria-hidden />
+      ) : (
+        <Wrench className="size-3" aria-hidden />
+      )}
+      Fix problems
+    </Button>
+  ) : hasProblem ? (
+    <Button
+      type="button"
+      size="xs"
+      variant="outline"
+      onClick={() => {
+        setActivityOpen(true);
+        activityTrigger.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        activityTrigger.current?.focus();
+      }}
+    >
+      Investigate
+    </Button>
+  ) : undefined;
 
   return (
     <div className="flex flex-col divide-y divide-border">
@@ -734,7 +1033,16 @@ export function TemplateDetail({
           />
 
           <Panel title="Checks" bodyClassName="p-0">
-            <CheckTable rows={checks} />
+            <CheckTable rows={checks} action={footerAction} />
+            <div className="border-t border-border">
+              <TemplateActivity
+                ref={activityTrigger}
+                brandId={brandId}
+                assetId={assetId}
+                open={activityOpen}
+                onOpenChange={setActivityOpen}
+              />
+            </div>
           </Panel>
         </div>
       </div>

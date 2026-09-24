@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  clipOfSlot,
   duplicateSlotRoles,
   templateSlotAsRenderVariable,
   templateSlotDefaultFitsKind,
@@ -78,7 +79,36 @@ describe('templateSlotDefaultFitsKind', () => {
   });
 });
 
+// Inyogo's background video, as the parse reads it: Card 1's layer starts its clip at -3.75 and
+// is on screen 0.92..6.25, so it plays the clip's 4.67..10.0; Card 2 plays 0..6.25.
+const BG_VIDEO_SLOT = {
+  key: 'video__abstract-bg-animation',
+  name: 'Abstract BG ANIMATION',
+  kind: 'video' as const,
+  comps: ['Card 1', 'Card 2'],
+  instances: [
+    { clip: { inSec: 0.9167, outSec: 6.25, clipInSec: 4.6667, clipOutSec: 10 } },
+    { clip: { inSec: 0, outSec: 6.25, clipInSec: 0, clipOutSec: 6.25 } },
+  ],
+};
+
+describe('clipOfSlot', () => {
+  it('asks for the latest clip second any comp plays, and the longest time on screen', () => {
+    expect(clipOfSlot(BG_VIDEO_SLOT)).toEqual({ fromSec: 0, toSec: 10, playsSec: 6.25 });
+  });
+
+  it('is null when no instance measured a clip — an image, an old parse, a remapped layer', () => {
+    expect(clipOfSlot({ instances: [{ clip: null }] })).toBeNull();
+    expect(clipOfSlot({})).toBeNull();
+  });
+});
+
 describe('templateSlotAsRenderVariable', () => {
+  it('carries a video slot’s clip seconds, and none for text', () => {
+    expect(templateSlotAsRenderVariable(BG_VIDEO_SLOT, null).clip?.toSec).toBe(10);
+    expect(templateSlotAsRenderVariable(DISCOUNT_SLOT, null).clip).toBeNull();
+  });
+
   it('carries the parse through when nobody has edited the slot', () => {
     const variable = templateSlotAsRenderVariable(DISCOUNT_SLOT, null);
     expect(variable.key).toBe('text__discount-1');
