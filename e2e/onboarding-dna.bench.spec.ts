@@ -1,5 +1,19 @@
-import { type BrowserContext, expect, type Page, test } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  assembleBrandMd,
+  brandReportResultSchema,
+  extractBrandTokens,
+  type ReadinessAnalysis,
+} from '@continuum/contracts';
+import { type BrowserContext, expect, type Locator, type Page, test } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import {
+  READINESS_LEGACY,
+  READINESS_PARTIAL,
+  READINESS_V2,
+} from '../src/components/onboarding/v2/readiness/readiness.fixtures';
 import { mintSessionForEmail } from './support/auth';
 import { type LocalBackend, startLocalBackend } from './support/localBackend';
 
@@ -34,6 +48,12 @@ import { type LocalBackend, startLocalBackend } from './support/localBackend';
 //   bun run supabase:start && bun run supabase:hydrate && bun run supabase:env:local
 //   Run with: bun run onboarding:dna:bench
 //
+// The READINESS HERO rides the same path: a criteria-scored row, a partial-evidence
+// row, a legacy row and a null row are seeded on the persisted snapshot, and a failed
+// scoring arrives as a replayed `status: error` event on a running run through the
+// real `/preview/:runId/events` SSE tail. The claim under test is that the radar leads
+// the reveal and that no confident number is ever drawn for what was not measured.
+//
 // UN-EXERCISED HOPS, STATED EXPLICITLY — this bench does NOT cover:
 //   · A live preview RUN. The agent workflow costs a model call per section and is not
 //     deterministic; the snapshot it persists is seeded directly and read back through the
@@ -45,6 +65,12 @@ import { type LocalBackend, startLocalBackend } from './support/localBackend';
 const OWNER_PASSWORD = 'onboarding-dna-bench';
 const SCREENSHOT_DIR =
   process.env.ONBOARDING_DNA_SCREENSHOT_DIR ?? 'e2e/__screenshots__/onboarding-dna';
+
+// Outside the repo tree: concurrent Playwright runs wipe `test-results/`, and these
+// are review artifacts, not goldens.
+const READINESS_SHOT_DIR =
+  process.env.ONBOARDING_DNA_READINESS_SHOT_DIR ??
+  join(tmpdir(), 'onboarding-dna-bench', 'readiness');
 
 const HAS_LOCAL_STACK = Boolean(
   /127\.0\.0\.1|localhost/.test(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '') &&
@@ -193,7 +219,10 @@ async function seedOnboardingState(
     .throwOnError();
 }
 
-async function seedCompletedRun(fixture: Fixture): Promise<void> {
+async function seedCompletedRun(
+  fixture: Fixture,
+  readiness: ReadinessAnalysis | null = null,
+): Promise<void> {
   await brandProfiles(admin())
     .from('preview_runs')
     .insert({
@@ -203,8 +232,44 @@ async function seedCompletedRun(fixture: Fixture): Promise<void> {
       input_hash: `dna-bench-${fixture.brandId}`,
       started_at: new Date().toISOString(),
       completed_at: new Date().toISOString(),
-      result: COMPLETED_RESULT,
+      result: { ...COMPLETED_RESULT, readiness },
     })
+    .throwOnError();
+}
+
+/**
+ * A run still `running` whose persisted events say readiness scoring FAILED. The page
+ * resumes it through the real SSE tail, which replays these rows in order.
+ */
+async function seedRunWithFailedReadiness(fixture: Fixture): Promise<void> {
+  const now = new Date().toISOString();
+  const { data: run } = await brandProfiles(admin())
+    .from('preview_runs')
+    .insert({
+      brand_id: fixture.brandId,
+      status: 'running',
+      prompt_version: 1,
+      input_hash: `dna-bench-${fixture.brandId}`,
+      started_at: now,
+      last_heartbeat_at: now,
+    })
+    .select('id')
+    .single()
+    .throwOnError();
+  const events = [
+    { kind: 'status', section: 'readiness', status: 'error', error: 'readiness scorer timed out' },
+    { kind: 'complete', phase: 'preview', status: 'partial', result: COMPLETED_RESULT },
+  ];
+  await brandProfiles(admin())
+    .from('preview_run_events')
+    .insert(
+      events.map((event, index) => ({
+        run_id: run.id,
+        sequence: index + 1,
+        kind: event.kind,
+        payload: event,
+      })),
+    )
     .throwOnError();
 }
 
@@ -213,7 +278,24 @@ async function teardown(fixture: Fixture | null): Promise<void> {
   const supabase = admin();
   // Best-effort: an orphaned ephemeral row is low-harm, and a throw here would mask the
   // real result of the run.
+  const { data: runs } = await brandProfiles(supabase)
+    .from('preview_runs')
+    .select('id')
+    .eq('brand_id', fixture.brandId);
+  const runIds = (runs ?? []).map((run: { id: string }) => run.id);
   const attempts: Array<Promise<unknown>> = [
+    brandProfiles(supabase).from('preview_run_events').delete().in('run_id', runIds),
+    brandProfiles(supabase)
+      .from('brand_report_composites')
+      .delete()
+      .eq('brand_profile_id', fixture.brandId),
+    brandProfiles(supabase).from('brand_book_jobs').delete().eq('brand_id', fixture.brandId),
+    brandProfiles(supabase).from('brand_book').delete().eq('brand_id', fixture.brandId),
+    brandProfiles(supabase)
+      .from('brand_report_readiness')
+      .delete()
+      .eq('brand_profile_id', fixture.brandId),
+    brandProfiles(supabase).from('user_brand_preferences').delete().eq('user_id', fixture.userId),
     brandProfiles(supabase).from('preview_runs').delete().eq('brand_id', fixture.brandId),
     brandProfiles(supabase).from('user_onboarding_states').delete().eq('user_id', fixture.userId),
     brandProfiles(supabase).from('permissions').delete().eq('brand_profile_id', fixture.brandId),
@@ -223,6 +305,82 @@ async function teardown(fixture: Fixture | null): Promise<void> {
     await Promise.resolve(attempt).catch(() => undefined);
   }
   await supabase.auth.admin.deleteUser(fixture.userId).catch(() => undefined);
+}
+
+/**
+ * A ready Brand Book whose composite carries `readiness`, made the active brand, so
+ * Settings → Brand Kit intelligence → Readiness renders it through the real Backend.
+ */
+async function seedBrandBook(fixture: Fixture, readiness: ReadinessAnalysis): Promise<void> {
+  const composite = brandReportResultSchema.parse({
+    brand_profile: { id: fixture.brandId, brand_name: 'DNA Bench Brand', website_url: SITE_URL },
+    structured: {
+      connected_accounts: [],
+      website: { website_url: SITE_URL, palette: null, typography: null },
+      documents: {},
+      target_audience: { summary: 'Practice managers at physiotherapy clinics.' },
+      business: null,
+      strategy: null,
+      guidelines: null,
+    },
+    understanding: {
+      positioning_thesis: 'Scheduling built for physiotherapy clinics.',
+      hypothesis_icp: 'Practice managers',
+      brand_pillars: ['fewer no-shows'],
+      tonal_signal: 'plain and practical',
+      notable_evidence: [],
+    },
+    audits: {},
+    readiness,
+  });
+  const db = brandProfiles(admin());
+  // One composite per brand here: replace it, so a re-seed is what the book serves.
+  await db
+    .from('brand_report_composites')
+    .delete()
+    .eq('brand_profile_id', fixture.brandId)
+    .throwOnError();
+  await db
+    .from('brand_report_composites')
+    .insert({
+      brand_profile_id: fixture.brandId,
+      composite,
+      brand_md: assembleBrandMd({ tokens: extractBrandTokens(composite), result: composite }),
+      brand_tokens: extractBrandTokens(composite),
+      updated_at: new Date().toISOString(),
+    })
+    .throwOnError();
+  await db
+    .from('user_brand_preferences')
+    .upsert(
+      { user_id: fixture.userId, active_brand_id: fixture.brandId },
+      { onConflict: 'user_id' },
+    )
+    .throwOnError();
+  // The composite write enqueues a brand-book rebuild that the Backend worker runs
+  // asynchronously; Settings serves that book, so wait until it carries this score.
+  await expect
+    .poll(
+      async () => {
+        const { data } = await db
+          .from('brand_book')
+          .select('status, assembled')
+          .eq('brand_id', fixture.brandId)
+          .maybeSingle();
+        type Scored = { overall_score?: number } | null;
+        const row = data as {
+          status?: string;
+          assembled?: {
+            report?: { composite?: { readiness?: Scored } | null; readiness?: Scored };
+          };
+        } | null;
+        // The same precedence BrandBookView reads: the composite's score, then the report's.
+        const report = row?.status === 'ready' ? row.assembled?.report : undefined;
+        return (report?.composite?.readiness ?? report?.readiness)?.overall_score ?? null;
+      },
+      { timeout: 90_000, intervals: [500, 1_000, 2_000] },
+    )
+    .toBe(readiness.overall_score);
 }
 
 /* -- the specimen scanner -------------------------------------------------- */
@@ -290,6 +448,158 @@ async function identityLayoutDefects(page: Page): Promise<string[]> {
   }
   await page.setViewportSize({ width: 1500, height: 1100 });
   return defects;
+}
+
+/* -- the readiness scanners ----------------------------------------------- */
+
+/**
+ * Nothing on the page states a readiness number: no overall, no dot on any axis, no
+ * digit anywhere in the hero, and no `· N` score chip left on the cards below it.
+ */
+async function expectNoReadinessNumber(page: Page): Promise<void> {
+  const hero = page.getByTestId('readiness-hero');
+  await expect(hero.getByTestId('readiness-overall')).toHaveCount(0);
+  await expect(page.locator('[data-radar-point]')).toHaveCount(0);
+  expect(((await hero.textContent()) ?? '').match(/\d+/g) ?? []).toEqual([]);
+  await expect(page.getByText(/^·\s*\d+$/)).toHaveCount(0);
+}
+
+/** `a` is laid out before `b` in document order. */
+async function precedes(a: Locator, b: Locator): Promise<boolean> {
+  const handle = await b.elementHandle();
+  return a.evaluate(
+    (first, second) =>
+      Boolean(second && first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING),
+    handle,
+  );
+}
+
+/** Every hero part that spills past the viewport's horizontal edges. */
+async function heroOverflow(page: Page, viewportWidth: number): Promise<string[]> {
+  return page.evaluate((width: number) => {
+    const hero = document.querySelector('[data-testid="readiness-hero"]');
+    if (!hero) return ['NO_HERO'];
+    // The onboarding step list is wider than a 390px screen (a separate, known
+    // overflow), so scrolling the hero into view can pan the page sideways. Measure
+    // from the page's own left edge so this gate grades the hero alone.
+    window.scrollTo(0, window.scrollY);
+    const parts = [
+      hero,
+      ...Array.from(
+        hero.querySelectorAll(
+          '[data-testid="radar-axis"], [data-testid="readiness-move"], [data-testid="criteria-ledger"]',
+        ),
+      ),
+    ];
+    return parts.flatMap((node) => {
+      const rect = node.getBoundingClientRect();
+      if (rect.left >= -0.5 && rect.right <= width + 0.5) return [];
+      const name = `${node.getAttribute('data-testid')}${node.getAttribute('data-dimension') ? `:${node.getAttribute('data-dimension')}` : ''}`;
+      return [`${name} spans ${Math.round(rect.left)}..${Math.round(rect.right)}px`];
+    });
+  }, viewportWidth);
+}
+
+/**
+ * The radar's enter animation has landed: every point sits still and off the hub.
+ * A shot taken earlier shows the data mid-flight (all dots still on the centre).
+ */
+async function radarSettled(page: Page): Promise<void> {
+  const read = () =>
+    page.evaluate(() =>
+      Array.from(
+        document.querySelectorAll('[data-radar-point]'),
+        (point) => `${point.getAttribute('cx')},${point.getAttribute('cy')}`,
+      ),
+    );
+  await expect
+    .poll(
+      async () => {
+        const before = await read();
+        await page.waitForTimeout(250);
+        const after = await read();
+        return (
+          before.join('|') === after.join('|') &&
+          !after.some((xy) => /^-?0(\.0+)?,-?0(\.0+)?$/.test(xy))
+        );
+      },
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+  // Park the pointer so no axis is mid-preview in the shot.
+  await page.mouse.move(0, 0);
+}
+
+async function useTheme(page: Page, theme: 'light' | 'dark'): Promise<void> {
+  await page.evaluate((next) => window.localStorage.setItem('theme', JSON.stringify(next)), theme);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${theme}\\b`), {
+    timeout: 60_000,
+  });
+  await expect(page.getByTestId('readiness-hero')).toBeVisible({ timeout: 120_000 });
+}
+
+const SHOT_VIEWPORTS = [
+  { label: 'desktop', width: 1500, height: 1100 },
+  { label: '390', width: 390, height: 844 },
+] as const;
+
+/**
+ * Light and dark at desktop and 390px, each gated on the hero fitting the screen.
+ * Reduced motion makes the radar land on its final geometry at once, so the shot is
+ * the data, not a frame of the enter animation.
+ */
+async function shootHero(page: Page, name: string): Promise<string[]> {
+  mkdirSync(READINESS_SHOT_DIR, { recursive: true });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const shots: string[] = [];
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const viewport of SHOT_VIEWPORTS) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      const hero = page.getByTestId('readiness-hero');
+      await hero.scrollIntoViewIfNeeded();
+      await radarSettled(page);
+      expect(await heroOverflow(page, viewport.width)).toEqual([]);
+      const path = join(READINESS_SHOT_DIR, `${name}-${theme}-${viewport.label}.png`);
+      await hero.screenshot({ path, animations: 'disabled' });
+      shots.push(path);
+    }
+  }
+  await page.setViewportSize({ width: 1500, height: 1100 });
+  console.log(`[onboarding:dna:bench] ${name} screenshots:\n  ${shots.join('\n  ')}`);
+  return shots;
+}
+
+async function shootHeroOnce(page: Page, name: string): Promise<void> {
+  mkdirSync(READINESS_SHOT_DIR, { recursive: true });
+  // Tall enough that no inner scroll pane (Settings has one) clips the element shot.
+  await page.setViewportSize({ width: 1500, height: 1800 });
+  await radarSettled(page);
+  const path = join(READINESS_SHOT_DIR, `${name}-light-desktop.png`);
+  await page.getByTestId('readiness-hero').screenshot({ path, animations: 'disabled' });
+  await page.setViewportSize({ width: 1500, height: 1100 });
+  console.log(`[onboarding:dna:bench] ${name} screenshot: ${path}`);
+}
+
+async function openSeededReveal(
+  browser: import('@playwright/test').Browser,
+  label: string,
+  seed: (fixture: Fixture) => Promise<void>,
+): Promise<{ fixture: Fixture; context: BrowserContext; page: Page }> {
+  const fixture = await provision(label);
+  try {
+    await seedOnboardingState(fixture, {
+      colors: [],
+      typography: { primary: null, secondary: null },
+    });
+    await seed(fixture);
+    const { context, page } = await openReveal(browser, fixture);
+    return { fixture, context, page };
+  } catch (error) {
+    await teardown(fixture);
+    throw error;
+  }
 }
 
 /* -- the run --------------------------------------------------------------- */
@@ -393,6 +703,11 @@ test.describe('onboarding brand reveal — honesty', () => {
       }
       expect(await page.locator('[role="status"][aria-label="Drafting"]').count()).toBe(0);
 
+      // Readiness came back null: the hero still leads, and states no number at all.
+      await expect(page.getByTestId('readiness-hero')).toHaveAttribute('data-state', 'empty');
+      await expectNoReadinessNumber(page);
+      await shootHeroOnce(page, 'null');
+
       /* NEGATIVE CONTROL — put the original bug back and prove the scanner catches it. */
       await page.evaluate((family: string) => {
         const root = document.querySelector('[data-testid="reveal-typography"]');
@@ -460,6 +775,198 @@ test.describe('onboarding brand reveal — honesty', () => {
 
       // Three bare-hex sentences plus the specimen note is the heaviest the row gets.
       expect(await identityLayoutDefects(page)).toEqual([]);
+    } finally {
+      await context?.close();
+      await teardown(fixture);
+    }
+  });
+
+  test('readiness leads the reveal: radar, reachable ghost, ranked moves, linked ledger', async ({
+    browser,
+  }, testInfo) => {
+    testInfo.setTimeout(300_000);
+    let opened: Awaited<ReturnType<typeof openSeededReveal>> | null = null;
+    try {
+      opened = await openSeededReveal(browser, 'ready', (f) => seedCompletedRun(f, READINESS_V2));
+      const { page } = opened;
+      const hero = page.getByTestId('readiness-hero');
+      await expect(hero).toHaveAttribute('data-state', 'scored', { timeout: 60_000 });
+
+      // First block of the reveal, and inside it the radar comes before the moves.
+      expect(await precedes(hero, page.getByTestId('brand-dna-identity'))).toBe(true);
+      expect(
+        await precedes(hero.getByTestId('readiness-radar'), hero.getByTestId('readiness-moves')),
+      ).toBe(true);
+
+      await expect(hero.getByTestId('readiness-overall')).toHaveText(
+        String(READINESS_V2.overall_score),
+      );
+      await expect(page.locator('[data-radar-point]')).toHaveCount(7);
+      await expect(hero.locator('path[stroke-dasharray="5 4"]')).toHaveCount(1);
+      await expect(hero.getByTestId('legend-reachable')).toContainText(
+        String(READINESS_V2.reachable_score),
+      );
+      await expect(hero.getByTestId('move-points')).toHaveText(['+6 pts', '+5 pts', '+4 pts']);
+
+      // Axis ↔ move ↔ ledger: the top move is open, hover previews, keyboard pins.
+      const ledger = hero.getByTestId('criteria-ledger');
+      await expect(ledger).toHaveAttribute('data-dimension', 'success_metrics');
+      await hero.locator('[data-testid="radar-axis"][data-dimension="customer_pains"]').hover();
+      await expect(ledger).toHaveAttribute('data-dimension', 'customer_pains');
+      const review = ledger.getByTestId('criterion-source').filter({ hasText: 'web: g2.com' });
+      await expect(review).toHaveAttribute('href', /g2\.com/);
+      await expect(ledger).toContainText('Our front desk used to spend mornings');
+
+      const positioningAxis = hero.locator(
+        '[data-testid="radar-axis"][data-dimension="positioning"]',
+      );
+      await positioningAxis.focus();
+      await page.keyboard.press('Enter');
+      await expect(positioningAxis).toHaveAttribute('aria-pressed', 'true');
+      await expect(
+        hero.locator('[data-testid="readiness-move"][data-dimension="positioning"]'),
+      ).toHaveAttribute('aria-pressed', 'true');
+      await expect(ledger).toHaveAttribute('data-dimension', 'positioning');
+
+      await shootHero(page, 'scored');
+    } finally {
+      await opened?.context.close();
+      await teardown(opened?.fixture ?? null);
+    }
+  });
+
+  test('partial evidence: a banner names what failed, and an unmeasured axis draws no number', async ({
+    browser,
+  }, testInfo) => {
+    testInfo.setTimeout(300_000);
+    let opened: Awaited<ReturnType<typeof openSeededReveal>> | null = null;
+    try {
+      opened = await openSeededReveal(browser, 'partial', (f) =>
+        seedCompletedRun(f, READINESS_PARTIAL),
+      );
+      const { page } = opened;
+      const hero = page.getByTestId('readiness-hero');
+      await expect(hero).toHaveAttribute('data-state', 'scored', { timeout: 60_000 });
+
+      const banner = hero.getByTestId('readiness-partial');
+      await expect(banner).toContainText('Scored on partial evidence');
+      await expect(banner).toContainText('Instagram');
+      await expect(banner).toContainText('web search');
+
+      // Five measured axes carry a dot; the thin and the unknown one carry none.
+      await expect(page.locator('[data-radar-point]')).toHaveCount(5);
+      for (const dimension of ['success_metrics', 'customer_pains']) {
+        await expect(page.locator(`[data-radar-point="${dimension}"]`)).toHaveCount(0);
+        await expect(page.locator(`[data-spoke="${dimension}"]`)).toHaveAttribute(
+          'data-hatched',
+          'true',
+        );
+      }
+      const unknown = hero.locator('[data-testid="radar-axis"][data-dimension="success_metrics"]');
+      await expect(unknown).toHaveAttribute('data-confidence', 'unknown');
+      await expect(unknown).toContainText('No evidence');
+      expect(((await unknown.textContent()) ?? '').match(/\d/g) ?? []).toEqual([]);
+      await expect(
+        hero.locator('[data-testid="radar-axis"][data-dimension="customer_pains"]'),
+      ).toHaveAttribute('data-confidence', 'thin');
+
+      await shootHero(page, 'partial');
+    } finally {
+      await opened?.context.close();
+      await teardown(opened?.fixture ?? null);
+    }
+  });
+
+  test('a legacy row with no criteria still renders the radar and its dimension scores', async ({
+    browser,
+  }, testInfo) => {
+    testInfo.setTimeout(240_000);
+    let opened: Awaited<ReturnType<typeof openSeededReveal>> | null = null;
+    try {
+      opened = await openSeededReveal(browser, 'legacy', (f) =>
+        seedCompletedRun(f, READINESS_LEGACY),
+      );
+      const { page } = opened;
+      const hero = page.getByTestId('readiness-hero');
+      await expect(hero).toHaveAttribute('data-state', 'legacy', { timeout: 60_000 });
+      await expect(hero.getByTestId('readiness-overall')).toHaveText('72');
+      await expect(page.locator('[data-radar-point]')).toHaveCount(7);
+      await expect(hero.locator('[data-testid="readiness-legacy"] li')).toHaveCount(7);
+      await expect(hero.getByTestId('readiness-moves')).toHaveCount(0);
+      await shootHeroOnce(page, 'legacy');
+    } finally {
+      await opened?.context.close();
+      await teardown(opened?.fixture ?? null);
+    }
+  });
+
+  test('a failed scoring, replayed over the real SSE tail, renders no number', async ({
+    browser,
+  }, testInfo) => {
+    testInfo.setTimeout(240_000);
+    let opened: Awaited<ReturnType<typeof openSeededReveal>> | null = null;
+    try {
+      opened = await openSeededReveal(browser, 'error', seedRunWithFailedReadiness);
+      const { page } = opened;
+      const hero = page.getByTestId('readiness-hero');
+      await expect(hero).toHaveAttribute('data-state', 'error', { timeout: 60_000 });
+      await expect(hero).toContainText("Readiness couldn't be scored this time");
+      await expectNoReadinessNumber(page);
+      await shootHeroOnce(page, 'error');
+    } finally {
+      await opened?.context.close();
+      await teardown(opened?.fixture ?? null);
+    }
+  });
+
+  test('Settings → Readiness is the same hero: Recalculate kept, legacy rows prompted', async ({
+    browser,
+  }, testInfo) => {
+    testInfo.setTimeout(300_000);
+    let fixture: Fixture | null = null;
+    let context: BrowserContext | null = null;
+    try {
+      fixture = await provision('settings');
+      await seedBrandBook(fixture, READINESS_LEGACY);
+      const storageState = await mintSessionForEmail(fixture.email);
+      context = await browser.newContext({ viewport: { width: 1500, height: 1100 } });
+      await context.addCookies(storageState.cookies);
+      const page = await context.newPage();
+      const openReadinessTab = async () => {
+        await page.goto('/settings?section=brand-intelligence', { waitUntil: 'domcontentloaded' });
+        // A click on the server-rendered tab before hydration is silently dropped.
+        const tab = page.getByRole('tab', { name: 'Readiness' });
+        await expect(async () => {
+          await tab.click({ timeout: 5_000 });
+          await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 2_000 });
+        }).toPass({ timeout: 150_000 });
+      };
+
+      await openReadinessTab();
+      const hero = page.getByTestId('readiness-hero');
+      await expect(hero).toHaveAttribute('data-state', 'legacy', { timeout: 60_000 });
+      await expect(hero.getByRole('button', { name: 'Recalculate' })).toBeVisible();
+      await expect(hero.getByTestId('readiness-legacy')).toContainText(
+        'Recalculate to see what earned each score.',
+      );
+      await expect(page.locator('[data-radar-point]')).toHaveCount(7);
+      await shootHeroOnce(page, 'settings-legacy');
+
+      // Recalculated under the criteria scorer: same surface, now with moves and ledger.
+      await seedBrandBook(fixture, READINESS_V2);
+      await openReadinessTab();
+      await expect(hero).toHaveAttribute('data-state', 'scored', { timeout: 60_000 });
+      await expect(hero.getByRole('button', { name: 'Recalculate' })).toBeVisible();
+      await expect(hero.getByTestId('readiness-overall')).toHaveText(
+        String(READINESS_V2.overall_score),
+      );
+      await expect(hero.getByTestId('readiness-moves')).toBeVisible();
+      await expect(hero.getByTestId('criteria-ledger')).toHaveAttribute(
+        'data-dimension',
+        'success_metrics',
+      );
+      await expect(hero.getByTestId('readiness-legacy')).toHaveCount(0);
+      await shootHeroOnce(page, 'settings-scored');
     } finally {
       await context?.close();
       await teardown(fixture);

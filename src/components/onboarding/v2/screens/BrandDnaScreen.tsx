@@ -13,16 +13,16 @@ import { EditableProse } from '../dna/EditableProse';
 import { HorizontalRow } from '../dna/HorizontalRow';
 import { IdentityPanel } from '../dna/IdentityPanel';
 import { ProvenanceMark } from '../dna/RevealMarks';
-import { provenanceOf } from '../dna/reveal';
-import { ReadinessCard } from '../dna/ReadinessCard';
 import { RunProgressBanner } from '../dna/RunProgressBanner';
+import { provenanceOf } from '../dna/reveal';
 import { StrategyGuidelinesRow } from '../dna/StrategyGuidelinesRow';
 import { UnderstandingCard } from '../dna/UnderstandingCard';
 import { VoiceDetail } from '../dna/VoiceDetail';
 import { WebsiteSummaryCard } from '../dna/WebsiteSummaryCard';
 import { DimensionChip } from '../readiness/DimensionChip';
 import { FindingsStack } from '../readiness/FindingsStack';
-import { OverallReadinessChip } from '../readiness/OverallReadinessChip';
+import { ReadinessHero, type ReadinessHeroStatus } from '../readiness/ReadinessHero';
+import { hostOf } from '../readiness/utils';
 import type { AgentPreviewBuckets, SectionStatus } from '../state/agentPreview';
 
 type BrandDnaScreenProps = {
@@ -95,14 +95,6 @@ function findingFor(
   return readiness?.findings?.find((f) => f.dimension === dim) ?? null;
 }
 
-function safeHostname(url: string): string | null {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return null;
-  }
-}
-
 function isTerminallyEmpty<T>(
   buckets: AgentPreviewBuckets | null,
   section: PreviewSection,
@@ -115,7 +107,7 @@ function isTerminallyEmpty<T>(
 export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: BrandDnaScreenProps) {
   const { state, updateState } = useOnboarding();
   const brand = state.brand;
-  const websiteHost = brand.website ? safeHostname(brand.website) : null;
+  const websiteHost = hostOf(brand.website);
 
   const voice = agentBuckets?.voice;
   const audience = agentBuckets?.audience;
@@ -153,6 +145,12 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
   const readiness: ReadinessAnalysis | null = brand.readiness ?? agentBuckets?.readiness ?? null;
   const loading = Boolean(readinessLoading) && !readiness;
   const settled = !loading && !readinessLoading;
+  const readinessStatus: ReadinessHeroStatus =
+    agentBuckets?.sectionStatus.readiness === 'error'
+      ? 'error'
+      : readinessLoading
+        ? 'running'
+        : 'settled';
   const successfulCount = countSuccessfulSections(agentBuckets);
   const thinResult = settled && successfulCount < 3;
 
@@ -170,10 +168,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
       animate="visible"
       className="mx-auto flex w-full min-h-0 max-w-[1700px] flex-1 flex-col px-4 py-8 md:px-8"
     >
-      <motion.header
-        variants={heroEnter}
-        className="mb-6 grid grid-cols-1 items-end gap-4 md:grid-cols-[1fr_auto]"
-      >
+      <motion.header variants={heroEnter} className="mb-6">
         <div className="space-y-2 text-left">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Brand DNA
@@ -194,10 +189,11 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
             onRetry={onRetry}
           />
         </div>
-        <div className="md:justify-self-end">
-          <OverallReadinessChip readiness={readiness} loading={loading} />
-        </div>
       </motion.header>
+
+      <motion.div variants={card} className="mb-4">
+        <ReadinessHero readiness={readiness} status={readinessStatus} />
+      </motion.div>
 
       <motion.div variants={card} className="mb-4">
         <IdentityPanel
@@ -338,9 +334,6 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
             <WebsiteSummaryCard buckets={agentBuckets} />
           )}
           <UnderstandingCard buckets={agentBuckets} />
-          {isTerminallyEmpty(agentBuckets, 'readiness', readiness) ? null : (
-            <ReadinessCard buckets={agentBuckets} readiness={readiness} />
-          )}
         </HorizontalRow>
       </motion.div>
     </motion.div>
