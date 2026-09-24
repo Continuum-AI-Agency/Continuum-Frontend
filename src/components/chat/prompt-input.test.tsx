@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { PromptInput } from './prompt-input';
+import { MENTION_DRAG_TYPE } from './SessionContentTray';
 import type { ChatAttachmentsController } from './useChatAttachments';
 
 class TestResizeObserver {
@@ -89,5 +90,44 @@ describe('PromptInput queued text', () => {
     );
 
     expect(screen.getByRole('textbox').textContent).toBe(queued);
+  });
+});
+
+describe('PromptInput dropped references', () => {
+  it('turns a dragged session item into a chip the turn carries as a reference', () => {
+    const onSubmit = mock();
+    render(<PromptInput attachments={attachmentController()} onSubmit={onSubmit} />);
+    const reference = {
+      id: 'draft-1',
+      type: 'draft' as const,
+      label: 'Summer launch',
+      source: 'organic' as const,
+      metadata: { draftId: 'draft-1' },
+    };
+    const payload = JSON.stringify({ key: 'draft:draft-1', ...reference, reference });
+    const dataTransfer = {
+      types: [MENTION_DRAG_TYPE],
+      files: [],
+      getData: (type: string) => (type === MENTION_DRAG_TYPE ? payload : ''),
+    };
+
+    const form = screen.getByRole('textbox').closest('form') as HTMLFormElement;
+    expect(fireEvent.dragOver(form, { dataTransfer })).toBe(false);
+    fireEvent.drop(form, { dataTransfer });
+    expect(screen.getByRole('textbox').textContent).toContain('Summer launch');
+
+    fireEvent.submit(form);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0]?.[2]).toEqual([reference]);
+  });
+
+  it('ignores a malformed payload under the reference type', () => {
+    const onSubmit = mock();
+    render(<PromptInput attachments={attachmentController()} onSubmit={onSubmit} />);
+    const form = screen.getByRole('textbox').closest('form') as HTMLFormElement;
+    fireEvent.drop(form, {
+      dataTransfer: { types: [MENTION_DRAG_TYPE], files: [], getData: () => '{not json' },
+    });
+    expect(screen.getByRole('textbox').textContent).toBe('');
   });
 });
