@@ -992,8 +992,9 @@ const claimableText = (sentence: string, entities: ReadonlyArray<ReportEntity>):
 
 /**
  * Every claim `text` makes, one per sentence per kind. A sentence carrying a number is
- * also a `figure` claim; figures are classified so a reader can see them, and never
- * flagged by the grounding gate — numbers have their own rule ("never invent numbers").
+ * also a `figure` claim, graded by `groundingViolationsOf` against the turn's figures
+ * exactly as a rendered cell is (JG-prose-figures-ungraded: the same invented revenue
+ * that is a violation in a cell was invisible one block over, in a sentence).
  */
 export const classifyClaims = (
   text: string,
@@ -1022,10 +1023,10 @@ export type GroundingOptions = {
   entities?: ReadonlyArray<ReportEntity>;
   /**
    * Every number the turn's tool results carry. When given, a figure a block RENDERS — a
-   * table cell, a grid value, a comparison leg, a chart point — that none of them matches
-   * is `claim_without_source`; when absent, figures are not graded, because there is no
-   * evidence to grade them against. The Backend derives it from the run cache, the one
-   * place a tool result is kept whole.
+   * table cell, a grid value, a comparison leg, a chart point — or STATES in prose that
+   * none of them matches is `claim_without_source`; when absent, figures are not graded,
+   * because there is no evidence to grade them against. The Backend derives it from the
+   * run cache, the one place a tool result is kept whole.
    */
   figures?: ReadonlyArray<number>;
 };
@@ -1312,34 +1313,160 @@ const readingIsMeasured = (reading: NumberReading, sorted: ReadonlyArray<number>
     return hasFigureNear(sorted, value, tolerance);
   });
 
+/** The turn's figures, deduplicated and sorted once, so every cell and sentence is searched by bisection. */
+const figureIndexOf = (figures: ReadonlyArray<number>): number[] =>
+  [...new Set(figures)].sort((left, right) => left - right);
+
+/**
+ * Whether every positive number among `tokens` has one reading among the turn's figures.
+ * A zero is an absence, never an invention, and a text with no positive figure states
+ * nothing to ground.
+ */
+const printsOnlyMeasuredFigures = (
+  tokens: ReadonlyArray<NumberReading[]>,
+  sorted: ReadonlyArray<number>,
+): boolean =>
+  tokens
+    .filter((readings) => readings.some((reading) => reading.value > 0))
+    .every((readings) => readings.some((reading) => readingIsMeasured(reading, sorted)));
+
 /**
  * The rendered cells of one block whose printed figures the turn's tool outputs do not
- * carry. A cell is grounded when every positive number it prints has one reading among
- * the figures; a zero is an absence, never an invention. The span is what the reader
- * sees: the cell's own text, or `label: value` for a bare number.
+ * carry. The span is what the reader sees: the cell's own text, or `label: value` for a
+ * bare number.
  */
 const unmeasuredCellsOf = (
   block: Record<string, unknown>,
-  figures: ReadonlyArray<number>,
+  sorted: ReadonlyArray<number>,
 ): Array<{ span: string }> => {
-  const sorted = [...new Set(figures)].sort((left, right) => left - right);
   const out: Array<{ span: string }> = [];
   for (const cell of cellsOfBlocks([block])) {
     if (!isMeasuredCell(cell)) continue;
-    const tokens = numberTokensOfCell(cell.value).filter((readings) =>
-      readings.some((reading) => reading.value > 0),
-    );
-    if (tokens.length === 0) continue;
-    const measured = tokens.every((readings) =>
-      readings.some((reading) => readingIsMeasured(reading, sorted)),
-    );
-    if (measured) continue;
+    if (printsOnlyMeasuredFigures(numberTokensOfCell(cell.value), sorted)) continue;
     out.push({
       span:
         typeof cell.value === 'string' ? cell.value : `${cell.label ?? cell.where}: ${cell.value}`,
     });
   }
   return out;
+};
+
+const CHANGE_WORDS = [
+  'up',
+  'down',
+  'rose',
+  'fell',
+  'grew',
+  'dropped',
+  'climbed',
+  'slid',
+  'jumped',
+  'declined',
+  'increased',
+  'decreased',
+  'improved',
+  'worsened',
+  'gained',
+  'lost',
+  'higher',
+  'lower',
+  'more',
+  'less',
+  'better',
+  'worse',
+  'above',
+  'below',
+  'subi[oó]',
+  'baj[oó]',
+  'creci[oó]',
+  'cay[oó]',
+  'aument[oó]',
+  'disminuy[oó]',
+  'mejor[oó]',
+  'empeor[oó]',
+  'm[áa]s',
+  'menos',
+  'mayor',
+  'menor',
+  'arriba',
+  'abajo',
+  'por encima',
+  'por debajo',
+].join('|');
+
+const COUNTED_NOUNS = [
+  'campaigns?',
+  'campa[ñn]as?',
+  'ad ?sets?',
+  'conjuntos?(?: de anuncios)?',
+  'ads?',
+  'anuncios?',
+  'creatives?',
+  'creativ[oa]s?',
+  'audiences?',
+  'audiencias?',
+  'placements?',
+  'ubicaciones',
+  'segments?',
+  'segmentos?',
+  'rows?',
+  'filas?',
+  'items?',
+  'accounts?',
+  'cuentas?',
+  'objectives?',
+  'objetivos?',
+].join('|');
+
+const WINDOW_UNITS =
+  'd|days?|d[ií]as?|wks?|weeks?|semanas?|months?|meses|mes|hours?|hrs?|horas?|years?|a[ñn]os?|min(?:ute)?s?|minutos?';
+
+const FIGURE = String.raw`\d[\d.,]*\s?(?:%|pp|pts?|puntos|points|x|×)?`;
+
+/**
+ * The figures a sentence COMPUTES rather than reads, masked before its numbers are held
+ * to the turn: the window it names ("last 30 days", "L14D", a date, a year, a time), the
+ * rank or count of the entities it lists ("top 3", "#1", "3 campaigns"), a share of a
+ * whole ("41% of spend") and a delta it derives ("up 12%", "+8 pp", "2x higher"). No tool
+ * returns them and no model invents them — they are the reason prose figures were once
+ * left ungraded at all.
+ */
+const COMPUTED_PROSE_FIGURES: ReadonlyArray<RegExp> = [
+  new RegExp(String.raw`\d+\s?(?:${WINDOW_UNITS})\b`, 'giu'),
+  /\b[Ll]\d+[Dd]\b/gu,
+  /\b\d{4}-\d{2}(?:-\d{2})?\b/gu,
+  /\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b/gu,
+  /\b(?:19|20)\d{2}\b/gu,
+  /\b\d{1,2}:\d{2}\b/gu,
+  /\b[Qq][1-4]\b/gu,
+  /#\d+|\b\d+(?:st|nd|rd|th|º|ª|er|d[oa]|r[oa]|t[oa]|v[oa]|m[oa])\b/giu,
+  /\b(?:top|bottom|first|only|all|los|las)\s?\d+\b/giu,
+  new RegExp(String.raw`\b\d+\s?(?:${COUNTED_NOUNS})\b`, 'giu'),
+  /\d[\d.,]*\s?%\s+(?:of|del?)\b/giu,
+  new RegExp(String.raw`[+\-−]\s?${FIGURE}`, 'gu'),
+  new RegExp(
+    String.raw`\b(?:${CHANGE_WORDS})\s+(?:by\s+|a\s+|de\s+|un\s+|en\s+|about\s+|roughly\s+|around\s+|nearly\s+|~)?${FIGURE}`,
+    'giu',
+  ),
+  new RegExp(String.raw`${FIGURE}\s+(?:${CHANGE_WORDS})\b`, 'giu'),
+];
+
+/**
+ * Whether every figure a sentence states — with the entities it names and the numbers it
+ * computes taken out — has one reading among the turn's figures, the same test a rendered
+ * cell passes. "Revenue: 26000" on a turn whose only read carried `purchase_value: 0` is
+ * as invented in a sentence as in a cell (JG-prose-figures-ungraded).
+ */
+const proseFiguresAreMeasured = (
+  sentence: string,
+  entities: ReadonlyArray<ReportEntity>,
+  sorted: ReadonlyArray<number>,
+): boolean => {
+  const stated = COMPUTED_PROSE_FIGURES.reduce(
+    (text, pattern) => text.replace(pattern, ' '),
+    claimableText(sentence, entities),
+  );
+  return printsOnlyMeasuredFigures(numberTokensInText(stated), sorted);
 };
 
 /**
@@ -1376,18 +1503,22 @@ const claimSourcesOf = (block: Record<string, unknown>): ClaimSource[] => {
  * The claims in one block that the turn cannot stand behind. A creative, audience,
  * breakdown or landing-page claim whose kind no tool call of this turn read is
  * `claim_without_source`; one whose kind WAS read, on a row that still cites nothing, is
- * `claim_uncited`. A figure in PROSE is never flagged — a sentence carries windows, counts
- * and deltas the model computes — but a figure a block RENDERS is a measurement, and when
- * `figures` is given every rendered cell is held to the turn's tool outputs: a revenue
- * cell on a leads account that no tool result carries is `claim_without_source` of kind
- * `figure` (JG-invented-revenue). Nothing is fabricated: a missing citation is reported,
- * not filled, and a flagged cell is annotated, never rewritten.
+ * `claim_uncited`. A figure is a measurement wherever it appears, and when `figures` is
+ * given every rendered cell AND every figure a sentence states is held to the turn's tool
+ * outputs: a revenue cell on a leads account that no tool result carries is
+ * `claim_without_source` of kind `figure` (JG-invented-revenue), and so is "Revenue: 26000"
+ * in the narrative beside it (JG-prose-figures-ungraded). What a sentence computes — its
+ * window, its entity count, its delta — is masked first (`COMPUTED_PROSE_FIGURES`), and
+ * without `figures` no figure is graded. Nothing is fabricated: a missing citation is
+ * reported, not filled, and a flagged cell is annotated, never rewritten.
  */
 export const groundingViolationsOf = (
   block: Record<string, unknown>,
   options: GroundingOptions,
 ): GroundingViolation[] => {
   const read = new Set(options.toolKinds);
+  const entities = options.entities ?? [];
+  const sorted = options.figures ? figureIndexOf(options.figures) : null;
   const out: GroundingViolation[] = [];
   const seen = new Set<string>();
   const report = (violation: GroundingViolation): void => {
@@ -1397,8 +1528,13 @@ export const groundingViolationsOf = (
     out.push(violation);
   };
   for (const source of claimSourcesOf(block)) {
-    for (const claim of classifyClaims(source.text, { entities: options.entities })) {
-      if (claim.kind === 'figure') continue;
+    for (const claim of classifyClaims(source.text, { entities })) {
+      if (claim.kind === 'figure') {
+        if (sorted !== null && !proseFiguresAreMeasured(claim.span, entities, sorted)) {
+          report({ kind: 'figure', span: claim.span, reason: 'claim_without_source' });
+        }
+        continue;
+      }
       const reason = !read.has(claim.kind)
         ? 'claim_without_source'
         : source.citeIds !== null && source.citeIds.length === 0
@@ -1408,8 +1544,8 @@ export const groundingViolationsOf = (
       report({ kind: claim.kind, span: claim.span, reason });
     }
   }
-  if (options.figures) {
-    for (const cell of unmeasuredCellsOf(block, options.figures)) {
+  if (sorted !== null) {
+    for (const cell of unmeasuredCellsOf(block, sorted)) {
       report({ kind: 'figure', span: cell.span, reason: 'claim_without_source' });
     }
   }

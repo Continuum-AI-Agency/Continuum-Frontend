@@ -864,9 +864,19 @@ describe('groundingViolationsOf — rendered figures', () => {
     expect(groundingViolationsOf(zero, { toolKinds: [], figures })).toEqual([]);
   });
 
-  it('never grades a figure in prose, where windows, counts and deltas are computed', () => {
+  // JG-prose-figures-ungraded: a figure in prose is held to the figure set like a cell; the
+  // window, entity count and delta a sentence computes are the controls the old rule protected.
+  it('grades a figure in prose, and leaves the window, count and delta a sentence computes alone', () => {
     const narrative = { block_id: 'n', category: 'narrative', body: 'Revenue reached 3,000 MXN.' };
-    expect(groundingViolationsOf(narrative, { toolKinds: [], figures })).toEqual([]);
+    expect(groundingViolationsOf(narrative, { toolKinds: [], figures })).toEqual([
+      { kind: 'figure', span: 'Revenue reached 3,000 MXN.', reason: 'claim_without_source' },
+    ]);
+    const computed = {
+      block_id: 'n',
+      category: 'narrative',
+      body: 'Over the last 30 days the top 3 campaigns spent 15,986.35 MXN, up 12% on the prior 7 days; CTR sits at 2.39%, 0.4 pp higher.',
+    };
+    expect(groundingViolationsOf(computed, { toolKinds: [], figures })).toEqual([]);
   });
 });
 
