@@ -200,3 +200,63 @@ export function formatHeadline(
       return { figure: headline.value.toLocaleString('en-US'), label: headline.label };
   }
 }
+
+// ── Figure provenance ──────────────────────────────────────────────────────
+//
+// Every costly bug in this module was a number: a `d7` window summing 8 days, a null currency
+// printed as `$`, `$26/day` beside `$766/mo`. A screenshot cannot catch that class, and a unit
+// test only grades the formatter with the figure the test chose. `paid:parity:e2e:bench`
+// grades the SCREEN: it captures the payload the page fetched and checks, node by node, that
+// what the page rendered equals what it was handed. For that the raw figure has to travel
+// with its text — on the same element, from the same call site, so the two cannot be
+// computed from different inputs. That is what these attributes carry; nothing reads them at
+// runtime.
+
+/** The window a figure was computed over, in the range vocabulary, or `none` for a point. */
+export type FigureWindow = 'd1' | 'd3' | 'd7' | 'd14' | 'd30' | 'none';
+
+/** How the raw figure is meant to read on screen — the rule the bench re-derives. */
+export type FigureUnit =
+  | 'currency'
+  | 'per-period'
+  | 'per-month'
+  | 'percent'
+  | 'percent-signed'
+  | 'count'
+  /** Prose that quotes figures: the node names the one it is about, the bench reads every
+   *  money token in it against the payload's figures. */
+  | 'sentence';
+
+export type FigureProps = {
+  'data-testid': 'figure';
+  'data-figure': string;
+  'data-figure-raw': string;
+  'data-figure-currency': string;
+  'data-figure-window': FigureWindow;
+  'data-figure-unit': FigureUnit;
+};
+
+/**
+ * The provenance attributes for one numeric node.
+ *
+ * `raw` is the figure BEFORE formatting, in the unit the text is about (money in account
+ * currency, a percent already in display units, a count). `currency` is the code the site
+ * formatted with, normalised the same way `formatCurrency` normalises it, so `none` on the
+ * node means the text must carry no symbol.
+ */
+export function figureProps(
+  key: string,
+  raw: number | null | undefined,
+  currency: string | null | undefined,
+  window: FigureWindow = 'none',
+  unit: FigureUnit = 'currency',
+): FigureProps {
+  return {
+    'data-testid': 'figure',
+    'data-figure': key,
+    'data-figure-raw': raw == null || !Number.isFinite(raw) ? '' : String(raw),
+    'data-figure-currency': normalizeCurrency(currency) ?? 'none',
+    'data-figure-window': window,
+    'data-figure-unit': unit,
+  };
+}

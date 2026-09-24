@@ -25,7 +25,7 @@ import { budgetByObjective, lastFullDay, type SpendStream, spendStream } from '.
 import { SpendByObjectiveStream } from '../charts/SpendByObjectiveStream';
 import { KpiTile } from '../components/KpiTile';
 import { StatusChip, type StatusTone } from '../components/StatusChip';
-import { formatCurrency, formatPercent, humanize } from '../format';
+import { figureProps, formatCurrency, formatPercent, humanize } from '../format';
 import { pendingWorkCount } from '../reportModel';
 import {
   useAccountApprovals,
@@ -135,14 +135,14 @@ export function sortPortfolios(
 export function spendVsPlan(
   spent: number | null,
   plan: number,
-): { pct: number; tone: StatusTone; label: string } | null {
+): { pct: number; tone: StatusTone; label: string; suffix: string } | null {
   if (spent == null || plan <= 0) return null;
   const ratio = spent / plan;
   const pct = Math.round(ratio * 100);
   const share = formatPercent(pct);
-  if (ratio > 1.1) return { pct, tone: 'warning', label: `${share} of plan · over` };
-  if (ratio < 0.9) return { pct, tone: 'info', label: `${share} of plan · under` };
-  return { pct, tone: 'success', label: `${share} of plan` };
+  const suffix = ratio > 1.1 ? ' of plan · over' : ratio < 0.9 ? ' of plan · under' : ' of plan';
+  const tone: StatusTone = ratio > 1.1 ? 'warning' : ratio < 0.9 ? 'info' : 'success';
+  return { pct, tone, label: `${share}${suffix}`, suffix };
 }
 
 type OptimizerOverviewProps = {
@@ -303,6 +303,7 @@ export function OptimizerOverview({
         >
           <KpiTile
             className={TILE_IN_BOARD}
+            figure={figureProps('tiles.daily-budget', dailyTotal, currency)}
             label="Daily budget"
             spark={spentSpark}
             sub={`planned across ${portfolios.length} ${portfolioNoun}`}
@@ -315,13 +316,30 @@ export function OptimizerOverview({
                   hint="The last full day of spend across every enrolled ad set, against the sum of the daily budgets."
                   tone={vsPlan.tone}
                 >
-                  {vsPlan.label}
+                  <span
+                    {...figureProps(
+                      'tiles.spent-yesterday.vs-plan',
+                      vsPlan.pct,
+                      null,
+                      'd1',
+                      'percent',
+                    )}
+                  >
+                    {formatPercent(vsPlan.pct)}
+                  </span>
+                  {vsPlan.suffix}
                 </StatusChip>
               ) : (
                 <StatusChip tone="muted">no spend history yet</StatusChip>
               )
             }
             className={TILE_IN_BOARD}
+            figure={figureProps(
+              'tiles.spent-yesterday',
+              stream.latest?.total ?? null,
+              currency,
+              'd1',
+            )}
             label="Spent yesterday"
             sub={stream.latest ? `last full day · ${STREAM_DAYS}-day trend` : undefined}
             value={stream.latest ? formatCurrency(stream.latest.total, currency) : '—'}
@@ -344,6 +362,7 @@ export function OptimizerOverview({
               )
             }
             className={TILE_IN_BOARD}
+            figure={figureProps('tiles.on-autopilot', autopilot.length, null, 'none', 'count')}
             label="On autopilot"
             sub={
               book.gone > 0
@@ -372,6 +391,7 @@ export function OptimizerOverview({
               )
             }
             className={TILE_IN_BOARD}
+            figure={figureProps('tiles.decisions-waiting', pendingCount, null, 'none', 'count')}
             label="Decisions waiting"
             value={String(pendingCount)}
           />

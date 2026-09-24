@@ -39,6 +39,7 @@ import { motion, useReducedMotion, type Variants } from 'motion/react';
 import * as React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { figureProps } from '../../format';
 import { AccountChartView } from '../account/AccountChartView';
 import { asOfLine } from '../recQueueModel';
 import type { HeroCta, HeroView } from './heroModel';
@@ -145,7 +146,21 @@ function Recap({
           {view.pacingLine}
         </Badge>
       ) : null}
-      <span className="max-w-[65ch]">{view.brief.growth_sentence}</span>
+      {/* The sentence carries figures inside prose, so the node declares the one it is
+       *  about (cost per result, else spend) and the bench reads every money token in it
+       *  against the growth figures under the screen's currency rule. */}
+      <span
+        className="max-w-[65ch]"
+        {...figureProps(
+          'recap.sentence',
+          view.brief.growth.cost_per_result ?? view.brief.growth.spend,
+          view.brief.growth.currency,
+          view.brief.growth.window,
+          'sentence',
+        )}
+      >
+        {view.brief.growth_sentence}
+      </span>
     </motion.p>
   );
 }

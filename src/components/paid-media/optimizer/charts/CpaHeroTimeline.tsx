@@ -32,7 +32,7 @@ import { ReferenceArea } from '@/components/charts/reference-area';
 import { ChartTooltip } from '@/components/charts/tooltip';
 import { XAxis } from '@/components/charts/x-axis';
 import { YAxis } from '@/components/charts/y-axis';
-import { formatCpa, formatCurrency } from '../format';
+import { figureProps, formatCpa, formatCurrency } from '../format';
 import { confidenceBand as bandMeta } from '../reportModel';
 import { ChartEmpty } from './ChartStates';
 import {
@@ -92,7 +92,13 @@ export function CpaHeroTimeline({
           <span className="text-xs text-muted-foreground">
             Projected {metric.costLabel} next cycle:{' '}
             <span className="font-data font-medium text-foreground tabular-nums">
-              {formatCpa(last, currency)} → {formatCpa(projectedEnd, currency)}
+              <span {...figureProps('timeline.projected.last', last, currency, 'd7')}>
+                {formatCpa(last, currency)}
+              </span>{' '}
+              →{' '}
+              <span {...figureProps('timeline.projected.next', projectedEnd, currency)}>
+                {formatCpa(projectedEnd, currency)}
+              </span>
             </span>
           </span>
           <span

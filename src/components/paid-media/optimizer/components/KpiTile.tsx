@@ -2,11 +2,14 @@
 // four of these; each reads at a glance and says its verdict in a chip, not a colour.
 
 import { cn } from '@/lib/utils';
+import type { FigureProps } from '../format';
 import { Sparkline } from './Sparkline';
 
 type KpiTileProps = {
   label: string;
   value: string;
+  /** Provenance for the headline figure (see `figureProps` in ../format). */
+  figure?: FigureProps;
   sub?: React.ReactNode;
   chip?: React.ReactNode;
   spark?: number[];
@@ -18,6 +21,7 @@ type KpiTileProps = {
 export function KpiTile({
   label,
   value,
+  figure,
   sub,
   chip,
   spark,
@@ -38,7 +42,10 @@ export function KpiTile({
       </div>
       <div className="flex items-end justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate font-semibold text-lg text-foreground tabular-nums leading-none">
+          <p
+            className="truncate font-semibold text-lg text-foreground tabular-nums leading-none"
+            {...figure}
+          >
             {value}
           </p>
           {sub ? <p className="mt-1 text-2xs text-muted-foreground">{sub}</p> : null}

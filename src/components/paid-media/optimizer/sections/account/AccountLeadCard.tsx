@@ -54,7 +54,7 @@ import { motion, useReducedMotion, type Variants } from 'motion/react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { formatCurrency, formatPercent } from '../../format';
+import { type FigureWindow, figureProps, formatCurrency, formatPercent } from '../../format';
 import { AccountChartView } from './AccountChartView';
 import { CalmRule, HeadlineComparison, HeadlineFigure, MoneyLine } from './candidateHeadline';
 import { doubtedBy, scopeOf } from './guardScope';
@@ -127,7 +127,7 @@ function Row({
   children,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   testId: string;
   children?: React.ReactNode;
 }) {
@@ -351,11 +351,22 @@ function LeadFace({
       <HeadlineFigure
         candidate={candidate}
         currency={currency}
+        figureKey="account-lead"
         size="card"
         testId="account-lead-figure"
       />
-      <HeadlineComparison candidate={candidate} currency={currency} testId="account-lead-sides" />
-      <MoneyLine candidate={candidate} currency={currency} testId="account-lead-money" />
+      <HeadlineComparison
+        candidate={candidate}
+        currency={currency}
+        figureKey="account-lead"
+        testId="account-lead-sides"
+      />
+      <MoneyLine
+        candidate={candidate}
+        currency={currency}
+        figureKey="account-lead"
+        testId="account-lead-money"
+      />
       <CalmRule play={play} testId="account-lead-rule" />
       <p className="text-2xs text-muted-foreground">{clipLine(meta.compares)}</p>
       {candidate.capped_by ? (
@@ -390,6 +401,18 @@ export type DeliveryPoint = { date: string; spend: number };
 
 /** Half of a fortnight: the window a person compares to "the week before" without counting. */
 const DELIVERY_WINDOW_DAYS = 7;
+
+/** The window a delivery reading covers, in the figure-provenance vocabulary. */
+function deliveryWindow(reading: DeliveryReading | null): FigureWindow {
+  if (!reading) return 'none';
+  return reading.days === 3
+    ? 'd3'
+    : reading.days === 7
+      ? 'd7'
+      : reading.days === 14
+        ? 'd14'
+        : 'none';
+}
 
 export type DeliveryReading = {
   /** Spend per day across the recent window. */
@@ -506,7 +529,10 @@ function QuietFace({
           data-reading={delivered ? 'window' : 'scale'}
           data-testid="account-lead-figure"
         >
-          <span className="font-mono font-semibold text-3xl tabular-nums text-foreground">
+          <span
+            className="font-mono font-semibold text-3xl tabular-nums text-foreground"
+            {...figureProps('account-lead.figure', perDay, currency, deliveryWindow(delivered))}
+          >
             {formatCurrency(perDay, currency)}
           </span>
           <span className="text-foreground">
@@ -544,8 +570,24 @@ function PacingRow({
   if (perDay == null || plannedPerDay == null || plannedPerDay <= 0) return null;
   const share = Math.round((perDay / plannedPerDay) * 100);
   return (
-    <Row label="Pacing" testId="account-lead-pacing" value={`${formatPercent(share)} of plan`}>
-      <Sub>{formatCurrency(plannedPerDay, currency)} a day planned.</Sub>
+    <Row
+      label="Pacing"
+      testId="account-lead-pacing"
+      value={
+        <>
+          <span {...figureProps('account-lead.pacing', share, null, 'none', 'percent')}>
+            {formatPercent(share)}
+          </span>{' '}
+          of plan
+        </>
+      }
+    >
+      <Sub>
+        <span {...figureProps('account-lead.planned', plannedPerDay, currency)}>
+          {formatCurrency(plannedPerDay, currency)}
+        </span>{' '}
+        a day planned.
+      </Sub>
     </Row>
   );
 }
@@ -553,7 +595,18 @@ function PacingRow({
 function SurenessRow({ candidate, doubted }: { candidate: AccountCandidate; doubted: boolean }) {
   const { word, pct } = sureness(candidate.confidence);
   return (
-    <Row label="How sure" testId="account-lead-sure" value={`${word} · ${formatPercent(pct)}`}>
+    <Row
+      label="How sure"
+      testId="account-lead-sure"
+      value={
+        <>
+          {word} ·{' '}
+          <span {...figureProps('account-lead.sure', pct, null, 'none', 'percent')}>
+            {formatPercent(pct)}
+          </span>
+        </>
+      }
+    >
       <div
         aria-hidden="true"
         className="h-1 w-full max-w-[9rem] overflow-hidden rounded-full bg-muted"
@@ -636,15 +689,31 @@ function TrendRow({
   delivered: DeliveryReading | null;
 }) {
   if (!delivered || delivered.priorPerDay == null || delivered.deltaPct == null) return null;
+  const window = deliveryWindow(delivered);
   const value =
-    delivered.deltaPct === 0
-      ? `Level with the ${delivered.days} days before`
-      : `${formatPercent(delivered.deltaPct, { signed: true })} on the ${delivered.days} days before`;
+    delivered.deltaPct === 0 ? (
+      `Level with the ${delivered.days} days before`
+    ) : (
+      <>
+        <span
+          {...figureProps('account-lead.trend', delivered.deltaPct, null, window, 'percent-signed')}
+        >
+          {formatPercent(delivered.deltaPct, { signed: true })}
+        </span>{' '}
+        on the {delivered.days} days before
+      </>
+    );
   return (
     <Row label="Trend" testId="account-lead-trend" value={value}>
       <Sub>
-        {formatCurrency(delivered.priorPerDay, currency)} a day then ·{' '}
-        {formatCurrency(delivered.perDay, currency)} a day now.
+        <span {...figureProps('account-lead.trend.prior', delivered.priorPerDay, currency, window)}>
+          {formatCurrency(delivered.priorPerDay, currency)}
+        </span>{' '}
+        a day then ·{' '}
+        <span {...figureProps('account-lead.trend.now', delivered.perDay, currency, window)}>
+          {formatCurrency(delivered.perDay, currency)}
+        </span>{' '}
+        a day now.
       </Sub>
     </Row>
   );
@@ -705,11 +774,26 @@ function PeakDayRow({
     <Row
       label="Biggest swing"
       testId="account-lead-peak"
-      value={`${DAY_FMT.format(new Date(`${peak.date}T00:00:00Z`))} · ${formatCurrency(peak.spend, currency)}`}
+      value={
+        <>
+          {DAY_FMT.format(new Date(`${peak.date}T00:00:00Z`))} ·{' '}
+          <span {...figureProps('account-lead.peak', peak.spend, currency, 'd1')}>
+            {formatCurrency(peak.spend, currency)}
+          </span>
+        </>
+      }
     >
       <Sub>
-        {formatPercent(peak.deltaPct, { signed: true })} against the {peak.days}-day average of{' '}
-        {formatCurrency(peak.meanPerDay, currency)} a day.
+        <span
+          {...figureProps('account-lead.peak.delta', peak.deltaPct, null, 'none', 'percent-signed')}
+        >
+          {formatPercent(peak.deltaPct, { signed: true })}
+        </span>{' '}
+        against the {peak.days}-day average of{' '}
+        <span {...figureProps('account-lead.peak.mean', peak.meanPerDay, currency)}>
+          {formatCurrency(peak.meanPerDay, currency)}
+        </span>{' '}
+        a day.
       </Sub>
     </Row>
   );
@@ -736,10 +820,36 @@ function MixRow({ mix }: { mix: AccountMix | null }) {
   const rest = mix.slices.slice(1);
   const basis = mix.basis === 'spent' ? `of spend, last ${mix.days} days` : 'of the daily plan';
   return (
-    <Row label="Mix" testId="account-lead-mix" value={`${top.label} · ${formatPercent(top.share)}`}>
+    <Row
+      label="Mix"
+      testId="account-lead-mix"
+      value={
+        <>
+          {top.label} ·{' '}
+          <span {...figureProps('account-lead.mix', top.share, null, 'none', 'percent')}>
+            {formatPercent(top.share)}
+          </span>
+        </>
+      }
+    >
       <Sub>
-        {rest.map((slice) => `${slice.label} ${formatPercent(slice.share)}`).join(' · ')}
-        {rest.length > 0 ? ' · ' : ''}
+        {rest.map((slice, index) => (
+          <span key={slice.label}>
+            {slice.label}{' '}
+            <span
+              {...figureProps(
+                `account-lead.mix.${index + 1}`,
+                slice.share,
+                null,
+                'none',
+                'percent',
+              )}
+            >
+              {formatPercent(slice.share)}
+            </span>
+            {' · '}
+          </span>
+        ))}
         {basis}
       </Sub>
     </Row>

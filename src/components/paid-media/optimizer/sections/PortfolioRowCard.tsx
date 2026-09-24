@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ApplyModePill } from '../ApplyModePill';
 import { StatusChip } from '../components/StatusChip';
-import { formatCpa, formatCurrency, humanize, portfolioLevelLabel } from '../format';
+import { figureProps, formatCpa, formatCurrency, humanize, portfolioLevelLabel } from '../format';
 import { pendingWorkCount } from '../reportModel';
 import { CalmRule, HeadlineFigure, MoneyLine } from './account/candidateHeadline';
 import { daysBetween, isIsoDate, todayIso } from './detail/rangeModel';
@@ -136,7 +136,10 @@ export function PortfolioRowCard({
           </div>
         </div>
         <div className="shrink-0 text-right">
-          <p className="font-semibold text-sm tabular-nums">
+          <p
+            className="font-semibold text-sm tabular-nums"
+            {...figureProps(`portfolio-row.${portfolio.id}.daily`, portfolio.daily_total, currency)}
+          >
             {formatCurrency(portfolio.daily_total, currency)}
           </p>
           <p className="text-2xs text-muted-foreground">
@@ -147,9 +150,16 @@ export function PortfolioRowCard({
 
       <div className="flex w-full flex-wrap items-center gap-1.5">
         <StatusChip tone="muted">
-          {target != null
-            ? `${metric.targetLabel} ${formatCpa(target, currency)}`
-            : `${metric.costLabel} · no target`}
+          {target != null ? (
+            <>
+              {metric.targetLabel}{' '}
+              <span {...figureProps(`portfolio-row.${portfolio.id}.target`, target, currency)}>
+                {formatCpa(target, currency)}
+              </span>
+            </>
+          ) : (
+            `${metric.costLabel} · no target`
+          )}
         </StatusChip>
         {flight ? (
           <StatusChip hint={`Flight day ${flight.day} of ${flight.days}`} tone="info">
@@ -180,9 +190,18 @@ export function PortfolioRowCard({
           <p className="truncate text-2xs text-muted-foreground">
             {clipLine(ACCOUNT_DETECTOR_META[lead.detector]?.label ?? lead.detector)}
           </p>
-          <HeadlineFigure candidate={lead} currency={currency ?? null} size="row" />
+          <HeadlineFigure
+            candidate={lead}
+            currency={currency ?? null}
+            figureKey={`portfolio-row.${portfolio.id}.lead`}
+            size="row"
+          />
           <CalmRule play={emphasis} testId="portfolio-lead-rule" />
-          <MoneyLine candidate={lead} currency={currency ?? null} />
+          <MoneyLine
+            candidate={lead}
+            currency={currency ?? null}
+            figureKey={`portfolio-row.${portfolio.id}.lead`}
+          />
         </div>
       ) : null}
     </button>

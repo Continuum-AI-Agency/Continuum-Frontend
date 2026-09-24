@@ -20,7 +20,7 @@ import { curveLinear } from '@visx/curve';
 import { Area, AreaChart } from '@/components/charts/area-chart';
 import { ChartTooltip } from '@/components/charts/tooltip';
 import { cn } from '@/lib/utils';
-import { formatCurrency, humanize } from '../format';
+import { figureProps, formatCurrency, humanize } from '../format';
 import {
   budgetByObjective,
   lastFullDay,
@@ -187,10 +187,27 @@ export function SpendByObjectiveStream({
                       style={{ background: objectiveColor(row.objective) }}
                     />
                     <span className="min-w-0 flex-1 truncate">{row.label}</span>
-                    <span className="shrink-0 text-muted-foreground tabular-nums">
+                    <span
+                      className="shrink-0 text-muted-foreground tabular-nums"
+                      {...figureProps(
+                        `legend.${row.objective}.share`,
+                        Math.round(row.pct * 100),
+                        null,
+                        stream.latest ? 'd1' : 'none',
+                        'percent',
+                      )}
+                    >
                       {Math.round(row.pct * 100)}%
                     </span>
-                    <span className="w-16 shrink-0 text-right font-medium tabular-nums">
+                    <span
+                      className="w-16 shrink-0 text-right font-medium tabular-nums"
+                      {...figureProps(
+                        `legend.${row.objective}.value`,
+                        row.value,
+                        currency,
+                        stream.latest ? 'd1' : 'none',
+                      )}
+                    >
                       {formatCurrency(row.value, currency)}
                     </span>
                   </button>

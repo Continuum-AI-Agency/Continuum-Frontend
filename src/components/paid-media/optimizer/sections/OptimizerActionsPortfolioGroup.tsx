@@ -63,7 +63,7 @@ import { attributeTransfers, type TransferAttribution } from '../charts/chartDat
 import { maxCiUpperBound } from '../charts/chartScale';
 import { ReallocationStory } from '../charts/ReallocationStory';
 import { defaultStoryLookback } from '../charts/reallocationStoryModel';
-import { formatCurrency } from '../format';
+import { figureProps, formatCurrency } from '../format';
 import {
   actionRoute,
   applyModeExplainer,
@@ -921,7 +921,17 @@ export function OptimizerActionsPortfolioGroup({
               <span className="text-muted-foreground">· {triggerWords(group.trigger)}</span>
               {group.impactPerDay > 0 ? (
                 <span className="text-muted-foreground tabular-nums">
-                  · {formatCurrency(group.impactPerDay, currency)}/day
+                  ·{' '}
+                  <span
+                    {...figureProps(
+                      `queue.summary.${group.kind}:${group.trigger}.impact`,
+                      group.impactPerDay,
+                      currency,
+                    )}
+                  >
+                    {formatCurrency(group.impactPerDay, currency)}
+                  </span>
+                  /day
                 </span>
               ) : null}
             </li>
@@ -1258,7 +1268,10 @@ function QueueToolbar({
         ) : (
           <span className="text-2xs text-warning tabular-nums">
             Net {selectionNetDelta > 0 ? '+' : '−'}
-            {formatCurrency(Math.abs(selectionNetDelta), currency)}/day
+            <span {...figureProps('queue.net', Math.abs(selectionNetDelta), currency)}>
+              {formatCurrency(Math.abs(selectionNetDelta), currency)}
+            </span>
+            /day
           </span>
         )}
         <Button
@@ -1561,7 +1574,23 @@ function RecEvidenceLine({ rec, currency }: { rec: RecommendationRow; currency: 
       {line ? (
         <p className="tabular-nums">
           <span className="font-medium text-foreground">{line}</span>
-          {money ? <span> · {money}</span> : null}
+          {money ? (
+            <span>
+              {' · '}
+              <span
+                {...figureProps(
+                  `queue.${rec.id}.at-stake`,
+                  impactPerDay(rec),
+                  currency,
+                  'none',
+                  'per-period',
+                )}
+              >
+                {money.replace(/ at stake$/, '')}
+              </span>{' '}
+              at stake
+            </span>
+          ) : null}
         </p>
       ) : null}
       {rec.reason ? (
@@ -1588,9 +1617,43 @@ function RowHeadline({
       <span className="text-sm font-semibold tracking-tight">
         {row.name ?? 'Budget move'}{' '}
         <span className="font-normal text-muted-foreground">
-          {formatCurrency(row.item.current_budget ?? 0, currency)} →{' '}
-          {formatCurrency(row.item.final_budget ?? 0, currency)}
-          {changePct != null ? ` (${changePct > 0 ? '+' : ''}${changePct.toFixed(0)}%)` : ''}
+          <span
+            {...figureProps(
+              `queue.${row.item.adset_id}.now`,
+              row.item.current_budget ?? 0,
+              currency,
+            )}
+          >
+            {formatCurrency(row.item.current_budget ?? 0, currency)}
+          </span>{' '}
+          →{' '}
+          <span
+            {...figureProps(
+              `queue.${row.item.adset_id}.proposed`,
+              row.item.final_budget ?? 0,
+              currency,
+            )}
+          >
+            {formatCurrency(row.item.final_budget ?? 0, currency)}
+          </span>
+          {changePct != null ? (
+            <>
+              {' ('}
+              <span
+                {...figureProps(
+                  `queue.${row.item.adset_id}.change`,
+                  Number(changePct.toFixed(0)),
+                  null,
+                  'none',
+                  'percent-signed',
+                )}
+              >
+                {changePct > 0 ? '+' : ''}
+                {changePct.toFixed(0)}%
+              </span>
+              {')'}
+            </>
+          ) : null}
         </span>
       </span>
     );
@@ -1956,8 +2019,21 @@ function BudgetDetail({
       ) : null}
       <p>
         <span className="font-medium text-foreground">Before → after:</span>{' '}
-        {formatCurrency(item.current_budget ?? 0, currency)} →{' '}
-        {formatCurrency(item.final_budget ?? 0, currency)}
+        <span
+          {...figureProps(`queue.${item.adset_id}.detail.now`, item.current_budget ?? 0, currency)}
+        >
+          {formatCurrency(item.current_budget ?? 0, currency)}
+        </span>{' '}
+        →{' '}
+        <span
+          {...figureProps(
+            `queue.${item.adset_id}.detail.proposed`,
+            item.final_budget ?? 0,
+            currency,
+          )}
+        >
+          {formatCurrency(item.final_budget ?? 0, currency)}
+        </span>
       </p>
       {windowText ? (
         <p>
@@ -1966,10 +2042,23 @@ function BudgetDetail({
       ) : null}
       {cpa != null ? (
         <p>
-          <span className="font-medium text-foreground">Cost:</span> {formatCurrency(cpa, currency)}
-          {typeof ci?.lo === 'number' && typeof ci?.hi === 'number'
-            ? ` (likely ${formatCurrency(ci.lo, currency)}–${formatCurrency(ci.hi, currency)})`
-            : ''}
+          <span className="font-medium text-foreground">Cost:</span>{' '}
+          <span {...figureProps(`queue.${item.adset_id}.detail.cost`, cpa, currency)}>
+            {formatCurrency(cpa, currency)}
+          </span>
+          {typeof ci?.lo === 'number' && typeof ci?.hi === 'number' ? (
+            <>
+              {' (likely '}
+              <span {...figureProps(`queue.${item.adset_id}.detail.ci.lo`, ci.lo, currency)}>
+                {formatCurrency(ci.lo, currency)}
+              </span>
+              –
+              <span {...figureProps(`queue.${item.adset_id}.detail.ci.hi`, ci.hi, currency)}>
+                {formatCurrency(ci.hi, currency)}
+              </span>
+              {')'}
+            </>
+          ) : null}
           {typeof ci?.events === 'number' ? ` from ${ci.events} events` : ''}
         </p>
       ) : null}

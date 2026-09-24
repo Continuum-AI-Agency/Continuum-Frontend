@@ -17,7 +17,14 @@ import type { AccountCandidate, CandidateHeadline } from '@continuum/contracts';
 import { perPeriod } from '@continuum/contracts';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
 import { cn } from '@/lib/utils';
-import { formatCurrency, formatHeadline, formatPercent, formatPerPeriod } from '../../format';
+import {
+  type FigureUnit,
+  figureProps,
+  formatCurrency,
+  formatHeadline,
+  formatPercent,
+  formatPerPeriod,
+} from '../../format';
 
 /** The calm rhythm. One short rule breathes inside the first fifth of it and rests for the rest. */
 export const CALM_SECONDS = 5;
@@ -72,6 +79,13 @@ function sideFigure(unit: CandidateHeadline['unit'], value: number, currency: st
   return value.toLocaleString('en-US');
 }
 
+/** The headline's unit in the figure-provenance vocabulary (see `figureProps`). */
+export function headlineFigureUnit(unit: CandidateHeadline['unit']): FigureUnit {
+  if (unit === 'percent') return 'percent';
+  if (unit === 'currency_per_day') return 'currency';
+  return 'count';
+}
+
 /**
  * The figure the card leads with, and the words that follow it.
  *
@@ -84,15 +98,27 @@ export function HeadlineFigure({
   currency,
   size = 'row',
   testId,
+  figureKey = 'candidate',
 }: {
   candidate: AccountCandidate;
   currency: string | null;
   size?: HeadlineSize;
   testId?: string;
+  /** The surface's name for this figure, e.g. `account-lead` → `account-lead.figure`. */
+  figureKey?: string;
 }) {
   const lead = candidate.headline
     ? formatHeadline(candidate.headline, currency)
     : { figure: formatCurrency(candidate.impact_per_day, currency), label: '/day' };
+  const provenance = candidate.headline
+    ? figureProps(
+        `${figureKey}.figure`,
+        candidate.headline.value,
+        currency,
+        'none',
+        headlineFigureUnit(candidate.headline.unit),
+      )
+    : figureProps(`${figureKey}.figure`, candidate.impact_per_day, currency);
   return (
     <p
       className="flex flex-wrap items-baseline gap-x-1.5 text-2xs text-muted-foreground"
@@ -101,6 +127,7 @@ export function HeadlineFigure({
     >
       <span
         className={cn('font-mono font-semibold tabular-nums text-foreground', FIGURE_SIZE[size])}
+        {...provenance}
       >
         {lead.figure}
       </span>
@@ -119,17 +146,25 @@ export function HeadlineComparison({
   candidate,
   currency,
   testId,
+  figureKey = 'candidate',
 }: {
   candidate: AccountCandidate;
   currency: string | null;
   testId?: string;
+  figureKey?: string;
 }) {
   const headline = candidate.headline;
   if (!headline || headline.from == null || headline.to == null) return null;
+  const unit = headlineFigureUnit(headline.unit);
   return (
     <p className="text-3xs text-muted-foreground tabular-nums" data-testid={testId}>
-      {sideFigure(headline.unit, headline.from, currency)} →{' '}
-      {sideFigure(headline.unit, headline.to, currency)}
+      <span {...figureProps(`${figureKey}.from`, headline.from, currency, 'none', unit)}>
+        {sideFigure(headline.unit, headline.from, currency)}
+      </span>{' '}
+      →{' '}
+      <span {...figureProps(`${figureKey}.to`, headline.to, currency, 'none', unit)}>
+        {sideFigure(headline.unit, headline.to, currency)}
+      </span>
     </p>
   );
 }
@@ -145,18 +180,30 @@ export function MoneyLine({
   candidate,
   currency,
   testId,
+  figureKey = 'candidate',
 }: {
   candidate: AccountCandidate;
   currency: string | null;
   testId?: string;
+  figureKey?: string;
 }) {
   const { month } = perPeriod(candidate.impact_per_day);
   const money = candidate.headline
     ? formatPerPeriod(candidate.impact_per_day, currency)
     : `${formatCurrency(month, currency)}/mo`;
+  const provenance = figureProps(
+    `${figureKey}.money`,
+    candidate.impact_per_day,
+    currency,
+    'none',
+    candidate.headline ? 'per-period' : 'per-month',
+  );
   return (
     <p className="text-2xs text-muted-foreground tabular-nums" data-testid={testId}>
-      <span className="text-foreground">{money}</span> · {candidate.result_label}
+      <span className="text-foreground" {...provenance}>
+        {money}
+      </span>{' '}
+      · {candidate.result_label}
     </p>
   );
 }

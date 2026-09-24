@@ -30,7 +30,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import { ApplyModePill } from '../ApplyModePill';
-import { formatCurrency, humanize, portfolioLevelLabel } from '../format';
+import { figureProps, formatCurrency, humanize, portfolioLevelLabel } from '../format';
 import { pendingWorkCount } from '../reportModel';
 import {
   useOptimizerAccountRead,
@@ -119,7 +119,12 @@ function PortfolioCard({
           <p className="mt-1 text-muted-foreground text-xs tabular-nums">
             {humanize(portfolio.objective)} · {portfolio.adset_count} ad{' '}
             {portfolio.adset_count === 1 ? 'set' : 'sets'} ·{' '}
-            {formatCurrency(portfolio.daily_total, currency)}/d
+            <span
+              {...figureProps(`portfolios.${portfolio.id}.daily`, portfolio.daily_total, currency)}
+            >
+              {formatCurrency(portfolio.daily_total, currency)}
+            </span>
+            /d
           </p>
           {staleLine(portfolio) || rosterLine(portfolio) ? (
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -139,9 +144,18 @@ function PortfolioCard({
           <p className="truncate text-2xs text-muted-foreground">
             {clipLine(ACCOUNT_DETECTOR_META[lead.detector]?.label ?? lead.detector)}
           </p>
-          <HeadlineFigure candidate={lead} currency={currency ?? null} size="row" />
+          <HeadlineFigure
+            candidate={lead}
+            currency={currency ?? null}
+            figureKey={`portfolios.${portfolio.id}.lead`}
+            size="row"
+          />
           <CalmRule play={emphasis} testId="portfolio-lead-rule" />
-          <MoneyLine candidate={lead} currency={currency ?? null} />
+          <MoneyLine
+            candidate={lead}
+            currency={currency ?? null}
+            figureKey={`portfolios.${portfolio.id}.lead`}
+          />
         </div>
       ) : null}
     </button>
@@ -184,7 +198,16 @@ function ArchivedPortfolios({
               <p className="text-muted-foreground text-xs">
                 {humanize(portfolio.objective)} · {portfolio.adset_count} ad{' '}
                 {portfolio.adset_count === 1 ? 'set' : 'sets'} ·{' '}
-                {formatCurrency(portfolio.daily_total, currency)}/d
+                <span
+                  {...figureProps(
+                    `portfolios.archived.${portfolio.id}.daily`,
+                    portfolio.daily_total,
+                    currency,
+                  )}
+                >
+                  {formatCurrency(portfolio.daily_total, currency)}
+                </span>
+                /d
               </p>
             </div>
             <Button

@@ -36,8 +36,14 @@ import type { CandidateHeadline } from '@continuum/contracts';
 import { perPeriod } from '@continuum/contracts';
 import * as React from 'react';
 import { cn } from '@/lib/utils';
-import { formatCurrency, formatHeadline, formatPercent, formatPerPeriod } from '../../../format';
-import { CalmRule } from '../../account/candidateHeadline';
+import {
+  figureProps,
+  formatCurrency,
+  formatHeadline,
+  formatPercent,
+  formatPerPeriod,
+} from '../../../format';
+import { CalmRule, headlineFigureUnit } from '../../account/candidateHeadline';
 import type { JustificationModel, NewsCardModel } from './justification';
 import { pickJustification } from './justification';
 
@@ -82,6 +88,15 @@ function Figure({
       ? { figure: formatCurrency(card.impactPerDay, currency), label: '/day' }
       : null;
   if (!lead) return null;
+  const provenance = card.headline
+    ? figureProps(
+        `news.${card.id}.figure`,
+        card.headline.value,
+        currency,
+        'none',
+        headlineFigureUnit(card.headline.unit),
+      )
+    : figureProps(`news.${card.id}.figure`, card.impactPerDay, currency);
   return (
     <p
       className={cn(
@@ -95,6 +110,7 @@ function Figure({
     >
       <span
         className={cn('font-mono font-semibold text-foreground tabular-nums', FIGURE_SIZE[size])}
+        {...provenance}
       >
         {lead.figure}
       </span>
@@ -139,8 +155,16 @@ function IntervalRule({
         ) : null}
       </span>
       <p className="flex items-baseline justify-between gap-2 text-3xs text-muted-foreground tabular-nums">
-        <span>{formatCurrency(interval.low, currency)}</span>
-        <span>{open ? 'no upper bound' : formatCurrency(interval.high, currency)}</span>
+        <span {...figureProps(`news.${card.id}.interval.low`, interval.low, currency)}>
+          {formatCurrency(interval.low, currency)}
+        </span>
+        {open ? (
+          <span>no upper bound</span>
+        ) : (
+          <span {...figureProps(`news.${card.id}.interval.high`, interval.high, currency)}>
+            {formatCurrency(interval.high, currency)}
+          </span>
+        )}
       </p>
     </div>
   );
@@ -156,7 +180,18 @@ function Support({ card, currency }: { card: NewsCardModel; currency: string | n
   if (card.moneyPerDay != null) {
     return (
       <p className="text-2xs text-muted-foreground tabular-nums" data-testid="news-support">
-        <span className="text-foreground">{formatPerPeriod(card.moneyPerDay, currency)}</span>
+        <span
+          className="text-foreground"
+          {...figureProps(
+            `news.${card.id}.money`,
+            card.moneyPerDay,
+            currency,
+            'none',
+            'per-period',
+          )}
+        >
+          {formatPerPeriod(card.moneyPerDay, currency)}
+        </span>
       </p>
     );
   }
@@ -164,7 +199,12 @@ function Support({ card, currency }: { card: NewsCardModel; currency: string | n
   const { month } = perPeriod(card.impactPerDay);
   return (
     <p className="text-2xs text-muted-foreground tabular-nums" data-testid="news-support">
-      <span className="text-foreground">{formatCurrency(month, currency)}/mo</span>
+      <span
+        className="text-foreground"
+        {...figureProps(`news.${card.id}.money`, card.impactPerDay, currency, 'none', 'per-month')}
+      >
+        {formatCurrency(month, currency)}/mo
+      </span>
     </p>
   );
 }
@@ -189,6 +229,7 @@ export function JustificationBlock({ card, currency, size = 'lead' }: Justificat
 
   const body = (() => {
     if (model === 'arithmetic' && headline?.from != null && headline.to != null) {
+      const unit = headlineFigureUnit(headline.unit);
       return (
         <div
           className="grid items-end gap-x-5 gap-y-3 @[28rem]/news-just:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)]"
@@ -198,11 +239,19 @@ export function JustificationBlock({ card, currency, size = 'lead' }: Justificat
             className="text-balance text-foreground text-sm tabular-nums @[28rem]/news-just:text-right"
             data-testid="news-comparison"
           >
-            <span className="text-muted-foreground">
+            <span
+              className="text-muted-foreground"
+              {...figureProps(`news.${card.id}.from`, headline.from, currency, 'none', unit)}
+            >
               {sideFigure(headline.unit, headline.from, currency)}
             </span>{' '}
             <span className="text-muted-foreground">→</span>{' '}
-            <span className="font-medium">{sideFigure(headline.unit, headline.to, currency)}</span>
+            <span
+              className="font-medium"
+              {...figureProps(`news.${card.id}.to`, headline.to, currency, 'none', unit)}
+            >
+              {sideFigure(headline.unit, headline.to, currency)}
+            </span>
           </p>
           <div
             aria-hidden

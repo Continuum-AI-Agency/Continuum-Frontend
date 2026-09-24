@@ -230,9 +230,22 @@ function Lead({
 }) {
   return (
     <div className="space-y-0.5">
-      <HeadlineFigure candidate={candidate} currency={currency} size={size} />
-      <HeadlineComparison candidate={candidate} currency={currency} />
-      <MoneyLine candidate={candidate} currency={currency} />
+      <HeadlineFigure
+        candidate={candidate}
+        currency={currency}
+        figureKey={`read.${candidate.detector}`}
+        size={size}
+      />
+      <HeadlineComparison
+        candidate={candidate}
+        currency={currency}
+        figureKey={`read.${candidate.detector}`}
+      />
+      <MoneyLine
+        candidate={candidate}
+        currency={currency}
+        figureKey={`read.${candidate.detector}`}
+      />
     </div>
   );
 }
