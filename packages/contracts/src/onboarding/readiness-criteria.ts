@@ -6,8 +6,8 @@ import type {
 
 /**
  * The readiness scorecard as a table. The model only answers whether each
- * criterion is met, with a quote from the brand's own material or third-party
- * search; the backend turns the answers into scores and the UI renders "what
+ * criterion is met, with a quote from the brand's own material; the backend
+ * turns the answers into scores and the UI renders "what
  * earned this" from the same rows. Changing a row changes what a score means —
  * bump the backend scorer_version with it.
  *
@@ -21,12 +21,18 @@ const P: ReadinessEvidenceSource = 'pricing';
 const C: ReadinessEvidenceSource = 'customers';
 const IB: ReadinessEvidenceSource = 'instagram_bio';
 const IP: ReadinessEvidenceSource = 'instagram_post';
-const S: ReadinessEvidenceSource = 'search';
 const M: ReadinessEvidenceSource = 'brand_md';
 /** The brand's own material: a claim counts wherever the brand makes it. */
 const OWN = [H, A, P, C, IB, IP, M];
-/** Own material plus third-party search: proof may come from outside. */
-const PROOF = [...OWN, S];
+/**
+ * Criteria about proof. Third-party `search` is deliberately not a scoring
+ * source: its results churn run to run, and on byte-identical own evidence a
+ * search-backed partial flipped in 25 of 78 proof cells across full-lane repeats
+ * (one weight-25 flip moves its dimension 12 points). Search stays in the
+ * evidence pack; listing it here again re-enables it, capped at partial and
+ * needing two domains to cite the quote.
+ */
+const PROOF = OWN;
 
 export const READINESS_CRITERIA: readonly ReadinessCriterion[] = [
   // value_proposition
@@ -138,7 +144,9 @@ export const READINESS_CRITERIA: readonly ReadinessCriterion[] = [
     unmet_headline: 'Nothing tells a visitor this is not for them',
     rubric: {
       yes: "States who it is for in words that exclude others: size, industry, stage, skill, place, or 'not for ...'.",
-      partial: null,
+      // Without this rung, copy that implies an audience split the model 10 yes / 11 no.
+      partial:
+        "Implies who it is for through an activity, place or lifestyle ('for uncommon pursuits'), ruling no one out.",
     },
   },
   {
@@ -245,7 +253,7 @@ export const READINESS_CRITERIA: readonly ReadinessCriterion[] = [
     target_field: 'structured.strategy.positioning.reason_to_believe',
     unmet_headline: 'Proof is not attributed to anyone',
     rubric: {
-      yes: 'Ties customer praise or a result to a named customer, a case study, or an independent review. A review on a review site counts: its URL names the site.',
+      yes: 'Ties customer praise or a result to a named customer, a case study, or an independent review. A review the brand quotes from a review site counts.',
       partial: null,
     },
   },
