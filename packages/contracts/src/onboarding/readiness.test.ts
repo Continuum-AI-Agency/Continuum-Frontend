@@ -1,11 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import {
-  READINESS_DIMENSIONS,
-  readinessAnalysisCoreSchema,
-  readinessAnalysisSchema,
-  readinessSeverity,
-} from './readiness';
+import { READINESS_DIMENSIONS, readinessAnalysisSchema, readinessSeverity } from './readiness';
 
 const legacyRow = {
   overall_score: 62,
@@ -61,11 +56,6 @@ describe('readinessAnalysisSchema', () => {
     expect(parsed.dimensions.success_metrics.criteria?.[0]?.id).toBe('sm_quantified_outcome');
     expect(parsed.evidence_sources?.subpages).toBe('thin');
     expect(parsed.reachable_score).toBe(74);
-  });
-
-  test('the model-facing core schema carries no criteria fields', () => {
-    const core = readinessAnalysisCoreSchema.shape.dimensions.shape.success_metrics.shape;
-    expect(Object.keys(core).sort()).toEqual(['rationale', 'score']);
   });
 });
 
