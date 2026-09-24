@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-import { deriveRevealedPalette, deriveRevealedTypography, provenanceOf } from './reveal';
+import {
+  deriveRevealedPalette,
+  deriveRevealedTypography,
+  provenanceOf,
+  readableProse,
+} from './reveal';
 
 describe('deriveRevealedTypography', () => {
   it('returns both slots even when only one family was read', () => {
@@ -38,5 +43,24 @@ describe('provenanceOf', () => {
     expect(provenanceOf([], 'brand analysis').read).toBe(false);
     expect(provenanceOf(['#fff'], 'brand analysis').read).toBe(true);
     expect(provenanceOf(null, 'brand analysis').read).toBe(false);
+  });
+});
+
+describe('readableProse', () => {
+  it('keeps prose, including prose that quotes or brackets something', () => {
+    expect(readableProse('Practice managers at physio clinics.')).toBe(
+      'Practice managers at physio clinics.',
+    );
+    expect(readableProse('They say "fewer no-shows" [often].')).toBe(
+      'They say "fewer no-shows" [often].',
+    );
+  });
+
+  it('reads saved model JSON — whole or truncated — as empty', () => {
+    expect(readableProse('{"summary": "Mid-market"}')).toBeNull();
+    expect(readableProse('{\n  "behaviors": ["Books online", "Compa')).toBeNull();
+    expect(readableProse('Audience: [ "tone": "bold"')).toBeNull();
+    expect(readableProse('   ')).toBeNull();
+    expect(readableProse(null)).toBeNull();
   });
 });

@@ -5,7 +5,7 @@
 // composite); edits to these sections are out of scope here.
 import type { BrandGuidelines, BrandStrategy } from '@continuum/contracts';
 import { Badge } from '@/components/ui/badge';
-import type { AgentPreviewBuckets, SectionStatus } from '../state/agentPreview';
+import type { AgentPreviewBuckets } from '../state/agentPreview';
 import { CardSurface } from './CardSurface';
 import { HorizontalRow } from './HorizontalRow';
 import { ProvenanceMark } from './RevealMarks';
@@ -75,23 +75,25 @@ function GuidelinesBody({ guidelines }: { guidelines: BrandGuidelines }) {
 export function StrategyGuidelinesRow({
   buckets,
   settled = false,
+  onRetry,
 }: {
   buckets: AgentPreviewBuckets | null;
   /** True once the run is over, so an untouched section reads as empty, not pending. */
   settled?: boolean;
+  onRetry?: () => void;
 }) {
   const strategy = buckets?.strategy ?? null;
   const guidelines = buckets?.guidelines ?? null;
-  const statusFor = (status: SectionStatus | undefined): SectionStatus | undefined =>
-    settled && (status === undefined || status === 'idle') ? 'skipped' : status;
 
   return (
     <HorizontalRow label="Brand strategy" layout="grid">
       <CardSurface
         title="Strategy"
         badge="Positioning"
-        status={statusFor(buckets?.sectionStatus.strategy)}
+        status={buckets?.sectionStatus.strategy}
         isEmpty={!strategy}
+        settled={settled}
+        onRetry={onRetry}
         minBodyHeight={140}
         maxBodyHeight={320}
         className="h-full"
@@ -111,8 +113,10 @@ export function StrategyGuidelinesRow({
       <CardSurface
         title="Guidelines"
         badge="Operating rules"
-        status={statusFor(buckets?.sectionStatus.guidelines)}
+        status={buckets?.sectionStatus.guidelines}
         isEmpty={!guidelines}
+        settled={settled}
+        onRetry={onRetry}
         minBodyHeight={140}
         maxBodyHeight={320}
         className="h-full"

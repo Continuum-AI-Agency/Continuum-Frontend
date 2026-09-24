@@ -99,19 +99,34 @@ describe('runAgentPreview', () => {
     expect(outcome.buckets.latestSpark?.label).toBe('Found 5 personality adjectives');
   });
 
-  it('appends stream deltas to the matching section accumulator', async () => {
+  it('keeps stream deltas (half-written model JSON) out of every bucket and every update', async () => {
+    const delta = '{"tone": "Bold, conf';
     runOnboardingPreviewMock.mockImplementation(async ({ onEvent }) => {
-      onEvent?.({ type: 'stream', section: 'voice', delta: 'Bold,' });
-      onEvent?.({ type: 'stream', section: 'voice', delta: ' confident,' });
-      onEvent?.({ type: 'stream', section: 'audience', delta: 'Mid-market.' });
-      onEvent?.({ type: 'voice', payload: { tone: 'Bold' } });
-      onEvent?.({ type: 'complete', phase: 'preview', status: 'ok', result: undefined });
+      onEvent?.({ type: 'stream', section: 'voice', delta });
+      onEvent?.({ type: 'stream', section: 'audience', delta: '{"summary": "Mid' });
+      onEvent?.({ type: 'business', payload: { business_description: 'B2B analytics' } });
+      return { runId: null };
+    });
+
+    const input = makeInput();
+    const outcome = await runAgentPreview(input, new AbortController().signal);
+    expect(JSON.stringify(outcome.buckets)).not.toContain('conf');
+    expect(input.onUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks a section still running when the stream closes as error, not pending', async () => {
+    runOnboardingPreviewMock.mockImplementation(async ({ onEvent }) => {
+      onEvent?.({ type: 'status', section: 'voice', status: 'running' });
+      onEvent?.({ type: 'status', section: 'business', status: 'running' });
+      onEvent?.({ type: 'business', payload: { business_description: 'B2B analytics' } });
+      onEvent?.({ type: 'status', section: 'business', status: 'done' });
       return { runId: null };
     });
 
     const outcome = await runAgentPreview(makeInput(), new AbortController().signal);
-    expect(outcome.buckets.voiceStream).toBe('Bold, confident,');
-    expect(outcome.buckets.audienceStream).toBe('Mid-market.');
+    expect(outcome.buckets.sectionStatus.voice).toBe('error');
+    expect(outcome.buckets.sectionStatus.business).toBe('done');
+    expect(outcome.buckets.sectionStatus.strategy).toBe('idle');
   });
 
   it('throws when no buckets are populated', async () => {
@@ -149,7 +164,6 @@ describe('runAgentPreview', () => {
     expect(b.firstImpression).toBeNull();
     expect(b.understanding).toBeNull();
     expect(b.latestSpark).toBeNull();
-    expect(b.voiceStream).toBe('');
     expect(b.result).toBeNull();
     expect(b.audits).toEqual({});
     expect(b.citations).toEqual({});

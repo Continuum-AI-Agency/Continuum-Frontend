@@ -30,6 +30,19 @@ export function provenanceOf(value: unknown, source: string): FieldProvenance {
   return value == null ? EMPTY : readFrom(source);
 }
 
+const LOOKS_LIKE_JSON = /^\s*\{|[{[]\s*"[A-Za-z_]+"\s*:/;
+
+/**
+ * Saved prose, or `null` when the saved value was never prose. An older client saved
+ * the model's structured-output deltas — half-written JSON — as the brand's voice,
+ * audience and overview (50 of 399 onboarding states on 2026-09-24). A JSON fragment
+ * is not something the brand said, so it reads as empty rather than being shown.
+ */
+export function readableProse(value: string | null | undefined): string | null {
+  if (!value?.trim() || LOOKS_LIKE_JSON.test(value)) return null;
+  return value;
+}
+
 /* ── typography ─────────────────────────────────────────────────────────────── */
 
 export interface RevealedTypeface {

@@ -76,10 +76,6 @@ export type AgentPreviewBuckets = {
   firstImpression: FirstImpression | null;
   understanding: UnderstandingBrief | null;
   latestSpark: AgentPreviewSpark | null;
-  voiceStream: string;
-  audienceStream: string;
-  businessStream: string;
-  websiteStream: string;
   sectionStatus: Record<PreviewSection, SectionStatus>;
   audits: AgentPreviewAudits;
   auditStatus: AgentPreviewAuditStatus;
@@ -108,10 +104,6 @@ export function emptyBuckets(): AgentPreviewBuckets {
     firstImpression: null,
     understanding: null,
     latestSpark: null,
-    voiceStream: '',
-    audienceStream: '',
-    businessStream: '',
-    websiteStream: '',
     sectionStatus: makeIdleSectionStatus(),
     audits: {},
     auditStatus: {},
@@ -287,12 +279,9 @@ export function makeEventHandler(buckets: AgentPreviewBuckets, dispatch: () => v
       case 'spark':
         buckets.latestSpark = { section: event.section, label: event.label };
         break;
-      case 'stream':
-        if (event.section === 'voice') buckets.voiceStream += event.delta;
-        if (event.section === 'audience') buckets.audienceStream += event.delta;
-        if (event.section === 'business') buckets.businessStream += event.delta;
-        if (event.section === 'website') buckets.websiteStream += event.delta;
-        break;
+      // `stream` deltas are the model's structured output mid-generation — half-written
+      // JSON, never prose. They keep the watchdog alive upstream and are otherwise
+      // dropped here (the default branch), so nothing can render or persist them.
       case 'enrich':
         if (event.section.startsWith('audit.')) {
           const key = event.section.slice('audit.'.length) as AuditKey;
@@ -471,6 +460,13 @@ export async function runAgentPreview(
       }
     }
 
+    // The run is over. A section still `running` now will never finish (it timed out
+    // or its lane died with the run), and a card waiting on it would draft for ever.
+    if (previewSectionSchema.options.some((s) => buckets.sectionStatus[s] === 'running')) {
+      flipRunningToError(buckets);
+      dispatch();
+    }
+
     if (!hasAnyBucket(buckets)) {
       throw new Error('Brand analysis returned no data. Please retry.');
     }
@@ -491,10 +487,6 @@ function hasAnyBucket(b: AgentPreviewBuckets): boolean {
       b.website ||
       b.readiness ||
       b.brandProfile ||
-      b.firstImpression ||
-      b.voiceStream ||
-      b.audienceStream ||
-      b.businessStream ||
-      b.websiteStream,
+      b.firstImpression,
   );
 }

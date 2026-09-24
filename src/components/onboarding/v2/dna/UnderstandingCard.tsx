@@ -5,9 +5,11 @@ import { BulletList, ChipRow } from './listprimitives';
 
 type Props = {
   buckets: AgentPreviewBuckets | null;
+  settled?: boolean;
+  onRetry?: () => void;
 };
 
-export function UnderstandingCard({ buckets }: Props) {
+export function UnderstandingCard({ buckets, settled, onRetry }: Props) {
   const understanding = buckets?.understanding ?? null;
   const hasResult = Boolean(buckets?.result);
   const status = understanding ? 'done' : hasResult ? 'done' : 'indeterminate';
@@ -18,6 +20,8 @@ export function UnderstandingCard({ buckets }: Props) {
       badge="Analysis"
       status={status}
       isEmpty={understanding === null}
+      settled={settled}
+      onRetry={onRetry}
       minBodyHeight={200}
       skeleton={
         <div className="space-y-3">
