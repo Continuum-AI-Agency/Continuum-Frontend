@@ -43,6 +43,7 @@ describe('readinessAnalysisSchema', () => {
           criteria: [
             {
               id: 'sm_quantified_outcome',
+              label: 'A quantified customer outcome is stated',
               met: 'no',
               quote: null,
               source: null,

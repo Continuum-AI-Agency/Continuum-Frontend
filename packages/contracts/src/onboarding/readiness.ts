@@ -72,6 +72,8 @@ export interface ReadinessCriterion {
 
 export const readinessCriterionResultSchema = z.object({
   id: z.string().min(1).max(64),
+  /** Carried per row so a stored score renders with the labels it was scored under. */
+  label: z.string().min(1).max(120),
   met: readinessCriterionMet,
   quote: z.string().max(400).nullable(),
   source: readinessEvidenceSource.nullable(),
