@@ -8,6 +8,7 @@ import {
 import { serializeWorkflowSnapshot } from './workflowSerialization';
 
 const makeFile = () => new File([new Uint8Array([1, 2, 3])], 'ref.png', { type: 'image/png' });
+const noExistingAsset = async () => null;
 
 describe('uploadReferenceFile', () => {
   it('keeps the base64 preview in memory until the durable upload settles', async () => {
@@ -63,7 +64,7 @@ describe('uploadReferenceFile', () => {
           fileName: 'ref.png',
         },
       },
-      { updateNodeData, triggerSave, uploadAsset },
+      { updateNodeData, triggerSave, uploadAsset, findExisting: noExistingAsset },
     );
 
     expect(nodeData).toMatchObject({
@@ -74,7 +75,9 @@ describe('uploadReferenceFile', () => {
     });
     expect(triggerSave).not.toHaveBeenCalled();
 
-    resolveUpload?.({
+    // The upload starts once the content lookup has missed.
+    while (!resolveUpload) await Promise.resolve();
+    resolveUpload({
       assetId: 'asset-1',
       versionId: '11111111-1111-4111-8111-111111111111',
       storagePath: 'brand-1/asset-1/ref.png',
@@ -114,7 +117,7 @@ describe('uploadReferenceFile', () => {
 
     const result = await uploadReferenceFile(
       { nodeId: 'n1', file: makeFile(), brandId: 'brand-1', field: 'image' },
-      { updateNodeData, triggerSave, uploadAsset },
+      { updateNodeData, triggerSave, uploadAsset, findExisting: noExistingAsset },
     );
 
     expect(result).toEqual({
@@ -153,7 +156,7 @@ describe('uploadReferenceFile', () => {
 
     await uploadReferenceFile(
       { nodeId: 'n1', file: makeFile(), brandId: 'brand-1', field: 'image' },
-      { updateNodeData, uploadAsset },
+      { updateNodeData, uploadAsset, findExisting: noExistingAsset },
     );
 
     expect(updates[1].assetId).toBe('asset-1');
@@ -172,7 +175,7 @@ describe('uploadReferenceFile', () => {
 
     await uploadReferenceFile(
       { nodeId: 'n1', file: makeFile(), brandId: 'b', field: 'video' },
-      { updateNodeData, uploadAsset },
+      { updateNodeData, uploadAsset, findExisting: noExistingAsset },
     );
 
     expect(updates[1]).toMatchObject({ video: 'https://x/v.mp4?t=1', referenceStatus: 'ready' });
@@ -188,7 +191,7 @@ describe('uploadReferenceFile', () => {
 
     const result = await uploadReferenceFile(
       { nodeId: 'n1', file: makeFile(), brandId: 'b' },
-      { updateNodeData, triggerSave, uploadAsset },
+      { updateNodeData, triggerSave, uploadAsset, findExisting: noExistingAsset },
     );
 
     expect(result).toBeNull();
@@ -198,5 +201,42 @@ describe('uploadReferenceFile', () => {
       referenceError: 'File exceeds 50 MB limit',
     });
     expect(triggerSave).not.toHaveBeenCalled();
+  });
+});
+
+describe('uploadReferenceFile with a file the brand already stores', () => {
+  it('points the node at the stored asset instead of uploading a second copy', async () => {
+    const uploadAsset = mock(async () => {
+      throw new Error('must not upload');
+    });
+    const findExisting = mock(async () => ({
+      assetId: 'existing-asset',
+      versionId: 'existing-version',
+      storagePath: 'brand-1/canvas-creations/1536x2752/calm-green-otter.jpg',
+      bucket: 'brand-profile-assets',
+      signedUrl: 'https://signed.example/existing',
+    }));
+    let nodeData: Record<string, unknown> = {};
+    const updateNodeData = mock((_id: string, patch: Record<string, unknown>) => {
+      nodeData = { ...nodeData, ...patch };
+    });
+    const triggerSave = mock(() => {});
+
+    const result = await uploadReferenceFile(
+      { nodeId: 'n1', file: makeFile(), brandId: 'brand-1', field: 'image' },
+      { updateNodeData, triggerSave, uploadAsset, findExisting },
+    );
+
+    expect(uploadAsset).not.toHaveBeenCalled();
+    expect(result?.bucket).toBe('brand-profile-assets');
+    expect(nodeData).toMatchObject({
+      image: 'https://signed.example/existing',
+      assetId: 'existing-asset',
+      assetVersionId: 'existing-version',
+      sourcePath: 'brand-1/canvas-creations/1536x2752/calm-green-otter.jpg',
+      bucket: 'brand-profile-assets',
+      referenceStatus: 'ready',
+    });
+    expect(triggerSave).toHaveBeenCalledTimes(1);
   });
 });

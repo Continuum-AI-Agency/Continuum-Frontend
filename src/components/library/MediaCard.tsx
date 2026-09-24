@@ -224,6 +224,9 @@ function Thumbnail({
   priority: boolean;
 }) {
   const [mediaError, setMediaError] = useState(false);
+  // A small derivative that fails to load (e.g. a transform quota) still has the
+  // original behind it; only give up once the original fails too.
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const preview = asset.preview?.state === 'ready' ? asset.preview : null;
 
   const companionFormat = formatUsesCompanionPreview(asset.fileName, asset.mimeType);
@@ -304,16 +307,25 @@ function Thumbnail({
     );
   }
 
+  // The thumbnail comes first: for an image with no rendition, `preview` is the full
+  // original, and a grid of ~3 MB originals is what the thumbnail exists to avoid.
+  const cardSrc = asset.thumbnailUrl ?? preview?.signedUrl;
   return (
     <>
       <Image
-        src={preview?.signedUrl ?? asset.signedUrl}
+        src={(thumbnailFailed ? null : cardSrc) ?? asset.signedUrl}
         alt={asset.title ?? asset.fileName}
         fill
         sizes={IMAGE_SIZES}
         priority={priority}
         className="object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
-        onError={() => setMediaError(true)}
+        onError={() => {
+          if (!thumbnailFailed && cardSrc) {
+            setThumbnailFailed(true);
+          } else {
+            setMediaError(true);
+          }
+        }}
       />
       {showBoundingBoxes && asset.detectedObjects.length > 0 && (
         <MediaBoundingBoxes objects={asset.detectedObjects} />

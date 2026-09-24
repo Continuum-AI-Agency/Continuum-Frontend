@@ -11,9 +11,15 @@
 //
 // Uploads go through the library-upload edge function (uploadMediaAsset): the
 // browser PUTs straight to storage and the row is registered server-side, so a
-// dropped reference also becomes a browsable library asset. Dependencies are
-// injected so the orchestration is testable without the network.
+// dropped reference also becomes a browsable library asset. A file whose exact
+// bytes the brand already stores (a downloaded output dropped back in) is not
+// uploaded again: the node points at the stored asset, as a Library drag does.
+// Dependencies are injected so the orchestration is testable without the network.
 
+import {
+  type ExistingAsset,
+  findExistingAssetByContent,
+} from '@/lib/library/findExistingAssetByContent';
 import { MEDIA_LIBRARY_BUCKET, uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import type { AudioNodeData, ImageNodeData, VideoNodeData } from '../types';
 
@@ -41,6 +47,7 @@ export interface UploadReferenceDeps {
     storagePath: string;
     signedUrl: string;
   }>;
+  findExisting?: (params: { file: File; brandId: string }) => Promise<ExistingAsset | null>;
 }
 
 export async function stageAndUploadReferenceFile(
@@ -64,18 +71,21 @@ export async function uploadReferenceFile(
   const { nodeId, file, brandId } = params;
   const field = params.field ?? 'image';
   const uploadAsset = deps.uploadAsset ?? ((p) => uploadMediaAsset(p));
+  const findExisting = deps.findExisting ?? ((p) => findExistingAssetByContent(p));
 
   deps.updateNodeData(nodeId, { referenceStatus: 'processing', referenceError: undefined });
   try {
     // The upload registers a library asset row; keeping its id on the node is what
     // lets a generation downstream be credited back to this reference.
-    const { assetId, versionId, storagePath, signedUrl } = await uploadAsset({ file, brandId });
+    const { assetId, versionId, storagePath, signedUrl, bucket } =
+      (await findExisting({ file, brandId })) ??
+      ({ ...(await uploadAsset({ file, brandId })), bucket: REFERENCE_UPLOAD_BUCKET } as const);
     deps.updateNodeData(nodeId, {
       [field]: signedUrl,
       assetId,
       assetVersionId: versionId,
       sourcePath: storagePath,
-      bucket: REFERENCE_UPLOAD_BUCKET,
+      bucket,
       sourceUrl: signedUrl,
       referenceStatus: 'ready',
       referenceError: undefined,
@@ -86,7 +96,7 @@ export async function uploadReferenceFile(
       assetVersionId: versionId,
       signedUrl,
       storagePath,
-      bucket: REFERENCE_UPLOAD_BUCKET,
+      bucket,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Upload failed';

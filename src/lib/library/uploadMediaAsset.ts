@@ -41,9 +41,10 @@ function resolveMimeType(file: File): string {
 }
 
 // sha256 hex of the file bytes, sent as `checksum` on register. Seeds the
-// future creative-DNA join against paid_media.content_hash. Fail-soft: a
+// future creative-DNA join against paid_media.content_hash, and is what a
+// re-dropped file is matched on (findExistingAssetByContent). Fail-soft: a
 // digest failure (e.g. a file too large to buffer) never blocks the upload.
-async function computeChecksum(file: File): Promise<string | null> {
+export async function computeChecksum(file: File): Promise<string | null> {
   if (file.size > MAX_BUFFERED_CHECKSUM_BYTES) return null;
   try {
     const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());

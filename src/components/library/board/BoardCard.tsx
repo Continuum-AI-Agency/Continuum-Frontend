@@ -12,9 +12,10 @@ import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
 
 function CardPreview({ asset }: { asset: MediaAsset }) {
+  // Thumbnail first: an image with no rendition reports its full original as `preview`.
   const previewUrl =
-    (asset.preview?.state === 'ready' ? asset.preview.signedUrl : null) ??
     asset.thumbnailUrl ??
+    (asset.preview?.state === 'ready' ? asset.preview.signedUrl : null) ??
     asset.signedUrl ??
     null;
   // A postered video is a still image on the board — no <video>, no video bytes.
