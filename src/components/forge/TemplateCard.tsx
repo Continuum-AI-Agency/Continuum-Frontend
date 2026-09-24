@@ -174,7 +174,7 @@ export function InlineRename({
         type="button"
         aria-label={`Rename ${value}`}
         onClick={begin}
-        className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/rename:opacity-100"
+        className="pointer-events-auto shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 group-hover/rename:opacity-100"
       >
         <Pencil className="size-3.5" aria-hidden />
       </button>
@@ -416,7 +416,7 @@ export function TemplateCard({
               type="button"
               aria-label={`Open ${name}`}
               onClick={onOpen}
-              className="absolute inset-0 z-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           }
         />
@@ -447,7 +447,11 @@ export function TemplateCard({
         </div>
       </TemplateMorph>
       <div className="pointer-events-none flex min-w-0 flex-col gap-2 p-3">
-        <InlineRename value={name} onRename={onRename} className="text-sm font-medium" />
+        <InlineRename
+          value={name}
+          onRename={onRename}
+          className="pointer-events-none z-20 text-sm font-medium"
+        />
         <div className="flex flex-wrap items-center gap-1">
           <TemplateStatusPill status={status} />
           <RatioChips ratios={source.ratios} />

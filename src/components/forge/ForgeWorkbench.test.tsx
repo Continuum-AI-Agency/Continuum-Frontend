@@ -245,6 +245,19 @@ describe('ForgeWorkbench', () => {
     }
   });
 
+  test('pending and failed source cards open their detail', async () => {
+    for (const parseState of ['pending', 'failed'] as const) {
+      fetchedSources = [
+        { ...SOURCE, parseState, parseError: parseState === 'failed' ? 'Could not parse' : null },
+      ];
+      const view = renderWorkbench();
+      fireEvent.click(await screen.findByRole('button', { name: 'Open Untitled template' }));
+      expect(await screen.findByRole('heading', { name: /Untitled template/ })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Templates' })).toBeTruthy();
+      view.unmount();
+    }
+  });
+
   test('reduced motion swaps the detail in outside a transition, so nothing cross-fades', async () => {
     reducedMotion = true;
     const transition = spyOn(React, 'startTransition');
