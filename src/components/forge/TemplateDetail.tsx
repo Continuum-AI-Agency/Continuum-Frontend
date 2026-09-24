@@ -320,6 +320,7 @@ export function TemplateDetail({
   const onAdvance = async (action: ForgeLadderAction) => {
     setBusy(action);
     try {
+      if (action === 'smoke') await advanceTemplateForgeRun(brandId, assetId, 'draft');
       await advanceTemplateForgeRun(brandId, assetId, action);
       await Promise.all([refreshRun(), onChanged()]);
     } catch (error) {

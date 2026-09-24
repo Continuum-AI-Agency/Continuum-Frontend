@@ -43,10 +43,22 @@ async function authorizedFetch(path: string, init?: RequestInit): Promise<Respon
   });
 }
 
+export function templateSourceErrorMessage(
+  code: string | undefined,
+  message: string,
+  what: string,
+): string {
+  if (code === 'DRAFT_REQUIRED') {
+    return 'Could not start the test render because the template draft is missing. Try again.';
+  }
+  return /nocobase/i.test(message) ? `${what} failed. Please try again.` : message;
+}
+
 async function unwrap<T>(response: Response, what: string): Promise<T> {
   if (!response.ok) {
     const detail = (await response.json().catch(() => ({}))) as { detail?: string; error?: string };
-    throw new Error(detail.detail ?? detail.error ?? `${what} failed (${response.status})`);
+    const message = detail.detail ?? detail.error ?? `${what} failed (${response.status})`;
+    throw new Error(templateSourceErrorMessage(detail.error, message, what));
   }
   return (await response.json()) as T;
 }
