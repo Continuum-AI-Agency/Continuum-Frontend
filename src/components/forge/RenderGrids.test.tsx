@@ -398,6 +398,11 @@ describe('RenderRequestsGrid', () => {
     expect(screen.getByRole<HTMLButtonElement>('button', { name: /Render 1/ }).disabled).toBe(true);
     // A value the server refuses is wrong, not missing.
     expect(screen.getByText('Invalid')).toBeTruthy();
+    // And it says WHY: the badge names the field and the reason the server gave. Without this
+    // the row is red with nothing to act on, so the reason gets retyped instead of read.
+    expect(screen.getByText('Invalid').getAttribute('title')).toBe(
+      'Headline: Use a permitted brand color.',
+    );
   });
 
   test('a blank required field reads Needs input, muted; only a wrong value reads Invalid', async () => {

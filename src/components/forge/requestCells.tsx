@@ -259,8 +259,19 @@ function Explained({ why, children }: { why: string; children: ReactNode }) {
   );
 }
 
-function StatusBadge({ row, invalid }: { row: RequestRow; invalid: boolean }) {
-  if (invalid) return <Badge variant="destructive">Invalid</Badge>;
+function StatusBadge({ row, invalidWhy }: { row: RequestRow; invalidWhy: string | null }) {
+  // "Invalid" used to be the one status in this cell that named no reason, while the row's
+  // errors were already in hand — Rejected has carried its message and Needs input its field
+  // list all along. A red badge nobody can act on is a row somebody deletes and retypes.
+  // `title`, like Rejected and Needs input beside it, rather than the richer Explained tooltip:
+  // the three statuses sit in one cell and a reason that appears differently per status reads
+  // as three different affordances.
+  if (invalidWhy)
+    return (
+      <Badge variant="destructive" title={invalidWhy}>
+        Invalid
+      </Badge>
+    );
   switch (row.check.state) {
     case 'checking':
       return (
@@ -881,9 +892,28 @@ export function EncodeCell({ row: { original: row }, table }: CellContext<Reques
   );
 }
 
+/**
+ * Why this row is invalid, in the words of the fields that are wrong.
+ *
+ * Capped, because a row can fail on every port it has and a tooltip listing nineteen of them
+ * is one nobody reads — the first few name the problem, the count says how much more there is.
+ */
+function invalidReason(
+  errors: Readonly<Record<string, string>>,
+  variables: readonly { key: string; label?: string | null }[],
+): string {
+  const named = Object.entries(errors).map(([key, message]) => {
+    const label = variables.find((item) => item.key === key)?.label ?? key;
+    return `${readableLayerName(label)}: ${message}`;
+  });
+  const shown = named.slice(0, 3).join(' · ');
+  return named.length > 3 ? `${shown} · and ${named.length - 3} more` : shown;
+}
+
 export function StatusCell({ row: { original: row }, table }: CellContext<RequestRow, unknown>) {
   const { contract, rows, clientErrors } = gridMeta(table);
-  const errorKeys = Object.keys(clientErrors.get(row.id) ?? {});
+  const errors = clientErrors.get(row.id) ?? {};
+  const errorKeys = Object.keys(errors);
   const missing = missingInputs(contract.variables, effectiveValues(rows, row.id));
   // Blank is not wrong: a row that is only waiting on required inputs reads muted, never red.
   if (errorKeys.length && errorKeys.every((key) => missing.includes(key))) {
@@ -896,7 +926,12 @@ export function StatusCell({ row: { original: row }, table }: CellContext<Reques
       </Badge>
     );
   }
-  return <StatusBadge row={row} invalid={errorKeys.length > 0} />;
+  return (
+    <StatusBadge
+      row={row}
+      invalidWhy={errorKeys.length > 0 ? invalidReason(errors, contract.variables) : null}
+    />
+  );
 }
 
 /**
