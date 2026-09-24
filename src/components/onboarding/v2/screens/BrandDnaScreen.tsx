@@ -1,11 +1,7 @@
 import { motion } from 'motion/react';
 import { useOnboarding } from '@/components/onboarding/providers/OnboardingContext';
 import { Skeleton } from '@/components/ui/skeleton';
-import type {
-  PreviewSection,
-  ReadinessAnalysis,
-  ReadinessFinding,
-} from '@/lib/onboarding/agentClient';
+import type { ReadinessAnalysis, ReadinessFinding } from '@/lib/onboarding/agentClient';
 import { AudienceDetail } from '../dna/AudienceDetail';
 import { BusinessFeatureChips } from '../dna/BusinessFeatureChips';
 import { CardSurface } from '../dna/CardSurface';
@@ -14,7 +10,7 @@ import { HorizontalRow } from '../dna/HorizontalRow';
 import { IdentityPanel } from '../dna/IdentityPanel';
 import { ProvenanceMark } from '../dna/RevealMarks';
 import { RunProgressBanner } from '../dna/RunProgressBanner';
-import { provenanceOf } from '../dna/reveal';
+import { provenanceOf, readableProse } from '../dna/reveal';
 import { StrategyGuidelinesRow } from '../dna/StrategyGuidelinesRow';
 import { UnderstandingCard } from '../dna/UnderstandingCard';
 import { VoiceDetail } from '../dna/VoiceDetail';
@@ -23,7 +19,7 @@ import { DimensionChip } from '../readiness/DimensionChip';
 import { FindingsStack } from '../readiness/FindingsStack';
 import { ReadinessHero, type ReadinessHeroStatus } from '../readiness/ReadinessHero';
 import { hostOf } from '../readiness/utils';
-import type { AgentPreviewBuckets, SectionStatus } from '../state/agentPreview';
+import type { AgentPreviewBuckets } from '../state/agentPreview';
 
 type BrandDnaScreenProps = {
   agentBuckets: AgentPreviewBuckets | null;
@@ -67,9 +63,6 @@ const heroEnter = {
   },
 };
 
-const isTerminal = (status: SectionStatus | undefined): boolean =>
-  status === 'done' || status === 'error' || status === 'skipped';
-
 const proseSkeleton = (
   <div className="space-y-2" role="status" aria-label="Drafting">
     <Skeleton className="h-3 w-3/4" />
@@ -95,15 +88,6 @@ function findingFor(
   return readiness?.findings?.find((f) => f.dimension === dim) ?? null;
 }
 
-function isTerminallyEmpty<T>(
-  buckets: AgentPreviewBuckets | null,
-  section: PreviewSection,
-  data: T | null | undefined,
-): boolean {
-  const status = buckets?.sectionStatus[section];
-  return (status === 'skipped' || status === 'error') && data == null;
-}
-
 export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: BrandDnaScreenProps) {
   const { state, updateState } = useOnboarding();
   const brand = state.brand;
@@ -114,33 +98,20 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
   const business = agentBuckets?.business;
   const heroStatement = agentBuckets?.website?.hero_statement;
 
-  // Skeleton-until-ready: while a section is still streaming we show its skeleton
-  // (never raw running text). `isEmpty` only counts the streamed draft once the
-  // section is terminal, so a parse failure degrades to the editable draft
-  // ("write your own") instead of either janking mid-stream or dropping info.
+  // Only parsed payloads and saved prose reach a card. A section without either shows
+  // its skeleton while the run is live and says why it is empty once it is not — never
+  // the model's streamed JSON, which is what an unparsed section used to fall back to.
   const voiceStatus = agentBuckets?.sectionStatus.voice;
-  const voiceDraft = agentBuckets?.voiceStream ?? '';
-  const voiceEmpty = !voice && !(isTerminal(voiceStatus) && voiceDraft.trim().length > 0);
 
   const businessStatus = agentBuckets?.sectionStatus.business;
-  const businessDraft = agentBuckets?.businessStream ?? '';
-  const businessEmpty =
-    !business &&
-    !brand.overview &&
-    !(isTerminal(businessStatus) && businessDraft.trim().length > 0);
-  const overviewValue =
-    brand.overview ||
-    business?.business_description ||
-    (isTerminal(businessStatus) ? businessDraft : '');
+  const savedOverview = readableProse(brand.overview);
+  const businessEmpty = !business && !savedOverview;
+  const overviewValue = savedOverview || business?.business_description || '';
 
   const audienceStatus = agentBuckets?.sectionStatus.audience;
-  const audienceDraft = agentBuckets?.audienceStream ?? '';
-  const audienceEmpty =
-    !audience &&
-    !brand.targetAudience &&
-    !(isTerminal(audienceStatus) && audienceDraft.trim().length > 0);
-  const audienceValue =
-    brand.targetAudience || audience?.summary || (isTerminal(audienceStatus) ? audienceDraft : '');
+  const savedAudience = readableProse(brand.targetAudience);
+  const audienceEmpty = !audience && !savedAudience;
+  const audienceValue = savedAudience || audience?.summary || '';
 
   const readiness: ReadinessAnalysis | null = brand.readiness ?? agentBuckets?.readiness ?? null;
   const loading = Boolean(readinessLoading) && !readiness;
@@ -153,13 +124,6 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
         : 'settled';
   const successfulCount = countSuccessfulSections(agentBuckets);
   const thinResult = settled && successfulCount < 3;
-
-  // A section still `idle` once the run has SETTLED is not loading — it is finished with
-  // nothing. A resumed snapshot carries no per-section status at all, so without this an
-  // empty voice breathes a skeleton for ever and never admits it found nothing, which is
-  // the same lie as a placeholder.
-  const resolvedStatus = (status: SectionStatus | undefined): SectionStatus | undefined =>
-    settled && (status === undefined || status === 'idle') ? 'skipped' : status;
 
   return (
     <motion.div
@@ -220,8 +184,10 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
           <CardSurface
             title="Business overview"
             badge="Core"
-            status={resolvedStatus(businessStatus)}
+            status={businessStatus}
             isEmpty={businessEmpty}
+            settled={settled}
+            onRetry={onRetry}
             minBodyHeight={140}
             maxBodyHeight={320}
             skeleton={proseSkeleton}
@@ -232,7 +198,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
                   field="business-overview"
                   provenance={provenanceOf(
                     overviewValue,
-                    brand.overview ? 'saved profile' : 'brand analysis',
+                    savedOverview ? 'saved profile' : 'brand analysis',
                   )}
                 />
                 <DimensionChip dim="value_proposition" readiness={readiness} loading={loading} />
@@ -259,8 +225,10 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
           <CardSurface
             title="Brand voice & tone"
             badge="Voice"
-            status={resolvedStatus(voiceStatus)}
-            isEmpty={voiceEmpty}
+            status={voiceStatus}
+            isEmpty={!voice}
+            settled={settled}
+            onRetry={onRetry}
             minBodyHeight={140}
             maxBodyHeight={320}
             skeleton={voiceSkeleton}
@@ -269,25 +237,23 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
               <>
                 <ProvenanceMark
                   field="brand-voice"
-                  provenance={provenanceOf(voice ?? voiceDraft, 'brand analysis')}
+                  provenance={provenanceOf(voice, 'brand analysis')}
                 />
                 <DimensionChip dim="positioning" readiness={readiness} loading={loading} />
               </>
             }
             findings={<FindingsStack findings={[findingFor(readiness, 'positioning')]} />}
           >
-            {voice ? (
-              <VoiceDetail voice={voice} />
-            ) : (
-              <p className="m-0 whitespace-pre-wrap text-sm text-muted-foreground">{voiceDraft}</p>
-            )}
+            {voice ? <VoiceDetail voice={voice} /> : null}
           </CardSurface>
 
           <CardSurface
             title="Target audience"
             badge="Audience"
-            status={resolvedStatus(audienceStatus)}
+            status={audienceStatus}
             isEmpty={audienceEmpty}
+            settled={settled}
+            onRetry={onRetry}
             minBodyHeight={140}
             maxBodyHeight={320}
             skeleton={proseSkeleton}
@@ -298,7 +264,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
                   field="target-audience"
                   provenance={provenanceOf(
                     audienceValue,
-                    brand.targetAudience ? 'saved profile' : 'brand analysis',
+                    savedAudience ? 'saved profile' : 'brand analysis',
                   )}
                 />
                 <DimensionChip dim="icp_clarity" readiness={readiness} loading={loading} />
@@ -325,15 +291,13 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
       </motion.div>
 
       <motion.div variants={card} className="mb-4">
-        <StrategyGuidelinesRow buckets={agentBuckets} settled={settled} />
+        <StrategyGuidelinesRow buckets={agentBuckets} settled={settled} onRetry={onRetry} />
       </motion.div>
 
       <motion.div variants={card} className="mb-4">
         <HorizontalRow label="Analysis" layout="grid">
-          {isTerminallyEmpty(agentBuckets, 'website', agentBuckets?.website) ? null : (
-            <WebsiteSummaryCard buckets={agentBuckets} />
-          )}
-          <UnderstandingCard buckets={agentBuckets} />
+          <WebsiteSummaryCard buckets={agentBuckets} settled={settled} onRetry={onRetry} />
+          <UnderstandingCard buckets={agentBuckets} settled={settled} onRetry={onRetry} />
         </HorizontalRow>
       </motion.div>
     </motion.div>

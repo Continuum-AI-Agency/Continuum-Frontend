@@ -709,6 +709,48 @@ export async function computePreviewInputHash(input: {
   return bytesToHex(new Uint8Array(digest));
 }
 
+type SectionParse<T> = { ok: true; data: T; dropped: string[] } | { ok: false; error: z.ZodError };
+
+const issuePath = (issue: z.core.$ZodIssue): string => issue.path.map(String).join('.') || '(root)';
+
+/**
+ * One bad field degrades that field, never the whole section. On a failed parse the
+ * offending top-level fields — or, inside an array, just the offending items — are
+ * dropped and the rest is parsed again. A payload that is wrong at its root, or whose
+ * bad field is one the schema requires, still fails.
+ */
+export function parseSectionPayload<S extends z.ZodType>(
+  schema: S,
+  data: unknown,
+): SectionParse<z.output<S>> {
+  const first = schema.safeParse(data);
+  if (first.success) return { ok: true, data: first.data, dropped: [] };
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+    return { ok: false, error: first.error };
+  }
+  const source = data as Record<string, unknown>;
+  const pruned: Record<string, unknown> = { ...source };
+  const badItems = new Map<string, Set<number>>();
+  for (const issue of first.error.issues) {
+    const [key, index] = issue.path;
+    if (typeof key !== 'string') return { ok: false, error: first.error };
+    if (Array.isArray(source[key]) && typeof index === 'number') {
+      badItems.set(key, (badItems.get(key) ?? new Set()).add(index));
+    } else {
+      delete pruned[key];
+    }
+  }
+  for (const [key, indices] of badItems) {
+    if (key in pruned) {
+      pruned[key] = (source[key] as unknown[]).filter((_, i) => !indices.has(i));
+    }
+  }
+  const second = schema.safeParse(pruned);
+  return second.success
+    ? { ok: true, data: second.data, dropped: first.error.issues.map(issuePath) }
+    : { ok: false, error: first.error };
+}
+
 async function consumePreviewStream(
   body: ReadableStream<Uint8Array>,
   options: {
@@ -728,70 +770,95 @@ async function consumePreviewStream(
     options.onEvent?.(event);
   };
 
-  // A single malformed section must never abort the whole stream — safeParse and
-  // skip the offending section, keeping every other section renderable.
-  const skipMalformedSection = (section: PreviewSection, error: z.ZodError) => {
-    console.warn('[agentClient] Malformed section data ignored', {
-      section,
-      issues: error.issues.map((i) => i.path.join('.')).join(', '),
-    });
+  // A malformed section must never abort the whole stream, and must never vanish
+  // either: it ends in `error`, so its card says so instead of drafting for ever. The
+  // Backend follows every `data` with `status: done`, so a section rejected here is
+  // remembered and that `done` is rewritten.
+  const rejectedSections = new Set<PreviewSection>();
+  const settledStatus = (section: PreviewSection, status: SectionStatusValue) =>
+    status === 'done' && rejectedSections.has(section) ? 'error' : status;
+
+  const parseSection = <S extends z.ZodType>(
+    section: PreviewSection,
+    schema: S,
+    data: unknown,
+  ): z.output<S> | undefined => {
+    const parsed = parseSectionPayload(schema, data);
+    if (!parsed.ok) {
+      rejectedSections.add(section);
+      console.warn('[agentClient] Section payload failed its schema; section marked error', {
+        section,
+        issues: parsed.error.issues.map((issue) => ({
+          path: issuePath(issue),
+          code: issue.code,
+          message: issue.message,
+        })),
+      });
+      dispatch({
+        type: 'status',
+        section,
+        status: 'error',
+        error: 'The section came back malformed.',
+      });
+      return undefined;
+    }
+    rejectedSections.delete(section);
+    if (parsed.dropped.length > 0) {
+      console.warn('[agentClient] Section payload degraded; invalid fields dropped', {
+        section,
+        dropped: parsed.dropped,
+      });
+    }
+    return parsed.data;
   };
 
   const handleDataEvent = (payload: z.infer<typeof previewDataEventSchema>) => {
     switch (payload.section) {
       case 'brand_profile': {
-        const parsed = agentBrandProfileSchema.safeParse(payload.data);
-        if (!parsed.success) return skipMalformedSection('brand_profile', parsed.error);
-        latestProfile = parsed.data;
-        dispatch({ type: 'brand_profile', payload: parsed.data });
+        const data = parseSection('brand_profile', agentBrandProfileSchema, payload.data);
+        if (data === undefined) return;
+        latestProfile = data;
+        dispatch({ type: 'brand_profile', payload: data });
         break;
       }
       case 'voice': {
-        const parsed = brandVoiceSchema.safeParse(payload.data);
-        if (!parsed.success) return skipMalformedSection('voice', parsed.error);
-        dispatch({ type: 'voice', payload: parsed.data });
+        const data = parseSection('voice', brandVoiceSchema, payload.data);
+        if (data !== undefined) dispatch({ type: 'voice', payload: data });
         break;
       }
       case 'audience': {
-        const parsed = targetAudienceSchema.safeParse(payload.data);
-        if (!parsed.success) return skipMalformedSection('audience', parsed.error);
-        dispatch({ type: 'audience', payload: parsed.data });
+        const data = parseSection('audience', targetAudienceSchema, payload.data);
+        if (data !== undefined) dispatch({ type: 'audience', payload: data });
         break;
       }
       case 'website': {
-        const parsed = websiteSummarySchema.nullable().safeParse(payload.data);
-        if (!parsed.success) return skipMalformedSection('website', parsed.error);
-        dispatch({ type: 'website', payload: parsed.data });
+        const data = parseSection('website', websiteSummarySchema.nullable(), payload.data);
+        if (data !== undefined) dispatch({ type: 'website', payload: data });
         break;
       }
       case 'business': {
-        const parsed = businessSummarySchema.nullable().safeParse(payload.data);
-        if (!parsed.success) return skipMalformedSection('business', parsed.error);
-        dispatch({ type: 'business', payload: parsed.data });
+        const data = parseSection('business', businessSummarySchema.nullable(), payload.data);
+        if (data !== undefined) dispatch({ type: 'business', payload: data });
         break;
       }
       case 'strategy': {
-        const parsed = brandStrategySchema.nullable().safeParse(payload.data);
-        if (!parsed.success) return skipMalformedSection('strategy', parsed.error);
-        dispatch({ type: 'strategy', payload: parsed.data });
+        const data = parseSection('strategy', brandStrategySchema.nullable(), payload.data);
+        if (data !== undefined) dispatch({ type: 'strategy', payload: data });
         break;
       }
       case 'guidelines': {
-        const parsed = brandGuidelinesSchema.nullable().safeParse(payload.data);
-        if (!parsed.success) return skipMalformedSection('guidelines', parsed.error);
-        dispatch({ type: 'guidelines', payload: parsed.data });
+        const data = parseSection('guidelines', brandGuidelinesSchema.nullable(), payload.data);
+        if (data !== undefined) dispatch({ type: 'guidelines', payload: data });
         break;
       }
       case 'readiness': {
-        const parsed = readinessAnalysisSchema.safeParse(payload.data);
-        if (!parsed.success) return skipMalformedSection('readiness', parsed.error);
-        dispatch({ type: 'readiness', payload: parsed.data });
+        const data = parseSection('readiness', readinessAnalysisSchema, payload.data);
+        if (data !== undefined) dispatch({ type: 'readiness', payload: data });
         break;
       }
       case 'first_impression': {
-        const parsed = firstImpressionSchema.safeParse(payload.data);
-        if (!parsed.success) return skipMalformedSection('first_impression', parsed.error);
-        dispatch({ type: 'first_impression', payload: parsed.data });
+        const data = parseSection('first_impression', firstImpressionSchema, payload.data);
+        if (data !== undefined) dispatch({ type: 'first_impression', payload: data });
         break;
       }
       default:
@@ -869,7 +936,7 @@ async function consumePreviewStream(
           dispatch({
             type: 'status',
             section: parsed.section,
-            status: parsed.status,
+            status: settledStatus(parsed.section, parsed.status),
             error: parsed.error,
             seq: parsed.seq,
           });
@@ -1012,7 +1079,7 @@ async function consumePreviewStream(
           dispatch({
             type: 'status',
             section: parsed.section,
-            status: parsed.status,
+            status: settledStatus(parsed.section, parsed.status),
             error: parsed.error,
             seq: parsed.seq,
           });

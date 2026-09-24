@@ -124,7 +124,7 @@ function patchFor(
     const brandPatch = {
       brandVoice: voiceText(b),
       targetAudience: audienceText(b),
-      overview: (b.business?.business_description ?? b.businessStream) || undefined,
+      overview: b.business?.business_description || undefined,
       tagline: b.website?.hero_statement ?? b.business?.business_cta ?? undefined,
       values: b.voice?.core_values ?? undefined,
       readiness: b.readiness ?? undefined,
@@ -143,15 +143,13 @@ function patchFor(
   return null;
 }
 
+// Only parsed payloads are saved. The stream deltas these once fell back to are the
+// model's half-written JSON, and 50 of 399 onboarding states carried one as prose.
 function voiceText(b: AgentPreviewBuckets): string | undefined {
-  if (b.voice) {
-    const parts = [b.voice.voice_style, b.voice.tone, b.voice.mission].filter(Boolean);
-    if (parts.length > 0) return parts.join(' — ');
-  }
-  return b.voiceStream || undefined;
+  const parts = [b.voice?.voice_style, b.voice?.tone, b.voice?.mission].filter(Boolean);
+  return parts.length > 0 ? parts.join(' — ') : undefined;
 }
 
 function audienceText(b: AgentPreviewBuckets): string | undefined {
-  if (b.audience?.summary) return b.audience.summary;
-  return b.audienceStream || undefined;
+  return b.audience?.summary || undefined;
 }

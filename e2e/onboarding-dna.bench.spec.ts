@@ -14,6 +14,14 @@ import {
   READINESS_PARTIAL,
   READINESS_V2,
 } from '../src/components/onboarding/v2/readiness/readiness.fixtures';
+import {
+  AUDIENCE_SUMMARY,
+  EXPECTED_PHASES,
+  KEPT_DEMOGRAPHIC,
+  SAVED_JSON_BRAND,
+  STREAM_REPLAY_EVENTS,
+  TRUNCATED_VOICE_DELTA,
+} from './fixtures/onboarding-dna/streamReplay';
 import { mintSessionForEmail } from './support/auth';
 import { type LocalBackend, startLocalBackend } from './support/localBackend';
 
@@ -54,10 +62,20 @@ import { type LocalBackend, startLocalBackend } from './support/localBackend';
 // real `/preview/:runId/events` SSE tail. The claim under test is that the radar leads
 // the reveal and that no confident number is ever drawn for what was not measured.
 //
+// The RENDER-INTEGRITY test replays a run that goes wrong every way prod has recorded
+// (`fixtures/onboarding-dna/streamReplay.ts`: a timed-out section with a truncated JSON
+// delta, a malformed payload, one bad field, a section still running when the run ends,
+// sections that never start) over the same real SSE tail, on top of an onboarding state
+// that SAVED model JSON as prose. The claim: no rendered text looks like JSON, every card
+// ends in content or an explicit error/unavailable state with a retry, no skeleton
+// outlives the run, and each parse failure is logged with its issue paths.
+//
 // UN-EXERCISED HOPS, STATED EXPLICITLY — this bench does NOT cover:
 //   · A live preview RUN. The agent workflow costs a model call per section and is not
 //     deterministic; the snapshot it persists is seeded directly and read back through the
 //     real Backend route, so the resume path is real end to end and the generation is not.
+//   · The RETRY itself. "Re-run analysis" is asserted present and enabled on every card
+//     that ended empty, but never clicked: it starts a live preview run.
 //   · The font STORE. Onboarding never reads it (see the comment in `dna/IdentityPanel`),
 //     so there is no `in the engine` badge on this surface to assert — which is precisely
 //     why NO specimen may be drawn here for ANY family.
@@ -128,6 +146,7 @@ const COMPLETED_RESULT = {
 function onboardingState(overrides: {
   colors: string[];
   typography: { primary: string | null; secondary: string | null };
+  brand?: Record<string, string | null>;
 }) {
   return {
     // The Brand DNA screen is reached by DATA FLOOR, not by a literal index: a sibling
@@ -152,6 +171,7 @@ function onboardingState(overrides: {
       readiness: null,
       understanding: null,
       audits: null,
+      ...overrides.brand,
     },
     documents: [],
     connections: {},
@@ -270,6 +290,56 @@ async function seedRunWithFailedReadiness(fixture: Fixture): Promise<void> {
         payload: event,
       })),
     )
+    .throwOnError();
+}
+
+/**
+ * A `running` run whose persisted events are `events`, replayed by the real SSE tail. It
+ * stays open until `endRun`: the heartbeat is set ahead so the reconciler, which reaps a
+ * run silent for 60s, cannot close it while a cold page is still compiling.
+ */
+async function seedRunningRun(
+  fixture: Fixture,
+  events: Array<Record<string, unknown>>,
+): Promise<string> {
+  const now = new Date().toISOString();
+  const { data: run } = await brandProfiles(admin())
+    .from('preview_runs')
+    .insert({
+      brand_id: fixture.brandId,
+      status: 'running',
+      prompt_version: 1,
+      input_hash: `dna-bench-${fixture.brandId}`,
+      started_at: now,
+      last_heartbeat_at: new Date(Date.now() + 5 * 60_000).toISOString(),
+    })
+    .select('id')
+    .single()
+    .throwOnError();
+  await brandProfiles(admin())
+    .from('preview_run_events')
+    .insert(
+      events.map((event, index) => ({
+        run_id: run.id,
+        sequence: index + 1,
+        kind: event.kind,
+        payload: event,
+      })),
+    )
+    .throwOnError();
+  return run.id;
+}
+
+/** The run ends the way the worker ends one; the SSE tail sees it and closes. */
+async function endRun(runId: string): Promise<void> {
+  await brandProfiles(admin())
+    .from('preview_runs')
+    .update({
+      status: 'partial',
+      completed_at: new Date().toISOString(),
+      result: { readiness: null },
+    })
+    .eq('id', runId)
     .throwOnError();
 }
 
@@ -408,6 +478,31 @@ async function specimenViolations(page: Page, families: string[]): Promise<strin
     return found;
   }, families);
 }
+
+/* -- the render-integrity scanners ---------------------------------------- */
+
+/** An object or array key being written: `{"tone":`, `[ "summary" :`. */
+const JSON_LIKE = /[{[]\s*"[a-z_]+"\s*:/i;
+
+/** Every rendered line of the reveal that looks like JSON — what a customer would read. */
+async function jsonLookingText(page: Page): Promise<string[]> {
+  const text = await page.locator('body').innerText();
+  return text.split('\n').filter((line) => JSON_LIKE.test(line));
+}
+
+async function cardPhases(page: Page): Promise<Record<string, string>> {
+  return page.evaluate(() =>
+    Object.fromEntries(
+      Array.from(document.querySelectorAll('[data-testid="dna-card"]'), (card) => [
+        card.getAttribute('data-card') ?? '',
+        card.getAttribute('data-phase') ?? '',
+      ]),
+    ),
+  );
+}
+
+const card = (page: Page, title: string): Locator =>
+  page.locator(`[data-testid="dna-card"][data-card="${title}"]`);
 
 /* -- the layout scanner ---------------------------------------------------- */
 
@@ -916,6 +1011,101 @@ test.describe('onboarding brand reveal — honesty', () => {
     } finally {
       await opened?.context.close();
       await teardown(opened?.fixture ?? null);
+    }
+  });
+
+  test('a run that breaks every way prod has seen renders no JSON and no endless skeleton', async ({
+    browser,
+  }, testInfo) => {
+    testInfo.setTimeout(300_000);
+    let fixture: Fixture | null = null;
+    let context: BrowserContext | null = null;
+    try {
+      fixture = await provision('stream');
+      await seedOnboardingState(fixture, {
+        colors: [],
+        typography: { primary: null, secondary: null },
+        brand: SAVED_JSON_BRAND,
+      });
+      const runId = await seedRunningRun(fixture, STREAM_REPLAY_EVENTS);
+
+      const storageState = await mintSessionForEmail(fixture.email);
+      context = await browser.newContext({ viewport: { width: 1500, height: 1100 } });
+      await context.addCookies(storageState.cookies);
+      const page = await context.newPage();
+      const warnings: Array<Promise<unknown>> = [];
+      page.on('console', (message) => {
+        if (message.type() !== 'warning' || !message.text().includes('[agentClient]')) return;
+        warnings.push(Promise.all(message.args().map((arg) => arg.jsonValue())));
+      });
+      await page.goto(`/onboarding?brand=${fixture.brandId}`, { waitUntil: 'domcontentloaded' });
+      await expect(page.getByTestId('brand-dna-identity')).toBeVisible({ timeout: 120_000 });
+
+      // LIVE: the replay has landed and the run is still open. The truncated deltas are in
+      // the stream, and none of them is on screen.
+      await expect(card(page, 'Target audience')).toHaveAttribute('data-phase', 'content', {
+        timeout: 60_000,
+      });
+      await expect(card(page, 'Target audience')).toContainText(AUDIENCE_SUMMARY);
+      await expect(card(page, 'Target audience')).toContainText(KEPT_DEMOGRAPHIC);
+      await expect(card(page, 'Brand voice & tone')).toHaveAttribute('data-phase', 'error');
+      await expect(card(page, 'Business overview')).toHaveAttribute('data-phase', 'error');
+      await expect(card(page, 'Website summary')).toHaveAttribute('data-phase', 'loading');
+      expect(await jsonLookingText(page)).toEqual([]);
+
+      // The run ends. Nothing still pending is coming, so nothing may keep drafting.
+      await endRun(runId);
+      await expect
+        .poll(() => cardPhases(page), { timeout: 60_000, intervals: [500, 1_000] })
+        .toEqual(EXPECTED_PHASES);
+      await expect(page.locator('[role="status"][aria-label="Drafting"]')).toHaveCount(0);
+      expect(await jsonLookingText(page)).toEqual([]);
+
+      // Every card that ended empty says so and offers the way back.
+      for (const [title, phase] of Object.entries(EXPECTED_PHASES)) {
+        if (phase === 'content') continue;
+        const retry = card(page, title).getByRole('button', { name: 'Re-run analysis' });
+        await expect(retry, `${title} offers a retry`).toBeVisible();
+        await expect(retry).toBeEnabled();
+      }
+      await expect(card(page, 'Brand voice & tone')).toContainText(
+        "We couldn't finish this section.",
+      );
+      await expect(card(page, 'Guidelines')).toContainText('Nothing came back for this section.');
+
+      // Each parse failure was logged with the paths that failed, not swallowed.
+      const logged = (await Promise.all(warnings)) as Array<[string, Record<string, unknown>]>;
+      const rejected = logged.find(
+        ([message, detail]) =>
+          message.includes('failed its schema') && detail?.section === 'business',
+      )?.[1] as { issues: Array<{ path: string }> } | undefined;
+      expect(rejected?.issues.map((issue) => issue.path)).toEqual(
+        expect.arrayContaining(['business_name', 'business_description']),
+      );
+      const degraded = logged.find(
+        ([message, detail]) =>
+          message.includes('invalid fields dropped') && detail?.section === 'audience',
+      )?.[1] as { dropped: string[] } | undefined;
+      expect(degraded?.dropped).toEqual(expect.arrayContaining(['segments.1.name']));
+
+      mkdirSync(READINESS_SHOT_DIR, { recursive: true });
+      const shot = join(READINESS_SHOT_DIR, 'stream-replay-ended.png');
+      await page.screenshot({ path: shot, fullPage: true, animations: 'disabled' });
+      console.log(`[onboarding:dna:bench] stream-replay screenshot: ${shot}`);
+
+      /* NEGATIVE CONTROL — put the old stream fallback back and prove the scanner sees it. */
+      await card(page, 'Brand voice & tone').evaluate((node, delta) => {
+        const draft = document.createElement('p');
+        draft.id = 'negative-control-draft';
+        draft.textContent = delta;
+        node.appendChild(draft);
+      }, TRUNCATED_VOICE_DELTA);
+      expect((await jsonLookingText(page)).length).toBeGreaterThan(0);
+      await page.evaluate(() => document.getElementById('negative-control-draft')?.remove());
+      expect(await jsonLookingText(page)).toEqual([]);
+    } finally {
+      await context?.close();
+      await teardown(fixture);
     }
   });
 
