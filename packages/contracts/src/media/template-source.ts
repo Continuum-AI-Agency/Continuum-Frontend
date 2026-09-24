@@ -17,24 +17,35 @@ import { type FontLicenceScope, fontLicenceScopeSchema } from './fonts';
 /**
  * The largest project file the Forge can actually accept, in bytes — the ONE number.
  *
- * There are four ceilings on this path and only the smallest is ever real:
+ * There are four ceilings on this path and only the smallest is ever real. Measured against the
+ * live project on 2026-09-23, via the Management API and `storage.buckets`:
  *
  * | Ceiling | Value | Binding? |
  * |---|---|---|
- * | Supabase **project-global** upload limit (Settings → Storage) | 50 MB | **yes, today** |
- * | `storage.buckets.file_size_limit` for `media-source` | 5 GB | no — the global silently overrides it |
- * | Template Forge's own package limit | 250 MB | only once the global is raised above it |
- * | `library-upload`'s register-time refusal | this constant | mirrors it by hand |
+ * | Supabase **project-global** upload limit (Settings → Storage) | 500 MB | no |
+ * | `storage.buckets.file_size_limit` for `media-source` | 5 GB | no |
+ * | Template Forge's own package limit | 250 MB | at the same number as this constant |
+ * | `library-upload`'s register-time refusal | this constant | **yes, once deployed** |
  *
- * The project-global cap is readable from neither SQL nor the browser — only the Management
- * API — which is why it was copied by hand into the drop zone and then drifted from the two
- * bench scripts and the edge function, giving four different answers to one question.
+ * The project-global cap was the binding one while it sat at 50 MB and nothing in this project
+ * had ever stored an object over 46.8 MB. It is readable from neither SQL nor the browser — only
+ * the Management API — which is why it was copied by hand into the drop zone and then drifted
+ * from the two bench scripts and the edge function, giving four different answers to one
+ * question. Read it before believing this table:
+ *
+ *   curl -H "Authorization: Bearer $TOKEN" \
+ *     https://api.supabase.com/v1/projects/<ref>/config/storage
+ *
+ * And the edge function's copy is only as real as its last deploy: on 2026-09-23 the LIVE
+ * function still held 5 GB (its pre-2026-09-20 value) while this repo had said 50 MB for days,
+ * so the only thing that ever refused an 85 MB package was the project-global cap. A committed
+ * ceiling is not an enforced one.
  *
  * So this number is NOT trusted: `forge:intake:e2e:bench` proves the effective ceiling
- * empirically by pushing one byte over it and requiring storage to refuse. Change this when
+ * empirically by pushing one byte over it and requiring the upload to refuse. Change this when
  * the dashboard changes and let the bench tell you if you are wrong.
  */
-export const FORGE_PROJECT_FILE_MAX_BYTES = 50 * 1024 * 1024;
+export const FORGE_PROJECT_FILE_MAX_BYTES = 250 * 1024 * 1024;
 
 /** The same ceiling in whole MB, for the sentence a refusal shows a person. */
 export const FORGE_PROJECT_FILE_MAX_MB = Math.floor(FORGE_PROJECT_FILE_MAX_BYTES / (1024 * 1024));
