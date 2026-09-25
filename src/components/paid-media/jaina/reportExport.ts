@@ -1,7 +1,9 @@
 import {
+  formatFigure,
   type JainaSheetsExportRequest,
   type JainaSheetsExportResponse,
   jainaSheetsExportRequestSchema,
+  renderFigureRefs,
   stripProseMarks,
 } from '@continuum/contracts';
 import { ApiError } from '@/lib/api/errors';
@@ -251,6 +253,29 @@ function projectV2Block(block: CheckpointReportV2['blocks'][number]): SheetCandi
           ['Term', block.term],
           ['Used', block.used],
           ...block.alternatives.map((alt) => ['Alternative', alt]),
+        ],
+      };
+    // The sentence as the reader saw it, then every figure it rests on with its read.
+    case 'answer_template':
+      return {
+        title: block.title,
+        rows: [
+          [
+            'Answer',
+            renderFigureRefs(block.executive.sentence, block.figures, formatFigure, {
+              onUnresolved: 'mark',
+            }).text,
+          ],
+          ['Figure', 'Value', 'Unit', 'Currency', 'Window', 'Source', 'Derivation'],
+          ...block.figures.map((figure) => [
+            figure.label,
+            figure.value,
+            figure.unit,
+            figure.currency,
+            `${figure.window.since} → ${figure.window.until}`,
+            `${figure.source.tool} · ${figure.source.datasetId}`,
+            figure.derivation,
+          ]),
         ],
       };
   }

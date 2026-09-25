@@ -35,6 +35,11 @@ import {
   openJainaReportMailDraft,
   shareJainaReportFile,
 } from '../reportExport';
+import {
+  isAnswerTemplateBlock,
+  TemplateExecutive,
+  TemplateJustification,
+} from '../templates/TemplateBlock';
 import { JainaJustificationSection, partitionReportBlocks } from './JainaJustificationSection';
 import { SaveDashboardButton } from './SaveDashboardButton';
 
@@ -165,6 +170,7 @@ export function JainaReportV2({
   // on go under the justification. Each keeps the order above; exports, saved dashboards
   // and the module toggles still read the full `visibleBlocks` / `report.blocks`.
   const sections = useMemo(() => partitionReportBlocks(visibleBlocks), [visibleBlocks]);
+  const templateBlocks = sections.answer.filter(isAnswerTemplateBlock);
 
   const hasMedia = report._meta.has_media && Object.keys(report.media_map).length > 0;
   // Derived from the rendered blocks rather than `_meta.has_citations` (the FE
@@ -311,9 +317,15 @@ export function JainaReportV2({
         {/* The rest of the answer — the reading, the moves — set as part of it. */}
         {sections.answer.length > 0 ? (
           <div data-report-section="answer" className="space-y-4">
-            {sections.answer.map((block) => (
-              <BlockRenderer key={block.block_id} block={block} isStreaming={isStreaming} />
-            ))}
+            {/* A templated answer puts its sentence and chart here and its steps under the
+             *  justification below — the same answer/justification split as every block. */}
+            {sections.answer.map((block) =>
+              isAnswerTemplateBlock(block) ? (
+                <TemplateExecutive key={block.block_id} block={block} />
+              ) : (
+                <BlockRenderer key={block.block_id} block={block} isStreaming={isStreaming} />
+              ),
+            )}
           </div>
         ) : null}
 
@@ -323,6 +335,13 @@ export function JainaReportV2({
         <JainaJustificationSection
           blocks={sections.justification}
           renderBlock={(block) => <BlockRenderer block={block} isStreaming={isStreaming} />}
+          leading={
+            templateBlocks.length > 0
+              ? templateBlocks.map((block) => (
+                  <TemplateJustification key={block.block_id} block={block} />
+                ))
+              : undefined
+          }
         />
 
         {/* Chrome, so it sits under the thing it controls. A row of toggles named after

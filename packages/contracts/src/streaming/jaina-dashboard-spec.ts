@@ -130,6 +130,7 @@ const arr = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 const NOT_A_FETCH: Partial<Record<BlockCategory, string>> = {
   data_scope: 'the scope frame is composed from the other blocks, not fetched',
   survey: 'a survey is a question to the reader, not a fetch',
+  answer_template: 'a templated answer is composed from every read of its turn, not one fetch',
 };
 
 const DERIVED_BY_CATEGORY: Record<BlockCategory, DashboardDerived | null> = {
@@ -143,6 +144,7 @@ const DERIVED_BY_CATEGORY: Record<BlockCategory, DashboardDerived | null> = {
   data_table: null,
   data_scope: null,
   survey: null,
+  answer_template: null,
 };
 
 const ACCOUNT_LABEL = /^(?:act_|account-)(\d+)$/i;

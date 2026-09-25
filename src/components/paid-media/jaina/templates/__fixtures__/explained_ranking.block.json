@@ -1,0 +1,676 @@
+{
+  "block_id": "answer_template_explained_ranking",
+  "category": "answer_template",
+  "scope": "account",
+  "title": "Ranking de campañas",
+  "priority": "primary",
+  "provenance": {
+    "source": "computed",
+    "tool": "get_key_metrics",
+    "period": {
+      "since": "2026-09-01",
+      "until": "2026-09-25",
+      "requested_label": "this_month"
+    },
+    "entity_label": null,
+    "record_count": 25
+  },
+  "grounding": null,
+  "template_id": "explained_ranking",
+  "layout": "steps",
+  "executive": {
+    "sentence": "SEDE C // MENSAJES // AGOSTO 2026 es la que mejor rinde este mes: consigue compras a {cpr_1}, {gap_avg_1} más barato que el promedio de la cuenta ({cpr_avg}).",
+    "hero_chart": {
+      "kind": "bar_horizontal",
+      "title": "Costo por compra por campaña",
+      "caption": "Costo por compra de este mes contra el promedio de la cuenta. Menos es mejor.",
+      "points": [
+        {
+          "label": "SEDE C // MENSAJES // AGOSTO 2026",
+          "figure_id": "cpr_1",
+          "entity_id": "900000000000000003",
+          "emphasis": true
+        },
+        {
+          "label": "SEDE A // MENSAJES // AGOSTO 2026",
+          "figure_id": "cpr_2",
+          "entity_id": "900000000000000001",
+          "emphasis": false
+        },
+        {
+          "label": "SEDE B // MENSAJES // AGOSTO 2026",
+          "figure_id": "cpr_3",
+          "entity_id": "900000000000000002",
+          "emphasis": false
+        },
+        {
+          "label": "SEDE D // MENSAJES // AGOSTO 2026",
+          "figure_id": "cpr_4",
+          "entity_id": "900000000000000004",
+          "emphasis": false
+        }
+      ],
+      "reference": {
+        "label": "promedio de la cuenta",
+        "figure_id": "cpr_avg"
+      },
+      "lower_is_better": true
+    }
+  },
+  "justification": {
+    "sections": [
+      {
+        "kind": "measured",
+        "title": "Qué medimos",
+        "text": "Leímos gasto y compras de las {campaigns_read} campañas con gasto en este mes, a nivel campaña: {spend_total} y {results_total} compras en total.",
+        "chart": null,
+        "table": null,
+        "items": []
+      },
+      {
+        "kind": "found",
+        "title": "Qué encontramos",
+        "text": "SEDE C // MENSAJES // AGOSTO 2026 consigue compras a {cpr_1}; el promedio de la cuenta es {cpr_avg}.",
+        "chart": null,
+        "table": {
+          "columns": [
+            {
+              "key": "results",
+              "label": "Compras"
+            },
+            {
+              "key": "spend",
+              "label": "Gasto"
+            },
+            {
+              "key": "cpr",
+              "label": "Costo por compra"
+            },
+            {
+              "key": "gap",
+              "label": "vs promedio"
+            }
+          ],
+          "rows": [
+            {
+              "label": "SEDE C // MENSAJES // AGOSTO 2026",
+              "entity_id": "900000000000000003",
+              "cells": {
+                "results": "results_1",
+                "spend": "spend_1",
+                "cpr": "cpr_1",
+                "gap": "gap_avg_1"
+              }
+            },
+            {
+              "label": "SEDE A // MENSAJES // AGOSTO 2026",
+              "entity_id": "900000000000000001",
+              "cells": {
+                "results": "results_2",
+                "spend": "spend_2",
+                "cpr": "cpr_2",
+                "gap": "gap_avg_2"
+              }
+            },
+            {
+              "label": "SEDE B // MENSAJES // AGOSTO 2026",
+              "entity_id": "900000000000000002",
+              "cells": {
+                "results": "results_3",
+                "spend": "spend_3",
+                "cpr": "cpr_3",
+                "gap": "gap_avg_3"
+              }
+            },
+            {
+              "label": "SEDE D // MENSAJES // AGOSTO 2026",
+              "entity_id": "900000000000000004",
+              "cells": {
+                "results": "results_4",
+                "spend": "spend_4",
+                "cpr": "cpr_4",
+                "gap": "gap_avg_4"
+              }
+            }
+          ]
+        },
+        "items": [
+          {
+            "id": "rank_1",
+            "title": "SEDE C // MENSAJES // AGOSTO 2026",
+            "entity_id": "900000000000000003",
+            "badge_figure_id": "cpr_1",
+            "detail_figure_ids": [
+              "results_1",
+              "spend_1"
+            ],
+            "text": "Consigue compras a {cpr_1}, {gap_avg_1} más barato que el promedio de la cuenta ({cpr_avg}): {results_1} compras con {spend_1}.",
+            "tone": "good"
+          },
+          {
+            "id": "rank_2",
+            "title": "SEDE A // MENSAJES // AGOSTO 2026",
+            "entity_id": "900000000000000001",
+            "badge_figure_id": "cpr_2",
+            "detail_figure_ids": [
+              "results_2",
+              "spend_2"
+            ],
+            "text": "Consigue compras a {cpr_2}, {gap_avg_2} más barato que el promedio de la cuenta ({cpr_avg}): {results_2} compras con {spend_2}.",
+            "tone": "good"
+          },
+          {
+            "id": "rank_3",
+            "title": "SEDE B // MENSAJES // AGOSTO 2026",
+            "entity_id": "900000000000000002",
+            "badge_figure_id": "cpr_3",
+            "detail_figure_ids": [
+              "results_3",
+              "spend_3"
+            ],
+            "text": "Consigue compras a {cpr_3}, {gap_avg_3} más barato que el promedio de la cuenta ({cpr_avg}): {results_3} compras con {spend_3}.",
+            "tone": "good"
+          },
+          {
+            "id": "rank_4",
+            "title": "SEDE D // MENSAJES // AGOSTO 2026",
+            "entity_id": "900000000000000004",
+            "badge_figure_id": "cpr_4",
+            "detail_figure_ids": [
+              "results_4",
+              "spend_4"
+            ],
+            "text": "Consigue compras a {cpr_4}, {gap_avg_4} más caro que el promedio de la cuenta ({cpr_avg}): {results_4} compras con {spend_4}.",
+            "tone": "bad"
+          }
+        ]
+      },
+      {
+        "kind": "why",
+        "title": "Por qué este orden",
+        "text": "Ordenamos por costo por compra (gasto ÷ compras) y solo campañas con al menos {min_results} compras, para que el orden no dependa de unos pocos resultados; {campaigns_unranked} quedaron fuera. Con {results_1} compras, el costo de SEDE C // MENSAJES // AGOSTO 2026 está entre {cpr_1_lo} y {cpr_1_hi} (intervalo exacto de Poisson al 95%). Ordenando por volumen de compras el primer lugar es el mismo ({results_volume_leader}), así que no depende del criterio.",
+        "chart": null,
+        "table": null,
+        "items": []
+      }
+    ]
+  },
+  "figures": [
+    {
+      "id": "spend_total",
+      "label": "Gasto · total",
+      "value": 64229.82,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "sum(spend) over 16 campaigns"
+    },
+    {
+      "id": "results_total",
+      "label": "compras · total",
+      "value": 171,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "sum(purchases) over 16 campaigns"
+    },
+    {
+      "id": "cpr_avg",
+      "label": "Costo por compra · promedio de la cuenta",
+      "value": 375.61298245614034,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "sum(spend) / sum(purchases) over every campaign in the read"
+    },
+    {
+      "id": "campaigns_read",
+      "label": "campaigns read",
+      "value": 16,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "campaigns with spend in the window"
+    },
+    {
+      "id": "min_results",
+      "label": "minimum results to rank",
+      "value": 10,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "ranking rule"
+    },
+    {
+      "id": "campaigns_unranked",
+      "label": "campaigns below the minimum",
+      "value": 12,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "campaigns with fewer than 10 purchases"
+    },
+    {
+      "id": "cpr_1",
+      "label": "Costo por compra · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 248.7291379310345,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": "spend / purchases"
+    },
+    {
+      "id": "results_1",
+      "label": "compras · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 58,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": null
+    },
+    {
+      "id": "spend_1",
+      "label": "Gasto · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 14426.29,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": null
+    },
+    {
+      "id": "gap_avg_1",
+      "label": "vs promedio · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 0.33780473639491904,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": "|cpr_1 / cpr_avg − 1|"
+    },
+    {
+      "id": "cpr_2",
+      "label": "Costo por compra · SEDE A // MENSAJES // AGOSTO 2026",
+      "value": 356.3155555555556,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000001"
+      },
+      "derivation": "spend / purchases"
+    },
+    {
+      "id": "results_2",
+      "label": "compras · SEDE A // MENSAJES // AGOSTO 2026",
+      "value": 36,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000001"
+      },
+      "derivation": null
+    },
+    {
+      "id": "spend_2",
+      "label": "Gasto · SEDE A // MENSAJES // AGOSTO 2026",
+      "value": 12827.36,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000001"
+      },
+      "derivation": null
+    },
+    {
+      "id": "gap_avg_2",
+      "label": "vs promedio · SEDE A // MENSAJES // AGOSTO 2026",
+      "value": 0.05137582512297234,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000001"
+      },
+      "derivation": "|cpr_2 / cpr_avg − 1|"
+    },
+    {
+      "id": "cpr_3",
+      "label": "Costo por compra · SEDE B // MENSAJES // AGOSTO 2026",
+      "value": 372.08621621621626,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000002"
+      },
+      "derivation": "spend / purchases"
+    },
+    {
+      "id": "results_3",
+      "label": "compras · SEDE B // MENSAJES // AGOSTO 2026",
+      "value": 37,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000002"
+      },
+      "derivation": null
+    },
+    {
+      "id": "spend_3",
+      "label": "Gasto · SEDE B // MENSAJES // AGOSTO 2026",
+      "value": 13767.19,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000002"
+      },
+      "derivation": null
+    },
+    {
+      "id": "gap_avg_3",
+      "label": "vs promedio · SEDE B // MENSAJES // AGOSTO 2026",
+      "value": 0.009389361935422169,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000002"
+      },
+      "derivation": "|cpr_3 / cpr_avg − 1|"
+    },
+    {
+      "id": "cpr_4",
+      "label": "Costo por compra · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 778.2768749999997,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": "spend / purchases"
+    },
+    {
+      "id": "results_4",
+      "label": "compras · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 16,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": null
+    },
+    {
+      "id": "spend_4",
+      "label": "Gasto · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 12452.429999999995,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": null
+    },
+    {
+      "id": "gap_avg_4",
+      "label": "vs promedio · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 1.072018038116874,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": "|cpr_4 / cpr_avg − 1|"
+    },
+    {
+      "id": "cpr_1_lo",
+      "label": "Costo por compra · SEDE C // MENSAJES // AGOSTO 2026 · 95% low",
+      "value": 192.40498663549508,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": "spend / Garwood 95% upper bound on purchases"
+    },
+    {
+      "id": "cpr_1_hi",
+      "label": "Costo por compra · SEDE C // MENSAJES // AGOSTO 2026 · 95% high",
+      "value": 327.5605056925886,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": "spend / Garwood 95% lower bound on purchases"
+    },
+    {
+      "id": "results_volume_leader",
+      "label": "compras · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 58,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": null
+    }
+  ],
+  "fallback_from": null
+}

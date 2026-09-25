@@ -9,6 +9,11 @@ import {
   JainaJustificationSection,
   partitionReportBlocks,
 } from '../components/JainaJustificationSection';
+import {
+  isAnswerTemplateBlock,
+  TemplateExecutive,
+  TemplateJustification,
+} from '../templates/TemplateBlock';
 
 // The paper layout for a Jaina report.
 //
@@ -74,6 +79,7 @@ export function JainaReportDocument({
   const computedCount = blocks.filter((block) => block.provenance?.source === 'computed').length;
   const hasMedia = report._meta.has_media && Object.keys(report.media_map).length > 0;
   const sections = partitionReportBlocks(blocks);
+  const templateBlocks = sections.answer.filter(isAnswerTemplateBlock);
   const renderExportBlock = (block: CheckpointBlockV2) => (
     <section
       key={block.block_id}
@@ -81,7 +87,11 @@ export function JainaReportDocument({
       data-block-id={block.block_id}
       data-category={block.category}
     >
-      <BlockRenderer block={block} isStreaming={false} />
+      {isAnswerTemplateBlock(block) ? (
+        <TemplateExecutive block={block} />
+      ) : (
+        <BlockRenderer block={block} isStreaming={false} />
+      )}
     </section>
   );
 
@@ -112,7 +122,24 @@ export function JainaReportDocument({
         <div data-report-section="answer">{sections.answer.map(renderExportBlock)}</div>
       ) : null}
 
-      <JainaJustificationSection blocks={sections.justification} renderBlock={renderExportBlock} />
+      <JainaJustificationSection
+        blocks={sections.justification}
+        renderBlock={renderExportBlock}
+        leading={
+          templateBlocks.length > 0
+            ? templateBlocks.map((block) => (
+                <section
+                  key={block.block_id}
+                  className="jaina-export-block"
+                  data-block-id={`${block.block_id}:justification`}
+                  data-category={block.category}
+                >
+                  <TemplateJustification block={block} />
+                </section>
+              ))
+            : undefined
+        }
+      />
 
       <footer className="jaina-export-footer">
         <span>

@@ -14,6 +14,7 @@ export * from './jaina-dashboard';
 export * from './jaina-dashboard-spec';
 export * from './jaina-report';
 export * from './jaina-scaffold';
+export * from './jaina-templates';
 export * from './jaina-ui';
 export * from './media';
 export * from './ndjson';

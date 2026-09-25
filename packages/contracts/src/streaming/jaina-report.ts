@@ -22,6 +22,8 @@
 
 import { z } from 'zod';
 import { percentBasisSchema } from './dataset';
+import { answerTemplatePayloadShape } from './jaina-templates/core';
+import { validateTemplateBlock } from './jaina-templates/validate';
 
 // ---------------------------------------------------------------------------
 // Shared item schemas referenced by multiple block variants
@@ -98,6 +100,8 @@ export const blockCategorySchema = z.enum([
   'actions',
   'goal_pacing',
   'survey',
+  // A templated answer: composed by code from the turn's reads, narrated through figure refs.
+  'answer_template',
 ]);
 export type BlockCategory = z.infer<typeof blockCategorySchema>;
 
@@ -114,6 +118,7 @@ const SECTION_OF_BLOCK_CATEGORY: Record<BlockCategory, JainaReportSection> = {
   insight_list: 'answer',
   actions: 'answer',
   survey: 'answer',
+  answer_template: 'answer',
   data_scope: 'justification',
   metric_grid: 'justification',
   chart: 'justification',
@@ -610,6 +615,18 @@ export const surveyBlockSchema = blockBaseSchema.extend({
 });
 export type SurveyBlock = z.infer<typeof surveyBlockSchema>;
 
+// ---------------------------------------------------------------------------
+// Answer template — a whole answer in one block: the executive sentence and its chart, the
+// justification sections, and the figures both read from (`jaina-templates/`). Every number
+// is a figure with a source; prose holds `{figure_id}` refs, never digits of its own.
+// ---------------------------------------------------------------------------
+
+export const answerTemplateBlockSchema = blockBaseSchema.extend({
+  category: z.literal('answer_template'),
+  ...answerTemplatePayloadShape,
+});
+export type AnswerTemplateBlock = z.infer<typeof answerTemplateBlockSchema>;
+
 const checkpointBlockV2UnionSchema = z.discriminatedUnion('category', [
   narrativeBlockSchema,
   metricGridBlockSchema,
@@ -621,6 +638,7 @@ const checkpointBlockV2UnionSchema = z.discriminatedUnion('category', [
   actionsBlockSchema,
   goalPacingBlockSchema,
   surveyBlockSchema,
+  answerTemplateBlockSchema,
 ]);
 
 export const checkpointBlockV2Schema = checkpointBlockV2UnionSchema.superRefine((block, ctx) => {
@@ -708,7 +726,8 @@ export type ReportViolation = {
     | 'table_totals_missing'
     | 'action_entity_is_account'
     | 'claim_without_source'
-    | 'claim_uncited';
+    | 'claim_uncited'
+    | 'answer_template_invalid';
   block_id: string | null;
   message: string;
 };
@@ -1679,6 +1698,15 @@ export function validateReport(
           code: 'table_totals_missing',
           block_id: b.block_id,
           message: 'A money table with two or more entities needs a totals row.',
+        });
+      }
+    }
+    if (b.category === 'answer_template') {
+      for (const violation of validateTemplateBlock(b)) {
+        out.push({
+          code: 'answer_template_invalid',
+          block_id: b.block_id,
+          message: `${violation.rule}: ${violation.message}`,
         });
       }
     }

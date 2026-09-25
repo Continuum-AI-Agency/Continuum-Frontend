@@ -5,6 +5,7 @@ import {
   agentDocumentAttachmentSchema,
   checkpointBlockV2LenientSchema,
   actionsBlockSchema as contractActionsBlockSchema,
+  answerTemplateBlockSchema as contractAnswerTemplateBlockSchema,
   blockBaseSchema as contractBlockBaseSchema,
   chartBlockBaseSchema as contractChartBlockBaseSchema,
   chartBlockSchema as contractChartBlockSchema,
@@ -583,6 +584,11 @@ export const surveyBlockV2Schema = contractSurveyBlockSchema.extend({
 });
 export type SurveyBlockV2 = z.infer<typeof surveyBlockV2Schema>;
 
+export const answerTemplateBlockV2Schema = contractAnswerTemplateBlockSchema.extend({
+  priority: blockPriorityV2Schema,
+});
+export type AnswerTemplateBlockV2 = z.infer<typeof answerTemplateBlockV2Schema>;
+
 const checkpointBlockV2UnionSchema = z.discriminatedUnion('category', [
   narrativeBlockV2Schema,
   metricGridBlockV2Schema,
@@ -594,6 +600,7 @@ const checkpointBlockV2UnionSchema = z.discriminatedUnion('category', [
   actionsBlockV2Schema,
   goalPacingBlockV2Schema,
   surveyBlockV2Schema,
+  answerTemplateBlockV2Schema,
 ]);
 
 // Re-apply the contract's chart-renderability invariants (category_key present

@@ -28,6 +28,8 @@ export function partitionReportBlocks(blocks: CheckpointBlockV2[]): PartitionedR
 type JainaJustificationSectionProps = {
   blocks: CheckpointBlockV2[];
   renderBlock: (block: CheckpointBlockV2) => ReactNode;
+  /** Set ahead of the blocks: a templated answer's own justification (`TemplateJustification`). */
+  leading?: ReactNode;
   className?: string;
 };
 
@@ -40,10 +42,11 @@ type JainaJustificationSectionProps = {
 export function JainaJustificationSection({
   blocks,
   renderBlock,
+  leading,
   className,
 }: JainaJustificationSectionProps) {
   const headingId = useId();
-  if (blocks.length === 0) return null;
+  if (blocks.length === 0 && !leading) return null;
 
   return (
     <section
@@ -58,6 +61,7 @@ export function JainaJustificationSection({
         <p className="text-xs text-muted-foreground">The data behind the answer</p>
       </header>
       <div className="space-y-4 border-l border-border/50 pl-3">
+        {leading}
         {blocks.map((block) => (
           <Fragment key={block.block_id}>{renderBlock(block)}</Fragment>
         ))}
