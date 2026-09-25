@@ -970,13 +970,13 @@ export function OptimizerActionsPortfolioGroup({
       />
 
       {writesBlocked ? (
-        <p className="rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-2xs text-warning">
+        <p className="rounded-md border border-warning/40 bg-warning/5 px-4 py-2.5 text-sm text-warning">
           {applyModeExplainer(portfolio.apply_mode)}
         </p>
       ) : null}
 
       {executeNote ? (
-        <p className="rounded-md border border-border/60 bg-muted/30 px-3 py-1.5 text-2xs text-muted-foreground">
+        <p className="rounded-md border border-border/60 bg-muted/30 px-4 py-2.5 text-sm text-muted-foreground">
           {executeNote}
         </p>
       ) : null}
@@ -1111,8 +1111,8 @@ function PortfolioRecentActions({
   if (recent.length === 0) return null;
 
   return (
-    <div className="space-y-1.5 rounded-md border border-border/60 bg-muted/20 px-3 py-2">
-      <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+    <div className="space-y-2 rounded-md border border-border/60 bg-muted/20 px-4 py-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Recently applied
       </p>
       <ul className="space-y-2">
@@ -1364,7 +1364,7 @@ function BudgetTransferHeader({
         : `Total daily spend ${net > 0 ? '+' : '−'}${formatCurrency(Math.abs(net), currency)}/day — this is not a flat reallocation.`;
 
   return (
-    <li className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+    <li className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3.5">
       <div className="flex items-start gap-2.5">
         <Checkbox
           aria-label="Select all budget moves in this cycle"
@@ -1374,7 +1374,7 @@ function BudgetTransferHeader({
           onCheckedChange={onToggleGroup}
         />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold tracking-tight">
+          <p className="text-base font-semibold tracking-tight">
             {pair ? (
               <>
                 Moving <span className="tabular-nums">{formatCurrency(moved, currency)}/day</span>{' '}
@@ -1388,7 +1388,7 @@ function BudgetTransferHeader({
               </>
             )}
           </p>
-          <p className="mt-0.5 text-2xs text-muted-foreground">
+          <p className="mt-0.5 text-sm text-muted-foreground">
             {conservation} These moves are one decision — approving only some of them changes the
             total.
           </p>
@@ -1412,7 +1412,7 @@ function CounterpartyLine({
   const rest = entry.parties.length - shown.length;
   if (shown.length === 0) return null;
   return (
-    <span className="text-3xs text-muted-foreground">
+    <span className="text-xs text-muted-foreground">
       {entry.direction === 'funds' ? '→ funds ' : '← funded by '}
       {shown
         .map((party) => `${party.name ?? party.adsetId} ${formatCurrency(party.amount, currency)}`)
@@ -1458,7 +1458,7 @@ function QueueRowView({
     // biome-ignore lint/a11y/useKeyWithClickEvents: the whole-row click is a pointer convenience; the accessible, keyboard-operable selection control is the Checkbox inside. Making the <li> a role=button would nest interactive controls (checkbox, expander, hover card).
     <li
       className={cn(
-        'rounded-lg border bg-card px-3 py-2 transition-colors',
+        'rounded-lg border bg-card px-4 py-3.5 transition-colors',
         selected ? 'border-primary/60 bg-accent/40 ring-1 ring-primary/40' : 'border-border/70',
         selectable && !writesBlocked && 'cursor-pointer hover:bg-muted/30',
       )}
@@ -1483,24 +1483,24 @@ function QueueRowView({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <RowHeadline row={row} brandId={brandId} currency={currency} />
             {row.approved ? (
-              <Badge variant="secondary" className="text-3xs uppercase">
+              <Badge variant="secondary" className="text-xs uppercase">
                 Approved
               </Badge>
             ) : null}
             {approving ? (
-              <span className="inline-flex items-center gap-1 text-3xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                 <Loader2Icon className="size-3 animate-spin" /> approving
               </span>
             ) : null}
             {failed ? (
-              <Badge variant="destructive" className="text-3xs uppercase">
+              <Badge variant="destructive" className="text-xs uppercase">
                 Failed
               </Badge>
             ) : null}
           </div>
           {row.route === 'budget' && row.item.reason ? (
             <p
-              className="mt-0.5 line-clamp-2 text-2xs text-muted-foreground"
+              className="mt-0.5 line-clamp-2 text-sm text-muted-foreground"
               title={row.item.reason}
             >
               <span className="font-medium text-foreground">Why:</span> {row.item.reason}
@@ -1509,16 +1509,16 @@ function QueueRowView({
           {row.route !== 'budget' ? <RecEvidenceLine rec={row.rec} currency={currency} /> : null}
           <div className="mt-1 flex flex-wrap items-center gap-2">
             {row.route === 'settings' ? (
-              <span className="text-3xs text-muted-foreground uppercase tracking-wide">
+              <span className="text-xs text-muted-foreground uppercase tracking-wide">
                 Portfolio setting
               </span>
             ) : (
-              <AdSetIdLabel id={row.adsetId} />
+              <AdSetIdLabel className="text-xs" id={row.adsetId} />
             )}
             {row.route !== 'budget' && row.rec.severity ? (
               <Badge
                 variant={severityBadgeVariant(row.rec.severity)}
-                className="text-3xs uppercase"
+                className="text-xs uppercase"
               >
                 {row.rec.severity}
               </Badge>
@@ -1572,14 +1572,15 @@ function RecEvidenceLine({ rec, currency }: { rec: RecommendationRow; currency: 
   const money = impactLabel(rec, currency);
   if (!line && !rec.reason) return null;
   return (
-    <div className="mt-0.5 space-y-0.5 text-2xs text-muted-foreground">
+    <div className="mt-0.5 space-y-0.5 text-sm text-muted-foreground">
       {line ? (
         <p className="tabular-nums">
-          <span className="font-medium text-foreground">{line}</span>
+          <span className="font-semibold text-foreground">{line}</span>
           {money ? (
             <span>
               {' · '}
               <span
+                className="font-semibold text-foreground"
                 {...figureProps(
                   `queue.${rec.id}.at-stake`,
                   impactPerDay(rec),
@@ -1616,9 +1617,9 @@ function RowHeadline({
   if (row.route === 'budget') {
     const changePct = row.item.change_pct != null ? row.item.change_pct * 100 : null;
     return (
-      <span className="text-sm font-semibold tracking-tight">
+      <span className="text-base font-semibold tracking-tight">
         {row.name ?? 'Budget move'}{' '}
-        <span className="font-normal text-muted-foreground">
+        <span className="font-normal tabular-nums text-muted-foreground">
           <span
             {...figureProps(
               `queue.${row.item.adset_id}.now`,
@@ -1630,6 +1631,7 @@ function RowHeadline({
           </span>{' '}
           →{' '}
           <span
+            className="font-semibold text-foreground"
             {...figureProps(
               `queue.${row.item.adset_id}.proposed`,
               row.item.final_budget ?? 0,
@@ -1663,13 +1665,13 @@ function RowHeadline({
   if (row.route === 'hidden') {
     const { label, glyph } = recommendationLabel(row.rec.kind);
     return (
-      <span className="text-sm font-semibold tracking-tight text-muted-foreground">
+      <span className="text-base font-semibold tracking-tight text-muted-foreground">
         {glyph} {label}
       </span>
     );
   }
   return (
-    <span className="text-sm font-semibold tracking-tight">
+    <span className="text-base font-semibold tracking-tight">
       <RecommendationInsight
         adsetId={row.adsetId}
         brandId={brandId}
@@ -1697,7 +1699,7 @@ function RowDetail({
   evidence: EvidenceContext;
 }) {
   return (
-    <div className="mt-2 space-y-1.5 rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-2xs text-muted-foreground">
+    <div className="mt-2 space-y-1.5 rounded-md border border-border/50 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
       {row.route === 'budget' ? (
         <BudgetDetail item={row.item} currency={currency} counterparty={counterparty} />
       ) : row.route !== 'settings' && isAudienceRecommendation(row.rec) ? (
@@ -1946,12 +1948,12 @@ function CreativeBriefDetail({ rec }: { rec: RecommendationRow }) {
           ) : null}
           <div className="min-w-0 space-y-1">
             {angleLabel ? (
-              <Badge className="text-3xs" variant="teal">
+              <Badge className="text-xs" variant="teal">
                 {angleLabel}
               </Badge>
             ) : null}
             {!inLibrary ? (
-              <p className="text-2xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Not in the Library yet — import it from the ad account to generate from it.
               </p>
             ) : null}
@@ -1969,7 +1971,7 @@ function CreativeBriefDetail({ rec }: { rec: RecommendationRow }) {
       {rec.ad_id ? (
         <p>
           <span className="font-medium text-foreground">Winning ad:</span>{' '}
-          <code className="text-3xs">{rec.ad_id}</code>
+          <code className="text-xs">{rec.ad_id}</code>
         </p>
       ) : null}
     </div>
@@ -2059,7 +2061,7 @@ function RecDetail({ rec }: { rec: RecommendationRow }) {
         </p>
       ) : null}
       <p>
-        <Badge variant="outline" className="text-3xs">
+        <Badge variant="outline" className="text-xs">
           {rec.trigger}
         </Badge>
       </p>

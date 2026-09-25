@@ -10,9 +10,23 @@ type LookbackToggleProps = {
   value: StoryLookback;
   onChange: (next: StoryLookback) => void;
   className?: string;
+  /** `lg` is the roomier Activity-tab scale; the default keeps the dense chart chrome. */
+  size?: LookbackToggleSize;
 };
 
-export function LookbackToggle({ value, onChange, className }: LookbackToggleProps) {
+type LookbackToggleSize = 'default' | 'lg';
+
+const ITEM_CLASS: Record<LookbackToggleSize, string> = {
+  default: 'h-6 px-2 text-2xs',
+  lg: 'h-9 px-3 text-sm',
+};
+
+export function LookbackToggle({
+  value,
+  onChange,
+  className,
+  size = 'default',
+}: LookbackToggleProps) {
   return (
     <ToggleGroup
       aria-label="Cost per result lookback"
@@ -26,7 +40,7 @@ export function LookbackToggle({ value, onChange, className }: LookbackTogglePro
       variant="outline"
     >
       {STORY_LOOKBACKS.map((days) => (
-        <ToggleGroupItem className="h-6 px-2 text-2xs" key={days} value={String(days)}>
+        <ToggleGroupItem className={ITEM_CLASS[size]} key={days} value={String(days)}>
           {days}d
         </ToggleGroupItem>
       ))}

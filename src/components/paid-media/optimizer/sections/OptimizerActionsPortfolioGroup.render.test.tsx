@@ -922,3 +922,64 @@ describe('queue header — a portfolio dead on Meta says so before its rows', ()
     expect(queryByTestId('queue-staleness')).toBeNull();
   });
 });
+
+describe('the portfolio Activity tab reads at the +2 type scale', () => {
+  const SUB_XS = /text-(2|3)xs/;
+
+  it('leaves no text-2xs or text-3xs in the queue, the notices, or Recently applied', () => {
+    recentActions = [
+      {
+        id: RECENT_AUDIT_ID,
+        ts: '2026-08-26T09:00:00Z',
+        family: 'money',
+        op: 'budget',
+        portfolio_id: '11111111-1111-4111-8111-111111111111',
+        portfolio_name: 'Prospecting',
+        before: { minor: 5000 },
+        after: { minor: 3500 },
+        actor_kind: 'autopilot',
+        reversible: true,
+      },
+    ];
+    // Observe mode is what surfaces the writes-blocked notice, so it is in the markup too.
+    const { container } = renderGroup({ apply_mode: 'observe' });
+    const expander = container.querySelector(
+      '[data-row-key^="budget:"] button[aria-label="Show detail"]',
+    );
+    expect(expander).not.toBeNull();
+    fireEvent.click(expander as Element);
+    expect(screen.getByRole('button', { name: 'Hide detail' })).toBeTruthy();
+
+    expect(screen.getByText('Recently applied').className).toContain('text-xs');
+    expect(container.innerHTML).not.toMatch(SUB_XS);
+  });
+
+  it('lifts the Recently applied row title and timestamp, and the lookback buttons', () => {
+    recentActions = [
+      {
+        id: RECENT_AUDIT_ID,
+        ts: '2026-08-26T09:00:00Z',
+        family: 'money',
+        op: 'budget',
+        portfolio_id: '11111111-1111-4111-8111-111111111111',
+        portfolio_name: 'Prospecting',
+        before: { minor: 5000 },
+        after: { minor: 3500 },
+        actor_kind: 'autopilot',
+        reversible: true,
+      },
+    ];
+    const { container } = renderGroup();
+    const recent = screen.getByText('Recently applied').parentElement as HTMLElement;
+    const header = recent.querySelector('li span.truncate') as HTMLElement;
+    expect(header.className).toContain('text-base');
+    expect(header.className).toContain('font-semibold');
+    expect((header.nextElementSibling as HTMLElement).className).toContain('text-sm');
+    for (const days of ['3d', '7d', '14d']) {
+      const toggle = screen.getByText(days, { selector: 'button' });
+      expect(toggle.className).toContain('h-9');
+      expect(toggle.className).toContain('text-sm');
+    }
+    expect(container.querySelector('li[data-row-key]')?.className).toContain('py-3.5');
+  });
+});

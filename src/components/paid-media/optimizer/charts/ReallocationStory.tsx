@@ -251,7 +251,7 @@ export function ReallocationStory({
         <p className="min-w-0 flex-1 text-base text-foreground leading-relaxed">
           <SummaryWithFigures text={story.summary} />
         </p>
-        <LookbackToggle onChange={setLookback} value={lookback} />
+        <LookbackToggle onChange={setLookback} size="lg" value={lookback} />
       </div>
 
       <div className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1.2fr)_minmax(0,1.4fr)] gap-x-4 px-1 text-muted-foreground text-xs uppercase tracking-wide sm:grid">

@@ -44,11 +44,29 @@ export function formatWhen(ts: string): string {
   return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-export function RowHeader({ title, ts }: { title: string; ts: string }) {
+/** `lg` is the roomier scale the portfolio Activity tab's "Recently applied" rows use; the
+ *  default keeps the dense look of the Server log and the account-wide Activity feed. */
+export type RowHeaderSize = 'default' | 'lg';
+
+const ROW_HEADER_CLASS: Record<RowHeaderSize, { title: string; ts: string }> = {
+  default: { title: 'text-sm font-medium', ts: 'text-xs' },
+  lg: { title: 'text-base font-semibold', ts: 'text-sm' },
+};
+
+export function RowHeader({
+  title,
+  ts,
+  size = 'default',
+}: {
+  title: string;
+  ts: string;
+  size?: RowHeaderSize;
+}) {
+  const classes = ROW_HEADER_CLASS[size];
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-      <span className="truncate text-sm font-medium tracking-tight">{title}</span>
-      <span className="shrink-0 text-xs text-muted-foreground">{formatWhen(ts)}</span>
+      <span className={cn('truncate tracking-tight', classes.title)}>{title}</span>
+      <span className={cn('shrink-0 text-muted-foreground', classes.ts)}>{formatWhen(ts)}</span>
     </div>
   );
 }

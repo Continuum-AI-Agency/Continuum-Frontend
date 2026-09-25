@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import type { AdhocSuggestionGate } from '@continuum/contracts';
 import { cleanup, render, screen, within } from '@testing-library/react';
 
+import { LookbackToggle } from '../../charts/LookbackToggle';
+import { RowHeader } from '../feedChrome';
 import type { DailyReadRow } from './dailyReadModel';
 import { DailyReadList } from './DailyReadList';
 import { SuggestionAsk } from './SuggestionAsk';
@@ -123,5 +125,32 @@ describe('DailyReadList — +2 type scale', () => {
     for (const button of within(section).getAllByRole('button')) {
       expect(button.className).toContain('h-10');
     }
+  });
+});
+
+describe('the shared pieces keep their dense default outside the Activity tab', () => {
+  it('LookbackToggle is dense by default and roomy at size lg', () => {
+    const { unmount } = render(<LookbackToggle onChange={() => undefined} value={7} />);
+    expect(screen.getByText('7d', { selector: 'button' }).className).toContain('text-2xs');
+    unmount();
+    render(<LookbackToggle onChange={() => undefined} size="lg" value={7} />);
+    const roomy = screen.getByText('7d', { selector: 'button' });
+    expect(roomy.className).toContain('h-9');
+    expect(roomy.className).toContain('text-sm');
+    expect(roomy.className).not.toMatch(SUB_XS);
+  });
+
+  it('RowHeader keeps the Server log / Activity feed look by default', () => {
+    const { unmount } = render(<RowHeader title="Daily budget" ts="2026-08-26T09:00:00Z" />);
+    const dense = screen.getByText('Daily budget');
+    expect(dense.className).toContain('text-sm');
+    expect(dense.className).toContain('font-medium');
+    expect((dense.nextElementSibling as HTMLElement).className).toContain('text-xs');
+    unmount();
+    render(<RowHeader size="lg" title="Daily budget" ts="2026-08-26T09:00:00Z" />);
+    const roomy = screen.getByText('Daily budget');
+    expect(roomy.className).toContain('text-base');
+    expect(roomy.className).toContain('font-semibold');
+    expect((roomy.nextElementSibling as HTMLElement).className).toContain('text-sm');
   });
 });
