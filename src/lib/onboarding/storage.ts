@@ -6,7 +6,6 @@ import { getFunctionsInvokeErrorMessage } from '@/lib/supabase/functions-errors'
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { Database, Json } from '@/lib/supabase/types';
 import { canPersistBrandRecord } from './brandRecordGuard';
-import { claimPendingInvite } from './claimInvite';
 import {
   findMatchingActiveBrandId,
   findPendingInviteBrandId,
@@ -121,9 +120,9 @@ async function ensureBrandProfileRecord(
   // Only the brand's creator may persist global fields from their onboarding
   // state. An invited member's state name is defaulted to "<their-name>'s Brand";
   // letting them write it overwrote the canonical brand_name for everyone (the
-  // shell, the switcher). Invited members are read-only on the brand row.
+  // shell, the switcher). Invited members are read-only on the brand row. Their invite
+  // is redeemed earlier, by getActiveBrandContext: until it is, RLS hides this row.
   if (!canPersistBrandRecord(data, owner.id)) {
-    await claimPendingInvite(supabase, brandId, owner.id);
     return brandId;
   }
 

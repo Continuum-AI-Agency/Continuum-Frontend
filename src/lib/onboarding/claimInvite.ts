@@ -15,6 +15,10 @@ type Client = SupabaseClient<Database>;
  * card rendered as its error state. Resolving the brand and granting access to it
  * have to be the same act; splitting them is what produced the dead end.
  *
+ * Called from `redeemPendingInvites` (active-brand-context.ts), never from onboarding
+ * storage: RLS hides an unaccepted invitee's brand row, so a claim gated on reading
+ * that row never ran for the users it was written for.
+ *
  * The grant itself belongs to the `brand_invite` edge function: `permissions` is
  * self-only under RLS so a service-role writer is required, and that function
  * already owns invite redemption end to end — including the email match that
