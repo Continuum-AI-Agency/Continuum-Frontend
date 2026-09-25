@@ -12,12 +12,15 @@
 import { ArrowRightIcon } from 'lucide-react';
 import type { OptimizerActionFeedRow } from '../useOptimizerData';
 import {
+  type ActionEntityNames,
   ActionDelta,
+  ActionEntityId,
   ActionFamilyBadge,
   ActionMeta,
   ActionRevertControl,
   ActionWhy,
-  actionEntityName,
+  actionEntity,
+  NO_ENTITY_NAMES,
   printChangeValue,
 } from './actionCardParts';
 import { readActionChange, readReceiptTrace } from './actionRows';
@@ -27,14 +30,16 @@ export function ActionFeaturedCard({
   row,
   brandId,
   currency,
+  entityNames = NO_ENTITY_NAMES,
 }: {
   row: OptimizerActionFeedRow;
   brandId: string;
   currency: string | null;
+  entityNames?: ActionEntityNames;
 }) {
   const change = readActionChange(row);
   const receipt = readReceiptTrace(row);
-  const entity = actionEntityName(row);
+  const entity = actionEntity(row, entityNames);
 
   return (
     <article
@@ -52,10 +57,11 @@ export function ActionFeaturedCard({
 
       <div className="min-w-0">
         <p className="font-medium text-muted-foreground text-xs">{change.label}</p>
-        <h3 className="truncate font-medium text-base text-foreground" title={entity}>
-          {entity}
+        <h3 className="truncate font-medium text-base text-foreground" title={entity.name}>
+          {entity.name}
         </h3>
-        {row.portfolio_name && entity !== row.portfolio_name ? (
+        {entity.id ? <ActionEntityId id={entity.id} /> : null}
+        {row.portfolio_name && entity.name !== row.portfolio_name ? (
           <p className="truncate text-muted-foreground text-xs" title={row.portfolio_name}>
             {row.portfolio_name}
           </p>

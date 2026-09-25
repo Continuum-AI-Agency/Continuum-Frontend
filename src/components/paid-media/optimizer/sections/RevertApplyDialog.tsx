@@ -40,6 +40,9 @@ type RevertApplyDialogProps = {
   /** The audit row's scope. 'adset_status' switches the dialog to unpause copy; anything
    *  else (or absent) keeps the budget-revert copy. */
   scope?: string | null;
+  /** The trigger's type size. The dense log row keeps `text-2xs`; the action cards, whose type
+   *  floor is `text-xs`, pass that. Written as whole class names because Tailwind reads source. */
+  triggerTextSize?: 'text-2xs' | 'text-xs';
 };
 
 /** One would-item in the revert preview — a budget move or an ad-set status restore. */
@@ -80,6 +83,7 @@ export function RevertApplyDialog({
   brandId,
   currency,
   scope,
+  triggerTextSize = 'text-2xs',
 }: RevertApplyDialogProps) {
   const revert = useRevertApply();
   const [open, setOpen] = React.useState(false);
@@ -151,7 +155,7 @@ export function RevertApplyDialog({
             type="button"
             size="sm"
             variant="ghost"
-            className="h-6 shrink-0 gap-1 px-1.5 text-2xs text-muted-foreground hover:text-foreground"
+            className={`h-6 shrink-0 gap-1 px-1.5 ${triggerTextSize} text-muted-foreground hover:text-foreground`}
           >
             <Undo2Icon aria-hidden="true" className="size-3" />
             {isStatus ? 'Unpause' : 'Revert'}

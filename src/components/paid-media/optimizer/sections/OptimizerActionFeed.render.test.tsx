@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render as renderWithoutClient, screen, waitFor, within } from '@testing-library/react';
+import type { ReactElement } from 'react';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -29,14 +31,34 @@ mock.module('../useOptimizerData', () => ({
 // The dialog's own dry-run → confirm behaviour is covered where it lives. What this suite
 // owns is the DECISION to offer it at all, which must come from the RPC's `reversible`.
 mock.module('./RevertApplyDialog', () => ({
-  RevertApplyDialog: ({ auditId, scope }: { auditId: string; scope?: string | null }) => (
-    <button type="button" data-audit-id={auditId} data-scope={scope ?? ''}>
+  RevertApplyDialog: ({
+    auditId,
+    scope,
+    triggerTextSize,
+  }: {
+    auditId: string;
+    scope?: string | null;
+    triggerTextSize?: string;
+  }) => (
+    <button
+      type="button"
+      className={triggerTextSize ?? 'text-2xs'}
+      data-audit-id={auditId}
+      data-scope={scope ?? ''}
+    >
       {scope === 'adset_status' ? 'Unpause' : 'Revert'}
     </button>
   ),
 }));
 
 const { OptimizerActionFeed } = await import('./OptimizerActionFeed');
+const { optimizerQueryKeys } = realOptimizerData;
+
+// The feed names what an action touched from the enrolled-roster cache the portfolio screen
+// already filled — so every render gets a real QueryClient, seeded per test when it matters.
+let queryClient = new QueryClient();
+const render = (ui: ReactElement) =>
+  renderWithoutClient(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 
 const PORTFOLIO_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -59,6 +81,7 @@ const action = (over: Partial<OptimizerActionFeedRow> = {}): OptimizerActionFeed
 
 beforeEach(() => {
   actionsState = { data: [], isLoading: false };
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 });
 
 afterEach(cleanup);
@@ -286,5 +309,65 @@ describe('OptimizerActionFeed — featured card and grid', () => {
     for (const id of ['action-featured', 'action-grid']) {
       expect(screen.getByTestId(id).outerHTML).not.toMatch(/text-(2|3)xs/);
     }
+  });
+});
+
+// The rows carry ids; a person reads names. The name comes from the enrolled roster the
+// portfolio screen already holds in the React Query cache — never a new read.
+describe('OptimizerActionFeed — entity names', () => {
+  const KNOWN_ID = '120251303880680236';
+  const seedRoster = () =>
+    queryClient.setQueryData(optimizerQueryKeys.enrolledAdsets(PORTFOLIO_ID), [
+      { adset_id: KNOWN_ID, adset_name: 'Lookalike 3% — Spain', active: true },
+    ]);
+
+  it('shows a known ad set name as the entity line and the id small and secondary', () => {
+    seedRoster();
+    actionsState = { data: [action()], isLoading: false };
+    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    const featured = screen.getByTestId('action-featured');
+    expect(within(featured).getByRole('heading').textContent).toBe('Lookalike 3% — Spain');
+    const id = within(featured).getByText(KNOWN_ID);
+    expect(id.className).toContain('font-mono');
+    expect(id.className).toContain('text-xs');
+  });
+
+  it('names a grid card too, and keeps the id reachable in its detail', async () => {
+    seedRoster();
+    actionsState = {
+      data: [
+        action({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000001', ts: new Date().toISOString() }),
+        action({
+          id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000002',
+          ts: new Date(Date.now() - 60_000).toISOString(),
+        }),
+      ],
+      isLoading: false,
+    };
+    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    const [card] = Array.from(screen.getByTestId('action-grid').children) as HTMLElement[];
+    expect(within(card).getByText('Lookalike 3% — Spain')).toBeTruthy();
+    expect(within(card).getByText(KNOWN_ID).className).toContain('font-mono');
+    fireEvent.click(within(card).getByRole('button'));
+    const dialog = await waitFor(() => screen.getByRole('dialog'));
+    expect(within(dialog).getByText('Lookalike 3% — Spain')).toBeTruthy();
+    expect(within(dialog).getByText(KNOWN_ID)).toBeTruthy();
+  });
+
+  it('falls back to the id when no name is known for it', () => {
+    seedRoster();
+    actionsState = { data: [action({ entity_id: '555000111' })], isLoading: false };
+    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    const featured = screen.getByTestId('action-featured');
+    expect(within(featured).getByRole('heading').textContent).toBe('555000111');
+    expect(within(featured).queryByText('Lookalike 3% — Spain')).toBeNull();
+  });
+
+  it('gives the revert trigger inside the cards at least text-xs', () => {
+    actionsState = { data: [action()], isLoading: false };
+    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    const trigger = screen.getByRole('button', { name: 'Revert' });
+    expect(trigger.className).toContain('text-xs');
+    expect(trigger.className).not.toContain('text-2xs');
   });
 });

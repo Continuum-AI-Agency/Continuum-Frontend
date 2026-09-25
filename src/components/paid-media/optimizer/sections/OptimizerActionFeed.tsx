@@ -12,12 +12,18 @@
 // and a row that has already been undone renders as "reverted" instead of offering the button
 // again.
 
-import type { OptimizerFeedWindowDays } from '@continuum/contracts';
+import { type OptimizerFeedWindowDays, PortfolioAdsetSchema } from '@continuum/contracts';
+import { skipToken, useQueries } from '@tanstack/react-query';
 import { ArrowRightIcon, ListChecksIcon, Undo2Icon } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { z } from 'zod';
 import { EmptyState } from '@/components/shared/state/EmptyState';
 import { formatCurrency } from '../format';
-import { type OptimizerActionFeedRow, useOptimizerActions } from '../useOptimizerData';
+import {
+  type OptimizerActionFeedRow,
+  optimizerQueryKeys,
+  useOptimizerActions,
+} from '../useOptimizerData';
 import {
   type ActionChange,
   actorLabel,
@@ -29,6 +35,7 @@ import {
 import { FeedFooter, FeedSkeleton, PortfolioFilter, ReceiptToken, RowHeader } from './feedChrome';
 import { ALL_PORTFOLIOS, distinctPortfolioNames, filterByPortfolio } from './logFilters';
 import { ActionFeaturedCard } from './ActionFeaturedCard';
+import type { ActionEntityNames } from './actionCardParts';
 import { ActionGridCard } from './ActionGridCard';
 import { OptimizerReadError } from './OptimizerReadError';
 import { RevertApplyDialog } from './RevertApplyDialog';
@@ -169,6 +176,48 @@ export function splitFeaturedAction(rows: OptimizerActionFeedRow[]): {
   };
 }
 
+const EnrolledRosterSchema = z.array(PortfolioAdsetSchema);
+
+/** Folds the cached rosters into one id → name map. Module-level so `useQueries` keeps its
+ *  result stable until a roster actually changes. */
+function namesFromRosters(rosters: { data: unknown }[]): ActionEntityNames {
+  const names = new Map<string, string>();
+  for (const roster of rosters) {
+    const parsed = EnrolledRosterSchema.safeParse(roster.data);
+    if (!parsed.success) continue;
+    for (const adset of parsed.data) {
+      const name = adset.adset_name?.trim();
+      if (name) names.set(adset.adset_id, name);
+    }
+  }
+  return names;
+}
+
+/**
+ * Names for the ids the action rows carry, from the enrolled rosters the portfolio screen
+ * already loaded (`optimizerQueryKeys.enrolledAdsets`, filled by the portfolio detail and its
+ * hover prefetch, the Actions groups and the manage panel). It OBSERVES that cache and never
+ * fetches (`skipToken`): the feed spans every portfolio of the brand, and a read per portfolio
+ * just to decorate a card is not this surface's job. A roster that lands later re-renders
+ * the cards named; an id no roster knows stays an id.
+ */
+export function useActionEntityNames(rows: OptimizerActionFeedRow[]): ActionEntityNames {
+  const portfolioIds = useMemo(
+    () =>
+      Array.from(
+        new Set(rows.flatMap((row) => (row.portfolio_id ? [row.portfolio_id] : []))),
+      ).sort(),
+    [rows],
+  );
+  return useQueries({
+    queries: portfolioIds.map((portfolioId) => ({
+      queryKey: optimizerQueryKeys.enrolledAdsets(portfolioId),
+      queryFn: skipToken,
+    })),
+    combine: namesFromRosters,
+  });
+}
+
 // Written out whole because Tailwind reads source text. Fewer cards than a full row get
 // fewer columns, so two cards fill the width instead of leaving two empty cells beside them.
 const GRID_COLUMNS: Record<number, string> = {
@@ -187,18 +236,30 @@ function ActionFeedCards({
   brandId: string;
   currency: string | null;
 }) {
+  const entityNames = useActionEntityNames(rows);
   const { featured, rest } = splitFeaturedAction(rows);
   if (!featured) return null;
   return (
     <div className="space-y-3">
-      <ActionFeaturedCard row={featured} brandId={brandId} currency={currency} />
+      <ActionFeaturedCard
+        row={featured}
+        brandId={brandId}
+        currency={currency}
+        entityNames={entityNames}
+      />
       {rest.length > 0 ? (
         <ul
           className={`grid items-stretch gap-3 ${GRID_COLUMNS[rest.length] ?? GRID_COLUMNS_FULL}`}
           data-testid="action-grid"
         >
           {rest.map((row) => (
-            <ActionGridCard key={row.id} row={row} brandId={brandId} currency={currency} />
+            <ActionGridCard
+              key={row.id}
+              row={row}
+              brandId={brandId}
+              currency={currency}
+              entityNames={entityNames}
+            />
           ))}
         </ul>
       ) : null}

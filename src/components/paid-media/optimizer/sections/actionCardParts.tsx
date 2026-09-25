@@ -111,11 +111,34 @@ export function ActionDelta({ change, className }: { change: ActionChange; class
   );
 }
 
-/** What the action touched, as the row can name it. The RPC carries ids, not names: a settings
- *  row's `entity_id` is the FIELD (already the change label), so it is named by its portfolio. */
-export function actionEntityName(row: OptimizerActionFeedRow): string {
-  if (row.op !== 'setting' && row.entity_id) return row.entity_id;
-  return row.portfolio_name ?? 'Portfolio';
+/** Ad-set / campaign id → the name a person reads. Built from data the optimizer screen already
+ *  holds; an id missing from it is simply unnamed. */
+export type ActionEntityNames = ReadonlyMap<string, string>;
+
+export const NO_ENTITY_NAMES: ActionEntityNames = new Map();
+
+/** What the action touched, as a person reads it: `name` is the main line, `id` the raw Meta
+ *  id to print small beside it — null when the name already IS the id (nothing is known for
+ *  it) or when the row names a portfolio. The RPC carries ids, not names: a settings row's
+ *  `entity_id` is the FIELD (already the change label), so it is named by its portfolio. */
+export function actionEntity(
+  row: OptimizerActionFeedRow,
+  names: ActionEntityNames = NO_ENTITY_NAMES,
+): { name: string; id: string | null } {
+  if (row.op !== 'setting' && row.entity_id) {
+    const known = names.get(row.entity_id)?.trim();
+    return known ? { name: known, id: row.entity_id } : { name: row.entity_id, id: null };
+  }
+  return { name: row.portfolio_name ?? 'Portfolio', id: null };
+}
+
+/** The raw id under a named entity: small, monospace, selectable. */
+export function ActionEntityId({ id, className }: { id: string; className?: string }) {
+  return (
+    <p className={cn('truncate font-mono text-muted-foreground text-xs', className)} title={id}>
+      {id}
+    </p>
+  );
 }
 
 /** The one-line meta every card carries: when, and who. */
@@ -148,6 +171,7 @@ export function ActionRevertControl({
         brandId={brandId}
         currency={currency}
         scope={revertScopeOf(row)}
+        triggerTextSize="text-xs"
       />
     );
   }
@@ -167,12 +191,15 @@ export function ActionDetailBody({
   row,
   brandId,
   currency,
+  entityNames = NO_ENTITY_NAMES,
 }: {
   row: OptimizerActionFeedRow;
   brandId: string;
   currency: string | null;
+  entityNames?: ActionEntityNames;
 }) {
   const change = readActionChange(row);
+  const entity = actionEntity(row, entityNames);
   const receipt = readReceiptTrace(row);
   return (
     <div className="space-y-3">
@@ -185,6 +212,12 @@ export function ActionDetailBody({
           <>
             <dt className="text-muted-foreground text-xs">Portfolio</dt>
             <dd className="min-w-0 truncate">{row.portfolio_name}</dd>
+          </>
+        ) : null}
+        {entity.id ? (
+          <>
+            <dt className="text-muted-foreground text-xs">Name</dt>
+            <dd className="min-w-0 truncate">{entity.name}</dd>
           </>
         ) : null}
         {row.entity_id && row.op !== 'setting' ? (
