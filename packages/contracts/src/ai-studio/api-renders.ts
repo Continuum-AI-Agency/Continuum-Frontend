@@ -158,9 +158,45 @@ export const apiRenderVariableSchema = z
     sample: z.string().nullable().default(null),
     /** Where this slot lands, so a picked asset can be placed before a render is spent. */
     placement: slotPlacementSchema.nullable().default(null),
+    /**
+     * A video slot's clip, in the clip's own seconds: the template plays `fromSec..toSec` of
+     * whatever is picked (across every ratio), and shows it for `playsSec` at most. A render
+     * keeps the layer's timing and swaps only the clip, so a clip shorter than `toSec` runs out
+     * and the layer is empty for the rest. Null when unparsed, not a video, or time-remapped.
+     */
+    clip: z
+      .object({ fromSec: z.number(), toSec: z.number(), playsSec: z.number() })
+      .strict()
+      .nullable()
+      .default(null),
   })
   .strict();
 export type ApiRenderVariable = z.infer<typeof apiRenderVariableSchema>;
+
+/**
+ * How a video slot's clip requirement reads — the one wording every surface uses.
+ *
+ * `toSec` is a REQUIREMENT, not a duration: a clip shorter than it runs out before the layer
+ * does. Shown bare it reads as "this is 12 seconds long", which is how the template editor came
+ * to display a worse number than the render grid it feeds. The `\u2265` is what makes it a demand.
+ *
+ * Lives beside `clip` rather than beside `clipOfSlot`, so the field and its wording are mirrored
+ * into the Frontend's vendored contracts copy together and cannot deploy out of step.
+ *
+ * `chip` is sized for a 3.5rem column; `detail` is the sentence for its title.
+ */
+export function clipRequirement(
+  clip: ApiRenderVariable['clip'] | undefined,
+): { chip: string; detail: string } | null {
+  if (!clip) return null;
+  const sec = (value: number) => `${value.toFixed(1)}s`;
+  return {
+    chip: `\u2265${sec(clip.toSec)}`,
+    detail:
+      `Plays ${sec(clip.fromSec)}\u2013${sec(clip.toSec)} of the clip, on screen up to ` +
+      `${sec(clip.playsSec)}. A shorter clip runs out and leaves the layer empty.`,
+  };
+}
 
 export const apiRenderTemplateSummarySchema = z
   .object({
@@ -268,9 +304,9 @@ export function templateRefOf(template: { bindingId: string; key: string }): str
 }
 
 /**
- * One frame is a still; anything longer is motion. THE rule — the gallery's Animated filter,
- * `outputKindsOf` and the encode guard all defer to it, so a template cannot be a video in one
- * place and a still in another.
+ * One frame is a still; anything longer is motion. THE rule — `motionLabel`, the gallery's
+ * Animated filter, `outputKindsOf` and the encode guard all defer to it, so a template cannot be
+ * a video in one place and a still in another.
  */
 export function isMotion(durationSec: number, frameRate: number): boolean {
   return Math.round(durationSec * frameRate) > 1;
@@ -279,8 +315,7 @@ export function isMotion(durationSec: number, frameRate: number): boolean {
 /** `1 frame` for a still, `6.0s · 30 fps` for a video. The pane's whole motion vocabulary. */
 export function motionLabel(motion: ApiRenderTemplateSummary['motion']): string | null {
   if (!motion) return null;
-  const frames = Math.round(motion.durationSec * motion.frameRate);
-  return frames <= 1
+  return !isMotion(motion.durationSec, motion.frameRate)
     ? 'Still · 1 frame'
     : `${motion.durationSec.toFixed(1)}s · ${Math.round(motion.frameRate)} fps`;
 }
@@ -293,6 +328,23 @@ export const apiRenderTemplateFontSchema = z
     held: z.boolean(),
     /** Whose licence the held face is under — the brand's own upload, or a house/vendor face. */
     scope: fontLicenceScopeSchema.optional(),
+    /**
+     * Present only when a person accepted a face we hold in place of one we do not.
+     *
+     * This schema is `.strict()` and it validates the render contract, so it has to admit the
+     * same two fields `templateFontStatusSchema` can now produce: the moment anything hands
+     * `templateFontStatuses` its substitution map, a strict schema without them refuses the
+     * whole contract and the template stops rendering rather than reporting a swap.
+     */
+    via: z.enum(['direct', 'substitute']).optional(),
+    substitutedBy: z
+      .object({
+        fontId: z.string().uuid(),
+        family: z.string().min(1),
+        weight: z.number().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type ApiRenderTemplateFont = z.infer<typeof apiRenderTemplateFontSchema>;
@@ -469,7 +521,8 @@ export function encodeContainerOf(mediaType: string | null | undefined): 'mp4' |
 export const ENCODE_FILE_CONTAINERS = ['mp4', 'mov', 'mxf', 'webm', 'gif'] as const;
 export type EncodeFileContainer = (typeof ENCODE_FILE_CONTAINERS)[number];
 
-const FILE_LABEL: Record<EncodeFileContainer, string> = {
+/** The display name of each container — the one spelling every surface and bench must use. */
+export const FILE_LABEL: Record<EncodeFileContainer, string> = {
   mp4: 'MP4',
   mov: 'MOV',
   mxf: 'MXF',
@@ -1121,6 +1174,8 @@ export const apiRenderJobSchema = z
     contractHash: z.string().min(1),
     taskUid: z.string().nullable(),
     status: z.enum(['submitting', 'queued', 'rendering', 'finished', 'failed']),
+    /** Null until the fleet has measured render progress. */
+    progressPct: z.number().int().min(0).max(100).nullable().default(null),
     // True = a Proof (submitted `test: true`), false = a Final. Recorded per job since Finals
     // exist. Defaulted because a job from before the column is one that was only ever a proof.
     // It is what was REQUESTED: the fleet's watermark switch is off upstream, so today a proof
@@ -1386,6 +1441,24 @@ export type ApiRenderBatchShareResponse = z.infer<typeof apiRenderBatchShareResp
 // the same client validation and server preflight as a typed one — this is a draft, not a render.
 
 export const API_RENDER_SUGGEST_ROWS_ROUTE = '/api/ai-studio/renders/suggest-rows';
+export const API_RENDER_DRAFT_SOURCES_STATUS_ROUTE = '/api/ai-studio/renders/draft-sources/status';
+export const apiRenderDraftSourcesStatusRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    documentIds: z.array(z.string().uuid()).min(1).max(5),
+  })
+  .strict();
+export type ApiRenderDraftSourcesStatusRequest = z.infer<
+  typeof apiRenderDraftSourcesStatusRequestSchema
+>;
+export const apiRenderDraftSourcesStatusResponseSchema = z
+  .object({
+    status: z.enum(['processing', 'ready', 'error']),
+  })
+  .strict();
+export type ApiRenderDraftSourcesStatusResponse = z.infer<
+  typeof apiRenderDraftSourcesStatusResponseSchema
+>;
 
 export const API_RENDER_SUGGEST_ROWS_MAX = 20;
 /** Variations drafted under each new row. Rows and their variations together stay within the max. */
@@ -1397,8 +1470,12 @@ export const apiRenderSuggestRowsRequestSchema = z
     bindingId: bindingIdField,
     templateKey: z.string().min(1),
     contractHash: z.string().min(1),
-    prompt: z.string().trim().min(1).max(2000),
+    prompt: z.string().trim().max(2000),
     count: z.number().int().min(1).max(API_RENDER_SUGGEST_ROWS_MAX).default(5),
+    /** Count is a ceiling; the model chooses the useful rows and variations. */
+    autoCount: z.boolean().default(false),
+    documentIds: z.array(z.string().uuid()).max(5).default([]),
+    mediaAssetIds: z.array(z.string().uuid()).max(6).default([]),
     /** Variations drafted under each new row, each changing one or two of its values. */
     forksPerRow: z.number().int().min(0).max(API_RENDER_SUGGEST_FORKS_MAX).default(0),
     /** Values to keep across every proposed row — a product already chosen, a fixed price. */
@@ -1416,6 +1493,14 @@ export const apiRenderSuggestRowsRequestSchema = z
       .optional(),
   })
   .strict()
+  .refine(
+    (request) =>
+      request.prompt.length > 0 || request.documentIds.length + request.mediaAssetIds.length > 0,
+    {
+      message: 'A brief or uploaded file is required',
+      path: ['prompt'],
+    },
+  )
   .refine((request) => request.count * (1 + request.forksPerRow) <= API_RENDER_SUGGEST_ROWS_MAX, {
     message: `Rows and their variations together are at most ${API_RENDER_SUGGEST_ROWS_MAX}`,
     path: ['forksPerRow'],
@@ -1475,6 +1560,13 @@ export const apiRenderRowGateSchema = z
   .strict();
 export type ApiRenderRowGate = z.infer<typeof apiRenderRowGateSchema>;
 
+export const forgeRowEvidenceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('document'), documentId: z.string().uuid(), name: z.string().min(1), excerpt: z.string().min(1).max(500), sheet: z.string().min(1).optional() }).strict(),
+  z.object({ kind: z.literal('media'), assetId: z.string().uuid() }).strict(),
+]);
+export type ForgeRowEvidence = z.infer<typeof forgeRowEvidenceSchema>;
+export const forgeRowEvidenceMapSchema = z.record(apiRenderVariableKeySchema, forgeRowEvidenceSchema);
+
 export const apiRenderSuggestRowsResponseSchema = z
   .object({
     /**
@@ -1489,6 +1581,7 @@ export const apiRenderSuggestRowsResponseSchema = z
           parentId: z.string().uuid().nullable(),
           label: z.string().min(1).max(200),
           overrides: apiRenderVariableMapSchema,
+          evidence: forgeRowEvidenceMapSchema.optional(),
           /** Absent only from a server older than the gate. */
           gate: apiRenderRowGateSchema.optional(),
         })
@@ -1500,6 +1593,8 @@ export const apiRenderSuggestRowsResponseSchema = z
     dropped: z.array(z.string()).default([]),
     /** What nothing could fill: a picture slot with no Library match, a required value left blank. */
     unfilled: z.array(z.string()).default([]),
+    /** A source was too large to read in full, or has no matching template slot. */
+    sourceWarnings: z.array(z.string()).default([]),
   })
   .strict();
 export type ApiRenderSuggestRowsResponse = z.infer<typeof apiRenderSuggestRowsResponseSchema>;

@@ -37,12 +37,14 @@ function source(
 }
 
 describe('partitionForgeProjectFiles', () => {
-  it('keeps only supported After Effects project packages', () => {
+  it('keeps project packages and loose fonts apart, and refuses the rest', () => {
     const result = partitionForgeProjectFiles([
       file('intro.aep'),
       file('master.AEPX'),
       file('starter.aet'),
       file('collected.zip'),
+      file('2f0cf1733d838e005b2ef333cfea82b6.ttf'),
+      file('Brand-Bold.OTF'),
       file('preview.mov'),
     ]);
 
@@ -51,6 +53,10 @@ describe('partitionForgeProjectFiles', () => {
       'master.AEPX',
       'starter.aet',
       'collected.zip',
+    ]);
+    expect(result.fonts.map((item) => item.name)).toEqual([
+      '2f0cf1733d838e005b2ef333cfea82b6.ttf',
+      'Brand-Bold.OTF',
     ]);
     expect(result.rejected.map((item) => item.name)).toEqual(['preview.mov']);
   });
@@ -98,11 +104,11 @@ describe('matchDroppedFile', () => {
 });
 
 describe('uploadRefusal', () => {
-  const inyogo = { name: 'inyogo.zip', sizeBytes: 210 * 1024 * 1024 };
+  const inyogo = { name: 'inyogo.zip', sizeBytes: 260 * 1024 * 1024 };
 
   it('names the file, its size and the limit for either form of the refusal', () => {
     const sentence =
-      'inyogo.zip is 210 MB, over the 50 MB upload limit, so it was not uploaded. Ask an admin to raise the limit.';
+      'inyogo.zip is 260 MB, over the 250 MB upload limit, so it was not uploaded. Ask an admin to raise the limit.';
     expect(uploadRefusal(inyogo, 'resumable upload creation failed (413)')).toBe(sentence);
     expect(
       uploadRefusal(

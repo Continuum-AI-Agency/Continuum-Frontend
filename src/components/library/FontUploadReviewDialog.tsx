@@ -1,8 +1,9 @@
 'use client';
 
+import { readFontNames } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -56,6 +57,8 @@ export function FontUploadReviewDialog({
     register,
     handleSubmit,
     reset,
+    setValue,
+    getFieldState,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -67,6 +70,27 @@ export function FontUploadReviewDialog({
       })),
     },
   });
+
+  // A filename is a guess, and packages ship hashed ones (`2f0cf17….ttf`). The file's own
+  // PostScript name is what a template asks for, and unique per face, so two weights of one
+  // family never land on the same stored object.
+  useEffect(() => {
+    let current = true;
+    void Promise.all(files.map(async (file) => readFontNames(await file.arrayBuffer()))).then(
+      (names) => {
+        if (!current) return;
+        names.forEach((name, index) => {
+          if (!name?.postScriptName || getFieldState(`fonts.${index}.family`).isDirty) return;
+          setValue(`fonts.${index}.family`, name.postScriptName);
+          if (/italic|oblique/i.test(name.subfamily ?? ''))
+            setValue(`fonts.${index}.style`, 'italic');
+        });
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [files, getFieldState, setValue]);
 
   const submit = handleSubmit(async ({ fonts }) => {
     setSaving(true);

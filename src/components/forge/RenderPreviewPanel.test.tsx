@@ -733,6 +733,28 @@ describe('RenderPreviewPanel', () => {
     expect(screen.queryAllByText(/^(Still ·|\d+\.\d+s ·)/)).toHaveLength(0);
   });
 
+  test('scrubbing requests the selected template frame', async () => {
+    const contract = {
+      ...CONTRACT,
+      template: { ...CONTRACT.template, motion: { durationSec: 6, frameRate: 30 } },
+    } as ApiRenderTemplateContract;
+    render(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={contract}
+        rows={rowWith('Hola')}
+        rowId={ROW}
+        renderSetId={null}
+      />,
+    );
+    fireEvent.change(screen.getByRole('slider', { name: 'Preview frame' }), {
+      target: { value: '75' },
+    });
+    await waitFor(() =>
+      expect(composePreviewMock).toHaveBeenCalledWith(expect.objectContaining({ atSec: 2.5 })),
+    );
+  });
+
   test('no selected row shows the hint', () => {
     render(
       <RenderPreviewPanel

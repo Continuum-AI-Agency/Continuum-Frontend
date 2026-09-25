@@ -8,6 +8,8 @@ import {
   type ApiRenderTemplateContract,
   type ApiRenderVariable,
   checkAssetSwap,
+  classifyLibraryFile,
+  clipRequirement,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   type MediaAsset,
   readableLayerName,
@@ -27,6 +29,7 @@ import {
   MoreHorizontal,
   Plus,
   RotateCcw,
+  Upload,
   Video,
   X,
 } from 'lucide-react';
@@ -44,8 +47,11 @@ import type { DataGridRowProps } from '@/components/forge/DataGrid';
 import { EncodeOverrideCell } from '@/components/forge/EncodeOverrideCell';
 import { ActionMenuItems, rowActions, takeFocusAfter } from '@/components/forge/gridActions';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
+import { lookupLibraryAsset } from '@/components/forge/RenderRowsImport';
 import {
+  clipShortBy,
   effectiveMedia,
+  effectiveEvidence,
   effectiveOutputIds,
   effectiveValues,
   isEmptyInput,
@@ -77,7 +83,9 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { TableRow } from '@/components/ui/table';
+import { toast } from '@/components/ui/toast-imperative';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import { cn } from '@/lib/utils';
 import { pickedPins } from '@/StudioCanvas/nodes/api-render/RenderVariableFields';
 
@@ -157,6 +165,8 @@ function fitTone(verdict: ApiRenderFitVerdict | null) {
   return { variant: 'success' as const, text: 'Fits', title: verdict.why };
 }
 
+const secs = (value: number) => `${value.toFixed(1)}s`;
+
 function MediaPicker({
   variable,
   value,
@@ -175,6 +185,8 @@ function MediaPicker({
   onClear: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const pins = pickedPins(value);
   const fit = fitTone(pins.length ? verdict : null);
   const Kind = variable.kind === 'video' ? Video : ImageIcon;
@@ -183,6 +195,16 @@ function MediaPicker({
       ? `${pins.length} picked`
       : (media?.name ?? 'Picked')
     : 'Choose';
+  // A video slot plays a fixed stretch of its clip — the render keeps the layer's timing — so its
+  // length rides in the field like a text budget does. A length the Library never stored is read
+  // from the file's own metadata.
+  const clip = variable.clip;
+  const [measured, setMeasured] = useState<{ url: string; sec: number } | null>(null);
+  const clipSec =
+    media?.durationSec ?? (measured?.url === media?.clipUrl ? measured?.sec : undefined);
+  const shortBy = pins.length ? clipShortBy(clip, clipSec) : null;
+  // Same wording as the template editor's badge — one formatter, so the two cannot drift.
+  const clipNeed = clipRequirement(clip)?.detail ?? null;
   // One line whatever was picked: a fixed-width anchor that truncates, controls that never wrap.
   return (
     <div className="flex items-center gap-1.5">
@@ -197,7 +219,7 @@ function MediaPicker({
           <button
             type="button"
             aria-label={`${pins.length ? 'Change' : 'Choose'} ${variable.label}`}
-            title={pins.length ? picked : undefined}
+            title={[pins.length ? picked : null, clipNeed].filter(Boolean).join(' · ') || undefined}
             className="flex h-7 w-32 shrink-0 items-center gap-1.5 rounded-md border border-border/70 px-1.5 text-2xs text-muted-foreground hover:bg-muted/50"
             onClick={() => setOpen(true)}
           >
@@ -211,10 +233,86 @@ function MediaPicker({
               <Kind className="size-3 shrink-0" aria-hidden />
             )}
             <span className="min-w-0 flex-1 truncate text-left">{picked}</span>
-            {!pins.length ? <Library className="size-3 shrink-0" aria-hidden /> : null}
+            {clip ? (
+              <span
+                className={cn(
+                  'shrink-0 font-mono tabular-nums',
+                  shortBy !== null && 'text-warning',
+                )}
+              >
+                {clipRequirement(clip)?.chip}
+              </span>
+            ) : !pins.length ? (
+              <Library className="size-3 shrink-0" aria-hidden />
+            ) : null}
           </button>
         }
       />
+      <input
+        ref={fileInput}
+        type="file"
+        accept={variable.kind === 'video' ? 'video/*' : 'image/*'}
+        aria-label={`Upload ${variable.label}`}
+        className="sr-only"
+        onChange={async (event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (!file) return;
+          const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
+          if (!format.accepted || format.originalKind !== variable.kind) {
+            toast.error(`Choose an ${variable.kind === 'image' ? 'image' : 'video'} file.`);
+            return;
+          }
+          setUploading(true);
+          try {
+            const uploaded = await uploadMediaAsset({ file, brandId });
+            const asset = await lookupLibraryAsset(brandId, uploaded.assetId);
+            if (!asset || asset.kind !== variable.kind)
+              throw new Error('Uploaded file is not ready in the Library.');
+            onPick([asset]);
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Could not upload this file.');
+          } finally {
+            setUploading(false);
+          }
+        }}
+      />
+      <button
+        type="button"
+        aria-label={`Upload ${variable.label}`}
+        title="Upload a file here"
+        disabled={uploading}
+        className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted/50 disabled:opacity-50"
+        onClick={() => fileInput.current?.click()}
+      >
+        {uploading ? (
+          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+        ) : (
+          <Upload className="size-3.5" aria-hidden />
+        )}
+      </button>
+      {clip && pins.length && clipSec === undefined && media?.clipUrl ? (
+        // biome-ignore lint/a11y/useMediaCaption: read for its length, never shown
+        <video
+          src={media.clipUrl}
+          preload="metadata"
+          muted
+          hidden
+          onLoadedMetadata={(event) => {
+            const sec = event.currentTarget.duration;
+            if (Number.isFinite(sec) && media.clipUrl) setMeasured({ url: media.clipUrl, sec });
+          }}
+        />
+      ) : null}
+      {shortBy !== null && clipSec !== undefined && clip ? (
+        <Badge
+          variant="warning"
+          title={`This clip is ${secs(clipSec)}; the template plays it to ${secs(clip.toSec)}, so it runs out ${secs(shortBy)} early and the layer is empty for the rest.`}
+          className="shrink-0 px-1 py-0 text-2xs"
+        >
+          Short
+        </Badge>
+      ) : null}
       {fit ? (
         <Badge variant={fit.variant} title={fit.title} className="shrink-0 px-1 py-0 text-2xs">
           {fit.text}
@@ -259,18 +357,12 @@ function Explained({ why, children }: { why: string; children: ReactNode }) {
   );
 }
 
-function StatusBadge({ row, invalidWhy }: { row: RequestRow; invalidWhy: string | null }) {
-  // "Invalid" used to be the one status in this cell that named no reason, while the row's
-  // errors were already in hand — Rejected has carried its message and Needs input its field
-  // list all along. A red badge nobody can act on is a row somebody deletes and retypes.
-  // `title`, like Rejected and Needs input beside it, rather than the richer Explained tooltip:
-  // the three statuses sit in one cell and a reason that appears differently per status reads
-  // as three different affordances.
-  if (invalidWhy)
+function StatusBadge({ row, invalidReason }: { row: RequestRow; invalidReason?: string }) {
+  if (invalidReason)
     return (
-      <Badge variant="destructive" title={invalidWhy}>
-        Invalid
-      </Badge>
+      <Explained why={invalidReason}>
+        <Badge variant="destructive">Invalid</Badge>
+      </Explained>
     );
   switch (row.check.state) {
     case 'checking':
@@ -892,24 +984,6 @@ export function EncodeCell({ row: { original: row }, table }: CellContext<Reques
   );
 }
 
-/**
- * Why this row is invalid, in the words of the fields that are wrong.
- *
- * Capped, because a row can fail on every port it has and a tooltip listing nineteen of them
- * is one nobody reads — the first few name the problem, the count says how much more there is.
- */
-function invalidReason(
-  errors: Readonly<Record<string, string>>,
-  variables: readonly { key: string; label?: string | null }[],
-): string {
-  const named = Object.entries(errors).map(([key, message]) => {
-    const label = variables.find((item) => item.key === key)?.label ?? key;
-    return `${readableLayerName(label)}: ${message}`;
-  });
-  const shown = named.slice(0, 3).join(' · ');
-  return named.length > 3 ? `${shown} · and ${named.length - 3} more` : shown;
-}
-
 export function StatusCell({ row: { original: row }, table }: CellContext<RequestRow, unknown>) {
   const { contract, rows, clientErrors } = gridMeta(table);
   const errors = clientErrors.get(row.id) ?? {};
@@ -929,7 +1003,12 @@ export function StatusCell({ row: { original: row }, table }: CellContext<Reques
   return (
     <StatusBadge
       row={row}
-      invalidWhy={errorKeys.length > 0 ? invalidReason(errors, contract.variables) : null}
+      invalidReason={Object.entries(errors)
+        .map(([key, message]) => {
+          const label = contract.variables.find((variable) => variable.key === key)?.label ?? key;
+          return `${readableLayerName(label)}: ${message}`;
+        })
+        .join('; ')}
     />
   );
 }
@@ -948,10 +1027,14 @@ export function RowFields({ table, rowId }: { table: Table<RequestRow>; rowId: s
   const cells = row
     .getAllCells()
     .filter((cell) => (cell.column.columnDef.meta as Partial<VariableColumnMeta>)?.variable);
+  const evidenceByKey = effectiveEvidence(table.options.data, rowId);
+  const hasDraftEvidence = row.original.evidence !== undefined;
+  const values = effectiveValues(table.options.data, rowId);
   return (
     <dl className="grid grid-cols-[minmax(5rem,max-content)_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 text-xs">
       {cells.map((cell) => {
         const { variable } = cell.column.columnDef.meta as VariableColumnMeta;
+        const evidence = evidenceByKey[variable.key];
         return (
           <Fragment key={cell.id}>
             <dt className="truncate text-muted-foreground" title={variable.label}>
@@ -959,6 +1042,15 @@ export function RowFields({ table, rowId }: { table: Table<RequestRow>; rowId: s
             </dt>
             <dd className="min-w-0 [&_input]:w-full">
               {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              {hasDraftEvidence && !variable.reserved && variable.key in values ? (
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {evidence?.kind === 'document'
+                    ? `Source: ${evidence.name}${evidence.sheet ? ` · ${evidence.sheet}` : ''} — “${evidence.excerpt}”`
+                    : evidence?.kind === 'media'
+                      ? 'Source: selected Library asset'
+                      : 'Needs review'}
+                </p>
+              ) : null}
             </dd>
           </Fragment>
         );

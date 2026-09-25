@@ -1,7 +1,6 @@
 /**
- * The AI draft in the Render tab: a brief, how many rows and how many variations of each go to
- * suggestRows, and the answer is handed to the grid — which shows the rows as proposed. Varying one
- * row sends that row and only the keys ticked. A writer that is down says so in plain words. On a
+ * The AI draft in the Render tab: a brief or files go to suggestRows in automatic mode,
+ * and the answer is handed to the grid as proposed rows. A writer that is down says so. On a
  * template, the button only opens Render with the draft asked for.
  */
 
@@ -24,12 +23,17 @@ const ANSWER = {
   unfilled: [],
 };
 const suggestRows = mock(async (_input: unknown): Promise<unknown> => ANSWER);
+const draftSourcesStatus = mock(async () => ({ status: 'ready' }));
+const uploadBrandDocument = mock(async () => ({
+  documentId: '99999999-9999-4999-8999-999999999999',
+}));
+const uploadMediaAsset = mock(async () => ({ assetId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }));
 
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
-  apiRendersApi: { suggestRows },
+  apiRendersApi: { suggestRows, draftSourcesStatus },
 }));
-const warmLaya = mock(() => undefined);
-mock.module('@/lib/api/layaWarm', () => ({ warmLaya }));
+mock.module('@/lib/documents/uploadBrandDocument', () => ({ uploadBrandDocument }));
+mock.module('@/lib/library/uploadMediaAsset', () => ({ uploadMediaAsset }));
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
@@ -69,15 +73,17 @@ const CONTRACT = {
 
 beforeEach(() => {
   suggestRows.mockClear();
-  warmLaya.mockClear();
+  draftSourcesStatus.mockClear();
+  uploadBrandDocument.mockClear();
+  uploadMediaAsset.mockClear();
 });
 afterEach(cleanup);
 
 const brief = (text: string) =>
-  fireEvent.change(screen.getByLabelText('Brief'), { target: { value: text } });
+  fireEvent.change(screen.getByLabelText(/Brief/), { target: { value: text } });
 
 describe('AiDraftDialog', () => {
-  test('new rows: the brief, the row count and variations of each reach the writer; the answer goes to the grid', async () => {
+  test('brief reaches the writer in automatic mode and the answer goes to the grid', async () => {
     const onDrafted = mock((_response: unknown) => undefined);
     const onOpenChange = mock((_open: boolean) => undefined);
     render(
@@ -92,27 +98,24 @@ describe('AiDraftDialog', () => {
       />,
     );
     brief('Two late-night offers');
-    fireEvent.change(screen.getByLabelText('Rows'), { target: { value: '4' } });
-    fireEvent.change(screen.getByLabelText('Variations of each'), { target: { value: '9' } });
-    // Four rows with four variations each is the twenty one draft may return.
-    expect(screen.getByText('20 rows in all')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Draft' }));
 
-    // The checker is woken the moment the dialog opens, not when the draft is sent.
-    expect(warmLaya).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(onDrafted).toHaveBeenCalledWith(ANSWER));
     expect(suggestRows.mock.calls[0]?.[0]).toEqual({
       brandId: BRAND,
       templateKey: '133',
       contractHash: 'hash-133',
       prompt: 'Two late-night offers',
-      count: 4,
-      forksPerRow: 4,
+      count: 20,
+      autoCount: true,
+      documentIds: [],
+      mediaAssetIds: [],
+      forksPerRow: 0,
     });
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  test('variations of one row send the row and only the keys ticked', async () => {
+  test('a cell-specific variation keeps its selected key', async () => {
     render(
       <AiDraftDialog
         open
@@ -121,19 +124,54 @@ describe('AiDraftDialog', () => {
         bindingId={null}
         contract={CONTRACT}
         parent={{ id: PARENT, label: 'Base', values: { headline: 'Hola', price: 10 } }}
+        initialVaryKeys={['headline']}
         onDrafted={() => undefined}
       />,
     );
-    expect(screen.queryByLabelText('Logo')).toBeNull();
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Price' }));
     brief('Punchier');
     fireEvent.click(screen.getByRole('button', { name: 'Draft' }));
     await waitFor(() => expect(suggestRows).toHaveBeenCalledTimes(1));
     expect(suggestRows.mock.calls[0]?.[0]).toMatchObject({
-      count: 3,
+      count: 20,
+      autoCount: true,
       forksPerRow: 0,
       varyKeys: ['headline'],
       parent: { id: PARENT, label: 'Base', values: { headline: 'Hola', price: 10 } },
+    });
+  });
+
+  test('a spreadsheet and image can draft without a brief', async () => {
+    render(
+      <AiDraftDialog
+        open
+        onOpenChange={() => undefined}
+        brandId={BRAND}
+        bindingId={null}
+        contract={CONTRACT}
+        parent={null}
+        onDrafted={() => undefined}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Choose source files'), {
+      target: {
+        files: [
+          new File(['name,headline\nA,Hello'], 'offers.csv', { type: 'text/csv' }),
+          new File(['image'], 'hero.png', { type: 'image/png' }),
+        ],
+      },
+    });
+    await waitFor(() => expect(uploadMediaAsset).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Draft' }));
+    await waitFor(() => expect(suggestRows).toHaveBeenCalledTimes(1));
+    expect(draftSourcesStatus).toHaveBeenCalledWith({
+      brandId: BRAND,
+      documentIds: ['99999999-9999-4999-8999-999999999999'],
+    });
+    expect(suggestRows.mock.calls[0]?.[0]).toMatchObject({
+      prompt: '',
+      autoCount: true,
+      documentIds: ['99999999-9999-4999-8999-999999999999'],
+      mediaAssetIds: ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'],
     });
   });
 

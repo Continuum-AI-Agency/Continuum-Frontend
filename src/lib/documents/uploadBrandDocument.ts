@@ -21,6 +21,7 @@ import type { OnboardingDocument, OnboardingState } from '@/lib/onboarding/state
 import { createBrandId } from '@/lib/onboarding/state';
 import { sanitizeStorageFileName } from '@/lib/storage/sanitize';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { resumableStorageUpload, TUS_CHUNK_SIZE_BYTES } from '@/lib/library/resumableStorageUpload';
 import { isAcceptedDocumentMime, MAX_DOCUMENT_BYTES, MAX_DOCUMENT_MB } from './uploadLimits';
 
 export const BRAND_DOCS_BUCKET = 'brand-docs';
@@ -96,11 +97,20 @@ export async function uploadBrandDocument({
   const sanitizedFileName = sanitizeStorageFileName(file.name);
   const storagePath = buildStoragePath(brandId, documentId, version, sanitizedFileName);
 
-  const { error: uploadError } = await supabase.storage
-    .from(BRAND_DOCS_BUCKET)
-    .upload(storagePath, file, { contentType: file.type || undefined, upsert: false });
-  if (uploadError) {
-    throw new Error(uploadError.message || `Failed to upload ${file.name}`);
+  if (file.size > TUS_CHUNK_SIZE_BYTES) {
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session?.access_token)
+      throw new Error(error?.message ?? 'Sign in to upload this document');
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!supabaseUrl) throw new Error('Document upload is unavailable');
+    await resumableStorageUpload({ file, bucket: BRAND_DOCS_BUCKET, objectPath: storagePath,
+      accessToken: data.session.access_token, supabaseUrl,
+      anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY });
+  } else {
+    const { error: uploadError } = await supabase.storage
+      .from(BRAND_DOCS_BUCKET)
+      .upload(storagePath, file, { contentType: file.type || undefined, upsert: false });
+    if (uploadError) throw new Error(uploadError.message || `Failed to upload ${file.name}`);
   }
 
   try {

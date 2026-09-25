@@ -24,6 +24,7 @@ import {
   Rocket,
   Send,
   TestTube2,
+  Trash2,
   Type,
   Variable,
   Wrench,
@@ -185,6 +186,7 @@ export function TemplateDetail({
   source,
   onBack,
   onRename,
+  onRemove,
   onOpenRender,
   onChanged,
   revisionFile,
@@ -194,6 +196,7 @@ export function TemplateDetail({
   source: TemplateSourceSummary;
   onBack: () => void;
   onRename: (title: string) => void;
+  onRemove?: () => void;
   onOpenRender?: (intent: ForgeRenderIntent) => void;
   /** Re-read the template list after something here changed what a card shows. */
   onChanged: () => Promise<void>;
@@ -220,7 +223,8 @@ export function TemplateDetail({
   );
   const [formatId, setFormatId] = useState<string | undefined>(undefined);
   // Read once: the dropped file is handed off moments after mount, and the tab must not follow it.
-  const [firstTab] = useState(revisionFile ? 'source' : 'variables');
+  const [tab, setTab] = useState(revisionFile ? 'source' : 'variables');
+  const missingFootage = source.parse?.missingFootage ?? [];
   // Open on a format that has something to show. A parse can list a precomp as a format (KAMAY's
   // "Gradient Background 1" came first), and landing on its empty frame reads as a broken preview.
   const boxedRatios = useMemo(
@@ -377,6 +381,7 @@ export function TemplateDetail({
     try {
       await saveTemplateVariables(brandId, assetId, edits);
       await queryClient.invalidateQueries({ queryKey: variablesKey, exact: true });
+      await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.contracts(brandId) });
       await loadVariables();
       toast.success('Saved');
       return true;
@@ -412,7 +417,6 @@ export function TemplateDetail({
   const onAdvance = async (action: ForgeLadderAction) => {
     setBusy(action);
     try {
-      if (action === 'smoke') await advanceTemplateForgeRun(brandId, assetId, 'draft');
       await advanceTemplateForgeRun(brandId, assetId, action);
       await Promise.all([refreshRun(), onChanged()]);
     } catch (error) {
@@ -753,7 +757,12 @@ export function TemplateDetail({
               type="button"
               size="sm"
               className="gap-1.5"
-              disabled={busy !== null || source.parseState !== 'parsed' || nameProblem !== null}
+              disabled={
+                busy !== null ||
+                source.parseState !== 'parsed' ||
+                nameProblem !== null ||
+                missingFootage.length > 0
+              }
               onClick={onSubmit}
             >
               {busy === 'submit' ? (
@@ -900,6 +909,17 @@ export function TemplateDetail({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {onRemove ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-destructive"
+              onClick={onRemove}
+            >
+              <Trash2 className="size-3.5" aria-hidden /> Remove
+            </Button>
+          ) : null}
           <DraftWithAiButton templateKey={templateKey} onOpenRender={onOpenRender} />
           {templateKey ? (
             <Button
@@ -948,8 +968,9 @@ export function TemplateDetail({
                         rendered.kind === 'video' ? (
                           // biome-ignore lint/a11y/useMediaCaption: a silent preview frame has no captions to show
                           <video
-                            src={`${rendered.url}#t=0.1`}
+                            src={rendered.url}
                             className="size-full object-contain"
+                            controls
                             muted
                             playsInline
                             preload="metadata"
@@ -975,6 +996,12 @@ export function TemplateDetail({
               </div>
             )}
           </TemplateMorph>
+          {!rendered && source.parse && drawnRatios.size > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Quick layout check is ready from the uploaded template. The full test render verifies
+              motion and effects before publishing.
+            </p>
+          ) : null}
         </div>
 
         <div className="flex min-w-0 flex-col divide-y divide-border">
@@ -1052,8 +1079,33 @@ export function TemplateDetail({
         <TemplateRenders brandId={brandId} templateKey={templateKey} formats={formats} />
       ) : null}
 
+      {missingFootage.length > 0 ? (
+        <section
+          className="mx-[var(--card-pad)] my-3 rounded-md border border-destructive/50 p-3 text-xs"
+          role="alert"
+        >
+          <p className="font-semibold">
+            This template package is missing {missingFootage.length} media file
+            {missingFootage.length === 1 ? '' : 's'}.
+          </p>
+          <p>
+            Upload a new ZIP that includes the AEP and these files. Keep their paths relative to the
+            AEP.
+          </p>
+          <ul className="my-2 max-h-40 list-disc overflow-y-auto pl-4">
+            {missingFootage.map((item) => (
+              <li key={item.file}>
+                {item.name || item.file.split(/[\\/]/).pop()} — {item.file}
+              </li>
+            ))}
+          </ul>
+          <Button type="button" size="sm" variant="outline" onClick={() => setTab('source')}>
+            Upload corrected ZIP
+          </Button>
+        </section>
+      ) : null}
       {/* Every panel stays mounted while hidden: switching tabs must never drop an unsaved edit. */}
-      <Tabs defaultValue={firstTab} className="gap-0">
+      <Tabs value={tab} onValueChange={setTab} className="gap-0">
         <TabsList
           variant="line"
           className="h-9 w-full justify-start gap-3 rounded-none border-b border-border px-[var(--card-pad)]"

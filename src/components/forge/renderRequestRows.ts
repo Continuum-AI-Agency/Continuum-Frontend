@@ -12,6 +12,7 @@ import {
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   type ForgeRenderSetEncodeClear,
   type ForgeRenderSetRow,
+  type ForgeRowEvidence,
   inheritEncodeBlock,
   type MediaAsset,
   type PinnedRenderAsset,
@@ -66,14 +67,40 @@ export type RequestRowMedia = {
   thumbnailUrl?: string | null;
   /** What the cell calls the picked asset. */
   name?: string;
+  /** A picked video's length, when the Library stored one. */
+  durationSec?: number;
+  /** A picked video with no stored length, so the cell can read it from the file itself. */
+  clipUrl?: string;
 };
 
 /** What the grid keeps about a picked Library asset — none of it goes over the wire. */
 export const rowMediaOf = (asset: MediaAsset): RequestRowMedia => ({
   ...(asset.width && asset.height ? { w: asset.width, h: asset.height } : {}),
+  ...(asset.durationMs ? { durationSec: asset.durationMs / 1000 } : {}),
+  // Most Library videos carry no stored length (136 of 1,276 on 2026-09-22).
+  ...(asset.kind === 'video' && !asset.durationMs && asset.signedUrl
+    ? { clipUrl: asset.signedUrl }
+    : {}),
   thumbnailUrl: asset.thumbnailUrl ?? asset.signedUrl ?? null,
   name: asset.title || asset.fileName,
 });
+
+/** Under a frame at 24 fps: a clip this close to the slot's length is not "short". */
+const CLIP_SLACK_SEC = 0.04;
+
+/**
+ * Seconds a picked clip falls short of what its video slot plays, or null when it covers it or
+ * either length is unknown. A render keeps the layer's timing and swaps only the clip, so a short
+ * clip runs out and the layer is empty for the rest; a long one is simply cut.
+ */
+export function clipShortBy(
+  clip: ApiRenderVariable['clip'],
+  durationSec: number | undefined,
+): number | null {
+  if (!clip || durationSec === undefined) return null;
+  const short = clip.toSec - durationSec;
+  return short > CLIP_SLACK_SEC ? short : null;
+}
 
 /**
  * Where one row's render goes. A spreadsheet names a replace by ad id alone; pre-flight resolves
@@ -106,6 +133,7 @@ export type RequestRow = {
   label: string;
   /** Only values authored on this row. Parent values are resolved at read/submit time. */
   values: Record<string, ApiRenderInputValue>;
+  evidence?: Record<string, ForgeRowEvidence>;
   /** Explicitly blank inherited values. Removing both this key and an override resets to inherit. */
   clearedKeys: string[];
   /** Empty on a child means inherit the parent's formats. */
@@ -298,6 +326,22 @@ export function effectiveMedia(rows: RequestRow[], id: string): Record<string, R
     Object.assign(media, item.media);
   }
   return media;
+}
+
+export function effectiveEvidence(rows: RequestRow[], id: string): Record<string, ForgeRowEvidence> {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const chain: RequestRow[] = [];
+  for (let row = byId.get(id); row; row = row.parentId ? byId.get(row.parentId) : undefined)
+    chain.unshift(row);
+  const evidence: Record<string, ForgeRowEvidence> = {};
+  for (const row of chain) {
+    for (const key of row.clearedKeys) delete evidence[key];
+    for (const key of Object.keys(row.values)) {
+      if (row.evidence?.[key]) evidence[key] = row.evidence[key];
+      else delete evidence[key];
+    }
+  }
+  return evidence;
 }
 
 export function effectiveOutputIds(rows: RequestRow[], id: string): string[] {
@@ -564,6 +608,7 @@ export function buildTemplateCsv(
 export function autoMapHeaders(
   headers: string[],
   variables: ApiRenderVariable[],
+  rows: Array<Record<string, string>> = [],
 ): Record<string, string> {
   const importable = importableVariables(variables);
   const byName = new Map<string, string>();
@@ -580,7 +625,7 @@ export function autoMapHeaders(
   for (const field of IMPORT_FIELDS)
     for (const alias of field.aliases) register(alias, field.target);
   const used = new Set<string>();
-  return Object.fromEntries(
+  const mapped = Object.fromEntries(
     headers.map((header) => {
       const target = byName.get(header.trim().toLowerCase());
       if (!target || used.has(target)) return [header, IMPORT_SKIP];
@@ -588,6 +633,47 @@ export function autoMapHeaders(
       return [header, target];
     }),
   );
+  const tokens = (value: string) =>
+    value
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(
+        (word) => word.length > 2 && !['url', 'link', 'media', 'file', 'text'].includes(word),
+      );
+  for (const header of headers) {
+    if (mapped[header] !== IMPORT_SKIP) continue;
+    const samples = rows
+      .slice(0, 20)
+      .map((row) => row[header]?.trim())
+      .filter(Boolean);
+    const links = samples.filter((sample) => /^https:\/\//i.test(sample));
+    const hint =
+      /\b(video|clip|movie)\b/i.test(header) ||
+      links.some((url) => /\.(mp4|mov|mxf|webm)(?:[?#]|$)/i.test(url))
+        ? 'video'
+        : /\b(image|photo|picture|logo)\b/i.test(header) ||
+            links.some((url) => /\.(png|jpe?g|webp|gif)(?:[?#]|$)/i.test(url))
+          ? 'image'
+          : null;
+    const candidates = importable.filter(
+      (variable) => !used.has(variable.key) && (!links.length || variable.kind === hint),
+    );
+    const words = tokens(header);
+    const scored = candidates.map((variable) => ({
+      variable,
+      score: words.filter((word) => tokens(`${variable.label} ${variable.key}`).includes(word))
+        .length,
+    }));
+    const best = Math.max(0, ...scored.map((item) => item.score));
+    const matches = scored.filter(
+      (item) => item.score === best && (best > 0 || (links.length > 0 && hint)),
+    );
+    if (matches.length !== 1) continue;
+    mapped[header] = matches[0]!.variable.key;
+    used.add(matches[0]!.variable.key);
+  }
+  return mapped;
 }
 
 export type ImportCellError = { row: number; column: string; message: string };
@@ -877,6 +963,7 @@ export function applyValue(
     changed.add(row.id);
     const values = { ...row.values };
     const nextMedia = { ...row.media };
+    const { [key]: _evidence, ...evidence } = row.evidence ?? {};
     const clearedKeys = row.clearedKeys.filter((item) => item !== key);
     delete values[key];
     delete nextMedia[key];
@@ -887,13 +974,14 @@ export function applyValue(
         ...row,
         values,
         media: nextMedia,
+        evidence,
         clearedKeys: inherited === undefined ? clearedKeys : [...clearedKeys, key],
       };
     if (!row.parentId || !sameValue(inherited, value)) {
       values[key] = structuredClone(value);
       if (media) nextMedia[key] = media;
     }
-    return { ...row, values, media: nextMedia, clearedKeys };
+    return { ...row, values, media: nextMedia, evidence, clearedKeys };
   });
   return idleFrom(next, changed);
 }
@@ -931,10 +1019,12 @@ export function clearKey(rows: RequestRow[], key: string, ids: string[]): Reques
     changed.add(row.id);
     const { [key]: _value, ...values } = row.values;
     const { [key]: _media, ...media } = row.media;
+    const { [key]: _evidence, ...evidence } = row.evidence ?? {};
     return {
       ...row,
       values,
       media,
+      evidence,
       clearedKeys: cleared ? [...row.clearedKeys, key] : row.clearedKeys,
     };
   });
@@ -950,7 +1040,8 @@ export function resetKey(rows: RequestRow[], key: string, ids: string[]): Reques
     changed.add(row.id);
     const { [key]: _value, ...values } = row.values;
     const { [key]: _media, ...media } = row.media;
-    return { ...row, values, media, clearedKeys: row.clearedKeys.filter((item) => item !== key) };
+    const { [key]: _evidence, ...evidence } = row.evidence ?? {};
+    return { ...row, values, media, evidence, clearedKeys: row.clearedKeys.filter((item) => item !== key) };
   });
   return idleFrom(next, changed);
 }
@@ -1035,6 +1126,7 @@ export function rowsFromSuggestion(
       parentId: row.parentId,
       label: row.label,
       values: { ...row.overrides },
+      evidence: row.evidence,
       clearedKeys: [],
       outputIds: row.parentId === null ? [...allOutputIds] : [],
       media,
@@ -1093,6 +1185,7 @@ export function toRenderSetRows(rows: RequestRow[], allOutputIds: string[]): For
         parentId: row.parentId,
         label: row.label.trim() || 'Untitled',
         overrides: toVariableMap(row),
+        ...(row.evidence ? { evidence: row.evidence } : {}),
         clearedKeys: row.clearedKeys,
         outputIds:
           row.parentId === null && row.outputIds.length === 0 ? allOutputIds : row.outputIds,
@@ -1130,6 +1223,7 @@ export function fromRenderSetRows(rows: ForgeRenderSetRow[]): RequestRow[] {
     parentId: row.parentId,
     label: row.label,
     values: { ...row.overrides },
+    evidence: row.evidence,
     clearedKeys: [...row.clearedKeys],
     outputIds: [...row.outputIds],
     encode: row.encode,
@@ -1164,6 +1258,7 @@ export function rebaseRows(
   const next = rows.map((row) => {
     const values = keep(row.values, keys, 'field')!;
     const media = keep(row.media, keys, 'field')!;
+    const evidence = keep(row.evidence, keys, 'field');
     const clearedKeys = row.clearedKeys.filter((key) => keys.has(key));
     for (const key of row.clearedKeys) if (!keys.has(key)) dropped.add(`${key} field`);
     const outputIds = row.outputIds.filter((id) => outputs.has(id));
@@ -1173,6 +1268,7 @@ export function rebaseRows(
     const changed =
       values !== row.values ||
       media !== row.media ||
+      evidence !== row.evidence ||
       clearedKeys.length !== row.clearedKeys.length ||
       outputIds.length !== row.outputIds.length ||
       encodeOutputs !== row.encode?.outputs ||
@@ -1182,6 +1278,7 @@ export function rebaseRows(
       ...row,
       values,
       media,
+      evidence,
       clearedKeys,
       outputIds,
       ...(row.encode

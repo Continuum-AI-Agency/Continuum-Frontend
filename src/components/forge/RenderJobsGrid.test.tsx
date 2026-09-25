@@ -840,6 +840,12 @@ describe('RenderJobsGrid', () => {
       ),
     ).toBeTruthy();
 
+    // The ledger row shows the video's own first frame, not a generic icon: an icon says a video
+    // exists and nothing about what rendered, which is what a thumbnail is for.
+    const thumb = (screen.getByText('Reel').closest('tr') as HTMLElement).querySelector('video');
+    expect(thumb?.getAttribute('src')).toBe('https://cdn.test/Story_9_16_ab12cd.mp4#t=0.1');
+    expect(thumb?.getAttribute('preload')).toBe('metadata');
+
     fireEvent.click(screen.getByText('Reel'));
     await screen.findByRole('heading', { name: 'Reel' });
     const preview = screen.getByRole('group', { name: 'Render preview' });

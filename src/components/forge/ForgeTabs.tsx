@@ -1,9 +1,15 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ForgeWorkbench } from '@/components/forge/ForgeWorkbench';
+import {
+  PendingApprovals,
+  useRenderApprovals,
+  waitingCount,
+} from '@/components/forge/PendingApprovals';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
+import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const RenderRequestsGrid = dynamic(() =>
@@ -17,6 +23,9 @@ const RenderJobsGrid = dynamic(() =>
 // against a published one, and watch them come back. A render request is against a PUBLISHED
 // template — including ones that never came through the Library — so the grids do not live
 // inside the workbench's "selected upload" branch, and a spreadsheet wants the full width.
+//
+// Approvals are the ledger's: a finished render waits there for a person before it becomes an ad.
+// The ledger tab carries the waiting count, so nothing waits unseen from the Templates tab.
 
 type ForgeTab = 'templates' | 'render' | 'renders';
 
@@ -38,6 +47,14 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
     setRenderIntent(intent);
     activate('render');
   };
+  // The approval notification links to `/forge#approvals`. A hash never reaches the server, so the
+  // ledger opens after mount.
+  useEffect(() => {
+    if (window.location.hash !== '#approvals') return;
+    setVisited((current) => new Set(current).add('renders'));
+    setTab('renders');
+  }, []);
+  const waiting = waitingCount(useRenderApprovals(brandId).data);
   return (
     // Bounded by the page: the strip stays put and each panel scrolls on its own.
     <Tabs
@@ -48,7 +65,15 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
       <TabsList className="shrink-0">
         <TabsTrigger value="templates">Templates</TabsTrigger>
         <TabsTrigger value="render">Render</TabsTrigger>
-        <TabsTrigger value="renders">Render ledger</TabsTrigger>
+        <TabsTrigger value="renders">
+          Render ledger
+          {waiting ? (
+            <Badge variant="warning" className="ml-1.5 tabular-nums">
+              {waiting}
+              <span className="sr-only"> waiting for approval</span>
+            </Badge>
+          ) : null}
+        </TabsTrigger>
       </TabsList>
       <TabsContent value="templates" className={PANEL}>
         <ForgeWorkbench
@@ -73,7 +98,10 @@ export function ForgeTabs({ brandId, brandName }: { brandId: string; brandName?:
       ) : null}
       {visited.has('renders') ? (
         <TabsContent value="renders" className={PANEL}>
-          <RenderJobsGrid key={brandId} brandId={brandId} active={tab === 'renders'} />
+          <div key={brandId} className="flex min-w-0 flex-col gap-4">
+            <PendingApprovals brandId={brandId} />
+            <RenderJobsGrid brandId={brandId} active={tab === 'renders'} />
+          </div>
         </TabsContent>
       ) : null}
     </Tabs>

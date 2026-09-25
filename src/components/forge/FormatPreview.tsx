@@ -242,22 +242,38 @@ export function FormatPreview({
         // A pressed chip pressed again reports no value; the pick stays where it was.
         onValueChange={(next) => next && onValueChange(next)}
       >
-        {formats.map((entry) => (
-          <ToggleGroupItem
-            key={entry.id}
-            value={entry.id}
-            aria-label={entry.label}
-            className="gap-1.5 px-2"
-          >
-            <RatioGlyph ratio={entry.ratio} className="text-muted-foreground" />
-            <span className="text-xs">{entry.ratio ?? entry.label}</span>
-            {entry.width && entry.height ? (
-              <span className="font-mono text-2xs tabular-nums text-muted-foreground">
-                {entry.width}×{entry.height}
-              </span>
-            ) : null}
-          </ToggleGroupItem>
-        ))}
+        {formats.map((entry) => {
+          // Two comps can share a ratio and a size (a fixed and an animated 9:16); only their
+          // names tell the chips apart.
+          const twin = formats.some(
+            (other) =>
+              other.id !== entry.id &&
+              other.ratio === entry.ratio &&
+              other.width === entry.width &&
+              other.height === entry.height,
+          );
+          return (
+            <ToggleGroupItem
+              key={entry.id}
+              value={entry.id}
+              aria-label={entry.label}
+              title={entry.label}
+              className="gap-1.5 px-2"
+            >
+              <RatioGlyph ratio={entry.ratio} className="text-muted-foreground" />
+              <span className="text-xs">{entry.ratio ?? entry.label}</span>
+              {twin ? (
+                <span className="max-w-32 truncate text-2xs text-muted-foreground">
+                  {entry.label}
+                </span>
+              ) : entry.width && entry.height ? (
+                <span className="font-mono text-2xs tabular-nums text-muted-foreground">
+                  {entry.width}×{entry.height}
+                </span>
+              ) : null}
+            </ToggleGroupItem>
+          );
+        })}
       </ToggleGroup>
       <div
         data-slot="format-preview-well"

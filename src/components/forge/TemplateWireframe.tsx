@@ -1,6 +1,6 @@
 'use client';
 
-import type { TemplatePreview } from '@continuum/contracts';
+import { readableLayerName, type TemplatePreview } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { LayoutTemplate } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
@@ -18,7 +18,8 @@ export type WireframeFrame = {
   ratio: string;
   width: number;
   height: number;
-  boxes: Array<{ key: string; kind: string; box: Box }>;
+  /** `label` is the layer a person would recognise, shown when the box is hovered. */
+  boxes: Array<{ key: string; kind: string; label: string; box: Box }>;
 };
 
 /** A box measured in a comp of one size, drawn on a frame of another. */
@@ -68,7 +69,16 @@ export function wireframeFrames(parse: TemplatePreview | null | undefined): Wire
             : bare
               ? scaleBox(bare, null, frame)
               : null;
-        return box ? [{ key: slot.key, kind: slot.kind, box }] : [];
+        return box
+          ? [
+              {
+                key: slot.key,
+                kind: slot.kind,
+                label: readableLayerName(slot.name || slot.key),
+                box,
+              },
+            ]
+          : [];
       }),
     };
   });
@@ -149,7 +159,7 @@ export function TemplateWireframe({
             strokeWidth={1.5}
             vectorEffect="non-scaling-stroke"
           />
-          {frame.boxes.map(({ key, kind, box }) => (
+          {frame.boxes.map(({ key, kind, label, box }) => (
             <rect
               key={key}
               x={box[0]}
@@ -157,10 +167,16 @@ export function TemplateWireframe({
               width={Math.max(0, box[2] - box[0])}
               height={Math.max(0, box[3] - box[1])}
               rx={Math.min(frame.width, frame.height) * 0.01}
-              className={KIND_STYLE[kind] ?? 'fill-muted-foreground/10 stroke-muted-foreground/50'}
+              className={cn(
+                KIND_STYLE[kind] ?? 'fill-muted-foreground/10 stroke-muted-foreground/50',
+                'cursor-help hover:stroke-foreground',
+              )}
               strokeWidth={1}
               vectorEffect="non-scaling-stroke"
-            />
+            >
+              {/* The browser's own tooltip: which variable this box is, without a library. */}
+              <title>{`${label} · ${kind}`}</title>
+            </rect>
           ))}
         </svg>
       ) : (

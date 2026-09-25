@@ -135,6 +135,22 @@ function Thumbnail({ output }: { output: ApiRenderOutput | null }) {
       />
     );
   }
+  // A video shows its own first frame, the same way a template card does — an icon told you a
+  // video exists but nothing about what rendered, which is the whole point of a ledger thumbnail.
+  if (output?.kind === 'video' && !broken) {
+    return (
+      // biome-ignore lint/a11y/useMediaCaption: a silent preview frame has no captions to show
+      <video
+        src={`${output.url}#t=0.1`}
+        aria-label="Rendered video"
+        className="size-9 rounded-sm object-contain"
+        muted
+        playsInline
+        preload="metadata"
+        onError={() => setBroken(true)}
+      />
+    );
+  }
   if (output?.kind === 'video') {
     return (
       <div className="flex size-9 items-center justify-center rounded-sm bg-muted">
@@ -175,7 +191,7 @@ export function RenderJobsGrid({
     brandId,
     trackedIds: [],
     limit: PAGE_SIZE,
-    pollIntervalMs: pushed ? false : DISCONNECTED_REFRESH_MS,
+    pollIntervalMs: active ? 5_000 : false,
     templateKey,
     // An open batch is read whole from the server; the set filter is for choosing one.
     ...(openBatchId ? { batchId: openBatchId } : renderSetId === 'all' ? {} : { renderSetId }),
@@ -347,6 +363,9 @@ export function RenderJobsGrid({
             <Badge variant={STATUS_TONE[job.status]}>
               {isInFlight(job) ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
               {job.status}
+              {job.status === 'rendering' && typeof job.progressPct === 'number'
+                ? ` ${job.progressPct}%`
+                : ''}
             </Badge>
             <RenderModePill test={job.test} />
           </span>
@@ -380,7 +399,26 @@ export function RenderJobsGrid({
         header: 'Files',
         enableSorting: false,
         cell: ({ row: { original: job } }) => (
-          <span className="tabular-nums">{filesSummary(job.outputs) || '—'}</span>
+          <span className="flex items-center gap-1.5 tabular-nums">
+            <span>{filesSummary(job.outputs) || '—'}</span>
+            {job.outputs
+              .filter((output) => /\.(mov|mxf)$/i.test(output.fileName))
+              .map((output) => (
+                <a
+                  key={output.id}
+                  href={output.url}
+                  download={output.fileName}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={`Download ${output.fileName}`}
+                  aria-label={`Download ${output.fileName}`}
+                  onClick={(event) => event.stopPropagation()}
+                  className="text-primary hover:underline"
+                >
+                  {output.fileName.split('.').pop()?.toUpperCase()}
+                </a>
+              ))}
+          </span>
         ),
       },
       {

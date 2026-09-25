@@ -272,6 +272,24 @@ test.describe('Render grid entry — fixtures', () => {
   for (const viewport of VIEWPORTS) {
     const size = `${viewport.width}x${viewport.height}`;
 
+    test(`E9 · ${size} · Draft with AI opens a compact bubble beside Add`, async ({ browser }) => {
+      const { page } = await newPage(browser, viewport);
+      const add = page.getByRole('button', { name: 'Add', exact: true });
+      await add.click();
+      await page.getByRole('menuitem', { name: 'Draft with AI…' }).click();
+      const bubble = page.getByRole('dialog', { name: 'Draft rows with AI' });
+      await expect(bubble).toBeVisible();
+      await expect(bubble).toHaveCSS('opacity', '1');
+      await expect(bubble.getByRole('button', { name: 'Add files' })).toBeVisible();
+      await expect(bubble.getByLabel('Brief (optional with files)')).toBeVisible();
+      await expect(bubble.getByLabel('Rows')).toHaveCount(0);
+      const [triggerBox, bubbleBox] = await Promise.all([add.boundingBox(), bubble.boundingBox()]);
+      expect(triggerBox && bubbleBox).toBeTruthy();
+      expect(bubbleBox!.width).toBeLessThan(450);
+      expect(Math.abs(bubbleBox!.x - triggerBox!.x)).toBeLessThan(100);
+      await shoot(page, `${size}-draft-bubble`);
+    });
+
     test(`E1 · ${size} · right-click is the ⋯ menu; headers hide and show; a typed-in field keeps its own menu`, async ({
       browser,
     }) => {

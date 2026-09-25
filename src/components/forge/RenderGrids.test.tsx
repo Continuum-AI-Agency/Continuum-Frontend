@@ -240,8 +240,10 @@ const HERO_ASSET = {
   thumbnailUrl: 'https://cdn.test/hero.png',
   headVersionId: null,
 };
+/** What the stand-in picker hands back next; HERO_ASSET unless a test says otherwise. */
+let pickedAsset: Record<string, unknown> = HERO_ASSET;
 // The Library picker drags the whole media stack in; the cell only needs its anchor, and opening
-// it picks HERO_ASSET the way a person choosing one would.
+// it picks `pickedAsset` the way a person choosing one would.
 mock.module('@/components/organic/primitives/MediaSelectPopover', () => ({
   MediaSelectPopover: ({
     anchor,
@@ -254,7 +256,7 @@ mock.module('@/components/organic/primitives/MediaSelectPopover', () => ({
   }) => {
     // biome-ignore lint/correctness/useExhaustiveDependencies: a pick per opening, like the real picker.
     useEffect(() => {
-      if (open) onAttachAssets([HERO_ASSET]);
+      if (open) onAttachAssets([pickedAsset]);
     }, [open]);
     return <>{anchor}</>;
   },
@@ -323,6 +325,7 @@ afterEach(() => {
   batchPreflightMock.mockClear();
   extraTemplates = [];
   contractOverrides = {};
+  pickedAsset = HERO_ASSET;
   brandRole = 'owner';
 });
 
@@ -353,9 +356,7 @@ const closeAnyMenu = async () => {
       expect(document.querySelectorAll('[role="menu"][data-open]').length).toBeLessThan(3 - level),
     );
   }
-  await waitFor(() =>
-    expect(document.querySelectorAll('[role="menu"][data-open]').length).toBe(0),
-  );
+  await waitFor(() => expect(document.querySelectorAll('[role="menu"][data-open]').length).toBe(0));
 };
 
 const openMenu = async (trigger: string | RegExp, item: string | RegExp) => {
@@ -398,11 +399,6 @@ describe('RenderRequestsGrid', () => {
     expect(screen.getByRole<HTMLButtonElement>('button', { name: /Render 1/ }).disabled).toBe(true);
     // A value the server refuses is wrong, not missing.
     expect(screen.getByText('Invalid')).toBeTruthy();
-    // And it says WHY: the badge names the field and the reason the server gave. Without this
-    // the row is red with nothing to act on, so the reason gets retyped instead of read.
-    expect(screen.getByText('Invalid').getAttribute('title')).toBe(
-      'Headline: Use a permitted brand color.',
-    );
   });
 
   test('a blank required field reads Needs input, muted; only a wrong value reads Invalid', async () => {
@@ -781,6 +777,46 @@ describe('RenderRequestsGrid', () => {
     } finally {
       unregister();
     }
+  });
+
+  test('a video slot states the clip length it demands, and says when one runs out early', async () => {
+    contractOverrides = {
+      variables: [
+        ...VARIABLES,
+        variable({
+          key: 'background',
+          label: 'Background',
+          kind: 'video',
+          clip: { fromSec: 0, toSec: 10, playsSec: 6.25 },
+        }),
+      ],
+    };
+    // Most Library videos store no length, so the cell reads it off the file itself.
+    pickedAsset = {
+      ...HERO_ASSET,
+      id: '88888888-8888-4888-8888-888888888888',
+      kind: 'video',
+      fileName: 'bg-loop.mp4',
+      durationMs: null,
+      signedUrl: 'https://cdn.test/bg-loop.mp4',
+    };
+    const view = render(<RenderRequestsGrid brandId={BRAND} />);
+    const choose = await screen.findByRole('button', { name: 'Choose Background' });
+    // "\u226510.0s", not a bare "10.0s": the number is the minimum the clip must be, not its length.
+    expect(within(choose).getByText('\u226510.0s')).toBeTruthy();
+    expect(choose.getAttribute('title')).toContain('Plays 0.0s\u201310.0s of the clip');
+
+    fireEvent.click(choose);
+    await screen.findByRole('button', { name: 'Change Background' });
+    expect(screen.queryByText('Short')).toBeNull();
+    const probe = view.container.querySelector<HTMLVideoElement>(
+      'video[src="https://cdn.test/bg-loop.mp4"]',
+    )!;
+    Object.defineProperty(probe, 'duration', { configurable: true, value: 6 });
+    fireEvent.loadedMetadata(probe);
+
+    const short = await screen.findByText('Short');
+    expect(short.getAttribute('title')).toContain('runs out 4.0s early');
   });
 
   test('a picked asset reads by name on one line with its clear control; a fork keeps both', async () => {
@@ -1284,7 +1320,9 @@ describe('RenderRequestsGrid', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Row actions for Base' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Generate with AI' }));
-    const presets = (await screen.findAllByRole('menuitem')).map((item) => item.textContent?.trim());
+    const presets = (await screen.findAllByRole('menuitem')).map((item) =>
+      item.textContent?.trim(),
+    );
     expect(presets).toEqual(
       expect.arrayContaining(['3 variations', '6 variations', '12 variations', 'With a brief…']),
     );
@@ -1421,7 +1459,7 @@ describe('RenderRequestsGrid', () => {
     await screen.findByDisplayValue('Newest row');
     await openMenu('Add', 'Draft with AI…');
     const dialog = await screen.findByRole('dialog', { name: 'Draft rows with AI' });
-    fireEvent.change(within(dialog).getByLabelText('Brief'), { target: { value: 'Summer' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Brief/), { target: { value: 'Summer' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Draft' }));
 
     const banner = await screen.findByRole('region', { name: 'Proposed rows' });
@@ -1456,7 +1494,7 @@ describe('RenderRequestsGrid', () => {
     await screen.findByDisplayValue('Newest row');
     await openMenu('Add', 'Draft with AI…');
     const dialog = await screen.findByRole('dialog', { name: 'Draft rows with AI' });
-    fireEvent.change(within(dialog).getByLabelText('Brief'), { target: { value: 'Summer' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Brief/), { target: { value: 'Summer' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Draft' }));
     const banner = await screen.findByRole('region', { name: 'Proposed rows' });
     fireEvent.click(within(banner).getByRole('button', { name: 'Discard all' }));

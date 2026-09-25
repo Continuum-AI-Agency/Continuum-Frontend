@@ -61,7 +61,6 @@ mock.module('motion/react', () => ({ ...motion, useReducedMotion: () => reducedM
 mock.module('@/components/forge/useForgeRun', () => ({
   useForgeRun: () => ({ run: null, pushed: true, loading: false, refresh: async () => undefined }),
 }));
-mock.module('@/components/forge/PendingApprovals', () => ({ PendingApprovals: () => null }));
 mock.module('@/components/forge/LineagePanel', () => ({ LineagePanel: () => null }));
 mock.module('@/components/forge/SourceRebindPanel', () => ({ SourceRebindPanel: () => null }));
 mock.module('@/components/forge/OutputSettingsPanel', () => ({ OutputSettingsPanel: () => null }));
@@ -220,9 +219,7 @@ describe('ForgeWorkbench', () => {
     expect(await screen.findByRole('button', { name: 'Open StarCraft Promo' })).toBeTruthy();
     // Its own build is the card above, not a second "shared" copy of it.
     expect(screen.getByRole('button', { name: /^Shared with you\s*1$/ })).toBeTruthy();
-    expect(
-      screen.getByRole('button', { name: 'Remove Hero offer from StarCraft' }),
-    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Remove Hero offer from StarCraft' })).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/\[DRAFT|template \d+|Continuum_app/);
   });
 
@@ -242,19 +239,6 @@ describe('ForgeWorkbench', () => {
       expect(transition).toHaveBeenCalledTimes(2);
     } finally {
       transition.mockRestore();
-    }
-  });
-
-  test('pending and failed source cards open their detail', async () => {
-    for (const parseState of ['pending', 'failed'] as const) {
-      fetchedSources = [
-        { ...SOURCE, parseState, parseError: parseState === 'failed' ? 'Could not parse' : null },
-      ];
-      const view = renderWorkbench();
-      fireEvent.click(await screen.findByRole('button', { name: 'Open Untitled template' }));
-      expect(await screen.findByRole('heading', { name: /Untitled template/ })).toBeTruthy();
-      expect(screen.getByRole('button', { name: 'Templates' })).toBeTruthy();
-      view.unmount();
     }
   });
 

@@ -133,22 +133,6 @@ export const templateSlotSchema = z
             compSize: z.array(z.number()).length(2).nullish(),
             charBudget: z.number().int().nonnegative().nullish(),
             sample: z.string().nullish(),
-            /**
-             * Video only: when this layer is on screen in `comp` (`inSec..outSec`) and which
-             * seconds of its clip it plays (`clipInSec..clipOutSec`). A render swaps the clip and
-             * keeps the layer's timing, so a clip shorter than `clipOutSec` runs out early and the
-             * layer is empty for the rest. `clipWhy` says why a video instance has none.
-             */
-            clip: z
-              .object({
-                inSec: z.number(),
-                outSec: z.number(),
-                clipInSec: z.number(),
-                clipOutSec: z.number(),
-              })
-              .passthrough()
-              .nullish(),
-            clipWhy: z.string().nullish(),
           })
           .passthrough(),
       )
@@ -280,6 +264,8 @@ export const templateParseSchema = z
       )
       .default([]),
     warnings: z.array(z.string()).default([]),
+    /** Footage referenced by the AEP but absent from its uploaded package. */
+    missingFootage: z.array(z.object({ name: z.string().nullable(), file: z.string() })).optional(),
   })
   .strip();
 export type TemplateParse = z.infer<typeof templateParseSchema>;
@@ -289,6 +275,7 @@ export const templatePreviewSchema = z
   .object({
     parser: z.string().min(1),
     sourceFamily: templateSourceFamilySchema,
+    missingFootage: templateParseSchema.shape.missingFootage,
     filename: z.string().optional(),
     comps: z.array(
       templateCompSchema.pick({
@@ -608,10 +595,7 @@ export function templateFontStatuses(
       layers: font.layers,
       held,
       ...(scope ? { scope } : {}),
-      // Only when it is a substitution. `templateFontStatusSchema` is strict, so a field on
-      // EVERY held face would be rejected outright by any client built before it existed —
-      // and `direct` tells a reader nothing the `held` flag has not already said.
-      ...(substitutedBy ? { via: 'substitute' as const } : {}),
+      ...(held ? { via: substitutedBy ? ('substitute' as const) : ('direct' as const) } : {}),
       ...(substitutedBy ? { substitutedBy } : {}),
     };
   });

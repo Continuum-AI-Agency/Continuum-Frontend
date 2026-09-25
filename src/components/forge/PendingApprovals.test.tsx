@@ -2,7 +2,8 @@
  * PendingApprovals against a mocked approvals client: a Forge package's variations under one
  * header with its expiry (a batch with no package keeps its own card), who decided and where,
  * `approved` read as publishing and re-read until the plugin's outcome lands, `expired` and
- * `failed` with their reason, and a refused decision shown in the backend's words.
+ * `failed` with their reason, and a refused decision shown in the backend's words. The section
+ * opens while something waits on a person and starts folded when every row is already decided.
  */
 
 import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
@@ -151,6 +152,30 @@ const renderApprovals = (
   );
 
 const card = (text: string) => screen.getByText(text).closest('div.rounded-lg') as HTMLElement;
+const sectionToggle = () => screen.getByRole('button', { name: /^Pending approvals/ });
+
+test('open while something waits, and folds away on a click', async () => {
+  renderApprovals();
+  await screen.findByText('Waiting on you');
+  expect(sectionToggle().getAttribute('aria-expanded')).toBe('true');
+
+  fireEvent.click(sectionToggle());
+  await waitFor(() => expect(screen.queryByText('Waiting on you')).toBeNull());
+  expect(sectionToggle().getAttribute('aria-expanded')).toBe('false');
+  expect(screen.getByText('Pending approvals (1)')).toBeTruthy();
+});
+
+test('a folded list opens itself when something new waits', async () => {
+  approvals = [row(ID, { status: 'rejected', decidedAt: '2026-09-15T00:05:00.000Z' })];
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  renderApprovals(client);
+  await screen.findByText('Pending approvals');
+  expect(sectionToggle().getAttribute('aria-expanded')).toBe('false');
+
+  approvals = [pending];
+  await client.invalidateQueries({ queryKey: ['forge', BRAND, 'approvals'] });
+  expect(await screen.findByText('Waiting on you')).toBeTruthy();
+});
 
 test('reuses a fresh approval list and invalidates it after a decision', async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -218,6 +243,10 @@ test('approved reads as publishing; expired and failed say why; the decider and 
     }),
   ];
   renderApprovals();
+  // Nothing waits on a person, so the list of decisions starts folded.
+  await screen.findByText('Pending approvals');
+  expect(screen.queryByText('Publishing…')).toBeNull();
+  fireEvent.click(sectionToggle());
   await screen.findByText('Publishing…');
   expect(card('Publishing…').textContent).toContain('Decided by ana@vivo47.com via Forge');
   expect(card('Expired').textContent).toContain('Nobody decided before the package expired.');

@@ -56,6 +56,7 @@ type PopoverPositionerProps = Pick<
   | 'collisionPadding'
   | 'collisionBoundary'
   | 'sticky'
+  | 'anchor'
 >;
 
 function PopoverContent({
@@ -67,6 +68,7 @@ function PopoverContent({
   collisionPadding,
   collisionBoundary,
   sticky,
+  anchor,
   ...props
 }: PopoverPrimitive.Popup.Props & PopoverPositionerProps) {
   const context = useContext(PopoverAnchorContext);
@@ -80,7 +82,7 @@ function PopoverContent({
         collisionPadding={collisionPadding}
         collisionBoundary={collisionBoundary}
         sticky={sticky}
-        anchor={context?.anchor ?? undefined}
+        anchor={anchor ?? context?.anchor ?? undefined}
         className="isolate z-50"
       >
         <PopoverPrimitive.Popup

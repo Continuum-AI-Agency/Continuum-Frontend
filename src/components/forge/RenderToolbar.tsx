@@ -18,7 +18,7 @@ import {
   Sparkles,
   Upload,
 } from 'lucide-react';
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, type ReactNode, type Ref } from 'react';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { Button } from '@/components/ui/button';
 import {
@@ -67,6 +67,7 @@ export function RenderToolbar({
   canAddRows,
   onAddRow,
   onDraftWithAi,
+  draftAnchorRef,
   onAddFromInputs,
   onUpload,
   onDownloadTemplate,
@@ -95,6 +96,7 @@ export function RenderToolbar({
   onAddRow: () => void;
   /** Rows from a brief, proposed by the AI — they land in the grid unsaved until kept. */
   onDraftWithAi: () => void;
+  draftAnchorRef?: Ref<HTMLButtonElement>;
   onAddFromInputs: (set: ApiRenderInputSet) => void;
   onUpload: () => void;
   onDownloadTemplate: () => void;
@@ -174,7 +176,13 @@ export function RenderToolbar({
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
-                  <Button type="button" size="sm" variant="outline" className="gap-1.5">
+                  <Button
+                    ref={draftAnchorRef}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                  >
                     <Plus className="size-3.5" aria-hidden /> Add
                     <ChevronDown className="size-3.5" aria-hidden />
                   </Button>

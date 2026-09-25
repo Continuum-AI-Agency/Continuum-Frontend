@@ -8,6 +8,7 @@ import {
   buildTemplateCsv,
   canImportRows,
   clearKey,
+  clipShortBy,
   descendantsOf,
   discardProposed,
   duplicateLabel,
@@ -38,6 +39,7 @@ import {
   rowBreadcrumb,
   rowDepth,
   rowFileCount,
+  rowMediaOf,
   rowsFromMappedImport,
   rowsFromSuggestion,
   seedRow,
@@ -80,6 +82,33 @@ const logo = variable({
   required: true,
 });
 const all = [headline, price, onSale, size, hero, logo];
+
+describe('a video slot’s clip length', () => {
+  const clip = { fromSec: 4.6667, toSec: 10, playsSec: 5.3333 };
+
+  test('a clip short of the last second the slot plays is short by the difference', () => {
+    expect(clipShortBy(clip, 6)).toBe(4);
+    // A frame of slack: 9.97s of a 10s slot is the same clip, rounded.
+    expect(clipShortBy(clip, 9.97)).toBeNull();
+    expect(clipShortBy(clip, 12)).toBeNull();
+  });
+
+  test('says nothing when either length is unknown', () => {
+    expect(clipShortBy(null, 6)).toBeNull();
+    expect(clipShortBy(clip, undefined)).toBeNull();
+  });
+
+  test('a picked video keeps its stored length, or its file when none was stored', () => {
+    const video = {
+      kind: 'video',
+      fileName: 'bg.mp4',
+      signedUrl: 'https://cdn.test/bg.mp4',
+    } as Parameters<typeof rowMediaOf>[0];
+    expect(rowMediaOf({ ...video, durationMs: 12_500 })).toMatchObject({ durationSec: 12.5 });
+    expect(rowMediaOf({ ...video, durationMs: 12_500 }).clipUrl).toBeUndefined();
+    expect(rowMediaOf({ ...video, durationMs: null }).clipUrl).toBe('https://cdn.test/bg.mp4');
+  });
+});
 
 describe('seedRow', () => {
   test('takes the designer’s samples, typed, and never media or reserved slots', () => {
@@ -365,6 +394,20 @@ describe('CSV', () => {
     expect(errors).toEqual([]);
     expect(rows[0]?.values).toEqual({ cta: 'Buy' });
     expect(autoMapHeaders([' Call to action '], [padded])).toEqual({ ' Call to action ': 'cta' });
+  });
+
+  test('a media link column maps by detected type when it has one matching slot', () => {
+    const image = variable({ key: 'hero', label: 'Hero asset', kind: 'image' });
+    const video = variable({ key: 'clip', label: 'Motion asset', kind: 'video' });
+    expect(
+      autoMapHeaders(
+        ['Creative URL'],
+        [image, video],
+        [{ 'Creative URL': 'https://cdn.example/ad.mov' }],
+      ),
+    ).toEqual({
+      'Creative URL': 'clip',
+    });
   });
 
   test('the Formats and variable samples are only what imports back cleanly', () => {
@@ -922,6 +965,19 @@ describe('merging two saves of one set', () => {
 });
 
 describe('a draft from the AI', () => {
+  test('retains field evidence after Keep and save, and clears it with the value', () => {
+    const id = '00000000-0000-4000-8000-000000000099';
+    const evidence = { kind: 'document' as const,
+      documentId: '33333333-3333-4333-8333-333333333333',
+      name: 'offers.xlsx', excerpt: '$279', sheet: 'Offers' };
+    const proposed = rowsFromSuggestion({ rows: [{ id, parentId: null, label: 'Offer',
+      overrides: { headline: '$279' }, evidence: { headline: evidence } }], assets: [] }, ['square']);
+    const saved = toRenderSetRows(keepProposed(proposed, [id]), ['square']);
+    expect(saved[0]?.evidence?.headline).toEqual(evidence);
+    expect(fromRenderSetRows(saved)[0]?.evidence?.headline).toEqual(evidence);
+    expect(clearKey(fromRenderSetRows(saved), 'headline', [id])[0]?.evidence?.headline).toBeUndefined();
+  });
+
   test('arrives proposed, roots in every format, with the picked picture’s thumbnail', () => {
     const root = '00000000-0000-4000-8000-000000000001';
     const hero = {

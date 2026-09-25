@@ -100,6 +100,13 @@ const IMPORT_ERROR_COPY: Record<string, string> = {
   render_import_too_large: 'This spreadsheet is too large to import.',
   render_import_not_found: 'The uploaded spreadsheet was not found. Upload it again.',
   render_import_failed: 'Could not read this spreadsheet.',
+  media_url_unsafe: 'This media link is not a public HTTPS address.',
+  media_url_unavailable: 'Could not download this media link.',
+  media_url_wrong_type: 'This link does not contain the expected image or video.',
+  media_url_too_large: 'This linked file is over 100 MB. Upload it directly to the Library.',
+  media_url_empty: 'This media link returned an empty file.',
+  media_url_redirects: 'This media link redirected too many times.',
+  media_import_failed: 'Could not import this media link.',
 };
 
 /** The server refuses with a bare code; the person needs the sentence (and the row count). */
@@ -116,7 +123,16 @@ const article = (word: string) => (/^[aeiou]/.test(word) ? 'an' : 'a');
 
 /** Delimited text — a CSV file or rows pasted onto the grid — as the preview the review reads. */
 const previewOfText = (text: string, sourceName: string): ForgeRenderImportPreview => {
-  const { headers, rows } = recordsFromTable(parseDelimited(text));
+  const table = parseDelimited(text);
+  const seen = new Set<string>();
+  for (const header of table[0] ?? []) {
+    const key = header.trim().toLowerCase();
+    if (seen.has(key)) throw new Error('render_import_duplicate_headers');
+    seen.add(key);
+  }
+  const { headers, rows } = recordsFromTable(table);
+  if (headers.length === 0) throw new Error('This sheet has no header row.');
+  if (rows.length === 0) throw new Error('render_import_no_rows');
   return { sourceName, sheetName: null, headers, rows, rowCount: rows.length };
 };
 
@@ -152,6 +168,10 @@ export function RenderRowsImport({
   const [mappings, setMappings] = useState<Record<string, string>>({});
   // Keyed by brand + id so remapping a column never refetches, and a brand switch never reuses.
   const [assets, setAssets] = useState<Record<string, MediaAsset | null | 'failed'>>({});
+  const [links, setLinks] = useState<
+    Record<string, { assetId: string; versionId: string } | string>
+  >({});
+  const requestedLinks = useRef(new Set<string>());
   const { variables, outputs } = contract;
   const variableScope = variables.map((variable) => `${variable.key}:${variable.kind}`).join('|');
 
@@ -181,12 +201,68 @@ export function RenderRowsImport({
     };
   }, [brandId, variableScope]);
 
+  const mediaLinks = useMemo(() => {
+    if (!preview) return [];
+    const byKey = new Map(variables.map((variable) => [variable.key, variable]));
+    const found = new Map<string, { url: string; kind: 'image' | 'video' }>();
+    for (const row of preview.rows)
+      for (const [column, target] of Object.entries(mappings)) {
+        const kind = byKey.get(target)?.kind;
+        const url = row[column]?.trim();
+        if ((kind === 'image' || kind === 'video') && url && /^https:\/\//i.test(url)) {
+          found.set(`${brandId}:${kind}:${url}`, { url, kind });
+        }
+      }
+    return [...found];
+  }, [preview, mappings, variables, brandId]);
+
+  useEffect(() => {
+    for (const [key, value] of mediaLinks) {
+      if (requestedLinks.current.has(key)) continue;
+      requestedLinks.current.add(key);
+      void apiRendersApi.importMedia({ brandId, ...value }).then(
+        (asset) => setLinks((current) => ({ ...current, [key]: asset })),
+        (error) => setLinks((current) => ({ ...current, [key]: importErrorMessage(error) })),
+      );
+    }
+  }, [brandId, mediaLinks, links]);
+
   const review = useMemo(() => {
     if (!preview) return null;
     const duplicate = duplicateMappedVariable(mappings, IMPORT_SKIP);
     if (duplicate) return { duplicate, rows: [], errors: [] };
-    return { duplicate: null, ...rowsFromMappedImport(preview.rows, mappings, variables, outputs) };
-  }, [preview, mappings, variables, outputs]);
+    const errors: ImportCellError[] = [];
+    const sourceRows = preview.rows.map((source, row) => {
+      const next = { ...source };
+      for (const [column, target] of Object.entries(mappings)) {
+        const kind = variables.find((variable) => variable.key === target)?.kind;
+        const url = source[column]?.trim();
+        if ((kind !== 'image' && kind !== 'video') || !url || !/^https:\/\//i.test(url)) continue;
+        const asset = links[`${brandId}:${kind}:${url}`];
+        next[column] = asset && typeof asset !== 'string' ? asset.assetId : '';
+        if (typeof asset === 'string') errors.push({ row, column, message: asset });
+      }
+      return next;
+    });
+    const result = rowsFromMappedImport(sourceRows, mappings, variables, outputs);
+    result.rows.forEach((row, index) => {
+      for (const [column, target] of Object.entries(mappings)) {
+        const kind = variables.find((variable) => variable.key === target)?.kind;
+        const url = preview.rows[index]?.[column]?.trim();
+        if ((kind !== 'image' && kind !== 'video') || !url) continue;
+        const asset = links[`${brandId}:${kind}:${url}`];
+        if (
+          asset &&
+          typeof asset !== 'string' &&
+          row.values[target] &&
+          !Array.isArray(row.values[target])
+        ) {
+          row.values[target] = { assetId: asset.assetId, versionId: asset.versionId };
+        }
+      }
+    });
+    return { duplicate: null, rows: result.rows, errors: [...result.errors, ...errors] };
+  }, [preview, mappings, variables, outputs, links, brandId]);
 
   const pending = useMemo(
     () =>
@@ -253,7 +329,12 @@ export function RenderRowsImport({
 
   const showPreview = (next: ForgeRenderImportPreview) => {
     retryFailedLookups();
-    setMappings(autoMapHeaders(next.headers, variables));
+    for (const [key, value] of Object.entries(links))
+      if (typeof value === 'string') requestedLinks.current.delete(key);
+    setLinks((current) =>
+      Object.fromEntries(Object.entries(current).filter(([, value]) => typeof value !== 'string')),
+    );
+    setMappings(autoMapHeaders(next.headers, variables, next.rows));
     setPreview(next);
   };
 
@@ -263,7 +344,11 @@ export function RenderRowsImport({
     if (!pasted) return;
     scopeRef.current += 1;
     setBusy(false);
-    showPreview(previewOfText(pasted.text, 'Clipboard'));
+    try {
+      showPreview(previewOfText(pasted.text, 'Clipboard'));
+    } catch (error) {
+      toast.error(importErrorMessage(error));
+    }
   }, [pasted]);
 
   const loadFile = async (file: File) => {
@@ -301,14 +386,28 @@ export function RenderRowsImport({
   };
 
   const overCap = preview !== null && !canImportRows(existingRows, preview.rowCount);
-  const checking = pending.length > 0;
+  const failedLinks = mediaLinks.filter(([key]) => typeof links[key] === 'string');
+  const retryFailedLinks = () => {
+    for (const [key] of failedLinks) requestedLinks.current.delete(key);
+    setLinks((current) =>
+      Object.fromEntries(Object.entries(current).filter(([key]) => !failedLinks.some(([failed]) => failed === key))),
+    );
+  };
+  const checkingLinks = mediaLinks.some(([key]) => !links[key]);
+  const checking = pending.length > 0 || checkingLinks;
   const errors = checked?.errors ?? [];
   const errorByCell = new Map(
     errors.map((error) => [cellKey(error.row, error.column), error.message]),
   );
   const mappedHeaders = preview?.headers.filter((header) => mappings[header] !== IMPORT_SKIP) ?? [];
   const canImport =
-    checked !== null && !busy && !checking && !overCap && !review?.duplicate && errors.length === 0;
+    checked !== null &&
+    preview?.rowCount !== 0 &&
+    !busy &&
+    !checking &&
+    !overCap &&
+    !review?.duplicate &&
+    errors.length === 0;
 
   const importRows = () => {
     if (!checked || !canImport) return;
@@ -358,7 +457,8 @@ export function RenderRowsImport({
             </Button>
             <FieldDescription>
               Name, Parent, Formats, Replace ad ID and variable columns map by key or label. Media
-              columns take Library asset ids.
+              columns take Library asset ids or public HTTPS media links, which are imported into
+              the Library.
             </FieldDescription>
           </Field>
 
@@ -408,8 +508,14 @@ export function RenderRowsImport({
               ) : null}
               {checking ? (
                 <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Loader2 className="size-3 animate-spin" /> Checking Library ids…
+                  <Loader2 className="size-3 animate-spin" /> Importing links and checking Library
+                  ids…
                 </p>
+              ) : null}
+              {failedLinks.length > 0 ? (
+                <Button type="button" variant="outline" size="xs" onClick={retryFailedLinks}>
+                  Retry linked media
+                </Button>
               ) : null}
 
               {mappedHeaders.length > 0 && checked && checked.rows.length > 0 ? (

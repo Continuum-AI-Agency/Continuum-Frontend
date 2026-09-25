@@ -20,10 +20,14 @@ const previewImport = mock(async () => ({
   rows: [{ Headline: 'Hello' }],
   rowCount: 1,
 }));
+const importMedia = mock(async () => ({
+  assetId: '11111111-1111-4111-8111-111111111111',
+  versionId: '44444444-4444-4444-8444-444444444444',
+}));
 
 mock.module('@/lib/documents/uploadBrandDocument', () => ({ uploadBrandDocument: upload }));
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
-  apiRendersApi: { previewImport },
+  apiRendersApi: { previewImport, importMedia },
 }));
 
 const { RenderRowsImport, downloadTemplateCsv } = await import('./RenderRowsImport');
@@ -38,6 +42,7 @@ afterEach(() => {
   globalThis.fetch = realFetch;
   upload.mockClear();
   previewImport.mockClear();
+  importMedia.mockClear();
   mock.restore();
 });
 
@@ -178,6 +183,49 @@ describe('RenderRowsImport', () => {
     expect(spain.parentId).toBe(root.id);
     expect(spain.delivery).toEqual({ action: 'replace', adId: '238500' });
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  test('refuses an empty CSV and duplicate headers before adding rows', async () => {
+    const toasts: string[] = [];
+    const unregister = registerToastSink(({ title }) => toasts.push(String(title)));
+    const { onImport } = renderImport();
+    chooseFile(csv('Name,Hero\n'));
+    await waitFor(() => expect(toasts).toContain('This spreadsheet has no rows to import.'));
+    chooseFile(csv('Name,name\nA,B'));
+    await waitFor(() => expect(toasts).toContain('Two columns share a header. Rename one and upload again.'));
+    expect(onImport).toHaveBeenCalledTimes(0);
+    unregister();
+  });
+
+  test('imports a mapped HTTPS image and pins its Library version on the row', async () => {
+    stubLibrary();
+    const { onImport } = renderImport();
+    chooseFile(csv('Name,Hero URL\nAd A,https://cdn.example/hero.jpg'));
+    await waitFor(() =>
+      expect(importMedia).toHaveBeenCalledWith({
+        brandId: 'brand-a',
+        kind: 'image',
+        url: 'https://cdn.example/hero.jpg',
+      }),
+    );
+    await waitFor(() => expect(importButton().hasAttribute('disabled')).toBe(false));
+    fireEvent.click(importButton());
+    expect(onImport.mock.calls[0]?.[0][0]?.values.hero).toEqual({
+      assetId: KNOWN,
+      versionId: '44444444-4444-4444-8444-444444444444',
+    });
+  });
+
+  test('retries a failed linked image without asking for another spreadsheet', async () => {
+    stubLibrary();
+    importMedia.mockImplementationOnce(async () => {
+      throw new Error('media_url_unavailable');
+    });
+    renderImport();
+    chooseFile(csv('Name,Hero URL\nAd A,https://cdn.example/hero.jpg'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry linked media' }));
+    await waitFor(() => expect(importMedia).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(importButton().hasAttribute('disabled')).toBe(false));
   });
 
   test('names each unusable cell, blocks Import, and fills a resolved Library thumbnail', async () => {

@@ -3,7 +3,7 @@
 import { AlertTriangle, CheckCircle2, CircleDashed, Loader2, PauseCircle } from 'lucide-react';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { Progress } from '@/components/ui/progress';
-import { type TemplateRunRow, templateSourceErrorMessage } from '@/lib/library/templateSources';
+import type { TemplateRunRow } from '@/lib/library/templateSources';
 import { labelForState } from './templateChecks';
 
 /**
@@ -114,13 +114,9 @@ export function ForgeRunProgress({ run }: { run: TemplateRunRow }) {
       {run.error ? (
         <p
           className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
-          title={/nocobase/i.test(run.error.code) ? undefined : run.error.code}
+          title={run.error.code}
         >
-          {templateSourceErrorMessage(
-            run.error.code,
-            run.error.message ?? 'The run stopped on an error.',
-            'Forge run',
-          )}
+          {run.error.message ?? 'The run stopped on an error.'}
         </p>
       ) : null}
 
@@ -131,21 +127,11 @@ export function ForgeRunProgress({ run }: { run: TemplateRunRow }) {
           </summary>
           <ul className="mt-2 flex flex-col gap-1">
             {run.findings.map((finding) => (
-              <li
-                key={finding.code}
-                className="text-muted-foreground"
-                title={/nocobase/i.test(finding.code) ? undefined : finding.code}
-              >
+              <li key={finding.code} className="text-muted-foreground" title={finding.code}>
                 <span className="text-foreground">
-                  {(finding.what &&
-                    templateSourceErrorMessage(undefined, finding.what, 'Forge step')) ??
-                    (finding.why
-                      ? templateSourceErrorMessage(finding.code, finding.why, 'Forge step')
-                      : 'Something went wrong')}
+                  {finding.what ?? finding.why ?? 'Something went wrong'}
                 </span>
-                {finding.what && finding.why
-                  ? ` — ${templateSourceErrorMessage(finding.code, finding.why, 'Forge step')}`
-                  : null}
+                {finding.what && finding.why ? ` — ${finding.why}` : null}
                 {/*
                   A null resolver is the backlog: nothing can fix this class of problem yet.
                   Saying so is the point — "we can fix this for you" and "nobody can fix this

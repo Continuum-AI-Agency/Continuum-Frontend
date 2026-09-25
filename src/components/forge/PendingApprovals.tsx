@@ -2,11 +2,20 @@
 
 import type { RenderApproval, RenderApprovalDecidedVia } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Clock, Loader2, Package, ShieldCheck, XCircle } from 'lucide-react';
+import {
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  Loader2,
+  Package,
+  ShieldCheck,
+  XCircle,
+} from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from '@/components/ui/toast-imperative';
 import { decideApprovals } from '@/lib/library/approvalDecisions';
 import { decideRenderApproval, fetchRenderApprovals } from '@/lib/library/renderApprovals';
@@ -25,6 +34,10 @@ import { cn } from '@/lib/utils';
 // expiry. Approve all / Reject all decide exactly the variations shown waiting — never one that
 // arrived after this list was read. A decision answers at once with `approved` — "publishing" — and the plugin's outcome
 // lands on the row later, so the list re-reads every few seconds while any row is still there.
+//
+// It sits at the top of the Render ledger and folds. It opens itself when something waits on you
+// and never folds itself, so deciding the last batch leaves its outcome in view. Past decisions
+// alone start folded; once the person toggles it, it stays where they put it.
 
 const STATUS_LABEL: Record<string, string> = {
   pending: 'Waiting on you',
@@ -67,6 +80,23 @@ const REASON_COPY: Record<string, string> = {
 export const APPROVAL_RELAY_POLL_MS = 3_000;
 export const approvalPollInterval = (approvals: RenderApproval[] | undefined) =>
   approvals?.some((approval) => approval.status === 'approved') ? APPROVAL_RELAY_POLL_MS : 30_000;
+
+/** The brand's approval list — one query, shared by the ledger's section and the tab's count. */
+export function useRenderApprovals(brandId: string) {
+  return useQuery({
+    queryKey: forgeQueryKeys.approvals(brandId),
+    queryFn: () => fetchRenderApprovals(brandId),
+    staleTime: FORGE_STALE_MS.active,
+    refetchInterval: (query) => approvalPollInterval(query.state.data),
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    retry: false,
+  });
+}
+
+export const waitingCount = (approvals: RenderApproval[] | undefined) =>
+  approvals?.filter((approval) => approval.status === 'pending').length ?? 0;
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -293,18 +323,10 @@ function ApprovalPackage({
 
 export function PendingApprovals({ brandId }: { brandId: string }) {
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [open, setOpen] = useState<boolean | null>(null);
   const queryClient = useQueryClient();
   const approvalKey = forgeQueryKeys.approvals(brandId);
-  const approvalQuery = useQuery({
-    queryKey: approvalKey,
-    queryFn: () => fetchRenderApprovals(brandId),
-    staleTime: FORGE_STALE_MS.active,
-    refetchInterval: (query) => approvalPollInterval(query.state.data),
-    refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    retry: false,
-  });
+  const approvalQuery = useRenderApprovals(brandId);
   const approvals = approvalQuery.data ?? [];
 
   const onDecide = useCallback(
@@ -372,20 +394,27 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
 
   if (approvalQuery.isPending || approvals.length === 0) return null;
 
-  const waiting = approvals.filter((a) => a.status === 'pending').length;
+  const waiting = waitingCount(approvals);
+  if (open === null && waiting > 0) setOpen(true);
 
   return (
-    <section id="approvals" className="space-y-3">
-      <div className="flex items-center gap-2">
-        <ShieldCheck className="h-4 w-4 text-warning" />
-        <h2 className="font-medium text-sm">
-          Pending approvals{waiting > 0 ? ` (${waiting})` : ''}
-        </h2>
-        <p className="text-xs text-muted-foreground">
-          Rendered creatives waiting for a person before they become ads.
-        </p>
-      </div>
-      <div className="space-y-2">
+    <Collapsible id="approvals" open={open ?? false} onOpenChange={setOpen} render={<section />}>
+      <h2>
+        <CollapsibleTrigger className="group flex w-full items-center gap-2 rounded-md py-1 text-left hover:bg-muted/30">
+          <ChevronRight
+            className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-data-panel-open:rotate-90"
+            aria-hidden
+          />
+          <ShieldCheck className="h-4 w-4 shrink-0 text-warning" aria-hidden />
+          <span className="font-medium text-sm">
+            Pending approvals{waiting > 0 ? ` (${waiting})` : ''}
+          </span>
+          <span className="truncate text-xs text-muted-foreground">
+            Rendered creatives waiting for a person before they become ads.
+          </span>
+        </CollapsibleTrigger>
+      </h2>
+      <CollapsibleContent className="space-y-2 pt-2">
         {groupByPackage(approvals).map((entry) =>
           'approvals' in entry ? (
             <ApprovalPackage
@@ -405,8 +434,8 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
             />
           ),
         )}
-      </div>
-    </section>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 

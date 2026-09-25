@@ -72,11 +72,11 @@ describe('wireframeFrames', () => {
       width: 1080,
       height: 1080,
       // Measured in a 540 px comp, drawn on the 1080 px frame.
-      boxes: [{ key: 'Headline', kind: 'text', box: [0, 0, 1080, 200] }],
+      boxes: [{ key: 'Headline', kind: 'text', label: 'Headline', box: [0, 0, 1080, 200] }],
     });
     expect(story?.boxes).toEqual([
-      { key: 'Headline', kind: 'text', box: [10, 20, 30, 40] },
-      { key: 'Product', kind: 'image', box: [100, 100, 900, 900] },
+      { key: 'Headline', kind: 'text', label: 'Headline', box: [10, 20, 30, 40] },
+      { key: 'Product', kind: 'image', label: 'Product', box: [100, 100, 900, 900] },
     ]);
   });
 
@@ -100,6 +100,10 @@ test('a gallery wireframe renders its compact parse without requesting render hi
   );
 
   expect(screen.getByRole('img', { name: '1:1 layout' })).toBeTruthy();
+  // Hovering a box names the variable in it.
+  expect([...document.querySelectorAll('rect > title')].map((node) => node.textContent)).toEqual([
+    'Headline · text',
+  ]);
 });
 
 test('the latest frame is the picked format’s file, never whichever file the fleet listed first', async () => {
