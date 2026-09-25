@@ -101,6 +101,31 @@ export const blockCategorySchema = z.enum([
 ]);
 export type BlockCategory = z.infer<typeof blockCategorySchema>;
 
+/**
+ * Where a block sits on the page: in the answer itself, or under the
+ * justification that holds the figures the answer rests on. A presentation
+ * grouping only — it never reorders `report.blocks`, whose order the backend
+ * grades (`data_scope_not_first`) and each section keeps.
+ */
+export type JainaReportSection = 'answer' | 'justification';
+
+const SECTION_OF_BLOCK_CATEGORY: Record<BlockCategory, JainaReportSection> = {
+  narrative: 'answer',
+  insight_list: 'answer',
+  actions: 'answer',
+  survey: 'answer',
+  data_scope: 'justification',
+  metric_grid: 'justification',
+  chart: 'justification',
+  data_table: 'justification',
+  comparison: 'justification',
+  goal_pacing: 'justification',
+};
+
+export function sectionOfBlockCategory(category: BlockCategory): JainaReportSection {
+  return SECTION_OF_BLOCK_CATEGORY[category];
+}
+
 export const blockPrioritySchema = z.enum(['primary', 'secondary', 'supplementary']);
 export type BlockPriority = z.infer<typeof blockPrioritySchema>;
 

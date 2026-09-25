@@ -5,6 +5,10 @@ import { BlockRenderer } from '../blocks/BlockRenderer';
 import { countBlockCitations } from '../blocks/citations';
 import { MediaMapProvider } from '../blocks/mediaText';
 import { JainaProse } from '../blocks/prose';
+import {
+  JainaJustificationSection,
+  partitionReportBlocks,
+} from '../components/JainaJustificationSection';
 
 // The paper layout for a Jaina report.
 //
@@ -12,7 +16,9 @@ import { JainaProse } from '../blocks/prose';
 // chart here is the same Recharts SVG the user was just looking at — vector, not a
 // photograph of one. What this component adds over the chat card is the furniture a
 // document needs and a conversation does not: a header that says what was measured
-// and over what window, and a footer that says where the numbers came from.
+// and over what window, and a footer that says where the numbers came from. The body
+// is split exactly as the chat splits it — the answer, then its Justification — so the
+// paper and the screen read alike.
 
 type JainaReportDocumentProps = {
   report: CheckpointReportV2;
@@ -67,6 +73,17 @@ export function JainaReportDocument({
   const citationCount = countBlockCitations(blocks);
   const computedCount = blocks.filter((block) => block.provenance?.source === 'computed').length;
   const hasMedia = report._meta.has_media && Object.keys(report.media_map).length > 0;
+  const sections = partitionReportBlocks(blocks);
+  const renderExportBlock = (block: CheckpointBlockV2) => (
+    <section
+      key={block.block_id}
+      className="jaina-export-block"
+      data-block-id={block.block_id}
+      data-category={block.category}
+    >
+      <BlockRenderer block={block} isStreaming={false} />
+    </section>
+  );
 
   const document = (
     <div className="jaina-export-root" lang={report.language}>
@@ -91,16 +108,11 @@ export function JainaReportDocument({
         />
       ) : null}
 
-      {blocks.map((block) => (
-        <section
-          key={block.block_id}
-          className="jaina-export-block"
-          data-block-id={block.block_id}
-          data-category={block.category}
-        >
-          <BlockRenderer block={block} isStreaming={false} />
-        </section>
-      ))}
+      {sections.answer.length > 0 ? (
+        <div data-report-section="answer">{sections.answer.map(renderExportBlock)}</div>
+      ) : null}
+
+      <JainaJustificationSection blocks={sections.justification} renderBlock={renderExportBlock} />
 
       <footer className="jaina-export-footer">
         <span>

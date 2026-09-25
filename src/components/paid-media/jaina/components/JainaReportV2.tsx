@@ -35,6 +35,7 @@ import {
   openJainaReportMailDraft,
   shareJainaReportFile,
 } from '../reportExport';
+import { JainaJustificationSection, partitionReportBlocks } from './JainaJustificationSection';
 import { SaveDashboardButton } from './SaveDashboardButton';
 
 const OBJECTIVE_STATUS_STYLE: Record<ExecutionObjective['status'], string> = {
@@ -160,6 +161,10 @@ export function JainaReportV2({
     () => orderedBlocks.filter((block) => !hiddenBlockIds.has(block.block_id)),
     [hiddenBlockIds, orderedBlocks],
   );
+  // Presentation only: the answer's own blocks stay with the answer, the figures it rests
+  // on go under the justification. Each keeps the order above; exports, saved dashboards
+  // and the module toggles still read the full `visibleBlocks` / `report.blocks`.
+  const sections = useMemo(() => partitionReportBlocks(visibleBlocks), [visibleBlocks]);
 
   const hasMedia = report._meta.has_media && Object.keys(report.media_map).length > 0;
   // Derived from the rendered blocks rather than `_meta.has_citations` (the FE
@@ -303,16 +308,22 @@ export function JainaReportV2({
           />
         ) : null}
 
-        {/* The evidence under the answer, marked as such. Without a rule here the blocks
-         *  read as further paragraphs of the same statement rather than as what they are —
-         *  the figures it rests on. */}
-        {visibleBlocks.length > 0 ? (
-          <div className="space-y-4 border-l border-border/50 pl-3">
-            {visibleBlocks.map((block) => (
+        {/* The rest of the answer — the reading, the moves — set as part of it. */}
+        {sections.answer.length > 0 ? (
+          <div data-report-section="answer" className="space-y-4">
+            {sections.answer.map((block) => (
               <BlockRenderer key={block.block_id} block={block} isStreaming={isStreaming} />
             ))}
           </div>
         ) : null}
+
+        {/* The evidence under the answer, marked as such. Without a heading and a rule the
+         *  figures read as further paragraphs of the same statement rather than as what they
+         *  are — the data it rests on. */}
+        <JainaJustificationSection
+          blocks={sections.justification}
+          renderBlock={(block) => <BlockRenderer block={block} isStreaming={isStreaming} />}
+        />
 
         {/* Chrome, so it sits under the thing it controls. A row of toggles named after
          *  every block used to be the first element in the report — the reader met the

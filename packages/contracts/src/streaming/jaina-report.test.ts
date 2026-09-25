@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  blockCategorySchema,
   cellsOfBlocks,
   chartBlockSchema,
   checkpointBlockV2LenientSchema,
@@ -16,6 +17,7 @@ import {
   numberReadingsOfToken,
   numbersInText,
   parseProseMarks,
+  sectionOfBlockCategory,
   stripProseMarks,
   validateReport,
 } from './jaina-report';
@@ -930,5 +932,32 @@ describe('cellsOfBlocks / headersOfBlocks', () => {
     expect(numbersInText('Spend was MX$73,712.61 across 1,424,702 impressions.')).toEqual([
       73712.61, 1424702,
     ]);
+  });
+});
+
+describe('sectionOfBlockCategory', () => {
+  it('keeps the blocks that state the answer in the answer', () => {
+    for (const category of ['narrative', 'insight_list', 'actions', 'survey'] as const) {
+      expect(sectionOfBlockCategory(category)).toBe('answer');
+    }
+  });
+
+  it('files the figures the answer rests on under its justification', () => {
+    for (const category of [
+      'data_scope',
+      'metric_grid',
+      'chart',
+      'data_table',
+      'comparison',
+      'goal_pacing',
+    ] as const) {
+      expect(sectionOfBlockCategory(category)).toBe('justification');
+    }
+  });
+
+  it('assigns every block category a section', () => {
+    for (const category of blockCategorySchema.options) {
+      expect(['answer', 'justification']).toContain(sectionOfBlockCategory(category));
+    }
   });
 });

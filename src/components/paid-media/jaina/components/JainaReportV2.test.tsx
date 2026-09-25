@@ -296,3 +296,105 @@ describe('JainaReportV2 — the answer reads as the answer', () => {
     ).toBeGreaterThan(0);
   });
 });
+
+describe('JainaReportV2 — the justification under the answer', () => {
+  const moduleBlock = (block_id: string, category: string, title: string) =>
+    ({
+      block_id,
+      category,
+      scope: 'current_account',
+      title,
+      priority: 1,
+      provenance: null,
+    }) as unknown as CheckpointReportV2['blocks'][number];
+
+  // The backend's reading order, which each section keeps: the scope frame opens the
+  // report, the figures sit between the reading and the closing moves.
+  const strategyReport = {
+    ...report,
+    blocks: [
+      moduleBlock('scope', 'data_scope', 'Data scope'),
+      moduleBlock('reading', 'insight_list', 'What stands out'),
+      moduleBlock('kpis', 'metric_grid', 'Headline KPIs'),
+      moduleBlock('trend', 'chart', 'Spend trend'),
+      moduleBlock('rows', 'data_table', 'Campaign table'),
+      moduleBlock('moves', 'actions', 'Next moves'),
+    ],
+  } as CheckpointReportV2;
+
+  const moduleIdsIn = (section: 'answer' | 'justification') =>
+    Array.from(
+      document.querySelectorAll(`[data-report-section="${section}"] [data-testid^="module-"]`),
+    ).map((node) => node.getAttribute('data-testid')?.replace('module-', ''));
+
+  it('keeps the reading and the moves with the answer, in the backend’s order', () => {
+    render(<JainaReportV2 report={strategyReport} isStreaming={false} />);
+    expect(moduleIdsIn('answer')).toEqual(['reading', 'moves']);
+  });
+
+  it('groups the figures under an always-open Justification, in the backend’s order', () => {
+    render(<JainaReportV2 report={strategyReport} isStreaming={false} />);
+    const justification = screen.getByRole('region', { name: 'Justification' });
+    expect(justification.tagName).not.toBe('DETAILS');
+    expect(justification.textContent).toContain('The data behind the answer');
+    expect(moduleIdsIn('justification')).toEqual(['scope', 'kpis', 'trend', 'rows']);
+  });
+
+  it('sets the justification below the answer', () => {
+    render(<JainaReportV2 report={strategyReport} isStreaming={false} />);
+    const moves = screen.getByTestId('module-moves');
+    const justification = screen.getByRole('region', { name: 'Justification' });
+    expect(
+      moves.compareDocumentPosition(justification) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
+  });
+
+  it('shows no Justification heading when the answer carries no figures', () => {
+    render(
+      <JainaReportV2
+        report={{ ...strategyReport, blocks: [moduleBlock('reading', 'insight_list', 'Reading')] }}
+        isStreaming={false}
+      />,
+    );
+    expect(screen.queryByRole('region', { name: 'Justification' })).toBeNull();
+    expect(screen.queryByText('Justification')).toBeNull();
+    expect(moduleIdsIn('answer')).toEqual(['reading']);
+  });
+
+  it('keeps hidden modules hidden, and drops the heading once every figure is hidden', () => {
+    render(
+      <JainaReportV2
+        report={{
+          ...strategyReport,
+          blocks: [
+            moduleBlock('reading', 'insight_list', 'What stands out'),
+            moduleBlock('kpis', 'metric_grid', 'Headline KPIs'),
+          ],
+        }}
+        isStreaming={false}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Headline KPIs module' }));
+    expect(screen.queryByTestId('module-kpis')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Justification' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show Headline KPIs module' }));
+    expect(moduleIdsIn('justification')).toEqual(['kpis']);
+  });
+
+  it('still exports the visible modules in the report’s own order', async () => {
+    downloadHtmlMock.mockClear();
+    render(<JainaReportV2 report={strategyReport} isStreaming={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Export report as HTML' }));
+    await waitFor(() => expect(downloadHtmlMock).toHaveBeenCalledTimes(1));
+    const blocks = downloadHtmlMock.mock.calls[0][0].blocks as Array<{ block_id: string }>;
+    expect(blocks.map((block) => block.block_id)).toEqual([
+      'scope',
+      'reading',
+      'kpis',
+      'trend',
+      'rows',
+      'moves',
+    ]);
+  });
+});
