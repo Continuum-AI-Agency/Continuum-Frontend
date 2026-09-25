@@ -1,0 +1,1155 @@
+{
+  "block_id": "answer_template_three_numbers",
+  "category": "answer_template",
+  "scope": "account",
+  "title": "Tres números que importan",
+  "priority": "primary",
+  "provenance": {
+    "source": "computed",
+    "tool": "get_key_metrics",
+    "period": {
+      "since": "2026-09-18",
+      "until": "2026-09-24",
+      "requested_label": "last_7d"
+    },
+    "entity_label": null,
+    "record_count": 49
+  },
+  "grounding": null,
+  "template_id": "three_numbers",
+  "layout": "steps",
+  "executive": {
+    "sentence": "En los últimos 7 días llevamos {spend} de gasto, {results} conversaciones y un costo por conversación de {cpr}: el gasto subió {spend_change} y el costo por conversación subió {cpr_change} frente a los 7 días anteriores.",
+    "hero_chart": {
+      "kind": "line",
+      "title": "Gasto diario",
+      "caption": "Gasto por día en los últimos 7 días, sumando las {campaigns_read} campañas: {spend} en total.",
+      "points": [
+        {
+          "label": "09-18",
+          "figure_id": "day_1",
+          "entity_id": null,
+          "emphasis": false
+        },
+        {
+          "label": "09-19",
+          "figure_id": "day_2",
+          "entity_id": null,
+          "emphasis": false
+        },
+        {
+          "label": "09-20",
+          "figure_id": "day_3",
+          "entity_id": null,
+          "emphasis": false
+        },
+        {
+          "label": "09-21",
+          "figure_id": "day_4",
+          "entity_id": null,
+          "emphasis": false
+        },
+        {
+          "label": "09-22",
+          "figure_id": "day_5",
+          "entity_id": null,
+          "emphasis": false
+        },
+        {
+          "label": "09-23",
+          "figure_id": "day_6",
+          "entity_id": null,
+          "emphasis": false
+        },
+        {
+          "label": "09-24",
+          "figure_id": "day_7",
+          "entity_id": null,
+          "emphasis": false
+        }
+      ],
+      "reference": null,
+      "lower_is_better": false
+    }
+  },
+  "justification": {
+    "sections": [
+      {
+        "kind": "measured",
+        "title": "Qué medimos",
+        "text": "Leímos gasto, objetivo y resultados de las {campaigns_read} campañas que gastaron en los últimos 7 días ({days}), a nivel campaña. El resultado es el que compra el objetivo de la mayor parte del gasto: conversaciones. Otras {campaigns_other} campañas buscan otro resultado: su gasto ({spend_other}) cuenta en el gasto, pero no en conversaciones ni en el costo por conversación. Lo comparamos con los 7 días anteriores ({days_prior}), leídos igual y a la misma duración.",
+        "chart": null,
+        "table": null,
+        "items": []
+      },
+      {
+        "kind": "found",
+        "title": "Qué encontramos",
+        "text": "El gasto es la suma de todas las campañas; conversaciones y el costo por conversación salen solo de las {campaigns_kind} campañas que buscan conversaciones.",
+        "chart": null,
+        "table": {
+          "columns": [
+            {
+              "key": "spend",
+              "label": "Gasto"
+            },
+            {
+              "key": "share",
+              "label": "Parte del gasto"
+            },
+            {
+              "key": "results",
+              "label": "Conversaciones"
+            },
+            {
+              "key": "cpr",
+              "label": "Costo por conversación"
+            },
+            {
+              "key": "spend_prior",
+              "label": "Gasto antes"
+            },
+            {
+              "key": "results_prior",
+              "label": "Conversaciones antes"
+            }
+          ],
+          "rows": [
+            {
+              "label": "SEDE C // MENSAJES // AGOSTO 2026",
+              "entity_id": "900000000000000003",
+              "cells": {
+                "spend": "c1_spend",
+                "share": "c1_share",
+                "results": "c1_results",
+                "cpr": "c1_cpr",
+                "spend_prior": "c1_spend_prior",
+                "results_prior": "c1_results_prior"
+              }
+            },
+            {
+              "label": "SEDE B // MENSAJES // AGOSTO 2026",
+              "entity_id": "900000000000000002",
+              "cells": {
+                "spend": "c2_spend",
+                "share": "c2_share",
+                "results": "c2_results",
+                "cpr": "c2_cpr",
+                "spend_prior": "c2_spend_prior",
+                "results_prior": "c2_results_prior"
+              }
+            },
+            {
+              "label": "SEDE A // MENSAJES // AGOSTO 2026",
+              "entity_id": "900000000000000001",
+              "cells": {
+                "spend": "c3_spend",
+                "share": "c3_share",
+                "results": "c3_results",
+                "cpr": "c3_cpr",
+                "spend_prior": "c3_spend_prior",
+                "results_prior": "c3_results_prior"
+              }
+            },
+            {
+              "label": "SEDE D // MENSAJES // AGOSTO 2026",
+              "entity_id": "900000000000000004",
+              "cells": {
+                "spend": "c4_spend",
+                "share": "c4_share",
+                "results": "c4_results",
+                "cpr": "c4_cpr",
+                "spend_prior": "c4_spend_prior",
+                "results_prior": "c4_results_prior"
+              }
+            },
+            {
+              "label": "Otras campañas (otro resultado)",
+              "entity_id": null,
+              "cells": {
+                "spend": "spend_other"
+              }
+            }
+          ]
+        },
+        "items": [
+          {
+            "id": "number_spend",
+            "title": "Gasto",
+            "entity_id": null,
+            "badge_figure_id": "spend",
+            "detail_figure_ids": [
+              "spend_prior"
+            ],
+            "text": "Suma del gasto de las {campaigns_read} campañas que gastaron en los últimos 7 días = {spend}. En los 7 días anteriores fue {spend_prior}: subió {spend_change}.",
+            "tone": "neutral"
+          },
+          {
+            "id": "number_results",
+            "title": "Conversaciones",
+            "entity_id": null,
+            "badge_figure_id": "results",
+            "detail_figure_ids": [
+              "results_prior"
+            ],
+            "text": "Suma de conversaciones de las {campaigns_kind} campañas que buscan conversaciones = {results}. En los 7 días anteriores fueron {results_prior}: subió {results_change}.",
+            "tone": "good"
+          },
+          {
+            "id": "number_cpr",
+            "title": "Costo por conversación",
+            "entity_id": null,
+            "badge_figure_id": "cpr",
+            "detail_figure_ids": [
+              "cpr_prior"
+            ],
+            "text": "{spend_kind} gastados en esas campañas ÷ {results} conversaciones = {cpr}. En los 7 días anteriores: {spend_kind_prior} ÷ {results_prior} = {cpr_prior}; subió {cpr_change}.",
+            "tone": "bad"
+          }
+        ]
+      },
+      {
+        "kind": "why",
+        "title": "Por qué",
+        "text": "SEDE A // MENSAJES // AGOSTO 2026 es la campaña que más movió el costo por conversación: pasó de {c3_results_prior} conversaciones con {c3_spend_prior} a {c3_results} con {c3_spend}. Si hubiera repetido los 7 días anteriores, el costo por conversación de la cuenta sería {cpr_without_driver} en vez de {cpr}.",
+        "chart": null,
+        "table": null,
+        "items": []
+      }
+    ]
+  },
+  "figures": [
+    {
+      "id": "spend",
+      "label": "Gasto",
+      "value": 24746.130000000005,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "sum(spend) over 16 campaigns"
+    },
+    {
+      "id": "results",
+      "label": "Conversaciones",
+      "value": 503,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "sum(conversations) over 4 campaigns bought for conversations"
+    },
+    {
+      "id": "cpr",
+      "label": "Costo por conversación",
+      "value": 40.445646123260445,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "spend_kind / conversations"
+    },
+    {
+      "id": "spend_kind",
+      "label": "Gasto · conversaciones",
+      "value": 20344.160000000003,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "sum(spend) over 4 campaigns bought for conversations"
+    },
+    {
+      "id": "campaigns_read",
+      "label": "campaigns with spend",
+      "value": 16,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": null
+    },
+    {
+      "id": "campaigns_kind",
+      "label": "campaigns bought for conversations",
+      "value": 4,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": null
+    },
+    {
+      "id": "campaigns_other",
+      "label": "campaigns buying another result",
+      "value": 12,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "campaigns with spend whose objective buys something other than conversations, or is unknown"
+    },
+    {
+      "id": "spend_other",
+      "label": "Gasto · Otras campañas (otro resultado)",
+      "value": 4401.970000000001,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "spend − spend_kind"
+    },
+    {
+      "id": "days",
+      "label": "days",
+      "value": 7,
+      "unit": "days",
+      "currency": null,
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": null
+    },
+    {
+      "id": "spend_prior",
+      "label": "Gasto · los 7 días anteriores",
+      "value": 20061.899999999994,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-11",
+        "until": "2026-09-17",
+        "label": "los 7 días anteriores"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_50f13a50",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "sum(spend) over 12 campaigns; last_14d − last_7d, per campaign"
+    },
+    {
+      "id": "results_prior",
+      "label": "Conversaciones · los 7 días anteriores",
+      "value": 401,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-11",
+        "until": "2026-09-17",
+        "label": "los 7 días anteriores"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_50f13a50",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "sum(conversations); last_14d − last_7d, per campaign"
+    },
+    {
+      "id": "spend_kind_prior",
+      "label": "Gasto · conversaciones · los 7 días anteriores",
+      "value": 16099.089999999997,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-11",
+        "until": "2026-09-17",
+        "label": "los 7 días anteriores"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_50f13a50",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "sum(spend) over campaigns bought for conversations; last_14d − last_7d, per campaign"
+    },
+    {
+      "id": "cpr_prior",
+      "label": "Costo por conversación · los 7 días anteriores",
+      "value": 40.147356608478795,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-11",
+        "until": "2026-09-17",
+        "label": "los 7 días anteriores"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_50f13a50",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "spend_kind_prior / conversations"
+    },
+    {
+      "id": "days_prior",
+      "label": "days",
+      "value": 7,
+      "unit": "days",
+      "currency": null,
+      "window": {
+        "since": "2026-09-11",
+        "until": "2026-09-17",
+        "label": "los 7 días anteriores"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_50f13a50",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": null
+    },
+    {
+      "id": "spend_change",
+      "label": "Gasto · vs los 7 días anteriores",
+      "value": 0.23348885200305114,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "|spend / spend_prior − 1|"
+    },
+    {
+      "id": "results_change",
+      "label": "Conversaciones · vs los 7 días anteriores",
+      "value": 0.254364089775561,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "|results / results_prior − 1|"
+    },
+    {
+      "id": "cpr_change",
+      "label": "Costo por conversación · vs los 7 días anteriores",
+      "value": 0.00742986686995617,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "|cpr / cpr_prior − 1|"
+    },
+    {
+      "id": "c1_spend",
+      "label": "Gasto · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 5989.6900000000005,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": null
+    },
+    {
+      "id": "c1_results",
+      "label": "Conversaciones · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 164,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": null
+    },
+    {
+      "id": "c1_cpr",
+      "label": "Costo por conversación · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 36.5225,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": "spend / conversations"
+    },
+    {
+      "id": "c1_share",
+      "label": "Parte del gasto · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 0.2420455238859571,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": "spend / spend (account)"
+    },
+    {
+      "id": "c1_spend_prior",
+      "label": "Gasto · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 4169.6799999999985,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-11",
+        "until": "2026-09-17",
+        "label": "los 7 días anteriores"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_50f13a50",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": "last_14d − last_7d, per campaign"
+    },
+    {
+      "id": "c1_results_prior",
+      "label": "Conversaciones · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 120,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-11",
+        "until": "2026-09-17",
+        "label": "los 7 días anteriores"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_50f13a50",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": "last_14d − last_7d, per campaign"
+    },
+    {
+      "id": "c2_spend",
+      "label": "Gasto · SEDE B // MENSAJES // AGOSTO 2026",
+      "value": 5369.1900000000005,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "campaign",
+        "entityId": "900000000000000002"
+      },
+      "derivation": null
+    },
+    {
+      "id": "c2_results",
+      "label": "Conversaciones · SEDE B // MENSAJES // AGOSTO 2026",
+      "value": 143,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "campaign",
+        "entityId": "900000000000000002"
+      },
+      "derivation": null
+    },
+    {
+      "id": "c2_cpr",
+      "label": "Costo por conversación · SEDE B // MENSAJES // AGOSTO 2026",
+      "value": 37.54678321678322,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "campaign",
+        "entityId": "900000000000000002"
+      },
+      "derivation": "spend / conversations"
+    },
+    {
+      "id": "c2_share",
+      "label": "Parte del gasto · SEDE B // MENSAJES // AGOSTO 2026",
+      "value": 0.21697089605526196,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "campaign",
+        "entityId": "900000000000000002"
+      },
+      "derivation": "spend / spend (account)"
+    },
+    {
+      "id": "c2_spend_prior",
+      "label": "Gasto · SEDE B // MENSAJES // AGOSTO 2026",
+      "value": 4111.779999999999,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-11",
+        "until": "2026-09-17",
+        "label": "los 7 días anteriores"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_50f13a50",
+        "level": "campaign",
+        "entityId": "900000000000000002"
+      },
+      "derivation": "last_14d − last_7d, per campaign"
+    },
+    {
+      "id": "c2_results_prior",
+      "label": "Conversaciones · SEDE B // MENSAJES // AGOSTO 2026",
+      "value": 115,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-11",
+        "until": "2026-09-17",
+        "label": "los 7 días anteriores"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_50f13a50",
+        "level": "campaign",
+        "entityId": "900000000000000002"
+      },
+      "derivation": "last_14d − last_7d, per campaign"
+    },
+    {
+      "id": "c3_spend",
+      "label": "Gasto · SEDE A // MENSAJES // AGOSTO 2026",
+      "value": 4654.790000000001,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "campaign",
+        "entityId": "900000000000000001"
+      },
+      "derivation": null
+    },
+    {
+      "id": "c3_results",
+      "label": "Conversaciones · SEDE A // MENSAJES // AGOSTO 2026",
+      "value": 95,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "campaign",
+        "entityId": "900000000000000001"
+      },
+      "derivation": null
+    },
+    {
+      "id": "c3_cpr",
+      "label": "Costo por conversación · SEDE A // MENSAJES // AGOSTO 2026",
+      "value": 48.99778947368422,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "campaign",
+        "entityId": "900000000000000001"
+      },
+      "derivation": "spend / conversations"
+    },
+    {
+      "id": "c3_share",
+      "label": "Parte del gasto · SEDE A // MENSAJES // AGOSTO 2026",
+      "value": 0.1881017355036929,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "campaign",
+        "entityId": "900000000000000001"
+      },
+      "derivation": "spend / spend (account)"
+    },
+    {
+      "id": "c3_spend_prior",
+      "label": "Gasto · SEDE A // MENSAJES // AGOSTO 2026",
+      "value": 3827.4399999999987,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-11",
+        "until": "2026-09-17",
+        "label": "los 7 días anteriores"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_50f13a50",
+        "level": "campaign",
+        "entityId": "900000000000000001"
+      },
+      "derivation": "last_14d − last_7d, per campaign"
+    },
+    {
+      "id": "c3_results_prior",
+      "label": "Conversaciones · SEDE A // MENSAJES // AGOSTO 2026",
+      "value": 90,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-11",
+        "until": "2026-09-17",
+        "label": "los 7 días anteriores"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_50f13a50",
+        "level": "campaign",
+        "entityId": "900000000000000001"
+      },
+      "derivation": "last_14d − last_7d, per campaign"
+    },
+    {
+      "id": "c4_spend",
+      "label": "Gasto · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 4330.49,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": null
+    },
+    {
+      "id": "c4_results",
+      "label": "Conversaciones · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 101,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": null
+    },
+    {
+      "id": "c4_cpr",
+      "label": "Costo por conversación · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 42.876138613861386,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": "spend / conversations"
+    },
+    {
+      "id": "c4_share",
+      "label": "Parte del gasto · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 0.17499665604278322,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": "spend / spend (account)"
+    },
+    {
+      "id": "c4_spend_prior",
+      "label": "Gasto · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 3990.1900000000005,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-11",
+        "until": "2026-09-17",
+        "label": "los 7 días anteriores"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_50f13a50",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": "last_14d − last_7d, per campaign"
+    },
+    {
+      "id": "c4_results_prior",
+      "label": "Conversaciones · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 76,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-11",
+        "until": "2026-09-17",
+        "label": "los 7 días anteriores"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_50f13a50",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": "last_14d − last_7d, per campaign"
+    },
+    {
+      "id": "cpr_without_driver",
+      "label": "Costo por conversación · si SEDE A // MENSAJES // AGOSTO 2026 repitiera los 7 días anteriores",
+      "value": 39.19038152610442,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-24",
+        "label": "los últimos 7 días"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_45eff8d3",
+        "level": "account",
+        "entityId": "900000000000000001"
+      },
+      "derivation": "(spend_kind − c3_spend + c3_spend_prior) / (conversations − c3_results + c3_results_prior)"
+    },
+    {
+      "id": "day_1",
+      "label": "Gasto · 2026-09-18",
+      "value": 2849.22,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-18",
+        "until": "2026-09-18",
+        "label": "2026-09-18"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_e192ee39",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "sum(spend) over the campaigns that day"
+    },
+    {
+      "id": "day_2",
+      "label": "Gasto · 2026-09-19",
+      "value": 3077.439999999999,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-19",
+        "until": "2026-09-19",
+        "label": "2026-09-19"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_e192ee39",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "sum(spend) over the campaigns that day"
+    },
+    {
+      "id": "day_3",
+      "label": "Gasto · 2026-09-20",
+      "value": 3949.66,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-20",
+        "until": "2026-09-20",
+        "label": "2026-09-20"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_e192ee39",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "sum(spend) over the campaigns that day"
+    },
+    {
+      "id": "day_4",
+      "label": "Gasto · 2026-09-21",
+      "value": 3887.5,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-21",
+        "until": "2026-09-21",
+        "label": "2026-09-21"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_e192ee39",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "sum(spend) over the campaigns that day"
+    },
+    {
+      "id": "day_5",
+      "label": "Gasto · 2026-09-22",
+      "value": 3873.96,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-22",
+        "until": "2026-09-22",
+        "label": "2026-09-22"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_e192ee39",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "sum(spend) over the campaigns that day"
+    },
+    {
+      "id": "day_6",
+      "label": "Gasto · 2026-09-23",
+      "value": 3855.5499999999993,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-23",
+        "until": "2026-09-23",
+        "label": "2026-09-23"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_e192ee39",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "sum(spend) over the campaigns that day"
+    },
+    {
+      "id": "day_7",
+      "label": "Gasto · 2026-09-24",
+      "value": 3252.7999999999997,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-24",
+        "until": "2026-09-24",
+        "label": "2026-09-24"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_e192ee39",
+        "level": "account",
+        "entityId": null
+      },
+      "derivation": "sum(spend) over the campaigns that day"
+    }
+  ],
+  "fallback_from": null
+}
