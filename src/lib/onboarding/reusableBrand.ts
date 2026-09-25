@@ -64,8 +64,8 @@ export async function findReusableBrandId(
  *
  * Returning a brand id is NOT the same as granting access to it — a caller that
  * only does this leaves the user on a brand `has_brand_access` says no to, and
- * every backend brand-scoped route 403s. `claimPendingInvite` in storage.ts is
- * the other half; keep them together.
+ * every backend brand-scoped route 403s. `redeemPendingInvites` in
+ * active-brand-context.ts is the other half, and runs before onboarding does.
  */
 export async function findPendingInviteBrandId(
   supabase: Client,
