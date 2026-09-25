@@ -41,6 +41,30 @@ const STANDING_DOT: Record<StoryRow['standing'], string> = {
   unknown: 'bg-muted-foreground',
 };
 
+const FIGURE_TOKEN = /^([(]*)(.*?\d.*?)([.,;:)]*)$/;
+
+/** The summary sentence with its figures in bold, so "how much, from how many, to how many"
+ *  reads at a glance. Splits on whitespace only — the words and their order are the model's. */
+function SummaryWithFigures({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(\s+)/).map((token, index) => {
+        const match = FIGURE_TOKEN.exec(token);
+        if (!match) return token;
+        const [, lead, figure, trail] = match;
+        return (
+          // biome-ignore lint/suspicious/noArrayIndexKey: tokens of one fixed sentence, never reordered
+          <span key={index}>
+            {lead}
+            <span className="font-semibold">{figure}</span>
+            {trail}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 function pct(value: number, max: number): number {
   if (max <= 0) return 0;
   return Math.max(0, Math.min(100, (value / max) * 100));
@@ -61,14 +85,14 @@ function CostCell({
 }) {
   if (row.held) {
     return (
-      <div className="flex items-center gap-2 text-2xs text-muted-foreground">
+      <div className="flex items-center gap-2 text-muted-foreground text-sm">
         <HeldPill reason={row.freezeReason} />
       </div>
     );
   }
   if (row.cost == null) {
     return (
-      <div className="text-2xs text-muted-foreground">
+      <div className="text-muted-foreground text-sm">
         No {metric.resultLabel.toLowerCase()} in this window
       </div>
     );
@@ -106,7 +130,7 @@ function CostCell({
       </div>
       <span
         className={cn(
-          'w-16 shrink-0 text-right font-medium text-xs tabular-nums',
+          'w-20 shrink-0 text-right font-semibold text-base tabular-nums',
           row.standing === 'above' && 'text-destructive',
           row.standing === 'below' && 'text-success',
         )}
@@ -164,12 +188,11 @@ function BudgetCell({
           style={{ left: `${to}%` }}
         />
       </div>
-      <span className="shrink-0 whitespace-nowrap text-xs tabular-nums">
+      <span className="shrink-0 whitespace-nowrap font-semibold text-base tabular-nums">
         <span className="text-muted-foreground">{formatCurrency(row.current, currency)}</span>
         <ArrowRightIcon aria-hidden className="mx-1 inline size-3 text-muted-foreground" />
         <span
           className={cn(
-            'font-medium',
             up && 'text-success',
             down && 'text-destructive',
             !up && !down && 'text-muted-foreground',
@@ -177,7 +200,7 @@ function BudgetCell({
         >
           {formatCurrency(row.proposed, currency)}
         </span>
-        <span className="text-2xs text-muted-foreground">{pctLabel}</span>
+        <span className="font-normal text-muted-foreground text-sm">{pctLabel}</span>
       </span>
     </div>
   );
@@ -225,11 +248,13 @@ export function ReallocationStory({
   return (
     <div className={cn('space-y-3', className)}>
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <p className="min-w-0 flex-1 text-xs leading-relaxed text-foreground">{story.summary}</p>
+        <p className="min-w-0 flex-1 text-base text-foreground leading-relaxed">
+          <SummaryWithFigures text={story.summary} />
+        </p>
         <LookbackToggle onChange={setLookback} value={lookback} />
       </div>
 
-      <div className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1.2fr)_minmax(0,1.4fr)] gap-x-4 px-1 text-3xs text-muted-foreground uppercase tracking-wide sm:grid">
+      <div className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1.2fr)_minmax(0,1.4fr)] gap-x-4 px-1 text-muted-foreground text-xs uppercase tracking-wide sm:grid">
         <span>Ad set</span>
         <span>
           {metric.costLabel} · {lookback}d
@@ -238,15 +263,15 @@ export function ReallocationStory({
         <span>Daily budget · now → proposed</span>
       </div>
 
-      <ul className="space-y-1.5">
+      <ul className="space-y-2">
         {rows.map((row) => (
           <li
-            className="grid grid-cols-1 gap-x-4 gap-y-1.5 rounded-md border border-border/60 bg-card px-2.5 py-2 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1.2fr)_minmax(0,1.4fr)] sm:items-center"
+            className="grid grid-cols-1 gap-x-4 gap-y-2 rounded-lg border border-border/60 bg-card px-4 py-3.5 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1.2fr)_minmax(0,1.4fr)] sm:items-center"
             key={row.adsetId}
           >
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-1.5">
-                <span className="truncate font-medium text-xs" title={row.name}>
+                <span className="truncate font-semibold text-base" title={row.name}>
                   {row.name}
                 </span>
                 {row.standing !== 'unknown' && !row.held ? (
@@ -258,7 +283,7 @@ export function ReallocationStory({
               </div>
               {row.reason ? (
                 <p
-                  className="mt-0.5 line-clamp-2 text-2xs text-muted-foreground"
+                  className="mt-1 line-clamp-2 text-muted-foreground text-sm"
                   title={row.reason}
                 >
                   {row.reason}
@@ -279,7 +304,7 @@ export function ReallocationStory({
 
       {hidden > 0 || showAll ? (
         <Button
-          className="h-6 px-2 text-2xs"
+          className="h-8 px-3 text-sm"
           onClick={() => setShowAll((value) => !value)}
           size="sm"
           type="button"
@@ -289,7 +314,7 @@ export function ReallocationStory({
         </Button>
       ) : null}
 
-      <p className="text-3xs text-muted-foreground">
+      <p className="text-muted-foreground text-xs">
         Dot = cost per result over the last {lookback} days
         {lookback === 14 ? ' (bar = likely range)' : ''}; dashed line = target. Budget bar runs from
         today&rsquo;s daily budget to the proposed one.

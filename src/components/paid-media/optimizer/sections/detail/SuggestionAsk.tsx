@@ -17,6 +17,8 @@ import {
   adhocSuggestionGateFor,
   adhocSuggestionGateNote,
 } from '@continuum/contracts';
+import type { LucideIcon } from 'lucide-react';
+import { ArrowLeftRightIcon, ImagePlusIcon, UsersIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -29,33 +31,52 @@ type SuggestionAskProps = {
   error?: string | null;
 };
 
+/** Each category's glyph, tinted with the same tone tokens as that category's badge in
+ *  Today's read (success / violet / teal), so an ask and the row it produces read as one. */
+const CATEGORY_ICON: Record<AdhocSuggestionCategory, { Icon: LucideIcon; tone: string }> = {
+  audience: { Icon: UsersIcon, tone: 'bg-success/10 text-emerald-700 dark:text-emerald-300' },
+  budget: { Icon: ArrowLeftRightIcon, tone: 'bg-primary/10 text-primary' },
+  creative: { Icon: ImagePlusIcon, tone: 'bg-secondary/10 text-sky-700 dark:text-sky-300' },
+};
+
 export function SuggestionAsk({ gates, onAsk, pending, error = null }: SuggestionAskProps) {
   return (
     <section
-      className="mb-3 rounded-lg border border-border/60 bg-card/40"
+      className="mb-5 rounded-xl border border-border/60 bg-card/40"
       data-testid="suggestion-ask"
     >
-      <header className="flex flex-wrap items-baseline justify-between gap-2 border-border/60 border-b px-3 py-2">
-        <h3 className="font-semibold text-foreground text-sm">Ask for a suggestion</h3>
-        <p className="text-3xs text-muted-foreground">
+      <header className="flex flex-wrap items-baseline justify-between gap-3 border-border/60 border-b px-5 py-4">
+        <h3 className="font-semibold text-foreground text-xl tracking-tight">Ask for a suggestion</h3>
+        <p className="text-muted-foreground text-sm">
           Read on request, from this portfolio's own figures
         </p>
       </header>
-      <ul className="grid gap-px bg-border/60 sm:grid-cols-3">
+      <ul className="grid gap-4 p-5 sm:grid-cols-3">
         {ADHOC_SUGGESTION_CATEGORIES.map((category) => {
           const gate = adhocSuggestionGateFor(gates, category);
           const copy = ADHOC_SUGGESTION_CATEGORY_COPY[category];
           const note = adhocSuggestionGateNote(gate);
           const busy = pending === category;
           const working = gate.state === 'queued' || gate.state === 'proposing';
+          const { Icon, tone } = CATEGORY_ICON[category];
           return (
-            <li className="space-y-1.5 bg-card/60 px-3 py-2.5" key={category}>
-              <p className="font-medium text-foreground text-xs">{copy.label}</p>
-              <p className="text-2xs text-muted-foreground">{copy.blurb}</p>
-              <div className="flex flex-wrap items-center gap-2 pt-0.5">
+            <li
+              className="flex min-h-56 flex-col gap-4 rounded-xl border border-border/60 bg-card p-5"
+              key={category}
+            >
+              <span
+                aria-hidden
+                className={cn('grid size-12 place-items-center rounded-full', tone)}
+                data-testid={`suggestion-ask-icon:${category}`}
+              >
+                <Icon className="size-6" />
+              </span>
+              <p className="font-semibold text-foreground text-lg tracking-tight">{copy.label}</p>
+              <p className="text-base text-muted-foreground leading-relaxed">{copy.blurb}</p>
+              <div className="mt-auto flex flex-col gap-2">
                 <Button
                   className={cn(
-                    'h-7 text-2xs',
+                    'h-10 w-full text-sm',
                     // A ~5s breath while the worker is reading. No sheen.
                     working && 'animate-[pulse_5s_ease-in-out_infinite]',
                   )}
@@ -67,9 +88,9 @@ export function SuggestionAsk({ gates, onAsk, pending, error = null }: Suggestio
                 >
                   {working ? 'Reading…' : busy ? 'Asking…' : 'Ask'}
                 </Button>
-                {note ? <span className="text-3xs text-muted-foreground">{note}</span> : null}
+                {note ? <span className="text-muted-foreground text-sm">{note}</span> : null}
                 {!note && gate.requests_left <= 1 ? (
-                  <span className="text-3xs text-muted-foreground">
+                  <span className="text-muted-foreground text-sm">
                     {gate.requests_left === 1 ? 'One more today' : 'None left today'}
                   </span>
                 ) : null}
@@ -79,7 +100,7 @@ export function SuggestionAsk({ gates, onAsk, pending, error = null }: Suggestio
         })}
       </ul>
       {error ? (
-        <p className="border-border/60 border-t px-3 py-1.5 text-3xs text-destructive">{error}</p>
+        <p className="border-border/60 border-t px-5 py-3 text-destructive text-sm">{error}</p>
       ) : null}
     </section>
   );

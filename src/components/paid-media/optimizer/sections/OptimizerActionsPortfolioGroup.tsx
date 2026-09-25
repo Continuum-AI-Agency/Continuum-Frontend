@@ -879,15 +879,15 @@ export function OptimizerActionsPortfolioGroup({
   return (
     <section className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+        <h3 className="flex items-center gap-2.5 text-xl font-semibold tracking-tight">
           {portfolio.name}
-          <Badge variant="secondary" className="text-3xs">
+          <Badge variant="secondary" className="text-xs">
             {selectableVisible.length || rows.length}
           </Badge>
         </h3>
         <Input
           aria-label={`Search ${portfolio.name} actions`}
-          className="h-7 w-full max-w-56 text-xs sm:w-56"
+          className="h-10 w-full max-w-72 text-sm sm:w-72"
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search name, id, kind, reason"
           value={search}
@@ -897,7 +897,7 @@ export function OptimizerActionsPortfolioGroup({
       {/* Is this queue current? One line, before anything in it is read. Every pending row
           belongs to the latest cycle (older ones are superseded server-side), so the cycle's
           time IS the queue's time. */}
-      {asOf ? <p className="text-2xs text-muted-foreground">{asOf}</p> : null}
+      {asOf ? <p className="text-sm text-muted-foreground">{asOf}</p> : null}
 
       {/* A queue whose portfolio has missed a cycle, or whose roster left Meta, says so before
           its rows — the rows below are from the last cycle that landed, however long ago. */}
@@ -910,10 +910,10 @@ export function OptimizerActionsPortfolioGroup({
       {/* What is in the queue, by reason, biggest money first — the summary a reader wants
           before ten rows that each say "Pause ad set · HIGH". */}
       {summary.length > 1 ? (
-        <ul className="flex flex-wrap gap-1.5" aria-label="Queue summary">
+        <ul className="flex flex-wrap gap-2" aria-label="Queue summary">
           {summary.map((group) => (
             <li
-              className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/20 px-2 py-1 text-2xs"
+              className="inline-flex items-center gap-2 rounded-lg border border-border/70 bg-muted/20 px-3 py-1.5 text-sm"
               key={`${group.kind}:${group.trigger}`}
             >
               <span className="font-medium">
@@ -924,6 +924,7 @@ export function OptimizerActionsPortfolioGroup({
                 <span className="text-muted-foreground tabular-nums">
                   ·{' '}
                   <span
+                    className="font-semibold text-foreground"
                     {...figureProps(
                       `queue.summary.${group.kind}:${group.trigger}.impact`,
                       group.impactPerDay,
@@ -1231,8 +1232,8 @@ function QueueToolbar({
   writesBlocked: boolean;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border/60 bg-muted/20 px-2 py-1.5">
-      <span className="flex items-center gap-1.5 pl-1 text-2xs text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-border/60 bg-muted/20 px-4 py-2.5">
+      <span className="flex items-center gap-2 pl-1 text-sm text-muted-foreground">
         <Checkbox
           aria-label="Select all actionable"
           checked={allSelected}
@@ -1242,13 +1243,13 @@ function QueueToolbar({
         All
       </span>
 
-      <div className="flex flex-wrap items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1.5">
         {ROUTE_FILTERS.map((option) => (
           <button
             key={option.route}
             aria-pressed={activeFilters.has(option.route)}
             className={cn(
-              'rounded-md border px-1.5 py-0.5 text-3xs font-medium transition-colors',
+              'rounded-lg border px-2.5 py-1 text-sm font-medium transition-colors',
               activeFilters.has(option.route)
                 ? 'border-primary/40 bg-primary/10 text-primary'
                 : 'border-border/70 bg-card text-muted-foreground hover:bg-muted/50',
@@ -1261,13 +1262,13 @@ function QueueToolbar({
         ))}
       </div>
 
-      <div className="ml-auto flex flex-wrap items-center gap-1.5">
+      <div className="ml-auto flex flex-wrap items-center gap-2">
         {/* A cycle's budget moves are conserved as a set, so approving a strict subset moves
             total spend. Sum the selection and say by how much rather than warning abstractly. */}
         {selectionNetDelta == null ? null : Math.abs(selectionNetDelta) < 0.5 ? (
-          <span className="text-2xs text-muted-foreground">Spend stays flat</span>
+          <span className="text-sm text-muted-foreground">Spend stays flat</span>
         ) : (
-          <span className="text-2xs text-warning tabular-nums">
+          <span className="text-sm text-warning tabular-nums">
             Net {selectionNetDelta > 0 ? '+' : '−'}
             <span {...figureProps('queue.net', Math.abs(selectionNetDelta), currency)}>
               {formatCurrency(Math.abs(selectionNetDelta), currency)}
@@ -1276,7 +1277,7 @@ function QueueToolbar({
           </span>
         )}
         <Button
-          className="h-7 px-2.5 text-xs"
+          className="h-10 px-4 text-sm"
           disabled={writesBlocked || !hasSelection || busyApprove}
           onClick={onApproveSelected}
           size="sm"
@@ -1287,7 +1288,7 @@ function QueueToolbar({
           Approve selected
         </Button>
         <Button
-          className="h-7 px-2.5 text-xs"
+          className="h-10 px-4 text-sm"
           disabled={writesBlocked || selectableCount === 0 || busyApprove}
           onClick={onApproveAll}
           size="sm"
@@ -1298,7 +1299,7 @@ function QueueToolbar({
         </Button>
         {applyBudgetCount > 0 ? (
           <Button
-            className="h-7 px-2.5 text-xs"
+            className="h-10 px-4 text-sm"
             disabled={writesBlocked || applyApprovedPending}
             onClick={onExecuteBudgets}
             size="sm"
@@ -1310,7 +1311,7 @@ function QueueToolbar({
         ) : null}
         {approvedPauseCount > 0 ? (
           <Button
-            className="h-7 px-2.5 text-xs"
+            className="h-10 px-4 text-sm"
             disabled={writesBlocked || pausePending}
             onClick={onExecutePauses}
             size="sm"

@@ -58,7 +58,7 @@ const FAMILY_LABEL: Record<string, string> = {
 
 function FamilyBadge({ family }: { family: string }) {
   return (
-    <span className="shrink-0 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+    <span className="shrink-0 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
       {FAMILY_LABEL[family] ?? family}
     </span>
   );
@@ -75,18 +75,18 @@ function ChangeLine({ change, currency }: { change: ActionChange; currency: stri
   // The row header already names the field; repeating it here just doubled every line.
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
-      <span className="font-mono text-2xs tabular-nums text-muted-foreground">
+      <span className="font-mono text-sm tabular-nums text-muted-foreground">
         {print(change.before)}
       </span>
       <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
-      <span className="font-mono text-2xs font-semibold tabular-nums">{print(change.after)}</span>
+      <span className="font-mono text-sm font-semibold tabular-nums">{print(change.after)}</span>
     </span>
   );
 }
 
 function RevertedBadge() {
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
       <Undo2Icon aria-hidden="true" className="size-3" />
       Reverted
     </span>
@@ -107,16 +107,16 @@ export function ActionRow({
   const revert = revertState(row);
 
   return (
-    <li className="flex items-start gap-3 rounded-lg border border-border/70 bg-card px-3 py-2">
+    <li className="flex items-start gap-3 rounded-lg border border-border/70 bg-card px-4 py-3">
       <FamilyBadge family={row.family} />
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <RowHeader title={change.label} ts={row.ts} />
-            <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+            <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
               {row.portfolio_name ? <span className="truncate">{row.portfolio_name}</span> : null}
               {row.entity_id && row.op !== 'setting' ? (
-                <span className="truncate font-mono text-2xs">{row.entity_id}</span>
+                <span className="truncate font-mono text-xs">{row.entity_id}</span>
               ) : null}
               <span>· {actorLabel(row)}</span>
             </p>
@@ -128,6 +128,7 @@ export function ActionRow({
               brandId={brandId}
               currency={currency}
               scope={revertScopeOf(row)}
+              triggerTextSize="text-xs"
             />
           ) : revert.kind === 'reverted' ? (
             <RevertedBadge />
@@ -137,11 +138,11 @@ export function ActionRow({
           <ChangeLine change={change} currency={currency} />
         </div>
         {row.justification ? (
-          <p className="mt-1 text-2xs leading-relaxed text-muted-foreground">
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
             <span className="font-medium text-foreground">Why:</span> {row.justification}
           </p>
         ) : null}
-        {receipt ? <ReceiptToken value={receipt} /> : null}
+        {receipt ? <ReceiptToken value={receipt} className="text-xs" /> : null}
       </div>
     </li>
   );
