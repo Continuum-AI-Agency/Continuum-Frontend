@@ -41,7 +41,7 @@ export function CpaConfidenceBar({
         <div className="flex flex-1 items-center">
           <HeldPill reason={freezeReason} />
         </div>
-        <span className="w-40 shrink-0 text-right text-2xs text-muted-foreground">
+        <span className="w-44 shrink-0 text-right text-xs text-muted-foreground">
           budget unchanged
         </span>
       </div>
@@ -81,7 +81,7 @@ export function CpaConfidenceBar({
           />
         ) : null}
       </div>
-      <span className="w-40 shrink-0 text-right text-2xs tabular-nums text-muted-foreground">
+      <span className="w-44 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
         {unboundedNote ?? (
           <>
             {formatCpa(cpa, currency)}
