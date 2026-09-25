@@ -241,12 +241,8 @@ describe('the template registry', () => {
     for (const id of ANSWER_TEMPLATE_IDS) expect(TEMPLATE_SPECS[id].id).toBe(id);
   });
 
-  it('accepts a minimal steps payload for every stub template', () => {
-    for (const id of ['spend_results_balance', 'weekly_bridge', 'three_numbers'] as const) {
-      const payload = rankingPayload({ template_id: id });
-      expect(validateTemplateBlock(payload)).toEqual([]);
-    }
-  });
+  // Each MVP template pins its own payload schema in its own test; this file only tests
+  // the shared contract, so a template tightening its schema never breaks a sibling.
 });
 
 describe('the answer_template block in the report contract', () => {
