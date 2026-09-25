@@ -110,7 +110,8 @@ export function JainaReportDocument({
         </div>
       </header>
 
-      {report.executive_summary ? (
+      {/* The template's sentence is the executive answer; the summary would repeat it. */}
+      {report.executive_summary && templateBlocks.length === 0 ? (
         <JainaProse
           content={report.executive_summary}
           className="jaina-export-summary text-sm leading-relaxed"

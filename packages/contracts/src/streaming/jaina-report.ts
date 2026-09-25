@@ -23,6 +23,12 @@
 import { z } from 'zod';
 import { percentBasisSchema } from './dataset';
 import { answerTemplatePayloadShape } from './jaina-templates/core';
+import {
+  type FigureUnit,
+  formatFigure,
+  renderFigureRefs,
+  type TemplateFigure,
+} from './jaina-templates/figure';
 import { validateTemplateBlock } from './jaina-templates/validate';
 
 // ---------------------------------------------------------------------------
@@ -1180,7 +1186,70 @@ const looseArray = (value: unknown): unknown[] => (Array.isArray(value) ? value 
 const formatOf = (value: unknown, fallback: string): string =>
   typeof value === 'string' ? value : fallback;
 
-/** Every value a block carries where a renderer would show it: grid values, cells, pairs, evidence, chart points, pacing. */
+/** A template figure's unit in the cell formats the other blocks use. */
+const CELL_FORMAT_OF_FIGURE_UNIT: Readonly<Record<FigureUnit, string>> = {
+  money: 'currency',
+  count: 'number',
+  ratio: 'number',
+  percent: 'percent',
+  multiple: 'multiplier',
+  days: 'number',
+};
+
+/** A figure as far as printing it needs, read loosely off an unvalidated block. */
+const looseFigureOf = (raw: unknown): TemplateFigure | null => {
+  const figure = looseRecord(raw);
+  if (typeof figure.id !== 'string' || typeof figure.unit !== 'string') return null;
+  if (!(figure.unit in CELL_FORMAT_OF_FIGURE_UNIT)) return null;
+  return {
+    ...(figure as unknown as TemplateFigure),
+    value: typeof figure.value === 'number' ? figure.value : null,
+    currency: typeof figure.currency === 'string' ? figure.currency : null,
+  };
+};
+
+/**
+ * What an `answer_template` block prints: each figure as the renderer formats it
+ * (`formatFigure` — "32.19 MXN", "12.1%"), then the executive sentence and every section and
+ * item text with its refs rendered. A templated answer carries no number anywhere else, so a
+ * walk that skipped the block left its figures invisible to the golden grader's figure and
+ * currency checks.
+ */
+const answerTemplateCellsOf = (block: Record<string, unknown>, id: string): BlockCell[] => {
+  const out: BlockCell[] = [];
+  const figures = looseArray(block.figures).flatMap((raw) => {
+    const figure = looseFigureOf(raw);
+    return figure ? [figure] : [];
+  });
+  figures.forEach((figure, i) => {
+    out.push({
+      value: formatFigure(figure),
+      where: `${id}.figures[${i}]`,
+      label: typeof figure.label === 'string' ? figure.label : figure.id,
+      format: CELL_FORMAT_OF_FIGURE_UNIT[figure.unit],
+    });
+  });
+  const prose = (text: unknown, where: string): void => {
+    if (typeof text !== 'string' || text.trim().length === 0) return;
+    out.push({
+      value: renderFigureRefs(text, figures, formatFigure, { onUnresolved: 'mark' }).text,
+      where,
+      label: null,
+      format: 'text',
+    });
+  };
+  prose(looseRecord(block.executive).sentence, `${id}.executive.sentence`);
+  looseArray(looseRecord(block.justification).sections).forEach((raw, i) => {
+    const section = looseRecord(raw);
+    prose(section.text, `${id}.justification.sections[${i}].text`);
+    looseArray(section.items).forEach((item, j) => {
+      prose(looseRecord(item).text, `${id}.justification.sections[${i}].items[${j}].text`);
+    });
+  });
+  return out;
+};
+
+/** Every value a block carries where a renderer would show it: grid values, cells, pairs, evidence, chart points, pacing, template figures and prose. */
 export const cellsOfBlocks = (blocks: readonly unknown[]): BlockCell[] => {
   const out: BlockCell[] = [];
   for (const raw of blocks) {
@@ -1262,6 +1331,9 @@ export const cellsOfBlocks = (blocks: readonly unknown[]): BlockCell[] => {
           label: 'projected_end',
           format: null,
         });
+        break;
+      case 'answer_template':
+        out.push(...answerTemplateCellsOf(block, id));
         break;
       default:
         break;
@@ -1384,6 +1456,10 @@ const unmeasuredCellsOf = (
   sorted: ReadonlyArray<number>,
 ): Array<{ span: string }> => {
   const out: Array<{ span: string }> = [];
+  // A template's figures are COMPUTED from the turn's datasets (a cost per result, a gap, an
+  // interval) and each carries its source and derivation, held by `validateTemplateBlock`;
+  // matching them against raw tool numbers would flag every derived ratio.
+  if (block.category === 'answer_template') return out;
   for (const cell of cellsOfBlocks([block])) {
     if (!isMeasuredCell(cell)) continue;
     if (printsOnlyMeasuredFigures(numberTokensOfCell(cell.value), sorted)) continue;

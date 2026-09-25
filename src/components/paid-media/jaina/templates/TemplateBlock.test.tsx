@@ -55,7 +55,7 @@ describe('TemplateExecutive (explained_ranking)', () => {
     const { container } = render(<TemplateExecutive block={block} />);
     const sentence = container.querySelector('p');
     expect(sentence?.textContent).toBe(
-      'SEDE C // MENSAJES // AGOSTO 2026 es la que mejor rinde este mes: consigue compras a 249 MXN, 33.8% más barato que el promedio de la cuenta (376 MXN).',
+      'SEDE C // MENSAJES // AGOSTO 2026 es la que mejor rinde entre las campañas que buscan conversaciones este mes: consigue conversaciones a 32.19 MXN, 12.1% más barato que el promedio de las campañas que buscan conversaciones (36.62 MXN).',
     );
     const inSentence = [...(sentence?.querySelectorAll('[data-testid="figure"]') ?? [])].map(
       (element) => element.getAttribute('data-figure-id'),
@@ -64,7 +64,7 @@ describe('TemplateExecutive (explained_ranking)', () => {
     expectFigureParity(container);
   });
 
-  it('charts every ranked campaign against the account average', () => {
+  it('charts every ranked campaign against the average of its result', () => {
     const { container } = render(<TemplateExecutive block={block} />);
     const chart = container.querySelector('[data-template-chart="bar_horizontal"]');
     const plotted = [...(chart?.querySelectorAll('[data-testid="figure"]') ?? [])].map((element) =>
@@ -72,7 +72,7 @@ describe('TemplateExecutive (explained_ranking)', () => {
     );
     expect(plotted).toEqual(['cpr_1', 'cpr_2', 'cpr_3', 'cpr_4', 'cpr_avg']);
     expect(chart?.querySelector('svg')?.getAttribute('aria-label')).toContain(
-      'SEDE D // MENSAJES // AGOSTO 2026 778 MXN',
+      'SEDE D // MENSAJES // AGOSTO 2026 46.90 MXN',
     );
     expect(screen.getByText(/Menos es mejor/)).toBeDefined();
   });
@@ -88,7 +88,7 @@ describe('TemplateJustification (steps)', () => {
     expect(container.querySelector('[data-template-layout="steps"]')).not.toBeNull();
     expect(container.textContent).toContain('Qué medimos.');
     expect(container.textContent).toContain(
-      'Leímos gasto y compras de las 16 campañas con gasto en este mes, a nivel campaña: 64,230 MXN y 171 compras en total.',
+      'Leímos gasto y conversaciones de las 4 campañas que buscan conversaciones y gastaron en este mes, a nivel campaña: 53,577 MXN y 1,463 conversaciones en total. Otras 12 campañas buscan otro resultado y no entran en la comparación: su costo por resultado no se compara con un costo por conversación.',
     );
     expectFigureParity(container);
   });
@@ -99,10 +99,10 @@ describe('TemplateJustification (steps)', () => {
     expect(rows.map((row) => row.getAttribute('data-rank'))).toEqual(['1', '2', '3', '4']);
     expect(rows.map((row) => row.open)).toEqual([true, false, false, false]);
     const badge = rows[3]?.querySelector('summary [data-figure-id="cpr_4"]');
-    expect(badge?.textContent).toBe('778 MXN');
+    expect(badge?.textContent).toBe('46.90 MXN');
     expect(badge?.className).toContain('text-destructive');
     expect(rows[0]?.textContent).toContain(
-      'Consigue compras a 249 MXN, 33.8% más barato que el promedio de la cuenta (376 MXN): 58 compras con 14,426 MXN.',
+      'Consigue conversaciones a 32.19 MXN, 12.1% más barato que el promedio de las campañas que buscan conversaciones (36.62 MXN): 449 conversaciones con 14,455 MXN.',
     );
   });
 
@@ -147,10 +147,10 @@ describe('an unresolved ref', () => {
   it('prints a dash, never the raw ref', () => {
     const broken = parseBlock({
       ...fixture,
-      executive: { ...fixture.executive, sentence: 'Cuesta {ghost} por compra.' },
+      executive: { ...fixture.executive, sentence: 'Cuesta {ghost} por conversación.' },
     });
     const { container } = render(<TemplateExecutive block={broken} />);
-    expect(container.querySelector('p')?.textContent).toBe('Cuesta — por compra.');
+    expect(container.querySelector('p')?.textContent).toBe('Cuesta — por conversación.');
     expect(container.querySelector('[data-figure-unresolved="ghost"]')).not.toBeNull();
   });
 });

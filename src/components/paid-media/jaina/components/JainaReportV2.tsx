@@ -306,7 +306,10 @@ export function JainaReportV2({
          *  table cells, so that one class muted the entire answer: every `###`, every
          *  figure, every row. `JAINA_ANSWER_PROSE` is the one constant both routes now
          *  share, so the answer reads the same whether the turn shipped a report or not. */}
-        {report.executive_summary ? (
+        {/* A templated answer's sentence IS the executive answer: printing Phase B's summary
+         *  above it would state the answer twice, in two sets of words and possibly two sets
+         *  of numbers. Only a report with no (visible) template block keeps the summary. */}
+        {report.executive_summary && templateBlocks.length === 0 ? (
           <JainaProse
             content={normalizeJainaMarkdownTables(report.executive_summary)}
             className={JAINA_ANSWER_PROSE}

@@ -57,10 +57,10 @@ const table = checkpointBlockV2Schema.parse({
   rows: [{ entity: 'SEDE C' }],
 });
 
-const report = (blocks: CheckpointBlockV2[]) =>
+const report = (blocks: CheckpointBlockV2[], executiveSummary = '') =>
   ({
     language: 'es',
-    executive_summary: '',
+    executive_summary: executiveSummary,
     reasoning_trace: '',
     blocks,
     follow_up_questions: [],
@@ -115,5 +115,41 @@ describe('a templated answer in the export document', () => {
     ]);
     const rows = [...container.querySelectorAll('details[data-rank]')] as HTMLDetailsElement[];
     expect(rows).toHaveLength(4);
+  });
+});
+
+/** Phase B's summary — a second statement of the answer, in the model's own words and numbers. */
+const SUMMARY = 'Resumen de la fase B: SEDE C gana con 249 MXN por compra.';
+const HEADLINE = 'SEDE C // MENSAJES // AGOSTO 2026 es la que mejor rinde';
+
+describe('one executive sentence', () => {
+  it('lets the template`s sentence be the answer, with no Phase B summary above it', () => {
+    const blocks = [scope, templateBlock, table];
+    const { container } = render(
+      <JainaReportV2 report={report(blocks, SUMMARY)} isStreaming={false} />,
+    );
+    expect(container.textContent).not.toContain(SUMMARY);
+    expect(container.textContent?.split(HEADLINE)).toHaveLength(2);
+  });
+
+  it('keeps the summary when the report has no template block', () => {
+    const { container } = render(
+      <JainaReportV2 report={report([scope, table], SUMMARY)} isStreaming={false} />,
+    );
+    expect(container.textContent).toContain(SUMMARY);
+  });
+
+  it('prints the same single answer in the export document', () => {
+    const blocks = [scope, templateBlock, table];
+    const templated = render(
+      <JainaReportDocument report={report(blocks, SUMMARY)} blocks={blocks} />,
+    );
+    expect(templated.container.textContent).not.toContain(SUMMARY);
+    expect(templated.container.textContent?.split(HEADLINE)).toHaveLength(2);
+    cleanup();
+    const plain = render(
+      <JainaReportDocument report={report([scope, table], SUMMARY)} blocks={[scope, table]} />,
+    );
+    expect(plain.container.textContent).toContain(SUMMARY);
   });
 });

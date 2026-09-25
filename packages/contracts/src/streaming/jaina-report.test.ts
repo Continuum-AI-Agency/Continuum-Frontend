@@ -933,6 +933,75 @@ describe('cellsOfBlocks / headersOfBlocks', () => {
       73712.61, 1424702,
     ]);
   });
+
+  const templateFigure = (id: string, value: number | null, unit: string, currency = null) => ({
+    id,
+    label: `label ${id}`,
+    value,
+    unit,
+    currency,
+    window: { since: '2026-09-01', until: '2026-09-25', label: 'este mes' },
+    source: { tool: 'get_key_metrics', datasetId: 'ds1', level: 'campaign', entityId: null },
+    derivation: null,
+  });
+  const templateBlock = {
+    block_id: 'answer_template_explained_ranking',
+    category: 'answer_template',
+    figures: [
+      { ...templateFigure('cpr_1', 32.194, 'money'), currency: 'MXN' },
+      templateFigure('gap_avg_1', 0.1209, 'percent'),
+      templateFigure('results_1', 449, 'count'),
+    ],
+    executive: {
+      sentence: 'SEDE C rinde mejor: {cpr_1}, {gap_avg_1} más barato.',
+      hero_chart: null,
+    },
+    justification: {
+      sections: [
+        {
+          kind: 'found',
+          text: '{results_1} conversaciones.',
+          items: [{ text: 'Consigue {cpr_1}.' }],
+        },
+      ],
+    },
+  };
+
+  it('walks an answer template: every figure as printed, then the rendered sentence and sections', () => {
+    const cells = cellsOfBlocks([templateBlock]);
+    expect(cells.map((cell) => [cell.where, cell.format, cell.value])).toEqual([
+      ['answer_template_explained_ranking.figures[0]', 'currency', '32.19 MXN'],
+      ['answer_template_explained_ranking.figures[1]', 'percent', '12.1%'],
+      ['answer_template_explained_ranking.figures[2]', 'number', '449'],
+      [
+        'answer_template_explained_ranking.executive.sentence',
+        'text',
+        'SEDE C rinde mejor: 32.19 MXN, 12.1% más barato.',
+      ],
+      [
+        'answer_template_explained_ranking.justification.sections[0].text',
+        'text',
+        '449 conversaciones.',
+      ],
+      [
+        'answer_template_explained_ranking.justification.sections[0].items[0].text',
+        'text',
+        'Consigue 32.19 MXN.',
+      ],
+    ]);
+    expect(cells[0]?.label).toBe('label cpr_1');
+  });
+
+  it('marks an unresolved ref instead of throwing on a malformed template block', () => {
+    const cells = cellsOfBlocks([
+      { ...templateBlock, executive: { sentence: 'Gana con {roas_1}.' }, figures: [{ id: 3 }] },
+    ]);
+    expect(cells.map((cell) => cell.value)).toContain('Gana con —.');
+  });
+
+  it('never grades a template`s computed figures against raw tool numbers', () => {
+    expect(groundingViolationsOf(templateBlock, { toolKinds: [], figures: [1, 2, 3] })).toEqual([]);
+  });
 });
 
 describe('sectionOfBlockCategory', () => {
