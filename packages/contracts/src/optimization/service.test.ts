@@ -16,6 +16,7 @@ import {
   ConvertCboRequestSchema,
   ConvertCboResponseSchema,
   CreatePortfolioRequestSchema,
+  CycleItemDiagnosticsSchema,
   CycleItemRowSchema,
   CyclePreviewRequestSchema,
   CyclePreviewResponseSchema,
@@ -1102,5 +1103,33 @@ describe('PortfolioListItemSchema — the staleness read (migration 202609232020
     expect(
       PortfolioListItemSchema.safeParse({ ...baseRow, roster_missing_count: -2 }).success,
     ).toBe(false);
+  });
+});
+
+// Real optimizer-status bodies (anonymised, history trimmed) from two production portfolios
+// that rendered blank. The engine's costInterval returns `hi: null` for an ad set with zero
+// conversions (spend ÷ 0 has no upper bound); the contract declared `hi` as a plain number,
+// so ONE such row failed the whole report and the Frontend fell back to an empty one.
+describe('ParsedCycleRunReportSchema on real zero-conversion reports', () => {
+  test.each([
+    ['optimizer-status-formularios.json', 9, 3],
+    ['optimizer-status-tours.json', 12, 0],
+  ])('%s parses and keeps every row', async (file, items, recs) => {
+    const body = await Bun.file(`${import.meta.dir}/fixtures/${file}`).json();
+    const parsed = ParsedCycleRunReportSchema.safeParse(body);
+    expect(parsed.error?.issues ?? []).toEqual([]);
+    expect(parsed.data?.latest_items).toHaveLength(items);
+    expect(parsed.data?.recommendations).toHaveLength(recs);
+    expect(parsed.data?.latest_run).not.toBeNull();
+    expect(parsed.data?.hero_brief).not.toBeNull();
+    const unbounded = parsed.data?.latest_items.filter((item) => item.diagnostics?.ci?.hi === null);
+    expect(unbounded?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  test('ci.hi accepts null (no upper bound at 0 events) but cpa/lo/events stay numeric', () => {
+    const ci = { cpa: 0, lo: 0, hi: null, events: 0 };
+    expect(CycleItemDiagnosticsSchema.safeParse({ ci }).success).toBe(true);
+    expect(CycleItemDiagnosticsSchema.safeParse({ ci: { ...ci, lo: null } }).success).toBe(false);
+    expect(CycleItemDiagnosticsSchema.safeParse({ ci: { ...ci, cpa: null } }).success).toBe(false);
   });
 });

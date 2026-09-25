@@ -81,7 +81,13 @@ import {
   TimelineEventSchema,
   type UpdatePortfolioPatch,
 } from '@continuum/contracts';
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  type QueryClient,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
@@ -681,7 +687,15 @@ export type RunUnavailableKind =
  *  indistinguishable from an unreachable service, so all three outcomes collapsed into one
  *  message: "Optimizer service not live yet". It was true in none of them. */
 export type RunCycleOutcome =
-  | { status: 'ran'; run: RunCycleResponse }
+  | {
+      status: 'ran';
+      run: RunCycleResponse;
+      /** The service handed back the run that was ALREADY on screen. optimizer_record_cycle
+       *  keeps one run per portfolio per UTC day (`on conflict (portfolio_id, utc_day) do
+       *  nothing` returns the existing id), so a second Run now the same day scores nothing
+       *  new. Present only when true. */
+      alreadyScoredToday?: true;
+    }
   | { status: 'skipped'; reason: CycleSkipReason; run: RunCycleResponse }
   | { status: 'unavailable'; kind: RunUnavailableKind };
 
@@ -706,6 +720,8 @@ async function runCycle(
   portfolioId: string,
   brandId?: string,
   accountId?: string | null,
+  /** latest_run.id on screen when Run now was pressed. */
+  runIdOnScreen?: string | null,
 ): Promise<RunCycleOutcome> {
   // brandId + accountId scope the run to a brand/account the caller can access —
   // the optimizer-run edge verifies them (mirrors optimizer-suggest). Omitted keys
@@ -725,6 +741,7 @@ async function runCycle(
     // LOUDLY: swallowing it into a silent null is what hid this exact bug for weeks.
     console.error('optimizer-run returned a body that does not match RunCycleResponseSchema', {
       issues: parsed.error.issues,
+      body: data,
     });
     return { status: 'unavailable', kind: 'malformed' };
   }
@@ -737,7 +754,19 @@ async function runCycle(
     console.error('optimizer-run returned runId:null with no skip reason', { run });
     return { status: 'unavailable', kind: 'malformed' };
   }
+  if (runIdOnScreen && run.runId === runIdOnScreen) {
+    return { status: 'ran', run, alreadyScoredToday: true };
+  }
   return { status: 'ran', run };
+}
+
+/** The latest_run.id of the performance report currently cached for a portfolio. */
+function cachedLatestRunId(queryClient: QueryClient, portfolioId: string): string | null {
+  const report = queryClient.getQueryData<CycleRunReport | null>(
+    optimizerQueryKeys.performance(portfolioId),
+  );
+  const id = report?.latest_run?.id;
+  return typeof id === 'string' ? id : null;
 }
 
 /** Convert a CBO ("Advantage Campaign Budget") campaign to ad-set (ABO) budgets via
@@ -2307,7 +2336,8 @@ export function useOptimizerMutations(brandId: string, adAccountId: string | nul
   });
 
   const run = useMutation({
-    mutationFn: (portfolioId: string) => runCycle(portfolioId, brandId, adAccountId),
+    mutationFn: (portfolioId: string) =>
+      runCycle(portfolioId, brandId, adAccountId, cachedLatestRunId(queryClient, portfolioId)),
     // Only a cycle that actually persisted a run changed anything worth re-reading. A skip
     // wrote nothing, and an unreachable service wrote nothing either.
     onSuccess: (outcome) => {

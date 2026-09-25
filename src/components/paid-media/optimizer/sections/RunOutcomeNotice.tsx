@@ -28,6 +28,16 @@ const TONE_CLASS: Record<Tone, string> = {
 };
 
 function describe(outcome: RunCycleOutcome): { tone: Tone; message: string } {
+  // One run per portfolio per UTC day: the service returned the run already on screen, so
+  // nothing new was scored and no card changed. "Cycle complete" would promise fresh cards.
+  if (outcome.status === 'ran' && outcome.alreadyScoredToday) {
+    return {
+      tone: 'warning',
+      message:
+        "Already scored today — a portfolio gets one cycle per day, and today's is the one on screen, so there was nothing new to score. The next cycle can run after 00:00 UTC.",
+    };
+  }
+
   if (outcome.status === 'ran') {
     const { snapshotCount, recommendations, applied, held } = outcome.run;
     const parts = [
@@ -79,7 +89,7 @@ function describe(outcome: RunCycleOutcome): { tone: Tone; message: string } {
       return {
         tone: 'destructive',
         message:
-          "The optimizer returned something we couldn't read. The cycle may still have run — we've logged it. Check the Logs tab before running again.",
+          "The optimizer answered with something this screen cannot read. The cycle may still have run — we've logged it. Check the Logs tab before running again.",
       };
     default:
       return {

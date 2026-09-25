@@ -15,6 +15,7 @@ import { AdSetIdLabel } from '../charts/AdSetIdLabel';
 import { pct } from '../charts/chartScale';
 import { formatCpa } from '../format';
 import { HeldPill } from '../HeldPill';
+import { measuredCpa, upperBoundNote } from '../reportModel';
 
 type CpaConfidenceBarProps = {
   item: CycleItemRow;
@@ -48,7 +49,10 @@ export function CpaConfidenceBar({
   }
 
   const ci = item.diagnostics?.ci ?? null;
-  const cpa = ci?.cpa != null ? ci.cpa * denominatorMultiplier : null;
+  const measured = measuredCpa(ci);
+  const cpa = measured != null ? measured * denominatorMultiplier : null;
+  // Zero conversions: no estimate and no upper bound — say so instead of "$0.00 · 0ev".
+  const unboundedNote = upperBoundNote(ci);
   const lo = ci?.lo != null ? ci.lo * denominatorMultiplier : null;
   const hi = ci?.hi != null ? ci.hi * denominatorMultiplier : null;
   const events = ci?.events ?? null;
@@ -78,9 +82,13 @@ export function CpaConfidenceBar({
         ) : null}
       </div>
       <span className="w-40 shrink-0 text-right text-2xs tabular-nums text-muted-foreground">
-        {formatCpa(cpa, currency)}
-        {hasInterval ? ` (${formatCpa(lo, currency)}–${formatCpa(hi, currency)})` : ''}
-        {events != null ? ` · ${events}ev` : ''}
+        {unboundedNote ?? (
+          <>
+            {formatCpa(cpa, currency)}
+            {hasInterval ? ` (${formatCpa(lo, currency)}–${formatCpa(hi, currency)})` : ''}
+            {events != null ? ` · ${events}ev` : ''}
+          </>
+        )}
       </span>
     </div>
   );

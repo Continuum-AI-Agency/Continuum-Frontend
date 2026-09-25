@@ -16,6 +16,7 @@ import type {
 } from '@continuum/contracts';
 import { resolveAdsetName } from '../adsetName';
 import { deriveEfficiency, formatCurrency } from '../format';
+import { measuredCpa } from '../reportModel';
 
 export type StoryLookback = 3 | 7 | 14;
 export const STORY_LOOKBACKS: readonly StoryLookback[] = [3, 7, 14];
@@ -108,7 +109,8 @@ export function buildReallocationStory(args: {
     const ciRaw = item.diagnostics?.ci ?? null;
     const costFromWindow = w ? deriveEfficiency(spend, results, mult) : null;
     // Without a snapshot window the engine's 14-day CI point is the only cost we have.
-    const costFromCi = num(ciRaw?.cpa) != null ? (ciRaw?.cpa as number) * mult : null;
+    const measured = measuredCpa(ciRaw);
+    const costFromCi = measured != null ? measured * mult : null;
     const cost = costFromWindow ?? (lookback === 14 ? costFromCi : null);
     const ci =
       lookback === 14 && num(ciRaw?.lo) != null && num(ciRaw?.hi) != null

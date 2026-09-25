@@ -782,7 +782,12 @@ export const CycleItemDiagnosticsSchema = z
       .object({
         cpa: z.number().optional(),
         lo: z.number().optional(),
-        hi: z.number().optional(),
+        /** null when the window has ZERO events: spend ÷ 0 has no upper bound. The engine's
+         *  costInterval returns exactly that (CpaInterval.hi: number | null) and every reader
+         *  has to say so — see upperBoundMissingBecause. Declared as a plain number, one
+         *  zero-conversion ad set failed the whole report and blanked the portfolio. cpa/lo
+         *  come back as 0 on that row: a sentinel, not a measured cost. */
+        hi: z.number().nullable().optional(),
         events: z.number().optional(),
       })
       .loose()

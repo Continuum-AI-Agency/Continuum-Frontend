@@ -127,6 +127,23 @@ describe('itemToRow joins the objective KPI from the d7 snapshot window', () => 
     expect(row.ci?.hi).toBe(30);
   });
 
+  it('does not read a zero-conversion interval as a $0 cost', () => {
+    const metric = getOptimizationMetricDefinition('lead');
+    const row = itemToRow(
+      {
+        adset_id: 'act_1::z',
+        current_budget: 17,
+        final_budget: 16,
+        change_abs: -1,
+        change_pct: -0.08,
+        diagnostics: { ci: { cpa: 0, lo: 0, hi: null, events: 0 } },
+      },
+      { metric, snapshot: snapshot('act_1::z', { spend: 170, leads: 0 }) },
+    );
+    expect(row.cost).toBeNull();
+    expect(row.ci?.hi).toBeNull();
+  });
+
   it('carries the freeze reason and leaves cost null for a held ad set', () => {
     const metric = getOptimizationMetricDefinition('lead');
     const row = itemToRow(

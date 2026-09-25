@@ -95,6 +95,7 @@ import {
 } from '../useOptimizerData';
 import { AudienceRecommendationCard } from './AudienceRecommendationCard';
 import { audienceCardView, isAudienceRecommendation } from './audienceCardModel';
+import { CostIntervalLine } from './CostIntervalLine';
 import { CreativeRecommendationCard } from './CreativeRecommendationCard';
 import { isCreativeRecommendation, standingChart, subjectAdId } from './creativeCardModel';
 import {
@@ -2007,8 +2008,6 @@ function BudgetDetail({
   counterparty?: { direction: 'funds' | 'fundedBy'; parties: Counterparty[] } | null;
 }) {
   const windowText = scoreWindows(item);
-  const ci = item.diagnostics?.ci ?? null;
-  const cpa = typeof ci?.cpa === 'number' && Number.isFinite(ci.cpa) ? ci.cpa : null;
 
   return (
     <>
@@ -2040,28 +2039,7 @@ function BudgetDetail({
           <span className="font-medium text-foreground">Score:</span> {windowText}
         </p>
       ) : null}
-      {cpa != null ? (
-        <p>
-          <span className="font-medium text-foreground">Cost:</span>{' '}
-          <span {...figureProps(`queue.${item.adset_id}.detail.cost`, cpa, currency)}>
-            {formatCurrency(cpa, currency)}
-          </span>
-          {typeof ci?.lo === 'number' && typeof ci?.hi === 'number' ? (
-            <>
-              {' (likely '}
-              <span {...figureProps(`queue.${item.adset_id}.detail.ci.lo`, ci.lo, currency)}>
-                {formatCurrency(ci.lo, currency)}
-              </span>
-              –
-              <span {...figureProps(`queue.${item.adset_id}.detail.ci.hi`, ci.hi, currency)}>
-                {formatCurrency(ci.hi, currency)}
-              </span>
-              {')'}
-            </>
-          ) : null}
-          {typeof ci?.events === 'number' ? ` from ${ci.events} events` : ''}
-        </p>
-      ) : null}
+      <CostIntervalLine adsetId={item.adset_id} ci={item.diagnostics?.ci} currency={currency} />
       {counterparty ? (
         <p>
           <CounterpartyLine currency={currency} entry={counterparty} limit={2} />

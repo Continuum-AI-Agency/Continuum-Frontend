@@ -15,12 +15,14 @@ import {
   freezeLabel,
   hasPendingWork,
   isExecutable,
+  measuredCpa,
   notImplementedMessage,
   parseReport,
   partitionHeldItems,
   pendingWorkCount,
   recommendationActionCopy,
   recommendationLabel,
+  upperBoundNote,
 } from './reportModel';
 
 describe('pending work spans two stores, and the queue must count both', () => {
@@ -205,9 +207,8 @@ describe('parseReport', () => {
     expect(parsed?.latest_run?.confidence?.band).toBe('high');
   });
 
-  it('falls back to an empty-but-valid shape when a row is malformed', () => {
-    // recommendations[0] is missing the required `id` — the whole safeParse fails,
-    // and the fallback keeps the surface renderable rather than throwing.
+  it('drops only the malformed row, and counts it', () => {
+    // recommendations[0] is missing the required `id`. It goes; nothing else does.
     const parsed = parseReport({
       portfolio: null,
       latest_run: null,
@@ -215,13 +216,88 @@ describe('parseReport', () => {
       recommendations: [{ adset_id: 'x' } as never],
       history: [],
     });
-    expect(parsed).toEqual({
+    expect(parsed?.recommendations).toEqual([]);
+    expect(parsed?.droppedRows).toBe(1);
+  });
+
+  // The failure mode that blanked real portfolios: ONE row that fails its schema used to throw
+  // away the run, every item, every recommendation and the stored brief, and the page then
+  // rendered a healthy portfolio as "Scoring your first cycle" / "Nothing worth changing today".
+  it('keeps the run, the recommendations and the brief when one item row is bad', () => {
+    const warn = console.warn;
+    const warnings: unknown[][] = [];
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args);
+    };
+    try {
+      const parsed = parseReport({
+        portfolio: {
+          id: '11111111-1111-4111-8111-111111111111',
+          name: 'Lead forms',
+          mode: 'balanced',
+          apply_mode: 'autopilot',
+          status: 'active',
+        },
+        latest_run: {
+          id: '22222222-2222-4222-8222-222222222222',
+          cycle_ts: '2026-09-25T19:03:03Z',
+          mode: 'balanced',
+        },
+        latest_items: [
+          { adset_id: 'bad', current_budget: 'ten' },
+          {
+            adset_id: 'good',
+            current_budget: 100,
+            final_budget: 90,
+            change_abs: -10,
+            change_pct: -0.1,
+          },
+        ],
+        recommendations: [
+          {
+            id: '33333333-3333-4333-8333-333333333333',
+            adset_id: 'a2',
+            kind: 'pause',
+            trigger: 'P2_sustained_poor',
+            severity: 'high',
+            reason: 'CPA high',
+            status: 'pending',
+          },
+        ],
+        history: [],
+        hero_brief: {
+          id: '44444444-4444-4444-8444-444444444444',
+          portfolio_id: '11111111-1111-4111-8111-111111111111',
+          brand_id: '55555555-5555-4555-8555-555555555555',
+          utc_day: '2026-09-25',
+          status: 'ready',
+          created_at: '2026-09-25T19:04:39Z',
+          updated_at: '2026-09-25T19:04:46Z',
+        },
+      });
+      expect(parsed?.portfolio?.name).toBe('Lead forms');
+      expect(parsed?.latest_run).not.toBeNull();
+      expect(parsed?.latest_items.map((item) => item.adset_id)).toEqual(['good']);
+      expect(parsed?.recommendations).toHaveLength(1);
+      expect(parsed?.hero_brief).not.toBeNull();
+      expect(parsed?.droppedRows).toBe(1);
+      const logged = JSON.stringify(warnings);
+      expect(logged).toContain('latest_items[0]');
+      expect(logged).toContain('11111111-1111-4111-8111-111111111111');
+    } finally {
+      console.warn = warn;
+    }
+  });
+
+  it('reports no dropped rows on a clean report', () => {
+    const parsed = parseReport({
       portfolio: null,
       latest_run: null,
       latest_items: [],
       recommendations: [],
       history: [],
     });
+    expect(parsed?.droppedRows).toBe(0);
   });
 });
 
@@ -461,5 +537,27 @@ describe('deliveryLabel — a chip only where it changes what the row means', ()
     expect(deliveryLabel(null)).toBeNull();
     expect(deliveryLabel(undefined)).toBeNull();
     expect(deliveryLabel('off_meta')).toBeNull();
+  });
+});
+
+// The engine's interval for an ad set with no conversions: spend ÷ 0 has no upper bound,
+// and the zeros beside the null are placeholders, not a measured cost.
+describe('measuredCpa / upperBoundNote', () => {
+  const unbounded = { cpa: 0, lo: 0, hi: null, events: 0 };
+  const bounded = { cpa: 22, lo: 16, hi: 30, events: 55 };
+
+  it('never reads the zero-conversion placeholder as a cost', () => {
+    expect(measuredCpa(unbounded)).toBeNull();
+    expect(measuredCpa(bounded)).toBe(22);
+    expect(measuredCpa({ cpa: 20 })).toBe(20);
+    expect(measuredCpa(null)).toBeNull();
+    expect(measuredCpa({ cpa: Number.NaN, hi: 3 })).toBeNull();
+  });
+
+  it('says why there is no upper bound, and only when there is none', () => {
+    expect(upperBoundNote(unbounded)).toBe('no upper bound yet (0 conversions)');
+    expect(upperBoundNote(bounded)).toBeNull();
+    expect(upperBoundNote({ cpa: 20 })).toBeNull();
+    expect(upperBoundNote(null)).toBeNull();
   });
 });

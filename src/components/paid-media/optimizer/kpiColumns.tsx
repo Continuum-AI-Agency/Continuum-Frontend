@@ -32,7 +32,7 @@ import { pct } from './charts/chartScale';
 import { DeliveryPill } from './DeliveryPill';
 import { deriveEfficiency, formatCpa } from './format';
 import { HeldPill } from './HeldPill';
-import { freezeLabel } from './reportModel';
+import { freezeLabel, measuredCpa, upperBoundNote } from './reportModel';
 
 const DASH = '—';
 
@@ -88,7 +88,8 @@ function rowFromItem(
   const window = snapshot?.windows?.d7 as Record<string, unknown> | undefined;
   const spend = window ? numericField(window, 'spend') : null;
   const results = metric && window ? numericField(window, metric.kpiField) : null;
-  const costFromCi = metric && ci?.cpa != null ? ci.cpa * metric.denominatorMultiplier : null;
+  const measured = measuredCpa(ci);
+  const costFromCi = metric && measured != null ? measured * metric.denominatorMultiplier : null;
   const costFromWindow =
     metric && spend != null && results != null
       ? deriveEfficiency(spend, results, metric.denominatorMultiplier)
@@ -276,8 +277,13 @@ function CostCell({
   const events = ci?.events ?? null;
   const hasInterval = lo != null && hi != null && hi >= lo;
 
+  const unboundedNote = upperBoundNote(ci);
   if (cost == null && !hasInterval) {
-    return <span className="text-muted-foreground">{DASH}</span>;
+    return unboundedNote ? (
+      <span className="text-2xs text-muted-foreground">{unboundedNote}</span>
+    ) : (
+      <span className="text-muted-foreground">{DASH}</span>
+    );
   }
 
   const left = hasInterval ? pct(lo as number, maxCiCost) : 0;
@@ -288,7 +294,7 @@ function CostCell({
 
   const plain = hasInterval
     ? `${metric.costLabel} ${formatCpa(cost, currency)} (likely ${formatCpa(lo, currency)}–${formatCpa(hi, currency)})${events != null ? ` from ${events} ${metric.resultLabel.toLowerCase()}` : ''}`
-    : `${metric.costLabel} ${formatCpa(cost, currency)}`;
+    : `${metric.costLabel} ${formatCpa(cost, currency)}${unboundedNote ? ` · ${unboundedNote}` : ''}`;
 
   return (
     <Tooltip>
