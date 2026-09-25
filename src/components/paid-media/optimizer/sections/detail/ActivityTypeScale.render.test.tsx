@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import type { AdhocSuggestionGate } from '@continuum/contracts';
+import type { AdhocSuggestionGate, CreativeSwapJobRow } from '@continuum/contracts';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, within } from '@testing-library/react';
 
 import { LookbackToggle } from '../../charts/LookbackToggle';
+import { CreativeRecommendationCard } from '../CreativeRecommendationCard';
 import { RowHeader } from '../feedChrome';
-import type { DailyReadRow } from './dailyReadModel';
 import { DailyReadList } from './DailyReadList';
+import type { DailyReadRow } from './dailyReadModel';
 import { SuggestionAsk } from './SuggestionAsk';
 
 afterEach(cleanup);
@@ -152,5 +154,107 @@ describe('the shared pieces keep their dense default outside the Activity tab', 
     expect(roomy.className).toContain('text-base');
     expect(roomy.className).toContain('font-semibold');
     expect((roomy.nextElementSibling as HTMLElement).className).toContain('text-sm');
+  });
+});
+
+describe('CreativeRecommendationCard — +2 type scale (Activity and Actions tabs alike)', () => {
+  const creativeRec = {
+    id: 'rec-c1',
+    adset_id: 'as-1',
+    ad_id: 'ad-1',
+    kind: 'creative_refresh',
+    trigger: 'F1_creative_fatigue',
+    severity: 'medium',
+    reason: 'CTR down 33% vs 14d',
+    status: 'pending',
+    evidence: null,
+    seed: null,
+  } as never;
+
+  const job = (over: Partial<CreativeSwapJobRow>): CreativeSwapJobRow => ({
+    id: 'job-1',
+    brand_id: 'brand-1',
+    recommendation_id: 'rec-c1',
+    adset_id: 'as-1',
+    mode: 'flash',
+    status: 'generated',
+    asset_id: 'asset-1',
+    result: { roomId: 'room-1' },
+    ...over,
+  });
+
+  const renderCard = (standing: Parameters<typeof CreativeRecommendationCard>[0]['standing']) =>
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <CreativeRecommendationCard
+          adsetName="Prospecting MX"
+          ads={[{ id: 'ad-1', name: 'Summer hero' }]}
+          adsLoading={false}
+          audienceType="prospecting"
+          brandId=""
+          currency="MXN"
+          generateNote="Creative+ is busy."
+          generating={false}
+          implementingKey={null}
+          jobs={[
+            job({}),
+            job({
+              id: 'job-2',
+              status: 'failed',
+              asset_id: null,
+              result: null,
+              error: { message: 'Quota exceeded' },
+              enqueued_via: 'autopilot',
+            }),
+          ]}
+          onGenerate={() => undefined}
+          onImplement={() => undefined}
+          rec={creativeRec}
+          resultWord="leads"
+          standing={standing}
+          targets={[{ adsetId: 'as-1', name: 'Prospecting MX', relation: 'here' }]}
+        />
+      </QueryClientProvider>,
+    );
+
+  it('uses no text-2xs or text-3xs: slots, badges, notes and the Generate button', () => {
+    renderCard(null);
+    const card = screen.getByTestId('creative-recommendation-card');
+    expect(card.outerHTML).not.toMatch(SUB_XS);
+    expect(screen.getByText('Summer hero').className).toContain('text-sm');
+    expect(screen.getByText('Generate with Creative+').className).toContain('h-9');
+    expect(screen.getByText('Generate with Creative+').className).toContain('text-sm');
+    for (const slot of screen.getAllByTestId('flash-slot')) {
+      expect(slot.className).toContain('text-xs');
+    }
+  });
+
+  it("shows the subject creative's cost as a key figure", () => {
+    renderCard({
+      bars: [
+        {
+          adId: 'ad-1',
+          name: 'Summer hero',
+          costPerEvent: 42,
+          events: 12,
+          spend: 504,
+          subject: true,
+          winner: false,
+          share: 1,
+        },
+      ],
+      median: 42,
+      medianShare: 1,
+      eligibleAds: 1,
+      totalAds: 1,
+    });
+    const [left, , right] = screen
+      .getByTestId('creative-recommendation-card')
+      .querySelectorAll(':scope > section');
+    expect(left.outerHTML).not.toMatch(SUB_XS);
+    expect(right.outerHTML).not.toMatch(SUB_XS);
+    const figure = left.querySelector('span.tabular-nums');
+    expect(figure?.className).toContain('text-lg');
+    expect(figure?.className).toContain('font-semibold');
   });
 });

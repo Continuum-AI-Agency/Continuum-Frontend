@@ -57,6 +57,9 @@ type CreativeRecommendationCardProps = {
 
 const FLASH_SLOTS = 3;
 
+/** In-slot actions: a flash slot is a third of the column, so they stay a step under the card buttons. */
+const SLOT_BUTTON = 'h-8 px-2 text-xs';
+
 type FlashSlot = {
   key: string;
   job: CreativeSwapJobRow;
@@ -112,31 +115,31 @@ function ImplementMenu({
     <Popover onOpenChange={setOpen} open={open}>
       <PopoverTrigger
         render={
-          <Button className="h-6 px-1.5 text-3xs" disabled={busy} size="sm" variant="default">
+          <Button className={SLOT_BUTTON} disabled={busy} size="sm" variant="default">
             {busy ? (
-              <Loader2Icon className="size-3 animate-spin" />
+              <Loader2Icon className="size-3.5 animate-spin" />
             ) : (
-              <UploadIcon className="size-3" />
+              <UploadIcon className="size-3.5" />
             )}
             Implement
           </Button>
         }
       />
-      <PopoverContent align="end" className="w-64 p-2 text-2xs">
-        <p className="mb-1.5 text-muted-foreground">
+      <PopoverContent align="end" className="w-72 p-3 text-sm">
+        <p className="mb-2 text-muted-foreground">
           The new ad is created paused, beside the ad set's current ad. Nothing existing changes.
         </p>
         <div className="max-h-56 space-y-2 overflow-y-auto">
           {groups.map((group) => (
             <div key={group.relation}>
-              <p className="mb-0.5 text-3xs text-muted-foreground uppercase tracking-wide">
+              <p className="mb-1 text-muted-foreground text-xs uppercase tracking-wide">
                 {RELATION_LABEL[group.relation]}
               </p>
               <ul className="space-y-0.5">
                 {group.items.map((target) => (
                   <li key={target.adsetId}>
                     <button
-                      className="w-full truncate rounded px-1.5 py-1 text-left hover:bg-muted"
+                      className="w-full truncate rounded px-2 py-1.5 text-left hover:bg-muted"
                       onClick={() => {
                         setOpen(false);
                         onImplement(slot.job, slot.assetId, target);
@@ -192,18 +195,18 @@ export function CreativeRecommendationCard({
 
   return (
     <div
-      className="grid gap-5 md:grid-cols-[11rem_minmax(0,1fr)_minmax(15rem,19rem)]"
+      className="grid gap-6 md:grid-cols-[12rem_minmax(0,1fr)_minmax(18rem,24rem)]"
       data-testid="creative-recommendation-card"
     >
       {/* Left — the creative in question */}
-      <section className="space-y-2">
-        <p className="text-3xs text-muted-foreground uppercase tracking-wide">
+      <section className="space-y-3">
+        <p className="text-muted-foreground text-xs uppercase tracking-wide">
           {copy.because === 'winner' ? 'The winner' : 'Creative to renew'}
         </p>
         {adsLoading && subjects.length === 0 ? (
           <div className="aspect-square w-full max-w-44 animate-pulse rounded-lg bg-muted/40" />
         ) : subjects.length === 0 ? (
-          <div className="flex aspect-square w-full max-w-44 flex-col items-center justify-center gap-2 rounded-lg border border-border/60 border-dashed p-3 text-center text-2xs text-muted-foreground">
+          <div className="flex aspect-square w-full max-w-44 flex-col items-center justify-center gap-2 rounded-lg border border-border/60 border-dashed p-4 text-center text-muted-foreground text-sm">
             <ImageOffIcon className="size-4" /> No creative could be loaded for this ad set.
           </div>
         ) : (
@@ -226,7 +229,7 @@ export function CreativeRecommendationCard({
                       <ImageOffIcon className="size-4 text-muted-foreground" />
                     </div>
                   )}
-                  <p className="mt-1.5 truncate text-2xs text-foreground" title={ad.name ?? ad.id}>
+                  <p className="mt-2 truncate text-foreground text-sm" title={ad.name ?? ad.id}>
                     {ad.name ?? ad.id}
                   </p>
                 </li>
@@ -235,8 +238,8 @@ export function CreativeRecommendationCard({
           </ul>
         )}
         {subjectBar?.costPerEvent != null ? (
-          <p className="text-2xs text-muted-foreground">
-            <span className="font-semibold text-foreground text-sm tabular-nums">
+          <p className="text-muted-foreground text-sm">
+            <span className="font-semibold text-foreground text-lg tabular-nums">
               {formatCpa(subjectBar.costPerEvent, currency)}
             </span>{' '}
             per {resultWord.replace(/s$/, '')} · {subjectBar.events} {resultWord}
@@ -245,23 +248,23 @@ export function CreativeRecommendationCard({
       </section>
 
       {/* Middle — the argument */}
-      <section className="space-y-3 text-2xs md:border-border/50 md:border-l md:pl-5">
-        <p className="font-medium text-foreground text-xs">{copy.headline}</p>
-        <dl className="space-y-1">
-          <div className="flex gap-2">
-            <dt className="w-16 shrink-0 text-muted-foreground">Angle</dt>
+      <section className="space-y-4 text-sm md:border-border/50 md:border-l md:pl-6">
+        <p className="font-medium text-base text-foreground">{copy.headline}</p>
+        <dl className="space-y-1.5">
+          <div className="flex items-baseline gap-2">
+            <dt className="w-24 shrink-0 text-muted-foreground text-xs">Angle</dt>
             <dd className="min-w-0 text-foreground">
               {angle ?? <span className="text-muted-foreground">not labelled yet</span>}
             </dd>
           </div>
-          <div className="flex gap-2">
-            <dt className="w-16 shrink-0 text-muted-foreground">Audience</dt>
+          <div className="flex items-baseline gap-2">
+            <dt className="w-24 shrink-0 text-muted-foreground text-xs">Audience</dt>
             <dd className="min-w-0 text-foreground">
               {audience ?? adsetName ?? <span className="text-muted-foreground">this ad set</span>}
             </dd>
           </div>
-          <div className="flex gap-2">
-            <dt className="w-16 shrink-0 text-muted-foreground">
+          <div className="flex items-baseline gap-2">
+            <dt className="w-24 shrink-0 text-muted-foreground text-xs">
               {copy.because === 'winner' ? 'Why it wins' : 'Why now'}
             </dt>
             <dd className="min-w-0 text-foreground tabular-nums">
@@ -273,16 +276,16 @@ export function CreativeRecommendationCard({
         {standing ? (
           <CreativeStandingBars chart={standing} currency={currency} resultWord={resultWord} />
         ) : (
-          <p className="text-3xs text-muted-foreground">
+          <p className="text-muted-foreground text-xs">
             No creative comparison in the latest snapshot for this ad set.
           </p>
         )}
       </section>
 
       {/* Right — flash creatives */}
-      <section className="space-y-2 md:border-border/50 md:border-l md:pl-5">
-        <p className="flex items-center gap-1 text-3xs text-muted-foreground uppercase tracking-wide">
-          <SparklesIcon className="size-3" /> Flash creatives
+      <section className="space-y-3 md:border-border/50 md:border-l md:pl-6">
+        <p className="flex items-center gap-1.5 text-muted-foreground text-xs uppercase tracking-wide">
+          <SparklesIcon className="size-3.5" /> Flash creatives
         </p>
         <ul className="grid grid-cols-3 gap-2">
           {slots.map((slot) => {
@@ -292,7 +295,7 @@ export function CreativeRecommendationCard({
             const busy = implementingKey === slot.key;
             return (
               <li
-                className="flex flex-col gap-1 rounded-lg border border-border/70 bg-muted/20 p-1.5 text-3xs"
+                className="flex flex-col gap-1.5 rounded-lg border border-border/70 bg-muted/20 p-2 text-xs"
                 data-testid="flash-slot"
                 key={slot.key}
                 title={slot.job.id}
@@ -315,7 +318,7 @@ export function CreativeRecommendationCard({
                   </div>
                 )}
                 <Badge
-                  className="w-fit text-3xs"
+                  className="w-fit text-xs"
                   variant={
                     status === 'published'
                       ? 'success'
@@ -327,7 +330,7 @@ export function CreativeRecommendationCard({
                   {SWAP_STATUS_LABEL[status] ?? status}
                 </Badge>
                 {slot.job.enqueued_via === 'autopilot' ? (
-                  <span className="text-3xs text-muted-foreground">by autopilot</span>
+                  <span className="text-muted-foreground text-xs">by autopilot</span>
                 ) : null}
                 {status === 'failed' && failureText(slot.job) ? (
                   <p className="line-clamp-2 text-destructive" title={failureText(slot.job) ?? ''}>
@@ -339,13 +342,13 @@ export function CreativeRecommendationCard({
                     <a
                       className={cn(
                         buttonVariants({ variant: 'secondary', size: 'sm' }),
-                        'h-6 px-1.5 text-3xs',
+                        SLOT_BUTTON,
                       )}
                       href={`/ai-studio?roomId=${encodeURIComponent(slot.roomId)}`}
                       rel="noreferrer"
                       target="_blank"
                     >
-                      <PencilIcon className="size-3" /> Edit
+                      <PencilIcon className="size-3.5" /> Edit
                     </a>
                   ) : null}
                   {ready ? (
@@ -363,7 +366,7 @@ export function CreativeRecommendationCard({
           {Array.from({ length: emptySlots }, (_, index) => slots.length + index + 1).map(
             (slotNumber) => (
               <li
-                className="flex aspect-square items-center justify-center rounded-lg border border-border/60 border-dashed text-3xs text-muted-foreground"
+                className="flex aspect-square items-center justify-center rounded-lg border border-border/60 border-dashed text-muted-foreground text-xs"
                 key={`slot-${slotNumber}`}
               >
                 slot {slotNumber}
@@ -373,6 +376,7 @@ export function CreativeRecommendationCard({
         </ul>
         {onGenerate ? (
           <Button
+            className="h-9 px-3 text-sm"
             disabled={generating}
             onClick={onGenerate}
             size="sm"
@@ -382,7 +386,7 @@ export function CreativeRecommendationCard({
             {generating ? 'Requesting…' : 'Generate with Creative+'}
           </Button>
         ) : null}
-        {generateNote ? <p className="text-3xs text-muted-foreground">{generateNote}</p> : null}
+        {generateNote ? <p className="text-muted-foreground text-xs">{generateNote}</p> : null}
       </section>
     </div>
   );

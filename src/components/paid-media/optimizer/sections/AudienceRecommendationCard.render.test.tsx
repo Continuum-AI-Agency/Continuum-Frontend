@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { AudienceRecommendationCard } from './AudienceRecommendationCard';
 import { audienceCardView } from './audienceCardModel';
 
@@ -144,6 +144,46 @@ const row = (over: Record<string, unknown>) =>
     ...over,
   }) as never;
 
+const executedResult = {
+  read_back_at: null,
+  campaign: { id: 'c1', name: 'Leads MX', status: 'ACTIVE' },
+  adset: {
+    id: 'as-9',
+    name: 'Source · wider fitness · 2026-09-19',
+    status: 'PAUSED',
+    effective_status: 'PAUSED',
+    daily_budget: '20000',
+    optimization_goal: 'LEAD_GENERATION',
+    billing_event: 'IMPRESSIONS',
+    bid_strategy: null,
+    targeting: plan.previous_spec,
+    promoted_object: null,
+  },
+  ads: [
+    {
+      id: 'ad-9',
+      name: 'Winner · new',
+      status: 'PAUSED',
+      effective_status: 'PAUSED',
+      creative_id: 'cr1',
+      thumbnail_url: null,
+      source_adset_id: 'as-2',
+      source_adset_name: 'Other',
+    },
+  ],
+  source_adset: {
+    id: 'as-1',
+    name: 'Source',
+    prior_status: 'ACTIVE',
+    status_after: 'ACTIVE',
+    paused: false,
+    note: null,
+  },
+  activation: null,
+  advantage_audience_written: true,
+  ads_manager_urls: null,
+};
+
 const noop = () => undefined;
 const baseProps = {
   rec,
@@ -215,45 +255,7 @@ describe('AudienceRecommendationCard', () => {
       [
         row({
           status: 'executed',
-          result: {
-            read_back_at: null,
-            campaign: { id: 'c1', name: 'Leads MX', status: 'ACTIVE' },
-            adset: {
-              id: 'as-9',
-              name: 'Source · wider fitness · 2026-09-19',
-              status: 'PAUSED',
-              effective_status: 'PAUSED',
-              daily_budget: '20000',
-              optimization_goal: 'LEAD_GENERATION',
-              billing_event: 'IMPRESSIONS',
-              bid_strategy: null,
-              targeting: plan.previous_spec,
-              promoted_object: null,
-            },
-            ads: [
-              {
-                id: 'ad-9',
-                name: 'Winner · new',
-                status: 'PAUSED',
-                effective_status: 'PAUSED',
-                creative_id: 'cr1',
-                thumbnail_url: null,
-                source_adset_id: 'as-2',
-                source_adset_name: 'Other',
-              },
-            ],
-            source_adset: {
-              id: 'as-1',
-              name: 'Source',
-              prior_status: 'ACTIVE',
-              status_after: 'ACTIVE',
-              paused: false,
-              note: null,
-            },
-            activation: null,
-            advantage_audience_written: true,
-            ads_manager_urls: null,
-          },
+          result: executedResult,
         }),
       ],
       rec,
@@ -267,5 +269,61 @@ describe('AudienceRecommendationCard', () => {
     expect(text).toContain('Switch over');
     expect(text).toContain('Undo');
     expect(container.querySelector('a[href*="selected_adset_ids=as-9"]')).not.toBeNull();
+  });
+});
+
+describe('AudienceRecommendationCard — +2 type scale', () => {
+  const SUB_XS = /text-(2|3)xs/;
+
+  it('a ready proposal carries no text-2xs/3xs and roomy buttons', () => {
+    const view = audienceCardView([row({})], rec);
+    const { container } = render(<AudienceRecommendationCard {...baseProps} view={view} />);
+    expect(container.innerHTML).not.toMatch(SUB_XS);
+    expect(screen.getByText(plan.diagnosis).className).toContain('text-base');
+    expect(screen.getByText('Replace audience').className).toContain('text-xs');
+    for (const button of container.querySelectorAll('button[data-slot="button"]')) {
+      expect(button.className).toContain('h-9');
+      expect(button.className).toContain('text-sm');
+    }
+  });
+
+  it('the no-proposal, CBO-preview and executed faces carry no text-2xs/3xs either', () => {
+    const faces = [
+      audienceCardView([], rec),
+      audienceCardView(
+        [
+          row({
+            status: 'blocked',
+            proposal: null,
+            blocked_by: {
+              code: 'cbo_campaign',
+              message: 'This campaign holds the budget.',
+              campaign_id: 'c1',
+              campaign_name: 'Leads MX',
+            },
+          }),
+        ],
+        rec,
+      ),
+      audienceCardView([row({ status: 'executed', result: executedResult })], rec),
+    ];
+    for (const view of faces) {
+      const { container, unmount } = render(
+        <AudienceRecommendationCard
+          {...baseProps}
+          cboPreview={
+            {
+              ok: true,
+              dryRun: true,
+              currency: 'MXN',
+              adset_budgets: [{ adset_id: 'as-1', adset_name: 'Source', daily_major: 200 }],
+            } as never
+          }
+          view={view}
+        />,
+      );
+      expect(container.innerHTML).not.toMatch(SUB_XS);
+      unmount();
+    }
   });
 });
