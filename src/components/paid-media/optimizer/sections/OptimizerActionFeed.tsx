@@ -28,6 +28,8 @@ import {
 } from './actionRows';
 import { FeedFooter, FeedSkeleton, PortfolioFilter, ReceiptToken, RowHeader } from './feedChrome';
 import { ALL_PORTFOLIOS, distinctPortfolioNames, filterByPortfolio } from './logFilters';
+import { ActionFeaturedCard } from './ActionFeaturedCard';
+import { ActionGridCard } from './ActionGridCard';
 import { OptimizerReadError } from './OptimizerReadError';
 import { RevertApplyDialog } from './RevertApplyDialog';
 
@@ -138,6 +140,72 @@ export function ActionRow({
   );
 }
 
+/**
+ * Which action leads the feed: the NEWEST one, by its own timestamp.
+ *
+ * The rows carry no impact figure (a budget write's before/after is not its effect), so
+ * "highest impact" would be a guess dressed as a ranking. The RPC already returns newest
+ * first; reading `ts` rather than trusting position keeps the rule true if that ever changes.
+ * The rest keep the feed's order.
+ */
+export function splitFeaturedAction(rows: OptimizerActionFeedRow[]): {
+  featured: OptimizerActionFeedRow | null;
+  rest: OptimizerActionFeedRow[];
+} {
+  let featuredIndex = -1;
+  let newest = Number.NEGATIVE_INFINITY;
+  rows.forEach((row, index) => {
+    const at = new Date(row.ts).getTime();
+    const comparable = Number.isFinite(at) ? at : Number.NEGATIVE_INFINITY;
+    if (featuredIndex === -1 || comparable > newest) {
+      featuredIndex = index;
+      newest = comparable;
+    }
+  });
+  if (featuredIndex === -1) return { featured: null, rest: [] };
+  return {
+    featured: rows[featuredIndex] ?? null,
+    rest: rows.filter((_, index) => index !== featuredIndex),
+  };
+}
+
+// Written out whole because Tailwind reads source text. Fewer cards than a full row get
+// fewer columns, so two cards fill the width instead of leaving two empty cells beside them.
+const GRID_COLUMNS: Record<number, string> = {
+  1: 'grid-cols-1',
+  2: 'grid-cols-1 sm:grid-cols-2',
+  3: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
+};
+const GRID_COLUMNS_FULL = 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4';
+
+function ActionFeedCards({
+  rows,
+  brandId,
+  currency,
+}: {
+  rows: OptimizerActionFeedRow[];
+  brandId: string;
+  currency: string | null;
+}) {
+  const { featured, rest } = splitFeaturedAction(rows);
+  if (!featured) return null;
+  return (
+    <div className="space-y-3">
+      <ActionFeaturedCard row={featured} brandId={brandId} currency={currency} />
+      {rest.length > 0 ? (
+        <ul
+          className={`grid items-stretch gap-3 ${GRID_COLUMNS[rest.length] ?? GRID_COLUMNS_FULL}`}
+          data-testid="action-grid"
+        >
+          {rest.map((row) => (
+            <ActionGridCard key={row.id} row={row} brandId={brandId} currency={currency} />
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 export function OptimizerActionFeed({
   brandId,
   currency,
@@ -194,11 +262,7 @@ export function OptimizerActionFeed({
           No actions for this portfolio in what has loaded.
         </p>
       ) : (
-        <ul className="space-y-2">
-          {visible.map((row) => (
-            <ActionRow key={row.id} row={row} brandId={brandId} currency={currency} />
-          ))}
-        </ul>
+        <ActionFeedCards rows={visible} brandId={brandId} currency={currency} />
       )}
       <FeedFooter
         loaded={actions.length}

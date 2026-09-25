@@ -55,8 +55,9 @@ export function RowHeader({ title, ts }: { title: string; ts: string }) {
 
 /** The Meta trace id, one-click copyable — the receipt an operator pastes into a Graph API
  *  support ticket. Clipboard access is optional-chained so a render environment without it
- *  (or a denied permission) never throws. */
-export function ReceiptToken({ value }: { value: string }) {
+ *  (or a denied permission) never throws. `className` lets a roomier surface (the action
+ *  cards) lift the type size; without it the token renders exactly as the dense feeds use it. */
+export function ReceiptToken({ value, className }: { value: string; className?: string }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
     void navigator.clipboard?.writeText(value)?.catch(() => {});
@@ -68,7 +69,10 @@ export function ReceiptToken({ value }: { value: string }) {
       type="button"
       onClick={copy}
       aria-label={`Copy Meta trace id ${value}`}
-      className="mt-1 inline-flex max-w-full items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-2xs tabular-nums text-muted-foreground transition-colors hover:bg-muted"
+      className={cn(
+        'mt-1 inline-flex max-w-full items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-2xs tabular-nums text-muted-foreground transition-colors hover:bg-muted',
+        className,
+      )}
     >
       {copied ? (
         <CheckIcon aria-hidden="true" className="size-3 shrink-0 text-success" />
