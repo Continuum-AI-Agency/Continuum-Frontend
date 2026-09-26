@@ -16,7 +16,8 @@ const TAG_LIMIT = 5;
 // "Track by name" fallback below stays available in every case.
 const PERM_SHORT =
   'Instagram Business Discovery is not permitted for your connected account — competitor lookups read other profiles through your own Instagram Business account and need a permission your own analytics do not. Reconnecting will not fix it.';
-const RATE = 'Instagram is rate-limiting your account — nothing needs reconnecting, try again in a few minutes.';
+const RATE =
+  'Instagram is rate-limiting your account — nothing needs reconnecting, try again in a few minutes.';
 
 function competitorSearchErrorCopy(error: unknown): string {
   switch (instagramLookupErrorKind(error)) {
@@ -24,6 +25,8 @@ function competitorSearchErrorCopy(error: unknown): string {
       return 'Instagram account required — connect your Instagram business account to research competitors. You can still track by name below.';
     case 'permission_denied':
       return `${PERM_SHORT} You can still track by name below.`;
+    case 'facebook_login_required':
+      return 'Competitor research needs your Instagram connected through Facebook, not Instagram only. You can still track by name below.';
     case 'rate_limited':
       return `${RATE} You can still track by name below.`;
     case 'lookup_unavailable':
@@ -32,6 +35,16 @@ function competitorSearchErrorCopy(error: unknown): string {
       return 'Could not find a public Instagram business or creator account.';
   }
 }
+
+// The create route resolves the optional YouTube channel before tracking anything,
+// so a bad channel fails the whole add and the user can fix or clear the field.
+const YOUTUBE_ERROR_COPY: Record<string, string> = {
+  youtube_url_invalid:
+    'That is not a YouTube channel link. Paste a channel URL, an @handle or a channel id.',
+  youtube_channel_not_found: 'No YouTube channel was found for that link.',
+  youtube_unavailable:
+    'YouTube lookup is unavailable right now. Try again shortly, or clear the YouTube field.',
+};
 
 function describeFrame(frame: CompetitorSpyStreamFrame): string {
   switch (frame.type) {
@@ -66,6 +79,7 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
   const create = useCreateCompetitor(brandId);
 
   const [query, setQuery] = useState('');
+  const [youtube, setYoutube] = useState('');
   const [debounced, setDebounced] = useState('');
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
@@ -112,6 +126,9 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
       : false;
   const limitError =
     create.error instanceof Error && create.error.message === 'competitor_limit_reached';
+  const youtubeError =
+    create.error instanceof Error ? (YOUTUBE_ERROR_COPY[create.error.message] ?? null) : null;
+  const youtubeInput = youtube.trim() || undefined;
 
   const addInstagramCompetitor = () => {
     if (!competitorResult || !account || atLimit) return;
@@ -137,10 +154,12 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
         instagramUserId: account.id ?? undefined,
         instagramName: account.name ?? undefined,
         instagramFollowersCount: account.followersCount ?? undefined,
+        youtube: youtubeInput,
       },
       {
         onSuccess: () => {
           setQuery('');
+          setYoutube('');
           setSelectedPageId(null);
         },
       },
@@ -150,7 +169,15 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
   const addByName = () => {
     const name = query.trim();
     if (!name || atLimit) return;
-    create.mutate({ name }, { onSuccess: () => setQuery('') });
+    create.mutate(
+      { name, youtube: youtubeInput },
+      {
+        onSuccess: () => {
+          setQuery('');
+          setYoutube('');
+        },
+      },
+    );
   };
 
   const runSync = async () => {
@@ -323,6 +350,17 @@ export function CompetitorTagInput({ brandId }: { brandId: string }) {
           </div>
         ) : null}
       </div>
+
+      <input
+        value={youtube}
+        onChange={(e) => setYoutube(e.target.value)}
+        disabled={atLimit}
+        placeholder="YouTube channel (optional): URL, @handle or channel id"
+        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
+        aria-label="YouTube channel"
+      />
+
+      {youtubeError ? <p className="text-xs text-destructive">{youtubeError}</p> : null}
 
       {limitError ? (
         <p className="text-xs text-destructive">

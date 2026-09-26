@@ -6,6 +6,7 @@ export const agentMentionReferenceTypeSchema = z.enum([
   'event',
   'question',
   'draft',
+  'organic_post',
   'campaign',
   'adset',
   'media_asset',

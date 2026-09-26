@@ -22,12 +22,7 @@ export function PostedContentPreview({
   const isCarousel = isCarouselMediaType(post.mediaType);
 
   return (
-    <div
-      className={cn(
-        'w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-border bg-card',
-        className,
-      )}
-    >
+    <div className={cn('w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-border bg-card', className)}>
       {mediaUrl ? (
         <div className="aspect-video overflow-hidden bg-muted">
           {/* eslint-disable-next-line @next/next/no-img-element */}

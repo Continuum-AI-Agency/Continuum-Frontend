@@ -182,6 +182,14 @@ const moduleData = (moduleId: string, moduleRole: string): Record<string, string
   workflowModuleRole: moduleRole,
 });
 
+/**
+ * Desk-demo capture, not a campaign move. `ugc.desk-demo.front-phone` forbids a
+ * dolly and a gimbal; a hardcoded "slow dolly in" made every talking-head job
+ * fail that law before the model ever saw the spoken line.
+ */
+export const UGC_TALKING_HEAD_CAMERA_MOVE =
+  'Handheld front-facing phone at phone-height eyeline. No gimbal and no dolly.';
+
 export function compileUgcTalkingHeadWorkflow(
   input: UgcTalkingHeadRecipe,
 ): CompiledUgcTalkingHeadWorkflow {
@@ -218,7 +226,7 @@ export function compileUgcTalkingHeadWorkflow(
           brief: shot.frameDirection,
           spokenLine: shot.spokenLine,
           subjectAction: shot.frameDirection,
-          cameraMove: 'Slow controlled dolly in.',
+          cameraMove: UGC_TALKING_HEAD_CAMERA_MOVE,
           inSceneEvent: shot.visualDirection,
           continuity: shot.continuity,
           targetDurationSec: shot.durationSeconds,

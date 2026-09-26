@@ -17,6 +17,7 @@ import {
   type DocumentCategory,
   type DocumentRetention,
 } from '@continuum/contracts';
+import { requireBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import type { OnboardingDocument, OnboardingState } from '@/lib/onboarding/state';
 import { createBrandId } from '@/lib/onboarding/state';
 import { sanitizeStorageFileName } from '@/lib/storage/sanitize';
@@ -97,14 +98,12 @@ export async function uploadBrandDocument({
   const sanitizedFileName = sanitizeStorageFileName(file.name);
   const storagePath = buildStoragePath(brandId, documentId, version, sanitizedFileName);
 
+  const accessToken = await requireBrowserAccessToken();
   if (file.size > TUS_CHUNK_SIZE_BYTES) {
-    const { data, error } = await supabase.auth.getSession();
-    if (error || !data.session?.access_token)
-      throw new Error(error?.message ?? 'Sign in to upload this document');
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     if (!supabaseUrl) throw new Error('Document upload is unavailable');
     await resumableStorageUpload({ file, bucket: BRAND_DOCS_BUCKET, objectPath: storagePath,
-      accessToken: data.session.access_token, supabaseUrl,
+      accessToken, supabaseUrl,
       anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY });
   } else {
     const { error: uploadError } = await supabase.storage

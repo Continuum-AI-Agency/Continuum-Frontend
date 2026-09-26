@@ -32,6 +32,16 @@ describe('buildAdsetAngleStanding', () => {
     expect(out.action).toContain('social proof');
   });
 
+  it('names a closed angle id by its display name, and keeps the id as the value', () => {
+    const rows = [
+      row({ adsetId: 'a1', dimension: 'angle_id', value: 'offer_discount', winRate: 0.75 }),
+      row({ adsetId: 'a1', dimension: 'angle_id', value: 'social_proof', winRate: 0.2 }),
+    ];
+    const [out] = buildAdsetAngleStanding({ winrateRows: rows, enrolledIds: ['a1'] });
+    expect(out.recommendedAngle?.value).toBe('offer_discount');
+    expect(out.action).toContain('"Discount offer"');
+  });
+
   // A 1-for-1 ad is not better evidence than 6-of-10, even though its win rate is higher.
   it('prefers the bigger sample when win rates tie', () => {
     const rows = [

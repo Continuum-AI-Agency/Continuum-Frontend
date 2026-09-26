@@ -58,8 +58,11 @@ const BUCKET = 'brand-profile-assets';
 const BENCH_CLIENT_KEY_PREFIX = 'bench-plstudio-';
 const POST_CLIENT_KEY = `${BENCH_CLIENT_KEY_PREFIX}post`;
 const CAROUSEL_CLIENT_KEY = `${BENCH_CLIENT_KEY_PREFIX}carousel`;
+const TEXT_CLIENT_KEY = `${BENCH_CLIENT_KEY_PREFIX}tiktok-text`;
 const POST_TITLE = 'PLSTUDIO Post — the headless generation must open as the base';
 const CAROUSEL_TITLE = 'PLSTUDIO Carousel — every realized slide is its own base';
+const TEXT_TITLE = 'PLSTUDIO TikTok copy — text-only handoff';
+const TEXT_CAPTION = 'Original TikTok caption';
 const CAROUSEL_SLIDES = 3;
 
 const BASE_IMAGE_PATH = `${BRAND_ID}/planner-studio-handoff-bench/base.png`;
@@ -205,6 +208,47 @@ function realizedDraftRow(params: {
             generated: true,
           })),
         },
+      },
+    },
+  };
+}
+
+function textOnlyDraftRow() {
+  const dayId = dayIdOffsetFromToday(2);
+  return {
+    brand_id: BRAND_ID,
+    user_id: OWNER_ID,
+    platform: 'tiktok',
+    platform_account_id: 'unassigned',
+    status: 'draft',
+    scheduled_date: `${dayId}T12:00:00.000Z`,
+    client_key: TEXT_CLIENT_KEY,
+    media_stage: 'text_only',
+    slot_data: {
+      placementId: TEXT_CLIENT_KEY,
+      dayId,
+      weekStart: dayId,
+      timeLabel: '9:00 AM',
+      platform: 'tiktok',
+      trendId: null,
+      title: TEXT_TITLE,
+      caption: TEXT_CAPTION,
+      draftSnapshot: {
+        id: TEXT_CLIENT_KEY,
+        clientKey: TEXT_CLIENT_KEY,
+        title: TEXT_TITLE,
+        summary: 'A copy-only TikTok draft.',
+        timeLabel: '9:00 AM',
+        dateLabel: dayId,
+        status: 'draft',
+        platforms: ['tiktok'],
+        format: 'Post',
+        objective: 'Engagement',
+        creativeIdea: TEXT_TITLE,
+        captionPreview: TEXT_CAPTION,
+        tags: [],
+        mediaCount: 0,
+        mediaStage: 'text_only',
       },
     },
   };
@@ -472,6 +516,7 @@ test.describe('planner → AI Studio handoff (#307)', () => {
           primaryUrl,
           slideUrls,
         }),
+        textOnlyDraftRow(),
       ])
       .throwOnError();
 
@@ -654,5 +699,31 @@ test.describe('planner → AI Studio handoff (#307)', () => {
 
     // And the prior work is still there after a second, larger append.
     expect(canvas.nodes.map((node) => node.id)).toContain(PRIOR_NODE_ID);
+  });
+
+  test('a text-only TikTok caption opens in Canvas and saves through Planner', async ({ page }) => {
+    test.setTimeout(300_000);
+    await openDraftInAiStudio(page, TEXT_CLIENT_KEY);
+    const captionNode = canvasNode(page, `organic-seed-text-${TEXT_CLIENT_KEY}`);
+    const caption = captionNode.locator('textarea').first();
+    await expect(caption).toHaveValue(TEXT_CAPTION, { timeout: 60_000 });
+    await caption.fill('Edited TikTok caption from AI Studio');
+    await caption.blur();
+    const apply = page.getByRole('button', { name: 'Apply Back to Planner' });
+    await expect(apply).toBeEnabled();
+    await apply.click();
+    await expect(page).toHaveURL(/\/organic\?/, { timeout: 60_000 });
+
+    const { data, error } = await admin()
+      .schema('organic')
+      .from('organic_calendar_drafts')
+      .select('content_json')
+      .eq('brand_id', BRAND_ID)
+      .eq('client_key', TEXT_CLIENT_KEY)
+      .single();
+    expect(error).toBeNull();
+    expect((data?.content_json as { copy?: { caption?: string } } | null)?.copy?.caption).toBe(
+      'Edited TikTok caption from AI Studio',
+    );
   });
 });

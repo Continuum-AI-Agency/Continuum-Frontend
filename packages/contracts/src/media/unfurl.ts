@@ -35,7 +35,7 @@ export const unfurlSourceSchema = z
     resolvedUrl: z.string().optional(),
     title: z.string().optional(),
     ogType: z.string().optional(),
-    via: z.enum(["direct", "firecrawl", "instagram_graph", "apify"]),
+    via: z.enum(["direct", "firecrawl", "instagram_graph", "apify", "tiktok_oembed"]),
     provider: z.string().optional(),
   })
   .strict();

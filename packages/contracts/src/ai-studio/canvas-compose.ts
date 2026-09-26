@@ -30,6 +30,11 @@ export type ComposerHistoryMessage = z.infer<typeof composerHistoryMessageSchema
 
 export const COMPOSER_HISTORY_MAX_MESSAGES = 12;
 export const CANVAS_COMPOSER_MAX_REFERENCES = 20;
+/**
+ * Typed prompt plus any pasted text and Element grounding the composer folds into it.
+ * Sized for a pasted brief; the Frontend trims grounding against this same number.
+ */
+export const CANVAS_COMPOSE_PROMPT_MAX_CHARS = 32_000;
 
 /**
  * Reference kinds the canvas `@` grabber can send.
@@ -120,7 +125,7 @@ export const canvasComposeRequestSchema = z
     roomId: z.string().min(1),
     /** Stable per submitted turn; retries must reuse it instead of starting duplicate work. */
     idempotencyKey: z.string().min(1).max(128).optional(),
-    prompt: z.string().min(1).max(4000),
+    prompt: z.string().min(1).max(CANVAS_COMPOSE_PROMPT_MAX_CHARS),
     /** Enables the model's maximum supported thinking level for this turn. */
     thinking: z.boolean().optional(),
     /** Nodes the user had selected — the composer treats them as the subject of the ask. */
@@ -150,11 +155,11 @@ export type CanvasComposeRequest = z.infer<typeof canvasComposeRequestSchema>;
 /**
  * Room for everything in a request that is NOT a base64 frame.
  *
- * The prompt (4,000), a full remembered transcript (12 x 2,000), the reference and
- * selection arrays, and the per-frame metadata keys come to roughly 40 KB. 64 KB
- * leaves half again as much for JSON escaping in user-authored text.
+ * The prompt (32,000, pasted text included), a full remembered transcript (12 x 2,000),
+ * the reference and selection arrays, and the per-frame metadata keys come to roughly
+ * 70 KB. 128 KB leaves the rest for JSON escaping in user-authored text.
  */
-const CANVAS_COMPOSE_ENVELOPE_BYTES = 64 * 1024;
+const CANVAS_COMPOSE_ENVELOPE_BYTES = 128 * 1024;
 
 /**
  * The route's body limit, DERIVED from the budgets above rather than written beside them.

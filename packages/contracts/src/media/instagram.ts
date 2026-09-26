@@ -15,6 +15,12 @@ export type InstagramMediaKind = z.infer<typeof instagramMediaKindSchema>;
 export const instagramPostKindSchema = z.enum(["post", "reel", "carousel"]);
 export type InstagramPostKind = z.infer<typeof instagramPostKindSchema>;
 
+// Platforms whose competitor posts share this shape (competitor_ad_spy.organic_posts).
+// On YouTube: a Short is "reel" and a long-form video is "post", per the API's own
+// Shorts playlist. TikTok is official-only and has no per-account feed (owner, 2026-09-21).
+export const organicPostPlatformSchema = z.enum(["instagram", "youtube"]);
+export type OrganicPostPlatform = z.infer<typeof organicPostPlatformSchema>;
+
 export const instagramTopMediaRequestSchema = z
   .object({
     brandId: z.string().uuid(),
@@ -56,6 +62,10 @@ export const instagramPostSchema = z
     // is not scored. Views are not in the score because only reels carry them.
     outlierScore: z.number().nonnegative().nullable().optional(),
     baselineEngagement: z.number().nonnegative().nullable().optional(),
+    // Absent means Instagram. Set only on other platforms' posts, whose metrics carry
+    // a freshness label ("updated Xh ago") from capturedAt.
+    platform: organicPostPlatformSchema.optional(),
+    capturedAt: z.string().nullable().optional(),
   })
   .strict();
 export type InstagramPost = z.infer<typeof instagramPostSchema>;

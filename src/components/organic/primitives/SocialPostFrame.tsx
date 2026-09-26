@@ -3,14 +3,11 @@
 /**
  * The shared post preview every organic platform renders through.
  *
- * `POST_PLATFORMS[platform].frame` picks the chrome: the phone frame is the Instagram preview
- * that already shipped, and TikTok and YouTube reuse it; Facebook renders the feed card and
- * LinkedIn the desktop card. The frame record is total over `PostPreviewFrame`, so there is no
- * "coming soon" fallthrough left for a publishable platform to land in — that fallthrough is
- * what dropped a TikTok draft's media, upload zone and library picker on the floor.
+ * `POST_PLATFORMS[platform].frame` picks the chrome. Instagram uses a feed inside a phone;
+ * TikTok and YouTube use a vertical video surface; Facebook and LinkedIn use feed cards.
  */
 import type { PublishPlatform } from '@continuum/contracts';
-import { Hash, Sparkles } from 'lucide-react';
+import { Hash, Heart, MessageCircle, Share2, Sparkles } from 'lucide-react';
 import type * as React from 'react';
 import { Iphone } from '@/components/ui/iphone';
 import { flattenHashtags } from '@/lib/organic/hashtags';
@@ -136,7 +133,7 @@ function PhonePostPreview({
           </div>
           <div className="flex flex-col">
             <span className="text-sm font-semibold leading-none tracking-tight">{displayName}</span>
-            <span className="mt-1 text-2xs text-muted-foreground">Sponsored</span>
+            <span className="mt-1 text-2xs text-muted-foreground">Post preview</span>
           </div>
         </div>
       </div>
@@ -235,7 +232,7 @@ function FeedPostPreview({
           </div>
           <div>
             <p className="text-sm font-bold tracking-tight">{displayName}</p>
-            <p className="text-xs text-muted-foreground">Sponsored · 1h</p>
+            <p className="text-xs text-muted-foreground">Post preview</p>
           </div>
         </div>
       </div>
@@ -331,7 +328,7 @@ function DesktopPostPreview({
           </div>
           <div>
             <p className="text-sm font-bold tracking-tight">{displayName}</p>
-            <p className="text-xs text-muted-foreground">12,450 followers</p>
+            <p className="text-xs text-muted-foreground">Post preview</p>
           </div>
         </div>
       </div>
@@ -413,12 +410,92 @@ function DesktopPostPreview({
   );
 }
 
+function VerticalVideoPreview({
+  draft,
+  onCaptionChange,
+  brandName,
+  platform,
+  mediaNode,
+  isEditing,
+  onEditCreativeDirection,
+  onEditHashtags,
+}: SocialPreviewProps) {
+  const displayName = brandName ?? 'Your Brand';
+  const hashtags = flattenHashtags(draft.hashtags);
+
+  return (
+    <div className="group/preview relative overflow-hidden bg-card text-foreground">
+      {isEditing && (
+        <PreviewHoverActions
+          onEditCreativeDirection={onEditCreativeDirection}
+          onEditHashtags={onEditHashtags}
+        />
+      )}
+      <div className="relative bg-slate-950">
+        {mediaNode}
+        <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/55 px-2 py-1 text-xs font-semibold text-white">
+          {platform === 'youtube' ? 'YouTube Shorts preview' : 'TikTok preview'}
+        </span>
+        <div
+          className="pointer-events-none absolute bottom-3 right-2 flex flex-col gap-3 text-white"
+          aria-hidden="true"
+        >
+          <Heart className="size-5" />
+          <MessageCircle className="size-5" />
+          <Share2 className="size-5" />
+        </div>
+        {!isEditing && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 pb-3 pt-12 text-white">
+            <p className="mr-8 text-sm font-semibold">{displayName}</p>
+            <div className="mr-8 line-clamp-3 text-xs leading-relaxed">
+              <EditableCaption
+                value={draft.captionPreview}
+                onChange={onCaptionChange}
+                platform={platform}
+                editable={false}
+                ariaLabel={`${POST_PLATFORMS[platform].label} caption`}
+              />
+            </div>
+            {hashtags.length > 0 && (
+              <p className="mr-8 mt-1 line-clamp-2 text-xs text-white/90">{hashtags.join(' ')}</p>
+            )}
+          </div>
+        )}
+      </div>
+      {isEditing && (
+        <div className="border-t border-border/70 px-3 py-2">
+          <p className="mb-1 text-xs font-semibold text-foreground">Caption</p>
+          <EditableCaption
+            value={draft.captionPreview}
+            onChange={onCaptionChange}
+            platform={platform}
+            editable
+            ariaLabel={`${POST_PLATFORMS[platform].label} caption`}
+            placeholder="Write your caption…"
+            className="text-xs leading-relaxed"
+          />
+          <HashtagDisplayBlock hashtags={draft.hashtags} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 const FRAMES: Record<PostPreviewFrame, (props: SocialPreviewProps) => React.ReactNode> = {
   phone: (props) => (
     <div className="flex justify-center">
       <div className="w-[433px] max-w-full" style={{ zoom: PHONE_PREVIEW_SCALE }}>
         <Iphone>
           <PhonePostPreview {...props} />
+        </Iphone>
+      </div>
+    </div>
+  ),
+  vertical: (props) => (
+    <div className="flex justify-center">
+      <div className="w-[433px] max-w-full" style={{ zoom: PHONE_PREVIEW_SCALE }}>
+        <Iphone>
+          <VerticalVideoPreview {...props} />
         </Iphone>
       </div>
     </div>

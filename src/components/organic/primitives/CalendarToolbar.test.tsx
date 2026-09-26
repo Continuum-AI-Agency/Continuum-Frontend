@@ -173,6 +173,32 @@ function defaultProps(overrides?: Partial<CalendarToolbarProps>): CalendarToolba
 afterEach(() => cleanup());
 
 describe('CalendarToolbar', () => {
+  it('keeps month creation and generation primary while other tools stay in a disclosure', () => {
+    const onGeneratePlan = mock();
+    const onViewModeChange = mock();
+    const { container } = render(
+      <CalendarToolbar
+        {...defaultProps({ viewMode: 'month', compact: true, onGeneratePlan, onViewModeChange })}
+      />,
+    );
+    const details = container.querySelector('details');
+    expect(details?.open).toBe(false);
+    expect(container.querySelector('summary')?.textContent).toBe('More calendar tools');
+    expect(container.querySelectorAll('button[aria-pressed="true"]')[0]?.textContent).toBe('Month');
+    expect(container.textContent).toContain('Create content');
+    expect(container.textContent).toContain('Generate plan');
+    expect(details?.textContent).toContain('Trends');
+    expect(details?.textContent).toContain('Clear view');
+    const primaryButton = (label: string) =>
+      Array.from(container.querySelectorAll('button')).find(
+        (button) => button.textContent?.trim() === label && !details?.contains(button),
+      )!;
+    fireEvent.click(primaryButton('Generate plan'));
+    fireEvent.click(primaryButton('Week'));
+    expect(onGeneratePlan).toHaveBeenCalledTimes(1);
+    expect(onViewModeChange).toHaveBeenCalledWith('week');
+  });
+
   it('renders view mode buttons for Week, Month, and List', () => {
     const { container } = render(<CalendarToolbar {...defaultProps()} />);
 

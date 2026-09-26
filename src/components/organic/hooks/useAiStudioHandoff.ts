@@ -6,6 +6,7 @@ import * as React from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
 import {
   AI_STUDIO_CONTEXT_STORAGE_PREFIX,
+  aiStudioHandoffIssue,
   brandStorageKeyAiStudioLastDraft,
   buildAiStudioHandoffStorageCandidates,
   buildAiStudioStorageKey,
@@ -142,7 +143,12 @@ export function useAiStudioHandoff({
     (draft: OrganicCalendarDraft): PlannerAiStudioHandoff => {
       const prompts = deriveAiStudioPrompts(draft);
       const postType = normalizeDraftPostType(draft.format);
-      const platform = draft.platforms[0] === 'linkedin' ? 'linkedin' : 'instagram';
+      const platform =
+        draft.platforms[0] === 'linkedin'
+          ? 'linkedin'
+          : draft.platforms[0] === 'tiktok'
+            ? 'tiktok'
+            : 'instagram';
       const workflowConcept = resolveWorkflowConcept({ platform, postType });
       const slides =
         postType === 'carousel'
@@ -159,7 +165,9 @@ export function useAiStudioHandoff({
       return {
         schemaVersion: 'planner_ai_handoff_v1',
         draftId: draft.id,
+        backendDraftId: draft.backendDraftId,
         brandProfileId: brandProfileId ?? '',
+        sourceUpdatedAt: draft.updatedAt ?? '',
         weekStartId,
         platform,
         postType,
@@ -282,6 +290,16 @@ export function useAiStudioHandoff({
     }
     const applyPayload = parsed.data;
 
+    if (applyPayload.draftId !== draftId || applyPayload.brandProfileId !== brandProfileId) {
+      show({
+        title: 'Could not apply AI Studio edits',
+        description: 'The draft or brand changed during the handoff. Open the draft again.',
+        variant: 'error',
+      });
+      removeLocalStorage(key);
+      return;
+    }
+
     updateDraftById(applyPayload.draftId, (draft) => ({
       ...draft,
       title: applyPayload.contentPatch.title ?? draft.title,
@@ -375,6 +393,11 @@ export function useAiStudioHandoff({
 
   const openDraft = React.useCallback(
     (draft: OrganicCalendarDraft) => {
+      const issue = aiStudioHandoffIssue(draft);
+      if (issue) {
+        show({ title: 'AI Studio unavailable', description: issue, variant: 'warning' });
+        return;
+      }
       const parsed = plannerAiStudioHandoffSchema.safeParse(buildAiStudioContext(draft));
       if (!parsed.success) return;
       const persisted = persistAiStudioContext(parsed.data);

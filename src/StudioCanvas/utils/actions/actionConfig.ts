@@ -45,6 +45,7 @@ const CUSTOM_CONFIG_KEYS: Partial<Record<ActionId, readonly string[]>> = {
   'image.shader': ['shaderStack'],
   'video.shader': ['shaderStack'],
   'video.subtitles': ['manualCaptions'],
+  'video.editorialCaptions': ['words', 'emphasisPhrases'],
   // An array of per-segment windows, each with its own trim, volume and fades. The
   // generic popover has no control shape for that and should not grow one — the bed is
   // placed on the timeline, where the segments are visible against the clip they cut.

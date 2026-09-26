@@ -15,6 +15,7 @@ import {
   packageDesignSystemUpload,
 } from '@continuum/contracts';
 import { request } from '@/lib/api/http';
+import { requireBrowserAccessToken } from '@/lib/auth/getBrowserAccessToken';
 import { createBrandId } from '@/lib/onboarding/state';
 import { sanitizeStorageFileName } from '@/lib/storage/sanitize';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -69,6 +70,7 @@ export async function uploadDesignSystem(args: {
   args.onProgress?.('uploading');
   const uploadId = createBrandId();
   const storagePath = `${args.brandId}/design-systems/${uploadId}/${sanitizeStorageFileName(packaged.fileName)}`;
+  await requireBrowserAccessToken();
   const supabase = createSupabaseBrowserClient();
   const { error } = await supabase.storage.from(BUCKET).upload(storagePath, packaged.blob, {
     contentType: packaged.blob.type || 'application/octet-stream',

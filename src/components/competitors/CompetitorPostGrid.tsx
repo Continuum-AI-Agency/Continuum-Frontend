@@ -11,8 +11,8 @@ import {
   countBy,
   type FormatFilter,
   filterViews,
-  POST_TYPE_LABELS,
   type PostTypeFilter,
+  postTypeLabel,
 } from './competitorPostView';
 import { FilterChips } from './inspirationControls';
 
@@ -86,10 +86,12 @@ export function FilterablePostGrid({
   const [postType, setPostType] = useState<PostTypeFilter>('all');
   const [format, setFormat] = useState<FormatFilter>('all');
   const { views } = grid;
+  // A grid is one platform's posts (YouTube is never interleaved with Instagram).
+  const platform = views[0]?.post.platform;
 
   const typeOptions = countBy(views, (view) => view.post.kind).map(([id, count]) => ({
     id,
-    label: POST_TYPE_LABELS[id],
+    label: postTypeLabel(id, platform),
     count,
   }));
   const ofType = filterViews(views, { postType, format: 'all' });
@@ -113,13 +115,17 @@ export function FilterablePostGrid({
             total={views.length}
             onChange={setPostType}
           />
-          <FilterChips
-            label="Format"
-            value={format}
-            options={formatOptions}
-            total={ofType.length}
-            onChange={setFormat}
-          />
+          {/* A YouTube format would only restate the post type (Reel/Photo), and
+              inferring a video's category is off-policy. */}
+          {platform === 'youtube' ? null : (
+            <FilterChips
+              label="Format"
+              value={format}
+              options={formatOptions}
+              total={ofType.length}
+              onChange={setFormat}
+            />
+          )}
         </div>
       ) : null}
       <CompetitorPostGrid

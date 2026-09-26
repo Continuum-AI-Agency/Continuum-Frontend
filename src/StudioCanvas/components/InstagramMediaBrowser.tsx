@@ -35,6 +35,8 @@ const ERROR_COPY: Record<InstagramLookupErrorKind, string> = {
   account_required: 'Connect an Instagram business account to this brand to import from Instagram.',
   permission_denied:
     "Instagram refused this lookup for want of a permission on the connected account — reconnecting will not fix it. The Meta app's Instagram permissions have to be approved for this account.",
+  facebook_login_required:
+    "Looking up other Instagram accounts needs this brand's Instagram connected through Facebook. It is connected with Instagram only, which Meta does not allow to read other accounts.",
   rate_limited:
     'Instagram is rate-limiting your account — nothing needs reconnecting, try again in a few minutes.',
   lookup_unavailable:
