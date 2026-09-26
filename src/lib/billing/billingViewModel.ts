@@ -22,7 +22,8 @@ const PRODUCT_FEATURES: Record<ProductCode, string> = {
   mcp: 'MCP connections',
 };
 
-export type PlanStatus = 'active' | 'activating' | 'available';
+/** `payment_failed`: on the subscription, but Stripe is retrying a declined renewal. */
+export type PlanStatus = 'active' | 'activating' | 'payment_failed' | 'available';
 /** `none` when the plan is the subscription's only one: cancelling lives in the Stripe portal. */
 export type PlanAction = 'checkout' | 'add' | 'remove' | 'none';
 
@@ -91,6 +92,11 @@ export type SelfServeBillingView = {
   credits: CanvasCreditsView;
   /** Nothing left and nothing billed to the card: generation is refused until the owner acts. */
   outOfCredits: boolean;
+  /**
+   * Stripe could not charge the renewal (`past_due`). `retrying`: access holds while Stripe
+   * retries. `lapsed`: Stripe gave up (unpaid, stored as past_due) and the plan's products are off.
+   */
+  paymentFailed: 'retrying' | 'lapsed' | null;
   autoBilling: AutoBillingView;
   creditPack: CreditPackOffer;
   invoices: InvoiceRowView[];
@@ -156,6 +162,17 @@ function toCreditsView(overview: BillingOverview): CanvasCreditsView {
   };
 }
 
+/**
+ * Past due, is the plan still on? Entitlements list no `plans` while past_due, but the grace
+ * period keeps the plan's products active — gone once Stripe gives up (unpaid).
+ */
+function accessHeld(overview: BillingOverview, livePlans: readonly PlanCode[] | null): boolean {
+  return (livePlans ?? []).some((planCode) => {
+    const plan = overview.catalog.plans.find((candidate) => candidate.planCode === planCode);
+    return plan?.products.every((product) => overview.entitlements.products.includes(product));
+  });
+}
+
 /** Only the owner manages billing; billing-api enforces the same rule with a 403. */
 export function isBrandOwner(
   permissions: readonly { brand_profile_id: string; role: string | null }[],
@@ -191,6 +208,7 @@ export function toBillingView(
   const liveSubscription =
     subscription && LIVE_SUBSCRIPTION_STATUSES.has(subscription.status) ? subscription : null;
   const livePlans = liveSubscription?.plans ?? null;
+  const paymentFailed = liveSubscription?.status === 'past_due';
   const catalogOrder = (plan: PlanCode) => PLAN_CODES.indexOf(plan);
 
   const plans = [...overview.catalog.plans]
@@ -201,11 +219,15 @@ export function toBillingView(
       monthlyPriceUsd: plan.monthlyPriceUsd,
       priceLabel: formatUsd(plan.monthlyPriceUsd),
       features: featuresFor(plan.products, plan.includedCanvasCredits),
-      status: entitlements.plans.includes(plan.planCode)
-        ? 'active'
-        : livePlans?.includes(plan.planCode)
-          ? 'activating'
-          : 'available',
+      status: !livePlans?.includes(plan.planCode)
+        ? entitlements.plans.includes(plan.planCode)
+          ? 'active'
+          : 'available'
+        : paymentFailed
+          ? 'payment_failed'
+          : entitlements.plans.includes(plan.planCode)
+            ? 'active'
+            : 'activating',
       action: planAction(plan.planCode, livePlans),
       highlighted: need !== null && plan.products.includes(need),
     }));
@@ -222,6 +244,7 @@ export function toBillingView(
     plans,
     credits,
     outOfCredits: canBuyCredits && credits.availableCredits === 0 && !credits.billsOverageToCard,
+    paymentFailed: !paymentFailed ? null : accessHeld(overview, livePlans) ? 'retrying' : 'lapsed',
     autoBilling: {
       enabled: overview.overageEnabled,
       capUsd: overview.overageCapUsd,
@@ -256,7 +279,10 @@ export type PendingBillingChange =
 
 export type CheckoutReturn =
   | { outcome: 'cancel' }
-  | { outcome: 'success'; change: PendingBillingChange };
+  /** `sessionId` is Stripe's substituted `{CHECKOUT_SESSION_ID}`; null on an older return link. */
+  | { outcome: 'success'; change: PendingBillingChange; sessionId: string | null };
+
+const CHECKOUT_SESSION_ID = /^cs_(test|live)_[A-Za-z0-9]+$/;
 
 type SearchParamsLike = { get(name: string): string | null };
 
@@ -277,8 +303,13 @@ export function parseCheckoutReturn(params: SearchParamsLike): CheckoutReturn | 
   if (outcome === 'cancel') return { outcome: 'cancel' };
   if (outcome !== 'success') return null;
 
+  const rawSessionId = params.get('session_id');
+  const sessionId = rawSessionId && CHECKOUT_SESSION_ID.test(rawSessionId) ? rawSessionId : null;
+
   const plan = planCodeSchema.safeParse(params.get('plan'));
-  if (plan.success) return { outcome: 'success', change: { kind: 'plan_added', plan: plan.data } };
+  if (plan.success) {
+    return { outcome: 'success', change: { kind: 'plan_added', plan: plan.data }, sessionId };
+  }
 
   const rawBalance = params.get('balance');
   const balance = Number(rawBalance);
@@ -286,9 +317,39 @@ export function parseCheckoutReturn(params: SearchParamsLike): CheckoutReturn | 
     return {
       outcome: 'success',
       change: { kind: 'credits_added', purchasedCreditsBefore: balance },
+      sessionId,
     };
   }
   return null;
+}
+
+// ── The printed receipt ──────────────────────────────────────────────────────────────────
+// A Checkout return with a session id prints a receipt instead of toasting. It prints once
+// Stripe says paid, our webhook has granted the purchase, and Stripe's invoice exists: the
+// receipt then never promises something the panel does not show yet.
+
+export type ReceiptPhase = 'processing' | 'printing' | 'complete' | 'delayed' | 'unavailable';
+
+export function receiptPhase(input: {
+  receipt: { paid: boolean; invoicePdf: string | null } | undefined;
+  /** The receipt could not be read (billing-api refused or failed). */
+  failed: boolean;
+  /** Our webhook has granted the purchase. */
+  settled: boolean;
+  /** The CHANGE_POLL_WINDOW_MS wait ran out. */
+  expired: boolean;
+  /** The paper has finished feeding. */
+  printed: boolean;
+}): ReceiptPhase {
+  const { receipt, failed, settled, expired, printed } = input;
+  if (failed) return 'unavailable';
+  const paid = receipt?.paid === true;
+  if (paid && settled && (receipt.invoicePdf !== null || expired)) {
+    return printed ? 'complete' : 'printing';
+  }
+  if (!expired) return 'processing';
+  if (!paid) return 'unavailable';
+  return printed ? 'delayed' : 'printing';
 }
 
 export function isChangeSettled(change: PendingBillingChange, overview: BillingOverview): boolean {

@@ -9,7 +9,7 @@ mock.module('@/hooks/useSession', () => ({
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { cleanup, render, screen } from '@testing-library/react';
 import { ActiveBrandProvider } from '@/components/providers/ActiveBrandProvider';
-import { BrandBillingPanel } from './BrandBillingPanel';
+import { BrandBillingPanel, brandToOffer } from './BrandBillingPanel';
 
 const BRAND_ID = '00000000-0000-4000-8000-0000000000b2';
 
@@ -50,5 +50,22 @@ describe('BrandBillingPanel — billing not live (PGRST106)', () => {
     renderPanel('admin');
     expect(screen.getByTestId('billing-not-live')).toBeTruthy();
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('brandToOffer — a credit-alert link for another brand', () => {
+  const brands = [
+    { id: 'a', name: 'Home' },
+    { id: 'b', name: 'Campaigns' },
+  ];
+
+  test('offers the linked brand only when it is not the active one', () => {
+    expect(brandToOffer('b', 'a', brands)?.name).toBe('Campaigns');
+    expect(brandToOffer('a', 'a', brands)).toBeUndefined();
+    expect(brandToOffer(null, 'a', brands)).toBeUndefined();
+  });
+
+  test('never offers a brand the viewer cannot open', () => {
+    expect(brandToOffer('someone-elses', 'a', brands)).toBeUndefined();
   });
 });

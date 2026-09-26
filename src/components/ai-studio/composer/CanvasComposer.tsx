@@ -13,6 +13,7 @@ import {
 import { Message } from '@/components/ai-elements/message';
 import {
   buildAgentAttachmentContext,
+  buildInlineTextContextBlock,
   mergeAttachmentReferences,
 } from '@/components/chat/attachmentReferences';
 import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
@@ -22,7 +23,6 @@ import { PromptInput } from '@/components/chat/prompt-input';
 import { useChatAttachments } from '@/components/chat/useChatAttachments';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { warmLaya } from '@/lib/api/layaWarm';
 import { isSessionStreaming, useAgentRunStore } from '@/lib/agents/runStore';
 import {
   ELEMENT_CATEGORY_LABEL,
@@ -30,6 +30,7 @@ import {
   getElement,
   useElements,
 } from '@/lib/ai-studio/elements';
+import { warmLaya } from '@/lib/api/layaWarm';
 import { useBrandSkills } from '@/lib/organic/skills';
 import { cn } from '@/lib/utils';
 import { LoadWorkflowDialog } from '@/StudioCanvas/components/LoadWorkflowDialog';
@@ -39,8 +40,10 @@ import {
   readElementMention,
   refreshElementMentions,
 } from './elementMentions';
+import { PipelineProposalCard } from './PipelineProposalCard';
 import {
   type CanvasComposerState,
+  type ComposerPipelineProposal,
   type ComposerTurn,
   useCanvasComposer,
 } from './useCanvasComposer';
@@ -102,10 +105,8 @@ export function CanvasComposer({
     brandId: brandProfileId,
     sessionId: roomId,
   });
-  const { state, turns, submit, cancel, clear, dismiss } = useCanvasComposer(
-    brandProfileId,
-    roomId,
-  );
+  const { state, turns, submit, cancel, clear, dismiss, resolvePipelineProposal } =
+    useCanvasComposer(brandProfileId, roomId);
 
   // Pressing Run hands the graph to the canvas executor, which then owns the
   // feedback (node spinners, or a preflight toast naming the blocked node). The
@@ -182,6 +183,7 @@ export function CanvasComposer({
       mentionProvider={mentionProvider}
       mentionSource="canvas"
       attachments={composerAttachments}
+      inlinePastedText
       attachmentOnlyPrompt="Use the attached media as a visual reference."
       queuedText={queuedText}
       onQueuedTextConsumed={() => setQueuedText(null)}
@@ -215,6 +217,7 @@ export function CanvasComposer({
           references: [...grounded.references, ...workflowReferences],
           thinking,
           ...(grounded.grounding ? { grounding: grounded.grounding } : {}),
+          pastedText: buildInlineTextContextBlock(attachmentContext.inlineTexts),
         });
       }}
       ariaLabel="Describe the workflow you want on the canvas"
@@ -339,6 +342,7 @@ export function CanvasComposer({
                       isLast={index === turns.length - 1}
                       onRun={runAndRetireCard}
                       onCancel={cancel}
+                      onResolveProposal={(outcome) => resolvePipelineProposal(turn.id, outcome)}
                     />
                   ))
                 )}
@@ -355,6 +359,10 @@ export function CanvasComposer({
               references={turns.at(-1)?.references}
               onDismiss={dismiss}
               onRun={runAndRetireCard}
+              onResolveProposal={(outcome) => {
+                const turnId = turns.at(-1)?.id;
+                if (turnId) resolvePipelineProposal(turnId, outcome);
+              }}
             />
             {inputRow}
           </>
@@ -379,16 +387,37 @@ export function CanvasComposer({
   );
 }
 
+type ProposalOutcome = NonNullable<ComposerPipelineProposal['outcome']>;
+
+function ProposalSlot({
+  proposal,
+  onResolve,
+}: {
+  proposal: ComposerPipelineProposal | null;
+  onResolve: (outcome: ProposalOutcome) => void;
+}) {
+  if (!proposal || proposal.outcome === 'dismissed') return null;
+  return (
+    <PipelineProposalCard
+      proposal={proposal}
+      onPublished={() => onResolve('published')}
+      onDismiss={() => onResolve('dismissed')}
+    />
+  );
+}
+
 function TurnMessages({
   turn,
   isLast,
   onRun,
   onCancel,
+  onResolveProposal,
 }: {
   turn: ComposerTurn;
   isLast: boolean;
   onRun: () => void;
   onCancel: () => void;
+  onResolveProposal: (outcome: ProposalOutcome) => void;
 }) {
   const { state } = turn;
   const latestStep = state.steps.at(-1);
@@ -475,6 +504,8 @@ function TurnMessages({
               ) : null}
             </div>
           ) : null}
+
+          <ProposalSlot proposal={state.pipelineProposal} onResolve={onResolveProposal} />
         </div>
       </Message>
     </>
@@ -533,11 +564,13 @@ function ComposerProgress({
   references,
   onDismiss,
   onRun,
+  onResolveProposal,
 }: {
   state: CanvasComposerState;
   references?: AgentMentionReference[];
   onDismiss: () => void;
   onRun: () => void;
+  onResolveProposal: (outcome: ProposalOutcome) => void;
 }) {
   if (state.status === 'idle') return null;
 
@@ -586,6 +619,10 @@ function ComposerProgress({
               ))}
             </ul>
           ) : null}
+
+          <div className="mt-2 empty:hidden">
+            <ProposalSlot proposal={state.pipelineProposal} onResolve={onResolveProposal} />
+          </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-1">

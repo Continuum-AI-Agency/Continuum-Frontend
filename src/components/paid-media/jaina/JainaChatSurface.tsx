@@ -65,11 +65,13 @@ import { ChatMarker } from '@/components/chat/ChatMarker';
 import { ChatTranscript } from '@/components/chat/ChatTranscript';
 import { useCollapsibleConversations } from '@/components/chat/collapsibleConversations';
 import { PromptInput } from '@/components/chat/prompt-input';
+import { SessionContentTray } from '@/components/chat/SessionContentTray';
 import { useChatAttachments } from '@/components/chat/useChatAttachments';
 import { prependUnseen, useEarlierHistory } from '@/components/chat/useEarlierHistory';
 import type { ToolApprovalDecision } from '@/components/paid-media/jaina/components/JainaToolApprovalCard';
 import type { ScaffoldDecision } from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
 import { PAID_SCAFFOLD_TREE_QUERY_ROOT } from '@/components/paid-media/jaina/scaffold/usePaidScaffoldTree';
+import { jainaSessionContent } from '@/components/paid-media/jaina/sessionContent';
 import { useActiveProjectOptional } from '@/components/projects';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -145,6 +147,7 @@ import type { PlanFeedbackPayload } from './components/PlanSection';
 import { deriveJainaAnchors, milestonesForJainaMessage } from './deriveJainaAnchors';
 import { getReportSummary, hasReportContent } from './jainaUtils';
 import { parsePersistedReportV2Value, parsePersistedReportValue } from './persistedReport';
+import { withPipelineMentions } from './pipelineMentions';
 import {
   enqueueMessage,
   type QueuedJainaMessage,
@@ -876,6 +879,12 @@ export function JainaChatSurface({
       );
   }, [uiMessages, isStreaming, optimisticPlanStatusById, historyMessageIds]);
 
+  const sessionContent = React.useMemo(() => jainaSessionContent(messages), [messages]);
+  // PromptInput has no imperative handle; a tray click reaches the composer through this queue.
+  const [queuedMentionSuggestions, setQueuedMentionSuggestions] = React.useState<
+    AgentMentionSuggestion[]
+  >([]);
+
   /** The turn on screen right now, projected once so the effects below share one object. */
   const liveMessage = uiMessages.at(-1) ?? null;
   const liveChatMessage = messages.at(-1) ?? null;
@@ -920,7 +929,7 @@ export function JainaChatSurface({
   const promptInputWrapperRef = React.useRef<HTMLDivElement>(null);
   const mentionAdSetsCacheRef = React.useRef<Map<string, JainaMentionAdSet[]>>(new Map());
 
-  const jainaMentionProvider = React.useMemo<AgentMentionProvider>(
+  const campaignMentionProvider = React.useMemo<AgentMentionProvider>(
     () => ({
       getSuggestions: async ({ query }) => {
         if (!adAccountId) return [];
@@ -1020,6 +1029,10 @@ export function JainaChatSurface({
       },
     }),
     [adAccountId, brandProfileId, loadCampaignPerformance, supabase],
+  );
+  const jainaMentionProvider = React.useMemo(
+    () => withPipelineMentions(campaignMentionProvider, queryClient, brandProfileId),
+    [brandProfileId, campaignMentionProvider, queryClient],
   );
 
   const setConversationSessionsWithCache = React.useCallback(
@@ -2835,12 +2848,20 @@ export function JainaChatSurface({
                     mentionSource="jaina"
                     queuedText={initialPrompt}
                     onQueuedTextConsumed={onInitialPromptConsumed}
+                    queuedMentionSuggestions={queuedMentionSuggestions}
+                    onQueuedMentionSuggestionsConsumed={() => setQueuedMentionSuggestions([])}
                     placeholder={
                       pendingClarificationId ? "Reply to Jaina's question…" : 'Ask Jaina anything…'
                     }
                     actions={
                       <TooltipProvider delay={180}>
                         <div className="flex items-center gap-1.5">
+                          <SessionContentTray
+                            items={sessionContent}
+                            onInsert={(item) =>
+                              setQueuedMentionSuggestions((current) => [...current, item])
+                            }
+                          />
                           <Tooltip>
                             <TooltipTrigger
                               render={

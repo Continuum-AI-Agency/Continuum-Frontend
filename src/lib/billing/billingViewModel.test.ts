@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { type BillingOverview, billingOverviewSchema } from '@continuum/contracts';
+import { BillingApiRequestError, promoErrorMessage, withCheckoutSessionId } from './billingApi';
 import {
   AUTO_BILLING_CONTRACT,
   AUTO_BILLING_NEEDS_PLAN,
@@ -7,6 +8,8 @@ import {
   isBrandOwner,
   isChangeSettled,
   parseCheckoutReturn,
+  type ReceiptPhase,
+  receiptPhase,
   toBillingView,
 } from './billingViewModel';
 
@@ -173,6 +176,27 @@ describe('toBillingView — states', () => {
   test('a plan on the Stripe subscription but not yet granted by the webhook reads as activating', () => {
     const view = selfServe(overview({ subscription: subscription(['organic_studio']) }));
     expect(view.plans[0]?.status).toBe('activating');
+  });
+
+  test('a declined renewal reads as payment failed, never as activating', () => {
+    // get_brand_entitlements lists no plans while past_due; the grace keeps the products on.
+    const retrying = selfServe(
+      overview({
+        entitlements: { billingModel: 'stripe', plans: [], products: ['studio', 'organic_agent'] },
+        subscription: subscription(['organic_studio'], 'past_due'),
+      }),
+    );
+    expect(retrying.paymentFailed).toBe('retrying');
+    expect(retrying.plans[0]?.status).toBe('payment_failed');
+    // Stripe gave up (unpaid, stored as past_due): products are off, and it still says why.
+    const lapsed = selfServe(
+      overview({ subscription: subscription(['organic_studio'], 'past_due') }),
+    );
+    expect(lapsed.paymentFailed).toBe('lapsed');
+    expect(lapsed.plans[0]?.status).toBe('payment_failed');
+    expect(
+      selfServe(overview({ subscription: subscription(['organic_studio']) })).paymentFailed,
+    ).toBeNull();
   });
 
   test('?need= highlights exactly the plan that grants the product', () => {
@@ -427,6 +451,7 @@ describe('checkout return', () => {
     expect(parseCheckoutReturn(params(plan.success))).toEqual({
       outcome: 'success',
       change: { kind: 'plan_added', plan: 'organic_studio' },
+      sessionId: null,
     });
     expect(parseCheckoutReturn(params(plan.cancel))).toEqual({ outcome: 'cancel' });
 
@@ -434,7 +459,22 @@ describe('checkout return', () => {
     expect(parseCheckoutReturn(params(credits.success))).toEqual({
       outcome: 'success',
       change: { kind: 'credits_added', purchasedCreditsBefore: 250 },
+      sessionId: null,
     });
+  });
+
+  test("reads Stripe's substituted session id, and only a real one", () => {
+    const success = checkoutReturnParams({ kind: 'plan_added', plan: 'paid_media' }).success;
+    const template = new URL(withCheckoutSessionId(`https://app.test/settings?${success}`));
+    // What Stripe redirects to: the literal template, replaced by the session id.
+    const returned = template.search.replace('{CHECKOUT_SESSION_ID}', 'cs_live_a1B2c3');
+    expect(parseCheckoutReturn(params(returned))).toMatchObject({ sessionId: 'cs_live_a1B2c3' });
+    for (const junk of ['{CHECKOUT_SESSION_ID}', 'pi_123', 'cs_test_../x', '']) {
+      expect(parseCheckoutReturn(params(`${success}&session_id=${junk}`))).toMatchObject({
+        outcome: 'success',
+        sessionId: null,
+      });
+    }
   });
 
   test('anything else is not a checkout return', () => {
@@ -443,6 +483,77 @@ describe('checkout return', () => {
     expect(parseCheckoutReturn(params('checkout=success&plan=enterprise'))).toBeNull();
     expect(parseCheckoutReturn(params('checkout=success&balance=-1'))).toBeNull();
   });
+});
+
+describe('withCheckoutSessionId', () => {
+  test('appends the template unencoded, after any query', () => {
+    expect(
+      withCheckoutSessionId('https://app.test/settings?section=billing&checkout=success'),
+    ).toBe(
+      'https://app.test/settings?section=billing&checkout=success&session_id={CHECKOUT_SESSION_ID}',
+    );
+    expect(withCheckoutSessionId('https://app.test/x')).toBe(
+      'https://app.test/x?session_id={CHECKOUT_SESSION_ID}',
+    );
+  });
+});
+
+describe('promoErrorMessage', () => {
+  const refused = (status: number, code: string) => new BillingApiRequestError(status, code, code);
+  test("names what went wrong with the code, never the API's words", () => {
+    expect(promoErrorMessage(refused(404, 'promo_code_not_found'))).toBe(
+      "That code isn't valid for this brand.",
+    );
+    expect(promoErrorMessage(refused(409, 'promo_code_used'))).toBe(
+      'This code has already been used.',
+    );
+    expect(promoErrorMessage(refused(400, 'invalid_request'))).toBe('Enter a promo code.');
+    expect(promoErrorMessage(refused(500, 'billing_api_failed'))).toBe(
+      "Couldn't check that code. Try again.",
+    );
+    expect(promoErrorMessage(new Error('network'))).toBe("Couldn't check that code. Try again.");
+  });
+});
+
+describe('receiptPhase', () => {
+  const paid = { paid: true, invoicePdf: 'https://pay.stripe.com/invoice/x/pdf' };
+  const paidNoInvoice = { paid: true, invoicePdf: null };
+  const unpaid = { paid: false, invoicePdf: null };
+  const base = { receipt: paid, failed: false, settled: true, expired: false, printed: false };
+  const cases: Array<[string, Partial<Parameters<typeof receiptPhase>[0]>, ReceiptPhase]> = [
+    ['receipt still loading', { receipt: undefined }, 'processing'],
+    ['Stripe has not confirmed payment', { receipt: unpaid }, 'processing'],
+    ['our webhook has not granted it', { settled: false }, 'processing'],
+    ["Stripe's invoice not ready yet", { receipt: paidNoInvoice }, 'processing'],
+    ['everything ready: feed', {}, 'printing'],
+    ['fed', { printed: true }, 'complete'],
+    [
+      'window ran out, no invoice: print without it',
+      { receipt: paidNoInvoice, expired: true },
+      'printing',
+    ],
+    [
+      'window ran out, printed without invoice',
+      { receipt: paidNoInvoice, expired: true, printed: true },
+      'complete',
+    ],
+    ['window ran out, webhook never landed: print', { settled: false, expired: true }, 'printing'],
+    [
+      'window ran out, webhook never landed: printed',
+      { settled: false, expired: true, printed: true },
+      'delayed',
+    ],
+    [
+      'window ran out, never paid',
+      { receipt: unpaid, expired: true, settled: false },
+      'unavailable',
+    ],
+    ['window ran out, receipt never loaded', { receipt: undefined, expired: true }, 'unavailable'],
+    ['billing-api refused', { failed: true }, 'unavailable'],
+  ];
+  for (const [name, patch, phase] of cases) {
+    test(name, () => expect(receiptPhase({ ...base, ...patch })).toBe(phase));
+  }
 });
 
 describe('isChangeSettled', () => {

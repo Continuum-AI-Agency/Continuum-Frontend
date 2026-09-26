@@ -44,6 +44,13 @@ describe('generationErrorCopy', () => {
     });
   });
 
+  it('says a spent balance is a billing stop, not a failure, and that the node is kept', () => {
+    const copy = generationErrorCopy('credits_exhausted', 'This brand is out of Canvas credits.');
+
+    expect(copy.title).toBe('Out of Canvas credits');
+    expect(copy.guidance).toContain('prompt and settings are kept');
+  });
+
   it('falls back to the raw provider message for a code it does not know', () => {
     const copy = generationErrorCopy('some_new_backend_code', 'Vertex is unreachable');
 

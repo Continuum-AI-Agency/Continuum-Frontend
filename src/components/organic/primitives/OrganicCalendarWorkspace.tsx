@@ -1,3 +1,4 @@
+import { plannerDayIdInZone } from '@continuum/contracts';
 import type { CalendarPostAccountsByPlatform } from '@/lib/organic/calendar-posts';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import type { PlannerAccountOption } from '@/lib/organic/store';
@@ -55,6 +56,7 @@ type OrganicCalendarWorkspaceProps = {
   maxTrendSelections?: number;
   brandProfileId?: string;
   brandName?: string;
+  brandTimeZone?: string;
   userId?: string;
   instagramAccountId?: string;
   initialWeekStart?: string | null;
@@ -76,6 +78,7 @@ export function OrganicCalendarWorkspace({
   maxTrendSelections,
   brandProfileId,
   brandName,
+  brandTimeZone,
   userId,
   instagramAccountId,
   initialWeekStart,
@@ -86,8 +89,10 @@ export function OrganicCalendarWorkspace({
   postedContentAccountsByPlatform,
   insightsError,
 }: OrganicCalendarWorkspaceProps) {
+  const todayId = plannerDayIdInZone(new Date().toISOString(), brandTimeZone);
   const { weekStart: resolvedWeekStart } = resolvePlannerInitialDates({
     initialWeekStart: initialWeekStart ?? undefined,
+    now: todayId ? new Date(`${todayId}T12:00:00`) : undefined,
   });
   const days = buildWeekDays(resolvedWeekStart);
 
@@ -106,6 +111,7 @@ export function OrganicCalendarWorkspace({
       maxTrendSelections={maxTrendSelections}
       brandProfileId={brandProfileId}
       brandName={brandName}
+      brandTimeZone={brandTimeZone}
       userId={userId}
       instagramAccountId={instagramAccountId}
       initialView={initialView}

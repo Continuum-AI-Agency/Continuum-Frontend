@@ -146,7 +146,19 @@
     ".next/vercel-parity/types/**/*.ts",
     ".next/vercel-parity/dev/types/**/*.ts",
     ".next/studio-placement/types/**/*.ts",
-    ".next/studio-placement/dev/types/**/*.ts"
+    ".next/studio-placement/dev/types/**/*.ts",
+    ".next/brand-brain-e2e/types/**/*.ts",
+    ".next/brand-brain-e2e/dev/types/**/*.ts",
+    ".next/organic-ship-e2e/types/**/*.ts",
+    ".next/organic-ship-e2e/dev/types/**/*.ts",
+    ".next/organic-ship-e2e-hosted/types/**/*.ts",
+    ".next/organic-ship-e2e-hosted/dev/types/**/*.ts",
+    ".next/session-content-e2e/types/**/*.ts",
+    ".next/session-content-e2e/dev/types/**/*.ts",
+    ".next/paste-e2e/types/**/*.ts",
+    ".next/paste-e2e/dev/types/**/*.ts",
+    ".next/ds-upload-e2e/types/**/*.ts",
+    ".next/ds-upload-e2e/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

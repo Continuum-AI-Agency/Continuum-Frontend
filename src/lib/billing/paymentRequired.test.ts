@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { parsePaymentRequired, paymentRequiredToast } from './paymentRequired';
+import {
+  notifyPaymentRequiredResponse,
+  notifyStreamPaymentRequired,
+  parsePaymentRequired,
+  paymentRequiredToast,
+} from './paymentRequired';
+import { registerTopUpHost } from './topUp';
 
 describe('parsePaymentRequired', () => {
   test('reads the contracts 402 body', () => {
@@ -36,7 +42,7 @@ describe('paymentRequiredToast', () => {
     expect(visited).toEqual(['/settings?section=billing&need=paid_media']);
   });
 
-  test('credits_exhausted offers Buy credits at the credit-pack section, naming auto-billing', () => {
+  test('credits_exhausted offers Buy credits at the credit-pack section', () => {
     const visited: string[] = [];
     const toast = paymentRequiredToast(
       { error: 'credits_exhausted', product: 'studio', planCode: 'organic_studio' },
@@ -44,11 +50,47 @@ describe('paymentRequiredToast', () => {
     );
     expect(toast).toMatchObject({
       title: 'Out of Canvas credits',
-      description: 'Buy a credit pack, or turn on auto-billing, to keep generating.',
+      description: 'Add a credit pack to keep generating.',
       action: { label: 'Buy credits' },
     });
     toast.action?.onClick();
     expect(visited).toEqual(['/settings?section=billing#credits']);
+  });
+
+  test('the buttons remember the page the refusal happened on', () => {
+    const visited: string[] = [];
+    const navigate = (href: string) => visited.push(href);
+    paymentRequiredToast(
+      { error: 'credits_exhausted', product: 'studio', planCode: 'organic_studio' },
+      navigate,
+      '/studio?room=1',
+    ).action?.onClick();
+    paymentRequiredToast(
+      { error: 'product_required', product: 'paid_media', planCode: 'paid_media' },
+      navigate,
+      '/forge',
+    ).action?.onClick();
+    expect(visited).toEqual([
+      '/settings?section=billing&from=%2Fstudio%3Froom%3D1#credits',
+      '/settings?section=billing&need=paid_media&from=%2Fforge',
+    ]);
+  });
+
+  test('Buy credits opens the Top up dialog where the refusal happened, when one is mounted', () => {
+    const visited: string[] = [];
+    const opened: string[] = [];
+    const unregister = registerTopUpHost((source) => {
+      opened.push(source);
+      return true;
+    });
+    paymentRequiredToast(
+      { error: 'credits_exhausted', product: 'studio', planCode: 'organic_studio' },
+      (href) => visited.push(href),
+      '/studio?room=1',
+    ).action?.onClick();
+    unregister();
+    expect(opened).toEqual(['toast']);
+    expect(visited).toEqual([]);
   });
 
   test('a product no plan sells has nothing to buy, so no button', () => {
@@ -58,5 +100,26 @@ describe('paymentRequiredToast', () => {
     );
     expect(toast.action).toBeUndefined();
     expect(toast.description).toBe('Ask your Continuum team to turn it on for this brand.');
+  });
+});
+
+describe('raw-fetch and stream refusals', () => {
+  const exhausted = { error: 'credits_exhausted', product: 'studio', planCode: 'organic_studio' };
+
+  test('a 402 Response is read from a clone, so the caller can still read the body', async () => {
+    const response = new Response(JSON.stringify(exhausted), { status: 402 });
+    expect(await notifyPaymentRequiredResponse(response)).toEqual(exhausted);
+    expect(await response.json()).toEqual(exhausted);
+  });
+
+  test('any other failure is left to the caller', async () => {
+    expect(await notifyPaymentRequiredResponse(new Response('boom', { status: 500 }))).toBeNull();
+    expect(await notifyPaymentRequiredResponse(new Response('<html>', { status: 402 }))).toBeNull();
+  });
+
+  test('a mid-stream billing code is the studio refusal; other codes are not', () => {
+    expect(notifyStreamPaymentRequired('credits_exhausted')).toEqual(exhausted);
+    expect(notifyStreamPaymentRequired('image_blocked')).toBeNull();
+    expect(notifyStreamPaymentRequired(undefined)).toBeNull();
   });
 });

@@ -82,9 +82,24 @@ describe('ImageGenBlock model picker', () => {
     await openModelPicker(nodeData());
 
     expect(modelItem('FLUX.2 Max').textContent).toContain('Needs fal credits');
-    // GPT Image 2 is an Azure model (contracts image-size.ts pins its note to 'Azure');
+    // GPT Image is an Azure model (contracts image-size.ts pins its note to 'Azure');
     // only the flux tier carries the fal note. Asserting fal copy here was the bug.
-    expect(modelItem('GPT Image 2').textContent).toContain('Azure');
+    expect(modelItem('GPT Image 2.5 Flare').textContent).toContain('Azure');
+  });
+
+  // `byText` matches by prefix, so "GPT Image 2" alone would also match the 2.5 items.
+  const gptImage2Item = (): Element | undefined =>
+    Array.from(document.querySelectorAll('[role="menuitemcheckbox"]')).find((node) =>
+      /^GPT Image 2(?!\.5)/.test(node.textContent ?? ''),
+    );
+
+  it('hides GPT Image 2 from new picks but still shows it on a node that runs it', async () => {
+    await openModelPicker(nodeData());
+    expect(gptImage2Item()).toBeUndefined();
+
+    cleanup();
+    await openModelPicker(nodeData({ model: 'gpt-image-2' }));
+    expect(gptImage2Item()?.getAttribute('aria-checked')).toBe('true');
   });
 
   it('states the size ceiling of a one-size model up front, not at the 400', async () => {
@@ -99,7 +114,12 @@ describe('ImageGenBlock model picker', () => {
     expect(modelItem('FLUX.2 Pro').getAttribute('aria-checked')).toBe('true');
     // Half the items used to read `data.model` and half the defaulted `model`, so a node
     // born on the default showed nothing checked at all.
-    for (const other of ['Nano Banana', 'Nano Banana 2 Lite', 'GPT Image 2', 'FLUX.2 Max']) {
+    for (const other of [
+      'Nano Banana',
+      'Nano Banana 2 Lite',
+      'GPT Image 2.5 Sunburst',
+      'FLUX.2 Max',
+    ]) {
       expect(modelItem(other).getAttribute('aria-checked')).toBe('false');
     }
 

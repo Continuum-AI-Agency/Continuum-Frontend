@@ -8,6 +8,7 @@ import {
   cohortMultipleLabel,
   FLAG_LABEL,
   FLAG_TOOLTIP,
+  groupWinRatesByDimension,
   hasThinEvidence,
   isHttpUrl,
   money,
@@ -186,5 +187,58 @@ describe('formatters', () => {
     expect(isHttpUrl('https://cdn.example/a.jpg')).toBe(true);
     expect(isHttpUrl('javascript:alert(1)')).toBe(false);
     expect(isHttpUrl(null)).toBe(false);
+  });
+});
+
+describe('groupWinRatesByDimension', () => {
+  const rows = paidCreativeReportSchema.parse({
+    brandId: 'b',
+    generatedAt: '2026-09-22T00:00:00.000Z',
+    winRates: [
+      {
+        dimension: 'angle',
+        value: 'free',
+        funnelStage: 'tof',
+        eligibleAds: 4,
+        winners: 2,
+        winRate: 0.5,
+      },
+      {
+        dimension: 'hook_archetype',
+        value: 'solo',
+        funnelStage: 'tof',
+        eligibleAds: 1,
+        winners: 1,
+        winRate: 1,
+      },
+      {
+        dimension: 'hook_archetype',
+        value: 'weak',
+        funnelStage: 'tof',
+        eligibleAds: 8,
+        winners: 2,
+        winRate: 0.25,
+      },
+      {
+        dimension: 'hook_archetype',
+        value: 'strong',
+        funnelStage: 'tof',
+        eligibleAds: 6,
+        winners: 4,
+        winRate: 0.67,
+      },
+    ],
+  }).winRates;
+
+  it('orders sections by decision value and drops empty ones', () => {
+    expect(groupWinRatesByDimension(rows).map((g) => g.dimension)).toEqual([
+      'hook_archetype',
+      'angle',
+    ]);
+  });
+
+  it('sorts a thin 100% cohort below every trustworthy one', () => {
+    const hooks = groupWinRatesByDimension(rows)[0].rows.map((r) => r.value);
+    expect(hooks).toEqual(['strong', 'weak', 'solo']);
   });
 });

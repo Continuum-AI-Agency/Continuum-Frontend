@@ -8,6 +8,7 @@ import {
   countBy,
   filterViews,
   formatOutlier,
+  postTypeLabel,
   searchResultToViews,
   sortByOutlier,
 } from './competitorPostView';
@@ -181,5 +182,18 @@ describe('filterViews + countBy', () => {
       ['photo_carousel', 1],
       ['photo', 1],
     ]);
+  });
+});
+
+describe('postTypeLabel', () => {
+  it('keeps the Instagram chip labels when the post carries no platform', () => {
+    expect(postTypeLabel('reel', undefined)).toBe('Reels');
+    expect(postTypeLabel('carousel', 'instagram')).toBe('Carousels');
+    expect(postTypeLabel('post', undefined)).toBe('Posts');
+  });
+
+  it('names YouTube Shorts and long-form videos', () => {
+    expect(postTypeLabel('reel', 'youtube')).toBe('Shorts');
+    expect(postTypeLabel('post', 'youtube')).toBe('Videos');
   });
 });

@@ -19,6 +19,9 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { type AppliedMediaAssetInput, buildApplyRegisterOperation } from './registerOperation';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7;
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+const SOURCE_TIMEOUT_MS = 15_000;
 // Register a generated creative as a durable media.assets row so it is
 // searchable by the Organic agent in future sessions.
 //
@@ -105,6 +108,69 @@ function decodeBase64ToBytes(value: string): Buffer {
   return Buffer.from(normalized, 'base64');
 }
 
+function assertAssetSize(bytes: Uint8Array, kind: 'image' | 'video'): void {
+  const limit = kind === 'image' ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES;
+  if (bytes.byteLength === 0 || bytes.byteLength > limit) {
+    throw new Error(
+      `${kind} asset is empty or exceeds the ${Math.round(limit / 1024 / 1024)} MB limit.`,
+    );
+  }
+}
+
+function decodeBoundedBase64(value: string, kind: 'image' | 'video'): Buffer {
+  const limit = kind === 'image' ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES;
+  if (value.length > Math.ceil(limit / 3) * 4 + 4)
+    throw new Error('Source asset exceeds size limit.');
+  const bytes = decodeBase64ToBytes(value);
+  assertAssetSize(bytes, kind);
+  return bytes;
+}
+
+function isAllowedStorageUrl(rawUrl: string, brandId: string): boolean {
+  try {
+    const url = new URL(rawUrl);
+    const storageUrl = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '');
+    const storagePath = decodeURIComponent(url.pathname);
+    const sourceBrand =
+      /^\/storage\/v1\/object\/(sign|public|authenticated)\/[^/]+\/([^/]+)\//.exec(
+        storagePath,
+      )?.[2];
+    return (
+      (url.protocol === 'https:' ||
+        (storageUrl.hostname === '127.0.0.1' && url.protocol === 'http:')) &&
+      url.origin === storageUrl.origin &&
+      sourceBrand === brandId
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function readBoundedResponse(response: Response, kind: 'image' | 'video'): Promise<Buffer> {
+  const limit = kind === 'image' ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES;
+  const declared = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > limit)
+    throw new Error('Source asset exceeds size limit.');
+  if (!response.body) throw new Error('Source asset has no body.');
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > limit) throw new Error('Source asset exceeds size limit.');
+      chunks.push(value);
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  const bytes = Buffer.concat(chunks, total);
+  assertAssetSize(bytes, kind);
+  return bytes;
+}
+
 function extractDataUrlParts(dataUrl: string): { mimeType: string; base64: string } | null {
   const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
   if (!match) return null;
@@ -116,6 +182,7 @@ function extractDataUrlParts(dataUrl: string): { mimeType: string; base64: strin
 
 async function resolveSourceBytes(input: {
   kind: 'image' | 'video';
+  brandId: string;
   sourceUrl?: string;
   sourceDataUrl?: string;
   sourceBase64?: string;
@@ -126,29 +193,40 @@ async function resolveSourceBytes(input: {
     if (!parsed) {
       throw new Error('Invalid data URL received for apply asset.');
     }
+    const bytes = decodeBoundedBase64(parsed.base64, input.kind);
     return {
-      bytes: decodeBase64ToBytes(parsed.base64),
+      bytes,
       mimeType: resolveAssetMimeType(input.kind, parsed.mimeType),
     };
   }
 
   if (input.sourceBase64) {
+    const bytes = decodeBoundedBase64(input.sourceBase64, input.kind);
     return {
-      bytes: decodeBase64ToBytes(input.sourceBase64),
+      bytes,
       mimeType: resolveAssetMimeType(input.kind, input.mimeType),
     };
   }
 
   if (input.sourceUrl) {
-    const upstream = await fetch(input.sourceUrl);
+    if (!isAllowedStorageUrl(input.sourceUrl, input.brandId))
+      throw new Error('Source URL must be a project storage object.');
+    const upstream = await fetch(input.sourceUrl, {
+      redirect: 'manual',
+      signal: AbortSignal.timeout(SOURCE_TIMEOUT_MS),
+    });
+    if (upstream.status >= 300 && upstream.status < 400)
+      throw new Error('Source asset redirects are not allowed.');
     if (!upstream.ok) {
       throw new Error(`Failed to fetch source asset URL (${upstream.status}).`);
     }
-    const arrayBuffer = await upstream.arrayBuffer();
     const upstreamMime = upstream.headers.get('content-type');
+    const mimeType = resolveAssetMimeType(input.kind, upstreamMime ?? input.mimeType);
+    if (!mimeType.startsWith(`${input.kind}/`))
+      throw new Error('Source asset type does not match the selected media kind.');
     return {
-      bytes: Buffer.from(arrayBuffer),
-      mimeType: resolveAssetMimeType(input.kind, upstreamMime ?? input.mimeType),
+      bytes: await readBoundedResponse(upstream, input.kind),
+      mimeType,
     };
   }
 
@@ -185,6 +263,28 @@ export async function POST(request: Request) {
   }
 
   try {
+    const organic = (createSupabaseAdminClient() as unknown as SupabaseClient).schema('organic');
+    const { data: draftRow, error: draftError } = await organic
+      .from('organic_calendar_drafts')
+      .select('updated_at')
+      .eq('id', payload.draftId)
+      .eq('brand_id', payload.brandProfileId)
+      .single();
+    if (draftError || !draftRow)
+      throw new Error(`Draft not found for apply: ${draftError?.message ?? 'no row'}`);
+    const expectedUpdatedAt = (draftRow as { updated_at: string | null }).updated_at;
+    if (!expectedUpdatedAt)
+      throw new Error('Draft has no updated_at to compare against; refusing a blind write.');
+    if (payload.expectedUpdatedAt !== expectedUpdatedAt) {
+      return NextResponse.json(
+        {
+          error: 'The draft changed while AI Studio was open. Reopen it before applying.',
+          code: 'draft_changed',
+        },
+        { status: 409 },
+      );
+    }
+
     const bucket = getCreativeAssetsBucket();
     const timestamp = Date.now();
     const persistedAssets = [];
@@ -194,6 +294,7 @@ export async function POST(request: Request) {
       const asset = payload.assets[index];
       const source = await resolveSourceBytes({
         kind: asset.kind,
+        brandId: payload.brandProfileId,
         sourceUrl: asset.sourceUrl,
         sourceDataUrl: asset.sourceDataUrl,
         sourceBase64: asset.sourceBase64,
@@ -281,22 +382,6 @@ export async function POST(request: Request) {
     // route's read and its write and quietly revert a creative the user had just applied —
     // which is how a draft ended up carrying five carousel slides while still labelled Reel.
     // The funnel has the CAS token, the operation ledger, and one mapping.
-    const organic = (createSupabaseAdminClient() as unknown as SupabaseClient).schema('organic');
-    const { data: draftRow, error: draftError } = await organic
-      .from('organic_calendar_drafts')
-      .select('updated_at')
-      .eq('id', payload.draftId)
-      .eq('brand_id', payload.brandProfileId)
-      .single();
-
-    if (draftError || !draftRow) {
-      throw new Error(`Draft not found for apply: ${draftError?.message ?? 'no row'}`);
-    }
-    const expectedUpdatedAt = (draftRow as { updated_at: string | null }).updated_at;
-    if (!expectedUpdatedAt) {
-      throw new Error('Draft has no updated_at to compare against; refusing a blind write.');
-    }
-
     // What the applied media IS, measured from the media. The seed's `postType` is the
     // format the draft carried BEFORE the user edited anything, and sending that is how a
     // set of five images arrived declared as a reel.

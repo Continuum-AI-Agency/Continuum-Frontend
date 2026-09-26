@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import type Stripe from 'stripe';
 import {
   CLIENT_PROMO_COUPON_ID,
   CLIENT_PROMO_DEFAULT_CODE,
@@ -33,7 +34,8 @@ import {
 //
 //   owner     fresh local user owning a fresh tier-0 brand: opens Settings → Billing, picks
 //             Organic Plus, pays on the Stripe-hosted SANDBOX Checkout with 4242, returns,
-//             and the panel shows Organic Plus active, card on file, 1,000 Canvas credits and
+//             and the receipt prints (processing → printing → complete) with Stripe's own
+//             invoice PDF behind "Download invoice"; then the panel shows Organic Plus active, card on file, 1,000 Canvas credits and
 //             the paid invoice; Manage payment method lands on the sandbox Customer Portal.
 //             The sidebar's bottom-left widget then reads "Organic Plus · 1,000 credits" on the
 //             Canvas (/ai-studio) and on Settings; hovering previews the breakdown; clicking lands
@@ -45,11 +47,16 @@ import {
 //             but the widget, read from member-readable entitlements, still shows the credits.
 //   contract  the owner of a Contract brand: "Managed by Continuum", nothing to buy, the
 //             auto-billing switch disabled, and the widget reads "Managed plan · unmetered".
+//   pack      the owner, with reduced motion, buys one credit pack: its Checkout creates a
+//             Stripe invoice, the pack credits exactly once (its invoice.paid grants nothing),
+//             and the receipt appears without the feed, that invoice's PDF behind the button.
 //   promo     scripts/billing-client-promo-codes.ts (sandbox) gives the owner brand and the
 //             Contract brand each their own CONTINUUM200 code; it finds the customer billing-api
-//             created, never a second one. The owner buys 20 packs on hosted Checkout with the
-//             code, pays $0, and the panel and the ledger both gain exactly 20,000 credits; a
-//             second 20-pack Checkout with the same code is refused by Stripe.
+//             created, never a second one. The owner types the code in Billing ("Have a promo
+//             code?"), which opens Checkout for the 20 packs it covers with it applied; they pay
+//             $0, the receipt prints the discount and a $0.00 total with a Stripe invoice PDF,
+//             and the panel and the ledger both gain exactly 20,000 credits. An unknown code
+//             and the used one are then refused in Billing, before Stripe.
 //
 // The one hop NOT exercised: Stripe's own webhook delivery to our URL. The local
 // stripe-billing-webhook has no public endpoint, so the bench replays the REAL sandbox events
@@ -97,6 +104,103 @@ async function shoot(page: Page, name: string): Promise<void> {
     }
   }
   await page.setViewportSize(DESKTOP);
+}
+
+// The post-Checkout receipt. The phases are recorded from the page as they change, so the
+// bench proves the printer actually ran, not just that it ended up complete.
+type ReceiptWindow = { __receiptPhases?: string[] };
+
+async function recordReceiptPhases(page: Page): Promise<void> {
+  await page.getByTestId('checkout-receipt').waitFor({ timeout: 60_000 });
+  await page.evaluate(() => {
+    const dialog = document.querySelector('[data-testid="checkout-receipt"]');
+    if (!dialog) throw new Error('checkout receipt not mounted');
+    const phases = [String(dialog.getAttribute('data-phase'))];
+    (window as ReceiptWindow).__receiptPhases = phases;
+    new MutationObserver(() => {
+      const phase = String(dialog.getAttribute('data-phase'));
+      if (phases.at(-1) !== phase) phases.push(phase);
+    }).observe(dialog, { attributes: true, attributeFilter: ['data-phase'] });
+  });
+}
+
+const usd = (cents: number) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
+
+/** The printed receipt, diffed against Stripe's own session and invoice, then dismissed. */
+async function expectPrintedReceipt(
+  page: Page,
+  stripe: Stripe,
+  sessionId: string,
+  name: string,
+  motion: 'full' | 'reduced' = 'full',
+): Promise<string> {
+  const receipt = page.getByTestId('checkout-receipt');
+  await expect(receipt).toHaveAttribute('data-phase', 'complete', { timeout: 90_000 });
+  await expect(receipt.getByRole('status')).toHaveText('Order complete');
+  // Reduced motion skips the paper feed: the receipt is simply there once it is ready.
+  expect(await page.evaluate(() => (window as ReceiptWindow).__receiptPhases)).toEqual(
+    motion === 'full' ? ['processing', 'printing', 'complete'] : ['processing', 'complete'],
+  );
+
+  const session = await stripe.checkout.sessions.retrieve(sessionId, {
+    expand: ['invoice', 'line_items'],
+  });
+  const invoice = session.invoice;
+  if (!invoice || typeof invoice === 'string' || !invoice.invoice_pdf || !invoice.number) {
+    throw new Error(`session ${sessionId} has no finalized invoice`);
+  }
+  await expect(receipt).toContainText(`Order ${invoice.number}`);
+  for (const line of session.line_items?.data ?? []) {
+    await expect(receipt).toContainText(String(line.description));
+  }
+  const discount = session.total_details?.amount_discount ?? 0;
+  if (discount > 0) await expect(receipt).toContainText(`Discount-${usd(discount)}`);
+  const totalRow = receipt.getByText('Total', { exact: true }).locator('..');
+  await expect(totalRow).toHaveText(`Total${usd(session.amount_total ?? -1)}`);
+
+  // Stripe re-signs invoice_pdf on every read, so the link is never string-equal to a fresh
+  // retrieve: the invoice is pinned by its number above, and the link the page shows must
+  // itself serve that PDF.
+  const download = receipt.getByRole('link', { name: 'Download invoice' });
+  const href = String(await download.getAttribute('href'));
+  expect(href).toMatch(/^https:\/\/pay\.stripe\.com\/invoice\/acct_[A-Za-z0-9]+\/test_/);
+  const pdf = await page.request.get(href);
+  expect(pdf.ok()).toBe(true);
+  // Stripe serves it as application/octet-stream (a download); the bytes say what it is.
+  const bytes = await pdf.body();
+  expect(bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+
+  const done = receipt.getByRole('button', { name: 'Done' });
+  await expect(done).toBeFocused();
+  mkdirSync(SCREENSHOT_DIR, { recursive: true });
+  for (const [theme, viewport] of [
+    ['light', DESKTOP],
+    ['light', MOBILE],
+    ['dark', DESKTOP],
+  ] as const) {
+    await page.setViewportSize(viewport);
+    await page.evaluate((dark) => {
+      document.documentElement.classList.toggle('dark', dark);
+      document.documentElement.classList.toggle('light', !dark);
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    }, theme === 'dark');
+    await page.screenshot({
+      path: path.join(
+        SCREENSHOT_DIR,
+        `receipt-${name}-${theme}-${viewport.width}x${viewport.height}.png`,
+      ),
+      style: HIDE_TOASTS,
+    });
+  }
+  await page.evaluate(() => {
+    document.documentElement.classList.replace('dark', 'light');
+    document.documentElement.dataset.theme = 'light';
+  });
+  await page.setViewportSize(DESKTOP);
+  await done.click();
+  await expect(receipt).toHaveCount(0);
+  return `${invoice.number} · ${bytes.byteLength} byte PDF`;
 }
 
 /** Visible AND painted on top at its centre — what a person sees, not just what is in the DOM. */
@@ -274,7 +378,7 @@ test.describe('billing:settings:e2e:bench', () => {
   });
 
   test.afterAll(async () => {
-    let deleted: string[] = [];
+    const deleted: string[] = [];
     try {
       // A redeemed code is already inactive; deactivating is idempotent. The fixed-id coupon
       // stays: it is shared by every run, exactly as the live one is.
@@ -285,9 +389,9 @@ test.describe('billing:settings:e2e:bench', () => {
       }
       deleted.push(
         ...(await cleanupBillingBench({
-        db,
-        stripe,
-        since,
+          db,
+          stripe,
+          since,
           brandIds: created.brandIds,
           userIds: created.userIds,
         })),
@@ -338,6 +442,8 @@ test.describe('billing:settings:e2e:bench', () => {
       await step('pay with 4242 and return to Settings → Billing', async () => {
         await payWithTestCard(page, EMAILS.owner);
         await page.waitForURL(/\/settings\?section=billing&checkout=success/, { timeout: 120_000 });
+        expect(new URL(page.url()).searchParams.get('session_id')).toBe(sessionId);
+        await recordReceiptPhases(page);
       });
 
       const customerId = await step(
@@ -374,6 +480,12 @@ test.describe('billing:settings:e2e:bench', () => {
             studioBucketOf(entitlements)?.includedUsd === 10,
         ),
       );
+
+      await step('the receipt prints Organic Plus with its Stripe invoice PDF', async () => {
+        notes.push(
+          `organic plus invoice: ${await expectPrintedReceipt(page, stripe, sessionId, 'organic-plus')}`,
+        );
+      });
 
       await step(
         'panel shows Organic Plus active, card on file, 1,000 credits, paid invoice',
@@ -585,6 +697,92 @@ test.describe('billing:settings:e2e:bench', () => {
   });
 
   // Last on purpose: the member test above reads the owner brand's 1,000 credits.
+  test('owner buys a credit pack and the receipt prints its Stripe invoice', async ({
+    browser,
+  }) => {
+    // One paid pack Checkout and a webhook replay. Packs create a Stripe invoice
+    // (invoice_creation) only for the receipt: this is the run that proves it exists.
+    test.setTimeout(360_000);
+    const { data: row, error: rowError } = await db
+      .schema('billing')
+      .from('brand_subscriptions')
+      .select('stripe_customer_id')
+      .eq('brand_id', ownerBrandId)
+      .single();
+    if (rowError) throw new Error(`brand_subscriptions: ${describeError(rowError)}`);
+    const customerId = String(row.stripe_customer_id);
+    const owner = await mintSessionBundleForEmail(EMAILS.owner);
+    // Reduced motion here, full motion on the plan purchase: both receipt paths run for real.
+    const context = await browser.newContext({
+      storageState: owner.state,
+      viewport: DESKTOP,
+      reducedMotion: 'reduce',
+    });
+    const page = await context.newPage();
+    const credits = page.locator('#credits');
+
+    try {
+      const before = (await brandEntitlements(db, ownerBrandId)).creditBalance.purchasedCredits;
+
+      const sessionId = await step(
+        'one pack opens payment Checkout that creates an invoice',
+        async () => {
+          await page.goto(billingSettingsPath);
+          await credits.getByTestId('top-up-pack-1').click();
+          await credits.getByRole('button', { name: 'Buy credits · $10' }).click();
+          await page.waitForURL(/^https:\/\/checkout\.stripe\.com\//, { timeout: 60_000 });
+          const id = page.url().match(/cs_test_[A-Za-z0-9]+/)?.[0];
+          if (!id) throw new Error(`no test-mode session id in ${page.url()}`);
+          const session = await stripe.checkout.sessions.retrieve(id);
+          expect(session).toMatchObject({
+            livemode: false,
+            mode: 'payment',
+            customer: customerId,
+            amount_total: 1_000,
+            invoice_creation: { enabled: true },
+            metadata: { continuum_brand_id: ownerBrandId, continuum_credit_pack: '1' },
+          });
+          expect(session.success_url).toContain('session_id={CHECKOUT_SESSION_ID}');
+          return id;
+        },
+      );
+
+      await step('pay with 4242 and return to Settings → Billing', async () => {
+        await payWithTestCard(page, EMAILS.owner);
+        await page.waitForURL(/\/settings\?section=billing&checkout=success/, { timeout: 120_000 });
+        expect(new URL(page.url()).searchParams.get('session_id')).toBe(sessionId);
+        await recordReceiptPhases(page);
+      });
+
+      await step(
+        'replay ⇒ the pack credits once; its invoice.paid grants nothing more',
+        async () => {
+          const { attempts, types } = await replayUntil({
+            db,
+            stripe,
+            webhookSecret,
+            customerId,
+            brandId: ownerBrandId,
+            since,
+            settled: (entitlements) => entitlements.creditBalance.purchasedCredits > before,
+            what: 'one 1,000-credit pack',
+          });
+          notes.push(`credit pack: replayed on attempt ${attempts} (${types.join(', ')})`);
+          const after = await brandEntitlements(db, ownerBrandId);
+          expect(after.creditBalance.purchasedCredits - before).toBe(1_000);
+        },
+      );
+
+      await step('the receipt prints the pack with its Stripe invoice PDF', async () => {
+        notes.push(
+          `credit pack invoice: ${await expectPrintedReceipt(page, stripe, sessionId, 'credit-pack', 'reduced')}`,
+        );
+      });
+    } finally {
+      await context.close();
+    }
+  });
+
   test('a client redeems the $200 promo code once, on 20 credit packs', async ({ browser }) => {
     // Two hosted Checkouts and a webhook replay.
     test.setTimeout(480_000);
@@ -618,7 +816,10 @@ test.describe('billing:settings:e2e:bench', () => {
         // The customer billing-api created and persisted — found, never duplicated.
         expect(owner).toMatchObject({ customerId, customerStatus: 'existing' });
         expect(owner?.promotionCodeStatus).toBe('created');
-        expect(contract).toMatchObject({ customerStatus: 'created', promotionCodeStatus: 'created' });
+        expect(contract).toMatchObject({
+          customerStatus: 'created',
+          promotionCodeStatus: 'created',
+        });
 
         const codes = await Promise.all(
           run.rows.map((r) =>
@@ -662,7 +863,9 @@ test.describe('billing:settings:e2e:bench', () => {
           couponStatus: 'existing',
           rows: [{ customerStatus: 'existing', promotionCodeStatus: 'existing' }],
         });
-        notes.push(`promo: ${run.rows.map((r) => `${r.customerId}→${r.promotionCodeId}`).join(', ')}`);
+        notes.push(
+          `promo: ${run.rows.map((r) => `${r.customerId}→${r.promotionCodeId}`).join(', ')}`,
+        );
         return String(owner?.promotionCodeId);
       },
     );
@@ -670,34 +873,17 @@ test.describe('billing:settings:e2e:bench', () => {
     const owner = await mintSessionBundleForEmail(EMAILS.owner);
     const context = await browser.newContext({ storageState: owner.state, viewport: DESKTOP });
     const page = await context.newPage();
-    const packsField = page.getByRole('textbox', { name: 'Credit packs' });
     const credits = page.locator('#credits');
-    const openPackCheckout = async (): Promise<string> => {
-      await page.goto(billingSettingsPath);
-      await expect(credits.getByRole('button', { name: 'Buy credits' })).toBeVisible({
-        timeout: 120_000,
-      });
-      await packsField.fill('20');
-      await packsField.blur();
-      await expect(packsField).toHaveValue('20');
-      await expect(credits).toContainText('packs · 20,000 credits · $200');
-      await credits.getByRole('button', { name: 'Buy credits' }).click();
-      await page.waitForURL(/^https:\/\/checkout\.stripe\.com\//, { timeout: 60_000 });
-      const id = page.url().match(/cs_test_[A-Za-z0-9]+/)?.[0];
-      if (!id) throw new Error(`no test-mode session id in ${page.url()}`);
-      const session = await stripe.checkout.sessions.retrieve(id);
-      expect(session).toMatchObject({
-        livemode: false,
-        mode: 'payment',
-        customer: customerId,
-        amount_subtotal: 20_000,
-        metadata: { continuum_brand_id: ownerBrandId, continuum_credit_pack: '20' },
-      });
-      const promo = page.locator('#promotionCode');
-      await promo.waitFor({ timeout: 60_000 });
-      await promo.fill(CLIENT_PROMO_DEFAULT_CODE);
-      await promo.press('Enter');
-      return id;
+    const promoField = credits.getByRole('textbox', { name: 'Promo code' });
+    const redeemInBilling = async (code: string): Promise<void> => {
+      if (!(await promoField.isVisible())) {
+        await page.goto(billingSettingsPath);
+        await credits
+          .getByRole('button', { name: 'Have a promo code?' })
+          .click({ timeout: 120_000 });
+      }
+      await promoField.fill(code);
+      await credits.getByRole('button', { name: 'Redeem' }).click();
     };
 
     try {
@@ -712,20 +898,41 @@ test.describe('billing:settings:e2e:bench', () => {
         };
       });
 
-      const sessionId = await step('20 packs with the code come to $0 on hosted Checkout', async () => {
-        const id = await openPackCheckout();
-        await expect(page.getByText('$200.00 off')).toBeVisible({ timeout: 30_000 });
-        await expect(page.locator('body')).toContainText(/Total due\s*\$0\.00/);
-        const email = page.locator('#email');
-        if ((await email.isVisible()) && !(await email.inputValue())) {
-          await email.fill(EMAILS.owner);
-        }
-        await page.getByTestId('hosted-payment-submit-button').click();
-        await page.waitForURL(/\/settings\?section=billing&checkout=success/, {
-          timeout: 120_000,
-        });
-        return id;
-      });
+      const sessionId = await step(
+        'the code, typed in Billing, opens Checkout for 20 packs at $0 with it applied',
+        async () => {
+          // Lower-case on purpose: Stripe matches promotion codes case-insensitively.
+          await redeemInBilling(CLIENT_PROMO_DEFAULT_CODE.toLowerCase());
+          await page.waitForURL(/^https:\/\/checkout\.stripe\.com\//, { timeout: 60_000 });
+          const id = page.url().match(/cs_test_[A-Za-z0-9]+/)?.[0];
+          if (!id) throw new Error(`no test-mode session id in ${page.url()}`);
+          const session = await stripe.checkout.sessions.retrieve(id);
+          expect(session).toMatchObject({
+            livemode: false,
+            mode: 'payment',
+            customer: customerId,
+            amount_subtotal: 20_000,
+            amount_total: 0,
+            invoice_creation: { enabled: true },
+            metadata: { continuum_brand_id: ownerBrandId, continuum_credit_pack: '20' },
+          });
+          expect(session.discounts?.[0]?.promotion_code).toBe(promotionCodeId);
+          await expect(page.locator('body')).toContainText(/Total due\s*\$0\.00/, {
+            timeout: 60_000,
+          });
+          const email = page.locator('#email');
+          if ((await email.isVisible()) && !(await email.inputValue())) {
+            await email.fill(EMAILS.owner);
+          }
+          await page.getByTestId('hosted-payment-submit-button').click();
+          await page.waitForURL(/\/settings\?section=billing&checkout=success/, {
+            timeout: 120_000,
+          });
+          expect(new URL(page.url()).searchParams.get('session_id')).toBe(id);
+          await recordReceiptPhases(page);
+          return id;
+        },
+      );
 
       await step('Stripe completed it at $0 with our code and no PaymentIntent', async () => {
         const session = await stripe.checkout.sessions.retrieve(sessionId);
@@ -743,31 +950,44 @@ test.describe('billing:settings:e2e:bench', () => {
         notes.push(`promo code after redemption: active=${code.active}`);
       });
 
-      await step('replay ⇒ the ledger gains exactly 20,000 credits, keyed on the session', async () => {
-        const { attempts, types } = await replayUntil({
-          db,
-          stripe,
-          webhookSecret,
-          customerId,
-          brandId: ownerBrandId,
-          since,
-          settled: (entitlements) =>
-            entitlements.creditBalance.purchasedCredits > before.purchasedCredits,
-          what: '20,000 promo credits',
-        });
-        notes.push(`promo pack: replayed on attempt ${attempts} (${types.join(', ')})`);
-        const after = await brandEntitlements(db, ownerBrandId);
-        expect(after.creditBalance.purchasedCredits - before.purchasedCredits).toBe(20_000);
-        const { data: topups, error } = await db
-          .schema('billing')
-          .from('credit_transactions')
-          .select('delta_usd, ref, meta')
-          .eq('brand_id', ownerBrandId)
-          .eq('kind', 'topup');
-        if (error) throw new Error(`credit_transactions: ${describeError(error)}`);
-        expect(topups).toHaveLength(1);
-        expect(topups?.[0]).toMatchObject({ ref: sessionId, meta: { packs: 20, credits: 20_000 } });
-        expect(Number(topups?.[0]?.delta_usd)).toBe(200);
+      await step(
+        'replay ⇒ the ledger gains exactly 20,000 credits, keyed on the session',
+        async () => {
+          const { attempts, types } = await replayUntil({
+            db,
+            stripe,
+            webhookSecret,
+            customerId,
+            brandId: ownerBrandId,
+            since,
+            settled: (entitlements) =>
+              entitlements.creditBalance.purchasedCredits > before.purchasedCredits,
+            what: '20,000 promo credits',
+          });
+          notes.push(`promo pack: replayed on attempt ${attempts} (${types.join(', ')})`);
+          const after = await brandEntitlements(db, ownerBrandId);
+          expect(after.creditBalance.purchasedCredits - before.purchasedCredits).toBe(20_000);
+          const { data: topups, error } = await db
+            .schema('billing')
+            .from('credit_transactions')
+            .select('delta_usd, ref, meta')
+            .eq('brand_id', ownerBrandId)
+            .eq('kind', 'topup')
+            .eq('ref', sessionId);
+          if (error) throw new Error(`credit_transactions: ${describeError(error)}`);
+          expect(topups).toHaveLength(1);
+          expect(topups?.[0]).toMatchObject({
+            ref: sessionId,
+            meta: { packs: 20, credits: 20_000 },
+          });
+          expect(Number(topups?.[0]?.delta_usd)).toBe(200);
+        },
+      );
+
+      await step('the receipt prints the $200 discount, $0.00 and a Stripe invoice', async () => {
+        notes.push(
+          `promo pack invoice: ${await expectPrintedReceipt(page, stripe, sessionId, 'promo-pack')}`,
+        );
       });
 
       await step('the panel shows the 20,000 purchased credits', async () => {
@@ -775,19 +995,34 @@ test.describe('billing:settings:e2e:bench', () => {
           (before.availableCredits + 20_000).toLocaleString('en-US'),
           { timeout: 60_000 },
         );
-        await expect(credits.getByRole('img', { name: /Purchased 20,000/ })).toBeVisible();
+        // Earlier tests may have bought packs too: the meter shows every purchased credit.
+        const purchased = (before.purchasedCredits + 20_000).toLocaleString('en-US');
+        await expect(
+          credits.getByRole('img', { name: new RegExp(`Purchased ${purchased}\\b`) }),
+        ).toBeVisible();
         await shoot(page, 'promo-credits-added');
       });
 
-      await step('a second 20-pack Checkout with the same code is refused by Stripe', async () => {
-        const id = await openPackCheckout();
-        await expect(page.getByText('This code is invalid.')).toBeVisible({ timeout: 30_000 });
-        await expect(page.locator('body')).toContainText(/Total due\s*\$200\.00/);
-        const expired = await stripe.checkout.sessions.expire(id);
-        expect(expired.status).toBe('expired');
-        const after = await brandEntitlements(db, ownerBrandId);
-        expect(after.creditBalance.purchasedCredits - before.purchasedCredits).toBe(20_000);
-      });
+      await step(
+        'an unknown code and the used one are refused in Billing, never reaching Stripe',
+        async () => {
+          const alert = credits.getByRole('alert');
+          await redeemInBilling('NOT-A-CODE');
+          await expect(alert).toHaveText("That code isn't valid for this brand.");
+          await redeemInBilling(CLIENT_PROMO_DEFAULT_CODE);
+          await expect(alert).toHaveText('This code has already been used.');
+          expect(new URL(page.url()).pathname).toBe('/settings');
+          mkdirSync(SCREENSHOT_DIR, { recursive: true });
+          await credits.screenshot({
+            path: path.join(SCREENSHOT_DIR, 'promo-code-used-1280x800.png'),
+            style: HIDE_TOASTS,
+          });
+          const code = await stripe.promotionCodes.retrieve(promotionCodeId);
+          expect(code.times_redeemed).toBe(1);
+          const after = await brandEntitlements(db, ownerBrandId);
+          expect(after.creditBalance.purchasedCredits - before.purchasedCredits).toBe(20_000);
+        },
+      );
     } finally {
       await context.close();
     }

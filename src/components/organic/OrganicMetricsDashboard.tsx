@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from 'motion/react';
 import dynamic from 'next/dynamic';
+import { useSearchParams } from 'next/navigation';
 import React from 'react';
 import {
   CartesianGrid,
@@ -53,7 +54,6 @@ import { Download, Flag, RotateCw, Send } from 'lucide-react';
 import { BrandTrendsHeaderModule } from '@/components/brand-insights/BrandTrendsHeaderModule';
 import { SendContinuumReportDialog } from '@/components/dashboard/SendContinuumReportDialog';
 import { Reel, ReelContent, type ReelItem, ReelVideo } from '@/components/kibo-ui/reel';
-import { PlatformIcon } from '@/components/onboarding/PlatformIcons';
 import { PinToAgentButton } from '@/components/organic/agent/PinToAgentButton';
 import { CreativeStrategyCard } from '@/components/organic/CreativeStrategyCard';
 import { PostQuickLook } from '@/components/organic/cards/PostQuickLook';
@@ -176,6 +176,10 @@ type AccountsByPlatform = {
 
 type MetricsPlatform = 'instagram' | 'facebook' | 'tiktok' | 'youtube' | 'linkedin';
 type MetricsViewMode = 'account' | 'posts' | 'compare';
+
+function isMetricsPlatform(value: string): value is MetricsPlatform {
+  return value === 'instagram' || value === 'facebook' || value === 'tiktok' || value === 'youtube' || value === 'linkedin';
+}
 
 const PLATFORM_LABELS: Record<MetricsPlatform, string> = {
   instagram: 'Instagram',
@@ -1434,6 +1438,7 @@ function Dashboard({
   rangePreset,
   youtubePostType,
   scrollRootRef,
+  linkedPostId,
 }: {
   data: OrganicMetricsResponse;
   viewMode: MetricsViewMode;
@@ -1455,8 +1460,10 @@ function Dashboard({
   // The tab's one scroll container. Cards below never open a scroller of their
   // own, so infinite-scroll observation has to key off this shared root.
   scrollRootRef: React.RefObject<HTMLDivElement | null>;
+  linkedPostId?: string | null;
 }) {
   const [selectedPostId, setSelectedPostId] = React.useState<string | null>(null);
+  const [showAllKpis, setShowAllKpis] = React.useState(false);
   const [selectedAccountMetric, setSelectedAccountMetric] =
     React.useState<keyof OrganicMetrics>('reach');
   const [selectedPostMetric, setSelectedPostMetric] = React.useState<PostMetricKey>('views');
@@ -1514,6 +1521,15 @@ function Dashboard({
       setSelectedPostId(null);
     }
   }, [data.posts, selectedPostId]);
+
+  React.useEffect(() => {
+    if (viewMode !== 'posts' || !linkedPostId) return;
+    if (data.posts?.some((post) => post.id === linkedPostId)) {
+      setSelectedPostId(linkedPostId);
+    } else if (hasMorePosts && !loadingMorePosts && !loadMorePostsError) {
+      onLoadMorePosts?.();
+    }
+  }, [viewMode, linkedPostId, data.posts, hasMorePosts, loadingMorePosts, loadMorePostsError, onLoadMorePosts]);
 
   const selectedPostBase = (data.posts ?? []).find((post) => post.id === selectedPostId) ?? null;
   const selectedPostDetail =
@@ -1672,14 +1688,15 @@ function Dashboard({
         </span>
       ) : null}
       {isAccountView ? (
+        <div className="px-3 pt-3">
         <motion.div
           key={`kpi-${data.range.since}-${data.range.until}`}
           initial="hidden"
           animate="visible"
           variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.05 } } }}
-          className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7"
+          className="grid grid-cols-1 gap-2 sm:grid-cols-3"
         >
-          {getKpiConfig(platform).map((metric) => (
+          {getKpiConfig(platform).slice(0, showAllKpis ? undefined : 3).map((metric) => (
             <motion.div
               key={String(metric.key)}
               variants={{
@@ -1713,6 +1730,12 @@ function Dashboard({
             </motion.div>
           ))}
         </motion.div>
+        {getKpiConfig(platform).length > 3 ? (
+          <Button variant="ghost" size="sm" className="mt-2" aria-expanded={showAllKpis} onClick={() => setShowAllKpis((value) => !value)}>
+            {showAllKpis ? 'Show key metrics' : `Show all ${getKpiConfig(platform).length} metrics`}
+          </Button>
+        ) : null}
+        </div>
       ) : null}
 
       {isAccountView && bestTimes ? <BestTimeTiles bestTimes={bestTimes} /> : null}
@@ -1723,7 +1746,7 @@ function Dashboard({
             title="Metric Drilldown"
             meta={
               <span className="text-xs text-muted-foreground">
-                {selectedAccountMetricLabel} · {formatDateRangeLabel(accountAxisLabelRange)}
+                Independent chart window · {selectedAccountMetricLabel} · {formatDateRangeLabel(accountAxisLabelRange)}
               </span>
             }
             action={
@@ -1788,7 +1811,7 @@ function Dashboard({
               <>
                 <span className="mb-2 block text-xs text-muted-foreground">
                   This chart keeps its own {drilldownWindow === '30d' ? '30-day' : '7-day'} window,
-                  separate from the range filter above. Data current through{' '}
+                  separate from the Overview date range. Data current through{' '}
                   {formatShortDate(dataCurrentThrough)}.
                 </span>
                 <ChartContainer
@@ -1869,6 +1892,17 @@ function Dashboard({
 
       {isPostsView ? (
         <>
+          {linkedPostId && !data.posts?.some((post) => post.id === linkedPostId) ? (
+            <Alert className="m-3 w-auto">
+              <AlertDescription>
+                {hasMorePosts || loadingMorePosts
+                  ? 'Finding the published post in account history…'
+                  : loadMorePostsError
+                    ? 'Post performance is unavailable because older posts could not load. Retry below.'
+                    : 'Post performance is unavailable for this post in the available account history.'}
+              </AlertDescription>
+            </Alert>
+          ) : null}
           {platform === 'youtube' ? (
             <YoutubeTypeSummaryStrip posts={visiblePosts} filter={youtubePostType} />
           ) : null}
@@ -1893,8 +1927,7 @@ function Dashboard({
                     <motion.div layout className="min-w-0">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
                         <span className="text-xs text-muted-foreground text-pretty">
-                          Posts load newest first and go deeper as you scroll, so this view does not
-                          follow the range filter above.
+                          Posts load newest first and go deeper as you scroll.
                         </span>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-muted-foreground">Sort</span>
@@ -2054,6 +2087,10 @@ export function OrganicMetricsDashboard({
   initialPlatform = 'instagram',
   brandInsights = null,
 }: Props) {
+  const searchParams = useSearchParams();
+  const linkedPlatform = searchParams.get('tab') === 'metrics' ? searchParams.get('platform') : null;
+  const linkedAccountId = searchParams.get('accountId');
+  const linkedPostId = searchParams.get('postId');
   const [isPending, startTransition] = React.useTransition();
   const [platform, setPlatform] = React.useState<MetricsPlatform>(initialPlatform);
   const [viewMode, setViewMode] = React.useState<MetricsViewMode>('account');
@@ -2072,6 +2109,17 @@ export function OrganicMetricsDashboard({
   // a wheel anywhere over the tab moves the same surface.
   const metricsScrollRef = React.useRef<HTMLDivElement | null>(null);
   const setSelection = useAccountSelectionStore((s) => s.setSelection);
+  React.useEffect(() => {
+    if (!linkedPlatform || !linkedAccountId || !linkedPostId) return;
+    if (!isMetricsPlatform(linkedPlatform)) return;
+    const nextPlatform = linkedPlatform;
+    if (!accountsByPlatform[nextPlatform].some((account) => account.integrationAccountId === linkedAccountId)) return;
+    setPlatform(nextPlatform);
+    setSelectedAccountByPlatform((current) => ({ ...current, [nextPlatform]: linkedAccountId }));
+    setSelection(brandId, nextPlatform, linkedAccountId);
+    setViewMode('posts');
+    setYoutubePostType('all');
+  }, [accountsByPlatform, brandId, linkedPlatform, linkedAccountId, linkedPostId, setSelection]);
   const [postGalleryPosts, setPostGalleryPosts] = React.useState<OrganicPost[]>([]);
   // Posts fetched in parallel for the account view so the drilldown chart can
   // demarcate when posts were published; the account scope itself omits posts.
@@ -2692,30 +2740,31 @@ export function OrganicMetricsDashboard({
       className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-surface"
     >
       <div className="flex min-h-10 flex-wrap items-center gap-2 border-b border-border px-[var(--card-pad)] py-1.5">
-        <Pill variant="muted" className="hidden sm:inline-flex">
-          <PlatformIcon platform={platform} />
-        </Pill>
+        {viewMode !== 'compare' ? (
+          <MetricsScopeSelector
+            mode="single"
+            accountsByPlatform={scopeAccountsByPlatform}
+            platform={platform}
+            accountId={selectedAccountId}
+            onSelect={(nextPlatform, accountId) => {
+              startTransition(() => {
+                setPlatform(nextPlatform);
+                setSelectedAccountByPlatform((current) => ({ ...current, [nextPlatform]: accountId }));
+                setSelection(brandId, nextPlatform, accountId);
+              });
+            }}
+          />
+        ) : null}
 
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <DisabledControl
-            side="bottom"
-            hint={
-              viewMode === 'posts'
-                ? {
-                    reason:
-                      'Post performance loads newest first and goes deeper as you scroll, so it does not use this range.',
-                    unlocks: 'date ranges on Overview and Compare accounts',
-                  }
-                : null
-            }
-          >
+          {viewMode !== 'posts' ? <div>
             <Select
               value={rangePreset}
               onValueChange={(value) =>
                 startTransition(() => setRangePreset(value as OrganicDateRangePreset))
               }
             >
-              <SelectTrigger className="h-8 w-[7.5rem] text-xs" disabled={viewMode === 'posts'}>
+              <SelectTrigger className="h-8 w-[7.5rem] text-xs">
                 {rangeLabel(rangePreset)}
               </SelectTrigger>
               <SelectContent>
@@ -2726,7 +2775,7 @@ export function OrganicMetricsDashboard({
                 ))}
               </SelectContent>
             </Select>
-          </DisabledControl>
+          </div> : null}
 
           <div className="flex items-center gap-2">
             <span className="hidden text-2xs font-semibold uppercase tracking-wide text-muted-foreground sm:inline">
@@ -2907,25 +2956,12 @@ export function OrganicMetricsDashboard({
             <AlertDescription>{reportError}</AlertDescription>
           </Alert>
         ) : null}
-        {viewMode !== 'compare' ? (
-          <div className="mb-3">
-            <MetricsScopeSelector
-              mode="single"
-              accountsByPlatform={scopeAccountsByPlatform}
-              platform={platform}
-              accountId={selectedAccountId}
-              onSelect={(nextPlatform, accountId) => {
-                startTransition(() => {
-                  setPlatform(nextPlatform);
-                  setSelectedAccountByPlatform((current) => ({
-                    ...current,
-                    [nextPlatform]: accountId,
-                  }));
-                  setSelection(brandId, nextPlatform, accountId);
-                });
-              }}
-            />
-          </div>
+        {linkedPostId && linkedPlatform && linkedAccountId &&
+        (!isMetricsPlatform(linkedPlatform) ||
+          !accountsByPlatform[linkedPlatform].some((account) => account.integrationAccountId === linkedAccountId)) ? (
+          <Alert className="m-3 w-auto">
+            <AlertDescription>Post performance is unavailable because the linked account is not connected to this brand.</AlertDescription>
+          </Alert>
         ) : null}
         {viewMode === 'compare' ? (
           <OrganicCompareView
@@ -2997,6 +3033,11 @@ export function OrganicMetricsDashboard({
                   rangePreset={rangePreset}
                   youtubePostType={youtubePostType}
                   scrollRootRef={metricsScrollRef}
+                  linkedPostId={
+                    linkedPlatform === platform && linkedAccountId === selectedAccountId
+                      ? linkedPostId
+                      : null
+                  }
                 />
               </motion.div>
             ) : (

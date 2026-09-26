@@ -4,6 +4,7 @@ import { WATERMARK_LOGO_VARIABLE_KEY } from './api-renders';
 import {
   batchLockedType,
   coerceNodeConfig,
+  coerceVideoGeneratorDuration,
   createNodeData,
   DEFAULT_VIDEO_GENERATOR_MODEL,
   DRAFT_INPUT_HANDLE,
@@ -13,6 +14,7 @@ import {
   getImageVariationHandleId,
   getStudioPortMetadata,
   getTargetHandleConnectionLimit,
+  getVideoGeneratorBackendModel,
   getVideoGeneratorImageReferenceHandle,
   getVideoGeneratorProvider,
   getVideoGeneratorReferenceMode,
@@ -422,7 +424,30 @@ describe('video generator provider groups', () => {
       VIDEO_GENERATOR_MODEL_GROUPS.map((group) => [group.provider, group.models]),
     );
     expect(byProvider.get('fal')).toEqual(['kling-omni', 'pixverse-v6', 'seedance-2.0']);
-    expect(byProvider.get('google')).toEqual(['veo-3.1-fast', 'veo-3.1-lite', 'veo-3.1']);
+    expect(byProvider.get('google')).toEqual([
+      'gemini-omni-flash',
+      'veo-3.1-fast',
+      'veo-3.1-lite',
+      'veo-3.1',
+    ]);
+  });
+
+  it('makes Omni 1.1 Flash the default Google video model', () => {
+    expect(DEFAULT_VIDEO_GENERATOR_MODEL).toBe('gemini-omni-flash');
+    expect(getVideoGeneratorProvider(DEFAULT_VIDEO_GENERATOR_MODEL)).toBe('google');
+    expect(createNodeData('videoGen').data.model).toBe('gemini-omni-flash');
+    expect(getVideoGeneratorBackendModel('gemini-omni-flash')).toBe('gemini-omni-1.1-flash');
+  });
+
+  it('keeps a saved node with no model on the Veo 3.1 Fast it has always rendered on', () => {
+    expect(resolveVideoGeneratorModel({ type: 'videoGen', data: {} })).toBe('veo-3.1-fast');
+    // An unrelated write must not re-gate the legacy node's frame mode against Omni.
+    const { data } = coerceNodeConfig('videoGen', { referenceMode: 'frames' }, {});
+    expect(data.referenceMode).toBe('frames');
+  });
+
+  it('gives Omni no Veo duration ladder', () => {
+    expect(coerceVideoGeneratorDuration('gemini-omni-flash', '4k', 4, true)).toBeUndefined();
   });
 
   it('agrees with getVideoGeneratorProvider and labels every provider', () => {

@@ -104,18 +104,6 @@ const capability = {
       max_items: 1,
     },
   ],
-  controls: [
-    {
-      control_id: 'blur_radius',
-      kind: 'number',
-      label: 'Background blur',
-      required: false,
-      minimum: 0,
-      maximum: 40,
-      step: 1,
-      default: 8,
-    },
-  ],
   outputs: [
     { output_id: 'hero', kind: 'asset', label: 'Hero image', media: 'image', count: 1 },
     {
@@ -231,7 +219,7 @@ describe('PipelineInvocationForm', () => {
 
   afterEach(cleanup);
 
-  it('shows required semantic inputs while keeping controls collapsed', () => {
+  it('shows the required semantic inputs and no scalar controls', () => {
     render(
       <PipelineInvocationForm
         brandId="22222222-2222-4222-8222-222222222222"
@@ -243,10 +231,7 @@ describe('PipelineInvocationForm', () => {
     expect(screen.getByLabelText(/Creative brief/)).toBeDefined();
     expect(screen.getByText('Bottle front')).toBeDefined();
     expect(screen.getByText('Bottle system')).toBeDefined();
-    expect(screen.queryByLabelText('Background blur')).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: /Advanced/ }));
-    expect(screen.getByLabelText('Background blur')).toBeDefined();
+    expect(screen.queryByRole('button', { name: /Advanced/ })).toBeNull();
   });
 
   it('invokes with exact asset versions and displays outputs grouped by promise', async () => {
@@ -289,8 +274,8 @@ describe('PipelineInvocationForm', () => {
           element_id: '44444444-4444-4444-8444-444444444444',
         },
       },
-      controls: { blur_radius: 8 },
     });
+    expect(executePipelineMock.mock.calls[0]?.[0]).not.toHaveProperty('controls');
 
     expect(await screen.findByText('Hero image')).toBeDefined();
     expect(screen.getByText(/asset aaaaaaaa/)).toBeDefined();
@@ -300,7 +285,7 @@ describe('PipelineInvocationForm', () => {
     expect(screen.getByText(/Candidate Element/)).toBeDefined();
   });
 
-  it('does not send untouched optional inputs or controls', async () => {
+  it('does not send untouched optional inputs', async () => {
     executePipelineMock.mockResolvedValueOnce(completedReceipt as never);
     const optionalCapability = {
       ...capability,
@@ -312,16 +297,6 @@ describe('PipelineInvocationForm', () => {
           required: false,
           semantic_role: 'creative_direction',
           min_length: 10,
-        },
-      ],
-      controls: [
-        {
-          control_id: 'contrast',
-          kind: 'number' as const,
-          label: 'Contrast',
-          required: false,
-          minimum: 0,
-          maximum: 1,
         },
       ],
     } as PipelineCapabilityV2;
@@ -336,6 +311,6 @@ describe('PipelineInvocationForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Run pipeline' }));
 
     await waitFor(() => expect(executePipelineMock).toHaveBeenCalledTimes(1));
-    expect(executePipelineMock.mock.calls[0]?.[0]).toMatchObject({ inputs: {}, controls: {} });
+    expect(executePipelineMock.mock.calls[0]?.[0]).toMatchObject({ inputs: {} });
   });
 });

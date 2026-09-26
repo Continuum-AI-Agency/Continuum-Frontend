@@ -1510,3 +1510,13 @@ button:focus-visible .mention-inline__label {
     transform: translateX(300%);
   }
 }
+
+/*
+  The checkout receipt's torn thermal-paper edge (CheckoutReceiptDialog): each 8px tile keeps
+  everything above a downward point, so the bottom edge reads as a tear-off serration.
+*/
+.receipt-edge {
+  -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% /
+    8px 100%;
+  mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 8px 100%;
+}

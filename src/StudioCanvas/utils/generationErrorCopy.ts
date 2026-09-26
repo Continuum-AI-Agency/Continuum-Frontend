@@ -29,6 +29,14 @@ const COPY: Record<StudioGenerationErrorCode, GenerationErrorCopy> = {
     title: "This model isn't available",
     guidance: 'Pick another model from the node menu — Nano Banana 2 is the closest match.',
   },
+  credits_exhausted: {
+    title: 'Out of Canvas credits',
+    guidance: 'Top up, then run this node again — its prompt and settings are kept.',
+  },
+  product_required: {
+    title: "AI Canvas isn't on this brand's plan",
+    guidance: 'Choose a plan in Settings → Billing to generate on the canvas.',
+  },
 };
 
 const FALLBACK_TITLE = 'Generation failed';

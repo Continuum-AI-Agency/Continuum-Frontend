@@ -19,17 +19,45 @@ const periodEndFormat = new Intl.DateTimeFormat('en-US', { month: 'short', day: 
 function accessibleName(view: SidebarBillingView): string {
   switch (view.kind) {
     case 'metered':
-      return `Billing: ${view.planLabel}, ${formatCredits(view.remainingCredits)} credits remaining`;
+      return `Billing: ${view.planLabel}, ${formatCredits(view.remainingCredits)} credits remaining${view.paymentFailed ? ', payment failed' : ''}`;
     case 'managed':
       return 'Billing: Managed plan · unmetered';
     case 'no_plan':
-      return 'Billing: No plan';
+      return view.paymentFailed ? 'Billing: No plan, payment failed' : 'Billing: No plan';
   }
 }
 
-export function SidebarBillingWidget({ view }: { view: SidebarBillingView }) {
-  const warn = view.kind === 'metered' && view.low;
+/**
+ * A low meter's row is the way to fix it: for the owner it opens Top up where they are instead
+ * of linking away. A failed payment is fixed in Billing, so it keeps the link.
+ */
+export function sidebarOpensTopUp(view: SidebarBillingView, owner: boolean): boolean {
+  return owner && view.kind === 'metered' && view.low && !view.paymentFailed;
+}
+
+export function SidebarBillingWidget({
+  view,
+  onTopUp,
+}: {
+  view: SidebarBillingView;
+  /** Set when the row should open Top up (see `sidebarOpensTopUp`) rather than link to Billing. */
+  onTopUp?: () => void;
+}) {
+  const paymentFailed = view.kind !== 'managed' && view.paymentFailed === true;
+  const warn = (view.kind === 'metered' && view.low) || paymentFailed;
   const Icon = view.kind === 'metered' ? Coins : view.kind === 'managed' ? Building2 : CircleDashed;
+  const rowProps = {
+    'aria-label': accessibleName(view),
+    'data-testid': 'sidebar-billing',
+    'data-kind': view.kind,
+    'data-low': warn || undefined,
+    className: cn(
+      'group/billing btn-fill [--btn-fill:var(--sidebar-hover-bg)] flex w-full min-w-0 items-center gap-2.5 rounded-lg border border-[var(--color-border)] px-2.5 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--ring)]',
+      'group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:border-transparent group-data-[collapsible=icon]:p-0',
+      warn &&
+        'border-[color-mix(in_srgb,var(--warning)_40%,transparent)] bg-[color-mix(in_srgb,var(--warning)_8%,transparent)]',
+    ),
+  };
 
   return (
     <SidebarMenu className="group-data-[collapsible=icon]:items-center">
@@ -37,19 +65,11 @@ export function SidebarBillingWidget({ view }: { view: SidebarBillingView }) {
         <HoverCard openDelay={150} closeDelay={100}>
           <HoverCardTrigger
             render={
-              <Link
-                href={view.href}
-                aria-label={accessibleName(view)}
-                data-testid="sidebar-billing"
-                data-kind={view.kind}
-                data-low={warn || undefined}
-                className={cn(
-                  'group/billing btn-fill [--btn-fill:var(--sidebar-hover-bg)] flex w-full min-w-0 items-center gap-2.5 rounded-lg border border-[var(--color-border)] px-2.5 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--ring)]',
-                  'group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:border-transparent group-data-[collapsible=icon]:p-0',
-                  warn &&
-                    'border-[color-mix(in_srgb,var(--warning)_40%,transparent)] bg-[color-mix(in_srgb,var(--warning)_8%,transparent)]',
-                )}
-              />
+              onTopUp ? (
+                <button type="button" onClick={onTopUp} {...rowProps} />
+              ) : (
+                <Link href={view.href} {...rowProps} />
+              )
             }
           >
             <span className="relative inline-flex shrink-0">
@@ -82,7 +102,7 @@ export function SidebarBillingWidget({ view }: { view: SidebarBillingView }) {
             data-testid="sidebar-billing-card"
             className="w-72 p-0"
           >
-            <BillingPreview view={view} />
+            <BillingPreview view={view} topUp={Boolean(onTopUp)} />
           </HoverCardContent>
         </HoverCard>
       </SidebarMenuItem>
@@ -95,8 +115,13 @@ function WidgetLines({ view }: { view: SidebarBillingView }) {
     case 'metered':
       return (
         <>
-          <span className="truncate text-[0.72rem] font-medium tracking-[0.01em] text-[var(--sidebar-muted)]">
-            {view.planLabel}
+          <span
+            className={cn(
+              'truncate text-[0.72rem] font-medium tracking-[0.01em]',
+              view.paymentFailed ? 'text-warning' : 'text-[var(--sidebar-muted)]',
+            )}
+          >
+            {view.paymentFailed ? 'Payment failed' : view.planLabel}
           </span>
           <span
             className={cn(
@@ -127,8 +152,13 @@ function WidgetLines({ view }: { view: SidebarBillingView }) {
           <span className="truncate text-[0.78rem] font-medium tracking-[0.01em] text-[var(--sidebar-foreground)]">
             No plan
           </span>
-          <span className="truncate text-[0.7rem] text-[var(--sidebar-muted)]">
-            Choose one in Billing
+          <span
+            className={cn(
+              'truncate text-[0.7rem]',
+              view.paymentFailed ? 'text-warning' : 'text-[var(--sidebar-muted)]',
+            )}
+          >
+            {view.paymentFailed ? 'Payment failed · update card' : 'Choose one in Billing'}
           </span>
         </>
       );
@@ -144,7 +174,7 @@ function PreviewRow({ label, children }: { label: string; children: ReactNode })
   );
 }
 
-function BillingPreview({ view }: { view: SidebarBillingView }) {
+function BillingPreview({ view, topUp }: { view: SidebarBillingView; topUp: boolean }) {
   if (view.kind === 'managed') {
     return (
       <div className="space-y-1 p-4">
@@ -167,10 +197,10 @@ function BillingPreview({ view }: { view: SidebarBillingView }) {
       </div>
     );
   }
-  return <MeteredPreview view={view} />;
+  return <MeteredPreview view={view} topUp={topUp} />;
 }
 
-function MeteredPreview({ view }: { view: MeteredSidebarBilling }) {
+function MeteredPreview({ view, topUp }: { view: MeteredSidebarBilling; topUp: boolean }) {
   return (
     <div>
       <div className="space-y-0.5 border-b border-border px-4 py-3">
@@ -207,12 +237,26 @@ function MeteredPreview({ view }: { view: MeteredSidebarBilling }) {
       <p
         className={cn(
           'border-t border-border px-4 py-2.5 text-xs',
-          view.exhausted ? 'text-warning' : 'text-muted-foreground',
+          view.exhausted || view.paymentFailed ? 'text-warning' : 'text-muted-foreground',
         )}
       >
-        {view.exhausted
-          ? 'Out of credits. Buy a pack or turn on auto-billing to keep generating.'
-          : 'Click to buy credit packs in Billing.'}
+        {view.paymentFailed
+          ? "The last payment didn't go through. Update your card in Billing."
+          : topUp
+            ? view.exhausted
+              ? 'Out of credits. Click to top up and keep generating.'
+              : 'Click to top up.'
+            : view.exhausted
+              ? 'Out of credits. Add a credit pack in Billing to keep generating.'
+              : 'Click to buy credit packs in Billing.'}
+        {topUp ? (
+          <>
+            {' '}
+            <Link href={view.href} className="text-foreground underline underline-offset-3">
+              Open Billing
+            </Link>
+          </>
+        ) : null}
       </p>
     </div>
   );

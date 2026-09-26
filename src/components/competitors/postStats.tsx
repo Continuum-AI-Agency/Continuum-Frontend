@@ -2,7 +2,7 @@
 
 // The numbers an Inspiration post is judged by, shared by the tile face and the
 // Analyse panel: its outlier multiple against its own account, and its public
-// views / likes / comments (views exist on reels only).
+// views / likes / comments (Instagram has views on reels only; YouTube on every video).
 
 import { Eye, Heart, MessageCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -56,7 +56,7 @@ export function PostMetrics({ view, className }: { view: CompetitorPostView; cla
   const { post } = view;
   return (
     <div className={cn('flex flex-wrap items-center gap-1.5 text-2xs tabular-nums', className)}>
-      {post.kind === 'reel' ? (
+      {post.kind === 'reel' || typeof post.viewCount === 'number' ? (
         <Metric icon={<Eye className="size-3" aria-hidden />} value={post.viewCount} unit="views" />
       ) : null}
       <Metric

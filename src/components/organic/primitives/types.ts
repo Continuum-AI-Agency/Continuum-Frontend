@@ -66,6 +66,8 @@ export type OrganicCalendarDraft = {
   location?: string;
   mediaCount: number;
   seedTrendId?: string;
+  /** Original competitor post used to generate this draft, when present. */
+  inspirationSourceUrl?: string;
   // Provenance: "manual" = authored from scratch via the calendar + button;
   // "agent" / undefined = produced by the generation pipeline (legacy default).
   origin?: 'manual' | 'agent';

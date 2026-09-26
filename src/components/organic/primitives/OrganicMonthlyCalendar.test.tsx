@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { createCalendarStoreStub } from '@/lib/organic/testing/calendarStoreStub';
-import type { OrganicCalendarDay, OrganicCalendarDraft } from './types';
+import type { OrganicCalendarDay, OrganicCalendarDraft, OrganicCalendarPostedContent } from './types';
 
 // happy-dom does not expose SyntaxError on its window object, which crashes
 // @testing-library/dom's querySelectorAll internals.
@@ -12,6 +12,8 @@ import type { OrganicCalendarDay, OrganicCalendarDraft } from './types';
 // Every droppable the month grid registers, so the spec can assert the id GRAMMAR — the
 // contract `useCalendarDnD.parsePlannerCellId` reads on the other side.
 const registeredDroppableIds: string[] = [];
+const routerPush = mock((_href: string) => undefined);
+mock.module('next/navigation', () => ({ useRouter: () => ({ push: routerPush }) }));
 
 mock.module('@dnd-kit/core', () => ({
   useDroppable: ({ id }: { id: string }) => {
@@ -45,7 +47,11 @@ mock.module('./DraftHoverCardContent', () => ({
   DraftHoverCardContent: () => <div data-testid="hover-preview" />,
 }));
 mock.module('./PostedContentQuickLook', () => ({
-  PostedContentPreview: () => <div />,
+  PostedContentPreview: ({ onViewMetrics }: { onViewMetrics?: () => void }) => (
+    <div>
+      {onViewMetrics && <button type="button" onClick={onViewMetrics}>View post metrics</button>}
+    </div>
+  ),
 }));
 mock.module('@/components/ui/hover-card', () => ({
   HoverCard: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -104,7 +110,10 @@ function renderMonth(
     slots?: OrganicCalendarDraft[];
     selectedDraftIds?: string[];
     onSelectDraft?: (id: string) => void;
+    onSelectPost?: (post: OrganicCalendarPostedContent, metricsHref: string | null) => void;
     onToggleSelection?: (id: string) => void;
+    onToday?: () => void;
+    postedContent?: OrganicCalendarPostedContent[];
   } = {},
 ) {
   render(
@@ -112,14 +121,16 @@ function renderMonth(
       days={days(overrides.slots ?? [draft()])}
       monthAnchorDate={ANCHOR}
       platforms={[]}
-      postedContent={[]}
+      postedContent={overrides.postedContent ?? []}
       selectedDraftId={null}
       selectedDraftIds={overrides.selectedDraftIds}
       onSelectDraft={overrides.onSelectDraft ?? NOOP}
+      onSelectPost={overrides.onSelectPost ?? NOOP}
       onToggleSelection={overrides.onToggleSelection}
       onCreatePost={NOOP}
       onPreviousMonth={NOOP}
       onNextMonth={NOOP}
+      onToday={overrides.onToday ?? NOOP}
     />,
   );
 }
@@ -201,7 +212,101 @@ describe('OrganicMonthlyCalendar status signal', () => {
   it('announces the status next to the title, not just as a colour', () => {
     renderMonth({ slots: [draft({ status: 'failed' })] });
 
-    expect(screen.getByText('Failed')).toBeTruthy();
+    expect(screen.getAllByText('Failed').length).toBeGreaterThan(0);
     expect(screen.getByTitle(/^Failed · /)).toBeTruthy();
+  });
+});
+
+describe('OrganicMonthlyCalendar day access', () => {
+  beforeEach(() => {
+    cleanup();
+    registeredDroppableIds.length = 0;
+    isDragging = false;
+  });
+
+  it('returns to today from the month header', () => {
+    const onToday = mock(() => undefined);
+    renderMonth({ onToday });
+    fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+    expect(onToday).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps at most three readable chips in a day and exposes the rest', () => {
+    renderMonth({
+      slots: Array.from({ length: 5 }, (_, i) => draft({ id: `draft-${i}`, title: `Post ${i}` })),
+    });
+    expect(screen.getByTitle('Scheduled · Post 0').className).toContain('text-xs');
+    expect(screen.queryByTitle('Scheduled · Post 3')).toBeNull();
+    expect(screen.getByRole('button', { name: `Show all 5 posts for ${DAY_ID}` }).textContent).toBe(
+      '+2 more',
+    );
+  });
+
+  it('opens every hidden draft and selects one for review', () => {
+    const onSelectDraft = mock((_id: string) => undefined);
+    renderMonth({
+      slots: Array.from({ length: 7 }, (_, i) => draft({ id: `draft-${i}`, title: `Post ${i}` })),
+      onSelectDraft,
+    });
+    fireEvent.click(screen.getByRole('button', { name: `Show all 7 posts for ${DAY_ID}` }));
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    for (let i = 0; i < 7; i++) {
+      expect(screen.getByRole('button', { name: new RegExp(`Post ${i}`) })).toBeTruthy();
+    }
+    fireEvent.click(screen.getByRole('button', { name: /Post 6/ }));
+    expect(onSelectDraft).toHaveBeenCalledWith('draft-6');
+  });
+
+  it('selects a published post for the side preview from a visible chip', () => {
+    routerPush.mockClear();
+    const onSelectPost = mock();
+    const post: OrganicCalendarPostedContent = {
+      id: 'post-1',
+      source: 'published_posts',
+      platform: 'instagram',
+      integrationAccountId: 'account-1',
+      externalPostId: 'media-1',
+      timestamp: '2026-08-03T15:00:00Z',
+      dayId: DAY_ID,
+      timeLabel: '9:00 AM',
+      title: 'Published launch',
+    };
+    renderMonth({
+      slots: [],
+      postedContent: [post],
+      onSelectPost,
+    });
+    fireEvent.click(screen.getByTitle('Published launch'));
+    expect(onSelectPost).toHaveBeenCalledWith(post, '?tab=metrics&platform=instagram&accountId=account-1&postId=media-1');
+    expect(routerPush).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'View post metrics' }));
+    expect(routerPush).toHaveBeenCalledTimes(1);
+  });
+
+  it('selects a published post for the side preview from the full day detail', () => {
+    routerPush.mockClear();
+    const onSelectPost = mock();
+    renderMonth({
+      slots: Array.from({ length: 5 }, (_, i) => draft({ id: `draft-${i}`, title: `Post ${i}` })),
+      postedContent: [{
+        id: 'post-1',
+        source: 'published_posts',
+        platform: 'instagram',
+        integrationAccountId: 'account-1',
+        externalPostId: 'media-1',
+        timestamp: '2026-08-03T15:00:00Z',
+        dayId: DAY_ID,
+        timeLabel: '9:00 AM',
+        title: 'Published launch',
+      }],
+      onSelectPost,
+    });
+    fireEvent.click(screen.getByRole('button', { name: `Show all 6 posts for ${DAY_ID}` }));
+    fireEvent.click(screen.getByRole('button', { name: /Published launch.*Published/ }));
+    expect(onSelectPost).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'post-1' }),
+      '?tab=metrics&platform=instagram&accountId=account-1&postId=media-1',
+    );
+    expect(routerPush).not.toHaveBeenCalled();
   });
 });

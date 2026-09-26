@@ -52,7 +52,6 @@ function LegacyPipelineContract({ manifest }: { manifest: PipelineManifest }) {
             Cannot run
           </Pill>
         ) : null}
-        {manifest.source === 'global' ? <Pill variant="muted">Shipped</Pill> : null}
         {manifest.headless.requires_authorisation ? (
           <Pill variant="warning">Needs approval</Pill>
         ) : null}
@@ -75,14 +74,44 @@ function LegacyPipelineContract({ manifest }: { manifest: PipelineManifest }) {
 
 function outputPromise(output: PipelineCapabilityV2['outputs'][number]): string {
   if (output.kind === 'element_candidate') return `${output.label} (Element candidate)`;
-  const media = output.count === 1 ? output.media : `${output.media}s`;
-  return `${output.label} (${output.count === 1 ? media : `${output.count} ${media}`})`;
+  const media = output.count === 1 ? output.media : `${output.count} ${output.media}s`;
+  const shape = [
+    media,
+    output.aspect_ratio,
+    output.duration_seconds === undefined ? undefined : `${output.duration_seconds}s`,
+  ].filter(Boolean);
+  return `${output.label} (${shape.join(' · ')})`;
+}
+
+// Null until a per-model price table exists; the generation cap is then the real bound.
+function spendCeiling(capability: PipelineCapabilityV2): string {
+  const { max_amount_minor, currency } = capability.cost_policy;
+  if (max_amount_minor === null) {
+    const generations = capability.execution_policy.max_generations;
+    return `Up to ${generations} generation${generations === 1 ? '' : 's'} per run`;
+  }
+  return `Up to ${moneyFormatter.format(max_amount_minor / 100)} ${currency}`;
+}
+
+// Each gate with the media it judges, and its floor where it has one: an image passes on
+// the gate's verdict alone, a video must also reach its score. The single-floor branch reads
+// a Backend that has not redeployed yet; drop it with the contract's legacy shape.
+function qualityLine(policy: PipelineCapabilityV2['quality_policy']): string {
+  if (!('checks' in policy)) {
+    const checks = policy.required_checks.map(readableToken).join(', ');
+    return `${Math.round(policy.minimum_score * 100)}% minimum${checks ? ` · ${checks}` : ''}`;
+  }
+  return policy.checks
+    .map((check) => {
+      const floor =
+        check.minimum_score === null ? '' : ` ≥ ${Math.round(check.minimum_score * 100)}%`;
+      return `${readableToken(check.check_id)}${floor} (${check.media.join(', ')})`;
+    })
+    .join(' · ');
 }
 
 function V2PipelineContract({ capability }: { capability: PipelineCapabilityV2 }) {
   const requiredInputs = capability.inputs.filter((input) => input.required);
-  const maximumCost = moneyFormatter.format(capability.cost_policy.max_amount_minor / 100);
-  const qualityChecks = capability.quality_policy.required_checks.map(readableToken).join(', ');
 
   return (
     <>
@@ -127,13 +156,11 @@ function V2PipelineContract({ capability }: { capability: PipelineCapabilityV2 }
         {capability.outputs.map(outputPromise).join(', ')}
       </p>
       <p className="text-muted-foreground">
-        <span className="font-medium text-foreground">Cost:</span> Up to {maximumCost}{' '}
-        {capability.cost_policy.currency}
+        <span className="font-medium text-foreground">Cost:</span> {spendCeiling(capability)}
       </p>
       <p className="text-muted-foreground">
         <span className="font-medium text-foreground">Quality:</span>{' '}
-        {Math.round(capability.quality_policy.minimum_score * 100)}% minimum
-        {qualityChecks ? ` · ${qualityChecks}` : ''}
+        {qualityLine(capability.quality_policy)}
       </p>
       <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
         <Pill variant="success">
@@ -141,7 +168,6 @@ function V2PipelineContract({ capability }: { capability: PipelineCapabilityV2 }
           Runnable
         </Pill>
         <Pill variant="muted">Revision {capability.identity.revision}</Pill>
-        {capability.source === 'global' ? <Pill variant="muted">Shipped</Pill> : null}
       </div>
     </>
   );

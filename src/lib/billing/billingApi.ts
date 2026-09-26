@@ -1,4 +1,5 @@
 import {
+  type BillingCheckoutReceipt,
   type BillingCheckoutResponse,
   type BillingCreditCheckoutResponse,
   type BillingOverageResponse,
@@ -7,10 +8,12 @@ import {
   type BillingPlanChangeResponse,
   type BillingPortalResponse,
   billingApiErrorSchema,
+  billingCheckoutReceiptSchema,
   billingCheckoutRequestSchema,
   billingCheckoutResponseSchema,
   billingCreditCheckoutRequestSchema,
   billingCreditCheckoutResponseSchema,
+  billingCreditRedeemRequestSchema,
   billingOverageRequestSchema,
   billingOverageResponseSchema,
   billingOverviewSchema,
@@ -23,6 +26,7 @@ import {
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import type { z } from 'zod';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { trackBillingEvent } from './telemetry';
 
 // Typed client for the `billing-api` edge function. Every call runs as the signed-in user
 // (supabase-js attaches the session bearer), every request body is built through its
@@ -46,6 +50,15 @@ export function isBillingManagerRequired(error: unknown): boolean {
     error.status === 403 &&
     error.code === 'billing_manager_required'
   );
+}
+
+/** A refused promo code, in the words the Redeem field shows under the input. */
+export function promoErrorMessage(error: unknown): string {
+  const code = error instanceof BillingApiRequestError ? error.code : null;
+  if (code === 'promo_code_not_found') return "That code isn't valid for this brand.";
+  if (code === 'promo_code_used') return 'This code has already been used.';
+  if (code === 'invalid_request') return 'Enter a promo code.';
+  return "Couldn't check that code. Try again.";
 }
 
 async function toRequestError(path: string, error: unknown): Promise<BillingApiRequestError> {
@@ -99,13 +112,37 @@ export function fetchBillingOverview(brandId: string): Promise<BillingOverview> 
   return callBillingApi(`brands/${brandId}/overview`, billingOverviewSchema, { method: 'GET' });
 }
 
+export function fetchCheckoutReceipt(
+  brandId: string,
+  sessionId: string,
+): Promise<BillingCheckoutReceipt> {
+  return callBillingApi(
+    `brands/${brandId}/checkout-sessions/${encodeURIComponent(sessionId)}`,
+    billingCheckoutReceiptSchema,
+    { method: 'GET' },
+  );
+}
+
+/**
+ * Stripe swaps `{CHECKOUT_SESSION_ID}` in the success URL for the real id, so the return can
+ * fetch its receipt. Appended as raw text, last: URLSearchParams would encode the braces, and
+ * Stripe only substitutes the literal template.
+ */
+export function withCheckoutSessionId(successUrl: string): string {
+  return `${successUrl}${successUrl.includes('?') ? '&' : '?'}session_id={CHECKOUT_SESSION_ID}`;
+}
+
 export function startPlanCheckout(
   brandId: string,
   input: { plans: PlanCode[]; successUrl: string; cancelUrl: string },
 ): Promise<BillingCheckoutResponse> {
+  trackBillingEvent('checkout_started', { kind: 'plan', plans: input.plans.join(',') });
   return callBillingApi(`brands/${brandId}/checkout`, billingCheckoutResponseSchema, {
     method: 'POST',
-    body: billingCheckoutRequestSchema.parse(input),
+    body: billingCheckoutRequestSchema.parse({
+      ...input,
+      successUrl: withCheckoutSessionId(input.successUrl),
+    }),
   });
 }
 
@@ -134,9 +171,28 @@ export function startCreditCheckout(
   brandId: string,
   input: { packs: number; successUrl: string; cancelUrl: string },
 ): Promise<BillingCreditCheckoutResponse> {
+  trackBillingEvent('checkout_started', { kind: 'credits', packs: input.packs });
   return callBillingApi(`brands/${brandId}/credits/checkout`, billingCreditCheckoutResponseSchema, {
     method: 'POST',
-    body: billingCreditCheckoutRequestSchema.parse(input),
+    body: billingCreditCheckoutRequestSchema.parse({
+      ...input,
+      successUrl: withCheckoutSessionId(input.successUrl),
+    }),
+  });
+}
+
+/** A promo code, applied up front: Checkout for the packs it covers, returning to `successUrl`. */
+export function redeemCreditPromo(
+  brandId: string,
+  input: { code: string; successUrl: string; cancelUrl: string },
+): Promise<BillingCreditCheckoutResponse> {
+  trackBillingEvent('checkout_started', { kind: 'credits', promo: true });
+  return callBillingApi(`brands/${brandId}/credits/redeem`, billingCreditCheckoutResponseSchema, {
+    method: 'POST',
+    body: billingCreditRedeemRequestSchema.parse({
+      ...input,
+      successUrl: withCheckoutSessionId(input.successUrl),
+    }),
   });
 }
 

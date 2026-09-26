@@ -11,6 +11,7 @@ import {
   plannerCompositionSchema,
   plannerDraftHasCopy,
   plannerInstantFromDayTime,
+  plannerDayIdInZone,
   plannerTimeOfDayInZone,
   publishOptionsByPlatformSchema,
   resolvePlannerTimeZone,
@@ -383,7 +384,7 @@ export function resolvePersistedRowDayId(row: PersistedOrganicDraftRow): string 
     readString(slotData.dayId) ??
     readString(scheduleData.dayId) ??
     readString(placementSchedule.dayId) ??
-    (scheduledIso ? scheduledIso.slice(0, 10) : null) ??
+    (scheduledIso ? plannerDayIdInZone(scheduledIso, readString(slotData.timeZone)) : null) ??
     UNSCHEDULED_DAY_ID
   );
 }
@@ -693,6 +694,8 @@ export function mapPersistedRowToCalendarEntry(
   if (!row.id) return null;
 
   const slotData = asRecord(row.slot_data);
+  const generation = asRecord(slotData.generation);
+  const inspiration = asRecord(generation.competitorInspiration);
   const snapshot = asRecord(slotData.draftSnapshot);
   // Backend-generated drafts (createPost + bulk) have no draftSnapshot; their
   // content lives in content_json (the CalendarPlacement). Resolve from both
@@ -786,6 +789,10 @@ export function mapPersistedRowToCalendarEntry(
     tags: readStringArray(snapshot.tags),
     mediaCount: readNumber(snapshot.mediaCount) ?? 1,
     seedTrendId: readString(snapshot.seedTrendId) ?? undefined,
+    inspirationSourceUrl:
+      generation.source === 'competitor_inspiration'
+        ? readString(inspiration.permalink) ?? undefined
+        : undefined,
     origin: resolveDraftOrigin(snapshot.origin ?? slotData.origin),
     targetAccountId:
       readString(snapshot.targetAccountId) ?? readString(row.platform_account_id) ?? undefined,

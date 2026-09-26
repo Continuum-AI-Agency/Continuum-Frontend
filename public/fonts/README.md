@@ -1,6 +1,6 @@
 # Caption faces
 
-The four typefaces the dynamic-subtitle presets render with. They are served from
+The preset and editorial caption faces. They are served from
 `/fonts/*.woff2`, fetched as bytes by `src/lib/clips/captionFonts.ts`, and registered as
 `FontFace`s on `document.fonts` (preview) and on the splicer worker's `self.fonts` (burn-in).
 
@@ -14,8 +14,10 @@ inside a Web Worker, which never inherits `document.fonts`. Before these landed,
 | `Anton-Regular.woff2` | `Anton` | `wght 400` (single) | `pop` | `@fontsource/anton` → `files/anton-latin-400-normal.woff2` |
 | `MontserratVariable.woff2` | `Montserrat` | `wght 100..900` | `pulse` | `@fontsource-variable/montserrat` → `files/montserrat-latin-wght-normal.woff2` |
 | `JetBrainsMonoVariable.woff2` | `JetBrains Mono` | `wght 100..800` | `boxed` | `@fontsource-variable/jetbrains-mono` → `files/jetbrains-mono-latin-wght-normal.woff2` |
+| `CormorantGaramond-Bold.woff2` | `Cormorant Garamond` | `wght 700` | editorial split | `@fontsource/cormorant-garamond@5.2.7` → `files/cormorant-garamond-latin-700-normal.woff2` |
+| `Allura-Regular.woff2` | `Allura` | `wght 400` | editorial script accents | `@fontsource/allura@5.2.7` → `files/allura-latin-400-normal.woff2` |
 
-All four are **SIL Open Font License 1.1** — self-hostable and redistributable, no attribution
+All six are **SIL Open Font License 1.1** — self-hostable and redistributable, no attribution
 burden in the UI. `OFL.txt` is the licence text. `TheBoldFont`, the original "Hormozi" face, is
 free-for-personal-use only and is excluded on licensing grounds; Anton is the face Submagic
 itself names as its 2025 replacement.

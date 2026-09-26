@@ -98,6 +98,7 @@ export const ACTION_IDS = [
   'video.longExposure',
   'video.overlay',
   'video.subtitles',
+  'video.editorialCaptions',
   'video.extractFrames',
   'video.frameGrid',
   'video.shader',
@@ -835,6 +836,41 @@ export const ACTION_DEFS = {
         // only reader does Array.isArray(), which cannot tell null from undefined.
         .nullable()
         .default(null),
+    }),
+  },
+  'video.editorialCaptions': {
+    id: 'video.editorialCaptions',
+    family: 'video',
+    label: 'Editorial Captions',
+    description:
+      'Burns word-timed captions, editorial motion, an optional inset, and a styled CTA.',
+    group: 'Overlay',
+    execution: 'worker',
+    inputs: [
+      { handle: 'in', modality: 'video', max: 1 },
+      { handle: 'inset-in', modality: 'image', max: 1 },
+    ],
+    output: 'video',
+    config: z.object({
+      style: z
+        .enum(['focus_blur', 'paper_notes', 'neon_frame', 'editorial_split'])
+        .default('focus_blur'),
+      words: z
+        .array(
+          z
+            .object({
+              text: z.string().trim().min(1).max(80),
+              startSec: z.number().nonnegative(),
+              endSec: z.number().positive(),
+            })
+            .refine((word) => word.endSec > word.startSec),
+        )
+        .max(500)
+        .nullable()
+        .default(null),
+      emphasisPhrases: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
+      cta: z.string().trim().max(400).nullable().default(null),
+      soundAccents: z.enum(['none', 'subtle']).default('subtle'),
     }),
   },
   'video.extractFrames': {

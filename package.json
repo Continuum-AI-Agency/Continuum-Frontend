@@ -44,6 +44,8 @@
     "jaina:transcript:scroll:e2e:bench": "playwright test --config playwright.jaina-transcript-scroll.config.ts --workers=1",
     "jaina:report:export:e2e:bench": "playwright test --config playwright.jaina-report-export.config.ts --workers=1",
     "forge:studio:e2e:bench": "playwright test --config playwright.forge-studio.config.ts --workers=1",
+    "forge:meta:live:bench": "playwright test --config playwright.forge-live.config.ts --workers=1",
+    "forge:ingest-heal:live:bench": "FORGE_STUDIO_LIVE=1 playwright test --config playwright.forge-studio.config.ts e2e/ingest-heal.forge-studio.bench.spec.ts --workers=1",
     "optimizer:rebalance:e2e:bench": "playwright test --config playwright.optimizer-rebalance.config.ts --workers=1",
     "command-palette:e2e:bench": "playwright test --config playwright.command-palette.config.ts --workers=1",
     "brands:dedupe:e2e:bench": "playwright test --config playwright.brand-dedupe.config.ts --workers=1",
@@ -107,7 +109,10 @@
     "inspiration:fe:e2e:bench": "playwright test --config playwright.inspiration.config.ts --workers=1",
     "brand:brain:fe:e2e:bench": "set -a; . ./.env.local; set +a; BENCH_BACKEND_PORT=4422 NEXT_PUBLIC_API_URL=http://127.0.0.1:4422 PORT=3122 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3122 NEXT_DIST_DIR=.next/brand-brain-e2e playwright test e2e/brand-brain.bench.spec.ts --workers=1",
     "organic:ship:fe:e2e:bench": "set -a; . ./.env.local; set +a; BENCH_BACKEND_PORT=4423 NEXT_PUBLIC_API_URL=http://127.0.0.1:4423 PORT=3123 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3123 NEXT_DIST_DIR=.next/organic-ship-e2e playwright test e2e/organic-ship.bench.spec.ts --workers=1",
-    "forge:meta:live:bench": "playwright test --config playwright.forge-live.config.ts --workers=1"
+    "forge:meta:live:bench": "playwright test --config playwright.forge-live.config.ts --workers=1",
+    "organic:session-content:e2e:bench": "playwright test --config playwright.session-content.config.ts --workers=1",
+    "paste:e2e:bench": "playwright test --config playwright.paste-context.config.ts --workers=1",
+    "design-system:upload:e2e:bench": "playwright test --config playwright.design-system-upload.config.ts --workers=1"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.109",

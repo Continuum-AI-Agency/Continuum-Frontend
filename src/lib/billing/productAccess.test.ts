@@ -2,11 +2,14 @@ import { describe, expect, test } from 'bun:test';
 import { type BrandEntitlements, brandEntitlementsSchema, type ProductCode } from '@continuum/contracts';
 import {
   type BrandAccess,
+  billingHref,
+  creditsHref,
   decideProductGate,
   type GatedSurface,
   isPaidBrand,
   lockedProducts,
   onboardingNeedsPlan,
+  safeReturnPath,
 } from './productAccess';
 
 const live = (products: ProductCode[]): BrandAccess => ({
@@ -63,16 +66,25 @@ describe('decideProductGate — billing live (the product matrix)', () => {
     expect(decide(live(['organic_agent', 'studio']))).toEqual({
       'ai-studio': { kind: 'allow' },
       organic: { kind: 'allow' },
-      scale: { kind: 'billing', href: '/settings?section=billing&need=paid_media' },
-      approvals: { kind: 'billing', href: '/settings?section=billing&need=paid_media' },
-      forge: { kind: 'billing', href: '/settings?section=billing&need=paid_media' },
+      scale: { kind: 'billing', href: '/settings?section=billing&need=paid_media&from=%2Fscale' },
+      approvals: {
+        kind: 'billing',
+        href: '/settings?section=billing&need=paid_media&from=%2Fscale%2Fapprovals',
+      },
+      forge: { kind: 'billing', href: '/settings?section=billing&need=paid_media&from=%2Fforge' },
     });
   });
 
   test('a Performance Plus brand opens paid media only', () => {
     expect(decide(live(['paid_media']))).toEqual({
-      'ai-studio': { kind: 'billing', href: '/settings?section=billing&need=studio' },
-      organic: { kind: 'billing', href: '/settings?section=billing&need=organic_agent' },
+      'ai-studio': {
+        kind: 'billing',
+        href: '/settings?section=billing&need=studio&from=%2Fai-studio',
+      },
+      organic: {
+        kind: 'billing',
+        href: '/settings?section=billing&need=organic_agent&from=%2Forganic',
+      },
       scale: { kind: 'allow' },
       approvals: { kind: 'allow' },
       forge: { kind: 'allow' },
@@ -117,7 +129,7 @@ describe('decideProductGate — billing live, grandfathered brands keep Forge at
     });
     expect(decideProductGate('forge', access)).toEqual({
       kind: 'billing',
-      href: '/settings?section=billing&need=paid_media',
+      href: '/settings?section=billing&need=paid_media&from=%2Fforge',
     });
   });
 
@@ -213,5 +225,27 @@ describe('isPaidBrand (library)', () => {
     expect(isPaidBrand(live(['trends']))).toBe(true);
     expect(isPaidBrand(notLive(0))).toBe(false);
     expect(isPaidBrand(notLive(2))).toBe(true);
+  });
+});
+
+describe('the way back from Billing (?from=)', () => {
+  test('only a same-origin path outside Settings is offered', () => {
+    expect(safeReturnPath('/studio?room=1')).toBe('/studio?room=1');
+    for (const unsafe of ['//evil.com', '/\\evil.com', 'https://evil.com', '', null, undefined]) {
+      expect(safeReturnPath(unsafe)).toBeNull();
+    }
+    expect(safeReturnPath('/settings?section=billing')).toBeNull();
+    expect(safeReturnPath('/settingsx')).toBe('/settingsx');
+  });
+
+  test('hrefs carry it encoded, and drop an unsafe one', () => {
+    expect(creditsHref('/studio?room=1')).toBe(
+      '/settings?section=billing&from=%2Fstudio%3Froom%3D1#credits',
+    );
+    expect(creditsHref('//evil.com')).toBe('/settings?section=billing#credits');
+    expect(billingHref()).toBe('/settings?section=billing');
+    expect(billingHref('studio', '/ai-studio')).toBe(
+      '/settings?section=billing&need=studio&from=%2Fai-studio',
+    );
   });
 });
