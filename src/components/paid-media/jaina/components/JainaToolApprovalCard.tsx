@@ -50,9 +50,9 @@ const TOOL_LABELS: Record<string, string> = {
   request_optimizer_budget_apply: 'Request budget apply',
   apply_approved_optimizer_pauses: 'Apply approved pauses',
   paid_creative_slate: 'Generate creative slate',
-  pause_meta_entity: 'Pause ad set / ad',
+  pause_meta_entity: 'Pause campaign / ad set / ad',
   rename_meta_entity: 'Rename campaign / ad set / ad',
-  activate_meta_entity: 'Resume a paused ad set / ad',
+  activate_meta_entity: 'Unpause a paused campaign / ad set / ad',
   archive_meta_entity: 'Archive ad set / ad',
   duplicate_meta_entity: 'Duplicate as a paused copy',
 };

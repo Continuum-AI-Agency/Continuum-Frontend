@@ -26,6 +26,7 @@ import {
   tableColumnSchema as contractTableColumnSchema,
   jainaPaidCreativeRenderPayloadSchema,
   jainaScaffoldActionSchema,
+  jainaOperatorActionSchema,
   jainaToolActionSchema,
   jainaToolApprovalRequiredPayloadSchema,
   jainaToolApprovalResolvedPayloadSchema,
@@ -78,6 +79,10 @@ export { jainaScaffoldActionSchema };
 export type JainaToolAction = z.infer<typeof jainaToolActionSchema>;
 export { jainaToolActionSchema };
 
+/** A gated call a button opened, with no model turn. The answer is a `JainaToolAction`. */
+export type JainaOperatorAction = z.infer<typeof jainaOperatorActionSchema>;
+export { jainaOperatorActionSchema };
+
 export const jainaChatRequestSchema = z.object({
   query: z.string().min(1),
   include_thoughts: z.boolean().optional(),
@@ -106,6 +111,11 @@ export const jainaChatRequestSchema = z.object({
    * an undeclared field vanishes silently and the approval never arrives.
    */
   tool_action: jainaToolActionSchema.optional(),
+  /**
+   * A gated call a BUTTON opened (Deploy paused, Pause, Unpause) — no model turn. Same
+   * stripping hazard: without this line the action never leaves the browser.
+   */
+  operator_action: jainaOperatorActionSchema.optional(),
   context: z.object({
     adAccountId: z.string().min(1),
     brandId: z.string().min(1),

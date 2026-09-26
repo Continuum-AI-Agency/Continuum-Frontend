@@ -4,7 +4,7 @@
 // `paid_scaffold_versions` row. These types describe that accumulated view; the rows themselves
 // live in Postgres. Shared by `JainaChatMessage`, `PaidScaffoldCard` and `scaffoldTree.ts`.
 
-import type { PaidScaffoldReceiptPayload } from '@continuum/contracts';
+import type { PaidScaffoldPlan, PaidScaffoldReceiptPayload } from '@continuum/contracts';
 
 export type JainaScaffoldNodeProgress = {
   step: string;
@@ -24,6 +24,17 @@ export type JainaScaffoldState = {
   approvalId?: string | null;
   /** Ids + counts + a campaign skeleton. The rows come from Postgres, not from here. */
   plan: unknown;
+  /** `paid_scaffolds.name` as proposed. */
+  name?: string;
+  /** `paid_scaffold_versions.version`. */
+  version?: number;
+  /** `paid_scaffold_versions.content_hash` — what a deploy of this version must carry. */
+  contentHash?: string;
+  /**
+   * The typed, data-backed plan from the proposal frame. Absent on a card seeded from a gate
+   * or a legacy frame; the card then reads the same object off `manifest.plan`.
+   */
+  scaffoldPlan?: PaidScaffoldPlan | null;
   summary?: { campaigns?: number; adSets?: number; ads?: number };
   /**
    * Latest progress per node, keyed on `pathKey`. A MAP AND NOT AN ARRAY: a 50-ad-set

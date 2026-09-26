@@ -1,19 +1,12 @@
 'use client';
-import {
-  AlertCircle,
-  CheckCircle2,
-  Copy,
-  Layers,
-  Plus,
-  ShieldCheck,
-  Trash2,
-  XCircle,
-} from 'lucide-react';
+import { Position } from '@xyflow/react';
+import { AlertCircle, CheckCircle2, Copy, Layers, Plus, Trash2, XCircle } from 'lucide-react';
 import React, { memo, useCallback } from 'react';
 import {
   Node,
   NodeContent,
   NodeDescription,
+  type NodeExtraHandle,
   NodeHeader,
   NodeTitle,
 } from '@/components/ai-elements/node';
@@ -41,68 +34,17 @@ import { EditableAmount } from '../components/EditableAmount';
 import { EditableLabel } from '../components/EditableLabel';
 import { NodeProvenance } from '../components/NodeProvenance';
 import { useCampaignStore } from '../stores/useCampaignStore';
-import type { AdSetData, CampaignNodeProps } from '../types';
+import { type AdSetData, AUDIENCE_HANDLE_ID, type CampaignNodeProps } from '../types';
+import {
+  billingEventForGoal,
+  DEFAULT_OPTIMIZATION_GOAL,
+  OPTIMIZATION_GOALS,
+} from '../types/nodeOptions';
 
-const OPTIMIZATION_GOALS = [
-  {
-    value: 'CONVERSIONS',
-    label: 'Conversions',
-    description: 'Conversions optimization focuses on users likely to complete conversion events.',
-  },
-  {
-    value: 'LANDING_PAGE_VIEWS',
-    label: 'Landing Page Views',
-    description:
-      'Landing Page Views optimization prioritizes users likely to fully load your page.',
-  },
-  {
-    value: 'LINK_CLICKS',
-    label: 'Link Clicks',
-    description: 'Link Clicks optimization targets users likely to click your ad link.',
-  },
-  {
-    value: 'IMPRESSIONS',
-    label: 'Impressions',
-    description: 'Impressions optimization prioritizes showing the ad as often as possible.',
-  },
-  {
-    value: 'REACH',
-    label: 'Reach',
-    description: 'Reach optimization prioritizes unique people seeing the ad.',
-  },
-];
-
-const BILLING_EVENTS = [
-  {
-    value: 'IMPRESSIONS',
-    label: 'Impressions',
-    description: 'Impressions billing charges based on ad views.',
-  },
-  {
-    value: 'LINK_CLICKS',
-    label: 'Link Clicks',
-    description: 'Link Clicks billing charges when users click your ad link.',
-  },
-];
-
-const BID_STRATEGIES = [
-  {
-    value: 'LOWEST_COST_WITHOUT_CAP',
-    label: 'Highest Volume',
-    description:
-      'Highest Volume seeks the most results for your budget without a strict cost target.',
-  },
-  {
-    value: 'COST_CAP',
-    label: 'Cost Cap',
-    description: 'Cost Cap aims to keep average result cost around your target cap.',
-  },
-  {
-    value: 'BID_CAP',
-    label: 'Bid Cap',
-    description: 'Bid Cap sets a hard maximum bid your ad can place in auctions.',
-  },
-];
+/** The ad set's side input: an audience lands here, on the left, never on top. */
+const AUDIENCE_INPUT = [
+  { type: 'target', position: Position.Left, id: AUDIENCE_HANDLE_ID },
+] as const satisfies readonly NodeExtraHandle[];
 
 const BUDGET_TYPES: Array<{ value: NonNullable<AdSetData['budgetType']>; label: string }> = [
   { value: 'DAILY', label: 'Daily' },
@@ -111,6 +53,9 @@ const BUDGET_TYPES: Array<{ value: NonNullable<AdSetData['budgetType']>; label: 
 
 export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set'>) => {
   const { duplicateNode, removeNode, updateNodeData, addConnectedNode } = useCampaignStore();
+  const hasAudience = useCampaignStore((store) =>
+    store.edges.some((edge) => edge.target === id && edge.targetHandle === AUDIENCE_HANDLE_ID),
+  );
   const activeBudgetType = data.budgetType || 'DAILY';
 
   const handleDuplicate = useCallback(() => duplicateNode(id), [duplicateNode, id]);
@@ -122,23 +67,11 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
     [id, updateNodeData],
   );
 
+  // Billing follows the goal: Meta allows one billing event per goal, so it is set here
+  // rather than offered as a second choice that could only ever disagree.
   const handleGoalChange = useCallback(
     (optimizationGoal: string) => {
-      updateNodeData(id, { optimizationGoal });
-    },
-    [id, updateNodeData],
-  );
-
-  const handleBillingChange = useCallback(
-    (billingEvent: string) => {
-      updateNodeData(id, { billingEvent });
-    },
-    [id, updateNodeData],
-  );
-
-  const handleBidChange = useCallback(
-    (bidStrategy: string) => {
-      updateNodeData(id, { bidStrategy });
+      updateNodeData(id, { optimizationGoal, billingEvent: billingEventForGoal(optimizationGoal) });
     },
     [id, updateNodeData],
   );
@@ -170,6 +103,7 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
       <ContextMenuTrigger>
         <Node
           handles={{ target: true, source: true }}
+          extraHandles={AUDIENCE_INPUT}
           selected={selected}
           className={cn(
             'overflow-visible hover:shadow-md transition-shadow cursor-pointer',
@@ -221,22 +155,14 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
             <Separator className="my-1.5 opacity-50" />
             <div className="flex flex-col gap-1">
               <NodeDescription className="text-2xs font-bold text-muted-foreground uppercase tracking-wider">
-                {OPTIMIZATION_GOALS.find((g) => g.value === data.optimizationGoal)?.label ||
-                  'CONVERSIONS'}
+                {OPTIMIZATION_GOALS.find(
+                  (g) => g.value === (data.optimizationGoal || DEFAULT_OPTIMIZATION_GOAL),
+                )?.label ?? data.optimizationGoal}
               </NodeDescription>
               <div className="flex flex-wrap items-center gap-1 mt-1">
                 <Badge variant="secondary" className="text-3xs px-1 py-0 opacity-80 h-4">
                   {data.billingEvent || 'IMPRESSIONS'}
                 </Badge>
-                {data.bidStrategy && (
-                  <Badge
-                    variant="outline"
-                    className="text-3xs px-1 py-0 opacity-80 h-4 border-primary/20"
-                  >
-                    {BID_STRATEGIES.find((s) => s.value === data.bidStrategy)?.label ||
-                      'Highest Vol'}
-                  </Badge>
-                )}
               </div>
               <div className="mt-1.5 rounded-md border border-primary/20 bg-primary/5 p-1.5">
                 <div className="flex items-center justify-between gap-2">
@@ -289,10 +215,16 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
             Add Ad
             <ContextMenuItemInfo description="An ad is the message and creative shown to people in this ad set." />
           </ContextMenuItem>
-          <ContextMenuItem onClick={handleAddAudience}>
+          <ContextMenuItem onClick={handleAddAudience} disabled={hasAudience}>
             <Plus className="mr-2 h-4 w-4 text-orange-500" />
             Add Audience
-            <ContextMenuItemInfo description="Audience defines who this ad set is allowed to reach." />
+            <ContextMenuItemInfo
+              description={
+                hasAudience
+                  ? 'This ad set already has its audience. Meta allows one targeting per ad set.'
+                  : 'Audience defines who this ad set is allowed to reach. It feeds the ad set from the left.'
+              }
+            />
           </ContextMenuItem>
         </ContextMenuGroup>
 
@@ -315,64 +247,12 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
                   key={goal.value}
                   checked={
                     data.optimizationGoal === goal.value ||
-                    (!data.optimizationGoal && goal.value === 'CONVERSIONS')
+                    (!data.optimizationGoal && goal.value === DEFAULT_OPTIMIZATION_GOAL)
                   }
                   onClick={() => handleGoalChange(goal.value)}
                 >
                   {goal.label}
                   <ContextMenuItemInfo description={goal.description} />
-                </ContextMenuCheckboxItem>
-              ))}
-            </ContextMenuSubContent>
-          </ContextMenuSub>
-
-          <ContextMenuSub>
-            <ContextMenuSubTrigger>
-              <CheckCircle2 className="mr-2 h-4 w-4" />
-              Billing Event
-              <ContextMenuItemInfo
-                className="ml-2 mr-4"
-                description="Billing event determines which user action triggers spend measurement."
-              />
-            </ContextMenuSubTrigger>
-            <ContextMenuSubContent className="w-48">
-              {BILLING_EVENTS.map((event) => (
-                <ContextMenuCheckboxItem
-                  key={event.value}
-                  checked={
-                    data.billingEvent === event.value ||
-                    (!data.billingEvent && event.value === 'IMPRESSIONS')
-                  }
-                  onClick={() => handleBillingChange(event.value)}
-                >
-                  {event.label}
-                  <ContextMenuItemInfo description={event.description} />
-                </ContextMenuCheckboxItem>
-              ))}
-            </ContextMenuSubContent>
-          </ContextMenuSub>
-
-          <ContextMenuSub>
-            <ContextMenuSubTrigger>
-              <ShieldCheck className="mr-2 h-4 w-4" />
-              Bid Strategy
-              <ContextMenuItemInfo
-                className="ml-2 mr-4"
-                description="Bid strategy controls how aggressively the system bids in auctions."
-              />
-            </ContextMenuSubTrigger>
-            <ContextMenuSubContent className="w-56">
-              {BID_STRATEGIES.map((strategy) => (
-                <ContextMenuCheckboxItem
-                  key={strategy.value}
-                  checked={
-                    data.bidStrategy === strategy.value ||
-                    (!data.bidStrategy && strategy.value === 'LOWEST_COST_WITHOUT_CAP')
-                  }
-                  onClick={() => handleBidChange(strategy.value)}
-                >
-                  {strategy.label}
-                  <ContextMenuItemInfo description={strategy.description} />
                 </ContextMenuCheckboxItem>
               ))}
             </ContextMenuSubContent>

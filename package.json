@@ -40,6 +40,7 @@
     "optimizer:coverage": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir coverage src/components/paid-media/optimizer",
     "optimizer:e2e:bench": "playwright test --config playwright.optimizer.config.ts --workers=1",
     "jaina:canvas:e2e:bench": "playwright test --config playwright.jaina-canvas.config.ts --workers=1",
+    "scale:campaigns:e2e:bench": "playwright test --config playwright.scale-campaigns.config.ts --workers=1",
     "jaina:approval:card:e2e:bench": "playwright test --config playwright.jaina-approval-card.config.ts --workers=1",
     "jaina:transcript:scroll:e2e:bench": "playwright test --config playwright.jaina-transcript-scroll.config.ts --workers=1",
     "jaina:report:export:e2e:bench": "playwright test --config playwright.jaina-report-export.config.ts --workers=1",

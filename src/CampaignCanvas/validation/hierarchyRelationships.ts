@@ -11,14 +11,19 @@ interface SingleParentIssue {
 
 const hierarchyErrorPrefix = 'Hierarchy constraint';
 
-const SINGLE_PARENT_RULES: Record<ChildNodeTypeWithSingleParent, CampaignNodeType> = {
-  'ad-set': 'campaign',
-  ad: 'ad-set',
-  creative: 'ad',
+/**
+ * Each child takes at most ONE parent of each listed type. An ad set has two: its
+ * campaign (from above) and its audience (from the side) — Meta has one targeting per ad
+ * set. The reverse is free: one audience may feed many ad sets.
+ */
+const SINGLE_PARENT_RULES: Record<ChildNodeTypeWithSingleParent, readonly CampaignNodeType[]> = {
+  'ad-set': ['campaign', 'audience'],
+  ad: ['ad-set'],
+  creative: ['ad'],
   // The OpenAI hierarchy is campaign > ad group > ad, with no audience or creative node:
   // targeting lives on the campaign and the creative is fields on the ad itself.
-  'openai-ad-group': 'openai-campaign',
-  'openai-ad': 'openai-ad-group',
+  'openai-ad-group': ['openai-campaign'],
+  'openai-ad': ['openai-ad-group'],
 };
 
 const NODE_DISPLAY_NAMES: Record<CampaignNodeType, string> = {
@@ -46,16 +51,23 @@ function isSingleParentChildNodeType(
   return SINGLE_PARENT_CHILD_TYPES.includes(nodeType as ChildNodeTypeWithSingleParent);
 }
 
-export function getExpectedSingleParentTypeForChild(
+/** Whether `childType` may take only one parent of `parentType`. */
+export function isSingleParentRelationship(
   childType: CampaignNodeType,
-): CampaignNodeType | null {
-  return isSingleParentChildNodeType(childType) ? SINGLE_PARENT_RULES[childType] : null;
+  parentType: CampaignNodeType,
+): boolean {
+  return isSingleParentChildNodeType(childType)
+    ? SINGLE_PARENT_RULES[childType].includes(parentType)
+    : false;
 }
 
 export function getSingleParentConstraintMessage(
   childType: CampaignNodeType,
   parentType: CampaignNodeType,
 ): string {
+  if (childType === 'ad-set' && parentType === 'audience') {
+    return `${hierarchyErrorPrefix}: an ad set takes one audience. Meta has one targeting per ad set, so disconnect the current audience first.`;
+  }
   return `${hierarchyErrorPrefix}: ${NODE_DISPLAY_NAMES[childType]} can only be attached to one ${NODE_DISPLAY_NAMES[parentType]} at a time.`;
 }
 
@@ -103,18 +115,13 @@ export function getSingleParentConnectionViolationMessage(
     return null;
   }
 
-  const expectedParentType = getExpectedSingleParentTypeForChild(targetNode.type);
-  if (!expectedParentType) {
-    return null;
-  }
-
-  if (sourceNode.type !== expectedParentType) {
+  if (!isSingleParentRelationship(targetNode.type, sourceNode.type)) {
     return null;
   }
 
   const hasExistingAttachment = hasExistingSingleParentAttachment(
     targetNode.id,
-    expectedParentType,
+    sourceNode.type,
     nodes,
     edges.filter((edge) => edge.source !== sourceNode.id),
   );
@@ -126,7 +133,7 @@ export function getSingleParentConnectionViolationMessage(
   return getHierarchyErrorMessage({
     childId: targetNode.id,
     childType: targetNode.type,
-    parentType: expectedParentType,
+    parentType: sourceNode.type,
   });
 }
 
@@ -142,26 +149,14 @@ export function collectSingleParentRelationshipIssues(
       continue;
     }
 
-    const expectedParentType = getExpectedSingleParentTypeForChild(childNode.type);
-    if (!expectedParentType) {
-      continue;
-    }
+    for (const parentType of SINGLE_PARENT_RULES[childNode.type]) {
+      const incomingParentEdges = edges.filter(
+        (edge) => edge.target === childNode.id && nodeById.get(edge.source)?.type === parentType,
+      );
 
-    const incomingParentEdges = edges.filter((edge) => {
-      if (edge.target !== childNode.id) {
-        return false;
+      if (incomingParentEdges.length > 1) {
+        issues.push({ childId: childNode.id, childType: childNode.type, parentType });
       }
-
-      const sourceNode = nodeById.get(edge.source);
-      return sourceNode?.type === expectedParentType;
-    });
-
-    if (incomingParentEdges.length > 1) {
-      issues.push({
-        childId: childNode.id,
-        childType: childNode.type,
-        parentType: expectedParentType,
-      });
     }
   }
 

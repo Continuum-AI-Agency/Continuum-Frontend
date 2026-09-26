@@ -23,6 +23,7 @@ import {
   projectTranscriptMessage,
   reasoningEntriesOf,
   reportOf,
+  scaffoldOf,
   type TranscriptProjectionInputs,
   textOf,
   toJainaChatMessage,
@@ -920,5 +921,45 @@ describe('a scaffold card for a turn that never proposed', () => {
       isStreaming: false,
     });
     expect(projected.scaffold).toBeUndefined();
+  });
+});
+
+describe('scaffoldOf', () => {
+  const VERSION_ID = '11111111-1111-4111-8111-111111111111';
+
+  it('keeps a pre-wave proposal that has no version, hash, name or typed plan', () => {
+    const scaffold = scaffoldOf(
+      uiMessage([
+        data(JAINA_UI_DATA_PART.scaffold, 'run_1:scaffold:proposed', {
+          scaffoldId: VERSION_ID,
+          plan: { campaigns: [{ name: 'Summer' }] },
+          summary: { campaigns: 1, adSets: 2, ads: 4 },
+        }),
+      ]),
+    );
+    expect(scaffold).toMatchObject({
+      scaffoldId: VERSION_ID,
+      plan: { campaigns: [{ name: 'Summer' }] },
+      scaffoldPlan: null,
+      summary: { campaigns: 1, adSets: 2, ads: 4 },
+    });
+    expect(scaffold?.contentHash).toBeUndefined();
+    expect(scaffold?.version).toBeUndefined();
+    expect(scaffold?.name).toBeUndefined();
+  });
+
+  it('carries the version, hash and name of a current proposal', () => {
+    const scaffold = scaffoldOf(
+      uiMessage([
+        data(JAINA_UI_DATA_PART.scaffold, 'run_1:scaffold:proposed', {
+          scaffoldId: VERSION_ID,
+          plan: {},
+          version: 3,
+          contentHash: 'a'.repeat(64),
+          name: 'Summer',
+        }),
+      ]),
+    );
+    expect(scaffold).toMatchObject({ version: 3, contentHash: 'a'.repeat(64), name: 'Summer' });
   });
 });
