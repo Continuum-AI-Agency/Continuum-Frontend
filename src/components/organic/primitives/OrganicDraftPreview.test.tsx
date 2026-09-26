@@ -267,6 +267,23 @@ function baseDraft(overrides: Partial<OrganicCalendarDraft> = {}): OrganicCalend
 describe('OrganicDraftPreview — contextual shell', () => {
   beforeEach(() => cleanup());
 
+  it('links to the saved inspiration source and rejects unsafe links', () => {
+    const { rerender } = render(
+      <OrganicDraftPreview
+        draft={baseDraft({ inspirationSourceUrl: 'https://www.instagram.com/p/original/' })}
+      />,
+    );
+    expect(screen.getByText('Inspiration source · View original post').getAttribute('href')).toBe(
+      'https://www.instagram.com/p/original/',
+    );
+    rerender(
+      <ToastProvider>
+        <OrganicDraftPreview draft={baseDraft({ inspirationSourceUrl: 'javascript:alert(1)' })} />
+      </ToastProvider>,
+    );
+    expect(screen.queryByText('Inspiration source · View original post')).toBeNull();
+  });
+
   it('renders the glanceable metadata chips and the ⋯ command menu', () => {
     renderPreview();
     expect(screen.getByTestId('meta-chips')).toBeTruthy();
@@ -450,8 +467,16 @@ describe('OrganicDraftPreview — schedule readiness', () => {
     expect(screen.queryByLabelText("Why this draft can't be scheduled yet")).toBeNull();
   });
 
-  it('renders the media-enrichment inventory label in the header', () => {
-    renderPreview();
+  it('keeps the media inventory in production details while the next action stays visible', () => {
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({ backendDraftId: 'be-1' })}
+        brandProfileId="brand-1"
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Generate copy' })).toBeTruthy();
+    expect(screen.queryByText('No media yet')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
     expect(screen.getByText('No media yet')).toBeTruthy();
   });
 });
@@ -763,7 +788,7 @@ describe('OrganicDraftPreview — multi-platform frame selector', () => {
 
 // TikTok and YouTube used to fall through to "Preview for tiktok is coming soon", which never
 // mounted the media: no video, no drop zone, no library picker, and a disabled Publish button
-// labelled "Instagram". Every publishable platform now renders through the shared frame.
+// labelled "Instagram". The vertical platforms must also avoid Instagram feed chrome.
 describe('OrganicDraftPreview — every publishable platform previews and posts', () => {
   beforeEach(() => {
     cleanup();
@@ -784,6 +809,21 @@ describe('OrganicDraftPreview — every publishable platform previews and posts'
       ],
     });
 
+  it('uses a compact empty state until a TikTok draft has creative', () => {
+    render(
+      <OrganicDraftPreview
+        draft={baseDraft({ platforms: ['tiktok'], format: 'Reel' })}
+        brandProfileId="brand-1"
+      />,
+    );
+
+    expect(screen.getByText('No media')).toBeTruthy();
+    expect(screen.getByText(/TikTok preview needs creative/)).toBeTruthy();
+    expect(screen.getByText('Test caption')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit post to add media' }));
+    expect(screen.getByTestId('drop-zone')).toBeTruthy();
+  });
+
   for (const [platform, label] of [
     ['tiktok', 'TikTok'],
     ['youtube', 'YouTube'],
@@ -797,6 +837,10 @@ describe('OrganicDraftPreview — every publishable platform previews and posts'
       expect(container.querySelector('video')?.getAttribute('src')).toContain(
         'https://cdn.example/clip.mp4',
       );
+      expect(
+        screen.getByText(`${label === 'YouTube' ? 'YouTube Shorts' : label} preview`),
+      ).toBeTruthy();
+      expect(screen.queryByText('Sponsored')).toBeNull();
       const publish = screen.getByRole('button', { name: `Publish to ${label}` });
       expect((publish as HTMLButtonElement).disabled).toBe(false);
       expect(screen.queryAllByRole('button', { name: 'Publish to Instagram' }).length).toBe(0);

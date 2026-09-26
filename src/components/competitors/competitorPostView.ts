@@ -50,6 +50,16 @@ export const POST_TYPE_LABELS: Record<InstagramPost['kind'], string> = {
   post: 'Posts',
 };
 
+// On YouTube a 'reel' is a Short (the API's own Shorts playlist) and a 'post' is a
+// long-form video; YouTube has no carousels.
+export function postTypeLabel(
+  kind: InstagramPost['kind'],
+  platform: InstagramPost['platform'],
+): string {
+  if (platform !== 'youtube') return POST_TYPE_LABELS[kind];
+  return kind === 'reel' ? 'Shorts' : 'Videos';
+}
+
 // '3.2x' — how far a post beat its own account's median engagement. Two digits
 // before the point drop the decimal ('12x'); null when the account has too few
 // scorable posts for a baseline.

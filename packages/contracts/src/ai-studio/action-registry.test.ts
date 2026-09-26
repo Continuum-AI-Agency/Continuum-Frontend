@@ -24,9 +24,9 @@ describe('ACTION_DEFS', () => {
   // A count, not a floor: silently trimming the catalog is exactly the drift this
   // registry exists to stop, and a shrinking list should have to be edited on purpose.
   it('declares the whole catalog up front', () => {
-    expect(ACTION_IDS).toHaveLength(39);
+    expect(ACTION_IDS).toHaveLength(40);
     expect(ACTION_IDS.filter((id) => id.startsWith('image.'))).toHaveLength(14);
-    expect(ACTION_IDS.filter((id) => id.startsWith('video.'))).toHaveLength(22);
+    expect(ACTION_IDS.filter((id) => id.startsWith('video.'))).toHaveLength(23);
     expect(ACTION_IDS.filter((id) => id.startsWith('text.'))).toHaveLength(3);
   });
 

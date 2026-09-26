@@ -32,6 +32,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { aiStudioHandoffIssue } from '@/lib/organic/ai-studio-bridge';
 import { isCarouselFormat, resolveCarouselSlideCount } from '@/lib/organic/carousel';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import {
@@ -539,7 +540,12 @@ export function CalendarDraftCard({
                               onActivate={() => onStitch(draft.id)}
                             />
                           ) : null}
-                          {onRealize && draft.backendDraftId && !isStreaming ? (
+                          {onRealize &&
+                          openInStudio &&
+                          draft.backendDraftId &&
+                          !isStreaming &&
+                          (!draft.mediaSuggestion?.reel?.composition ||
+                            !aiStudioHandoffIssue(draft)) ? (
                             <CardStageAction
                               label={
                                 draft.mediaSuggestion?.reel?.composition
@@ -735,7 +741,7 @@ export function CalendarDraftCard({
                   : `Publish to ${publishPlatformLabel(publishPlatform)}`}
             </ContextMenuItem>
           ) : null}
-          {openInStudio && draft.status !== 'streaming' && draft.status !== 'placeholder' ? (
+          {openInStudio && !aiStudioHandoffIssue(draft) ? (
             <ContextMenuItem onSelect={() => openInStudio(draft.id)}>
               {draft.mediaSuggestion?.reel?.composition ? 'Edit composition' : 'Open in AI Studio'}
             </ContextMenuItem>

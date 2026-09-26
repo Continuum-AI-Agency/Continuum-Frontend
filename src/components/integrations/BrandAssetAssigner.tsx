@@ -43,6 +43,7 @@ import { useMetaAutoResync } from '@/hooks/useMetaAutoResync';
 import {
   assignBrandIntegrationAccount,
   type LinkedInSyncMode,
+  type MetaSyncMode,
   startGoogleSync,
   startLinkedInSync,
   startMetaSync,
@@ -91,7 +92,7 @@ const PROVIDER_GROUP_BY_ID: Record<string, ProviderGroup> = {
 const META_PLATFORMS: ReadonlySet<PlatformKey> = new Set(['facebook', 'instagram', 'threads']);
 const META_TAB_ID = 'meta';
 
-type SyncOptions = { linkedinMode?: LinkedInSyncMode };
+type SyncOptions = { linkedinMode?: LinkedInSyncMode; metaMode?: MetaSyncMode };
 
 const stagger = {
   hidden: { opacity: 0 },
@@ -308,6 +309,35 @@ function ProviderConnectMenu({
                   <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled>
                     Coming soon
                   </Button>
+                ) : group === 'facebook' ? (
+                  // Instagram only = Business Login for Instagram, for an Instagram
+                  // professional account with no Facebook Page behind it.
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1 px-2 text-xs"
+                      onClick={() => onConnect(group)}
+                      disabled={syncing}
+                    >
+                      {syncing ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Plus className="h-3 w-3" />
+                      )}
+                      Facebook
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1 px-2 text-xs"
+                      title="Connect an Instagram account that has no Facebook Page"
+                      onClick={() => onConnect(group, { metaMode: 'instagram' })}
+                      disabled={syncing}
+                    >
+                      Instagram only
+                    </Button>
+                  </div>
                 ) : group === 'linkedin' ? (
                   // LinkedIn Ads and LinkedIn Organic are separate OAuth apps
                   // with separate scopes, so neither can stand in for the other.
@@ -534,7 +564,7 @@ export function BrandAssetAssigner({
         const callbackUrl = buildOAuthCallbackUrl(group, brandId);
         const syncResponse =
           group === 'facebook'
-            ? await startMetaSync(callbackUrl)
+            ? await startMetaSync(callbackUrl, { mode: options?.metaMode })
             : group === 'tiktok'
               ? await startTikTokSync(callbackUrl)
               : group === 'linkedin'
@@ -549,7 +579,9 @@ export function BrandAssetAssigner({
         const popupTitle =
           group === 'linkedin'
             ? `Connect LinkedIn ${linkedinMode === 'organic' ? 'Organic' : 'Ads'}`
-            : `Connect ${providerLabel}`;
+            : group === 'facebook' && options?.metaMode === 'instagram'
+              ? 'Connect Instagram'
+              : `Connect ${providerLabel}`;
         const popup = openCenteredPopup(syncResponse.url, popupTitle, 600, 700);
         if (!popup) {
           show({

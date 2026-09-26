@@ -1,5 +1,9 @@
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import {
+  buildOrganicPostContextBlock,
+  resolveOrganicPostReferences,
+} from '../../Continuum-Backend/App/organic/agent/src/agents/organicPostContext';
 import { formatDayId, startOfWeek } from '../src/components/organic/primitives/calendar-utils';
 import { createDefaultOnboardingState } from '../src/lib/onboarding/state';
 import { mintSessionWithPassword } from './support/auth';
@@ -28,6 +32,8 @@ import { type LocalBackend, startLocalBackend } from './support/localBackend';
 //   #177  a question and its answer are told apart at a glance: the assistant turn carries a mark
 //         and a name and stays full-width (its cards still get the column), the reader's turn keeps
 //         a tinted bubble, and the turns are not crammed together.
+//   Month overflow exposes every persisted draft and post; an inspiration draft retains its source,
+//   and a published post opens the side preview before Metrics.
 //
 // Un-exercised hop, stated explicitly: no live agent turn is streamed. The transcript renders
 // PERSISTED turns through the same components a live stream feeds — the surface both bugs are
@@ -455,11 +461,98 @@ test.describe('organic planner status + agent chat speakers', () => {
     await page.screenshot({ path: `${SCREENSHOT_DIR}/chat-speaker-identity.png` });
   });
 
-  test('month published post opens a media side preview', async () => {
+  test('TikTok draft previews as an organic vertical post with a compact header', async () => {
     const supabase = admin();
-    const postId = `calendar-preview-bench-${Date.now()}`;
-    const dayId = formatDayId(new Date());
+    const base = draftRows()[0];
+    const clientKey = `${BENCH_CLIENT_KEY_PREFIX}tiktok-preview`;
+    const title = 'TikTok preview bench';
     try {
+      await supabase
+        .schema('organic')
+        .from('organic_calendar_drafts')
+        .insert({
+          ...base,
+          client_key: clientKey,
+          platform: 'tiktok',
+          content_json: {
+            ...base.content_json,
+            content: { type: 'post', format: 'Reel' },
+            creative: {},
+          },
+          slot_data: {
+            ...base.slot_data,
+            placementId: clientKey,
+            platform: 'tiktok',
+            title,
+            draftSnapshot: {
+              ...base.slot_data.draftSnapshot,
+              id: clientKey,
+              clientKey,
+              title,
+              format: 'Reel',
+              platforms: ['tiktok'],
+            },
+          },
+        })
+        .throwOnError();
+
+      await page.goto('/organic?tab=planner&view=month', { waitUntil: 'domcontentloaded' });
+      await page.getByRole('button', { name: 'Month', exact: true }).first().click();
+      const draftChip = page.getByRole('button', { name: `Draft ${title}`, exact: true }).last();
+      await expect(draftChip).toBeVisible({ timeout: 30_000 });
+      await draftChip.hover();
+      const hoverPreview = page.getByTestId('planner-draft-hover-preview');
+      await expect(hoverPreview).toBeVisible();
+      await expect(hoverPreview).toContainText(/tiktok/i);
+      await expect(hoverPreview).toContainText('Click to review');
+      await page.waitForTimeout(150);
+      await page.screenshot({ path: `${SCREENSHOT_DIR}/calendar-draft-hover.png` });
+      await draftChip.click();
+      const preview = page.getByRole('complementary', { name: 'Draft preview' });
+      await expect(preview.getByText(/TikTok preview needs creative/)).toBeVisible();
+      await expect(preview.getByText('Sponsored')).toHaveCount(0);
+      await expect(preview.getByRole('button', { name: 'Details' })).toBeVisible();
+      await expect(preview.getByText('No media', { exact: true })).toBeVisible();
+      await page.screenshot({ path: `${SCREENSHOT_DIR}/tiktok-post-preview.png` });
+    } finally {
+      await supabase
+        .schema('organic')
+        .from('organic_calendar_drafts')
+        .delete()
+        .eq('brand_id', brandId)
+        .eq('client_key', clientKey);
+    }
+  });
+
+  test('Organic agent picker sends persisted draft and published post identities', async () => {
+    const supabase = admin();
+    const base = draftRows()[0];
+    const clientKey = `${BENCH_CLIENT_KEY_PREFIX}agent-reference`;
+    const postId = `local-agent-reference-${Date.now()}`;
+    const title = 'Organic reference bench draft';
+    const caption = 'A stored post caption for grounding';
+    let insertedDraftId = '';
+    try {
+      const { data: draft, error: draftError } = await supabase
+        .schema('organic')
+        .from('organic_calendar_drafts')
+        .insert({
+          ...base,
+          client_key: clientKey,
+          scheduled_date: `${formatDayId(new Date())}T18:00:00.000Z`,
+          slot_data: {
+            ...base.slot_data,
+            placementId: clientKey,
+            dayId: formatDayId(new Date()),
+            title,
+            draftSnapshot: { ...base.slot_data.draftSnapshot, id: clientKey, clientKey, title },
+          },
+        })
+        .select('id')
+        .single();
+      if (draftError) throw draftError;
+      insertedDraftId = String(draft.id);
+
       await supabase
         .schema('organic')
         .from('organic_published_posts')
@@ -469,28 +562,50 @@ test.describe('organic planner status + agent chat speakers', () => {
           platform: 'instagram',
           platform_account_id: 'local-instagram-account',
           platform_post_id: postId,
-          published_at: `${dayId}T18:00:00.000Z`,
-          caption: 'Calendar published preview bench',
-          media_urls: [`${process.env.PLAYWRIGHT_BASE_URL}/ContinuumAI.jpeg`],
+          published_at: `${formatDayId(new Date())}T17:00:00.000Z`,
+          caption,
+          content_snapshot: { title: 'Stored published post' },
         })
         .throwOnError();
 
-      await page.goto('/organic?tab=planner&view=month', { waitUntil: 'domcontentloaded' });
-      const chip = page.getByRole('button', { name: /Calendar published preview bench/ });
-      await expect(chip).toBeVisible({ timeout: 90_000 });
-      await chip.click();
+      await page.goto('/organic?tab=agent', { waitUntil: 'domcontentloaded' });
+      await page.getByRole('button', { name: 'Agent', exact: true }).click({ timeout: 90_000 });
+      const editor = page.getByRole('textbox', { name: 'Message the organic agent' });
+      await editor.click();
+      await editor.pressSequentially('@');
+      await page.getByRole('option', { name: 'Drafts' }).click();
+      await page.screenshot({ path: `${SCREENSHOT_DIR}/organic-context-drafts-folder.png` });
+      const draftOption = page.getByRole('option', { name: new RegExp(title) });
+      await expect(draftOption).toBeVisible({ timeout: 15_000 });
+      await draftOption.click({ timeout: 15_000 });
+      await editor.press('End');
+      await editor.press('Space');
+      await editor.pressSequentially('@');
+      await page.getByRole('option', { name: 'Published' }).click();
+      await page.getByRole('option', { name: /Stored published post/ }).click();
 
-      const preview = page.getByRole('complementary', { name: 'Published post preview' });
-      await expect(preview).toContainText('Calendar published preview bench');
-      await expect(
-        preview.getByRole('img', { name: 'Calendar published preview bench' }),
-      ).toHaveJSProperty('naturalWidth', 1600);
-      await page.keyboard.press('Escape');
-      await expect(preview).toBeHidden();
+      const chatRequest = page.waitForRequest(
+        (request) =>
+          request.url().includes('/api/organic/agent/chat') && request.method() === 'POST',
+        { timeout: 60_000 },
+      );
+      await page.route('**/api/organic/agent/chat', async (route) => route.abort());
+      await page.getByRole('button', { name: 'Send message' }).click();
+      const request = await chatRequest;
+      const body = request.postDataJSON() as {
+        references?: Array<{ id: string; type: string; metadata?: Record<string, unknown> }>;
+      };
+      expect(body.references?.map(({ id, type }) => ({ id, type }))).toEqual([
+        { id: insertedDraftId, type: 'draft' },
+        { id: postId, type: 'organic_post' },
+      ]);
 
-      await chip.click();
-      await preview.getByRole('button', { name: 'View post metrics' }).click();
-      await expect(page).toHaveURL(new RegExp(`postId=${postId}`));
+      // Run the Backend resolver against the same real local rows selected in the browser.
+      process.env.SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const resolved = await resolveOrganicPostReferences(brandId, body.references as never);
+      const promptBlock = buildOrganicPostContextBlock(resolved);
+      expect(promptBlock).toContain('Stored published post');
+      expect(promptBlock).toContain('A stored post caption for grounding');
     } finally {
       await supabase
         .schema('organic')
@@ -498,6 +613,156 @@ test.describe('organic planner status + agent chat speakers', () => {
         .delete()
         .eq('brand_id', brandId)
         .eq('platform_post_id', postId);
+      await supabase
+        .schema('organic')
+        .from('organic_calendar_drafts')
+        .delete()
+        .eq('brand_id', brandId)
+        .eq('client_key', clientKey);
+    }
+  });
+
+  test('month overflow opens every post and carries inspiration through to metrics', async () => {
+    const supabase = admin();
+    const dayId = formatDayId(new Date());
+    const sourceUrl = 'https://www.instagram.com/p/local-calendar-bench/';
+    const postId = `local-calendar-bench-${Date.now()}`;
+    const hoverPostId = `${postId}-hover`;
+    const hoverDay = new Date();
+    hoverDay.setDate(hoverDay.getDate() <= 15 ? 27 : 3);
+    const hoverDayId = formatDayId(hoverDay);
+    const base = draftRows()[0];
+    const extras = Array.from({ length: 6 }, (_, index) => {
+      const clientKey = `${BENCH_CLIENT_KEY_PREFIX}month-${index}`;
+      return {
+        ...base,
+        client_key: clientKey,
+        scheduled_date: `${dayId}T18:00:00.000Z`,
+        slot_data: {
+          ...base.slot_data,
+          placementId: clientKey,
+          dayId,
+          timeZone: 'America/Denver',
+          title: `Calendar journey ${index}`,
+          generation:
+            index === 0
+              ? {
+                  source: 'competitor_inspiration',
+                  competitorInspiration: { permalink: sourceUrl },
+                }
+              : undefined,
+          draftSnapshot: {
+            ...base.slot_data.draftSnapshot,
+            id: clientKey,
+            clientKey,
+            title: `Calendar journey ${index}`,
+            dateLabel: dayId,
+          },
+        },
+      };
+    });
+
+    try {
+      await supabase
+        .schema('organic')
+        .from('organic_calendar_drafts')
+        .insert(extras)
+        .throwOnError();
+      await supabase
+        .schema('organic')
+        .from('organic_published_posts')
+        .insert([
+          {
+            brand_id: brandId,
+            post_type: 'POST',
+            platform: 'instagram',
+            platform_account_id: 'local-instagram-account',
+            platform_post_id: postId,
+            published_at: `${dayId}T18:00:00.000Z`,
+            caption: 'Calendar journey published post',
+            media_urls: [`${process.env.PLAYWRIGHT_BASE_URL}/ContinuumAI.jpeg`],
+          },
+          {
+            brand_id: brandId,
+            post_type: 'POST',
+            platform: 'instagram',
+            platform_account_id: 'local-instagram-account',
+            platform_post_id: hoverPostId,
+            published_at: `${hoverDayId}T18:00:00.000Z`,
+            caption: 'Calendar hover published post',
+          },
+        ])
+        .throwOnError();
+
+      await page.goto('/organic?tab=planner&view=month', { waitUntil: 'domcontentloaded' });
+      await page.getByRole('button', { name: 'Month', exact: true }).first().click();
+      await page.getByRole('button', { name: /Calendar hover published post/ }).hover();
+      await expect(page.getByText('Posted', { exact: true }).last()).toBeVisible();
+      await expect(page.getByRole('button', { name: /View post metrics/ })).toBeVisible();
+      await page.waitForTimeout(150);
+      await page.screenshot({ path: `${SCREENSHOT_DIR}/calendar-post-hover.png` });
+      await page.getByRole('button', { name: /Calendar hover published post/ }).click();
+      const directPreview = page.getByRole('complementary', { name: 'Published post preview' });
+      await expect(directPreview).toBeVisible();
+      await expect(directPreview).toContainText('Calendar hover published post');
+      await page.keyboard.press('Escape');
+      await expect(directPreview).toBeHidden();
+      const overflow = page.getByRole('button', {
+        name: new RegExp(`Show all \\d+ posts for ${dayId}`),
+      });
+      await expect(overflow).toBeVisible({ timeout: 90_000 });
+      await overflow.click();
+      const dayDialog = page.getByRole('dialog');
+      for (let index = 0; index < extras.length; index++) {
+        await expect(
+          dayDialog.getByRole('button', { name: new RegExp(`Calendar journey ${index}`) }),
+        ).toBeVisible();
+      }
+      await expect(
+        dayDialog.getByRole('button', { name: /Calendar journey published post/ }),
+      ).toBeVisible();
+      await page.screenshot({ path: `${SCREENSHOT_DIR}/calendar-day.png` });
+      await dayDialog.getByRole('button', { name: /Calendar journey 0/ }).click();
+      const source = page.getByRole('link', { name: 'Inspiration source · View original post' });
+      await expect(source).toHaveAttribute('href', sourceUrl);
+      await page.getByRole('button', { name: 'Month', exact: true }).first().click();
+      await overflow.click();
+      await dayDialog.getByRole('button', { name: /Calendar journey published post/ }).click();
+      const publishedPreview = page.getByRole('complementary', {
+        name: 'Published post preview',
+      });
+      await expect(publishedPreview).toBeVisible();
+      await expect(publishedPreview).toContainText('Calendar journey published post');
+      await expect(
+        publishedPreview.getByRole('img', { name: 'Calendar journey published post' }),
+      ).toHaveJSProperty('naturalWidth', 1600);
+      await page.screenshot({ path: `${SCREENSHOT_DIR}/calendar-published-preview.png` });
+      await publishedPreview.getByRole('button', { name: 'View post metrics' }).click();
+      await expect(page).toHaveURL(/tab=metrics/);
+      await expect(page).toHaveURL(new RegExp(`postId=${postId}`));
+      await expect(page.getByRole('button', { name: 'Metrics', exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      await expect(
+        page.getByText(
+          'Post performance is unavailable because the linked account is not connected to this brand.',
+        ),
+      ).toBeVisible();
+      await page.screenshot({ path: `${SCREENSHOT_DIR}/calendar-metrics.png` });
+    } finally {
+      await supabase
+        .schema('organic')
+        .from('organic_published_posts')
+        .delete()
+        .eq('brand_id', brandId)
+        .in('platform_post_id', [postId, hoverPostId]);
+      await supabase
+        .schema('organic')
+        .from('organic_calendar_drafts')
+        .delete()
+        .eq('brand_id', brandId)
+        .like('client_key', `${BENCH_CLIENT_KEY_PREFIX}month-%`);
     }
   });
 

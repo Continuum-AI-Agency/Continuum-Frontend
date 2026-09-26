@@ -26,7 +26,7 @@ describe('POST_PLATFORMS', () => {
 
   it('previews TikTok and YouTube as vertical phone posts', () => {
     for (const platform of ['tiktok', 'youtube'] as const) {
-      expect(POST_PLATFORMS[platform].frame).toBe('phone');
+      expect(POST_PLATFORMS[platform].frame).toBe('vertical');
       expect(POST_PLATFORMS[platform].reelAspect).toBe(9 / 16);
       expect(POST_PLATFORMS[platform].permalink).toBeUndefined();
     }

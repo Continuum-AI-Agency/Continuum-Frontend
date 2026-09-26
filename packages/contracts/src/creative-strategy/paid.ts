@@ -126,7 +126,12 @@ export type CreativeWinRateFlag = z.infer<typeof creativeWinRateFlagSchema>;
 export const creativeWinRateDimensionSchema = z.enum([
   'asset_type',
   'hook_archetype',
+  // The labeller's free text: ~1.2 ads per value, so almost every bucket holds one ad.
   'angle',
+  // The closed GLOBAL_ANGLE_DEFINITIONS id, written by Jev behind `angle_vocab_version >= 1`.
+  // Measured 98.1% of ads in a bucket of >=3 against 14.1% for the free text — this is the
+  // angle dimension a win rate can actually be counted on.
+  'angle_id',
   'theme',
   'funnel_stage',
   'visual_style',
@@ -315,6 +320,16 @@ export const paidCreativeSourceCountsSchema = z.object({
 });
 export type PaidCreativeSourceCounts = z.infer<typeof paidCreativeSourceCountsSchema>;
 
+// 2-3 short concepts that summarise what the win-rate table has in common. Written
+// by a Flash-Lite pass at most every PAID_SYNOPSIS_TTL_DAYS and carried between
+// assemblies, so it reads as a standing theme rather than churning each sync.
+export const PAID_SYNOPSIS_TTL_DAYS = 3;
+export const paidCreativeSynopsisSchema = z.object({
+  themes: z.array(z.string()).min(1).max(3),
+  generatedAt: z.string(),
+});
+export type PaidCreativeSynopsis = z.infer<typeof paidCreativeSynopsisSchema>;
+
 export const paidCreativeReportSchema = z.object({
   brandId: z.string(),
   adAccountId: z.string().nullable().default(null),
@@ -325,6 +340,7 @@ export const paidCreativeReportSchema = z.object({
   liftRules: z.array(creativeLiftRuleSchema).default([]),
   verdicts: z.array(paidCreativeVerdictSchema).default([]),
   iterationBriefs: z.array(paidIterationBriefSchema).default([]),
+  synopsis: paidCreativeSynopsisSchema.nullable().default(null),
   sourceCounts: paidCreativeSourceCountsSchema.default({
     ads: 0,
     creatives: 0,

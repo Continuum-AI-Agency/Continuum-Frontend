@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { creativeWinRateDimensionSchema } from '../creative-strategy/paid';
 import {
   agentTargetSchema,
   automationRecipientsSchema,
@@ -326,17 +327,8 @@ export const automationSourceQuerySchemas = {
         .default([]),
       /** Empty means every dimension. */
       dimensions: z
-        .array(
-          z.enum([
-            'hook_archetype',
-            'angle',
-            'asset_type',
-            'theme',
-            'funnel_stage',
-            'visual_style',
-          ]),
-        )
-        .max(6)
+        .array(creativeWinRateDimensionSchema)
+        .max(creativeWinRateDimensionSchema.options.length)
         .default([]),
       window: z.enum(['d7', 'd14', 'd30']).default('d30'),
       hideThinEvidence: z.boolean().default(true),

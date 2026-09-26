@@ -84,6 +84,9 @@ export const competitorInspirationPostSchema = z
     // Null for a saved post of an untracked account (pasted URL).
     competitorId: z.string().uuid().nullable(),
     competitorName: z.string(),
+    // ponytail: the account handle on post.platform (a YouTube @handle or channel id
+    // when platform is youtube). Kept under this name because saved assets persist it
+    // in media.assets.origin_ref; rename with a data migration if a third platform lands.
     instagramUsername: z.string(),
     post: instagramPostSchema,
     format: competitorPostFormatSchema,
@@ -97,10 +100,13 @@ export const competitorInspirationPostSchema = z
   .strict();
 export type CompetitorInspirationPost = z.infer<typeof competitorInspirationPostSchema>;
 
-export const inspirationSortSchema = z.enum(['recent', 'outlier', 'relevance']);
+// 'views' ranks by raw view count. YouTube allows only 'recent' and 'views': its
+// policies forbid custom channel-average scores and merging API data with other data.
+export const inspirationSortSchema = z.enum(['recent', 'outlier', 'relevance', 'views']);
 export type InspirationSort = z.infer<typeof inspirationSortSchema>;
 
-// GET /api/competitor-ad-spy/instagram/posts?brandId&competitorId?&limit?&sort?
+// GET /api/competitor-ad-spy/instagram/posts?brandId&competitorId?&limit?&sort?&platform?
+// (platform defaults to instagram; the path predates YouTube).
 export const inspirationPostsResponseSchema = z.object({
   items: z.array(competitorInspirationPostSchema),
 });

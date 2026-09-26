@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'bun:test';
-import { compileStoryboardWorkflow, compileUgcTalkingHeadWorkflow } from './ugc-workflow';
+import {
+  compileStoryboardWorkflow,
+  compileUgcTalkingHeadWorkflow,
+  UGC_TALKING_HEAD_CAMERA_MOVE,
+} from './ugc-workflow';
 import { buildWorkflowGraph } from './workflow-builder';
 
 const shot = (id: string, continuity: 'cut' | 'match' = 'cut') => ({
@@ -45,6 +49,7 @@ describe('compileUgcTalkingHeadWorkflow', () => {
           order: 0,
           spokenLine: 'Line for hook',
           continuity: 'match',
+          cameraMove: UGC_TALKING_HEAD_CAMERA_MOVE,
           targetDurationSec: 4,
         },
         { id: 'proof', order: 1, continuity: 'cut' },
