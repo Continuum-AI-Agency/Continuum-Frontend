@@ -11,6 +11,7 @@ import {
   API_RENDER_JOBS_ROUTE,
   API_RENDER_PREFLIGHT_ROUTE,
   API_RENDER_PREVIEW_ROUTE,
+  API_RENDER_PREVIEW_SKETCH_ROUTE,
   API_RENDER_MOTION_PROOFS_ROUTE,
   API_RENDER_MOTION_PROOF_FORMATS_ROUTE,
   API_RENDER_SETS_ROUTE,
@@ -68,6 +69,8 @@ import {
   type ForgeRenderImportPreviewRequest,
   type ForgeRenderPreview,
   type ForgeRenderPreviewRequest,
+  type ForgeRenderSketch,
+  type ForgeRenderSketchRequest,
   type ForgeMotionProof,
   type ForgeMotionProofRequest,
   type ForgeMotionProofFormat,
@@ -77,6 +80,7 @@ import {
   forgeRenderImportMediaResponseSchema,
   forgeRenderImportPreviewSchema,
   forgeRenderPreviewSchema,
+  forgeRenderSketchSchema,
   forgeMotionProofSchema,
   forgeMotionProofFormatsSchema,
   forgeRenderSetListResponseSchema,
@@ -155,6 +159,14 @@ export const apiRendersApi = {
       method: 'POST',
       body: input,
       schema: forgeRenderPreviewSchema,
+    });
+  },
+  sketchPreview(input: ForgeRenderSketchRequest) {
+    return http.request<ForgeRenderSketch>({
+      path: API_RENDER_PREVIEW_SKETCH_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: forgeRenderSketchSchema,
     });
   },
   startMotionProof(input: ForgeMotionProofRequest) {

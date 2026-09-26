@@ -67,6 +67,35 @@ export const forgeRenderPreviewSchema = z
   .strict();
 export type ForgeRenderPreview = z.infer<typeof forgeRenderPreviewSchema>;
 
+// The animation sketch: the same row and format, drawn from the template at every instant of the
+// stretch of the timeline the row is on screen, as a short silent clip. No render and no queue —
+// it shows timing and keyframed movement in seconds. Motion an expression drives (an Animation
+// Composer preset) is not in it, and the notes name those layers.
+
+export const API_RENDER_PREVIEW_SKETCH_ROUTE = '/api/ai-studio/renders/preview/sketch';
+
+export const forgeRenderSketchRequestSchema = forgeRenderPreviewRequestSchema
+  .omit({ atSec: true, backdrop: true })
+  .extend({ fps: z.number().positive().max(12).default(8) })
+  .strict();
+export type ForgeRenderSketchRequest = z.infer<typeof forgeRenderSketchRequestSchema>;
+
+export const forgeRenderSketchSchema = z
+  .object({
+    /** `data:video/mp4;base64,…`, H.264, silent. */
+    video: z.string().startsWith('data:video/mp4;base64,'),
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+    comp: z.string().min(1),
+    /** The seconds of the comp the clip covers: where the row's own layers are on screen. */
+    window: z.tuple([z.number().nonnegative(), z.number().nonnegative()]),
+    fps: z.number().positive(),
+    frames: z.number().int().positive(),
+    notes: z.array(z.string()),
+  })
+  .strict();
+export type ForgeRenderSketch = z.infer<typeof forgeRenderSketchSchema>;
+
 type DiffVariable = Pick<ApiRenderVariable, 'key' | 'kind' | 'reserved'>;
 
 /** One comparable spelling per value: pins by asset, colours without case or `#`, blanks empty. */

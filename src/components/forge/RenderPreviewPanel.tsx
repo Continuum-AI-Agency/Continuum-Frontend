@@ -13,7 +13,7 @@ import {
   motionLabel,
   readableLayerName,
 } from '@continuum/contracts';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type JSX, useEffect, useState } from 'react';
 import {
   FormatPreview,
@@ -556,6 +556,22 @@ export function RenderPreviewPanel({
     retry: false,
   });
   const currentProof = proofReady ? proof.data : null;
+  // The animation sketch: asked for, never automatic. It is drawn from the template in seconds —
+  // no render, no queue — and it pictures THESE values only: an edit hides it until asked again.
+  const sketchLive = JSON.stringify([brandId, templateKey, format?.id ?? null, values]);
+  const [sketchFor, setSketchFor] = useState<string | null>(null);
+  const sketch = useMutation({
+    mutationFn: (picked: PreviewFormat) =>
+      apiRendersApi.sketchPreview({
+        brandId,
+        environment: contract.template.environment,
+        templateKey,
+        format: { id: picked.id, ratio: picked.ratio, comp: picked.comp?.name ?? null },
+        values,
+        fps: 8,
+      }),
+  });
+  const currentSketch = sketch.data && sketchFor === sketchLive ? sketch.data : null;
   const settledValues = (() => {
     const [settledSubject, settledRow] = JSON.parse(settled) as [unknown[], unknown];
     return sameSubject([...settledSubject, null], [...subject, null])
@@ -691,6 +707,24 @@ export function RenderPreviewPanel({
       };
       return { frame, warning: null };
     }
+    if (entry.id === format?.id && currentSketch) {
+      frame = {
+        mode: 'preview',
+        at: null,
+        basedOn: null,
+        badge: 'Animation sketch',
+        caption: [
+          `Drawn from the template · ${currentSketch.window[0].toFixed(1)}–${currentSketch.window[1].toFixed(1)}s · ${currentSketch.frames} frames`,
+          ...currentSketch.notes,
+        ].join(' · '),
+        node: (
+          <video autoPlay loop muted playsInline controls src={currentSketch.video} className="size-full object-contain">
+            <track kind="captions" />
+          </video>
+        ),
+      };
+      return { frame, warning: null };
+    }
     if (lastJob && own && atSec === null) {
       const ownBackdrop = plan.backdrop?.job.id === lastJob.id;
       const revisionStale =
@@ -787,6 +821,23 @@ export function RenderPreviewPanel({
           {currentProof?.state === 'failed' ? <button type="button" className="ml-2 underline" onClick={async () => { await proofStart.refetch(); await proof.refetch(); }}>Retry proof: {currentProof.error}</button> : null}
           {currentProof && currentProof.state !== 'ready' && currentProof.state !== 'failed' ? <span className="ml-2">{currentProof.state} {currentProof.progressPct ?? 0}%</span> : null}
           {!currentProof && proofReady && !proofStart.isError ? <span className="ml-2">Preparing proof…</span> : null}
+        </div>
+      ) : null}
+      {format && contract.template.motion && isMotion(contract.template.motion.durationSec, contract.template.motion.frameRate) ? (
+        <div className="flex shrink-0 items-center gap-2 text-2xs text-muted-foreground">
+          <button
+            type="button"
+            className="underline disabled:no-underline disabled:opacity-60"
+            disabled={sketch.isPending}
+            onClick={() => {
+              setSketchFor(sketchLive);
+              sketch.mutate(format);
+            }}
+          >
+            {sketch.isPending ? 'Sketching the animation…' : currentSketch ? 'Sketch again' : 'Sketch the animation'}
+          </button>
+          <span>drawn from the template in seconds · no render</span>
+          {sketch.isError && sketchFor === sketchLive ? <span>· Sketch unavailable: {String(sketch.error)}</span> : null}
         </div>
       ) : null}
       {currentProof?.state !== 'ready' && contract.template.motion &&

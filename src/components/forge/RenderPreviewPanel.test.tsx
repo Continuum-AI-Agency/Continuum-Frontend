@@ -16,6 +16,7 @@ import type {
   ForgeRenderPreviewRequest,
   ForgeMotionProof,
   ForgeMotionProofRequest,
+  ForgeRenderSketch,
 } from '@continuum/contracts';
 import type { PostgresChangesSubscription } from '@/lib/supabase/realtime';
 
@@ -50,6 +51,16 @@ const getMotionProofMock = mock(async (_brandId: string, id: string): Promise<Fo
   outputId: 'square', comp: 'Square', state: 'ready', progressPct: 100,
   signedUrl: `https://cdn.test/${id}.mp4`, durationSec: 6, frameRate: 30, hasAudio: true, error: null,
 }));
+const sketchPreviewMock = mock(async (): Promise<ForgeRenderSketch> => ({
+  video: 'data:video/mp4;base64,AAAA',
+  width: 640,
+  height: 640,
+  comp: 'Square',
+  window: [1, 7.25],
+  fps: 8,
+  frames: 48,
+  notes: ['motion an expression drives is not drawn: headline'],
+}));
 const listMotionProofFormatsMock = mock(async () => [{ id: 'square', label: 'Square', ratio: '1:1' as const,
   comp: SQUARE.comp, mediaType: 'video/mp4' as const }]);
 
@@ -60,6 +71,7 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
     startMotionProof: startMotionProofMock,
     getMotionProof: getMotionProofMock,
     listMotionProofFormats: listMotionProofFormatsMock,
+    sketchPreview: sketchPreviewMock,
     listRenderSets: async () => ({
       items: [{ id: '33333333-3333-4333-8333-333333333333', revision: setRevision }],
       nextCursor: null,
@@ -271,9 +283,29 @@ afterEach(() => {
   startMotionProofMock.mockClear();
   getMotionProofMock.mockClear();
   listMotionProofFormatsMock.mockClear();
+  sketchPreviewMock.mockClear();
 });
 
 describe('RenderPreviewPanel', () => {
+  test('the animation sketch is asked for, plays for these values, and an edit hides it', async () => {
+    const contract = {
+      ...CONTRACT,
+      template: { ...CONTRACT.template, motion: { durationSec: 6, frameRate: 30 } },
+    } as ApiRenderTemplateContract;
+    const props = { brandId: BRAND, contract, rowId: ROW, renderSetId: null };
+    const { container, rerender } = render(<RenderPreviewPanel {...props} rows={rowWith('Hola')} />);
+    expect(sketchPreviewMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Sketch the animation' }));
+    await waitFor(() => expect(badge(container)).toBe('Animation sketch'));
+    expect(sketchPreviewMock).toHaveBeenCalledWith(
+      expect.objectContaining({ fps: 8, values: expect.objectContaining({ headline: 'Hola' }) }),
+    );
+    expect(container.querySelector('video')?.getAttribute('src')).toBe('data:video/mp4;base64,AAAA');
+    expect(caption(container)).toContain('motion an expression drives is not drawn: headline');
+    rerender(<RenderPreviewPanel {...props} rows={rowWith('Adios')} />);
+    expect(badge(container)).not.toBe('Animation sketch');
+    expect(screen.getByRole('button', { name: 'Sketch the animation' })).toBeTruthy();
+  });
   test('plays only the selected row’s settled full animation proof', async () => {
     const contract = {
       ...CONTRACT,
