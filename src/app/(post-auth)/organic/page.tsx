@@ -61,8 +61,8 @@ async function OrganicContent({
   }
   const brandName = brandSummaries?.find((b) => b.id === activeBrandId)?.name;
 
-  // Run all four in parallel — none depend on each other, only on activeBrandId.
-  const [onboardingResult, integrationSummaryResult, insightsResult, brandDocsResult] =
+  // These reads depend only on activeBrandId, so run them together.
+  const [onboardingResult, integrationSummaryResult, insightsResult, brandDocsResult, brandTimeZoneResult] =
     await Promise.allSettled([
       ensureOnboardingState(activeBrandId),
       fetchBrandIntegrationSummary(activeBrandId),
@@ -82,6 +82,16 @@ async function OrganicContent({
           kind: string | null;
           text_excerpt: string | null;
         }>;
+      })(),
+      (async () => {
+        const supabase = await createSupabaseServerClient();
+        const { data } = await supabase
+          .schema('brand_profiles')
+          .from('brand_profiles')
+          .select('timezone')
+          .eq('id', activeBrandId)
+          .single();
+        return data?.timezone;
       })(),
     ]);
 
@@ -356,6 +366,7 @@ async function OrganicContent({
             maxTrendSelections={5}
             brandProfileId={brandProfileId}
             brandName={brandName}
+            brandTimeZone={brandTimeZoneResult.status === 'fulfilled' ? brandTimeZoneResult.value : undefined}
             initialSelectedDraftId={initialSelectedDraftId}
             initialWeekStart={initialWeekStart}
             initialView={initialView}

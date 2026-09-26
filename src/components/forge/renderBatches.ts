@@ -59,7 +59,22 @@ export function batchStatus(batch: RenderBatch): {
 } {
   const total = batch.jobs.length;
   if (batch.inFlight > 0) {
-    return { label: `${batch.inFlight} of ${total} rendering`, tone: 'warning', busy: true };
+    const measured = batch.jobs.some(
+      (job) => typeof job.progressPct === 'number' || job.status === 'finished',
+    );
+    const percent = measured
+      ? Math.floor(
+          batch.jobs.reduce(
+            (sum, job) => sum + (job.status === 'finished' ? 100 : (job.progressPct ?? 0)),
+            0,
+          ) / total,
+        )
+      : null;
+    return {
+      label: `${batch.inFlight} of ${total} rendering${percent === null ? '' : ` · ${percent}%`}`,
+      tone: 'warning',
+      busy: true,
+    };
   }
   if (batch.failed === total) return { label: 'failed', tone: 'destructive', busy: false };
   if (batch.failed > 0) {

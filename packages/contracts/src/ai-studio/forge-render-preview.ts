@@ -27,6 +27,8 @@ export const forgeRenderPreviewRequestSchema = z
       })
       .strict(),
     values: z.record(z.string(), apiRenderInputValueSchema),
+    /** Seconds into the template timeline; null picks the authored settled frame. */
+    atSec: z.number().nonnegative().nullable().optional(),
     /** The finished file to paint over, as the tab picked it. Null draws the template whole. */
     backdrop: z
       .object({ jobId: z.string().uuid(), fileName: z.string().min(1) })

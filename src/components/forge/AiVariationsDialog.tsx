@@ -1,31 +1,25 @@
 'use client';
 
 import {
-  API_RENDER_SUGGEST_FORKS_MAX,
   API_RENDER_SUGGEST_ROWS_MAX,
   type ApiRenderInputValue,
   type ApiRenderRowGate,
   type ApiRenderSuggestRowsResponse,
   type ApiRenderTemplateContract,
+  classifyLibraryFile,
   readableLayerName,
 } from '@continuum/contracts';
-import { Loader2, Sparkles, TriangleAlert } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Loader2, Paperclip, Sparkles, TriangleAlert, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
-import { warmLaya } from '@/lib/api/layaWarm';
+import { uploadBrandDocument } from '@/lib/documents/uploadBrandDocument';
+import { ACCEPTED_DOCUMENT_EXTENSIONS, hasDocumentExtension } from '@/lib/documents/uploadLimits';
+import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
 
@@ -38,12 +32,8 @@ import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/
 // Called rows, not variants: a VARIANT is a sibling version of the template — a ratio, a language —
 // and lives in the Variants tab. See template-forge docs/TEMPLATE_IDENTITY.md.
 //
-// Every drafted row comes back checked against the brand's written rules (Laya, on the Backend).
-// Only a confident FAIL is shown: it is flagged and starts unticked — shown, never hidden, and the
-// person decides. Measured, those flags were right every time; a pass was right ~9 times in 10 at
-// any bar, which is not good enough to put a check mark on a row. So a pass, an unsure and a
-// checker that was down all show nothing — a badge on every undecided row is a badge people learn to
-// ignore. Every verdict stays in the contract for MCP and telemetry.
+// The model checker is parked. Source evidence and deterministic checks are shown in the row
+// fields; any older flagged gate result can still be reviewed before the rows enter the grid.
 
 type DraftedRow = ApiRenderSuggestRowsResponse['rows'][number];
 
@@ -81,8 +71,7 @@ export type AiDraftParent = {
   values: Record<string, ApiRenderInputValue>;
 };
 
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(max, Math.max(min, Math.round(value) || min));
+type DraftFile = { name: string; id: string; kind: 'document' | 'media'; status: 'uploading' | 'processing' | 'ready' | 'error' };
 
 export function AiDraftDialog({
   open,
@@ -92,7 +81,8 @@ export function AiDraftDialog({
   contract,
   parent,
   initialVaryKeys,
-  initialCount,
+  maxRows = API_RENDER_SUGGEST_ROWS_MAX,
+  anchor,
   onDrafted,
 }: {
   open: boolean;
@@ -105,14 +95,14 @@ export function AiDraftDialog({
   parent: AiDraftParent | null;
   /** What the path that opened this already decided may change — a cell ticks only its own key. */
   initialVaryKeys?: string[] | null;
-  initialCount?: number | null;
+  maxRows?: number;
+  anchor?: Element | null;
   onDrafted: (response: ApiRenderSuggestRowsResponse) => void;
 }) {
-  const editable = contract.variables.filter((variable) => !variable.reserved);
   const [prompt, setPrompt] = useState('');
-  const [count, setCount] = useState(parent ? 3 : 5);
-  const [forks, setForks] = useState(0);
-  const [vary, setVary] = useState<string[]>(() => editable.map((variable) => variable.key));
+  const [files, setFiles] = useState<DraftFile[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [drafted, setDrafted] = useState<ApiRenderSuggestRowsResponse | null>(null);
@@ -122,36 +112,110 @@ export function AiDraftDialog({
   // biome-ignore lint/correctness/useExhaustiveDependencies: only opening resets the form.
   useEffect(() => {
     if (!open) return;
-    // The checker scales to zero and takes about ninety seconds to wake: start it while they type.
-    warmLaya();
     setDrafted(null);
-    setCount(initialCount ?? (parent ? 3 : 5));
-    setForks(0);
-    setVary(initialVaryKeys?.length ? initialVaryKeys : editable.map((variable) => variable.key));
+    setFiles([]);
     setProblem(null);
-  }, [open, parent?.id, initialCount, initialVaryKeys]);
+  }, [open, parent?.id]);
 
-  // Rows and their variations together stay within what one draft may return.
-  const maxForks = Math.min(
-    API_RENDER_SUGGEST_FORKS_MAX,
-    Math.floor(API_RENDER_SUGGEST_ROWS_MAX / count) - 1,
-  );
-  const total = parent ? count : count * (1 + Math.min(forks, Math.max(0, maxForks)));
+  useEffect(() => {
+    const pending = files.filter((file) => file.kind === 'document' && file.status === 'processing');
+    if (!open || pending.length === 0) return;
+    const timer = setTimeout(() => {
+      void Promise.all(pending.map(async (file) => {
+        try {
+          const result = await apiRendersApi.draftSourcesStatus({ brandId, documentIds: [file.id] });
+          setFiles((current) => current.map((item) => item.id === file.id ? { ...item, status: result.status } : item));
+        } catch {
+          setFiles((current) => current.map((item) => item.id === file.id ? { ...item, status: 'error' } : item));
+        }
+      }));
+    }, 2_000);
+    return () => clearTimeout(timer);
+  }, [brandId, files, open]);
+
+  const upload = async (selected: FileList | null) => {
+    if (!selected?.length) return;
+    setUploading(true);
+    setProblem(null);
+    const next = [...files];
+    try {
+      for (const file of Array.from(selected)) {
+        const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
+        if (
+          format.accepted &&
+          (format.originalKind === 'image' || format.originalKind === 'video')
+        ) {
+          if (next.filter((item) => item.kind === 'media').length >= 6)
+            throw new Error('Add at most six images or videos per draft.');
+          const pending = { name: file.name, id: crypto.randomUUID(), kind: 'media' as const, status: 'uploading' as const };
+          setFiles((current) => [...current, pending]);
+          try {
+            const result = await uploadMediaAsset({ brandId, file });
+            const ready: DraftFile = { ...pending, id: result.assetId, status: 'ready' };
+            next.push(ready);
+            setFiles((current) => current.map((item) => item.id === pending.id ? ready : item));
+          } catch (error) {
+            setFiles((current) => current.map((item) => item.id === pending.id ? { ...item, status: 'error' } : item));
+            throw error;
+          }
+        } else if (hasDocumentExtension(file.name)) {
+          if (next.filter((item) => item.kind === 'document').length >= 5)
+            throw new Error('Add at most five documents per draft.');
+          const pending = { name: file.name, id: crypto.randomUUID(), kind: 'document' as const, status: 'uploading' as const };
+          setFiles((current) => [...current, pending]);
+          try {
+            const result = await uploadBrandDocument({ brandId, file });
+            const processing: DraftFile = { ...pending, id: result.documentId, status: 'processing' };
+            next.push(processing);
+            setFiles((current) => current.map((item) => item.id === pending.id ? processing : item));
+          } catch (error) {
+            setFiles((current) => current.map((item) => item.id === pending.id ? { ...item, status: 'error' } : item));
+            throw error;
+          }
+        } else throw new Error(`Unsupported file: ${file.name}`);
+      }
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : 'Could not upload this file.');
+    } finally {
+      if (fileInput.current) fileInput.current.value = '';
+      setUploading(false);
+    }
+  };
 
   const draft = async () => {
-    if (!prompt.trim() || (parent && vary.length === 0)) return;
+    if ((!prompt.trim() && files.length === 0) || maxRows < 1 || files.some((file) => file.status === 'error' || file.status === 'uploading')) return;
     setBusy(true);
     setProblem(null);
     try {
+      const documentIds = files.filter((file) => file.kind === 'document').map((file) => file.id);
+      if (documentIds.length) {
+        let ready = false;
+        for (let attempt = 0; attempt < 30; attempt += 1) {
+          const source = await apiRendersApi.draftSourcesStatus({ brandId, documentIds });
+          if (source.status === 'error')
+            throw new Error('A source file could not be read. Remove it and try again.');
+          if (source.status === 'ready') {
+            ready = true;
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1_000));
+        }
+        if (!ready) throw new Error('Files are still processing. Try Draft again shortly.');
+      }
       const response = await apiRendersApi.suggestRows({
         brandId,
         ...(bindingId ? { bindingId } : {}),
         templateKey: contract.template.key,
         contractHash: contract.template.contractHash,
         prompt: prompt.trim(),
-        count,
-        forksPerRow: parent ? 0 : Math.min(forks, Math.max(0, maxForks)),
-        ...(parent ? { parent, varyKeys: vary } : {}),
+        count: Math.min(API_RENDER_SUGGEST_ROWS_MAX, maxRows),
+        autoCount: true,
+        documentIds,
+        mediaAssetIds: files.filter((file) => file.kind === 'media').map((file) => file.id),
+        forksPerRow: 0,
+        ...(parent
+          ? { parent, ...(initialVaryKeys?.length ? { varyKeys: initialVaryKeys } : {}) }
+          : {}),
       });
       if (response.rows.length === 0) {
         setProblem(
@@ -159,13 +223,13 @@ export function AiDraftDialog({
             'Nothing usable came back. Try a more specific brief.',
             ...response.unfilled,
             ...response.dropped.slice(0, 3),
+            ...(response.sourceWarnings ?? []),
           ].join(' '),
         );
         return;
       }
       setPrompt('');
-      // Nothing flagged — every row passed, was unsure, or went unchecked: nothing to show, so the
-      // rows go straight in.
+      // A source-backed draft is reviewed in the grid; only a legacy flagged gate adds a step.
       if (!response.rows.some(flaggedRow)) {
         onDrafted(response);
         onOpenChange(false);
@@ -180,7 +244,11 @@ export function AiDraftDialog({
       setProblem(
         message.includes('suggest_unavailable')
           ? 'The AI writer is unavailable right now. Try again in a few minutes, or add rows by hand.'
-          : describeRenderDiscoveryFailure(message),
+          : message.startsWith('A source file') || message.startsWith('Files are still processing')
+            ? message
+            : message.includes('render_draft_file_') || message.includes('render_draft_media_')
+              ? 'A source file is unavailable. Remove it and try again.'
+              : describeRenderDiscoveryFailure(message),
       );
     } finally {
       setBusy(false);
@@ -199,14 +267,17 @@ export function AiDraftDialog({
     const byId = new Set(drafted.rows.map((row) => row.id));
     const kept = keptRows(drafted.rows, ticked).length;
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Some rows failed your brand’s rules</DialogTitle>
-            <DialogDescription>
-              A row that failed a rule starts unticked — read why, and keep it if you disagree.
-            </DialogDescription>
-          </DialogHeader>
+      <Popover open={open} onOpenChange={onOpenChange}>
+        <PopoverContent
+          anchor={anchor ?? undefined}
+          align="start"
+          className="max-h-[70vh] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto"
+          aria-label="Review drafted rows"
+        >
+          <h2 className="text-sm font-semibold">Some rows failed your brand’s rules</h2>
+          <p className="mt-1 mb-3 text-xs text-muted-foreground">
+            A failed row starts unticked. Keep it if you disagree.
+          </p>
           <ul className="flex max-h-80 flex-col gap-2 overflow-y-auto">
             {drafted.rows.map((row) => {
               const sentence = row.gate ? gateSentence(row.gate, labels) : null;
@@ -243,35 +314,39 @@ export function AiDraftDialog({
               );
             })}
           </ul>
-          <DialogFooter>
+          <div className="mt-4 flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setDrafted(null)}>
               Back
             </Button>
             <Button type="button" disabled={kept === 0} onClick={addChecked}>
               Add {kept} {kept === 1 ? 'row' : 'rows'}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </PopoverContent>
+      </Popover>
     );
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => (busy ? undefined : onOpenChange(next))}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>
-            {parent ? `Vary “${parent.label}” with AI` : 'Draft rows with AI'}
-          </DialogTitle>
-          <DialogDescription>
-            {parent
-              ? 'New variations of this row that change only what you tick. They arrive proposed: keep the ones you want.'
-              : 'Rows from a brief, with pictures from your Library and colours from your palette. They arrive proposed: keep the ones you want.'}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-4">
+    <Popover open={open} onOpenChange={(next) => !busy && !uploading && onOpenChange(next)}>
+      <PopoverContent
+        anchor={anchor ?? undefined}
+        align="start"
+        className="max-h-[70vh] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto"
+        aria-label={parent ? `Vary ${parent.label} with AI` : 'Draft rows with AI'}
+      >
+        <h2 className="text-sm font-semibold">
+          {parent ? `Vary “${parent.label}” with AI` : 'Draft rows with AI'}
+        </h2>
+        <p className="mt-1 mb-4 text-xs text-muted-foreground">
+          Add a brief, files, or both. AI chooses the useful rows; review them in the grid before
+          rendering.
+        </p>
+        <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="ai-draft-prompt">Brief</Label>
+            <Label htmlFor="ai-draft-prompt">
+              Brief <span className="font-normal text-muted-foreground">(optional with files)</span>
+            </Label>
             <Textarea
               id="ai-draft-prompt"
               value={prompt}
@@ -285,82 +360,67 @@ export function AiDraftDialog({
               onChange={(event) => setPrompt(event.target.value)}
             />
           </div>
-          <div className="flex flex-wrap gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ai-draft-count">{parent ? 'Variations' : 'Rows'}</Label>
-              <Input
-                id="ai-draft-count"
-                type="number"
-                min={1}
-                max={API_RENDER_SUGGEST_ROWS_MAX}
-                className="w-24"
-                value={count}
-                onChange={(event) =>
-                  setCount(clamp(Number(event.target.value), 1, API_RENDER_SUGGEST_ROWS_MAX))
-                }
-              />
-            </div>
-            {parent ? null : (
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="ai-draft-forks">Variations of each</Label>
-                <Input
-                  id="ai-draft-forks"
-                  type="number"
-                  min={0}
-                  max={Math.max(0, maxForks)}
-                  className="w-24"
-                  value={Math.min(forks, Math.max(0, maxForks))}
-                  onChange={(event) =>
-                    setForks(clamp(Number(event.target.value), 0, Math.max(0, maxForks)))
-                  }
-                />
-              </div>
+          <input
+            ref={fileInput}
+            type="file"
+            multiple
+            accept={`${ACCEPTED_DOCUMENT_EXTENSIONS},image/*,video/*`}
+            className="sr-only"
+            aria-label="Choose source files"
+            onChange={(event) => void upload(event.target.files)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="self-start gap-1.5"
+            disabled={uploading || busy}
+            onClick={() => fileInput.current?.click()}
+          >
+            {uploading ? (
+              <Loader2 className="size-3.5 animate-spin" aria-hidden />
+            ) : (
+              <Paperclip className="size-3.5" aria-hidden />
             )}
-            <p className="self-end pb-1.5 text-xs text-muted-foreground tabular-nums">
-              {total} {total === 1 ? 'row' : 'rows'} in all
-            </p>
-          </div>
-          {parent ? (
-            <fieldset className="flex flex-col gap-1.5">
-              <legend className="mb-1.5 text-sm font-medium">What may change</legend>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                {editable.map((variable) => (
-                  // Siblings, not a checkbox inside its label: the label's own click would
-                  // toggle it straight back.
-                  <div key={variable.key} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`ai-draft-vary-${variable.key}`}
-                      checked={vary.includes(variable.key)}
-                      onCheckedChange={(checked) =>
-                        setVary((current) =>
-                          checked
-                            ? [...current, variable.key]
-                            : current.filter((key) => key !== variable.key),
-                        )
-                      }
-                    />
-                    <Label
-                      htmlFor={`ai-draft-vary-${variable.key}`}
-                      className="text-xs font-normal"
-                    >
-                      {readableLayerName(variable.label)}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </fieldset>
+            {uploading ? 'Uploading…' : 'Add files'}
+          </Button>
+          {files.length ? (
+            <ul className="flex flex-col gap-1 text-xs">
+              {files.map((file) => (
+                <li
+                  key={file.id}
+                  className="flex items-center justify-between gap-2 rounded border px-2 py-1"
+                >
+                  <span className="truncate">{file.name} · {file.status === 'error' ? 'Could not read; remove and add again' : file.status === 'ready' ? `Ready · ${file.id}` : file.status === 'processing' ? 'Reading file…' : 'Uploading…'}</span>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${file.name}`}
+                    disabled={busy || uploading}
+                    onClick={() =>
+                      setFiles((current) => current.filter((item) => item.id !== file.id))
+                    }
+                  >
+                    <X className="size-3.5" aria-hidden />
+                  </button>
+                </li>
+              ))}
+            </ul>
           ) : null}
+          <p className="text-xs text-muted-foreground">
+            PDF, Word, PowerPoint, Excel, CSV, text, images, and video. Files stay in your brand
+            files.
+          </p>
           {problem ? (
             <p role="alert" className="text-sm text-destructive">
               {problem}
             </p>
           ) : null}
         </div>
-        <DialogFooter>
+        <div className="mt-4 flex justify-end gap-2">
           <Button
             type="button"
             variant="outline"
-            disabled={busy}
+            disabled={busy || uploading}
             onClick={() => onOpenChange(false)}
           >
             Cancel
@@ -368,7 +428,7 @@ export function AiDraftDialog({
           <Button
             type="button"
             className="gap-2"
-            disabled={busy || !prompt.trim() || (parent !== null && vary.length === 0)}
+            disabled={busy || uploading || maxRows < 1 || files.some((file) => file.status === 'error' || file.status === 'uploading') || (!prompt.trim() && files.length === 0)}
             onClick={() => void draft()}
           >
             {busy ? (
@@ -378,9 +438,9 @@ export function AiDraftDialog({
             )}
             Draft
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

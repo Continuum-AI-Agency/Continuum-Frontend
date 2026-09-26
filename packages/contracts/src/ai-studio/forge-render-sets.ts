@@ -11,6 +11,7 @@ import {
   type EncodeSettingKey,
   type EncodeSettings,
   flattenEncodeSettings,
+  forgeRowEvidenceMapSchema,
   unflattenEncodeSettings,
 } from './api-renders';
 
@@ -73,6 +74,8 @@ export const forgeRenderSetRowSchema = z
     parentId: z.string().uuid().nullable(),
     label: z.string().trim().min(1).max(200),
     overrides: apiRenderVariableMapSchema.default({}),
+    /** Evidence belongs to this row's own values; edits remove the corresponding entry. */
+    evidence: forgeRowEvidenceMapSchema.optional(),
     clearedKeys: z.array(apiRenderVariableKeySchema).default([]),
     outputIds: z.array(z.string().min(1)).default([]),
     /** Output settings authored on THIS row, keyed by public output id. Children inherit. */

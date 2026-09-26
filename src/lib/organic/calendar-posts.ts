@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { plannerDayIdInZone } from '@continuum/contracts';
 import type { OrganicCalendarPostedContent } from '@/components/organic/primitives/types';
 import type { OrganicPlatformKey } from '@/lib/organic/platforms';
 import { isOrganicPlatformKey } from '@/lib/organic/platforms';
@@ -48,6 +49,14 @@ export const calendarPostsResponseSchema = z.object({
 
 export type CalendarPostsResponse = z.infer<typeof calendarPostsResponseSchema>;
 
+export function shouldFetchExternalCalendarPosts(input: {
+  databaseCount: number;
+  includeExternal?: boolean;
+}): boolean {
+  if (input.includeExternal === false) return false;
+  return input.includeExternal === true || input.databaseCount === 0;
+}
+
 export function formatCalendarDayId(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -81,13 +90,18 @@ export function getWeekRange(weekStart: Date): { start: string; end: string } {
   };
 }
 
-export function formatPostedTimeLabel(timestamp: string): string {
+export function formatPostedTimeLabel(timestamp: string, timeZone?: string): string {
   const parsed = new Date(timestamp);
   if (Number.isNaN(parsed.getTime())) return '';
   return new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
     minute: '2-digit',
+    timeZone,
   }).format(parsed);
+}
+
+export function formatPostedDayId(timestamp: string, timeZone?: string): string | null {
+  return plannerDayIdInZone(timestamp, timeZone);
 }
 
 export function normalizeCalendarPlatform(value: unknown): OrganicPlatformKey {

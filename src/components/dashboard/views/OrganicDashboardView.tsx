@@ -76,22 +76,25 @@ export function OrganicDashboardView({
         }
       />
 
-      <CompetitorOrganicTable brandId={brandId} />
+      <div className="grid min-w-0 grid-cols-1 divide-y divide-border lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+        <CompetitorOrganicTable brandId={brandId} />
 
-      <div className="min-h-[var(--dashboard-compact-panel-min-height)]">
-        <BrandTrendsPanel
-          trends={trendsAndEvents.trends}
-          events={trendsAndEvents.events}
-          questionsByNiche={questionsByNiche}
-          brandId={brandId}
-          country={trendsAndEvents.country}
-          generatedAt={generatedAt}
-          status={trendsAndEvents.status ?? insightsStatus}
-          actionSlot={<ModuleShortcutLink href="/organic?tab=metrics" label="Open metrics" />}
-          statusSlot={
-            <BrandInsightsGenerateButton brandId={brandId} lastGeneratedAt={generatedAt} force />
-          }
-        />
+        <div className="min-w-0 min-h-[var(--dashboard-compact-panel-min-height)]">
+          <BrandTrendsPanel
+            className="h-full"
+            trends={trendsAndEvents.trends}
+            events={trendsAndEvents.events}
+            questionsByNiche={questionsByNiche}
+            brandId={brandId}
+            country={trendsAndEvents.country}
+            generatedAt={generatedAt}
+            status={trendsAndEvents.status ?? insightsStatus}
+            actionSlot={<ModuleShortcutLink href="/organic?tab=metrics" label="Open metrics" />}
+            statusSlot={
+              <BrandInsightsGenerateButton brandId={brandId} lastGeneratedAt={generatedAt} force />
+            }
+          />
+        </div>
       </div>
 
       <InstagramOrganicReportingWidget

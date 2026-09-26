@@ -104,6 +104,57 @@ describe('CompetitorPostHoverTile face', () => {
     expect(queryByTestId('format-label')?.textContent).toBe('Photo');
   });
 
+  it('shows a YouTube video raw: badge, views, freshness, no multiplier, opens YouTube', () => {
+    const capturedAt = new Date(Date.now() - 3 * 60 * 60_000).toISOString();
+    const { getByTestId, queryByTestId, getByRole, container } = wrap(
+      <CompetitorPostHoverTile
+        brandId="b1"
+        view={view(
+          { format: 'photo', instagramUsername: '@apple' },
+          {
+            kind: 'post',
+            permalink: 'https://www.youtube.com/watch?v=abc',
+            viewCount: 120000,
+            likeCount: null,
+            outlierScore: null,
+            baselineEngagement: null,
+            items: [{ kind: 'image', url: 'https://i.ytimg.com/vi/abc/hqdefault.jpg' }],
+            platform: 'youtube',
+            capturedAt,
+          },
+        )}
+      />,
+    );
+    expect(getByTestId('platform-badge').textContent).toBe('Video');
+    expect(queryByTestId('format-label')).toBeNull();
+    expect(queryByTestId('outlier-badge')).toBeNull();
+    expect(container.querySelector('[data-metric="views"]')?.getAttribute('data-value')).toBe(
+      '120000',
+    );
+    expect(getByTestId('captured-at').textContent).toBe('Updated 3h ago');
+    const link = getByRole('link', { name: 'Open The Duchess on YouTube' });
+    expect(link.getAttribute('href')).toBe('https://www.youtube.com/watch?v=abc');
+    expect(link.getAttribute('target')).toBe('_blank');
+  });
+
+  it('labels a YouTube Short as a Short', () => {
+    const { getByTestId } = wrap(
+      <CompetitorPostHoverTile
+        brandId="b1"
+        view={view(
+          { format: 'reel' },
+          {
+            items: [{ kind: 'image', url: 'https://i.ytimg.com/vi/s1/hqdefault.jpg' }],
+            outlierScore: null,
+            platform: 'youtube',
+            capturedAt: null,
+          },
+        )}
+      />,
+    );
+    expect(getByTestId('platform-badge').textContent).toBe('Short');
+  });
+
   it('names the brand terms a post matched when sorted for the brand', () => {
     const { getByTestId } = wrap(
       <CompetitorPostHoverTile

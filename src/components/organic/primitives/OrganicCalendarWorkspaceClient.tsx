@@ -4,6 +4,7 @@ import {
   DEFAULT_REEL_VIDEO_BATCH_MAX,
   type OneShotPostResponse,
   type PublishPlatform,
+  plannerDayIdInZone,
   resolvePlannerTimeZone,
 } from '@continuum/contracts';
 import { ChevronLeft, X } from 'lucide-react';
@@ -13,7 +14,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useGenerateDraftMedia } from '@/components/organic/hooks/useGenerateDraftMedia';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -28,7 +28,10 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useBrandInsightsRefresh } from '@/lib/brand-insights/useBrandInsightsRefresh';
 import { pluralize } from '@/lib/format/pluralize';
 import { readSavedAccountSelection } from '@/lib/organic/account-selection';
-import { brandStorageKeyAiStudioLastDraft } from '@/lib/organic/ai-studio-bridge';
+import {
+  aiStudioHandoffIssue,
+  brandStorageKeyAiStudioLastDraft,
+} from '@/lib/organic/ai-studio-bridge';
 import type { CalendarPostAccountsByPlatform } from '@/lib/organic/calendar-posts';
 import { evaluateDraftReadiness } from '@/lib/organic/draftReadiness';
 import { mapOneShotPostResponseToCalendarDraft } from '@/lib/organic/mapPlacementToDraft';
@@ -68,16 +71,15 @@ import {
   UNSCHEDULED_DAY_ID,
 } from './calendar-utils';
 import { DestructiveConfirmationProvider } from './DestructiveConfirmation';
-import { StatusBadge } from './DraftCardBadges';
 import {
   DraftDeletionConfirmationProvider,
   useDraftDeletionConfirmation,
 } from './DraftDeletionConfirmation';
 import { OrganicCreativesPicker } from './OrganicCreativesPicker';
 import { OrganicDraftPreview } from './OrganicDraftPreview';
+import { PostedContentPreview } from './PostedContentQuickLook';
 import { ListViewSkeleton, MonthGridSkeleton, PlannerViewSkeleton } from './PlannerViewSkeletons';
 import { PlannerWorkflowRail, resolvePlannerStage } from './PlannerWorkflowRail';
-import { PostedContentPreview } from './PostedContentQuickLook';
 import { usePlannerDateAnchors } from './planner-date-anchor';
 import {
   buildPlannerPlatforms,
@@ -137,6 +139,7 @@ type OrganicCalendarWorkspaceClientProps = {
   maxTrendSelections?: number;
   brandProfileId?: string;
   brandName?: string;
+  brandTimeZone?: string;
   userId?: string;
   instagramAccountId?: string;
   initialWeekStart?: string | null;
@@ -173,6 +176,7 @@ function OrganicCalendarWorkspaceInner({
   maxTrendSelections,
   brandProfileId,
   brandName,
+  brandTimeZone,
   instagramAccountId,
   initialWeekStart,
   initialSelectedDraftId,
@@ -336,6 +340,9 @@ function OrganicCalendarWorkspaceInner({
   const { weekStart, setWeekStart, monthAnchorDate, setMonthAnchorDate } = usePlannerDateAnchors({
     initialWeekStart: initialWeekStart ?? undefined,
     persistedWeekStartId,
+    now: new Date(
+      `${plannerDayIdInZone(new Date().toISOString(), brandTimeZone) ?? formatDayId(new Date())}T12:00:00`,
+    ),
   });
   const [trendsDrawerOpen, setTrendsDrawerOpen] = React.useState(false);
 
@@ -489,11 +496,21 @@ function OrganicCalendarWorkspaceInner({
   }, [handleWeekChange, weekStart]);
 
   const handleToday = React.useCallback(() => {
-    const today = new Date();
+    const todayId =
+      plannerDayIdInZone(new Date().toISOString(), brandTimeZone) ?? formatDayId(new Date());
+    const today = new Date(`${todayId}T12:00:00`);
     clearAll();
     setWeekStart(startOfWeek(today));
-    setFocusedDayId(formatDayId(today));
-  }, [clearAll, setFocusedDayId, setWeekStart]);
+    setFocusedDayId(todayId);
+  }, [brandTimeZone, clearAll, setFocusedDayId, setWeekStart]);
+
+  const handleMonthToday = React.useCallback(() => {
+    const todayId =
+      plannerDayIdInZone(new Date().toISOString(), brandTimeZone) ?? formatDayId(new Date());
+    clearAll();
+    setMonthAnchorDate(new Date(`${todayId}T12:00:00`));
+    setFocusedDayId(todayId);
+  }, [brandTimeZone, clearAll, setFocusedDayId, setMonthAnchorDate]);
 
   const handlePreviousMonth = React.useCallback(() => {
     const prev = new Date(monthAnchorDate);
@@ -632,6 +649,7 @@ function OrganicCalendarWorkspaceInner({
     (selectedId && lastResolvedDraftRef.current?.id === selectedId
       ? lastResolvedDraftRef.current
       : null);
+  const studioIssue = previewDraft ? aiStudioHandoffIssue(previewDraft) : null;
 
   React.useEffect(() => {
     if (selectedId) setSelectedPost(null);
@@ -1317,7 +1335,11 @@ function OrganicCalendarWorkspaceInner({
                   <div className="mb-2 flex shrink-0 items-center justify-between pb-1.5">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Post Preview
-                      {previewPost ? ` · ${previewPost.post.dayId}` : ''}
+                      {previewDraft?.dateLabel
+                        ? ` · ${previewDraft.dateLabel}`
+                        : previewPost
+                          ? ` · ${previewPost.post.dayId}`
+                          : ''}
                     </p>
                     <div className="flex items-center gap-1.5">
                       {previewDraft?.mediaSuggestion?.reel?.composition &&
@@ -1334,37 +1356,39 @@ function OrganicCalendarWorkspaceInner({
                             : 'Ready to render'}
                         </Button>
                       ) : null}
-                      {previewDraft ? (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger
-                              render={
-                                <span>
-                                  <Button
-                                    type="button"
-                                    variant="secondary"
-                                    size="sm"
-                                    disabled={!brandProfileId || !previewDraft}
-                                    onClick={handleOpenInAiStudio}
-                                    style={
-                                      !brandProfileId || !previewDraft
-                                        ? { pointerEvents: 'none' }
-                                        : undefined
-                                    }
-                                  >
-                                    {previewDraft?.mediaSuggestion?.reel?.composition
-                                      ? 'Edit in AI Studio'
-                                      : 'Open in AI Studio'}
-                                  </Button>
-                                </span>
-                              }
-                            />
-                            {!brandProfileId ? (
-                              <TooltipContent>Select a brand to use AI Studio</TooltipContent>
-                            ) : null}
-                          </Tooltip>
-                        </TooltipProvider>
-                      ) : null}
+                      {previewDraft ? <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <span>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="sm"
+                                  disabled={
+                                    !brandProfileId || !previewDraft || Boolean(studioIssue)
+                                  }
+                                  onClick={handleOpenInAiStudio}
+                                  style={
+                                    !brandProfileId || !previewDraft || studioIssue
+                                      ? { pointerEvents: 'none' }
+                                      : undefined
+                                  }
+                                >
+                                  {previewDraft?.mediaSuggestion?.reel?.composition
+                                    ? 'Edit in AI Studio'
+                                    : 'Open in AI Studio'}
+                                </Button>
+                              </span>
+                            }
+                          />
+                          {!brandProfileId || studioIssue ? (
+                            <TooltipContent>
+                              {!brandProfileId ? 'Select a brand to use AI Studio' : studioIssue}
+                            </TooltipContent>
+                          ) : null}
+                        </Tooltip>
+                      </TooltipProvider> : null}
                       <Button
                         type="button"
                         variant="ghost"
@@ -1376,19 +1400,6 @@ function OrganicCalendarWorkspaceInner({
                       </Button>
                     </div>
                   </div>
-
-                  {/* The preview's status reads from the same presentation map as the card's
-                      pill — one status, one hue, one word, wherever it is shown. */}
-                  {previewDraft ? (
-                    <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                      <Badge variant="outline">{previewDraft.platforms[0] ?? 'Unassigned'}</Badge>
-                      <StatusBadge status={previewDraft.status} format={previewDraft.format} />
-                      <Badge variant="outline">
-                        {previewDraft.dateLabel || 'Unscheduled'} ·{' '}
-                        {previewDraft.timeLabel || 'No time'}
-                      </Badge>
-                    </div>
-                  ) : null}
 
                   <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/45 bg-background/80">
                     {previewPost ? (
@@ -1434,9 +1445,12 @@ function OrganicCalendarWorkspaceInner({
             }
             workspace={
               <section className="relative flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden">
-                <PlannerWorkflowRail currentStage={plannerStage} insight={plannerInsight} />
+                {viewMode !== 'month' && (
+                  <PlannerWorkflowRail currentStage={plannerStage} insight={plannerInsight} />
+                )}
                 <div>
                   <CalendarToolbar
+                    compact={viewMode === 'month'}
                     viewMode={viewMode}
                     onViewModeChange={handleViewModeChange}
                     dateRange={dateRange}
@@ -1531,6 +1545,9 @@ function OrganicCalendarWorkspaceInner({
                         <OrganicMonthlyCalendar
                           days={gridDays}
                           monthAnchorDate={monthAnchorDate}
+                          todayId={
+                            plannerDayIdInZone(new Date().toISOString(), brandTimeZone) ?? undefined
+                          }
                           platforms={plannerPlatforms}
                           postedContent={postedContent}
                           selectedDraftId={selectedId}
@@ -1549,6 +1566,7 @@ function OrganicCalendarWorkspaceInner({
                           }
                           onPreviousMonth={handlePreviousMonth}
                           onNextMonth={handleNextMonth}
+                          onToday={handleMonthToday}
                           onRegenerate={handleRegenerate}
                           onDeleteDraft={(id) => requestDraftDeletion([id], bulkDeleteDrafts)}
                         />

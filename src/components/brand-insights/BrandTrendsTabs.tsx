@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -13,6 +13,7 @@ import { BrandEventsList } from './BrandEventsList';
 import { BrandQuestionsList } from './BrandQuestionsList';
 import { BrandTrendsGrid } from './BrandTrendsGrid';
 import { countQuestions } from './questions-utils';
+import { TiktokTrendsList } from './TiktokTrendsList';
 
 type Props = {
   trends: BrandInsightsTrend[];
@@ -22,8 +23,16 @@ type Props = {
   generatedAt?: string;
 };
 
-export function BrandTrendsTabs({ trends, events = [], questionsByNiche, generatedAt }: Props) {
+export function BrandTrendsTabs({
+  trends,
+  events = [],
+  questionsByNiche,
+  brandId,
+  generatedAt,
+}: Props) {
   const questionsCount = useMemo(() => countQuestions(questionsByNiche), [questionsByNiche]);
+  // TikTok trends load only once the tab is opened: a cold load queries TikTok.
+  const [tab, setTab] = useState('trends');
 
   const inferredPlatforms = useMemo(() => {
     const trendAndEventPlatforms = [...trends, ...events].flatMap((item) =>
@@ -44,8 +53,12 @@ export function BrandTrendsTabs({ trends, events = [], questionsByNiche, generat
   }, [events, questionsByNiche, trends]);
 
   return (
-    <Tabs defaultValue="trends" className="flex flex-col gap-1">
-      <TabsList className="grid h-7 w-full grid-cols-3 gap-0.5 p-0.5">
+    <Tabs
+      value={tab}
+      onValueChange={(next) => setTab(String(next))}
+      className="flex flex-col gap-1"
+    >
+      <TabsList className="grid h-7 w-full grid-cols-4 gap-0.5 p-0.5">
         {/* Each badge counts the items available in its own tab, never a selection
             or a cap. The aria-label says which quantity, since a bare number beside
             a tab name is ambiguous to a screen reader. */}
@@ -67,6 +80,9 @@ export function BrandTrendsTabs({ trends, events = [], questionsByNiche, generat
             {questionsCount}
           </Badge>
         </TabsTrigger>
+        <TabsTrigger value="tiktok" className="h-6 min-w-0 px-2 text-xs">
+          <span className="truncate">TikTok</span>
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="trends" className="mt-0 max-h-[clamp(160px,22dvh,400px)] overflow-y-auto">
@@ -86,6 +102,10 @@ export function BrandTrendsTabs({ trends, events = [], questionsByNiche, generat
           density="compact"
           scrollWithinSection
         />
+      </TabsContent>
+
+      <TabsContent value="tiktok" className="mt-0 max-h-[clamp(160px,22dvh,400px)] overflow-y-auto">
+        <TiktokTrendsList brandId={brandId} enabled={tab === 'tiktok'} />
       </TabsContent>
     </Tabs>
   );

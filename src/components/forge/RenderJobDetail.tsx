@@ -387,6 +387,9 @@ export function RenderJobDetail({
                 value: (
                   <span className="inline-flex items-center gap-1.5">
                     {job.status}
+                    {job.status === 'rendering' && typeof job.progressPct === 'number'
+                      ? ` ${job.progressPct}%`
+                      : ''}
                     <RenderModePill test={job.test} />
                   </span>
                 ),

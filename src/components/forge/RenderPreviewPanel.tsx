@@ -8,6 +8,7 @@ import {
   type ApiRenderVariable,
   changedKeys,
   type ForgeRenderPreview,
+  isMotion,
   motionLabel,
   readableLayerName,
 } from '@continuum/contracts';
@@ -418,6 +419,7 @@ export function RenderPreviewPanel({
   const templateKey = contract.template.key;
   // The format picked per template, so moving between rows keeps looking at the same format.
   const [picked, setPicked] = useState<Record<string, string>>({});
+  const [atSec, setAtSec] = useState<number | null>(null);
   const lastKey =
     rowId && renderSetId ? forgeQueryKeys.renderJobRowLatest(brandId, renderSetId, rowId) : null;
   // One row-scoped read per row, cached: the newest finished render of the row on screen.
@@ -509,6 +511,7 @@ export function RenderPreviewPanel({
     row?.id ?? null,
     current?.backdrop?.job.id ?? null,
     current?.backdrop?.file.fileName ?? null,
+    atSec === null ? null : String(atSec),
   ];
   const live = JSON.stringify([subject, values]);
   const settled = useDebounce(live, COMPOSE_DEBOUNCE_MS);
@@ -523,7 +526,9 @@ export function RenderPreviewPanel({
   const backdropKnown =
     (lastKey === null || lastRead) && (setKey === null || setRead) && templateRead;
   const needsCompose =
-    backdropKnown && current !== null && (current.backdrop === null || current.changed.length > 0);
+    backdropKnown &&
+    current !== null &&
+    (current.backdrop === null || current.changed.length > 0 || atSec !== null);
   const composeKey = composeKeyOf(subject, settled);
   const composed = useQuery({
     queryKey: composeKey,
@@ -538,6 +543,7 @@ export function RenderPreviewPanel({
           comp: (format as PreviewFormat).comp?.name ?? null,
         },
         values: settledValues ?? {},
+        ...(atSec !== null ? { atSec } : {}),
         backdrop: current?.backdrop
           ? { jobId: current.backdrop.job.id, fileName: current.backdrop.file.fileName }
           : null,
@@ -628,12 +634,12 @@ export function RenderPreviewPanel({
     const drawing = plan.layout ? drawLayout(plan.layout, contract.variables, values, media) : null;
     const composedPreview = composedFrame(plan.backdrop);
     const preview =
-      plan.backdrop && plan.known && plan.changed.length === 0
+      plan.backdrop && plan.known && plan.changed.length === 0 && atSec === null
         ? unchangedFrame(plan.backdrop)
         : composedPreview;
     const own = lastJob ? fileForFormat(lastJob.outputs, formats, entry.id) : null;
     let frame: PreviewFrame;
-    if (lastJob && own) {
+    if (lastJob && own && atSec === null) {
       const ownBackdrop = plan.backdrop?.job.id === lastJob.id;
       const revisionStale =
         setRevision != null &&
@@ -720,6 +726,29 @@ export function RenderPreviewPanel({
       ) : (
         <p className="m-0 text-muted-foreground">This template has no measured layout to draw.</p>
       )}
+      {contract.template.motion &&
+      isMotion(contract.template.motion.durationSec, contract.template.motion.frameRate) ? (
+        <label className="flex shrink-0 items-center gap-2 text-2xs text-muted-foreground">
+          <span>Frame</span>
+          <input
+            type="range"
+            min={0}
+            max={Math.max(
+              0,
+              Math.floor(
+                contract.template.motion.durationSec * contract.template.motion.frameRate,
+              ) - 1,
+            )}
+            value={Math.round((atSec ?? 0) * contract.template.motion.frameRate)}
+            onChange={(event) =>
+              setAtSec(Number(event.target.value) / contract.template.motion!.frameRate)
+            }
+            className="min-w-0 flex-1"
+            aria-label="Preview frame"
+          />
+          <span>{atSec === null ? 'Auto' : `${atSec.toFixed(2)}s`}</span>
+        </label>
+      ) : null}
     </div>
   );
 }

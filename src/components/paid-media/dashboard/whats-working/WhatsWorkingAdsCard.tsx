@@ -18,6 +18,7 @@ import { usePaidCreativeRecovery } from '@/hooks/usePaidCreativeRecovery';
 import { usePaidCreativeReport } from '@/hooks/usePaidCreativeReport';
 import { cn } from '@/lib/utils';
 import { VerdictHoverCard } from './VerdictHoverCard';
+import { WhatsWorkingSynopsis } from './WhatsWorkingSynopsis';
 import {
   FUNNEL_TABS,
   type FunnelTab,
@@ -181,6 +182,8 @@ export function WhatsWorkingAdsCard({
           </TabsList>
         </Tabs>
       </header>
+
+      <WhatsWorkingSynopsis className="mx-2 mt-2" synopsis={report.synopsis} />
 
       <div className="flex flex-col gap-1.5 p-2 lg:flex-row">
         <VerdictColumn

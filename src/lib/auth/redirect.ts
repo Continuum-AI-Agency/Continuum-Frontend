@@ -25,7 +25,7 @@ function normalizeFallbackPath(fallbackPath: string): string {
 }
 
 function isSafeRedirectPath(path: string): boolean {
-  if (!path.startsWith('/') || path.startsWith('//')) return false;
+  if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\')) return false;
   return !UNSAFE_REDIRECT_PREFIXES.some(
     (prefix) => path === prefix || path.startsWith(`${prefix}/`),
   );

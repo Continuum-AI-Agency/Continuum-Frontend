@@ -470,6 +470,8 @@ const WORKER_OPS_WITH_ENGINES = new Set<ActionId>([
 const ORCHESTRATED_OPS: Partial<Record<ActionId, SyncOp>> = {
   'video.subtitles': (args, config) =>
     import('./subtitlesOp').then((m) => m.runSubtitlesAction(args, config)),
+  'video.editorialCaptions': (args, config) =>
+    import('./editorialCaptionsOp').then((m) => m.runEditorialCaptionsAction(args, config)),
   // Both cutout ops sit here rather than in SYNC_OPS/WORKER_OPS because the matting
   // runs on a GPU in Cloud Run: the runner's whole job is an authenticated call and
   // an SSE read. Note `image.removeBackground` declares `execution: 'sync'` to satisfy

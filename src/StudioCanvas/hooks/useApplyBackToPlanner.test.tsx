@@ -62,6 +62,7 @@ function makeSeed(overrides: Partial<PlannerAiStudioHandoff> = {}): PlannerAiStu
   return {
     schemaVersion: 'planner_ai_handoff_v1',
     draftId: 'draft-1',
+    sourceUpdatedAt: '2026-08-23T00:00:00.000Z',
     brandProfileId: 'brand-1',
     weekStartId: '2026-08-17',
     platform: 'instagram',
@@ -79,6 +80,7 @@ function imageNode(id: string, source: string, x: number): StudioNode {
   return {
     id,
     type: 'nanoGen',
+    selected: true,
     position: { x, y: 0 },
     data: { generatedImage: source },
   } as unknown as StudioNode;
@@ -88,6 +90,7 @@ function videoNode(id: string, source: string, x: number): StudioNode {
   return {
     id,
     type: 'videoGen',
+    selected: true,
     position: { x, y: 0 },
     data: { generatedVideo: source },
   } as unknown as StudioNode;
@@ -181,6 +184,7 @@ describe('useApplyBackToPlanner', () => {
       {
         id: 'layers-1',
         type: 'layerEditor',
+        selected: true,
         position: { x: 0, y: 0 },
         data: { generatedImage: 'data:image/png;base64,EDITED' },
       } as unknown as StudioNode,
@@ -237,17 +241,17 @@ describe('useApplyBackToPlanner', () => {
     });
 
     store.nodes = [
-      imageNode('img-1', 'data:image/png;base64,AAA', 0),
-      imageNode('img-2', 'data:image/png;base64,BBB', 100),
+      imageNode('organic-seed-carousel-draft-1-1', 'data:image/png;base64,AAA', 0),
+      imageNode('organic-seed-carousel-draft-1-2', 'data:image/png;base64,BBB', 100),
     ];
     rerender();
     expect(result.current.applyReadiness?.ready).toBe(false);
     expect(result.current.applyReadiness?.label).toBe('2/3 slides ready');
 
     store.nodes = [
-      imageNode('img-1', 'data:image/png;base64,AAA', 0),
-      imageNode('img-2', 'data:image/png;base64,BBB', 100),
-      imageNode('img-3', 'data:image/png;base64,CCC', 200),
+      imageNode('organic-seed-carousel-draft-1-1', 'data:image/png;base64,AAA', 0),
+      imageNode('organic-seed-carousel-draft-1-2', 'data:image/png;base64,BBB', 100),
+      imageNode('organic-seed-carousel-draft-1-3', 'data:image/png;base64,CCC', 200),
       imageNode('img-4', 'data:image/png;base64,DDD', 300),
     ];
     rerender();
@@ -263,7 +267,7 @@ describe('useApplyBackToPlanner', () => {
 
   it('falls back to one slide when a carousel seed carries no authoritativeCount', () => {
     const seed = makeSeed({ postType: 'carousel', format: 'Carousel' });
-    store.nodes = [imageNode('img-1', 'data:image/png;base64,AAA', 0)];
+    store.nodes = [imageNode('organic-seed-carousel-draft-1-1', 'data:image/png;base64,AAA', 0)];
     const { result } = renderApply(seed, 'brand-1');
 
     expect(result.current.applyReadiness?.total).toBe(1);
@@ -293,18 +297,85 @@ describe('useApplyBackToPlanner', () => {
     });
   });
 
-  it('reports a missing pick on the first render of a multi-output LinkedIn draft', () => {
+  it('ignores an older unselected room output when applying this draft', async () => {
+    const seed = makeSeed();
+    applyBody = persistedResponse(seed, [{ role: 'image_1', kind: 'image' }]);
+    const prior = imageNode('older-draft-output', 'data:image/png;base64,OLD', 0);
+    prior.selected = false;
+    const current = imageNode('organic-seed-image-draft-1', 'data:image/png;base64,NEW', 500);
+    current.selected = false;
+    store.nodes = [prior, current];
+    const { result } = renderApply(seed, 'brand-1');
+    expect(result.current.applyReadiness?.ready).toBe(true);
+    await act(async () => {
+      await result.current.onApplyBack();
+    });
+    expect(requestBody().assets).toEqual([
+      { role: 'image_1', kind: 'image', sourceDataUrl: 'data:image/png;base64,NEW' },
+    ]);
+  });
+
+  it('applies a selected edited output instead of the original seed image', async () => {
+    const seed = makeSeed();
+    applyBody = persistedResponse(seed, [{ role: 'image_1', kind: 'image' }]);
+    const original = imageNode('organic-seed-image-draft-1', 'data:image/png;base64,OLD', 0);
+    original.selected = false;
+    store.nodes = [original, imageNode('edited-output', 'data:image/png;base64,EDITED', 500)];
+    const { result } = renderApply(seed, 'brand-1');
+    await act(async () => {
+      await result.current.onApplyBack();
+    });
+    expect(requestBody().assets).toEqual([
+      { role: 'image_2', kind: 'image', sourceDataUrl: 'data:image/png;base64,EDITED' },
+    ]);
+  });
+
+  it('saves edited TikTok copy through the Planner field endpoint with the seed revision', async () => {
+    const seed = makeSeed({
+      platform: 'tiktok',
+      workflowConcept: 'tt_text',
+      backendDraftId: 'server-draft-1',
+      sourceUpdatedAt: '2026-09-22T00:00:00Z',
+      captionPreview: 'Original caption',
+    });
+    store.nodes = [
+      {
+        id: 'organic-seed-text-draft-1',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'Edited TikTok caption' },
+      } as StudioNode,
+    ];
+    applyBody = { updated_at: '2026-09-22T00:01:00Z' };
+    const { result } = renderApply(seed, 'brand-1');
+    expect(result.current.applyReadiness?.ready).toBe(true);
+    await act(async () => {
+      await result.current.onApplyBack();
+    });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      '/api/organic/calendar/drafts/server-draft-1/fields',
+    );
+    const request = fetchMock.mock.calls[0]?.[1] as { body: string; method: string };
+    expect(request.method).toBe('PATCH');
+    expect(JSON.parse(request.body)).toEqual({
+      caption: 'Edited TikTok caption',
+      expected_updated_at: '2026-09-22T00:00:00Z',
+    });
+    expect(push).toHaveBeenCalledWith(
+      '/organic?tab=planner&draftId=draft-1&weekStartId=2026-08-17&from=ai-studio',
+    );
+  });
+
+  it('requires a real pick for a multi-output LinkedIn draft', () => {
     const seed = makeSeed({ platform: 'linkedin', format: 'LinkedIn post' });
     store.nodes = [
       imageNode('img-1', 'data:image/png;base64,AAA', 0),
       imageNode('img-2', 'data:image/png;base64,BBB', 100),
     ];
-    const { result, renders } = renderApply(seed, 'brand-1');
+    const { result } = renderApply(seed, 'brand-1');
 
-    // Before the auto-pick effect commits there is no selection, and that is the
-    // only moment the "select one" branch is reachable.
-    expect(renders[0].selectedLinkedinNodeId).toBeNull();
-    expect(renders[0].applyReadiness).toEqual({
+    expect(result.current.selectedLinkedinNodeId).toBeNull();
+    expect(result.current.applyReadiness).toEqual({
       ready: false,
       completed: 1,
       total: 1,
@@ -312,9 +383,7 @@ describe('useApplyBackToPlanner', () => {
       detail: 'Select one image output before applying.',
     });
 
-    // The auto-pick effect then chooses the first candidate, so the settled state
-    // is ready — the readiness banner never actually asks the user to choose.
-    expect(result.current.selectedLinkedinNodeId).toBe('img-1');
+    act(() => result.current.setSelectedLinkedinNodeId('img-2'));
     expect(result.current.applyReadiness?.ready).toBe(true);
   });
 
@@ -333,7 +402,7 @@ describe('useApplyBackToPlanner', () => {
     }
   });
 
-  it('auto-picks, re-picks and clears the explicit LinkedIn selection', () => {
+  it('clears a LinkedIn pick when its output disappears', () => {
     const seed = makeSeed({ platform: 'linkedin', format: 'LinkedIn post' });
     store.nodes = [
       imageNode('img-1', 'data:image/png;base64,AAA', 0),
@@ -346,16 +415,19 @@ describe('useApplyBackToPlanner', () => {
       'img-1',
       'img-2',
     ]);
-    expect(result.current.selectedLinkedinNodeId).toBe('img-1');
+    expect(result.current.selectedLinkedinNodeId).toBeNull();
 
-    // The selected node disappears from the canvas: the effect re-picks rather
-    // than leaving a dangling selection.
+    act(() => result.current.setSelectedLinkedinNodeId('img-2'));
+    expect(result.current.selectedLinkedinNodeId).toBe('img-2');
+
+    // The selected node disappears from the canvas: the effect clears it.
     store.nodes = [
       imageNode('img-3', 'data:image/png;base64,CCC', 0),
       imageNode('img-4', 'data:image/png;base64,DDD', 100),
     ];
     rerender();
-    expect(result.current.selectedLinkedinNodeId).toBe('img-3');
+    expect(result.current.selectedLinkedinNodeId).toBeNull();
+    expect(result.current.applyReadiness?.ready).toBe(false);
 
     // Down to a single candidate an explicit pick is no longer required, and the
     // selection is cleared.
@@ -377,8 +449,8 @@ describe('useApplyBackToPlanner', () => {
       { role: 'slide_2', kind: 'image', slideIndex: 1 },
     ]);
     store.nodes = [
-      imageNode('img-1', 'data:image/png;base64,AAA', 0),
-      imageNode('img-2', 'https://cdn.example.com/two.png', 100),
+      imageNode('organic-seed-carousel-draft-carousel-1', 'data:image/png;base64,AAA', 0),
+      imageNode('organic-seed-carousel-draft-carousel-2', 'https://cdn.example.com/two.png', 100),
     ];
     const { result } = renderApply(seed, 'brand-1');
 
@@ -410,11 +482,7 @@ describe('useApplyBackToPlanner', () => {
       },
     ]);
     expect(body.selection).toEqual({ required: false });
-    expect(body.contentPatch).toEqual({
-      title: 'Launch teaser',
-      summary: 'Short summary',
-      captionPreview: 'Caption preview',
-    });
+    expect(body.contentPatch).toEqual({});
 
     expect(window.localStorage.getItem(buildPendingApplyStorageKey('draft-carousel'))).toBe(
       JSON.stringify(applyBody),
@@ -435,6 +503,8 @@ describe('useApplyBackToPlanner', () => {
       imageNode('img-2', 'data:image/png;base64,BBB', 100),
     ];
     const { result } = renderApply(seed, 'brand-1');
+
+    act(() => result.current.setSelectedLinkedinNodeId('img-1'));
 
     await act(async () => {
       await result.current.onApplyBack();
@@ -460,9 +530,9 @@ describe('useApplyBackToPlanner', () => {
       { role: 'slide_3', kind: 'image', slideIndex: 2 },
     ]);
     store.nodes = [
-      imageNode('img-1', 'data:image/png;base64,AAA', 0),
-      imageNode('img-2', 'https://cdn.example.com/two.png', 100),
-      imageNode('img-3', 'iVBORw0KGgoAAAA', 200),
+      imageNode('organic-seed-carousel-draft-sources-1', 'data:image/png;base64,AAA', 0),
+      imageNode('organic-seed-carousel-draft-sources-2', 'https://cdn.example.com/two.png', 100),
+      imageNode('organic-seed-carousel-draft-sources-3', 'iVBORw0KGgoAAAA', 200),
     ];
     const { result } = renderApply(seed, 'brand-1');
 

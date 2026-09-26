@@ -57,9 +57,20 @@ async function getBrowserUserId(): Promise<string | undefined> {
   }
 }
 
-export async function startMetaSync(callbackUrl: string): Promise<MetaSyncResponse> {
+// 'instagram' = Business Login for Instagram: an Instagram professional account with no
+// Facebook Page. Omitted = Facebook Login (Pages, ads, and their linked Instagram).
+export type MetaSyncMode = 'facebook' | 'instagram';
+
+export async function startMetaSync(
+  callbackUrl: string,
+  options?: { mode?: MetaSyncMode },
+): Promise<MetaSyncResponse> {
+  const params: Record<string, string> = { callback_url: callbackUrl };
+  if (options?.mode) {
+    params.mode = options.mode;
+  }
   return http.request({
-    path: buildSyncPath('/integrations/meta/sync', { callback_url: callbackUrl }),
+    path: buildSyncPath('/integrations/meta/sync', params),
     method: 'GET',
     schema: metaSyncResponseSchema,
     cache: 'no-store',
@@ -257,7 +268,10 @@ export async function startGoogleDrivePicker(
 
 export function useStartMetaSync() {
   return useMutation({
-    mutationFn: (callbackUrl: string) => startMetaSync(callbackUrl),
+    mutationFn: (input: string | { callbackUrl: string; mode?: MetaSyncMode }) => {
+      if (typeof input === 'string') return startMetaSync(input);
+      return startMetaSync(input.callbackUrl, { mode: input.mode });
+    },
   });
 }
 

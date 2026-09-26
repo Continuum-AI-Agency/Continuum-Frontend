@@ -111,24 +111,27 @@ function KeywordSearch({ value, onChange }: { value: string; onChange: (value: s
   );
 }
 
+// YouTube posts stay out of the Library and boards: its API data may not be
+// merged with ours or kept past 30 days.
 function OrganicSave({ brandId }: { brandId: string }) {
-  return (view: CompetitorPostView): ReactNode => (
-    <div className="flex items-center gap-1.5">
-      {view.competitorId ? (
-        <SaveToBoardButton
-          brandId={brandId}
-          request={{
-            kind: 'organic',
-            competitorId: view.competitorId,
-            competitorName: view.competitorName,
-            instagramUsername: view.instagramUsername,
-            post: view.post,
-          }}
-        />
-      ) : null}
-      <SaveToLibraryButton brandId={brandId} view={view} />
-    </div>
-  );
+  return (view: CompetitorPostView): ReactNode =>
+    view.post.platform === 'youtube' ? null : (
+      <div className="flex items-center gap-1.5">
+        {view.competitorId ? (
+          <SaveToBoardButton
+            brandId={brandId}
+            request={{
+              kind: 'organic',
+              competitorId: view.competitorId,
+              competitorName: view.competitorName,
+              instagramUsername: view.instagramUsername,
+              post: view.post,
+            }}
+          />
+        ) : null}
+        <SaveToLibraryButton brandId={brandId} view={view} />
+      </div>
+    );
 }
 
 // Kept in its own component so its two queries only run while "All" is selected.

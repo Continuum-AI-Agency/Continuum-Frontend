@@ -455,6 +455,22 @@ describe('TemplateDetail', () => {
     );
   });
 
+  test('missing AEP footage names each file and directs a corrected ZIP upload', async () => {
+    renderDetail(undefined, {
+      ...SOURCE,
+      parse: {
+        ...SOURCE.parse!,
+        missingFootage: [{ name: 'Hero video', file: 'Footage/hero.mov' }],
+      },
+    });
+    expect(screen.getByText(/This template package is missing 1 media file/)).toBeTruthy();
+    expect(screen.getByText(/Hero video — Footage\/hero.mov/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Upload corrected ZIP' }));
+    expect(screen.getByRole('tab', { name: 'Source revision' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+  });
+
   test('reviews a dry plan before installing held faces', async () => {
     renderDetail();
     fireEvent.click(await screen.findByRole('button', { name: 'Fonts details' }));

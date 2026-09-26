@@ -188,6 +188,7 @@ function TimeframeSelector({
 }
 
 type CalendarToolbarProps = {
+  compact?: boolean;
   viewMode: 'week' | 'month' | 'list';
   onViewModeChange: (mode: 'week' | 'month' | 'list') => void;
   dateRange: CalendarDateRange | null;
@@ -212,29 +213,31 @@ type CalendarToolbarProps = {
   onFetchPostedContent?: () => void;
 };
 
-export function CalendarToolbar({
-  viewMode,
-  onViewModeChange,
-  dateRange,
-  onDateRangeChange,
-  selectedTrendCount,
-  maxTrendSelections,
-  isGenerating,
-  onOpenTrends,
-  onCreatePost,
-  onClear,
-  draftsCount,
-  slotProgress,
-  gridProgress,
-  gridStatus,
-  gridError,
-  onRetryGeneration,
-  onGeneratePlan,
-  isProposingPlan = false,
-  postedContentCount = 0,
-  isFetchingPostedContent = false,
-  onFetchPostedContent,
-}: CalendarToolbarProps) {
+export function CalendarToolbar(props: CalendarToolbarProps) {
+  const {
+    compact = false,
+    viewMode,
+    onViewModeChange,
+    dateRange,
+    onDateRangeChange,
+    selectedTrendCount,
+    maxTrendSelections,
+    isGenerating,
+    onOpenTrends,
+    onCreatePost,
+    onClear,
+    draftsCount,
+    slotProgress,
+    gridProgress,
+    gridStatus,
+    gridError,
+    onRetryGeneration,
+    onGeneratePlan,
+    isProposingPlan = false,
+    postedContentCount = 0,
+    isFetchingPostedContent = false,
+    onFetchPostedContent,
+  } = props;
   const showPlanned = useCalendarStore((state) => state.showPlanned);
   const setShowPlanned = useCalendarStore((state) => state.setShowPlanned);
 
@@ -245,6 +248,58 @@ export function CalendarToolbar({
   const showPlanningNote = !isGenerating && draftsCount === 0;
   const scopeLabel =
     viewMode === 'week' ? 'This week' : viewMode === 'month' ? 'This month' : 'Visible range';
+
+  if (compact) {
+    return (
+      <div className="rounded-lg bg-card/70 px-2.5 py-1.5 ring-1 ring-border/40">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="inline-flex items-center rounded-md border border-border bg-muted/35 p-0.5">
+            {(['week', 'month', 'list'] as const).map((mode) => (
+              <Button
+                key={mode}
+                type="button"
+                size="sm"
+                variant={viewMode === mode ? 'secondary' : 'ghost'}
+                className="h-7 rounded px-2.5 text-xs"
+                aria-pressed={viewMode === mode}
+                onClick={() => onViewModeChange(mode)}
+              >
+                {mode === 'week' ? 'Week' : mode === 'month' ? 'Month' : 'List'}
+              </Button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            {onGeneratePlan && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isGenerating || isProposingPlan}
+                onClick={onGeneratePlan}
+              >
+                <Sparkles data-icon="inline-start" />
+                {isProposingPlan ? 'Proposing…' : 'Generate plan'}
+              </Button>
+            )}
+            <AddPostMenu onCreatePost={onCreatePost} align="end">
+              <Button type="button" size="sm" disabled={isGenerating}>
+                <Plus data-icon="inline-start" />
+                Create content
+              </Button>
+            </AddPostMenu>
+          </div>
+        </div>
+        <details className="mt-1">
+          <summary className="w-fit cursor-pointer rounded px-1 py-0.5 text-xs text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
+            More calendar tools
+          </summary>
+          <div className="mt-2">
+            <CalendarToolbar {...props} compact={false} />
+          </div>
+        </details>
+      </div>
+    );
+  }
 
   return (
     <ContextMenu>

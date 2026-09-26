@@ -48,6 +48,19 @@ describe('recommended competitor client calls', () => {
     );
   });
 
+  it('asks for another platform only when it is not Instagram', async () => {
+    requestMock.mockResolvedValue({ items: [] });
+
+    await fetchInstagramPosts({ brandId: 'brand-1', sort: 'views', platform: 'youtube' });
+    await fetchInstagramPosts({ brandId: 'brand-1', platform: 'instagram' });
+
+    const paths = requestMock.mock.calls.map((call) => (call[0] as { path: string }).path);
+    expect(paths).toEqual([
+      '/api/competitor-ad-spy/instagram/posts?brandId=brand-1&limit=12&sort=views&platform=youtube',
+      '/api/competitor-ad-spy/instagram/posts?brandId=brand-1&limit=12',
+    ]);
+  });
+
   it('uses the route default for a non-finite Instagram feed limit', async () => {
     requestMock.mockResolvedValue({ items: [] });
 

@@ -12,7 +12,7 @@
  */
 import { type PublishPlatform, publishPlatformSchema, supportsFormat } from '@continuum/contracts';
 
-export type PostPreviewFrame = 'phone' | 'feed' | 'desktop';
+export type PostPreviewFrame = 'phone' | 'vertical' | 'feed' | 'desktop';
 
 export type PostPlatformConfig = {
   label: string;
@@ -63,7 +63,7 @@ export const POST_PLATFORMS: Readonly<Record<PublishPlatform, PostPlatformConfig
     abbr: 'TT',
     color: '#69C9D0',
     gradient: ['#69C9D0', '#010101'],
-    frame: 'phone',
+    frame: 'vertical',
     mediaTemplate: { width: 1080, height: 1920 },
     reelAspect: 9 / 16,
   },
@@ -72,7 +72,7 @@ export const POST_PLATFORMS: Readonly<Record<PublishPlatform, PostPlatformConfig
     abbr: 'YT',
     color: '#FF0000',
     gradient: ['#FF0000', '#CC0000'],
-    frame: 'phone',
+    frame: 'vertical',
     mediaTemplate: { width: 1080, height: 1920 },
     reelAspect: 9 / 16,
   },

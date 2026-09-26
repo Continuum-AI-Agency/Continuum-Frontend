@@ -191,7 +191,7 @@ export function RenderJobsGrid({
     brandId,
     trackedIds: [],
     limit: PAGE_SIZE,
-    pollIntervalMs: pushed ? false : DISCONNECTED_REFRESH_MS,
+    pollIntervalMs: active ? 5_000 : false,
     templateKey,
     // An open batch is read whole from the server; the set filter is for choosing one.
     ...(openBatchId ? { batchId: openBatchId } : renderSetId === 'all' ? {} : { renderSetId }),
@@ -363,6 +363,9 @@ export function RenderJobsGrid({
             <Badge variant={STATUS_TONE[job.status]}>
               {isInFlight(job) ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
               {job.status}
+              {job.status === 'rendering' && typeof job.progressPct === 'number'
+                ? ` ${job.progressPct}%`
+                : ''}
             </Badge>
             <RenderModePill test={job.test} />
           </span>
@@ -396,7 +399,26 @@ export function RenderJobsGrid({
         header: 'Files',
         enableSorting: false,
         cell: ({ row: { original: job } }) => (
-          <span className="tabular-nums">{filesSummary(job.outputs) || '—'}</span>
+          <span className="flex items-center gap-1.5 tabular-nums">
+            <span>{filesSummary(job.outputs) || '—'}</span>
+            {job.outputs
+              .filter((output) => /\.(mov|mxf)$/i.test(output.fileName))
+              .map((output) => (
+                <a
+                  key={output.id}
+                  href={output.url}
+                  download={output.fileName}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={`Download ${output.fileName}`}
+                  aria-label={`Download ${output.fileName}`}
+                  onClick={(event) => event.stopPropagation()}
+                  className="text-primary hover:underline"
+                >
+                  {output.fileName.split('.').pop()?.toUpperCase()}
+                </a>
+              ))}
+          </span>
         ),
       },
       {

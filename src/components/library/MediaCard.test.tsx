@@ -90,3 +90,41 @@ describe('MediaCard download affordance', () => {
     expect(opened).toHaveLength(0);
   });
 });
+
+describe('MediaCard thumbnail', () => {
+  // Tests run without next.config, so next/image wraps the chosen URL in its loader.
+  const imageSrc = () => {
+    const src = screen.getByAltText('Hero shot').getAttribute('src') ?? '';
+    return new URL(src, 'http://localhost').searchParams.get('url') ?? src;
+  };
+
+  it('paints the small thumbnail even when the preview is the full original', () => {
+    mount(
+      <MediaCard
+        brandId="brand-1"
+        asset={libraryAsset({
+          thumbnailUrl: 'https://cdn.test/render/hero-480.jpg',
+          preview: {
+            assetVersionId: 'version-1',
+            state: 'ready',
+            kind: 'image',
+            role: null,
+            signedUrl: 'https://cdn.test/hero.jpg',
+          },
+        })}
+      />,
+    );
+    expect(imageSrc()).toBe('https://cdn.test/render/hero-480.jpg');
+  });
+
+  it('falls back to the original when the thumbnail fails to load', () => {
+    mount(
+      <MediaCard
+        brandId="brand-1"
+        asset={libraryAsset({ thumbnailUrl: 'https://cdn.test/render/hero-480.jpg' })}
+      />,
+    );
+    fireEvent.error(screen.getByAltText('Hero shot'));
+    expect(imageSrc()).toBe('https://cdn.test/hero.jpg');
+  });
+});

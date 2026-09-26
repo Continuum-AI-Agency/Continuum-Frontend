@@ -2,6 +2,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useToast } from '@/components/ui/ToastProvider';
+import { request } from '@/lib/api/http';
 import {
   buildPendingApplyStorageKey,
   type PlannerAiStudioApplyRequest,
@@ -15,6 +16,7 @@ import {
   type ApplyAssetCandidate,
   collectApplyAssetCandidates,
 } from '../utils/applyAssetCandidates';
+import { buildStarterFlow } from '../utils/seedStarterFlow';
 
 // Module scope rather than a useCallback: it closes over nothing, so its identity
 // was already constant and the apply handler no longer needs it as a dependency.
@@ -54,9 +56,11 @@ async function resolveCandidateSource(source: string) {
 export function useApplyBackToPlanner({
   brandProfileId,
   organicPlannerSeed,
+  focusNodeId,
 }: {
   brandProfileId?: string;
   organicPlannerSeed?: PlannerAiStudioHandoff | null;
+  focusNodeId?: string;
 }) {
   const router = useRouter();
   const { show } = useToast();
@@ -75,7 +79,24 @@ export function useApplyBackToPlanner({
     [organicPlannerSeed],
   );
 
-  const applyCandidates = useMemo(() => collectApplyAssetCandidates(nodes), [nodes]);
+  const allowedOutputIds = useMemo(() => {
+    if (!organicPlannerSeed || organicPlannerSeed.brandProfileId !== brandProfileId)
+      return new Set<string>();
+    const ids = new Set(buildStarterFlow(organicPlannerSeed).nodes.map((node) => node.id));
+    if (focusNodeId) ids.add(focusNodeId);
+    return ids;
+  }, [brandProfileId, focusNodeId, organicPlannerSeed]);
+  const applyCandidates = useMemo(
+    () =>
+      collectApplyAssetCandidates(
+        nodes.filter(
+          (node) =>
+            allowedOutputIds.has(node.id) ||
+            (workflowSpec?.outputMode !== 'ordered' && node.selected),
+        ),
+      ),
+    [allowedOutputIds, nodes, workflowSpec?.outputMode],
+  );
   const linkedinImageCandidates = useMemo(
     () => applyCandidates.filter((candidate) => candidate.kind === 'image'),
     [applyCandidates],
@@ -85,6 +106,23 @@ export function useApplyBackToPlanner({
   );
   const applyReadiness = useMemo(() => {
     if (!organicPlannerSeed || !workflowSpec) return null;
+
+    if (workflowSpec.outputKind === 'text') {
+      const copy = nodes.find(
+        (node) => node.id === `organic-seed-text-${organicPlannerSeed.draftId}`,
+      )?.data as { value?: unknown } | undefined;
+      const caption = typeof copy?.value === 'string' ? copy.value.trim() : '';
+      const ready = Boolean(caption && caption !== organicPlannerSeed.captionPreview.trim());
+      return {
+        ready,
+        completed: ready ? 1 : 0,
+        total: 1,
+        label: ready ? 'Caption ready' : 'Edit caption',
+        detail: ready
+          ? 'Ready to save this caption to Planner.'
+          : 'Edit the caption in the text node to apply it.',
+      };
+    }
 
     const imageCount = applyCandidates.filter((candidate) => candidate.kind === 'image').length;
     const videoCount = applyCandidates.filter((candidate) => candidate.kind === 'video').length;
@@ -134,9 +172,10 @@ export function useApplyBackToPlanner({
           ? 'Ready to apply this draft back to Planner.'
           : 'Generate one image output to enable apply-back.',
     };
-  }, [applyCandidates, organicPlannerSeed, selectedLinkedinNodeId, workflowSpec]);
+  }, [applyCandidates, nodes, organicPlannerSeed, selectedLinkedinNodeId, workflowSpec]);
   const workflowSummaryLabel = useMemo(() => {
     if (!workflowSpec) return null;
+    if (workflowSpec.outputKind === 'text') return 'TikTok caption';
     if (workflowSpec.outputKind === 'video') return 'Reel workflow';
     if (workflowSpec.outputMode === 'ordered') return 'Carousel workflow';
     if (workflowSpec.requiresExplicitPickOnMultiOutput) return 'LinkedIn post workflow';
@@ -154,7 +193,7 @@ export function useApplyBackToPlanner({
     ) {
       return;
     }
-    setSelectedLinkedinNodeId(linkedinImageCandidates[0]?.nodeId ?? null);
+    setSelectedLinkedinNodeId(null);
   }, [linkedinImageCandidates, requiresExplicitSelection, selectedLinkedinNodeId]);
 
   const handleReturnToPlanner = useCallback(() => {
@@ -170,7 +209,11 @@ export function useApplyBackToPlanner({
   }, [organicPlannerSeed, router]);
 
   const handleApplyBackToPlanner = useCallback(async () => {
-    if (!organicPlannerSeed || !brandProfileId) {
+    if (
+      !organicPlannerSeed ||
+      !brandProfileId ||
+      organicPlannerSeed.brandProfileId !== brandProfileId
+    ) {
       show({
         title: 'Apply unavailable',
         description: 'Missing Planner context for this canvas session.',
@@ -183,6 +226,40 @@ export function useApplyBackToPlanner({
     try {
       if (!workflowSpec) {
         throw new Error('Workflow concept is missing for this Planner draft.');
+      }
+      if (workflowSpec.outputKind === 'text') {
+        const draftId = organicPlannerSeed.backendDraftId;
+        const expectedUpdatedAt = organicPlannerSeed.sourceUpdatedAt;
+        const textNode = nodes.find(
+          (node) => node.id === `organic-seed-text-${organicPlannerSeed.draftId}`,
+        );
+        const value = (textNode?.data as { value?: unknown } | undefined)?.value;
+        const caption = typeof value === 'string' ? value.trim() : '';
+        if (
+          !draftId ||
+          !expectedUpdatedAt ||
+          !caption ||
+          caption === organicPlannerSeed.captionPreview.trim()
+        ) {
+          throw new Error('Edit this draft caption before applying it to Planner.');
+        }
+        await request({
+          path: `/api/organic/calendar/drafts/${encodeURIComponent(draftId)}/fields`,
+          method: 'PATCH',
+          body: { caption, expected_updated_at: expectedUpdatedAt },
+        });
+        show({ title: 'Caption saved to Planner', variant: 'success' });
+        const params = new URLSearchParams({
+          tab: 'planner',
+          draftId: organicPlannerSeed.draftId,
+          weekStartId: organicPlannerSeed.weekStartId,
+          from: 'ai-studio',
+        });
+        router.push(`/organic?${params.toString()}`);
+        return;
+      }
+      if (organicPlannerSeed.platform === 'tiktok') {
+        throw new Error('TikTok media cannot be applied from this Studio workflow.');
       }
       const imageCandidates = applyCandidates.filter((candidate) => candidate.kind === 'image');
       const videoCandidates = applyCandidates.filter((candidate) => candidate.kind === 'video');
@@ -214,7 +291,12 @@ export function useApplyBackToPlanner({
             ? imageCandidates.filter((candidate) => candidate.nodeId === selectedLinkedinNodeId)
             : [imageCandidates[0]];
       } else {
-        const firstImage = imageCandidates[0];
+        const firstImage =
+          imageCandidates.find(
+            (candidate) =>
+              !allowedOutputIds.has(candidate.nodeId) &&
+              nodes.some((node) => node.id === candidate.nodeId && node.selected),
+          ) ?? imageCandidates[0];
         if (!firstImage) {
           throw new Error('Generate at least one image output before applying back.');
         }
@@ -240,13 +322,8 @@ export function useApplyBackToPlanner({
         postType: organicPlannerSeed.postType,
         platform: organicPlannerSeed.platform,
         overwrite: true,
-        contentPatch: {
-          title: organicPlannerSeed.title,
-          summary: organicPlannerSeed.summary,
-          captionPreview: organicPlannerSeed.captionPreview,
-          creativeDirectionPrompt: organicPlannerSeed.creativeDirectionPrompt,
-          thumbnailPrompt: organicPlannerSeed.thumbnailPrompt,
-        },
+        expectedUpdatedAt: organicPlannerSeed.sourceUpdatedAt,
+        contentPatch: {},
         assets,
         selection: {
           required: requiresExplicitSelection,
@@ -308,8 +385,10 @@ export function useApplyBackToPlanner({
     }
   }, [
     applyCandidates,
+    allowedOutputIds,
     brandProfileId,
     organicPlannerSeed,
+    nodes,
     requiresExplicitSelection,
     router,
     selectedLinkedinNodeId,
@@ -318,7 +397,7 @@ export function useApplyBackToPlanner({
   ]);
 
   return {
-    enabled: Boolean(organicPlannerSeed),
+    enabled: Boolean(organicPlannerSeed && organicPlannerSeed.brandProfileId === brandProfileId),
     applyReadiness,
     workflowSummaryLabel,
     requiresExplicitSelection,

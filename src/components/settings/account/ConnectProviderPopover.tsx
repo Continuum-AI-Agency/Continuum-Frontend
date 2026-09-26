@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/components/ui/ToastProvider';
 import {
+  type MetaSyncMode,
   useStartGoogleAccountChooserSync,
   useStartGoogleSync,
   useStartLinkedInSync,
@@ -73,7 +74,11 @@ export function ConnectProviderPopover({
 
   const handleConnect = (
     provider: ProviderGroup,
-    options?: { forceAccountChooser?: boolean; linkedinMode?: 'paid' | 'organic' },
+    options?: {
+      forceAccountChooser?: boolean;
+      linkedinMode?: 'paid' | 'organic';
+      metaMode?: MetaSyncMode;
+    },
   ) => {
     if (isProviderComingSoon(provider)) return;
     // OpenAI Ads is the one provider with no consent screen: the credential is a partner
@@ -105,7 +110,9 @@ export function ConnectProviderPopover({
                 callbackUrl,
                 mode: options?.linkedinMode ?? 'paid',
               })
-            : await sync.mutateAsync(callbackUrl);
+            : provider === 'facebook'
+              ? await metaSync.mutateAsync({ callbackUrl, mode: options?.metaMode })
+              : await sync.mutateAsync(callbackUrl);
         const expectedState = 'state' in syncResponse ? syncResponse.state : null;
 
         const popup = openCenteredPopup(
@@ -114,7 +121,9 @@ export function ConnectProviderPopover({
             ? 'Connect LinkedIn Organic'
             : provider === 'linkedin'
               ? 'Connect LinkedIn Ads'
-              : `Connect ${PROVIDER_GROUP_LABELS[provider]}`,
+              : provider === 'facebook' && options?.metaMode === 'instagram'
+                ? 'Connect Instagram'
+                : `Connect ${PROVIDER_GROUP_LABELS[provider]}`,
         );
         if (!popup) {
           show({
@@ -343,6 +352,18 @@ export function ConnectProviderPopover({
                             Organic
                           </Button>
                         ) : null}
+                        {providerId === 'facebook' ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            title="Connect an Instagram account that has no Facebook Page"
+                            onClick={() => handleConnect(providerId, { metaMode: 'instagram' })}
+                            disabled={isPending}
+                          >
+                            Instagram only
+                          </Button>
+                        ) : null}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -357,6 +378,29 @@ export function ConnectProviderPopover({
                           disabled={isPending}
                         >
                           <RefreshCw className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : providerId === 'facebook' ? (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1 px-2 text-xs"
+                          onClick={() => handleConnect(providerId)}
+                          disabled={isPending}
+                        >
+                          <Plus className="h-3 w-3" />
+                          Facebook
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1 px-2 text-xs"
+                          title="Connect an Instagram account that has no Facebook Page"
+                          onClick={() => handleConnect(providerId, { metaMode: 'instagram' })}
+                          disabled={isPending}
+                        >
+                          Instagram only
                         </Button>
                       </div>
                     ) : providerId === 'linkedin' ? (

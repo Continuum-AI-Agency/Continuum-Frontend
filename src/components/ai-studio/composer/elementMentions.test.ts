@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import type { AgentMentionReference, ElementCategory, ElementRecord } from '@continuum/contracts';
-import { ELEMENT_MEMBER_LIMIT, ELEMENT_PERSON_FALLBACK_LIMIT } from '@continuum/contracts';
+import {
+  CANVAS_COMPOSE_PROMPT_MAX_CHARS,
+  ELEMENT_MEMBER_LIMIT,
+  ELEMENT_PERSON_FALLBACK_LIMIT,
+} from '@continuum/contracts';
 import {
   appendElementGrounding,
   elementCategoryFolderKey,
@@ -279,16 +283,16 @@ describe('appendElementGrounding', () => {
     expect(appendElementGrounding('a shot', '')).toBe('a shot');
   });
 
-  it('drops lines rather than blowing the schema’s 4000-char prompt ceiling', () => {
-    const prompt = 'x'.repeat(3960);
+  it('drops lines rather than blowing the schema’s prompt ceiling', () => {
+    const prompt = 'x'.repeat(CANVAS_COMPOSE_PROMPT_MAX_CHARS - 40);
     const grounded = appendElementGrounding(prompt, ['first line', 'second line'].join('\n'));
-    expect(grounded.length).toBeLessThanOrEqual(4000);
+    expect(grounded.length).toBeLessThanOrEqual(CANVAS_COMPOSE_PROMPT_MAX_CHARS);
     expect(grounded).toContain('first line');
     expect(grounded).not.toContain('second line');
   });
 
   it('keeps the prompt intact when not even one line fits', () => {
-    const prompt = 'x'.repeat(3999);
+    const prompt = 'x'.repeat(CANVAS_COMPOSE_PROMPT_MAX_CHARS - 1);
     expect(appendElementGrounding(prompt, 'first line')).toBe(prompt);
   });
 });

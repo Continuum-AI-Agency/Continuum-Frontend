@@ -1157,6 +1157,8 @@ export const apiRenderJobSchema = z
     contractHash: z.string().min(1),
     taskUid: z.string().nullable(),
     status: z.enum(['submitting', 'queued', 'rendering', 'finished', 'failed']),
+    /** Null until the fleet has measured render progress. */
+    progressPct: z.number().int().min(0).max(100).nullable().default(null),
     // True = a Proof (submitted `test: true`), false = a Final. Recorded per job since Finals
     // exist. Defaulted because a job from before the column is one that was only ever a proof.
     // It is what was REQUESTED: the fleet's watermark switch is off upstream, so today a proof
@@ -1422,6 +1424,24 @@ export type ApiRenderBatchShareResponse = z.infer<typeof apiRenderBatchShareResp
 // the same client validation and server preflight as a typed one — this is a draft, not a render.
 
 export const API_RENDER_SUGGEST_ROWS_ROUTE = '/api/ai-studio/renders/suggest-rows';
+export const API_RENDER_DRAFT_SOURCES_STATUS_ROUTE = '/api/ai-studio/renders/draft-sources/status';
+export const apiRenderDraftSourcesStatusRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    documentIds: z.array(z.string().uuid()).min(1).max(5),
+  })
+  .strict();
+export type ApiRenderDraftSourcesStatusRequest = z.infer<
+  typeof apiRenderDraftSourcesStatusRequestSchema
+>;
+export const apiRenderDraftSourcesStatusResponseSchema = z
+  .object({
+    status: z.enum(['processing', 'ready', 'error']),
+  })
+  .strict();
+export type ApiRenderDraftSourcesStatusResponse = z.infer<
+  typeof apiRenderDraftSourcesStatusResponseSchema
+>;
 
 export const API_RENDER_SUGGEST_ROWS_MAX = 20;
 /** Variations drafted under each new row. Rows and their variations together stay within the max. */
@@ -1433,8 +1453,12 @@ export const apiRenderSuggestRowsRequestSchema = z
     bindingId: bindingIdField,
     templateKey: z.string().min(1),
     contractHash: z.string().min(1),
-    prompt: z.string().trim().min(1).max(2000),
+    prompt: z.string().trim().max(2000),
     count: z.number().int().min(1).max(API_RENDER_SUGGEST_ROWS_MAX).default(5),
+    /** Count is a ceiling; the model chooses the useful rows and variations. */
+    autoCount: z.boolean().default(false),
+    documentIds: z.array(z.string().uuid()).max(5).default([]),
+    mediaAssetIds: z.array(z.string().uuid()).max(6).default([]),
     /** Variations drafted under each new row, each changing one or two of its values. */
     forksPerRow: z.number().int().min(0).max(API_RENDER_SUGGEST_FORKS_MAX).default(0),
     /** Values to keep across every proposed row — a product already chosen, a fixed price. */
@@ -1452,6 +1476,14 @@ export const apiRenderSuggestRowsRequestSchema = z
       .optional(),
   })
   .strict()
+  .refine(
+    (request) =>
+      request.prompt.length > 0 || request.documentIds.length + request.mediaAssetIds.length > 0,
+    {
+      message: 'A brief or uploaded file is required',
+      path: ['prompt'],
+    },
+  )
   .refine((request) => request.count * (1 + request.forksPerRow) <= API_RENDER_SUGGEST_ROWS_MAX, {
     message: `Rows and their variations together are at most ${API_RENDER_SUGGEST_ROWS_MAX}`,
     path: ['forksPerRow'],
@@ -1511,6 +1543,13 @@ export const apiRenderRowGateSchema = z
   .strict();
 export type ApiRenderRowGate = z.infer<typeof apiRenderRowGateSchema>;
 
+export const forgeRowEvidenceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('document'), documentId: z.string().uuid(), name: z.string().min(1), excerpt: z.string().min(1).max(500), sheet: z.string().min(1).optional() }).strict(),
+  z.object({ kind: z.literal('media'), assetId: z.string().uuid() }).strict(),
+]);
+export type ForgeRowEvidence = z.infer<typeof forgeRowEvidenceSchema>;
+export const forgeRowEvidenceMapSchema = z.record(apiRenderVariableKeySchema, forgeRowEvidenceSchema);
+
 export const apiRenderSuggestRowsResponseSchema = z
   .object({
     /**
@@ -1525,6 +1564,7 @@ export const apiRenderSuggestRowsResponseSchema = z
           parentId: z.string().uuid().nullable(),
           label: z.string().min(1).max(200),
           overrides: apiRenderVariableMapSchema,
+          evidence: forgeRowEvidenceMapSchema.optional(),
           /** Absent only from a server older than the gate. */
           gate: apiRenderRowGateSchema.optional(),
         })
@@ -1536,6 +1576,8 @@ export const apiRenderSuggestRowsResponseSchema = z
     dropped: z.array(z.string()).default([]),
     /** What nothing could fill: a picture slot with no Library match, a required value left blank. */
     unfilled: z.array(z.string()).default([]),
+    /** A source was too large to read in full, or has no matching template slot. */
+    sourceWarnings: z.array(z.string()).default([]),
   })
   .strict();
 export type ApiRenderSuggestRowsResponse = z.infer<typeof apiRenderSuggestRowsResponseSchema>;
