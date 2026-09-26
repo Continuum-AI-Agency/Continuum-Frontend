@@ -264,6 +264,8 @@ export const templateParseSchema = z
       )
       .default([]),
     warnings: z.array(z.string()).default([]),
+    /** Footage referenced by the AEP but absent from its uploaded package. */
+    missingFootage: z.array(z.object({ name: z.string().nullable(), file: z.string() })).optional(),
   })
   .strip();
 export type TemplateParse = z.infer<typeof templateParseSchema>;
@@ -273,6 +275,7 @@ export const templatePreviewSchema = z
   .object({
     parser: z.string().min(1),
     sourceFamily: templateSourceFamilySchema,
+    missingFootage: templateParseSchema.shape.missingFootage,
     filename: z.string().optional(),
     comps: z.array(
       templateCompSchema.pick({

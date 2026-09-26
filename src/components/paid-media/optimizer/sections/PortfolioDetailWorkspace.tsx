@@ -148,7 +148,13 @@ export function PortfolioDetailWorkspace({
   const flightLabel = portfolio.period_start
     ? formatDateRange({ from: portfolio.period_start, to: portfolio.period_end ?? null })
     : null;
-  const winratesQuery = useOptimizerAdsetCreativeWinrates(brandId, resolvedRange.lookback, 'angle');
+  // The closed angle vocabulary: free-text angles hold ~1 ad per value, so no ad set ever
+  // had two of the same to compare.
+  const winratesQuery = useOptimizerAdsetCreativeWinrates(
+    brandId,
+    resolvedRange.lookback,
+    'angle_id',
+  );
   const enrolledQuery = useOptimizerEnrolledAdsets(portfolio.id);
   const nameById = useMemo(
     () => new Map(enrolledQuery.data.map((row) => [row.adset_id, row.adset_name ?? ''])),

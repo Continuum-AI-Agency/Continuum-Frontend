@@ -33,9 +33,14 @@ describe('organicUgcSpecSchema', () => {
       ],
       sceneCount: 4,
       targetDurationSeconds: 20,
-      captionsEnabled: true,
+      captionsEnabled: false,
       continuity: 'cut',
     });
+  });
+
+  it('preserves explicit caption choices on saved specs', () => {
+    expect(organicUgcSpecSchema.parse({ captionsEnabled: true }).captionsEnabled).toBe(true);
+    expect(organicUgcSpecSchema.parse({ captionsEnabled: false }).captionsEnabled).toBe(false);
   });
 
   it('carries a persona Element id and refuses one that is not a uuid', () => {

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { buildInlineTextContextBlock } from '@/components/chat/attachmentReferences';
 import { useStudioStore } from '@/StudioCanvas/stores/useStudioStore';
 
 // Bug #222: the composer card's X did not close it. `cancel()` aborted the fetch
@@ -118,6 +119,30 @@ describe('useCanvasComposer — settling and dismissing a turn', () => {
     expect(hook.result.current.turns.at(-1)?.attachments).toEqual([
       expect.objectContaining({ assetId: 'asset-1', versionId: 'version-1' }),
     ]);
+  });
+
+  it('sends pasted text to the model ahead of Element grounding and keeps it out of the transcript', async () => {
+    const pastedText = buildInlineTextContextBlock([
+      { id: 'paste-1', name: 'pasted-text.txt', text: 'Brief line one\nSENTINEL-PASTE' },
+    ]);
+    const hook = renderHook(() => useCanvasComposer('brand-1', 'room-1'));
+    act(() => {
+      void hook.result.current.submit('Build from this brief', [], {
+        pastedText,
+        grounding: 'Hero shot: the product on white',
+      });
+    });
+
+    await waitFor(() => expect(streamCanvasComposer).toHaveBeenCalledTimes(1));
+    const call = streamCanvasComposer.mock.calls[0]?.[0] as unknown as {
+      request: { prompt: string };
+    };
+    expect(call.request.prompt.startsWith(`Build from this brief\n\n${pastedText}`)).toBe(true);
+    expect(call.request.prompt).toContain('SENTINEL-PASTE');
+    expect(call.request.prompt.indexOf('<elements>')).toBeGreaterThan(
+      call.request.prompt.indexOf('SENTINEL-PASTE'),
+    );
+    expect(hook.result.current.turns.at(-1)?.prompt).toBe('Build from this brief');
   });
 
   it('applies a committed composer patch to the live Canvas without another approval step', async () => {

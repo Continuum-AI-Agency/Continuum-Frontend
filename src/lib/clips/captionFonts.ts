@@ -48,6 +48,12 @@ export const CAPTION_FONTS: Readonly<Record<string, CaptionFontSpec>> = {
     url: '/fonts/JetBrainsMonoVariable.woff2',
     weightRange: '100 800',
   },
+  'Cormorant Garamond': {
+    family: 'Cormorant Garamond',
+    url: '/fonts/CormorantGaramond-Bold.woff2',
+    weightRange: '700',
+  },
+  Allura: { family: 'Allura', url: '/fonts/Allura-Regular.woff2', weightRange: '400' },
 };
 
 /** True when a family name has a real file behind it — the honest answer for brand fonts. */
@@ -154,7 +160,6 @@ export async function registerCaptionFonts(
 export async function ensureCaptionFonts(families: readonly string[]): Promise<string[]> {
   return registerCaptionFonts(await loadCaptionFonts(families));
 }
-
 
 /**
  * One family as an `@font-face` rule with the woff2 inlined as a data URI.

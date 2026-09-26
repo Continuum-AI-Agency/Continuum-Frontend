@@ -97,6 +97,11 @@ describe('DraftHoverCardContent', () => {
     const preview = screen.getByTestId('planner-draft-hover-preview');
     expect(preview.className).toContain('w-[208px]');
     expect(preview.querySelectorAll('button')).toHaveLength(0);
+    expect(screen.getByText('Draft')).toBeTruthy();
+    expect(screen.getByText('instagram')).toBeTruthy();
+    expect(screen.getByText('Post · Mon, Jan 1 · 9:00 AM')).toBeTruthy();
+    expect(screen.getByText('Click to review')).toBeTruthy();
+    expect(preview.querySelector('[style*=linear-gradient]')).toBeNull();
   });
 
   it('renders the caption when there is one', () => {

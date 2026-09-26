@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 import { ProductGate } from '@/components/billing/ProductGate';
 import { ForgeTabs } from '@/components/forge/ForgeTabs';
+import { ForgeSourceHandoff } from '@/components/forge/ForgeSourceHandoff';
 import { MetaWritesSwitch } from '@/components/forge/MetaWritesSwitch';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -52,6 +54,7 @@ export default async function ForgePage() {
           canEdit={role === 'owner' || role === 'admin'}
         />
       </header>
+      <Suspense fallback={null}><ForgeSourceHandoff brandId={activeBrandId} /></Suspense>
       <ForgeTabs
         brandId={activeBrandId}
         brandName={brandSummaries.find((brand) => brand.id === activeBrandId)?.name}

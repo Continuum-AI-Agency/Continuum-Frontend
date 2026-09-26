@@ -11,6 +11,8 @@
 import { z } from 'zod';
 import { competitorAdHookArchetypeSchema } from '../competitor-spy/analysis';
 import { globalAngleIdSchema } from '../creative-strategy/angles';
+import { creativeSpecV1Schema } from '../creative-system/creative-spec';
+import { creativeReferenceSchema } from '../creative-system/references';
 import { conversionDescriptorSchema } from './custom-conversion';
 import {
   AdSetSnapshotSchema,
@@ -2204,21 +2206,42 @@ export type CreativeSwapSource = z.infer<typeof CreativeSwapSourceSchema>;
  *  campaign/ad-set/ad ids are what make this a *swap* rather than a generation —
  *  the endpoint knows where the result lands, so the whole loop closes without a
  *  human copying an asset id between two screens. */
-export const CreativeSwapRequestSchema = z.object({
-  brandId: z.string(),
-  campaignId: z.string(),
-  adsetId: z.string(),
-  /** The ad being iterated on / replaced. */
-  adId: z.string(),
-  mode: CreativeSwapModeSchema,
-  prompt: z.string().optional(),
-  /** CreativeVariationSeed passthrough from the recommendation. */
-  seed: z.record(z.string(), z.unknown()).optional(),
-  /** Required for mode: 'use_asset' — the media.assets row to publish. */
-  assetId: z.string().optional(),
-  source: CreativeSwapSourceSchema,
-  recommendationId: z.string().optional(),
-});
+const creativeSwapDirectionShape = {
+  creativeSpec: creativeSpecV1Schema.optional(),
+  durableReferences: z.array(creativeReferenceSchema).max(12).optional(),
+};
+
+export const CreativeSwapRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    campaignId: z.string().min(1).optional(),
+    adsetId: z.string().min(1),
+    /** The ad being iterated on / replaced. */
+    adId: z.string().min(1).optional(),
+    mode: CreativeSwapModeSchema.default('generate'),
+    prompt: z.string().min(1).max(4000).optional(),
+    /** Recommendation fields pass through; structured direction is validated before enqueue. */
+    seed: z.object(creativeSwapDirectionShape).catchall(z.unknown()).optional(),
+    ...creativeSwapDirectionShape,
+    /** Required for mode: 'use_asset' — the media.assets row to publish. */
+    assetId: z.string().uuid().optional(),
+    portfolioId: z.string().uuid().optional(),
+    source: CreativeSwapSourceSchema.default('optimizer'),
+    recommendationId: z.string().uuid().optional(),
+  })
+  .strict()
+  .refine((value) => value.mode !== 'use_asset' || Boolean(value.assetId), {
+    message: 'mode "use_asset" requires assetId',
+    path: ['assetId'],
+  })
+  .refine(
+    (value) =>
+      value.mode === 'use_asset' ||
+      Boolean(value.prompt) ||
+      Boolean(value.seed) ||
+      Boolean(value.creativeSpec),
+    { message: 'a prompt, a seed or a creativeSpec is required', path: ['prompt'] },
+  );
 export type CreativeSwapRequest = z.infer<typeof CreativeSwapRequestSchema>;
 
 /** A durable swap job. `brief` is FROZEN at enqueue: what the worker executes must

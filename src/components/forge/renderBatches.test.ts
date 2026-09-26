@@ -89,7 +89,7 @@ describe('batchStatus', () => {
 
   test('reads what is still happening first, then what went wrong', () => {
     expect(statusOf('finished', 'rendering', 'queued')).toEqual({
-      label: '2 of 3 rendering',
+      label: '2 of 3 rendering · 33%',
       tone: 'warning',
       busy: true,
     });
@@ -107,6 +107,18 @@ describe('batchStatus', () => {
       label: 'finished',
       tone: 'success',
       busy: false,
+    });
+  });
+
+  test('uses the worker percentage once a render reports it', () => {
+    const [batch] = groupJobsIntoBatches([
+      job({ batchId: BATCH_A, status: 'rendering', progressPct: 40 }),
+      job({ batchId: BATCH_A, status: 'queued', progressPct: null }),
+    ]);
+    expect(batchStatus(batch!)).toEqual({
+      label: '2 of 2 rendering · 20%',
+      tone: 'warning',
+      busy: true,
     });
   });
 });

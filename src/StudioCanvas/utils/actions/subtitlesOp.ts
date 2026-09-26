@@ -10,6 +10,7 @@ import { runSingleSourceSpliceInWorker } from '../../workers/spliceWorkerClient'
 import { extractAudioWav } from '../clip/extractAudioWav';
 import {
   applyEmphasisIndices,
+  type CaptionWord,
   groupWordsIntoCues,
   wordsForCaptionText,
 } from '../splice/captionCues';
@@ -86,6 +87,27 @@ export async function runSubtitlesAction(
     return { type: 'video', url: result.objectUrl, sizeBytes: result.blob.size };
   }
 
+  const words = await transcribeCaptionWords(args, deps, config.emphasize !== false);
+  const captionCues = groupWordsIntoCues(words, preset.grouping);
+  const result = await splice({
+    blob,
+    ranges: WHOLE_SOURCE,
+    captionCues,
+    captionStyle,
+    captionFonts: await loadFonts(preset.fontFamily ? [preset.fontFamily] : []),
+    signal: args.signal,
+    onProgress: ({ progress }) => args.onProgress?.(0.35 + progress * 0.65),
+  });
+  return { type: 'video', url: result.objectUrl, sizeBytes: result.blob.size };
+}
+
+export async function transcribeCaptionWords(
+  args: SubtitlesActionArgs,
+  deps: SubtitlesOpDeps = {},
+  emphasize = true,
+): Promise<CaptionWord[]> {
+  const blob = args.inputs.find((input) => input.handle === 'in')?.blob;
+  if (!blob) throw new Error('Connect a clip to the subtitles action first');
   const brandId = (deps.resolveBrandId ?? (() => useStudioStore.getState().brandId))();
   if (!brandId) throw new Error('Select a brand before running subtitles');
 
@@ -120,7 +142,7 @@ export async function runSubtitlesAction(
         brandId,
         audioBucket: uploaded.audioBucket,
         audioStoragePath: uploaded.audioStoragePath,
-        emphasize: config.emphasize !== false,
+        emphasize,
       }),
       signal: args.signal,
     });
@@ -145,21 +167,7 @@ export async function runSubtitlesAction(
       })),
       transcript.emphasisIndices,
     );
-    const captionCues = groupWordsIntoCues(words, preset.grouping);
-
-    const result = await splice({
-      blob,
-      ranges: WHOLE_SOURCE,
-      captionCues,
-      captionStyle,
-      // Without the bytes the worker's OffscreenCanvas silently renders Helvetica, and
-      // every preset looks the same.
-      captionFonts: await loadFonts(preset.fontFamily ? [preset.fontFamily] : []),
-      signal: args.signal,
-      onProgress: ({ progress }) => args.onProgress?.(0.35 + progress * 0.65),
-    });
-
-    return { type: 'video', url: result.objectUrl, sizeBytes: result.blob.size };
+    return words;
   } finally {
     // The WAV is a temporary on a shared store; a failed render must not leave it behind.
     await cleanupAudio({ brandId, ...uploaded }).catch(() => undefined);

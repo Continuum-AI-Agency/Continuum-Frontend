@@ -2,11 +2,13 @@
 
 import type { Competitor } from '@continuum/contracts';
 import { X } from 'lucide-react';
+import { TikTokIcon, YouTubeIcon } from '@/components/shared/icons/brandIcon';
 import {
   useAdCounts,
   useCompetitors,
   useDeleteCompetitor,
   useResolvePaidPage,
+  useTiktokTrends,
 } from '@/lib/api/competitorSpy';
 import { compactCount, initials, tileStyle } from './brandVisuals';
 import { CompetitorHealthBadge } from './CompetitorHealthBadge';
@@ -40,6 +42,20 @@ export function TrackedCompetitorsList({ brandId }: { brandId: string }) {
   const { data: adCounts } = useAdCounts(brandId);
   const remove = useDeleteCompetitor(brandId);
   const resolvePaid = useResolvePaidPage(brandId);
+  // Where a competitor's own videos sit in TikTok's trending lists for the brand's markets.
+  const { data: tiktokTrends } = useTiktokTrends(
+    brandId,
+    Boolean(competitors?.some((c) => c.tiktokUsername)),
+  );
+  const trendingHashtagsByHandle = new Map<string, string[]>();
+  for (const hashtag of tiktokTrends?.hashtags ?? []) {
+    for (const video of hashtag.videos) {
+      if (!video.isCompetitor || !video.authorHandle) continue;
+      const labels = trendingHashtagsByHandle.get(video.authorHandle) ?? [];
+      if (!labels.includes(hashtag.label)) labels.push(hashtag.label);
+      trendingHashtagsByHandle.set(video.authorHandle, labels);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -68,7 +84,8 @@ export function TrackedCompetitorsList({ brandId }: { brandId: string }) {
       {tracked.map((c) => {
         const paid = paidBadge(c);
         const followers = compactCount(c.instagramFollowersCount);
-        const organicReady = c.organicStatus === 'ready';
+        // A YouTube channel alone is enough for organic posts.
+        const organicReady = c.organicStatus === 'ready' || Boolean(c.youtubeChannelId);
         return (
           <li
             key={c.id}
@@ -87,6 +104,27 @@ export function TrackedCompetitorsList({ brandId }: { brandId: string }) {
                   <span className="font-mono">@{c.instagramUsername}</span>
                 ) : null}
                 {followers ? <span className="tabular-nums">{followers} followers</span> : null}
+                {c.youtubeChannelId ? (
+                  <span className="inline-flex items-center gap-1 font-mono">
+                    <YouTubeIcon className="size-3" />
+                    {c.youtubeHandle ? `@${c.youtubeHandle.replace(/^@/, '')}` : c.youtubeChannelId}
+                  </span>
+                ) : null}
+                {c.tiktokUsername ? (
+                  <span className="inline-flex items-center gap-1 font-mono">
+                    <TikTokIcon className="size-3" />@{c.tiktokUsername}
+                  </span>
+                ) : null}
+                {c.tiktokUsername &&
+                trendingHashtagsByHandle.has(c.tiktokUsername.toLowerCase()) ? (
+                  <span>
+                    in top TikTok videos for{' '}
+                    {trendingHashtagsByHandle
+                      .get(c.tiktokUsername.toLowerCase())
+                      ?.map((label) => `#${label}`)
+                      .join(', ')}
+                  </span>
+                ) : null}
               </div>
               <div className="mt-1 flex flex-wrap gap-1.5">
                 <CompetitorHealthBadge competitor={c} adsFound={adCounts?.[c.id]} />

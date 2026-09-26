@@ -4,10 +4,14 @@
 // how far the post beat its own account ('3.2x'), and its views/likes/comments —
 // so nothing needs a hover. Hovering a reel only plays it. Clicking opens the
 // Analyse panel beside the grid, where the saved/board actions live.
+// A YouTube card is raw metrics only (its API policies): a YouTube badge, an
+// "updated Xh ago" freshness label, the thumbnail unaltered, no multiplier, and a
+// click opens the video on YouTube. It cannot be analysed or saved.
 
 import { COMPETITOR_POST_FORMAT_LABELS } from '@continuum/contracts';
 import { Images, Play } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
+import { YouTubeIcon } from '@/components/shared/icons/brandIcon';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
 import type { CompetitorPostView } from './competitorPostView';
@@ -50,8 +54,47 @@ export function CompetitorPostHoverTile({
   const altText = `${view.competitorName} ${post.kind}`;
   const videoUrl = reelVideoUrl(post);
   const age = post.timestamp ? formatRelativeTime(post.timestamp) : null;
-  const mediaClassName =
-    'aspect-[4/5] h-full transition-transform duration-200 motion-safe:group-hover/tile:scale-[1.03]';
+  const youtube = post.platform === 'youtube';
+  const mediaClassName = youtube
+    ? 'aspect-[4/5] h-full bg-black object-contain'
+    : 'aspect-[4/5] h-full transition-transform duration-200 motion-safe:group-hover/tile:scale-[1.03]';
+  const faceClassName =
+    'relative block overflow-hidden bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset';
+  const face = (
+    <>
+      {videoUrl ? (
+        <ReelVideo
+          src={videoUrl}
+          poster={post.coverUrl}
+          alt={altText}
+          playing={hovering}
+          className={mediaClassName}
+        />
+      ) : (
+        <PostThumb coverUrl={post.coverUrl} alt={altText} className={mediaClassName} />
+      )}
+      {youtube ? (
+        <span
+          data-testid="platform-badge"
+          className="pointer-events-none absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-black/60 px-1.5 py-0.5 text-2xs font-medium text-white"
+        >
+          <YouTubeIcon className="size-3" />
+          {post.kind === 'reel' ? 'Short' : 'Video'}
+        </span>
+      ) : (
+        <>
+          <span
+            data-testid="format-label"
+            className="pointer-events-none absolute left-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-2xs font-medium text-white"
+          >
+            {COMPETITOR_POST_FORMAT_LABELS[view.format]}
+          </span>
+          <OutlierBadge view={view} className="pointer-events-none absolute right-1.5 top-1.5" />
+          <KindGlyph kind={post.kind} mediaCount={post.mediaCount} />
+        </>
+      )}
+    </>
+  );
 
   return (
     <article
@@ -65,34 +108,28 @@ export function CompetitorPostHoverTile({
         open ? 'border-primary' : 'border-border hover:border-foreground/25',
       )}
     >
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        onPointerEnter={() => setHovering(true)}
-        onPointerLeave={() => setHovering(false)}
-        aria-label={`Analyse ${view.competitorName} ${post.kind}`}
-        className="relative block overflow-hidden bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-      >
-        {videoUrl ? (
-          <ReelVideo
-            src={videoUrl}
-            poster={post.coverUrl}
-            alt={altText}
-            playing={hovering}
-            className={mediaClassName}
-          />
-        ) : (
-          <PostThumb coverUrl={post.coverUrl} alt={altText} className={mediaClassName} />
-        )}
-        <span
-          data-testid="format-label"
-          className="pointer-events-none absolute left-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-2xs font-medium text-white"
+      {youtube ? (
+        <a
+          href={post.permalink}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Open ${view.competitorName} on YouTube`}
+          className={faceClassName}
         >
-          {COMPETITOR_POST_FORMAT_LABELS[view.format]}
-        </span>
-        <OutlierBadge view={view} className="pointer-events-none absolute right-1.5 top-1.5" />
-        <KindGlyph kind={post.kind} mediaCount={post.mediaCount} />
-      </button>
+          {face}
+        </a>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          onPointerEnter={() => setHovering(true)}
+          onPointerLeave={() => setHovering(false)}
+          aria-label={`Analyse ${view.competitorName} ${post.kind}`}
+          className={faceClassName}
+        >
+          {face}
+        </button>
+      )}
 
       <div className="flex min-w-0 flex-col gap-1.5 p-2.5">
         <p className="flex min-w-0 items-baseline gap-1 text-xs">
@@ -108,6 +145,11 @@ export function CompetitorPostHoverTile({
           </p>
         ) : null}
         <PostMetrics view={view} />
+        {youtube && post.capturedAt ? (
+          <p data-testid="captured-at" className="text-2xs text-muted-foreground">
+            Updated {formatRelativeTime(post.capturedAt)}
+          </p>
+        ) : null}
       </div>
 
       {open ? (

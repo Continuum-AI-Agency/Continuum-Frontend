@@ -414,11 +414,10 @@ export function RenderRequestsGrid({
   /** Someone else's version of the open set, when it and the rows on screen changed one row two ways. */
   const [conflict, setConflict] = useState<ForgeRenderSet | null>(null);
   const [historyFor, setHistoryFor] = useState<ForgeRenderSet | null>(null);
-  /** The AI draft dialog: open for new rows (`parent: null`) or for variations of one row. */
+  /** Open for new rows (`parent: null`) or for variations of one row. */
   const [aiDraft, setAiDraft] = useState<{
     parent: AiDraftParent | null;
     varyKeys?: string[];
-    count?: number;
   } | null>(null);
   /** A menu-driven draft in flight: what the banner says, and what blocks a second click. */
   const [generating, setGenerating] = useState<{ count: number; of: string } | null>(null);
@@ -451,6 +450,7 @@ export function RenderRequestsGrid({
   /** Where a menu's picked action wants focus once the menu has closed. */
   const menuFocus = useRef<(() => HTMLElement | null) | null>(null);
   const gridBox = useRef<HTMLDivElement>(null);
+  const draftAnchor = useRef<HTMLButtonElement>(null);
   /** A row just added, whose name field takes focus once it is on screen. */
   const focusRowId = useRef<string | null>(null);
 
@@ -709,13 +709,17 @@ export function RenderRequestsGrid({
       record(coalesce ?? null);
       setRows((current) => {
         const affected = descendantsOf(current, [id]);
-        return current.map((row) =>
-          row.id === id
-            ? { ...patch(row), check: { state: 'idle' } }
-            : affected.has(row.id)
-              ? { ...row, check: { state: 'idle' } }
-              : row,
-        );
+        return current.map((row) => {
+          if (row.id !== id)
+            return affected.has(row.id) ? { ...row, check: { state: 'idle' } } : row;
+          const next = patch(row);
+          const evidence = Object.fromEntries(
+            Object.entries(next.evidence ?? {}).filter(
+              ([key]) => JSON.stringify(row.values[key]) === JSON.stringify(next.values[key]),
+            ),
+          );
+          return { ...next, evidence, check: { state: 'idle' } };
+        });
       });
     },
     [],
@@ -1113,7 +1117,11 @@ export function RenderRequestsGrid({
     if (!contract) return;
     const outputs = allOutputIdsOf(contract);
     const drafted = responses.flatMap((response) => rowsFromSuggestion(response, outputs));
-    const notes = responses.flatMap((response) => [...response.unfilled, ...response.dropped]);
+    const notes = responses.flatMap((response) => [
+      ...response.unfilled,
+      ...response.dropped,
+      ...(response.sourceWarnings ?? []),
+    ]);
     // Said, never assumed: the server reports a short answer in `dropped`, and a draft that
     // produced nothing is a failure the person has to see rather than an empty success toast.
     const described = notes.length
@@ -1144,7 +1152,11 @@ export function RenderRequestsGrid({
     ids,
     count,
     varyKeys,
-  }: { ids: string[]; count: number; varyKeys: string[] }) => {
+  }: {
+    ids: string[];
+    count: number;
+    varyKeys: string[];
+  }) => {
     if (!contract || generating || varyKeys.length === 0) return;
     const current = latestRows.current;
     const targets = ids.flatMap((id) => {
@@ -1176,6 +1188,9 @@ export function RenderRequestsGrid({
               ? `Vary only the ${what}. ${count} variations of this row, each clearly different.`
               : `${count} variations of this row, each clearly different from it and from each other.`,
             count,
+            autoCount: false,
+            documentIds: [],
+            mediaAssetIds: [],
             forksPerRow: 0,
             parent: {
               id: row.id,
@@ -1943,6 +1958,7 @@ export function RenderRequestsGrid({
         canAddRows={rows.length < MAX_BATCH_ROWS}
         onAddRow={addRow}
         onDraftWithAi={() => setAiDraft({ parent: null })}
+        draftAnchorRef={draftAnchor}
         onAddFromInputs={(set) =>
           appendRows([{ ...seedRow([], set.name), values: { ...set.variables } }])
         }
@@ -2178,7 +2194,7 @@ export function RenderRequestsGrid({
                 <ResizableHandle withHandle />
                 <ResizablePanel
                   id="render-grid"
-                  defaultSize="54%"
+                  defaultSize="60%"
                   minSize="40%"
                   className="min-w-0"
                 >
@@ -2230,7 +2246,7 @@ export function RenderRequestsGrid({
                 <ResizableHandle withHandle />
                 <ResizablePanel
                   id="render-preview"
-                  defaultSize="30%"
+                  defaultSize="24%"
                   minSize="20%"
                   className="min-w-0"
                 >
@@ -2247,7 +2263,7 @@ export function RenderRequestsGrid({
                     {/* The previewed row's fields at the pane's full width: room for long copy. */}
                     <section
                       aria-label="Fields"
-                      className="flex max-h-[55%] shrink-0 flex-col border-t border-border"
+                      className="flex max-h-[40%] shrink-0 flex-col border-t border-border"
                     >
                       <button
                         type="button"
@@ -2402,7 +2418,8 @@ export function RenderRequestsGrid({
           contract={contract}
           parent={aiDraft?.parent ?? null}
           initialVaryKeys={aiDraft?.varyKeys ?? null}
-          initialCount={aiDraft?.count ?? null}
+          maxRows={MAX_BATCH_ROWS - rows.length}
+          anchor={draftAnchor.current}
           onDrafted={acceptDraft}
         />
       ) : null}

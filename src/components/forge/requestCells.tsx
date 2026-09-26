@@ -8,6 +8,7 @@ import {
   type ApiRenderTemplateContract,
   type ApiRenderVariable,
   checkAssetSwap,
+  classifyLibraryFile,
   clipRequirement,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   type MediaAsset,
@@ -28,6 +29,7 @@ import {
   MoreHorizontal,
   Plus,
   RotateCcw,
+  Upload,
   Video,
   X,
 } from 'lucide-react';
@@ -45,9 +47,11 @@ import type { DataGridRowProps } from '@/components/forge/DataGrid';
 import { EncodeOverrideCell } from '@/components/forge/EncodeOverrideCell';
 import { ActionMenuItems, rowActions, takeFocusAfter } from '@/components/forge/gridActions';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
+import { lookupLibraryAsset } from '@/components/forge/RenderRowsImport';
 import {
   clipShortBy,
   effectiveMedia,
+  effectiveEvidence,
   effectiveOutputIds,
   effectiveValues,
   isEmptyInput,
@@ -79,7 +83,9 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { TableRow } from '@/components/ui/table';
+import { toast } from '@/components/ui/toast-imperative';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import { cn } from '@/lib/utils';
 import { pickedPins } from '@/StudioCanvas/nodes/api-render/RenderVariableFields';
 
@@ -179,6 +185,8 @@ function MediaPicker({
   onClear: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const pins = pickedPins(value);
   const fit = fitTone(pins.length ? verdict : null);
   const Kind = variable.kind === 'video' ? Video : ImageIcon;
@@ -240,6 +248,49 @@ function MediaPicker({
           </button>
         }
       />
+      <input
+        ref={fileInput}
+        type="file"
+        accept={variable.kind === 'video' ? 'video/*' : 'image/*'}
+        aria-label={`Upload ${variable.label}`}
+        className="sr-only"
+        onChange={async (event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (!file) return;
+          const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
+          if (!format.accepted || format.originalKind !== variable.kind) {
+            toast.error(`Choose an ${variable.kind === 'image' ? 'image' : 'video'} file.`);
+            return;
+          }
+          setUploading(true);
+          try {
+            const uploaded = await uploadMediaAsset({ file, brandId });
+            const asset = await lookupLibraryAsset(brandId, uploaded.assetId);
+            if (!asset || asset.kind !== variable.kind)
+              throw new Error('Uploaded file is not ready in the Library.');
+            onPick([asset]);
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Could not upload this file.');
+          } finally {
+            setUploading(false);
+          }
+        }}
+      />
+      <button
+        type="button"
+        aria-label={`Upload ${variable.label}`}
+        title="Upload a file here"
+        disabled={uploading}
+        className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted/50 disabled:opacity-50"
+        onClick={() => fileInput.current?.click()}
+      >
+        {uploading ? (
+          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+        ) : (
+          <Upload className="size-3.5" aria-hidden />
+        )}
+      </button>
       {clip && pins.length && clipSec === undefined && media?.clipUrl ? (
         // biome-ignore lint/a11y/useMediaCaption: read for its length, never shown
         <video
@@ -306,8 +357,13 @@ function Explained({ why, children }: { why: string; children: ReactNode }) {
   );
 }
 
-function StatusBadge({ row, invalid }: { row: RequestRow; invalid: boolean }) {
-  if (invalid) return <Badge variant="destructive">Invalid</Badge>;
+function StatusBadge({ row, invalidReason }: { row: RequestRow; invalidReason?: string }) {
+  if (invalidReason)
+    return (
+      <Explained why={invalidReason}>
+        <Badge variant="destructive">Invalid</Badge>
+      </Explained>
+    );
   switch (row.check.state) {
     case 'checking':
       return (
@@ -930,7 +986,8 @@ export function EncodeCell({ row: { original: row }, table }: CellContext<Reques
 
 export function StatusCell({ row: { original: row }, table }: CellContext<RequestRow, unknown>) {
   const { contract, rows, clientErrors } = gridMeta(table);
-  const errorKeys = Object.keys(clientErrors.get(row.id) ?? {});
+  const errors = clientErrors.get(row.id) ?? {};
+  const errorKeys = Object.keys(errors);
   const missing = missingInputs(contract.variables, effectiveValues(rows, row.id));
   // Blank is not wrong: a row that is only waiting on required inputs reads muted, never red.
   if (errorKeys.length && errorKeys.every((key) => missing.includes(key))) {
@@ -943,7 +1000,17 @@ export function StatusCell({ row: { original: row }, table }: CellContext<Reques
       </Badge>
     );
   }
-  return <StatusBadge row={row} invalid={errorKeys.length > 0} />;
+  return (
+    <StatusBadge
+      row={row}
+      invalidReason={Object.entries(errors)
+        .map(([key, message]) => {
+          const label = contract.variables.find((variable) => variable.key === key)?.label ?? key;
+          return `${readableLayerName(label)}: ${message}`;
+        })
+        .join('; ')}
+    />
+  );
 }
 
 /**
@@ -960,10 +1027,14 @@ export function RowFields({ table, rowId }: { table: Table<RequestRow>; rowId: s
   const cells = row
     .getAllCells()
     .filter((cell) => (cell.column.columnDef.meta as Partial<VariableColumnMeta>)?.variable);
+  const evidenceByKey = effectiveEvidence(table.options.data, rowId);
+  const hasDraftEvidence = row.original.evidence !== undefined;
+  const values = effectiveValues(table.options.data, rowId);
   return (
     <dl className="grid grid-cols-[minmax(5rem,max-content)_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 text-xs">
       {cells.map((cell) => {
         const { variable } = cell.column.columnDef.meta as VariableColumnMeta;
+        const evidence = evidenceByKey[variable.key];
         return (
           <Fragment key={cell.id}>
             <dt className="truncate text-muted-foreground" title={variable.label}>
@@ -971,6 +1042,15 @@ export function RowFields({ table, rowId }: { table: Table<RequestRow>; rowId: s
             </dt>
             <dd className="min-w-0 [&_input]:w-full">
               {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              {hasDraftEvidence && !variable.reserved && variable.key in values ? (
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {evidence?.kind === 'document'
+                    ? `Source: ${evidence.name}${evidence.sheet ? ` · ${evidence.sheet}` : ''} — “${evidence.excerpt}”`
+                    : evidence?.kind === 'media'
+                      ? 'Source: selected Library asset'
+                      : 'Needs review'}
+                </p>
+              ) : null}
             </dd>
           </Fragment>
         );

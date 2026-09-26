@@ -26,7 +26,10 @@ type AIStudioClientProps = {
   focusNodeId?: string;
 };
 
-function readOrganicPlannerSeedContext(draftId: string): PlannerAiStudioHandoff | null {
+function readOrganicPlannerSeedContext(
+  draftId: string,
+  brandProfileId: string,
+): PlannerAiStudioHandoff | null {
   if (typeof window === 'undefined') return null;
 
   const raw = window.localStorage.getItem(buildAiStudioStorageKey(draftId));
@@ -34,7 +37,11 @@ function readOrganicPlannerSeedContext(draftId: string): PlannerAiStudioHandoff 
 
   try {
     const parsed = plannerAiStudioHandoffSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : null;
+    return parsed.success &&
+      parsed.data.brandProfileId === brandProfileId &&
+      parsed.data.draftId === draftId
+      ? parsed.data
+      : null;
   } catch {
     return null;
   }
@@ -62,8 +69,8 @@ export default function AIStudioClient({
       return;
     }
 
-    setOrganicPlannerSeed(readOrganicPlannerSeedContext(draftId));
-  }, [draftId, source]);
+    setOrganicPlannerSeed(readOrganicPlannerSeedContext(draftId, brandProfileId));
+  }, [brandProfileId, draftId, source]);
 
   React.useEffect(() => {
     if (source !== 'organic-planner' || !draftId) {

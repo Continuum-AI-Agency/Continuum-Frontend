@@ -64,9 +64,11 @@ afterEach(() => {
 });
 
 describe('CAPTION_FONTS', () => {
-  it('carries exactly the four preset faces, each pointing at a public /fonts path', () => {
+  it('carries the preset and editorial faces, each pointing at a public /fonts path', () => {
     expect(Object.keys(CAPTION_FONTS).sort()).toEqual([
+      'Allura',
       'Anton',
+      'Cormorant Garamond',
       'Inter',
       'JetBrains Mono',
       'Montserrat',

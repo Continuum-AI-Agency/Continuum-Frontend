@@ -396,6 +396,20 @@ describe('CSV', () => {
     expect(autoMapHeaders([' Call to action '], [padded])).toEqual({ ' Call to action ': 'cta' });
   });
 
+  test('a media link column maps by detected type when it has one matching slot', () => {
+    const image = variable({ key: 'hero', label: 'Hero asset', kind: 'image' });
+    const video = variable({ key: 'clip', label: 'Motion asset', kind: 'video' });
+    expect(
+      autoMapHeaders(
+        ['Creative URL'],
+        [image, video],
+        [{ 'Creative URL': 'https://cdn.example/ad.mov' }],
+      ),
+    ).toEqual({
+      'Creative URL': 'clip',
+    });
+  });
+
   test('the Formats and variable samples are only what imports back cleanly', () => {
     const { rows, errors } = roundTrip({
       variables: [
@@ -951,6 +965,19 @@ describe('merging two saves of one set', () => {
 });
 
 describe('a draft from the AI', () => {
+  test('retains field evidence after Keep and save, and clears it with the value', () => {
+    const id = '00000000-0000-4000-8000-000000000099';
+    const evidence = { kind: 'document' as const,
+      documentId: '33333333-3333-4333-8333-333333333333',
+      name: 'offers.xlsx', excerpt: '$279', sheet: 'Offers' };
+    const proposed = rowsFromSuggestion({ rows: [{ id, parentId: null, label: 'Offer',
+      overrides: { headline: '$279' }, evidence: { headline: evidence } }], assets: [] }, ['square']);
+    const saved = toRenderSetRows(keepProposed(proposed, [id]), ['square']);
+    expect(saved[0]?.evidence?.headline).toEqual(evidence);
+    expect(fromRenderSetRows(saved)[0]?.evidence?.headline).toEqual(evidence);
+    expect(clearKey(fromRenderSetRows(saved), 'headline', [id])[0]?.evidence?.headline).toBeUndefined();
+  });
+
   test('arrives proposed, roots in every format, with the picked picture’s thumbnail', () => {
     const root = '00000000-0000-4000-8000-000000000001';
     const hero = {

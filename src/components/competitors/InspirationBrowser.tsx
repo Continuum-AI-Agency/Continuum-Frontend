@@ -111,24 +111,27 @@ function KeywordSearch({ value, onChange }: { value: string; onChange: (value: s
   );
 }
 
+// YouTube posts stay out of the Library and boards: its API data may not be
+// merged with ours or kept past 30 days.
 function OrganicSave({ brandId }: { brandId: string }) {
-  return (view: CompetitorPostView): ReactNode => (
-    <div className="flex items-center gap-1.5">
-      {view.competitorId ? (
-        <SaveToBoardButton
-          brandId={brandId}
-          request={{
-            kind: 'organic',
-            competitorId: view.competitorId,
-            competitorName: view.competitorName,
-            instagramUsername: view.instagramUsername,
-            post: view.post,
-          }}
-        />
-      ) : null}
-      <SaveToLibraryButton brandId={brandId} view={view} />
-    </div>
-  );
+  return (view: CompetitorPostView): ReactNode =>
+    view.post.platform === 'youtube' ? null : (
+      <div className="flex items-center gap-1.5">
+        {view.competitorId ? (
+          <SaveToBoardButton
+            brandId={brandId}
+            request={{
+              kind: 'organic',
+              competitorId: view.competitorId,
+              competitorName: view.competitorName,
+              instagramUsername: view.instagramUsername,
+              post: view.post,
+            }}
+          />
+        ) : null}
+        <SaveToLibraryButton brandId={brandId} view={view} />
+      </div>
+    );
 }
 
 // Kept in its own component so its two queries only run while "All" is selected.
@@ -206,7 +209,9 @@ export function InspirationBrowser({
   const q = debounced || undefined;
 
   return (
-    <div className={cn('flex min-w-0 flex-col', compact ? 'gap-2' : 'gap-4', className)}>
+    <div
+      className={cn('flex min-w-0 flex-col', compact ? 'min-h-0 flex-1 gap-2' : 'gap-4', className)}
+    >
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <Segmented
           label="Source"
@@ -244,7 +249,13 @@ export function InspirationBrowser({
         />
       ) : null}
 
-      <div className={cn('flex min-w-0 flex-col gap-4', showRail && 'md:flex-row md:gap-5')}>
+      <div
+        className={cn(
+          'flex min-w-0 flex-col gap-4',
+          showRail && 'md:flex-row md:gap-5',
+          compact && 'min-h-0 flex-1',
+        )}
+      >
         {showRail ? (
           <CompetitorRail
             competitors={competitors ?? []}
@@ -257,7 +268,7 @@ export function InspirationBrowser({
           />
         ) : null}
 
-        <div className={cn('min-w-0 flex-1', compact && 'max-h-[28rem] overflow-y-auto')}>
+        <div className={cn('min-w-0 flex-1', compact && 'min-h-0 overflow-y-auto')}>
           {source === 'organic' ? (
             <CompetitorOrganicExplorer
               brandId={brandId}

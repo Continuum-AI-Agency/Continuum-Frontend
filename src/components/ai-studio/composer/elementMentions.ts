@@ -23,6 +23,7 @@
 import type { AgentMentionReference, ElementCategory, ElementRecord } from '@continuum/contracts';
 import {
   buildElementReferenceLabel,
+  CANVAS_COMPOSE_PROMPT_MAX_CHARS,
   ELEMENT_CATEGORIES,
   elementCategorySchema,
   resolveElementRefs,
@@ -34,8 +35,6 @@ export const ELEMENTS_ROOT_KEY = 'canvas-context:elements';
 export const ELEMENT_CATEGORY_FOLDER_PREFIX = 'canvas-context:elements:';
 export const ELEMENT_MENTION_KEY_PREFIX = 'canvas-element:';
 
-/** `canvasComposeRequestSchema.prompt` is `.max(4000)` — the grounding block rides in it. */
-const PROMPT_MAX_CHARS = 4000;
 
 /** What one mentioned Element contributes, read back off the reference it produced. */
 export interface ElementMentionGrounding {
@@ -261,7 +260,7 @@ export function appendElementGrounding(prompt: string, grounding: string): strin
   const lines = grounding.split('\n');
   while (lines.length > 0) {
     const block = `\n\n<elements>\n${lines.join('\n')}\n</elements>`;
-    if (prompt.length + block.length <= PROMPT_MAX_CHARS) return `${prompt}${block}`;
+    if (prompt.length + block.length <= CANVAS_COMPOSE_PROMPT_MAX_CHARS) return `${prompt}${block}`;
     lines.pop();
   }
   return prompt;

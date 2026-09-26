@@ -13,6 +13,7 @@ import {
 import { Message } from '@/components/ai-elements/message';
 import {
   buildAgentAttachmentContext,
+  buildInlineTextContextBlock,
   mergeAttachmentReferences,
 } from '@/components/chat/attachmentReferences';
 import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
@@ -182,6 +183,7 @@ export function CanvasComposer({
       mentionProvider={mentionProvider}
       mentionSource="canvas"
       attachments={composerAttachments}
+      inlinePastedText
       attachmentOnlyPrompt="Use the attached media as a visual reference."
       queuedText={queuedText}
       onQueuedTextConsumed={() => setQueuedText(null)}
@@ -215,6 +217,7 @@ export function CanvasComposer({
           references: [...grounded.references, ...workflowReferences],
           thinking,
           ...(grounded.grounding ? { grounding: grounded.grounding } : {}),
+          pastedText: buildInlineTextContextBlock(attachmentContext.inlineTexts),
         });
       }}
       ariaLabel="Describe the workflow you want on the canvas"

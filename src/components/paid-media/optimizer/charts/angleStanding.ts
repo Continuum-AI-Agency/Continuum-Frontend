@@ -16,8 +16,8 @@
 // ad set: audience, budget and placement are held roughly constant, so comparing labels
 // inside it is the closest thing to a controlled creative test the account gives away.
 
-import type { AdsetCreativeWinRateRow } from '@continuum/contracts';
-import { isDegenerateWinRate } from '@continuum/contracts';
+import type { AdsetCreativeWinRateRow, GlobalAngleId } from '@continuum/contracts';
+import { GLOBAL_ANGLE_LABELS, isDegenerateWinRate } from '@continuum/contracts';
 
 export type AngleVerdict =
   /** One angle is proven here and already carries the spend. Make more of it. */
@@ -102,6 +102,12 @@ export function portfolioAngleRanking(rows: readonly AdsetCreativeWinRateRow[]):
     .sort((a, b) => b.winRate - a.winRate || b.eligibleAds - a.eligibleAds);
 }
 
+/** Values are closed angle ids (`angle_id`); a person reads the display name. */
+const angleName = (value: string | undefined): string =>
+  value && value in GLOBAL_ANGLE_LABELS
+    ? GLOBAL_ANGLE_LABELS[value as GlobalAngleId]
+    : (value ?? '');
+
 function buildAction(
   verdict: AngleVerdict,
   recommended: AngleCandidate | null,
@@ -111,18 +117,18 @@ function buildAction(
   const kpiLabel = kpi || 'results';
   switch (verdict) {
     case 'double_down':
-      return `Build the next ads around "${recommended?.value}" — it beats this ad set's median ${kpiLabel} in ${Math.round((recommended?.winRate ?? 0) * 100)}% of its ads.`;
+      return `Build the next ads around "${angleName(recommended?.value)}" — it beats this ad set's median ${kpiLabel} in ${Math.round((recommended?.winRate ?? 0) * 100)}% of its ads.`;
     case 'introduce':
-      return `Try "${recommended?.value}" here — it wins elsewhere in this portfolio and has never run in this ad set.`;
+      return `Try "${angleName(recommended?.value)}" here — it wins elsewhere in this portfolio and has never run in this ad set.`;
     case 'rebuild_craft':
-      return `Keep the "${current?.value}" angle but rebuild the execution — it already carries most of the spend and is not beating the ad set's own median.`;
+      return `Keep the "${angleName(current?.value)}" angle but rebuild the execution — it already carries most of the spend and is not beating the ad set's own median.`;
     default:
       return 'Not enough compared ads in this ad set yet — ship a second variant so there is something to measure against.';
   }
 }
 
 export type BuildAngleStandingInput = {
-  /** Rows from paid_media_get_adset_creative_winrates with dimension='angle'. */
+  /** Rows from paid_media_get_adset_creative_winrates with dimension='angle_id'. */
   winrateRows: readonly AdsetCreativeWinRateRow[];
   /** Only the ad sets enrolled in this portfolio. */
   enrolledIds: readonly string[];

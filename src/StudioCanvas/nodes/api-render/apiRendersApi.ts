@@ -2,8 +2,10 @@ import {
   API_RENDER_BATCH_PREFLIGHT_ROUTE,
   API_RENDER_BATCHES_ROUTE,
   API_RENDER_DESTINATIONS_ROUTE,
+  API_RENDER_DRAFT_SOURCES_STATUS_ROUTE,
   API_RENDER_DRIVE_SNAPSHOT_ROUTE,
   API_RENDER_ENVIRONMENTS_ROUTE,
+  API_RENDER_IMPORT_MEDIA_ROUTE,
   API_RENDER_IMPORT_PREVIEW_ROUTE,
   API_RENDER_INPUT_SETS_ROUTE,
   API_RENDER_JOBS_ROUTE,
@@ -22,6 +24,8 @@ import {
   type ApiRenderCreateJobRequest,
   type ApiRenderDeliveryDestination,
   type ApiRenderDeliveryDestinationsResponse,
+  type ApiRenderDraftSourcesStatusRequest,
+  type ApiRenderDraftSourcesStatusResponse,
   type ApiRenderEnvironmentListResponse,
   type ApiRenderInputSet,
   type ApiRenderInputSetListResponse,
@@ -42,6 +46,7 @@ import {
   apiRenderDeliveryDestinationSchema,
   apiRenderDeliveryDestinationsResponseSchema,
   apiRenderDestinationRoute,
+  apiRenderDraftSourcesStatusResponseSchema,
   apiRenderEnvironmentListResponseSchema,
   apiRenderInputSetListResponseSchema,
   apiRenderInputSetSchema,
@@ -55,6 +60,8 @@ import {
   type CreateForgeRenderSetRequest,
   type ForgeRenderDriveSnapshot,
   type ForgeRenderDriveSnapshotRequest,
+  type ForgeRenderImportMediaRequest,
+  type ForgeRenderImportMediaResponse,
   type ForgeRenderImportPreview,
   type ForgeRenderImportPreviewRequest,
   type ForgeRenderPreview,
@@ -62,6 +69,7 @@ import {
   type ForgeRenderSet,
   type ForgeRenderSetRevision,
   forgeRenderDriveSnapshotSchema,
+  forgeRenderImportMediaResponseSchema,
   forgeRenderImportPreviewSchema,
   forgeRenderPreviewSchema,
   forgeRenderSetListResponseSchema,
@@ -76,6 +84,14 @@ const query = (input: Record<string, string | number>) =>
   new URLSearchParams(Object.entries(input).map(([key, value]) => [key, String(value)])).toString();
 
 export const apiRendersApi = {
+  importMedia(input: ForgeRenderImportMediaRequest) {
+    return http.request<ForgeRenderImportMediaResponse>({
+      path: API_RENDER_IMPORT_MEDIA_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: forgeRenderImportMediaResponseSchema,
+    });
+  },
   previewImport(input: ForgeRenderImportPreviewRequest) {
     return http.request<ForgeRenderImportPreview>({
       path: API_RENDER_IMPORT_PREVIEW_ROUTE,
@@ -271,6 +287,14 @@ export const apiRendersApi = {
       method: 'POST',
       body: input,
       schema: apiRenderSuggestRowsResponseSchema,
+    });
+  },
+  draftSourcesStatus(input: ApiRenderDraftSourcesStatusRequest) {
+    return http.request<ApiRenderDraftSourcesStatusResponse>({
+      path: API_RENDER_DRAFT_SOURCES_STATUS_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: apiRenderDraftSourcesStatusResponseSchema,
     });
   },
   // Delivery destinations: where a render can go besides the Library. The Slack channel list is

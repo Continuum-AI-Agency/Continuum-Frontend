@@ -4,14 +4,15 @@ import { Accordion as AccordionPrimitive } from '@base-ui/react/accordion';
 import {
   type ApiRenderVariableKind,
   apiRenderVariableLabel,
+  classifyLibraryFile,
   clipRequirement,
   readableLayerName,
   SLOT_ROLE_KIND,
   SLOT_ROLES,
   type SlotRole,
 } from '@continuum/contracts';
-import { Image as ImageIcon, Info, Loader2, Save, Type, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Image as ImageIcon, Info, Loader2, Save, Type, Upload, X } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
 import { BrandColorField } from '@/components/forge/BrandColorField';
 import { KIND_ICONS } from '@/components/forge/DataGrid';
 import { Pill } from '@/components/kibo-ui/pill';
@@ -29,8 +30,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { toast } from '@/components/ui/toast-imperative';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import type { TemplateSlotEdit, TemplateVariable } from '@/lib/library/templateSources';
+import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import { cn } from '@/lib/utils';
 
 // Editing what a variable IS, not what it says this render.
@@ -80,6 +83,8 @@ function DefaultValueControl({
   onChange: (next: unknown) => void;
 }) {
   const [picking, setPicking] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   if (variable.kind === 'image' || variable.kind === 'video') {
     const pinned = value as { assetId?: string } | null;
@@ -110,6 +115,47 @@ function DefaultValueControl({
             </Button>
           }
         />
+        <input
+          ref={fileInput}
+          type="file"
+          accept={variable.kind === 'video' ? 'video/*' : 'image/*'}
+          aria-label={`Upload ${label} default`}
+          className="sr-only"
+          onChange={async (event) => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (!file) return;
+            const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
+            if (!format.accepted || format.originalKind !== variable.kind) {
+              toast.error(`Choose an ${variable.kind === 'image' ? 'image' : 'video'} file.`);
+              return;
+            }
+            setUploading(true);
+            try {
+              const uploaded = await uploadMediaAsset({ file, brandId });
+              onChange({ assetId: uploaded.assetId, versionId: uploaded.versionId });
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : 'Could not upload this file.');
+            } finally {
+              setUploading(false);
+            }
+          }}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          className="gap-1.5"
+          disabled={uploading}
+          onClick={() => fileInput.current?.click()}
+        >
+          {uploading ? (
+            <Loader2 className="size-3.5 animate-spin" aria-hidden />
+          ) : (
+            <Upload className="size-3.5" aria-hidden />
+          )}
+          Upload here
+        </Button>
         {pinned?.assetId ? (
           <>
             <span className="text-xs text-muted-foreground">A Library {variable.kind} is set</span>

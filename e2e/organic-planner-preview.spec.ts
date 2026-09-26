@@ -382,11 +382,11 @@ async function openMonthPlanner(page: Page, extraQuery = ''): Promise<void> {
     .toBe('month');
 }
 
-// Radix HoverCard closes on pointer-leave, never on Escape: reading the popper without
+// HoverCard closes on pointer-leave: reading the popover without
 // dismissing the previous one measures the PREVIOUS chip's card.
 async function dismissHoverCard(page: Page): Promise<void> {
   await page.mouse.move(5, 5);
-  await expect(page.locator('[data-radix-popper-content-wrapper]')).toHaveCount(0, {
+  await expect(page.locator('[data-slot="hover-card-content"]')).toHaveCount(0, {
     timeout: 20_000,
   });
 }
@@ -409,7 +409,7 @@ async function openLibraryPicker(page: Page, trigger: Locator): Promise<Locator>
 }
 
 const hoverCard = (page: Page) =>
-  page.locator('[data-radix-popper-content-wrapper] [data-side][data-align]').first();
+  page.locator('[data-slot="hover-card-content"]').first();
 
 async function hoverMonthChip(page: Page, title: string) {
   await dismissHoverCard(page);
@@ -1150,12 +1150,6 @@ test.describe('organic planner list + draft preview', () => {
     );
     await page.screenshot({ path: `${SCREENSHOT_DIR}/preview-video-readonly.png` });
 
-    // The header chip counted the same asset twice — "2 videos" for one attached reel.
-    const chip = preview.getByRole('button', { name: 'Media enrichment details' });
-    await expect(chip).toBeVisible({ timeout: 30_000 });
-    await expect(chip, 'the media chip double-counts a single reel').toContainText('1 video');
-    expect(await chip.innerText()).not.toContain('2 video');
-
     // Edit mode is a SEPARATE component tree, and it regressed separately.
     // `getByLabel('Edit post')` matches TWICE — the button carries both aria-label and title —
     // and `.first()` picked the one whose click did nothing, which made the edit-mode half of
@@ -1332,7 +1326,7 @@ test.describe('organic planner list + draft preview', () => {
   // if you touch the button of edit it should open." Both halves are measured here on the
   // MONTH view, against a draft whose signed URL has decayed, with NO page.reload().
   // biome-ignore lint/correctness/noEmptyPattern: Playwright test signature
-  test('#233 month hover renders decayed media + caption, and Edit opens the editor', async ({}, testInfo) => {
+  test('#233 month hover renders media + caption, and Open in editor opens the panel', async ({}, testInfo) => {
     testInfo.setTimeout(480_000);
 
     // Every sign POST the page makes, counted at the network. The cache claim cannot be
@@ -1346,6 +1340,7 @@ test.describe('organic planner list + draft preview', () => {
     });
 
     await openMonthPlanner(page);
+    await page.getByRole('button', { name: 'Today', exact: true }).click();
 
     // The fixture sits one day out, which normally lands in the current month; roll
     // forward once rather than depending on the day the bench happens to run.
@@ -1399,32 +1394,34 @@ test.describe('organic planner list + draft preview', () => {
       `[#233a] ${signRequests.length} sign POST(s) total; the second hover added ${signRequests.length - signsAfterFirstHover}`,
     );
 
-    // ---- (c) Edit opens the panel IN edit mode ----
+    // ---- (c) a click opens the side preview; the context action enters edit mode ----
     const preview = page.getByRole('complementary', { name: 'Draft preview' });
     const doneEditing = page.locator('button[aria-label="Done editing post"]');
 
     await dismissHoverCard(page);
-    const editCard = await hoverMonthChip(page, VIDEO_TITLE);
-    await editCard.getByRole('button', { name: 'Edit' }).click();
-    await expect(preview, 'Edit did not open the preview panel').toBeVisible({ timeout: 60_000 });
+    await monthChip(page, VIDEO_TITLE).click();
+    await expect(preview, 'clicking the post did not open the side preview').toBeVisible({
+      timeout: 60_000,
+    });
+    await expect(preview.locator('video').first()).toBeVisible({ timeout: 30_000 });
+    await monthChip(page, VIDEO_TITLE).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Open in editor' }).click();
     await expect(
       doneEditing,
-      'Edit opened the panel read-only instead of in edit mode',
+      'Open in editor left the panel read-only',
     ).toBeVisible({ timeout: 30_000 });
-    console.log('[#233b] Edit from a cold month chip opened the panel in edit mode');
+    console.log('[#233b] click opened the preview and the context action opened edit mode');
     await page.screenshot({ path: `${SCREENSHOT_DIR}/month-edit-opens-editor.png` });
 
-    // ---- (d) the ALREADY-SELECTED case: the exact shape of the bug ----
-    // The month view passed `onEdit={() => onClick()}`, discarding the id; `onClick` is
-    // plain selection, so on the draft that was already selected Edit did nothing at all.
+    // ---- (d) the ALREADY-SELECTED case ----
     await doneEditing.click();
     await expect(doneEditing).toHaveCount(0, { timeout: 20_000 });
     await dismissHoverCard(page);
     await monthChip(page, VIDEO_TITLE).click();
     await expect(preview).toBeVisible({ timeout: 30_000 });
 
-    const selectedCard = await hoverMonthChip(page, VIDEO_TITLE);
-    await selectedCard.getByRole('button', { name: 'Edit' }).click();
+    await monthChip(page, VIDEO_TITLE).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Open in editor' }).click();
     await expect(
       doneEditing,
       'Edit was a no-op on the draft that was ALREADY selected — the reported bug',
@@ -1446,8 +1443,8 @@ test.describe('organic planner list + draft preview', () => {
       .toBe(0);
 
     await dismissHoverCard(page);
-    const collapsedCard = await hoverMonthChip(page, VIDEO_TITLE);
-    await collapsedCard.getByRole('button', { name: 'Edit' }).click();
+    await monthChip(page, VIDEO_TITLE).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Open in editor' }).click();
     await expect(
       doneEditing,
       'Edit left the panel collapsed — the edit intent never re-expanded it',

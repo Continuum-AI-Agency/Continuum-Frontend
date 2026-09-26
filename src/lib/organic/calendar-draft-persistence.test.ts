@@ -8,6 +8,7 @@ import {
   isDayIdInWeekRange,
   mapPersistedRowToCalendarEntry,
   normalizePersistedStatus,
+  resolvePersistedRowDayId,
   type PersistedOrganicDraftRow,
 } from './calendar-draft-persistence';
 
@@ -30,6 +31,25 @@ function makeDraft(partial: Partial<OrganicCalendarDraft> = {}): OrganicCalendar
 }
 
 describe('calendar draft persistence utils', () => {
+  it('carries the original inspiration permalink into the draft preview', () => {
+    const days = buildWeekDays(new Date('2026-04-20T12:00:00'));
+    const row: PersistedOrganicDraftRow = {
+      id: 'inspired-1',
+      status: 'draft',
+      scheduled_date: '2026-04-21T16:00:00Z',
+      slot_data: {
+        dayId: '2026-04-21',
+        generation: {
+          source: 'competitor_inspiration',
+          competitorInspiration: { permalink: 'https://www.instagram.com/p/original/' },
+        },
+      },
+    };
+    expect(mapPersistedRowToCalendarEntry(row, days)?.draft.inspirationSourceUrl).toBe(
+      'https://www.instagram.com/p/original/',
+    );
+  });
+
   it('normalizes persisted statuses safely', () => {
     expect(normalizePersistedStatus('scheduled')).toBe('scheduled');
     expect(normalizePersistedStatus('published')).toBe('published');
@@ -323,6 +343,14 @@ describe('mapPersistedRowToCalendarEntry — generated drafts (content_json shap
     (row.content_json as Record<string, unknown>).schedule = {};
     const entry = mapPersistedRowToCalendarEntry(row, days);
     expect(entry?.dayId).toBe('2026-06-01');
+  });
+
+  it('resolves a bare scheduled instant in the saved brand timezone', () => {
+    const row = generatedRow();
+    row.scheduled_date = '2026-06-01T01:00:00.000Z';
+    row.slot_data = { timeZone: 'America/Denver' };
+    (row.content_json as Record<string, unknown>).schedule = {};
+    expect(resolvePersistedRowDayId(row)).toBe('2026-05-31');
   });
 
   it('leaves contentPlanId null for non-bulk (ad-hoc) drafts', () => {

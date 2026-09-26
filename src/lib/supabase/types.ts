@@ -16232,6 +16232,7 @@ export type Database = {
           label_path: Json
           outputs: Json
           parent_row_id: string | null
+          progress_pct: number | null
           reconcile_after: string
           reconcile_completed_at: string | null
           reconcile_lease_expires_at: string | null
@@ -16278,6 +16279,7 @@ export type Database = {
           label_path?: Json
           outputs?: Json
           parent_row_id?: string | null
+          progress_pct?: number | null
           reconcile_after?: string
           reconcile_completed_at?: string | null
           reconcile_lease_expires_at?: string | null
@@ -16324,6 +16326,7 @@ export type Database = {
           label_path?: Json
           outputs?: Json
           parent_row_id?: string | null
+          progress_pct?: number | null
           reconcile_after?: string
           reconcile_completed_at?: string | null
           reconcile_lease_expires_at?: string | null
@@ -23904,6 +23907,8 @@ export type Database = {
           id: string
           max_files: number
           mcp_session_id: string | null
+          purpose: string
+          source_refs: Json
           status: string
           updated_at: string
           user_id: string
@@ -23916,6 +23921,8 @@ export type Database = {
           id?: string
           max_files?: number
           mcp_session_id?: string | null
+          purpose?: string
+          source_refs?: Json
           status?: string
           updated_at?: string
           user_id: string
@@ -23928,6 +23935,8 @@ export type Database = {
           id?: string
           max_files?: number
           mcp_session_id?: string | null
+          purpose?: string
+          source_refs?: Json
           status?: string
           updated_at?: string
           user_id?: string
@@ -24049,6 +24058,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      complete_forge_source_intent: {
+        Args: { p_source_refs: Json; p_upload_intent_id: string; p_user_id?: string }
+        Returns: Json
+      }
       complete_upload_intent: {
         Args: {
           p_asset_refs: Json
@@ -24125,6 +24138,10 @@ export type Database = {
         Args: { p_session_id: string; p_user_id?: string }
         Returns: string
       }
+      get_forge_source_intent: {
+        Args: { p_upload_intent_id: string; p_user_id?: string }
+        Returns: Json
+      }
       get_upload_intent: {
         Args: { p_upload_intent_id: string; p_user_id?: string }
         Returns: Json
@@ -24146,6 +24163,10 @@ export type Database = {
           expires_at: string
           link_id: string
         }[]
+      }
+      issue_forge_source_intent: {
+        Args: { p_brand_id: string; p_mcp_session_id?: string; p_user_id?: string }
+        Returns: Json
       }
       issue_upload_intent: {
         Args: {

@@ -2,6 +2,20 @@ import { z } from 'zod';
 
 export const API_RENDER_IMPORT_PREVIEW_ROUTE = '/api/ai-studio/renders/imports/preview';
 export const API_RENDER_DRIVE_SNAPSHOT_ROUTE = '/api/ai-studio/renders/imports/drive-snapshot';
+export const API_RENDER_IMPORT_MEDIA_ROUTE = '/api/ai-studio/renders/imports/media';
+
+export const forgeRenderImportMediaRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    url: z.string().url().max(4096),
+    kind: z.enum(['image', 'video']),
+  })
+  .strict();
+export type ForgeRenderImportMediaRequest = z.infer<typeof forgeRenderImportMediaRequestSchema>;
+export const forgeRenderImportMediaResponseSchema = z
+  .object({ assetId: z.string().uuid(), versionId: z.string().uuid() })
+  .strict();
+export type ForgeRenderImportMediaResponse = z.infer<typeof forgeRenderImportMediaResponseSchema>;
 
 export const forgeRenderImportPreviewRequestSchema = z
   .object({ brandId: z.string().uuid(), documentId: z.string().uuid() })

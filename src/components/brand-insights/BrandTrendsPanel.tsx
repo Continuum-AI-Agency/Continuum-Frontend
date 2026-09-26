@@ -38,6 +38,8 @@ type BrandTrendsPanelProps = {
   statusSlot?: React.ReactNode;
   brandId?: string;
   isLoading?: boolean;
+  /** Stretch the tab list to the card's height instead of capping it; the parent must bound the height. */
+  fill?: boolean;
   className?: string;
 };
 
@@ -117,6 +119,7 @@ export function BrandTrendsPanel({
   statusSlot,
   brandId,
   isLoading = false,
+  fill = false,
   className,
 }: BrandTrendsPanelProps) {
   const weekLabel = formatDate(weekStartDate);
@@ -193,14 +196,15 @@ export function BrandTrendsPanel({
         </div>
       </CardHeader>
 
-      <CardContent className="flex flex-col gap-1.5 p-1.5">
-        <div>
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-1.5 p-1.5">
+        <div className="flex min-h-0 flex-1 flex-col">
           <BrandTrendsTabs
             trends={trends}
             events={events}
             questionsByNiche={questionsByNiche}
             brandId={brandId}
             generatedAt={generatedAt}
+            fill={fill}
           />
         </div>
       </CardContent>

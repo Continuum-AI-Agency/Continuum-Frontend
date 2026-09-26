@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import type { PlannerAiStudioHandoff } from '@/lib/organic/ai-studio-bridge';
-import { buildStarterFlow } from './seedStarterFlow';
+import { buildStarterFlow, seedFocusNodeId } from './seedStarterFlow';
 
 const carouselSeed = (overrides: Partial<PlannerAiStudioHandoff> = {}): PlannerAiStudioHandoff => ({
   schemaVersion: 'planner_ai_handoff_v1',
@@ -29,6 +29,20 @@ const generatorNodes = (nodes: Array<{ type?: string }>) =>
 const promptOf = (node: { data: unknown }) => (node.data as { value?: string }).value ?? '';
 
 describe('buildStarterFlow — carousel handoff', () => {
+  it('opens a TikTok text-only draft as an editable caption node', () => {
+    const seed = carouselSeed({
+      platform: 'tiktok',
+      postType: 'post',
+      workflowConcept: 'tt_text',
+      format: 'Post',
+      captionPreview: 'Draft caption',
+    });
+    const flow = buildStarterFlow(seed);
+    expect(flow.edges).toHaveLength(0);
+    expect(flow.nodes).toHaveLength(1);
+    expect(flow.nodes[0]?.data).toMatchObject({ value: 'Draft caption' });
+    expect(seedFocusNodeId(seed)).toBe('organic-seed-text-draft-1');
+  });
   it('seeds one generator and one distinct, non-empty prompt node per slide', () => {
     const { nodes, edges } = buildStarterFlow(
       carouselSeed({

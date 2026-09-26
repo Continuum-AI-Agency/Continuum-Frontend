@@ -34,7 +34,15 @@ export type FontFormat = z.infer<typeof fontFormatSchema>;
 export const fontStyleSchema = z.enum(['normal', 'italic']);
 
 /** How a face got into the repository — upload, harvested off a worker, or backfilled. */
-export const fontSourceSchema = z.enum(['upload', 'worker-harvest', 'backfill']);
+export const fontSourceSchema = z.enum([
+  'upload',
+  'worker-harvest',
+  'backfill',
+  // Shipped inside the After Effects package the brand uploaded — brand-scoped, like an upload.
+  'template_package',
+  // An SIL OFL face fetched from Google Fonts because a template asked for it — house-scoped.
+  'google_fonts',
+]);
 export type FontSource = z.infer<typeof fontSourceSchema>;
 
 /**

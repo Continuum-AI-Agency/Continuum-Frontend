@@ -43,7 +43,7 @@ const REGISTERED_ASSET_ID = '55555555-5555-4555-8555-555555555555';
 const REGISTERED_VERSION_ID = '66666666-6666-4666-8666-666666666666';
 const DRAFT_UPDATED_AT = '2026-09-09T11:59:00.000Z';
 
-function applyRequest(): Request {
+function applyRequest(overrides: Record<string, unknown> = {}): Request {
   return new Request('http://localhost/api/organic/ai-studio/apply', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -51,6 +51,7 @@ function applyRequest(): Request {
       schemaVersion: 'planner_ai_apply_v1',
       draftId: 'draft-1',
       brandProfileId: BRAND_ID,
+      expectedUpdatedAt: DRAFT_UPDATED_AT,
       postType: 'post',
       platform: 'instagram',
       overwrite: true,
@@ -63,6 +64,7 @@ function applyRequest(): Request {
             'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5M4V8AAAAASUVORK5CYII=',
         },
       ],
+      ...overrides,
     }),
   });
 }
@@ -273,6 +275,87 @@ describe('POST /api/organic/ai-studio/apply', () => {
     expect(response.status).toBe(409);
     const body = await response.json();
     expect(body.code).toBe('draft_changed');
+  });
+
+  it('rejects a stale handoff before uploading an asset', async () => {
+    seedApplyClients();
+    const response = await POST(applyRequest({ expectedUpdatedAt: '2026-09-08T00:00:00.000Z' }));
+    expect(response.status).toBe(409);
+    expect(funnelCalls).toHaveLength(0);
+  });
+
+  it('refuses an arbitrary URL before the server fetches it', async () => {
+    seedApplyClients();
+    const originalFetch = global.fetch;
+    const unsafeFetch = mock(async () => new Response('private'));
+    global.fetch = unsafeFetch as unknown as typeof fetch;
+    try {
+      const response = await POST(
+        applyRequest({
+          assets: [
+            {
+              role: 'primary',
+              kind: 'image',
+              sourceUrl: 'http://169.254.169.254/latest/meta-data',
+            },
+          ],
+        }),
+      );
+      expect(response.status).toBe(502);
+      expect(unsafeFetch).not.toHaveBeenCalled();
+      expect(funnelCalls).toHaveLength(0);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('refuses a storage URL from another brand and bounds allowed downloads', async () => {
+    seedApplyClients();
+    const originalUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const originalFetch = global.fetch;
+    const sourceFetch = mock(
+      async () =>
+        new Response('too large', {
+          headers: { 'content-type': 'image/png', 'content-length': String(20 * 1024 * 1024 + 1) },
+        }),
+    );
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://storage.example.test';
+    global.fetch = sourceFetch as unknown as typeof fetch;
+    try {
+      const otherBrand = await POST(
+        applyRequest({
+          assets: [
+            {
+              role: 'primary',
+              kind: 'image',
+              sourceUrl:
+                'https://storage.example.test/storage/v1/object/sign/media/other-brand/photo.png?token=x',
+            },
+          ],
+        }),
+      );
+      expect(otherBrand.status).toBe(502);
+      expect(sourceFetch).not.toHaveBeenCalled();
+
+      const oversized = await POST(
+        applyRequest({
+          assets: [
+            {
+              role: 'primary',
+              kind: 'image',
+              sourceUrl: `https://storage.example.test/storage/v1/object/sign/media/${BRAND_ID}/photo.png?token=x`,
+            },
+          ],
+        }),
+      );
+      expect(oversized.status).toBe(502);
+      expect(sourceFetch).toHaveBeenCalledTimes(1);
+      expect(funnelCalls).toHaveLength(0);
+    } finally {
+      global.fetch = originalFetch;
+      if (originalUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+      else process.env.NEXT_PUBLIC_SUPABASE_URL = originalUrl;
+    }
   });
 
   it('reports a format the assets would change as 422, not as success', async () => {

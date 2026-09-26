@@ -78,10 +78,17 @@ export function rowToMediaAsset(
   };
 }
 
+// Where mintSignedUrls files a path's display-sized derivative, apart from the
+// original's URL under the bare path.
+export function displayDerivativeKey(storagePath: string): string {
+  return `display:${storagePath}`;
+}
+
 // Row + the batch-signing Map (keyed by storage path) -> a fully signed asset.
 // The asset's poster lives in the SAME bucket as the asset, so one signing pass
 // covers both paths; callers that fed `assetSignablePaths(rows)` into
 // mintSignedUrls get the thumbnail for free instead of hand-wiring it per route.
+// An image with no poster gets its display derivative as the thumbnail.
 export function rowToSignedMediaAsset(
   row: MediaAssetRow,
   signedUrls: ReadonlyMap<string, string>,
@@ -91,7 +98,7 @@ export function rowToSignedMediaAsset(
   const asset = rowToMediaAsset(
     row,
     signedUrls.get(row.storage_path) ?? null,
-    thumbnailPath ? (signedUrls.get(thumbnailPath) ?? null) : null,
+    signedUrls.get(thumbnailPath ?? displayDerivativeKey(row.storage_path)) ?? null,
   );
   return preview === undefined ? asset : { ...asset, preview };
 }

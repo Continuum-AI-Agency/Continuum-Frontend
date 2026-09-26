@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
+import { bulkDeleteAssetsOperation } from '@/lib/library/creativeOperations';
 import {
   discoverWorkspaceTemplates,
   fetchTemplateSources,
@@ -39,6 +40,7 @@ import {
   setTemplateAdoption,
   uploadTemplateFontFiles,
 } from '@/lib/library/templateSources';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 // Forge — bring your own After Effects project.
 //
@@ -106,6 +108,8 @@ export function ForgeWorkbench({
   // grant switched off elsewhere drops the detail back to the gallery on the next list read.
   const [selectedShared, setSelectedShared] = useState<string | null>(null);
   const [adopting, setAdopting] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<TemplateSourceSummary | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
   // Dropped files named like a template already here, waiting for "revision or new template?".
   const [sameName, setSameName] = useState<Array<{ file: File; source: TemplateSourceSummary }>>(
     [],
@@ -247,6 +251,54 @@ export function ForgeWorkbench({
     }
   };
 
+  const removeFromBrand = async () => {
+    if (!removing || removeBusy) return;
+    const source = removing;
+    setRemoveBusy(true);
+    let accessDisabled = false;
+    try {
+      if (source.templateKey) {
+        const workspaceId =
+          (workspaceQuery.data ?? []).find((item) => item.sourceAssetId === source.assetId)
+            ?.bindingId ??
+          (await discoverWorkspaceTemplates(brandId)).items.find(
+            (item) => item.sourceAssetId === source.assetId,
+          )?.bindingId;
+        if (!workspaceId)
+          throw new Error(
+            'Could not find this template’s render workspace. Refresh and try again.',
+          );
+        const disabled = await setTemplateAdoption({
+          brandId,
+          templateKey: source.templateKey,
+          enabled: false,
+          workspaceId,
+        });
+        if (!disabled.granted) throw new Error('Could not turn off render access for this template.');
+        accessDisabled = true;
+      }
+      const removed = await bulkDeleteAssetsOperation(createSupabaseBrowserClient(), {
+        brandId,
+        assetIds: [source.assetId],
+      });
+      if (!removed.includes(source.assetId)) throw new Error('The template file was not removed.');
+      setSelected(null);
+      setRemoving(null);
+      toast.success(`${sourceDisplayName(source)} removed from ${brandName ?? 'this brand'}`);
+    } catch (error) {
+      toast.error(
+        accessDisabled
+          ? 'The template file could not be removed. Render access is off; try removing it again.'
+          : error instanceof Error
+            ? error.message
+            : 'Could not remove the template.',
+      );
+    } finally {
+      setRemoveBusy(false);
+      void refreshTemplate();
+    }
+  };
+
   const morph = useTemplateMorphSwap();
   const open = (assetId: string | null) => morph(() => setSelected(assetId));
   const openShared = (template: SharedTemplate | null) =>
@@ -330,6 +382,7 @@ export function ForgeWorkbench({
           source={current}
           onBack={() => open(null)}
           onRename={(title) => void rename(current.assetId, title)}
+          onRemove={() => setRemoving(current)}
           onOpenRender={onOpenRender}
           onChanged={refreshTemplate}
           revisionFile={revision?.assetId === current.assetId ? revision.file : undefined}
@@ -384,6 +437,34 @@ export function ForgeWorkbench({
             </Button>
             <Button type="button" onClick={() => answer('revision')}>
               New revision of {askingName}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={removing !== null}
+        onOpenChange={(next) => !next && !removeBusy && setRemoving(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Remove “{removing ? sourceDisplayName(removing) : ''}”?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the template from {brandName ?? 'this brand'} and its Library. Existing
+              renders and file history are kept.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removeBusy}>Cancel</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={removeBusy}
+              onClick={() => void removeFromBrand()}
+            >
+              {removeBusy ? 'Removing…' : 'Remove from brand'}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

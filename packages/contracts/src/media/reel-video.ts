@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { captionTreatmentSchema } from '../headless-content';
 import { databaseUuidSchema } from './database-uuid';
 import { mediaPreviewApprovalSchema } from './preview-approval';
 
@@ -42,7 +43,8 @@ export const organicUgcSpecSchema = z
     references: z.array(organicUgcReferenceSchema).max(3).default([]),
     sceneCount: z.number().int().min(3).max(5).default(4),
     targetDurationSeconds: z.number().min(12).max(30).default(20),
-    captionsEnabled: z.boolean().default(true),
+    captionsEnabled: z.boolean().default(false),
+    captionTreatment: captionTreatmentSchema.optional(),
     characterDescription: z.string().min(1).max(1_000).nullable().optional(),
     /**
      * The recurring creator: a person Element (`media.asset_groups`, category
