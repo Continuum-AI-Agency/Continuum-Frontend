@@ -177,9 +177,10 @@ describe('SpendResultsBalance justification', () => {
     expect(panels.map((panel) => panel.getAttribute('data-tone'))).toEqual(['good', 'warn']);
     expect(panels[0]?.className).toContain('border-l-success');
     expect(panels[1]?.textContent).toBe(
-      'Qué cambiaría el repartoSi SEDE D // MENSAJES // AGOSTO 2026 rindiera en equilibrio (índice 1), con el mismo gasto traería 341 conversaciones en vez de 266. Esa es la brecha: 75 conversaciones en este mes.',
+      'Qué cambiaría el repartoSi SEDE D // MENSAJES // AGOSTO 2026 rindiera en equilibrio (índice 1.00), con el mismo gasto traería 341 conversaciones en vez de 266. Esa es la brecha: 75 conversaciones en este mes.',
     );
     expect(figureIdsIn(panels[1])).toEqual([
+      'index_even',
       'under_results_at_avg',
       'under_results',
       'results_gap',

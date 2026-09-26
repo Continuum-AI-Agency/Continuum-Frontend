@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, fireEvent, render } from '@testing-library/react';
 import type { ComponentProps, ReactNode } from 'react';
 import {
   type CheckpointBlockV2,
@@ -137,6 +137,23 @@ describe('one executive sentence', () => {
       <JainaReportV2 report={report([scope, table], SUMMARY)} isStreaming={false} />,
     );
     expect(container.textContent).toContain(SUMMARY);
+  });
+
+  it('brings the summary back when the reader hides the template block, and takes it away again', () => {
+    const blocks = [scope, templateBlock, table];
+    const { container, getByRole } = render(
+      <JainaReportV2 report={report(blocks, SUMMARY)} isStreaming={false} />,
+    );
+    expect(container.textContent).not.toContain(SUMMARY);
+
+    fireEvent.click(getByRole('button', { name: `Hide ${templateBlock.title} module` }));
+    expect(container.textContent).toContain(SUMMARY);
+    expect(container.textContent).not.toContain(HEADLINE);
+    expect(container.querySelector('[data-template-part]')).toBeNull();
+
+    fireEvent.click(getByRole('button', { name: `Show ${templateBlock.title} module` }));
+    expect(container.textContent).not.toContain(SUMMARY);
+    expect(container.textContent?.split(HEADLINE)).toHaveLength(2);
   });
 
   it('prints the same single answer in the export document', () => {

@@ -13,7 +13,7 @@
       "requested_label": "this_month"
     },
     "entity_label": null,
-    "record_count": 26
+    "record_count": 27
   },
   "grounding": null,
   "template_id": "explained_ranking",
@@ -188,7 +188,7 @@
       {
         "kind": "why",
         "title": "Por qué este orden",
-        "text": "Ordenamos por costo por conversación (gasto ÷ conversaciones), el resultado que busca el objetivo de estas campañas, y solo campañas con al menos {min_results} conversaciones, para que el orden no dependa de unos pocos resultados; {campaigns_unranked} quedaron fuera. Con {results_1} conversaciones, el costo de SEDE C // MENSAJES // AGOSTO 2026 está entre {cpr_1_lo} y {cpr_1_hi} (intervalo exacto de Poisson al 95%). Ordenando por volumen de conversaciones el primer lugar es el mismo ({results_volume_leader}), así que no depende del criterio.",
+        "text": "Ordenamos por costo por conversación (gasto ÷ conversaciones), el resultado que busca el objetivo de estas campañas, y solo campañas con al menos {min_results} conversaciones, para que el orden no dependa de unos pocos resultados; {campaigns_unranked} quedaron fuera. Con {results_1} conversaciones, el costo de SEDE C // MENSAJES // AGOSTO 2026 está entre {cpr_1_lo} y {cpr_1_hi} (intervalo exacto de Poisson al {confidence_level}). Ordenando por volumen de conversaciones el primer lugar es el mismo ({results_volume_leader}), así que no depende del criterio.",
         "chart": null,
         "table": null,
         "items": []
@@ -634,8 +634,27 @@
       "derivation": "|cpr_4 / cpr_avg − 1|"
     },
     {
+      "id": "confidence_level",
+      "label": "confidence level of the interval",
+      "value": 0.95,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "interval rule"
+    },
+    {
       "id": "cpr_1_lo",
-      "label": "Costo por conversación · SEDE C // MENSAJES // AGOSTO 2026 · 95% low",
+      "label": "Costo por conversación · SEDE C // MENSAJES // AGOSTO 2026 · interval low",
       "value": 29.3496166507358,
       "unit": "money",
       "currency": "MXN",
@@ -650,11 +669,11 @@
         "level": "campaign",
         "entityId": "900000000000000003"
       },
-      "derivation": "spend / Garwood 95% upper bound on conversations"
+      "derivation": "spend / Garwood upper bound on conversations at confidence_level"
     },
     {
       "id": "cpr_1_hi",
-      "label": "Costo por conversación · SEDE C // MENSAJES // AGOSTO 2026 · 95% high",
+      "label": "Costo por conversación · SEDE C // MENSAJES // AGOSTO 2026 · interval high",
       "value": 35.39262517019868,
       "unit": "money",
       "currency": "MXN",
@@ -669,7 +688,7 @@
         "level": "campaign",
         "entityId": "900000000000000003"
       },
-      "derivation": "spend / Garwood 95% lower bound on conversations"
+      "derivation": "spend / Garwood lower bound on conversations at confidence_level"
     },
     {
       "id": "results_volume_leader",

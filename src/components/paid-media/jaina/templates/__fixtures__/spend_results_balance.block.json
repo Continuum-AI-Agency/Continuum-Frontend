@@ -13,7 +13,7 @@
       "requested_label": "this_month"
     },
     "entity_label": null,
-    "record_count": 41
+    "record_count": 42
   },
   "grounding": null,
   "template_id": "spend_results_balance",
@@ -83,7 +83,7 @@
       {
         "kind": "measured",
         "title": "Qué medimos",
-        "text": "Leímos gasto y conversaciones de las {campaigns_read} campañas que buscan conversaciones y gastaron en este mes, a nivel campaña: {spend_total} y {results_total} conversaciones. Para cada una dividimos su parte de las conversaciones entre su parte del gasto: un índice de 1 es traer exactamente lo que cuesta; arriba de 1, más; abajo, menos. Otras {campaigns_other} campañas buscan otro resultado y no entran: sus resultados no son conversaciones.",
+        "text": "Leímos gasto y conversaciones de las {campaigns_read} campañas que buscan conversaciones y gastaron en este mes, a nivel campaña: {spend_total} y {results_total} conversaciones. Para cada una dividimos su parte de las conversaciones entre su parte del gasto: un índice de {index_even} es traer exactamente lo que cuesta; arriba, más; abajo, menos. Otras {campaigns_other} campañas buscan otro resultado y no entran: sus resultados no son conversaciones.",
         "chart": null,
         "table": null,
         "items": []
@@ -247,7 +247,7 @@
             "entity_id": "900000000000000004",
             "badge_figure_id": "results_gap",
             "detail_figure_ids": [],
-            "text": "Si SEDE D // MENSAJES // AGOSTO 2026 rindiera en equilibrio (índice 1), con el mismo gasto traería {under_results_at_avg} conversaciones en vez de {under_results}. Esa es la brecha: {results_gap} conversaciones en este mes.",
+            "text": "Si SEDE D // MENSAJES // AGOSTO 2026 rindiera en equilibrio (índice {index_even}), con el mismo gasto traería {under_results_at_avg} conversaciones en vez de {under_results}. Esa es la brecha: {results_gap} conversaciones en este mes.",
             "tone": "warn"
           }
         ]
@@ -387,6 +387,25 @@
         "entityId": null
       },
       "derivation": "share_total / share_total"
+    },
+    {
+      "id": "index_even",
+      "label": "index of a campaign that brings exactly what it costs",
+      "value": 1,
+      "unit": "ratio",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "reading rule: share of results = share of spend"
     },
     {
       "id": "balance_low",

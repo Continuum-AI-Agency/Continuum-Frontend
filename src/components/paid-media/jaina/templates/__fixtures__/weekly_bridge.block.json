@@ -74,7 +74,7 @@
       {
         "kind": "measured",
         "title": "Qué medimos",
-        "text": "Comparamos gasto y conversaciones de las {campaigns_read} campañas que buscan conversaciones, a nivel campaña, en dos semanas del mismo largo: del 2026-09-11 al 2026-09-17 ({results_prior} conversaciones con {spend_prior}) y del 2026-09-18 al 2026-09-24 ({results_current} conversaciones con {spend_current}). La semana anterior es la lectura de los últimos 14 días menos la de los últimos 7, campaña por campaña. Cada escalón se separa en efecto gasto (las conversaciones que el gasto nuevo habría traído al costo de la semana anterior) y efecto costo (el resto). Otras {campaigns_other} campañas buscan otro resultado y no entran: su costo por resultado no se compara con un costo por conversación.",
+        "text": "Comparamos gasto y conversaciones de las {campaigns_read} campañas que buscan conversaciones, a nivel campaña, en dos semanas del mismo largo: los 7 días anteriores ({results_prior} conversaciones con {spend_prior}) y los últimos 7 días ({results_current} conversaciones con {spend_current}). La semana anterior sale de restar, campaña por campaña, los últimos 7 días a la lectura de las dos últimas semanas. Cada escalón se separa en efecto gasto (las conversaciones que el gasto nuevo habría traído al costo de la semana anterior) y efecto costo (el resto). Otras {campaigns_other} campañas buscan otro resultado y no entran: su costo por resultado no se compara con un costo por conversación.",
         "chart": null,
         "table": null,
         "items": []
