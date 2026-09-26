@@ -17,6 +17,7 @@
  */
 
 import { z } from 'zod';
+import { paidScaffoldPlanSchema } from '../paid/scaffold-plan';
 
 // ---------------------------------------------------------------------------
 // Tool approval frames (shared mental model with Organic, which already emits
@@ -136,8 +137,25 @@ export const paidScaffoldProposedPayloadSchema = z
     parentScaffoldId: z.string().optional(),
     brandId: z.string().optional(),
     adAccountId: z.string().nullable().optional(),
+    // OPTIONAL AT THE WIRE, and only there: the Backend always emits version, contentHash,
+    // name and scaffoldPlan, but a `paid.scaffold_proposed` row written before they existed
+    // is replayed from run events on every reload and must still parse. A card missing them
+    // degrades — no Deploy button, no evidence table — rather than dropping the frame.
+    /** `paid_scaffold_versions.version` — 1 for a new scaffold, +1 per revision or canvas save. */
+    version: z.number().int().positive().optional(),
+    /** `paid_scaffold_versions.content_hash`. An operator-action deploy must carry it. */
+    contentHash: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+    name: z.string().optional(),
     /** The proposed campaign → ad set → ad tree. Narrowed on the Frontend. */
     plan: z.unknown(),
+    /**
+     * The typed, data-backed plan — evidence, expected results, optimizer enrollment,
+     * blockers. The SAME object is persisted at `paid_scaffold_versions.manifest.plan`.
+     */
+    scaffoldPlan: paidScaffoldPlanSchema.optional(),
     /** Present when this proposal is gated behind a HITL approval. */
     approvalId: z.string().nullable().optional(),
     /** Counts for a one-line summary without walking `plan`. */

@@ -186,7 +186,7 @@ describe('JainaMessageItem renders parts and persistence identically', () => {
     expect(screen.getAllByText('Which ad account should I pause it in?').length).toBeGreaterThan(0);
 
     // The gate: a uuid on a card is consent to nothing, so the change itself must be on screen.
-    expect(screen.getByText('Pause ad set / ad')).toBeTruthy();
+    expect(screen.getByText('Pause campaign / ad set / ad')).toBeTruthy();
     expect(screen.getByText('Awaiting your approval')).toBeTruthy();
     // ACTIVE appears twice on purpose: once as the table's `before`, once in the exact input the
     // approval actually authorises. The table summarises; the argument list IS the call.
@@ -203,7 +203,7 @@ describe('JainaMessageItem renders parts and persistence identically', () => {
       { wrapper },
     );
 
-    expect(screen.getByText('Pause ad set / ad')).toBeTruthy();
+    expect(screen.getByText('Pause campaign / ad set / ad')).toBeTruthy();
     expect(screen.getByText('PAUSED')).toBeTruthy();
   });
 

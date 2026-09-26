@@ -19,7 +19,12 @@ import {
 } from '@continuum/contracts';
 import type { AgentMentionReference } from '@/lib/agent-references';
 import { browserTimezone } from '@/lib/automations/schedule';
-import type { JainaPlanAction, JainaScaffoldAction, JainaToolAction } from '@/lib/jaina/schemas';
+import type {
+  JainaOperatorAction,
+  JainaPlanAction,
+  JainaScaffoldAction,
+  JainaToolAction,
+} from '@/lib/jaina/schemas';
 
 export type { JainaChatStreamRequest };
 
@@ -48,6 +53,11 @@ export type JainaChatInput = {
   scaffoldAction?: JainaScaffoldAction;
   /** A human's answer to any gated tool that is not a paid scaffold. */
   toolAction?: JainaToolAction;
+  /**
+   * A deterministic gated call opened by a button, not by the model: the Backend opens the
+   * tool's approval gate with no LLM turn, and the answer comes back as a `toolAction`.
+   */
+  operatorAction?: JainaOperatorAction;
   forceReportArtifact?: boolean;
   /**
    * Invoked when the request fails to reach the backend.
@@ -127,6 +137,7 @@ export function buildJainaChatStreamRequest(
     ...(input.planAction ? { plan_action: input.planAction } : {}),
     ...(input.scaffoldAction ? { scaffold_action: input.scaffoldAction } : {}),
     ...(input.toolAction ? { tool_action: input.toolAction } : {}),
+    ...(input.operatorAction ? { operator_action: input.operatorAction } : {}),
     context: {
       adAccountId: input.adAccountId,
       ...(includeScope ? { adAccountIds: accountIds, dataScope } : {}),

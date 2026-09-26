@@ -111,8 +111,14 @@ import {
   mapConversationCreateResponse,
 } from '@/lib/jaina/conversations';
 import {
+  type OperatorActionOutcome,
+  operatorActionOutcome,
+  operatorDispatchRefusal,
+} from '@/lib/jaina/operatorOutcome';
+import {
   frontendCheckpointReportSchema,
   type JainaObjectiveStatus,
+  type JainaOperatorAction,
   type JainaPlanAction,
   type JainaScaffoldAction,
   type JainaToolAction,
@@ -204,6 +210,16 @@ type JainaChatSurfaceProps = {
   initialSessionId?: string | null;
   initialPrompt?: string | null;
   onInitialPromptConsumed?: () => void;
+  /**
+   * A gated call a button OUTSIDE the transcript opened — the canvas's "Deploy paused". It is
+   * posted once as an `operator_action` (no model turn) and its approval card lands in this
+   * transcript, where it is answered like every other gate. `id` makes a repeat click a new
+   * request rather than a no-op.
+   */
+  operatorActionRequest?: OperatorActionRequestProp | null;
+  onOperatorActionConsumed?: () => void;
+  /** How that request ended: its gate opened, or the reason it did not. */
+  onOperatorActionSettled?: (id: string, outcome: OperatorActionOutcome) => void;
   onCanvasActionApplied?: () => void;
   /**
    * Opens the optimizer's account read for a cited optimizer figure in an answer.
@@ -215,6 +231,12 @@ type JainaChatSurfaceProps = {
   onOpenAccountRead?: (readId: string) => void;
   goalsAccessEnabled?: boolean;
   className?: string;
+};
+
+export type OperatorActionRequestProp = {
+  id: string;
+  action: JainaOperatorAction;
+  displayText: string;
 };
 
 type ReportArtifactJobStatus = 'pending' | 'running' | 'done' | 'failed';
@@ -745,6 +767,9 @@ export function JainaChatSurface({
   initialSessionId,
   initialPrompt,
   onInitialPromptConsumed,
+  operatorActionRequest = null,
+  onOperatorActionConsumed,
+  onOperatorActionSettled,
   onCanvasActionApplied,
   onOpenAccountRead,
   goalsAccessEnabled = process.env.NODE_ENV !== 'production',
@@ -1879,6 +1904,7 @@ export function JainaChatSurface({
       planAction?: JainaPlanAction;
       scaffoldAction?: JainaScaffoldAction;
       toolAction?: JainaToolAction;
+      operatorAction?: JainaOperatorAction;
       forceReportArtifact?: boolean;
       silentUserMessage?: boolean;
       onDispatchError?: (message: string) => void;
@@ -2011,6 +2037,7 @@ export function JainaChatSurface({
         planAction: input.planAction,
         scaffoldAction: input.scaffoldAction,
         toolAction: input.toolAction,
+        operatorAction: input.operatorAction,
         forceReportArtifact: input.forceReportArtifact,
         onDispatchError: (message) => {
           if (input.forceReportArtifact) {
@@ -2479,6 +2506,84 @@ export function JainaChatSurface({
     [dispatchMessage, show],
   );
 
+  /**
+   * Open one gate from a button — the scaffold card's "Deploy paused", the canvas's record bar.
+   * No model turn: the Backend scripts the single tool call, and the approval card that comes
+   * back is answered through `handleApprovalDecision` like every other gate.
+   *
+   * The caller learns how it ended — the gate opened, or the Backend refused it in words — so no
+   * button is left on "Opening the approval…" after a refusal. Refused outright while a turn is
+   * still streaming: a second request mid-turn would land in the middle of someone else's answer.
+   */
+  const pendingOperatorRef = React.useRef<{
+    start: number;
+    tool: string;
+    settle: (outcome: OperatorActionOutcome) => void;
+  } | null>(null);
+
+  const handleOperatorAction = React.useCallback(
+    (
+      action: JainaOperatorAction,
+      displayText: string,
+      onSettled?: (outcome: OperatorActionOutcome) => void,
+    ) => {
+      let settled = false;
+      const settle = (outcome: OperatorActionOutcome) => {
+        if (settled) return;
+        settled = true;
+        if (pendingOperatorRef.current?.settle === settle) pendingOperatorRef.current = null;
+        onSettled?.(outcome);
+      };
+      const busy = operatorDispatchRefusal({
+        isStreaming,
+        actionPending: pendingOperatorRef.current !== null,
+      });
+      if (busy) {
+        settle({ ok: false, reason: busy });
+        return;
+      }
+      pendingOperatorRef.current = { start: messages.length, tool: action.tool, settle };
+      void dispatchMessage({
+        query: displayText,
+        canvas: false,
+        operatorAction: action,
+        onDispatchError: (message) => settle({ ok: false, reason: message }),
+      }).then((dispatched) => {
+        if (!dispatched) settle({ ok: false, reason: 'Jaina did not receive the request.' });
+      });
+    },
+    [dispatchMessage, isStreaming, messages.length],
+  );
+
+  // Settles the pending operator turn once it has answered — read off the same projected
+  // messages the transcript renders, so "the gate opened" means the card is on screen.
+  React.useEffect(() => {
+    const pending = pendingOperatorRef.current;
+    if (!pending || isStreaming) return;
+    const outcome = operatorActionOutcome(messages.slice(pending.start), pending.tool);
+    if (outcome) pending.settle(outcome);
+  }, [isStreaming, messages]);
+
+  const consumedOperatorRequestRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!operatorActionRequest || !adAccountId) return;
+    // One request per id until it settles: a double-click must open one gate, not two.
+    if (consumedOperatorRequestRef.current === operatorActionRequest.id) return;
+    const { id, action, displayText } = operatorActionRequest;
+    consumedOperatorRequestRef.current = id;
+    handleOperatorAction(action, displayText, (outcome) => {
+      if (consumedOperatorRequestRef.current === id) consumedOperatorRequestRef.current = null;
+      onOperatorActionSettled?.(id, outcome);
+    });
+    onOperatorActionConsumed?.();
+  }, [
+    adAccountId,
+    handleOperatorAction,
+    onOperatorActionConsumed,
+    onOperatorActionSettled,
+    operatorActionRequest,
+  ]);
+
   const handleClearMemory = React.useCallback(async () => {
     if (!adAccountId) return;
     try {
@@ -2517,6 +2622,7 @@ export function JainaChatSurface({
   const submitFromTranscript = useStableHandler((query: string) => handleSubmit(query));
   const planFeedbackFromTranscript = useStableHandler(handlePlanFeedback);
   const approvalDecisionFromTranscript = useStableHandler(handleApprovalDecision);
+  const operatorActionFromTranscript = useStableHandler(handleOperatorAction);
 
   const regeneratePromptByMessageId = React.useMemo(() => {
     const prompts = new Map<string, string>();
@@ -2686,6 +2792,7 @@ export function JainaChatSurface({
                       onPlanFeedback={planFeedbackFromTranscript}
                       onFocusInput={handleFocusInput}
                       onApprovalDecision={approvalDecisionFromTranscript}
+                      onOperatorAction={operatorActionFromTranscript}
                       optimisticApprovalDecisions={optimisticApprovalDecisions}
                       onRegenerate={submitFromTranscript}
                       regeneratePrompt={regeneratePromptByMessageId.get(message.id)}

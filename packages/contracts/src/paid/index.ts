@@ -13,6 +13,9 @@ export * from './multi-account';
 // Backend client and the campaign canvas that drives it.
 export * from './openai-ads';
 export * from './ranking';
+// The typed plan behind a paid scaffold version (evidence, expected results, optimizer
+// enrollment) and the Campaign Canvas save request/response.
+export * from './scaffold-plan';
 // Meta ad-set targeting -> the audience axis (cold/warm, and the normalized columns
 // paid_media.adset_targeting_snapshots indexes on).
 export * from './targeting';

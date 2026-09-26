@@ -51,6 +51,7 @@ mock.module('next/dynamic', () => ({
 }));
 
 mock.module('next/navigation', () => ({
+  usePathname: () => '/scale',
   useRouter: () => ({ replace: routerReplaceMock }),
   useSearchParams: () => new URLSearchParams(searchParamsValue),
 }));
@@ -67,6 +68,10 @@ mock.module('@/components/paid-media/optimizer/useOptimizerData', () => ({
     return latestOptimizerPrefetch;
   },
   useOptimizerAdAccounts: () => optimizerAdAccounts,
+}));
+
+mock.module('@/components/paid-media/campaigns/usePrefetchScaleCampaigns', () => ({
+  usePrefetchScaleCampaigns: () => () => undefined,
 }));
 
 mock.module('@/lib/prefetch/paid-media-cache', () => ({

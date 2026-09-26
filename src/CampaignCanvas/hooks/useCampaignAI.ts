@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { useCampaignStore } from '../stores/useCampaignStore';
 import type { CampaignCanvasNodeData, CampaignData, CampaignNodeType } from '../types';
+import { getTargetHandleIdFor } from '../types/hierarchyNavigation';
 
 type FlowPosition = { x: number; y: number };
 
@@ -77,13 +78,20 @@ export const useCampaignAI = () => {
         }
         case 'CONNECT_NODES': {
           const { sourceId, targetId } = action.payload;
-          const resolvedSourceId = nodeAliasMapRef.current.get(sourceId) ?? sourceId;
-          const resolvedTargetId = nodeAliasMapRef.current.get(targetId) ?? targetId;
+          let resolvedSourceId = nodeAliasMapRef.current.get(sourceId) ?? sourceId;
+          let resolvedTargetId = nodeAliasMapRef.current.get(targetId) ?? targetId;
+          const typeOf = (nodeId: string) =>
+            useCampaignStore.getState().nodes.find((node) => node.id === nodeId)?.type;
+          // An agent that still says "ad set -> audience" means the one relationship
+          // there is: the audience feeds the ad set from the side.
+          if (typeOf(resolvedSourceId) === 'ad-set' && typeOf(resolvedTargetId) === 'audience') {
+            [resolvedSourceId, resolvedTargetId] = [resolvedTargetId, resolvedSourceId];
+          }
           onConnect({
             source: resolvedSourceId,
             sourceHandle: null,
             target: resolvedTargetId,
-            targetHandle: null,
+            targetHandle: getTargetHandleIdFor(typeOf(resolvedSourceId), typeOf(resolvedTargetId)),
           });
           break;
         }

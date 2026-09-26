@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 import { CampaignCanvas } from './components/CampaignCanvas';
 import { ScaffoldRecordBar } from './components/ScaffoldRecordBar';
+import { type CanvasDeployRequest, useDeployRequest } from './hooks/useDeployRequest';
 import { useCampaignStore } from './stores/useCampaignStore';
 
 /**
@@ -31,6 +32,7 @@ const CampaignFlowCanvasPage = ({
   const [isMaximized, setIsMaximized] = useState(false);
   const [initialPrompt, setInitialPrompt] = useState<string | null>(null);
   const [adAccountId, setAdAccountId] = useState<string | null>(null);
+  const deploy = useDeployRequest();
   const dragControls = useDragControls();
   const canvasContainerRef = useRef<HTMLDivElement>(null);
 
@@ -76,6 +78,27 @@ const CampaignFlowCanvasPage = ({
     );
   }, [hydration]);
 
+  /**
+   * "Deploy paused" opens the gate in THIS panel, not somewhere else: the approval card is the
+   * one place a person sees what deploying creates, so it lands where the canvas already is.
+   * Maximized for the same reason as Propose — the card's footer must be reachable.
+   */
+  const { requestDeploy, cancel: cancelDeploy, inFlight: deployInFlight } = deploy;
+  // Closing the panel unmounts the chat that would settle the request.
+  React.useEffect(() => {
+    if (!isJainaOpen && deployInFlight) {
+      cancelDeploy('The Jaina panel was closed before the approval opened. Deploy again.');
+    }
+  }, [cancelDeploy, deployInFlight, isJainaOpen]);
+  const handleDeploy = useCallback(
+    (request: CanvasDeployRequest) => {
+      if (!requestDeploy(request)) return;
+      setIsJainaOpen(true);
+      setIsMaximized(true);
+    },
+    [requestDeploy],
+  );
+
   const chatDimensions = useMemo(
     () => ({
       width: isMaximized ? 'min(94vw, 980px)' : 'min(92vw, 420px)',
@@ -98,6 +121,9 @@ const CampaignFlowCanvasPage = ({
               requestedScaffoldId={requestedScaffoldId}
               onAdAccountChange={setAdAccountId}
               onPropose={handlePropose}
+              onDeploy={handleDeploy}
+              deployInFlight={deploy.inFlight}
+              deployRefusal={deploy.refusal}
             />
           </div>
 
@@ -173,6 +199,9 @@ const CampaignFlowCanvasPage = ({
                     campaignCanvasPayload={campaignCanvasPayload}
                     initialPrompt={initialPrompt}
                     onInitialPromptConsumed={() => setInitialPrompt(null)}
+                    operatorActionRequest={deploy.request}
+                    onOperatorActionConsumed={deploy.consumed}
+                    onOperatorActionSettled={deploy.settled}
                   />
                 </div>
               </motion.div>

@@ -180,7 +180,7 @@ describe('JainaToolApprovalCard', () => {
       { wrapper },
     );
 
-    expect(screen.getByText('Pause ad set / ad')).toBeTruthy();
+    expect(screen.getByText('Pause campaign / ad set / ad')).toBeTruthy();
 
     // Scoped to the table: `ACTIVE` is also the prior in the exact-input list below it,
     // and a page-wide lookup would pass on the wrong element.

@@ -1,6 +1,6 @@
 'use client';
 
-import type { JainaToolApprovalRequiredPayload } from '@continuum/contracts';
+import type { JainaOperatorAction, JainaToolApprovalRequiredPayload } from '@continuum/contracts';
 import { motion } from 'motion/react';
 import * as React from 'react';
 import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
@@ -11,6 +11,7 @@ import { MentionifiedText } from '@/components/chat/mentionified-text';
 import { JainaOptimizerCitations } from '@/components/paid-media/jaina/blocks/JainaOptimizerCitations';
 import { JainaOptimizerHyperframes } from '@/components/paid-media/jaina/blocks/JainaOptimizerHyperframes';
 import { PaidScaffoldCard } from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
+import type { OperatorActionOutcome } from '@/lib/jaina/operatorOutcome';
 import {
   type CreativeArtifact,
   frontendCheckpointReportSchema,
@@ -127,6 +128,15 @@ type JainaMessageItemProps = {
   /** Decisions submitted but not yet echoed back by a tool.approval_resolved frame. */
   optimisticApprovalDecisions?: Record<string, ToolApprovalDecision>;
   /**
+   * Opens a gate from a button with no model turn — the scaffold card's "Deploy paused". Must be
+   * referentially stable, like every handler here: this item is memoized.
+   */
+  onOperatorAction?: (
+    action: JainaOperatorAction,
+    displayText: string,
+    onSettled?: (outcome: OperatorActionOutcome) => void,
+  ) => void;
+  /**
    * Opens the optimizer's account read — what a cited optimizer figure points at.
    *
    * Only the shell that owns the paid-media tabs can honour it, so it arrives from there rather
@@ -145,6 +155,7 @@ function JainaMessageItemImpl({
   onFocusInput,
   onApprovalDecision,
   optimisticApprovalDecisions,
+  onOperatorAction,
   onOpenAccountRead,
 }: JainaMessageItemProps) {
   const isStreaming = message.status === 'streaming';
@@ -344,6 +355,7 @@ function JainaMessageItemImpl({
                 }
                 isStreaming={isStreaming}
                 {...(onApprovalDecision ? { onDecide: onApprovalDecision } : {})}
+                {...(onOperatorAction ? { onDeploy: onOperatorAction } : {})}
               />
             ) : null}
 

@@ -360,6 +360,8 @@ export const scaffoldOf = (message: JainaUIMessage): JainaScaffoldState | undefi
       continue;
     }
 
+    // A frame persisted before the typed plan existed lacks `scaffoldPlan`/`contentHash`/`name`/
+    // `version` — optional at the wire for exactly this — and its card still renders from the rows.
     const proposal = paidScaffoldProposedPayloadSchema.safeParse(data);
     if (!proposal.success) continue;
     const sameScaffold = scaffold?.scaffoldId === proposal.data.scaffoldId;
@@ -372,6 +374,10 @@ export const scaffoldOf = (message: JainaUIMessage): JainaScaffoldState | undefi
       adAccountId: proposal.data.adAccountId ?? null,
       approvalId: proposal.data.approvalId ?? null,
       plan: proposal.data.plan,
+      ...(proposal.data.name ? { name: proposal.data.name } : {}),
+      ...(proposal.data.version ? { version: proposal.data.version } : {}),
+      ...(proposal.data.contentHash ? { contentHash: proposal.data.contentHash } : {}),
+      scaffoldPlan: proposal.data.scaffoldPlan ?? null,
       ...(proposal.data.summary ? { summary: proposal.data.summary } : {}),
       progressByNode: sameScaffold ? (scaffold?.progressByNode ?? {}) : {},
       lastProgress: sameScaffold ? (scaffold?.lastProgress ?? null) : null,

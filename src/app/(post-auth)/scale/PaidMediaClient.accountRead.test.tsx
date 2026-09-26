@@ -51,6 +51,10 @@ mock.module('@/components/paid-media/jaina/components/SavedDashboardsPanel', () 
   SavedDashboardsPanel: () => <div data-testid="saved-dashboards" />,
 }));
 
+mock.module('@/components/paid-media/campaigns/usePrefetchScaleCampaigns', () => ({
+  usePrefetchScaleCampaigns: () => () => undefined,
+}));
+
 mock.module('@/lib/prefetch/paid-media-cache', () => ({
   prefetchPaidMediaDashboard: () => undefined,
 }));

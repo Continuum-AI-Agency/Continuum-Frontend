@@ -71,14 +71,15 @@ import { CreativeNode } from '../nodes/CreativeNode';
 import { OpenAiAdGroupNode } from '../nodes/OpenAiAdGroupNode';
 import { OpenAiAdNode } from '../nodes/OpenAiAdNode';
 import { OpenAiCampaignNode } from '../nodes/OpenAiCampaignNode';
-import { useCampaignStore } from '../stores/useCampaignStore';
+import { seedDataForConnectedNode, useCampaignStore } from '../stores/useCampaignStore';
 import type { CampaignNodeType } from '../types';
-import { getNodeTypeToCreateFromHandle } from '../types/hierarchyNavigation';
+import { getNodeTypeToCreateFromHandle, getTargetHandleIdFor } from '../types/hierarchyNavigation';
 import {
-  getExpectedSingleParentTypeForChild,
   getSingleParentConstraintMessage,
   hasExistingSingleParentAttachment,
+  isSingleParentRelationship,
 } from '../validation/hierarchyRelationships';
+import { CanvasInspector } from './inspector/CanvasInspector';
 
 const nodeTypes: NodeTypes = {
   campaign: CampaignNode as unknown as ComponentType<ReactFlowNodeProps>,
@@ -120,6 +121,8 @@ export const CampaignCanvas = () => {
     onEdgesChange,
     onConnect,
     connectionBlockReason,
+    childBlockReason,
+    editLocked,
     addNode,
     removeNode,
     duplicateNode,
@@ -223,23 +226,33 @@ export const CampaignCanvas = () => {
       const nodeTypeToCreate = getNodeTypeToCreateFromHandle(
         startNode.type,
         connectStart.handleType,
+        connectStart.handleId ?? null,
       );
       if (!nodeTypeToCreate) {
         return;
       }
 
-      if (connectStart.handleType === 'target') {
-        const expectedParentType = getExpectedSingleParentTypeForChild(startNode.type);
-        if (
-          expectedParentType === nodeTypeToCreate &&
-          hasExistingSingleParentAttachment(startNode.id, expectedParentType, nodes, edges)
-        ) {
-          toast({
-            title: 'Connection blocked',
-            description: getSingleParentConstraintMessage(startNode.type, expectedParentType),
-          });
-          return;
-        }
+      if (
+        connectStart.handleType === 'target' &&
+        isSingleParentRelationship(startNode.type, nodeTypeToCreate) &&
+        hasExistingSingleParentAttachment(startNode.id, nodeTypeToCreate, nodes, edges)
+      ) {
+        toast({
+          title: 'Connection blocked',
+          description: getSingleParentConstraintMessage(startNode.type, nodeTypeToCreate),
+        });
+        return;
+      }
+
+      // Asked BEFORE the node exists: a child the rules refuse would otherwise be drawn and then
+      // left stranded when its edge is refused.
+      const childRefusal =
+        connectStart.handleType === 'source'
+          ? childBlockReason(startNode.id, nodeTypeToCreate)
+          : null;
+      if (childRefusal) {
+        toast({ title: 'Connection blocked', description: childRefusal });
+        return;
       }
 
       const pointerPosition = getClientPositionFromPointerEvent(event);
@@ -248,14 +261,18 @@ export const CampaignCanvas = () => {
       }
 
       const nodePosition = screenToFlowPosition(pointerPosition);
-      const newNodeId = addNode(nodeTypeToCreate, {}, nodePosition);
+      const newNodeId = addNode(
+        nodeTypeToCreate,
+        seedDataForConnectedNode(startNode, nodeTypeToCreate),
+        nodePosition,
+      );
 
       if (connectStart.handleType === 'source') {
         handleConnect({
           source: connectStart.nodeId,
           sourceHandle: connectStart.handleId,
           target: newNodeId,
-          targetHandle: null,
+          targetHandle: getTargetHandleIdFor(startNode.type, nodeTypeToCreate),
         });
         return;
       }
@@ -267,7 +284,7 @@ export const CampaignCanvas = () => {
         targetHandle: connectStart.handleId,
       });
     },
-    [addNode, edges, handleConnect, nodes, screenToFlowPosition, toast],
+    [addNode, childBlockReason, edges, handleConnect, nodes, screenToFlowPosition, toast],
   );
 
   const confirmDelete = useCallback(() => {
@@ -335,8 +352,13 @@ export const CampaignCanvas = () => {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const isCmd = event.metaKey || event.ctrlKey;
+      // Inside a field, ⌘Z is the field's own text undo. The inspector commits on blur,
+      // so the canvas history only ever holds whole edits.
+      const target = event.target as HTMLElement | null;
+      const inField =
+        target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable;
 
-      if (isCmd && event.key === 'z') {
+      if (isCmd && event.key === 'z' && !inField) {
         if (event.shiftKey) {
           redo();
           toast({ title: 'Redo', durationMs: 1000 });
@@ -344,7 +366,10 @@ export const CampaignCanvas = () => {
           undo();
           toast({ title: 'Undo', durationMs: 1000 });
         }
-      } else if (isCmd && event.key === 'd') {
+      } else if (event.shiftKey && !isCmd && event.key.toLowerCase() === 'f' && !inField) {
+        // The shortcut the "Fit to Screen" menu item advertises.
+        fitView({ duration: 800 });
+      } else if (isCmd && event.key === 'd' && !inField) {
         event.preventDefault();
         const selected = nodes.find((n) => n.selected);
         if (selected) duplicateNode(selected.id);
@@ -361,7 +386,7 @@ export const CampaignCanvas = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [nodes, undo, redo, duplicateNode, toast]);
+  }, [nodes, undo, redo, duplicateNode, toast, fitView]);
 
   return (
     <div ref={surfaceRef} className="relative h-full w-full">
@@ -381,7 +406,9 @@ export const CampaignCanvas = () => {
             onConnectStart={handleConnectStart}
             onConnectEnd={handleConnectEnd}
             isValidConnection={isValidConnection}
-            nodesConnectable
+            nodesConnectable={!editLocked}
+            nodesDraggable={!editLocked}
+            deleteKeyCode={editLocked ? null : undefined}
             panOnDrag
             selectionOnDrag={false}
             nodeTypes={nodeTypes as unknown as NodeTypes}
@@ -391,7 +418,14 @@ export const CampaignCanvas = () => {
             fitView
           >
             <Controls />
-            <MiniMap zoomable pannable className="!bg-background border shadow-sm" />
+            {/* Bottom-left beside Controls, as on the Studio canvas: the right edge is the inspector's. */}
+            <MiniMap
+              position="bottom-left"
+              zoomable
+              pannable
+              className="!ml-14 !bg-background border shadow-sm"
+            />
+            <CanvasInspector />
 
             <Panel position="top-left" className="flex items-center gap-1">
               <Button variant="ghost" size="icon" onClick={undo} className="h-8 w-8">
@@ -435,23 +469,6 @@ export const CampaignCanvas = () => {
 
         <ContextMenuContent className="w-[clamp(13rem,17vw,17rem)]">
           <ContextMenuLabel>Workspace Actions</ContextMenuLabel>
-          <ContextMenuItem
-            inset
-            onClick={() => toast({ title: 'Paste', description: 'Functionality coming soon' })}
-          >
-            Paste
-            <ContextMenuShortcut>⌘V</ContextMenuShortcut>
-          </ContextMenuItem>
-          <ContextMenuItem
-            inset
-            onClick={() => toast({ title: 'Select All', description: 'Functionality coming soon' })}
-          >
-            Select All
-            <ContextMenuShortcut>⌘A</ContextMenuShortcut>
-          </ContextMenuItem>
-
-          <ContextMenuSeparator />
-
           <ContextMenuSub>
             <ContextMenuSubTrigger inset>
               <Plus className="mr-2 h-4 w-4" />
