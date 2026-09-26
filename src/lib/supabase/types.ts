@@ -18102,6 +18102,104 @@ export type Database = {
         }
         Relationships: []
       }
+      forge_motion_proofs: {
+        Row: {
+          binding_id: string
+          brand_id: string
+          comp: string
+          content_hash: string
+          contract_hash: string
+          created_at: string
+          created_by: string
+          duration_sec: number | null
+          environment: string
+          error: string | null
+          finished_at: string | null
+          font_hashes: Json
+          frame_rate: number | null
+          has_audio: boolean | null
+          id: string
+          media_versions: Json
+          output_id: string
+          profile: string
+          progress_pct: number | null
+          proxy_path: string | null
+          render_input: Json
+          state: string
+          task_uid: string | null
+          template_commit_sha: string | null
+          template_key: string
+          template_source_sha256: string
+          updated_at: string
+        }
+        Insert: {
+          binding_id: string
+          brand_id: string
+          comp: string
+          content_hash: string
+          contract_hash: string
+          created_at?: string
+          created_by: string
+          duration_sec?: number | null
+          environment: string
+          error?: string | null
+          finished_at?: string | null
+          font_hashes?: Json
+          frame_rate?: number | null
+          has_audio?: boolean | null
+          id?: string
+          media_versions?: Json
+          output_id: string
+          profile?: string
+          progress_pct?: number | null
+          proxy_path?: string | null
+          render_input: Json
+          state?: string
+          task_uid?: string | null
+          template_commit_sha?: string | null
+          template_key: string
+          template_source_sha256: string
+          updated_at?: string
+        }
+        Update: {
+          binding_id?: string
+          brand_id?: string
+          comp?: string
+          content_hash?: string
+          contract_hash?: string
+          created_at?: string
+          created_by?: string
+          duration_sec?: number | null
+          environment?: string
+          error?: string | null
+          finished_at?: string | null
+          font_hashes?: Json
+          frame_rate?: number | null
+          has_audio?: boolean | null
+          id?: string
+          media_versions?: Json
+          output_id?: string
+          profile?: string
+          progress_pct?: number | null
+          proxy_path?: string | null
+          render_input?: Json
+          state?: string
+          task_uid?: string | null
+          template_commit_sha?: string | null
+          template_key?: string
+          template_source_sha256?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forge_motion_proofs_binding_id_brand_id_fkey"
+            columns: ["binding_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "render_workspace_bindings"
+            referencedColumns: ["id", "brand_id"]
+          },
+        ]
+      }
       intake_forms: {
         Row: {
           allowed_extensions: string[]

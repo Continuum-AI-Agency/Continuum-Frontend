@@ -8,6 +8,7 @@ import {
   type ApiRenderVariable,
   changedKeys,
   type ForgeRenderPreview,
+  type ForgeMotionProof,
   isMotion,
   motionLabel,
   readableLayerName,
@@ -34,6 +35,7 @@ import {
   effectiveValues,
   type RequestRow,
   type RequestRowMedia,
+  validateRow,
 } from './renderRequestRows';
 
 // One row, before a render is spent on it. The picture is composed on the server — brand faces
@@ -53,6 +55,7 @@ const SAMPLE_FLOOR_RATIO = 0.4;
 const FLOOR_PX = 12;
 /** A keystroke waits this long before it costs a composition. */
 const COMPOSE_DEBOUNCE_MS = 400;
+const PROOF_DEBOUNCE_MS = 1500;
 
 type Box = ApiRenderTemplateLayout['boxes'][number];
 
@@ -405,12 +408,14 @@ const COMPOSE_FAILED = 'Composed preview unavailable — showing the measured bo
 export function RenderPreviewPanel({
   brandId,
   contract,
+  templateRef,
   rows,
   rowId,
   renderSetId,
 }: {
   brandId: string;
   contract: ApiRenderTemplateContract;
+  templateRef?: string;
   rows: RequestRow[];
   rowId: string | null;
   renderSetId: string | null;
@@ -465,7 +470,15 @@ export function RenderPreviewPanel({
   const values = row ? effectiveValues(rows, row.id) : {};
   const media = row ? effectiveMedia(rows, row.id) : {};
   const scopedIds = row ? effectiveOutputIds(rows, row.id) : [];
-  const formats = previewFormats({ outputs: contract.outputs, ratios: contract.template.ratios });
+  const { data: parsedProofFormats } = useQuery({
+    queryKey: ['forge-motion-proof-formats', brandId, contract.template.bindingId, templateKey],
+    queryFn: () => apiRendersApi.listMotionProofFormats(brandId, contract.template.bindingId, templateKey),
+    enabled: contract.outputs.length === 0 &&
+      Boolean(contract.template.motion && isMotion(contract.template.motion.durationSec, contract.template.motion.frameRate)),
+    staleTime: FORGE_STALE_MS.contract,
+  });
+  const formats = previewFormats({ outputs: contract.outputs.length ? contract.outputs : parsedProofFormats,
+    ratios: contract.template.ratios });
   // A row scoped to some outputs previews only those; ratio-only formats have no ids to scope by.
   const rowFormats = contract.outputs.length
     ? formats.filter((format) => scopedIds.length === 0 || scopedIds.includes(format.id))
@@ -515,6 +528,34 @@ export function RenderPreviewPanel({
   ];
   const live = JSON.stringify([subject, values]);
   const settled = useDebounce(live, COMPOSE_DEBOUNCE_MS);
+  const proofLive = JSON.stringify([
+    brandId, contract.template.bindingId, templateKey, contract.template.contractHash,
+    templateRef ?? null, row?.id ?? null, format?.id ?? null, format?.comp?.name ?? null, values,
+  ]);
+  const proofSettled = useDebounce(proofLive, PROOF_DEBOUNCE_MS);
+  const proofReady = proofSettled === proofLive && Boolean(row && format?.comp?.name && format.mediaType?.startsWith('video')) &&
+    Boolean(contract.template.motion && isMotion(contract.template.motion.durationSec, contract.template.motion.frameRate)) &&
+    Object.keys(validateRow(contract.variables, values)).length === 0 &&
+    (renderSetId === null || row?.check.state === 'ready') && !row?.proposed;
+  const proofStart = useQuery({
+    queryKey: ['forge-motion-proof', proofSettled],
+    queryFn: (): Promise<ForgeMotionProof> => apiRendersApi.startMotionProof({
+      brandId, bindingId: contract.template.bindingId, templateKey,
+      contractHash: contract.template.contractHash, ...(templateRef ? { templateRef } : {}),
+      outputId: format!.id, comp: format!.comp!.name, values,
+    }),
+    enabled: proofReady,
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  });
+  const proof = useQuery({
+    queryKey: ['forge-motion-proof-status', brandId, proofStart.data?.id],
+    queryFn: () => apiRendersApi.getMotionProof(brandId, proofStart.data!.id),
+    enabled: proofReady && Boolean(proofStart.data?.id),
+    refetchInterval: (query) => query.state.data?.state === 'ready' ? 30 * 60_000 : query.state.data?.state === 'failed' ? false : 2000,
+    retry: false,
+  });
+  const currentProof = proofReady ? proof.data : null;
   const settledValues = (() => {
     const [settledSubject, settledRow] = JSON.parse(settled) as [unknown[], unknown];
     return sameSubject([...settledSubject, null], [...subject, null])
@@ -597,6 +638,7 @@ export function RenderPreviewPanel({
     if (!data) return null;
     return {
       mode: 'preview',
+      badge: 'Layout frame',
       at: data.source === 'render' ? (backdrop?.job.finishedAt ?? null) : null,
       basedOn:
         data.source === 'render'
@@ -614,6 +656,7 @@ export function RenderPreviewPanel({
   /** A render made with exactly these values is the preview as it stands. */
   const unchangedFrame = (backdrop: Backdrop): PreviewRepaint => ({
     mode: 'preview',
+    badge: backdrop.job.test === false ? 'Final render' : 'Previous render',
     at: backdrop.job.finishedAt ?? backdrop.job.updatedAt,
     basedOn: backdrop.job.label ?? backdrop.job.templateName,
     notes: ['same values'],
@@ -639,6 +682,15 @@ export function RenderPreviewPanel({
         : composedPreview;
     const own = lastJob ? fileForFormat(lastJob.outputs, formats, entry.id) : null;
     let frame: PreviewFrame;
+    if (entry.id === format?.id && currentProof?.state === 'ready' && currentProof.signedUrl) {
+      frame = {
+        mode: 'preview', at: null, basedOn: null,
+        badge: 'Full animation proof',
+        caption: `After Effects · ${currentProof.durationSec?.toFixed(1)}s · ${currentProof.frameRate?.toFixed(1)} fps · ${currentProof.hasAudio ? 'audio' : 'no audio'}`,
+        node: <video controls preload="metadata" src={currentProof.signedUrl} className="size-full object-contain"><track kind="captions" /></video>,
+      };
+      return { frame, warning: null };
+    }
     if (lastJob && own && atSec === null) {
       const ownBackdrop = plan.backdrop?.job.id === lastJob.id;
       const revisionStale =
@@ -649,6 +701,7 @@ export function RenderPreviewPanel({
       const stale = ownBackdrop && plan.known ? plan.changed.length > 0 : revisionStale;
       frame = {
         mode: 'rendered',
+        badge: `${lastJob.test === false ? 'Final render' : 'Previous render'}${stale ? ' · before latest edits' : ''}`,
         at: lastJob.finishedAt ?? lastJob.updatedAt,
         stale,
         node:
@@ -726,7 +779,17 @@ export function RenderPreviewPanel({
       ) : (
         <p className="m-0 text-muted-foreground">This template has no measured layout to draw.</p>
       )}
-      {contract.template.motion &&
+      {format?.comp && format.mediaType?.startsWith('video') && contract.template.motion && isMotion(contract.template.motion.durationSec, contract.template.motion.frameRate) ? (
+        <div aria-live="polite" className="shrink-0 text-2xs text-muted-foreground">
+          <span>Full animation proof · {format.label} · source {currentProof?.templateCommitSha?.slice(0, 8) ?? currentProof?.templateSourceSha256.slice(0, 8) ?? 'checking'} · {currentProof?.state === 'ready' ? 'matches current values' : proofReady ? 'current values submitted' : 'updating for current values'}</span>
+          {proofStart.isError ? <button type="button" className="ml-2 underline" onClick={() => void proofStart.refetch()}>Retry proof: {String(proofStart.error)}</button> : null}
+          {proof.isError ? <button type="button" className="ml-2 underline" onClick={() => void proof.refetch()}>Retry status: {String(proof.error)}</button> : null}
+          {currentProof?.state === 'failed' ? <button type="button" className="ml-2 underline" onClick={async () => { await proofStart.refetch(); await proof.refetch(); }}>Retry proof: {currentProof.error}</button> : null}
+          {currentProof && currentProof.state !== 'ready' && currentProof.state !== 'failed' ? <span className="ml-2">{currentProof.state} {currentProof.progressPct ?? 0}%</span> : null}
+          {!currentProof && proofReady && !proofStart.isError ? <span className="ml-2">Preparing proof…</span> : null}
+        </div>
+      ) : null}
+      {currentProof?.state !== 'ready' && contract.template.motion &&
       isMotion(contract.template.motion.durationSec, contract.template.motion.frameRate) ? (
         <label className="flex shrink-0 items-center gap-2 text-2xs text-muted-foreground">
           <span>Frame</span>

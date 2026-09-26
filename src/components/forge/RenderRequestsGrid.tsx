@@ -2255,6 +2255,7 @@ export function RenderRequestsGrid({
                       <RenderPreviewPanel
                         brandId={brandId}
                         contract={contract}
+                        templateRef={templateRef ?? undefined}
                         rows={rows}
                         rowId={previewId}
                         renderSetId={activeSet?.id ?? null}

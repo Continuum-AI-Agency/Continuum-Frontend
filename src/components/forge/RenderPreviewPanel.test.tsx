@@ -14,6 +14,8 @@ import type {
   ApiRenderTemplateLayout,
   ForgeRenderPreview,
   ForgeRenderPreviewRequest,
+  ForgeMotionProof,
+  ForgeMotionProofRequest,
 } from '@continuum/contracts';
 import type { PostgresChangesSubscription } from '@/lib/supabase/realtime';
 
@@ -37,11 +39,27 @@ const composePreviewMock = mock(
     throw new Error('preview_unavailable');
   },
 );
+const startMotionProofMock = mock(async (input: ForgeMotionProofRequest): Promise<ForgeMotionProof> => ({
+  id: input.values.headline === 'Hola' ? 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' : 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  contentHash: 'a'.repeat(64), templateSourceSha256: 'b'.repeat(64), templateCommitSha: null,
+  outputId: input.outputId, comp: input.comp, state: 'queued', progressPct: 0,
+  signedUrl: null, durationSec: null, frameRate: null, hasAudio: null, error: null,
+}));
+const getMotionProofMock = mock(async (_brandId: string, id: string): Promise<ForgeMotionProof> => ({
+  id, contentHash: 'a'.repeat(64), templateSourceSha256: 'b'.repeat(64), templateCommitSha: null,
+  outputId: 'square', comp: 'Square', state: 'ready', progressPct: 100,
+  signedUrl: `https://cdn.test/${id}.mp4`, durationSec: 6, frameRate: 30, hasAudio: true, error: null,
+}));
+const listMotionProofFormatsMock = mock(async () => [{ id: 'square', label: 'Square', ratio: '1:1' as const,
+  comp: SQUARE.comp, mediaType: 'video/mp4' as const }]);
 
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: {
     listJobs: listJobsMock,
     composePreview: composePreviewMock,
+    startMotionProof: startMotionProofMock,
+    getMotionProof: getMotionProofMock,
+    listMotionProofFormats: listMotionProofFormatsMock,
     listRenderSets: async () => ({
       items: [{ id: '33333333-3333-4333-8333-333333333333', revision: setRevision }],
       nextCursor: null,
@@ -250,9 +268,29 @@ afterEach(() => {
   composePreviewMock.mockImplementation(async () => {
     throw new Error('preview_unavailable');
   });
+  startMotionProofMock.mockClear();
+  getMotionProofMock.mockClear();
+  listMotionProofFormatsMock.mockClear();
 });
 
 describe('RenderPreviewPanel', () => {
+  test('plays only the selected row’s settled full animation proof', async () => {
+    const contract = {
+      ...CONTRACT,
+      template: { ...CONTRACT.template, motion: { durationSec: 6, frameRate: 30 } },
+      outputs: [],
+    } as ApiRenderTemplateContract;
+    const props = { brandId: BRAND, contract, rowId: ROW, renderSetId: null };
+    const { container, rerender } = render(<RenderPreviewPanel {...props} rows={rowWith('Hola')} />);
+    await waitFor(() => expect(startMotionProofMock).toHaveBeenCalledWith(expect.objectContaining({
+      values: expect.objectContaining({ headline: 'Hola' }), outputId: 'square', comp: 'Square',
+    })), { timeout: 3000 });
+    expect(listMotionProofFormatsMock).toHaveBeenCalled();
+    await waitFor(() => expect(container.querySelector('video')?.getAttribute('src')).toContain('aaaaaaaa-aaaa'));
+    rerender(<RenderPreviewPanel {...props} rows={rowWith('Adios')} />);
+    expect(container.querySelector('video')).toBeNull();
+    await waitFor(() => expect(container.querySelector('video')?.getAttribute('src')).toContain('bbbbbbbb-bbbb'), { timeout: 3000 });
+  });
   test('draws text in its box and flags overflow live from props', () => {
     const props = { brandId: BRAND, contract: CONTRACT, rowId: ROW, renderSetId: null };
     const { container, rerender } = render(
@@ -343,7 +381,7 @@ describe('RenderPreviewPanel', () => {
       'https://cdn.test/Producto_individual_con_descuento_1_1_1mjxxwb.jpg',
     );
     expect(frame(container).style.aspectRatio).toBe('1 / 1');
-    await waitFor(() => expect(badge(container)).toBe('Rendered · 2h ago'));
+    await waitFor(() => expect(badge(container)).toBe('Previous render'));
     // Three cached reads: the row's newest render, the set's renders, the template's newest.
     expect(listJobsMock).toHaveBeenCalledTimes(3);
     expect(listJobsMock).toHaveBeenCalledWith(BRAND, 1, {
@@ -399,7 +437,7 @@ describe('RenderPreviewPanel', () => {
     );
 
     // The composition comes first; nothing says which values the render used, so all are sent.
-    await waitFor(() => expect(badge(container)).toBe('Preview'));
+    await waitFor(() => expect(badge(container)).toBe('Layout frame'));
     expect(screen.getByAltText('Composed preview').getAttribute('src')).toBe(COMPOSED);
     expect(caption(container)).toBe(
       "Based on 'Spain' render · 2h ago · Headline: resize rig approximated",
@@ -419,7 +457,7 @@ describe('RenderPreviewPanel', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Rendered' }));
-    expect(badge(container)).toBe('Rendered · before latest edits');
+    expect(badge(container)).toBe('Previous render · before latest edits');
     expect(screen.getByAltText('Last render').getAttribute('src')).toBe(
       'https://cdn.test/Square_1mjxxwb.png',
     );
@@ -450,7 +488,7 @@ describe('RenderPreviewPanel', () => {
       />,
     );
 
-    await waitFor(() => expect(badge(container)).toBe('Rendered · 2h ago'));
+    await waitFor(() => expect(badge(container)).toBe('Previous render'));
     expect(screen.queryByRole('group', { name: 'Picture' })).toBeNull();
     expect(warning(container)).toBe('');
     expect(composePreviewMock).not.toHaveBeenCalled();
@@ -489,7 +527,7 @@ describe('RenderPreviewPanel', () => {
       />,
     );
 
-    await waitFor(() => expect(badge(container)).toBe('Preview'));
+    await waitFor(() => expect(badge(container)).toBe('Layout frame'));
     expect(caption(container)).toStartWith("Based on 'Spain' render · 2h ago");
     // The fork's own values over what it inherits, painted over the parent's render.
     expect(composePreviewMock.mock.calls.at(-1)?.[0]).toMatchObject({
@@ -525,7 +563,7 @@ describe('RenderPreviewPanel', () => {
       />,
     );
 
-    await waitFor(() => expect(badge(container)).toBe('Preview'));
+    await waitFor(() => expect(badge(container)).toBe('Layout frame'));
     expect(caption(container)).toStartWith("Based on 'Madrid' render");
     expect(composePreviewMock.mock.calls.at(-1)?.[0].backdrop).toEqual({
       jobId: madrid.id,
@@ -551,7 +589,7 @@ describe('RenderPreviewPanel', () => {
       />,
     );
 
-    await waitFor(() => expect(badge(container)).toBe('Composed from template'));
+    await waitFor(() => expect(badge(container)).toBe('Layout frame'));
     expect(caption(container)).toBe(
       'Drawn from the template · drawn from the template: effects and masks are not drawn',
     );
@@ -565,17 +603,16 @@ describe('RenderPreviewPanel', () => {
     const { container, rerender } = render(
       <RenderPreviewPanel {...props} rows={rowWith('Adiós')} />,
     );
-    await waitFor(() => expect(badge(container)).toBe('Preview'));
+    await waitFor(() => expect(badge(container)).toBe('Layout frame'));
     const settledCalls = composePreviewMock.mock.calls.length;
 
     rerender(<RenderPreviewPanel {...props} rows={rowWith('Adiós, ')} />);
     rerender(<RenderPreviewPanel {...props} rows={rowWith('Adiós, amigos')} />);
-    expect(badge(container)).toBe('Preview · updating…');
+    expect(badge(container)).toBe('Layout frame');
     expect(screen.getByAltText('Composed preview')).toBeTruthy();
 
-    await waitFor(() => expect(badge(container)).toBe('Preview'));
+    await waitFor(() => expect(composePreviewMock.mock.calls.length).toBe(settledCalls + 1));
     // One composition for the settled value, none for the keystrokes on the way.
-    expect(composePreviewMock.mock.calls.length).toBe(settledCalls + 1);
     expect(composePreviewMock.mock.calls.at(-1)?.[0].values.headline).toBe('Adiós, amigos');
   });
 
@@ -591,7 +628,7 @@ describe('RenderPreviewPanel', () => {
       />,
     );
     await waitFor(() => expect(warning(container)).toBe('Composed preview unavailable'));
-    expect(badge(container)).toBe('Rendered · before latest edits');
+    expect(badge(container)).toBe('Previous render · before latest edits');
     cleanup();
 
     // No render anywhere: the slot boxes, with the reason in the caption.

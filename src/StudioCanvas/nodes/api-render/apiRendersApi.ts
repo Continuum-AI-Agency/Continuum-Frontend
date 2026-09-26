@@ -11,6 +11,8 @@ import {
   API_RENDER_JOBS_ROUTE,
   API_RENDER_PREFLIGHT_ROUTE,
   API_RENDER_PREVIEW_ROUTE,
+  API_RENDER_MOTION_PROOFS_ROUTE,
+  API_RENDER_MOTION_PROOF_FORMATS_ROUTE,
   API_RENDER_SETS_ROUTE,
   API_RENDER_SLACK_CHANNELS_ROUTE,
   API_RENDER_SUGGEST_ROWS_ROUTE,
@@ -66,12 +68,17 @@ import {
   type ForgeRenderImportPreviewRequest,
   type ForgeRenderPreview,
   type ForgeRenderPreviewRequest,
+  type ForgeMotionProof,
+  type ForgeMotionProofRequest,
+  type ForgeMotionProofFormat,
   type ForgeRenderSet,
   type ForgeRenderSetRevision,
   forgeRenderDriveSnapshotSchema,
   forgeRenderImportMediaResponseSchema,
   forgeRenderImportPreviewSchema,
   forgeRenderPreviewSchema,
+  forgeMotionProofSchema,
+  forgeMotionProofFormatsSchema,
   forgeRenderSetListResponseSchema,
   forgeRenderSetRevisionListResponseSchema,
   forgeRenderSetSchema,
@@ -148,6 +155,24 @@ export const apiRendersApi = {
       method: 'POST',
       body: input,
       schema: forgeRenderPreviewSchema,
+    });
+  },
+  startMotionProof(input: ForgeMotionProofRequest) {
+    return http.request<ForgeMotionProof>({
+      path: API_RENDER_MOTION_PROOFS_ROUTE,
+      method: 'POST', body: input, schema: forgeMotionProofSchema,
+    });
+  },
+  listMotionProofFormats(brandId: string, bindingId: string, templateKey: string) {
+    return http.request<ForgeMotionProofFormat[]>({
+      path: `${API_RENDER_MOTION_PROOF_FORMATS_ROUTE}?${query({ brandId, bindingId, templateKey })}`,
+      schema: forgeMotionProofFormatsSchema,
+    });
+  },
+  getMotionProof(brandId: string, proofId: string) {
+    return http.request<ForgeMotionProof>({
+      path: `${API_RENDER_MOTION_PROOFS_ROUTE}/${encodeURIComponent(proofId)}?${query({ brandId })}`,
+      schema: forgeMotionProofSchema,
     });
   },
   createJob(input: ApiRenderCreateJobRequest) {
