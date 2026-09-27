@@ -3,7 +3,12 @@
 // so bun:test covers it directly. Backed by media.share_links (deny-all RLS:
 // only the service-role client reads or writes rows).
 
-import type { ShareLink, ShareLinkScope } from '@continuum/contracts';
+import {
+  type ShareLink,
+  type ShareLinkScope,
+  shareLinkBrandingSchema,
+  shareLinkLayoutSchema,
+} from '@continuum/contracts';
 
 export type ShareLinkRow = {
   id: string;
@@ -26,6 +31,8 @@ export type ShareLinkRow = {
   expires_at: string | null;
   revoked_at: string | null;
   created_at: string;
+  layout?: string;
+  branding?: unknown;
 };
 
 export type ShareLinkStatus = { active: true } | { active: false; reason: 'revoked' | 'expired' };
@@ -57,6 +64,10 @@ export function rowToShareLink(
   origin?: string,
   assetIds: string[] = [],
 ): ShareLink {
+  // A malformed layout or branding payload degrades to the schema defaults
+  // rather than taking the link down.
+  const layout = shareLinkLayoutSchema.safeParse(row.layout);
+  const branding = shareLinkBrandingSchema.safeParse(row.branding);
   return {
     id: row.id,
     brandId: row.brand_id,
@@ -77,6 +88,8 @@ export function rowToShareLink(
       requireIdentity: row.require_identity,
       hasPasscode: row.passcode_hash !== null,
     },
+    layout: layout.success ? layout.data : 'grid',
+    branding: branding.success ? branding.data : {},
     createdBy: row.created_by,
     expiresAt: row.expires_at,
     revokedAt: row.revoked_at,

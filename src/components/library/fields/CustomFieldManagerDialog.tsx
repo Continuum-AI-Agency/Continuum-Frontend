@@ -17,6 +17,7 @@ import {
   type CustomField,
   type CustomFieldOption,
   type CustomFieldType,
+  customFieldChoiceOptions,
   MAX_CUSTOM_FIELDS_PER_BRAND,
 } from '@continuum/contracts';
 import { ChevronDown, ChevronUp, Loader2, Plus, Trash2, X } from 'lucide-react';
@@ -60,7 +61,17 @@ const TYPE_LABEL: Record<CustomFieldType, string> = {
   multi_select: 'Multi select',
   text: 'Text',
   date: 'Date',
+  number: 'Number',
+  checkbox: 'Checkbox',
+  rating: 'Rating',
+  user: 'User',
+  url: 'URL',
+  status: 'Status',
 };
+
+// This dialog can only author options for the selects, so it offers the types it
+// can create correctly; the rest still get a label when they already exist.
+const CREATABLE_TYPES: CustomFieldType[] = ['single_select', 'multi_select', 'text', 'date'];
 
 const SELECT_TYPES: CustomFieldType[] = ['single_select', 'multi_select'];
 
@@ -237,33 +248,34 @@ function FieldRow({
 }) {
   const [draftOption, setDraftOption] = useState('');
   const isSelect = SELECT_TYPES.includes(field.type);
+  const options = customFieldChoiceOptions(field);
 
   const addOption = () => {
     const label = draftOption.trim();
     if (!label) return;
     setDraftOption('');
-    onSaveOptions([...field.options, newOption(label)]);
+    onSaveOptions([...options, newOption(label)]);
   };
 
   const relabelOption = (optionId: string, label: string) => {
     const trimmed = label.trim();
-    const existing = field.options.find((option) => option.id === optionId);
+    const existing = options.find((option) => option.id === optionId);
     if (!trimmed || !existing || existing.label === trimmed) return;
     // The id is untouched: the assets holding it keep their answer, and the new
     // label shows up wherever it is read.
     onSaveOptions(
-      field.options.map((option) =>
+      options.map((option) =>
         option.id === optionId ? { ...option, label: trimmed } : option,
       ),
     );
   };
 
   const removeOption = (optionId: string) => {
-    if (field.options.length <= 1) {
+    if (options.length <= 1) {
       toast.error('A select field needs at least one option');
       return;
     }
-    onSaveOptions(field.options.filter((option) => option.id !== optionId));
+    onSaveOptions(options.filter((option) => option.id !== optionId));
   };
 
   return (
@@ -319,7 +331,7 @@ function FieldRow({
 
       {isSelect ? (
         <div className="mt-1.5 space-y-1 border-t border-border/60 pt-1.5 pl-1.5">
-          {field.options.map((option) => (
+          {options.map((option) => (
             <div key={option.id} className="flex items-center gap-1">
               <Input
                 defaultValue={option.label}
@@ -431,7 +443,7 @@ function NewFieldForm({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {(Object.keys(TYPE_LABEL) as CustomFieldType[]).map((candidate) => (
+            {CREATABLE_TYPES.map((candidate) => (
               <SelectItem key={candidate} value={candidate} className="text-xs">
                 {TYPE_LABEL[candidate]}
               </SelectItem>

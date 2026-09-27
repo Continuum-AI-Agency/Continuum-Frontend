@@ -9,7 +9,11 @@
 // option id existing: renaming "Licensed" must not orphan the assets that hold
 // it.
 
-import type { CustomField, CustomFieldValue } from '@continuum/contracts';
+import {
+  type CustomField,
+  type CustomFieldValue,
+  customFieldChoiceOptions,
+} from '@continuum/contracts';
 import { CalendarIcon, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -57,7 +61,7 @@ function SingleSelectEditor({ field, value, disabled, onChange }: CustomFieldVal
         <SelectItem value={CLEAR_VALUE} className="text-xs text-muted-foreground">
           Not set
         </SelectItem>
-        {field.options.map((option) => (
+        {customFieldChoiceOptions(field).map((option) => (
           <SelectItem key={option.id} value={option.id} className="text-xs">
             {option.label}
           </SelectItem>
@@ -82,7 +86,7 @@ function MultiSelectEditor({ field, value, disabled, onChange }: CustomFieldValu
       disabled={disabled}
       className="flex flex-wrap items-center gap-1"
     >
-      {field.options.map((option) => {
+      {customFieldChoiceOptions(field).map((option) => {
         const isActive = selected.includes(option.id);
         return (
           <button

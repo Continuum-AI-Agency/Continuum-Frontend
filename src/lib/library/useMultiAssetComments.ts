@@ -232,6 +232,7 @@ export function useMultiAssetComments(
         body: input.body,
         mentions: parseCommentMentions(input.body),
         annotation: input.annotation ?? null,
+        attachments: [],
         resolvedAt: null,
         resolvedBy: null,
         createdBy: user?.id ?? null,

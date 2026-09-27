@@ -1,4 +1,8 @@
-import type { MediaCollection } from '@continuum/contracts';
+import {
+  collectionViewConfigSchema,
+  collectionVisibilitySchema,
+  type MediaCollection,
+} from '@continuum/contracts';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
@@ -8,6 +12,8 @@ import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 function rowToCollection(row: MediaCollectionRow): MediaCollection {
+  const visibility = collectionVisibilitySchema.safeParse(row.visibility);
+  const viewConfig = collectionViewConfigSchema.safeParse(row.view_config);
   return {
     id: row.id,
     brandId: row.brand_id,
@@ -19,6 +25,8 @@ function rowToCollection(row: MediaCollectionRow): MediaCollection {
     parentId: row.parent_id ?? null,
     depth: row.depth ?? 0,
     systemKey: row.system_key ?? null,
+    visibility: visibility.success ? visibility.data : 'team',
+    viewConfig: viewConfig.success ? viewConfig.data : {},
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
