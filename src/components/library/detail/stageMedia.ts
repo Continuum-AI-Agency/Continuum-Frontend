@@ -61,6 +61,10 @@ function readyPreview(preview: AssetPreview | null) {
 //      thumbnail in its place, which would turn a video into a still;
 //   3. any other ready preview — the companion PNG/MP4 of a PSD or AEP.
 // Null means "no ready preview/playable original": the caller decides the fallback.
+//
+// HEIC and TIFF originals paint only in Safari; the WebP made at upload paints everywhere.
+const ONLY_SAFARI_PAINTS = new Set(['image/heic', 'image/heif', 'image/tiff']);
+
 function pickSource(bytes: StageBytes, label: string, keyPrefix: string): StageMedia | null {
   const preview = readyPreview(bytes.preview);
   if (preview?.role === 'preview_video') {
@@ -77,7 +81,8 @@ function pickSource(bytes: StageBytes, label: string, keyPrefix: string): StageM
   if (
     bytes.signedUrl &&
     originalKind !== 'file' &&
-    !formatUsesCompanionPreview(bytes.fileName, bytes.mimeType)
+    !formatUsesCompanionPreview(bytes.fileName, bytes.mimeType) &&
+    !(preview && ONLY_SAFARI_PAINTS.has(bytes.mimeType))
   ) {
     return null;
   }

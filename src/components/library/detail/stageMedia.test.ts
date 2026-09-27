@@ -244,12 +244,18 @@ describe('resolveStageMedia — which bytes play', () => {
       fileName: 'interview.mkv',
       mimeType: 'video/x-matroska',
     });
-    expect(resolveStageMedia({ asset: HEAD_ASSET, viewedVersion: null, headVersion: mkv })).toMatchObject({
+    expect(
+      resolveStageMedia({ asset: HEAD_ASSET, viewedVersion: null, headVersion: mkv }),
+    ).toMatchObject({
       kind: 'file',
       src: null,
     });
     expect(
-      resolveStageMedia({ asset: HEAD_ASSET, viewedVersion: null, headVersion: { ...mkv, preview: PROXY } }),
+      resolveStageMedia({
+        asset: HEAD_ASSET,
+        viewedVersion: null,
+        headVersion: { ...mkv, preview: PROXY },
+      }),
     ).toMatchObject({ kind: 'video', sourceRole: 'preview_video' });
   });
 
@@ -285,6 +291,30 @@ describe('resolveStageMedia — which bytes play', () => {
     for (const stage of [fromVersion, fromSnapshot]) {
       expect(stage.kind).toBe('video');
       expect(stage.sourceRole).toBe('original');
+    }
+  });
+
+  it('shows the ready WebP for a HEIC or TIFF original, which only Safari paints', () => {
+    const webp = {
+      assetVersionId: '11111111-1111-4111-8111-111111111111',
+      renditionId: '55555555-5555-4555-8555-555555555555',
+      state: 'ready' as const,
+      kind: 'image' as const,
+      role: 'preview_image' as const,
+      signedUrl: 'https://storage.test/preview.webp',
+    };
+    for (const [fileName, mimeType] of [
+      ['photo.heic', 'image/heic'],
+      ['scan.tiff', 'image/tiff'],
+    ] as const) {
+      const head = version({ id: 'v2', isHead: true, fileName, mimeType, preview: webp });
+      expect(
+        resolveStageMedia({ asset: HEAD_ASSET, viewedVersion: null, headVersion: head }),
+      ).toMatchObject({
+        kind: 'image',
+        src: 'https://storage.test/preview.webp',
+        sourceRole: 'preview_image',
+      });
     }
   });
 
