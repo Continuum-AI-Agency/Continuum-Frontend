@@ -441,6 +441,8 @@ export const libraryShareRequestSchema = z.discriminatedUnion('action', [
     })
     .strict(),
   z.object({ action: z.literal('share_presentation'), token }).strict(),
+  // An interactive HyperFrames embed: the film's live composition, its assets signed in.
+  z.object({ action: z.literal('interactive_composition'), token, assetId: uuid }).strict(),
   z
     .object({
       action: z.literal('record_event'),

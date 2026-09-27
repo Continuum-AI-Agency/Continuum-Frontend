@@ -18,7 +18,7 @@
     "typecheck:e2e": "bunx tsc -p tsconfig.e2e.json --noEmit",
     "typecheck:build": "NODE_OPTIONS='--max-old-space-size=12288' tsc --noEmit --pretty false --project ${NEXT_TSCONFIG_PATH:-tsconfig.build.json}",
     "bundle:check": "node scripts/check-vercel-bundle-budget.mjs",
-    "shader:check": "vgpu check src/lib/vgpu/shader-stack.wgsl --require-validation",
+    "shader:check": "vgpu check packages/contracts/src/ai-studio/hyperframes-runtime/shader-stack.wgsl --require-validation",
     "bundle:e2e:bench": "playwright test --config playwright.bundle.config.ts",
     "test:vercel": "bun test scripts/check-vercel-bundle-budget.test.ts scripts/vercel-ignore-build.test.ts src/lib/theme/themeDom.test.ts",
     "vercel:runtime:bench": "playwright test --config playwright.vercel.config.ts",

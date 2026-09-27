@@ -8,7 +8,6 @@ import {
 import type { Edge } from '@xyflow/react';
 import type { StudioNode } from '../types';
 import {
-  assertHyperframesRenderCapability,
   hyperframesStoryboardInputKey,
   inspectHyperframesInputs,
   resolveHyperframesPrompt,
@@ -156,12 +155,6 @@ describe('inspectHyperframesInputs', () => {
       { assetId: 'reference-image', kind: 'image', purpose: 'reference' },
     ]);
   });
-});
-
-test('rejects an incapable browser before starting paid agent work', async () => {
-  expect(
-    assertHyperframesRenderCapability(async () => ({ webCodecs: false, avc: false, aac: false })),
-  ).rejects.toThrow('Use desktop Chrome or Edge');
 });
 
 test('a targeted revision uses the visible revision prompt instead of connected Text', () => {

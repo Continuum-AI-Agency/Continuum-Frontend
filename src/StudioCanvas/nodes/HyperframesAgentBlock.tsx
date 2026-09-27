@@ -21,12 +21,10 @@ import {
   AlertTriangle,
   Check,
   Circle,
-  Clock,
   Download,
   ExternalLink,
   Film,
   Play,
-  RotateCcw,
   Share2,
   Sparkles,
 } from 'lucide-react';
@@ -42,7 +40,6 @@ import {
   getHyperframesStoryAngles,
   getHyperframesStoryboard,
 } from '@/lib/api/hyperframesAgent.client';
-import { useClientRenderQueueIfMounted } from '@/lib/client-render/ClientRenderProvider';
 import {
   buildHyperframesProjectZip,
   downloadHyperframesProjectZip,
@@ -208,38 +205,13 @@ export function HyperframesAgentBlock({
     }
   }, [data, openingEditor, router, runtime, show, storyboard]);
 
-  // The render happens in a browser, and only a tab that opted in claims the job. A tab
-  // that reloaded no longer has, so the node has to SHOW that it is waiting instead of
-  // repeating "rendering continues in this tab" over a job nothing is running — three
-  // jobs sat `ready` for days under that copy (Airtable #296).
-  const queue = useClientRenderQueueIfMounted();
-  const renderJob = queue?.jobs.find(
-    (job) =>
-      job.executionSpec.kind === 'hyperframes_agent' &&
-      (job.executionSpec.runId === data.activeRunId || job.executionSpec.nodeId === id),
-  );
-  const renderFailure = renderJob?.state === 'failed' ? renderJob.errorMessage : undefined;
-  const failure = renderFailure || runError || data.error;
+  // The film renders on the server; the run's events and the node's own status carry it.
+  const failure = runError || data.error;
   const runStatus = runRecord?.run.status;
   const running =
     !failure &&
     (starting || runStatus === 'queued' || runStatus === 'running' || Boolean(data.isExecuting));
-  // `willAutoRun` is literally the question the provider asks on its next poll — asked
-  // THROUGH the provider because the answer now depends on who is signed in, so a render
-  // this person started never flashes "waiting" in the gap before the claim.
-  const waitingForDevice =
-    renderJob?.state === 'ready' &&
-    !queue?.willAutoRun(renderJob) &&
-    !queue?.isRunningLocally(renderJob) &&
-    !starting;
-
-  const displayedStatus = failure
-    ? 'Run failed'
-    : waitingForDevice
-      ? 'Waiting for a device'
-      : renderJob?.state === 'rendering' || renderJob?.state === 'saving'
-        ? labelForStatus('rendering')
-        : labelForStatus(data.status);
+  const displayedStatus = failure ? 'Run failed' : labelForStatus(data.status);
   const stages: Array<{ label: string; state: StageState }> = [
     {
       label: 'Inputs',
@@ -255,13 +227,7 @@ export function HyperframesAgentBlock({
     },
     {
       label: 'Render',
-      state: video
-        ? 'done'
-        : renderFailure
-          ? 'failed'
-          : renderRequested || renderJob
-            ? 'active'
-            : 'pending',
+      state: video ? 'done' : failure && review ? 'failed' : renderRequested ? 'active' : 'pending',
     },
   ];
 
@@ -895,26 +861,12 @@ export function HyperframesAgentBlock({
               <InteractiveHyperframesPreview key={data.activeRunId} runId={data.activeRunId} />
             ) : video ? (
               <NodeVideoPreview src={video} className="bg-transparent" />
-            ) : waitingForDevice && renderJob ? (
-              <div className="flex w-3/4 flex-col items-center gap-3 text-center">
-                <Clock className="h-6 w-6 text-amber-400" />
-                <span className="text-2xs text-muted-foreground">
-                  Waiting for a device to render this composition.
-                </span>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => void queue?.run(renderJob).catch(() => undefined)}
-                >
-                  Render here
-                </Button>
-              </div>
             ) : running ? (
               <div className="flex w-3/4 flex-col items-center gap-3 text-center">
                 <Film className="h-6 w-6 animate-pulse text-violet-400" />
                 <Progress value={(data.progress ?? 0) * 100} className="h-1.5 w-full" />
                 <span className="text-2xs text-muted-foreground">
-                  You can leave AI Studio; rendering continues in this tab.
+                  You can leave AI Studio; the film renders on our servers.
                 </span>
               </div>
             ) : (
@@ -931,25 +883,19 @@ export function HyperframesAgentBlock({
             </div>
           ) : null}
 
-          {renderFailure && renderJob ? (
-            <Button onClick={() => void queue?.retry(renderJob)} className="w-full">
-              <RotateCcw className="mr-2 h-3.5 w-3.5" />
-              Retry
-            </Button>
-          ) : (
-            <Button
-              onClick={() => void start()}
-              disabled={!runtime || running || (!data.revisionTarget && !approved)}
-              className="w-full"
-            >
-              <Play className="mr-2 h-3.5 w-3.5" />
-              {data.revisionTarget
-                ? 'Send scene revision'
-                : data.sessionId
-                  ? 'Send global revision'
-                  : 'Animate approved storyboard'}
-            </Button>
-          )}
+          <Button
+            onClick={() => void start()}
+            disabled={!runtime || running || (!data.revisionTarget && !approved)}
+            className="w-full"
+          >
+            <Play className="mr-2 h-3.5 w-3.5" />
+            {data.revisionTarget
+              ? 'Send scene revision'
+              : data.sessionId
+                ? 'Send global revision'
+                : 'Animate approved storyboard'}
+          </Button>
+
           {data.revisionId || revision ? (
             <Button
               type="button"

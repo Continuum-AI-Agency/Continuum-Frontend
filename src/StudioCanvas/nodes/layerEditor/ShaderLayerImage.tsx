@@ -29,7 +29,9 @@ export function ShaderLayerImage({
         const response = await fetch(src);
         if (!response.ok) throw new Error(`Could not read layer (${response.status})`);
         source = await createImageBitmap(await response.blob());
-        const { renderShaderStackFrame } = await import('@/lib/vgpu/renderShaderStack');
+        const { renderShaderStackFrame } = await import(
+          '@continuum/contracts/ai-studio/hyperframes-runtime/renderShaderStack'
+        );
         rendered = await renderShaderStackFrame({
           source,
           width: layer.sourceWidth,

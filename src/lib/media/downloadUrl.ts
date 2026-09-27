@@ -7,8 +7,11 @@
 const HTTP_URL = /^https?:\/\//i;
 const HAS_DOWNLOAD_PARAM = /[?&]download(=|&|$)/;
 
+// A GCS V4 URL refuses any query param it was not signed with; its disposition is signed in.
+const GCS_SIGNED_URL = /^https:\/\/storage\.googleapis\.com\//i;
+
 export const withForcedDownload = (url: string, fileName: string): string => {
-  if (!HTTP_URL.test(url) || HAS_DOWNLOAD_PARAM.test(url)) return url;
+  if (!HTTP_URL.test(url) || HAS_DOWNLOAD_PARAM.test(url) || GCS_SIGNED_URL.test(url)) return url;
   const separator = url.includes('?') ? '&' : '?';
   return `${url}${separator}download=${encodeURIComponent(fileName)}`;
 };

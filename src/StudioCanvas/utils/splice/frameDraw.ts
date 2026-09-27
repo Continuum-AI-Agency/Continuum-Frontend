@@ -251,7 +251,9 @@ async function prepareSource(
   }
 
   if (!hasShaderStack(effects)) return prepared;
-  const { renderShaderStackFrame } = await import('@/lib/vgpu/renderShaderStack');
+  const { renderShaderStackFrame } = await import(
+    '@continuum/contracts/ai-studio/hyperframes-runtime/renderShaderStack'
+  );
   return renderShaderStackFrame({
     source: prepared,
     width: sourceWidth,

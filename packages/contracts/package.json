@@ -29,6 +29,7 @@
     "./brands": "./src/brands/index.ts",
     "./mcp": "./src/mcp/index.ts",
     "./ai-studio": "./src/ai-studio/index.ts",
+    "./ai-studio/hyperframes-runtime/*": "./src/ai-studio/hyperframes-runtime/*.ts",
     "./whats-new": "./src/whats-new/index.ts"
   },
   "peerDependencies": {
