@@ -6,6 +6,7 @@ import { ArrowLeftRightIcon, ArrowUpRightIcon, Loader2Icon } from 'lucide-react'
 import Link from 'next/link';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
 import { cn } from '@/lib/utils';
+import { HyperframesFilmView, useHyperframesFilm } from './HyperframesRunFilm';
 
 // One cross-agent call, as it reads in the CALLER's transcript:
 // "⇄ Asked Jaina: '<query>'" with the call status and a link into the callee
@@ -19,6 +20,8 @@ const STATUS_TEXT: Record<AgentDelegatedFrameData['status'], string> = {
   timeout: 'Still running',
   refused: 'Refused',
 };
+
+const FILM_STATUS = { running: 'running', ready: 'completed', failed: 'failed' } as const;
 
 const STATUS_VARIANT: Record<
   AgentDelegatedFrameData['status'],
@@ -48,6 +51,11 @@ export type AgentDelegatedCardProps = {
 
 export function AgentDelegatedCard({ data, className }: AgentDelegatedCardProps) {
   const href = agentDelegatedHref(data);
+  // A film outlives the call that asked for it, so its card follows the run, not the frame.
+  const film = useHyperframesFilm(
+    data.calleeAgent === 'hyperframes' ? (data.calleeRunId ?? null) : null,
+  );
+  const status = film ? FILM_STATUS[film.state] : data.status;
 
   return (
     <div
@@ -61,16 +69,18 @@ export function AgentDelegatedCard({ data, className }: AgentDelegatedCardProps)
         <ArrowLeftRightIcon className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
         <span className="text-xs font-medium text-foreground">{agentDelegatedLabel(data)}</span>
         <Pill variant="secondary" className="ml-auto gap-1">
-          {data.status === 'running' ? (
+          {status === 'running' ? (
             <Loader2Icon className="size-3 animate-spin" />
           ) : (
-            <PillIndicator variant={STATUS_VARIANT[data.status]} />
+            <PillIndicator variant={STATUS_VARIANT[status]} />
           )}
-          {STATUS_TEXT[data.status]}
+          {STATUS_TEXT[status]}
         </Pill>
       </div>
 
       <p className="line-clamp-3 text-xs text-muted-foreground">“{data.query}”</p>
+
+      {film ? <HyperframesFilmView film={film} /> : null}
 
       {href ? (
         <Link

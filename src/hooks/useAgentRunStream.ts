@@ -137,7 +137,7 @@ export function useAgentRunStream(
 
     const ingest = (events: AgentRunEventDto[]): void => {
       if (cancelled || events.length === 0) return;
-      appendEvents(runId, events);
+      appendEvents(runId, events, agent);
     };
 
     // Subscribe FIRST — `onSubscribed` runs only once the channel is live, so nothing
