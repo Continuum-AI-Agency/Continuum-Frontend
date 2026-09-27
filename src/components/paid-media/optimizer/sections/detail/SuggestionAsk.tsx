@@ -46,8 +46,8 @@ export function SuggestionAsk({ gates, onAsk, pending, error = null }: Suggestio
       data-testid="suggestion-ask"
     >
       <header className="flex flex-wrap items-baseline justify-between gap-3 border-border/60 border-b px-5 py-4">
-        <h3 className="font-semibold text-foreground text-xl tracking-tight">Ask for a suggestion</h3>
-        <p className="text-muted-foreground text-sm">
+        <h3 className="font-semibold text-foreground text-base tracking-tight">Ask for a suggestion</h3>
+        <p className="text-muted-foreground text-2xs">
           Read on request, from this portfolio's own figures
         </p>
       </header>
@@ -71,12 +71,12 @@ export function SuggestionAsk({ gates, onAsk, pending, error = null }: Suggestio
               >
                 <Icon className="size-6" />
               </span>
-              <p className="font-semibold text-foreground text-lg tracking-tight">{copy.label}</p>
-              <p className="text-base text-muted-foreground leading-relaxed">{copy.blurb}</p>
+              <p className="font-semibold text-foreground text-sm tracking-tight">{copy.label}</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">{copy.blurb}</p>
               <div className="mt-auto flex flex-col gap-2">
                 <Button
                   className={cn(
-                    'h-10 w-full text-sm',
+                    'h-8 w-full text-xs',
                     // A ~5s breath while the worker is reading. No sheen.
                     working && 'animate-[pulse_5s_ease-in-out_infinite]',
                   )}
@@ -88,9 +88,9 @@ export function SuggestionAsk({ gates, onAsk, pending, error = null }: Suggestio
                 >
                   {working ? 'Reading…' : busy ? 'Asking…' : 'Ask'}
                 </Button>
-                {note ? <span className="text-muted-foreground text-sm">{note}</span> : null}
+                {note ? <span className="text-muted-foreground text-2xs">{note}</span> : null}
                 {!note && gate.requests_left <= 1 ? (
-                  <span className="text-muted-foreground text-sm">
+                  <span className="text-muted-foreground text-2xs">
                     {gate.requests_left === 1 ? 'One more today' : 'None left today'}
                   </span>
                 ) : null}
@@ -100,7 +100,7 @@ export function SuggestionAsk({ gates, onAsk, pending, error = null }: Suggestio
         })}
       </ul>
       {error ? (
-        <p className="border-border/60 border-t px-5 py-3 text-destructive text-sm">{error}</p>
+        <p className="border-border/60 border-t px-5 py-3 text-destructive text-2xs">{error}</p>
       ) : null}
     </section>
   );

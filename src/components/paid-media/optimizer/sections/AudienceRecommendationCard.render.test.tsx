@@ -272,22 +272,22 @@ describe('AudienceRecommendationCard', () => {
   });
 });
 
-describe('AudienceRecommendationCard — +2 type scale', () => {
-  const SUB_XS = /text-(2|3)xs/;
+describe('AudienceRecommendationCard — +1 type scale', () => {
+  const NO_3XS = /text-3xs/;
 
-  it('a ready proposal carries no text-2xs/3xs and roomy buttons', () => {
+  it('a ready proposal carries no text-3xs and one-step-up buttons', () => {
     const view = audienceCardView([row({})], rec);
     const { container } = render(<AudienceRecommendationCard {...baseProps} view={view} />);
-    expect(container.innerHTML).not.toMatch(SUB_XS);
-    expect(screen.getByText(plan.diagnosis).className).toContain('text-base');
-    expect(screen.getByText('Replace audience').className).toContain('text-xs');
+    expect(container.innerHTML).not.toMatch(NO_3XS);
+    expect(screen.getByText(plan.diagnosis).className).toContain('text-sm');
+    expect(screen.getByText('Replace audience').className).toContain('text-2xs');
     for (const button of container.querySelectorAll('button[data-slot="button"]')) {
-      expect(button.className).toContain('h-9');
+      expect(button.className).toContain('h-8');
       expect(button.className).toContain('text-sm');
     }
   });
 
-  it('the no-proposal, CBO-preview and executed faces carry no text-2xs/3xs either', () => {
+  it('the no-proposal, CBO-preview and executed faces carry no text-3xs either', () => {
     const faces = [
       audienceCardView([], rec),
       audienceCardView(
@@ -322,7 +322,7 @@ describe('AudienceRecommendationCard — +2 type scale', () => {
           view={view}
         />,
       );
-      expect(container.innerHTML).not.toMatch(SUB_XS);
+      expect(container.innerHTML).not.toMatch(NO_3XS);
       unmount();
     }
   });

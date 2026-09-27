@@ -12,7 +12,8 @@ import { SuggestionAsk } from './SuggestionAsk';
 
 afterEach(cleanup);
 
-const SUB_XS = /text-(2|3)xs/;
+// +1 on the original sizes: the old text-3xs lands on text-2xs, so text-3xs is the floor.
+const NO_3XS = /text-3xs/;
 
 const gate = (
   category: AdhocSuggestionGate['category'],
@@ -63,7 +64,7 @@ const heroRow: DailyReadRow = {
   cta: { kind: 'queue_row', rowKey: 'rec:1', label: 'Review the pause' },
 };
 
-describe('SuggestionAsk — +2 type scale', () => {
+describe('SuggestionAsk — +1 type scale', () => {
   it('gives each of the three options its own icon', () => {
     render(
       <SuggestionAsk
@@ -87,7 +88,7 @@ describe('SuggestionAsk — +2 type scale', () => {
     );
   });
 
-  it('uses no text-2xs or text-3xs anywhere, notes and error included', () => {
+  it('uses no text-3xs anywhere, notes and error included', () => {
     render(
       <SuggestionAsk
         error="The worker is busy."
@@ -97,17 +98,21 @@ describe('SuggestionAsk — +2 type scale', () => {
       />,
     );
     const section = screen.getByTestId('suggestion-ask');
-    expect(section.outerHTML).not.toMatch(SUB_XS);
-    expect(within(section).getByRole('heading').className).toContain('text-xl');
+    expect(section.outerHTML).not.toMatch(NO_3XS);
+    expect(within(section).getByRole('heading').className).toContain('text-base');
+    expect(screen.getByText('Read on request, from this portfolio\'s own figures').className).toContain(
+      'text-2xs',
+    );
     for (const button of within(section).getAllByRole('button')) {
-      expect(button.className).toContain('h-10');
+      expect(button.className).toContain('h-8');
       expect(button.className).toContain('w-full');
+      expect(button.className).toContain('text-xs');
     }
   });
 });
 
-describe('DailyReadList — +2 type scale', () => {
-  it('uses no text-2xs or text-3xs anywhere and shows figures as stat chips', () => {
+describe('DailyReadList — +1 type scale', () => {
+  it('uses no text-3xs anywhere and shows figures as stat chips', () => {
     render(
       <DailyReadList
         currency="MXN"
@@ -119,13 +124,16 @@ describe('DailyReadList — +2 type scale', () => {
       />,
     );
     const section = screen.getByTestId('daily-read');
-    expect(section.outerHTML).not.toMatch(SUB_XS);
-    expect(screen.getByText(askedRow.title).className).toContain('text-lg');
+    expect(section.outerHTML).not.toMatch(NO_3XS);
+    expect(within(section).getByRole('heading').className).toContain('text-base');
+    expect(screen.getByText(askedRow.title).className).toContain('text-sm');
+    expect(screen.getByText(askedRow.reason as string).className).toContain('text-xs');
     const value = screen.getByText('1.25×');
-    expect(value.className).toContain('text-lg');
+    expect(value.className).toContain('text-2xs');
     expect(value.parentElement?.className).toContain('rounded-lg');
     for (const button of within(section).getAllByRole('button')) {
-      expect(button.className).toContain('h-10');
+      expect(button.className).toContain('h-8');
+      expect(button.className).toContain('text-xs');
     }
   });
 });
@@ -137,9 +145,9 @@ describe('the shared pieces keep their dense default outside the Activity tab', 
     unmount();
     render(<LookbackToggle onChange={() => undefined} size="lg" value={7} />);
     const roomy = screen.getByText('7d', { selector: 'button' });
-    expect(roomy.className).toContain('h-9');
-    expect(roomy.className).toContain('text-sm');
-    expect(roomy.className).not.toMatch(SUB_XS);
+    expect(roomy.className).toContain('h-7');
+    expect(roomy.className).toContain('text-xs');
+    expect(roomy.className).not.toMatch(/text-(2|3)xs/);
   });
 
   it('RowHeader keeps the Server log / Activity feed look by default', () => {
@@ -157,7 +165,7 @@ describe('the shared pieces keep their dense default outside the Activity tab', 
   });
 });
 
-describe('CreativeRecommendationCard — +2 type scale (Activity and Actions tabs alike)', () => {
+describe('CreativeRecommendationCard — +1 type scale (Activity and Actions tabs alike)', () => {
   const creativeRec = {
     id: 'rec-c1',
     adset_id: 'as-1',
@@ -217,15 +225,15 @@ describe('CreativeRecommendationCard — +2 type scale (Activity and Actions tab
       </QueryClientProvider>,
     );
 
-  it('uses no text-2xs or text-3xs: slots, badges, notes and the Generate button', () => {
+  it('uses no text-3xs: slots, badges, notes and the Generate button', () => {
     renderCard(null);
     const card = screen.getByTestId('creative-recommendation-card');
-    expect(card.outerHTML).not.toMatch(SUB_XS);
-    expect(screen.getByText('Summer hero').className).toContain('text-sm');
-    expect(screen.getByText('Generate with Creative+').className).toContain('h-9');
+    expect(card.outerHTML).not.toMatch(NO_3XS);
+    expect(screen.getByText('Summer hero').className).toContain('text-xs');
+    expect(screen.getByText('Generate with Creative+').className).toContain('h-8');
     expect(screen.getByText('Generate with Creative+').className).toContain('text-sm');
     for (const slot of screen.getAllByTestId('flash-slot')) {
-      expect(slot.className).toContain('text-xs');
+      expect(slot.className).toContain('text-2xs');
     }
   });
 
@@ -251,10 +259,10 @@ describe('CreativeRecommendationCard — +2 type scale (Activity and Actions tab
     const [left, , right] = screen
       .getByTestId('creative-recommendation-card')
       .querySelectorAll(':scope > section');
-    expect(left.outerHTML).not.toMatch(SUB_XS);
-    expect(right.outerHTML).not.toMatch(SUB_XS);
+    expect(left.outerHTML).not.toMatch(NO_3XS);
+    expect(right.outerHTML).not.toMatch(NO_3XS);
     const figure = left.querySelector('span.tabular-nums');
-    expect(figure?.className).toContain('text-lg');
+    expect(figure?.className).toContain('text-base');
     expect(figure?.className).toContain('font-semibold');
   });
 });

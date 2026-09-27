@@ -85,14 +85,14 @@ function CostCell({
 }) {
   if (row.held) {
     return (
-      <div className="flex items-center gap-2 text-muted-foreground text-sm">
+      <div className="flex items-center gap-2 text-muted-foreground text-xs">
         <HeldPill reason={row.freezeReason} />
       </div>
     );
   }
   if (row.cost == null) {
     return (
-      <div className="text-muted-foreground text-sm">
+      <div className="text-muted-foreground text-xs">
         No {metric.resultLabel.toLowerCase()} in this window
       </div>
     );
@@ -130,7 +130,7 @@ function CostCell({
       </div>
       <span
         className={cn(
-          'w-20 shrink-0 text-right font-semibold text-base tabular-nums',
+          'w-20 shrink-0 text-right font-semibold text-sm tabular-nums',
           row.standing === 'above' && 'text-destructive',
           row.standing === 'below' && 'text-success',
         )}
@@ -188,7 +188,7 @@ function BudgetCell({
           style={{ left: `${to}%` }}
         />
       </div>
-      <span className="shrink-0 whitespace-nowrap font-semibold text-base tabular-nums">
+      <span className="shrink-0 whitespace-nowrap font-semibold text-sm tabular-nums">
         <span className="text-muted-foreground">{formatCurrency(row.current, currency)}</span>
         <ArrowRightIcon aria-hidden className="mx-1 inline size-3 text-muted-foreground" />
         <span
@@ -200,7 +200,7 @@ function BudgetCell({
         >
           {formatCurrency(row.proposed, currency)}
         </span>
-        <span className="font-normal text-muted-foreground text-sm">{pctLabel}</span>
+        <span className="font-normal text-muted-foreground text-xs">{pctLabel}</span>
       </span>
     </div>
   );
@@ -248,13 +248,13 @@ export function ReallocationStory({
   return (
     <div className={cn('space-y-3', className)}>
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <p className="min-w-0 flex-1 text-base text-foreground leading-relaxed">
+        <p className="min-w-0 flex-1 text-sm text-foreground leading-relaxed">
           <SummaryWithFigures text={story.summary} />
         </p>
         <LookbackToggle onChange={setLookback} size="lg" value={lookback} />
       </div>
 
-      <div className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1.2fr)_minmax(0,1.4fr)] gap-x-4 px-1 text-muted-foreground text-xs uppercase tracking-wide sm:grid">
+      <div className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1.2fr)_minmax(0,1.4fr)] gap-x-4 px-1 text-muted-foreground text-2xs uppercase tracking-wide sm:grid">
         <span>Ad set</span>
         <span>
           {metric.costLabel} · {lookback}d
@@ -271,7 +271,7 @@ export function ReallocationStory({
           >
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-1.5">
-                <span className="truncate font-semibold text-base" title={row.name}>
+                <span className="truncate font-semibold text-sm" title={row.name}>
                   {row.name}
                 </span>
                 {row.standing !== 'unknown' && !row.held ? (
@@ -283,7 +283,7 @@ export function ReallocationStory({
               </div>
               {row.reason ? (
                 <p
-                  className="mt-1 line-clamp-2 text-muted-foreground text-sm"
+                  className="mt-1 line-clamp-2 text-muted-foreground text-xs"
                   title={row.reason}
                 >
                   {row.reason}
@@ -304,7 +304,7 @@ export function ReallocationStory({
 
       {hidden > 0 || showAll ? (
         <Button
-          className="h-8 px-3 text-sm"
+          className="h-7 px-3 text-xs"
           onClick={() => setShowAll((value) => !value)}
           size="sm"
           type="button"
@@ -314,7 +314,7 @@ export function ReallocationStory({
         </Button>
       ) : null}
 
-      <p className="text-muted-foreground text-xs">
+      <p className="text-muted-foreground text-2xs">
         Dot = cost per result over the last {lookback} days
         {lookback === 14 ? ' (bar = likely range)' : ''}; dashed line = target. Budget bar runs from
         today&rsquo;s daily budget to the proposed one.

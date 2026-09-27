@@ -58,7 +58,7 @@ type CreativeRecommendationCardProps = {
 const FLASH_SLOTS = 3;
 
 /** In-slot actions: a flash slot is a third of the column, so they stay a step under the card buttons. */
-const SLOT_BUTTON = 'h-8 px-2 text-xs';
+const SLOT_BUTTON = 'h-7 px-2 text-2xs';
 
 type FlashSlot = {
   key: string;
@@ -125,14 +125,14 @@ function ImplementMenu({
           </Button>
         }
       />
-      <PopoverContent align="end" className="w-72 p-3 text-sm">
+      <PopoverContent align="end" className="w-72 p-3 text-xs">
         <p className="mb-2 text-muted-foreground">
           The new ad is created paused, beside the ad set's current ad. Nothing existing changes.
         </p>
         <div className="max-h-56 space-y-2 overflow-y-auto">
           {groups.map((group) => (
             <div key={group.relation}>
-              <p className="mb-1 text-muted-foreground text-xs uppercase tracking-wide">
+              <p className="mb-1 text-muted-foreground text-2xs uppercase tracking-wide">
                 {RELATION_LABEL[group.relation]}
               </p>
               <ul className="space-y-0.5">
@@ -200,13 +200,13 @@ export function CreativeRecommendationCard({
     >
       {/* Left — the creative in question */}
       <section className="space-y-3">
-        <p className="text-muted-foreground text-xs uppercase tracking-wide">
+        <p className="text-muted-foreground text-2xs uppercase tracking-wide">
           {copy.because === 'winner' ? 'The winner' : 'Creative to renew'}
         </p>
         {adsLoading && subjects.length === 0 ? (
           <div className="aspect-square w-full max-w-44 animate-pulse rounded-lg bg-muted/40" />
         ) : subjects.length === 0 ? (
-          <div className="flex aspect-square w-full max-w-44 flex-col items-center justify-center gap-2 rounded-lg border border-border/60 border-dashed p-4 text-center text-muted-foreground text-sm">
+          <div className="flex aspect-square w-full max-w-44 flex-col items-center justify-center gap-2 rounded-lg border border-border/60 border-dashed p-4 text-center text-muted-foreground text-xs">
             <ImageOffIcon className="size-4" /> No creative could be loaded for this ad set.
           </div>
         ) : (
@@ -229,7 +229,7 @@ export function CreativeRecommendationCard({
                       <ImageOffIcon className="size-4 text-muted-foreground" />
                     </div>
                   )}
-                  <p className="mt-2 truncate text-foreground text-sm" title={ad.name ?? ad.id}>
+                  <p className="mt-2 truncate text-foreground text-xs" title={ad.name ?? ad.id}>
                     {ad.name ?? ad.id}
                   </p>
                 </li>
@@ -238,8 +238,8 @@ export function CreativeRecommendationCard({
           </ul>
         )}
         {subjectBar?.costPerEvent != null ? (
-          <p className="text-muted-foreground text-sm">
-            <span className="font-semibold text-foreground text-lg tabular-nums">
+          <p className="text-muted-foreground text-xs">
+            <span className="font-semibold text-foreground text-base tabular-nums">
               {formatCpa(subjectBar.costPerEvent, currency)}
             </span>{' '}
             per {resultWord.replace(/s$/, '')} · {subjectBar.events} {resultWord}
@@ -248,8 +248,8 @@ export function CreativeRecommendationCard({
       </section>
 
       {/* Middle — the argument */}
-      <section className="space-y-4 text-sm md:border-border/50 md:border-l md:pl-6">
-        <p className="font-medium text-base text-foreground">{copy.headline}</p>
+      <section className="space-y-4 text-xs md:border-border/50 md:border-l md:pl-6">
+        <p className="font-medium text-sm text-foreground">{copy.headline}</p>
         <dl className="space-y-1.5">
           <div className="flex items-baseline gap-2">
             <dt className="w-24 shrink-0 text-muted-foreground text-xs">Angle</dt>
@@ -276,7 +276,7 @@ export function CreativeRecommendationCard({
         {standing ? (
           <CreativeStandingBars chart={standing} currency={currency} resultWord={resultWord} />
         ) : (
-          <p className="text-muted-foreground text-xs">
+          <p className="text-muted-foreground text-2xs">
             No creative comparison in the latest snapshot for this ad set.
           </p>
         )}
@@ -284,7 +284,7 @@ export function CreativeRecommendationCard({
 
       {/* Right — flash creatives */}
       <section className="space-y-3 md:border-border/50 md:border-l md:pl-6">
-        <p className="flex items-center gap-1.5 text-muted-foreground text-xs uppercase tracking-wide">
+        <p className="flex items-center gap-1.5 text-muted-foreground text-2xs uppercase tracking-wide">
           <SparklesIcon className="size-3.5" /> Flash creatives
         </p>
         <ul className="grid grid-cols-3 gap-2">
@@ -295,7 +295,7 @@ export function CreativeRecommendationCard({
             const busy = implementingKey === slot.key;
             return (
               <li
-                className="flex flex-col gap-1.5 rounded-lg border border-border/70 bg-muted/20 p-2 text-xs"
+                className="flex flex-col gap-1.5 rounded-lg border border-border/70 bg-muted/20 p-2 text-2xs"
                 data-testid="flash-slot"
                 key={slot.key}
                 title={slot.job.id}
@@ -318,7 +318,7 @@ export function CreativeRecommendationCard({
                   </div>
                 )}
                 <Badge
-                  className="w-fit text-xs"
+                  className="w-fit text-2xs"
                   variant={
                     status === 'published'
                       ? 'success'
@@ -330,7 +330,7 @@ export function CreativeRecommendationCard({
                   {SWAP_STATUS_LABEL[status] ?? status}
                 </Badge>
                 {slot.job.enqueued_via === 'autopilot' ? (
-                  <span className="text-muted-foreground text-xs">by autopilot</span>
+                  <span className="text-muted-foreground text-2xs">by autopilot</span>
                 ) : null}
                 {status === 'failed' && failureText(slot.job) ? (
                   <p className="line-clamp-2 text-destructive" title={failureText(slot.job) ?? ''}>
@@ -366,7 +366,7 @@ export function CreativeRecommendationCard({
           {Array.from({ length: emptySlots }, (_, index) => slots.length + index + 1).map(
             (slotNumber) => (
               <li
-                className="flex aspect-square items-center justify-center rounded-lg border border-border/60 border-dashed text-muted-foreground text-xs"
+                className="flex aspect-square items-center justify-center rounded-lg border border-border/60 border-dashed text-muted-foreground text-2xs"
                 key={`slot-${slotNumber}`}
               >
                 slot {slotNumber}
@@ -376,7 +376,7 @@ export function CreativeRecommendationCard({
         </ul>
         {onGenerate ? (
           <Button
-            className="h-9 px-3 text-sm"
+            className="h-8 px-3 text-sm"
             disabled={generating}
             onClick={onGenerate}
             size="sm"
@@ -386,7 +386,7 @@ export function CreativeRecommendationCard({
             {generating ? 'Requesting…' : 'Generate with Creative+'}
           </Button>
         ) : null}
-        {generateNote ? <p className="text-muted-foreground text-xs">{generateNote}</p> : null}
+        {generateNote ? <p className="text-muted-foreground text-2xs">{generateNote}</p> : null}
       </section>
     </div>
   );

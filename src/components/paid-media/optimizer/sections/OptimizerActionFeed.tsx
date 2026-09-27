@@ -58,7 +58,7 @@ const FAMILY_LABEL: Record<string, string> = {
 
 function FamilyBadge({ family }: { family: string }) {
   return (
-    <span className="shrink-0 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+    <span className="shrink-0 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
       {FAMILY_LABEL[family] ?? family}
     </span>
   );
@@ -75,18 +75,18 @@ function ChangeLine({ change, currency }: { change: ActionChange; currency: stri
   // The row header already names the field; repeating it here just doubled every line.
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
-      <span className="font-mono text-sm tabular-nums text-muted-foreground">
+      <span className="font-mono text-xs tabular-nums text-muted-foreground">
         {print(change.before)}
       </span>
       <ArrowRightIcon aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
-      <span className="font-mono text-sm font-semibold tabular-nums">{print(change.after)}</span>
+      <span className="font-mono text-xs font-semibold tabular-nums">{print(change.after)}</span>
     </span>
   );
 }
 
 function RevertedBadge() {
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
       <Undo2Icon aria-hidden="true" className="size-3" />
       Reverted
     </span>
@@ -138,7 +138,7 @@ export function ActionRow({
           <ChangeLine change={change} currency={currency} />
         </div>
         {row.justification ? (
-          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             <span className="font-medium text-foreground">Why:</span> {row.justification}
           </p>
         ) : null}

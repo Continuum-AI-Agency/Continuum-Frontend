@@ -36,7 +36,7 @@ export function RecEvidenceChart({
   if (isPause && item?.diagnostics?.ci) {
     return (
       <div className="space-y-1.5" data-testid="rec-evidence-ci">
-        <p className="text-muted-foreground text-xs uppercase tracking-wide">
+        <p className="text-muted-foreground text-2xs uppercase tracking-wide">
           Cost per result · 95% interval, narrower = more events
         </p>
         <CpaConfidenceBar
@@ -60,7 +60,7 @@ function EvidenceBars({ series, currency }: { series: EvidenceSeries; currency: 
     series.threshold != null ? Math.min(100, (series.threshold / max) * 100) : null;
   return (
     <div className="space-y-1.5" data-testid="rec-evidence-bars">
-      <p className="text-muted-foreground text-xs uppercase tracking-wide">
+      <p className="text-muted-foreground text-2xs uppercase tracking-wide">
         {series.metric}
         {series.threshold != null && series.thresholdLabel
           ? ` · dashed line = ${series.thresholdLabel} ${formatEvidenceValue(series.unit, series.threshold, currency)}`
@@ -68,7 +68,7 @@ function EvidenceBars({ series, currency }: { series: EvidenceSeries; currency: 
       </p>
       <ul className="space-y-1">
         {series.points.map((point) => (
-          <li className="flex items-center gap-2.5 text-sm" key={point.label}>
+          <li className="flex items-center gap-2.5 text-xs" key={point.label}>
             <span className="w-8 shrink-0 text-muted-foreground text-xs tabular-nums">
               {point.label}
             </span>

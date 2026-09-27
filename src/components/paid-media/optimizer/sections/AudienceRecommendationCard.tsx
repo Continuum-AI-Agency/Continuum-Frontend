@@ -75,7 +75,7 @@ export type AudienceRecommendationCardProps = {
 };
 
 /** The card's buttons, one size up from the dense `sm` default. */
-const ROOMY_BUTTON = 'h-9 px-3 text-sm';
+const ROOMY_BUTTON = 'h-8 px-3 text-sm';
 
 function Line({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -103,11 +103,11 @@ function CurrentAudience({
   const evidence = queueHeadlineLine(rec, currency) ?? evidenceLine(rec.evidence, currency);
   return (
     <section className="space-y-3">
-      <p className="flex items-center gap-1.5 text-muted-foreground text-xs uppercase tracking-wide">
+      <p className="flex items-center gap-1.5 text-muted-foreground text-2xs uppercase tracking-wide">
         <UsersIcon className="size-3.5" /> Audience today
       </p>
-      <p className="text-base text-foreground">{line ?? snapshot?.audienceType ?? 'this ad set'}</p>
-      <dl className="space-y-1.5 text-sm">
+      <p className="text-sm text-foreground">{line ?? snapshot?.audienceType ?? 'this ad set'}</p>
+      <dl className="space-y-1.5 text-xs">
         {plan?.reach.current ? (
           <Line label="Reach">{estimateLabel(plan.reach.current)}</Line>
         ) : null}
@@ -130,10 +130,10 @@ function ProposalBody({ plan, currency }: { plan: AudienceProposalPlan; currency
   const groups = optionsByBucket(plan);
   const reach = reachDeltaLabel(plan);
   return (
-    <div className="space-y-4 text-sm">
+    <div className="space-y-4 text-xs">
       <div className="flex flex-wrap items-center gap-2">
         <Badge
-          className="text-xs uppercase"
+          className="text-2xs uppercase"
           variant={plan.mode === 'replace' ? 'default' : 'secondary'}
         >
           {plan.mode === 'replace' ? 'Replace audience' : 'Add audience'}
@@ -144,11 +144,11 @@ function ProposalBody({ plan, currency }: { plan: AudienceProposalPlan; currency
             : 'New ad set beside the current one; both keep running.'}
         </span>
       </div>
-      <p className="font-medium text-base text-foreground">{plan.diagnosis}</p>
+      <p className="font-medium text-sm text-foreground">{plan.diagnosis}</p>
       <p className="text-muted-foreground">{plan.rationale}</p>
       {groups.map((group) => (
         <div key={group.bucket}>
-          <p className="mb-1.5 text-muted-foreground text-xs uppercase tracking-wide">
+          <p className="mb-1.5 text-muted-foreground text-2xs uppercase tracking-wide">
             {group.label}
           </p>
           <ul className="flex flex-wrap gap-1.5">
@@ -168,7 +168,7 @@ function ProposalBody({ plan, currency }: { plan: AudienceProposalPlan; currency
                 {option.chosen ? <CheckIcon className="size-3.5" /> : null}
                 {option.name}
                 {option.estimate ? (
-                  <span className="text-xs tabular-nums opacity-70">
+                  <span className="text-2xs tabular-nums opacity-70">
                     {estimateLabel(option.estimate)}
                   </span>
                 ) : null}
@@ -187,7 +187,7 @@ function ProposalBody({ plan, currency }: { plan: AudienceProposalPlan; currency
       </dl>
       {plan.creatives.length > 0 ? (
         <div>
-          <p className="mb-1.5 text-muted-foreground text-xs uppercase tracking-wide">
+          <p className="mb-1.5 text-muted-foreground text-2xs uppercase tracking-wide">
             Creatives carried over
           </p>
           <ul className="flex flex-wrap gap-3">
@@ -203,17 +203,17 @@ function ProposalBody({ plan, currency }: { plan: AudienceProposalPlan; currency
                     src={creative.poster_url}
                   />
                 ) : (
-                  <div className="flex aspect-square w-full items-center justify-center rounded-md border border-border/60 border-dashed text-muted-foreground text-sm tabular-nums">
+                  <div className="flex aspect-square w-full items-center justify-center rounded-md border border-border/60 border-dashed text-muted-foreground text-2xs tabular-nums">
                     #{creative.rank}
                   </div>
                 )}
                 <p
-                  className="mt-1.5 truncate text-foreground text-sm"
+                  className="mt-1.5 truncate text-foreground text-2xs"
                   title={creative.ad_name ?? creative.ad_id}
                 >
                   {creative.ad_name ?? creative.ad_id}
                 </p>
-                <p className="truncate text-muted-foreground text-xs tabular-nums">
+                <p className="truncate text-muted-foreground text-2xs tabular-nums">
                   {creative.cost_per_event != null
                     ? formatCurrency(creative.cost_per_event, currency)
                     : '—'}{' '}
@@ -222,7 +222,7 @@ function ProposalBody({ plan, currency }: { plan: AudienceProposalPlan; currency
               </li>
             ))}
           </ul>
-          <p className="mt-1.5 text-muted-foreground text-xs">{plan.creatives_disclosure}</p>
+          <p className="mt-1.5 text-muted-foreground text-2xs">{plan.creatives_disclosure}</p>
         </div>
       ) : null}
     </div>
@@ -267,20 +267,20 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
 
       {/* Middle — the proposal */}
       <section className="space-y-3 md:border-border/50 md:border-l md:pl-6">
-        <p className="flex items-center gap-1.5 text-muted-foreground text-xs uppercase tracking-wide">
+        <p className="flex items-center gap-1.5 text-muted-foreground text-2xs uppercase tracking-wide">
           <SparklesIcon className="size-3.5" /> Jaina's proposal
         </p>
         {plan ? (
           <ProposalBody currency={currency} plan={plan} />
         ) : state === 'queued' || state === 'proposing' ? (
-          <p className="flex items-center gap-2 text-muted-foreground text-sm">
-            <Loader2Icon className="size-4 animate-spin" />
+          <p className="flex items-center gap-2 text-muted-foreground text-xs">
+            <Loader2Icon className="size-3.5 animate-spin" />
             {state === 'queued'
               ? 'Queued — Jaina picks it up within a minute.'
               : 'Jaina is reading the audience, the catalogue and the creatives…'}
           </p>
         ) : state === 'blocked_cbo' || state === 'blocked' ? (
-          <div className="space-y-1.5 text-sm">
+          <div className="space-y-1.5 text-xs">
             <p className="font-medium text-foreground">
               {state === 'blocked_cbo'
                 ? 'This campaign holds the budget'
@@ -289,12 +289,12 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
             <p className="text-muted-foreground">{block?.message}</p>
           </div>
         ) : state === 'failed' ? (
-          <div className="space-y-1.5 text-sm">
+          <div className="space-y-1.5 text-xs">
             <p className="font-medium text-foreground">The analysis failed</p>
             <p className="text-muted-foreground">{view.errorMessage ?? 'Unknown error.'}</p>
           </div>
         ) : (
-          <p className="text-muted-foreground text-sm">
+          <p className="text-muted-foreground text-xs">
             Jaina's audience analysis runs with the daily optimizer cycle for this ad set. Ask now
             to build the proposal today.
           </p>
@@ -303,7 +303,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
 
       {/* Right — the decision */}
       <section className="space-y-3 md:border-border/50 md:border-l md:pl-6">
-        <p className="text-muted-foreground text-xs uppercase tracking-wide">Decision</p>
+        <p className="text-muted-foreground text-2xs uppercase tracking-wide">Decision</p>
 
         {state === 'none' || state === 'failed' ? (
           <Button
@@ -315,16 +315,16 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
             variant="secondary"
           >
             {props.requesting ? (
-              <Loader2Icon className="size-4 animate-spin" />
+              <Loader2Icon className="size-3.5 animate-spin" />
             ) : (
-              <SparklesIcon className="size-4" />
+              <SparklesIcon className="size-3.5" />
             )}
             {state === 'failed' ? 'Ask Jaina again' : 'Ask Jaina now'}
           </Button>
         ) : null}
 
         {state === 'blocked_cbo' && block ? (
-          <div className="space-y-3 text-sm">
+          <div className="space-y-3 text-xs">
             <p className="text-muted-foreground">
               Recommendations need ad-set daily budgets to pace and compare ad sets. Convert the
               campaign, then ask Jaina again.
@@ -351,7 +351,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                   size="sm"
                   type="button"
                 >
-                  {props.convertingCbo ? <Loader2Icon className="size-4 animate-spin" /> : null}
+                  {props.convertingCbo ? <Loader2Icon className="size-3.5 animate-spin" /> : null}
                   Convert campaign to ad-set budgets
                 </Button>
               </div>
@@ -369,7 +369,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                 type="button"
                 variant="secondary"
               >
-                {props.convertingCbo ? <Loader2Icon className="size-4 animate-spin" /> : null}
+                {props.convertingCbo ? <Loader2Icon className="size-3.5 animate-spin" /> : null}
                 Preview the conversion
               </Button>
             )}
@@ -400,17 +400,17 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
         ) : null}
 
         {state === 'ready' && plan ? (
-          <div className="space-y-3 text-sm">
+          <div className="space-y-3 text-xs">
             <label className="block space-y-1" htmlFor={`budget-${rec.id}`}>
               <span className="text-muted-foreground">Daily budget ({plan.budget.currency})</span>
               <Input
-                className="h-9 text-sm"
+                className="h-8 text-sm"
                 id={`budget-${rec.id}`}
                 inputMode="decimal"
                 onChange={(event) => setBudgetMajor(event.target.value)}
                 value={budgetMajor}
               />
-              <span className="block text-muted-foreground text-xs tabular-nums">
+              <span className="block text-muted-foreground text-2xs tabular-nums">
                 {majorUnits(plan.budget.bounds.min_minor_units)}–
                 {majorUnits(plan.budget.bounds.max_minor_units)}
                 {budgetClamped ? ' · adjusted to the bounds' : ''}
@@ -436,7 +436,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                 size="sm"
                 type="button"
               >
-                {props.approving ? <Loader2Icon className="size-4 animate-spin" /> : null}
+                {props.approving ? <Loader2Icon className="size-3.5 animate-spin" /> : null}
                 Create new ad set
               </Button>
               <Button
@@ -487,8 +487,8 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
         state === 'executing' ||
         state === 'switching' ||
         state === 'undoing' ? (
-          <p className="flex items-center gap-2 text-muted-foreground text-sm">
-            <Loader2Icon className="size-4 animate-spin" />
+          <p className="flex items-center gap-2 text-muted-foreground text-xs">
+            <Loader2Icon className="size-3.5 animate-spin" />
             {state === 'approved'
               ? 'Approved — the worker creates it within a minute.'
               : state === 'executing'
@@ -500,12 +500,12 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
         ) : null}
 
         {(state === 'executed' || state === 'undone') && result ? (
-          <div className="space-y-3 text-sm">
+          <div className="space-y-3 text-xs">
             <div className="space-y-1">
-              <p className="font-medium text-base text-foreground">
+              <p className="font-medium text-foreground">
                 {state === 'undone' ? 'Undone' : 'Created on Meta'}
                 {(row?.approval as { via?: string } | null)?.via === 'autopilot' ? (
-                  <Badge className="ml-2 text-xs" variant="success">
+                  <Badge className="ml-2 text-2xs" variant="success">
                     Approved by autopilot · created paused
                   </Badge>
                 ) : null}
@@ -556,10 +556,10 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
               <CollapsibleTrigger
                 className={cn(
                   buttonVariants({ variant: 'ghost', size: 'sm' }),
-                  'h-9 gap-1.5 px-3 text-sm',
+                  'h-8 gap-1.5 px-3 text-xs',
                 )}
               >
-                <ChevronDownIcon className="size-4" /> What was implemented
+                <ChevronDownIcon className="size-3.5" /> What was implemented
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <dl className="mt-1.5 space-y-1.5 rounded-md border border-border/60 bg-muted/20 p-3">
@@ -603,7 +603,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                   type="button"
                   variant="ghost"
                 >
-                  <UndoIcon className="size-4" /> Undo
+                  <UndoIcon className="size-3.5" /> Undo
                 </Button>
               </div>
             ) : null}
@@ -611,7 +611,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
         ) : null}
 
         {row?.status === 'failed' && result?.adset ? (
-          <p className="text-muted-foreground text-xs">
+          <p className="text-muted-foreground text-2xs">
             A partial result exists (ad set {result.adset.id}); retrying resumes from it.
           </p>
         ) : null}

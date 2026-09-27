@@ -101,8 +101,8 @@ describe('RecEvidenceChart', () => {
   });
 });
 
-describe('RecEvidenceChart — +2 type scale', () => {
-  it('draws labels at text-xs and values at text-sm, with no text-2xs/3xs', () => {
+describe('RecEvidenceChart — +1 type scale', () => {
+  it('draws the caption at text-2xs and the rows at text-xs, with no text-3xs', () => {
     const { getByTestId, getByText } = render(
       <RecEvidenceChart
         currency="USD"
@@ -115,12 +115,12 @@ describe('RecEvidenceChart — +2 type scale', () => {
       />,
     );
     const chart = getByTestId('rec-evidence-bars');
-    expect(chart.outerHTML).not.toMatch(/text-(2|3)xs/);
-    expect(chart.querySelector('p')?.className).toContain('text-xs');
-    expect(getByText('1.00%').closest('li')?.className).toContain('text-sm');
+    expect(chart.outerHTML).not.toMatch(/text-3xs/);
+    expect(chart.querySelector('p')?.className).toContain('text-2xs');
+    expect(getByText('1.00%').closest('li')?.className).toContain('text-xs');
   });
 
-  it('the cost-interval caption is text-xs too', () => {
+  it('the cost-interval caption is text-2xs too', () => {
     const { getByTestId } = render(
       <RecEvidenceChart
         currency="USD"
@@ -135,7 +135,7 @@ describe('RecEvidenceChart — +2 type scale', () => {
       />,
     );
     const block = getByTestId('rec-evidence-ci');
-    expect(block.outerHTML).not.toMatch(/text-(2|3)xs/);
-    expect(block.querySelector('p')?.className).toContain('text-xs');
+    expect(block.outerHTML).not.toMatch(/text-3xs/);
+    expect(block.querySelector('p')?.className).toContain('text-2xs');
   });
 });

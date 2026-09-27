@@ -81,7 +81,7 @@ export function CpaConfidenceBar({
           />
         ) : null}
       </div>
-      <span className="w-44 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
+      <span className="w-44 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
         {unboundedNote ?? (
           <>
             {formatCpa(cpa, currency)}

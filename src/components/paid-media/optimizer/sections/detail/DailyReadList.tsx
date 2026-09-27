@@ -80,10 +80,10 @@ export function DailyReadList({
       data-testid="daily-read"
     >
       <header className="flex flex-wrap items-baseline justify-between gap-3 border-border/60 border-b px-5 py-4">
-        <h3 className="font-semibold text-foreground text-xl tracking-tight">
+        <h3 className="font-semibold text-foreground text-base tracking-tight">
           {asked > 0 ? "Today's read, and what you asked for" : "Today's read, by category"}
         </h3>
-        <p className="text-muted-foreground text-sm">
+        <p className="text-muted-foreground text-2xs">
           {source === 'brief' ? 'Jaina, from the latest cycle' : 'Draft read from the latest cycle'}
         </p>
       </header>
@@ -105,26 +105,26 @@ export function DailyReadList({
             >
               <div className="min-w-0 space-y-2.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge className="px-2.5 py-0.5 text-xs" variant={MODULE_VARIANT[row.module]}>
+                  <Badge className="px-2.5 py-0.5 text-2xs" variant={MODULE_VARIANT[row.module]}>
                     {row.category}
                   </Badge>
-                  <Badge className="px-2.5 py-0.5 text-xs" variant={TIER_VARIANT[row.tier]}>
+                  <Badge className="px-2.5 py-0.5 text-2xs" variant={TIER_VARIANT[row.tier]}>
                     {row.tierLabel}
                   </Badge>
                   {row.isHero ? (
-                    <span className="text-primary text-xs">On the overview</span>
+                    <span className="text-primary text-2xs">On the overview</span>
                   ) : null}
                   {row.origin === 'asked' ? (
-                    <span className="text-muted-foreground text-xs">You asked for this</span>
+                    <span className="text-muted-foreground text-2xs">You asked for this</span>
                   ) : null}
                 </div>
-                <p className="truncate font-semibold text-foreground text-lg tracking-tight">{row.title}</p>
+                <p className="truncate font-semibold text-foreground text-sm tracking-tight">{row.title}</p>
                 {row.reason ? (
-                  <p className="line-clamp-2 text-base text-muted-foreground leading-relaxed" title={row.basis}>
+                  <p className="line-clamp-2 text-xs text-muted-foreground leading-relaxed" title={row.basis}>
                     {row.reason}
                   </p>
                 ) : (
-                  <p className="text-base text-muted-foreground leading-relaxed">{row.basis}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{row.basis}</p>
                 )}
                 {row.detail && row.detail.figures.length > 0 ? (
                   <dl className="flex flex-wrap gap-2">
@@ -133,8 +133,8 @@ export function DailyReadList({
                         className="rounded-lg border border-border/60 bg-muted/30 px-3 py-1.5"
                         key={`${row.id}:${figure.label}`}
                       >
-                        <dt className="text-muted-foreground text-xs">{figure.label}</dt>
-                        <dd className="font-semibold text-foreground text-lg tabular-nums">
+                        <dt className="text-muted-foreground text-2xs">{figure.label}</dt>
+                        <dd className="font-semibold text-foreground text-2xs tabular-nums">
                           {formatFigure(figure, currency)}
                         </dd>
                       </div>
@@ -142,20 +142,20 @@ export function DailyReadList({
                   </dl>
                 ) : null}
                 {row.detail && row.detail.steps.length > 0 ? (
-                  <ol className="list-inside list-decimal space-y-1.5 text-muted-foreground text-sm">
+                  <ol className="list-inside list-decimal space-y-1.5 text-muted-foreground text-xs">
                     {row.detail.steps.map((step) => (
                       <li key={`${row.id}:${step}`}>{step}</li>
                     ))}
                   </ol>
                 ) : null}
                 {failure?.rowId === row.id ? (
-                  <p className="text-destructive text-sm" data-testid={`read-failure:${row.id}`}>
+                  <p className="text-destructive text-xs" data-testid={`read-failure:${row.id}`}>
                     {failure.message}
                   </p>
                 ) : null}
                 {row.nextNote ? (
                   <p
-                    className="text-secondary text-sm opacity-80"
+                    className="text-secondary text-xs opacity-80"
                     data-testid={`read-next-note:${row.id}`}
                   >
                     {row.nextNote}
@@ -169,7 +169,7 @@ export function DailyReadList({
                 <div className="flex items-center gap-2">
                   {onDismiss && row.origin === 'asked' && !waiting ? (
                     <Button
-                      className="h-10 px-4 text-sm"
+                      className="h-8 px-4 text-xs"
                       disabled={busy}
                       onClick={() => onDismiss(row)}
                       size="sm"
@@ -180,7 +180,7 @@ export function DailyReadList({
                     </Button>
                   ) : null}
                   <Button
-                    className="h-10 px-4 text-sm"
+                    className="h-8 px-4 text-xs"
                     disabled={waiting || busy}
                     onClick={() => onCta(row.cta, row)}
                     size="sm"

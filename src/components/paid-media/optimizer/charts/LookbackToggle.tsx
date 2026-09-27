@@ -18,7 +18,7 @@ type LookbackToggleSize = 'default' | 'lg';
 
 const ITEM_CLASS: Record<LookbackToggleSize, string> = {
   default: 'h-6 px-2 text-2xs',
-  lg: 'h-9 px-3 text-sm',
+  lg: 'h-7 px-3 text-xs',
 };
 
 export function LookbackToggle({

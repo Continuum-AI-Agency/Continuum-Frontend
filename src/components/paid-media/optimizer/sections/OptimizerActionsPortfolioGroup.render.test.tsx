@@ -923,10 +923,10 @@ describe('queue header — a portfolio dead on Meta says so before its rows', ()
   });
 });
 
-describe('the portfolio Activity tab reads at the +2 type scale', () => {
-  const SUB_XS = /text-(2|3)xs/;
+describe('the portfolio Activity tab reads at the +1 type scale', () => {
+  const NO_3XS = /text-3xs/;
 
-  it('leaves no text-2xs or text-3xs in the queue, the notices, or Recently applied', () => {
+  it('leaves no text-3xs in the queue, the notices, or Recently applied', () => {
     recentActions = [
       {
         id: RECENT_AUDIT_ID,
@@ -951,7 +951,7 @@ describe('the portfolio Activity tab reads at the +2 type scale', () => {
     expect(screen.getByRole('button', { name: 'Hide detail' })).toBeTruthy();
 
     expect(screen.getByText('Recently applied').className).toContain('text-xs');
-    expect(container.innerHTML).not.toMatch(SUB_XS);
+    expect(container.innerHTML).not.toMatch(NO_3XS);
   });
 
   it('lifts the Recently applied row title and timestamp, and the lookback buttons', () => {
@@ -977,8 +977,8 @@ describe('the portfolio Activity tab reads at the +2 type scale', () => {
     expect((header.nextElementSibling as HTMLElement).className).toContain('text-sm');
     for (const days of ['3d', '7d', '14d']) {
       const toggle = screen.getByText(days, { selector: 'button' });
-      expect(toggle.className).toContain('h-9');
-      expect(toggle.className).toContain('text-sm');
+      expect(toggle.className).toContain('h-7');
+      expect(toggle.className).toContain('text-xs');
     }
     expect(container.querySelector('li[data-row-key]')?.className).toContain('py-3.5');
   });
