@@ -8,7 +8,11 @@ import type {
   MediaKind,
   MediaSource,
 } from '@continuum/contracts';
-import { DEFAULT_LIBRARY_SORT } from '@continuum/contracts';
+import {
+  collectionViewConfigSchema,
+  collectionVisibilitySchema,
+  DEFAULT_LIBRARY_SORT,
+} from '@continuum/contracts';
 import { resolveFieldFilterAssetIds } from '@/lib/library/customFields.server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { buildCarousel, carouselSignablePaths, EXCLUDE_CAROUSEL_SLIDES_FILTER } from './carousel';
@@ -176,8 +180,10 @@ export async function fetchMediaCollections(brandId: string): Promise<MediaColle
     return [];
   }
 
-  return (data ?? []).map(
-    (row): MediaCollection => ({
+  return (data ?? []).map((row): MediaCollection => {
+    const visibility = collectionVisibilitySchema.safeParse(row.visibility);
+    const viewConfig = collectionViewConfigSchema.safeParse(row.view_config);
+    return {
       id: row.id,
       brandId: row.brand_id,
       name: row.name,
@@ -188,11 +194,13 @@ export async function fetchMediaCollections(brandId: string): Promise<MediaColle
       parentId: row.parent_id ?? null,
       depth: row.depth ?? 0,
       systemKey: row.system_key ?? null,
+      visibility: visibility.success ? visibility.data : 'team',
+      viewConfig: viewConfig.success ? viewConfig.data : {},
       createdBy: row.created_by,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
-    }),
-  );
+    };
+  });
 }
 
 export async function fetchStorageUsedBytes(brandId: string): Promise<number> {
