@@ -43,7 +43,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 // notification producer logic.
 
 const COMMENT_SELECT =
-  'id, brand_id, asset_id, version_id, parent_comment_id, body, mentions, annotation, attachments, resolved_at, resolved_by, created_by, created_at, updated_at, deleted_at';
+  'id, brand_id, asset_id, version_id, parent_comment_id, body, mentions, annotation, attachments, visibility, resolved_at, resolved_by, created_by, created_at, updated_at, deleted_at';
 
 // Loose id strings on purpose, matching the contracts request schemas the
 // other verbs validate with (see contracts-wire-dto-stay-loose).
