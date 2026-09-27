@@ -24,18 +24,14 @@ import {
   type PortfolioListItem,
 } from '@continuum/contracts';
 import { ArrowLeftIcon, LineChartIcon, RefreshCwIcon } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { InsightDataTable } from '@/components/dashboard/datatable/InsightDataTable';
-import { formatDateRange } from '@/components/shared/DateRangeField';
-import { MetricStrip } from '@/components/shared/MetricStrip';
 import { DataState } from '@/components/shared/state/DataState';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import { cn } from '@/lib/utils';
-import { ApplyModePill } from '../ApplyModePill';
 import { AdSetTimeline } from '../charts/AdSetTimeline';
 import { AdsetActionMenu } from '../charts/AdsetActionMenu';
 import { AdsetAngleStanding } from '../charts/AdsetAngleStanding';
@@ -61,7 +57,6 @@ import {
   sumFunnelWindow,
 } from '../charts/vizData';
 import { DateRangeControl } from '../components/DateRangeControl';
-import { formatCurrency, humanize, portfolioLevelLabel } from '../format';
 import { costCiLegend, itemToRow, kpiColumns } from '../kpiColumns';
 import { applyModeExplainer, firstCycleState, parseReport, pendingWorkCount } from '../reportModel';
 import {
@@ -94,15 +89,15 @@ import { type RangeSpec, resolveRange, todayIso } from './detail/rangeModel';
 import { buildRecap } from './detail/recapModel';
 import { SuggestionAsk } from './detail/SuggestionAsk';
 import { useAdhocSuggestionMutations, useAdhocSuggestions } from './detail/useAdhocSuggestions';
+import { buildHeroHeader, buildVitals, type HeroSetting } from './detail/vitalsModel';
 import { JainaEntryChips } from './JainaEntryChips';
 import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
 import { OptimizerPanel } from './OptimizerPanel';
 import { OptimizerReadError } from './OptimizerReadError';
 import { PortfolioManagePanel } from './PortfolioManagePanel';
-import { isStale, rosterLine, staleLine } from './portfolioStaleness';
+import { isStale } from './portfolioStaleness';
 import { RunOutcomeNotice } from './RunOutcomeNotice';
 import { SignalReadinessCard } from './SignalReadinessCard';
-import { StalenessChips } from './StalenessChips';
 
 type PortfolioDetailWorkspaceProps = {
   portfolio: PortfolioListItem;
@@ -154,9 +149,6 @@ export function PortfolioDetailWorkspace({
     Math.max(DEFAULT_CPA_SERIES_LIMIT, resolvedRange.days + 5),
   );
   const hasFlight = Boolean(portfolio.period_start && portfolio.period_end);
-  const flightLabel = portfolio.period_start
-    ? formatDateRange({ from: portfolio.period_start, to: portfolio.period_end ?? null })
-    : null;
   const winratesQuery = useOptimizerAdsetCreativeWinrates(brandId, resolvedRange.lookback, 'angle');
   const enrolledQuery = useOptimizerEnrolledAdsets(portfolio.id);
   const nameById = useMemo(
@@ -164,7 +156,7 @@ export function PortfolioDetailWorkspace({
     [enrolledQuery.data],
   );
   const snapshotsQuery = useOptimizerAccountSnapshots(brandId, adAccountId, level);
-  const { run, archive, update } = useOptimizerMutations(brandId, adAccountId);
+  const { run, archive, update, setPaused } = useOptimizerMutations(brandId, adAccountId);
 
   const report = parseReport(performanceQuery.data);
   const items = report?.latest_items ?? [];
@@ -299,6 +291,41 @@ export function PortfolioDetailWorkspace({
     firstCycle: !latestRun,
   });
   useHeroBriefWatch(portfolio.id, Boolean(latestRun) && heroView.source === 'fallback');
+  const vitalsHeader = buildHeroHeader({
+    portfolio,
+    lastCycleAt: latestRun?.cycle_ts ?? null,
+    growth: heroView.brief.growth,
+    metric,
+    currency: currency ?? null,
+  });
+  const vitalsRows = latestRun
+    ? buildVitals({
+        report,
+        growth: heroView.brief.growth,
+        portfolio,
+        metric,
+        currency: currency ?? null,
+      })
+    : null;
+  // A header chip opens its own field in Manage; the panel scrolls to it and clears this.
+  const [manageFocus, setManageFocus] = useState<HeroSetting | null>(null);
+  const clearManageFocus = useCallback(() => setManageFocus(null), []);
+  const onEditSetting = (setting: HeroSetting) => {
+    setManageFocus(setting);
+    onSectionChange('manage');
+  };
+  const onSecondary = () => {
+    if (vitalsHeader.secondary?.kind === 'review') {
+      onSectionChange('activity');
+      return;
+    }
+    const stopping = vitalsHeader.secondary?.kind === 'stop';
+    setPaused.mutate({
+      portfolio_id: portfolio.id,
+      paused: stopping,
+      reason: stopping ? 'Stopped from the portfolio header' : undefined,
+    });
+  };
   const dailyRead = buildDailyRead(heroView, portfolio.daily_total);
   const [focusRowKey, setFocusRowKey] = useState<string | null>(null);
   /** The asked-for row whose adopt/build/dismiss is mid-write. */
@@ -458,46 +485,13 @@ export function PortfolioDetailWorkspace({
             }}
             onRun={() => run.mutate(portfolio.id)}
           >
-            <div className="min-w-0">
-              <h2 className="flex flex-wrap items-center gap-2 truncate font-semibold text-sm tracking-tight">
-                <span className="truncate">{portfolio.name}</span>
-                <Badge className="text-3xs" variant="teal">
-                  {humanize(portfolio.mode)}
-                </Badge>
-                <ApplyModePill
-                  applyMode={portfolio.apply_mode}
-                  autopilotPaused={portfolio.autopilot_paused}
-                  scopes={portfolio.autopilot_scopes ?? null}
-                />
-              </h2>
-              <p className="text-3xs text-muted-foreground">
-                {humanize(portfolio.objective)} · right-click for actions
-              </p>
-              {/* The page's own verdict on whether the cycle instrument below is current: a
-                  portfolio dead on Meta for 49 days otherwise reads "Autopilot" and nothing
-                  else, and the hero's "next attempt" line has no room to say why. */}
-              {staleLine(portfolio) || rosterLine(portfolio) ? (
-                <div
-                  className="mt-1.5 flex flex-wrap items-center gap-1.5"
-                  data-testid="portfolio-staleness"
-                >
-                  <StalenessChips portfolio={portfolio} />
-                </div>
-              ) : null}
-            </div>
+            {/* Navigation chrome only: the mode, freshness, settings and Run now live in the
+                portfolio's own header (PortfolioVitals) on the Performance tab. */}
+            <h2 className="min-w-0 truncate font-semibold text-sm tracking-tight">
+              {portfolio.name}
+            </h2>
           </AdsetActionMenu>
         </div>
-        <Button
-          className="h-7 gap-1.5 px-2 text-xs"
-          disabled={run.isPending}
-          onClick={() => run.mutate(portfolio.id)}
-          size="sm"
-          type="button"
-          variant="secondary"
-        >
-          <RefreshCwIcon className={cn('size-3.5', run.isPending && 'animate-spin')} />
-          Run now
-        </Button>
       </header>
 
       {/* Internal sections — a shallow, instant swap (no server round-trip). Performance
@@ -580,49 +574,16 @@ export function PortfolioDetailWorkspace({
             stale={isStale(portfolio)}
             portfolioId={portfolio.id}
             view={heroView}
+            vitals={{
+              header: vitalsHeader,
+              rows: vitalsRows,
+              onEditSetting,
+              onSecondary,
+              secondaryPending: setPaused.isPending,
+              onRun: () => run.mutate(portfolio.id),
+              running: run.isPending,
+            }}
           />
-
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <MetricStrip
-              items={[
-                {
-                  label: 'Allocated',
-                  value: formatCurrency(latestRun?.allocated_total ?? null, currency),
-                },
-                {
-                  label: 'Daily budget',
-                  // An 'observed' portfolio reallocates within live spend, so naming
-                  // daily_total as "the budget" would misdescribe what the cycle targets.
-                  value:
-                    portfolio.budget_source === 'fixed'
-                      ? formatCurrency(portfolio.daily_total, currency)
-                      : `${formatCurrency(portfolio.daily_total, currency)} · matched`,
-                },
-                ...(typeof portfolio.period_budget === 'number' && portfolio.period_budget > 0
-                  ? [
-                      {
-                        label: 'Flight budget',
-                        value: formatCurrency(portfolio.period_budget, currency),
-                      },
-                    ]
-                  : []),
-                {
-                  label: 'Optimizing for',
-                  value: `${humanize(portfolio.objective)} · ${metric.resultLabel}`,
-                },
-                { label: portfolioLevelLabel(level), value: String(portfolio.adset_count) },
-                { label: 'Pending', value: String(pendingWorkCount(portfolio)) },
-                ...(flightLabel ? [{ label: 'Flight', value: flightLabel }] : []),
-              ]}
-            />
-            <span className="inline-flex items-center gap-1.5">
-              <span className="text-2xs text-muted-foreground uppercase tracking-wide">Volume</span>
-              <ConversionVolumeBadge
-                confidence={latestRun?.confidence ?? null}
-                resultLabel={resultWord}
-              />
-            </span>
-          </div>
 
           <JainaEntryChips portfolio={portfolio} />
 
@@ -957,7 +918,9 @@ export function PortfolioDetailWorkspace({
             adAccountId={adAccountId}
             brandId={brandId}
             currency={currency}
+            focusSetting={manageFocus}
             onDone={() => onSectionChange('performance')}
+            onFocusSettingDone={clearManageFocus}
             portfolio={portfolio}
           />
         </TabsContent>

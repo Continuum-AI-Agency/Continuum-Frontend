@@ -56,7 +56,7 @@ import {
 } from '@continuum/contracts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Archive, ChevronDown, Loader2, Pause, Play, SparklesIcon } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { type Control, useController, useForm } from 'react-hook-form';
 import { DateRangeField } from '@/components/shared/DateRangeField';
 import {
@@ -101,6 +101,7 @@ import {
   useOptimizerPerformance,
 } from '../useOptimizerData';
 import { AutopilotScopesField } from './AutopilotScopesField';
+import type { HeroSetting } from './detail/vitalsModel';
 import { OBJECTIVES } from './suggestionModel';
 import {
   ANALOG_LABEL,
@@ -238,6 +239,18 @@ type PortfolioManagePanelProps = {
   portfolio: PortfolioListItem;
   currency?: string | null;
   onDone?: () => void;
+  /** A setting the portfolio header's chip asked to edit: scrolled to and focused on mount. */
+  focusSetting?: HeroSetting | null;
+  onFocusSettingDone?: () => void;
+};
+
+/** The field each header chip opens — the id prefix of that field's control below. */
+const SETTING_FIELD: Record<HeroSetting, string> = {
+  strategy: 'manage-mode',
+  objective: 'manage-objective',
+  target: 'manage-cpa',
+  budget: 'manage-budget-source',
+  window: 'manage-lookback',
 };
 
 export function PortfolioManagePanel({
@@ -246,6 +259,8 @@ export function PortfolioManagePanel({
   portfolio,
   currency,
   onDone,
+  focusSetting = null,
+  onFocusSettingDone,
 }: PortfolioManagePanelProps) {
   // A campaign portfolio edits campaigns, not ad sets: the level drives which snapshot
   // scope + picker mode the manage panel shows. Enroll/unenroll operate on the entity id
@@ -256,6 +271,14 @@ export function PortfolioManagePanel({
     adAccountId,
   );
   const enrolledRead = useOptimizerEnrolledAdsets(portfolio.id);
+
+  useEffect(() => {
+    if (!focusSetting) return;
+    const field = document.getElementById(`${SETTING_FIELD[focusSetting]}-${portfolio.id}`);
+    field?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    field?.focus({ preventScroll: true });
+    onFocusSettingDone?.();
+  }, [focusSetting, portfolio.id, onFocusSettingDone]);
   const snapshotsRead = useOptimizerAccountSnapshots(brandId, adAccountId, level);
   const inventoryRead = useOptimizerAdsetInventory(brandId, adAccountId, level === 'adset');
   // Who else holds each ad set's single active enrollment. Drives the picker's "In: X" badge
@@ -645,14 +668,14 @@ export function PortfolioManagePanel({
             ) : null}
           </div>
           <div className="space-y-1.5">
-            <Label>Objective</Label>
+            <Label htmlFor={`manage-objective-${portfolio.id}`}>Objective</Label>
             <Select
               value={objective}
               onValueChange={(value) =>
                 form.setValue('objective', value as OptimizationObjective, { shouldDirty: true })
               }
             >
-              <SelectTrigger>
+              <SelectTrigger id={`manage-objective-${portfolio.id}`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -845,14 +868,14 @@ export function PortfolioManagePanel({
       <Section title="Strategy">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-1.5">
-            <Label>Mode</Label>
+            <Label htmlFor={`manage-mode-${portfolio.id}`}>Mode</Label>
             <Select
               value={values.mode}
               onValueChange={(value) =>
                 form.setValue('mode', value as OptimizationModeDto, { shouldDirty: true })
               }
             >
-              <SelectTrigger>
+              <SelectTrigger id={`manage-mode-${portfolio.id}`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

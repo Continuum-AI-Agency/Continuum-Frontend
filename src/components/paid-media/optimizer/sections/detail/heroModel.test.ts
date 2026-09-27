@@ -105,12 +105,7 @@ describe('buildHeroView', () => {
       firstCycle: false,
     });
     expect(view.source).toBe('fallback');
-    expect(view.tiles.map((t) => [t.key, t.value])).toEqual([
-      ['spend', 3640],
-      ['results', 47],
-      ['cost', 77.45],
-    ]);
-    expect(view.tiles[2]?.note).toBe('11% over target');
+    expect(view.brief.growth).toMatchObject({ spend: 3640, results: 47, cost_per_result: 77.45 });
     expect(view.brief.hero).toMatchObject({ module: 'pause', impact_per_day: 120 });
     expect(view.cta).toEqual({
       kind: 'queue_row',
@@ -210,7 +205,7 @@ describe('buildHeroView', () => {
       flightPacing: { kind: 'no_flight' },
       metric,
       currency: 'USD',
-      portfolio: { ...portfolio, apply_mode: 'observe' } as never,
+      portfolio: { ...(portfolio as object), apply_mode: 'observe' } as never,
       target: 70,
       window: 'd7',
       firstCycle: false,
@@ -434,28 +429,5 @@ describe('the real FORMULARIOS // TODOS body — a pause that bought 8 leads', (
     const news = buildPortfolioNews({ view, items: report?.latest_items ?? [], target: 35 });
     const dead = news.insights.find((card) => card.claim.includes('Ad set B'));
     expect(dead?.headline?.kind).toBe('avoided');
-  });
-});
-
-describe('the cost tile — a day with no results has no cost, not a zero one', () => {
-  it('leaves the day unpriced', () => {
-    const view = buildHeroView({
-      report: null,
-      recap: {
-        ...(recap as object),
-        series: [
-          { date: '2026-09-13', spend: 500, results: 5 },
-          { date: '2026-09-14', spend: 520, results: 0 },
-        ],
-      } as never,
-      flightPacing: null,
-      metric,
-      currency: 'USD',
-      portfolio,
-      target: 70,
-      window: 'd7',
-      firstCycle: false,
-    });
-    expect(view.tiles.find((tile) => tile.key === 'cost')?.series).toEqual([100, null]);
   });
 });

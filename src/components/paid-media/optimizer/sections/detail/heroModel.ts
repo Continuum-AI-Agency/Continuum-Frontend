@@ -1,5 +1,5 @@
-// The hero view: what the portfolio opens on. Growth tiles from the recap (the same
-// arithmetic the recap tiles use), the hero from the daily brief when it belongs to the
+// The hero view: what the portfolio opens on. Growth from the recap (the same arithmetic the
+// recap tiles use), the hero from the daily brief when it belongs to the
 // latest cycle — else the deterministic brief composed here from the report, so the screen
 // reads the same whether Jaina has written today's words yet or not.
 
@@ -19,22 +19,6 @@ import { impactPerDay } from '../recQueueModel';
 import { type AdSetMeasure, heroChart, heroChartReading, measureOf } from './heroChart';
 import { stripPaceClaim } from './paceClaim';
 import type { RecapModel } from './recapModel';
-
-export type HeroTile = {
-  key: 'spend' | 'results' | 'cost';
-  label: string;
-  value: number | null;
-  /** How to print the value: money or a count. */
-  format: 'currency' | 'count';
-  /** Fractional period delta; null when there is no previous period. */
-  delta: number | null;
-  /** For cost, a delta DOWN is good. */
-  goodWhenDown: boolean;
-  /** Null on a day nothing was bought: a cost per result that does not exist is not zero. */
-  series: Array<number | null>;
-  /** "12% over target" — cost tile only. */
-  note: string | null;
-};
 
 export type HeroCta = {
   /** `build` belongs to an ADOPTED asked-for suggestion that proposed something new: the
@@ -57,7 +41,6 @@ export type HeroView = {
   chartReading: string | null;
   /** 'brief' when Jaina wrote today's words; 'fallback' when composed here. */
   source: 'brief' | 'fallback';
-  tiles: HeroTile[];
   pacingLine: string | null;
   pacingTone: 'success' | 'warning' | 'muted';
   brief: PortfolioBrief;
@@ -333,43 +316,6 @@ export function buildHeroView(args: {
     latestRun: report?.latest_run ?? null,
     window: args.window,
   });
-  const tiles: HeroTile[] = [
-    {
-      key: 'spend',
-      label: 'Spend',
-      value: recap.current.spend,
-      format: 'currency',
-      delta: recap.delta.spend,
-      goodWhenDown: false,
-      series: recap.series.map((d) => d.spend),
-      note: null,
-    },
-    {
-      key: 'results',
-      label: metric.resultLabel,
-      value: recap.current.results,
-      format: 'count',
-      delta: recap.delta.results,
-      goodWhenDown: false,
-      series: recap.series.map((d) => d.results),
-      note: null,
-    },
-    {
-      key: 'cost',
-      label: metric.costLabel,
-      value: recap.current.costPerResult,
-      format: 'currency',
-      delta: recap.delta.costPerResult,
-      goodWhenDown: true,
-      series: recap.series.map((d) =>
-        d.results > 0 ? (d.spend / d.results) * metric.denominatorMultiplier : null,
-      ),
-      note:
-        recap.vsTarget != null
-          ? `${Math.abs(Math.round(recap.vsTarget * 100))}% ${recap.vsTarget <= 0 ? 'under' : 'over'} target`
-          : null,
-    },
-  ];
   const pacing = pacingLineOf(args.flightPacing);
   const stored = report?.hero_brief ? readPortfolioBrief(report.hero_brief) : null;
   const latestRunId = report?.latest_run?.id ?? null;
@@ -403,7 +349,6 @@ export function buildHeroView(args: {
     source: briefIsCurrent ? 'brief' : 'fallback',
     chart,
     chartReading: heroChartReading(chart),
-    tiles,
     pacingLine: pacing.line,
     pacingTone: pacing.tone,
     brief,
