@@ -13,11 +13,12 @@
 // asset is re-saved), so a value whose option no longer exists renders as
 // ORPHANED_OPTION_LABEL rather than disappearing or crashing.
 
-import type {
-  AssetFieldValue,
-  CustomField,
-  CustomFieldOption,
-  CustomFieldValue,
+import {
+  type AssetFieldValue,
+  type CustomField,
+  type CustomFieldOption,
+  type CustomFieldValue,
+  customFieldChoiceOptions,
 } from '@continuum/contracts';
 import { isEmptyFieldValue, validateFieldValue } from './customFields';
 
@@ -35,7 +36,7 @@ export function valuesByFieldId(values: readonly AssetFieldValue[]): Map<string,
 }
 
 export function findOption(field: CustomField, optionId: string): CustomFieldOption | null {
-  return field.options.find((option) => option.id === optionId) ?? null;
+  return customFieldChoiceOptions(field).find((option) => option.id === optionId) ?? null;
 }
 
 /** The option id a single_select holds, or null when unset or shape-mismatched. */

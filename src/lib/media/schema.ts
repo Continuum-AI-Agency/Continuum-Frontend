@@ -79,6 +79,8 @@ export type MediaCollectionRow = {
   parent_id?: string | null;
   depth?: number;
   system_key?: string | null;
+  visibility?: string;
+  view_config?: unknown;
   created_by: string | null;
   created_at: string;
   updated_at: string;

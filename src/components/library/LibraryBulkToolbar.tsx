@@ -3,6 +3,7 @@
 import {
   type CustomField,
   type CustomFieldValue,
+  customFieldChoiceOptions,
   ELEMENT_MEMBER_LIMIT,
   type MediaCollection,
   type Project,
@@ -417,7 +418,7 @@ export function LibraryBulkToolbar({
                 <SelectValue placeholder="Value" />
               </SelectTrigger>
               <SelectContent>
-                {selectedField.options.map((option) => (
+                {customFieldChoiceOptions(selectedField).map((option) => (
                   <SelectItem key={option.id} value={option.id}>
                     {option.label}
                   </SelectItem>

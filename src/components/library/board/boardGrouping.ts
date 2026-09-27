@@ -10,7 +10,7 @@
 // the board exactly which call to make.
 
 import type { CustomField, MediaAsset, MediaReviewStatus } from '@continuum/contracts';
-import { mediaReviewStatusSchema } from '@continuum/contracts';
+import { customFieldChoiceOptions, mediaReviewStatusSchema } from '@continuum/contracts';
 import { REVIEW_STATUS_META, REVIEW_STATUS_ORDER } from '@/lib/library/reviewStatus';
 import { groupAssetsByReviewStatus } from './groupAssetsByReviewStatus';
 
@@ -94,6 +94,7 @@ export function buildBoardLanes({
   }
 
   const { field } = grouping;
+  const options = customFieldChoiceOptions(field);
   const lanes: BoardLane[] = [
     {
       id: encodeLaneId({ kind: 'custom_field', fieldId: field.id, optionId: null }),
@@ -101,7 +102,7 @@ export function buildBoardLanes({
       dotClass: UNSET_DOT,
       assets: [],
     },
-    ...field.options.map((option) => ({
+    ...options.map((option) => ({
       id: encodeLaneId({ kind: 'custom_field', fieldId: field.id, optionId: option.id }),
       label: option.label,
       dotClass: OPTION_DOT,
@@ -110,7 +111,7 @@ export function buildBoardLanes({
   ];
 
   const laneByOptionId = new Map(
-    field.options.map((option, index) => [option.id, lanes[index + 1] as BoardLane] as const),
+    options.map((option, index) => [option.id, lanes[index + 1] as BoardLane] as const),
   );
 
   for (const asset of assets) {

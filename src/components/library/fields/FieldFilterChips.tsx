@@ -10,7 +10,11 @@
 // ("is"), or find the assets nobody has filled in ("is empty"). The mutation
 // helpers in customFieldFilters own that rule; this component only renders it.
 
-import type { CustomField, CustomFieldFilter } from '@continuum/contracts';
+import {
+  type CustomField,
+  type CustomFieldFilter,
+  customFieldChoiceOptions,
+} from '@continuum/contracts';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -137,7 +141,7 @@ function SelectFieldChip({ field, filter, summary, compact, filters, onChange }:
         }
       />
       <DropdownMenuContent align="start" className="w-52">
-        {field.options.map((option) => (
+        {customFieldChoiceOptions(field).map((option) => (
           <DropdownMenuCheckboxItem
             key={option.id}
             checked={selected.includes(option.id)}
