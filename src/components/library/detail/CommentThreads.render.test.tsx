@@ -18,7 +18,9 @@ function comment(overrides: Partial<MediaComment> & { id: string }): MediaCommen
     versionId: null,
     parentCommentId: null,
     body: 'body',
+    mentions: [],
     annotation: null,
+    attachments: [],
     resolvedAt: null,
     resolvedBy: null,
     createdBy: 'user-1',
@@ -158,5 +160,52 @@ describe('CommentThreads — comments from another version', () => {
     expect(container.textContent).toContain('No comments on this version yet.');
     // "No comments yet" would be a lie — there is a conversation, on v1.
     expect(container.textContent).toContain('1 comment on earlier versions');
+  });
+});
+
+describe('CommentThreads — who sees a comment', () => {
+  function renderVisibility(visibility: MediaComment['visibility']) {
+    const threads = buildCommentThreads([
+      comment({ id: 'c-vis', versionId: V2, body: 'Tighten the cut', visibility }),
+    ]);
+    return render(
+      <CommentThreads
+        brandId="brand-1"
+        threads={threads}
+        pinLabels={new Map()}
+        otherVersionThreads={[]}
+        otherVersionCommentCount={0}
+        versionLabels={new Map()}
+        viewingHead
+        onViewVersion={() => {}}
+        selectedId={null}
+        onSelectThread={() => {}}
+        currentUserId="user-1"
+        pendingIds={new Set()}
+        posting={false}
+        loading={false}
+        onReply={() => {}}
+        onResolve={() => {}}
+        onDelete={() => {}}
+      />,
+    );
+  }
+
+  it('locks an internal comment and offers to share it', () => {
+    const { container, getByText } = renderVisibility('internal');
+    expect(container.querySelector('[data-testid=comment-internal-lock]')).not.toBeNull();
+    expect(getByText('Share')).toBeTruthy();
+  });
+
+  it('marks a shared comment without a lock and offers to make it internal', () => {
+    const { container, getByText } = renderVisibility('shared');
+    expect(container.querySelector('[data-testid=comment-internal-lock]')).toBeNull();
+    expect(container.querySelector('[data-testid=comment-shared-mark]')).not.toBeNull();
+    expect(getByText('Make internal')).toBeTruthy();
+  });
+
+  it('never offers to hide a share-link reviewer’s comment', () => {
+    const { container } = renderVisibility('external');
+    expect(container.querySelector('[data-testid=comment-visibility-switch]')).toBeNull();
   });
 });

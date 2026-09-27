@@ -3,8 +3,9 @@
 // its pin (Figma-style), and a thread from another version has no pin at all
 // because its geometry addresses bytes nobody is looking at.
 //
-// Box pins are numbered in creation order; time pins are labeled with their
-// timecode. The same label is handed to the sidebar so a card and its pin read
+// Spatial pins (a pin, a drawing, or a legacy box) are numbered in creation
+// order; time pins are labeled with their timecode and carry any marks drawn on
+// the paused frame. The same label is handed to the sidebar so a card and its pin read
 // identically.
 
 import type { MediaComment } from '@continuum/contracts';
@@ -64,6 +65,7 @@ export function buildStageAnnotations(params: {
       timeMs: annotation.timeMs,
       endMs,
       box: annotation.box ?? null,
+      shapes: annotation.shapes ?? [],
       initials: initialsFor(commentAuthor(thread.root)),
       title: commentTitle(thread.root),
       selected: thread.root.id === selectedCommentId,

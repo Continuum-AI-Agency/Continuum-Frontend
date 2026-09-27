@@ -4,10 +4,19 @@
 import {
   type AssetReviewEvent,
   listReviewEventsResponseSchema,
+  listReviewStateLabelsResponseSchema,
+  REVIEW_EDGE_FUNCTION,
+  type RequestCollectionReviewResult,
+  type ReviewEdgeRequest,
+  type ReviewStateLabel,
   type ReviewTransitionRequest,
   type ReviewTransitionResponse,
+  requestCollectionReviewResultSchema,
+  resolveReviewStateLabels,
   reviewTransitionResponseSchema,
+  setReviewStateLabelsResultSchema,
 } from '@continuum/contracts';
+import type { z } from 'zod';
 import { transitionAssetReviewOperation } from '@/lib/library/creativeOperations';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -43,4 +52,67 @@ export async function listReviewEvents(params: {
   const parsed = listReviewEventsResponseSchema.safeParse(await response.json());
   if (!parsed.success) throw new Error('Review history response was malformed');
   return parsed.data.events;
+}
+
+export async function fetchReviewStateLabels(brandId: string): Promise<ReviewStateLabel[]> {
+  const response = await fetch(`/api/library/review/labels?${new URLSearchParams({ brandId })}`);
+  if (!response.ok)
+    throw new Error(await readErrorMessage(response, 'Loading status labels failed'));
+  return listReviewStateLabelsResponseSchema.parse(await response.json()).labels;
+}
+
+// Review writes run through the library-review edge function with the user's
+// JWT: it verifies the caller and pins them as the dispatcher's actor.
+async function invokeReviewEdge<T>(request: ReviewEdgeRequest, schema: z.ZodType<T>): Promise<T> {
+  const { data, error } = await createSupabaseBrowserClient().functions.invoke(
+    REVIEW_EDGE_FUNCTION,
+    { body: request },
+  );
+  if (error) {
+    const response = (error as { context?: unknown }).context;
+    let detail: string | null = null;
+    if (response instanceof Response) {
+      try {
+        const body = (await response.clone().json()) as { error?: unknown };
+        if (typeof body.error === 'string') detail = body.error;
+      } catch {
+        // A platform failure may not send JSON; the invoke error names it instead.
+      }
+    }
+    throw new Error(detail ?? error.message);
+  }
+  return schema.parse(data);
+}
+
+export async function saveReviewStateLabels(
+  brandId: string,
+  labels: ReviewStateLabel[],
+): Promise<ReviewStateLabel[]> {
+  const result = await invokeReviewEdge(
+    { action: 'set_review_state_labels', brandId, labels },
+    setReviewStateLabelsResultSchema,
+  );
+  return Object.values(resolveReviewStateLabels(result.labels)).sort(
+    (a, b) => a.position - b.position,
+  );
+}
+
+export function requestCollectionReview(
+  input: Omit<Extract<ReviewEdgeRequest, { action: 'request_collection_review' }>, 'action'>,
+): Promise<RequestCollectionReviewResult> {
+  return invokeReviewEdge(
+    { action: 'request_collection_review', ...input },
+    requestCollectionReviewResultSchema,
+  );
+}
+
+export function approvalReportHref(params: {
+  brandId: string;
+  collectionId?: string;
+  assetId?: string;
+}): string {
+  const query = new URLSearchParams({ brandId: params.brandId });
+  if (params.collectionId) query.set('collectionId', params.collectionId);
+  if (params.assetId) query.set('assetId', params.assetId);
+  return `/api/library/review/report?${query.toString()}`;
 }
