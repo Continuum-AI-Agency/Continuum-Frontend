@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { type DragEvent, type ReactNode, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { ShareLogoPicker } from './ShareLogoPicker';
 import { updateShareLinkSettings } from './shareLinkClient';
 
 const LAYOUTS: Array<{ value: ShareLinkLayout; label: string; Icon: typeof List }> = [
@@ -205,6 +206,14 @@ export function ShareLinkSettings({
         <p className="text-2xs text-muted-foreground">
           Empty fields use the brand kit: its name, logo and first colour.
         </p>
+        <div className={LABEL}>
+          Logo
+          <ShareLogoPicker
+            brandId={link.brandId}
+            value={branding.logoAssetId}
+            onChange={(logoAssetId) => setBrand({ logoAssetId })}
+          />
+        </div>
         <label className={LABEL}>
           Title
           <input
@@ -271,6 +280,15 @@ export function ShareLinkSettings({
             </select>
           </label>
         </div>
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            name="hideFooter"
+            checked={branding.hideFooter === true}
+            onChange={(event) => setBrand({ hideFooter: event.target.checked || undefined })}
+          />
+          Hide "Shared via Continuum"
+        </label>
       </Section>
 
       <Section title="Watermark">

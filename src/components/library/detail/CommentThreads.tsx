@@ -24,11 +24,11 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
-  FileText,
   Globe,
   History,
   Link2,
   Lock,
+  PanelRight,
   RotateCcw,
   Trash2,
 } from 'lucide-react';
@@ -49,12 +49,16 @@ import {
   commentExportHref,
   displayNameFromEmail,
   downloadFromRoute,
+  editorViewHref,
   initialsFor,
   listCommentAttachmentPreviews,
   patchCommentMetadata,
 } from '@/lib/library/comments';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
+import { AttachmentPreviewList } from '../review/AttachmentPreviewList';
+import { formatStageRange, useTimecodeDisplay } from '../review/timecodeDisplay';
+import { useAssetTiming } from '../review/useAssetTiming';
 import { CommentComposer, type ComposerExtras } from './CommentComposer';
 
 type Props = {
@@ -159,44 +163,7 @@ function CommentAttachments({ brandId, comment }: { brandId?: string; comment: M
   if (previews === null) {
     return <div className="mt-1.5 h-16 w-28 animate-pulse rounded-md bg-muted/70" />;
   }
-  return (
-    <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Attachments">
-      {previews.map((preview) => (
-        <li
-          key={preview.assetId}
-          data-testid="comment-attachment"
-          data-kind={preview.kind}
-          className="overflow-hidden rounded-md border border-border bg-muted/40"
-        >
-          {preview.kind === 'image' && preview.url ? (
-            <a href={preview.url} target="_blank" rel="noreferrer" title={preview.name}>
-              {/* biome-ignore lint/performance/noImgElement: signed storage URL preview */}
-              <img src={preview.url} alt={preview.name} className="h-16 w-28 object-cover" />
-            </a>
-          ) : preview.kind === 'video' && preview.url ? (
-            // biome-ignore lint/a11y/useMediaCaption: reviewer-attached reference clip
-            <video
-              src={preview.url}
-              poster={preview.thumbnailUrl ?? undefined}
-              controls
-              preload="metadata"
-              className="h-16 w-28 bg-black object-contain"
-            />
-          ) : (
-            <a
-              href={preview.url ?? undefined}
-              target="_blank"
-              rel="noreferrer"
-              className="flex h-16 w-28 flex-col items-center justify-center gap-1 px-1 text-2xs text-muted-foreground hover:text-foreground"
-            >
-              <FileText className="size-4" />
-              <span className="w-full truncate text-center">{preview.name}</span>
-            </a>
-          )}
-        </li>
-      ))}
-    </ul>
-  );
+  return <AttachmentPreviewList previews={previews} />;
 }
 
 function CommentBody({
@@ -503,6 +470,33 @@ export function CommentThreads({
   const [showResolved, setShowResolved] = useState(false);
   const [showOtherVersions, setShowOtherVersions] = useState(false);
 
+  // The version on stage, read off its own threads (a legacy row with no pin
+  // is the head's, which the export and timing routes resolve when none is named).
+  const currentRoots = [...threads.open, ...threads.resolved].map((thread) => thread.root);
+  const timedRoot = currentRoots.find((root) => root.annotation?.kind === 'time');
+
+  // In timecode or frame mode the labels come from the file's own timing; until it
+  // arrives (or for a still) the stage's m:ss labels stand.
+  const timecodeMode = useTimecodeDisplay();
+  const timing = useAssetTiming(
+    timecodeMode !== 'clock' && brandId && timedRoot
+      ? { brandId, assetId: timedRoot.assetId, versionId: timedRoot.versionId ?? null }
+      : null,
+  );
+  const labelFor = (root: MediaComment): string | undefined => {
+    const annotation = root.annotation;
+    if (timecodeMode === 'clock' || !timing || annotation?.kind !== 'time') {
+      return pinLabels.get(root.id);
+    }
+    return formatStageRange(
+      annotation.timeMs,
+      annotation.endMs ?? null,
+      timecodeMode,
+      timing.frameRate,
+      { startFrame: timing.startFrame, dropFrame: timing.dropFrame },
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col gap-2 p-3">
@@ -526,11 +520,6 @@ export function CommentThreads({
     );
   }
 
-  // The version on stage, read off its own threads (a legacy row with no pin
-  // is the head's, which the export route resolves when no version is named).
-  const currentRoots = [...threads.open, ...threads.resolved].map((thread) => thread.root);
-  const timedRoot = currentRoots.find((root) => root.annotation?.kind === 'time');
-
   const otherVersionsLabel = `${otherVersionCommentCount} ${
     otherVersionCommentCount === 1 ? 'comment' : 'comments'
   } on ${viewingHead ? 'earlier versions' : 'other versions'}`;
@@ -542,7 +531,22 @@ export function CommentThreads({
       )}
 
       {brandId && timedRoot ? (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-1">
+          <a
+            href={editorViewHref({
+              brandId,
+              assetId: timedRoot.assetId,
+              versionId: timedRoot.versionId ?? null,
+            })}
+            target="continuum-editor-view"
+            rel="noreferrer"
+            data-testid="editor-view-link"
+            title="Open a compact comment list to keep beside your editor"
+            className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-2xs text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <PanelRight className="size-3" />
+            Editor view
+          </a>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -590,7 +594,7 @@ export function CommentThreads({
           key={thread.root.id}
           brandId={brandId}
           thread={thread}
-          pinLabel={pinLabels.get(thread.root.id)}
+          pinLabel={labelFor(thread.root)}
           selected={selectedId === thread.root.id}
           resolved={false}
           currentUserId={currentUserId}
@@ -615,7 +619,7 @@ export function CommentThreads({
                 key={thread.root.id}
                 brandId={brandId}
                 thread={thread}
-                pinLabel={pinLabels.get(thread.root.id)}
+                pinLabel={labelFor(thread.root)}
                 selected={selectedId === thread.root.id}
                 resolved
                 currentUserId={currentUserId}

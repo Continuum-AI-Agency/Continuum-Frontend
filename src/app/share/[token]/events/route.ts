@@ -4,7 +4,7 @@
 
 import { shareBeaconEventRequestSchema } from '@continuum/contracts';
 import { NextResponse } from 'next/server';
-import { resolveShareLink, shareAssetIds } from '../loadSharePayload';
+import { resolveShareLink, shareHasAsset } from '../loadSharePayload';
 import { recordShareEvent, reviewerSessionToken } from '../shareEvents.server';
 
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
@@ -16,13 +16,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   if (!resolved.ok) return NextResponse.json({ error: resolved.reason }, { status: 404 });
   if (
     parsed.data.assetId &&
-    !(await shareAssetIds(resolved.admin, resolved.link)).includes(parsed.data.assetId)
+    !(await shareHasAsset(resolved.admin, resolved.link, parsed.data.assetId))
   ) {
     return NextResponse.json({ error: 'asset_not_shared' }, { status: 404 });
   }
 
   await recordShareEvent(
-    { linkId: resolved.link.id, brandId: resolved.link.brand_id, sessionId: resolved.session?.id ?? null },
+    {
+      linkId: resolved.link.id,
+      brandId: resolved.link.brand_id,
+      sessionId: resolved.session?.id ?? null,
+    },
     parsed.data,
   );
   return new NextResponse(null, { status: 204 });

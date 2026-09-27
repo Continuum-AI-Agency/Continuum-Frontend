@@ -9,6 +9,7 @@
 
 import type { PublicShareComment } from '@continuum/contracts';
 import { formatTimecode } from '@/components/library/detail/annotationGeometry';
+import { AttachmentPreviewList } from '@/components/library/review/AttachmentPreviewList';
 import { initialsFor } from '@/lib/library/comments';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { ShareCopyLink } from './ShareCopyLink';
@@ -73,6 +74,9 @@ function CommentBody({ comment }: { comment: PublicShareComment }) {
         <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/90">
           {comment.body}
         </p>
+        {comment.attachmentPreviews?.length ? (
+          <AttachmentPreviewList previews={comment.attachmentPreviews} />
+        ) : null}
       </div>
     </div>
   );
