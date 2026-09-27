@@ -404,30 +404,27 @@ describe('the real FORMULARIOS // TODOS body — a pause that bought 8 leads', (
     return { report, view };
   };
 
-  it('draws the ad set’s own measured interval, not a no-results one', () => {
+  it('hands the cards the cycle’s evidence: the daily series and the recommendations', () => {
     const { view } = build();
     expect(view.brief.hero.headline).toContain('Ad set A');
-    if (view.chart?.shape !== 'interval') throw new Error(`shape ${view.chart?.shape}`);
-    expect(view.chart.no_results).toBe(false);
-    expect(view.chart.estimate).toBe(75.65);
-    expect(view.chart.low).toBe(38.39);
-    expect(view.chart.high).toBe(175.24);
-    expect(view.chart.reference).toBe(35);
-    expect(view.chartReading).toContain('above the target');
+    expect(view.series?.length).toBe(2);
+    expect(view.recommendations?.map((rec) => rec.evidence?.metric).sort()).toEqual([
+      'cpp',
+      'ctr',
+      'spend',
+    ]);
   });
 
-  it('the lead card neither says nor draws "bought nothing"', () => {
+  it('the lead card draws its cost against the reference, never "bought nothing"', () => {
     const { report, view } = build();
     const news = buildPortfolioNews({ view, items: report?.latest_items ?? [], target: 35 });
-    expect(news.lead?.headline?.kind).not.toBe('avoided');
-    if (news.leadChart?.shape !== 'interval') throw new Error('lead chart');
-    expect(news.leadChart.no_results).toBe(false);
+    expect(news.lead?.visual.kind).toBe('cost_vs_reference');
   });
 
-  it('still calls the zero-conversion ad set (Ad set B) avoided spend', () => {
+  it('draws the zero-conversion ad set (Ad set B) as spend that bought nothing', () => {
     const { report, view } = build();
     const news = buildPortfolioNews({ view, items: report?.latest_items ?? [], target: 35 });
     const dead = news.insights.find((card) => card.claim.includes('Ad set B'));
-    expect(dead?.headline?.kind).toBe('avoided');
+    expect(dead?.visual.kind).toBe('spend_blocks');
   });
 });

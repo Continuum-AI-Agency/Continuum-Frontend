@@ -80,24 +80,28 @@ describe('the FORMULARIOS lead card, rendered from the real body', () => {
     );
   };
 
-  it('draws the measured interval, never "no results to divide by"', () => {
+  it('draws the pause’s own cost against the reference, never "no results to divide by"', () => {
     const { container } = mount();
     const lead = container.querySelector('[data-testid="portfolio-news-lead"]');
     const text = lead?.textContent ?? '';
     expect(text).toContain('Ad set A');
     expect(text).not.toContain('no results to divide by');
     expect(text).not.toContain('buying nothing');
-    const readout = lead?.querySelector('[data-testid="interval-readout"]')?.textContent;
-    expect(readout).toContain('75.65');
-    expect(readout).toContain('between');
-    expect(text).toContain('the whole interval sits above the target');
+    const band = lead?.querySelector('[data-testid="news-band"]');
+    expect(band?.getAttribute('data-visual')).toBe('cost_vs_reference');
+    expect(band?.textContent).toContain('$75.65 / lead · this ad set');
+    expect(band?.textContent).toContain('$28.86 · the reference');
+    expect(band?.textContent).toContain('2.5× line · $72.14');
   });
 
-  it('still says "buying nothing" of the ad set that measured zero conversions', () => {
+  it('draws the zero-conversion ad set as spend that bought nothing', () => {
     const { container } = mount();
     const dead = [...container.querySelectorAll('[data-testid="portfolio-news-insight"]')].find(
       (card) => card.textContent?.includes('Ad set B'),
     );
-    expect(dead?.textContent).toContain('a day buying nothing');
+    const band = dead?.querySelector('[data-testid="news-band"]');
+    expect(band?.getAttribute('data-visual')).toBe('spend_blocks');
+    expect(band?.textContent).toContain('$340 = 9.7 leads at target');
+    expect(band?.textContent).toContain('0 leads');
   });
 });

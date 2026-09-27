@@ -12,8 +12,6 @@ import {
   CARD_ASPECT_BAND,
   CARD_FRAME,
   cardMinHeightCqw,
-  cellWidthRem,
-  JUSTIFICATION_SPLIT_REM,
   NEWS_CELL,
   NEWS_PANE,
   NEWS_ROW,
@@ -128,28 +126,21 @@ describe('the card components, not their callers, own the shape', () => {
   });
 });
 
-describe('the justification angles are container queries', () => {
-  const block = readFileSync(join(import.meta.dir, 'JustificationBlock.tsx'), 'utf8');
-  /** Comment lines say the word `sm:` to explain why it is gone; code may not use it. */
-  const code = block
-    .split('\n')
-    .filter((line) => !line.trimStart().startsWith('//'))
-    .join('\n');
+describe('the band is the part of the card that grows', () => {
+  const band = readFileSync(join(import.meta.dir, 'CardBand.tsx'), 'utf8');
 
-  it('splits on the block’s own width, at the declared rem', () => {
-    expect(block).toContain('@container/news-just');
-    expect(block).toContain(`@[${JUSTIFICATION_SPLIT_REM}rem]/news-just:`);
+  it('takes the leftover height as picture, never as a gap', () => {
+    expect(band).toMatch(/className=\{cn\('[^']*\bflex-1\b/);
   });
 
-  it('asks nothing about the viewport', () => {
-    expect(code).not.toMatch(/\bsm:/);
+  it('stretches every drawing to the band instead of sizing the band to the drawing', () => {
+    expect(band).toContain('preserveAspectRatio="none"');
+    expect(band).toContain('viewBox="0 0 100 100"');
   });
 
-  it('never splits inside a three-column cell at the desktop threshold', () => {
-    // At the width where the row first goes to three, a cell is about 18rem: a block that
-    // split there would squeeze its two halves into 9rem each. It stacks until the pane is
-    // wide enough for a cell to reach the split on its own.
-    const cell = cellWidthRem(NEWS_ROW_BREAKPOINT_REM.desktop, NEWS_ROW_COLUMNS.desktop);
-    expect(JUSTIFICATION_SPLIT_REM).toBeGreaterThan(cell);
+  it.each(['NewsCard.tsx', 'InsightCard.tsx'])('%s lets nothing but the band grow', (file) => {
+    const card = readFileSync(join(import.meta.dir, file), 'utf8');
+    expect(card).toContain('<CardBand');
+    expect(card).not.toContain('mt-auto');
   });
 });

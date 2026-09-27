@@ -23,16 +23,10 @@
 // half is already honest: `heroModel` overlays the run's pacing verdict on the stored brief
 // and strips a pace clause the verdict does not support.
 //
-// The figure the lead card carries is the recommendation's OWN (the budget that moved, the
-// spend that bought nothing). Money per day moved to a support line and is printed day AND
-// month, because "$14/day" is a figure a reader has to finish in their head. The
-// justification layouts live in ./news — three of them, picked from what a card holds.
-// Entrance is a short stagger; after that the only motion is the 5s breath on a connector.
-// Everything is static under prefers-reduced-motion.
-//
-// Whether the lead draws a chart is not decided here either: `buildPortfolioNews` hands back
-// `leadChart`, which is `view.chart` only when the chart draws the figure the lead leads
-// with. A chart that argues about a different quantity is withheld in silence.
+// Every card in the row draws its own evidence in a band that grows to fill the card
+// (./news/CardBand): the lead AND the insights, from the same status body — the cycle's
+// recommendations and its ad-set rows, joined in ./news/newsModel. Entrance is a short
+// stagger; everything is static under prefers-reduced-motion.
 
 import type { CycleItemRow } from '@continuum/contracts';
 import { IMPACT_TIER_COPY, type ImpactTier, impactTier } from '@continuum/contracts';
@@ -41,15 +35,13 @@ import * as React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { figureProps } from '../../format';
-import { AccountChartView } from '../account/AccountChartView';
 import { asOfLine } from '../recQueueModel';
 import type { HeroCta, HeroView } from './heroModel';
 import { NEWS_CELL, NEWS_PANE, NEWS_ROW, NEWS_ROW_SIZE, RECAP_BESIDE_SPAN } from './news/cardShape';
 import { InsightCard } from './news/InsightCard';
-import type { NewsCardModel } from './news/justification';
 import type { NewsTier } from './news/NewsCard';
 import { NewsCard } from './news/NewsCard';
-import { buildPortfolioNews } from './news/newsModel';
+import { buildPortfolioNews, type NewsCardModel } from './news/newsModel';
 import { PortfolioVitals, type PortfolioVitalsProps } from './PortfolioVitals';
 
 const TIER_TONE: Record<ImpactTier, 'destructive' | 'warning' | 'muted'> = {
@@ -59,22 +51,6 @@ const TIER_TONE: Record<ImpactTier, 'destructive' | 'warning' | 'muted'> = {
 };
 
 const EASE = [0.16, 1, 0.3, 1] as const;
-
-const CYCLE_DAY = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short' });
-
-/**
- * The day the figures were computed, for a chart that carries no dates of its own.
- *
- * `rates` puts its window on its own x axis. `interval` cannot: the candidate supplies an
- * amount per day and nothing that says over which days it was observed, so the only date
- * that is actually known is the cycle that produced it. That one is named, and nothing is
- * inferred about the observation window — see heroChart.ts.
- */
-function cycleDay(iso: string | null): string | null {
-  if (!iso) return null;
-  const at = Date.parse(iso);
-  return Number.isNaN(at) ? null : CYCLE_DAY.format(at);
-}
 
 const tileVariants: Variants = {
   hidden: { opacity: 0, y: 12 },
@@ -188,7 +164,6 @@ export function PortfolioHero({
   React.useEffect(() => {
     playedFor.current = portfolioId;
   }, [portfolioId]);
-  const asOfDay = cycleDay(view.asOf);
   const news = React.useMemo(
     () => buildPortfolioNews({ view, items, target: view.brief.growth.target }),
     [view, items],
@@ -214,40 +189,7 @@ export function PortfolioHero({
     );
   }
 
-  // The chart belongs INSIDE the lead card: it is the same claim drawn, not a second panel
-  // beside it. Three outcomes, and only one of them is a box with a message in it:
-  //
-  //   the chart agrees   — drawn, with the line saying which reading it is.
-  //   no chart at all    — the window cannot be drawn honestly, and saying so is the honest
-  //                        thing to put in the space.
-  //   a chart that does
-  //   not argue THIS
-  //   card's argument    — nothing. Not a box, not an apology. The chart was about a
-  //                        different quantity, and a placeholder explaining its absence would
-  //                        only be a second thing on the card that is not the argument.
-  const chart = news.leadChart ? (
-    <div
-      className="rounded-md border border-border/50 bg-background/40 p-3"
-      data-testid="hero-chart"
-    >
-      <AccountChartView chart={news.leadChart} currency={currency} />
-      {view.chartReading ? (
-        <p className="mt-1.5 text-3xs text-muted-foreground">
-          {view.chartReading}
-          {news.leadChart.shape === 'interval' && asOfDay ? <> · as of {asOfDay}</> : null}
-        </p>
-      ) : null}
-    </div>
-  ) : view.chart ? null : (
-    <div
-      className="rounded-md border border-border/50 bg-background/40 p-3"
-      data-testid="hero-chart"
-    >
-      <p className="text-2xs text-muted-foreground">
-        Not enough priced days in this window to draw it yet.
-      </p>
-    </div>
-  );
+  const resultLabel = view.brief.growth.result_label;
 
   const cell = (card: NewsCardModel) => (
     <motion.div
@@ -260,11 +202,11 @@ export function PortfolioHero({
         <NewsCard
           asOfLine={asOfLine(view.asOf, nextCycleAt, stale) ?? 'Awaiting the first cycle'}
           card={card}
-          chart={chart}
           currency={currency}
           draft={view.brief.model === 'deterministic'}
           explainHref={explainHref}
           onCta={onCta}
+          resultLabel={resultLabel}
           tier={tierOf(card.impactPerDay)}
         />
       ) : (
@@ -272,6 +214,7 @@ export function PortfolioHero({
           card={card}
           currency={currency}
           onCta={onCta}
+          resultLabel={resultLabel}
           tier={tierOf(card.impactPerDay)}
         />
       )}

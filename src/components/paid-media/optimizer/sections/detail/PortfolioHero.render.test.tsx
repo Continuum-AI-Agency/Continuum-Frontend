@@ -23,6 +23,7 @@ mock.module('motion/react', () => {
   };
 });
 
+import type { CycleItemRow } from '@continuum/contracts';
 import type { HeroView } from './heroModel';
 import { PortfolioHero } from './PortfolioHero';
 
@@ -31,20 +32,12 @@ afterEach(cleanup);
 const view = (over: Partial<HeroView> = {}): HeroView => ({
   state: 'ready',
   source: 'brief',
-  chart: {
-    shape: 'rates',
-    unit: 'currency',
-    points: [
-      { t: '2026-09-17', a: 83, b: 70 },
-      { t: '2026-09-18', a: 79, b: 70 },
-      { t: '2026-09-19', a: 74, b: 70 },
-    ],
-    a_label: 'Cost per lead',
-    b_label: 'Target',
-    projected_from: null,
-    gap_per_day: 120,
-  },
-  chartReading: 'cost per result across the window, against the target',
+  series: [
+    { date: '2026-09-17', spend: 830, results: 10 },
+    { date: '2026-09-18', spend: 790, results: 10 },
+    { date: '2026-09-19', spend: 740, results: 10 },
+  ],
+  recommendations: [],
   pacingLine: 'On pace · day 12 of 30',
   pacingTone: 'success',
   brief: {
@@ -103,7 +96,7 @@ const view = (over: Partial<HeroView> = {}): HeroView => ({
 });
 
 describe('PortfolioHero', () => {
-  it('renders the chart, the pacing pill, the headline, the money and the CTA', () => {
+  it('renders the band, the pacing pill, the headline, the money and the CTA', () => {
     const clicks: string[] = [];
     const { container, getByText } = render(
       <PortfolioHero
@@ -117,10 +110,9 @@ describe('PortfolioHero', () => {
       />,
     );
     const text = container.textContent ?? '';
-    // The three tiles were REPLACED by one chart on purpose — $3,640 was the spend tile.
-    // What has to survive is the growth read itself, which the sentence still carries.
-    expect(container.querySelector('[data-testid="hero-chart"]')).toBeTruthy();
-    expect(text).toContain('cost per result across the window');
+    // Every card draws a band; with no cycle rows and no evidence the lead's is the strip.
+    const lead = container.querySelector('[data-testid="portfolio-news-lead"]');
+    expect(lead?.querySelector('[data-testid="news-band"]')).toBeTruthy();
     // 47 was the results TILE. The tiles are gone; the growth sentence carries the read as
     // direction against target rather than as three absolute numbers, which was the trade the
     // design made deliberately when it chose one chart over three frozen figures.
@@ -168,140 +160,14 @@ describe('PortfolioHero', () => {
   });
 });
 
-describe('PortfolioHero — the chart is the growth read, or nothing', () => {
-  it('draws the chart it was given', () => {
-    const { container } = render(
-      <PortfolioHero
-        currency="USD"
-        dailyTotal={1000}
-        explainHref="#"
-        nextCycleAt={null}
-        onCta={() => undefined}
-        portfolioId="p1"
-        view={view()}
-      />,
-    );
-    const host = container.querySelector('[data-testid="hero-chart"]');
-    expect(host?.querySelector('svg')).toBeTruthy();
-  });
-
-  it('says so plainly when the window cannot be drawn, instead of drawing nothing', () => {
-    const { container } = render(
-      <PortfolioHero
-        currency="USD"
-        dailyTotal={1000}
-        explainHref="#"
-        nextCycleAt={null}
-        onCta={() => undefined}
-        portfolioId="p1"
-        view={view({ chart: null, chartReading: null })}
-      />,
-    );
-    expect(container.textContent).toContain('Not enough priced days');
-    expect(container.querySelector('[data-testid="hero-chart"] svg')).toBeNull();
-  });
-
-  it('keeps the growth sentence visible either way — that was a deliberate decision', () => {
-    const { container } = render(
-      <PortfolioHero
-        currency="USD"
-        dailyTotal={1000}
-        explainHref="#"
-        nextCycleAt={null}
-        onCta={() => undefined}
-        portfolioId="p1"
-        view={view({ chart: null, chartReading: null })}
-      />,
-    );
-    expect(container.textContent).toContain('cost per result');
-  });
-});
-
-describe('PortfolioHero — a chart with no dates of its own still says when', () => {
-  const interval = view({
-    chart: {
-      shape: 'interval',
-      unit: 'currency',
-      estimate: null,
-      low: 120,
-      high: 240,
-      reference: 70,
-      reference_label: 'target',
-      at_stake_per_day: 120,
-      no_results: true,
-    },
-    chartReading: 'what it spent, against the line it had to beat',
-  });
-
-  it('names the cycle that produced the figure, because the interval carries no window', () => {
-    const { container } = render(
-      <PortfolioHero
-        currency="USD"
-        dailyTotal={1000}
-        explainHref="#"
-        nextCycleAt={null}
-        onCta={() => undefined}
-        portfolioId="p1"
-        view={interval}
-      />,
-    );
-    expect(container.textContent).toContain('what it spent, against the line it had to beat');
-    expect(container.textContent).toContain('as of ');
-  });
-
-  it('leaves the rates chart alone — its own x axis already carries the window', () => {
-    const { container } = render(
-      <PortfolioHero
-        currency="USD"
-        dailyTotal={1000}
-        explainHref="#"
-        nextCycleAt={null}
-        onCta={() => undefined}
-        portfolioId="p1"
-        view={view()}
-      />,
-    );
-    const host = container.querySelector('[data-testid="hero-chart"]');
-    expect(host?.textContent).not.toContain('as of ');
-    expect(host?.textContent).toContain('Sep 19');
-  });
-});
-
-describe('the lead card and its chart have to be about the same thing', () => {
-  /** A hero the news model can actually build a headline for: a pause that bought nothing. */
-  const withPauseCandidate = (over: Partial<HeroView> = {}): HeroView => {
-    const base = view();
-    return view({
-      brief: {
-        ...base.brief,
-        candidates: [
-          ...base.brief.candidates,
-          {
-            id: 'rec:1',
-            module: 'pause',
-            kind: 'pause',
-            trigger: null,
-            adset_id: 'as-1',
-            adset_name: 'Dead',
-            impact_per_day: 120,
-            impact_unit: 'currency',
-            results_per_day: 0,
-            impact_basis: 'spend/day on the ad set',
-            reason: null,
-            cta: { kind: 'queue_row', target_id: 'rec:1' },
-          },
-        ],
-      },
-      ...over,
-    });
-  };
-
-  const mount = (v: HeroView) =>
+describe('PortfolioHero — every card draws its own evidence, never the formula', () => {
+  const mount = (v: HeroView, items: CycleItemRow[] = []) =>
     render(
       <PortfolioHero
         currency="USD"
         dailyTotal={1000}
-        explainHref="/scale?tab=jaina"
+        explainHref="#"
+        items={items}
         nextCycleAt={null}
         onCta={() => undefined}
         portfolioId="p1"
@@ -309,40 +175,46 @@ describe('the lead card and its chart have to be about the same thing', () => {
       />,
     );
 
-  it('shows nothing at all — not even a placeholder — when the chart is about something else', () => {
-    // The default `view()` chart is the portfolio's cost per result across the window. The
-    // card now leads with "$120 a day buying nothing". Both true, neither about the other.
-    const { container } = mount(withPauseCandidate());
-    expect(container.textContent).toContain('$120');
-    expect(container.querySelector('[data-testid="hero-chart"]')).toBeNull();
-    // And no apology for the missing chart: the sentence was always meant to be enough.
-    expect(container.textContent).not.toContain('Not enough priced days');
-  });
-
-  it('draws the chart when it reaches the figure the card leads with', () => {
-    const { container } = mount(
-      withPauseCandidate({
-        chart: {
-          shape: 'interval',
-          unit: 'currency',
-          estimate: null,
-          low: 120,
-          high: 240,
-          reference: 70,
-          reference_label: 'target',
-          at_stake_per_day: 120,
-          no_results: true,
-        },
-        chartReading: 'what it spent, against the line it had to beat',
-      }),
+  it('gives the lead AND the insight a band', () => {
+    const { container } = mount(view());
+    const cards = container.querySelectorAll(
+      '[data-testid="portfolio-news-lead"], [data-testid="portfolio-news-insight"]',
     );
-    expect(container.querySelector('[data-testid="hero-chart"]')).toBeTruthy();
-    expect(container.textContent).toContain('what it spent');
+    expect(cards.length).toBe(2);
+    for (const card of cards) {
+      expect(
+        card.querySelector('[data-testid="news-band"] [data-testid="news-visual"]'),
+      ).toBeTruthy();
+    }
   });
 
-  it('still says so when there was no chart to draw in the first place', () => {
-    const { container } = mount(withPauseCandidate({ chart: null, chartReading: null }));
-    expect(container.textContent).toContain('Not enough priced days');
+  it('never prints the engine’s impact basis in place of a picture', () => {
+    const { container } = mount(view());
+    expect(container.textContent).not.toContain('spend/day on the ad set');
+  });
+
+  it('draws the same ad set’s cycle numbers when the recommendation carries no evidence', () => {
+    const { container } = mount(view(), [
+      {
+        adset_id: 'as-2',
+        adset_name: 'Warm',
+        current_budget: 50,
+        final_budget: 50,
+        change_abs: 0,
+        diagnostics: { ci: { cpa: 60, lo: 45, hi: 90, events: 12 } },
+      } as CycleItemRow,
+    ]);
+    const insight = container.querySelector('[data-testid="portfolio-news-insight"]');
+    expect(insight?.querySelector('[data-testid="news-band"]')?.getAttribute('data-visual')).toBe(
+      'range',
+    );
+    expect(insight?.textContent).toContain('est. $60.00');
+    expect(insight?.textContent).toContain('target $70.00');
+  });
+
+  it('keeps the growth sentence visible under the row', () => {
+    const { container } = mount(view());
+    expect(container.textContent).toContain('cost per result');
   });
 });
 

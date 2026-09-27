@@ -34,9 +34,6 @@ export const NEWS_ROW_COLUMNS = { phone: 1, tablet: 2, desktop: 3 } as const;
 /** How many cards the first row shows before the rest go behind a disclosure. */
 export const NEWS_ROW_SIZE = NEWS_ROW_COLUMNS.desktop;
 
-/** The gap between cells, in rem, so a cell's width can be reasoned about. */
-export const NEWS_ROW_GAP_REM = 0.75;
-
 /**
  * The name the pane registers under, so the row's breakpoints ask about the pane and not
  * about the window.
@@ -76,21 +73,3 @@ export function cardMinHeightCqw(): number {
  * keeps a card inside the aspect band at any column width.
  */
 export const CARD_FRAME = 'flex h-full w-full min-h-[66.67cqw]';
-
-/**
- * The cell width, in rem, at a given pane width and column count.
- */
-export function cellWidthRem(paneRem: number, columns: number): number {
-  return (paneRem - NEWS_ROW_GAP_REM * (columns - 1)) / columns;
-}
-
-/**
- * The width at which a justification block earns its angled layout.
- *
- * A CONTAINER width, never the viewport. The three layouts were written with `sm:`, which is
- * a viewport query: on a desktop an insight card 336px wide still matched `sm:` and laid its
- * figure and its argument into two ~150px columns, which is the other half of "the cards did
- * not hold". A block only splits when the BLOCK has room to split — which, in a three-column
- * row, is a pane wider than about 85rem.
- */
-export const JUSTIFICATION_SPLIT_REM = 28;

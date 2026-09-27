@@ -4,7 +4,6 @@
 // reads the same whether Jaina has written today's words yet or not.
 
 import type {
-  AccountChart,
   BriefCandidate,
   BriefGrowth,
   CycleRunPacing,
@@ -16,9 +15,8 @@ import type {
 import { deterministicBrief, growthSentence, readPortfolioBrief } from '@continuum/contracts';
 import type { FlightPacingModel } from '../../charts/flightPacingModel';
 import { impactPerDay } from '../recQueueModel';
-import { type AdSetMeasure, heroChart, heroChartReading, measureOf } from './heroChart';
 import { stripPaceClaim } from './paceClaim';
-import type { RecapModel } from './recapModel';
+import type { RecapDay, RecapModel } from './recapModel';
 
 export type HeroCta = {
   /** `build` belongs to an ADOPTED asked-for suggestion that proposed something new: the
@@ -32,13 +30,6 @@ export type HeroCta = {
 
 export type HeroView = {
   state: 'first_cycle' | 'ready';
-  /**
-   * The one chart the hero opens on, in place of the three tiles. Null when the window
-   * cannot honestly be drawn — the hero then shows the sentence alone, which is the
-   * correct outcome and not a degraded one. See heroChart.ts.
-   */
-  chart: AccountChart | null;
-  chartReading: string | null;
   /** 'brief' when Jaina wrote today's words; 'fallback' when composed here. */
   source: 'brief' | 'fallback';
   pacingLine: string | null;
@@ -47,6 +38,16 @@ export type HeroView = {
   cta: HeroCta | null;
   observe: boolean;
   asOf: string | null;
+  /**
+   * The daily recap series, so the calm card can draw cost per result against the target
+   * across the window. Absent reads as no priced days. See ./news/cardVisual.
+   */
+  series?: readonly RecapDay[];
+  /**
+   * The cycle's recommendations: where each card's evidence lives (value, threshold, window),
+   * joined to its brief candidate by `rec:<id>`. Absent reads as no evidence.
+   */
+  recommendations?: ParsedCycleRunReport['recommendations'];
 };
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -229,34 +230,6 @@ function candidatesFromReport(
   return out;
 }
 
-/** Evidence metrics whose value IS the ad set's cost per result. */
-const COST_PER_RESULT_METRICS = new Set(['cpp', 'cpa']);
-
-/**
- * What the cycle measured on the candidate's own ad set, for the hero to draw from.
- *
- * Every brief candidate reaches here with `results_per_day: null` on a pause — the packet
- * never fills it — so the fact has to come from the status body the brief was written from:
- * first the engine's interval on the ad set's cycle row, else the recommendation's own
- * evidence when that evidence is a cost per result (a priced cost proves the ad set bought
- * something, though it bounds nothing). Null when neither says anything.
- */
-function measureFor(
-  candidate: BriefCandidate | null,
-  report: ParsedCycleRunReport | null,
-): AdSetMeasure | null {
-  if (!candidate?.adset_id || !report) return null;
-  const item = report.latest_items.find((it) => it.adset_id === candidate.adset_id);
-  const measured = measureOf(item?.diagnostics?.ci);
-  if (measured) return measured;
-  const rec = report.recommendations.find((r) => `rec:${r.id}` === candidate.id);
-  const evidence = rec?.evidence;
-  if (evidence && COST_PER_RESULT_METRICS.has(evidence.metric) && evidence.value > 0) {
-    return { results: null, costPerResult: evidence.value, low: null, high: null };
-  }
-  return null;
-}
-
 /** Where a candidate's call to action lands: the queue row, the audience card, or Manage
  *  when the portfolio only observes (the click then shows what Recommend would do). */
 export function ctaForCandidate(
@@ -335,25 +308,16 @@ export function buildHeroView(args: {
           promptVersion: 'fallback',
           generatedAt: args.now ?? new Date().toISOString(),
         });
-  const heroCandidate = brief.candidates.find((c) => c.id === brief.hero.candidate_id) ?? null;
-  const chart = heroChart({
-    candidate: heroCandidate,
-    measured: measureFor(heroCandidate, report),
-    series: recap.series,
-    target: args.target,
-    resultLabel: metric.resultLabel,
-  });
-
   return {
     state: args.firstCycle ? 'first_cycle' : 'ready',
     source: briefIsCurrent ? 'brief' : 'fallback',
-    chart,
-    chartReading: heroChartReading(chart),
     pacingLine: pacing.line,
     pacingTone: pacing.tone,
     brief,
     cta: ctaFor(brief, observe),
     observe,
     asOf: report?.latest_run?.cycle_ts ?? null,
+    series: recap.series,
+    recommendations: report?.recommendations ?? [],
   };
 }
