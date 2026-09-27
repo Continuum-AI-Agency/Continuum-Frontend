@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'bun:test';
+import { type CycleRunReport, getOptimizationMetricDefinition } from '@continuum/contracts';
+import formularios from '../../__fixtures__/optimizer-status-formularios.json';
+import { parseReport } from '../../reportModel';
 import { buildHeroView } from './heroModel';
+import { buildPortfolioNews } from './news/newsModel';
 
 const metric = {
   kpiField: 'leads',
@@ -375,5 +379,83 @@ describe('a stored brief is read against the run it came from', () => {
     const view = build(pacingFromAFlight);
     expect(view.brief.growth.pacing.status).toBe('overpacing');
     expect(view.brief.growth_sentence).toContain('and is on track');
+  });
+});
+
+describe('the real FORMULARIOS // TODOS body — a pause that bought 8 leads', () => {
+  // Anonymised production body. The hero pauses "Ad set A" (production: ITESO // AGOSTO -
+  // RTG): 8 leads over 14 days at 75.65 each against a 35 target, engine interval 38.39 to
+  // 175.24. Its brief candidate says `results_per_day: null`, and the screen drew "no
+  // results to divide by" under "43.23 a day buying nothing".
+  const build = () => {
+    const report = parseReport(formularios as unknown as CycleRunReport);
+    const view = buildHeroView({
+      report,
+      recap: {
+        ...(recap as object),
+        series: [
+          { date: '2026-09-24', spend: 280, results: 6 },
+          { date: '2026-09-25', spend: 289, results: 7 },
+        ],
+      } as never,
+      flightPacing: null,
+      metric: getOptimizationMetricDefinition('lead'),
+      currency: 'MXN',
+      portfolio: (formularios as { portfolio: unknown }).portfolio as never,
+      target: 35,
+      window: 'd14',
+      firstCycle: false,
+    });
+    return { report, view };
+  };
+
+  it('draws the ad set’s own measured interval, not a no-results one', () => {
+    const { view } = build();
+    expect(view.brief.hero.headline).toContain('Ad set A');
+    if (view.chart?.shape !== 'interval') throw new Error(`shape ${view.chart?.shape}`);
+    expect(view.chart.no_results).toBe(false);
+    expect(view.chart.estimate).toBe(75.65);
+    expect(view.chart.low).toBe(38.39);
+    expect(view.chart.high).toBe(175.24);
+    expect(view.chart.reference).toBe(35);
+    expect(view.chartReading).toContain('above the target');
+  });
+
+  it('the lead card neither says nor draws "bought nothing"', () => {
+    const { report, view } = build();
+    const news = buildPortfolioNews({ view, items: report?.latest_items ?? [], target: 35 });
+    expect(news.lead?.headline?.kind).not.toBe('avoided');
+    if (news.leadChart?.shape !== 'interval') throw new Error('lead chart');
+    expect(news.leadChart.no_results).toBe(false);
+  });
+
+  it('still calls the zero-conversion ad set (Ad set B) avoided spend', () => {
+    const { report, view } = build();
+    const news = buildPortfolioNews({ view, items: report?.latest_items ?? [], target: 35 });
+    const dead = news.insights.find((card) => card.claim.includes('Ad set B'));
+    expect(dead?.headline?.kind).toBe('avoided');
+  });
+});
+
+describe('the cost tile — a day with no results has no cost, not a zero one', () => {
+  it('leaves the day unpriced', () => {
+    const view = buildHeroView({
+      report: null,
+      recap: {
+        ...(recap as object),
+        series: [
+          { date: '2026-09-13', spend: 500, results: 5 },
+          { date: '2026-09-14', spend: 520, results: 0 },
+        ],
+      } as never,
+      flightPacing: null,
+      metric,
+      currency: 'USD',
+      portfolio,
+      target: 70,
+      window: 'd7',
+      firstCycle: false,
+    });
+    expect(view.tiles.find((tile) => tile.key === 'cost')?.series).toEqual([100, null]);
   });
 });

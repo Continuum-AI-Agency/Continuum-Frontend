@@ -32,6 +32,7 @@ import {
   rankCandidates,
 } from '@continuum/contracts';
 import { humanize } from '../../../format';
+import { boughtAnything, measureOf } from '../heroChart';
 import type { HeroView } from '../heroModel';
 import { ctaForCandidate } from '../heroModel';
 import type { NewsCardModel, NewsInterval } from './justification';
@@ -94,8 +95,11 @@ export function headlineFor(
     }
   }
   if (candidate.module === 'pause') {
-    const bought = candidate.results_per_day;
-    if ((bought == null || bought === 0) && candidate.impact_per_day > 0) {
+    // Only a MEASURED zero earns "buying nothing". The brief's `results_per_day` is null on
+    // every pause it carries, and null is "nobody said" — the ad set's own cycle row answers
+    // when it can, and when nothing answers the card leads with its sentence instead.
+    const bought = boughtAnything(candidate, measureOf(item?.diagnostics?.ci));
+    if (bought === false && candidate.impact_per_day > 0) {
       return {
         kind: 'avoided',
         value: round2(candidate.impact_per_day),
@@ -122,7 +126,10 @@ export function intervalFor(item: CycleItemRow | null, target: number | null): N
   if (!ci) return null;
   const { lo, hi, cpa, events } = ci;
   if (typeof lo !== 'number' || typeof hi !== 'number' || !(hi > lo)) return null;
-  const hasEstimate = typeof cpa === 'number' && Number.isFinite(cpa) && (events ?? 1) > 0;
+  // A zero cost per result is the engine's zero-event sentinel, never a measured cost — so a
+  // row whose event count is missing cannot let a 0 through as the estimate.
+  const hasEstimate =
+    typeof cpa === 'number' && Number.isFinite(cpa) && cpa > 0 && (events == null || events > 0);
   return {
     low: round2(lo),
     high: round2(hi),

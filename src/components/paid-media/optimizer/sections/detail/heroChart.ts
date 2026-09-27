@@ -9,8 +9,10 @@
 // Two charts are reachable, and the distinction matters:
 //
 //   `interval`  — the candidate's OWN argument, when it is a pause. "This cost this much and
-//                 returned nothing; the interval does not reach the target." That is the
-//                 recommendation's arithmetic, drawn.
+//                 returned nothing", or — when it bought something — the engine's measured
+//                 interval on its cost per result against the target. Which of the two is a
+//                 FACT read from the candidate or the cycle row; a null result count is
+//                 unknown, never zero, and an unknown draws no interval at all.
 //
 //   `rates`     — the portfolio's own cost per result against its target, over the window the
 //                 tiles already covered. This is NOT the recommendation's arithmetic and is not
@@ -31,6 +33,8 @@ import {
 } from '@continuum/contracts';
 import type { RecapDay } from './recapModel';
 
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
 /** Cost per result for one day; null when the day bought nothing to divide by. */
 function costOf(day: RecapDay): number | null {
   if (!(day.results > 0)) return null;
@@ -38,37 +42,123 @@ function costOf(day: RecapDay): number | null {
 }
 
 /**
+ * What the cycle measured on one ad set: the engine's confidence interval on its cost per
+ * result (`latest_items[].diagnostics.ci`). Every field is null when it was not measured —
+ * and null is "nobody said", never zero.
+ */
+export type AdSetMeasure = {
+  /** Results over the engine's window; 0 is a measured zero, null is unknown. */
+  results: number | null;
+  costPerResult: number | null;
+  low: number | null;
+  high: number | null;
+};
+
+const finite = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
+
+/**
+ * The engine's interval, read without its sentinels. A zero-event row comes back as
+ * `{ cpa: 0, lo: 0, hi: null, events: 0 }`: the zero events are a measurement, the zero cost
+ * is not — a window that bought nothing has no cost per result to report.
+ */
+export function measureOf(
+  ci: { cpa?: number; lo?: number; hi?: number | null; events?: number } | null | undefined,
+): AdSetMeasure | null {
+  if (!ci) return null;
+  const results = finite(ci.events) && ci.events >= 0 ? ci.events : null;
+  const bought = results !== 0;
+  const costPerResult = bought && finite(ci.cpa) && ci.cpa > 0 ? ci.cpa : null;
+  const bounded = bought && finite(ci.lo) && finite(ci.hi) && ci.hi > ci.lo;
+  return {
+    results,
+    costPerResult,
+    low: bounded ? (ci.lo as number) : null,
+    high: bounded ? (ci.hi as number) : null,
+  };
+}
+
+/**
+ * Did the ad set buy anything? true, false, or null for "nothing says".
+ *
+ * The candidate's own `results_per_day` answers first; the measure answers when it is null.
+ * A priced cost per result proves a denominator. When the two DISAGREE the answer is null:
+ * a card has no business choosing which of two contradicting facts to draw.
+ */
+export function boughtAnything(
+  candidate: Pick<BriefCandidate, 'results_per_day'>,
+  measured: AdSetMeasure | null | undefined,
+): boolean | null {
+  const fromCandidate = candidate.results_per_day != null ? candidate.results_per_day > 0 : null;
+  const fromMeasure =
+    measured?.results != null
+      ? measured.results > 0
+      : measured?.costPerResult != null
+        ? true
+        : null;
+  if (fromCandidate != null && fromMeasure != null && fromCandidate !== fromMeasure) return null;
+  return fromCandidate ?? fromMeasure;
+}
+
+/**
  * The pause candidate's own interval: what it spent, against the line it had to beat.
  *
- * Only reachable when the candidate says it gained nothing — which is what makes the interval
- * unbounded above and is the entire argument for pausing. A pause candidate that DID produce
- * results is a different recommendation and does not get this chart.
+ * Two arguments are drawable, and which one depends on a FACT, never on a missing field:
+ *
+ *   bought nothing   — the interval is unbounded above, and that is the entire case for
+ *                      pausing. The floor is what one result would already have cost.
+ *   bought something — the engine's own interval on the ad set's cost per result, with its
+ *                      point estimate, against the target.
+ *
+ * When nothing says which (the candidate's results are null and the cycle measured nothing
+ * on the ad set) this draws nothing: a "no results" picture of an ad set that bought eight
+ * leads is the one outcome worse than no picture.
  */
 function pauseInterval(
   candidate: BriefCandidate,
+  measured: AdSetMeasure | null,
   target: number | null,
   resultLabel: string,
 ): AccountChart | null {
   if (candidate.module !== 'pause') return null;
-  if (candidate.results_per_day != null && candidate.results_per_day > 0) return null;
   if (!(candidate.impact_per_day > 0)) return null;
-  return {
-    shape: 'interval',
-    unit: 'currency',
-    // The axis is a cost per result, and says so rather than leaving the view to work it
-    // out. With zero results the floor is what a single result would ALREADY have cost —
-    // the only figure the spend proves, and the one the target is comparable to. Same words
-    // as the growth read's own axis, because it is the same quantity.
-    value_label: `Cost per ${resultLabel.toLowerCase()}`,
-    // No results means no point estimate exists. Saying so is the point.
-    estimate: null,
-    low: candidate.impact_per_day,
-    high: candidate.impact_per_day * 2,
-    reference: target,
-    reference_label: target != null ? 'target' : null,
-    at_stake_per_day: candidate.impact_per_day,
-    no_results: true,
-  };
+  const bought = boughtAnything(candidate, measured);
+  // The axis is a cost per result, and says so rather than leaving the view to work it out.
+  // Same words as the growth read's own axis, because it is the same quantity.
+  const valueLabel = `Cost per ${resultLabel.toLowerCase()}`;
+  const reference = { reference: target, reference_label: target != null ? 'target' : null };
+  if (bought === false) {
+    return {
+      shape: 'interval',
+      unit: 'currency',
+      value_label: valueLabel,
+      // No results means no point estimate exists. Saying so is the point.
+      estimate: null,
+      low: candidate.impact_per_day,
+      high: candidate.impact_per_day * 2,
+      ...reference,
+      at_stake_per_day: candidate.impact_per_day,
+      no_results: true,
+    };
+  }
+  if (
+    bought === true &&
+    measured?.costPerResult != null &&
+    measured.low != null &&
+    measured.high != null
+  ) {
+    return {
+      shape: 'interval',
+      unit: 'currency',
+      value_label: valueLabel,
+      estimate: round2(measured.costPerResult),
+      low: round2(measured.low),
+      high: round2(measured.high),
+      ...reference,
+      at_stake_per_day: candidate.impact_per_day,
+      no_results: false,
+    };
+  }
+  return null;
 }
 
 /**
@@ -117,13 +207,17 @@ function growthRates(
  */
 export function heroChart(args: {
   candidate: BriefCandidate | null;
+  /** What the cycle measured on the candidate's own ad set, when it measured anything. */
+  measured?: AdSetMeasure | null;
   series: RecapDay[];
   target: number | null;
   /** The objective's own word, so the axis never says "results" on a conversations account. */
   resultLabel: string;
 }): ArguingChart | null {
   const { candidate, series, target, resultLabel } = args;
-  const own = candidate ? pauseInterval(candidate, target, resultLabel) : null;
+  const own = candidate
+    ? pauseInterval(candidate, args.measured ?? null, target, resultLabel)
+    : null;
   const drawn = own ?? growthRates(series, target, resultLabel, candidate?.impact_per_day ?? null);
   return chartArgues(drawn) ? drawn : null;
 }
@@ -132,7 +226,16 @@ export function heroChart(args: {
 export function heroChartReading(chart: AccountChart | null): string | null {
   if (!chart) return null;
   if (chart.shape === 'interval') {
-    return 'what it spent, against the line it had to beat — the whole interval sits short of it';
+    if (chart.no_results) {
+      return 'what it spent, against the line it had to beat — the whole interval sits short of it';
+    }
+    const measured = 'its cost per result, with the interval the engine measured';
+    if (chart.reference == null) return measured;
+    if (chart.low > chart.reference)
+      return `${measured} — the whole interval sits above the target`;
+    if (chart.high < chart.reference)
+      return `${measured} — the whole interval sits under the target`;
+    return `${measured} — the interval reaches the target`;
   }
   if (chart.shape === 'rates') {
     return 'cost per result across the window, against the target';

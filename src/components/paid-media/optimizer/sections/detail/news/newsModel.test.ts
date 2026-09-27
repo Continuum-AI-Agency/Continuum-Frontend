@@ -427,8 +427,9 @@ describe('the bracket beside the figure has to be about the figure', () => {
 
   it('withholds a cost-per-result interval from a money-per-day figure', () => {
     const news = pauseHero(blownCi);
-    expect(news.lead?.headline?.value).toBe(26);
-    expect(news.lead?.headline?.unit).toBe('currency_per_day');
+    // The candidate says 0 results and the engine measured 2 events: two facts that disagree,
+    // so the card claims neither — "buying nothing" of an ad set with 2 events was false too.
+    expect(news.lead?.headline).toBeNull();
     // The engine measured it and the row still holds it — the CARD is what refuses to draw it.
     expect(intervalFor(item({ diagnostics: { ci: blownCi } }), 35)).not.toBeNull();
     expect(news.lead?.interval).toBeNull();
@@ -583,5 +584,42 @@ describe('cards — the row order is the brief’s own ranking', () => {
     });
     const news = buildPortfolioNews({ view: viewOf(b), items: [], target: 35 });
     expect(news.cards.map((c) => c.id)).toEqual(['hero']);
+  });
+});
+
+// Every brief candidate reaches the Frontend with `results_per_day: null` — the Backend
+// packet never fills it for a pause. Null is "nobody said", and the engine's own interval on
+// the ad set's row is the fact that answers it.
+describe('headlineFor — null results are unknown, never zero', () => {
+  const unknown = candidate({
+    id: 'rec:iteso',
+    module: 'pause',
+    kind: 'pause',
+    adset_id: 'as-1',
+    impact_per_day: 43.23,
+    results_per_day: null,
+  });
+
+  it('does not say "buying nothing" when nothing says how much it bought', () => {
+    expect(headlineFor(unknown, null)).toBeNull();
+  });
+
+  it('does not say "buying nothing" of an ad set the engine measured 8 results on', () => {
+    const measured = item({
+      diagnostics: { ci: { cpa: 75.65, lo: 38.39, hi: 175.24, events: 8 } },
+    });
+    expect(headlineFor(unknown, measured)).toBeNull();
+  });
+
+  it('does say it when the engine measured zero events on the ad set', () => {
+    const dead = item({ diagnostics: { ci: { cpa: 0, lo: 0, hi: null, events: 0 } } });
+    expect(headlineFor(unknown, dead)?.kind).toBe('avoided');
+  });
+});
+
+describe('intervalFor — a zero cost per result is a sentinel, not an estimate', () => {
+  it('gives no point estimate for cpa 0 even when the event count is missing', () => {
+    const interval = intervalFor(item({ diagnostics: { ci: { cpa: 0, lo: 10, hi: 40 } } }), 35);
+    expect(interval?.estimate).toBeNull();
   });
 });

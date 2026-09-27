@@ -194,3 +194,78 @@ describe('heroChart — the news card draws a chart only when it argues', () => 
     expect(chartArgues(undefined)).toBe(false);
   });
 });
+
+// FORMULARIOS // TODOS, production: the lead card paused "ITESO // AGOSTO - RTG" under an
+// interval reading "no results to divide by" — for an ad set that bought 8 leads at 75.65
+// each. Every brief candidate carries `results_per_day: null`, and null was read as zero.
+describe('heroChart — null results mean unknown, never zero', () => {
+  const iteso = cand({ module: 'pause', impact_per_day: 43.23, results_per_day: null });
+  const measured = { results: 8, costPerResult: 75.65, low: 38.39, high: 175.24 };
+
+  it('draws no "bought nothing" interval for a pause whose results nobody measured', () => {
+    const chart = heroChart({
+      candidate: iteso,
+      series: days([12, 14, 16]),
+      target: 35,
+      resultLabel: 'Leads',
+    });
+    expect(chart?.shape).not.toBe('interval');
+  });
+
+  it('draws the engine’s own interval on cost per result for a pause that bought results', () => {
+    const chart = heroChart({
+      candidate: iteso,
+      measured,
+      series: days([12, 14, 16]),
+      target: 35,
+      resultLabel: 'Leads',
+    });
+    if (chart?.shape !== 'interval') throw new Error(`shape ${chart?.shape}`);
+    expect(chart.no_results).toBe(false);
+    expect(chart.estimate).toBe(75.65);
+    expect(chart.low).toBe(38.39);
+    expect(chart.high).toBe(175.24);
+    expect(chart.reference).toBe(35);
+    expect(chart.at_stake_per_day).toBe(43.23);
+    expect(() => accountChartSchema.parse(chart)).not.toThrow();
+    const reading = heroChartReading(chart) ?? '';
+    expect(reading).toContain('above the target');
+    expect(reading).not.toContain('what it spent');
+  });
+
+  it('keeps the no-results interval when the engine measured zero events', () => {
+    const chart = heroChart({
+      candidate: iteso,
+      measured: { results: 0, costPerResult: null, low: null, high: null },
+      series: days([12, 14]),
+      target: 35,
+      resultLabel: 'Leads',
+    });
+    if (chart?.shape !== 'interval') throw new Error('shape');
+    expect(chart.no_results).toBe(true);
+  });
+
+  it('draws nothing of its own when the candidate and the measure disagree', () => {
+    const chart = heroChart({
+      candidate: cand({ module: 'pause', impact_per_day: 43.23, results_per_day: 0 }),
+      measured,
+      series: days([12, 14]),
+      target: 35,
+      resultLabel: 'Leads',
+    });
+    expect(chart?.shape).not.toBe('interval');
+  });
+
+  it('says so when the measured interval reaches the target instead of clearing it', () => {
+    const chart = heroChart({
+      candidate: iteso,
+      measured: { results: 8, costPerResult: 40, low: 20, high: 90 },
+      series: days([12, 14]),
+      target: 35,
+      resultLabel: 'Leads',
+    });
+    const reading = heroChartReading(chart) ?? '';
+    expect(reading).toContain('reaches the target');
+    expect(reading).not.toContain('whole interval');
+  });
+});
