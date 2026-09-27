@@ -114,6 +114,8 @@ export function getLibrarySortOrder(sort: LibrarySort): LibrarySortOrder {
     case 'most_used':
     case 'best_performing':
     case 'manual':
+    case 'field_asc':
+    case 'field_desc':
       throw new Error(`${sort} is available only through the cursor browse read model`);
   }
 }
@@ -177,6 +179,7 @@ export function buildLibraryBrowseParams(
   setList(params, 'fonts', query.fonts);
   if (query.search) params.set('search', query.search);
   if (query.sort !== DEFAULT_LIBRARY_SORT) params.set('sort', query.sort);
+  if (query.sortFieldId) params.set('sortField', query.sortFieldId);
   if (query.performanceWindow !== 'd30') {
     params.set('performanceWindow', query.performanceWindow);
   }

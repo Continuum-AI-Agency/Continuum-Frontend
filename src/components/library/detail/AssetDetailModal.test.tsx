@@ -149,6 +149,19 @@ describe('AssetDetailModal prev/next navigation', () => {
     expect(calls).toEqual(['next', 'prev', 'next']);
   });
 
+  it('steps with ⌥ + arrow even from a focused player, which ignores Alt', () => {
+    const calls: string[] = [];
+    const dialog = mountWithNav(
+      () => calls.push('prev'),
+      () => calls.push('next'),
+    );
+    const video = document.createElement('video');
+    dialog.append(video);
+    fireEvent.keyDown(video, { key: 'ArrowRight' });
+    fireEvent.keyDown(video, { key: 'ArrowRight', altKey: true });
+    expect(calls).toEqual(['next']);
+  });
+
   it('leaves arrow keys to a text field, a player, and a nested dialog', () => {
     const calls: string[] = [];
     const dialog = mountWithNav(

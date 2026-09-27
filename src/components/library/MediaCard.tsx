@@ -23,7 +23,7 @@ import { type DragEvent, useEffect, useRef, useState } from 'react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { ViralityScoreBadge } from '@/components/virality/ViralityScoreBadge';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
-import { formatUsesCompanionPreview } from '@/lib/library/previewPlayable';
+import { formatUsesCompanionPreview, officeDocumentType } from '@/lib/library/previewPlayable';
 import { normalizeReviewStatus, REVIEW_STATUS_META } from '@/lib/library/reviewStatus';
 import { seekVideoPreviewFrame } from '@/lib/library/videoPoster';
 import { SOURCE_LABEL } from '@/lib/media/filters';
@@ -38,6 +38,7 @@ import { useClipCaptionPreference } from './hooks/useClipCaptionPreference';
 import { useClipQualityPreference } from './hooks/useClipQualityPreference';
 import { useGenerateClips } from './hooks/useGenerateClips';
 import { MediaBoundingBoxes } from './MediaBoundingBoxes';
+import { OfficeDocumentIcon } from './OfficeDocumentIcon';
 import { QuickReformatMenu } from './reformat/QuickReformatMenu';
 import {
   assetDragInFlightIncludes,
@@ -283,6 +284,31 @@ function Thumbnail({
         className="object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
         onError={() => setMediaError(true)}
       />
+    );
+  }
+
+  const officeType = officeDocumentType(asset.fileName, asset.mimeType);
+  if (officeType) {
+    const ext = fileExtension(asset.fileName);
+    return (
+      <div className="flex size-full flex-col items-center justify-center gap-1.5 bg-muted px-3">
+        <OfficeDocumentIcon
+          type={officeType}
+          className="size-8 text-muted-foreground/50"
+          strokeWidth={1.5}
+        />
+        {ext && (
+          <span className="rounded border border-border bg-background px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-muted-foreground">
+            {ext}
+          </span>
+        )}
+        <span className="max-w-full truncate text-2xs text-muted-foreground/70">
+          {asset.fileName}
+        </span>
+        <span data-testid="card-no-preview" className="text-2xs text-muted-foreground/60">
+          No preview — download to open
+        </span>
+      </div>
     );
   }
 

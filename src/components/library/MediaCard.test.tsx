@@ -260,3 +260,55 @@ describe('MediaCard drag to stack', () => {
     expect(drops).toEqual([]);
   });
 });
+
+describe('MediaCard office documents', () => {
+  it.each([
+    [
+      'brief.docx',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'DOCX',
+      'document',
+    ],
+    [
+      'budget.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'XLSX',
+      'spreadsheet',
+    ],
+    [
+      'deck.pptx',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'PPTX',
+      'presentation',
+    ],
+    ['old.xls', 'application/vnd.ms-excel', 'XLS', 'spreadsheet'],
+  ])('%s says it has no preview and still offers the download', (fileName, mimeType, badge, icon) => {
+    mount(
+      <MediaCard
+        brandId="brand-1"
+        asset={libraryAsset({
+          kind: 'file',
+          bucket: 'media-source',
+          fileName,
+          mimeType,
+          signedUrl: undefined,
+        })}
+      />,
+    );
+    expect(screen.getByTestId('card-no-preview').textContent).toBe('No preview — download to open');
+    expect(screen.getByTestId(`office-icon-${icon}`)).not.toBeNull();
+    expect(screen.getByText(badge)).not.toBeNull();
+    expect(screen.queryByText('Add companion preview')).toBeNull();
+    expect(download()).not.toBeNull();
+  });
+
+  it('leaves a PDF card alone', () => {
+    mount(
+      <MediaCard
+        brandId="brand-1"
+        asset={libraryAsset({ kind: 'file', fileName: 'deck.pdf', mimeType: 'application/pdf' })}
+      />,
+    );
+    expect(screen.queryByTestId('card-no-preview')).toBeNull();
+  });
+});

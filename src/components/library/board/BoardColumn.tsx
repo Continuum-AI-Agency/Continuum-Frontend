@@ -21,7 +21,7 @@ export function BoardColumn({
   selectedAssetIds?: ReadonlySet<string>;
   onToggleSelected?: (asset: MediaAsset) => void;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: lane.id });
+  const { setNodeRef, isOver } = useDroppable({ id: lane.id, disabled: !lane.droppable });
 
   return (
     <div
