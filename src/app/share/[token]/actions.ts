@@ -7,11 +7,32 @@ import {
   externalReviewerSessionRequestSchema,
   externalReviewerSessionResponseSchema,
   externalShareReviewDecisionSchema,
+  type ShareLinkEventKind,
+  customFieldOptionsSchema,
+  customFieldTypeSchema,
+  isShareFeaturableFieldType,
+  valueSchemaFor,
 } from '@continuum/contracts';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { mediaSchema } from '@/lib/media/supabase-media';
+import { resolveShareLink, shareAssetIds } from './loadSharePayload';
 import { invokePublicCreativeOperation, reviewerSessionCookieName } from './reviewerSession.server';
+import { recordShareEvent } from './shareEvents.server';
+
+async function recordReviewerEvent(
+  token: string,
+  sessionToken: string,
+  event: { kind: ShareLinkEventKind; assetId: string; versionId?: string },
+): Promise<void> {
+  const resolved = await resolveShareLink(token, sessionToken);
+  if (!resolved.ok) return;
+  await recordShareEvent(
+    { linkId: resolved.link.id, brandId: resolved.link.brand_id, sessionId: resolved.session?.id ?? null },
+    event,
+  );
+}
 
 export type ShareAccessActionState = { error: string | null };
 
@@ -113,6 +134,7 @@ export async function postExternalComment(
   if (!createExternalShareCommentResponseSchema.safeParse(result.data).success) {
     return { error: 'The review service returned an invalid comment.', posted: false };
   }
+  await recordReviewerEvent(token, reviewerSession.token, { kind: 'comment', assetId, versionId });
   revalidatePath(`/share/${token}`);
   return { error: null, posted: true };
 }
@@ -151,6 +173,86 @@ export async function decideExternalReview(
   const decision = externalShareReviewDecisionSchema.safeParse(result.data);
   if (!decision.success)
     return { error: 'The review service returned an invalid decision.', decision: null };
+  await recordReviewerEvent(token, reviewerSession.token, { kind: 'decision', assetId, versionId });
   revalidatePath(`/share/${token}`);
   return { error: null, decision: decision.data.decision };
+}
+
+export type FeaturedFieldActionState = { error: string | null; saved: boolean };
+
+function formValue(type: string, raw: FormDataEntryValue | null): unknown {
+  const text = typeof raw === 'string' ? raw.trim() : '';
+  if (type === 'checkbox') return text === 'true';
+  if (text === '') return null;
+  if (type === 'number' || type === 'rating') return Number(text);
+  return text;
+}
+
+// A guest sets the one field the owner featured on this link. The value is
+// checked against the field here and again by the asset_field_values trigger.
+export async function editFeaturedField(
+  token: string,
+  assetId: string,
+  versionId: string,
+  _previous: FeaturedFieldActionState,
+  formData: FormData,
+): Promise<FeaturedFieldActionState> {
+  const reviewerSession = await reviewerSessionForMutation(token, formData);
+  if (!reviewerSession.ok) return { error: reviewerSession.error, saved: false };
+  const resolved = await resolveShareLink(token, reviewerSession.token);
+  if (!resolved.ok || !resolved.link.featured_field_id || !resolved.identityPresent) {
+    return { error: 'This link does not take field edits.', saved: false };
+  }
+  const { admin, link } = resolved;
+  if (!(await shareAssetIds(admin, link)).includes(assetId)) {
+    return { error: 'That asset is not on this link.', saved: false };
+  }
+  const media = mediaSchema(admin);
+  const { data: field } = await media
+    .from('custom_fields')
+    .select('id, type, options')
+    .eq('id', link.featured_field_id)
+    .eq('brand_id', link.brand_id)
+    .maybeSingle();
+  const type = customFieldTypeSchema.safeParse((field as { type?: unknown } | null)?.type);
+  const options = customFieldOptionsSchema.safeParse((field as { options?: unknown } | null)?.options);
+  if (!type.success || !options.success || !isShareFeaturableFieldType(type.data)) {
+    return { error: 'This field cannot be edited here.', saved: false };
+  }
+
+  const raw = formValue(type.data, formData.get('value'));
+  const write =
+    raw === null
+      ? await media
+          .from('asset_field_values')
+          .delete()
+          .eq('asset_id', assetId)
+          .eq('field_id', link.featured_field_id)
+      : await (async () => {
+          const value = valueSchemaFor(type.data, options.data).safeParse(raw);
+          if (!value.success) return { error: { message: 'invalid_field_value' } };
+          return media.from('asset_field_values').upsert(
+            {
+              asset_id: assetId,
+              field_id: link.featured_field_id,
+              brand_id: link.brand_id,
+              value: value.data,
+              updated_by: null,
+            },
+            { onConflict: 'asset_id,field_id' },
+          );
+        })();
+  if (write.error) {
+    return {
+      error:
+        write.error.message === 'invalid_field_value' ? 'That value does not fit this field.' : 'Could not save.',
+      saved: false,
+    };
+  }
+  await recordShareEvent(
+    { linkId: link.id, brandId: link.brand_id, sessionId: resolved.session?.id ?? null },
+    { kind: 'field_edit', assetId, versionId },
+  );
+  revalidatePath(`/share/${token}`);
+  return { error: null, saved: true };
 }
