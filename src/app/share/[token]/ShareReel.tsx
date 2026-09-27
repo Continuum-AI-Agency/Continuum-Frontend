@@ -4,12 +4,21 @@
 // arrow keys. Every slide is server-rendered; this only chooses which shows.
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 
 export function ShareReel({ slides, labels }: { slides: ReactNode[]; labels: string[] }) {
   const [index, setIndex] = useState(0);
+  const reel = useRef<HTMLElement>(null);
   const count = slides.length;
+
+  // Leaving a slide stops whatever was playing on it.
+  useEffect(() => {
+    const hiddenSlides = reel.current?.querySelectorAll<HTMLElement>('[data-reel-slide][hidden]');
+    for (const slide of hiddenSlides ?? []) {
+      for (const media of slide.querySelectorAll<HTMLMediaElement>('video, audio')) media.pause();
+    }
+  }, [index]);
   const go = useCallback(
     (step: number) => setIndex((current) => (current + step + count) % count),
     [count],
@@ -28,7 +37,7 @@ export function ShareReel({ slides, labels }: { slides: ReactNode[]; labels: str
 
   if (count === 0) return null;
   return (
-    <section aria-label="Shared assets, one at a time" className="flex flex-col gap-4">
+    <section ref={reel} aria-label="Shared assets, one at a time" className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
         <Button variant="outline" size="sm" onClick={() => go(-1)} aria-label="Previous asset">
           <ChevronLeft className="size-4" aria-hidden />

@@ -14,7 +14,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
   const search = new URL(request.url).searchParams;
   const sessionToken = await reviewerSessionToken(token);
   const ip = await viewerIp();
-  const result = await loadSharePayload(token, sessionToken, ip);
+  const result = await loadSharePayload(token, sessionToken, ip, {
+    assetId: search.get('asset') ?? undefined,
+  });
   if (!result.ok) return new Response('This link is not available.', { status: 404 });
   if (!result.payload.policy.allowDownload) {
     return new Response('Downloads are turned off for this link.', { status: 403 });

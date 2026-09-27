@@ -7,6 +7,7 @@ import {
   type ExportComment,
   exportCommentsForVersion,
   frameAtMs,
+  framesForTimecode,
   msForFrame,
   snapFrameRate,
   timecodeForFrame,
@@ -110,7 +111,7 @@ describe('Premiere xmeml', () => {
   it('writes in/out frames, -1 out for a single frame', () => {
     const xmeml = commentsToPremiereXml(comments, { ...context, rate: NTSC });
     expect(xmeml).toContain('<rate><timebase>30</timebase><ntsc>TRUE</ntsc></rate>');
-    expect(xmeml).toContain('<in>31</in>\n      <out>-1</out>');
+    expect(xmeml).toMatch(/<in>31<\/in>\s*<out>-1<\/out>/);
     expect(xmeml).toContain(`<in>${frameAtMs(2000, NTSC)}</in>`);
     expect(xmeml).toContain(`<out>${frameAtMs(3000, NTSC) + 1}</out>`);
   });
@@ -145,5 +146,64 @@ describe('exportCommentsForVersion', () => {
       ['reply', 500, 900],
       ['legacy', 100, null],
     ]);
+  });
+});
+
+describe('source timecode', () => {
+  it('counts drop-frame at 29.97: minute labels skip ;00 and ;01 except each tenth', () => {
+    expect(timecodeForFrame(1799, NTSC, true)).toBe('00:00:59;29');
+    expect(timecodeForFrame(1800, NTSC, true)).toBe('00:01:00;02');
+    expect(timecodeForFrame(17982, NTSC, true)).toBe('00:10:00;00');
+    expect(timecodeForFrame(107892, NTSC, true)).toBe('01:00:00;00');
+  });
+
+  it('round-trips drop-frame and non-drop strings to frame counts', () => {
+    for (const frame of [0, 1799, 1800, 17981, 17982, 107892, 123456]) {
+      expect(framesForTimecode(timecodeForFrame(frame, NTSC, true), NTSC, true)).toBe(frame);
+      expect(framesForTimecode(timecodeForFrame(frame, PAL), PAL)).toBe(frame);
+    }
+  });
+
+  it('ignores a drop-frame flag on a rate that cannot drop', () => {
+    expect(timecodeForFrame(1500, PAL, true)).toBe('00:01:00:00');
+  });
+
+  const source = { startFrame: 107892, dropFrame: true };
+  const withSource = {
+    assetName: 'Spot',
+    fileName: 'spot a.mov',
+    rate: NTSC,
+    durationMs: 10_000,
+    source,
+  };
+
+  it('offsets EDL record times by the start timecode and declares drop-frame', () => {
+    const edl = commentsToResolveEdl(comments, withSource);
+    expect(edl).toContain('FCM: DROP FRAME');
+    // 1040 ms → frame 31 → 01:00:00;00 + 31 frames.
+    expect(edl).toContain('01:00:01;01 01:00:01;02 01:00:01;01 01:00:01;02');
+  });
+
+  it('anchors FCPXML markers on a clip with a media reference at the source start', () => {
+    const fcpxml = commentsToFcpxml(comments, withSource);
+    expect(fcpxml).toContain(`start="${107892 * 1001}/30000s"`);
+    expect(fcpxml).toContain('<media-rep kind="original-media" src="file:///spot%20a.mov"/>');
+    expect(fcpxml).toContain(`<marker start="${(107892 + 31) * 1001}/30000s"`);
+    expect(fcpxml).toContain('tcFormat="DF"');
+  });
+
+  it('puts Premiere markers inside a clipitem whose file carries the timecode', () => {
+    const xmeml = commentsToPremiereXml(comments, withSource);
+    const clip = xmeml.slice(xmeml.indexOf('<clipitem'), xmeml.indexOf('</clipitem>'));
+    expect(clip).toContain('<pathurl>file://localhost/spot%20a.mov</pathurl>');
+    expect(clip).toContain(
+      '<string>01:00:00;00</string><frame>107892</frame><displayformat>DF</displayformat>',
+    );
+    expect(clip).toMatch(/<marker>[\s\S]*<in>31<\/in>/);
+  });
+
+  it('writes source timecodes in the CSV', () => {
+    const lines = commentsToCsv(comments, withSource).trim().split('\r\n');
+    expect(lines[1]).toContain('01:00:01;01');
   });
 });

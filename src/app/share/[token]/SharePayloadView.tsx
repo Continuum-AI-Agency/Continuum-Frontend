@@ -18,23 +18,24 @@ import type {
   ShareLinkWatermark,
   ShareWatermarkViewer,
 } from '@continuum/contracts';
-import type { CSSProperties, ReactNode } from 'react';
 import { buildShareDeepLinkHref, commentDeepLinkFromAnnotation } from '@continuum/contracts';
 import { Download, FileArchive } from 'lucide-react';
+import type { CSSProperties, ReactNode } from 'react';
+import { type StaticMark, StaticMarks } from '@/components/library/detail/annotation/StaticMarks';
 import { initialsFor } from '@/lib/library/comments';
 import { ExternalApprovalControl } from './ExternalApprovalControl';
 import { ExternalCommentComposer } from './ExternalCommentComposer';
+import { FeaturedFieldEditor } from './FeaturedFieldEditor';
 import {
   authorLabel,
   buildPublicShareThreads,
   type PublicShareThread,
   ShareCommentThreads,
 } from './ShareCommentThreads';
-import { FeaturedFieldEditor } from './FeaturedFieldEditor';
 import { ShareAssetBeacon, ShareOpenBeacon } from './ShareEventBeacon';
+import { ShareMediaFrame } from './ShareMediaFrame';
 import { ShareReel } from './ShareReel';
 import { type ShareTimeMarker, ShareVideoPlayer } from './ShareVideoPlayer';
-import { ShareWatermark } from './ShareWatermark';
 
 const MARKER_TITLE_MAX = 80;
 
@@ -86,6 +87,7 @@ function timeMarkersFor(threads: PublicShareThread[]): ShareTimeMarker[] {
         id: thread.root.id,
         timeMs: annotation.timeMs,
         endMs: annotation.endMs ?? null,
+        shapes: annotation.shapes,
         initials: initialsFor(name),
         title: `${name}: ${body.length > MARKER_TITLE_MAX ? `${body.slice(0, MARKER_TITLE_MAX)}…` : body}`,
       },
@@ -93,70 +95,24 @@ function timeMarkersFor(threads: PublicShareThread[]): ShareTimeMarker[] {
   });
 }
 
-function PublicImageAnnotations({ comments }: { comments: PublicShareComment[] }) {
-  const annotations = comments.flatMap((comment) =>
+// Every spatial annotation on the asset (pins, legacy boxes and freehand, drawn
+// marks), for the read-only overlay: drawn with the Library's own ShapeLayer on
+// the image's real content rect, numbered in thread order like the Library stage.
+function spatialMarksOf(comments: PublicShareComment[]): StaticMark[] {
+  return comments.flatMap((comment) =>
     comment.annotation && comment.annotation.kind !== 'time'
       ? [{ id: comment.id, annotation: comment.annotation }]
       : [],
   );
-  if (annotations.length === 0) return null;
-  return (
-    <svg
-      viewBox="0 0 1000 1000"
-      preserveAspectRatio="none"
-      className="pointer-events-none absolute inset-0 size-full"
-      aria-label="Review annotations"
-    >
-      {annotations.map(({ id, annotation }, index) => {
-        if (annotation.kind === 'box') {
-          return (
-            <rect
-              key={id}
-              x={annotation.x * 1000}
-              y={annotation.y * 1000}
-              width={annotation.width * 1000}
-              height={annotation.height * 1000}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="4"
-              className="text-primary"
-            />
-          );
-        }
-        if (annotation.kind === 'freehand') {
-          const points = annotation.points
-            .map((point) => `${point.x * 1000},${point.y * 1000}`)
-            .join(' ');
-          return (
-            <polyline
-              key={id}
-              points={points}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="text-primary"
-            />
-          );
-        }
-        return (
-          <g key={id} className="text-primary">
-            <circle cx={annotation.x * 1000} cy={annotation.y * 1000} r="18" fill="currentColor" />
-            <text
-              x={annotation.x * 1000}
-              y={annotation.y * 1000 + 7}
-              textAnchor="middle"
-              fontSize="22"
-              fill="white"
-            >
-              {index + 1}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
+}
+
+// A protected link (downloads off, or watermarked) hides the video's own
+// download, fullscreen and picture-in-picture: each would take the media out
+// from under the watermark.
+function videoGuard(protect: boolean) {
+  return protect
+    ? { controlsList: 'nodownload nofullscreen noremoteplayback', disablePictureInPicture: true }
+    : {};
 }
 
 function AssetPreviewMedia({
@@ -164,12 +120,21 @@ function AssetPreviewMedia({
   markers,
   comments,
   deepLink,
+  protect,
+  commentable = false,
 }: {
+  protect: boolean;
   asset: MediaAsset;
   markers: ShareTimeMarker[];
   comments: PublicShareComment[];
   deepLink?: CommentDeepLink;
+  /** Guests may comment: a video gets the pinning player even before any marker exists. */
+  commentable?: boolean;
 }) {
+  // The custom transport earns its client JS when there is feedback to locate, a
+  // deep link to land on, or a guest who may pin feedback of their own.
+  const reviewPlayer =
+    markers.length > 0 || Boolean(deepLink?.commentId) || deepLink?.timeMs != null || commentable;
   if (asset.carousel && asset.carousel.slides.length > 1) {
     return (
       <div className="grid grid-cols-1 gap-2 overflow-hidden rounded-lg border border-border bg-muted/30 sm:grid-cols-2">
@@ -181,6 +146,7 @@ function AssetPreviewMedia({
                 src={slide.signedUrl}
                 controls
                 playsInline
+                {...videoGuard(protect)}
                 className="aspect-square size-full bg-black object-contain"
               >
                 <track kind="captions" />
@@ -215,16 +181,32 @@ function AssetPreviewMedia({
           alt={asset.title ?? asset.fileName}
           className="max-h-[70vh] w-full object-contain"
         />
-        <PublicImageAnnotations comments={comments} />
+        <StaticMarks marks={spatialMarksOf(comments)} />
       </div>
     );
   }
   if (preview?.kind === 'video' && preview.signedUrl) {
+    if (reviewPlayer) {
+      return (
+        <ShareVideoPlayer
+          src={preview.signedUrl}
+          posterUrl={asset.thumbnailUrl ?? null}
+          label={asset.title ?? asset.fileName}
+          durationMsHint={preview.durationMs ?? asset.durationMs ?? null}
+          markers={markers}
+          initialSelectedId={deepLink?.commentId ?? null}
+          initialTimeMs={deepLink?.timeMs ?? null}
+          protect={protect}
+          pinForAssetId={commentable ? asset.id : null}
+        />
+      );
+    }
     return (
       <video
         src={preview.signedUrl}
         controls
         playsInline
+        {...videoGuard(protect)}
         className="max-h-[70vh] w-full rounded-lg border border-border bg-black"
       >
         <track kind="captions" />
@@ -240,19 +222,20 @@ function AssetPreviewMedia({
           alt={asset.title ?? asset.fileName}
           className="max-h-[70vh] w-full object-contain"
         />
-        <PublicImageAnnotations comments={comments} />
+        <StaticMarks marks={spatialMarksOf(comments)} />
       </div>
     );
   }
   if (asset.kind === 'video' && asset.signedUrl) {
     // A video nobody commented on gets the native player, so a plain share stays
     // free of client JS; time-pinned feedback is what earns the custom transport.
-    if (markers.length === 0 && !deepLink?.commentId && deepLink?.timeMs == null) {
+    if (!reviewPlayer) {
       return (
         <video
           src={asset.signedUrl}
           controls
           playsInline
+          {...videoGuard(protect)}
           className="max-h-[70vh] w-full rounded-lg border border-border bg-black"
         >
           <track kind="captions" />
@@ -268,6 +251,8 @@ function AssetPreviewMedia({
         markers={markers}
         initialSelectedId={deepLink?.commentId ?? null}
         initialTimeMs={deepLink?.timeMs ?? null}
+        protect={protect}
+        pinForAssetId={commentable ? asset.id : null}
       />
     );
   }
@@ -295,12 +280,15 @@ function AssetPreview({
   overlay,
   ...media
 }: Parameters<typeof AssetPreviewMedia>[0] & { overlay: WatermarkOverlay | null }) {
-  if (!overlay) return <AssetPreviewMedia {...media} />;
+  if (!overlay && !media.protect) return <AssetPreviewMedia {...media} />;
   return (
-    <div className="relative">
+    <ShareMediaFrame
+      protect={media.protect}
+      watermark={overlay?.watermark ?? null}
+      viewer={overlay?.viewer ?? null}
+    >
       <AssetPreviewMedia {...media} />
-      <ShareWatermark watermark={overlay.watermark} viewer={overlay.viewer} />
-    </div>
+    </ShareMediaFrame>
   );
 }
 
@@ -317,10 +305,12 @@ function SharedAssetTile({
   deepLink,
   layout,
   overlay,
+  protect,
   featuredField,
   featuredValue,
 }: {
-  layout: ShareLinkLayout;
+  layout: SharePageLayout;
+  protect: boolean;
   overlay: WatermarkOverlay | null;
   featuredField: ShareFeaturedField | null;
   featuredValue: CustomFieldValue | undefined;
@@ -337,8 +327,8 @@ function SharedAssetTile({
 }) {
   const { asset, versionId, versionNumber, isHead } = sharedAsset;
   const threads = buildPublicShareThreads(comments);
-  // Box-annotated images show their threads but no pin overlay: the share page
-  // renders the frame, not the annotation stage.
+  // Time-pinned threads ride the scrubber (with their marks, drawn on the frame
+  // when selected); spatial ones are drawn over the image by StaticMarks.
   const markers = asset.kind === 'video' ? timeMarkersFor(threads) : [];
 
   const preview = (
@@ -348,6 +338,8 @@ function SharedAssetTile({
       comments={comments}
       deepLink={deepLink}
       overlay={overlay}
+      protect={protect}
+      commentable={allowComments}
     />
   );
   const details = (
@@ -360,7 +352,9 @@ function SharedAssetTile({
             {isHead ? ' · Latest' : ''}
           </p>
         </div>
-        {allowDownload ? <DownloadButton asset={asset} token={token} versionId={versionId} /> : null}
+        {allowDownload ? (
+          <DownloadButton asset={asset} token={token} versionId={versionId} />
+        ) : null}
       </div>
       {showMetadata ? (
         <p className="text-xs text-muted-foreground">
@@ -394,6 +388,7 @@ function SharedAssetTile({
           versionId={versionId}
           hasIdentity={hasIdentity}
           hasPasscode={hasPasscode}
+          pinnable={asset.kind === 'video'}
         />
       ) : null}
       {allowApproval ? (
@@ -435,21 +430,75 @@ function commentsByAsset(comments: PublicShareComment[]): Map<string, PublicShar
   return grouped;
 }
 
+// Mirrors SHARE_PAGE_SIZE in loadSharePayload (server-only, so not importable here).
+const SHARE_DEFAULT_PAGE_SIZE = 60;
+const PAGER_LINK_CLASS =
+  'rounded-md border border-border px-3 py-1.5 font-medium text-foreground hover:bg-muted';
+
 const DOWNLOAD_ALL_CLASS =
   'inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90';
+
+// A single asset gets the player view: the media full width, details beneath.
+type SharePageLayout = ShareLinkLayout | 'player';
 
 function LayoutBody({
   layout,
   tiles,
   labels,
 }: {
-  layout: ShareLinkLayout;
+  layout: SharePageLayout;
   tiles: ReactNode[];
   labels: string[];
 }) {
   if (layout === 'reel') return <ShareReel slides={tiles} labels={labels} />;
-  if (layout === 'list') return <div className="flex flex-col gap-6">{tiles}</div>;
+  if (layout === 'list' || layout === 'player') {
+    return <div className="flex flex-col gap-6">{tiles}</div>;
+  }
   return <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">{tiles}</div>;
+}
+
+function SharePager({
+  token,
+  pagination,
+}: {
+  token: string;
+  pagination: NonNullable<PublicSharePayload['pagination']>;
+}) {
+  const { page, pageSize, total } = pagination;
+  const pages = Math.ceil(total / pageSize);
+  if (pages <= 1) return null;
+  const href = (target: number) => {
+    const query = new URLSearchParams({ page: String(target) });
+    if (pageSize !== SHARE_DEFAULT_PAGE_SIZE) query.set('per', String(pageSize));
+    return `/share/${token}?${query}`;
+  };
+  const first = (page - 1) * pageSize + 1;
+  const last = Math.min(page * pageSize, total);
+  return (
+    <nav
+      aria-label="Pages"
+      data-share-pager
+      className="flex items-center justify-between gap-3 text-xs"
+    >
+      {page > 1 ? (
+        <a href={href(page - 1)} rel="prev" className={PAGER_LINK_CLASS}>
+          Previous
+        </a>
+      ) : (
+        <span />
+      )}
+      <span className="text-muted-foreground" data-share-page={page}>
+        {first}–{last} of {total}
+      </span>
+      {page < pages ? (
+        <a href={href(page + 1)} rel="next" className={PAGER_LINK_CLASS}>
+          Next
+        </a>
+      ) : (
+        <span />
+      )}
+    </nav>
+  );
 }
 
 export function SharePayloadView({
@@ -468,8 +517,11 @@ export function SharePayloadView({
   const branding = payload.branding ?? {};
   const heading = branding.headerTitle ?? fallbackHeading;
   // A single asset has nothing to lay out; the owner's layout applies to many.
-  const layout: ShareLinkLayout =
-    payload.assets.length > 1 ? (payload.layout ?? 'grid') : 'list';
+  const layout: SharePageLayout =
+    payload.assets.length === 1 && (payload.pagination?.total ?? 1) === 1
+      ? 'player'
+      : (payload.layout ?? 'grid');
+  const protect = !payload.policy.allowDownload || Boolean(payload.watermark);
   const grouped = commentsByAsset(payload.comments);
   const overlay: WatermarkOverlay | null =
     payload.watermark && payload.reviewer
@@ -500,6 +552,7 @@ export function SharePayloadView({
       deepLink={deepLink}
       layout={layout}
       overlay={overlay}
+      protect={protect}
       featuredField={payload.featuredField ?? null}
       featuredValue={payload.featuredValues?.[sharedAsset.asset.id]}
     />
@@ -541,8 +594,13 @@ export function SharePayloadView({
                 ) : null}
               </div>
             </div>
-            {payload.policy.allowDownload && payload.assets.length > 1 ? (
-              <a href={`/share/${token}/download-all`} data-share-download-all className={DOWNLOAD_ALL_CLASS}>
+            {payload.policy.allowDownload &&
+            (payload.pagination?.total ?? payload.assets.length) > 1 ? (
+              <a
+                href={`/share/${token}/download-all`}
+                data-share-download-all
+                className={DOWNLOAD_ALL_CLASS}
+              >
                 <Download className="size-3.5" aria-hidden />
                 Download all
               </a>
@@ -560,7 +618,12 @@ export function SharePayloadView({
             Nothing here yet — the shared collection is empty.
           </p>
         ) : null}
-        <p className="text-center text-2xs text-muted-foreground">Shared via Continuum</p>
+        {payload.pagination ? <SharePager token={token} pagination={payload.pagination} /> : null}
+        {branding.hideFooter ? null : (
+          <p data-share-footer className="text-center text-2xs text-muted-foreground">
+            Shared via Continuum
+          </p>
+        )}
       </main>
     </div>
   );
