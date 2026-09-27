@@ -11,7 +11,12 @@ const uploaded = {
 };
 const uploadMediaAsset = mock(async () => uploaded);
 
-mock.module('@/lib/library/uploadMediaAsset', () => ({ uploadMediaAsset }));
+// A partial mock.module deletes every other export for the whole process, so the
+// size gate the hook calls before queueing is carried too.
+mock.module('@/lib/library/uploadMediaAsset', () => ({
+  uploadMediaAsset,
+  uploadSizeRefusal: () => null,
+}));
 
 const { useMediaUpload } = await import('./useMediaUpload');
 

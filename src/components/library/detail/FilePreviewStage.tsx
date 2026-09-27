@@ -3,17 +3,37 @@
 // Stage for kind === 'file' assets (source files, no renderable preview):
 // file identity + metadata and a signed-URL download, minted on demand
 // through `downloadLibraryAsset` — the one sign-and-save every Library
-// surface shares.
+// surface shares. A PDF skips all of that: the browser's own viewer renders it
+// straight from its signed URL (PdfPreview).
 
 import type { MediaAsset } from '@continuum/contracts';
-import { Download, FileIcon, ImagePlus, Loader2 } from 'lucide-react';
+import { Download, ExternalLink, FileIcon, ImagePlus, Loader2 } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { downloadLibraryAsset } from '@/lib/library/assetDownload';
 import { uploadCompanionPreview } from '@/lib/library/assetPreview';
 import { ensureAssetHeadVersion } from '@/lib/library/creativeOperations';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { fileExtension, formatBytes } from './assetFileMeta';
+
+export function PdfPreview({ src, title }: { src: string; title: string }) {
+  return (
+    <div className="flex size-full flex-col">
+      <iframe src={src} title={title} data-testid="pdf-preview" className="min-h-0 w-full flex-1" />
+      <div className="flex shrink-0 justify-center p-2">
+        <a
+          href={src}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={buttonVariants({ size: 'sm', variant: 'ghost' })}
+        >
+          <ExternalLink className="size-4" />
+          Open PDF
+        </a>
+      </div>
+    </div>
+  );
+}
 
 type Props = {
   brandId: string;

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { CAROUSEL_SLIDE_TAG, TEXT_EMBEDDING_DIM, HIDDEN_LIBRARY_TAGS } from '@continuum/contracts';
+import { CAROUSEL_SLIDE_TAG, HIDDEN_LIBRARY_TAGS, TEXT_EMBEDDING_DIM } from '@continuum/contracts';
 
 // bun's mock.module is process-wide, and the sibling library route specs replace
 // these same modules. Delegating through the shared globalThis hooks they already
@@ -32,6 +32,8 @@ const ASSET_ID = '11111111-1111-4111-8111-111111111111';
 const VECTOR = Array.from({ length: TEXT_EMBEDDING_DIM }, () => 0.01);
 
 type RpcCall = { fn: string; args: Record<string, unknown> };
+type QueryOp = [method: string, ...args: unknown[]];
+type FromCall = { table: string; ops: QueryOp[] };
 
 function assetRow(id: string) {
   return {
@@ -79,8 +81,14 @@ function installSupabaseStub(params: {
   // unavailable, which must degrade to keyword search.
   embedding?: number[] | null;
   hydrateIds?: string[];
+  fromCalls?: FromCall[];
+  // Rows answered by the plain selects (not hydration): comment hits and the
+  // filtered id select.
+  commentRows?: { asset_id: string }[];
+  filteredIds?: string[];
 }) {
   const { rpcResults, rpcCalls } = params;
+  const fromCalls = params.fromCalls ?? [];
   const embedding = params.embedding === undefined ? VECTOR : params.embedding;
   const hydrateIds = params.hydrateIds ?? [ASSET_ID];
 
@@ -102,11 +110,38 @@ function installSupabaseStub(params: {
         }
         return { data: rpcResults[fn] ?? [], error: null };
       },
-      from: () => ({
-        select: () => ({
-          in: async () => ({ data: hydrateIds.map((id) => assetRow(id)), error: null }),
-        }),
-      }),
+      from: (table: string) => {
+        const call: FromCall = { table, ops: [] };
+        fromCalls.push(call);
+        const result = () => {
+          if (table === 'comments') return params.commentRows ?? [];
+          const columns = call.ops[0]?.[1];
+          if (columns === 'id') return (params.filteredIds ?? []).map((id) => ({ id }));
+          return hydrateIds.map((id) => assetRow(id));
+        };
+        const builder: Record<string, unknown> = {
+          then: (resolve: (value: unknown) => unknown) => resolve({ data: result(), error: null }),
+        };
+        for (const method of [
+          'select',
+          'eq',
+          'is',
+          'not',
+          'in',
+          'ilike',
+          'contains',
+          'gte',
+          'lt',
+          'order',
+          'limit',
+        ]) {
+          builder[method] = (...args: unknown[]) => {
+            call.ops.push([method, ...args]);
+            return builder;
+          };
+        }
+        return builder;
+      },
     }),
   });
 
@@ -116,11 +151,17 @@ function installSupabaseStub(params: {
   };
 }
 
-function searchRequest(query: string) {
+function searchRequest(query: string, filters?: Record<string, unknown>) {
   return new Request('http://localhost/api/library/search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ brandId: BRAND_ID, mode: 'text', query, limit: 24 }),
+    body: JSON.stringify({
+      brandId: BRAND_ID,
+      mode: 'text',
+      ...(query ? { query } : {}),
+      limit: 24,
+      ...(filters ? { filters } : {}),
+    }),
   });
 }
 
@@ -243,5 +284,192 @@ describe('POST /api/library/search — strategy selection', () => {
 
     expect(body.strategy).toBe('lexical');
     expect(body.items).toEqual([]);
+  });
+});
+
+describe('POST /api/library/search — comments and date filters', () => {
+  const COMMENTED_ID = '33333333-3333-4333-8333-333333333333';
+  let rpcCalls: RpcCall[];
+  let fromCalls: FromCall[];
+
+  beforeEach(() => {
+    rpcCalls = [];
+    fromCalls = [];
+  });
+
+  afterEach(() => {
+    hooks.__testCreateSupabaseServerClient = undefined;
+    hooks.__testMintSignedUrls = undefined;
+  });
+
+  it('finds an asset by its review comment, word by word, behind the semantic hits', async () => {
+    installSupabaseStub({
+      rpcCalls,
+      fromCalls,
+      rpcResults: { match_assets_by_text: [{ id: ASSET_ID, similarity: 0.71 }] },
+      commentRows: [{ asset_id: COMMENTED_ID }, { asset_id: COMMENTED_ID }],
+      filteredIds: [COMMENTED_ID],
+      hydrateIds: [ASSET_ID, COMMENTED_ID],
+    });
+
+    const response = await POST(searchRequest('logo too small'));
+    const body = (await response.json()) as {
+      strategy: string;
+      items: { asset: { id: string }; similarity: number; matchedOn?: string[] }[];
+    };
+
+    expect(body.strategy).toBe('hybrid');
+    expect(body.items.map((item) => item.asset.id)).toEqual([ASSET_ID, COMMENTED_ID]);
+    expect(body.items[0].matchedOn).toEqual(['semantic']);
+    expect(body.items[1].matchedOn).toEqual(['comment']);
+    expect(body.items[1].similarity).toBeCloseTo(1 / 3, 5);
+
+    const comments = fromCalls.find((call) => call.table === 'comments');
+    expect(comments?.ops).toContainEqual(['eq', 'brand_id', BRAND_ID]);
+    expect(comments?.ops).toContainEqual(['is', 'deleted_at', null]);
+    const needles = comments?.ops.filter((op) => op[0] === 'ilike').map((op) => op[2]);
+    expect(needles).toEqual(['%logo%', '%too%', '%small%']);
+
+    // The comment hit is re-checked against the user's filters before it is shown.
+    const recheck = fromCalls.find(
+      (call) =>
+        call.table === 'assets' &&
+        call.ops.some(
+          (op) => op[0] === 'in' && Array.isArray(op[2]) && op[2].includes(COMMENTED_ID),
+        ),
+    );
+    expect(recheck?.ops).toContainEqual(['select', 'id']);
+  });
+
+  it('resolves a date range to an id constraint on the ranking RPCs', async () => {
+    const RECENT_ID = '44444444-4444-4444-8444-444444444444';
+    installSupabaseStub({
+      rpcCalls,
+      fromCalls,
+      rpcResults: { search_assets_ranked: [{ id: RECENT_ID, similarity: 3 }] },
+      filteredIds: [RECENT_ID],
+      hydrateIds: [RECENT_ID],
+    });
+
+    const range = {
+      createdAfter: '2026-09-20T00:00:00.000Z',
+      createdBefore: '2026-09-27T00:00:00.000Z',
+    };
+    const response = await POST(searchRequest('beach', { kind: 'video', ...range }));
+    expect(response.status).toBe(200);
+
+    const rangeSelect = fromCalls.find((call) => call.ops.some((op) => op[0] === 'gte'));
+    expect(rangeSelect?.ops).toContainEqual(['gte', 'created_at', range.createdAfter]);
+    expect(rangeSelect?.ops).toContainEqual(['lt', 'created_at', range.createdBefore]);
+    expect(rangeSelect?.ops).toContainEqual(['eq', 'kind', 'video']);
+
+    const lexicalCall = rpcCalls.find((call) => call.fn === 'search_assets_ranked');
+    expect(lexicalCall?.args.filter_asset_ids).toEqual([RECENT_ID]);
+    expect(lexicalCall?.args.filter_kind).toBe('video');
+  });
+
+  it('lists the filtered assets newest-first when the query is only filters', async () => {
+    installSupabaseStub({
+      rpcCalls,
+      fromCalls,
+      rpcResults: {},
+      filteredIds: [ASSET_ID],
+    });
+
+    const response = await POST(searchRequest('', { kind: 'video', tags: ['summer'] }));
+    const body = (await response.json()) as {
+      strategy: string;
+      items: { asset: { id: string }; matchedOn?: string[] }[];
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.strategy).toBe('filters');
+    expect(body.items.map((item) => item.asset.id)).toEqual([ASSET_ID]);
+    expect(body.items[0].matchedOn).toEqual(['filters']);
+    expect(rpcCalls.some((call) => call.fn === 'search_assets_ranked')).toBe(false);
+
+    const select = fromCalls.find((call) => call.ops[0]?.[1] === 'id');
+    expect(select?.ops).toContainEqual(['contains', 'tags', ['summer']]);
+    expect(select?.ops).toContainEqual(['order', 'created_at', { ascending: false }]);
+  });
+
+  it('still rejects a text search with neither words nor filters', async () => {
+    installSupabaseStub({ rpcCalls, fromCalls, rpcResults: {} });
+    const response = await POST(searchRequest(''));
+    expect(response.status).toBe(422);
+  });
+});
+
+describe('POST /api/library/search — visual text search', () => {
+  const UNTAGGED_ID = '55555555-5555-4555-8555-555555555555';
+  const KEYWORD_ID = '66666666-6666-4666-8666-666666666666';
+  const VISUAL = Array.from({ length: 1408 }, () => 0.02);
+  let rpcCalls: RpcCall[];
+
+  beforeEach(() => {
+    rpcCalls = [];
+  });
+
+  afterEach(() => {
+    hooks.__testCreateSupabaseServerClient = undefined;
+    hooks.__testMintSignedUrls = undefined;
+  });
+
+  function visualRequest(visualEmbedding: number[]) {
+    return new Request('http://localhost/api/library/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        brandId: BRAND_ID,
+        mode: 'text',
+        query: 'person lifting weights',
+        limit: 24,
+        visualEmbedding,
+        filters: { kind: 'video' },
+      }),
+    });
+  }
+
+  it('ranks image-space hits after semantic hits and before keyword hits', async () => {
+    installSupabaseStub({
+      rpcCalls,
+      rpcResults: {
+        match_assets_by_text: [{ id: ASSET_ID, similarity: 0.71 }],
+        match_similar_assets: [
+          { id: UNTAGGED_ID, similarity: 0.14 },
+          { id: ASSET_ID, similarity: 0.12 },
+        ],
+        search_assets_ranked: [{ id: KEYWORD_ID, similarity: 3 }],
+      },
+      hydrateIds: [ASSET_ID, UNTAGGED_ID, KEYWORD_ID],
+    });
+
+    const response = await POST(visualRequest(VISUAL));
+    const body = (await response.json()) as {
+      items: { asset: { id: string }; matchedOn?: string[] }[];
+    };
+
+    expect(body.items.map((item) => item.asset.id)).toEqual([ASSET_ID, UNTAGGED_ID, KEYWORD_ID]);
+    expect(body.items[0].matchedOn).toEqual(['semantic', 'visual']);
+    expect(body.items[1].matchedOn).toEqual(['visual']);
+
+    const visualCall = rpcCalls.find((call) => call.fn === 'match_similar_assets');
+    expect(visualCall?.args.query_embedding).toEqual(VISUAL);
+    expect(visualCall?.args.exclude_asset_id).toBeNull();
+    expect(visualCall?.args.match_threshold).toBe(0.08);
+    expect(visualCall?.args.match_count).toBe(12);
+    expect(visualCall?.args.filter_kind).toBe('video');
+  });
+
+  it('skips the image-space match when no visual embedding is sent', async () => {
+    installSupabaseStub({ rpcCalls, rpcResults: {} });
+    await POST(searchRequest('olive oil'));
+    expect(rpcCalls.some((call) => call.fn === 'match_similar_assets')).toBe(false);
+  });
+
+  it('rejects a visual embedding of the wrong width', async () => {
+    installSupabaseStub({ rpcCalls, rpcResults: {} });
+    const response = await POST(visualRequest([0.1, 0.2]));
+    expect(response.status).toBe(422);
   });
 });

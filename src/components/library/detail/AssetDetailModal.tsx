@@ -13,7 +13,6 @@
 // operating on a file the reviewer is not looking at.
 
 import type {
-  CommentAnnotation,
   CommentDeepLink,
   LibraryPreviewFrame,
   MediaAsset,
@@ -26,6 +25,7 @@ import {
 } from '@continuum/contracts';
 import { ChevronLeft, ChevronRight, Layers3 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ProvenancePanel } from '@/components/library/detail/ProvenancePanel';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { buildCommentThreads } from '@/lib/library/comments';
 import { enrichOnOpen } from '@/lib/library/enrichment';
@@ -35,6 +35,7 @@ import { AssetDownloadButton } from '../AssetDownloadButton';
 import { EditTimelineButton } from '../editor/EditTimelineButton';
 import { AssetFieldsPanel } from '../fields/AssetFieldsPanel';
 import { fileExtension, formatBytes } from './assetFileMeta';
+import { AudioStage } from './audio/AudioStage';
 import { CommentComposer } from './CommentComposer';
 import { CommentThreads } from './CommentThreads';
 import {
@@ -43,7 +44,7 @@ import {
   partitionThreadsByVersion,
 } from './commentVersions';
 import { DeleteAssetButton } from './DeleteAssetButton';
-import { FilePreviewStage } from './FilePreviewStage';
+import { FilePreviewStage, PdfPreview } from './FilePreviewStage';
 import { ImageAnnotationLayer } from './ImageAnnotationLayer';
 import { OlderFileStage } from './OlderFileStage';
 import { OpenInCanvasButton } from './OpenInCanvasButton';
@@ -56,10 +57,10 @@ import { ReviewStatusControl } from './ReviewStatusControl';
 import { ShareLinkMenu } from './ShareLinkMenu';
 import { SmartResizeMenu } from './SmartResizeMenu';
 import { buildStageAnnotations } from './stageAnnotations';
-import { resolveStageMedia } from './stageMedia';
+import { resolveStageMedia, type StageMedia } from './stageMedia';
 import { TranscriptPanel } from './TranscriptPanel';
 import { preferredSidebarTab, type SidebarTab } from './transcriptSegments';
-import { useAssetComments } from './useAssetComments';
+import { type PostCommentInput, useAssetComments } from './useAssetComments';
 import { useAssetTranscript } from './useAssetTranscript';
 import { useAssetVersions } from './useAssetVersions';
 import { useOpportunisticPoster } from './useOpportunisticPoster';
@@ -77,6 +78,9 @@ export type AssetDetailModalProps = {
   initialDeepLink?: CommentDeepLink;
   previewFrame?: LibraryPreviewFrame;
   onDeepLinkChange?: (link: CommentDeepLink) => void;
+  /** Step to the neighbouring asset in the browse order; omitted at either end. */
+  onPrev?: () => void;
+  onNext?: () => void;
 };
 
 // Performance and Fields are further sidebar destinations alongside the two the
@@ -99,6 +103,24 @@ function assetMetaLine(asset: MediaAsset): string {
     }),
   );
   return parts.join(' · ');
+}
+
+// Arrow keys belong to whatever has focus first: a text caret, a slider, a
+// focused player (where they seek), or a dialog opened from this one — compare,
+// the rollback confirm — which is a different [role=dialog] than ours.
+function arrowKeyOwnedElsewhere(target: EventTarget, ownDialog: EventTarget): boolean {
+  if (!(target instanceof Element)) return true;
+  if (
+    target.closest(
+      'input, textarea, select, video, audio, [role="slider"], [contenteditable]:not([contenteditable="false"])',
+    )
+  ) {
+    return true;
+  }
+  // A nested dialog (compare, rollback confirm) is usually portalled, so its target sits
+  // outside this dialog's DOM; one mounted inline has its own nearer role="dialog".
+  if (!(ownDialog instanceof Node) || !ownDialog.contains(target)) return true;
+  return target.closest('[role="dialog"], [role="alertdialog"]') !== ownDialog;
 }
 
 function SidebarTabButton({
@@ -140,6 +162,8 @@ export function AssetDetailModal({
   initialDeepLink,
   previewFrame,
   onDeepLinkChange,
+  onPrev,
+  onNext,
 }: AssetDetailModalProps) {
   if (!asset) return null;
   // Keyed per asset so comments, selection, drafts, and the viewed version never
@@ -154,6 +178,8 @@ export function AssetDetailModal({
       initialDeepLink={initialDeepLink}
       previewFrame={previewFrame}
       onDeepLinkChange={onDeepLinkChange}
+      onPrev={onPrev}
+      onNext={onNext}
     />
   );
 }
@@ -166,6 +192,8 @@ function AssetDetailDialog({
   initialDeepLink,
   previewFrame = 'native',
   onDeepLinkChange,
+  onPrev,
+  onNext,
 }: AssetDetailModalProps & { asset: MediaAsset }) {
   const {
     comments,
@@ -225,16 +253,17 @@ function AssetDetailDialog({
       durationMs: null,
       label: `${asset.title ?? asset.fileName} · slide ${carouselSlideIndex + 1}`,
       key: `carousel-${asset.groupId ?? asset.id}-${slide.assetId ?? slide.slideIndex}`,
-    };
+      sourceRole: 'original',
+    } satisfies StageMedia;
   }, [asset, viewedVersion, headVersion, viewingHead, carouselSlideIndex]);
 
-  const isVideo = stage.kind === 'video';
+  const isTimed = stage.kind === 'video' || stage.kind === 'audio';
   // The playhead is published into a clock rather than into React state: only the
   // transcript panel follows it, and it coalesces its own re-renders.
   const [clock] = useState(createPlaybackClock);
   // The transcript belongs to the head's audio. Against an older cut its
   // timecodes point at the wrong frames, so it is only offered on the head.
-  const transcriptEnabled = asset.kind === 'video' && viewingHead;
+  const transcriptEnabled = (asset.kind === 'video' || asset.kind === 'audio') && viewingHead;
   const transcript = useAssetTranscript(brandId, asset.id, transcriptEnabled);
 
   // Opening an asset is what pays for its intelligence. A library that predates
@@ -279,7 +308,7 @@ function AssetDetailDialog({
   // Choose the opening tab ONCE, when both sides have loaded — never fight a
   // viewer who has already picked one.
   useEffect(() => {
-    if (!isVideo || autoSelectedTab.current || loading || transcript.loading) return;
+    if (!isTimed || autoSelectedTab.current || loading || transcript.loading) return;
     autoSelectedTab.current = true;
     setSidebarTab(
       preferredSidebarTab({
@@ -287,7 +316,7 @@ function AssetDetailDialog({
         openCommentCount: openCount,
       }),
     );
-  }, [isVideo, loading, transcript.loading, transcript.view.status, openCount]);
+  }, [isTimed, loading, transcript.loading, transcript.view.status, openCount]);
 
   // Stage annotations come from the OPEN threads of the VIEWED version only.
   // Resolving a thread retires its pin (Figma-style); belonging to another
@@ -298,7 +327,7 @@ function AssetDetailDialog({
   );
 
   const post = useCallback(
-    async (input: { body: string; annotation?: CommentAnnotation; parentCommentId?: string }) => {
+    async (input: Omit<PostCommentInput, 'versionId'>) => {
       setPosting(true);
       const created = await postComment({
         ...input,
@@ -351,6 +380,26 @@ function AssetDetailDialog({
     [headVersionId],
   );
 
+  // Captured on the document, not bubbled from the popup: the dialog stack stops keydown
+  // propagation before React's root listener ever sees an arrow press inside the panel.
+  // On a video the player owns the plain arrows (frame step, as in Frame.io) and stops them
+  // at the window, so ⌥/Alt + arrow steps between assets everywhere.
+  const popupRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      if (event.ctrlKey || event.metaKey || event.shiftKey) return;
+      const popup = popupRef.current;
+      if (!popup || !event.target || arrowKeyOwnedElsewhere(event.target, popup)) return;
+      const step = event.key === 'ArrowLeft' ? onPrev : onNext;
+      if (!step) return;
+      event.preventDefault();
+      step();
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, [onPrev, onNext]);
+
   const backToLatest = useCallback(() => {
     setOlderVersionId(null);
     setSelectedCommentId(null);
@@ -374,8 +423,35 @@ function AssetDetailDialog({
       <DialogContent
         showOverlay={false}
         className="fixed inset-4 flex h-auto w-auto max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0 shadow-2xl sm:max-w-none"
+        ref={popupRef}
       >
         <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3 pr-14">
+          {onPrev || onNext ? (
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                aria-label="Previous asset"
+                title="Previous asset (← or ⌥←)"
+                data-testid="asset-detail-prev"
+                disabled={!onPrev}
+                onClick={onPrev}
+                className="flex size-7 items-center justify-center rounded-md hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+              >
+                <ChevronLeft className="size-4" />
+              </button>
+              <button
+                type="button"
+                aria-label="Next asset"
+                title="Next asset (→ or ⌥→)"
+                data-testid="asset-detail-next"
+                disabled={!onNext}
+                onClick={onNext}
+                className="flex size-7 items-center justify-center rounded-md hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+              >
+                <ChevronRight className="size-4" />
+              </button>
+            </div>
+          ) : null}
           <div className="min-w-0">
             <DialogTitle className="truncate text-sm font-medium">
               {asset.title ?? asset.fileName}
@@ -432,31 +508,39 @@ function AssetDetailDialog({
                   onSelectPin={setSelectedCommentId}
                   posting={posting}
                   brandId={brandId}
-                  onPostAnnotated={(body, annotation) => void post({ body, annotation })}
+                  onPostAnnotated={(body, annotation, extras) =>
+                    void post({ body, annotation, ...extras })
+                  }
                 />
               ) : stage.kind === 'video' ? (
-                <VideoAnnotationPlayer
+                // Which bytes play (720p proxy or original) is readable from the
+                // DOM, so a bench can prove the proxy is what streams.
+                <div className="size-full" data-source-role={stage.sourceRole}>
+                  <VideoAnnotationPlayer
+                    key={stage.key}
+                    src={stage.src}
+                    durationMsHint={stage.durationMs}
+                    markers={videoMarkers}
+                    onSelectMarker={setSelectedCommentId}
+                    posting={posting}
+                    brandId={brandId}
+                    onPostAtTime={({ body, annotation, extras }) =>
+                      void post({ body, annotation, ...extras })
+                    }
+                    registerSeek={registerSeek}
+                    onTimeChange={clock.publish}
+                  />
+                </div>
+              ) : stage.kind === 'audio' ? (
+                <AudioStage
                   key={stage.key}
                   src={stage.src}
-                  durationMsHint={stage.durationMs}
-                  markers={videoMarkers}
-                  onSelectMarker={setSelectedCommentId}
-                  posting={posting}
-                  brandId={brandId}
-                  onPostAtTime={({ body, timeMs, endMs, box }) =>
-                    void post({
-                      body,
-                      annotation: {
-                        kind: 'time',
-                        timeMs,
-                        ...(endMs === null ? {} : { endMs }),
-                        box,
-                      },
-                    })
-                  }
+                  label={stage.label}
                   registerSeek={registerSeek}
                   onTimeChange={clock.publish}
                 />
+              ) : stage.kind === 'pdf' && stage.src ? (
+                <PdfPreview key={stage.key} src={stage.src} title={stage.label} />
               ) : viewedVersion ? (
                 // FilePreviewStage signs its download by assetId, which always
                 // mints the HEAD bytes — it cannot represent an older file.
@@ -606,7 +690,10 @@ function AssetDetailDialog({
             </div>
 
             {sidebarTab === 'fields' ? (
-              <AssetFieldsPanel brandId={brandId} assetId={asset.id} />
+              <>
+                <ProvenancePanel brandId={brandId} assetId={asset.id} />
+                <AssetFieldsPanel brandId={brandId} assetId={asset.id} />
+              </>
             ) : sidebarTab === 'performance' ? (
               <PerformancePanel brandId={brandId} assetId={asset.id} />
             ) : sidebarTab === 'insights' && transcriptEnabled && asset.videoInsights ? (
@@ -617,6 +704,8 @@ function AssetDetailDialog({
                 loading={transcript.loading}
                 error={transcript.error}
                 source={transcript.source}
+                language={transcript.language}
+                fileName={asset.fileName}
                 clock={clock}
                 onSeek={seekTo}
               />
@@ -638,7 +727,9 @@ function AssetDetailDialog({
                     pendingIds={pendingIds}
                     posting={posting}
                     loading={loading}
-                    onReply={(parentId, body) => void post({ body, parentCommentId: parentId })}
+                    onReply={(parentId, body, extras) =>
+                      void post({ body, parentCommentId: parentId, ...extras })
+                    }
                     onResolve={(commentId, resolved) => void setResolved(commentId, resolved)}
                     onDelete={(commentId) => void removeComment(commentId)}
                     commentHref={(comment) =>
@@ -662,7 +753,8 @@ function AssetDetailDialog({
                     }
                     busy={posting}
                     brandId={brandId}
-                    onSubmit={(body) => void post({ body })}
+                    reviewOptions
+                    onSubmit={(body, extras) => void post({ body, ...extras })}
                   />
                 </div>
               </>

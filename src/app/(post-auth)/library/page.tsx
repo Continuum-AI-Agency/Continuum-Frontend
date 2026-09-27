@@ -17,6 +17,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import { LibraryViewer } from '@/components/library/LibraryViewer';
+import { readLibraryViewPreferences } from '@/components/library/views/viewPreferences';
 import { fetchBrandStyle } from '@/lib/ai-studio/brandStyle.server';
 import { readBrandAccess } from '@/lib/billing/brandAccess.server';
 import { isPaidBrand } from '@/lib/billing/productAccess';
@@ -191,7 +192,7 @@ async function LibraryContent({ searchParams }: { searchParams: LibrarySearchPar
     if (value) overlayParams.set(key, value);
   }
   const initialDeepLink = parseCommentDeepLink(overlayParams);
-  const [page, collections, savedViews, storageUsedBytes, brandStyle, requestedAssets] =
+  const [page, collections, savedViews, storageUsedBytes, brandStyle, requestedAssets, viewConfig] =
     await Promise.all([
       fetchLibraryBrowsePage(supabase, browseQuery),
       fetchMediaCollections(activeBrandId),
@@ -201,7 +202,13 @@ async function LibraryContent({ searchParams }: { searchParams: LibrarySearchPar
       isUuid(requestedAssetId)
         ? fetchMediaAssets(activeBrandId, { assetId: requestedAssetId, limit: 1 })
         : Promise.resolve([]),
+      readLibraryViewPreferences(supabase, activeBrandId),
     ]);
+  // An explicit ?layout= wins (shared links, the tabs); otherwise the user's saved one.
+  const initialBrowseQuery =
+    !first(searchParams.layout) && viewConfig.layout
+      ? { ...browseQuery, layout: viewConfig.layout }
+      : browseQuery;
 
   return (
     <LibraryViewer
@@ -214,9 +221,11 @@ async function LibraryContent({ searchParams }: { searchParams: LibrarySearchPar
       storageUsedBytes={storageUsedBytes}
       captionStyle={buildCaptionStyle(brandStyle)}
       section={parseLibrarySection(first(searchParams.section))}
-      initialBrowseQuery={browseQuery}
+      initialBrowseQuery={initialBrowseQuery}
       initialDetailAsset={requestedAssets[0] ?? null}
       initialDeepLink={initialDeepLink}
+      initialViewConfig={viewConfig}
+      initialTrashOpen={first(searchParams.view) === 'trash'}
     />
   );
 }

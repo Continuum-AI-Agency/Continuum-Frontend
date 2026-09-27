@@ -47,7 +47,9 @@ describe('stageKindForMimeType', () => {
   it('reads the kind off the mime type of the bytes actually being shown', () => {
     expect(stageKindForMimeType('image/png')).toBe('image');
     expect(stageKindForMimeType('video/quicktime')).toBe('video');
-    expect(stageKindForMimeType('application/pdf')).toBe('file');
+    expect(stageKindForMimeType('audio/mpeg')).toBe('audio');
+    expect(stageKindForMimeType('application/pdf')).toBe('pdf');
+    expect(stageKindForMimeType('application/zip')).toBe('file');
   });
 });
 
@@ -187,5 +189,120 @@ describe('resolveStageMedia — the head follows its version row, not the stale 
     });
     expect(stage.src).toBe('https://storage.test/original.mp4');
     expect(stage.key).toBe('head-asset-1');
+  });
+
+  it('keeps the same key when the version list arrives for the same head bytes', () => {
+    // The modal keys the stage on this; a flip here remounts the annotation layer
+    // mid-drawing and drops the draft's first mark.
+    const asset = { ...HEAD_ASSET, headVersionId: 'v1' };
+    const beforeList = resolveStageMedia({ asset, viewedVersion: null, headVersion: null });
+    const afterList = resolveStageMedia({
+      asset,
+      viewedVersion: null,
+      headVersion: version({ id: 'v1', isHead: true }),
+    });
+    expect(afterList.key).toBe(beforeList.key);
+  });
+});
+
+describe('resolveStageMedia — which bytes play', () => {
+  const PROXY = {
+    assetVersionId: '11111111-1111-4111-8111-111111111111',
+    renditionId: '33333333-3333-4333-8333-333333333333',
+    state: 'ready' as const,
+    kind: 'video' as const,
+    role: 'preview_video' as const,
+    signedUrl: 'https://storage.test/proxy-720p.mp4',
+  };
+  const POSTER = {
+    assetVersionId: '11111111-1111-4111-8111-111111111111',
+    renditionId: '44444444-4444-4444-8444-444444444444',
+    state: 'ready' as const,
+    kind: 'image' as const,
+    role: 'poster' as const,
+    signedUrl: 'https://storage.test/poster.jpg',
+  };
+
+  it('plays a ready 720p proxy over the original on the head', () => {
+    const stage = resolveStageMedia({
+      asset: HEAD_ASSET,
+      viewedVersion: null,
+      headVersion: version({ id: 'v2', isHead: true, preview: PROXY }),
+    });
+    expect(stage).toMatchObject({
+      kind: 'video',
+      src: 'https://storage.test/proxy-720p.mp4',
+      sourceRole: 'preview_video',
+      durationMs: 18000,
+    });
+  });
+
+  it('plays a ready proxy for an older version too', () => {
+    const stage = resolveStageMedia({
+      asset: HEAD_ASSET,
+      viewedVersion: version({ id: 'version-1', preview: PROXY }),
+    });
+    expect(stage.sourceRole).toBe('preview_video');
+    expect(stage.src).toBe('https://storage.test/proxy-720p.mp4');
+  });
+
+  it('plays the original when there is no proxy', () => {
+    const stage = resolveStageMedia({
+      asset: HEAD_ASSET,
+      viewedVersion: null,
+      headVersion: version({ id: 'v2', isHead: true }),
+    });
+    expect(stage.sourceRole).toBe('original');
+    expect(stage.src).toBe('https://storage.test/v1.mp4');
+  });
+
+  it('never swaps a playable video for its poster still', () => {
+    const fromVersion = resolveStageMedia({
+      asset: HEAD_ASSET,
+      viewedVersion: null,
+      headVersion: version({ id: 'v2', isHead: true, preview: POSTER }),
+    });
+    const fromSnapshot = resolveStageMedia({
+      asset: { ...HEAD_ASSET, preview: POSTER },
+      viewedVersion: null,
+    });
+    for (const stage of [fromVersion, fromSnapshot]) {
+      expect(stage.kind).toBe('video');
+      expect(stage.sourceRole).toBe('original');
+    }
+  });
+
+  it('plays the proxy for an MXF original the browser cannot decode', () => {
+    const stage = resolveStageMedia({
+      asset: { ...HEAD_ASSET, fileName: 'camera.mxf', mimeType: 'application/mxf', preview: PROXY },
+      viewedVersion: null,
+    });
+    expect(stage).toMatchObject({ kind: 'video', sourceRole: 'preview_video' });
+  });
+
+  it('puts audio and PDF originals on their native stages', () => {
+    const audio = resolveStageMedia({
+      asset: {
+        ...HEAD_ASSET,
+        kind: 'audio',
+        fileName: 'vo.mp3',
+        mimeType: 'audio/mpeg',
+        signedUrl: 'https://storage.test/vo.mp3',
+      },
+      viewedVersion: null,
+    });
+    expect(audio).toMatchObject({ kind: 'audio', src: 'https://storage.test/vo.mp3' });
+
+    const pdf = resolveStageMedia({
+      asset: {
+        ...HEAD_ASSET,
+        kind: 'file',
+        fileName: 'brief.pdf',
+        mimeType: 'application/pdf',
+        signedUrl: 'https://storage.test/brief.pdf',
+      },
+      viewedVersion: null,
+    });
+    expect(pdf).toMatchObject({ kind: 'pdf', src: 'https://storage.test/brief.pdf' });
   });
 });
