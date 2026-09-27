@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  type ElementRecord,
   HYPERFRAMES_AUDIO_INPUT_HANDLE,
   HYPERFRAMES_IMAGE_INPUT_HANDLE,
   HYPERFRAMES_VIDEO_INPUT_HANDLE,
@@ -8,6 +9,7 @@ import type { Edge } from '@xyflow/react';
 import type { StudioNode } from '../types';
 import {
   assertHyperframesRenderCapability,
+  hyperframesStoryboardInputKey,
   inspectHyperframesInputs,
   resolveHyperframesPrompt,
 } from './startHyperframesAgent';
@@ -95,6 +97,65 @@ describe('inspectHyperframesInputs', () => {
       value: 'Use the portrait as the opening hero',
     });
   });
+
+  test('pins the current brand Element reference in the approved plan inputs', () => {
+    const element = {
+      id: '00000000-0000-4000-8000-000000000001',
+      name: 'Hero product',
+      category: 'product',
+      defaultReferenceAssetId: 'product-reference',
+      members: [],
+    } as unknown as ElementRecord;
+    const result = inspectHyperframesInputs(
+      'agent',
+      [node('product', 'element', { elementId: element.id, useIntent: 'subject' })],
+      [edge('product', HYPERFRAMES_IMAGE_INPUT_HANDLE)],
+      [element],
+    );
+    expect(result.assets).toEqual([
+      {
+        assetId: 'product-reference',
+        kind: 'image',
+        elementId: element.id,
+        elementUseIntent: 'subject',
+      },
+    ]);
+    const key = hyperframesStoryboardInputKey({
+      prompt: 'Launch',
+      assets: result.assets,
+      energy: 'balanced',
+      aspectRatio: '16:9',
+      durationSeconds: 10,
+    });
+    expect(key).toContain('product-reference');
+  });
+
+  test('marks a reference video as direction, not render footage', () => {
+    const result = inspectHyperframesInputs(
+      'agent',
+      [node('reference', 'video', { assetId: 'reference-video' })],
+      [edge('reference', HYPERFRAMES_VIDEO_INPUT_HANDLE)],
+      [],
+      ['reference-video'],
+    );
+    expect(result.assets).toEqual([
+      { assetId: 'reference-video', kind: 'video', purpose: 'reference' },
+    ]);
+  });
+
+  test('marks a reference image as direction, not render media', () => {
+    const result = inspectHyperframesInputs(
+      'agent',
+      [node('reference', 'image', { assetId: 'reference-image' })],
+      [edge('reference', HYPERFRAMES_IMAGE_INPUT_HANDLE)],
+      [],
+      [],
+      ['reference-image'],
+    );
+    expect(result.assets).toEqual([
+      { assetId: 'reference-image', kind: 'image', purpose: 'reference' },
+    ]);
+  });
 });
 
 test('rejects an incapable browser before starting paid agent work', async () => {
@@ -107,7 +168,8 @@ test('a targeted revision uses the visible revision prompt instead of connected 
   expect(
     resolveHyperframesPrompt(
       {
-        prompt: 'Tighten the CTA entrance',
+        prompt: 'Create the original launch film',
+        revisionPrompt: 'Tighten the CTA entrance',
         revisionTarget: {
           revisionId: 'revision-1',
           sceneId: 'cta',

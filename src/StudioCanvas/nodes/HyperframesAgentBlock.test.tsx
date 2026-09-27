@@ -365,7 +365,7 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
     fireEvent.click(getByLabelText('Revise cta scene'));
 
     expect(node()?.data).toMatchObject({
-      prompt: 'Make the CTA entrance legible.',
+      revisionPrompt: 'Make the CTA entrance legible.',
       status: 'idle',
       revisionTarget: {
         revisionId: 'revision-1',

@@ -5,6 +5,7 @@ import {
   type EditorProjectV2,
   editorProjectV2Schema,
 } from '@continuum/contracts';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ToastProvider } from '../../src/components/ui/ToastProvider';
@@ -208,7 +209,9 @@ declare global {
 
 window.__editorV2UiBench = { project: initialProject() };
 createRoot(document.getElementById('root') as HTMLElement).render(
-  <ToastProvider>
-    <Bench />
-  </ToastProvider>,
+  <QueryClientProvider client={new QueryClient()}>
+    <ToastProvider>
+      <Bench />
+    </ToastProvider>
+  </QueryClientProvider>,
 );

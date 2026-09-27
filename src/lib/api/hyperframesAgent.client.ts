@@ -5,10 +5,15 @@ import {
   type HyperframesRenderCompleteRequest,
   type HyperframesReviewUploadRequest,
   type HyperframesReviewUploadResponse,
+  type HyperframesStoryAngle,
+  type HyperframesStoryboard,
+  type HyperframesStoryPlanRequest,
   hyperframesAgentTurnResponseSchema,
   hyperframesClientRenderWorkSchema,
   hyperframesCompositionRevisionSchema,
   hyperframesReviewUploadResponseSchema,
+  hyperframesStoryAnglesSchema,
+  hyperframesStoryboardSchema,
 } from '@continuum/contracts';
 import { z } from 'zod';
 import { http } from './http';
@@ -50,6 +55,30 @@ export function startHyperframesTurn(
     method: 'POST',
     body: { brandId, turn },
     schema: hyperframesAgentTurnResponseSchema,
+    cache: 'no-store',
+  });
+}
+
+export function getHyperframesStoryAngles(
+  request: HyperframesStoryPlanRequest,
+): Promise<{ angles: HyperframesStoryAngle[] }> {
+  return http.request({
+    path: `${base()}/story-angles`,
+    method: 'POST',
+    body: request,
+    schema: hyperframesStoryAnglesSchema,
+    cache: 'no-store',
+  });
+}
+
+export function getHyperframesStoryboard(
+  request: HyperframesStoryPlanRequest,
+): Promise<{ storyboard: HyperframesStoryboard }> {
+  return http.request({
+    path: `${base()}/storyboard`,
+    method: 'POST',
+    body: request,
+    schema: z.object({ storyboard: hyperframesStoryboardSchema }),
     cache: 'no-store',
   });
 }

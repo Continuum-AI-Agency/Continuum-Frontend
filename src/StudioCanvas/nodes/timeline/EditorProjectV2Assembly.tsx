@@ -1473,7 +1473,7 @@ export function EditorProjectV2Assembly({
             onClick={onRender}
             disabled={busy || !clips.length || !canRender}
             title={
-              canRender ? undefined : 'Approve one final master for every shot before rendering.'
+              canRender ? undefined : 'Add pinned video clips or approve every generated master.'
             }
           >
             Render final 1080p
