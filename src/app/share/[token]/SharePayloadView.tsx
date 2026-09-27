@@ -1,23 +1,27 @@
-// Brand-neutral viewer for a resolved share link. Server-rendered: plain
-// anchors handle download (the signed URL's `download` query param sets
-// Content-Disposition), so an uncommented share still ships ~zero client JS.
-// The only client leaf is ShareVideoPlayer, and only for a video that actually
-// carries time-pinned comments — everything else, threads included, is static.
-//
-// Read-only throughout: comments are displayed, never authored. There is no
-// composer on this page and no mutation seam to reach one.
+// The public viewer for a resolved share link, in the owner's chosen layout
+// (grid, list or reel) and the brand's look (logo, accent, background, theme —
+// the brand kit by default, the link's overrides on top). Server-rendered; the
+// client leaves are the reel's pager, the per-session watermark, the event
+// beacons, the video player with time-pinned comments and the guest forms.
+// Downloads go through /share/<token>/download so each one is recorded and,
+// on a watermarked link, burned with the reviewer's identity.
 
 import type {
   CommentDeepLink,
+  CustomFieldValue,
   MediaAsset,
   PublicShareAsset,
   PublicShareComment,
   PublicSharePayload,
+  ShareFeaturedField,
+  ShareLinkLayout,
+  ShareLinkWatermark,
+  ShareWatermarkViewer,
 } from '@continuum/contracts';
+import type { CSSProperties, ReactNode } from 'react';
 import { buildShareDeepLinkHref, commentDeepLinkFromAnnotation } from '@continuum/contracts';
 import { Download, FileArchive } from 'lucide-react';
 import { initialsFor } from '@/lib/library/comments';
-import { withForcedDownload } from '@/lib/media/downloadUrl';
 import { ExternalApprovalControl } from './ExternalApprovalControl';
 import { ExternalCommentComposer } from './ExternalCommentComposer';
 import {
@@ -26,7 +30,11 @@ import {
   type PublicShareThread,
   ShareCommentThreads,
 } from './ShareCommentThreads';
+import { FeaturedFieldEditor } from './FeaturedFieldEditor';
+import { ShareAssetBeacon, ShareOpenBeacon } from './ShareEventBeacon';
+import { ShareReel } from './ShareReel';
 import { type ShareTimeMarker, ShareVideoPlayer } from './ShareVideoPlayer';
+import { ShareWatermark } from './ShareWatermark';
 
 const MARKER_TITLE_MAX = 80;
 
@@ -42,11 +50,21 @@ function formatBytes(bytes: number | null | undefined): string | null {
   return `${value >= 10 || unit === 0 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
 }
 
-function DownloadButton({ asset }: { asset: MediaAsset }) {
+function DownloadButton({
+  asset,
+  token,
+  versionId,
+}: {
+  asset: MediaAsset;
+  token: string;
+  versionId: string;
+}) {
   if (!asset.signedUrl) return null;
+  const query = new URLSearchParams({ asset: asset.id, version: versionId });
   return (
     <a
-      href={withForcedDownload(asset.signedUrl, asset.fileName)}
+      href={`/share/${token}/download?${query}`}
+      data-share-download={asset.id}
       className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
     >
       <Download className="size-3.5" aria-hidden />
@@ -141,7 +159,7 @@ function PublicImageAnnotations({ comments }: { comments: PublicShareComment[] }
   );
 }
 
-function AssetPreview({
+function AssetPreviewMedia({
   asset,
   markers,
   comments,
@@ -188,7 +206,8 @@ function AssetPreview({
     );
   }
   const preview = asset.preview?.state === 'ready' ? asset.preview : null;
-  if (preview?.kind === 'image' && preview.signedUrl) {
+  // A video's image preview is its poster: the reviewer gets the playable file.
+  if (preview?.kind === 'image' && preview.signedUrl && asset.kind !== 'video') {
     return (
       <div className="relative overflow-hidden rounded-lg border border-border">
         <img
@@ -267,6 +286,24 @@ function AssetPreview({
   );
 }
 
+type WatermarkOverlay = {
+  watermark: ShareLinkWatermark;
+  viewer: Omit<ShareWatermarkViewer, 'time'>;
+};
+
+function AssetPreview({
+  overlay,
+  ...media
+}: Parameters<typeof AssetPreviewMedia>[0] & { overlay: WatermarkOverlay | null }) {
+  if (!overlay) return <AssetPreviewMedia {...media} />;
+  return (
+    <div className="relative">
+      <AssetPreviewMedia {...media} />
+      <ShareWatermark watermark={overlay.watermark} viewer={overlay.viewer} />
+    </div>
+  );
+}
+
 function SharedAssetTile({
   sharedAsset,
   comments,
@@ -278,7 +315,15 @@ function SharedAssetTile({
   hasPasscode,
   allowApproval,
   deepLink,
+  layout,
+  overlay,
+  featuredField,
+  featuredValue,
 }: {
+  layout: ShareLinkLayout;
+  overlay: WatermarkOverlay | null;
+  featuredField: ShareFeaturedField | null;
+  featuredValue: CustomFieldValue | undefined;
   sharedAsset: PublicShareAsset;
   comments: PublicShareComment[];
   allowDownload: boolean;
@@ -296,9 +341,17 @@ function SharedAssetTile({
   // renders the frame, not the annotation stage.
   const markers = asset.kind === 'video' ? timeMarkersFor(threads) : [];
 
-  return (
-    <div className="flex flex-col gap-2">
-      <AssetPreview asset={asset} markers={markers} comments={comments} deepLink={deepLink} />
+  const preview = (
+    <AssetPreview
+      asset={asset}
+      markers={markers}
+      comments={comments}
+      deepLink={deepLink}
+      overlay={overlay}
+    />
+  );
+  const details = (
+    <div className="flex min-w-0 flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm text-foreground">{asset.title ?? asset.fileName}</p>
@@ -307,13 +360,23 @@ function SharedAssetTile({
             {isHead ? ' · Latest' : ''}
           </p>
         </div>
-        {allowDownload ? <DownloadButton asset={asset} /> : null}
+        {allowDownload ? <DownloadButton asset={asset} token={token} versionId={versionId} /> : null}
       </div>
       {showMetadata ? (
         <p className="text-xs text-muted-foreground">
           {asset.mimeType}
           {formatBytes(asset.sizeBytes) ? ` · ${formatBytes(asset.sizeBytes)}` : ''}
         </p>
+      ) : null}
+      {featuredField ? (
+        <FeaturedFieldEditor
+          token={token}
+          assetId={asset.id}
+          versionId={versionId}
+          field={featuredField}
+          value={featuredValue}
+          hasIdentity={hasIdentity}
+        />
       ) : null}
       <ShareCommentThreads
         threads={threads}
@@ -344,6 +407,22 @@ function SharedAssetTile({
       ) : null}
     </div>
   );
+
+  return (
+    <ShareAssetBeacon
+      token={token}
+      assetId={asset.id}
+      versionId={versionId}
+      className={
+        layout === 'list'
+          ? 'grid gap-4 border-b border-border pb-6 sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]'
+          : 'flex flex-col gap-2'
+      }
+    >
+      {preview}
+      {details}
+    </ShareAssetBeacon>
+  );
 }
 
 function commentsByAsset(comments: PublicShareComment[]): Map<string, PublicShareComment[]> {
@@ -356,6 +435,23 @@ function commentsByAsset(comments: PublicShareComment[]): Map<string, PublicShar
   return grouped;
 }
 
+const DOWNLOAD_ALL_CLASS =
+  'inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90';
+
+function LayoutBody({
+  layout,
+  tiles,
+  labels,
+}: {
+  layout: ShareLinkLayout;
+  tiles: ReactNode[];
+  labels: string[];
+}) {
+  if (layout === 'reel') return <ShareReel slides={tiles} labels={labels} />;
+  if (layout === 'list') return <div className="flex flex-col gap-6">{tiles}</div>;
+  return <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">{tiles}</div>;
+}
+
 export function SharePayloadView({
   token,
   payload,
@@ -365,11 +461,27 @@ export function SharePayloadView({
   payload: PublicSharePayload;
   deepLink?: CommentDeepLink;
 }) {
-  const heading =
+  const fallbackHeading =
     payload.scope === 'collection'
       ? (payload.collectionName ?? 'Shared collection')
       : (payload.assets[0]?.asset.title ?? payload.assets[0]?.asset.fileName ?? 'Shared asset');
+  const branding = payload.branding ?? {};
+  const heading = branding.headerTitle ?? fallbackHeading;
+  // A single asset has nothing to lay out; the owner's layout applies to many.
+  const layout: ShareLinkLayout =
+    payload.assets.length > 1 ? (payload.layout ?? 'grid') : 'list';
   const grouped = commentsByAsset(payload.comments);
+  const overlay: WatermarkOverlay | null =
+    payload.watermark && payload.reviewer
+      ? {
+          watermark: payload.watermark,
+          viewer: {
+            name: payload.reviewer.displayName,
+            email: payload.reviewer.email,
+            ip: payload.viewerIp ?? null,
+          },
+        }
+      : null;
 
   const tiles = payload.assets.map((sharedAsset) => (
     <SharedAssetTile
@@ -386,25 +498,70 @@ export function SharePayloadView({
       hasPasscode={payload.policy.hasPasscode}
       allowApproval={payload.policy.allowApproval}
       deepLink={deepLink}
+      layout={layout}
+      overlay={overlay}
+      featuredField={payload.featuredField ?? null}
+      featuredValue={payload.featuredValues?.[sharedAsset.asset.id]}
     />
   ));
+  const labels = payload.assets.map(({ asset }) => asset.title ?? asset.fileName);
+  const themeStyle = {
+    ...(branding.accent ? { '--primary': branding.accent } : {}),
+    ...(branding.background ? { '--background': branding.background } : {}),
+  } as CSSProperties;
+  const theme = branding.theme && branding.theme !== 'system' ? branding.theme : undefined;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-6 py-10">
-      <header className="flex items-baseline justify-between gap-4 border-b border-border pb-4">
-        <h1 className="truncate text-lg font-semibold text-foreground">{heading}</h1>
-        <p className="shrink-0 text-xs text-muted-foreground">Shared via Continuum</p>
-      </header>
-      {payload.scope === 'collection' ? (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">{tiles}</div>
-      ) : (
-        tiles
-      )}
-      {payload.assets.length === 0 ? (
-        <p className="py-12 text-center text-sm text-muted-foreground">
-          Nothing here yet — the shared collection is empty.
-        </p>
-      ) : null}
-    </main>
+    <div
+      data-theme={theme}
+      style={themeStyle}
+      className="min-h-screen bg-background text-foreground"
+    >
+      <ShareOpenBeacon token={token} />
+      <main
+        data-share-layout={layout}
+        className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-10"
+      >
+        <header className="flex flex-col gap-3 border-b border-border pb-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3">
+              {payload.logoUrl ? (
+                // Signed storage URL, cross-origin and short-lived; next/image adds nothing.
+                <img
+                  src={payload.logoUrl}
+                  alt={payload.brandName ?? 'Brand logo'}
+                  data-share-logo
+                  className="h-9 w-auto max-w-32 object-contain"
+                />
+              ) : null}
+              <div className="min-w-0">
+                <h1 className="truncate text-lg font-semibold text-foreground">{heading}</h1>
+                {payload.brandName ? (
+                  <p className="text-xs text-muted-foreground">{payload.brandName}</p>
+                ) : null}
+              </div>
+            </div>
+            {payload.policy.allowDownload && payload.assets.length > 1 ? (
+              <a href={`/share/${token}/download-all`} data-share-download-all className={DOWNLOAD_ALL_CLASS}>
+                <Download className="size-3.5" aria-hidden />
+                Download all
+              </a>
+            ) : null}
+          </div>
+          {branding.description ? (
+            <p className="max-w-3xl text-sm whitespace-pre-line text-muted-foreground">
+              {branding.description}
+            </p>
+          ) : null}
+        </header>
+        <LayoutBody layout={layout} tiles={tiles} labels={labels} />
+        {payload.assets.length === 0 ? (
+          <p className="py-12 text-center text-sm text-muted-foreground">
+            Nothing here yet — the shared collection is empty.
+          </p>
+        ) : null}
+        <p className="text-center text-2xs text-muted-foreground">Shared via Continuum</p>
+      </main>
+    </div>
   );
 }
