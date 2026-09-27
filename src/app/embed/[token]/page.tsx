@@ -1,5 +1,6 @@
 import { compositionSpecSchema, type MediaAsset } from '@continuum/contracts';
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import { z } from 'zod';
 import { loadSharePayload } from '@/app/share/[token]/loadSharePayload';
 import { HyperframesInteractivePlayer } from '@/lib/hyperframes-agent/InteractivePreview';
@@ -10,8 +11,6 @@ export const metadata: Metadata = {
   title: 'Video — Continuum',
   robots: { index: false, follow: false },
 };
-export const dynamic = 'force-dynamic';
-
 const versionSchema = z.object({
   id: z.string(),
   asset_id: z.string(),
@@ -91,13 +90,22 @@ async function loadInteractive(asset: MediaAsset) {
   };
 }
 
-export default async function VideoEmbedPage({
-  params,
-  searchParams,
-}: {
+type EmbedProps = {
   params: Promise<{ token: string }>;
   searchParams: Promise<{ mode?: string }>;
-}) {
+};
+
+// Request data is read under Suspense: with cacheComponents a route-level `dynamic` flag is
+// a build error, the same way the share viewer streams its token lookup.
+export default function VideoEmbedPage(props: EmbedProps) {
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-black" />}>
+      <VideoEmbed {...props} />
+    </Suspense>
+  );
+}
+
+async function VideoEmbed({ params, searchParams }: EmbedProps) {
   const { token } = await params;
   const { mode } = await searchParams;
   const result = await loadSharePayload(token);
