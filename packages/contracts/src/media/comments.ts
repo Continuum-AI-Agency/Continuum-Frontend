@@ -18,21 +18,73 @@ export const boxAnnotationSchema = z
   .strict();
 export type BoxAnnotation = z.infer<typeof boxAnnotationSchema>;
 
-export const pointAnnotationSchema = z
-  .object({
-    kind: z.literal('point'),
-    x: z.number().min(0).max(1),
-    y: z.number().min(0).max(1),
-  })
-  .strict();
-export type PointAnnotation = z.infer<typeof pointAnnotationSchema>;
-
 const freehandPointSchema = z
   .object({
     x: z.number().min(0).max(1),
     y: z.number().min(0).max(1),
   })
   .strict();
+
+// A reviewer's marks on a frame (Frame.io-style draw tools). Each shape carries
+// its own colour and normalized 0..1 geometry against the media's intrinsic
+// frame, so it re-renders exactly where it was drawn at any stage size.
+// Shapes ride on an existing anchor — the pin of a `point` annotation on an
+// image, or the moment of a `time` annotation on a video — rather than on a new
+// annotation kind, so every reader that switches on `kind` keeps working and
+// simply ignores marks it does not draw yet.
+export const DRAWING_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+const drawingColorSchema = z.string().regex(DRAWING_COLOR_PATTERN);
+
+export const drawingShapeSchema = z.discriminatedUnion('tool', [
+  z
+    .object({
+      tool: z.literal('box'),
+      color: drawingColorSchema,
+      x: z.number().min(0).max(1),
+      y: z.number().min(0).max(1),
+      width: z.number().min(0).max(1),
+      height: z.number().min(0).max(1),
+    })
+    .strict(),
+  z
+    .object({
+      tool: z.literal('arrow'),
+      color: drawingColorSchema,
+      from: freehandPointSchema,
+      to: freehandPointSchema,
+    })
+    .strict(),
+  z
+    .object({
+      tool: z.literal('line'),
+      color: drawingColorSchema,
+      from: freehandPointSchema,
+      to: freehandPointSchema,
+    })
+    .strict(),
+  z
+    .object({
+      tool: z.literal('freehand'),
+      color: drawingColorSchema,
+      points: z.array(freehandPointSchema).min(2).max(1024),
+    })
+    .strict(),
+]);
+export type DrawingShape = z.infer<typeof drawingShapeSchema>;
+export type DrawingTool = DrawingShape['tool'];
+
+export const MAX_DRAWING_SHAPES = 32;
+export const drawingShapesSchema = z.array(drawingShapeSchema).min(1).max(MAX_DRAWING_SHAPES);
+
+export const pointAnnotationSchema = z
+  .object({
+    kind: z.literal('point'),
+    x: z.number().min(0).max(1),
+    y: z.number().min(0).max(1),
+    shapes: drawingShapesSchema.optional(),
+  })
+  .strict();
+export type PointAnnotation = z.infer<typeof pointAnnotationSchema>;
 
 export const freehandAnnotationSchema = z
   .object({
@@ -52,6 +104,7 @@ export const timeAnnotationSchema = z
     timeMs: z.number().int().nonnegative(),
     endMs: z.number().int().positive().optional(),
     box: boundingBoxSchema.nullable().optional(),
+    shapes: drawingShapesSchema.optional(),
   })
   .strict()
   .refine((annotation) => annotation.endMs === undefined || annotation.endMs > annotation.timeMs, {
@@ -117,6 +170,27 @@ export function stripMentionTokensForExcerpt(body: string, maxLength = 140): str
   return plain.length > maxLength ? `${plain.slice(0, maxLength - 1)}…` : plain;
 }
 
+// An asset (optionally an exact version) attached to a comment as reference —
+// "use this take instead". media.comments.attachments holds at most ten.
+export const commentAttachmentSchema = z
+  .object({
+    assetId: z.string().uuid(),
+    versionId: z.string().uuid().optional(),
+  })
+  .strict();
+export type CommentAttachment = z.infer<typeof commentAttachmentSchema>;
+
+export const MAX_COMMENT_ATTACHMENTS = 10;
+export const commentAttachmentsSchema = z
+  .array(commentAttachmentSchema)
+  .max(MAX_COMMENT_ATTACHMENTS);
+
+// Who may read a comment outside the brand. 'internal' (the column default) never
+// leaves the team; 'shared' is shown to share-link recipients; 'external' marks a
+// comment an external reviewer wrote through a share link.
+export const commentVisibilitySchema = z.enum(['internal', 'shared', 'external']);
+export type CommentVisibility = z.infer<typeof commentVisibilitySchema>;
+
 export const mediaCommentSchema = z
   .object({
     id: z.string().min(1),
@@ -129,6 +203,8 @@ export const mediaCommentSchema = z
     // membership server-side. Drives rendering and notification fan-out.
     mentions: z.array(commentMentionSchema).default([]),
     annotation: commentAnnotationSchema.nullable().optional(),
+    attachments: commentAttachmentsSchema.default([]),
+    visibility: commentVisibilitySchema.optional(),
     resolvedAt: z.string().nullable().optional(),
     resolvedBy: z.string().nullable().optional(),
     createdBy: z.string().nullable().optional(),
@@ -150,6 +226,7 @@ export const createCommentRequestSchema = z
     // validates this list against brand membership before fanning out.
     mentions: z.array(commentMentionSchema).max(20).optional(),
     annotation: commentAnnotationSchema.optional(),
+    attachments: commentAttachmentsSchema.optional(),
     parentCommentId: z.string().min(1).optional(),
     versionId: z.string().min(1).optional(),
     idempotencyKey: z.string().min(1).max(200).optional(),
@@ -179,6 +256,22 @@ export const updateCommentOperationSchema = updateCommentRequestSchema.extend({
   action: z.literal('update_asset_comment'),
 });
 
+// The review metadata of a comment a member may change after posting: whether
+// share recipients see it (the lock toggle) and which assets it references.
+// 'external' is never settable — it is written only by the share-link path.
+export const patchCommentMetadataRequestSchema = z
+  .object({
+    brandId: z.string().min(1),
+    commentId: z.string().min(1),
+    visibility: z.enum(['internal', 'shared']).optional(),
+    attachments: commentAttachmentsSchema.optional(),
+  })
+  .strict()
+  .refine((v) => v.visibility !== undefined || v.attachments !== undefined, {
+    message: 'visibility or attachments is required',
+  });
+export type PatchCommentMetadataRequest = z.infer<typeof patchCommentMetadataRequestSchema>;
+
 export const deleteCommentRequestSchema = z
   .object({
     brandId: z.string().min(1),
@@ -206,3 +299,22 @@ export const listCommentsResponseSchema = z
   })
   .strict();
 export type ListCommentsResponse = z.infer<typeof listCommentsResponseSchema>;
+
+// How a video asset counts time, for SMPTE display and marker export: the measured
+// frame rate and the file's own start timecode (its tmcd track; 0 when it has none).
+export const assetTimingSchema = z
+  .object({
+    assetId: z.string().min(1),
+    versionId: z.string().nullable(),
+    assetName: z.string(),
+    fileName: z.string(),
+    frameRate: z
+      .object({ num: z.number().int().positive(), den: z.number().int().positive() })
+      .strict(),
+    startFrame: z.number().int().nonnegative(),
+    dropFrame: z.boolean(),
+    startTimecode: z.string(),
+    durationMs: z.number().int().nonnegative(),
+  })
+  .strict();
+export type AssetTiming = z.infer<typeof assetTimingSchema>;

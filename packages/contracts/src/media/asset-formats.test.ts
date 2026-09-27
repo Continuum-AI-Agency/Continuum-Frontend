@@ -30,9 +30,9 @@ describe('Library format registry', () => {
     expect(
       classifyLibraryFile({ fileName: 'raw.cr3', mimeType: 'image/x-canon-cr3' }).accepted,
     ).toBe(false);
-    expect(
-      classifyLibraryFile({ fileName: 'clip.mkv', mimeType: 'video/x-matroska' }).accepted,
-    ).toBe(false);
+    expect(classifyLibraryFile({ fileName: 'clip.flv', mimeType: 'video/x-flv' }).accepted).toBe(
+      false,
+    );
   });
 
   it('publishes one picker accept value from the registry', () => {
@@ -50,6 +50,64 @@ describe('Library format registry', () => {
     expect(mxf.originalKind).toBe('video');
     expect(mxf.previewStrategy).toBe('proxy_transcode');
     expect(libraryStorageBucket(mxf)).toBe('media-source');
+  });
+});
+
+describe('container video (MKV / AVI / WMV)', () => {
+  it.each([
+    ['clip.mkv', 'video/x-matroska'],
+    ['clip.avi', 'video/x-msvideo'],
+    ['clip.avi', 'video/avi'],
+    ['clip.wmv', 'video/x-ms-wmv'],
+    ['clip.wmv', 'video/x-ms-asf'],
+    ['CLIP.MKV', ''],
+    ['clip.bin', 'video/x-matroska'],
+    ['clip', 'video/x-ms-wmv'],
+  ] as const)('%s (%s) plays through a server proxy stored in the viewer bucket', (fileName, mimeType) => {
+    const format = classifyLibraryFile({ fileName, mimeType });
+    if (!format.accepted) throw new Error(`expected ${fileName} to be accepted`);
+    expect(format.family).toBe('container_video');
+    expect(format.originalKind).toBe('video');
+    expect(format.previewStrategy).toBe('proxy_transcode');
+    expect(libraryStorageBucket(format)).toBe('media-library');
+  });
+
+  it('accepts a same-stem MP4 sidecar while the proxy is pending', () => {
+    expect(
+      isPlayableSidecarPreview({ sourceFileName: 'tape.wmv', companionFileName: 'tape.mp4' }),
+    ).toBe(true);
+  });
+
+  it('is offered by the picker', () => {
+    for (const extension of ['.mkv', '.avi', '.wmv']) {
+      expect(LIBRARY_ACCEPT_ATTRIBUTE.split(',')).toContain(extension);
+    }
+  });
+});
+
+describe('office documents', () => {
+  it.each([
+    ['brief.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    ['deck.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+    ['budget.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+    ['old.doc', 'application/msword'],
+    ['old.ppt', 'application/vnd.ms-powerpoint'],
+    ['old.xls', 'application/vnd.ms-excel'],
+    ['brief.docx', 'application/octet-stream'],
+    ['upload', 'application/vnd.ms-excel'],
+  ] as const)('%s (%s) is an honest no-preview source file', (fileName, mimeType) => {
+    const format = classifyLibraryFile({ fileName, mimeType });
+    if (!format.accepted) throw new Error(`expected ${fileName} to be accepted`);
+    expect(format.family).toBe('office_document');
+    expect(format.originalKind).toBe('file');
+    expect(format.previewStrategy).toBe('none');
+    expect(libraryStorageBucket(format)).toBe('media-source');
+  });
+
+  it('is offered by the picker', () => {
+    for (const extension of ['.docx', '.pptx', '.xlsx', '.doc', '.ppt', '.xls']) {
+      expect(LIBRARY_ACCEPT_ATTRIBUTE.split(',')).toContain(extension);
+    }
   });
 });
 

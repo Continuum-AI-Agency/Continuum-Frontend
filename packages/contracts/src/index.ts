@@ -22,6 +22,7 @@ export * from './invites/index';
 export * from './laya/index';
 export * from './mcp/index';
 export * from './media/index';
+export * from './storage/transfer';
 export * from './media-stream/index';
 export * from './onboarding/index';
 export * from './optimization/index';

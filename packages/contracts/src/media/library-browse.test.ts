@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { libraryBrowseQuerySchema } from './library-browse';
+import { libraryBrowseQuerySchema, libraryTrashItemSchema } from './library-browse';
 
 const brandId = '11111111-1111-4111-8111-111111111111';
 
@@ -69,5 +69,18 @@ describe('libraryBrowseQuerySchema', () => {
     expect(libraryBrowseQuerySchema.safeParse({ brandId, aspectRatios: ['1.91:1'] }).success).toBe(
       false,
     );
+  });
+});
+
+describe('layouts and trash', () => {
+  test('accepts every layout the Library renders, and nothing else', () => {
+    for (const layout of ['grid', 'list', 'board', 'reel']) {
+      expect(libraryBrowseQuerySchema.parse({ brandId, layout }).layout).toBe(layout);
+    }
+    expect(libraryBrowseQuerySchema.safeParse({ brandId, layout: 'table' }).success).toBe(false);
+  });
+
+  test('a trash item needs its deletion time beside the asset', () => {
+    expect(libraryTrashItemSchema.safeParse({ asset: {} }).success).toBe(false);
   });
 });
