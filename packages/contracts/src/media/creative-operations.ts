@@ -3,6 +3,8 @@ import { z } from 'zod';
 export const creativeOperationErrorCodeSchema = z.enum([
   'unauthenticated',
   'brand_forbidden',
+  // A brand member whose role (viewer) may not run this action.
+  'insufficient_role',
   'asset_not_found',
   'version_not_found',
   'version_conflict',
@@ -64,6 +66,8 @@ export const registerGeneratedAssetOperationSchema = z
       'reel',
       'meta_ad',
       'figma',
+      'goal_artifact',
+      'forge',
     ]),
     operation: z.string().regex(/^[a-z][a-z0-9_]{0,79}$/),
     originRef: z.record(z.string(), z.unknown()).default({}),

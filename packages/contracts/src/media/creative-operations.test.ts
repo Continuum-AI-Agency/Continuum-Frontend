@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  creativeOperationErrorCodeSchema,
   registerGeneratedAssetOperationSchema,
   registerGeneratedAssetResponseSchema,
 } from './creative-operations';
@@ -79,5 +80,33 @@ describe('registerGeneratedAssetResponseSchema', () => {
     });
 
     expect(parsed.lineageCount).toBe(1);
+  });
+});
+
+describe('creativeOperationErrorCodeSchema', () => {
+  it('knows the viewer refusal and still rejects junk', () => {
+    expect(creativeOperationErrorCodeSchema.safeParse('insufficient_role').success).toBe(true);
+    expect(creativeOperationErrorCodeSchema.safeParse('not_a_code').success).toBe(false);
+  });
+});
+
+describe('registerGeneratedAssetOperationSchema sources', () => {
+  it('registers a forge output and a goal artifact source', () => {
+    for (const source of ['forge', 'goal_artifact']) {
+      expect(
+        registerGeneratedAssetOperationSchema.safeParse({
+          action: 'register_generated_asset',
+          brandId: BRAND_ID,
+          kind: 'image',
+          bucket: 'brand-profile-assets',
+          storagePath: `${BRAND_ID}/forge/out.png`,
+          fileName: 'out.png',
+          mimeType: 'image/png',
+          source,
+          operation: 'forge_render',
+          idempotencyKey: `forge:${source}`,
+        }).success,
+      ).toBe(true);
+    }
   });
 });

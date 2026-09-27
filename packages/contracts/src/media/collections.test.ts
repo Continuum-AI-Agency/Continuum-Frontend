@@ -8,6 +8,8 @@ import {
   mergeLibraryTagsOperationSchema,
   mutateCollectionMembershipOperationSchema,
   renameLibraryTagOperationSchema,
+  smartCollectionQuerySchema,
+  updateLibraryCollectionOperationSchema,
 } from './collections';
 
 const BRAND = '6c92770d-dc9d-4cc1-aebd-aed97fc240a1';
@@ -162,6 +164,73 @@ describe('Library collection commands', () => {
         sourceTags: ['Reel'],
         targetTag: 'reel',
       }).success,
+    ).toBe(false);
+  });
+});
+
+describe('collection visibility and view config', () => {
+  it('creates a private collection with a view config', () => {
+    const parsed = createLibraryCollectionOperationSchema.parse({
+      action: 'create_library_collection',
+      brandId: BRAND,
+      name: 'My picks',
+      visibility: 'private',
+      viewConfig: { layout: 'list' },
+    });
+    expect(parsed.visibility).toBe('private');
+    expect(parsed.viewConfig).toEqual({ layout: 'list' });
+  });
+
+  it('accepts an update that only changes visibility or viewConfig', () => {
+    const base = {
+      action: 'update_library_collection',
+      brandId: BRAND,
+      collectionId: COLLECTION,
+    } as const;
+    expect(
+      updateLibraryCollectionOperationSchema.safeParse({ ...base, visibility: 'team' }).success,
+    ).toBe(true);
+    expect(
+      updateLibraryCollectionOperationSchema.safeParse({ ...base, viewConfig: { layout: 'reel' } })
+        .success,
+    ).toBe(true);
+    expect(updateLibraryCollectionOperationSchema.safeParse(base).success).toBe(false);
+  });
+
+  it('rejects an unknown visibility', () => {
+    expect(
+      createLibraryCollectionOperationSchema.safeParse({
+        action: 'create_library_collection',
+        brandId: BRAND,
+        name: 'X',
+        visibility: 'public',
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('smart collection query', () => {
+  const BRAND_ID = '11111111-1111-4111-8111-111111111111';
+  it('carries custom-field filters and the viewer-relative keys a saved view needs', () => {
+    const parsed = createLibraryCollectionOperationSchema.safeParse({
+      action: 'create_library_collection',
+      brandId: BRAND_ID,
+      name: 'Assigned to me, done',
+      kind: 'smart',
+      visibility: 'private',
+      smartQuery: {
+        brandId: BRAND_ID,
+        tags: ['hero'],
+        assignedTo: 'me',
+        fieldFilters: [{ fieldId: 'f1', operator: 'any_of', values: ['@me'] }],
+      },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('refuses a viewer key other than me', () => {
+    expect(
+      smartCollectionQuerySchema.safeParse({ brandId: BRAND_ID, assignedTo: 'someone' }).success,
     ).toBe(false);
   });
 });
