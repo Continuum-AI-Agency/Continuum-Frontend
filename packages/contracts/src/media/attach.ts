@@ -217,7 +217,9 @@ export function shapeUserSuppliedMedia(
     throw new Error(`shapeUserSuppliedMedia: ${multiVideo}`);
   }
   const primary = list[0];
-  const publishableKinds = list.flatMap((item) => (item.kind === 'file' ? [] : [item.kind]));
+  const publishableKinds = list.flatMap((item) =>
+    item.kind === 'image' || item.kind === 'video' ? [item.kind] : [],
+  );
   const inferred = publishFormatForAssetKinds(publishableKinds);
   // The caller's format is a TIE-BREAK, never an override. It exists for `[video, image]`,
   // which the assets genuinely cannot settle — reel-with-a-cover or mixed carousel. When the

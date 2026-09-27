@@ -15,13 +15,24 @@ export const librarySortSchema = z.enum([
   'most_used',
   'best_performing',
   'manual',
+  // Sort by a custom field (`sortFieldId`); media.library_browse_page receives it as
+  // p_sort = 'field_asc:<field id>' so its signature never grows an overload.
+  'field_asc',
+  'field_desc',
 ]);
 
 export type LibrarySort = z.infer<typeof librarySortSchema>;
 
 export const DEFAULT_LIBRARY_SORT: LibrarySort = 'created_desc';
 
-export const libraryMediaTypeSchema = z.enum(['all', 'image', 'video', 'carousel', 'project_file']);
+export const libraryMediaTypeSchema = z.enum([
+  'all',
+  'image',
+  'video',
+  'carousel',
+  'project_file',
+  'audio',
+]);
 export type LibraryMediaType = z.infer<typeof libraryMediaTypeSchema>;
 
 export const libraryPlacementSchema = z.enum(['reel', 'story', 'feed', 'ad', 'other']);
@@ -30,7 +41,9 @@ export type LibraryPlacement = z.infer<typeof libraryPlacementSchema>;
 export const libraryPerformanceWindowSchema = z.enum(['d7', 'd14', 'd30']);
 export type LibraryPerformanceWindow = z.infer<typeof libraryPerformanceWindowSchema>;
 
-export const libraryLayoutSchema = z.enum(['grid', 'board']);
+// grid = cards, list = sortable metadata table, board = lanes by a status field,
+// reel = one asset full-bleed at a time, stepped with the arrow keys.
+export const libraryLayoutSchema = z.enum(['grid', 'list', 'board', 'reel']);
 export type LibraryLayout = z.infer<typeof libraryLayoutSchema>;
 
 /**
@@ -103,6 +116,8 @@ export const libraryBrowseQuerySchema = z
     performanceWindow: libraryPerformanceWindowSchema.default('d30'),
     layout: libraryLayoutSchema.default('grid'),
     boardGroupBy: z.string().min(1).max(100).default('review_status'),
+    /** The custom field a `field_asc` / `field_desc` sort orders by. */
+    sortFieldId: z.string().uuid().nullable().optional(),
     cursor: z.string().min(1).nullable().optional(),
     limit: z.number().int().min(1).max(96).default(48),
   })
@@ -131,6 +146,19 @@ export const libraryBrowsePageSchema = z
   })
   .strict();
 export type LibraryBrowsePage = z.infer<typeof libraryBrowsePageSchema>;
+
+/** Days a soft-deleted asset stays restorable from the Library's Trash view. */
+export const LIBRARY_TRASH_RETENTION_DAYS = 30;
+
+// A soft-deleted asset as the Trash view lists it. deletedAt rides beside the asset
+// because the asset shape itself never carries deletion state.
+export const libraryTrashItemSchema = z
+  .object({ asset: mediaAssetSchema, deletedAt: z.string() })
+  .strict();
+export type LibraryTrashItem = z.infer<typeof libraryTrashItemSchema>;
+
+export const libraryTrashPageSchema = z.object({ items: z.array(libraryTrashItemSchema) }).strict();
+export type LibraryTrashPage = z.infer<typeof libraryTrashPageSchema>;
 
 // System tags whose assets are real Library rows but do NOT belong in a default browse:
 // they are components of something else the grid already shows, or machinery the user

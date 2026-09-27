@@ -1,9 +1,12 @@
 export type LibraryFormatFamily =
   | 'raster_image'
   | 'video'
+  | 'audio'
   | 'broadcast_video'
+  | 'container_video'
   | 'design_source'
   | 'document'
+  | 'office_document'
   | 'after_effects'
   | 'after_effects_package'
   | 'premiere_project'
@@ -33,7 +36,7 @@ export type LibraryFormatDefinition = {
   family: LibraryFormatFamily;
   extensions: readonly string[];
   mimeTypes: readonly string[];
-  originalKind: 'image' | 'video' | 'file';
+  originalKind: 'image' | 'video' | 'audio' | 'file';
   previewStrategy: LibraryPreviewStrategy;
   /**
    * Broadcast / project files exceed the viewer bucket's 500MB object cap.
@@ -58,6 +61,27 @@ export const LIBRARY_FORMATS: readonly LibraryFormatDefinition[] = [
     previewStrategy: 'browser_video',
   },
   {
+    // The browser's own <audio> element plays every one of these; the waveform is
+    // decoded client-side, so no rendition is ever needed.
+    family: 'audio',
+    extensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'oga', 'flac'],
+    mimeTypes: [
+      'audio/mpeg',
+      'audio/mp3',
+      'audio/wav',
+      'audio/x-wav',
+      'audio/wave',
+      'audio/mp4',
+      'audio/x-m4a',
+      'audio/aac',
+      'audio/ogg',
+      'audio/flac',
+      'audio/x-flac',
+    ],
+    originalKind: 'audio',
+    previewStrategy: 'native',
+  },
+  {
     // Premiere / broadcast camera files. Playable only after a proxy; the original
     // is often larger than the viewer bucket, so it lives next to AEP in media-source.
     family: 'broadcast_video',
@@ -66,6 +90,23 @@ export const LIBRARY_FORMATS: readonly LibraryFormatDefinition[] = [
     originalKind: 'video',
     previewStrategy: 'proxy_transcode',
     storageBucket: 'media-source',
+  },
+  {
+    // Containers no browser <video> element plays reliably (WMV never, AVI/MKV only by luck
+    // of codec). The server transcodes a 720p H.264 playback proxy; the original stays the
+    // download. Under the 500 MB viewer cap like any other video, so it lives there.
+    family: 'container_video',
+    extensions: ['mkv', 'avi', 'wmv'],
+    mimeTypes: [
+      'video/x-matroska',
+      'video/x-msvideo',
+      'video/avi',
+      'video/msvideo',
+      'video/x-ms-wmv',
+      'video/x-ms-asf',
+    ],
+    originalKind: 'video',
+    previewStrategy: 'proxy_transcode',
   },
   {
     // Premiere project XML/bin — not a movie. Preview is a sidecar MP4 only.
@@ -105,11 +146,29 @@ export const LIBRARY_FORMATS: readonly LibraryFormatDefinition[] = [
     previewStrategy: 'companion',
   },
   {
+    // The browser's built-in PDF viewer renders a signed URL directly, so a PDF
+    // needs no companion preview to be readable in the Library.
     family: 'document',
     extensions: ['pdf'],
     mimeTypes: ['application/pdf'],
     originalKind: 'file',
-    previewStrategy: 'companion',
+    previewStrategy: 'native',
+  },
+  {
+    // No converter runs on these: the card and the stage say so and offer the download,
+    // rather than inventing a thumbnail or waiting on a companion that never comes.
+    family: 'office_document',
+    extensions: ['docx', 'pptx', 'xlsx', 'doc', 'ppt', 'xls'],
+    mimeTypes: [
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/msword',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.ms-excel',
+    ],
+    originalKind: 'file',
+    previewStrategy: 'none',
   },
   {
     family: 'design_source',
@@ -206,6 +265,7 @@ const SIDECAR_SOURCE_FAMILIES = new Set([
   'after_effects',
   'after_effects_package',
   'broadcast_video',
+  'container_video',
   'premiere_project',
 ]);
 
@@ -219,7 +279,7 @@ function fileStem(fileName: string): string {
 
 /**
  * A playable preview for a source that the browser cannot decode: same stem
- * MP4/MOV, or `{stem}_preview`. Applies to After Effects, Premiere, and MXF.
+ * MP4/MOV, or `{stem}_preview`. Applies to After Effects, Premiere, MXF and MKV/AVI/WMV.
  * Forge/aerender/ffmpeg of the original is a separate worker.
  */
 export function isPlayableSidecarPreview(input: {
