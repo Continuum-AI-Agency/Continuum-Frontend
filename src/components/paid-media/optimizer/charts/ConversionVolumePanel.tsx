@@ -58,7 +58,10 @@ export function ConversionVolumePanel({
         <ul className="space-y-1 border-border/60 border-t pt-2">
           {volume.actionables.map((action) => (
             <li className="text-foreground" key={action.code}>
-              <span className="font-medium">To raise it:</span> {action.message}
+              {action.code === 'kpi_mismatch' ? null : (
+                <span className="font-medium">To raise it: </span>
+              )}
+              {action.message}
             </li>
           ))}
         </ul>
