@@ -212,6 +212,12 @@ export const metricItemSchema = z.object({
   percent_basis: percentBasisSchema.nullable().default(null),
   change: z.number().nullable().default(null),
   change_direction: z.enum(['up', 'down', 'flat']).nullable().default(null),
+  /** The same figure over `prior_label`'s window, in the metric's own unit/format (a money
+   *  prior keeps `unit`'s currency). `change` is the percent move from it; null when the
+   *  prior is 0 — a move from nothing has no percentage. Null = no prior period was read. */
+  prior_value: z.union([z.number(), z.string()]).nullable().default(null),
+  /** The window `prior_value` covers, e.g. "2026-09-13 → 2026-09-19". */
+  prior_label: z.string().nullable().default(null),
   severity: z.enum(['positive', 'neutral', 'watch', 'risk']).default('neutral'),
 });
 export type MetricItem = z.infer<typeof metricItemSchema>;
