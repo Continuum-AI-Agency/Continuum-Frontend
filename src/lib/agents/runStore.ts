@@ -69,7 +69,8 @@ type AgentRunStoreState = {
   viewingSessionId: string | null;
 
   upsertRun: (run: AgentRunDto) => void;
-  appendEvents: (runId: string, events: AgentRunEventDto[]) => void;
+  /** `agent` names the log being tailed, for a run whose row has not arrived yet. */
+  appendEvents: (runId: string, events: AgentRunEventDto[], agent?: AgentKind) => void;
   setViewingSession: (sessionId: string | null) => void;
   /** Drop a run's frame log once nothing is projecting it. The run row is durable; this is just memory. */
   forgetRun: (runId: string) => void;
@@ -106,7 +107,7 @@ export const useAgentRunStore = create<AgentRunStoreState>()((set) => ({
       };
     }),
 
-  appendEvents: (runId, incoming) =>
+  appendEvents: (runId, incoming, agent) =>
     set((state) => {
       const existing = state.runs[runId];
       // A frame can arrive before the run row does (the seq-0 agent.chat_started frame IS
@@ -115,7 +116,7 @@ export const useAgentRunStore = create<AgentRunStoreState>()((set) => ({
       if (existing && events === existing.events) return state;
 
       const lastSeq = events.length > 0 ? (events[events.length - 1]?.seq ?? -1) : -1;
-      const run = existing?.run ?? pendingRun(runId, events);
+      const run = existing?.run ?? pendingRun(runId, events, agent);
 
       // The LOG is the only thing a detached client is subscribed to, so the run's ENDING
       // has to be readable from it. Without this, a run you navigated away from never
@@ -171,11 +172,16 @@ const runIdentityFromEvents = (
  * frame when the log carries one, so a Jaina or canvas run never masquerades as
  * organic while the row is still in flight.
  */
-const pendingRun = (runId: string, events: readonly AgentRunEventDto[]): AgentRunDto => {
+const pendingRun = (
+  runId: string,
+  events: readonly AgentRunEventDto[],
+  tailedAgent?: AgentKind,
+): AgentRunDto => {
   const identity = runIdentityFromEvents(events);
   return {
     runId,
-    agent: identity.agent ?? 'organic',
+    // A HyperFrames run writes no identity frame; the tailer still knows whose table it read.
+    agent: identity.agent ?? tailedAgent ?? 'organic',
     sessionId: identity.sessionId ?? '',
     status: 'running',
     createdAt: new Date().toISOString(),
