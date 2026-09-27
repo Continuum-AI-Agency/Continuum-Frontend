@@ -121,7 +121,9 @@ export async function compositeLayers(input: CompositeLayersInput): Promise<Comp
     for (const layer of input.layers) {
       const source = prepared.get(layer.id);
       if (!source || !hasShaderStack(layer.effects)) continue;
-      const { renderShaderStackFrame } = await import('@/lib/vgpu/renderShaderStack');
+      const { renderShaderStackFrame } = await import(
+        '@continuum/contracts/ai-studio/hyperframes-runtime/renderShaderStack'
+      );
       const bitmap = await renderShaderStackFrame({
         source,
         width: layer.sourceWidth,

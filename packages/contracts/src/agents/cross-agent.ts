@@ -10,7 +10,10 @@
 // `agent.delegated` frame the caller's stream renders.
 
 import { z } from 'zod';
-import { hyperframesReportRequestSchema } from '../ai-studio/hyperframes-agent';
+import {
+  hyperframesBriefRequestSchema,
+  hyperframesReportRequestSchema,
+} from '../ai-studio/hyperframes-agent';
 import { agentKindSchema } from './runs';
 
 /**
@@ -73,8 +76,13 @@ export const crossAgentCallRequestSchema = z.object({
   /** Explicit callee session. Absent = the persistent xagent_<caller>_<brand> thread. */
   sessionId: z.string().min(1).optional(),
   canvas: crossAgentCanvasTargetSchema.optional(),
-  /** HyperFrames targeting: the film to make. Only `report` films are callable today. */
-  hyperframes: z.object({ report: hyperframesReportRequestSchema }).strict().optional(),
+  /** HyperFrames targeting: a performance `report` film, or a film from a creative `brief`. */
+  hyperframes: z
+    .union([
+      z.object({ report: hyperframesReportRequestSchema }).strict(),
+      z.object({ brief: hyperframesBriefRequestSchema }).strict(),
+    ])
+    .optional(),
   timeoutMs: z.number().int().positive().max(CROSS_AGENT_MAX_TIMEOUT_MS).optional(),
   provenance: crossAgentProvenanceSchema,
 });

@@ -14,8 +14,6 @@ import type { Edge } from '@xyflow/react';
 import { useAgentRunStore } from '@/lib/agents/runStore';
 import { elementSourceAssetId, listElements } from '@/lib/ai-studio/elements';
 import { startHyperframesTurn } from '@/lib/api/hyperframesAgent.client';
-import { probeClientRenderCapabilities } from '@/lib/client-render/capabilities';
-import { markRenderStartedHere } from '@/lib/client-render/ownedRuns';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { HyperframesAgentNodeData, StudioNode } from '../types';
 import { effectiveBrandBookPieces } from './brandEnforcement';
@@ -169,15 +167,6 @@ export const inspectHyperframesInputs = (
   return { prompt: promptFromEdges(nodeId, nodes, edges), assets, media, issues };
 };
 
-export async function assertHyperframesRenderCapability(
-  probe = probeClientRenderCapabilities,
-): Promise<void> {
-  const capabilities = await probe();
-  if (!capabilities.webCodecs || !capabilities.avc) {
-    throw new Error('This browser cannot render HyperFrames video. Use desktop Chrome or Edge.');
-  }
-}
-
 export const resolveHyperframesPrompt = (
   data: Pick<HyperframesAgentNodeData, 'prompt' | 'revisionTarget' | 'revisionPrompt'>,
   connectedPrompt?: string,
@@ -252,7 +241,6 @@ export async function startHyperframesAgentNode(params: {
   ) {
     throw new Error('Approve a current storyboard before creating the video.');
   }
-  await assertHyperframesRenderCapability();
 
   studio.updateNodeData(params.nodeId, {
     status: 'queued',
@@ -294,9 +282,6 @@ export async function startHyperframesAgentNode(params: {
     origin: { surface: 'ai-studio', roomId: params.roomId, nodeId: params.nodeId },
   };
   useAgentRunStore.getState().upsertRun(run);
-  // The render job the backend enqueues for this run may be picked up by this tab
-  // without an inbox click — the node's own copy already promises that it will be.
-  markRenderStartedHere(response.runId);
   studio.updateNodeData(params.nodeId, {
     sessionId: response.sessionId,
     activeRunId: response.runId,

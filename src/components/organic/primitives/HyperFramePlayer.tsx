@@ -1,11 +1,11 @@
 'use client';
 
-import type { ShaderStackV1 } from '@continuum/contracts';
+import { isGcsPointer, type ShaderStackV1 } from '@continuum/contracts';
 import { Loader2, Play } from 'lucide-react';
 import * as React from 'react';
 import { createClientRenderJob } from '@/lib/api/clientRenderJobs.client';
 import { openClientRenderInbox } from '@/lib/client-render/ClientRenderProvider';
-import { signHyperframeComposition } from '@/lib/organic/hyperframeSign';
+import { signHyperframeAsset } from '@/lib/organic/hyperframeSign';
 import { cn } from '@/lib/utils';
 import type { OrganicCalendarDraft } from './types';
 
@@ -118,7 +118,9 @@ export function HyperFramePlayer({
       !hasText(hyperframe.htmlPath) ||
       !hyperframe.compositionId ||
       !draft.backendDraftId ||
-      mp4Status === 'ready'
+      mp4Status === 'ready' ||
+      // Rendered on the server: its MP4 (or its render error) is already on the draft.
+      isGcsPointer(hyperframe.bucket ?? '')
     ) {
       return;
     }
@@ -171,16 +173,29 @@ export function HyperFramePlayer({
     setState('loading');
     setErrorMessage(null);
     if (usesRenderedShaderPreview) {
-      if (!renderedPreviewUrl) {
+      const filmUrl =
+        renderedPreviewUrl ??
+        (hasText(hyperframe.mp4Path) && hasText(hyperframe.mp4Bucket)
+          ? await signHyperframeAsset({
+              brandId,
+              bucket: hyperframe.mp4Bucket,
+              path: hyperframe.mp4Path,
+            })
+          : null);
+      if (!filmUrl) {
         setErrorMessage('Shader preview is still rendering.');
         setState('error');
         return;
       }
-      setSignedUrl(renderedPreviewUrl);
+      setSignedUrl(filmUrl);
       setState('playing');
       return;
     }
-    const url = await signHyperframeComposition(brandId, hyperframe.htmlPath);
+    const url = await signHyperframeAsset({
+      brandId,
+      bucket: hyperframe.bucket ?? 'hyperframes-compositions',
+      path: hyperframe.htmlPath,
+    });
     if (!url) {
       setErrorMessage('Could not load the HyperFrame composition.');
       setState('error');

@@ -35,6 +35,13 @@ export const hyperframesStoragePointerSchema = z
   .strict();
 export type HyperframesStoragePointer = z.infer<typeof hyperframesStoragePointerSchema>;
 
+/**
+ * A pointer whose bucket starts `gs://` lives in the HyperFrames GCS bucket, not Supabase
+ * storage; only the Backend (or an edge function holding the signer key) can sign it.
+ */
+export const GCS_POINTER_PREFIX = 'gs://';
+export const isGcsPointer = (bucket: string): boolean => bucket.startsWith(GCS_POINTER_PREFIX);
+
 export const hyperframesAgentAssetRefSchema = z
   .object({
     assetId: z.string().min(1),
@@ -201,7 +208,10 @@ export type HyperframesAgentNodeData = z.infer<typeof hyperframesAgentNodeDataSc
 export const hyperframesReportRequestSchema = z
   .object({
     /** Meta ad account (`act_…`); the brand's linked account when absent. */
-    adAccountId: z.string().regex(/^act_\d+$/).optional(),
+    adAccountId: z
+      .string()
+      .regex(/^act_\d+$/)
+      .optional(),
     rangePreset: z.enum(['last_7d', 'last_14d', 'last_30d']).default('last_7d'),
     // 15-20s: the scene budget holds a high-energy film of 21-30s to exactly 8 scenes,
     // and 8 scenes cannot carry one transition every 3s past 20s.
@@ -210,6 +220,21 @@ export const hyperframesReportRequestSchema = z
   })
   .strict();
 export type HyperframesReportRequest = z.infer<typeof hyperframesReportRequestSchema>;
+
+/**
+ * A HyperFrames film from a creative brief — what another agent asks for with `ask_agent`.
+ * The call's `query` is the prompt; the agent drafts, reviews and renders it on the server.
+ */
+export const hyperframesBriefRequestSchema = z
+  .object({
+    aspectRatio: hyperframesAspectRatioSchema.default('9:16'),
+    durationSeconds: z.number().int().min(5).max(30).default(15),
+    energy: hyperframesEnergySchema.default('balanced'),
+    /** Library assets the film may show, as `hf-asset://<assetId>`. */
+    assets: z.array(hyperframesAgentAssetRefSchema).max(HYPERFRAMES_AGENT_MEDIA_LIMIT).default([]),
+  })
+  .strict();
+export type HyperframesBriefRequest = z.infer<typeof hyperframesBriefRequestSchema>;
 
 export const hyperframesAgentTurnRequestSchema = z
   .object({
