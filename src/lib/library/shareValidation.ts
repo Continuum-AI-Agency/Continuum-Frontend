@@ -8,6 +8,7 @@ import {
   type ShareLinkScope,
   shareLinkBrandingSchema,
   shareLinkLayoutSchema,
+  shareLinkWatermarkSchema,
 } from '@continuum/contracts';
 
 export type ShareLinkRow = {
@@ -33,6 +34,8 @@ export type ShareLinkRow = {
   created_at: string;
   layout?: string;
   branding?: unknown;
+  watermark?: unknown;
+  featured_field_id?: string | null;
 };
 
 export type ShareLinkStatus = { active: true } | { active: false; reason: 'revoked' | 'expired' };
@@ -68,6 +71,7 @@ export function rowToShareLink(
   // rather than taking the link down.
   const layout = shareLinkLayoutSchema.safeParse(row.layout);
   const branding = shareLinkBrandingSchema.safeParse(row.branding);
+  const watermark = row.watermark ? shareLinkWatermarkSchema.safeParse(row.watermark) : null;
   return {
     id: row.id,
     brandId: row.brand_id,
@@ -90,6 +94,8 @@ export function rowToShareLink(
     },
     layout: layout.success ? layout.data : 'grid',
     branding: branding.success ? branding.data : {},
+    watermark: watermark?.success ? watermark.data : null,
+    featuredFieldId: row.featured_field_id ?? null,
     createdBy: row.created_by,
     expiresAt: row.expires_at,
     revokedAt: row.revoked_at,

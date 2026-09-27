@@ -2,6 +2,7 @@ import { parseCommentDeepLink } from '@continuum/contracts';
 import { cookies } from 'next/headers';
 import { loadSharePayload } from './loadSharePayload';
 import { reviewerSessionCookieName } from './reviewerSession.server';
+import { viewerIp } from './shareEvents.server';
 import { ShareAccessChallenge } from './ShareAccessChallenge';
 import { SharePayloadView } from './SharePayloadView';
 import { ShareUnavailableCard } from './ShareUnavailableCard';
@@ -27,7 +28,7 @@ export async function ShareLoader({
   const deepLink = parseCommentDeepLink(overlay);
   const cookieStore = await cookies();
   const reviewerSession = cookieStore.get(reviewerSessionCookieName(token))?.value;
-  const result = await loadSharePayload(token, reviewerSession);
+  const result = await loadSharePayload(token, reviewerSession, await viewerIp());
   if (!result.ok && result.reason === 'challenge') {
     return (
       <ShareAccessChallenge
