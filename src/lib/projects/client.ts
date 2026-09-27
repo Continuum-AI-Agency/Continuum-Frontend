@@ -1,19 +1,21 @@
-// Same-origin client for /api/projects.
+// Projects client. Reads go to the same-origin /api/projects routes, which query under the
+// caller's RLS; writes go to the `projects` edge function with the user's JWT, because every
+// write is service-role and that key stays off Vercel.
 //
-// Plain `fetch` with a relative path, NOT `@/lib/api/http` — that wrapper prefixes
-// `getApiBaseUrl()` (the Fastify Backend on :4000), which is right for /api/goals and wrong
-// for a Next route handler. The route reads the Supabase session from cookies, so no bearer
-// header is needed; this mirrors `src/lib/library/collections.ts`.
+// Reads use plain `fetch` with a relative path, NOT `@/lib/api/http` — that wrapper prefixes
+// `getApiBaseUrl()` (the Fastify Backend on :4000), which is wrong for a Next route handler.
 //
 // Every response is parsed with the contracts schema so a drifted route fails here, loudly,
 // instead of rendering `undefined` three components later.
 
 import {
+  PROJECTS_EDGE_FUNCTION,
   type Project,
   type ProjectCreateRequest,
   type ProjectEntityType,
   type ProjectListFilter,
   type ProjectMembership,
+  type ProjectsEdgeRequest,
   type ProjectTagRequest,
   type ProjectUntagRequest,
   type ProjectUpdateRequest,
@@ -23,14 +25,15 @@ import {
   projectTagResponseSchema,
   projectUntagResponseSchema,
 } from '@continuum/contracts';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { readEdgeErrorMessage } from '@/lib/supabase/edgeErrorMessage';
 
 const ROUTE = '/api/projects';
 const MEMBERSHIPS_ROUTE = '/api/projects/memberships';
 
 async function readJson(response: Response, what: string): Promise<unknown> {
   if (!response.ok) {
-    // The route answers `{ error }` on every failure path; surfacing it beats a bare status
-    // when the cause is a 409 duplicate name the user can actually fix.
+    // The route answers `{ error }` on every failure path; surfacing it beats a bare status.
     const detail = await response
       .json()
       .then((body: unknown) => (body as { error?: string }).error)
@@ -38,6 +41,16 @@ async function readJson(response: Response, what: string): Promise<unknown> {
     throw new Error(detail ?? `${what} failed (${response.status})`);
   }
   return response.json();
+}
+
+async function invokeProjects(request: ProjectsEdgeRequest, what: string): Promise<unknown> {
+  const { data, error } = await createSupabaseBrowserClient().functions.invoke(
+    PROJECTS_EDGE_FUNCTION,
+    { body: request },
+  );
+  // The function answers `{ error }` on every failure path, e.g. a 409 duplicate name.
+  if (error) throw new Error(await readEdgeErrorMessage(error, `${what} failed`));
+  return data;
 }
 
 export async function fetchProjects(
@@ -52,50 +65,31 @@ export async function fetchProjects(
 }
 
 export async function createProject(input: ProjectCreateRequest): Promise<Project> {
-  const response = await fetch(ROUTE, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-  const payload = await readJson(response, 'Creating the project');
+  const payload = await invokeProjects({ action: 'create', ...input }, 'Creating the project');
   return projectResponseSchema.parse(payload).project;
 }
 
 export async function updateProject(input: ProjectUpdateRequest): Promise<Project> {
-  const response = await fetch(ROUTE, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-  const payload = await readJson(response, 'Updating the project');
+  const payload = await invokeProjects({ action: 'update', ...input }, 'Updating the project');
   return projectResponseSchema.parse(payload).project;
 }
 
 /** Soft delete: the project is archived, its memberships survive. */
 export async function archiveProject(brandId: string, projectId: string): Promise<Project> {
-  const params = new URLSearchParams({ brandId, projectId });
-  const response = await fetch(`${ROUTE}?${params.toString()}`, { method: 'DELETE' });
-  const payload = await readJson(response, 'Archiving the project');
+  const payload = await invokeProjects(
+    { action: 'archive', brandId, projectId },
+    'Archiving the project',
+  );
   return projectResponseSchema.parse(payload).project;
 }
 
 export async function tagIntoProject(input: ProjectTagRequest): Promise<ProjectMembership[]> {
-  const response = await fetch(MEMBERSHIPS_ROUTE, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-  const payload = await readJson(response, 'Tagging into the project');
+  const payload = await invokeProjects({ action: 'tag', ...input }, 'Tagging into the project');
   return projectTagResponseSchema.parse(payload).memberships;
 }
 
 export async function untagFromProject(input: ProjectUntagRequest): Promise<number> {
-  const response = await fetch(MEMBERSHIPS_ROUTE, {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-  const payload = await readJson(response, 'Removing from the project');
+  const payload = await invokeProjects({ action: 'untag', ...input }, 'Removing from the project');
   return projectUntagResponseSchema.parse(payload).removed;
 }
 
