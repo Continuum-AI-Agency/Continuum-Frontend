@@ -5,7 +5,17 @@
 
 import 'server-only';
 
-import type { PublicShareAsset, PublicSharePayload } from '@continuum/contracts';
+import {
+  type CustomFieldValue,
+  customFieldOptionsSchema,
+  customFieldTypeSchema,
+  isShareFeaturableFieldType,
+  type PublicShareAsset,
+  type PublicSharePayload,
+  type ShareFeaturedField,
+  shareLinkBrandingSchema,
+  shareLinkWatermarkSchema,
+} from '@continuum/contracts';
 import { rowToShareLink, type ShareLinkRow, shareLinkStatus } from '@/lib/library/shareValidation';
 import { buildCarousel, carouselSignablePaths } from '@/lib/media/carousel';
 import { rowToSignedMediaAsset } from '@/lib/media/mapper';
@@ -26,8 +36,17 @@ const COLLECTION_ASSET_CAP = 100;
 
 export type ShareUnavailableReason = 'missing' | 'revoked' | 'expired';
 
+// What a share route needs besides the page: which link and reviewer session
+// the request resolved to, so events and downloads are attributed.
+export type ShareRequestContext = {
+  linkId: string;
+  brandId: string;
+  sessionId: string | null;
+  allowedAssetIds: string[];
+};
+
 export type LoadShareResult =
-  | { ok: true; payload: PublicSharePayload }
+  | { ok: true; payload: PublicSharePayload; context: ShareRequestContext }
   | {
       ok: false;
       reason: 'challenge';
@@ -105,6 +124,80 @@ async function signAssets(admin: AdminClient, paths: SignablePath[]): Promise<Ma
   return map;
 }
 
+type MemberRow = { asset_id: string; version_id: string | null; position: number };
+
+// A link's members in the owner's order. A collection share is live: it reads
+// the collection as it is now, keeping the owner's order for the members the
+// link already knew and appending anything filed since, in collection order.
+// Selection shares stay the snapshot they were created as.
+export async function shareMembers(admin: AdminClient, link: ShareLinkRow): Promise<MemberRow[]> {
+  const media = mediaSchema(admin);
+  const { data: memberships } = await media
+    .from('share_link_assets')
+    .select('asset_id, version_id, position')
+    .eq('share_link_id', link.id)
+    .order('position', { ascending: true })
+    .limit(COLLECTION_ASSET_CAP);
+  const snapshot = (memberships ?? []) as MemberRow[];
+  if (link.scope !== 'collection' || !link.collection_id) return snapshot;
+
+  const { data: items } = await media
+    .from('collection_items')
+    .select('asset_id, position')
+    .eq('collection_id', link.collection_id)
+    .order('position', { ascending: true })
+    .limit(COLLECTION_ASSET_CAP);
+  const current = (items ?? []) as Array<{ asset_id: string; position: number }>;
+  const inCollection = new Set(current.map((item) => item.asset_id));
+  const known = snapshot.filter((row) => inCollection.has(row.asset_id));
+  const knownIds = new Set(known.map((row) => row.asset_id));
+  const fresh = current.filter((item) => !knownIds.has(item.asset_id));
+  if (fresh.length === 0) return known;
+
+  // A member filed after the link was made joins the link on first sight, so a
+  // guest can comment on it and decide on it (those checks read
+  // share_link_assets). A pinned link pins the version the guest first saw.
+  const { data: heads } = await media
+    .from('assets')
+    .select('id, head_version_id')
+    .in(
+      'id',
+      fresh.map((item) => item.asset_id),
+    )
+    .eq('brand_id', link.brand_id)
+    .is('deleted_at', null);
+  const headById = new Map(
+    ((heads ?? []) as Array<{ id: string; head_version_id: string | null }>).map((row) => [
+      row.id,
+      row.head_version_id,
+    ]),
+  );
+  const start = Math.max(-1, ...snapshot.map((row) => row.position)) + 1;
+  const added = fresh
+    .filter((item) => headById.has(item.asset_id))
+    .map((item, index) => ({
+      asset_id: item.asset_id,
+      version_id: link.version_mode === 'pinned' ? (headById.get(item.asset_id) ?? null) : null,
+      position: start + index,
+    }));
+  if (added.length > 0) {
+    const { error } = await media
+      .from('share_link_assets')
+      .upsert(
+        added.map((row) => ({ share_link_id: link.id, ...row })),
+        { onConflict: 'share_link_id,asset_id', ignoreDuplicates: true },
+      );
+    if (error) console.error('[share] live member join failed', { linkId: link.id, error });
+  }
+  return [...known, ...added].slice(0, COLLECTION_ASSET_CAP);
+}
+
+// The asset ids a link exposes, without signing anything.
+export async function shareAssetIds(admin: AdminClient, link: ShareLinkRow): Promise<string[]> {
+  if (link.scope === 'asset') return link.asset_id ? [link.asset_id] : [];
+  return (await shareMembers(admin, link)).map((row) => row.asset_id);
+}
+
 async function loadAssetRows(
   admin: AdminClient,
   link: ShareLinkRow,
@@ -114,17 +207,7 @@ async function loadAssetRows(
   versionIdsByAsset: Record<string, string>;
 } | null> {
   const media = mediaSchema(admin);
-  const { data: memberships } = await media
-    .from('share_link_assets')
-    .select('asset_id, version_id, position')
-    .eq('share_link_id', link.id)
-    .order('position', { ascending: true })
-    .limit(COLLECTION_ASSET_CAP);
-  const memberRows = (memberships ?? []) as Array<{
-    asset_id: string;
-    version_id: string | null;
-    position: number;
-  }>;
+  const memberRows = await shareMembers(admin, link);
   const assetIds =
     memberRows.length > 0
       ? memberRows.map((row) => row.asset_id)
@@ -161,10 +244,14 @@ async function loadAssetRows(
     });
   }
 
-  const requestedVersionIds =
+  const pinnedByAsset = new Map(memberRows.map((row) => [row.asset_id, row.version_id]));
+  // A pinned link shows each member's pinned version; a member that joined a
+  // live collection after the link was made has none yet and shows its head.
+  const shownVersionId = (row: MediaAssetRow) =>
     link.version_mode === 'pinned'
-      ? memberRows.flatMap((row) => row.version_id ?? [])
-      : rows.flatMap((row) => row.head_version_id ?? []);
+      ? (pinnedByAsset.get(row.id) ?? row.head_version_id)
+      : row.head_version_id;
+  const requestedVersionIds = rows.flatMap((row) => shownVersionId(row) ?? []);
   let versionQuery = media
     .from('asset_versions')
     .select(SHARE_VERSION_SELECT)
@@ -184,17 +271,12 @@ async function loadAssetRows(
     if (existing) existing.push(version);
     else versionsByAsset.set(version.asset_id, [version]);
   }
-  const pinnedByAsset = new Map(memberRows.map((row) => [row.asset_id, row.version_id]));
   const entries = rows.flatMap((row): SharedAssetEntry[] => {
     const candidates = versionsByAsset.get(row.id) ?? [];
     const selected =
       link.version_mode === 'all'
         ? candidates
-        : candidates.filter((version) =>
-            link.version_mode === 'pinned'
-              ? version.id === pinnedByAsset.get(row.id)
-              : version.id === row.head_version_id,
-          );
+        : candidates.filter((version) => version.id === shownVersionId(row));
     return selected.map((version) => ({
       row: rowAtVersion(row, version),
       versionId: version.id,
@@ -210,10 +292,119 @@ async function loadAssetRows(
   return { entries, collectionName, versionIdsByAsset };
 }
 
-export async function loadSharePayload(
+type BrandPresentation = {
+  brandName: string | null;
+  logoUrl: string | null;
+  accent: string | undefined;
+};
+
+const HEX = /^#[0-9a-fA-F]{6}$/;
+
+// The brand kit is the default look of every share: name, logo and first
+// colour from the brand profile. A link's own logo asset overrides the logo.
+async function loadBrandPresentation(
+  admin: AdminClient,
+  brandId: string,
+  logoAssetId: string | undefined,
+): Promise<BrandPresentation> {
+  const { data: profile } = await admin
+    .schema('brand_profiles')
+    .from('brand_profiles')
+    .select('brand_name, brand_colors, logo_path')
+    .eq('id', brandId)
+    .maybeSingle();
+  const row = profile as {
+    brand_name: string | null;
+    brand_colors: unknown;
+    logo_path: string | null;
+  } | null;
+  const colors = Array.isArray(row?.brand_colors) ? row.brand_colors : [];
+  const accent = colors.find((color): color is string => typeof color === 'string' && HEX.test(color));
+
+  let logoUrl: string | null = null;
+  if (logoAssetId) {
+    const { data: asset } = await mediaSchema(admin)
+      .from('assets')
+      .select('bucket, storage_path')
+      .eq('id', logoAssetId)
+      .eq('brand_id', brandId)
+      .is('deleted_at', null)
+      .maybeSingle();
+    const logo = asset as { bucket: string; storage_path: string } | null;
+    if (logo) {
+      const { data } = await admin.storage
+        .from(logo.bucket)
+        .createSignedUrl(logo.storage_path, SIGNED_URL_TTL_SECONDS);
+      logoUrl = data?.signedUrl ?? null;
+    }
+  }
+  if (!logoUrl && row?.logo_path) {
+    const { data } = await admin.storage
+      .from('brand-profile-assets')
+      .createSignedUrl(row.logo_path, SIGNED_URL_TTL_SECONDS);
+    logoUrl = data?.signedUrl ?? null;
+  }
+  return { brandName: row?.brand_name ?? null, logoUrl, accent };
+}
+
+async function loadFeaturedField(
+  admin: AdminClient,
+  link: ShareLinkRow,
+  assetIds: string[],
+): Promise<{ field: ShareFeaturedField | null; values: Record<string, CustomFieldValue> }> {
+  if (!link.featured_field_id) return { field: null, values: {} };
+  const media = mediaSchema(admin);
+  const { data } = await media
+    .from('custom_fields')
+    .select('id, name, type, options')
+    .eq('id', link.featured_field_id)
+    .eq('brand_id', link.brand_id)
+    .maybeSingle();
+  const type = customFieldTypeSchema.safeParse((data as { type?: unknown } | null)?.type);
+  const options = customFieldOptionsSchema.safeParse((data as { options?: unknown } | null)?.options);
+  if (!data || !type.success || !options.success || !isShareFeaturableFieldType(type.data)) {
+    return { field: null, values: {} };
+  }
+  const field = {
+    id: String((data as { id: string }).id),
+    name: String((data as { name: string }).name),
+    type: type.data,
+    options: options.data,
+  };
+  const { data: valueRows } =
+    assetIds.length > 0
+      ? await media
+          .from('asset_field_values')
+          .select('asset_id, value')
+          .eq('field_id', field.id)
+          .in('asset_id', assetIds)
+      : { data: [] };
+  const values = Object.fromEntries(
+    ((valueRows ?? []) as Array<{ asset_id: string; value: CustomFieldValue }>).map((row) => [
+      row.asset_id,
+      row.value,
+    ]),
+  );
+  return { field, values };
+}
+
+type ResolvedShareLink =
+  | {
+      ok: true;
+      admin: AdminClient;
+      link: ShareLinkRow;
+      session: { id: string; display_name: string | null; email: string | null } | null;
+      identityPresent: boolean;
+    }
+  | Exclude<LoadShareResult, { ok: true }>;
+
+// Token, revocation, expiry and the reviewer gate: everything a share route
+// must pass before it may read or act on the link. A watermarked link names
+// its viewer on every frame, so it always needs a verified identity.
+export async function resolveShareLink(
   token: string,
   reviewerSessionToken?: string,
-): Promise<LoadShareResult> {
+): Promise<ResolvedShareLink> {
   if (!token || token.length > 128) return { ok: false, reason: 'missing' };
 
   const admin = createSupabaseAdminClient();
@@ -229,7 +420,7 @@ export async function loadSharePayload(
   if (!status.active) return { ok: false, reason: status.reason };
 
   const sessionHash = reviewerSessionToken ? hashReviewerSessionToken(reviewerSessionToken) : null;
-  const { data: session } = sessionHash
+  const { data: sessionRow } = sessionHash
     ? await mediaSchema(admin)
         .from('external_reviewer_sessions')
         .select('id, display_name, email')
@@ -239,28 +430,49 @@ export async function loadSharePayload(
         .gt('expires_at', new Date().toISOString())
         .maybeSingle()
     : { data: null };
+  const session = sessionRow as {
+    id: string;
+    display_name: string | null;
+    email: string | null;
+  } | null;
   const identityPresent = Boolean(session?.display_name && session?.email);
-  if (link.passcode_hash || link.require_identity) {
-    if (!session || (link.require_identity && !identityPresent)) {
+  const requireIdentity = link.require_identity || link.watermark != null;
+  if (link.passcode_hash || requireIdentity) {
+    if (!session || (requireIdentity && !identityPresent)) {
       return {
         ok: false,
         reason: 'challenge',
         needsPasscode: Boolean(link.passcode_hash),
-        requireIdentity: link.require_identity,
+        requireIdentity,
       };
     }
   }
+  return { ok: true, admin, link, session, identityPresent };
+}
+
+export async function loadSharePayload(
+  token: string,
+  reviewerSessionToken?: string,
+  viewerIp?: string | null,
+): Promise<LoadShareResult> {
+  const resolved = await resolveShareLink(token, reviewerSessionToken);
+  if (!resolved.ok) return resolved;
+  const { admin, link, session, identityPresent } = resolved;
 
   const loaded = await loadAssetRows(admin, link);
   if (!loaded) return { ok: false, reason: 'missing' };
 
   const sharedRows = loaded.entries.map((entry) => entry.row);
+  const assetIds = [...new Set(sharedRows.map((row) => row.id))];
+  const branding = shareLinkBrandingSchema.safeParse(link.branding);
+  const overrides = branding.success ? branding.data : {};
+  const watermark = shareLinkWatermarkSchema.safeParse(link.watermark);
   const renditions = await loadAssetRenditions(
     admin,
     loaded.entries.map((entry) => entry.versionId),
   );
-  // Signing and the comment read are independent reads over the same rows.
-  const [signedByPath, comments] = await Promise.all([
+  // Signing, comments, the brand kit and the featured field are independent reads.
+  const [signedByPath, comments, brand, featured] = await Promise.all([
     signAssets(admin, [
       ...assetSignablePaths(sharedRows),
       ...carouselSignablePaths(sharedRows),
@@ -269,10 +481,12 @@ export async function loadSharePayload(
     link.allow_comments
       ? loadShareComments(admin, {
           brandId: link.brand_id,
-          assetIds: [...new Set(loaded.entries.map((entry) => entry.row.id))],
+          assetIds,
           versionIdsByAsset: loaded.versionIdsByAsset,
         })
       : Promise.resolve([]),
+    loadBrandPresentation(admin, link.brand_id, overrides.logoAssetId),
+    loadFeaturedField(admin, link, assetIds),
   ]);
 
   const assets: PublicShareAsset[] = loaded.entries.map((entry) => {
@@ -287,18 +501,33 @@ export async function loadSharePayload(
     };
   });
 
+  const shareLink = rowToShareLink(link);
   return {
     ok: true,
     payload: {
       scope: link.scope,
-      brandName: null,
+      brandName: brand.brandName,
       collectionName: loaded.collectionName,
       assets,
       comments,
-      policy: rowToShareLink(link).policy,
+      policy: shareLink.policy,
+      layout: shareLink.layout,
+      branding: { ...overrides, accent: overrides.accent ?? brand.accent },
+      logoUrl: brand.logoUrl,
+      watermark: watermark.success ? watermark.data : null,
+      featuredFieldId: featured.field?.id ?? null,
+      featuredField: featured.field,
+      featuredValues: featured.values,
+      viewerIp: viewerIp ?? null,
       reviewer: identityPresent
         ? { displayName: String(session?.display_name), email: String(session?.email) }
         : null,
+    },
+    context: {
+      linkId: link.id,
+      brandId: link.brand_id,
+      sessionId: session?.id ?? null,
+      allowedAssetIds: assetIds,
     },
   };
 }
