@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { BrandGrantsSection } from '@/components/integrations/BrandGrantsSection';
 import { MyConnectionsSharingSection } from '@/components/integrations/MyConnectionsSharingSection';
+import { NotificationPreferences } from '@/components/notifications/NotificationPreferences';
 import { ChatConnectionsSection } from '@/components/settings/account/ChatConnectionsSection';
 import { McpActivityTable } from '@/components/settings/account/McpActivityTable';
 import { McpConnectionsSection } from '@/components/settings/account/McpConnectionsSection';
@@ -443,6 +444,15 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     );
   } else if (initialSection === 'drive') {
     activeSectionSlot = <DriveSettings email={userEmail} />;
+  } else if (initialSection === 'notifications') {
+    activeSectionSlot = (
+      <SettingsSection
+        title="Notifications"
+        description="Choose where each kind of update reaches you, and how often. Digests group everything waiting into one message."
+      >
+        <NotificationPreferences />
+      </SettingsSection>
+    );
   } else if (initialSection === 'activity') {
     activeSectionSlot = (
       <SettingsSection

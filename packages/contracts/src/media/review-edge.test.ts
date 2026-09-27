@@ -35,4 +35,39 @@ describe('reviewEdgeRequestSchema', () => {
       true,
     );
   });
+
+  it('accepts custom states alone, and refuses a request with neither list', () => {
+    const customStates = [
+      { label: 'Legal review', color: '#8B5CF6', baseStatus: 'in_review', position: 0 },
+    ];
+    expect(
+      reviewEdgeRequestSchema.safeParse({
+        action: 'set_review_state_labels',
+        brandId,
+        customStates,
+      }).success,
+    ).toBe(true);
+    expect(
+      reviewEdgeRequestSchema.safeParse({ action: 'set_review_state_labels', brandId }).success,
+    ).toBe(false);
+    expect(
+      reviewEdgeRequestSchema.safeParse({
+        action: 'set_review_state_labels',
+        brandId,
+        customStates: [{ ...customStates[0], baseStatus: 'shipped' }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('sets a state on a named version, and needs a status or a state', () => {
+    const base = { action: 'set_asset_review_state', brandId, assetId: brandId };
+    expect(
+      reviewEdgeRequestSchema.safeParse({ ...base, versionId: brandId, stateId: brandId }).success,
+    ).toBe(true);
+    expect(reviewEdgeRequestSchema.safeParse({ ...base, toStatus: 'approved' }).success).toBe(true);
+    expect(reviewEdgeRequestSchema.safeParse(base).success).toBe(false);
+    expect(
+      reviewEdgeRequestSchema.safeParse({ ...base, toStatus: 'approved', actor: brandId }).success,
+    ).toBe(false);
+  });
 });

@@ -23,7 +23,6 @@ import { buildAssetPreview, loadAssetRenditions, renditionSignablePaths } from '
 import { MEDIA_ASSET_SELECT, type MediaAssetRow, type MediaCollectionRow } from './schema';
 import { assetSignablePaths, mintSignedUrls } from './signed-urls';
 import { resolveSmartQueryFilter } from './smart-collections';
-import { sumActiveMediaAssetBytes } from './storage-usage';
 import { mediaSchema } from './supabase-media';
 
 const PAGE_SIZE = 48;
@@ -197,22 +196,13 @@ export async function fetchMediaCollections(brandId: string): Promise<MediaColle
       depth: row.depth ?? 0,
       systemKey: row.system_key ?? null,
       visibility: visibility.success ? visibility.data : 'team',
+      access: row.access === 'restricted' ? 'restricted' : 'brand',
       viewConfig: viewConfig.success ? viewConfig.data : {},
       createdBy: row.created_by,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
   });
-}
-
-export async function fetchStorageUsedBytes(brandId: string): Promise<number> {
-  const client = await createSupabaseServerClient();
-  try {
-    return await sumActiveMediaAssetBytes(client, brandId);
-  } catch (error) {
-    console.error('[media/fetchers] storage usage query failed', error);
-    return 0;
-  }
 }
 
 /**

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { MediaAsset } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { MediaCard } from './MediaCard';
@@ -310,5 +310,63 @@ describe('MediaCard office documents', () => {
       />,
     );
     expect(screen.queryByTestId('card-no-preview')).toBeNull();
+  });
+});
+
+describe('MediaCard hover card and dragging', () => {
+  // The hover card is portalled over the neighbouring cards. Measured in the files bench: an
+  // open one sat over the grid while a card was dragged to a collection. None may be open
+  // (or open) while an asset drag is under way.
+  const hoverCardOpen = () => document.body.textContent?.includes('Added') ?? false;
+  const hover = async () => {
+    const trigger = screen.getByRole('button', { name: 'Open Hero shot' });
+    fireEvent.pointerEnter(trigger);
+    fireEvent.mouseEnter(trigger);
+    fireEvent.pointerMove(trigger);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    });
+  };
+  const dataTransfer = () => {
+    const store = new Map<string, string>();
+    return {
+      setData: (type: string, value: string) => store.set(type, value),
+      getData: (type: string) => store.get(type) ?? '',
+      get types() {
+        return [...store.keys()];
+      },
+      effectAllowed: 'none',
+      dropEffect: 'none',
+    } as unknown as DataTransfer;
+  };
+
+  it('opens on hover when nothing is being dragged', async () => {
+    mount(<MediaCard brandId="brand-1" asset={libraryAsset()} />);
+    await hover();
+    expect(hoverCardOpen()).toBe(true);
+  });
+
+  it('never opens while an asset drag is under way', async () => {
+    mount(<MediaCard brandId="brand-1" asset={libraryAsset()} />);
+    writeAssetDrag({ dataTransfer: dataTransfer() }, 'brand-1', ['asset-9']);
+    await hover();
+    expect(hoverCardOpen()).toBe(false);
+  });
+
+  it('closes the moment its own card starts a drag', async () => {
+    mount(
+      <MediaCard
+        brandId="brand-1"
+        asset={libraryAsset()}
+        onDragAssetStart={(event, asset) => writeAssetDrag(event, 'brand-1', [asset.id])}
+      />,
+    );
+    await hover();
+    expect(hoverCardOpen()).toBe(true);
+    fireEvent.dragStart(screen.getByTestId('media-card'), { dataTransfer: dataTransfer() });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    expect(hoverCardOpen()).toBe(false);
   });
 });

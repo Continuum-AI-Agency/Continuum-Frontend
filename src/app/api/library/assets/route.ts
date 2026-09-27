@@ -80,6 +80,21 @@ export async function GET(request: Request) {
   const { brandId, assetId, collectionId, source, kind, reviewStatus, sort, offset, limit } =
     parsed.data;
   const tags = parseTagsParam(parsed.data.tags);
+  // The brand's custom review states (review_state_id), as a comma list of ids. A malformed
+  // one fails loudly, like every filter here: silently dropping it would widen the result.
+  const reviewStateParse = z
+    .array(z.string().uuid())
+    .max(50)
+    .safeParse(
+      (url.searchParams.get('reviewStateIds') ?? '')
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean),
+    );
+  if (!reviewStateParse.success) {
+    return NextResponse.json({ error: 'reviewStateIds must be review state ids' }, { status: 422 });
+  }
+  const reviewStateIds = reviewStateParse.data;
 
   // A malformed filter must fail loudly: dropping it would widen the result set,
   // and a filter UI that quietly shows MORE than you asked for is worse than one
@@ -197,6 +212,7 @@ export async function GET(request: Request) {
   if (effectiveKind) query = query.or(kindMatchOrFilter(effectiveKind));
   if (tags.length > 0) query = query.contains('tags', tags);
   if (reviewStatus) query = query.eq('review_status', reviewStatus);
+  if (reviewStateIds.length > 0) query = query.in('review_state_id', reviewStateIds);
 
   let rows: MediaAssetRow[];
   let nextOffset: number | null;

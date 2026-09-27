@@ -23,7 +23,11 @@ export function DriveStorage() {
     <div className="space-y-4">
       <ul className="flex flex-col gap-3">
         {whoami.data.brands.map((brand) => (
-          <li key={brand.brandId} className="space-y-1 rounded-lg border bg-card p-3">
+          <li
+            key={brand.brandId}
+            data-brand-id={brand.brandId}
+            className="space-y-1 rounded-lg border bg-card p-3"
+          >
             <span className="text-sm font-medium">{brand.folder}</span>
             <StorageQuotaMeter brandId={brand.brandId} />
           </li>

@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'bun:test';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   commentsToCsv,
   commentsToFcpxml,
@@ -89,7 +92,7 @@ describe('Resolve EDL', () => {
     const edl = commentsToResolveEdl(comments, context);
     expect(edl).toContain('FCM: NON-DROP FRAME');
     expect(edl).toContain(
-      '001  001      V     C        00:00:01:01 00:00:01:02 00:00:01:01 00:00:01:02',
+      '001  001      V     C        00:00:01:01 00:00:01:02 01:00:01:01 01:00:01:02',
     );
     expect(edl).toContain('|M:Ana Ruiz: Logo too small |D:1');
     expect(edl).toContain('002  001      V     C        00:00:02:00 00:00:02:01');
@@ -205,5 +208,101 @@ describe('source timecode', () => {
   it('writes source timecodes in the CSV', () => {
     const lines = commentsToCsv(comments, withSource).trim().split('\r\n');
     expect(lines[1]).toContain('01:00:01;01');
+  });
+});
+
+describe('timeline start', () => {
+  // A camera clip whose own timecode starts at 10:00:00:00 (25 fps).
+  const camera = { startFrame: 10 * 3600 * 25, dropFrame: false };
+  const cameraClip = { assetName: 'Cam', rate: PAL, durationMs: 10_000, source: camera };
+
+  it('records EDL events from 01:00:00:00 by default, source columns at the clip timecode', () => {
+    const edl = commentsToResolveEdl(comments, cameraClip);
+    // 1040 ms at 25 fps → frame 26 → 1 s + 1 frame.
+    expect(edl).toContain('10:00:01:01 10:00:01:02 01:00:01:01 01:00:01:02');
+  });
+
+  it("records from the clip's own timecode when asked", () => {
+    const edl = commentsToResolveEdl(comments, { ...cameraClip, timelineStart: 'source' });
+    expect(edl).toContain('10:00:01:01 10:00:01:02 10:00:01:01 10:00:01:02');
+  });
+
+  it('starts the FCPXML and xmeml sequences at the timeline start, the clip at its own', () => {
+    const fcpxml = commentsToFcpxml(comments, cameraClip);
+    expect(fcpxml).toContain(`tcStart="${3600 * 25}/25s"`);
+    expect(fcpxml).toContain(`offset="${3600 * 25}/25s" start="${camera.startFrame}/25s"`);
+    const xmeml = commentsToPremiereXml(comments, cameraClip);
+    const sequenceHead = xmeml.slice(0, xmeml.indexOf('<media>'));
+    expect(sequenceHead).toContain('<string>01:00:00:00</string><frame>90000</frame>');
+    expect(xmeml.slice(xmeml.indexOf('<file'))).toContain(
+      `<string>10:00:00:00</string><frame>${camera.startFrame}</frame>`,
+    );
+  });
+
+  it('exports a file with no timecode track from 00:00:00:00 source, non-drop', () => {
+    const edl = commentsToResolveEdl(comments, {
+      assetName: 'Phone',
+      rate: NTSC,
+      durationMs: 5000,
+    });
+    expect(edl).toContain('FCM: NON-DROP FRAME');
+    expect(edl).toContain('00:00:01:01 00:00:01:02 01:00:01:01 01:00:01:02');
+    const sourceTimeline = commentsToResolveEdl(comments, {
+      assetName: 'Phone',
+      rate: NTSC,
+      durationMs: 5000,
+      timelineStart: 'source',
+    });
+    expect(sourceTimeline).toContain('00:00:01:01 00:00:01:02 00:00:01:01 00:00:01:02');
+  });
+});
+
+// Apple's own DTDs, vendored under __fixtures__/nle-dtd: FCPXMLv1_10.dtd (as
+// bundled in Final Cut Pro's Interchange.framework) and the Final Cut Pro XML
+// Interchange Format v5 DTD that xmeml is defined by.
+const xmllint = Bun.which('xmllint');
+describe.skipIf(!xmllint)('DTD validity (xmllint)', () => {
+  const dtd = (name: string) => join(import.meta.dir, '__fixtures__', 'nle-dtd', name);
+  const validate = (text: string, dtdName: string) => {
+    const dir = mkdtempSync(join(tmpdir(), 'nle-dtd-'));
+    try {
+      const file = join(dir, 'doc.xml');
+      writeFileSync(file, text);
+      const run = Bun.spawnSync([xmllint as string, '--noout', '--dtdvalid', dtd(dtdName), file]);
+      return { ok: run.exitCode === 0, errors: run.stderr.toString() };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+  const contexts = [
+    context,
+    { ...context, rate: NTSC, source: { startFrame: 107892, dropFrame: true } },
+    {
+      ...context,
+      rate: PAL,
+      source: { startFrame: 900000, dropFrame: false },
+      timelineStart: 'source' as const,
+    },
+  ];
+
+  it('validates FCPXML against FCPXMLv1_10.dtd', () => {
+    for (const ctx of contexts)
+      expect(validate(commentsToFcpxml(comments, ctx), 'FCPXMLv1_10.dtd')).toEqual({
+        ok: true,
+        errors: '',
+      });
+  });
+
+  it('validates Premiere xmeml against the xmeml v5 DTD', () => {
+    for (const ctx of contexts)
+      expect(validate(commentsToPremiereXml(comments, ctx), 'xmeml-v5.dtd')).toEqual({
+        ok: true,
+        errors: '',
+      });
+  });
+
+  it('rejects a document the DTD does not allow (the check can fail)', () => {
+    const broken = commentsToFcpxml(comments, context).replace('<marker ', '<marker bogus="1" ');
+    expect(validate(broken, 'FCPXMLv1_10.dtd').ok).toBe(false);
   });
 });

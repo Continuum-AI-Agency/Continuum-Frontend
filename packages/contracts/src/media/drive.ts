@@ -107,6 +107,11 @@ export const driveDownloadTicketSchema = z
     mimeType: z.string(),
     sizeBytes: z.number().int().nonnegative(),
     signedUrl: z.string().url(),
+    /** The head file's sha256 when the Library recorded one; the client verifies against it. */
+    sha256: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .nullable(),
   })
   .strict();
 export type DriveDownloadTicket = z.infer<typeof driveDownloadTicketSchema>;

@@ -34,8 +34,10 @@ import {
 } from './ShareCommentThreads';
 import { ShareAssetBeacon, ShareOpenBeacon } from './ShareEventBeacon';
 import { ShareMediaFrame } from './ShareMediaFrame';
+import { SharePreparingPreview } from './SharePreparingPreview';
 import { ShareReel } from './ShareReel';
 import { type ShareTimeMarker, ShareVideoPlayer } from './ShareVideoPlayer';
+import { ShareViewerName } from './ShareViewerName';
 
 const MARKER_TITLE_MAX = 80;
 
@@ -60,7 +62,7 @@ function DownloadButton({
   token: string;
   versionId: string;
 }) {
-  if (!asset.signedUrl) return null;
+  // The route decides (policy, watermark burn-in); a protected page holds no original URL.
   const query = new URLSearchParams({ asset: asset.id, version: versionId });
   return (
     <a
@@ -122,8 +124,11 @@ function AssetPreviewMedia({
   deepLink,
   protect,
   commentable = false,
+  previewState,
 }: {
   protect: boolean;
+  /** Protected links: where this asset's stored preview stands. */
+  previewState?: string;
   asset: MediaAsset;
   markers: ShareTimeMarker[];
   comments: PublicShareComment[];
@@ -172,8 +177,31 @@ function AssetPreviewMedia({
     );
   }
   const preview = asset.preview?.state === 'ready' ? asset.preview : null;
-  // A video's image preview is its poster: the reviewer gets the playable file.
-  if (preview?.kind === 'image' && preview.signedUrl && asset.kind !== 'video') {
+  // A protected link holds no original: an image or video with no stored preview yet
+  // waits for one (the poster, if any, behind the notice) instead of a dead placeholder.
+  if (
+    protect &&
+    !asset.signedUrl &&
+    (asset.kind === 'image' || asset.kind === 'video') &&
+    previewState !== 'unsupported' &&
+    previewState !== 'not_found'
+  ) {
+    return (
+      <SharePreparingPreview
+        assetId={asset.id}
+        label={asset.title ?? asset.fileName}
+        failed={previewState === 'failed'}
+        posterUrl={preview?.kind === 'image' ? preview.signedUrl : (asset.thumbnailUrl ?? null)}
+      />
+    );
+  }
+  // A video's image preview is its poster: the reviewer gets the playable file, or
+  // the poster when a protected link has no preview proxy to play.
+  if (
+    preview?.kind === 'image' &&
+    preview.signedUrl &&
+    (asset.kind !== 'video' || !asset.signedUrl)
+  ) {
     return (
       <div className="relative overflow-hidden rounded-lg border border-border">
         <img
@@ -308,12 +336,14 @@ function SharedAssetTile({
   protect,
   featuredField,
   featuredValue,
+  previewState,
 }: {
   layout: SharePageLayout;
   protect: boolean;
   overlay: WatermarkOverlay | null;
   featuredField: ShareFeaturedField | null;
   featuredValue: CustomFieldValue | undefined;
+  previewState?: string;
   sharedAsset: PublicShareAsset;
   comments: PublicShareComment[];
   allowDownload: boolean;
@@ -340,6 +370,7 @@ function SharedAssetTile({
       overlay={overlay}
       protect={protect}
       commentable={allowComments}
+      previewState={previewState}
     />
   );
   const details = (
@@ -370,6 +401,7 @@ function SharedAssetTile({
           field={featuredField}
           value={featuredValue}
           hasIdentity={hasIdentity}
+          hasPasscode={hasPasscode}
         />
       ) : null}
       <ShareCommentThreads
@@ -555,6 +587,7 @@ export function SharePayloadView({
       protect={protect}
       featuredField={payload.featuredField ?? null}
       featuredValue={payload.featuredValues?.[sharedAsset.asset.id]}
+      previewState={payload.previewStates?.[sharedAsset.versionId]}
     />
   ));
   const labels = payload.assets.map(({ asset }) => asset.title ?? asset.fileName);
@@ -606,6 +639,13 @@ export function SharePayloadView({
               </a>
             ) : null}
           </div>
+          {payload.reviewer ? null : (
+            <ShareViewerName
+              token={token}
+              viewerName={payload.viewerName ?? null}
+              hasPasscode={payload.policy.hasPasscode}
+            />
+          )}
           {branding.description ? (
             <p className="max-w-3xl text-sm whitespace-pre-line text-muted-foreground">
               {branding.description}

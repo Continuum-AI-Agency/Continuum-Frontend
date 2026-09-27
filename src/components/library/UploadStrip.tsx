@@ -46,6 +46,7 @@ export function UploadStrip({ uploads, onPause, onResume, onRetry, onCancel, onM
           key={u.id}
           data-testid="upload-item"
           data-status={u.status}
+          data-paused-by={u.pausedBy}
           data-upload-name={u.name}
           className={cn(
             'min-w-0 rounded-lg border px-3 py-2 text-xs',

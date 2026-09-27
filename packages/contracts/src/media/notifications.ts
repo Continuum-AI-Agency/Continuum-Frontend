@@ -126,10 +126,14 @@ export type NotificationChannel = z.infer<typeof notificationChannelSchema>;
 export const notificationFrequencySchema = z.enum(['immediate', 'hourly', 'daily', 'never']);
 export type NotificationFrequency = z.infer<typeof notificationFrequencySchema>;
 
-/** What a user who never touched the preferences page gets, per channel. */
+/**
+ * What a user who never touched the preferences page gets, per channel. Mirrors
+ * brand_profiles.notification_frequency: email is opt-in, so deploying the delivery worker
+ * emails nobody who did not choose it.
+ */
 export const DEFAULT_NOTIFICATION_FREQUENCY: Record<NotificationChannel, NotificationFrequency> = {
   in_app: 'immediate',
-  email: 'daily',
+  email: 'never',
   slack: 'never',
   web_push: 'never',
 };

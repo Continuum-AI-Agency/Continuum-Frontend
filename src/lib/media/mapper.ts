@@ -57,6 +57,7 @@ export function rowToMediaAsset(
     groupId,
     status: row.status,
     reviewStatus: row.review_status ?? 'none',
+    reviewStateId: row.review_state_id ?? null,
     headVersionId: row.head_version_id ?? null,
     integrityState: row.integrity_state ?? 'unknown',
     checksum: row.checksum ?? null,

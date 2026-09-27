@@ -16,6 +16,10 @@ export const assetReviewEventSchema = z
     // Transient display name resolved from brand membership at read time.
     actorName: z.string().nullable().optional(),
     note: z.string().nullable().optional(),
+    // The version the decision was cast on (the head when the writer named none),
+    // and the brand's custom state when one was chosen.
+    versionId: z.string().nullable().optional(),
+    toStateId: z.string().nullable().optional(),
     createdAt: z.string(),
   })
   .strict();
@@ -55,9 +59,23 @@ export const reviewTransitionResponseSchema = z
   .strict();
 export type ReviewTransitionResponse = z.infer<typeof reviewTransitionResponseSchema>;
 
+// One version's own decided state; null status = never decided on that version.
+export const versionReviewStateSchema = z
+  .object({
+    versionId: z.string().uuid(),
+    versionNumber: z.number().int().positive(),
+    isHead: z.boolean(),
+    reviewStatus: mediaReviewStatusSchema.nullable(),
+    reviewStateId: z.string().uuid().nullable(),
+  })
+  .strict();
+export type VersionReviewState = z.infer<typeof versionReviewStateSchema>;
+
 export const listReviewEventsResponseSchema = z
   .object({
     events: z.array(assetReviewEventSchema),
+    // Each version's own decided state (see versionReviewStateSchema).
+    versions: z.array(versionReviewStateSchema).optional(),
   })
   .strict();
 export type ListReviewEventsResponse = z.infer<typeof listReviewEventsResponseSchema>;
@@ -126,8 +144,25 @@ export const DEFAULT_REVIEW_STATE_LABELS: readonly ReviewStateLabel[] = [
   { state: 'approved', label: 'Approved', color: '#10B981', position: 4 },
 ];
 
+// A brand-owned review state (media.review_custom_states): the brand's own name
+// for a refinement of ONE base category. An asset holding it still carries the
+// base in review_status, so every filter, lane and report keeps working.
+export const reviewCustomStateSchema = z
+  .object({
+    id: z.string().uuid(),
+    baseStatus: mediaReviewStatusSchema,
+    label: z.string().trim().min(1).max(40),
+    color: z.string().regex(REVIEW_LABEL_COLOR_PATTERN),
+    position: z.number().int().nonnegative(),
+  })
+  .strict();
+export type ReviewCustomState = z.infer<typeof reviewCustomStateSchema>;
+
 export const listReviewStateLabelsResponseSchema = z
-  .object({ labels: z.array(reviewStateLabelSchema) })
+  .object({
+    labels: z.array(reviewStateLabelSchema),
+    customStates: z.array(reviewCustomStateSchema).default([]),
+  })
   .strict();
 export type ListReviewStateLabelsResponse = z.infer<typeof listReviewStateLabelsResponseSchema>;
 
@@ -161,3 +196,19 @@ export const reviewDueNotificationPayloadSchema = z
   })
   .strict();
 export type ReviewDueNotificationPayload = z.infer<typeof reviewDueNotificationPayloadSchema>;
+
+// What media.review_set_asset_state answers: the state now held by the head or by
+// the one version named (isHead false leaves the asset's own status untouched).
+export const setAssetReviewStateResultSchema = z
+  .object({
+    assetId: z.string().uuid(),
+    versionId: z.string().uuid(),
+    isHead: z.boolean(),
+    reviewStatus: mediaReviewStatusSchema,
+    reviewStateId: z.string().uuid().nullable(),
+    changed: z.boolean(),
+    eventId: z.string().uuid().nullable(),
+    notificationIds: z.array(z.string().uuid()),
+  })
+  .strict();
+export type SetAssetReviewStateResult = z.infer<typeof setAssetReviewStateResultSchema>;

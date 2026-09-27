@@ -12,6 +12,10 @@ import { ThemeProvider } from '../components/theme-provider';
 export const metadata: Metadata = {
   title: 'Continuum AI',
   description: 'Continuum AI – Build, orchestrate, and ship Marketing experiences fast.',
+  // Installable as a standalone home-screen app: iOS (16.4+) only grants Web Push to one.
+  // manifest.json, not Next's /manifest.webmanifest, because the proxy matcher skips .json.
+  manifest: '/manifest.json',
+  appleWebApp: { capable: true, title: 'Continuum', statusBarStyle: 'default' },
 };
 
 export const viewport: Viewport = {

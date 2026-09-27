@@ -14,8 +14,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { formatCustomFieldValue } from '@/lib/library/customFieldValue';
-import { normalizeReviewStatus, REVIEW_STATUS_META } from '@/lib/library/reviewStatus';
+import { normalizeReviewStatus } from '@/lib/library/reviewStatus';
 import { formatBytes } from '../detail/assetFileMeta';
+import { reviewDisplay } from '../review/reviewDisplay';
+import { useReviewCustomStates, useReviewStateLabels } from '../review/useReviewStateLabels';
 import { AssetThumb } from './AssetThumb';
 import { formatDurationMs } from './cardOptions';
 import {
@@ -32,7 +34,11 @@ import type { FieldValuesByAsset } from './useAssetFieldValues';
 
 const DATE_FORMAT: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
 
-function builtInCell(asset: MediaAsset, key: string): string {
+function builtInCell(
+  asset: MediaAsset,
+  key: string,
+  reviewLabel: (asset: MediaAsset) => string,
+): string {
   switch (key) {
     case 'name':
       return asset.title ?? asset.fileName;
@@ -45,7 +51,7 @@ function builtInCell(asset: MediaAsset, key: string): string {
     case 'dimensions':
       return asset.width && asset.height ? `${asset.width} × ${asset.height}` : '—';
     case 'review':
-      return REVIEW_STATUS_META[normalizeReviewStatus(asset.reviewStatus)].label;
+      return reviewLabel(asset);
     case 'created':
       return new Date(asset.createdAt).toLocaleDateString(undefined, DATE_FORMAT);
     case 'updated':
@@ -84,6 +90,15 @@ export function ListView({
   emptyHint?: string;
 }) {
   const [clientSort, setClientSort] = useState<ListSort | null>(null);
+  const reviewLabels = useReviewStateLabels(assets[0]?.brandId);
+  const customStates = useReviewCustomStates(assets[0]?.brandId);
+  const reviewLabel = (asset: MediaAsset) =>
+    reviewDisplay(
+      normalizeReviewStatus(asset.reviewStatus),
+      asset.reviewStateId,
+      reviewLabels,
+      customStates,
+    ).label;
   const activeSort = clientSort ?? listSortFromServer(serverSort);
 
   const fieldById = new Map(customFields.map((field) => [field.id, field]));
@@ -148,10 +163,7 @@ export function ListView({
                     : 'descending'
                   : 'none';
                 return (
-                  <TableHead
-                    key={column.key}
-                    aria-sort={sortState}
-                  >
+                  <TableHead key={column.key} aria-sort={sortState}>
                     <button
                       type="button"
                       data-testid={`library-list-sort-${column.key}`}
@@ -206,12 +218,12 @@ export function ListView({
                           }}
                           className="block max-w-full truncate text-left hover:underline"
                         >
-                          {builtInCell(asset, column.key)}
+                          {builtInCell(asset, column.key, reviewLabel)}
                         </button>
                       </TableCell>
                     ) : (
                       <TableCell key={column.key} className="tabular-nums text-muted-foreground">
-                        {builtInCell(asset, column.key)}
+                        {builtInCell(asset, column.key, reviewLabel)}
                       </TableCell>
                     ),
                   )}
