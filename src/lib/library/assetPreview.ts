@@ -3,6 +3,7 @@
 import {
   type AssetPreviewState,
   classifyLibraryFile,
+  needsPlaybackProxy,
   type SignAssetRenditionOperation,
   signAssetRenditionResponseSchema,
 } from '@continuum/contracts';
@@ -220,6 +221,21 @@ export async function attachAssetPreview(params: {
         durationMs: poster.durationMs,
       },
     });
+    if (
+      needsPlaybackProxy({
+        sizeBytes: params.file.size,
+        width: poster.sourceWidth,
+        height: poster.sourceHeight,
+      })
+    ) {
+      void requestLibraryPreviewProxy({
+        brandId: params.brandId,
+        assetId: params.assetId,
+        assetVersionId: params.assetVersionId,
+      }).catch((error: unknown) => {
+        console.error('[assetPreview] playback proxy request failed', error);
+      });
+    }
     return 'ready';
   }
 

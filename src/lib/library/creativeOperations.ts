@@ -41,6 +41,7 @@ import {
   type RegisterGeneratedAssetOperation,
   type RegisterGeneratedAssetResponse,
   type RegisterVersionResponse,
+  type RestoreAssetsResult,
   type ReviewCommandResponse,
   type ReviewTransitionResponse,
   type RevokeShareLinkRequest,
@@ -50,13 +51,16 @@ import {
   registerVersionResponseSchema,
   renameLibraryTagOperationSchema,
   requestAssetReviewOperationSchema,
+  restoreAssetsResultSchema,
   reviewCommandResponseSchema,
   reviewTransitionResponseSchema,
   revokeShareLinkOperationSchema,
   rollbackAssetVersionOperationSchema,
   type ShareLink,
+  type StackAssetsResult,
   shareLinkSchema,
   signVersionUploadOperationSchema,
+  stackAssetsResultSchema,
   transitionAssetReviewOperationSchema,
   type UpdateCommentRequest,
   updateCommentOperationSchema,
@@ -398,13 +402,7 @@ export function revokeShareLinkOperation(
 
 export async function createLibraryCollectionOperation(
   supabase: SupabaseClient,
-  input: {
-    brandId: string;
-    name: string;
-    kind?: 'manual' | 'smart';
-    parentId?: string | null;
-    smartQuery?: Omit<LibraryBrowseQuery, 'cursor'>;
-  },
+  input: Omit<z.input<typeof createLibraryCollectionOperationSchema>, 'action' | 'idempotencyKey'>,
 ): Promise<MediaCollection> {
   const result = await invokeCreativeOperation(
     supabase,
@@ -420,13 +418,7 @@ export async function createLibraryCollectionOperation(
 
 export async function updateLibraryCollectionOperation(
   supabase: SupabaseClient,
-  input: {
-    brandId: string;
-    collectionId: string;
-    name?: string;
-    parentId?: string | null;
-    smartQuery?: Omit<LibraryBrowseQuery, 'cursor'> | null;
-  },
+  input: Omit<z.input<typeof updateLibraryCollectionOperationSchema>, 'action' | 'idempotencyKey'>,
 ): Promise<MediaCollection> {
   const result = await invokeCreativeOperation(
     supabase,
@@ -509,6 +501,32 @@ export async function bulkDeleteAssetsOperation(
     libraryBulkCommandResponseSchema,
   );
   return result.updatedAssetIds;
+}
+
+// Drag-to-stack: every version of each source becomes a newer version of the target,
+// and the sources leave the grid (their bytes now live on the target's history).
+export function stackAssetsOperation(
+  supabase: SupabaseClient,
+  input: { brandId: string; targetAssetId: string; sourceAssetIds: string[] },
+): Promise<StackAssetsResult> {
+  return invokeCreativeOperation(
+    supabase,
+    { action: 'stack_assets', ...input, idempotencyKey: crypto.randomUUID() },
+    stackAssetsResultSchema,
+  );
+}
+
+// Trash restore. A stacked asset is refused rather than restored: its bytes already
+// live on as versions of the asset it was stacked into.
+export function restoreAssetsOperation(
+  supabase: SupabaseClient,
+  input: { brandId: string; assetIds: string[] },
+): Promise<RestoreAssetsResult> {
+  return invokeCreativeOperation(
+    supabase,
+    { action: 'restore_assets', ...input, idempotencyKey: crypto.randomUUID() },
+    restoreAssetsResultSchema,
+  );
 }
 
 export async function bulkTransitionAssetReviewOperation(

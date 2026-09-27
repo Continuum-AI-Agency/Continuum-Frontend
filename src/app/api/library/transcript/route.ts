@@ -5,6 +5,8 @@ import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
 import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
+type ServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
+
 const querySchema = z.object({
   brandId: z.string().uuid(),
   assetId: z.string().uuid(),
@@ -14,7 +16,27 @@ type TranscriptRow = {
   transcript: string | null;
   transcript_segments: unknown;
   transcript_source: string | null;
+  transcript_language?: string | null;
 };
+
+const TRANSCRIPT_COLUMNS = 'transcript, transcript_segments, transcript_source';
+const UNDEFINED_COLUMN = '42703';
+
+// transcript_language ships in its own migration. Until that applies, PostgREST
+// answers the wider select with 42703; the transcript must still load, just
+// without a language.
+async function loadTranscriptRow(supabase: ServerClient, brandId: string, assetId: string) {
+  const read = (columns: string) =>
+    mediaSchema(supabase)
+      .from('assets')
+      .select(columns)
+      .eq('id', assetId)
+      .eq('brand_id', brandId)
+      .is('deleted_at', null)
+      .maybeSingle();
+  const withLanguage = await read(`${TRANSCRIPT_COLUMNS}, transcript_language`);
+  return withLanguage.error?.code === UNDEFINED_COLUMN ? read(TRANSCRIPT_COLUMNS) : withLanguage;
+}
 
 // A malformed line is dropped, never fatal — same rule the contracts row mapper
 // applies to every other jsonb column.
@@ -27,7 +49,7 @@ function parseSegments(raw: unknown): TranscriptSegment[] | null {
   });
 }
 
-// GET /api/library/transcript?brandId&assetId — one video's spoken track.
+// GET /api/library/transcript?brandId&assetId — one video or audio asset's spoken track.
 //
 // Deliberately NOT part of the grid's asset payload: a long-form transcript is by
 // far the heaviest column on the row, and a page of 48 cards has no use for it.
@@ -61,13 +83,7 @@ export async function GET(request: Request) {
 
   // User-scoped client: media.assets RLS (has_brand_access) already fences rows
   // to the caller's brands, so no service-role bypass is warranted for a read.
-  const { data, error } = await mediaSchema(supabase)
-    .from('assets')
-    .select('transcript, transcript_segments, transcript_source')
-    .eq('id', assetId)
-    .eq('brand_id', brandId)
-    .is('deleted_at', null)
-    .maybeSingle();
+  const { data, error } = await loadTranscriptRow(supabase, brandId, assetId);
   if (error) {
     console.error('[library/transcript] asset lookup failed', error);
     return NextResponse.json({ error: 'Query failed' }, { status: 500 });
@@ -82,5 +98,6 @@ export async function GET(request: Request) {
     transcript: row.transcript,
     transcriptSegments: parseSegments(row.transcript_segments),
     transcriptSource: row.transcript_source,
+    transcriptLanguage: row.transcript_language ?? null,
   });
 }

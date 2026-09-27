@@ -19,11 +19,14 @@ import { GET } from './route';
 const BRAND_ID = '00000000-0000-4000-8000-0000000000b2';
 const ASSET_ID = '11111111-2222-4333-8444-555555555555';
 
-type DbResult = { data: unknown; error: { message: string } | null };
+type DbResult = { data: unknown; error: { message: string; code?: string } | null };
+type Resolve = (columns: string) => DbResult;
 
 class QueryStub implements PromiseLike<DbResult> {
-  constructor(private readonly result: DbResult) {}
-  select() {
+  private columns = '';
+  constructor(private readonly resolve: Resolve) {}
+  select(columns: string) {
+    this.columns = columns;
     return this;
   }
   eq() {
@@ -39,15 +42,16 @@ class QueryStub implements PromiseLike<DbResult> {
     onfulfilled?: ((value: DbResult) => T1 | PromiseLike<T1>) | null,
     onrejected?: ((reason: unknown) => T2 | PromiseLike<T2>) | null,
   ): PromiseLike<T1 | T2> {
-    return Promise.resolve(this.result).then(onfulfilled, onrejected);
+    return Promise.resolve(this.resolve(this.columns)).then(onfulfilled, onrejected);
   }
 }
 
-function setClient(row: DbResult, user: { id: string } | null = { id: 'viewer-1' }) {
+function setClient(row: DbResult | Resolve, user: { id: string } | null = { id: 'viewer-1' }) {
+  const resolve = typeof row === 'function' ? row : () => row;
   hooks.__testCreateSupabaseServerClient = () =>
     Promise.resolve({
       auth: { getUser: () => Promise.resolve({ data: { user }, error: null }) },
-      schema: () => ({ from: () => new QueryStub(row) }),
+      schema: () => ({ from: () => new QueryStub(resolve) }),
     });
 }
 
@@ -88,7 +92,51 @@ describe('GET /api/library/transcript', () => {
         { startMs: 1500, endMs: 3000, text: 'Nothing else.' },
       ],
       transcriptSource: 'gemini_video',
+      transcriptLanguage: null,
     });
+  });
+
+  it('returns the stored spoken language', async () => {
+    setClient({
+      data: {
+        transcript: 'Hola.',
+        transcript_segments: [{ startMs: 0, endMs: 900, text: 'Hola.' }],
+        transcript_source: 'gemini_video',
+        transcript_language: 'es',
+      },
+      error: null,
+    });
+    const response = await GET(getRequest({ brandId: BRAND_ID, assetId: ASSET_ID }));
+    expect(await response.json()).toMatchObject({ transcriptLanguage: 'es' });
+  });
+
+  it('still serves the transcript before the language column exists', async () => {
+    const selects: string[] = [];
+    setClient((columns) => {
+      selects.push(columns);
+      return columns.includes('transcript_language')
+        ? {
+            data: null,
+            error: {
+              code: '42703',
+              message: 'column assets.transcript_language does not exist',
+            },
+          }
+        : {
+            data: { transcript: 'Hi.', transcript_segments: null, transcript_source: 'x' },
+            error: null,
+          };
+    });
+    const response = await GET(getRequest({ brandId: BRAND_ID, assetId: ASSET_ID }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ transcript: 'Hi.', transcriptLanguage: null });
+    expect(selects).toHaveLength(2);
+  });
+
+  it('500s any other query failure instead of retrying it', async () => {
+    setClient({ data: null, error: { code: '57014', message: 'timeout' } });
+    const response = await GET(getRequest({ brandId: BRAND_ID, assetId: ASSET_ID }));
+    expect(response.status).toBe(500);
   });
 
   it('passes through analyzed-no-speech distinctly from never-transcribed', async () => {
