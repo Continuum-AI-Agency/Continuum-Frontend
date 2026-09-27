@@ -6,7 +6,13 @@ import {
   type MediaReviewStatus,
   mediaAssetSchema,
 } from '@continuum/contracts';
-import { buildBoardLanes, decodeLaneId, encodeLaneId, UNSET_LANE_LABEL } from './boardGrouping';
+import {
+  buildBoardLanes,
+  decodeLaneId,
+  dropValue,
+  encodeLaneId,
+  UNSET_LANE_LABEL,
+} from './boardGrouping';
 
 function makeAsset(id: string, reviewStatus?: MediaReviewStatus): MediaAsset {
   return mediaAssetSchema.parse({
@@ -108,7 +114,7 @@ describe('buildBoardLanes — custom single-select field', () => {
     const lanes = buildBoardLanes({
       grouping: { kind: 'custom_field', field: rights },
       assets,
-      optionByAssetId: new Map([
+      valueByAssetId: new Map([
         ['a1', 'expired'],
         ['a2', 'unlimited'],
         ['a4', 'expired'],
@@ -123,7 +129,7 @@ describe('buildBoardLanes — custom single-select field', () => {
     const lanes = buildBoardLanes({
       grouping: { kind: 'custom_field', field: rights },
       assets: [makeAsset('orphan')],
-      optionByAssetId: new Map([['orphan', 'option-that-was-deleted']]),
+      valueByAssetId: new Map([['orphan', 'option-that-was-deleted']]),
     });
     expect(lanes[0]?.assets.map((asset) => asset.id)).toEqual(['orphan']);
     expect(lanes.flatMap((lane) => lane.assets)).toHaveLength(1);
@@ -169,7 +175,7 @@ describe('buildBoardLanes — status and user fields', () => {
     const lanes = buildBoardLanes({
       grouping: { kind: 'custom_field', field: stage },
       assets: [makeAsset('a1')],
-      optionByAssetId: new Map([['a1', 'done']]),
+      valueByAssetId: new Map([['a1', 'done']]),
     });
     expect(lanes.map((lane) => [lane.label, lane.dotColor ?? null])).toEqual([
       [UNSET_LANE_LABEL, null],
@@ -184,7 +190,7 @@ describe('buildBoardLanes — status and user fields', () => {
     const lanes = buildBoardLanes({
       grouping: { kind: 'custom_field', field: assignee },
       assets: [makeAsset('a1'), makeAsset('a2')],
-      optionByAssetId: new Map([['a2', 'u-2']]),
+      valueByAssetId: new Map([['a2', 'u-2']]),
       members: [
         { userId: 'u-1', label: 'Ada' },
         { userId: 'u-2', label: 'Grace' },
@@ -198,5 +204,136 @@ describe('buildBoardLanes — status and user fields', () => {
       fieldId: 'assignee',
       optionId: 'u-2',
     });
+  });
+});
+
+const field = (type: CustomField['type'], options: unknown = []): CustomField =>
+  customFieldSchema.parse({ ...rights, id: `f-${type}`, type, options });
+const ids = (lane: { assets: MediaAsset[] } | undefined) => lane?.assets.map((asset) => asset.id);
+
+describe('buildBoardLanes — every other field type', () => {
+  it('puts a multi-select in the lane of its first option', () => {
+    const multi = field('multi_select', [
+      { id: 'ig', label: 'Instagram' },
+      { id: 'tt', label: 'TikTok' },
+    ]);
+    const lanes = buildBoardLanes({
+      grouping: { kind: 'custom_field', field: multi },
+      assets: [makeAsset('a1'), makeAsset('a2')],
+      valueByAssetId: new Map([['a1', ['tt', 'ig']]]),
+    });
+    expect(lanes.map((lane) => lane.label)).toEqual([UNSET_LANE_LABEL, 'Instagram', 'TikTok']);
+    expect(ids(lanes[2])).toEqual(['a1']);
+    expect(ids(lanes[0])).toEqual(['a2']);
+  });
+
+  it('buckets dates relative to today and refuses drops', () => {
+    const lanes = buildBoardLanes({
+      grouping: { kind: 'custom_field', field: field('date') },
+      assets: ['a1', 'a2', 'a3', 'a4'].map((id) => makeAsset(id)),
+      valueByAssetId: new Map([
+        ['a1', '2026-09-20'],
+        ['a2', '2026-09-27'],
+        ['a3', '2026-10-01'],
+        ['a4', '2027-01-01'],
+      ]),
+      now: new Date('2026-09-27T15:00:00Z'),
+    });
+    expect(lanes.map((lane) => [lane.label, ids(lane)])).toEqual([
+      [UNSET_LANE_LABEL, []],
+      ['Past', ['a1']],
+      ['Today', ['a2']],
+      ['Next 7 days', ['a3']],
+      ['Later', ['a4']],
+    ]);
+    expect(lanes.every((lane) => !lane.droppable)).toBe(true);
+  });
+
+  it('splits numbers into four equal ranges over the values present', () => {
+    const lanes = buildBoardLanes({
+      grouping: { kind: 'custom_field', field: field('number') },
+      assets: ['a1', 'a2', 'a3'].map((id) => makeAsset(id)),
+      valueByAssetId: new Map([
+        ['a1', 0],
+        ['a2', 50],
+        ['a3', 100],
+      ]),
+    });
+    expect(lanes.map((lane) => lane.label)).toEqual([
+      UNSET_LANE_LABEL,
+      '0 – 25',
+      '25 – 50',
+      '50 – 75',
+      '75 – 100',
+    ]);
+    expect(ids(lanes[1])).toEqual(['a1']);
+    expect(ids(lanes[3])).toEqual(['a2']);
+    expect(ids(lanes[4])).toEqual(['a3']);
+  });
+
+  it('gives a rating one lane per star and a checkbox exactly Yes and No', () => {
+    const rating = buildBoardLanes({
+      grouping: { kind: 'custom_field', field: field('rating', { max: 3 }) },
+      assets: [makeAsset('a1')],
+      valueByAssetId: new Map([['a1', 2]]),
+    });
+    expect(rating.map((lane) => lane.label)).toEqual([UNSET_LANE_LABEL, '★', '★★', '★★★']);
+    expect(ids(rating[2])).toEqual(['a1']);
+    const checkbox = buildBoardLanes({
+      grouping: { kind: 'custom_field', field: field('checkbox') },
+      assets: [makeAsset('a1'), makeAsset('a2')],
+      valueByAssetId: new Map([['a1', true]]),
+    });
+    expect(checkbox.map((lane) => [lane.label, ids(lane)])).toEqual([
+      ['Yes', ['a1']],
+      ['No', ['a2']],
+    ]);
+  });
+
+  it('groups text by value with the long tail in Other', () => {
+    const lanes = buildBoardLanes({
+      grouping: { kind: 'custom_field', field: field('text') },
+      assets: ['a1', 'a2', 'a3'].map((id) => makeAsset(id)),
+      valueByAssetId: new Map([
+        ['a1', 'Q4'],
+        ['a2', 'Q4'],
+        ['a3', 'Q1'],
+      ]),
+    });
+    expect(lanes.map((lane) => [lane.label, ids(lane)])).toEqual([
+      [UNSET_LANE_LABEL, []],
+      ['Q4', ['a1', 'a2']],
+      ['Q1', ['a3']],
+    ]);
+  });
+
+  it('takes the brand review labels and colours for the review lanes', () => {
+    const lanes = buildBoardLanes({
+      grouping: { kind: 'review_status' },
+      assets: [],
+      reviewLabels: { approved: { label: 'Signed off', color: '#10b981' } },
+    });
+    expect(lanes[4]).toMatchObject({ label: 'Signed off', dotColor: '#10b981' });
+    expect(lanes[1]?.label).toBe('Draft');
+  });
+});
+
+describe('dropValue', () => {
+  it('writes the lane value for each droppable type and nothing for buckets', () => {
+    expect(dropValue(field('rating', { max: 5 }), '4', null)).toBe(4);
+    expect(dropValue(field('checkbox'), 'true', false)).toBe(true);
+    expect(dropValue(field('checkbox'), null, true)).toBe(false);
+    expect(dropValue(rights, null, 'expired')).toBeNull();
+    expect(dropValue(field('date'), 'later', '2026-01-01')).toBeUndefined();
+  });
+
+  it('swaps only the grouped option of a multi-select', () => {
+    const multi = field('multi_select', [
+      { id: 'a', label: 'A' },
+      { id: 'b', label: 'B' },
+      { id: 'c', label: 'C' },
+    ]);
+    expect(dropValue(multi, 'c', ['a', 'b'])).toEqual(['c', 'b']);
+    expect(dropValue(multi, 'b', ['a', 'b'])).toEqual(['b']);
   });
 });

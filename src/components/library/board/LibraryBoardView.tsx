@@ -21,8 +21,10 @@ import {
   type CollectionViewConfig,
   type CustomField,
   type CustomFieldFilter,
+  type CustomFieldValue,
   collectionViewConfigSchema,
   type MediaAsset,
+  mediaReviewStatusSchema,
 } from '@continuum/contracts';
 import {
   DndContext,
@@ -49,14 +51,16 @@ import {
   serializeFieldFilters,
   setAssetFieldValue,
 } from '@/lib/library/customFields';
-import { isGroupableField } from '@/lib/library/customFieldValue';
 import { transitionReviewStatus } from '@/lib/library/review';
 import { normalizeReviewStatus, REVIEW_STATUS_ORDER } from '@/lib/library/reviewStatus';
+import { canEditLibrary, useBrandRole } from '@/lib/library/useBrandRole';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
+import { useReviewStateLabels } from '../review/useReviewStateLabels';
 import { useMentionTargets } from '../detail/useMentionTargets';
 import { BoardCardContent } from './BoardCard';
 import { BoardColumn } from './BoardColumn';
-import { type BoardGrouping, buildBoardLanes, decodeLaneId } from './boardGrouping';
+import { type BoardGrouping, buildBoardLanes, decodeLaneId, dropValue } from './boardGrouping';
 
 const PAGE_SIZE = 96;
 const MAX_BOARD_ASSETS = 192;
@@ -135,18 +139,10 @@ async function fetchBoardAssets(
   return collected;
 }
 
-// assetId → the lane value it holds for `field` (option id, status id, or user id),
-// in one read of the field's values. An asset the map does not name is unset.
-async function fetchOptionByAssetId(
-  brandId: string,
-  field: CustomField,
-): Promise<Map<string, string>> {
-  const values = await listFieldValuesByAsset({ brandId, fieldId: field.id });
-  const optionByAssetId = new Map<string, string>();
-  for (const [assetId, value] of values) {
-    if (typeof value === 'string' && value.length > 0) optionByAssetId.set(assetId, value);
-  }
-  return optionByAssetId;
+// assetId → the value it holds for `field`, in one read of the field's values. An asset
+// the map does not name is unset.
+function fetchValueByAssetId(brandId: string, field: CustomField) {
+  return listFieldValuesByAsset({ brandId, fieldId: field.id });
 }
 
 async function fetchCollectionViewConfig(
@@ -192,14 +188,14 @@ export function LibraryBoardView({
   const [assets, setAssets] = useState<MediaAsset[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeAsset, setActiveAsset] = useState<MediaAsset | null>(null);
-  const [optionByAssetId, setOptionByAssetId] = useState<Map<string, string>>(new Map());
+  const [valueByAssetId, setValueByAssetId] = useState<Map<string, CustomFieldValue>>(new Map());
+  const canEdit = canEditLibrary(useBrandRole(brandId));
+  const reviewLabels = useReviewStateLabels(brandId);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
-  const groupableFields = useMemo(
-    () => (customFields ?? []).filter(isGroupableField),
-    [customFields],
-  );
+  // Every field can group the board; the lane shapes live in boardGrouping.
+  const groupableFields = customFields ?? [];
 
   // A field deleted (or made non-groupable) while it was the board's group-by
   // must not strand the board on a dimension that no longer exists.
@@ -246,13 +242,13 @@ export function LibraryBoardView({
   // the asset row, so the default board costs no extra request.
   useEffect(() => {
     if (!groupField) {
-      setOptionByAssetId(new Map());
+      setValueByAssetId(new Map());
       return;
     }
     let cancelled = false;
-    fetchOptionByAssetId(brandId, groupField)
+    fetchValueByAssetId(brandId, groupField)
       .then((map) => {
-        if (!cancelled) setOptionByAssetId(map);
+        if (!cancelled) setValueByAssetId(map);
       })
       .catch((err: unknown) => {
         if (!cancelled) setLoadError((err as Error).message);
@@ -263,11 +259,63 @@ export function LibraryBoardView({
     // biome-ignore lint/correctness/useExhaustiveDependencies: filterKey serializes filters
   }, [brandId, filterKey, refreshKey, groupField]);
 
+  // Live, brand-wide: another member's field write or review move lands in this board's
+  // lanes as the row arrives — merged in place, no refetch and no reload.
+  const groupFieldId = groupField?.id ?? null;
+  useEffect(() => {
+    return subscribeToPostgresChanges({
+      label: `library-board-${brandId}`,
+      bindings: [
+        {
+          event: '*',
+          schema: 'media',
+          table: 'asset_field_values',
+          filter: `brand_id=eq.${brandId}`,
+          onRow: (row, meta) => {
+            const source = meta.eventType === 'DELETE' ? meta.old : row;
+            if (!groupFieldId || source.field_id !== groupFieldId) return;
+            const assetId = String(source.asset_id ?? '');
+            if (!assetId) return;
+            setValueByAssetId((prev) => {
+              const next = new Map(prev);
+              if (meta.eventType === 'DELETE') next.delete(assetId);
+              else next.set(assetId, row.value as CustomFieldValue);
+              return next;
+            });
+          },
+        },
+        {
+          event: 'UPDATE',
+          schema: 'media',
+          table: 'assets',
+          filter: `brand_id=eq.${brandId}`,
+          onRow: (row) => {
+            const reviewStatus = mediaReviewStatusSchema.safeParse(row.review_status);
+            if (!reviewStatus.success) return;
+            setAssets((prev) =>
+              prev
+                ? prev.map((item) =>
+                    item.id === row.id ? { ...item, reviewStatus: reviewStatus.data } : item,
+                  )
+                : prev,
+            );
+          },
+        },
+      ],
+    });
+  }, [brandId, groupFieldId]);
+
   const members = useMentionTargets(groupField?.type === 'user' ? brandId : null);
   const lanes = useMemo(
     () =>
-      buildBoardLanes({ grouping, assets: assets ?? [], optionByAssetId, members: members ?? [] }),
-    [grouping, assets, optionByAssetId, members],
+      buildBoardLanes({
+        grouping,
+        assets: assets ?? [],
+        valueByAssetId,
+        members: members ?? [],
+        reviewLabels,
+      }),
+    [grouping, assets, valueByAssetId, members, reviewLabels],
   );
 
   // Inside a collection the grouping is the collection's, not the viewer's: it is
@@ -307,22 +355,24 @@ export function LibraryBoardView({
     });
   };
 
-  const setLocalOption = useCallback((assetId: string, optionId: string | null) => {
-    setOptionByAssetId((prev) => {
+  const setLocalValue = useCallback((assetId: string, value: CustomFieldValue) => {
+    setValueByAssetId((prev) => {
       const next = new Map(prev);
-      if (optionId === null) next.delete(assetId);
-      else next.set(assetId, optionId);
+      if (value === null) next.delete(assetId);
+      else next.set(assetId, value);
       return next;
     });
   }, []);
 
   const handleDragStart = (event: DragStartEvent) => {
+    if (!canEdit) return;
     const asset = (assets ?? []).find((candidate) => candidate.id === String(event.active.id));
     setActiveAsset(asset ?? null);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveAsset(null);
+    if (!canEdit) return;
     const { active, over } = event;
     if (!over) return;
 
@@ -355,19 +405,22 @@ export function LibraryBoardView({
       return;
     }
 
-    const fromOptionId = optionByAssetId.get(assetId) ?? null;
-    if (fromOptionId === target.optionId) return;
-    setLocalOption(assetId, target.optionId);
+    if (!groupField || target.fieldId !== groupField.id) return;
+    const current = valueByAssetId.get(assetId) ?? null;
+    const next = dropValue(groupField, target.optionId, current);
+    if (next === undefined) {
+      toast.info(`${groupField.name} lanes group by range — set the value on the asset`);
+      return;
+    }
+    if (JSON.stringify(next) === JSON.stringify(current)) return;
+    setLocalValue(assetId, next);
     // The unset lane is a real destination: dropping there CLEARS the value.
-    setAssetFieldValue({
-      brandId,
-      assetId,
-      fieldId: target.fieldId,
-      value: target.optionId,
-    }).catch((err: unknown) => {
-      setLocalOption(assetId, fromOptionId);
-      toast.error(`Move failed · ${(err as Error).message}`);
-    });
+    setAssetFieldValue({ brandId, assetId, fieldId: groupField.id, value: next }).catch(
+      (err: unknown) => {
+        setLocalValue(assetId, current);
+        toast.error(`Move failed · ${(err as Error).message}`);
+      },
+    );
   };
 
   if (assets === null) return <BoardSkeleton />;
