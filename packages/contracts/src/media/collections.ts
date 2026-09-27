@@ -1,7 +1,22 @@
 import { z } from 'zod';
-import { mediaCollectionSchema, mediaReviewStatusSchema } from './asset';
-import { customFieldValueSchema } from './custom-fields';
+import {
+  collectionViewConfigSchema,
+  collectionVisibilitySchema,
+  mediaCollectionSchema,
+  mediaReviewStatusSchema,
+} from './asset';
+import { customFieldFilterSchema, customFieldValueSchema } from './custom-fields';
 import { libraryBrowseQuerySchema } from './library-browse';
+
+// What a smart collection stores in smart_query and media.asset_matches_smart_query
+// evaluates: the browse filters, plus the custom-field filters the browse read model
+// does not carry, plus the two viewer-relative system views ('me' = whoever opens it).
+export const smartCollectionQuerySchema = libraryBrowseQuerySchema.omit({ cursor: true }).extend({
+  fieldFilters: z.array(customFieldFilterSchema).max(20).optional(),
+  assignedTo: z.literal('me').optional(),
+  reviewAssignedTo: z.literal('me').optional(),
+});
+export type SmartCollectionQuery = z.infer<typeof smartCollectionQuerySchema>;
 
 const collectionCommandBase = {
   brandId: z.string().uuid(),
@@ -15,7 +30,9 @@ export const createLibraryCollectionOperationSchema = z
     name: z.string().trim().min(1).max(120),
     kind: z.enum(['manual', 'smart']).default('manual'),
     parentId: z.string().uuid().nullable().optional(),
-    smartQuery: libraryBrowseQuerySchema.omit({ cursor: true }).optional(),
+    smartQuery: smartCollectionQuerySchema.optional(),
+    visibility: collectionVisibilitySchema.optional(),
+    viewConfig: collectionViewConfigSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -41,14 +58,20 @@ export const updateLibraryCollectionOperationSchema = z
     collectionId: z.string().uuid(),
     name: z.string().trim().min(1).max(120).optional(),
     parentId: z.string().uuid().nullable().optional(),
-    smartQuery: libraryBrowseQuerySchema.omit({ cursor: true }).nullable().optional(),
+    smartQuery: smartCollectionQuerySchema.nullable().optional(),
+    visibility: collectionVisibilitySchema.optional(),
+    viewConfig: collectionViewConfigSchema.optional(),
   })
   .strict()
   .refine(
     (value) =>
-      value.name !== undefined || value.smartQuery !== undefined || value.parentId !== undefined,
+      value.name !== undefined ||
+      value.smartQuery !== undefined ||
+      value.parentId !== undefined ||
+      value.visibility !== undefined ||
+      value.viewConfig !== undefined,
     {
-      message: 'name, smartQuery, or parentId is required',
+      message: 'name, smartQuery, parentId, visibility, or viewConfig is required',
     },
   );
 

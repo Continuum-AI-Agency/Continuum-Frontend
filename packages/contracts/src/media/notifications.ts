@@ -9,6 +9,11 @@ export const notificationKindSchema = z.enum([
   'review_status_change',
   'comment_reply',
   'comment_mention',
+  // A user custom field (an assignee) was pointed at the recipient. `count` > 1
+  // when one bulk write assigned several assets at once.
+  'asset_assigned',
+  'review_reminder',
+  'review_escalation',
 ]);
 export type NotificationKind = z.infer<typeof notificationKindSchema>;
 
@@ -111,3 +116,72 @@ export const markNotificationsReadRequestSchema = z
   })
   .strict();
 export type MarkNotificationsReadRequest = z.infer<typeof markNotificationsReadRequestSchema>;
+
+// Per-user delivery preferences (brand_profiles.notification_preferences):
+// one row per (user, notification kind, channel). `kind` is free text so a new
+// producer does not need a migration to become configurable.
+export const notificationChannelSchema = z.enum(['in_app', 'email', 'slack', 'web_push']);
+export type NotificationChannel = z.infer<typeof notificationChannelSchema>;
+
+export const notificationFrequencySchema = z.enum(['immediate', 'hourly', 'daily', 'never']);
+export type NotificationFrequency = z.infer<typeof notificationFrequencySchema>;
+
+/** What a user who never touched the preferences page gets, per channel. */
+export const DEFAULT_NOTIFICATION_FREQUENCY: Record<NotificationChannel, NotificationFrequency> = {
+  in_app: 'immediate',
+  email: 'daily',
+  slack: 'never',
+  web_push: 'never',
+};
+
+export const notificationPreferenceSchema = z
+  .object({
+    userId: z.string().uuid(),
+    kind: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),
+    channel: notificationChannelSchema,
+    frequency: notificationFrequencySchema,
+    updatedAt: z.string(),
+  })
+  .strict();
+export type NotificationPreference = z.infer<typeof notificationPreferenceSchema>;
+
+export const notificationDeliveryStatusSchema = z.enum(['pending', 'sent', 'failed', 'skipped']);
+export type NotificationDeliveryStatus = z.infer<typeof notificationDeliveryStatusSchema>;
+
+// One channel's attempt to deliver a notification (service-only table). The
+// recipient's preference is resolved once, when the notification is inserted:
+// `frequency` is what it said, and `dueAt` is null while a digest row waits for
+// its hourly/daily release. `providerRef` is the provider's receipt — the Resend
+// message id, the Slack message ts, or the push service's HTTP status.
+export const notificationDeliverySchema = z
+  .object({
+    notificationId: z.string().uuid(),
+    channel: notificationChannelSchema,
+    status: notificationDeliveryStatusSchema,
+    frequency: notificationFrequencySchema,
+    dueAt: z.string().nullable(),
+    attempts: z.number().int().nonnegative(),
+    lastError: z.string().nullable(),
+    providerRef: z.string().nullable(),
+    updatedAt: z.string(),
+  })
+  .strict();
+export type NotificationDelivery = z.infer<typeof notificationDeliverySchema>;
+
+// A browser Push API subscription (brand_profiles.web_push_subscriptions).
+export const webPushSubscriptionSchema = z
+  .object({
+    id: z.string().uuid(),
+    userId: z.string().uuid(),
+    endpoint: z
+      .string()
+      .url()
+      .regex(/^https:\/\//),
+    p256dh: z.string().min(1),
+    auth: z.string().min(1),
+    userAgent: z.string().nullable(),
+    createdAt: z.string(),
+    lastSeenAt: z.string(),
+  })
+  .strict();
+export type WebPushSubscription = z.infer<typeof webPushSubscriptionSchema>;
