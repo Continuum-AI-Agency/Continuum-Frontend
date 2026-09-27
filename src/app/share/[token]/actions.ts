@@ -3,21 +3,21 @@
 import {
   createExternalShareCommentRequestSchema,
   createExternalShareCommentResponseSchema,
+  customFieldOptionsSchema,
+  customFieldTypeSchema,
   decideExternalShareReviewRequestSchema,
   externalReviewerSessionRequestSchema,
   externalReviewerSessionResponseSchema,
   externalShareReviewDecisionSchema,
-  type ShareLinkEventKind,
-  customFieldOptionsSchema,
-  customFieldTypeSchema,
   isShareFeaturableFieldType,
+  type ShareLinkEventKind,
   valueSchemaFor,
 } from '@continuum/contracts';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { mediaSchema } from '@/lib/media/supabase-media';
-import { resolveShareLink, shareAssetIds } from './loadSharePayload';
+import { resolveShareLink, shareHasAsset } from './loadSharePayload';
 import { invokePublicCreativeOperation, reviewerSessionCookieName } from './reviewerSession.server';
 import { recordShareEvent } from './shareEvents.server';
 
@@ -29,7 +29,11 @@ async function recordReviewerEvent(
   const resolved = await resolveShareLink(token, sessionToken);
   if (!resolved.ok) return;
   await recordShareEvent(
-    { linkId: resolved.link.id, brandId: resolved.link.brand_id, sessionId: resolved.session?.id ?? null },
+    {
+      linkId: resolved.link.id,
+      brandId: resolved.link.brand_id,
+      sessionId: resolved.session?.id ?? null,
+    },
     event,
   );
 }
@@ -115,12 +119,23 @@ export async function postExternalComment(
   const reviewerSession = await reviewerSessionForMutation(token, formData);
   if (!reviewerSession.ok) return { error: reviewerSession.error, posted: false };
 
+  // A guest pins feedback to the player's moment, or the I/O range they marked.
+  const timeMs = String(formData.get('timeMs') ?? '');
+  const endMs = String(formData.get('endMs') ?? '');
+  const annotation = /^\d+$/.test(timeMs)
+    ? {
+        kind: 'time' as const,
+        timeMs: Number(timeMs),
+        ...(/^\d+$/.test(endMs) ? { endMs: Number(endMs) } : {}),
+      }
+    : undefined;
   const input = createExternalShareCommentRequestSchema.safeParse({
     token,
     sessionToken: reviewerSession.token,
     assetId,
     versionId,
     body: String(formData.get('body') ?? ''),
+    ...(annotation ? { annotation } : {}),
     idempotencyKey: crypto.randomUUID(),
   });
   if (!input.success) {
@@ -204,7 +219,7 @@ export async function editFeaturedField(
     return { error: 'This link does not take field edits.', saved: false };
   }
   const { admin, link } = resolved;
-  if (!(await shareAssetIds(admin, link)).includes(assetId)) {
+  if (!(await shareHasAsset(admin, link, assetId))) {
     return { error: 'That asset is not on this link.', saved: false };
   }
   const media = mediaSchema(admin);
@@ -215,7 +230,9 @@ export async function editFeaturedField(
     .eq('brand_id', link.brand_id)
     .maybeSingle();
   const type = customFieldTypeSchema.safeParse((field as { type?: unknown } | null)?.type);
-  const options = customFieldOptionsSchema.safeParse((field as { options?: unknown } | null)?.options);
+  const options = customFieldOptionsSchema.safeParse(
+    (field as { options?: unknown } | null)?.options,
+  );
   if (!type.success || !options.success || !isShareFeaturableFieldType(type.data)) {
     return { error: 'This field cannot be edited here.', saved: false };
   }
@@ -245,7 +262,9 @@ export async function editFeaturedField(
   if (write.error) {
     return {
       error:
-        write.error.message === 'invalid_field_value' ? 'That value does not fit this field.' : 'Could not save.',
+        write.error.message === 'invalid_field_value'
+          ? 'That value does not fit this field.'
+          : 'Could not save.',
       saved: false,
     };
   }

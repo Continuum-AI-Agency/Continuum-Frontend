@@ -98,7 +98,7 @@ async function linkDetail(
   const members =
     row.scope === 'asset' && row.asset_id
       ? [{ asset_id: row.asset_id }]
-      : await shareMembers(admin, row);
+      : (await shareMembers(admin, row, { pageSize: 200 })).rows;
   const ids = members.map((member) => member.asset_id);
   const [titles, { data: events }] = await Promise.all([
     titlesFor(admin, ids),

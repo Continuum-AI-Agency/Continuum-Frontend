@@ -24,6 +24,14 @@ import {
   framesPerSecond,
   msForFrame,
 } from '@/lib/library/commentExport';
+import {
+  formatStageRange,
+  formatStageTime,
+  nextTimecodeDisplay,
+  setTimecodeDisplay,
+  TIMECODE_MODE_LABELS,
+  useTimecodeDisplay,
+} from '../review/timecodeDisplay';
 import { AnnotationOverlay, type OverlayPin } from './AnnotationOverlay';
 import { DrawingToolbar, handleUndoRedoKey, type StageTool } from './annotation/DrawingToolbar';
 import {
@@ -32,13 +40,8 @@ import {
   EMPTY_DRAWING,
   shapesAnchor,
 } from './annotation/drawing';
-import { useFrameRate } from './annotation/useFrameRate';
-import {
-  formatTimecode,
-  formatTimecodeRange,
-  type NormalizedBox,
-  seekFraction,
-} from './annotationGeometry';
+import { useFrameRate, useStartTimecode } from './annotation/useFrameRate';
+import { formatTimecode, type NormalizedBox, seekFraction } from './annotationGeometry';
 import { CommentComposer, type ComposerExtras } from './CommentComposer';
 import { TimelineMarkerStrip, type TimeMarker } from './TimelineMarkerStrip';
 import { useStageGeometry } from './useStageGeometry';
@@ -119,6 +122,11 @@ export function VideoAnnotationPlayer({
   const laneRef = useRef<HTMLDivElement>(null);
   const { containerRef, containerSize, contentRect, setNaturalSize } = useStageGeometry();
   const measuredRate = useFrameRate(src);
+  const startTimecode = useStartTimecode(src) ?? null;
+  const timecodeMode = useTimecodeDisplay();
+  const stageTime = (ms: number) => formatStageTime(ms, timecodeMode, measuredRate, startTimecode);
+  const stageRange = (from: number, to: number | null) =>
+    formatStageRange(from, to, timecodeMode, measuredRate, startTimecode);
   const rate = measuredRate ?? NOMINAL_RATE;
   const [playing, setPlaying] = useState(false);
   const [currentMs, setCurrentMs] = useState(0);
@@ -509,8 +517,21 @@ export function VideoAnnotationPlayer({
             {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
           </Button>
 
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            data-testid="timecode-mode"
+            data-mode={timecodeMode}
+            className="h-6 px-1.5 text-2xs text-muted-foreground"
+            title="Show time as m:ss, source timecode, or frames"
+            onClick={() => setTimecodeDisplay(nextTimecodeDisplay(timecodeMode))}
+          >
+            {TIMECODE_MODE_LABELS[timecodeMode]}
+          </Button>
           <span className="text-xs tabular-nums text-muted-foreground">
-            {formatTimecode(currentMs)} / {formatTimecode(durationMs)}
+            <span data-testid="player-time">{stageTime(currentMs)}</span> /{' '}
+            {timecodeMode === 'clock' ? formatTimecode(durationMs) : stageTime(durationMs)}
             <span className="ml-1.5 text-muted-foreground/70" data-testid="player-frame">
               f{currentFrame} ·{' '}
               {measuredRate ? `${framesPerSecond(measuredRate).toFixed(2)} fps` : '~30 fps'}
@@ -583,8 +604,8 @@ export function VideoAnnotationPlayer({
             >
               <MessageSquarePlus className="size-3.5" />
               {range
-                ? `Comment on ${formatTimecodeRange(range.inMs, range.outMs)}`
-                : `Comment at ${formatTimecode(currentMs)}`}
+                ? `Comment on ${stageRange(range.inMs, range.outMs)}`
+                : `Comment at ${stageTime(currentMs)}`}
             </Button>
           ) : (
             <Button
@@ -596,7 +617,7 @@ export function VideoAnnotationPlayer({
               title="Extend this comment into a range ending at the playhead (O)"
             >
               <SquareDashedBottom className="size-3.5" />
-              End at {formatTimecode(currentMs)}
+              End at {stageTime(currentMs)}
             </Button>
           )}
         </div>
@@ -617,7 +638,7 @@ export function VideoAnnotationPlayer({
                     data-testid="draft-timecode"
                     className="flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 font-medium tabular-nums text-primary"
                   >
-                    {formatTimecodeRange(draftInMs, draftOutMs)}
+                    {stageRange(draftInMs, draftOutMs)}
                     {draftOutMs !== null && (
                       <button
                         type="button"
