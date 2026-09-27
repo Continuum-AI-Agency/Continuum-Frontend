@@ -6,6 +6,7 @@ import {
   COMMENT_EXPORT_FILES,
   COMMENT_EXPORT_FORMATS,
   exportCommentsForVersion,
+  TIMELINE_STARTS,
 } from '@/lib/library/commentExport';
 import {
   commentRowToMediaComment,
@@ -15,10 +16,11 @@ import {
 import { requireBrandCaller } from '@/lib/library/libraryOperation.server';
 import { mediaSchema } from '@/lib/media/supabase-media';
 
-// GET /api/library/comments/export?brandId&assetId&format[&versionId] — the
+// GET /api/library/comments/export?brandId&assetId&format[&versionId][&timeline] — the
 // timed comments of one version as editing-app markers (CSV, Resolve EDL,
 // FCPXML, Premiere XML), at the version's measured frame rate and from its own
-// start timecode (lib/library/assetTiming.server). Everything is read on the
+// start timecode (lib/library/assetTiming.server), on a timeline that starts at
+// 01:00:00:00 (timeline=hour, the default) or at the clip's timecode (source). Everything is read on the
 // caller's RLS-scoped client.
 
 const querySchema = z.object({
@@ -26,6 +28,7 @@ const querySchema = z.object({
   assetId: z.string().uuid(),
   versionId: z.string().uuid().optional(),
   format: z.enum(COMMENT_EXPORT_FORMATS),
+  timeline: z.enum(TIMELINE_STARTS).default('hour'),
 });
 
 export async function GET(request: Request) {
@@ -35,6 +38,7 @@ export async function GET(request: Request) {
     assetId: url.searchParams.get('assetId'),
     versionId: url.searchParams.get('versionId') ?? undefined,
     format: url.searchParams.get('format'),
+    timeline: url.searchParams.get('timeline') ?? undefined,
   });
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.message }, { status: 422 });
@@ -81,6 +85,7 @@ export async function GET(request: Request) {
     rate,
     durationMs,
     source: { startFrame: timing.startFrame, dropFrame: timing.dropFrame },
+    timelineStart: query.timeline,
   };
   return new Response(target.build(exported, context), {
     headers: {
@@ -88,6 +93,7 @@ export async function GET(request: Request) {
       'content-disposition': `attachment; filename="${fileName}"`,
       'x-frame-rate': `${rate.num}/${rate.den}`,
       'x-start-timecode': timing.startTimecode,
+      'x-timeline-start': query.timeline,
     },
   });
 }

@@ -3,39 +3,24 @@
 import {
   createExternalShareCommentRequestSchema,
   createExternalShareCommentResponseSchema,
-  customFieldOptionsSchema,
-  customFieldTypeSchema,
   decideExternalShareReviewRequestSchema,
   externalReviewerSessionRequestSchema,
   externalReviewerSessionResponseSchema,
   externalShareReviewDecisionSchema,
-  isShareFeaturableFieldType,
-  type ShareLinkEventKind,
-  valueSchemaFor,
 } from '@continuum/contracts';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { mediaSchema } from '@/lib/media/supabase-media';
-import { resolveShareLink, shareHasAsset } from './loadSharePayload';
 import { invokePublicCreativeOperation, reviewerSessionCookieName } from './reviewerSession.server';
-import { recordShareEvent } from './shareEvents.server';
+import { invokeLibraryShare } from './shareEdge.server';
+import { recordShareEvent, viewerContext } from './shareEvents.server';
 
 async function recordReviewerEvent(
   token: string,
   sessionToken: string,
-  event: { kind: ShareLinkEventKind; assetId: string; versionId?: string },
+  event: { kind: 'comment' | 'decision'; assetId: string; versionId?: string },
 ): Promise<void> {
-  const resolved = await resolveShareLink(token, sessionToken);
-  if (!resolved.ok) return;
-  await recordShareEvent(
-    {
-      linkId: resolved.link.id,
-      brandId: resolved.link.brand_id,
-      sessionId: resolved.session?.id ?? null,
-    },
-    event,
-  );
+  await recordShareEvent(token, { ...event, sessionToken });
 }
 
 export type ShareAccessActionState = { error: string | null };
@@ -195,7 +180,7 @@ export async function decideExternalReview(
 
 export type FeaturedFieldActionState = { error: string | null; saved: boolean };
 
-function formValue(type: string, raw: FormDataEntryValue | null): unknown {
+function formValue(type: string, raw: FormDataEntryValue | null): string | number | boolean | null {
   const text = typeof raw === 'string' ? raw.trim() : '';
   if (type === 'checkbox') return text === 'true';
   if (text === '') return null;
@@ -203,75 +188,59 @@ function formValue(type: string, raw: FormDataEntryValue | null): unknown {
   return text;
 }
 
-// A guest sets the one field the owner featured on this link. The value is
-// checked against the field here and again by the asset_field_values trigger.
+// A guest sets the one field the owner featured on this link. The library-share
+// edge function checks the link, the reviewer's identity and the asset, and
+// validates the value against the field (the asset_field_values trigger again).
 export async function editFeaturedField(
   token: string,
   assetId: string,
   versionId: string,
+  fieldType: string,
   _previous: FeaturedFieldActionState,
   formData: FormData,
 ): Promise<FeaturedFieldActionState> {
   const reviewerSession = await reviewerSessionForMutation(token, formData);
   if (!reviewerSession.ok) return { error: reviewerSession.error, saved: false };
-  const resolved = await resolveShareLink(token, reviewerSession.token);
-  if (!resolved.ok || !resolved.link.featured_field_id || !resolved.identityPresent) {
-    return { error: 'This link does not take field edits.', saved: false };
-  }
-  const { admin, link } = resolved;
-  if (!(await shareHasAsset(admin, link, assetId))) {
-    return { error: 'That asset is not on this link.', saved: false };
-  }
-  const media = mediaSchema(admin);
-  const { data: field } = await media
-    .from('custom_fields')
-    .select('id, type, options')
-    .eq('id', link.featured_field_id)
-    .eq('brand_id', link.brand_id)
-    .maybeSingle();
-  const type = customFieldTypeSchema.safeParse((field as { type?: unknown } | null)?.type);
-  const options = customFieldOptionsSchema.safeParse(
-    (field as { options?: unknown } | null)?.options,
-  );
-  if (!type.success || !options.success || !isShareFeaturableFieldType(type.data)) {
-    return { error: 'This field cannot be edited here.', saved: false };
-  }
+  const result = await invokeLibraryShare({
+    action: 'edit_featured_field',
+    token,
+    ...(await viewerContext(token, reviewerSession.token)),
+    sessionToken: reviewerSession.token,
+    assetId,
+    versionId,
+    value: formValue(fieldType, formData.get('value')),
+  });
+  if (!result.ok) return { error: result.error, saved: false };
+  revalidatePath(`/share/${token}`);
+  return { error: null, saved: true };
+}
 
-  const raw = formValue(type.data, formData.get('value'));
-  const write =
-    raw === null
-      ? await media
-          .from('asset_field_values')
-          .delete()
-          .eq('asset_id', assetId)
-          .eq('field_id', link.featured_field_id)
-      : await (async () => {
-          const value = valueSchemaFor(type.data, options.data).safeParse(raw);
-          if (!value.success) return { error: { message: 'invalid_field_value' } };
-          return media.from('asset_field_values').upsert(
-            {
-              asset_id: assetId,
-              field_id: link.featured_field_id,
-              brand_id: link.brand_id,
-              value: value.data,
-              updated_by: null,
-            },
-            { onConflict: 'asset_id,field_id' },
-          );
-        })();
-  if (write.error) {
-    return {
-      error:
-        write.error.message === 'invalid_field_value'
-          ? 'That value does not fit this field.'
-          : 'Could not save.',
-      saved: false,
-    };
+export type ViewerNameActionState = { error: string | null; saved: boolean };
+
+// Light name capture on an open link: an optional name (no email) that opens a
+// reviewer session, so this viewer's opens, views and downloads carry the name.
+export async function setViewerName(
+  token: string,
+  _previous: ViewerNameActionState,
+  formData: FormData,
+): Promise<ViewerNameActionState> {
+  const input = externalReviewerSessionRequestSchema.safeParse({
+    token,
+    // Its own field name: the identity forms beside it already use displayName.
+    displayName: String(formData.get('viewerName') ?? '').trim() || undefined,
+    passcode: String(formData.get('passcode') ?? '').trim() || undefined,
+  });
+  if (!input.success || !input.data.displayName) {
+    return { error: 'Enter your name.', saved: false };
   }
-  await recordShareEvent(
-    { linkId: link.id, brandId: link.brand_id, sessionId: resolved.session?.id ?? null },
-    { kind: 'field_edit', assetId, versionId },
-  );
+  const result = await invokePublicCreativeOperation({
+    action: 'create_external_reviewer_session',
+    ...input.data,
+  });
+  if (!result.ok) return { error: result.message, saved: false };
+  const session = externalReviewerSessionResponseSchema.safeParse(result.data);
+  if (!session.success) return { error: 'Could not save your name.', saved: false };
+  await storeReviewerSession(token, session.data.sessionToken, session.data.expiresAt);
   revalidatePath(`/share/${token}`);
   return { error: null, saved: true };
 }

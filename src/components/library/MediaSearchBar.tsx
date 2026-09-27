@@ -6,6 +6,7 @@ import {
   librarySearchParseRequestSchema,
   librarySearchParseResponseSchema,
   type MediaKind,
+  type MediaReviewStatus,
   type MediaSearchFilters,
   type MediaSearchResultItem,
   type MediaSource,
@@ -23,6 +24,10 @@ type Props = {
   // Scopes search to the open collection (server-side, inside the ranking RPC).
   collectionId?: string | null;
   tags?: readonly string[] | null;
+  /** The brand's custom review states the listing is filtered to. */
+  reviewStateIds?: readonly string[];
+  /** The review statuses picked in the filter bar; OR'd with the custom states. */
+  reviewStatuses?: readonly MediaReviewStatus[];
   onResults: (items: MediaSearchResultItem[]) => void;
   onClear: () => void;
   className?: string;
@@ -153,6 +158,8 @@ export function MediaSearchBar({
   kind,
   collectionId,
   tags,
+  reviewStateIds,
+  reviewStatuses,
   onResults,
   onClear,
   className,
@@ -178,6 +185,8 @@ export function MediaSearchBar({
     if (kind) filters.kind = kind;
     if (collectionId) filters.collectionId = collectionId;
     if (tags && tags.length > 0) filters.tags = [...tags];
+    if (reviewStateIds && reviewStateIds.length > 0) filters.reviewStateIds = [...reviewStateIds];
+    if (reviewStatuses && reviewStatuses.length > 0) filters.reviewStatuses = [...reviewStatuses];
     return filters;
   }
 

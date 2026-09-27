@@ -53,7 +53,7 @@ export async function GET(request: Request) {
 }
 
 // POST /api/library/ping — write one review_request notification per selected
-// brand member, then fan out email via the send-library-ping edge function.
+// brand member, then fan out email + Slack via the send-library-ping edge function.
 // Email is fail-soft: a send failure never fails the ping.
 export async function POST(request: Request) {
   try {
@@ -97,19 +97,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Select at least one other teammate' }, { status: 400 });
     }
 
-    // Only actual brand members receive notifications; the same rows carry the
-    // emails for the edge-function fan-out.
+    // Only actual brand members receive notifications.
     const { data: memberData, error: membersError } = await supabase
       .schema('brand_profiles')
       .from('permissions')
-      .select('user_id, email')
+      .select('user_id')
       .eq('brand_profile_id', input.brandId)
       .in('user_id', recipientIds);
     if (membersError) {
       console.error('[library-ping] member lookup failed', { error: membersError.message });
       return serviceUnavailable('Service temporarily unavailable while loading members');
     }
-    const recipients = (memberData ?? []) as Array<{ user_id: string; email: string | null }>;
+    const recipients = (memberData ?? []) as Array<{ user_id: string }>;
     if (recipients.length === 0) {
       return NextResponse.json({ error: 'No matching brand members' }, { status: 400 });
     }
@@ -119,7 +118,9 @@ export async function POST(request: Request) {
     const pingId = crypto.randomUUID();
     const payload = { pingId, assetId: asset.id, assetName, message, actorName };
 
-    const { data: inserted, error: insertError } = await supabase
+    // No RETURNING: the SELECT policy shows a notification only to its recipient, so a
+    // sender reading back the rows it wrote is refused (42501) and the whole insert fails.
+    const { error: insertError } = await supabase
       .schema('brand_profiles')
       .from('notifications')
       .insert(
@@ -130,31 +131,14 @@ export async function POST(request: Request) {
           kind: 'review_request',
           payload,
         })),
-      )
-      .select('id');
+      );
     if (insertError) {
       console.error('[library-ping] notification insert failed', { error: insertError.message });
       return serviceUnavailable('Service temporarily unavailable while writing notifications');
     }
-    const notified = (inserted ?? []).length;
+    const notified = recipients.length;
 
-    const recipientEmails = [
-      ...new Set(recipients.map((r) => r.email).filter((email): email is string => Boolean(email))),
-    ];
-    const emailed = await sendPingEmails({
-      pingId,
-      brandId: input.brandId,
-      assetId: asset.id,
-      assetName,
-      recipientEmails,
-      actorName,
-      message,
-    });
-
-    // Slack DMs ride on top of the same notification rows; recipients without a
-    // linked Slack account are skipped inside the edge function.
-    const notificationIds = ((inserted ?? []) as Array<{ id: string }>).map((row) => row.id);
-    await sendNotificationSlacks(notificationIds);
+    const emailed = await sendPingFanOut(supabase, { pingId, brandId: input.brandId });
 
     return NextResponse.json(reviewPingResponseSchema.parse({ notified, emailed }));
   } catch (error) {
@@ -172,99 +156,26 @@ function resolveActorName(user: User): string {
   return user.email ?? 'A teammate';
 }
 
-// Fail-soft Slack fan-out through the shared send-library-notification edge
-// function. Mirrors sendPingEmails: any failure logs and moves on.
-async function sendNotificationSlacks(notificationIds: string[]): Promise<void> {
-  if (notificationIds.length === 0) return;
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) {
-    console.warn('[library-ping] slack skipped: missing Supabase env');
-    return;
-  }
+// Email + Slack fan-out through send-library-ping, on the CALLER's session: Vercel holds no
+// service-role key. The edge function checks the caller's brand access and reads the
+// recipients and content back from the notification rows written above, so this sends only
+// the ping id. Fail-soft: a delivery failure never fails the ping, it reports 0 emails.
+async function sendPingFanOut(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  params: { pingId: string; brandId: string },
+): Promise<number> {
   const appUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? process.env.SITE_URL ?? 'http://localhost:3000';
-
-  try {
-    const response = await fetch(`${supabaseUrl}/functions/v1/send-library-notification`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${serviceKey}`,
-      },
-      body: JSON.stringify({ notificationIds, appUrl }),
-    });
-    if (!response.ok) {
-      console.warn('[library-ping] send-library-notification failed', {
-        status: response.status,
-      });
-    }
-  } catch (error) {
-    console.warn('[library-ping] send-library-notification invoke failed', {
-      error: String(error),
-    });
-  }
-}
-
-// Fail-soft edge invoke: any failure logs and reports 0 emails sent. Mirrors
-// the register-canvas → analyze_media service-key invocation pattern.
-async function sendPingEmails(params: {
-  pingId: string;
-  brandId: string;
-  assetId: string;
-  assetName: string;
-  recipientEmails: string[];
-  actorName: string;
-  message: string | null;
-}): Promise<number> {
-  if (params.recipientEmails.length === 0) return 0;
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) {
-    console.warn('[library-ping] email skipped: missing Supabase env');
+  const { data, error } = await supabase.functions.invoke<{
+    emailed?: number;
+    skipped?: string;
+  }>('send-library-ping', { body: { ...params, appUrl } });
+  if (error) {
+    console.warn('[library-ping] send-library-ping failed', { error: error.message });
     return 0;
   }
-  const appUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ?? process.env.SITE_URL ?? 'http://localhost:3000';
-
-  try {
-    const response = await fetch(`${supabaseUrl}/functions/v1/send-library-ping`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${serviceKey}`,
-      },
-      body: JSON.stringify({
-        pingId: params.pingId,
-        brandId: params.brandId,
-        assetId: params.assetId,
-        assetName: params.assetName,
-        recipientEmails: params.recipientEmails,
-        actorName: params.actorName,
-        ...(params.message ? { message: params.message } : {}),
-        appUrl,
-      }),
-    });
-    const body = (await response.json().catch(() => null)) as {
-      emailed?: number;
-      skipped?: string;
-      error?: string;
-    } | null;
-    if (!response.ok) {
-      console.warn('[library-ping] send-library-ping failed', {
-        status: response.status,
-        error: body?.error,
-      });
-      return 0;
-    }
-    if (body?.skipped) {
-      console.warn('[library-ping] email skipped by edge function', { reason: body.skipped });
-    }
-    return typeof body?.emailed === 'number' ? body.emailed : 0;
-  } catch (error) {
-    console.warn('[library-ping] send-library-ping invoke failed', { error: String(error) });
-    return 0;
+  if (data?.skipped) {
+    console.warn('[library-ping] email skipped by edge function', { reason: data.skipped });
   }
+  return typeof data?.emailed === 'number' ? data.emailed : 0;
 }

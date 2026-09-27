@@ -72,6 +72,7 @@ export function FeaturedFieldEditor({
   field,
   value,
   hasIdentity,
+  hasPasscode,
 }: {
   token: string;
   assetId: string;
@@ -79,9 +80,10 @@ export function FeaturedFieldEditor({
   field: ShareFeaturedField;
   value: CustomFieldValue | undefined;
   hasIdentity: boolean;
+  hasPasscode: boolean;
 }) {
   const [state, action, pending] = useActionState(
-    editFeaturedField.bind(null, token, assetId, versionId),
+    editFeaturedField.bind(null, token, assetId, versionId, field.type),
     INITIAL_STATE,
   );
   return (
@@ -90,6 +92,17 @@ export function FeaturedFieldEditor({
         <div className="grid w-full gap-2 sm:grid-cols-2">
           <Input name="displayName" placeholder="Your name" autoComplete="name" required />
           <Input name="email" type="email" placeholder="Email" autoComplete="email" required />
+          {/* Identifying yourself opens a new reviewer session, which a passcode link re-checks. */}
+          {hasPasscode ? (
+            <Input
+              name="passcode"
+              type="password"
+              placeholder="Passcode"
+              autoComplete="current-password"
+              required
+              className="sm:col-span-2"
+            />
+          ) : null}
         </div>
       ) : null}
       <span className="shrink-0 text-xs font-medium text-muted-foreground">{field.name}</span>

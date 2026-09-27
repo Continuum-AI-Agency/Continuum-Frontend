@@ -65,6 +65,57 @@ describe('uploadNewAssetVersion', () => {
     ]);
   });
 
+  test('sends a photo revision through TUS too, resuming from the saved upload URL', async () => {
+    const resumableCalls: Array<{ uploadUrl?: string; objectPath: string }> = [];
+    const client = {
+      auth: {
+        getSession: async () => ({ data: { session: { access_token: 'user-jwt' } }, error: null }),
+      },
+      storage: {
+        from: () => ({
+          uploadToSignedUrl: async () => {
+            throw new Error('a revision must never go up in one PUT');
+          },
+        }),
+      },
+    } as never;
+    const photoTicket = { ...ticket, bucket: 'media-library', path: 'brand/asset/v2/hero.jpg' };
+
+    await uploadNewAssetVersion(
+      {
+        brandId: 'brand',
+        assetId: 'asset',
+        file: new File(['jpeg'], 'hero.jpg', { type: 'image/jpeg' }),
+        resume: { ticket: photoTicket, uploadUrl: 'https://db.test/upload/resumable/half' },
+      },
+      {
+        createClient: () => client,
+        signUpload: async () => {
+          throw new Error('a resumed upload must reuse its ticket');
+        },
+        supabaseUrl: 'https://db.test',
+        resumableUpload: async (params) => {
+          resumableCalls.push(params);
+          return { uploadUrl: params.uploadUrl ?? '' };
+        },
+        registerVersion: async () => ({
+          assetId: 'asset',
+          versionId: 'version-2',
+          versionNumber: 2,
+          versions: [],
+        }),
+        attachPreview: async () => 'ready',
+      },
+    );
+
+    expect(resumableCalls).toEqual([
+      expect.objectContaining({
+        objectPath: 'brand/asset/v2/hero.jpg',
+        uploadUrl: 'https://db.test/upload/resumable/half',
+      }),
+    ]);
+  });
+
   test('registers the sha256 of the revision bytes, so the drop zone can match them', async () => {
     const registerCalls: unknown[] = [];
     await uploadNewAssetVersion(

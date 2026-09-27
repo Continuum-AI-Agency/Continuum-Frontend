@@ -1,8 +1,9 @@
 import { parseCommentDeepLink } from '@continuum/contracts';
 import { cookies } from 'next/headers';
-import { loadSharePayload } from './loadSharePayload';
+import { loadSharePayload, loadSharePresentation } from './loadSharePayload';
 import { reviewerSessionCookieName } from './reviewerSession.server';
 import { ShareAccessChallenge } from './ShareAccessChallenge';
+import { ShareBrandShell } from './ShareBrandShell';
 import { SharePayloadView } from './SharePayloadView';
 import { ShareUnavailableCard } from './ShareUnavailableCard';
 import { viewerIp } from './shareEvents.server';
@@ -34,15 +35,21 @@ export async function ShareLoader({
     page: Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1,
     pageSize: Number.isInteger(perParam) && perParam > 0 ? Math.min(perParam, 200) : undefined,
   });
-  if (!result.ok && result.reason === 'challenge') {
+  if (!result.ok) {
+    const presentation = await loadSharePresentation(token);
     return (
-      <ShareAccessChallenge
-        token={token}
-        needsPasscode={result.needsPasscode}
-        requireIdentity={result.requireIdentity}
-      />
+      <ShareBrandShell presentation={presentation}>
+        {result.reason === 'challenge' ? (
+          <ShareAccessChallenge
+            token={token}
+            needsPasscode={result.needsPasscode}
+            requireIdentity={result.requireIdentity}
+          />
+        ) : (
+          <ShareUnavailableCard reason={result.reason} />
+        )}
+      </ShareBrandShell>
     );
   }
-  if (!result.ok) return <ShareUnavailableCard reason={result.reason} />;
   return <SharePayloadView token={token} payload={result.payload} deepLink={deepLink} />;
 }

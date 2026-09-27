@@ -1,5 +1,5 @@
 // Requests to the `library-review` edge function — the write side of review
-// labels and collection review. The browser calls it with the user's JWT; the
+// labels, custom states, per-version state and collection review. The browser calls it with the user's JWT; the
 // function verifies the caller and runs media.library_execute_operation as the
 // service role with that verified user as the actor. It lives in an edge
 // function because the service-role key does not belong on Vercel.
@@ -23,6 +23,10 @@ export const REVIEW_EDGE_STATES = [
 
 const uuid = () => z.string().uuid();
 
+const color = () => z.string().regex(/^#[0-9a-fA-F]{6}$/);
+
+// The five base labels and/or the brand's whole custom-state list (an omitted
+// custom state is deleted). At least one of the two.
 export const reviewEdgeRequestSchema = z.discriminatedUnion('action', [
   z
     .object({
@@ -34,15 +38,49 @@ export const reviewEdgeRequestSchema = z.discriminatedUnion('action', [
             .object({
               state: z.enum(REVIEW_EDGE_STATES),
               label: z.string().trim().min(1).max(40),
-              color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+              color: color(),
               position: z.number().int().nonnegative(),
             })
             .strict(),
         )
         .min(1)
-        .max(5),
+        .max(5)
+        .optional(),
+      customStates: z
+        .array(
+          z
+            .object({
+              id: uuid().optional(),
+              baseStatus: z.enum(REVIEW_EDGE_STATES),
+              label: z.string().trim().min(1).max(40),
+              color: color(),
+              position: z.number().int().nonnegative(),
+            })
+            .strict(),
+        )
+        .max(20)
+        .optional(),
     })
-    .strict(),
+    .strict()
+    .refine((request) => request.labels !== undefined || request.customStates !== undefined, {
+      message: 'Send labels, customStates, or both',
+    }),
+  // A base status or a custom state on the head, or on one named version (a
+  // decision on an older cut stays on that cut).
+  z
+    .object({
+      action: z.literal('set_asset_review_state'),
+      brandId: uuid(),
+      assetId: uuid(),
+      versionId: uuid().optional(),
+      toStatus: z.enum(REVIEW_EDGE_STATES).optional(),
+      stateId: uuid().optional(),
+      note: z.string().max(2000).optional(),
+    })
+    .strict()
+    .refine((request) => request.toStatus !== undefined || request.stateId !== undefined, {
+      message: 'Send toStatus, stateId, or both',
+    }),
   z
     .object({
       action: z.literal('request_collection_review'),

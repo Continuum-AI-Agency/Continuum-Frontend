@@ -22,10 +22,18 @@ export function operationFailure(action: string, error: unknown): Response {
 export async function refuseViewer(
   supabase: SupabaseClient,
   brandId: string,
+  collectionId?: string,
 ): Promise<Response | null> {
   const { data, error } = await supabase
     .schema('brand_profiles')
     .rpc('brand_role', { p_brand_id: brandId });
   if (error || data !== 'viewer') return null;
+  // A brand viewer who is an editor or manager of this collection may change its items.
+  if (collectionId) {
+    const { data: collectionRole } = await supabase
+      .schema('media')
+      .rpc('collection_role', { p_collection: collectionId });
+    if (collectionRole === 'editor' || collectionRole === 'manager') return null;
+  }
   return NextResponse.json({ error: 'Your role cannot change collections' }, { status: 403 });
 }

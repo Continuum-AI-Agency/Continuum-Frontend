@@ -7,7 +7,6 @@ import {
 } from '@/lib/library/thumbnailStoragePath';
 import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
 import { mediaSchema } from '@/lib/media/supabase-media';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 // A decoded video frame at 640px wide is tens of KB. Anything approaching a
@@ -36,6 +35,11 @@ const fieldsSchema = z.object({
 // storage first). The storage path is DERIVED here from the caller-verified
 // brandId/assetId — the client never names a path — and the poster lands in the
 // asset's own bucket.
+//
+// Every read and write runs as the CALLER, under RLS ("Manage media assets (member)",
+// "Media library - member all"): Vercel holds no service-role key, so a privileged client
+// here only ever worked on a developer laptop. A brand viewer is refused by those same
+// policies.
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
   const {
@@ -78,9 +82,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const admin = createSupabaseAdminClient();
-
-  const { data: asset, error: assetError } = await mediaSchema(admin)
+  const { data: asset, error: assetError } = await mediaSchema(supabase)
     .from('assets')
     .select('id, bucket, kind, thumbnail_path, width, height, duration_ms')
     .eq('id', assetId)
@@ -119,7 +121,7 @@ export async function POST(request: Request) {
 
   if (head.thumbnail_path) {
     if (Object.keys(metadataPatch).length > 0) {
-      const { error: patchError } = await mediaSchema(admin)
+      const { error: patchError } = await mediaSchema(supabase)
         .from('assets')
         .update(metadataPatch)
         .eq('id', assetId)
@@ -137,7 +139,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid poster path' }, { status: 422 });
   }
 
-  const { error: uploadError } = await admin.storage
+  const { error: uploadError } = await supabase.storage
     .from(head.bucket)
     .upload(thumbnailPath, poster, { contentType: poster.type, upsert: true });
   if (uploadError) {
@@ -149,7 +151,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
   }
 
-  const { error: updateError } = await mediaSchema(admin)
+  const { error: updateError } = await mediaSchema(supabase)
     .from('assets')
     .update({ thumbnail_path: thumbnailPath, ...metadataPatch })
     .eq('id', assetId)

@@ -12,253 +12,24 @@ import {
   customFieldTypeSchema,
   customFieldValueSchema,
 } from './custom-fields';
+import {
+  SHARE_FEATURED_FIELD_TYPES,
+  type ShareLinkScope,
+  type ShareVersionMode,
+  shareLinkBrandingSchema,
+  shareLinkLayoutSchema,
+  shareLinkSchema,
+  shareLinkScopeSchema,
+  shareLinkWatermarkSchema,
+  sharePolicySchema,
+  shareVersionModeSchema,
+} from './share-core';
 
-export const shareLinkScopeSchema = z.enum(['asset', 'collection', 'selection']);
-export type ShareLinkScope = z.infer<typeof shareLinkScopeSchema>;
+export * from './share-core';
 
-export const shareVersionModeSchema = z.enum(['live', 'pinned', 'all']);
-export type ShareVersionMode = z.infer<typeof shareVersionModeSchema>;
-
-export const sharePolicySchema = z
-  .object({
-    versionMode: shareVersionModeSchema,
-    pinnedVersionId: z.string().min(1).nullable(),
-    allowComments: z.boolean(),
-    allowApproval: z.boolean(),
-    allowDownload: z.boolean(),
-    showMetadata: z.boolean(),
-    showCustomFields: z.boolean(),
-    requireIdentity: z.boolean(),
-    hasPasscode: z.boolean(),
-  })
-  .strict();
-export type SharePolicy = z.infer<typeof sharePolicySchema>;
-
-export const shareLinkLayoutSchema = z.enum(['grid', 'list', 'reel']);
-export type ShareLinkLayout = z.infer<typeof shareLinkLayoutSchema>;
-
-const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
-
-// How the public share page presents the brand (media.share_links.branding).
-export const shareLinkBrandingSchema = z
-  .object({
-    logoAssetId: z.string().uuid().optional(),
-    accent: hexColorSchema.optional(),
-    background: hexColorSchema.optional(),
-    headerTitle: z.string().max(120).optional(),
-    description: z.string().max(1000).optional(),
-    theme: z.enum(['light', 'dark', 'system']).optional(),
-    // Drops the "Shared via Continuum" line for a fully white-labelled page.
-    hideFooter: z.boolean().optional(),
-  })
-  .strict();
-export type ShareLinkBranding = z.infer<typeof shareLinkBrandingSchema>;
-
-export const shareLinkWatermarkPositionSchema = z.enum([
-  'center',
-  'top_left',
-  'top_right',
-  'bottom_left',
-  'bottom_right',
-  'tiled',
-]);
-export type ShareLinkWatermarkPosition = z.infer<typeof shareLinkWatermarkPositionSchema>;
-
-export const DEFAULT_SHARE_WATERMARK_TEMPLATE = '{name} · {email} · {time}';
-
-// media.share_links.watermark: null means no watermark. burnDownloads stamps
-// downloaded files too, not only the on-page preview.
-export const shareLinkWatermarkSchema = z
-  .object({
-    template: z.string().max(200).default(DEFAULT_SHARE_WATERMARK_TEMPLATE),
-    position: shareLinkWatermarkPositionSchema,
-    opacity: z.number().min(0.05).max(1),
-    burnDownloads: z.boolean(),
-  })
-  .strict();
-export type ShareLinkWatermark = z.infer<typeof shareLinkWatermarkSchema>;
-
-export type ShareWatermarkViewer = {
-  name: string | null;
-  email: string | null;
-  ip?: string | null;
-  time: Date;
-};
-
-// The overlay text for one viewer. The share page draws it live and the
-// Backend burns the same string into downloads, so both read this one function.
-export function renderShareWatermarkText(template: string, viewer: ShareWatermarkViewer): string {
-  const time = viewer.time.toISOString().slice(0, 16).replace('T', ' ');
-  return template
-    .replaceAll('{name}', viewer.name ?? '')
-    .replaceAll('{email}', viewer.email ?? '')
-    .replaceAll('{ip}', viewer.ip ?? '')
-    .replaceAll('{time}', `${time} UTC`)
-    .replace(/(\s*·\s*)+$/, '')
-    .replace(/^(\s*·\s*)+/, '')
-    .trim();
-}
-
-// A guest edits exactly one value per asset; member-picking ('user') and
-// multi-value types need a seat's context, so they cannot be featured.
-export const SHARE_FEATURED_FIELD_TYPES = [
-  'single_select',
-  'status',
-  'text',
-  'number',
-  'checkbox',
-  'rating',
-  'date',
-  'url',
-] as const satisfies readonly CustomFieldType[];
-
-export function isShareFeaturableFieldType(type: CustomFieldType): boolean {
-  return (SHARE_FEATURED_FIELD_TYPES as readonly CustomFieldType[]).includes(type);
-}
-
-export const shareLinkSchema = z
-  .object({
-    id: z.string().min(1),
-    brandId: z.string().min(1),
-    token: z.string().min(1),
-    scope: shareLinkScopeSchema,
-    assetId: z.string().nullable().optional(),
-    collectionId: z.string().nullable().optional(),
-    assetIds: z.array(z.string().min(1)).default([]),
-    permissions: z.literal('view'),
-    policy: sharePolicySchema,
-    layout: shareLinkLayoutSchema.default('grid'),
-    branding: shareLinkBrandingSchema.default({}),
-    watermark: shareLinkWatermarkSchema.nullable().optional(),
-    featuredFieldId: z.string().uuid().nullable().optional(),
-    createdBy: z.string().nullable().optional(),
-    expiresAt: z.string().nullable().optional(),
-    revokedAt: z.string().nullable().optional(),
-    createdAt: z.string(),
-    // Transient: absolute public URL for the token, built at read time.
-    url: z.string().nullable().optional(),
-  })
-  .strict();
-export type ShareLink = z.infer<typeof shareLinkSchema>;
-
-export const shareLinkEventKindSchema = z.enum([
-  'open',
-  'view',
-  'play',
-  'download',
-  'download_all',
-  'comment',
-  'decision',
-  'field_edit',
-]);
-export type ShareLinkEventKind = z.infer<typeof shareLinkEventKindSchema>;
-
-// One row of media.share_link_events — what an external reviewer did on a link.
-export const shareLinkEventSchema = z
-  .object({
-    id: z.string().uuid(),
-    shareLinkId: z.string().uuid(),
-    brandId: z.string().uuid(),
-    reviewerSessionId: z.string().uuid().nullable(),
-    assetId: z.string().uuid().nullable(),
-    versionId: z.string().uuid().nullable(),
-    kind: shareLinkEventKindSchema,
-    ipHash: z.string().nullable(),
-    userAgent: z.string().nullable(),
-    createdAt: z.string(),
-  })
-  .strict();
-export type ShareLinkEvent = z.infer<typeof shareLinkEventSchema>;
-
-// The events a share page reports from the browser; the rest are recorded
-// server-side where the action happens.
-export const shareBeaconEventKindSchema = z.enum(['open', 'view', 'play']);
-export const shareBeaconEventRequestSchema = z
-  .object({
-    kind: shareBeaconEventKindSchema,
-    assetId: z.string().uuid().optional(),
-    versionId: z.string().uuid().optional(),
-  })
-  .strict();
-export type ShareBeaconEventRequest = z.infer<typeof shareBeaconEventRequestSchema>;
-
-// One event as the share owner sees it: attributed to the reviewer by name.
-export const shareLinkActivityEventSchema = z
-  .object({
-    id: z.string().uuid(),
-    shareLinkId: z.string().uuid(),
-    kind: shareLinkEventKindSchema,
-    assetId: z.string().uuid().nullable(),
-    assetTitle: z.string().nullable(),
-    versionId: z.string().uuid().nullable(),
-    reviewerName: z.string().nullable(),
-    reviewerEmail: z.string().nullable(),
-    createdAt: z.string(),
-  })
-  .strict();
-export type ShareLinkActivityEvent = z.infer<typeof shareLinkActivityEventSchema>;
-
-export const shareLinkMemberSchema = z
-  .object({
-    assetId: z.string().uuid(),
-    title: z.string(),
-    kind: z.string(),
-  })
-  .strict();
-export type ShareLinkMember = z.infer<typeof shareLinkMemberSchema>;
-
-// GET /api/library/share/manage — one link with what its owner edits and sees.
-export const shareLinkDetailResponseSchema = z
-  .object({
-    link: shareLinkSchema,
-    members: z.array(shareLinkMemberSchema),
-    events: z.array(shareLinkActivityEventSchema),
-  })
-  .strict();
-export type ShareLinkDetailResponse = z.infer<typeof shareLinkDetailResponseSchema>;
-
-export const shareLinkActivityResponseSchema = z
-  .object({ events: z.array(shareLinkActivityEventSchema) })
-  .strict();
-export type ShareLinkActivityResponse = z.infer<typeof shareLinkActivityResponseSchema>;
-
-// PATCH /api/library/share/manage — the owner's edit; the route adds the actor.
-export const updateShareLinkRequestSchema = z
-  .object({
-    brandId: z.string().uuid(),
-    shareLinkId: z.string().uuid(),
-    idempotencyKey: z.string().min(1).max(200).optional(),
-    layout: shareLinkLayoutSchema.optional(),
-    branding: shareLinkBrandingSchema.optional(),
-    watermark: shareLinkWatermarkSchema.nullable().optional(),
-    featuredFieldId: z.string().uuid().nullable().optional(),
-    assetOrder: z.array(z.string().uuid()).max(500).optional(),
-  })
-  .strict();
-export type UpdateShareLinkRequest = z.infer<typeof updateShareLinkRequestSchema>;
-
-// Share page → Backend share delivery. The reviewer's session token proves who
-// the watermark names; the signed storage URLs prove the page was allowed to
-// hand those files out.
-export const shareDeliveryFileSchema = z
-  .object({
-    url: z.string().url(),
-    fileName: z.string().min(1).max(255),
-    mimeType: z.string().min(1).max(255),
-  })
-  .strict();
-export type ShareDeliveryFile = z.infer<typeof shareDeliveryFileSchema>;
-
-export const shareDeliveryRequestSchema = z
-  .object({
-    token: z.string().min(16).max(128),
-    sessionToken: z.string().min(32).max(256).optional(),
-    viewerIp: z.string().max(64).optional(),
-    files: z.array(shareDeliveryFileSchema).min(1).max(1000),
-    zipName: z.string().min(1).max(200).optional(),
-  })
-  .strict();
-export type ShareDeliveryRequest = z.infer<typeof shareDeliveryRequestSchema>;
+// Every featurable type is a real custom-field type.
+const featurableTypesAreFieldTypes: readonly CustomFieldType[] = SHARE_FEATURED_FIELD_TYPES;
+void featurableTypesAreFieldTypes;
 
 export const shareFeaturedFieldSchema = z
   .object({
@@ -424,6 +195,14 @@ export const publicSharePayloadSchema = z
     featuredField: shareFeaturedFieldSchema.nullable().optional(),
     featuredValues: z.record(z.string(), customFieldValueSchema).optional(),
     viewerIp: z.string().nullable().optional(),
+    // The name a viewer gave on an open link (no email), which tags their events.
+    viewerName: z.string().nullable().optional(),
+    // Protected links: where each shown version's stored preview stands, keyed by version
+    // id (library-share asked the Backend to make the missing ones, for that version).
+    // Absent = nothing was missing.
+    previewStates: z
+      .record(z.string(), z.enum(['ready', 'pending', 'failed', 'unsupported', 'not_found']))
+      .optional(),
     // Collection shares page instead of truncating; total counts every member.
     pagination: z
       .object({

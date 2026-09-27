@@ -148,11 +148,3 @@ export function validateCustomFieldValue(
     ? { ok: true, value: checked.value }
     : { ok: false, error: `${field.name} · ${checked.reason}` };
 }
-
-/**
- * A board lane must hold each asset exactly once, so only a one-value choice can
- * drive it: a single_select, a status, or a user (one lane per brand member).
- */
-export function isGroupableField(field: CustomField): boolean {
-  return field.type === 'single_select' || field.type === 'status' || field.type === 'user';
-}

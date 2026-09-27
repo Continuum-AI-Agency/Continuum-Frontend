@@ -1,10 +1,12 @@
-// "Who approved which version, and when" — one row per verdict, from the two
-// places a verdict is recorded: a reviewer's decision on a review request
-// (media.review_assignments, pinned to the request's version) and a direct status
-// change (media.asset_review_events, pinned to the version that was head at that
-// moment). decide_asset_review writes BOTH in one transaction, so an event that
-// mirrors a decision (same asset, actor, verdict and transaction timestamp) is
-// dropped rather than counted twice.
+// "Who approved which version, and when" — one row per verdict, and per move into a
+// brand custom state, from the two places they are recorded: a reviewer's decision on
+// a review request (media.review_assignments, pinned to the request's version) and a
+// direct status change (media.asset_review_events, which records the version it was
+// cast on — an older version can be decided while another is head; events from before
+// that column existed fall back to the version that was head at that moment).
+// decide_asset_review writes BOTH in one transaction, so an event that mirrors a
+// decision (same asset, actor, verdict and transaction timestamp) is dropped rather
+// than counted twice.
 
 export type ReportDecisionRow = {
   assetId: string;
@@ -17,6 +19,10 @@ export type ReportDecisionRow = {
 
 export type ReportEventRow = {
   assetId: string;
+  /** The version the event was cast on; null on events recorded before round 3. */
+  versionId?: string | null;
+  /** The brand custom state chosen, if any (media.review_custom_states). */
+  stateId?: string | null;
   actor: string | null;
   toStatus: string;
   note: string | null;
@@ -35,7 +41,13 @@ export type ApprovalReportRow = {
   assetName: string;
   versionId: string | null;
   versionNumber: number | null;
-  decision: 'approved' | 'needs_changes';
+  /**
+   * The base status the row records: a verdict (approved / needs_changes), or — for a
+   * move into a brand custom state — that state's base (e.g. in_review for "Legal review").
+   */
+  decision: string;
+  /** The brand's custom state name, when one was chosen. */
+  state: string | null;
   userId: string | null;
   userEmail: string | null;
   at: string;
@@ -44,6 +56,12 @@ export type ApprovalReportRow = {
 };
 
 const VERDICTS = new Set(['approved', 'needs_changes']);
+
+// A status change belongs in the audit when it is a verdict, or when it moved the asset
+// into one of the brand's custom states — whatever that state's base (a "Legal review"
+// under in_review is a workflow step the report must show).
+const isReported = (event: ReportEventRow) =>
+  VERDICTS.has(event.toStatus) || Boolean(event.stateId);
 
 function headAt(
   versions: ReportVersionRow[],
@@ -64,6 +82,8 @@ export function buildApprovalReport(input: {
   versions: ReportVersionRow[];
   assetNames: Map<string, string>;
   emails: Map<string, string>;
+  /** Custom state id → its name. */
+  stateNames?: Map<string, string>;
 }): ApprovalReportRow[] {
   const versionsById = new Map(input.versions.map((version) => [version.id, version]));
   const decisionKeys = new Set(
@@ -82,6 +102,7 @@ export function buildApprovalReport(input: {
       ? (versionsById.get(decision.versionId)?.versionNumber ?? null)
       : null,
     decision: decision.decision,
+    state: null,
     userId: decision.reviewerUserId,
     userEmail: email(decision.reviewerUserId),
     at: decision.decidedAt,
@@ -90,7 +111,7 @@ export function buildApprovalReport(input: {
   }));
 
   const fromEvents: ApprovalReportRow[] = input.events
-    .filter((event) => VERDICTS.has(event.toStatus))
+    .filter(isReported)
     .filter(
       (event) =>
         !decisionKeys.has(
@@ -98,13 +119,16 @@ export function buildApprovalReport(input: {
         ),
     )
     .map((event) => {
-      const head = headAt(input.versions, event.assetId, event.createdAt);
+      const version =
+        (event.versionId ? versionsById.get(event.versionId) : undefined) ??
+        headAt(input.versions, event.assetId, event.createdAt);
       return {
         assetId: event.assetId,
         assetName: name(event.assetId),
-        versionId: head?.id ?? null,
-        versionNumber: head?.versionNumber ?? null,
-        decision: event.toStatus as ApprovalReportRow['decision'],
+        versionId: event.versionId ?? version?.id ?? null,
+        versionNumber: version?.versionNumber ?? null,
+        decision: event.toStatus,
+        state: event.stateId ? (input.stateNames?.get(event.stateId) ?? null) : null,
         userId: event.actor,
         userEmail: email(event.actor),
         at: event.createdAt,
@@ -128,6 +152,7 @@ export function approvalReportToCsv(rows: ApprovalReportRow[]): string {
     'Version',
     'Version ID',
     'Decision',
+    'State',
     'By',
     'By User ID',
     'At',
@@ -141,6 +166,7 @@ export function approvalReportToCsv(rows: ApprovalReportRow[]): string {
       row.versionNumber === null ? '' : `v${row.versionNumber}`,
       row.versionId,
       row.decision,
+      row.state,
       row.userEmail,
       row.userId,
       row.at,

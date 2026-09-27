@@ -23,9 +23,9 @@ export function ShareAccessChallenge({
     INITIAL_STATE,
   );
   return (
-    <main className="flex min-h-screen items-center justify-center px-6">
-      <form
+    <form
         action={action}
+        data-share-challenge
         className="flex w-full max-w-md flex-col gap-5 rounded-xl border border-border bg-card px-7 py-8 shadow-sm"
       >
         <div className="flex items-start gap-3">
@@ -76,8 +76,6 @@ export function ShareAccessChallenge({
         <Button type="submit" disabled={pending}>
           {pending ? 'Checking…' : 'Continue'}
         </Button>
-        <p className="text-center text-xs text-muted-foreground">Shared via Continuum</p>
       </form>
-    </main>
   );
 }

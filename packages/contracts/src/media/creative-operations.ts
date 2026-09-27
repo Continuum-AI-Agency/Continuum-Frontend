@@ -8,6 +8,8 @@ export const creativeOperationErrorCodeSchema = z.enum([
   'asset_not_found',
   'version_not_found',
   'version_conflict',
+  // The asset's review status moved under the caller (a concurrent approve/request).
+  'review_status_conflict',
   'unsupported_file',
   'file_too_large',
   'share_forbidden',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { parallelRangedDownload, resumableStorageUpload } from './transfer';
+import { parallelRangedDownload, resumableStorageUpload, TUS_CHUNK_SIZE_BYTES } from './transfer';
 
 describe('resumableStorageUpload with a signed upload token', () => {
   it('uses the /sign endpoint and x-signature instead of a bearer', async () => {
@@ -57,7 +57,7 @@ function pacedStorage(pace: () => Promise<void>) {
   }) as typeof fetch;
 }
 
-async function download(fetchImpl: typeof fetch) {
+async function download(fetchImpl: typeof fetch, onResume?: (offset: number) => void) {
   const target = new Uint8Array(source.length);
   const result = await parallelRangedDownload({
     url: 'https://storage/x',
@@ -66,6 +66,7 @@ async function download(fetchImpl: typeof fetch) {
     minPartBytes: 768 * 1024,
     probeMs: 250,
     write: async (offset, bytes) => target.set(bytes, offset),
+    onResume,
     fetchImpl,
   });
   return { target, streams: result.streams };
@@ -84,8 +85,9 @@ describe('parallelRangedDownload', () => {
       }
       return new Response(body, { status: 206 });
     }) as typeof fetch;
-    const { target } = await download(fetchImpl);
-    expect(dropped).toBe(true);
+    const resumedAt: number[] = [];
+    const { target } = await download(fetchImpl, (offset) => resumedAt.push(offset));
+    expect(resumedAt).toEqual([1000]);
     expect(target).toEqual(source);
   });
 
@@ -151,5 +153,74 @@ describe('parallelRangedDownload', () => {
     await expect(
       parallelRangedDownload({ url: 'u', sizeBytes: 1, write: () => {}, fetchImpl }),
     ).rejects.toThrow('expected 206');
+  });
+});
+
+describe('resumableStorageUpload through an outage', () => {
+  /** A fake TUS server whose PATCHes fail `failures` times, then work. */
+  function flakyTus(failures: number, failStatus = 0, goodPatchesFirst = 0) {
+    let offset = 0;
+    let good = 0;
+    let failed = 0;
+    const calls: string[] = [];
+    const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      calls.push(method);
+      if (method === 'POST')
+        return new Response(null, { status: 201, headers: { location: '/u/1' } });
+      if (method === 'HEAD')
+        return new Response(null, { status: 200, headers: { 'upload-offset': String(offset) } });
+      if (good >= goodPatchesFirst && failed < failures) {
+        failed += 1;
+        if (failStatus) return new Response('no', { status: failStatus });
+        throw new TypeError('socket connection was closed unexpectedly');
+      }
+      good += 1;
+      offset += (init?.body as Blob).size;
+      return new Response(null, { status: 204, headers: { 'upload-offset': String(offset) } });
+    }) as typeof fetch;
+    return { fetchImpl, calls };
+  }
+  const upload = (fetchImpl: typeof fetch, retryBudgetMs?: number) =>
+    resumableStorageUpload({
+      file: new Blob([new Uint8Array(1000)]),
+      bucket: 'b',
+      objectPath: 'p',
+      accessToken: 't',
+      supabaseUrl: 'https://project.supabase.co',
+      fetchImpl,
+      retryBudgetMs,
+    });
+
+  it('rides out five failed chunks in a row, re-reading the offset each time', async () => {
+    const { fetchImpl, calls } = flakyTus(5);
+    await upload(fetchImpl);
+    expect(calls.filter((method) => method === 'HEAD')).toHaveLength(5);
+  }, 20_000);
+
+  it('resumes a dropped upload from the offset Storage reports, not from zero', async () => {
+    const { fetchImpl } = flakyTus(1, 0, 1);
+    const resumedAt: number[] = [];
+    await resumableStorageUpload({
+      file: new Blob([new Uint8Array(TUS_CHUNK_SIZE_BYTES + 10)]),
+      bucket: 'b',
+      objectPath: 'p',
+      accessToken: 't',
+      supabaseUrl: 'https://project.supabase.co',
+      fetchImpl,
+      onResume: (offset) => resumedAt.push(offset),
+    });
+    expect(resumedAt).toEqual([TUS_CHUNK_SIZE_BYTES]);
+  });
+
+  it('gives up once the outage outlasts the retry budget', async () => {
+    const { fetchImpl } = flakyTus(100);
+    await expect(upload(fetchImpl, 1_000)).rejects.toThrow('socket connection');
+  });
+
+  it('fails at once on a refusal no retry can fix', async () => {
+    const { fetchImpl, calls } = flakyTus(1, 403);
+    await expect(upload(fetchImpl)).rejects.toThrow('(403)');
+    expect(calls.filter((method) => method === 'HEAD')).toHaveLength(0);
   });
 });

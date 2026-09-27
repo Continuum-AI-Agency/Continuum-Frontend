@@ -6,7 +6,13 @@ import type {
   LibraryBrowseQuery,
 } from '@continuum/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { libraryBrowseRpcArgs, libraryBrowseSortArg } from './browse-args';
+import {
+  browseNarrowingPredicate,
+  type LibraryBrowseNarrowing,
+  libraryBrowseRpcArgs,
+  libraryBrowseSortArg,
+  reviewPrefilterStatuses,
+} from './browse-args';
 import { buildCarousel, carouselSignablePaths } from './carousel';
 import { rowToSignedMediaAsset } from './mapper';
 import { buildAssetPreview, loadAssetRenditions, renditionSignablePaths } from './renditions';
@@ -67,7 +73,20 @@ export async function fetchLibraryBrowsePage(
   const pageRows = ranked.slice(0, query.limit);
   if (pageRows.length === 0) return { items: [], nextCursor: null };
 
-  const ids = pageRows.map((row) => row.asset_id);
+  return {
+    items: await hydrateBrowseItems(
+      client,
+      pageRows.map((row) => row.asset_id),
+    ),
+    nextCursor: hasMore ? encodeCursor(pageRows[pageRows.length - 1]!) : null,
+  };
+}
+
+async function hydrateBrowseItems(
+  client: SupabaseClient,
+  ids: string[],
+): Promise<LibraryBrowsePage['items']> {
+  if (ids.length === 0) return [];
   const { data: assets, error: assetsError } = await mediaSchema(client)
     .from('assets')
     .select(MEDIA_ASSET_SELECT)
@@ -95,9 +114,101 @@ export async function fetchLibraryBrowsePage(
     return carousel ? { ...asset, carousel } : asset;
   });
 
+  return items;
+}
+
+// ponytail: a bounded scan — a narrow custom state on a huge brand can return a short (even
+// empty) page with a cursor; a review-state RPC argument would make it exact.
+const NARROWED_SCAN_PAGE = 96;
+const NARROWED_SCAN_ROUNDS = 8;
+
+/**
+ * A browse page with custom review states and/or custom-field filters on: the browse RPC
+ * ranks with EVERY other filter, and the narrowing is applied to its rows, scanning ahead by
+ * cursor until the page is full.
+ */
+export async function fetchNarrowedLibraryBrowsePage(
+  client: SupabaseClient,
+  query: LibraryBrowseQuery,
+  narrowing: LibraryBrowseNarrowing,
+): Promise<LibraryBrowsePage> {
+  if (narrowing.fieldConstraint.kind === 'ids' && narrowing.fieldConstraint.ids.length === 0) {
+    return { items: [], nextCursor: null };
+  }
+  let rpcQuery = query;
+  if (narrowing.reviewStateIds.length > 0) {
+    const { data, error } = await mediaSchema(client)
+      .from('review_custom_states')
+      .select('base_status')
+      .eq('brand_id', query.brandId)
+      .in('id', [...narrowing.reviewStateIds]);
+    if (error) throw new Error(`Library review states failed: ${error.message}`);
+    const bases = ((data ?? []) as Array<{ base_status: string }>).map((row) => row.base_status);
+    rpcQuery = {
+      ...query,
+      reviewStatuses: reviewPrefilterStatuses(
+        query.reviewStatuses,
+        bases,
+      ) as LibraryBrowseQuery['reviewStatuses'],
+    };
+  }
+  const passes = browseNarrowingPredicate(query.reviewStatuses, narrowing);
+
+  const matched: BrowseRow[] = [];
+  let cursor = query.cursor ?? null;
+  let exhausted = false;
+  let lastScanned: BrowseRow | null = null;
+  for (
+    let round = 0;
+    round < NARROWED_SCAN_ROUNDS && !exhausted && matched.length <= query.limit;
+    round += 1
+  ) {
+    const { data, error } = await mediaSchema(client).rpc('library_browse_page', {
+      ...libraryBrowseRpcArgs(rpcQuery),
+      p_sort: libraryBrowseSortArg(query),
+      p_cursor: decodeCursor(cursor),
+      p_limit: NARROWED_SCAN_PAGE,
+    });
+    if (error) throw new Error(`Library browse failed: ${error.message}`);
+    const ranked = (data ?? []) as unknown as BrowseRow[];
+    exhausted = ranked.length <= NARROWED_SCAN_PAGE;
+    const scan = ranked.slice(0, NARROWED_SCAN_PAGE);
+    if (scan.length === 0) break;
+    const { data: reviewRows, error: reviewError } = await mediaSchema(client)
+      .from('assets')
+      .select('id, review_status, review_state_id')
+      .in(
+        'id',
+        scan.map((row) => row.asset_id),
+      );
+    if (reviewError) throw new Error(`Library narrowing failed: ${reviewError.message}`);
+    const byId = new Map(
+      (
+        (reviewRows ?? []) as Array<{
+          id: string;
+          review_status: string | null;
+          review_state_id: string | null;
+        }>
+      ).map((row) => [row.id, row]),
+    );
+    for (const row of scan) {
+      lastScanned = row;
+      const asset = byId.get(row.asset_id);
+      if (asset && passes(asset)) matched.push(row);
+      if (matched.length > query.limit) break;
+    }
+    cursor = encodeCursor(lastScanned!);
+  }
+
+  const page = matched.slice(0, query.limit);
+  const full = matched.length > query.limit;
+  const resumeFrom = full ? page[page.length - 1] : lastScanned;
   return {
-    items,
-    nextCursor: hasMore ? encodeCursor(pageRows[pageRows.length - 1]!) : null,
+    items: await hydrateBrowseItems(
+      client,
+      page.map((row) => row.asset_id),
+    ),
+    nextCursor: (full || !exhausted) && resumeFrom ? encodeCursor(resumeFrom) : null,
   };
 }
 

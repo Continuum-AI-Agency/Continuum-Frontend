@@ -1,10 +1,10 @@
 'use client';
 
-// Kanban board over ONE one-value dimension, with drag-between-lanes. The
-// dimension is the viewer's choice: review_status (the default — Unsorted →
-// draft → in review → needs changes → approved) or any of the brand's custom
-// single-select, status or user fields. Inside a collection the choice is saved
-// to the collection's view_config.
+// Kanban board over ONE dimension, with drag-between-lanes. The dimension is the
+// viewer's choice: review_status (the default — Unsorted → draft → in review → needs
+// changes → approved) or ANY of the brand's custom fields; the lane shapes per type live
+// in boardGrouping. Inside a collection the choice is saved to the collection's
+// view_config.
 //
 // The two are NOT the same write, and the board must never confuse them. A drop
 // on a review lane posts an audited review TRANSITION; a drop on a custom-field
@@ -51,13 +51,13 @@ import {
   serializeFieldFilters,
   setAssetFieldValue,
 } from '@/lib/library/customFields';
-import { transitionReviewStatus } from '@/lib/library/review';
+import { setAssetReviewState, transitionReviewStatus } from '@/lib/library/review';
 import { normalizeReviewStatus, REVIEW_STATUS_ORDER } from '@/lib/library/reviewStatus';
-import { canEditLibrary, useBrandRole } from '@/lib/library/useBrandRole';
+import { useLibraryAccess } from '@/lib/library/useBrandRole';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
-import { useReviewStateLabels } from '../review/useReviewStateLabels';
 import { useMentionTargets } from '../detail/useMentionTargets';
+import { useReviewCustomStates, useReviewStateLabels } from '../review/useReviewStateLabels';
 import { BoardCardContent } from './BoardCard';
 import { BoardColumn } from './BoardColumn';
 import { type BoardGrouping, buildBoardLanes, decodeLaneId, dropValue } from './boardGrouping';
@@ -189,8 +189,9 @@ export function LibraryBoardView({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeAsset, setActiveAsset] = useState<MediaAsset | null>(null);
   const [valueByAssetId, setValueByAssetId] = useState<Map<string, CustomFieldValue>>(new Map());
-  const canEdit = canEditLibrary(useBrandRole(brandId));
+  const { canEdit } = useLibraryAccess(brandId, { collectionId: filters.collectionId });
   const reviewLabels = useReviewStateLabels(brandId);
+  const customStates = useReviewCustomStates(brandId);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -295,7 +296,14 @@ export function LibraryBoardView({
             setAssets((prev) =>
               prev
                 ? prev.map((item) =>
-                    item.id === row.id ? { ...item, reviewStatus: reviewStatus.data } : item,
+                    item.id === row.id
+                      ? {
+                          ...item,
+                          reviewStatus: reviewStatus.data,
+                          reviewStateId:
+                            typeof row.review_state_id === 'string' ? row.review_state_id : null,
+                        }
+                      : item,
                   )
                 : prev,
             );
@@ -314,8 +322,9 @@ export function LibraryBoardView({
         valueByAssetId,
         members: members ?? [],
         reviewLabels,
+        customStates,
       }),
-    [grouping, assets, valueByAssetId, members, reviewLabels],
+    [grouping, assets, valueByAssetId, members, reviewLabels, customStates],
   );
 
   // Inside a collection the grouping is the collection's, not the viewer's: it is
@@ -383,23 +392,29 @@ export function LibraryBoardView({
     const asset = (assets ?? []).find((candidate) => candidate.id === assetId);
     if (!asset) return;
 
-    if (target.kind === 'review_status') {
-      const fromStatus = normalizeReviewStatus(asset.reviewStatus);
-      if (fromStatus === target.status) return;
-      const toStatus = target.status;
-      setAssets((prev) =>
-        prev
-          ? prev.map((item) => (item.id === assetId ? { ...item, reviewStatus: toStatus } : item))
-          : prev,
-      );
-      transitionReviewStatus({ brandId, assetId, toStatus }).catch((err: unknown) => {
+    if (target.kind === 'review_status' || target.kind === 'review_state') {
+      const from = {
+        reviewStatus: normalizeReviewStatus(asset.reviewStatus),
+        reviewStateId: asset.reviewStateId ?? null,
+      };
+      const to = {
+        reviewStatus: target.status,
+        reviewStateId: target.kind === 'review_state' ? target.stateId : null,
+      };
+      if (from.reviewStatus === to.reviewStatus && from.reviewStateId === to.reviewStateId) return;
+      const place = (fields: typeof from) =>
         setAssets((prev) =>
-          prev
-            ? prev.map((item) =>
-                item.id === assetId ? { ...item, reviewStatus: fromStatus } : item,
-              )
-            : prev,
+          prev ? prev.map((item) => (item.id === assetId ? { ...item, ...fields } : item)) : prev,
         );
+      place(to);
+      // A base lane is a plain transition; a custom-state lane goes through the
+      // library-review edge function, which records the state on the event.
+      const write =
+        target.kind === 'review_state'
+          ? setAssetReviewState({ brandId, assetId, stateId: target.stateId })
+          : transitionReviewStatus({ brandId, assetId, toStatus: target.status });
+      write.catch((err: unknown) => {
+        place(from);
         toast.error(`Move failed · ${(err as Error).message}`);
       });
       return;

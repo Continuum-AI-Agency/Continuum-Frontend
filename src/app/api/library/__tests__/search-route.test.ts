@@ -132,6 +132,7 @@ function installSupabaseStub(params: {
           'contains',
           'gte',
           'lt',
+          'or',
           'order',
           'limit',
         ]) {
@@ -368,6 +369,82 @@ describe('POST /api/library/search — comments and date filters', () => {
     expect(lexicalCall?.args.filter_kind).toBe('video');
   });
 
+  it('resolves custom review states to an id constraint, with no new ranking-RPC argument', async () => {
+    const IN_LEGAL = '55555555-5555-4555-8555-555555555555';
+    const LEGAL = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
+    installSupabaseStub({
+      rpcCalls,
+      fromCalls,
+      rpcResults: { search_assets_ranked: [{ id: IN_LEGAL, similarity: 3 }] },
+      filteredIds: [IN_LEGAL],
+      hydrateIds: [IN_LEGAL],
+    });
+
+    const response = await POST(searchRequest('beach', { reviewStateIds: [LEGAL] }));
+    expect(response.status).toBe(200);
+
+    const stateSelect = fromCalls.find((call) => call.ops.some((op) => op[0] === 'or'));
+    expect(stateSelect?.ops).toContainEqual(['or', `review_state_id.in.(${LEGAL})`]);
+    const lexicalCall = rpcCalls.find((call) => call.fn === 'search_assets_ranked');
+    expect(lexicalCall?.args.filter_asset_ids).toEqual([IN_LEGAL]);
+    // The ranking RPCs are called with exactly their existing arguments.
+    expect(Object.keys(lexicalCall?.args ?? {})).not.toContain('filter_review_state_ids');
+  });
+
+  it('ORs the filter-bar statuses and a typed status with the custom states, never ANDs them', async () => {
+    const APPROVED_ID = '66666666-6666-4666-8666-666666666666';
+    const IN_LEGAL = '55555555-5555-4555-8555-555555555555';
+    const LEGAL = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
+    installSupabaseStub({
+      rpcCalls,
+      fromCalls,
+      rpcResults: {
+        search_assets_ranked: [
+          { id: APPROVED_ID, similarity: 3 },
+          { id: IN_LEGAL, similarity: 2 },
+        ],
+      },
+      filteredIds: [APPROVED_ID, IN_LEGAL],
+      hydrateIds: [APPROVED_ID, IN_LEGAL],
+    });
+
+    const response = await POST(
+      searchRequest('beach', {
+        reviewStatuses: ['approved'],
+        reviewStatus: 'needs_changes',
+        reviewStateIds: [LEGAL],
+      }),
+    );
+    expect(response.status).toBe(200);
+
+    const reviewSelect = fromCalls.find((call) => call.ops.some((op) => op[0] === 'or'));
+    expect(reviewSelect?.ops).toContainEqual([
+      'or',
+      `review_status.in.(approved,needs_changes),review_state_id.in.(${LEGAL})`,
+    ]);
+    // No AND on top: neither the id select nor the ranking RPC narrows to one status.
+    expect(reviewSelect?.ops.some((op) => op[0] === 'eq' && op[1] === 'review_status')).toBe(false);
+    const lexicalCall = rpcCalls.find((call) => call.fn === 'search_assets_ranked');
+    expect(lexicalCall?.args.filter_review_status).toBeNull();
+    expect(lexicalCall?.args.filter_asset_ids).toEqual([APPROVED_ID, IN_LEGAL]);
+  });
+
+  it('keeps a single filter-bar status on the ranking RPC, with no id resolution', async () => {
+    installSupabaseStub({
+      rpcCalls,
+      fromCalls,
+      rpcResults: { search_assets_ranked: [{ id: ASSET_ID, similarity: 3 }] },
+      hydrateIds: [ASSET_ID],
+    });
+
+    const response = await POST(searchRequest('beach', { reviewStatuses: ['approved'] }));
+    expect(response.status).toBe(200);
+    const lexicalCall = rpcCalls.find((call) => call.fn === 'search_assets_ranked');
+    expect(lexicalCall?.args.filter_review_status).toBe('approved');
+    expect(lexicalCall?.args.filter_asset_ids).toBeNull();
+    expect(fromCalls.some((call) => call.ops.some((op) => op[0] === 'or'))).toBe(false);
+  });
+
   it('lists the filtered assets newest-first when the query is only filters', async () => {
     installSupabaseStub({
       rpcCalls,
@@ -484,10 +561,45 @@ describe('POST /api/library/search — visual text search', () => {
     expect(body.items[1]?.asset.id).toBe(UNTAGGED_ID);
   });
 
+  it('finds footage on its BEST frame when its mean vector is under the threshold', async () => {
+    // A subject in one shot of long footage: the mean over nine frames misses (nothing from
+    // match_similar_assets), the frame that shows it matches.
+    installSupabaseStub({
+      rpcCalls,
+      rpcResults: {
+        match_assets_by_text: [],
+        match_similar_assets: [{ id: ASSET_ID, similarity: 0.09 }],
+        match_asset_frames: [
+          { id: UNTAGGED_ID, similarity: 0.22 },
+          { id: ASSET_ID, similarity: 0.19 },
+        ],
+        search_assets_ranked: [],
+      },
+      hydrateIds: [ASSET_ID, UNTAGGED_ID],
+    });
+
+    const response = await POST(visualRequest(VISUAL));
+    const body = (await response.json()) as {
+      items: { asset: { id: string }; matchedOn?: string[] }[];
+    };
+
+    // One entry per asset, ranked by its best score (frame 0.19 beats its mean 0.09).
+    expect(body.items.map((item) => item.asset.id)).toEqual([UNTAGGED_ID, ASSET_ID]);
+    expect(body.items.every((item) => item.matchedOn?.includes('visual'))).toBe(true);
+    const frameCall = rpcCalls.find((call) => call.fn === 'match_asset_frames');
+    expect(frameCall?.args).toMatchObject({
+      query_embedding: VISUAL,
+      match_threshold: 0.08,
+      match_count: 12,
+      filter_kind: 'video',
+    });
+  });
+
   it('skips the image-space match when no visual embedding is sent', async () => {
     installSupabaseStub({ rpcCalls, rpcResults: {} });
     await POST(searchRequest('olive oil'));
     expect(rpcCalls.some((call) => call.fn === 'match_similar_assets')).toBe(false);
+    expect(rpcCalls.some((call) => call.fn === 'match_asset_frames')).toBe(false);
   });
 
   it('rejects a visual embedding of the wrong width', async () => {

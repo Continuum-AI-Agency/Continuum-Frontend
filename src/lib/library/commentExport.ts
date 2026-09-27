@@ -7,7 +7,10 @@
 // at that instant, floor(timeMs · fps / 1000). Timecodes are SOURCE timecodes: the
 // file's embedded start timecode (its tmcd track) plus that frame, drop-frame
 // when the file says so, so a marker lines up with the clip's own timecode in
-// the editor. Markers ride on the clip (FCPXML asset-clip with a media reference,
+// the editor. The TIMELINE (EDL record columns, the FCPXML sequence, the xmeml
+// sequence) starts at 01:00:00:00 as editors' timelines do, or at the clip's own
+// timecode when asked. A file with no timecode track starts at 00:00:00:00 and
+// counts non-drop. Markers ride on the clip (FCPXML asset-clip with a media reference,
 // xmeml clipitem with a file), not on a bare sequence. NTSC rates keep their exact
 // 1001 denominator in FCPXML and their ntsc flag in xmeml.
 
@@ -39,7 +42,12 @@ export type ExportContext = {
   /** The file name the editor relinks the clip to. */
   fileName?: string;
   source?: SourceTimecode;
+  /** Where the record timeline starts: 01:00:00:00 (default) or the clip's own timecode. */
+  timelineStart?: TimelineStart;
 };
+
+export const TIMELINE_STARTS = ['hour', 'source'] as const;
+export type TimelineStart = (typeof TIMELINE_STARTS)[number];
 
 export const COMMENT_EXPORT_FORMATS = ['csv', 'edl', 'fcpxml', 'premiere'] as const;
 export type CommentExportFormat = (typeof COMMENT_EXPORT_FORMATS)[number];
@@ -140,6 +148,13 @@ export function sourceTimecodeAtMs(
   return timecodeForFrame(source.startFrame + frameAtMs(ms, rate), rate, source.dropFrame);
 }
 
+// The timeline frame the clip's first frame sits on.
+export function timelineStartFrame(context: ExportContext): number {
+  const source = context.source ?? ZERO_SOURCE_TIMECODE;
+  if (context.timelineStart === 'source') return source.startFrame;
+  return framesForTimecode('01:00:00:00', context.rate, source.dropFrame);
+}
+
 type MarkerSpan = { comment: ExportComment; inFrame: number; outFrame: number };
 
 // A point comment is one frame long; a range covers its last frame too, so an
@@ -205,18 +220,23 @@ export function commentsToCsv(comments: ExportComment[], context: ExportContext)
 }
 
 // Resolve reads timeline markers from a CMX3600 EDL: the record-in of each event
-// is the marker frame, `|M:` its name, `|D:` its duration in frames.
+// is the marker's frame on the timeline (timeline start + frame), the source-in
+// the clip's own timecode at that frame, `|M:` its name, `|D:` its duration.
 export function commentsToResolveEdl(comments: ExportComment[], context: ExportContext): string {
   const title = context.assetName.replace(/[\r\n]+/g, ' ');
   const source = context.source ?? ZERO_SOURCE_TIMECODE;
   const df = dropsFrames(context.rate, source.dropFrame);
   const tc = (frame: number) => timecodeForFrame(source.startFrame + frame, context.rate, df);
+  const recordStart = timelineStartFrame(context);
+  const rec = (frame: number) => timecodeForFrame(recordStart + frame, context.rate, df);
   const lines = [`TITLE: ${title} review`, `FCM: ${df ? 'DROP FRAME' : 'NON-DROP FRAME'}`, ''];
   markerSpans(comments, context.rate).forEach(({ comment, inFrame, outFrame }, index) => {
     const event = String(index + 1).padStart(3, '0');
     const tcIn = tc(inFrame);
     const tcOut = tc(inFrame + 1);
-    lines.push(`${event}  001      V     C        ${tcIn} ${tcOut} ${tcIn} ${tcOut}  `);
+    lines.push(
+      `${event}  001      V     C        ${tcIn} ${tcOut} ${rec(inFrame)} ${rec(inFrame + 1)}  `,
+    );
     lines.push(
       ` |C:ResolveColorBlue |M:${markerText(comment).replaceAll('|', '/')} |D:${outFrame - inFrame}`,
     );
@@ -254,6 +274,7 @@ export function commentsToFcpxml(comments: ExportComment[], context: ExportConte
   // The clip's first frame IS its start timecode; marker times are in the clip's
   // own time, so each sits at start + frame.
   const start = fcpTime(source.startFrame, rate);
+  const timelineStart = fcpTime(timelineStartFrame(context), rate);
   const name = xml(context.assetName);
   const fileName = context.fileName ?? context.assetName;
   const markers = markerSpans(comments, rate).map(
@@ -273,9 +294,9 @@ export function commentsToFcpxml(comments: ExportComment[], context: ExportConte
     '  <library>',
     '    <event name="Continuum review">',
     `      <project name="${name} review">`,
-    `        <sequence format="r1" duration="${duration}" tcStart="${start}" tcFormat="${df ? 'DF' : 'NDF'}">`,
+    `        <sequence format="r1" duration="${duration}" tcStart="${timelineStart}" tcFormat="${df ? 'DF' : 'NDF'}">`,
     '          <spine>',
-    `            <asset-clip ref="r2" name="${name}" offset="${start}" start="${start}" duration="${duration}" format="r1" tcFormat="${df ? 'DF' : 'NDF'}">`,
+    `            <asset-clip ref="r2" name="${name}" offset="${timelineStart}" start="${start}" duration="${duration}" format="r1" tcFormat="${df ? 'DF' : 'NDF'}">`,
     ...markers,
     '            </asset-clip>',
     '          </spine>',
@@ -300,7 +321,8 @@ export function commentsToPremiereXml(comments: ExportComment[], context: Export
   const durationFrames = Math.max(1, frameAtMs(context.durationMs, rate));
   const name = xml(context.assetName);
   const fileName = context.fileName ?? context.assetName;
-  const timecodeXml = `<timecode>${rateXml}<string>${timecodeForFrame(source.startFrame, rate, df)}</string><frame>${source.startFrame}</frame><displayformat>${df ? 'DF' : 'NDF'}</displayformat></timecode>`;
+  const timecodeAt = (frame: number) =>
+    `<timecode>${rateXml}<string>${timecodeForFrame(frame, rate, df)}</string><frame>${frame}</frame><displayformat>${df ? 'DF' : 'NDF'}</displayformat></timecode>`;
   const markers = markerSpans(comments, rate).map(({ comment, inFrame, outFrame }) =>
     [
       '          <marker>',
@@ -319,7 +341,7 @@ export function commentsToPremiereXml(comments: ExportComment[], context: Export
     `    <name>${name} review</name>`,
     `    <duration>${durationFrames}</duration>`,
     `    ${rateXml}`,
-    `    ${timecodeXml}`,
+    `    ${timecodeAt(timelineStartFrame(context))}`,
     '    <media><video><track>',
     '      <clipitem id="clipitem-1">',
     `        <name>${name}</name>`,
@@ -331,7 +353,7 @@ export function commentsToPremiereXml(comments: ExportComment[], context: Export
     `          <pathurl>${xml(fileUrl(fileName, 'file://localhost/'))}</pathurl>`,
     `          ${rateXml}`,
     `          <duration>${durationFrames}</duration>`,
-    `          ${timecodeXml}`,
+    `          ${timecodeAt(source.startFrame)}`,
     '          <media><video/></media>',
     '        </file>',
     ...markers,
