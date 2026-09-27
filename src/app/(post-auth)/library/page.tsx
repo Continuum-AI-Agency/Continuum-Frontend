@@ -25,11 +25,7 @@ import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { setActiveBrandPreference } from '@/lib/brands/preferences';
 import { buildCaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import { fetchLibraryBrowsePage } from '@/lib/media/browse.server';
-import {
-  fetchMediaAssets,
-  fetchMediaCollections,
-  fetchStorageUsedBytes,
-} from '@/lib/media/fetchers.server';
+import { fetchMediaAssets, fetchMediaCollections } from '@/lib/media/fetchers.server';
 import { kindToMediaType, parseTagsParam } from '@/lib/media/filters';
 import { fetchLibrarySavedViews } from '@/lib/media/saved-views.server';
 import { parseLibrarySection } from '@/lib/media/sections';
@@ -193,12 +189,11 @@ async function LibraryContent({ searchParams }: { searchParams: LibrarySearchPar
     if (value) overlayParams.set(key, value);
   }
   const initialDeepLink = parseCommentDeepLink(overlayParams);
-  const [page, collections, savedViews, storageUsedBytes, brandStyle, requestedAssets, viewConfig] =
+  const [page, collections, savedViews, brandStyle, requestedAssets, viewConfig] =
     await Promise.all([
       fetchLibraryBrowsePage(supabase, browseQuery),
       fetchMediaCollections(activeBrandId),
       fetchLibrarySavedViews(supabase, activeBrandId),
-      fetchStorageUsedBytes(activeBrandId),
       fetchBrandStyle(activeBrandId),
       isUuid(requestedAssetId)
         ? fetchMediaAssets(activeBrandId, { assetId: requestedAssetId, limit: 1 })
@@ -219,7 +214,6 @@ async function LibraryContent({ searchParams }: { searchParams: LibrarySearchPar
       initialNextCursor={page.nextCursor}
       initialCollections={collections}
       initialSavedViews={savedViews}
-      storageUsedBytes={storageUsedBytes}
       captionStyle={buildCaptionStyle(brandStyle)}
       section={parseLibrarySection(first(searchParams.section))}
       initialBrowseQuery={initialBrowseQuery}

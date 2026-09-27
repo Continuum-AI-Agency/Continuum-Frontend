@@ -24,7 +24,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { ViralityScoreBadge } from '@/components/virality/ViralityScoreBadge';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import { formatUsesCompanionPreview, officeDocumentType } from '@/lib/library/previewPlayable';
-import { normalizeReviewStatus, REVIEW_STATUS_META } from '@/lib/library/reviewStatus';
+import { normalizeReviewStatus } from '@/lib/library/reviewStatus';
 import { seekVideoPreviewFrame } from '@/lib/library/videoPoster';
 import { SOURCE_LABEL } from '@/lib/media/filters';
 import { cn } from '@/lib/utils';
@@ -40,7 +40,10 @@ import { useGenerateClips } from './hooks/useGenerateClips';
 import { MediaBoundingBoxes } from './MediaBoundingBoxes';
 import { OfficeDocumentIcon } from './OfficeDocumentIcon';
 import { QuickReformatMenu } from './reformat/QuickReformatMenu';
+import { reviewDisplay } from './review/reviewDisplay';
+import { useReviewCustomStates, useReviewStateLabels } from './review/useReviewStateLabels';
 import {
+  assetDragInFlight,
   assetDragInFlightIncludes,
   endAssetDrag,
   isAssetDrag,
@@ -687,13 +690,14 @@ export function MediaCard({
   const [stackTarget, setStackTarget] = useState(false);
   const fields = visibleCardFields(card);
   const reviewStatus = normalizeReviewStatus(asset.reviewStatus);
+  const reviewLabels = useReviewStateLabels(asset.brandId);
+  const customStates = useReviewCustomStates(asset.brandId);
+  const review = reviewDisplay(reviewStatus, asset.reviewStateId, reviewLabels, customStates);
   const duration = formatDurationMs(asset.durationMs);
   const metaFacts = [
     fields.includes('size') && asset.sizeBytes ? formatBytes(asset.sizeBytes) : null,
     fields.includes('duration') ? duration : null,
-    fields.includes('review') && reviewStatus !== 'none'
-      ? REVIEW_STATUS_META[reviewStatus].label
-      : null,
+    fields.includes('review') && reviewStatus !== 'none' ? review.label : null,
   ].filter((fact): fact is string => !!fact);
   const { generate, isGenerating, progress } = useGenerateClips();
   const { quality, setQuality } = useClipQualityPreference();
@@ -724,8 +728,10 @@ export function MediaCard({
     onOpen?.(asset);
   };
 
+  // A hover card is portalled over the neighbouring cards: during a drag it would sit on top
+  // of the very cards and collections the user is aiming at, so none opens mid-drag.
   const handleHoverDetailOpenChange = (open: boolean) => {
-    if (open && suppressHoverDetailRef.current) return;
+    if (open && (suppressHoverDetailRef.current || assetDragInFlight())) return;
     setHoverDetailOpen(open);
   };
 
@@ -741,7 +747,14 @@ export function MediaCard({
       data-drop-target={stackTarget ? 'stack' : undefined}
       className="relative"
       draggable={!!onDragAssetStart}
-      onDragStart={onDragAssetStart ? (event) => onDragAssetStart(event, asset) : undefined}
+      onDragStart={
+        onDragAssetStart
+          ? (event) => {
+              setHoverDetailOpen(false);
+              onDragAssetStart(event, asset);
+            }
+          : undefined
+      }
       onDragEnd={endAssetDrag}
       onDragOver={(event) => {
         if (!acceptsStack(event)) return;

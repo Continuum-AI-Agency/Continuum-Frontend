@@ -71,6 +71,65 @@ describe('buildApprovalReport', () => {
     ]);
   });
 
+  it('credits a status change to the version it was cast on, with its custom state', () => {
+    // v1 approved on 09-12 while v2 (09-10) is head: the event names v1.
+    const [row] = buildApprovalReport({
+      ...base,
+      stateNames: new Map([['legal', 'Client signed off']]),
+      decisions: [],
+      events: [
+        {
+          assetId: 'a',
+          versionId: 'v1',
+          stateId: 'legal',
+          actor: 'bo',
+          toStatus: 'approved',
+          note: null,
+          createdAt: '2026-09-12T00:00:00.000Z',
+        },
+      ],
+    });
+    expect(row).toMatchObject({ versionId: 'v1', versionNumber: 1, state: 'Client signed off' });
+    expect(approvalReportToCsv([row as NonNullable<typeof row>]).split('\r\n')[1]).toContain(
+      ',v1,v1,approved,Client signed off,',
+    );
+  });
+
+  it('reports every custom-state move, whatever its base, and leaves plain non-verdicts out', () => {
+    const rows = buildApprovalReport({
+      ...base,
+      stateNames: new Map([['legal', 'Legal review']]),
+      decisions: [],
+      events: [
+        {
+          assetId: 'a',
+          versionId: 'v2',
+          stateId: 'legal',
+          actor: 'ana',
+          toStatus: 'in_review',
+          note: null,
+          createdAt: '2026-09-13T00:00:00.000Z',
+        },
+        {
+          assetId: 'a',
+          versionId: 'v2',
+          actor: 'ana',
+          toStatus: 'draft',
+          note: null,
+          createdAt: '2026-09-14T00:00:00.000Z',
+        },
+      ],
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      decision: 'in_review',
+      state: 'Legal review',
+      versionNumber: 2,
+      userEmail: 'ana@brand.test',
+      at: '2026-09-13T00:00:00.000Z',
+    });
+  });
+
   it('counts a decision and the event it wrote once', () => {
     const rows = buildApprovalReport({
       ...base,
@@ -118,7 +177,7 @@ describe('approvalReportToCsv', () => {
       }),
     );
     expect(csv.split('\r\n')[1]).toBe(
-      '"Hero, cut",a,v2,v2,approved,ana@brand.test,ana,2026-09-12T00:00:00.000Z,review_request,',
+      '"Hero, cut",a,v2,v2,approved,,ana@brand.test,ana,2026-09-12T00:00:00.000Z,review_request,',
     );
   });
 });

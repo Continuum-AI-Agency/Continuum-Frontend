@@ -2,15 +2,19 @@ import { describe, expect, it } from 'bun:test';
 import {
   DEFAULT_SHARE_WATERMARK_TEMPLATE,
   isShareFeaturableFieldType,
+  libraryShareRequestSchema,
   renderShareWatermarkText,
+  type ShareLinkEventKind,
   shareBeaconEventRequestSchema,
   shareDeliveryRequestSchema,
   shareLinkBrandingSchema,
   shareLinkEventKindSchema,
   shareLinkEventSchema,
+  shareLinkFromRow,
   shareLinkLayoutSchema,
   shareLinkSchema,
   shareLinkWatermarkSchema,
+  summarizeShareActivity,
   updateShareLinkRequestSchema,
 } from './share';
 
@@ -153,17 +157,115 @@ describe('share owner and delivery requests', () => {
     expect(isShareFeaturableFieldType('multi_select')).toBe(false);
   });
 
-  it('bounds a delivery request', () => {
-    const file = {
-      url: 'https://x.supabase.co/storage/v1/object/sign/a/b',
-      fileName: 'a.png',
-      mimeType: 'image/png',
-    };
+  it('names the file by asset, never by URL', () => {
     expect(
-      shareDeliveryRequestSchema.safeParse({ token: 't'.repeat(20), files: [file] }).success,
+      shareDeliveryRequestSchema.safeParse({ token: 't'.repeat(20), assetId: ID }).success,
     ).toBe(true);
-    expect(shareDeliveryRequestSchema.safeParse({ token: 't'.repeat(20), files: [] }).success).toBe(
-      false,
-    );
+    expect(
+      shareDeliveryRequestSchema.safeParse({
+        token: 't'.repeat(20),
+        files: [{ url: 'https://x.test/a', fileName: 'a', mimeType: 'image/png' }],
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('summarizeShareActivity', () => {
+  const A = '22222222-2222-4222-8222-222222222222';
+  const B = '33333333-3333-4333-8333-333333333333';
+  const row = (kind: ShareLinkEventKind, assetId: string | null, viewerKey: string) => ({
+    kind,
+    assetId,
+    assetTitle: assetId === A ? 'Hero cut' : 'Teaser',
+    viewerKey,
+    viewerName: viewerKey === 'ada' ? 'Ada' : null,
+    viewerEmail: viewerKey === 'ada' ? 'ada@client.test' : null,
+  });
+
+  it('totals views, plays, downloads and comments per asset and per viewer', () => {
+    const totals = summarizeShareActivity([
+      row('open', null, 'ada'),
+      row('view', A, 'ada'),
+      row('view', A, 'anon'),
+      row('play', A, 'ada'),
+      row('download', A, 'ada'),
+      row('comment', B, 'ada'),
+      row('download_all', null, 'ada'),
+      row('field_edit', A, 'ada'),
+    ]);
+    expect(totals.byAsset).toEqual([
+      { assetId: A, title: 'Hero cut', views: 2, plays: 1, downloads: 1, comments: 0 },
+      { assetId: B, title: 'Teaser', views: 0, plays: 0, downloads: 0, comments: 1 },
+    ]);
+    expect(totals.byViewer[0]).toEqual({
+      viewerKey: 'ada',
+      name: 'Ada',
+      email: 'ada@client.test',
+      views: 1,
+      plays: 1,
+      downloads: 2,
+      comments: 1,
+    });
+    expect(totals.byViewer[1]?.views).toBe(1);
+  });
+});
+
+describe('library-share edge requests', () => {
+  const token = 't'.repeat(20);
+
+  it('lets a guest report only page events, and set only a single featured value', () => {
+    expect(
+      libraryShareRequestSchema.safeParse({ action: 'record_event', token, kind: 'view' }).success,
+    ).toBe(true);
+    expect(
+      libraryShareRequestSchema.safeParse({ action: 'record_event', token, kind: 'download' })
+        .success,
+    ).toBe(false);
+    const edit = {
+      action: 'edit_featured_field',
+      token,
+      sessionToken: 's'.repeat(40),
+      assetId: ID,
+      versionId: ID,
+    };
+    expect(libraryShareRequestSchema.safeParse({ ...edit, value: 'approved' }).success).toBe(true);
+    expect(libraryShareRequestSchema.safeParse({ ...edit, value: ['a', 'b'] }).success).toBe(false);
+  });
+
+  it('asks for a link detail by id or by token, not both', () => {
+    expect(
+      libraryShareRequestSchema.safeParse({ action: 'share_link_detail', id: ID }).success,
+    ).toBe(true);
+    expect(
+      libraryShareRequestSchema.safeParse({ action: 'share_link_detail', id: ID, token }).success,
+    ).toBe(false);
+  });
+
+  it('maps a row whose hash was withheld through has_passcode', () => {
+    const link = shareLinkFromRow({
+      id: ID,
+      brand_id: ID,
+      token,
+      scope: 'asset',
+      asset_id: ID,
+      collection_id: null,
+      version_mode: 'live',
+      pinned_version_id: null,
+      allow_comments: true,
+      allow_approval: false,
+      allow_download: true,
+      show_metadata: true,
+      show_custom_fields: false,
+      require_identity: false,
+      has_passcode: true,
+      permissions: 'view',
+      created_by: null,
+      expires_at: null,
+      revoked_at: null,
+      created_at: '2026-09-27T00:00:00Z',
+      layout: 'bogus',
+    });
+    expect(link.policy.hasPasscode).toBe(true);
+    expect(link.layout).toBe('grid');
   });
 });

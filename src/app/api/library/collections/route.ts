@@ -28,6 +28,7 @@ function rowToCollection(row: MediaCollectionRow): MediaCollection {
     depth: row.depth ?? 0,
     systemKey: row.system_key ?? null,
     visibility: visibility.success ? visibility.data : 'team',
+    access: row.access === 'restricted' ? 'restricted' : 'brand',
     viewConfig: viewConfig.success ? viewConfig.data : {},
     createdBy: row.created_by,
     createdAt: row.created_at,

@@ -13,7 +13,7 @@ import { mediaSchema } from '@/lib/media/supabase-media';
 
 // GET /api/library/review/report?brandId[&collectionId][&assetId] — the approval
 // audit as CSV: who approved (or sent back) which version, when, and through
-// which path. Brand-wide by default, narrowed to one collection or one asset.
+// which path, with the brand's custom state when one was chosen. Brand-wide by default, narrowed to one collection or one asset.
 // Everything is read on the caller's RLS-scoped client: the audit tables are
 // member-readable, and a private collection stays its creator's.
 
@@ -108,15 +108,18 @@ export async function GET(request: Request) {
 
     const eventResult = await media
       .from('asset_review_events')
-      .select('asset_id, actor, to_status, note, created_at')
+      .select('asset_id, version_id, to_state_id, actor, to_status, note, created_at')
       .eq('brand_id', query.brandId)
-      .in('to_status', ['approved', 'needs_changes'])
+      // Verdicts, and every move into a brand custom state whatever its base.
+      .or('to_status.in.(approved,needs_changes),to_state_id.not.is.null')
       .order('created_at', { ascending: false })
       .limit(MAX_ROWS);
     if (eventResult.error) throw eventResult.error;
     const events: ReportEventRow[] = (
       (eventResult.data ?? []) as {
         asset_id: string;
+        version_id: string | null;
+        to_state_id: string | null;
         actor: string | null;
         to_status: string;
         note: string | null;
@@ -125,6 +128,8 @@ export async function GET(request: Request) {
     )
       .map((row) => ({
         assetId: row.asset_id,
+        versionId: row.version_id,
+        stateId: row.to_state_id,
         actor: row.actor,
         toStatus: row.to_status,
         note: row.note,
@@ -163,6 +168,10 @@ export async function GET(request: Request) {
       if (error) throw error;
       return (data ?? []) as { id: string; title: string | null; file_name: string | null }[];
     });
+    const { data: customStates } = await media
+      .from('review_custom_states')
+      .select('id, label')
+      .eq('brand_id', query.brandId);
     const { data: members } = await caller.supabase
       .schema('brand_profiles')
       .from('permissions')
@@ -175,6 +184,9 @@ export async function GET(request: Request) {
       versions,
       assetNames: new Map(
         assets.map((asset) => [asset.id, asset.title || asset.file_name || asset.id]),
+      ),
+      stateNames: new Map(
+        ((customStates ?? []) as { id: string; label: string }[]).map((s) => [s.id, s.label]),
       ),
       emails: new Map(
         ((members ?? []) as { user_id: string | null; email: string | null }[]).flatMap((m) =>

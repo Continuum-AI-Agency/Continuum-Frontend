@@ -9,7 +9,11 @@ import { NextResponse } from 'next/server';
 import { resolveFieldFilterAssetIds } from '@/lib/library/customFields.server';
 import { buildCarousel, carouselSignablePaths } from '@/lib/media/carousel';
 import { embedSearchQuery } from '@/lib/media/embedQuery.server';
-import { type MediaSearchRpcFilters, toSearchRpcFilters } from '@/lib/media/filters';
+import {
+  type MediaSearchRpcFilters,
+  searchReviewFilter,
+  toSearchRpcFilters,
+} from '@/lib/media/filters';
 import { rowToSignedMediaAsset } from '@/lib/media/mapper';
 import {
   buildAssetPreview,
@@ -125,6 +129,8 @@ async function selectFilteredAssetIds(
     ids?: readonly string[];
     createdAfter?: string;
     createdBefore?: string;
+    /** The review choice as a PostgREST `or` (statuses OR custom states). */
+    reviewOr?: string | null;
     limit: number;
   },
 ): Promise<string[]> {
@@ -157,6 +163,7 @@ async function selectFilteredAssetIds(
   if (filters.filter_review_status) query = query.eq('review_status', filters.filter_review_status);
   if (options.createdAfter) query = query.gte('created_at', options.createdAfter);
   if (options.createdBefore) query = query.lt('created_at', options.createdBefore);
+  if (options.reviewOr) query = query.or(options.reviewOr);
 
   const { data, error } = await query
     .order('created_at', { ascending: false })
@@ -272,6 +279,24 @@ async function runTextSearch(
         visual.push({ id: match.id, similarity: match.similarity, matchedOn: ['visual'] });
       }
     }
+    // Footage is matched on its BEST frame: the mean over a video's frames dilutes a subject
+    // that is on screen for one shot (measured 0.084 for the mean vs ~0.2 for the frame).
+    const { data: frameData, error: frameError } = await mediaSchema(supabase).rpc(
+      'match_asset_frames',
+      {
+        query_embedding: visualEmbedding,
+        match_threshold: VISUAL_MATCH_THRESHOLD,
+        match_count: Math.min(limit, VISUAL_MATCH_CAP),
+        filter_brand_id: brandId,
+        exclude_asset_id: null,
+        ...rpcFilters,
+      },
+    );
+    if (frameError) {
+      console.error('[library/search] visual match_asset_frames failed', frameError);
+    } else {
+      mergeBestVisual(visual, (frameData ?? []) as MatchAssetRow[]);
+    }
   }
 
   const { data, error } = await mediaSchema(supabase).rpc('search_assets_ranked', {
@@ -328,6 +353,17 @@ async function runTextSearch(
   const strategy: SearchStrategy =
     meaningHits > 0 ? (extras.length > 0 ? 'hybrid' : 'semantic') : 'lexical';
   return { matches, strategy };
+}
+
+/** Adds best-frame hits to the visual list, one entry per asset at its best score. */
+function mergeBestVisual(visual: RankedMatch[], frameHits: readonly MatchAssetRow[]): void {
+  for (const hit of frameHits) {
+    const existing = visual.find((match) => match.id === hit.id);
+    if (existing) existing.similarity = Math.max(existing.similarity, hit.similarity);
+    else visual.push({ id: hit.id, similarity: hit.similarity, matchedOn: ['visual'] });
+  }
+  visual.sort((a, b) => b.similarity - a.similarity);
+  visual.splice(VISUAL_MATCH_CAP);
 }
 
 export async function POST(request: Request) {
@@ -394,9 +430,12 @@ export async function POST(request: Request) {
   // A created-at window is resolved to ids the same way, so the ranking RPCs
   // need no new args. It intersects with any field-filter id set because the
   // select below already applies filter_asset_ids / filter_exclude_asset_ids.
+  // A review choice wider than one status (several statuses, or any custom state) rides the
+  // same id resolution, OR'd inside itself — no new ranking-RPC argument.
   const createdAfter = req.filters?.createdAfter;
   const createdBefore = req.filters?.createdBefore;
-  if (createdAfter || createdBefore) {
+  const reviewOr = searchReviewFilter(req.filters).orFilter;
+  if (createdAfter || createdBefore || reviewOr) {
     try {
       rpcFilters.filter_asset_ids = await selectFilteredAssetIds(
         supabase,
@@ -405,6 +444,7 @@ export async function POST(request: Request) {
         {
           createdAfter,
           createdBefore,
+          reviewOr,
           limit: DATE_RANGE_ID_CAP,
         },
       );

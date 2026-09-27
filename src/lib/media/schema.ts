@@ -32,6 +32,7 @@ export type MediaAssetRow = {
   // Optional so pre-v2 cached payloads/fixtures without the columns still
   // typecheck; the mapper defaults them ('none' / null).
   review_status?: MediaReviewStatus;
+  review_state_id?: string | null;
   head_version_id?: string | null;
   integrity_state?: AssetIntegrityState;
   checksum?: string | null;
@@ -64,7 +65,7 @@ export type MediaAssetRow = {
 export const MEDIA_ASSET_SELECT =
   'id, brand_id, created_by, kind, bucket, storage_path, file_name, mime_type, ' +
   'size_bytes, width, height, aspect_ratio, duration_ms, source, origin_ref, status, ' +
-  'review_status, head_version_id, integrity_state, checksum, ' +
+  'review_status, review_state_id, head_version_id, integrity_state, checksum, ' +
   'progress_step, error_code, error_message, title, description, tags, ' +
   'ad_creative_analysis, detected_objects, video_insights, thumbnail_path, embedding_model, has_image_embedding, ' +
   'created_at, updated_at, deleted_at';
@@ -80,6 +81,7 @@ export type MediaCollectionRow = {
   depth?: number;
   system_key?: string | null;
   visibility?: string;
+  access?: string;
   view_config?: unknown;
   created_by: string | null;
   created_at: string;

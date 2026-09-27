@@ -204,6 +204,49 @@ describe('CommentThreads — who sees a comment', () => {
     expect(getByText('Make internal')).toBeTruthy();
   });
 
+  it('keeps the newest choice when a late echo of an earlier toggle arrives', () => {
+    // The writes stay in flight: only the server's echo can settle the switch.
+    globalThis.fetch = (() => new Promise<Response>(() => {})) as unknown as typeof fetch;
+    const { container, rerender } = renderVisibility('internal');
+    const toggle = () =>
+      fireEvent.click(
+        container.querySelector('[data-testid=comment-visibility-switch]') as HTMLElement,
+      );
+    const state = () =>
+      container
+        .querySelector('[data-testid=comment-visibility-switch]')
+        ?.getAttribute('data-visibility-state');
+    toggle();
+    toggle();
+    expect(state()).toBe('internal');
+    // The echo of the FIRST toggle (shared) lands after the second click.
+    const threads = buildCommentThreads([
+      comment({ id: 'c-vis', versionId: V2, body: 'Tighten the cut', visibility: 'shared' }),
+    ]);
+    rerender(
+      <CommentThreads
+        brandId="brand-1"
+        threads={threads}
+        pinLabels={new Map()}
+        otherVersionThreads={[]}
+        otherVersionCommentCount={0}
+        versionLabels={new Map()}
+        viewingHead
+        onViewVersion={() => {}}
+        selectedId={null}
+        onSelectThread={() => {}}
+        currentUserId="user-1"
+        pendingIds={new Set()}
+        posting={false}
+        loading={false}
+        onReply={() => {}}
+        onResolve={() => {}}
+        onDelete={() => {}}
+      />,
+    );
+    expect(state()).toBe('internal');
+  });
+
   it('never offers to hide a share-link reviewer’s comment', () => {
     const { container } = renderVisibility('external');
     expect(container.querySelector('[data-testid=comment-visibility-switch]')).toBeNull();

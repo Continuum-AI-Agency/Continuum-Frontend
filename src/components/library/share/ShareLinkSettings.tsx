@@ -85,6 +85,15 @@ export function ShareLinkSettings({
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [allowDownload, setAllowDownload] = useState(link.policy.allowDownload);
+  const [allowComments, setAllowComments] = useState(link.policy.allowComments);
+  const [allowApproval, setAllowApproval] = useState(link.policy.allowApproval);
+  // yyyy-mm-dd, or '' for no expiry.
+  // The last saved expiry day: an untouched field is not re-sent, a changed one is.
+  const [savedExpiry, setSavedExpiry] = useState(link.expiresAt ? link.expiresAt.slice(0, 10) : '');
+  const [expiryDate, setExpiryDate] = useState(savedExpiry);
+  const [newPasscode, setNewPasscode] = useState('');
+  const [removePasscode, setRemovePasscode] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -128,8 +137,23 @@ export function ShareLinkSettings({
         branding,
         watermark,
         featuredFieldId,
+        allowDownload,
+        allowComments,
+        allowApproval,
+        // Untouched, the exact expiry stays; a picked day runs to its end (UTC).
+        ...(expiryDate !== savedExpiry
+          ? { expiresAt: expiryDate ? new Date(`${expiryDate}T23:59:59.000Z`).toISOString() : null }
+          : {}),
+        ...(newPasscode.trim()
+          ? { passcode: newPasscode.trim() }
+          : removePasscode
+            ? { passcode: null }
+            : {}),
         ...(order.length > 1 ? { assetOrder: order.map((member) => member.assetId) } : {}),
       });
+      setNewPasscode('');
+      setRemovePasscode(false);
+      setSavedExpiry(expiryDate);
       setOrder(saved.members);
       onSaved(saved);
       setMessage('Saved');
@@ -372,6 +396,65 @@ export function ShareLinkSettings({
               Burn it into downloaded images and videos
             </label>
           </>
+        ) : null}
+      </Section>
+
+      <Section title="Access">
+        <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+          {(
+            [
+              ['allowDownload', 'Downloads', allowDownload, setAllowDownload],
+              ['allowComments', 'Comments', allowComments, setAllowComments],
+              ['allowApproval', 'Approval', allowApproval, setAllowApproval],
+            ] as const
+          ).map(([name, label, checked, set]) => (
+            <label key={name} className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name={name}
+                checked={checked}
+                onChange={(event) => set(event.target.checked)}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <label className={LABEL}>
+            Expires (blank = never)
+            <input
+              type="date"
+              name="expiresOn"
+              className={FIELD}
+              value={expiryDate}
+              onChange={(event) => setExpiryDate(event.target.value)}
+            />
+          </label>
+          <label className={LABEL}>
+            {link.policy.hasPasscode ? 'New passcode' : 'Passcode'}
+            <input
+              type="password"
+              name="newPasscode"
+              autoComplete="new-password"
+              minLength={4}
+              maxLength={128}
+              className={FIELD}
+              value={newPasscode}
+              placeholder={link.policy.hasPasscode ? 'Set to rotate' : 'Optional'}
+              onChange={(event) => setNewPasscode(event.target.value)}
+            />
+          </label>
+        </div>
+        {link.policy.hasPasscode ? (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              name="removePasscode"
+              checked={removePasscode}
+              onChange={(event) => setRemovePasscode(event.target.checked)}
+            />
+            Remove the passcode (changing or removing it signs current reviewers out)
+          </label>
         ) : null}
       </Section>
 

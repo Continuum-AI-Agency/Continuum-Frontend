@@ -62,6 +62,13 @@ describe('asset rendition contracts', () => {
   it('accepts continuity frames without surfacing them as Library previews', () => {
     expect(assetRenditionRoleSchema.parse('first_frame')).toBe('first_frame');
     expect(assetRenditionRoleSchema.parse('last_frame')).toBe('last_frame');
+    // Search stills sampled by the clip's length: frame_1 … frame_999, nothing else.
+    for (const role of ['frame_1', 'frame_7', 'frame_120', 'frame_999']) {
+      expect(assetRenditionRoleSchema.parse(role)).toBe(role);
+    }
+    for (const role of ['frame_0', 'frame_1000', 'frame_01', 'frame_x']) {
+      expect(assetRenditionRoleSchema.safeParse(role).success).toBe(false);
+    }
     const continuityFrames = [
       assetRenditionSchema.parse({
         ...base,

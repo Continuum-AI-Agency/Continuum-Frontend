@@ -38,11 +38,21 @@ import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/toast-imperative';
-import { COMMENT_EXPORT_FORMATS, type CommentExportFormat } from '@/lib/library/commentExport';
+import {
+  COMMENT_EXPORT_FORMATS,
+  type CommentExportFormat,
+  TIMELINE_STARTS,
+  type TimelineStart,
+} from '@/lib/library/commentExport';
 import type { CommentThread, CommentThreadGroups } from '@/lib/library/comments';
 import {
   type CommentAttachmentPreview,
@@ -129,6 +139,11 @@ function VisibilityMark({ visibility }: { visibility: CommentVisibility }) {
     />
   );
 }
+
+const TIMELINE_LABELS: Record<TimelineStart, string> = {
+  hour: '01:00:00:00',
+  source: 'Clip timecode',
+};
 
 const EXPORT_LABELS: Record<CommentExportFormat, string> = {
   csv: 'CSV (spreadsheet)',
@@ -251,8 +266,11 @@ function ThreadCard({
   const rootVisibility = visibilityOverride ?? thread.root.visibility ?? 'internal';
   const root = { ...thread.root, visibility: rootVisibility };
 
+  // Drop the optimistic value once the server confirms it — not on any change: a
+  // late realtime echo of an EARLIER toggle would otherwise show the stale state,
+  // and the next click would write the opposite of what the reviewer sees.
   useEffect(() => {
-    setVisibilityOverride(null);
+    setVisibilityOverride((current) => (current === thread.root.visibility ? null : current));
   }, [thread.root.visibility]);
 
   const toggleVisibility = () => {
@@ -274,6 +292,7 @@ function ThreadCard({
   return (
     <div
       ref={cardRef}
+      data-thread-id={thread.root.id}
       className={cn(
         'group rounded-lg border p-2.5 transition-colors',
         selected ? 'border-primary/50 bg-primary/5' : 'border-border/60 bg-card',
@@ -364,6 +383,7 @@ function ThreadCard({
             variant="ghost"
             size="sm"
             data-testid="comment-visibility-switch"
+            data-visibility-state={rootVisibility}
             className="h-6 px-1.5 text-2xs text-muted-foreground"
             onClick={toggleVisibility}
             title={
@@ -469,6 +489,7 @@ export function CommentThreads({
 }: Props) {
   const [showResolved, setShowResolved] = useState(false);
   const [showOtherVersions, setShowOtherVersions] = useState(false);
+  const [timeline, setTimeline] = useState<TimelineStart>('hour');
 
   // The version on stage, read off its own threads (a legacy row with no pin
   // is the head's, which the export and timing routes resolve when none is named).
@@ -563,6 +584,25 @@ export function CommentThreads({
               }
             />
             <DropdownMenuContent align="end">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Timeline starts at</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={timeline}
+                  onValueChange={(value) => setTimeline(value as TimelineStart)}
+                >
+                  {TIMELINE_STARTS.map((start) => (
+                    <DropdownMenuRadioItem
+                      key={start}
+                      value={start}
+                      className="text-xs"
+                      data-timeline-start={start}
+                    >
+                      {TIMELINE_LABELS[start]}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
               {COMMENT_EXPORT_FORMATS.map((format) => (
                 <DropdownMenuItem
                   key={format}
@@ -575,6 +615,7 @@ export function CommentThreads({
                         assetId: timedRoot.assetId,
                         versionId: timedRoot.versionId ?? null,
                         format,
+                        timeline,
                       }),
                     ).catch((error: unknown) =>
                       toast.error(`Export failed · ${(error as Error).message}`),

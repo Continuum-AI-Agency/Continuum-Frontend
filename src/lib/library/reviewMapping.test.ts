@@ -9,6 +9,8 @@ const ROW: ReviewEventRow = {
   to_status: 'in_review',
   actor: 'user-1',
   note: 'ready for review',
+  version_id: 'version-2',
+  to_state_id: 'state-legal',
   created_at: '2026-07-10T00:00:00.000Z',
 };
 
@@ -24,6 +26,8 @@ describe('reviewEventRowToContract', () => {
       actor: 'user-1',
       actorName: 'duane@continuumai.agency',
       note: 'ready for review',
+      versionId: 'version-2',
+      toStateId: 'state-legal',
       createdAt: '2026-07-10T00:00:00.000Z',
     });
   });

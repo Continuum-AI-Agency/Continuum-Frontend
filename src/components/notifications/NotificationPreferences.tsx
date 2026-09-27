@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from '@/components/ui/toast-imperative';
+import { subscribeThisBrowser } from '@/lib/notifications/pushSubscribe';
 
 const KINDS: { kind: string; label: string }[] = [
   { kind: 'asset_assigned', label: 'Assigned to me' },
@@ -188,21 +189,12 @@ function PushOnThisBrowser() {
     if (!publicKey) return;
     setState('working');
     try {
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') throw new Error('Notifications are blocked for this site');
-      const registration = await navigator.serviceWorker.register('/push-sw.js');
-      await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        // The Push API takes the VAPID key as base64url text directly.
-        applicationServerKey: publicKey,
+      await subscribeThisBrowser({
+        publicKey,
+        requestPermission: () => Notification.requestPermission(),
+        serviceWorker: navigator.serviceWorker,
+        fetch: (input, init) => fetch(input, init),
       });
-      const response = await fetch('/api/notifications/push-subscriptions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(subscription.toJSON()),
-      });
-      if (!response.ok) throw new Error(`Saving the subscription failed (${response.status})`);
       setState('on');
       toast.success('Push notifications are on for this browser');
     } catch (error) {

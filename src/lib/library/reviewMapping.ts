@@ -14,11 +14,13 @@ export type ReviewEventRow = {
   to_status: string;
   actor: string | null;
   note: string | null;
+  version_id: string | null;
+  to_state_id: string | null;
   created_at: string;
 };
 
 export const REVIEW_EVENT_SELECT =
-  'id, brand_id, asset_id, from_status, to_status, actor, note, created_at';
+  'id, brand_id, asset_id, from_status, to_status, actor, note, version_id, to_state_id, created_at';
 
 export function reviewEventRowToContract(
   row: ReviewEventRow,
@@ -33,6 +35,8 @@ export function reviewEventRowToContract(
     actor: row.actor,
     actorName,
     note: row.note,
+    versionId: row.version_id ?? null,
+    toStateId: row.to_state_id ?? null,
     createdAt: row.created_at,
   });
 }

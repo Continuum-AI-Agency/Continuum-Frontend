@@ -10,7 +10,32 @@
 
 const TUS_VERSION = '1.0.0';
 export const TUS_CHUNK_SIZE_BYTES = 6 * 1024 * 1024;
-const RETRY_DELAYS_MS = [250, 1_000, 3_000] as const;
+/**
+ * How long a transfer keeps retrying through an outage (a dropped Wi-Fi, a proxy reset)
+ * before it gives up: long enough to ride out a network change, measured from the start of
+ * the outage and reset whenever bytes move again.
+ */
+export const TRANSFER_RETRY_BUDGET_MS = 60_000;
+
+/** A refusal no retry can fix (a 4xx that is not about timing): fail at once. */
+class PermanentTransferError extends Error {}
+
+const TRANSIENT_STATUSES = new Set([408, 409, 423, 429]);
+
+function httpFailure(what: string, status: number): Error {
+  const message = `${what} (${status})`;
+  return status >= 400 && status < 500 && !TRANSIENT_STATUSES.has(status)
+    ? new PermanentTransferError(message)
+    : new Error(message);
+}
+
+/** Exponential backoff (250 ms doubling, capped at 8 s) until the outage outlasts the budget. */
+function nextRetryDelay(failures: number, failingSince: number, budgetMs: number): number | null {
+  const delay = Math.min(250 * 2 ** failures, 8_000);
+  return Date.now() - failingSince + delay > budgetMs ? null : delay;
+}
+
+const isAbort = (error: unknown) => (error as { name?: string }).name === 'AbortError';
 
 export type ResumableUploadProgress = {
   uploadedBytes: number;
@@ -35,7 +60,11 @@ export type ResumableStorageUploadParams = {
   signal?: AbortSignal;
   onUploadUrl?: (url: string) => void;
   onProgress?: (progress: ResumableUploadProgress) => void;
+  /** After a failed chunk: the offset Storage says the upload continues from. */
+  onResume?: (offset: number) => void;
   fetchImpl?: typeof fetch;
+  /** Default TRANSFER_RETRY_BUDGET_MS. */
+  retryBudgetMs?: number;
 };
 
 function encodeMetadataValue(value: string): string {
@@ -112,7 +141,7 @@ async function readOffset(
     headers: { ...authHeaders(params), 'Tus-Resumable': TUS_VERSION },
     signal: params.signal,
   });
-  if (!response.ok) throw new Error(`resumable upload resume failed (${response.status})`);
+  if (!response.ok) throw httpFailure('resumable upload resume failed', response.status);
   const raw = response.headers.get('upload-offset');
   const offset = raw === null ? Number.NaN : Number(raw);
   if (!Number.isSafeInteger(offset) || offset < 0 || offset > params.file.size) {
@@ -139,7 +168,7 @@ async function patchChunk(
     body: params.file.slice(offset, end),
     signal: params.signal,
   });
-  if (!response.ok) throw new Error(`resumable upload chunk failed (${response.status})`);
+  if (!response.ok) throw httpFailure('resumable upload chunk failed', response.status);
   const nextRaw = response.headers.get('upload-offset');
   const nextOffset = nextRaw === null ? end : Number(nextRaw);
   if (!Number.isSafeInteger(nextOffset) || nextOffset <= offset || nextOffset > params.file.size) {
@@ -189,26 +218,33 @@ export async function resumableStorageUpload(
   }
   reportProgress(params, offset);
 
+  const budget = params.retryBudgetMs ?? TRANSFER_RETRY_BUDGET_MS;
+  let failures = 0;
+  let failingSince = 0;
   while (offset < params.file.size) {
     throwIfAborted(params.signal);
-    let lastError: unknown;
-    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      offset = await patchChunk(uploadUrl, offset, params, fetchImpl);
+      reportProgress(params, offset);
+      failures = 0;
+    } catch (error) {
+      if (isAbort(error) || error instanceof PermanentTransferError) throw error;
+      if (failures === 0) failingSince = Date.now();
+      const delay = nextRetryDelay(failures, failingSince, budget);
+      failures += 1;
+      if (delay === null) throw error;
+      await wait(delay, params.signal);
+      // Storage's own offset decides where to continue; if it cannot be read yet, the next
+      // PATCH fails and lands back here.
       try {
-        offset = await patchChunk(uploadUrl, offset, params, fetchImpl);
-        reportProgress(params, offset);
-        lastError = null;
-        break;
-      } catch (error) {
-        if ((error as { name?: string }).name === 'AbortError') throw error;
-        lastError = error;
-        const delay = RETRY_DELAYS_MS[attempt];
-        if (delay === undefined) break;
-        await wait(delay, params.signal);
         offset = await readOffset(uploadUrl, params, fetchImpl);
+        params.onResume?.(offset);
         reportProgress(params, offset);
+      } catch (offsetError) {
+        if (isAbort(offsetError) || offsetError instanceof PermanentTransferError)
+          throw offsetError;
       }
     }
-    if (lastError) throw lastError;
   }
 
   return { uploadUrl };
@@ -235,7 +271,11 @@ export type ParallelRangedDownloadParams = {
   probeMs?: number;
   signal?: AbortSignal;
   onProgress?: (downloadedBytes: number) => void;
+  /** After a dropped range: the byte it continues from. */
+  onResume?: (offset: number) => void;
   fetchImpl?: typeof fetch;
+  /** Default TRANSFER_RETRY_BUDGET_MS, per range, reset whenever that range makes progress. */
+  retryBudgetMs?: number;
 };
 
 /** The trial second range must beat one stream by this much before any more are added. */
@@ -318,15 +358,21 @@ export async function parallelRangedDownload(
       await previous;
     };
 
-    for (let attempt = 0; segment.cursor <= segment.end; attempt += 1) {
+    const budget = params.retryBudgetMs ?? TRANSFER_RETRY_BUDGET_MS;
+    let failures = 0;
+    let failingSince = 0;
+    while (segment.cursor <= segment.end) {
       throwIfAborted(params.signal);
+      const cursorBefore = segment.cursor;
       try {
         const response = await fetchImpl(params.url, {
           headers: { Range: `bytes=${segment.cursor}-${segment.end}` },
           signal: params.signal,
         });
         if (response.status !== 206 || !response.body) {
-          throw new Error(`ranged download expected 206, got ${response.status}`);
+          throw response.status >= 500 || TRANSIENT_STATUSES.has(response.status)
+            ? new Error(`ranged download failed (${response.status})`)
+            : new PermanentTransferError(`ranged download expected 206, got ${response.status}`);
         }
         const reader = response.body.getReader();
         while (segment.cursor <= segment.end) {
@@ -349,11 +395,15 @@ export async function parallelRangedDownload(
         await reader.cancel().catch(() => undefined);
         if (segment.cursor <= segment.end) throw new Error('ranged download ended early');
       } catch (error) {
-        if ((error as { name?: string }).name === 'AbortError') throw error;
-        const delay = RETRY_DELAYS_MS[attempt];
-        if (delay === undefined) throw error;
+        if (isAbort(error) || error instanceof PermanentTransferError) throw error;
+        if (segment.cursor > cursorBefore) failures = 0;
+        if (failures === 0) failingSince = Date.now();
+        const delay = nextRetryDelay(failures, failingSince, budget);
+        failures += 1;
+        if (delay === null) throw error;
         await flush();
         await wait(delay, params.signal);
+        params.onResume?.(segment.cursor);
       }
     }
     await flush();

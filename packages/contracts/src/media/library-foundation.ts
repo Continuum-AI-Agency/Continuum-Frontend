@@ -5,7 +5,7 @@
 // imports creative-operations.ts — putting them there would close a cycle.
 
 import { z } from 'zod';
-import { reviewStateLabelSchema, reviewStateLabelsSchema } from './review';
+import { reviewCustomStateSchema, reviewStateLabelSchema, reviewStateLabelsSchema } from './review';
 import { shareLinkBrandingSchema, shareLinkLayoutSchema, shareLinkWatermarkSchema } from './share';
 
 const uuid = () => z.string().uuid();
@@ -131,7 +131,10 @@ export const setReviewStateLabelsOperationSchema = z
 export type SetReviewStateLabelsOperation = z.infer<typeof setReviewStateLabelsOperationSchema>;
 
 export const setReviewStateLabelsResultSchema = z
-  .object({ labels: z.array(reviewStateLabelSchema) })
+  .object({
+    labels: z.array(reviewStateLabelSchema),
+    customStates: z.array(reviewCustomStateSchema).default([]),
+  })
   .strict();
 export type SetReviewStateLabelsResult = z.infer<typeof setReviewStateLabelsResultSchema>;
 
