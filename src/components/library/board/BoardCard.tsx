@@ -91,6 +91,8 @@ export function BoardCard({
   return (
     <div
       ref={setNodeRef}
+      data-testid="board-card"
+      data-asset-id={asset.id}
       style={{ transform: CSS.Translate.toString(transform) }}
       className={cn(
         'group relative block w-full touch-none rounded-md outline-none',

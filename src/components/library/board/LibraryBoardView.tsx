@@ -1,9 +1,10 @@
 'use client';
 
-// Kanban board over ONE single-select dimension, with drag-between-lanes. The
+// Kanban board over ONE one-value dimension, with drag-between-lanes. The
 // dimension is the viewer's choice: review_status (the default — Unsorted →
 // draft → in review → needs changes → approved) or any of the brand's custom
-// single-select fields.
+// single-select, status or user fields. Inside a collection the choice is saved
+// to the collection's view_config.
 //
 // The two are NOT the same write, and the board must never confuse them. A drop
 // on a review lane posts an audited review TRANSITION; a drop on a custom-field
@@ -12,16 +13,15 @@
 // dispatches on a decoded target rather than on a guess about what the string
 // meant.
 //
-// v1 fetches the brand's assets from the existing listing route and groups them
-// client-side. Grouping by a custom field additionally needs each asset's value
-// for that field: the listing route can filter by a field, so one request per
-// option builds the id → option map, and every asset it does not name is (by
-// definition) unset.
+// The board fetches the brand's assets from the existing listing route and groups
+// them client-side. A custom-field grouping also reads every asset's value for that
+// field in one request; an asset it does not name is (by definition) unset.
 
 import {
+  type CollectionViewConfig,
   type CustomField,
   type CustomFieldFilter,
-  customFieldChoiceOptions,
+  collectionViewConfigSchema,
   type MediaAsset,
 } from '@continuum/contracts';
 import {
@@ -43,10 +43,17 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast-imperative';
-import { serializeFieldFilters, setAssetFieldValue } from '@/lib/library/customFields';
+import { updateLibraryCollectionOperation } from '@/lib/library/creativeOperations';
+import {
+  listFieldValuesByAsset,
+  serializeFieldFilters,
+  setAssetFieldValue,
+} from '@/lib/library/customFields';
 import { isGroupableField } from '@/lib/library/customFieldValue';
 import { transitionReviewStatus } from '@/lib/library/review';
 import { normalizeReviewStatus, REVIEW_STATUS_ORDER } from '@/lib/library/reviewStatus';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { useMentionTargets } from '../detail/useMentionTargets';
 import { BoardCardContent } from './BoardCard';
 import { BoardColumn } from './BoardColumn';
 import { type BoardGrouping, buildBoardLanes, decodeLaneId } from './boardGrouping';
@@ -128,27 +135,32 @@ async function fetchBoardAssets(
   return collected;
 }
 
-// assetId → the option it holds for `field`. One filtered listing per option:
-// the route already knows how to answer "which assets hold this option", and an
-// asset absent from every answer holds none.
+// assetId → the lane value it holds for `field` (option id, status id, or user id),
+// in one read of the field's values. An asset the map does not name is unset.
 async function fetchOptionByAssetId(
   brandId: string,
-  filters: LibraryBoardFilters,
   field: CustomField,
 ): Promise<Map<string, string>> {
-  const perOption = await Promise.all(
-    customFieldChoiceOptions(field).map(async (option) => {
-      const assets = await fetchBoardAssets(brandId, filters, [
-        { fieldId: field.id, operator: 'any_of', values: [option.id] },
-      ]);
-      return [option.id, assets] as const;
-    }),
-  );
+  const values = await listFieldValuesByAsset({ brandId, fieldId: field.id });
   const optionByAssetId = new Map<string, string>();
-  for (const [optionId, assets] of perOption) {
-    for (const asset of assets) optionByAssetId.set(asset.id, optionId);
+  for (const [assetId, value] of values) {
+    if (typeof value === 'string' && value.length > 0) optionByAssetId.set(assetId, value);
   }
   return optionByAssetId;
+}
+
+async function fetchCollectionViewConfig(
+  brandId: string,
+  collectionId: string,
+): Promise<CollectionViewConfig | null> {
+  const response = await fetch(`/api/library/collections?brandId=${encodeURIComponent(brandId)}`);
+  if (!response.ok) return null;
+  const payload = (await response.json()) as {
+    collections?: { id: string; viewConfig?: unknown }[];
+  };
+  const collection = payload.collections?.find((candidate) => candidate.id === collectionId);
+  const parsed = collectionViewConfigSchema.safeParse(collection?.viewConfig ?? {});
+  return parsed.success ? parsed.data : null;
 }
 
 function BoardSkeleton() {
@@ -238,7 +250,7 @@ export function LibraryBoardView({
       return;
     }
     let cancelled = false;
-    fetchOptionByAssetId(brandId, filters, groupField)
+    fetchOptionByAssetId(brandId, groupField)
       .then((map) => {
         if (!cancelled) setOptionByAssetId(map);
       })
@@ -251,10 +263,49 @@ export function LibraryBoardView({
     // biome-ignore lint/correctness/useExhaustiveDependencies: filterKey serializes filters
   }, [brandId, filterKey, refreshKey, groupField]);
 
+  const members = useMentionTargets(groupField?.type === 'user' ? brandId : null);
   const lanes = useMemo(
-    () => buildBoardLanes({ grouping, assets: assets ?? [], optionByAssetId }),
-    [grouping, assets, optionByAssetId],
+    () =>
+      buildBoardLanes({ grouping, assets: assets ?? [], optionByAssetId, members: members ?? [] }),
+    [grouping, assets, optionByAssetId, members],
   );
+
+  // Inside a collection the grouping is the collection's, not the viewer's: it is
+  // read from view_config when the collection opens and written back on change, so
+  // everyone who opens the board sees the same lanes.
+  const collectionId = filters.collectionId;
+  const [viewConfig, setViewConfig] = useState<CollectionViewConfig | null>(null);
+  useEffect(() => {
+    setViewConfig(null);
+    if (!collectionId) return;
+    let cancelled = false;
+    fetchCollectionViewConfig(brandId, collectionId).then((config) => {
+      if (cancelled || !config) return;
+      setViewConfig(config);
+      if (config.groupBy && config.groupBy !== groupBy) onGroupByChange(config.groupBy);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Read once per collection; groupBy changes are written, not re-read.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: see above
+  }, [brandId, collectionId]);
+
+  const chooseGroupBy = (next: string) => {
+    onGroupByChange(next);
+    if (!collectionId || !viewConfig || viewConfig.groupBy === next) return;
+    const nextConfig = { ...viewConfig, groupBy: next };
+    setViewConfig(nextConfig);
+    updateLibraryCollectionOperation(createSupabaseBrowserClient(), {
+      brandId,
+      collectionId,
+      viewConfig: nextConfig,
+    }).catch((err: unknown) => {
+      // A system view (or someone else's) cannot be re-configured; the board still
+      // regroups for this viewer.
+      console.warn('[LibraryBoardView] could not save the grouping', err);
+    });
+  };
 
   const setLocalOption = useCallback((assetId: string, optionId: string | null) => {
     setOptionByAssetId((prev) => {
@@ -327,7 +378,7 @@ export function LibraryBoardView({
         <GroupByPicker
           label={groupField?.name ?? REVIEW_GROUPING_LABEL}
           fields={groupableFields}
-          onSelect={(fieldId) => onGroupByChange(fieldId ?? 'review_status')}
+          onSelect={(fieldId) => chooseGroupBy(fieldId ?? 'review_status')}
         />
         {loadError ? <p className="text-2xs text-destructive">{loadError}</p> : null}
       </div>

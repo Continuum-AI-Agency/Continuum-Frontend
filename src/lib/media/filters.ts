@@ -39,6 +39,8 @@ export const MEDIA_SOURCES: FilterOption<MediaSource>[] = [
   { value: 'reel', label: 'Reels' },
   { value: 'backfill', label: 'Imported' },
   { value: 'figma', label: 'Figma' },
+  { value: 'forge', label: 'Forge renders' },
+  { value: 'goal_artifact', label: 'Goal artifacts' },
 ];
 
 export const SOURCE_FILTERS: FilterOption<SourceFilterValue>[] = [
@@ -61,6 +63,7 @@ export const CREATION_METHOD_GROUPS: FilterOption<MediaSource>[] = [
   { value: 'reel', label: 'Reel' },
   { value: 'backfill', label: 'Imported' },
   { value: 'figma', label: 'Figma' },
+  { value: 'forge', label: 'Forge' },
 ];
 
 // Per-source display label keyed by source value. Derived from MEDIA_SOURCES so
@@ -74,6 +77,7 @@ export const KIND_FILTERS: FilterOption<KindFilterValue>[] = [
   { value: 'image', label: 'Images' },
   { value: 'video', label: 'Videos' },
   { value: 'file', label: 'Project files' },
+  { value: 'audio', label: 'Audio' },
 ];
 
 export const LIBRARY_SORT_OPTIONS: FilterOption<LibrarySort>[] = [
@@ -126,13 +130,13 @@ export type LibraryQueryInput = {
 };
 
 export function mediaTypeToKind(mediaType: LibraryMediaType): MediaKind | null {
-  if (mediaType === 'image' || mediaType === 'video') return mediaType;
+  if (mediaType === 'image' || mediaType === 'video' || mediaType === 'audio') return mediaType;
   if (mediaType === 'project_file') return 'file';
   return null;
 }
 
 export function kindToMediaType(kind: MediaKind | null | undefined): LibraryMediaType {
-  if (kind === 'image' || kind === 'video') return kind;
+  if (kind === 'image' || kind === 'video' || kind === 'audio') return kind;
   if (kind === 'file') return 'project_file';
   return 'all';
 }
