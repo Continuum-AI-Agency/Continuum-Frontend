@@ -42,6 +42,7 @@ import { FormatPreview, previewFormats } from '@/components/forge/FormatPreview'
 import { LineagePanel } from '@/components/forge/LineagePanel';
 import { MappingQuestions } from '@/components/forge/MappingQuestions';
 import { OutputSettingsPanel } from '@/components/forge/OutputSettingsPanel';
+import { CommentCount, OpenInLibrary, useLibraryState } from '@/components/forge/libraryState';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
@@ -468,6 +469,8 @@ export function TemplateDetail({
     staleTime: 60_000,
     select: (response) => response.items.filter((job) => job.templateKey === templateKey),
   });
+  // The template is a Library asset too: its thread and versions live there.
+  const library = useLibraryState(brandId, [assetId]).get(assetId);
   const { data: setCount } = useQuery({
     queryKey: forgeQueryKeys.renderSetList(brandId, templateKey ?? undefined),
     queryFn: () => apiRendersApi.listRenderSets(brandId, templateKey ?? undefined),
@@ -909,6 +912,17 @@ export function TemplateDetail({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-2 text-xs">
+            {library ? (
+              <>
+                <CommentCount count={library.commentCount} />
+                <span className="tabular-nums text-muted-foreground">
+                  {library.versionCount} {library.versionCount === 1 ? 'version' : 'versions'}
+                </span>
+              </>
+            ) : null}
+            <OpenInLibrary brandId={brandId} assetId={assetId} />
+          </span>
           {onRemove ? (
             <Button
               type="button"

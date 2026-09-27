@@ -8,7 +8,7 @@
  * row logic has its own test, the tray its own, and the Render ledger (RenderJobsGrid) its own.
  */
 
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { useEffect } from 'react';
 
 const TEMPLATE = {
@@ -867,6 +867,35 @@ describe('RenderRequestsGrid', () => {
     );
     expect(await screen.findByDisplayValue('Older row')).toBeTruthy();
     expect(screen.queryByDisplayValue('Newest row')).toBeNull();
+  });
+
+  test('an intent naming a row brings it into view, and with rerender selects it alone for Render', async () => {
+    withSavedSets();
+    const scrolled: string[] = [];
+    const scrollIntoView = spyOn(Element.prototype, 'scrollIntoView').mockImplementation(
+      function (this: Element) {
+        scrolled.push((this as HTMLElement).dataset.rowId ?? '');
+      },
+    );
+    try {
+      const { rerender } = render(<RenderRequestsGrid brandId={BRAND} />);
+      expect(await screen.findByDisplayValue('Newest row')).toBeTruthy();
+
+      const rowId = OLDER.rows[0]!.id;
+      rerender(
+        <RenderRequestsGrid
+          brandId={BRAND}
+          intent={{ templateKey: '133', renderSetId: OLDER.id, rowId, rerender: true }}
+        />,
+      );
+      expect(await screen.findByDisplayValue('Older row')).toBeTruthy();
+      await waitFor(() => expect(screen.getByText('1 selected')).toBeTruthy());
+      const [box] = screen.getAllByLabelText<HTMLButtonElement>('Select row');
+      expect(box?.getAttribute('aria-checked')).toBe('true');
+      expect(scrolled).toContain(rowId);
+    } finally {
+      scrollIntoView.mockRestore();
+    }
   });
 
   test('a new intent saves the edits on screen, then loads its set, and is handed back', async () => {

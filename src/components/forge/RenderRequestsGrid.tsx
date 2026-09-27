@@ -339,6 +339,10 @@ export type ForgeRenderIntent = {
    * which could list heads but never aim a render at one, so every name on it was decoration.
    */
   templateRef?: string;
+  /** A row of `renderSetId` to bring into view — a Library asset's link back to where it came from. */
+  rowId?: string;
+  /** Select that row alone, so Render (and its review) is the next step. Never renders by itself. */
+  rerender?: boolean;
 };
 
 type NameRequest = {
@@ -1301,6 +1305,12 @@ export function RenderRequestsGrid({
 
   // The head this grid is pinned to, or null for the template's live pointer.
   const [templateRef, setTemplateRef] = useState<string | null>(null);
+  // A row an intent named, held until its set's rows are on screen.
+  const [focusRow, setFocusRow] = useState<{
+    setId: string | undefined;
+    id: string;
+    select: boolean;
+  } | null>(null);
 
   // An intent is an event, taken once and handed back. Like every other way of replacing the rows
   // it saves or asks first; one for what is already open changes nothing.
@@ -1316,11 +1326,25 @@ export function RenderRequestsGrid({
       intent.templateKey === templateKey &&
       (!intent.renderSetId || intent.renderSetId === activeSet?.id);
     if (intent.draftWithAi) setDraftFor(intent.templateKey);
+    setFocusRow(
+      intent.rowId
+        ? { setId: intent.renderSetId, id: intent.rowId, select: intent.rerender === true }
+        : null,
+    );
     if (!alreadyOpen)
       confirmDiscard(() =>
         setSelection({ templateKey: intent.templateKey, renderSetId: intent.renderSetId }),
       );
   }, [intent]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: showRow reads the grid as it is now.
+  useEffect(() => {
+    if (!focusRow || (focusRow.setId && activeSet?.id !== focusRow.setId)) return;
+    if (!rows.some((row) => row.id === focusRow.id)) return;
+    setFocusRow(null);
+    if (focusRow.select) setRowSelection({ [focusRow.id]: true });
+    showRow(focusRow.id);
+  }, [rows, activeSet, focusRow]);
 
   // The draft opens once the template it was asked for is on screen, not over the previous one.
   useEffect(() => {
