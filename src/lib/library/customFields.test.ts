@@ -6,6 +6,7 @@ import {
   MAX_FIELD_TEXT_LENGTH,
   matchesFieldFilter,
   parseFieldFiltersParam,
+  resolveViewerToken,
   serializeFieldFilters,
   validateFieldValue,
 } from './customFields';
@@ -210,5 +211,42 @@ describe('parseFieldFiltersParam', () => {
 
   it('rejects an unknown operator', () => {
     expect(parseFieldFiltersParam('[{"fieldId":"f1","operator":"greater_than"}]').ok).toBe(false);
+  });
+});
+
+describe('matchesFieldFilter — the non-string types', () => {
+  it('matches numbers, booleans and ratings through their string form', () => {
+    expect(matchesFieldFilter(4, { fieldId: 'f', operator: 'any_of', values: ['4', '5'] })).toBe(
+      true,
+    );
+    expect(matchesFieldFilter(3, { fieldId: 'f', operator: 'any_of', values: ['4', '5'] })).toBe(
+      false,
+    );
+    expect(matchesFieldFilter(12.5, { fieldId: 'f', operator: 'is', values: ['12.5'] })).toBe(true);
+    expect(matchesFieldFilter(false, { fieldId: 'f', operator: 'is', values: ['false'] })).toBe(
+      true,
+    );
+    expect(matchesFieldFilter(true, { fieldId: 'f', operator: 'is', values: ['false'] })).toBe(
+      false,
+    );
+  });
+
+  it('does not treat an unchecked checkbox as empty', () => {
+    expect(matchesFieldFilter(false, { fieldId: 'f', operator: 'is_empty', values: [] })).toBe(
+      false,
+    );
+  });
+});
+
+describe('resolveViewerToken', () => {
+  it('replaces @me with the viewer and leaves other values alone', () => {
+    const filters: CustomFieldFilter[] = [
+      { fieldId: 'assignee', operator: 'any_of', values: ['@me', 'someone'] },
+      { fieldId: 'stage', operator: 'any_of', values: ['done'] },
+    ];
+    expect(resolveViewerToken(filters, 'viewer-1')).toEqual([
+      { fieldId: 'assignee', operator: 'any_of', values: ['viewer-1', 'someone'] },
+      { fieldId: 'stage', operator: 'any_of', values: ['done'] },
+    ]);
   });
 });
