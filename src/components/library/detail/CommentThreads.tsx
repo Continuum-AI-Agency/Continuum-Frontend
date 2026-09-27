@@ -10,27 +10,52 @@
 // crop that is no longer on screen and their timecode addresses a cut that no
 // longer exists, so they carry a version chip and a way to go look at the
 // version they were written on instead of a pin that would point at nothing.
+//
+// Review metadata lives here too: a lock marks a comment internal (never shown
+// on a share link), a globe marks one shared with share recipients, and either
+// can be flipped in place; attachments preview inline; and the timed comments of
+// the version on stage export as editing-app markers.
 
-import type { MediaComment } from '@continuum/contracts';
+import type { CommentVisibility, MediaComment } from '@continuum/contracts';
 import { splitCommentBodyForRender } from '@continuum/contracts';
 import {
   Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Download,
+  FileText,
+  Globe,
   History,
   Link2,
+  Lock,
   RotateCcw,
   Trash2,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { toast } from '@/components/ui/toast-imperative';
+import { COMMENT_EXPORT_FORMATS, type CommentExportFormat } from '@/lib/library/commentExport';
 import type { CommentThread, CommentThreadGroups } from '@/lib/library/comments';
-import { displayNameFromEmail, initialsFor } from '@/lib/library/comments';
+import {
+  type CommentAttachmentPreview,
+  commentExportHref,
+  displayNameFromEmail,
+  downloadFromRoute,
+  initialsFor,
+  listCommentAttachmentPreviews,
+  patchCommentMetadata,
+} from '@/lib/library/comments';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
-import { CommentComposer } from './CommentComposer';
+import { CommentComposer, type ComposerExtras } from './CommentComposer';
 
 type Props = {
   /** Brand context enables @mention autocomplete in reply composers. */
@@ -52,7 +77,7 @@ type Props = {
   pendingIds: ReadonlySet<string>;
   posting: boolean;
   loading: boolean;
-  onReply: (parentId: string, body: string) => void;
+  onReply: (parentId: string, body: string, extras?: ComposerExtras) => void;
   onResolve: (commentId: string, resolved: boolean) => void;
   onDelete: (commentId: string) => void;
   commentHref?: (comment: MediaComment) => string;
@@ -82,24 +107,123 @@ function CommentBodyText({ body }: { body: string }) {
   );
 }
 
+function VisibilityMark({ visibility }: { visibility: CommentVisibility }) {
+  if (visibility === 'internal') {
+    return (
+      <Lock
+        data-testid="comment-internal-lock"
+        aria-label="Internal — hidden from share links"
+        className="size-3 shrink-0 text-muted-foreground"
+      />
+    );
+  }
+  return (
+    <Globe
+      data-testid="comment-shared-mark"
+      aria-label={visibility === 'external' ? 'From a share-link reviewer' : 'Shown on share links'}
+      className="size-3 shrink-0 text-primary"
+    />
+  );
+}
+
+const EXPORT_LABELS: Record<CommentExportFormat, string> = {
+  csv: 'CSV (spreadsheet)',
+  edl: 'EDL (DaVinci Resolve markers)',
+  fcpxml: 'FCPXML (Final Cut Pro)',
+  premiere: 'XML (Premiere Pro markers)',
+};
+
+// Attachments are Library assets; previews are signed on demand and cached per
+// comment for the life of the card.
+function CommentAttachments({ brandId, comment }: { brandId?: string; comment: MediaComment }) {
+  const [previews, setPreviews] = useState<CommentAttachmentPreview[] | null>(null);
+  const ids = comment.attachments.map((attachment) => attachment.assetId).join(',');
+
+  useEffect(() => {
+    if (!brandId || !ids) return;
+    let cancelled = false;
+    listCommentAttachmentPreviews(brandId, ids.split(','))
+      .then((result) => {
+        if (!cancelled) setPreviews(result);
+      })
+      .catch((error: unknown) => {
+        console.error('[CommentThreads] attachment previews failed', error);
+        if (!cancelled) setPreviews([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, ids]);
+
+  if (!ids) return null;
+  if (previews === null) {
+    return <div className="mt-1.5 h-16 w-28 animate-pulse rounded-md bg-muted/70" />;
+  }
+  return (
+    <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Attachments">
+      {previews.map((preview) => (
+        <li
+          key={preview.assetId}
+          data-testid="comment-attachment"
+          data-kind={preview.kind}
+          className="overflow-hidden rounded-md border border-border bg-muted/40"
+        >
+          {preview.kind === 'image' && preview.url ? (
+            <a href={preview.url} target="_blank" rel="noreferrer" title={preview.name}>
+              {/* biome-ignore lint/performance/noImgElement: signed storage URL preview */}
+              <img src={preview.url} alt={preview.name} className="h-16 w-28 object-cover" />
+            </a>
+          ) : preview.kind === 'video' && preview.url ? (
+            // biome-ignore lint/a11y/useMediaCaption: reviewer-attached reference clip
+            <video
+              src={preview.url}
+              poster={preview.thumbnailUrl ?? undefined}
+              controls
+              preload="metadata"
+              className="h-16 w-28 bg-black object-contain"
+            />
+          ) : (
+            <a
+              href={preview.url ?? undefined}
+              target="_blank"
+              rel="noreferrer"
+              className="flex h-16 w-28 flex-col items-center justify-center gap-1 px-1 text-2xs text-muted-foreground hover:text-foreground"
+            >
+              <FileText className="size-4" />
+              <span className="w-full truncate text-center">{preview.name}</span>
+            </a>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function CommentBody({
+  brandId,
   comment,
   pinLabel,
   pending,
 }: {
+  brandId?: string;
   comment: MediaComment;
   pinLabel?: string;
   pending: boolean;
 }) {
   const name = authorLabel(comment);
   return (
-    <div className={cn('flex gap-2.5', pending && 'opacity-60')}>
+    <div
+      className={cn('flex gap-2.5', pending && 'opacity-60')}
+      data-comment-id={comment.id}
+      data-visibility={comment.visibility ?? 'internal'}
+    >
       <Avatar className="size-6 shrink-0">
         <AvatarFallback className="text-2xs font-medium">{initialsFor(name)}</AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="truncate text-xs font-medium">{name}</span>
+          <VisibilityMark visibility={comment.visibility ?? 'internal'} />
           <span className="shrink-0 text-2xs text-muted-foreground/70">
             {formatRelativeTime(comment.createdAt)}
           </span>
@@ -112,6 +236,7 @@ function CommentBody({
         <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/90">
           <CommentBodyText body={comment.body} />
         </p>
+        <CommentAttachments brandId={brandId} comment={comment} />
       </div>
     </div>
   );
@@ -146,14 +271,34 @@ function ThreadCard({
   pendingIds: ReadonlySet<string>;
   posting: boolean;
   onSelect: () => void;
-  onReply: (body: string) => void;
+  onReply: (body: string, extras?: ComposerExtras) => void;
   onResolve: (resolved: boolean) => void;
   onDelete: (commentId: string) => void;
   href?: string;
 }) {
   const [replying, setReplying] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Held until realtime echoes the row back, so the lock flips on click.
+  const [visibilityOverride, setVisibilityOverride] = useState<CommentVisibility | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const rootVisibility = visibilityOverride ?? thread.root.visibility ?? 'internal';
+  const root = { ...thread.root, visibility: rootVisibility };
+
+  useEffect(() => {
+    setVisibilityOverride(null);
+  }, [thread.root.visibility]);
+
+  const toggleVisibility = () => {
+    if (!brandId || rootVisibility === 'external') return;
+    const next = rootVisibility === 'internal' ? 'shared' : 'internal';
+    setVisibilityOverride(next);
+    patchCommentMetadata({ brandId, commentId: thread.root.id, visibility: next }).catch(
+      (error: unknown) => {
+        setVisibilityOverride(null);
+        toast.error(`Could not change who sees this comment · ${(error as Error).message}`);
+      },
+    );
+  };
 
   useEffect(() => {
     if (selected) cardRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -187,7 +332,8 @@ function ThreadCard({
 
       <button type="button" className="w-full text-left" onClick={onSelect}>
         <CommentBody
-          comment={thread.root}
+          brandId={brandId}
+          comment={root}
           pinLabel={pinLabel}
           pending={pendingIds.has(thread.root.id)}
         />
@@ -198,7 +344,7 @@ function ThreadCard({
           {thread.replies.map((reply) => (
             <div key={reply.id} className="flex items-start gap-1">
               <div className="min-w-0 flex-1">
-                <CommentBody comment={reply} pending={pendingIds.has(reply.id)} />
+                <CommentBody brandId={brandId} comment={reply} pending={pendingIds.has(reply.id)} />
               </div>
               {currentUserId && reply.createdBy === currentUserId && (
                 <button
@@ -245,6 +391,28 @@ function ThreadCard({
             {copied ? 'Copied' : 'Copy link'}
           </Button>
         ) : null}
+        {brandId && rootVisibility !== 'external' ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            data-testid="comment-visibility-switch"
+            className="h-6 px-1.5 text-2xs text-muted-foreground"
+            onClick={toggleVisibility}
+            title={
+              rootVisibility === 'internal'
+                ? 'Show this comment to share-link reviewers'
+                : 'Hide this comment from share links'
+            }
+          >
+            {rootVisibility === 'internal' ? (
+              <Globe className="size-3" />
+            ) : (
+              <Lock className="size-3" />
+            )}
+            {rootVisibility === 'internal' ? 'Share' : 'Make internal'}
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="ghost"
@@ -277,8 +445,9 @@ function ThreadCard({
             busy={posting}
             autoFocus
             brandId={brandId}
-            onSubmit={(body) => {
-              onReply(body);
+            reviewOptions={Boolean(brandId)}
+            onSubmit={(body, extras) => {
+              onReply(body, extras);
               setReplying(false);
             }}
             onCancel={() => setReplying(false)}
@@ -357,6 +526,11 @@ export function CommentThreads({
     );
   }
 
+  // The version on stage, read off its own threads (a legacy row with no pin
+  // is the head's, which the export route resolves when no version is named).
+  const currentRoots = [...threads.open, ...threads.resolved].map((thread) => thread.root);
+  const timedRoot = currentRoots.find((root) => root.annotation?.kind === 'time');
+
   const otherVersionsLabel = `${otherVersionCommentCount} ${
     otherVersionCommentCount === 1 ? 'comment' : 'comments'
   } on ${viewingHead ? 'earlier versions' : 'other versions'}`;
@@ -366,6 +540,50 @@ export function CommentThreads({
       {currentCount === 0 && (
         <p className="px-1 py-2 text-xs text-muted-foreground">No comments on this version yet.</p>
       )}
+
+      {brandId && timedRoot ? (
+        <div className="flex justify-end">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-1.5 text-2xs text-muted-foreground"
+                  aria-label="Export comments as markers"
+                >
+                  <Download className="size-3" />
+                  Export markers
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end">
+              {COMMENT_EXPORT_FORMATS.map((format) => (
+                <DropdownMenuItem
+                  key={format}
+                  className="text-xs"
+                  data-export-format={format}
+                  onSelect={() => {
+                    downloadFromRoute(
+                      commentExportHref({
+                        brandId,
+                        assetId: timedRoot.assetId,
+                        versionId: timedRoot.versionId ?? null,
+                        format,
+                      }),
+                    ).catch((error: unknown) =>
+                      toast.error(`Export failed · ${(error as Error).message}`),
+                    );
+                  }}
+                >
+                  {EXPORT_LABELS[format]}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ) : null}
 
       {threads.open.map((thread) => (
         <ThreadCard
@@ -379,7 +597,7 @@ export function CommentThreads({
           pendingIds={pendingIds}
           posting={posting}
           onSelect={() => onSelectThread(thread.root)}
-          onReply={(body) => onReply(thread.root.id, body)}
+          onReply={(body, extras) => onReply(thread.root.id, body, extras)}
           onResolve={(resolved) => onResolve(thread.root.id, resolved)}
           onDelete={onDelete}
           href={commentHref?.(thread.root)}
@@ -404,7 +622,7 @@ export function CommentThreads({
                 pendingIds={pendingIds}
                 posting={posting}
                 onSelect={() => onSelectThread(thread.root)}
-                onReply={(body) => onReply(thread.root.id, body)}
+                onReply={(body, extras) => onReply(thread.root.id, body, extras)}
                 onResolve={(resolved) => onResolve(thread.root.id, resolved)}
                 onDelete={onDelete}
                 href={commentHref?.(thread.root)}
@@ -440,7 +658,7 @@ export function CommentThreads({
                   pendingIds={pendingIds}
                   posting={posting}
                   onSelect={() => onSelectThread(thread.root)}
-                  onReply={(body) => onReply(thread.root.id, body)}
+                  onReply={(body, extras) => onReply(thread.root.id, body, extras)}
                   onResolve={(resolved) => onResolve(thread.root.id, resolved)}
                   onDelete={onDelete}
                   href={commentHref?.(thread.root)}

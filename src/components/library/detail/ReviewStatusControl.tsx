@@ -1,15 +1,20 @@
 'use client';
 
 // Review-status selector (none/draft/in_review/needs_changes/approved) with
-// audit trail. Owned by WS3 (versions + review workflow). Renders as the
-// canonical status pill; changing status POSTs a transition (with an optional
-// note when moving to needs_changes) and a history popover answers "who
-// approved what, when".
+// audit trail. Renders as the canonical status pill in the brand's own label and
+// colour (media.review_state_labels); changing status POSTs a transition (with
+// an optional note when moving to needs_changes) and a history popover answers
+// "who approved what, when" — for this asset, or brand-wide as a CSV report.
 
-import type { AssetReviewEvent, MediaAsset, MediaReviewStatus } from '@continuum/contracts';
-import { ChevronDown, History, Loader2 } from 'lucide-react';
+import type {
+  AssetReviewEvent,
+  MediaAsset,
+  MediaReviewStatus,
+  ReviewStateLabel,
+} from '@continuum/contracts';
+import { ChevronDown, Download, History, Loader2, Palette } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
+import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -23,19 +28,17 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/toast-imperative';
-import { listReviewEvents, transitionReviewStatus } from '@/lib/library/review';
-import {
-  normalizeReviewStatus,
-  REVIEW_STATUS_META,
-  REVIEW_STATUS_ORDER,
-} from '@/lib/library/reviewStatus';
+import { approvalReportHref, listReviewEvents, transitionReviewStatus } from '@/lib/library/review';
+import { normalizeReviewStatus, REVIEW_STATUS_ORDER } from '@/lib/library/reviewStatus';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
-import { cn } from '@/lib/utils';
+import { ReviewStateLabelsEditor } from '../review/ReviewStateLabelsEditor';
+import { useReviewStateLabels } from '../review/useReviewStateLabels';
 
 const HISTORY_DISPLAY_LIMIT = 8;
 
@@ -45,13 +48,19 @@ export type ReviewStatusControlProps = {
   onChanged?: () => void;
 };
 
-function StatusDot({ status }: { status: MediaReviewStatus }) {
-  const meta = REVIEW_STATUS_META[status];
-  if (meta.indicator) return <PillIndicator variant={meta.indicator} />;
-  return <span className={cn('inline-flex size-2 rounded-full', meta.dotClass)} />;
+type Labels = Record<MediaReviewStatus, ReviewStateLabel>;
+
+function StatusDot({ label }: { label: ReviewStateLabel }) {
+  return (
+    <span
+      data-status-color={label.color}
+      className="inline-flex size-2 shrink-0 rounded-full"
+      style={{ backgroundColor: label.color }}
+    />
+  );
 }
 
-function HistoryList({ events }: { events: AssetReviewEvent[] | null }) {
+function HistoryList({ events, labels }: { events: AssetReviewEvent[] | null; labels: Labels }) {
   if (events === null) {
     return <p className="py-2 text-xs text-muted-foreground">Loading history…</p>;
   }
@@ -62,7 +71,7 @@ function HistoryList({ events }: { events: AssetReviewEvent[] | null }) {
     <ul className="space-y-2">
       {events.slice(0, HISTORY_DISPLAY_LIMIT).map((event) => (
         <li key={event.id} className="text-xs">
-          <span className="font-medium">{REVIEW_STATUS_META[event.toStatus].label}</span>
+          <span className="font-medium">{labels[event.toStatus].label}</span>
           <span className="text-muted-foreground">
             {' '}
             by {event.actorName ?? 'a teammate'} · {formatRelativeTime(event.createdAt)}
@@ -83,6 +92,8 @@ export function ReviewStatusControl({ brandId, asset, onChanged }: ReviewStatusC
   const [note, setNote] = useState('');
   const [events, setEvents] = useState<AssetReviewEvent[] | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [labelsOpen, setLabelsOpen] = useState(false);
+  const labels = useReviewStateLabels(brandId);
 
   useEffect(() => {
     setStatus(normalizeReviewStatus(asset.reviewStatus));
@@ -138,7 +149,7 @@ export function ReviewStatusControl({ brandId, asset, onChanged }: ReviewStatusC
     }
   };
 
-  const meta = REVIEW_STATUS_META[status];
+  const current = labels[status];
 
   return (
     <div className="flex items-center gap-1">
@@ -149,15 +160,16 @@ export function ReviewStatusControl({ brandId, asset, onChanged }: ReviewStatusC
               type="button"
               disabled={saving}
               className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-              aria-label={`Review status: ${meta.label}`}
+              aria-label={`Review status: ${current.label}`}
+              data-review-status={status}
             >
               <Pill variant="secondary" className="cursor-pointer select-none">
                 {saving ? (
                   <Loader2 className="size-3 animate-spin" />
                 ) : (
-                  <StatusDot status={status} />
+                  <StatusDot label={current} />
                 )}
-                {meta.label}
+                {current.label}
                 <ChevronDown className="size-3 text-muted-foreground" />
               </Pill>
             </button>
@@ -171,10 +183,15 @@ export function ReviewStatusControl({ brandId, asset, onChanged }: ReviewStatusC
               onSelect={() => handleSelect(candidate)}
               className="gap-2 text-xs"
             >
-              <StatusDot status={candidate} />
-              {REVIEW_STATUS_META[candidate].label}
+              <StatusDot label={labels[candidate]} />
+              {labels[candidate].label}
             </DropdownMenuItem>
           ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => setLabelsOpen(true)} className="gap-2 text-xs">
+            <Palette className="size-3.5" />
+            Customize status labels…
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -194,9 +211,29 @@ export function ReviewStatusControl({ brandId, asset, onChanged }: ReviewStatusC
         />
         <PopoverContent align="start" className="w-72 p-3">
           <p className="mb-1 font-medium text-xs">Review history</p>
-          <HistoryList events={events} />
+          <HistoryList events={events} labels={labels} />
+          <div className="mt-3 flex flex-col gap-1 border-t border-border pt-2">
+            <a
+              href={approvalReportHref({ brandId, assetId: asset.id })}
+              download
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <Download className="size-3.5" />
+              Approval report (this asset)
+            </a>
+            <a
+              href={approvalReportHref({ brandId })}
+              download
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <Download className="size-3.5" />
+              Approval report (all assets)
+            </a>
+          </div>
         </PopoverContent>
       </Popover>
+
+      <ReviewStateLabelsEditor brandId={brandId} open={labelsOpen} onOpenChange={setLabelsOpen} />
 
       <Dialog
         open={noteTarget !== null}
@@ -221,7 +258,7 @@ export function ReviewStatusControl({ brandId, asset, onChanged }: ReviewStatusC
               Cancel
             </Button>
             <Button type="button" size="sm" onClick={submitNoteDialog}>
-              Move to Needs changes
+              Move to {labels.needs_changes.label}
             </Button>
           </DialogFooter>
         </DialogContent>
