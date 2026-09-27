@@ -35,12 +35,14 @@ import {
   Trash2,
   Type,
   UserCheck,
+  UsersRound,
   Workflow,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useState } from 'react';
+import { type DragEvent, type HTMLAttributes, useCallback, useState } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { toast } from '@/components/ui/toast-imperative';
 import {
   createLibraryCollectionOperation,
   createLibrarySavedViewOperation,
@@ -49,16 +51,20 @@ import {
   updateLibraryCollectionOperation,
 } from '@/lib/library/creativeOperations';
 import { createShareLink } from '@/lib/library/share';
+import { canEditLibrary, useBrandRole } from '@/lib/library/useBrandRole';
 import type { LibrarySection } from '@/lib/media/sections';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
+import { RequestCollectionReviewDialog } from './review/RequestCollectionReviewDialog';
 import { ShareBoxDialog } from './ShareBoxDialog';
+import { StorageQuotaMeter } from './StorageQuotaMeter';
 import { useLibraryLiveRefresh } from './useLibraryLiveRefresh';
 
 // The seeded system views (media.ensure_library_system_views), in the order a
 // person reaches for them. Their system_key prefix is what separates them from the
 // product boards (canvas_outputs, forge_renders) that stay out of the sidebar.
 const SYSTEM_VIEW_PREFIX = 'view_';
+const COLLECTION_DRAG_TYPE = 'application/x-continuum-collection';
 const SYSTEM_VIEW_ICONS: Record<string, typeof Folder> = {
   view_needs_my_review: Eye,
   view_assigned_to_me: UserCheck,
@@ -151,23 +157,37 @@ function CollectionRow({
   kind,
   locked,
   isPrivate,
+  dropTarget,
   onClick,
   onShare,
+  onRequestReview,
   onRename,
   onDelete,
+  dragHandlers,
 }: {
   selected: boolean;
   label: string;
   kind: MediaCollection['kind'];
   locked: boolean;
   isPrivate: boolean;
+  dropTarget: boolean;
   onClick: () => void;
   onShare: (() => void) | null;
+  onRequestReview: (() => void) | null;
   onRename: () => void;
   onDelete: () => void;
+  dragHandlers: HTMLAttributes<HTMLDivElement> & { draggable?: boolean };
 }) {
   return (
-    <div className="group flex items-center gap-0.5">
+    <div
+      {...dragHandlers}
+      data-testid="sidebar-collection"
+      data-collection-label={label}
+      className={cn(
+        'group flex items-center gap-0.5 rounded-lg',
+        dropTarget && 'bg-primary/10 ring-1 ring-inset ring-primary/40',
+      )}
+    >
       <button
         type="button"
         onClick={onClick}
@@ -199,6 +219,16 @@ function CollectionRow({
           className="flex size-7 items-center justify-center rounded-md text-muted-foreground opacity-0 hover:bg-accent group-focus-within:opacity-100 group-hover:opacity-100"
         >
           <Link2 className="size-3" />
+        </button>
+      ) : null}
+      {onRequestReview ? (
+        <button
+          type="button"
+          onClick={onRequestReview}
+          aria-label={`Request review of ${label}`}
+          className="flex size-7 items-center justify-center rounded-md text-muted-foreground opacity-0 hover:bg-accent group-focus-within:opacity-100 group-hover:opacity-100"
+        >
+          <UsersRound className="size-3" />
         </button>
       ) : null}
       {locked ? null : (
@@ -280,7 +310,12 @@ export function LibrarySidebar({
   const [savedViewName, setSavedViewName] = useState('');
   const [savingView, setSavingView] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
-  useLibraryLiveRefresh(brandId, selectedCollectionId);
+  const selectedCollection =
+    collections.find((collection) => collection.id === selectedCollectionId) ?? null;
+  useLibraryLiveRefresh(brandId, selectedCollection);
+  const canEdit = canEditLibrary(useBrandRole(brandId));
+  const [reviewTarget, setReviewTarget] = useState<MediaCollection | null>(null);
+  const [dropId, setDropId] = useState<string | null>(null);
   const visibleCollections = orderCollectionsTree(
     collections.filter((collection) => !collection.systemKey),
   );
@@ -365,6 +400,54 @@ export function LibrarySidebar({
       console.error('[LibrarySidebar] delete collection failed', error);
     }
   }
+
+  // Drag a manual collection onto another to nest it, or onto the Collections header to
+  // make it a root. The database refuses a cycle or a sixth level (its depth trigger); that
+  // refusal is shown, never pre-guessed here.
+  async function reparent(collectionId: string, parentId: string | null) {
+    const moving = collections.find((collection) => collection.id === collectionId);
+    // Only a self-drop is refused here. "Already there" is NOT checked against these props:
+    // they are the RSC seed, stale until router.refresh lands, so a second drag right after a
+    // first read the old parent and was silently dropped (the round-2 gate failure). The
+    // dispatcher's update is idempotent, so re-writing the current parent costs nothing.
+    if (!moving || moving.id === parentId) return;
+    try {
+      await updateLibraryCollectionOperation(createSupabaseBrowserClient(), {
+        brandId,
+        collectionId,
+        parentId,
+      });
+      router.refresh();
+    } catch (error) {
+      toast.error(`Could not move “${moving.name}” · ${(error as Error).message}`);
+    }
+  }
+
+  const dragHandlersFor = (collection: MediaCollection) =>
+    canEdit && collection.kind === 'manual' && !collection.systemKey
+      ? {
+          draggable: true,
+          onDragStart: (event: DragEvent) => {
+            event.dataTransfer.setData(COLLECTION_DRAG_TYPE, collection.id);
+            event.dataTransfer.effectAllowed = 'move';
+          },
+          onDragEnd: () => setDropId(null),
+          // The payload type, not React state: dragover can fire before a state update from
+          // the dragstart of the same gesture has re-rendered this handler.
+          onDragOver: (event: DragEvent) => {
+            if (!event.dataTransfer.types.includes(COLLECTION_DRAG_TYPE)) return;
+            event.preventDefault();
+            setDropId(collection.id);
+          },
+          onDragLeave: () => setDropId((current) => (current === collection.id ? null : current)),
+          onDrop: (event: DragEvent) => {
+            event.preventDefault();
+            const moving = event.dataTransfer.getData(COLLECTION_DRAG_TYPE);
+            setDropId(null);
+            if (moving) void reparent(moving, collection.id);
+          },
+        }
+      : {};
 
   async function submitSavedView() {
     const trimmed = savedViewName.trim();
@@ -521,18 +604,39 @@ export function LibrarySidebar({
           ))
         )}
 
-        <div className="mt-3 flex items-center justify-between px-2 pb-1">
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: a pointer drop zone for drag-to-reparent — it has nothing to activate */}
+        <div
+          data-testid="sidebar-collections-root"
+          onDragOver={(event) => {
+            if (!event.dataTransfer.types.includes(COLLECTION_DRAG_TYPE)) return;
+            event.preventDefault();
+            setDropId('__root');
+          }}
+          onDragLeave={() => setDropId((current) => (current === '__root' ? null : current))}
+          onDrop={(event) => {
+            event.preventDefault();
+            const moving = event.dataTransfer.getData(COLLECTION_DRAG_TYPE);
+            setDropId(null);
+            if (moving) void reparent(moving, null);
+          }}
+          className={cn(
+            'mt-3 flex items-center justify-between rounded-lg px-2 pb-1',
+            dropId === '__root' && 'bg-primary/10 ring-1 ring-inset ring-primary/40',
+          )}
+        >
           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Collections
           </span>
-          <button
-            type="button"
-            onClick={() => setCreating((v) => !v)}
-            className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-[0.96] [transition-property:scale,color,background-color]"
-            title="New collection"
-          >
-            <FolderPlus className="size-4" />
-          </button>
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={() => setCreating((v) => !v)}
+              className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-[0.96] [transition-property:scale,color,background-color]"
+              title="New collection"
+            >
+              <FolderPlus className="size-4" />
+            </button>
+          ) : null}
         </div>
 
         {creating && (
@@ -593,10 +697,15 @@ export function LibrarySidebar({
                   selected={selectedCollectionId === col.id}
                   label={col.name}
                   kind={col.kind}
-                  locked={Boolean(col.systemKey)}
+                  locked={Boolean(col.systemKey) || !canEdit}
                   isPrivate={col.visibility === 'private'}
+                  dropTarget={dropId === col.id}
+                  dragHandlers={dragHandlersFor(col)}
                   onClick={() => onSelectCollection(col.id)}
-                  onShare={col.kind === 'manual' ? () => void shareCollection(col) : null}
+                  onShare={() => void shareCollection(col)}
+                  onRequestReview={
+                    canEdit && col.kind === 'manual' ? () => setReviewTarget(col) : null
+                  }
                   onRename={() => {
                     setRenamingId(col.id);
                     setRenameValue(col.name);
@@ -619,6 +728,20 @@ export function LibrarySidebar({
         )}
         <span className="tabular-nums">{formatBytes(storageUsedBytes)} used</span>
       </div>
+      <div className="px-3 pb-2.5">
+        <StorageQuotaMeter brandId={brandId} />
+      </div>
+      {reviewTarget ? (
+        <RequestCollectionReviewDialog
+          brandId={brandId}
+          collectionId={reviewTarget.id}
+          collectionName={reviewTarget.name}
+          open
+          onOpenChange={(open) => {
+            if (!open) setReviewTarget(null);
+          }}
+        />
+      ) : null}
       <ShareBoxDialog
         open={shareUrl !== null}
         url={shareUrl}

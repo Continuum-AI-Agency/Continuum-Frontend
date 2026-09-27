@@ -6,7 +6,7 @@ import type {
   LibraryBrowseQuery,
 } from '@continuum/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { libraryBrowseRpcArgs } from './browse-args';
+import { libraryBrowseRpcArgs, libraryBrowseSortArg } from './browse-args';
 import { buildCarousel, carouselSignablePaths } from './carousel';
 import { rowToSignedMediaAsset } from './mapper';
 import { buildAssetPreview, loadAssetRenditions, renditionSignablePaths } from './renditions';
@@ -56,7 +56,7 @@ export async function fetchLibraryBrowsePage(
 ): Promise<LibraryBrowsePage> {
   const { data, error } = await mediaSchema(client).rpc('library_browse_page', {
     ...libraryBrowseRpcArgs(query),
-    p_sort: query.sort,
+    p_sort: libraryBrowseSortArg(query),
     p_cursor: decodeCursor(query.cursor),
     p_limit: query.limit,
   });

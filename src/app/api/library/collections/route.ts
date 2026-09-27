@@ -5,12 +5,13 @@ import {
 } from '@continuum/contracts';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { createLibraryCollectionOperation } from '@/lib/library/creativeOperations';
 import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
 import { ensureLibrarySystemViews } from '@/lib/media/fetchers.server';
 import type { MediaCollectionRow } from '@/lib/media/schema';
 import { mediaSchema } from '@/lib/media/supabase-media';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { operationFailure, refuseViewer } from './operationFailure';
 
 function rowToCollection(row: MediaCollectionRow): MediaCollection {
   const visibility = collectionVisibilitySchema.safeParse(row.visibility);
@@ -39,6 +40,10 @@ const createSchema = z.object({
   name: z.string().trim().min(1).max(120),
 });
 
+// Every write goes through the Library dispatcher (library-creative-operations) on the
+// CALLER's own session: the edge function verifies the JWT and passes that user as the
+// actor, so library_internal.authorize_operation refuses a viewer. A service-role write here
+// would skip that gate — and there is no service-role key on the deployed Frontend anyway.
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
   const {
@@ -66,22 +71,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const admin = createSupabaseAdminClient();
-  const { data, error } = await mediaSchema(admin)
-    .from('collections')
-    .insert({ brand_id: brandId, name, kind: 'manual', created_by: user.id })
-    .select('*')
-    .single();
+  const refused = await refuseViewer(supabase, brandId);
+  if (refused) return refused;
 
-  if (error || !data) {
-    console.error('[library/collections] create failed', error);
-    return NextResponse.json({ error: 'Create failed' }, { status: 500 });
+  try {
+    const collection = await createLibraryCollectionOperation(supabase, {
+      brandId,
+      name,
+      kind: 'manual',
+    });
+    return NextResponse.json({ collection }, { status: 201 });
+  } catch (error) {
+    return operationFailure('create', error);
   }
-
-  return NextResponse.json(
-    { collection: rowToCollection(data as MediaCollectionRow) },
-    { status: 201 },
-  );
 }
 
 export async function GET(request: Request) {
@@ -105,14 +107,12 @@ export async function GET(request: Request) {
 
   await ensureLibrarySystemViews(supabase, brandId);
 
-  // The service client bypasses RLS, so the private fence RLS draws is redrawn here:
-  // a private collection is listed to its creator only.
-  const admin = createSupabaseAdminClient();
-  const { data, error } = await mediaSchema(admin)
+  // The user-scoped client: RLS is the fence, including the restrictive policy that keeps a
+  // private collection its creator's alone.
+  const { data, error } = await mediaSchema(supabase)
     .from('collections')
     .select('*')
     .eq('brand_id', brandId)
-    .or(`visibility.eq.team,created_by.eq.${user.id}`)
     .order('created_at', { ascending: false });
 
   if (error) {

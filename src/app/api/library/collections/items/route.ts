@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { mutateCollectionMembershipOperation } from '@/lib/library/creativeOperations';
 import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
-import { mediaSchema } from '@/lib/media/supabase-media';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { operationFailure, refuseViewer } from '../operationFailure';
 
 const itemSchema = z.object({
   brandId: z.string().uuid(),
@@ -11,32 +11,11 @@ const itemSchema = z.object({
   assetId: z.string().uuid(),
 });
 
-// Confirms the collection AND asset both belong to brandId before mutating, so
-// a member of one brand cannot graft assets onto another brand's collection.
-async function assertCollectionAndAssetInBrand(
-  admin: ReturnType<typeof createSupabaseAdminClient>,
-  brandId: string,
-  collectionId: string,
-  assetId: string,
-): Promise<boolean> {
-  const [{ data: col }, { data: asset }] = await Promise.all([
-    mediaSchema(admin)
-      .from('collections')
-      .select('id')
-      .eq('id', collectionId)
-      .eq('brand_id', brandId)
-      .single(),
-    mediaSchema(admin)
-      .from('assets')
-      .select('id')
-      .eq('id', assetId)
-      .eq('brand_id', brandId)
-      .single(),
-  ]);
-  return Boolean(col && asset);
-}
-
-export async function POST(request: Request) {
+// Membership changes go through the Library dispatcher on the caller's own session, like
+// every other collection write: the dispatcher checks that the collection and asset belong
+// to the brand, that the collection is manual and not someone else's private one, and —
+// through authorize_operation — that the caller is not a viewer.
+async function mutate(request: Request, mode: 'add' | 'remove'): Promise<Response> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -46,14 +25,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-  }
-
-  const parsed = itemSchema.safeParse(body);
+  const parsed = itemSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.message }, { status: 422 });
   }
@@ -63,68 +35,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const admin = createSupabaseAdminClient();
-  if (!(await assertCollectionAndAssetInBrand(admin, brandId, collectionId, assetId))) {
-    return NextResponse.json({ error: 'Collection or asset not found' }, { status: 404 });
+  const refused = await refuseViewer(supabase, brandId);
+  if (refused) return refused;
+
+  try {
+    await mutateCollectionMembershipOperation(supabase, {
+      brandId,
+      collectionId,
+      assetIds: [assetId],
+      mode,
+    });
+    return NextResponse.json({ ok: true }, { status: mode === 'add' ? 201 : 200 });
+  } catch (error) {
+    return operationFailure(mode === 'add' ? 'add' : 'remove', error);
   }
-
-  const { error } = await mediaSchema(admin)
-    .from('collection_items')
-    .upsert(
-      { collection_id: collectionId, asset_id: assetId, added_by: user.id },
-      { onConflict: 'collection_id,asset_id' },
-    );
-
-  if (error) {
-    console.error('[library/collections/items] add failed', error);
-    return NextResponse.json({ error: 'Add failed' }, { status: 500 });
-  }
-
-  return NextResponse.json({ ok: true }, { status: 201 });
 }
 
-export async function DELETE(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export function POST(request: Request) {
+  return mutate(request, 'add');
+}
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-  }
-
-  const parsed = itemSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.message }, { status: 422 });
-  }
-  const { brandId, collectionId, assetId } = parsed.data;
-
-  if (!(await callerHasBrandAccess(supabase, brandId))) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  const admin = createSupabaseAdminClient();
-  if (!(await assertCollectionAndAssetInBrand(admin, brandId, collectionId, assetId))) {
-    return NextResponse.json({ error: 'Collection or asset not found' }, { status: 404 });
-  }
-
-  const { error } = await mediaSchema(admin)
-    .from('collection_items')
-    .delete()
-    .eq('collection_id', collectionId)
-    .eq('asset_id', assetId);
-
-  if (error) {
-    console.error('[library/collections/items] remove failed', error);
-    return NextResponse.json({ error: 'Remove failed' }, { status: 500 });
-  }
-
-  return NextResponse.json({ ok: true });
+export function DELETE(request: Request) {
+  return mutate(request, 'remove');
 }

@@ -211,6 +211,15 @@ async function findCommentAssetIds(
 // only on zero vector hits made such an asset invisible the moment one OTHER
 // asset matched semantically. The keyword RPC already reads the transcript, so
 // spoken words are found there; review comments are matched here.
+function interleaveByRank<T>(first: readonly T[], second: readonly T[]): T[] {
+  const out: T[] = [];
+  for (let i = 0; i < Math.max(first.length, second.length); i += 1) {
+    if (i < first.length) out.push(first[i] as T);
+    if (i < second.length) out.push(second[i] as T);
+  }
+  return out;
+}
+
 async function runTextSearch(
   supabase: SupabaseClient,
   params: {
@@ -287,9 +296,11 @@ async function runTextSearch(
           .sort((a, b) => commentIds.indexOf(a) - commentIds.indexOf(b))
           .map((id) => ({ id, similarity: COMMENT_HIT_SIMILARITY, matchedOn: ['comment'] }));
 
-  // Semantic hits keep their rank; visual hits follow in their own rank; keyword
-  // and comment hits trail them, merged by score. Never dropped; an asset found
-  // twice keeps its first place and carries both reasons.
+  // Semantic and visual hits are interleaved by rank — their scores live on different
+  // scales (text↔text vs text↔image), and appending visual after a full page of
+  // semantic hits left untagged footage unreachable (measured: a clip at 0.16 visual
+  // similarity missing from 48 results). Keyword and comment hits trail, merged by
+  // score. An asset found twice keeps its first place and carries both reasons.
   const byId = new Map(semantic.map((match) => [match.id, match]));
   const merge = (hits: readonly RankedMatch[], into: RankedMatch[]) => {
     for (const hit of hits) {
@@ -309,7 +320,7 @@ async function runTextSearch(
   const extras: RankedMatch[] = [];
   merge([...lexical, ...commentHits], extras);
   extras.sort((a, b) => b.similarity - a.similarity);
-  const matches = [...semantic, ...visualExtras, ...extras].slice(0, limit);
+  const matches = [...interleaveByRank(semantic, visualExtras), ...extras].slice(0, limit);
 
   // Visual hits are meaning-matched too, so they count as semantic for the
   // "this media hasn't been analyzed" hint.
