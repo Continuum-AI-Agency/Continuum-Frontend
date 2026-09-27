@@ -244,13 +244,15 @@ type PortfolioManagePanelProps = {
   onFocusSettingDone?: () => void;
 };
 
-/** The field each header chip opens — the id prefix of that field's control below. */
+/** The field each header chip (or the goal-mismatch banner) opens — the id prefix of that
+ *  field's control below. */
 const SETTING_FIELD: Record<HeroSetting, string> = {
   strategy: 'manage-mode',
   objective: 'manage-objective',
   target: 'manage-cpa',
   budget: 'manage-budget-source',
   window: 'manage-lookback',
+  roster: 'manage-roster',
 };
 
 export function PortfolioManagePanel({
@@ -1384,7 +1386,7 @@ export function PortfolioManagePanel({
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="space-y-1.5">
+      <div className="space-y-1.5 outline-none" id={`manage-roster-${portfolio.id}`} tabIndex={-1}>
         <Label>{level === 'campaign' ? 'Enrolled campaigns' : 'Enrolled ad sets'}</Label>
         <CampaignAdsetPicker
           entities={pickerEntities}

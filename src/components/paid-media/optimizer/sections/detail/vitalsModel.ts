@@ -17,6 +17,7 @@ import type {
 import { formatCurrency, humanize } from '../../format';
 import { applyModePill } from '../../reportModel';
 import { isStale, rosterLine, rosterTone, staleLine } from '../portfolioStaleness';
+import { type GoalMismatch, goalMismatchOf, readMismatchMessage } from './goalMismatch';
 
 export type VitalTone = 'good' | 'warn' | 'bad' | 'idle';
 
@@ -49,8 +50,17 @@ export type VitalRow = {
   bar: BulletBar | OutcomeBar | null;
 };
 
-/** The five settings a header chip opens in Manage. */
-export type HeroSetting = 'strategy' | 'objective' | 'target' | 'budget' | 'window';
+/** What the header opens in Manage: the five settings its chips name, and the ad-set roster. */
+export type HeroSetting = 'strategy' | 'objective' | 'target' | 'budget' | 'window' | 'roster';
+
+/**
+ * The warning under the chips when ad sets bid for a different result than the portfolio
+ * measures. All of them → the portfolio moves nothing, and the fix is its objective; some →
+ * a quieter note, and the fix is the roster (changing the objective would strand the rest).
+ */
+export type HeroMismatch = Pick<GoalMismatch, 'scope' | 'mismatched' | 'total' | 'text'> & {
+  actions: Array<{ setting: HeroSetting; label: string; primary: boolean }>;
+};
 
 export type HeroHeader = {
   name: string;
@@ -58,6 +68,7 @@ export type HeroHeader = {
   freshness: { text: string; stale: boolean } | null;
   roster: { text: string; tone: 'bad' | 'warn' } | null;
   chips: Array<{ setting: HeroSetting; label: string; value: string }>;
+  mismatch: HeroMismatch | null;
   secondary: { kind: 'stop' | 'resume' | 'review'; label: string } | null;
 };
 
@@ -328,10 +339,10 @@ const budgetSourceWords = (source: string | null | undefined): string =>
  * conversations". A message in a shape this does not know falls back to the ad-set count.
  */
 function mismatchLine(message: string, mismatched: number, total: number, units: string): string {
-  const said = /^(\d+) of (\d+) ad sets.*? bid for (.+?), not the (.+?) this portfolio prices/.exec(
-    message,
-  );
-  if (said) return `${said[1]} of ${said[2]} ad sets bid for ${said[3]}, not ${said[4]}`;
+  const said = readMismatchMessage(message);
+  if (said?.bought) {
+    return `${said.mismatched} of ${said.total} ad sets bid for ${said.bought}, not ${said.priced}`;
+  }
   return `${mismatched} of ${total} ad sets bid for a different result than ${units}`;
 }
 
@@ -530,7 +541,31 @@ function secondaryOf(portfolio: VitalsPortfolio): HeroHeader['secondary'] {
   return null;
 }
 
+function mismatchOf(
+  report: ParsedCycleRunReport | null,
+  measures: string,
+): HeroHeader['mismatch'] {
+  const found = goalMismatchOf({ report, measures });
+  if (!found) return null;
+  const remove = { setting: 'roster', label: 'Remove these ad sets' } as const;
+  return {
+    scope: found.scope,
+    mismatched: found.mismatched,
+    total: found.total,
+    text: found.text,
+    actions:
+      found.scope === 'all'
+        ? [
+            { setting: 'objective', label: 'Change objective', primary: true },
+            { ...remove, primary: false },
+          ]
+        : [{ ...remove, primary: false }],
+  };
+}
+
 export function buildHeroHeader(args: {
+  /** The latest status body: what its cycle held and why. Absent before the first cycle. */
+  report?: ParsedCycleRunReport | null;
   portfolio: VitalsPortfolio;
   lastCycleAt: string | null;
   growth: BriefGrowth | null;
@@ -584,6 +619,7 @@ export function buildHeroHeader(args: {
       },
       { setting: 'window', label: 'Window', value: `${lookback.replace(/^d/, '')} days` },
     ],
+    mismatch: mismatchOf(args.report ?? null, resultLabel),
     secondary: secondaryOf(portfolio),
   };
 }

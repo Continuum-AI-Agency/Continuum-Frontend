@@ -5,12 +5,19 @@
 // this file only draws it. The rows container is a size container, so a narrow pane stacks
 // label+value over a full-width bar exactly as a phone does, whatever the window is.
 
-import { CheckCheckIcon, PauseIcon, PlayIcon, RefreshCwIcon } from 'lucide-react';
+import {
+  CheckCheckIcon,
+  PauseIcon,
+  PlayIcon,
+  RefreshCwIcon,
+  TriangleAlertIcon,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type {
   BulletBar,
   HeroHeader,
+  HeroMismatch,
   HeroSetting,
   OutcomeBar,
   VitalRow,
@@ -182,6 +189,50 @@ function Row({ row }: { row: VitalRow }) {
   );
 }
 
+/**
+ * Ad sets bidding for a result the portfolio does not measure. All of them is a warning
+ * surface of its own (the portfolio moves nothing); some of them is a quieter line.
+ */
+function MismatchBanner({
+  mismatch,
+  onEditSetting,
+}: {
+  mismatch: HeroMismatch;
+  onEditSetting: (setting: HeroSetting) => void;
+}) {
+  const all = mismatch.scope === 'all';
+  return (
+    <div
+      className={cn(
+        'flex flex-col gap-3 rounded-xl border px-4 py-3 sm:flex-row sm:items-center sm:justify-between',
+        all ? 'border-warning/40 bg-warning/10' : 'border-border bg-muted/40',
+      )}
+      data-scope={mismatch.scope}
+      data-testid="vitals-mismatch"
+      role={all ? 'alert' : 'status'}
+    >
+      <p className="flex min-w-0 items-start gap-2 text-foreground text-sm">
+        <TriangleAlertIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+        <span className={cn(all && 'font-medium')}>{mismatch.text}</span>
+      </p>
+      <div className="flex flex-wrap gap-2 sm:shrink-0">
+        {mismatch.actions.map((action) => (
+          <Button
+            data-setting={action.setting}
+            key={action.setting}
+            onClick={() => onEditSetting(action.setting)}
+            size="sm"
+            type="button"
+            variant={action.primary ? 'default' : 'outline'}
+          >
+            {action.label}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const SECONDARY_ICON = { stop: PauseIcon, resume: PlayIcon, review: CheckCheckIcon } as const;
 
 export function PortfolioVitals({
@@ -272,6 +323,9 @@ export function PortfolioVitals({
           </Button>
         </div>
       </div>
+      {header.mismatch ? (
+        <MismatchBanner mismatch={header.mismatch} onEditSetting={onEditSetting} />
+      ) : null}
       {rows ? (
         <div
           className="@container rounded-xl border border-border bg-card"

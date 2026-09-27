@@ -453,6 +453,22 @@ describe('conversionVolume reads the one term that survives', () => {
     expect(volume?.note).toBe('786 conversions in 14 days · 2 ad sets under the 20-event floor');
     expect(volume?.actionables.map((a) => a.code)).toEqual(['under_event_floor']);
   });
+  it('says kpi_mismatch first: more events cannot help ad sets that bid for something else', () => {
+    const volume = conversionVolume({
+      events: 0,
+      sampleSize: 0,
+      actionables: [
+        { code: 'under_event_floor', adsetIds: ['a'], message: 'Consolidate.' },
+        { code: 'tracking_gap', adsetIds: ['b'], message: 'Fix the pixel.' },
+        { code: 'kpi_mismatch', adsetIds: ['a', 'b'], message: '2 of 2 ad sets bid for purchases.' },
+      ],
+    });
+    expect(volume?.actionables.map((a) => a.code)).toEqual([
+      'kpi_mismatch',
+      'under_event_floor',
+      'tracking_gap',
+    ]);
+  });
   it('is thin under half the sample term and null without an event count', () => {
     expect(conversionVolume({ events: 3, sampleSize: 0.13 })?.band).toBe('thin');
     expect(conversionVolume({ events: 40, sampleSize: 0.6 })?.band).toBe('building');

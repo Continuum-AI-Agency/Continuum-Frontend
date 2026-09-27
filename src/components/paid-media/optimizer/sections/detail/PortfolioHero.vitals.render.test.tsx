@@ -84,6 +84,7 @@ function mount(body: unknown, handlers: { edits?: HeroSetting[]; runs?: number[]
       view={view}
       vitals={{
         header: buildHeroHeader({
+          report,
           portfolio,
           lastCycleAt: report.latest_run.cycle_ts,
           growth,
@@ -150,6 +151,34 @@ describe('PortfolioHero — the vital signs from each real body', () => {
     expect(cost?.textContent).toContain('—');
     expect(cost?.querySelector('[data-testid="vital-bullet"]')).toBeTruthy();
     expect(cost?.querySelector('[data-testid="vital-fill"]')).toBeNull();
+  });
+
+  it('Tours: a warning says all 12 bid for a different result, and the CTA opens the objective', () => {
+    const edits: HeroSetting[] = [];
+    const { container, getByText } = mount(tours, { edits });
+    const banner = container.querySelector('[data-testid="vitals-mismatch"]');
+    expect(banner?.getAttribute('data-scope')).toBe('all');
+    expect(banner?.textContent).toContain(
+      'All 12 ad sets bid for a different result than the conversations this portfolio measures — the optimizer holds them and moves nothing.',
+    );
+    const vitals = container.querySelector('[data-testid="portfolio-vitals"]');
+    const rows = container.querySelector('[data-testid="vitals-rows"]');
+    expect(vitals?.contains(banner ?? null)).toBe(true);
+    // Under the name and chips, above the six rows.
+    expect(
+      banner && rows ? banner.compareDocumentPosition(rows) & Node.DOCUMENT_POSITION_FOLLOWING : 0,
+    ).toBeTruthy();
+    fireEvent.click(getByText('Change objective'));
+    fireEvent.click(getByText('Remove these ad sets'));
+    expect(edits).toEqual(['objective', 'roster']);
+  });
+
+  it('FORMULARIOS and MENSAJES draw no mismatch banner', () => {
+    for (const body of [formularios, mensajes]) {
+      const { container, unmount } = mount(body);
+      expect(container.querySelector('[data-testid="vitals-mismatch"]')).toBeNull();
+      unmount();
+    }
   });
 
   it('a chip opens its setting and Run now runs', () => {

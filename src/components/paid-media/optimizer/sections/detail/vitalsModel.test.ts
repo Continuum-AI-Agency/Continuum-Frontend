@@ -34,6 +34,7 @@ function read(body: unknown, currency: string | null = 'MXN') {
     timeZone: MEXICO,
   });
   const header = buildHeroHeader({
+    report,
     portfolio,
     lastCycleAt: report.latest_run?.cycle_ts ?? null,
     growth: brief.growth,
@@ -260,6 +261,39 @@ describe('Tours — two days old, nothing bought yet, every ad set held', () => 
     expect(row(read(body).rows, 'confidence').reading).toBe(
       '12 of 12 ad sets bid for purchases, not conversations',
     );
+  });
+});
+
+describe('the goal-mismatch banner in the header', () => {
+  it('Tours: all 12 bid for a different result — change the objective, or remove them', () => {
+    expect(read(tours).header.mismatch).toEqual({
+      scope: 'all',
+      mismatched: 12,
+      total: 12,
+      text: 'All 12 ad sets bid for a different result than the conversations this portfolio measures — the optimizer holds them and moves nothing.',
+      actions: [
+        { setting: 'objective', label: 'Change objective', primary: true },
+        { setting: 'roster', label: 'Remove these ad sets', primary: false },
+      ],
+    });
+  });
+
+  it('FORMULARIOS, MENSAJES and Prueba have none', () => {
+    for (const body of [formularios, mensajes, prueba]) {
+      expect(read(body).header.mismatch).toBeNull();
+    }
+  });
+
+  it('no report, no banner', () => {
+    const portfolio = tours.portfolio as unknown as VitalsPortfolio;
+    const header = buildHeroHeader({
+      portfolio,
+      lastCycleAt: null,
+      growth: null,
+      metric: getOptimizationMetricDefinition(portfolio.objective),
+      currency: null,
+    });
+    expect(header.mismatch).toBeNull();
   });
 });
 

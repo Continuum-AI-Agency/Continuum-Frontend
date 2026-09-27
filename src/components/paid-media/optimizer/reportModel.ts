@@ -169,6 +169,13 @@ export type ConversionVolume = {
 const asPct = (value: number | undefined): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? Math.round(value * 100) : null;
 
+/** The confidence actionables the volume panel says, in the order it says them. */
+const SURFACED_ACTIONABLES: readonly string[] = [
+  'kpi_mismatch',
+  'under_event_floor',
+  'tracking_gap',
+];
+
 export function conversionVolume(
   confidence: RunConfidence | null | undefined,
 ): ConversionVolume | null {
@@ -194,9 +201,11 @@ export function conversionVolume(
     under > 0
       ? `${events} conversion${events === 1 ? '' : 's'} in 14 days · ${under} ad set${under === 1 ? '' : 's'} under the ${floorEvents}-event floor`
       : `${events} conversion${events === 1 ? '' : 's'} in 14 days · every ad set clears the ${floorEvents}-event floor`;
-  const actionables = (confidence.actionables ?? []).filter(
-    (action) => action.code === 'under_event_floor' || action.code === 'tracking_gap',
-  );
+  // kpi_mismatch leads: ad sets that bid for another result are held whatever their volume,
+  // so "clear the event floor" is advice they can never take until that is fixed.
+  const actionables = (confidence.actionables ?? [])
+    .filter((action) => SURFACED_ACTIONABLES.includes(action.code))
+    .sort((a, b) => SURFACED_ACTIONABLES.indexOf(a.code) - SURFACED_ACTIONABLES.indexOf(b.code));
   return { events, floorEvents, underFloorIds, band, note, actionables };
 }
 

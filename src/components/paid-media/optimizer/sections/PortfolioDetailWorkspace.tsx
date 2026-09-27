@@ -292,6 +292,7 @@ export function PortfolioDetailWorkspace({
   });
   useHeroBriefWatch(portfolio.id, Boolean(latestRun) && heroView.source === 'fallback');
   const vitalsHeader = buildHeroHeader({
+    report,
     portfolio,
     lastCycleAt: latestRun?.cycle_ts ?? null,
     growth: heroView.brief.growth,
