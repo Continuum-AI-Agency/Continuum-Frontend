@@ -150,6 +150,7 @@ import type { PlanStatus } from '@/components/ai-elements/plan';
 import type { PlanFeedbackPayload } from './components/PlanSection';
 import { deriveJainaAnchors, milestonesForJainaMessage } from './deriveJainaAnchors';
 import { getReportSummary, hasReportContent } from './jainaUtils';
+import { normalizePersistedObjectiveStatus } from './objectiveStatus';
 import { parsePersistedReportV2Value, parsePersistedReportValue } from './persistedReport';
 import {
   enqueueMessage,
@@ -542,46 +543,6 @@ function deriveObjectivesFromReport(
     }));
 
   return objectives.length > 0 ? objectives : undefined;
-}
-
-function normalizePersistedObjectiveStatus(
-  value: unknown,
-): 'pending' | 'in_progress' | 'completed' | 'failed' {
-  if (
-    value === 'pending' ||
-    value === 'in_progress' ||
-    value === 'completed' ||
-    value === 'failed'
-  ) {
-    return value;
-  }
-  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
-  if (
-    normalized === 'in_progress' ||
-    normalized === 'in-progress' ||
-    normalized === 'running' ||
-    normalized === 'active'
-  ) {
-    return 'in_progress';
-  }
-  if (
-    normalized === 'completed' ||
-    normalized === 'complete' ||
-    normalized === 'done' ||
-    normalized === 'success'
-  ) {
-    return 'completed';
-  }
-  if (
-    normalized === 'failed' ||
-    normalized === 'error' ||
-    normalized === 'errored' ||
-    normalized === 'cancelled' ||
-    normalized === 'canceled'
-  ) {
-    return 'failed';
-  }
-  return 'pending';
 }
 
 const messageObjectiveStatusRank: Record<JainaObjectiveStatus, number> = {
