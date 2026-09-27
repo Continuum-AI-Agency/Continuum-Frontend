@@ -26,6 +26,7 @@ import {
   playableFirst,
   previewFormats,
 } from '@/components/forge/FormatPreview';
+import { LibraryStateLine, useLibraryState } from '@/components/forge/libraryState';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { templateVersionOf, templateVersionTitle } from '@/components/forge/templateVersion';
@@ -338,6 +339,10 @@ export function RenderJobDetail({
     }
   };
   const rendered = formats.filter((format) => fileFor(format.id));
+  const inLibrary = files.flatMap((output) =>
+    output.assetId ? [{ fileName: output.fileName, assetId: output.assetId }] : [],
+  );
+  const libraryState = useLibraryState(job.brandId, inLibrary.map((output) => output.assetId));
 
   return (
     <div className="flex flex-col divide-y divide-border">
@@ -461,6 +466,23 @@ export function RenderJobDetail({
             <p role="alert" className="m-0 text-xs text-destructive">
               {downloadError}
             </p>
+          ) : null}
+          {/* Each file as the Library holds it: where its review stands, and its thread. */}
+          {inLibrary.length ? (
+            <ul aria-label="In the Library" className="m-0 flex list-none flex-col gap-1 p-0">
+              {inLibrary.map((output) => (
+                <li key={output.assetId} className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="min-w-0 truncate font-mono text-2xs text-muted-foreground">
+                    {output.fileName}
+                  </span>
+                  <LibraryStateLine
+                    brandId={job.brandId}
+                    assetId={output.assetId}
+                    state={libraryState.get(output.assetId)}
+                  />
+                </li>
+              ))}
+            </ul>
           ) : null}
         </div>
 

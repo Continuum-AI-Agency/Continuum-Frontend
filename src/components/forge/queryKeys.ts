@@ -77,6 +77,9 @@ export const forgeQueryKeys = {
   renderJob: (brandId: string, jobId: string) =>
     ['forge', brandId, 'render-jobs', 'job', jobId] as const,
   approvals: (brandId: string) => ['forge', brandId, 'approvals'] as const,
+  /** The Library side of these outputs; the caller sorts the ids so any order is one read. */
+  libraryState: (brandId: string, assetIds: readonly string[]) =>
+    ['forge', brandId, 'library-state', assetIds.join(',')] as const,
   mediaAsset: (brandId: string, assetId: string) =>
     ['forge', brandId, 'media-assets', assetId] as const,
 } as const;

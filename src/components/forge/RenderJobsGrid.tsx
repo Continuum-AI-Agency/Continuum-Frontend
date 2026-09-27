@@ -19,11 +19,15 @@ import {
 import { ArrowLeft, Download, Loader2, RefreshCw, Search, Video } from 'lucide-react';
 import { startTransition, useEffect, useMemo, useState } from 'react';
 import { formatRelativeTime } from '@/components/approvals/formatters';
-import { BatchShareActions } from '@/components/forge/BatchShareActions';
 import { type CheckTick, checkSummary, TickBar } from '@/components/forge/CheckTable';
 import { DataGrid, STICKY_LEFT, selectColumn } from '@/components/forge/DataGrid';
 import { DeliveryChain, deliverySearchText } from '@/components/forge/DeliveryChain';
 import { fileForFormat, type PreviewFormat } from '@/components/forge/FormatPreview';
+import {
+  ReviewStatusPill,
+  reviewSummary,
+  useLibraryState,
+} from '@/components/forge/libraryState';
 import {
   filesSummary,
   formatsNamedByJob,
@@ -63,8 +67,9 @@ import { FORGE_STALE_MS, forgeQueryKeys } from './queryKeys';
 // node; this is the brand's ledger.
 //
 // The brand's ledger reads in batches: one row per Render click, which opens into that click's
-// renders, and a render opens into its detail. Each batch downloads as one zip and shares as a
-// link to it. One template's ledger (on the template itself) stays a list of renders by set.
+// renders, and a render opens into its detail. Each batch says how far its outputs are through
+// review in the Library, where they are shared from. One template's ledger (on the template itself)
+// stays a list of renders by set.
 //
 // Live: the node's own hook polls in-flight jobs (including the auto-judge tail) every 5 s
 // through the live relay, and the list is re-read on focus, on a slow timer, and on a Realtime
@@ -496,6 +501,15 @@ export function RenderJobsGrid({
       batch.jobs.some((job) => matching.has(job.id)),
     );
   }, [jobs, visible]);
+  // One Library read for every output of the batches on screen, not one per batch.
+  const libraryState = useLibraryState(
+    brandId,
+    batchLevel && !openBatchId
+      ? batches.flatMap((batch) =>
+          batch.jobs.flatMap((job) => job.outputs.map((output) => output.assetId)),
+        )
+      : [],
+  );
   const [batchSorting, setBatchSorting] = useState<SortingState>([{ id: 'createdAt', desc: true }]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: the name helpers read only sets and formats.
   const batchColumns = useMemo<ColumnDef<RenderBatch>[]>(
@@ -575,15 +589,27 @@ export function RenderJobsGrid({
         ),
       },
       {
-        id: 'share',
-        header: '',
+        id: 'review',
+        header: 'Review',
         enableSorting: false,
-        cell: ({ row: { original: batch } }) => (
-          <BatchShareActions brandId={brandId} batchId={batch.id} ready={batch.files > 0} />
-        ),
+        cell: ({ row: { original: batch } }) => {
+          const summary = reviewSummary(
+            batch.jobs.flatMap((job) =>
+              job.outputs.flatMap((output) => {
+                const state = output.assetId ? libraryState.get(output.assetId) : undefined;
+                return state ? [state] : [];
+              }),
+            ),
+          );
+          return summary ? (
+            <ReviewStatusPill status={summary.status} label={summary.label} />
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          );
+        },
       },
     ],
-    [brandId, sets, formats],
+    [sets, formats, libraryState],
   );
   const batchTable = useReactTable({
     data: batches,
@@ -660,13 +686,6 @@ export function RenderJobsGrid({
               {openBatch.createdByEmail ? ` · ${openBatch.createdByEmail}` : ''}
             </span>
           ) : null}
-          <div className="ml-auto">
-            <BatchShareActions
-              brandId={brandId}
-              batchId={openBatchId}
-              ready={(openBatch?.files ?? 0) > 0}
-            />
-          </div>
         </div>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">

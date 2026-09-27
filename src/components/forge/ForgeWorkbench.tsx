@@ -8,6 +8,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fileSha256, matchDroppedFile, uploadRefusal } from '@/components/forge/ForgeProjectDrop';
+import { type ForgeDeepLink, readForgeDeepLink } from '@/components/forge/forgeDeepLink';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { SharedTemplateDetail } from '@/components/forge/SharedTemplateDetail';
@@ -299,6 +300,17 @@ export function ForgeWorkbench({
     }
   };
 
+  // A link from the Library (`/forge?template=…&set=…&row=…`), read after mount the way the tab
+  // shell reads `#approvals`, and taken once: the template opens here, and its set opens in Render
+  // once the template's key is known.
+  const [deepLink, setDeepLink] = useState<ForgeDeepLink | null>(null);
+  useEffect(() => {
+    const link = readForgeDeepLink(window.location.search);
+    if (!link) return;
+    setSelected(link.templateAssetId);
+    if (link.renderSetId) setDeepLink(link);
+  }, []);
+
   const morph = useTemplateMorphSwap();
   const open = (assetId: string | null) => morph(() => setSelected(assetId));
   const openShared = (template: SharedTemplate | null) =>
@@ -308,6 +320,17 @@ export function ForgeWorkbench({
   const currentShared = current
     ? null
     : (shared.find((template) => sharedTemplateId(template) === selectedShared) ?? null);
+
+  useEffect(() => {
+    if (!deepLink?.renderSetId || current?.assetId !== deepLink.templateAssetId) return;
+    if (!current.templateKey) return;
+    setDeepLink(null);
+    onOpenRender?.({
+      templateKey: current.templateKey,
+      renderSetId: deepLink.renderSetId,
+      ...(deepLink.rowId ? { rowId: deepLink.rowId, rerender: deepLink.rerender } : {}),
+    });
+  }, [current, deepLink, onOpenRender]);
 
   // A drop never makes a second copy by accident: the same bytes open the template that holds them,
   // and a known file name asks whether this is its next revision.

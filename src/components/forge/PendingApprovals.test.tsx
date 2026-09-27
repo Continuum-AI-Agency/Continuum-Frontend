@@ -8,6 +8,7 @@
 
 import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
 import type {
+  ApiRenderJob,
   ApprovalBatchDecisionResponse,
   RenderApproval,
   RenderApprovalDecisionResponse,
@@ -122,6 +123,7 @@ const decideApprovals = mock(
 );
 mock.module('@/lib/library/approvalDecisions', () => ({ decideApprovals }));
 
+import { forgeQueryKeys } from '@/components/forge/queryKeys';
 import { registerToastSink } from '@/components/ui/toast-imperative';
 import { APPROVAL_RELAY_POLL_MS, approvalPollInterval, PendingApprovals } from './PendingApprovals';
 
@@ -137,19 +139,30 @@ beforeEach(() => {
 afterEach(() => {
   unregisterToasts();
   cleanup();
+  ledgerJobs = [];
   fetchRenderApprovals.mockClear();
   decideRenderApproval.mockClear();
   decideApprovals.mockClear();
 });
 
+const ASSET = '77777777-7777-4777-8777-777777777771';
+// The ledger's first page, which the cards read their Library asset from. Seeded fresh, so no test
+// here reaches the jobs API.
+let ledgerJobs: ApiRenderJob[] = [];
+
 const renderApprovals = (
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
-) =>
-  render(
+) => {
+  client.setQueryData(forgeQueryKeys.renderJobList(BRAND, 50), {
+    items: ledgerJobs,
+    nextCursor: null,
+  });
+  return render(
     <QueryClientProvider client={client}>
       <PendingApprovals brandId={BRAND} />
     </QueryClientProvider>,
   );
+};
 
 const card = (text: string) => screen.getByText(text).closest('div.rounded-lg') as HTMLElement;
 const sectionToggle = () => screen.getByRole('button', { name: /^Pending approvals/ });
@@ -358,4 +371,43 @@ test('a package with one variation waiting has no batch buttons', async () => {
   renderApprovals();
   await screen.findByRole('region', { name: 'Approval package, 1 variation' });
   expect(screen.queryAllByRole('button', { name: /all/ })).toHaveLength(0);
+});
+
+test('a card links to its render’s thread in the Library, found by the task it ran as', async () => {
+  const output = {
+    id: 'o1',
+    kind: 'image',
+    fileName: 'render.png',
+    mimeType: 'image/png',
+    url: 'https://example.com/render.png',
+    width: 1080,
+    height: 1920,
+  };
+  ledgerJobs = [
+    {
+      taskUid: 'task-2',
+      outputs: [{ ...output, assetId: '77777777-7777-4777-8777-777777777779', versionId: null }],
+    },
+    {
+      taskUid: pending.taskUid,
+      outputs: [
+        { ...output, id: 'o0', assetId: null, versionId: null },
+        { ...output, assetId: ASSET, versionId: null },
+      ],
+    },
+  ] as ApiRenderJob[];
+  renderApprovals();
+  await screen.findByText('Waiting on you');
+  const href =
+    within(card('Waiting on you'))
+      .getByRole('link', { name: /Open in Library/ })
+      .getAttribute('href') ?? '';
+  expect(href.startsWith('/library?')).toBe(true);
+  expect(new URLSearchParams(href.split('?')[1]).get('assetId')).toBe(ASSET);
+});
+
+test('a card whose render is not on the ledger’s page has no Library link', async () => {
+  renderApprovals();
+  await screen.findByText('Waiting on you');
+  expect(within(card('Waiting on you')).queryByRole('link', { name: /Open in Library/ })).toBeNull();
 });

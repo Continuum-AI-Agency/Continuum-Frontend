@@ -9,14 +9,19 @@
  * and RenderGrids.test.tsx covers them.
  */
 
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { ApiRenderJob, ApiRenderJobListResponse, ForgeRenderSet } from '@continuum/contracts';
 
 const listJobsMock = mock(async () => {
   throw new Error('the rail must read the cached jobs page, not fetch its own');
 });
+const shareRenderSetMock = mock(async (_brandId: string, _setId: string) => ({
+  shareLinkId: '66666666-6666-4666-8666-666666666661',
+  path: '/share/tok123',
+  assetCount: 4,
+}));
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
-  apiRendersApi: { listJobs: listJobsMock },
+  apiRendersApi: { listJobs: listJobsMock, shareRenderSet: shareRenderSetMock },
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -25,10 +30,13 @@ import {
   fireEvent,
   screen,
   render as testingRender,
+  waitFor,
   within,
 } from '@testing-library/react';
 import type React from 'react';
 import { installPickerDomGlobals } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import { registerToastSink } from '@/components/ui/toast-imperative';
+import { ApiError } from '@/lib/api/errors';
 import { RenderSetRail, rendersBySet, rendersLine, templateJobsKey } from './RenderSetRail';
 
 // Base UI waits on a MutationObserver as a popup or dialog animates; happy-dom's, lifted per file
@@ -72,6 +80,7 @@ const page = (items: ApiRenderJob[], nextCursor: string | null = null) =>
 afterEach(() => {
   cleanup();
   listJobsMock.mockClear();
+  shareRenderSetMock.mockClear();
 });
 
 describe('rendersBySet / rendersLine', () => {
@@ -225,6 +234,57 @@ describe('RenderSetRail', () => {
     fireEvent.click(within(teaser).getByText('Teaser'));
     expect(props.confirmDiscard).toHaveBeenCalledTimes(1);
     expect(props.onSwitch.mock.calls[0]).toEqual([TEASER]);
+  });
+
+  describe('Share render set', () => {
+    // A sink per test, not a module mock: `mock.module` outlives this file in a multi-file run.
+    const toasts: Array<{ title: string; variant: unknown }> = [];
+    let unregister = () => {};
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    const writeText = mock(async (_text: string) => undefined);
+    beforeEach(() => {
+      toasts.length = 0;
+      unregister = registerToastSink(({ title, variant }) =>
+        toasts.push({ title: String(title), variant }),
+      );
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    });
+    afterEach(() => {
+      unregister();
+      writeText.mockClear();
+      if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+    });
+
+    const share = async (name: string) => {
+      fireEvent.click(screen.getByRole('button', { name: `Actions for ${name}` }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: /Share render set/ }));
+    };
+
+    test('copies the Library link for the set and says how many renders it holds', async () => {
+      setup();
+      await share('Teaser');
+      await waitFor(() =>
+        expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/share/tok123`),
+      );
+      expect(shareRenderSetMock.mock.calls[0]).toEqual([BRAND, TEASER.id]);
+      expect(toasts.at(-1)?.title).toBe('Link copied — 4 renders, revocable from the Library');
+    });
+
+    test('a set with nothing in the Library yet says so, and copies nothing', async () => {
+      shareRenderSetMock.mockImplementationOnce(async () => {
+        throw new ApiError('render_set_not_in_library', 409, undefined, {
+          error: 'render_set_not_in_library',
+        });
+      });
+      setup();
+      await share('Teaser');
+      await waitFor(() => expect(toasts).toHaveLength(1));
+      expect(toasts[0]?.title).toBe(
+        'Nothing from “Teaser” is in the Library yet. Render it first, then share.',
+      );
+      expect(writeText).not.toHaveBeenCalled();
+    });
   });
 
   test('rows that are in no set read as the open, unsaved one', () => {

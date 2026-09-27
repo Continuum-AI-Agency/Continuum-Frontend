@@ -10,7 +10,11 @@
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
-import type { ApiRenderJob, ApiRenderTemplateSummary } from '@continuum/contracts';
+import type {
+  ApiRenderJob,
+  ApiRenderTemplateSummary,
+  ForgeOutputLibraryState,
+} from '@continuum/contracts';
 import type { PostgresChangesSubscription } from '@/lib/supabase/realtime';
 
 const HOUR = 3_600_000;
@@ -162,9 +166,9 @@ const getJob = mock(async (_brandId: string, id: string) =>
   jobsFixture.find((job) => job.id === id),
 );
 const listEnvironments = mock(async () => ({ items: environmentsFixture }));
-const shareBatch = mock(async (_brandId: string, batchId: string) => ({
-  url: `https://api.example.com/api/ai-studio/renders/shared/hero.zip?token=${batchId}`,
-  expiresAt: '2026-10-19T00:00:00.000Z',
+let libraryStateFixture: ForgeOutputLibraryState[] = [];
+const libraryState = mock(async (_brandId: string, assetIds: string[]) => ({
+  items: libraryStateFixture.filter((item) => assetIds.includes(item.assetId)),
 }));
 const listTemplates = mock(async (_brandId: string, bindingId?: string | null) => ({
   items: bindingId === CLIENT_BINDING ? clientTemplatesFixture : bindingId ? [] : templatesFixture,
@@ -181,6 +185,7 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
     shareBatch,
     prepareMasterDownload,
     masterDownloadStatus,
+    libraryState,
   },
 }));
 mock.module('@/lib/supabase/client', () => ({
@@ -260,7 +265,7 @@ afterAll(() => {
 
 beforeEach(() => {
   realtime = undefined;
-  shareBatch.mockClear();
+  libraryState.mockClear();
   listJobs.mockClear();
   getJob.mockClear();
   listEnvironments.mockClear();
@@ -272,6 +277,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   clientTemplatesFixture = [];
+  libraryStateFixture = [];
   environmentsFixture = [environment(DEFAULT_BINDING, 'Continuum_app', true)];
 });
 
@@ -344,39 +350,43 @@ describe('RenderJobsGrid', () => {
     expect(screen.queryByText('Madrid')).toBeNull();
   }, 30_000);
 
-  test('Copy link mints the batch’s share link without opening the batch; no files, no zip', async () => {
-    const writeText = mock(async (_text: string) => undefined);
-    const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
-    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
-    try {
-      const OTHER = '99999999-9999-4999-8999-999999999992';
-      const queued: ApiRenderJob = { ...PROMO, batchId: OTHER, status: 'queued', outputs: [] };
-      await renderLedger([MADRID, queued], [TEMPLATE], undefined, { open: false });
+  test('each batch reads its outputs’ Library review in one read: approved of total, toned by the furthest behind', async () => {
+    const OTHER = '99999999-9999-4999-8999-999999999992';
+    const asset = (n: number) => `77777777-7777-4777-8777-77777777778${n}`;
+    const output = (n: number) => ({ ...MADRID.outputs[0]!, id: `o${n}`, assetId: asset(n) });
+    const later: ApiRenderJob = {
+      ...PROMO,
+      batchId: OTHER,
+      status: 'finished',
+      outputs: [output(1), output(2), output(3)],
+    };
+    const state = (n: number, reviewStatus: ForgeOutputLibraryState['reviewStatus']) => ({
+      assetId: asset(n),
+      reviewStatus,
+      versionNumber: 1,
+      versionCount: 1,
+      commentCount: 0,
+    });
+    libraryStateFixture = [
+      state(1, 'approved'),
+      state(2, 'approved'),
+      state(3, 'in_review'),
+      { ...state(0, 'needs_changes'), assetId: MADRID.outputs[0]!.assetId! },
+    ];
+    await renderLedger([MADRID, ROMA, later], [TEMPLATE], undefined, { open: false });
 
-      const finishedRow = within(
-        screen.getByText('1 render · 1 file').closest('tr') as HTMLElement,
-      );
-      fireEvent.click(finishedRow.getByRole('button', { name: /Copy link/ }));
-      await waitFor(() =>
-        expect(writeText).toHaveBeenCalledWith(
-          `https://api.example.com/api/ai-studio/renders/shared/hero.zip?token=${BATCH}`,
-        ),
-      );
-      expect(shareBatch).toHaveBeenCalledWith(BRAND, BATCH);
-      // The click stayed on the button: the ledger is still on its batches.
-      expect(screen.queryByText('Madrid')).toBeNull();
-
-      const queuedRow = within(screen.getByText('1 render · 0 files').closest('tr') as HTMLElement);
-      expect(
-        (queuedRow.getByRole('button', { name: /Copy link/ }) as HTMLButtonElement).disabled,
-      ).toBe(true);
-      expect((queuedRow.getByRole('button', { name: /Zip/ }) as HTMLButtonElement).disabled).toBe(
-        true,
-      );
-    } finally {
-      if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard);
-      else Reflect.deleteProperty(navigator, 'clipboard');
-    }
+    const laterRow = within(screen.getByText('1 render · 3 files').closest('tr') as HTMLElement);
+    const pill = await laterRow.findByText('2/3 approved');
+    expect(pill.closest('[title]')?.getAttribute('title')).toBe('Library review: In review');
+    const firstRow = within(screen.getByText('2 renders · 1 file').closest('tr') as HTMLElement);
+    expect(
+      (await firstRow.findByText('0/1 approved')).closest('[title]')?.getAttribute('title'),
+    ).toBe('Library review: Needs changes');
+    // Every output on the page, in one call.
+    expect(libraryState).toHaveBeenCalledTimes(1);
+    expect([...(libraryState.mock.calls[0]?.[1] ?? [])].sort()).toEqual(
+      [asset(1), asset(2), asset(3), MADRID.outputs[0]!.assetId!].sort(),
+    );
   }, 30_000);
 
   test('the Template version column reads "Rev N · date", the digest when no revision came back, and names the gap when it has none', async () => {
@@ -592,6 +602,25 @@ describe('RenderJobsGrid', () => {
     fireEvent.click(screen.getByRole('button', { name: /All renders/ }));
     await waitFor(() => expect(screen.getByRole('table')).toBeTruthy());
     expect(rowOrder()).toEqual(['Promo B', 'Roma', 'Madrid']);
+  }, 30_000);
+
+  test('a job’s detail says where each output stands in the Library and links to its thread', async () => {
+    const assetId = MADRID.outputs[0]!.assetId!;
+    libraryStateFixture = [
+      { assetId, reviewStatus: 'in_review', versionNumber: 3, versionCount: 3, commentCount: 2 },
+    ];
+    await renderLedger([MADRID, ROMA, PROMO], [TEMPLATE]);
+    fireEvent.click(screen.getByText('Madrid'));
+
+    const library = within(await screen.findByRole('list', { name: 'In the Library' }));
+    expect(library.getByText('madrid_1080x1920.png')).toBeTruthy();
+    expect(await library.findByText('In review')).toBeTruthy();
+    expect(library.getByTitle('Comments in the Library').textContent).toBe('2 comments');
+    expect(library.getByText('v3').getAttribute('title')).toBe('Version 3 of 3');
+    const href = library.getByRole('link', { name: /Open in Library/ }).getAttribute('href') ?? '';
+    expect(href.startsWith('/library?')).toBe(true);
+    expect(new URLSearchParams(href.split('?')[1]).get('assetId')).toBe(assetId);
+    expect(libraryState.mock.calls.at(-1)?.[1]).toEqual([assetId]);
   }, 30_000);
 
   test('a refresh that only changes the approval updates the badge', async () => {

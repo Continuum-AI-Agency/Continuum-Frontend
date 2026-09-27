@@ -252,6 +252,15 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: {
     listJobs: async () => ({ items: jobs, nextCursor: null }),
     listRenderSets: async () => ({ items: [{ id: 'set-1' }, { id: 'set-2' }], nextCursor: null }),
+    libraryState: async (_brandId: string, assetIds: string[]) => ({
+      items: assetIds.map((assetId) => ({
+        assetId,
+        reviewStatus: 'none',
+        versionNumber: 4,
+        versionCount: 4,
+        commentCount: 3,
+      })),
+    }),
   },
 }));
 
@@ -346,6 +355,17 @@ describe('TemplateDetail', () => {
     expect(opened).toContain('tpl_starcraft_b17d81_starcraft_promo_root');
     expect(opened).toContain('Continuum_app');
     expect(opened).toContain(ASSET);
+  });
+
+  test('the header reads the template’s Library thread: comments, versions and a link to it', async () => {
+    renderDetail();
+    const comments = await screen.findByTitle('Comments in the Library');
+    expect(comments.textContent).toBe('3 comments');
+    expect(screen.getByText('4 versions')).toBeTruthy();
+    const href =
+      screen.getByRole('link', { name: /Open in Library/ }).getAttribute('href') ?? '';
+    expect(href.startsWith('/library?')).toBe(true);
+    expect(new URLSearchParams(href.split('?')[1]).get('assetId')).toBe(ASSET);
   });
 
   test('a brand with two workspaces is never asked to pick one', async () => {
