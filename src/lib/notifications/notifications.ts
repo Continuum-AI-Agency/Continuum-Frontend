@@ -82,5 +82,28 @@ export function describeNotification(notification: AppNotification): Notificatio
         detail: message ?? payloadString(notification, 'excerpt'),
         href,
       };
+    case 'asset_assigned': {
+      const count = typeof notification.payload.count === 'number' ? notification.payload.count : 1;
+      return {
+        title:
+          count > 1
+            ? `${actorName} assigned you ${count} assets`
+            : `${actorName} assigned you “${assetName}”`,
+        detail: payloadString(notification, 'fieldName'),
+        href,
+      };
+    }
+    case 'review_reminder':
+      return {
+        title: `Reminder: “${assetName}” is waiting for your review`,
+        detail: message,
+        href,
+      };
+    case 'review_escalation':
+      return {
+        title: `“${assetName}” review is overdue`,
+        detail: message,
+        href,
+      };
   }
 }

@@ -6,6 +6,7 @@ import {
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
+import { ensureLibrarySystemViews } from '@/lib/media/fetchers.server';
 import type { MediaCollectionRow } from '@/lib/media/schema';
 import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
@@ -102,11 +103,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  await ensureLibrarySystemViews(supabase, brandId);
+
+  // The service client bypasses RLS, so the private fence RLS draws is redrawn here:
+  // a private collection is listed to its creator only.
   const admin = createSupabaseAdminClient();
   const { data, error } = await mediaSchema(admin)
     .from('collections')
     .select('*')
     .eq('brand_id', brandId)
+    .or(`visibility.eq.team,created_by.eq.${user.id}`)
     .order('created_at', { ascending: false });
 
   if (error) {

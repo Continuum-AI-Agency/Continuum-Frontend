@@ -25,6 +25,7 @@ import {
 } from '@/lib/media/filters';
 import { cn } from '@/lib/utils';
 import { FieldFilterChips } from './fields/FieldFilterChips';
+import { SaveFiltersAsCollection } from './fields/SaveFiltersAsCollection';
 
 type Props = {
   source: SourceFilterValue;
@@ -174,6 +175,19 @@ export function LibraryFilterBar({
             variant={variant}
           />
         )}
+        {customFields?.[0] ? (
+          <SaveFiltersAsCollection
+            brandId={customFields[0].brandId}
+            query={{
+              mediaType,
+              createdWith: [...(createdWith ?? [])],
+              tags: [...(selectedTags ?? [])],
+              reviewStatuses: [...(reviewStatuses ?? [])],
+              fieldFilters: [...(fieldFilters ?? [])],
+            }}
+            onSaved={() => onFieldFiltersChange?.([])}
+          />
+        ) : null}
       </div>
     );
   }
@@ -235,6 +249,7 @@ const MEDIA_TYPE_OPTIONS: readonly { value: LibraryMediaType; label: string }[] 
   { value: 'video', label: 'Videos' },
   { value: 'carousel', label: 'Carousels' },
   { value: 'project_file', label: 'Project files' },
+  { value: 'audio', label: 'Audio' },
 ];
 
 const PLACEMENT_OPTIONS: readonly { value: LibraryPlacement; label: string }[] = [
@@ -434,7 +449,8 @@ function AdvancedFilterPopover({
               bar had the same one as the bulk toolbar. No project matching the SEARCH text
               hides, because that is what a search does and every sibling section agrees. */}
           {onProjectIdsChange &&
-          (projectOptions.length === 0 || projectOptions.some((project) => matches(project.name))) ? (
+          (projectOptions.length === 0 ||
+            projectOptions.some((project) => matches(project.name))) ? (
             <FilterSection label="Project">
               {projectOptions.length === 0 ? (
                 <span className="text-xs text-muted-foreground">
@@ -448,7 +464,9 @@ function AdvancedFilterPopover({
                       key={project.id}
                       label={project.name}
                       selected={selectedProjectIds.includes(project.id)}
-                      onClick={() => onProjectIdsChange(toggleValue(selectedProjectIds, project.id))}
+                      onClick={() =>
+                        onProjectIdsChange(toggleValue(selectedProjectIds, project.id))
+                      }
                     />
                   ))
               )}

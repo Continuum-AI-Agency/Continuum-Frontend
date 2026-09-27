@@ -16,8 +16,10 @@
 import {
   type CustomField,
   type CustomFieldOption,
+  type CustomFieldOptions,
   type CustomFieldType,
   customFieldChoiceOptions,
+  DEFAULT_RATING_MAX,
   MAX_CUSTOM_FIELDS_PER_BRAND,
 } from '@continuum/contracts';
 import { ChevronDown, ChevronUp, Loader2, Plus, Trash2, X } from 'lucide-react';
@@ -69,14 +71,20 @@ const TYPE_LABEL: Record<CustomFieldType, string> = {
   status: 'Status',
 };
 
-// This dialog can only author options for the selects, so it offers the types it
-// can create correctly; the rest still get a label when they already exist.
-const CREATABLE_TYPES: CustomFieldType[] = ['single_select', 'multi_select', 'text', 'date'];
+const CREATABLE_TYPES = Object.keys(TYPE_LABEL) as CustomFieldType[];
 
-const SELECT_TYPES: CustomFieldType[] = ['single_select', 'multi_select'];
+// The types defined by a list of options. A status is a select whose every option
+// carries a colour, so the board and the chips can show the stage at a glance.
+const CHOICE_TYPES: CustomFieldType[] = ['single_select', 'multi_select', 'status'];
 
-function newOption(label: string): CustomFieldOption {
-  return { id: crypto.randomUUID(), label };
+// New stages cycle through these until someone picks their own.
+const STATUS_PALETTE = ['#94a3b8', '#3b82f6', '#f59e0b', '#8b5cf6', '#10b981', '#ef4444'];
+
+function newOption(type: CustomFieldType, label: string, index: number): CustomFieldOption {
+  const option = { id: crypto.randomUUID(), label };
+  return type === 'status'
+    ? { ...option, color: STATUS_PALETTE[index % STATUS_PALETTE.length] }
+    : option;
 }
 
 export type CustomFieldManagerDialogProps = {
@@ -119,7 +127,7 @@ export function CustomFieldManagerDialog({
     );
   };
 
-  const saveOptions = (field: CustomField, options: CustomFieldOption[]) => {
+  const saveOptions = (field: CustomField, options: CustomFieldOptions) => {
     void run(
       () => updateCustomField({ brandId, fieldId: field.id, options }),
       'Saving the options failed',
@@ -160,7 +168,7 @@ export function CustomFieldManagerDialog({
             <DialogTitle className="text-sm">Custom fields</DialogTitle>
             <DialogDescription className="text-xs">
               Your brand's own metadata on an asset. Every field here can be filtered on, and a
-              single-select can group the board.
+              single-select, status or user field can group the board.
             </DialogDescription>
           </DialogHeader>
 
@@ -243,18 +251,18 @@ function FieldRow({
   onRename: (name: string) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
-  onSaveOptions: (options: CustomFieldOption[]) => void;
+  onSaveOptions: (options: CustomFieldOptions) => void;
   onDelete: () => void;
 }) {
   const [draftOption, setDraftOption] = useState('');
-  const isSelect = SELECT_TYPES.includes(field.type);
+  const isSelect = CHOICE_TYPES.includes(field.type);
   const options = customFieldChoiceOptions(field);
 
   const addOption = () => {
     const label = draftOption.trim();
     if (!label) return;
     setDraftOption('');
-    onSaveOptions([...options, newOption(label)]);
+    onSaveOptions([...options, newOption(field.type, label, options.length)]);
   };
 
   const relabelOption = (optionId: string, label: string) => {
@@ -264,9 +272,13 @@ function FieldRow({
     // The id is untouched: the assets holding it keep their answer, and the new
     // label shows up wherever it is read.
     onSaveOptions(
-      options.map((option) =>
-        option.id === optionId ? { ...option, label: trimmed } : option,
-      ),
+      options.map((option) => (option.id === optionId ? { ...option, label: trimmed } : option)),
+    );
+  };
+
+  const recolorOption = (optionId: string, color: string) => {
+    onSaveOptions(
+      options.map((option) => (option.id === optionId ? { ...option, color } : option)),
     );
   };
 
@@ -333,6 +345,20 @@ function FieldRow({
         <div className="mt-1.5 space-y-1 border-t border-border/60 pt-1.5 pl-1.5">
           {options.map((option) => (
             <div key={option.id} className="flex items-center gap-1">
+              {field.type === 'status' ? (
+                <input
+                  type="color"
+                  defaultValue={option.color ?? STATUS_PALETTE[0]}
+                  disabled={busy}
+                  aria-label={`Colour of ${option.label}`}
+                  className="size-6 shrink-0 cursor-pointer rounded border-0 bg-transparent p-0"
+                  onBlur={(event) => {
+                    if (event.target.value !== option.color) {
+                      recolorOption(option.id, event.target.value);
+                    }
+                  }}
+                />
+              ) : null}
               <Input
                 defaultValue={option.label}
                 disabled={busy}
@@ -385,6 +411,54 @@ function FieldRow({
           </div>
         </div>
       ) : null}
+
+      {field.type === 'rating' ? (
+        <RatingScalePicker
+          value={ratingMaxOf(field.options)}
+          disabled={busy}
+          onChange={(max) => onSaveOptions({ max })}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ratingMaxOf(options: CustomFieldOptions): number {
+  return !Array.isArray(options) && options.max ? options.max : DEFAULT_RATING_MAX;
+}
+
+function RatingScalePicker({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: number;
+  disabled: boolean;
+  onChange: (max: number) => void;
+}) {
+  return (
+    <div className="mt-1.5 flex items-center gap-2 border-t border-border/60 pt-1.5 pl-1.5">
+      <span className="text-2xs text-muted-foreground">Out of</span>
+      <Select
+        value={String(value)}
+        disabled={disabled}
+        onValueChange={(next) => onChange(Number(next))}
+      >
+        <SelectTrigger size="sm" className="h-7 w-20 text-xs" aria-label="Rating scale">
+          <SelectValue
+            items={Object.fromEntries(
+              Array.from({ length: 10 }, (_, index) => [String(index + 1), `${index + 1} stars`]),
+            )}
+          />
+        </SelectTrigger>
+        <SelectContent>
+          {Array.from({ length: 10 }, (_, index) => index + 1).map((max) => (
+            <SelectItem key={max} value={String(max)} className="text-xs">
+              {max} stars
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
@@ -397,19 +471,20 @@ function NewFieldForm({
   onCreate: (input: {
     name: string;
     type: CustomFieldType;
-    options?: CustomFieldOption[];
+    options?: CustomFieldOptions;
   }) => Promise<void>;
 }) {
   const [name, setName] = useState('');
   const [type, setType] = useState<CustomFieldType>('single_select');
   const [optionsText, setOptionsText] = useState('');
+  const [ratingScale, setRatingScale] = useState(DEFAULT_RATING_MAX);
 
-  const isSelect = SELECT_TYPES.includes(type);
+  const isSelect = CHOICE_TYPES.includes(type);
   const options = optionsText
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
-    .map(newOption);
+    .map((label, index) => newOption(type, label, index));
   const ready = name.trim().length > 0 && (!isSelect || options.length > 0);
 
   const submit = async () => {
@@ -417,7 +492,7 @@ function NewFieldForm({
     await onCreate({
       name: name.trim(),
       type,
-      ...(isSelect ? { options } : {}),
+      ...(isSelect ? { options } : type === 'rating' ? { options: { max: ratingScale } } : {}),
     });
     setName('');
     setOptionsText('');
@@ -440,7 +515,7 @@ function NewFieldForm({
           onValueChange={(next) => setType(next as CustomFieldType)}
         >
           <SelectTrigger size="sm" className="h-8 w-32 text-xs" aria-label="New field type">
-            <SelectValue />
+            <SelectValue items={TYPE_LABEL} />
           </SelectTrigger>
           <SelectContent>
             {CREATABLE_TYPES.map((candidate) => (
@@ -466,11 +541,14 @@ function NewFieldForm({
           value={optionsText}
           disabled={busy}
           rows={3}
-          placeholder="One option per line"
+          placeholder={type === 'status' ? 'One stage per line' : 'One option per line'}
           aria-label="New field options, one per line"
           className="resize-none text-xs"
           onChange={(event) => setOptionsText(event.target.value)}
         />
+      ) : null}
+      {type === 'rating' ? (
+        <RatingScalePicker value={ratingScale} disabled={busy} onChange={setRatingScale} />
       ) : null}
     </div>
   );
