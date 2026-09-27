@@ -1015,8 +1015,13 @@ const BREAKDOWN_MEASURE = new RegExp(
   'iu',
 );
 
-const isBreakdownClaim = (judged: string): boolean =>
-  BREAKDOWN_SEGMENT.test(judged) && BREAKDOWN_MEASURE.test(judged);
+/** A calendar date — `2026-09-14`, `14/09/2026` — whose digit pairs read as an age band. */
+const CALENDAR_DATE = /\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4}/g;
+
+const isBreakdownClaim = (judged: string): boolean => {
+  const undated = judged.replace(CALENDAR_DATE, ' ');
+  return BREAKDOWN_SEGMENT.test(undated) && BREAKDOWN_MEASURE.test(undated);
+};
 
 export type Claim = { kind: ClaimKind; span: string };
 

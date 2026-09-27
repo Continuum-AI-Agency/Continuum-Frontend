@@ -770,6 +770,20 @@ describe('classifyClaims — breakdown', () => {
     ]);
   });
 
+  // Golden 0fe1d3e7 wow-comparison: the justification's opening sentence names its window as
+  // ISO dates, and "2026-09-14" holds "26-09" — read as an age band beside the spend it
+  // states, so a plain account total became a breakdown claim with no breakdown read.
+  it('never reads a calendar date as an age band', () => {
+    expect(
+      kindsOf(
+        'Across [window: 2026-09-14..2026-09-20], Meta ad account insights show that the account spent 19304.12 MXN to capture 7398 clicks.',
+      ),
+    ).toEqual(['figure']);
+    expect(kindsOf('Del 2026-09-20 al 2026-09-26 la cuenta gastó 23983.93 MXN.')).toEqual([
+      'figure',
+    ]);
+  });
+
   it('leaves a targeting statement an audience claim: no share, no metric', () => {
     expect(kindsOf('Targeting women 25-34 with a lookalike of purchasers.')).toEqual([
       'audience',
