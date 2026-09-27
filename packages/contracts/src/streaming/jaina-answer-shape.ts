@@ -405,6 +405,16 @@ const withoutExecutive = (body: string, executive: string): string => {
   return `${body.slice(0, at)}${body.slice(at + head.length)}`.trim();
 };
 
+/**
+ * An item as the reader sees it: its title (a campaign's name, over a step) drawn above its
+ * text. A text that already names its title is not given it twice.
+ */
+const underItemTitle = (title: string, text: string): string => {
+  const name = title.trim();
+  if (!name || text.toLowerCase().includes(name.toLowerCase())) return text;
+  return `${name}: ${text}`;
+};
+
 /** The executive and the justification the reader sees — the grader's judge reads these too. */
 export function answerTextsOf(report: unknown): AnswerTexts {
   const rec = recordOf(report);
@@ -417,8 +427,8 @@ export function answerTextsOf(report: unknown): AnswerTexts {
       const text = stringOf(section.text);
       if (text.trim()) justification.push(renderRefs(text, figures));
       for (const item of arrayOf(section.items).map(recordOf)) {
-        const itemText = stringOf(item.text);
-        if (itemText.trim()) justification.push(renderRefs(itemText, figures));
+        const itemText = renderRefs(stringOf(item.text), figures).trim();
+        if (itemText) justification.push(underItemTitle(stringOf(item.title), itemText));
       }
     }
     return {

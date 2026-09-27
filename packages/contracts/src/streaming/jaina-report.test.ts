@@ -896,6 +896,61 @@ describe('groundingViolationsOf — rendered figures', () => {
   });
 });
 
+describe('groundingViolationsOf — a totals row', () => {
+  // Golden 36c6f691: a materialized money table now closes on a totals row. Its sums are in
+  // no tool output — they add up the cells above them, and that is what is checked.
+  const figures = [2197.35, 2005.21, 1700.03, 63, 58, 31, 34.88, 34.57, 54.84];
+  const table = (total: Record<string, unknown>) => ({
+    block_id: 'ads',
+    category: 'data_table',
+    columns: [
+      { key: 'creative', label: 'Creative', format: 'creative' },
+      { key: 'spend', label: 'Spend', format: 'currency' },
+      { key: 'conversations', label: 'Conversations', format: 'number' },
+      { key: 'cpr', label: 'Cost / conversation', format: 'currency' },
+    ],
+    rows: [
+      { creative: 'A', spend: '2,197 MXN', conversations: 63, cpr: '34.88 MXN' },
+      { creative: 'B', spend: '2,005 MXN', conversations: 58, cpr: '34.57 MXN' },
+      { creative: 'C', spend: '1,700 MXN', conversations: 31, cpr: '54.84 MXN' },
+      { creative: 'Total', ...total },
+    ],
+  });
+
+  it('reads a totals cell that adds up its column as measured', () => {
+    expect(
+      groundingViolationsOf(table({ spend: '5,903 MXN', conversations: 152, cpr: null }), {
+        toolKinds: [],
+        figures,
+      }),
+    ).toEqual([]);
+  });
+
+  it('flags a totals cell that does not add up, and a rate summed as if it were money', () => {
+    expect(
+      groundingViolationsOf(table({ spend: '6,400 MXN', conversations: 152, cpr: '124.29 MXN' }), {
+        toolKinds: [],
+        figures,
+      }),
+    ).toEqual([
+      { kind: 'figure', span: '6,400 MXN', reason: 'claim_without_source' },
+      { kind: 'figure', span: '124.29 MXN', reason: 'claim_without_source' },
+    ]);
+  });
+
+  it('holds a row that is not labelled a total to the figure set, sum or not', () => {
+    expect(
+      groundingViolationsOf(table({ creative: 'D', spend: '5,903 MXN', conversations: 152 }), {
+        toolKinds: [],
+        figures,
+      }),
+    ).toEqual([
+      { kind: 'figure', span: '5,903 MXN', reason: 'claim_without_source' },
+      { kind: 'figure', span: 'Conversations: 152', reason: 'claim_without_source' },
+    ]);
+  });
+});
+
 describe('cellsOfBlocks / headersOfBlocks', () => {
   it('walks every rendered value with its label and format, in render order', () => {
     const cells = cellsOfBlocks([

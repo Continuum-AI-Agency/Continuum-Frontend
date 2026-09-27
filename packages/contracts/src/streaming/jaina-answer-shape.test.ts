@@ -433,6 +433,28 @@ describe('answerShapeOf — template answers', () => {
     expect(codesOf(templated(rankingBlock({}), 'Analysis complete.'))).toEqual([]);
   });
 
+  it('reads each item under the title the reader sees above it (golden 36c6f691)', () => {
+    // week-bridge-7d, judge FAIL: "campaign names for the individual campaign steps" — each
+    // step's name is its item title, drawn above the text, and these texts left it out.
+    const block = rankingBlock({});
+    const found = block.justification.sections[1] as { items: Array<Record<string, unknown>> };
+    found.items = [
+      {
+        id: 'step_1',
+        title: 'AV CAMACHO // MENSAJES // AGOSTO 2026',
+        badge_figure_id: 'cpr_1',
+        text: 'De {cpr_2} a {cpr_1} por compra.',
+      },
+      { id: 'effect', title: 'Gastar más', badge_figure_id: 'cpr_avg', text: 'Gastar más: {cpr_avg}.' },
+    ];
+    const texts = answerTextsOf(templated(block));
+    expect(texts.justification).toContain(
+      'AV CAMACHO // MENSAJES // AGOSTO 2026: De 356 MXN a 249 MXN por compra.',
+    );
+    // A text that already opens with its title is not given it twice.
+    expect(texts.justification).toContain('Gastar más: 300 MXN.');
+  });
+
   it('a two-sentence template sentence is flagged', () => {
     expect(
       codesOf(templated(rankingBlock({ sentence: 'A es la mejor. Cuesta {cpr_1} por compra.' }))),

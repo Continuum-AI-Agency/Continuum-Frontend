@@ -1457,6 +1457,70 @@ const printsOnlyMeasuredFigures = (
     .filter((readings) => readings.some((reading) => reading.value > 0))
     .every((readings) => readings.some((reading) => readingIsMeasured(reading, sorted)));
 
+/** A column whose values add up across rows: spend, cost, revenue, counts of results. */
+const ADDITIVE_COLUMN =
+  /(?:^|_)(?:spend|amount_spent|cost|revenue|value|impressions|clicks|purchases|leads|conversions|conversations|results|installs|registrations|add_to_cart|checkouts|video_views|thruplays|engagements)$/;
+/** A rate, ratio or average: CPC, CTR, a cost per result, ROAS — its sum is no figure at all. */
+const RATE_COLUMN =
+  /(?:^|_)(?:cpc|cpm|cpa|cpl|cpp|cpr|cpv|ctr|cvr|roas|frequency|rate|ratio|share|pct|percent|avg|average|median|per)(?:_|$)/;
+
+/**
+ * Whether a table column sums across its rows — what a totals row may add up. Read off the
+ * column key: `spend`, `cost`, `revenue`, `messaging_conversations` do; `cpc`, `ctr`,
+ * `cost_per_messaging_conversation`, `roas` and `reach` (people, deduplicated) do not.
+ */
+export const isAdditiveTableColumn = (column: { key: string; format?: string | null }): boolean =>
+  (column.format === 'currency' || column.format === 'number') &&
+  ADDITIVE_COLUMN.test(column.key.toLowerCase()) &&
+  !RATE_COLUMN.test(column.key.toLowerCase());
+
+/** A row that labels itself the table's total — the same test `validateReport` applies. */
+const isTotalsRow = (row: Record<string, unknown>): boolean =>
+  Object.values(row).some((value) => typeof value === 'string' && /^total/i.test(value));
+
+/**
+ * The `where` paths of a table's totals cells that add up their column: an additive column
+ * whose every other row prints one number, summed, within the rounding of the printed cells
+ * (half a unit of each cell's own precision) or half a percent. Those cells are computed
+ * from the cells above them, not read from a tool, so they are not held to the figure set.
+ */
+const summedTotalsCellsOf = (block: Record<string, unknown>): Set<string> => {
+  const out = new Set<string>();
+  if (block.category !== 'data_table') return out;
+  const id = String(block.block_id ?? block.category ?? '?');
+  const rows = looseArray(block.rows).map(looseRecord);
+  const totals = rows.flatMap((row, index) => (isTotalsRow(row) ? [index] : []));
+  if (totals.length === 0) return out;
+  for (const column of looseArray(block.columns).map(looseRecord)) {
+    const key = typeof column.key === 'string' ? column.key : null;
+    if (!key || !isAdditiveTableColumn({ key, format: formatOf(column.format, 'text') })) continue;
+    let sum = 0;
+    let slack = 0;
+    let readable = true;
+    rows.forEach((row, index) => {
+      if (totals.includes(index) || row[key] === null || row[key] === undefined) return;
+      const tokens = numberTokensOfCell(row[key]);
+      const reading = tokens.length === 1 ? tokens[0][0] : undefined;
+      if (!reading) {
+        readable = false;
+        return;
+      }
+      sum += reading.value;
+      slack += 0.5 * 10 ** -reading.decimals;
+    });
+    if (!readable) continue;
+    for (const index of totals) {
+      const tokens = numberTokensOfCell(rows[index][key]);
+      if (tokens.length !== 1) continue;
+      const tolerance = Math.max(slack, Math.abs(sum) * FIGURE_RELATIVE_TOLERANCE);
+      if (tokens[0].some((reading) => Math.abs(reading.value - sum) <= tolerance + 0.5 * 10 ** -reading.decimals)) {
+        out.add(`${id}.rows[${index}].${key}`);
+      }
+    }
+  }
+  return out;
+};
+
 /**
  * The rendered cells of one block whose printed figures the turn's tool outputs do not
  * carry. The span is what the reader sees: the cell's own text, or `label: value` for a
@@ -1471,8 +1535,9 @@ const unmeasuredCellsOf = (
   // interval) and each carries its source and derivation, held by `validateTemplateBlock`;
   // matching them against raw tool numbers would flag every derived ratio.
   if (block.category === 'answer_template') return out;
+  const summed = summedTotalsCellsOf(block);
   for (const cell of cellsOfBlocks([block])) {
-    if (!isMeasuredCell(cell)) continue;
+    if (!isMeasuredCell(cell) || summed.has(cell.where)) continue;
     if (printsOnlyMeasuredFigures(numberTokensOfCell(cell.value), sorted)) continue;
     out.push({
       span:
