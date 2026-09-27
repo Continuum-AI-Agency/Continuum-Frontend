@@ -47,6 +47,7 @@ describe('browse taxonomy', () => {
       { value: 'image', label: 'Images' },
       { value: 'video', label: 'Videos' },
       { value: 'file', label: 'Project files' },
+      { value: 'audio', label: 'Audio' },
     ]);
   });
 

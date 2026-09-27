@@ -10,11 +10,7 @@
 // ("is"), or find the assets nobody has filled in ("is empty"). The mutation
 // helpers in customFieldFilters own that rule; this component only renders it.
 
-import {
-  type CustomField,
-  type CustomFieldFilter,
-  customFieldChoiceOptions,
-} from '@continuum/contracts';
+import type { CustomField, CustomFieldFilter, CustomFieldOption } from '@continuum/contracts';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -31,12 +27,16 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import {
   activeFilterFor,
   clearFieldFilter,
+  type FilterMember,
   fieldFilterSummary,
+  filterChoices,
   setLiteralFilter,
   toggleEmptyFilter,
   toggleSelectFilterValue,
 } from '@/lib/library/customFieldFilters';
 import { cn } from '@/lib/utils';
+import { useMentionTargets } from '../detail/useMentionTargets';
+import { StatusDot } from './CustomFieldValueEditor';
 
 export type FieldFilterChipsProps = {
   fields: readonly CustomField[];
@@ -65,6 +65,10 @@ export function FieldFilterChips({
   onChange,
   variant = 'page',
 }: FieldFilterChipsProps) {
+  const brandId = fields[0]?.brandId ?? null;
+  const hasUserField = fields.some((field) => field.type === 'user');
+  const memberTargets = useMentionTargets(hasUserField ? brandId : null);
+  const members: FilterMember[] = memberTargets ?? [];
   if (fields.length === 0) return null;
   const compact = variant === 'compact';
 
@@ -78,11 +82,12 @@ export function FieldFilterChips({
     >
       {fields.map((field) => {
         const filter = activeFilterFor(filters, field.id);
-        const summary = fieldFilterSummary(field, filter);
-        const isSelect = field.type === 'single_select' || field.type === 'multi_select';
-        return isSelect ? (
+        const summary = fieldFilterSummary(field, filter, members);
+        const choices = filterChoices(field, members);
+        return choices ? (
           <SelectFieldChip
             key={field.id}
+            choices={choices}
             field={field}
             filter={filter}
             summary={summary}
@@ -125,7 +130,15 @@ function ChipLabel({ field, summary }: { field: CustomField; summary: string }) 
   );
 }
 
-function SelectFieldChip({ field, filter, summary, compact, filters, onChange }: ChipProps) {
+function SelectFieldChip({
+  field,
+  choices,
+  filter,
+  summary,
+  compact,
+  filters,
+  onChange,
+}: ChipProps & { choices: CustomFieldOption[] }) {
   const selected = filter?.operator === 'any_of' ? filter.values : [];
   return (
     <DropdownMenu>
@@ -141,7 +154,7 @@ function SelectFieldChip({ field, filter, summary, compact, filters, onChange }:
         }
       />
       <DropdownMenuContent align="start" className="w-52">
-        {customFieldChoiceOptions(field).map((option) => (
+        {choices.map((option) => (
           <DropdownMenuCheckboxItem
             key={option.id}
             checked={selected.includes(option.id)}
@@ -150,8 +163,9 @@ function SelectFieldChip({ field, filter, summary, compact, filters, onChange }:
               event.preventDefault();
               onChange(toggleSelectFilterValue(filters, field.id, option.id));
             }}
-            className="text-xs"
+            className="gap-1.5 text-xs"
           >
+            {field.type === 'status' ? <StatusDot color={option.color} /> : null}
             {option.label}
           </DropdownMenuCheckboxItem>
         ))}
@@ -217,6 +231,7 @@ function LiteralFieldChip({ field, filter, summary, compact, filters, onChange }
         ) : (
           <Input
             value={draft}
+            type={field.type === 'number' ? 'number' : 'text'}
             autoFocus
             placeholder={`${field.name} is…`}
             aria-label={`Filter ${field.name}`}

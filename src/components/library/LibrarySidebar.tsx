@@ -12,8 +12,10 @@ import {
   orderCollectionsTree,
 } from '@continuum/contracts';
 import {
+  BadgeCheck,
   Bookmark,
   BookmarkPlus,
+  Eye,
   Film,
   Folder,
   FolderOpen,
@@ -25,12 +27,14 @@ import {
   LayoutTemplate,
   Link2,
   Loader2,
+  Lock,
   PackageOpen,
   Pencil,
   ShieldAlert,
   Sparkles,
   Trash2,
   Type,
+  UserCheck,
   Workflow,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -49,6 +53,19 @@ import type { LibrarySection } from '@/lib/media/sections';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import { ShareBoxDialog } from './ShareBoxDialog';
+import { useLibraryLiveRefresh } from './useLibraryLiveRefresh';
+
+// The seeded system views (media.ensure_library_system_views), in the order a
+// person reaches for them. Their system_key prefix is what separates them from the
+// product boards (canvas_outputs, forge_renders) that stay out of the sidebar.
+const SYSTEM_VIEW_PREFIX = 'view_';
+const SYSTEM_VIEW_ICONS: Record<string, typeof Folder> = {
+  view_needs_my_review: Eye,
+  view_assigned_to_me: UserCheck,
+  view_approved: BadgeCheck,
+  view_forge_renders: Workflow,
+};
+const SYSTEM_VIEW_ORDER = Object.keys(SYSTEM_VIEW_ICONS);
 
 export type { LibraryBrowseDestination };
 
@@ -133,6 +150,7 @@ function CollectionRow({
   label,
   kind,
   locked,
+  isPrivate,
   onClick,
   onShare,
   onRename,
@@ -142,6 +160,7 @@ function CollectionRow({
   label: string;
   kind: MediaCollection['kind'];
   locked: boolean;
+  isPrivate: boolean;
   onClick: () => void;
   onShare: (() => void) | null;
   onRename: () => void;
@@ -165,6 +184,12 @@ function CollectionRow({
           <Folder className="size-4 shrink-0 text-muted-foreground" />
         )}
         <span className="truncate">{label}</span>
+        {isPrivate ? (
+          <Lock
+            aria-label="Private — only you can see it"
+            className="size-3 shrink-0 text-muted-foreground"
+          />
+        ) : null}
       </button>
       {onShare ? (
         <button
@@ -255,9 +280,16 @@ export function LibrarySidebar({
   const [savedViewName, setSavedViewName] = useState('');
   const [savingView, setSavingView] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  useLibraryLiveRefresh(brandId, selectedCollectionId);
   const visibleCollections = orderCollectionsTree(
     collections.filter((collection) => !collection.systemKey),
   );
+  const systemViews = collections
+    .filter((collection) => collection.systemKey?.startsWith(SYSTEM_VIEW_PREFIX))
+    .sort(
+      (a, b) =>
+        SYSTEM_VIEW_ORDER.indexOf(a.systemKey ?? '') - SYSTEM_VIEW_ORDER.indexOf(b.systemKey ?? ''),
+    );
   const nestParent =
     selectedCollectionId && createKind === 'manual'
       ? visibleCollections.find((collection) => collection.id === selectedCollectionId)
@@ -413,6 +445,25 @@ export function LibrarySidebar({
           />
         ))}
 
+        {systemViews.length > 0 ? (
+          <>
+            <div className="mt-3 px-2 pb-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Views
+              </span>
+            </div>
+            {systemViews.map((view) => (
+              <BrowseRow
+                key={view.id}
+                selected={selectedCollectionId === view.id}
+                label={view.name}
+                icon={SYSTEM_VIEW_ICONS[view.systemKey ?? ''] ?? Sparkles}
+                onClick={() => onSelectCollection(view.id)}
+              />
+            ))}
+          </>
+        ) : null}
+
         <div className="mt-3 flex items-center justify-between px-2 pb-1">
           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Saved views
@@ -543,6 +594,7 @@ export function LibrarySidebar({
                   label={col.name}
                   kind={col.kind}
                   locked={Boolean(col.systemKey)}
+                  isPrivate={col.visibility === 'private'}
                   onClick={() => onSelectCollection(col.id)}
                   onShare={col.kind === 'manual' ? () => void shareCollection(col) : null}
                   onRename={() => {

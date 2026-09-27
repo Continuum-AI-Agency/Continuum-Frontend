@@ -16,6 +16,15 @@ const listQuerySchema = z.object({
   assetId: z.string().uuid(),
 });
 
+const fieldQuerySchema = z.object({
+  brandId: z.string().uuid(),
+  fieldId: z.string().uuid(),
+});
+
+// A board grouped by one field needs every asset's value for it in one read, not
+// one filtered listing per lane.
+const MAX_FIELD_VALUES = 5000;
+
 type Session = { userId: string; client: Awaited<ReturnType<typeof createSupabaseServerClient>> };
 
 async function openSession(brandId: string): Promise<Session | Response> {
@@ -38,8 +47,10 @@ function isResponse(value: Session | Response): value is Response {
 }
 
 // GET /api/library/asset-fields?brandId&assetId — every value this asset holds.
+// GET /api/library/asset-fields?brandId&fieldId — every asset's value for this field.
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  if (url.searchParams.has('fieldId')) return listFieldValues(url);
   const parsed = listQuerySchema.safeParse({
     brandId: url.searchParams.get('brandId'),
     assetId: url.searchParams.get('assetId'),
@@ -158,5 +169,34 @@ export async function PUT(request: Request) {
       value: row.value,
       updatedAt: row.updated_at,
     }),
+  });
+}
+
+async function listFieldValues(url: URL): Promise<Response> {
+  const parsed = fieldQuerySchema.safeParse({
+    brandId: url.searchParams.get('brandId'),
+    fieldId: url.searchParams.get('fieldId'),
+  });
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.message }, { status: 422 });
+  }
+  const { brandId, fieldId } = parsed.data;
+  const session = await openSession(brandId);
+  if (isResponse(session)) return session;
+
+  const { data, error } = await mediaSchema(session.client)
+    .from('asset_field_values')
+    .select('asset_id, value')
+    .eq('brand_id', brandId)
+    .eq('field_id', fieldId)
+    .order('asset_id')
+    .limit(MAX_FIELD_VALUES);
+  if (error) {
+    console.error('[library/asset-fields] field value list failed', error);
+    return NextResponse.json({ error: 'Query failed' }, { status: 500 });
+  }
+  const rows = (data ?? []) as unknown as { asset_id: string; value: unknown }[];
+  return NextResponse.json({
+    values: rows.map((row) => ({ assetId: row.asset_id, value: row.value })),
   });
 }

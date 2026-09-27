@@ -154,3 +154,49 @@ describe('buildBoardLanes — custom single-select field', () => {
     });
   });
 });
+
+describe('buildBoardLanes — status and user fields', () => {
+  it('gives a status field one coloured lane per stage', () => {
+    const stage = {
+      ...rights,
+      id: 'stage',
+      type: 'status' as const,
+      options: [
+        { id: 'todo', label: 'To do', color: '#999999' },
+        { id: 'done', label: 'Done', color: '#10b981' },
+      ],
+    };
+    const lanes = buildBoardLanes({
+      grouping: { kind: 'custom_field', field: stage },
+      assets: [makeAsset('a1')],
+      optionByAssetId: new Map([['a1', 'done']]),
+    });
+    expect(lanes.map((lane) => [lane.label, lane.dotColor ?? null])).toEqual([
+      [UNSET_LANE_LABEL, null],
+      ['To do', '#999999'],
+      ['Done', '#10b981'],
+    ]);
+    expect(lanes[2]?.assets.map((asset) => asset.id)).toEqual(['a1']);
+  });
+
+  it('gives a user field an Unassigned lane and one lane per member', () => {
+    const assignee = { ...rights, id: 'assignee', type: 'user' as const, options: [] };
+    const lanes = buildBoardLanes({
+      grouping: { kind: 'custom_field', field: assignee },
+      assets: [makeAsset('a1'), makeAsset('a2')],
+      optionByAssetId: new Map([['a2', 'u-2']]),
+      members: [
+        { userId: 'u-1', label: 'Ada' },
+        { userId: 'u-2', label: 'Grace' },
+      ],
+    });
+    expect(lanes.map((lane) => lane.label)).toEqual(['Unassigned', 'Ada', 'Grace']);
+    expect(lanes[0]?.assets.map((asset) => asset.id)).toEqual(['a1']);
+    expect(lanes[2]?.assets.map((asset) => asset.id)).toEqual(['a2']);
+    expect(decodeLaneId(lanes[2]?.id ?? '')).toEqual({
+      kind: 'custom_field',
+      fieldId: 'assignee',
+      optionId: 'u-2',
+    });
+  });
+});
