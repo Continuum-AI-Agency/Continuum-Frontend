@@ -14,6 +14,7 @@ export const HYPERFRAMES_LAYOUTS = [
   'media-fullbleed',
   'quote',
   'outro',
+  'morph-state',
 ] as const;
 export type HyperframesLayout = (typeof HYPERFRAMES_LAYOUTS)[number];
 
@@ -35,6 +36,7 @@ export const HYPERFRAMES_MOTION_VERBS = [
   'reveal',
   'track',
   'hold',
+  'morph',
 ] as const;
 export type HyperframesMotionVerb = (typeof HYPERFRAMES_MOTION_VERBS)[number];
 
@@ -65,9 +67,15 @@ export const sceneSpecSchema = z.object({
     .max(40)
     .regex(/^[a-z0-9-]+$/, 'scene.id must be lowercase kebab-case'),
   role: z.enum(HYPERFRAMES_SCENE_ROLES),
-  start_seconds: z.number().min(0).max(60),
+  start_seconds: z.number().min(0).max(90),
   duration_seconds: z.number().min(0.5).max(20),
   layout: z.enum(HYPERFRAMES_LAYOUTS),
+  /** Film-catalog shot template (`filmCatalog.ts`); the grader measures template share by it. */
+  template: z
+    .string()
+    .max(40)
+    .regex(/^[a-z0-9-]+$/)
+    .optional(),
   copy: hyperframeSceneCopySchema,
   asset: hyperframePinnedAssetSchema.optional(),
   intentional_hold: z.boolean().default(false),
@@ -96,11 +104,11 @@ export const compositionSpecSchema = z.object({
   title: z.string().min(1).max(120),
   width: z.number().int().positive(),
   height: z.number().int().positive(),
-  duration_seconds: z.number().min(5).max(30),
+  duration_seconds: z.number().min(5).max(90),
   energy: hyperframesEnergySchema,
   palette: hyperframePaletteSchema,
   typography: hyperframeTypographySchema,
-  scenes: z.array(sceneSpecSchema).min(2).max(8),
+  scenes: z.array(sceneSpecSchema).min(2).max(24),
   background_audio: hyperframePinnedAssetSchema.optional(),
   /** Historical pre-version contract. New compositions use `background_audio`. */
   background_audio_ref: z.string().url().optional(),
