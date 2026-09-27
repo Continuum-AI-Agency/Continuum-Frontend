@@ -26,6 +26,7 @@ import {
 import { cn } from '@/lib/utils';
 import { FieldFilterChips } from './fields/FieldFilterChips';
 import { SaveFiltersAsCollection } from './fields/SaveFiltersAsCollection';
+import { SortByFieldPicker } from './fields/SortByFieldPicker';
 
 type Props = {
   source: SourceFilterValue;
@@ -175,6 +176,7 @@ export function LibraryFilterBar({
             variant={variant}
           />
         )}
+        {customFields && customFields.length > 0 ? <SortByFieldPicker fields={customFields} /> : null}
         {customFields?.[0] ? (
           <SaveFiltersAsCollection
             brandId={customFields[0].brandId}

@@ -237,6 +237,22 @@ describe('resolveStageMedia — which bytes play', () => {
     });
   });
 
+  it('waits on the proxy for an MKV instead of handing the raw file to <video>', () => {
+    const mkv = version({
+      id: 'v3',
+      isHead: true,
+      fileName: 'interview.mkv',
+      mimeType: 'video/x-matroska',
+    });
+    expect(resolveStageMedia({ asset: HEAD_ASSET, viewedVersion: null, headVersion: mkv })).toMatchObject({
+      kind: 'file',
+      src: null,
+    });
+    expect(
+      resolveStageMedia({ asset: HEAD_ASSET, viewedVersion: null, headVersion: { ...mkv, preview: PROXY } }),
+    ).toMatchObject({ kind: 'video', sourceRole: 'preview_video' });
+  });
+
   it('plays a ready proxy for an older version too', () => {
     const stage = resolveStageMedia({
       asset: HEAD_ASSET,

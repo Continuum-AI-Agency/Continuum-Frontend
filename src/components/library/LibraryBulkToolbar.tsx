@@ -65,6 +65,7 @@ import {
 } from '@/lib/library/creativeOperations';
 import { createCustomField } from '@/lib/library/customFields';
 import { createShareLink } from '@/lib/library/share';
+import { canEditLibrary, useBrandRole } from '@/lib/library/useBrandRole';
 import { useProjectMutations } from '@/lib/projects';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { CustomFieldValueEditor } from './fields/CustomFieldValueEditor';
@@ -117,6 +118,7 @@ export function LibraryBulkToolbar({
   // biome-ignore lint/correctness/useExhaustiveDependencies: selectionKey is the selection
   useEffect(() => setMatchingIds(null), [selectionKey]);
   const targetIds = matchingIds ?? assetIds;
+  const canEdit = canEditLibrary(useBrandRole(brandId));
   const userFields = customFields.filter((field) => field.type === 'user');
   const assignField =
     userFields.find((field) => field.id === assignFieldId) ?? userFields[0] ?? null;
@@ -207,6 +209,32 @@ export function LibraryBulkToolbar({
       setBusy(null);
       setProgress(null);
     }
+  }
+
+  // Every action here is a write the dispatcher refuses a viewer, so a viewer gets the
+  // selection and nothing to press.
+  if (!canEdit) {
+    return (
+      <div className="sticky top-0 z-20 flex items-center gap-2 rounded-lg border border-border bg-background/95 p-2 shadow-sm backdrop-blur">
+        <span className="flex items-center gap-1.5 px-1 text-xs font-medium text-foreground">
+          <Check className="size-3.5 text-primary" aria-hidden />
+          {targetIds.length} selected
+        </span>
+        <span className="flex-1 text-xs text-muted-foreground">
+          View only — your role cannot change these assets.
+        </span>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="size-7"
+          onClick={onClear}
+          aria-label="Clear selection"
+        >
+          <X className="size-3.5" />
+        </Button>
+      </div>
+    );
   }
 
   return (

@@ -160,6 +160,44 @@ export async function rasterizeBrowserImage(file: Blob): Promise<{
   }
 }
 
+const SAMPLED_FRAME_WIDTH = 512;
+
+// The opening and closing frames, beside the poster: the video's visual embedding is the
+// average of all three, so one unlucky poster frame does not decide what a search for the
+// footage finds. Best effort — a frame that will not decode leaves the poster alone.
+async function persistSampledFrames(params: {
+  file: File;
+  brandId: string;
+  assetId: string;
+  assetVersionId: string;
+  client: SupabaseBrowserClient;
+}): Promise<void> {
+  for (const [selector, role] of [
+    ['first', 'first_frame'],
+    ['last', 'last_frame'],
+  ] as const) {
+    try {
+      const frame = await generateVideoPoster(params.file, {
+        selector,
+        maxWidth: SAMPLED_FRAME_WIDTH,
+      });
+      if (!frame) continue;
+      await persistAssetRendition({
+        ...params,
+        role,
+        blob: frame.blob,
+        mimeType: frame.mimeType === 'image/jpeg' ? 'image/jpeg' : 'image/webp',
+        width: frame.width,
+        height: frame.height,
+        renderer: 'mediabunny-browser-frame',
+        sourceTimestampMs: Math.round(frame.timestampSec * 1000),
+      });
+    } catch (error) {
+      console.warn(`[assetPreview] ${role} sample failed`, error);
+    }
+  }
+}
+
 export async function attachAssetPreview(params: {
   file: File;
   brandId: string;
@@ -171,6 +209,8 @@ export async function attachAssetPreview(params: {
   const format = classifyLibraryFile({ fileName: params.file.name, mimeType: params.file.type });
   if (!format.accepted) return 'unsupported';
   if (format.previewStrategy === 'native') return 'ready';
+  // Office documents: there is no converter, so there is honestly nothing to wait for.
+  if (format.previewStrategy === 'none') return 'unsupported';
 
   if (format.previewStrategy === 'browser_video') {
     const poster = await generateVideoPoster(params.file);
@@ -221,6 +261,7 @@ export async function attachAssetPreview(params: {
         durationMs: poster.durationMs,
       },
     });
+    await persistSampledFrames({ ...params, client });
     if (
       needsPlaybackProxy({
         sizeBytes: params.file.size,

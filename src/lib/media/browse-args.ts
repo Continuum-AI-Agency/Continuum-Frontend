@@ -37,3 +37,16 @@ export function libraryBrowseRpcArgs(query: LibraryBrowseQuery) {
     p_aspect_ratios: query.aspectRatios.length > 0 ? query.aspectRatios : null,
   };
 }
+
+/**
+ * p_sort for library_browse_page. A custom-field sort travels INSIDE the existing text
+ * argument ('field_asc:<field id>') rather than as a new one: a new argument would create
+ * a second overload and PostgREST would refuse every browse call as ambiguous. Without a
+ * field the SQL falls back to its default order, so this never sends a half-formed sort.
+ */
+export function libraryBrowseSortArg(query: Pick<LibraryBrowseQuery, 'sort' | 'sortFieldId'>) {
+  if (query.sort === 'field_asc' || query.sort === 'field_desc') {
+    return query.sortFieldId ? `${query.sort}:${query.sortFieldId}` : 'created_desc';
+  }
+  return query.sort;
+}

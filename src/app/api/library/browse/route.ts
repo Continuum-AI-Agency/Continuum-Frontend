@@ -45,6 +45,7 @@ export async function GET(request: Request) {
     sort: url.searchParams.get('sort') ?? undefined,
     performanceWindow: url.searchParams.get('performanceWindow') ?? undefined,
     layout: url.searchParams.get('layout') ?? undefined,
+    sortFieldId: url.searchParams.get('sortField') ?? undefined,
     cursor: url.searchParams.get('cursor'),
     limit: url.searchParams.get('limit') ? Number(url.searchParams.get('limit')) : undefined,
   });
