@@ -11,7 +11,8 @@ import {
   ShieldCheck,
   XCircle,
 } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { OpenInLibrary } from '@/components/forge/libraryState';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,7 @@ import { toast } from '@/components/ui/toast-imperative';
 import { decideApprovals } from '@/lib/library/approvalDecisions';
 import { decideRenderApproval, fetchRenderApprovals } from '@/lib/library/renderApprovals';
 import { cn } from '@/lib/utils';
+import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 
 // Pending batches — the middle state between a finished render and a Meta ad.
 //
@@ -67,6 +69,7 @@ const VIA_LABEL: Record<RenderApprovalDecidedVia, string> = {
   slack: 'Slack',
   whatsapp: 'WhatsApp',
   system: 'Continuum',
+  library: 'Library',
 };
 
 // The reconciler's reason codes in words; an unmapped reason is shown as written.
@@ -93,6 +96,33 @@ export function useRenderApprovals(brandId: string) {
     refetchOnReconnect: true,
     retry: false,
   });
+}
+
+/** The ledger's first page, whose key this shares so the ledger tab pays for one read, not two. */
+const LEDGER_PAGE = 50;
+
+/**
+ * Each approval's first Library asset, by the task its renders ran as — the card links to that
+ * asset's thread, where the review and its comments live.
+ */
+// ponytail: an approval whose renders are older than the newest 50 gets no link; a taskUid filter
+// on the jobs route lifts that.
+function useApprovalAssets(brandId: string, enabled: boolean) {
+  const { data } = useQuery({
+    queryKey: forgeQueryKeys.renderJobList(brandId, LEDGER_PAGE),
+    queryFn: () => apiRendersApi.listJobs(brandId, LEDGER_PAGE),
+    enabled,
+    staleTime: FORGE_STALE_MS.active,
+    retry: false,
+  });
+  return useMemo(() => {
+    const byTask = new Map<string, string>();
+    for (const job of data?.items ?? []) {
+      const assetId = job.outputs.find((output) => output.assetId)?.assetId;
+      if (job.taskUid && assetId && !byTask.has(job.taskUid)) byTask.set(job.taskUid, assetId);
+    }
+    return byTask;
+  }, [data]);
 }
 
 export const waitingCount = (approvals: RenderApproval[] | undefined) =>
@@ -148,10 +178,13 @@ const isVideo = (url: string) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(url);
 
 function ApprovalCard({
   approval,
+  assetId,
   busy,
   onDecide,
 }: {
   approval: RenderApproval;
+  /** The render's Library asset, once the ledger's page has it. */
+  assetId: string | undefined;
   busy: boolean;
   onDecide: (id: string, decision: 'approve' | 'reject') => void;
 }) {
@@ -198,6 +231,11 @@ function ApprovalCard({
             <Badge variant="secondary" className="text-xs">
               {approval.groupKey}
             </Badge>
+          ) : null}
+          {assetId ? (
+            <span className="text-xs">
+              <OpenInLibrary brandId={approval.brandId} assetId={assetId} />
+            </span>
           ) : null}
         </div>
 
@@ -246,12 +284,14 @@ type Decision = 'approve' | 'reject';
 function ApprovalPackage({
   packageId,
   approvals,
+  assets,
   busyId,
   onDecide,
   onDecideAll,
 }: {
   packageId: string;
   approvals: RenderApproval[];
+  assets: ReadonlyMap<string, string>;
   busyId: string | null;
   onDecide: (id: string, decision: Decision) => void;
   onDecideAll: (packageId: string, ids: string[], decision: Decision) => void;
@@ -313,6 +353,7 @@ function ApprovalPackage({
         <ApprovalCard
           key={approval.id}
           approval={approval}
+          assetId={assets.get(approval.taskUid)}
           busy={busyId === approval.id}
           onDecide={onDecide}
         />
@@ -328,6 +369,7 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
   const approvalKey = forgeQueryKeys.approvals(brandId);
   const approvalQuery = useRenderApprovals(brandId);
   const approvals = approvalQuery.data ?? [];
+  const assets = useApprovalAssets(brandId, approvals.length > 0);
 
   const onDecide = useCallback(
     async (approvalId: string, decision: Decision) => {
@@ -421,6 +463,7 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
               key={entry.packageId}
               packageId={entry.packageId}
               approvals={entry.approvals}
+              assets={assets}
               busyId={busyId}
               onDecide={onDecide}
               onDecideAll={onDecideAll}
@@ -429,6 +472,7 @@ export function PendingApprovals({ brandId }: { brandId: string }) {
             <ApprovalCard
               key={entry.id}
               approval={entry}
+              assetId={assets.get(entry.taskUid)}
               busy={busyId === entry.id}
               onDecide={onDecide}
             />

@@ -257,4 +257,37 @@ describe('ForgeWorkbench', () => {
       transition.mockRestore();
     }
   });
+  describe('a link from the Library', () => {
+    const SET = '77777777-7777-4777-8777-777777777777';
+    const ROW = '88888888-8888-4888-8888-888888888888';
+    const at = (search: string) => window.history.replaceState(null, '', `/forge${search}`);
+    afterEach(() => at(''));
+
+    test('?template opens that template’s detail', async () => {
+      at(`?template=${ASSET}`);
+      renderWorkbench();
+      expect(await screen.findByRole('tab', { name: 'Variables' })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: /Untitled template/ })).toBeTruthy();
+    });
+
+    test('?set and ?row open that set in Render with the row, selected for a re-render', async () => {
+      fetchedSources = [{ ...SOURCE, templateKey: '133' }];
+      at(`?template=${ASSET}&set=${SET}&row=${ROW}&rerender=1`);
+      const onOpenRender = mock((_intent: unknown) => undefined);
+      render(
+        <QueryClientProvider
+          client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+        >
+          <ForgeWorkbench brandId={BRAND} brandName="StarCraft" onOpenRender={onOpenRender} />
+        </QueryClientProvider>,
+      );
+      await waitFor(() => expect(onOpenRender).toHaveBeenCalledTimes(1));
+      expect(onOpenRender.mock.calls[0]?.[0]).toEqual({
+        templateKey: '133',
+        renderSetId: SET,
+        rowId: ROW,
+        rerender: true,
+      });
+    });
+  });
 });

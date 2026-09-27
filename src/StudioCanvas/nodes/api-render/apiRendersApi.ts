@@ -23,7 +23,6 @@ import {
   type ApiRenderBatch,
   type ApiRenderBatchPreflightRequest,
   type ApiRenderBatchPreflightResponse,
-  type ApiRenderBatchShareResponse,
   type ApiRenderCreateDeliveryDestinationRequest,
   type ApiRenderCreateInputSetRequest,
   type ApiRenderCreateJobRequest,
@@ -48,8 +47,6 @@ import {
   type ApiRenderUpdateInputSetRequest,
   apiRenderBatchPreflightResponseSchema,
   apiRenderBatchSchema,
-  apiRenderBatchShareResponseSchema,
-  apiRenderBatchShareRoute,
   apiRenderDeliveryDestinationSchema,
   apiRenderDeliveryDestinationsResponseSchema,
   apiRenderDestinationRoute,
@@ -70,6 +67,10 @@ import {
   type ForgeMotionProof,
   type ForgeMotionProofFormat,
   type ForgeMotionProofRequest,
+  FORGE_LIBRARY_STATE_ROUTE,
+  FORGE_PROVENANCE_ROUTE,
+  type ForgeLibraryStateResponse,
+  type ForgeProvenanceResponse,
   type ForgeRenderDriveSnapshot,
   type ForgeRenderDriveSnapshotRequest,
   type ForgeRenderImportMediaRequest,
@@ -88,6 +89,9 @@ import {
   type ForgeRenderSketchRequest,
   forgeMotionProofFormatsSchema,
   forgeMotionProofSchema,
+  type ForgeRenderSetShareResponse,
+  forgeLibraryStateResponseSchema,
+  forgeProvenanceResponseSchema,
   forgeRenderDriveSnapshotSchema,
   forgeRenderImportMediaResponseSchema,
   forgeRenderImportPreviewSchema,
@@ -98,9 +102,10 @@ import {
   forgeRenderSetRevisionListResponseSchema,
   forgeRenderSetSchema,
   forgeRenderSketchSchema,
+  forgeRenderSetShareResponseSchema,
+  forgeRenderSetShareRoute,
   type UpdateForgeRenderSetRequest,
 } from '@continuum/contracts';
-import { getApiBaseUrl } from '@/lib/api/config';
 import { http } from '@/lib/api/http';
 
 const query = (input: Record<string, string | number>) =>
@@ -354,6 +359,33 @@ export const apiRendersApi = {
     });
   },
 
+  // The Library side of Forge. Review status, version and comment count of up to 200 of the
+  // brand's Library assets (outputs or not), and where one output came from in Forge.
+  libraryState(brandId: string, assetIds: string[]) {
+    return http.request<ForgeLibraryStateResponse>({
+      path: `${FORGE_LIBRARY_STATE_ROUTE}?${query({ brandId, assetIds: assetIds.join(',') })}`,
+      schema: forgeLibraryStateResponseSchema,
+    });
+  },
+  getProvenance(brandId: string, assetId: string) {
+    return http.request<ForgeProvenanceResponse>({
+      path: `${FORGE_PROVENANCE_ROUTE}?${query({ brandId, assetId })}`,
+      schema: forgeProvenanceResponseSchema,
+    });
+  },
+  /**
+   * The set's Library collection as a revocable share link. Refused 409
+   * `render_set_not_in_library` while nothing in the set has rendered into the Library.
+   */
+  shareRenderSet(brandId: string, setId: string) {
+    return http.request<ForgeRenderSetShareResponse>({
+      path: forgeRenderSetShareRoute(setId),
+      method: 'POST',
+      body: { brandId },
+      schema: forgeRenderSetShareResponseSchema,
+    });
+  },
+
   // Batches. One token wraps N per-record tokens; every job createBatch makes carries its
   // `batchId`, so `listJobs({ batchId })` reads the whole batch back later.
   batchPreflight(input: ApiRenderBatchPreflightRequest) {
@@ -413,19 +445,6 @@ export const apiRendersApi = {
       path: apiRenderDestinationRoute(destinationId),
       method: 'DELETE',
     });
-  },
-  /**
-   * A 30-day link that downloads the batch as one zip, with no sign-in. Minted per click: the
-   * link is the credential, so it is never cached or shown before someone asks for it.
-   */
-  async shareBatch(brandId: string, batchId: string) {
-    const share = await http.request<ApiRenderBatchShareResponse>({
-      path: apiRenderBatchShareRoute(batchId),
-      method: 'POST',
-      body: { brandId },
-      schema: apiRenderBatchShareResponseSchema,
-    });
-    return { url: `${getApiBaseUrl()}${share.path}`, expiresAt: share.expiresAt };
   },
   createBatch(input: ApiRenderCreateJobRequest) {
     return http.request<ApiRenderBatch>({

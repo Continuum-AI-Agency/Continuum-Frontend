@@ -16,6 +16,7 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Share2,
   Text,
   Trash2,
 } from 'lucide-react';
@@ -44,6 +45,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { toast } from '@/components/ui/toast-imperative';
+import { ApiError } from '@/lib/api/errors';
+import { pluralize } from '@/lib/format/pluralize';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
@@ -187,6 +191,32 @@ function SetDescription({
   );
 }
 
+/**
+ * Shares the set as its Library collection: a link that anyone can open and anyone on the brand can
+ * revoke from the Library. Minted per click — the link is the credential, so it is never cached.
+ */
+async function shareRenderSet(brandId: string, set: ForgeRenderSet) {
+  try {
+    const share = await apiRendersApi.shareRenderSet(brandId, set.id);
+    const url = `${window.location.origin}${share.path}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success(
+        `Link copied — ${pluralize(share.assetCount, 'render')}, revocable from the Library`,
+      );
+    } catch {
+      // Safari refuses a clipboard write that follows a network round trip.
+      window.prompt('Copy this link. It can be revoked from the Library.', url);
+    }
+  } catch (error) {
+    toast.error(
+      error instanceof ApiError && error.payload?.error === 'render_set_not_in_library'
+        ? `Nothing from “${set.name}” is in the Library yet. Render it first, then share.`
+        : 'Could not make the link. Try again.',
+    );
+  }
+}
+
 type RailDialog =
   | { kind: 'new' }
   | { kind: 'rename'; set: ForgeRenderSet }
@@ -272,6 +302,13 @@ export function RenderSetRail({
             setDescribing((current) => ({ id: set.id, request: (current?.request ?? 0) + 1 })),
         },
         { id: 'duplicate', label: 'Duplicate', icon: Copy, run: () => onDuplicate(set) },
+        {
+          id: 'share',
+          label: 'Share render set',
+          icon: Share2,
+          hint: 'Copies a link to its renders in the Library',
+          run: () => void shareRenderSet(brandId, set),
+        },
         { id: 'history', label: 'Version history…', icon: History, run: () => onHistory(set) },
         ...(set.contractHash === contractHash
           ? []
