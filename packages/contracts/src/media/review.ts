@@ -94,3 +94,70 @@ export const reviewCommandResponseSchema = z
   })
   .strict();
 export type ReviewCommandResponse = z.infer<typeof reviewCommandResponseSchema>;
+
+const REVIEW_LABEL_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+
+// A brand's display name + colour for one review state (media.review_state_labels).
+// The states themselves are fixed; only how they read is the brand's call.
+export const reviewStateLabelSchema = z
+  .object({
+    state: mediaReviewStatusSchema,
+    label: z.string().trim().min(1).max(40),
+    color: z.string().regex(REVIEW_LABEL_COLOR_PATTERN),
+    position: z.number().int().nonnegative(),
+  })
+  .strict();
+export type ReviewStateLabel = z.infer<typeof reviewStateLabelSchema>;
+
+export const reviewStateLabelsSchema = z
+  .array(reviewStateLabelSchema)
+  .min(1)
+  .max(5)
+  .refine((labels) => new Set(labels.map((label) => label.state)).size === labels.length, {
+    message: 'Each review state may be labelled once',
+  });
+
+/** What a brand that never customized its labels sees. */
+export const DEFAULT_REVIEW_STATE_LABELS: readonly ReviewStateLabel[] = [
+  { state: 'none', label: 'None', color: '#9CA3AF', position: 0 },
+  { state: 'draft', label: 'Draft', color: '#6B7280', position: 1 },
+  { state: 'in_review', label: 'In review', color: '#3B82F6', position: 2 },
+  { state: 'needs_changes', label: 'Needs changes', color: '#F59E0B', position: 3 },
+  { state: 'approved', label: 'Approved', color: '#10B981', position: 4 },
+];
+
+export const listReviewStateLabelsResponseSchema = z
+  .object({ labels: z.array(reviewStateLabelSchema) })
+  .strict();
+export type ListReviewStateLabelsResponse = z.infer<typeof listReviewStateLabelsResponseSchema>;
+
+// Every brand state resolved to a label, falling back to the default for any
+// state the brand never customized.
+export function resolveReviewStateLabels(
+  custom: readonly ReviewStateLabel[],
+): Record<ReviewStateLabel['state'], ReviewStateLabel> {
+  const byState = new Map(custom.map((label) => [label.state, label]));
+  return Object.fromEntries(
+    DEFAULT_REVIEW_STATE_LABELS.map((fallback) => [
+      fallback.state,
+      byState.get(fallback.state) ?? fallback,
+    ]),
+  ) as Record<ReviewStateLabel['state'], ReviewStateLabel>;
+}
+
+// Payload of the notifications the review-due sweep writes
+// (library_internal.enqueue_review_due_notifications, run by pg_cron):
+// 'review_reminder' to a reviewer who has not decided before dueAt, and
+// 'review_escalation' to the requester and brand admins once dueAt has passed.
+export const REVIEW_DUE_NOTIFICATION_KINDS = ['review_reminder', 'review_escalation'] as const;
+export const reviewDueNotificationPayloadSchema = z
+  .object({
+    assetId: z.string().min(1),
+    assetName: z.string().min(1),
+    actorName: z.string().min(1),
+    reviewRequestId: z.string().uuid(),
+    dueAt: z.string().min(1),
+    pendingReviewerIds: z.array(z.string().uuid()),
+  })
+  .strict();
+export type ReviewDueNotificationPayload = z.infer<typeof reviewDueNotificationPayloadSchema>;

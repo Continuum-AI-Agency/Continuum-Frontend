@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { mediaSearchFiltersSchema, mediaSearchRequestSchema } from './search';
+import { IMAGE_EMBEDDING_DIM, mediaSearchFiltersSchema, mediaSearchRequestSchema } from './search';
 
 describe('mediaSearchFiltersSchema', () => {
   it('accepts workflow and custom-field filters used by Library search', () => {
@@ -50,5 +50,55 @@ describe('mediaSearchRequestSchema with source filter', () => {
       expect(parsed.data.filters?.source).toBe('ai_generated');
       expect(parsed.data.filters?.kind).toBe('image');
     }
+  });
+});
+
+describe('filters-only text search', () => {
+  const created = {
+    createdAfter: '2026-09-20T00:00:00.000Z',
+    createdBefore: '2026-09-27T00:00:00.000Z',
+  };
+
+  it('accepts a date range on the filters', () => {
+    expect(mediaSearchFiltersSchema.safeParse(created).success).toBe(true);
+    expect(mediaSearchFiltersSchema.safeParse({ createdAfter: 'last week' }).success).toBe(false);
+  });
+
+  it('allows an empty query when at least one filter is set', () => {
+    const parsed = mediaSearchRequestSchema.safeParse({
+      brandId: 'brand-1',
+      mode: 'text',
+      filters: { kind: 'video', ...created },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('still rejects a text search with neither a query nor a filter', () => {
+    expect(mediaSearchRequestSchema.safeParse({ brandId: 'brand-1', mode: 'text' }).success).toBe(
+      false,
+    );
+    expect(
+      mediaSearchRequestSchema.safeParse({
+        brandId: 'brand-1',
+        mode: 'text',
+        filters: { tags: [] },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('visual query embedding', () => {
+  it('accepts exactly one image-space vector on a text search', () => {
+    const request = { brandId: 'brand-1', mode: 'text', query: 'red sneakers' };
+    const ok = mediaSearchRequestSchema.safeParse({
+      ...request,
+      visualEmbedding: Array.from({ length: IMAGE_EMBEDDING_DIM }, () => 0.01),
+    });
+    expect(ok.success).toBe(true);
+    const wrongWidth = mediaSearchRequestSchema.safeParse({
+      ...request,
+      visualEmbedding: Array.from({ length: 1536 }, () => 0.01),
+    });
+    expect(wrongWidth.success).toBe(false);
   });
 });

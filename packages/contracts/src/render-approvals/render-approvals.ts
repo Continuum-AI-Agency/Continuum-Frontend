@@ -75,8 +75,17 @@ export const renderApprovalRequestSchema = z
   .strict();
 export type RenderApprovalRequest = z.infer<typeof renderApprovalRequestSchema>;
 
-/** Where a decision was made. `system` is the reconciler expiring a batch nobody decided. */
-export const renderApprovalDecidedViaSchema = z.enum(['forge', 'slack', 'whatsapp', 'system']);
+/**
+ * Where a decision was made. `system` is the reconciler expiring a batch nobody decided;
+ * `library` is a brand member approving every output of the batch in the Library.
+ */
+export const renderApprovalDecidedViaSchema = z.enum([
+  'forge',
+  'slack',
+  'whatsapp',
+  'system',
+  'library',
+]);
 export type RenderApprovalDecidedVia = z.infer<typeof renderApprovalDecidedViaSchema>;
 
 /** One pending batch, as the Forge page and the Slack card read it. */

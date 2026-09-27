@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import {
   buildMentionToken,
+  commentAttachmentSchema,
   commentMentionSchema,
   createCommentRequestSchema,
   mediaCommentSchema,
@@ -115,5 +116,38 @@ describe('typed notification payloads', () => {
     expect(parseNotificationPayload('review_request', { anything: true })).toEqual({
       anything: true,
     });
+  });
+});
+
+describe('comment attachments', () => {
+  const ASSET = '11111111-1111-4111-8111-111111111111';
+  const VERSION = '21111111-1111-4111-8111-111111111111';
+  const baseCreate = { brandId: 'b-1', assetId: 'a-1', body: 'use this take' };
+
+  it('accepts a create request with an asset and an exact-version attachment', () => {
+    const attachments = [{ assetId: ASSET }, { assetId: ASSET, versionId: VERSION }];
+    expect(createCommentRequestSchema.parse({ ...baseCreate, attachments }).attachments).toEqual(
+      attachments,
+    );
+  });
+
+  it('rejects more than ten attachments and a non-uuid asset', () => {
+    const eleven = Array.from({ length: 11 }, () => ({ assetId: ASSET }));
+    expect(
+      createCommentRequestSchema.safeParse({ ...baseCreate, attachments: eleven }).success,
+    ).toBe(false);
+    expect(commentAttachmentSchema.safeParse({ assetId: 'a-1' }).success).toBe(false);
+  });
+
+  it('defaults attachments to [] on legacy comment rows', () => {
+    const parsed = mediaCommentSchema.parse({
+      id: 'c-1',
+      brandId: 'b-1',
+      assetId: 'a-1',
+      body: 'legacy',
+      createdAt: '2026-09-27T00:00:00Z',
+      updatedAt: '2026-09-27T00:00:00Z',
+    });
+    expect(parsed.attachments).toEqual([]);
   });
 });

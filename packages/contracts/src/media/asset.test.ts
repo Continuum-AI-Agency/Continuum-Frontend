@@ -8,10 +8,14 @@ import {
 import {
   adCreativeAnalysisSchema,
   boundingBoxSchema,
+  type CollectionViewConfig,
+  collectionViewConfigSchema,
+  collectionVisibilitySchema,
   detectedObjectSchema,
   mediaAnalysisResultSchema,
   mediaAssetSchema,
   mediaCollectionSchema,
+  mediaKindSchema,
   mediaSourceSchema,
 } from './asset';
 import { mediaSearchRequestSchema, mediaSearchResponseSchema } from './search';
@@ -102,7 +106,7 @@ describe('mediaAssetSchema', () => {
   });
 
   it('rejects an unknown kind', () => {
-    expect(mediaAssetSchema.safeParse({ ...base, kind: 'audio' }).success).toBe(false);
+    expect(mediaAssetSchema.safeParse({ ...base, kind: 'sound' }).success).toBe(false);
   });
 
   it('rejects an unknown status', () => {
@@ -124,7 +128,11 @@ describe('mediaSourceSchema', () => {
       'reel',
       'meta_ad',
       'figma',
+      'goal_artifact',
+      'forge',
     ]);
+    expect(mediaSourceSchema.safeParse('forge').success).toBe(true);
+    expect(mediaSourceSchema.safeParse('forged').success).toBe(false);
   });
 
   it('accepts a media asset registered from a competitor/inspiration bucket', () => {
@@ -145,7 +153,51 @@ describe('mediaSourceSchema', () => {
   });
 });
 
+describe('mediaKindSchema', () => {
+  it('mirrors media.assets.kind, audio included', () => {
+    expect(mediaKindSchema.options).toEqual(['image', 'video', 'file', 'audio']);
+    expect(mediaKindSchema.safeParse('sound').success).toBe(false);
+  });
+});
+
 describe('mediaCollectionSchema', () => {
+  it('defaults visibility to team and viewConfig to {}', () => {
+    const parsed = mediaCollectionSchema.parse({
+      id: 'c1',
+      brandId: 'b1',
+      name: 'Wedding',
+      kind: 'manual',
+      createdAt: '2026-05-31T00:00:00Z',
+      updatedAt: '2026-05-31T00:00:00Z',
+    });
+    expect(parsed.visibility).toBe('team');
+    expect(parsed.viewConfig).toEqual({});
+  });
+
+  it('rejects an unknown visibility', () => {
+    expect(collectionVisibilitySchema.safeParse('private').success).toBe(true);
+    expect(collectionVisibilitySchema.safeParse('public').success).toBe(false);
+  });
+
+  it('parses a full view config and keeps unknown keys the SQL never checks', () => {
+    const config: CollectionViewConfig = {
+      layout: 'board',
+      groupBy: 'review_status',
+      sort: { field: 'created_at', direction: 'desc' },
+      card: { size: 'lg', aspect: 'square', fields: ['f1'], showTitle: false, extra: 1 },
+      futureKey: true,
+    };
+    expect(collectionViewConfigSchema.parse(config)).toEqual(config);
+    expect(
+      collectionViewConfigSchema.parse({ groupBy: '22222222-2222-4222-8222-222222222222' }).groupBy,
+    ).toBe('22222222-2222-4222-8222-222222222222');
+  });
+
+  it('rejects a bad layout or a groupBy that is neither a field id nor review_status', () => {
+    expect(collectionViewConfigSchema.safeParse({ layout: 'masonry' }).success).toBe(false);
+    expect(collectionViewConfigSchema.safeParse({ groupBy: 'tags' }).success).toBe(false);
+  });
+
   it('defaults itemCount', () => {
     const parsed = mediaCollectionSchema.parse({
       id: 'c1',
