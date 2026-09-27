@@ -2,9 +2,22 @@ import { describe, expect, it } from 'bun:test';
 import {
   animatedCssProperties,
   buildTemporalMetrics,
+  contactSheetSampleIndexes,
   resolveCompositionHtml,
   withCrossOrigin,
 } from './browserRenderer';
+
+it('captures one midpoint frame for every scene in a 90-second contact sheet', () => {
+  const scenes = Array.from({ length: 24 }, (_, index) => ({
+    start_seconds: index * 3.75,
+    duration_seconds: 3.75,
+  }));
+  const indexes = contactSheetSampleIndexes(scenes, 10, 900);
+  expect(indexes).toHaveLength(24);
+  expect(new Set(indexes).size).toBe(24);
+  expect(indexes[0]).toBe(19);
+  expect(indexes[23]).toBe(881);
+});
 
 /**
  * `crossorigin` is what opts a media fetch into CORS mode. Without it the browser
