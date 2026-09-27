@@ -147,7 +147,7 @@ export const executeHyperframesClientRender: ClientRenderExecutor = async (conte
         width: response.revision.width,
         height: response.revision.height,
         durationSeconds: response.revision.durationSeconds,
-        fps: 30 as const,
+        fps: response.revision.fps,
         shaderStack: spec.shaderStack,
       };
       const preparedKey = `${work.revisionId}:${work.fingerprint}`;

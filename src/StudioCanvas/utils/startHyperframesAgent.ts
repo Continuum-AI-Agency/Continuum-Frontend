@@ -2,6 +2,8 @@
 
 import {
   type AgentRunDto,
+  defaultElementUseIntent,
+  type ElementRecord,
   HYPERFRAMES_AUDIO_INPUT_HANDLE,
   HYPERFRAMES_IMAGE_INPUT_HANDLE,
   HYPERFRAMES_PROMPT_INPUT_HANDLE,
@@ -10,6 +12,7 @@ import {
 } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
 import { useAgentRunStore } from '@/lib/agents/runStore';
+import { elementSourceAssetId, listElements } from '@/lib/ai-studio/elements';
 import { startHyperframesTurn } from '@/lib/api/hyperframesAgent.client';
 import { probeClientRenderCapabilities } from '@/lib/client-render/capabilities';
 import { markRenderStartedHere } from '@/lib/client-render/ownedRuns';
@@ -31,6 +34,7 @@ export type HyperframesInputMedia = {
   status: 'ready' | 'blocked';
   assetId?: string;
   assetVersionId?: string;
+  purpose?: 'source' | 'reference';
 };
 
 const promptFromEdges = (
@@ -66,6 +70,9 @@ export const inspectHyperframesInputs = (
   nodeId: string,
   nodes: StudioNode[],
   edges: Edge[],
+  elements: ElementRecord[] = [],
+  referenceVideoAssetIds: readonly string[] = [],
+  referenceImageAssetIds: readonly string[] = [],
 ): {
   prompt: { sourceNodeId: string; value: string } | null;
   assets: HyperframesAgentAssetRef[];
@@ -100,8 +107,34 @@ export const inspectHyperframesInputs = (
       });
       continue;
     }
-    const label = mediaLabel(source, kind);
-    const ref = readNodeAssetRef(source.data);
+    const element =
+      source.type === 'element'
+        ? elements.find(
+            (candidate) => candidate.id === (source.data as { elementId?: string }).elementId,
+          )
+        : undefined;
+    const intent = element
+      ? ((source.data as { useIntent?: HyperframesAgentAssetRef['elementUseIntent'] }).useIntent ??
+        defaultElementUseIntent(element.category))
+      : undefined;
+    if (
+      element &&
+      ((intent === 'motion' && kind !== 'video') || (intent !== 'motion' && kind !== 'image'))
+    ) {
+      issues.push({
+        sourceNodeId: source.id,
+        kind,
+        message: `${element.name} is connected to the wrong HyperFrames input for its ${intent} use.`,
+      });
+      continue;
+    }
+    const elementAssetId = element && intent ? elementSourceAssetId(element, intent) : undefined;
+    const label = element?.name ?? mediaLabel(source, kind);
+    const ref = elementAssetId
+      ? { assetId: elementAssetId }
+      : source.type === 'element'
+        ? null
+        : readNodeAssetRef(source.data);
     if (!ref) {
       media.push({ sourceNodeId: source.id, kind, label, status: 'blocked' });
       issues.push({
@@ -111,6 +144,9 @@ export const inspectHyperframesInputs = (
       });
       continue;
     }
+    const reference =
+      (kind === 'video' && referenceVideoAssetIds.includes(ref.assetId)) ||
+      (kind === 'image' && referenceImageAssetIds.includes(ref.assetId));
     media.push({
       sourceNodeId: source.id,
       kind,
@@ -118,6 +154,7 @@ export const inspectHyperframesInputs = (
       status: 'ready',
       assetId: ref.assetId,
       assetVersionId: ref.versionId,
+      purpose: reference ? 'reference' : 'source',
     });
     if (seen.has(ref.assetId)) continue;
     seen.add(ref.assetId);
@@ -125,6 +162,8 @@ export const inspectHyperframesInputs = (
       assetId: ref.assetId,
       ...(ref.versionId ? { assetVersionId: ref.versionId } : {}),
       kind,
+      ...(reference ? { purpose: 'reference' as const } : {}),
+      ...(element ? { elementId: element.id, elementUseIntent: intent } : {}),
     });
   }
   return { prompt: promptFromEdges(nodeId, nodes, edges), assets, media, issues };
@@ -140,9 +179,37 @@ export async function assertHyperframesRenderCapability(
 }
 
 export const resolveHyperframesPrompt = (
-  data: Pick<HyperframesAgentNodeData, 'prompt' | 'revisionTarget'>,
+  data: Pick<HyperframesAgentNodeData, 'prompt' | 'revisionTarget' | 'revisionPrompt'>,
   connectedPrompt?: string,
-): string => (data.revisionTarget ? data.prompt : (connectedPrompt ?? data.prompt)).trim();
+): string =>
+  (data.revisionTarget
+    ? (data.revisionPrompt ?? data.prompt)
+    : (connectedPrompt ?? data.prompt)
+  ).trim();
+
+export const hyperframesStoryboardInputKey = (input: {
+  prompt: string;
+  assets: HyperframesAgentAssetRef[];
+  energy: HyperframesAgentNodeData['energy'];
+  aspectRatio: HyperframesAgentNodeData['aspectRatio'];
+  durationSeconds: number;
+}): string =>
+  JSON.stringify({
+    prompt: input.prompt.trim(),
+    assets: input.assets.map(
+      ({ assetId, assetVersionId, kind, purpose, elementId, elementUseIntent }) => ({
+        assetId,
+        assetVersionId,
+        kind,
+        purpose,
+        elementId,
+        elementUseIntent,
+      }),
+    ),
+    energy: input.energy,
+    aspectRatio: input.aspectRatio,
+    durationSeconds: input.durationSeconds,
+  });
 
 export async function startHyperframesAgentNode(params: {
   nodeId: string;
@@ -156,10 +223,35 @@ export async function startHyperframesAgentNode(params: {
     throw new Error('HyperFrames Agent node is unavailable.');
   }
   const data = node.data as HyperframesAgentNodeData;
-  const inputs = inspectHyperframesInputs(params.nodeId, nodes, studio.edges);
-  const prompt = resolveHyperframesPrompt(data, inputs.prompt?.value);
-  if (!prompt) throw new Error('Add a prompt or connect a Text node.');
+  const inputs = inspectHyperframesInputs(
+    params.nodeId,
+    nodes,
+    studio.edges,
+    await listElements(params.brandId),
+    data.referenceVideoAssetIds,
+    data.referenceImageAssetIds,
+  );
+  const brief = (inputs.prompt?.value ?? data.prompt).trim();
+  const prompt = data.revisionTarget
+    ? resolveHyperframesPrompt(data, inputs.prompt?.value)
+    : data.feedbackPrompt?.trim()
+      ? `${brief}\n\nRevision feedback: ${data.feedbackPrompt.trim()}`
+      : brief;
+  if (!brief || !prompt) throw new Error('Add a prompt or connect a Text node.');
   if (inputs.issues[0]) throw new Error(inputs.issues[0].message);
+  const inputKey = hyperframesStoryboardInputKey({
+    prompt: brief,
+    assets: inputs.assets,
+    energy: data.energy,
+    aspectRatio: data.aspectRatio,
+    durationSeconds: data.durationSeconds,
+  });
+  if (
+    !data.revisionTarget &&
+    (!data.storyboardApproved || !data.storyboard || data.storyboardInputKey !== inputKey)
+  ) {
+    throw new Error('Approve a current storyboard before creating the video.');
+  }
   await assertHyperframesRenderCapability();
 
   studio.updateNodeData(params.nodeId, {
@@ -184,9 +276,11 @@ export async function startHyperframesAgentNode(params: {
     energy: data.energy,
     aspectRatio: data.aspectRatio,
     durationSeconds: data.durationSeconds,
+    fps: data.fps ?? 30,
     resolution: data.resolution,
     shaderStack: data.shaderStack,
     revisionTarget: data.revisionTarget,
+    approvedStoryboard: data.storyboardApproved ? data.storyboard : undefined,
     idempotencyKey: `${params.nodeId}:${crypto.randomUUID()}`,
   });
   const run: AgentRunDto = {
@@ -210,6 +304,8 @@ export async function startHyperframesAgentNode(params: {
     isExecuting: true,
     error: undefined,
     revisionTarget: undefined,
+    revisionPrompt: undefined,
+    feedbackPrompt: undefined,
   });
   studio.triggerSave();
   return run;

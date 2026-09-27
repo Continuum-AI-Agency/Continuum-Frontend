@@ -28,7 +28,7 @@ export type HyperframesBrowserComposition = {
   width: number;
   height: number;
   durationSeconds: number;
-  fps: 30;
+  fps: 30 | 60;
   shaderStack?: ShaderStackV1;
 };
 
@@ -104,6 +104,18 @@ export function buildTemporalMetrics(
     entranceMotionSceneIds,
   };
 }
+
+export const contactSheetSampleIndexes = (
+  scenes: readonly { start_seconds: number; duration_seconds: number }[],
+  sampleFps: number,
+  sampleCount: number,
+): number[] =>
+  scenes.map((scene) =>
+    Math.min(
+      sampleCount - 1,
+      Math.round((scene.start_seconds + scene.duration_seconds / 2) * sampleFps),
+    ),
+  );
 
 const throwIfAborted = (signal?: AbortSignal): void => {
   if (signal?.aborted) throw new DOMException('HyperFrames render aborted', 'AbortError');
@@ -646,12 +658,16 @@ export async function captureHyperframesReviewEvidence(params: {
     .slice(0, 4);
   const requested = new Map(frameTimestampsSeconds.map((timestamp, index) => [timestamp, index]));
   const dense = new Set(denseTimestamps);
-  const stripIndexes = new Set(
-    Array.from({ length: 8 }, (_, index) => Math.round(((denseTimestamps.length - 1) * index) / 7)),
+  const stripSamples = contactSheetSampleIndexes(
+    params.spec.scenes,
+    sampleFps,
+    denseTimestamps.length,
   );
-  const strip = createCanvas(1280, 90);
+  const strip = createCanvas(1440, Math.ceil(stripSamples.length / 6) * 180);
   const stripContext = strip.getContext('2d') as Canvas2D | null;
   if (!stripContext) throw new Error('Review motion-strip context is unavailable.');
+  stripContext.fillStyle = '#0b0b0b';
+  stripContext.fillRect(0, 0, strip.width, strip.height);
   const frames: Array<Blob | undefined> = Array(frameTimestampsSeconds.length).fill(undefined);
   const samples: Uint8Array[] = [];
   const clippedTextIds = new Set<string>();
@@ -671,9 +687,29 @@ export async function captureHyperframesReviewEvidence(params: {
       if (dense.has(timestamp)) {
         const sampleIndex = samples.length;
         samples.push(canvasLuma(prepared.canvas));
-        if (stripIndexes.has(sampleIndex)) {
-          const stripIndex = [...stripIndexes].indexOf(sampleIndex);
-          stripContext.drawImage(prepared.canvas, stripIndex * 160, 0, 160, 90);
+        for (const [tile, selected] of stripSamples.entries()) {
+          if (selected !== sampleIndex) continue;
+          const scale = Math.min(240 / params.composition.width, 180 / params.composition.height);
+          const width = params.composition.width * scale;
+          const height = params.composition.height * scale;
+          const x = (tile % 6) * 240;
+          const y = Math.floor(tile / 6) * 180;
+          stripContext.drawImage(
+            prepared.canvas,
+            x + (240 - width) / 2,
+            y + (180 - height) / 2,
+            width,
+            height,
+          );
+          stripContext.fillStyle = 'rgba(0,0,0,0.75)';
+          stripContext.fillRect(x, y + 158, 240, 22);
+          stripContext.fillStyle = '#ffffff';
+          stripContext.font = '12px sans-serif';
+          stripContext.fillText(
+            `${tile + 1}. ${params.spec.scenes[tile]?.id ?? ''}`,
+            x + 6,
+            y + 173,
+          );
         }
       }
       const frameIndex = requested.get(timestamp);
