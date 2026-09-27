@@ -54,6 +54,7 @@ import type { AgentRequestPayload } from '@/lib/onboarding/agentClient';
 import { mapOnboardingStateToAgentPayload } from '@/lib/onboarding/mapping';
 import { ensureOnboardingState, fetchOnboardingState } from '@/lib/onboarding/storage';
 import { createBrandProfileRepository } from '@/lib/repositories/brandProfile';
+import { DriveSettings } from './drive/DriveSettings';
 
 // TODO: Cache Components adoption. Refactor this route so this opt-out can be removed.
 // See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
@@ -440,6 +441,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         </SettingsSection>
       </>
     );
+  } else if (initialSection === 'drive') {
+    activeSectionSlot = <DriveSettings email={userEmail} />;
   } else if (initialSection === 'activity') {
     activeSectionSlot = (
       <SettingsSection
