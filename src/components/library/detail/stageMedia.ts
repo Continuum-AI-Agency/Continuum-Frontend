@@ -125,6 +125,18 @@ export function resolveStageMedia(params: {
       'head',
     );
     if (picked) return picked;
+    // An MKV/AVI/WMV/MXF original is not browser-playable: until its proxy is ready the
+    // stage waits on it (the companion stage) instead of handing the raw file to <video>.
+    if (headVersion && formatUsesCompanionPreview(headVersion.fileName, headVersion.mimeType)) {
+      return {
+        kind: 'file',
+        src: null,
+        durationMs: null,
+        label,
+        key: `head-companion-${headVersion.id}`,
+        sourceRole: 'original',
+      };
+    }
     if (headVersion) {
       return {
         kind: stageKindForMimeType(headVersion.mimeType),
@@ -169,6 +181,16 @@ export function resolveStageMedia(params: {
     viewedVersion.id,
   );
   if (picked) return picked;
+  if (formatUsesCompanionPreview(viewedVersion.fileName, viewedVersion.mimeType)) {
+    return {
+      kind: 'file',
+      src: null,
+      durationMs: null,
+      label: viewedVersion.fileName,
+      key: `${viewedVersion.id}-companion`,
+      sourceRole: 'original',
+    };
+  }
   return {
     kind: stageKindForMimeType(viewedVersion.mimeType),
     src: viewedVersion.signedUrl ?? null,

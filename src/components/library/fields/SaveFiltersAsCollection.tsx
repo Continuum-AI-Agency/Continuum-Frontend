@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from '@/components/ui/toast-imperative';
 import { createLibraryCollectionOperation } from '@/lib/library/creativeOperations';
+import { canEditLibrary, useBrandRole } from '@/lib/library/useBrandRole';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 
@@ -56,7 +57,8 @@ export function SaveFiltersAsCollection({
   const [name, setName] = useState('');
   const [visibility, setVisibility] = useState<CollectionVisibility>('team');
   const [saving, setSaving] = useState(false);
-  if (!hasAnyFilter(query)) return null;
+  const canEdit = canEditLibrary(useBrandRole(brandId));
+  if (!canEdit || !hasAnyFilter(query)) return null;
 
   const save = async () => {
     const trimmed = name.trim();

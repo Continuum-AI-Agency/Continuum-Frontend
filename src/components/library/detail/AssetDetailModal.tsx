@@ -108,15 +108,17 @@ function assetMetaLine(asset: MediaAsset): string {
 // Arrow keys belong to whatever has focus first: a text caret, a slider, a
 // focused player (where they seek), or a dialog opened from this one — compare,
 // the rollback confirm — which is a different [role=dialog] than ours.
-function arrowKeyOwnedElsewhere(target: EventTarget, ownDialog: EventTarget): boolean {
+// With ⌥/Alt held the arrow is always ours (the players ignore Alt), so only a text field
+// keeps it; a plain arrow on a focused player seeks it instead.
+function arrowKeyOwnedElsewhere(
+  target: EventTarget,
+  ownDialog: EventTarget,
+  altKey = false,
+): boolean {
   if (!(target instanceof Element)) return true;
-  if (
-    target.closest(
-      'input, textarea, select, video, audio, [role="slider"], [contenteditable]:not([contenteditable="false"])',
-    )
-  ) {
-    return true;
-  }
+  const typing =
+    'input, textarea, select, [role="slider"], [contenteditable]:not([contenteditable="false"])';
+  if (target.closest(altKey ? typing : `${typing}, video, audio`)) return true;
   // A nested dialog (compare, rollback confirm) is usually portalled, so its target sits
   // outside this dialog's DOM; one mounted inline has its own nearer role="dialog".
   if (!(ownDialog instanceof Node) || !ownDialog.contains(target)) return true;
@@ -390,7 +392,9 @@ function AssetDetailDialog({
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
       if (event.ctrlKey || event.metaKey || event.shiftKey) return;
       const popup = popupRef.current;
-      if (!popup || !event.target || arrowKeyOwnedElsewhere(event.target, popup)) return;
+      if (!popup || !event.target || arrowKeyOwnedElsewhere(event.target, popup, event.altKey)) {
+        return;
+      }
       const step = event.key === 'ArrowLeft' ? onPrev : onNext;
       if (!step) return;
       event.preventDefault();

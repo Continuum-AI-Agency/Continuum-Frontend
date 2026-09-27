@@ -148,6 +148,7 @@ function parseBrowseQuery(brandId: string, params: LibrarySearchParams) {
     performanceWindow: performanceWindow.success ? performanceWindow.data : undefined,
     layout: layout.success ? layout.data : undefined,
     boardGroupBy: first(params.boardGroupBy),
+    sortFieldId: first(params.sortField) ?? undefined,
   });
 }
 

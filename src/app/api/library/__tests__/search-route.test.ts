@@ -461,6 +461,29 @@ describe('POST /api/library/search — visual text search', () => {
     expect(visualCall?.args.filter_kind).toBe('video');
   });
 
+  it('keeps an untagged visual hit when semantic hits alone would fill the page', async () => {
+    const semanticIds = Array.from(
+      { length: 24 },
+      (_, i) => `77777777-7777-4777-8777-${String(i).padStart(12, '0')}`,
+    );
+    installSupabaseStub({
+      rpcCalls,
+      rpcResults: {
+        match_assets_by_text: semanticIds.map((id, i) => ({ id, similarity: 0.9 - i * 0.01 })),
+        match_similar_assets: [{ id: UNTAGGED_ID, similarity: 0.16 }],
+        search_assets_ranked: [],
+      },
+      hydrateIds: [...semanticIds, UNTAGGED_ID],
+    });
+
+    const response = await POST(visualRequest(VISUAL));
+    const body = (await response.json()) as { items: { asset: { id: string } }[] };
+
+    expect(body.items).toHaveLength(24);
+    expect(body.items.map((item) => item.asset.id)).toContain(UNTAGGED_ID);
+    expect(body.items[1]?.asset.id).toBe(UNTAGGED_ID);
+  });
+
   it('skips the image-space match when no visual embedding is sent', async () => {
     installSupabaseStub({ rpcCalls, rpcResults: {} });
     await POST(searchRequest('olive oil'));

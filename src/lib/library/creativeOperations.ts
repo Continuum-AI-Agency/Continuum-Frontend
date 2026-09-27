@@ -41,7 +41,9 @@ import {
   type RegisterGeneratedAssetOperation,
   type RegisterGeneratedAssetResponse,
   type RegisterVersionResponse,
+  type ReorderAssetVersionsResult,
   type RestoreAssetsResult,
+  reorderAssetVersionsResultSchema,
   type ReviewCommandResponse,
   type ReviewTransitionResponse,
   type RevokeShareLinkRequest,
@@ -58,6 +60,8 @@ import {
   rollbackAssetVersionOperationSchema,
   type ShareLink,
   type StackAssetsResult,
+  type UnstackAssetVersionResult,
+  unstackAssetVersionResultSchema,
   shareLinkSchema,
   signVersionUploadOperationSchema,
   stackAssetsResultSchema,
@@ -526,6 +530,30 @@ export function restoreAssetsOperation(
     supabase,
     { action: 'restore_assets', ...input, idempotencyKey: crypto.randomUUID() },
     restoreAssetsResultSchema,
+  );
+}
+
+// Pulls one version out of a stack into an asset of its own; the stack keeps the rest.
+export function unstackAssetVersionOperation(
+  supabase: SupabaseClient,
+  input: { brandId: string; assetId: string; versionId: string },
+): Promise<UnstackAssetVersionResult> {
+  return invokeCreativeOperation(
+    supabase,
+    { action: 'unstack_asset_version', ...input, idempotencyKey: crypto.randomUUID() },
+    unstackAssetVersionResultSchema,
+  );
+}
+
+// Puts a stack in a new order, oldest first; the last version becomes the head.
+export function reorderAssetVersionsOperation(
+  supabase: SupabaseClient,
+  input: { brandId: string; assetId: string; versionIds: string[] },
+): Promise<ReorderAssetVersionsResult> {
+  return invokeCreativeOperation(
+    supabase,
+    { action: 'reorder_asset_versions', ...input, idempotencyKey: crypto.randomUUID() },
+    reorderAssetVersionsResultSchema,
   );
 }
 
