@@ -6,11 +6,14 @@
 
 import type { AppNotification } from '@continuum/contracts';
 import {
+  AlarmClockIcon,
   AtSignIcon,
   CheckCheckIcon,
   CircleCheckBigIcon,
   EyeIcon,
   MessageSquareReplyIcon,
+  SirenIcon,
+  UserCheckIcon,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -25,6 +28,9 @@ const KIND_ICONS = {
   review_status_change: CircleCheckBigIcon,
   comment_reply: MessageSquareReplyIcon,
   comment_mention: AtSignIcon,
+  asset_assigned: UserCheckIcon,
+  review_reminder: AlarmClockIcon,
+  review_escalation: SirenIcon,
 } satisfies Record<AppNotification['kind'], typeof EyeIcon>;
 
 export type NotificationsPanelProps = {

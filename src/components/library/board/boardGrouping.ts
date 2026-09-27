@@ -1,6 +1,6 @@
 // Generalizes the Kanban from "the review board" to "a board over any
-// single-select dimension" — review_status, or one of the brand's custom
-// single-select fields.
+// one-value dimension" — review_status, or one of the brand's custom single-select,
+// status (coloured stages) or user (one lane per brand member) fields.
 //
 // review_status is NOT one of those custom fields and is never migrated into
 // them: it carries an append-only audit trail, so a drop onto a review lane must
@@ -24,6 +24,8 @@ export type BoardLane = {
   label: string;
   /** Tailwind class for the lane's header dot. */
   dotClass: string;
+  /** A status stage's own colour, which overrides dotClass. */
+  dotColor?: string | null;
   assets: MediaAsset[];
 };
 
@@ -76,12 +78,25 @@ export type BuildBoardLanesInput = {
    * option the field no longer defines) lands in the "Not set" lane.
    */
   optionByAssetId?: ReadonlyMap<string, string | null>;
+  /** The brand's members: a user field's lanes, one per member. */
+  members?: readonly { userId: string; label: string }[];
 };
+
+function laneChoices(
+  field: CustomField,
+  members: BuildBoardLanesInput['members'],
+): { id: string; label: string; color?: string | null }[] {
+  if (field.type === 'user') {
+    return (members ?? []).map((member) => ({ id: member.userId, label: member.label }));
+  }
+  return customFieldChoiceOptions(field);
+}
 
 export function buildBoardLanes({
   grouping,
   assets,
   optionByAssetId,
+  members,
 }: BuildBoardLanesInput): BoardLane[] {
   if (grouping.kind === 'review_status') {
     const columns = groupAssetsByReviewStatus([...assets]);
@@ -94,11 +109,11 @@ export function buildBoardLanes({
   }
 
   const { field } = grouping;
-  const options = customFieldChoiceOptions(field);
+  const options = laneChoices(field, members);
   const lanes: BoardLane[] = [
     {
       id: encodeLaneId({ kind: 'custom_field', fieldId: field.id, optionId: null }),
-      label: UNSET_LANE_LABEL,
+      label: field.type === 'user' ? 'Unassigned' : UNSET_LANE_LABEL,
       dotClass: UNSET_DOT,
       assets: [],
     },
@@ -106,6 +121,7 @@ export function buildBoardLanes({
       id: encodeLaneId({ kind: 'custom_field', fieldId: field.id, optionId: option.id }),
       label: option.label,
       dotClass: OPTION_DOT,
+      dotColor: field.type === 'status' ? (option.color ?? null) : null,
       assets: [] as MediaAsset[],
     })),
   ];

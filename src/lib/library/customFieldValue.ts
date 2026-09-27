@@ -20,9 +20,10 @@ import {
   type CustomFieldValue,
   customFieldChoiceOptions,
 } from '@continuum/contracts';
-import { isEmptyFieldValue, validateFieldValue } from './customFields';
+import { isEmptyFieldValue, ratingMax, validateFieldValue } from './customFields';
 
 export const ORPHANED_OPTION_LABEL = 'Removed option';
+export const ORPHANED_USER_LABEL = 'Former member';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -81,11 +82,20 @@ export function formatDateValue(iso: string): string {
   });
 }
 
-/** Display string for a stored value. Unset reads as '' — the caller renders the placeholder. */
-export function formatCustomFieldValue(field: CustomField, value: CustomFieldValue): string {
+/**
+ * Display string for a stored value. Unset reads as '' — the caller renders the
+ * placeholder. A user value is an id; `userLabel` names it when the caller has the
+ * member list, and an unknown id reads as ORPHANED_USER_LABEL rather than a uuid.
+ */
+export function formatCustomFieldValue(
+  field: CustomField,
+  value: CustomFieldValue,
+  userLabel?: (userId: string) => string | undefined,
+): string {
   if (value === null || value === undefined) return '';
   switch (field.type) {
-    case 'single_select': {
+    case 'single_select':
+    case 'status': {
       const optionId = singleSelectOptionId(value);
       return optionId ? optionLabel(field, optionId) : '';
     }
@@ -101,9 +111,25 @@ export function formatCustomFieldValue(field: CustomField, value: CustomFieldVal
       const iso = literalValue(value).trim();
       return iso ? formatDateValue(iso) : '';
     }
+    case 'number':
+      return typeof value === 'number' ? value.toLocaleString('en-US') : '';
+    case 'checkbox':
+      return value === true ? 'Yes' : value === false ? 'No' : '';
+    case 'rating':
+      return typeof value === 'number' ? `${'★'.repeat(value)} ${value}/${ratingMax(field)}` : '';
+    case 'user': {
+      const userId = literalValue(value);
+      return userId ? (userLabel?.(userId) ?? ORPHANED_USER_LABEL) : '';
+    }
     default:
       return literalValue(value).trim();
   }
+}
+
+/** The colour of a status option, or null for an unset/removed one. */
+export function statusColor(field: CustomField, value: CustomFieldValue): string | null {
+  const optionId = singleSelectOptionId(value);
+  return optionId ? (findOption(field, optionId)?.color ?? null) : null;
 }
 
 /**
@@ -123,7 +149,10 @@ export function validateCustomFieldValue(
     : { ok: false, error: `${field.name} · ${checked.reason}` };
 }
 
-/** Only a single_select can drive a board's lanes: an asset must sit in exactly one. */
+/**
+ * A board lane must hold each asset exactly once, so only a one-value choice can
+ * drive it: a single_select, a status, or a user (one lane per brand member).
+ */
 export function isGroupableField(field: CustomField): boolean {
-  return field.type === 'single_select';
+  return field.type === 'single_select' || field.type === 'status' || field.type === 'user';
 }
