@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import { databaseUuidSchema } from '../media/client-render';
 import {
+  editorCaptionWordSchema,
   editorCommandBatchSchema,
+  editorKeyframeSchema,
   editorPinnedAssetRefSchema,
   editorProductionStageSchema,
   editorProjectV2Schema,
@@ -65,8 +67,10 @@ export const editorTimelineOperationSchema = z
       'move_clip',
       'remove_clip',
       'upsert_text',
+      'upsert_caption',
       'upsert_audio',
       'upsert_overlay',
+      'upsert_keyframe',
       'upsert_transition',
       'remove_transition',
     ]),
@@ -86,6 +90,10 @@ export const editorTimelineOperationSchema = z
     assetId: editorTimelineOperationIdSchema.optional(),
     versionId: editorTimelineOperationIdSchema.optional(),
     text: z.string().min(1).max(20_000).optional(),
+    language: z.string().min(2).max(35).optional(),
+    words: z.array(editorCaptionWordSchema).max(200).optional(),
+    highlightMode: z.enum(['none', 'word', 'karaoke']).optional(),
+    keyframe: editorKeyframeSchema.optional(),
     fontFamily: z.string().min(1).max(300).optional(),
     fontSizePx: z.number().finite().positive().max(2_000).optional(),
     color: z.string().min(1).max(100).optional(),
@@ -128,8 +136,10 @@ export const editorTimelineOperationSchema = z
       move_clip: ['fromTrackId', 'toTrackId', 'clipId', 'timelineStartSec'],
       remove_clip: ['trackId', 'clipId'],
       upsert_text: ['trackId', 'clipId'],
+      upsert_caption: ['trackId', 'clipId'],
       upsert_audio: ['trackId', 'clipId'],
       upsert_overlay: ['trackId', 'clipId'],
+      upsert_keyframe: ['trackId', 'clipId', 'keyframe'],
       upsert_transition: [
         'trackId',
         'transitionId',
@@ -160,6 +170,36 @@ export const editorTimelineOperationSchema = z
 export type EditorTimelineOperation = z.infer<typeof editorTimelineOperationSchema>;
 
 export const editorTimelineOperationsSchema = z.array(editorTimelineOperationSchema).min(1).max(20);
+
+export const editorAgentTurnRequestSchema = z
+  .object({
+    message: z.string().trim().min(1).max(4_000),
+    history: z
+      .array(
+        z
+          .object({
+            role: z.enum(['user', 'assistant']),
+            content: z.string().min(1).max(4_000),
+          })
+          .strict(),
+      )
+      .max(10)
+      .default([]),
+  })
+  .strict();
+export type EditorAgentTurnRequest = z.infer<typeof editorAgentTurnRequestSchema>;
+
+export const editorAgentTurnResponseSchema = z
+  .object({
+    reply: z.string().min(1),
+    model: z.literal('gemini-3.5-flash'),
+    projectRevision: z.number().int().nonnegative(),
+    projectFingerprint: z.string().min(1),
+    editsApplied: z.number().int().nonnegative(),
+    revisionBeforeEdits: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+export type EditorAgentTurnResponse = z.infer<typeof editorAgentTurnResponseSchema>;
 
 export const editorGenerationKindSchema = z.enum([
   'style_extract',
