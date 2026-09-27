@@ -17285,6 +17285,7 @@ export type Database = {
           height: number | null
           id: string
           integrity_state: string
+          media_info: Json | null
           mime_type: string
           note: string | null
           review_state_id: string | null
@@ -17309,6 +17310,7 @@ export type Database = {
           height?: number | null
           id?: string
           integrity_state?: string
+          media_info?: Json | null
           mime_type: string
           note?: string | null
           review_state_id?: string | null
@@ -17333,6 +17335,7 @@ export type Database = {
           height?: number | null
           id?: string
           integrity_state?: string
+          media_info?: Json | null
           mime_type?: string
           note?: string | null
           review_state_id?: string | null
@@ -17374,39 +17377,92 @@ export type Database = {
           },
         ]
       }
+      asset_views: {
+        Row: {
+          asset_id: string
+          brand_id: string
+          first_seen_at: string
+          last_seen_at: string
+          user_id: string
+          view_count: number
+        }
+        Insert: {
+          asset_id: string
+          brand_id: string
+          first_seen_at?: string
+          last_seen_at?: string
+          user_id: string
+          view_count?: number
+        }
+        Update: {
+          asset_id?: string
+          brand_id?: string
+          first_seen_at?: string
+          last_seen_at?: string
+          user_id?: string
+          view_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_views_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assets: {
         Row: {
           ad_creative_analysis: Json | null
           aspect_ratio: string | null
+          audio_bit_depth: number | null
+          audio_bit_rate: number | null
+          audio_channels: number | null
+          audio_codec: string | null
+          audio_sample_rate: number | null
+          bit_depth: number | null
+          bit_rate: number | null
           brand_id: string
           bucket: string
           checksum: string | null
+          color_space: string | null
           created_at: string
           created_by: string | null
           deleted_at: string | null
           description: string | null
           detected_objects: Json
           duration_ms: number | null
+          dynamic_range: string | null
           embedding_image: string | null
           embedding_model: string | null
           embedding_text: string | null
+          end_timecode: string | null
           error_code: string | null
           error_message: string | null
           file_name: string
+          frame_rate: number | null
+          has_alpha: boolean | null
           has_image_embedding: boolean | null
+          has_location: boolean | null
           head_version_id: string | null
           height: number | null
           id: string
           integrity_state: string
           kind: string
+          media_probe_error: string | null
+          media_probed_at: string | null
           mime_type: string
+          notes: string | null
           origin_ref: Json | null
+          page_count: number | null
           progress_step: string | null
           review_state_id: string | null
           review_status: string
           review_status_updated_at: string | null
           size_bytes: number | null
           source: string
+          start_timecode: string | null
           status: string
           storage_path: string
           tags: string[]
@@ -17417,41 +17473,61 @@ export type Database = {
           transcript_segments: Json | null
           transcript_source: string | null
           updated_at: string
+          video_bit_rate: number | null
+          video_codec: string | null
           video_insights: Json | null
           width: number | null
         }
         Insert: {
           ad_creative_analysis?: Json | null
           aspect_ratio?: string | null
+          audio_bit_depth?: number | null
+          audio_bit_rate?: number | null
+          audio_channels?: number | null
+          audio_codec?: string | null
+          audio_sample_rate?: number | null
+          bit_depth?: number | null
+          bit_rate?: number | null
           brand_id: string
           bucket?: string
           checksum?: string | null
+          color_space?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
           detected_objects?: Json
           duration_ms?: number | null
+          dynamic_range?: string | null
           embedding_image?: string | null
           embedding_model?: string | null
           embedding_text?: string | null
+          end_timecode?: string | null
           error_code?: string | null
           error_message?: string | null
           file_name: string
+          frame_rate?: number | null
+          has_alpha?: boolean | null
           has_image_embedding?: boolean | null
+          has_location?: boolean | null
           head_version_id?: string | null
           height?: number | null
           id?: string
           integrity_state?: string
           kind: string
+          media_probe_error?: string | null
+          media_probed_at?: string | null
           mime_type: string
+          notes?: string | null
           origin_ref?: Json | null
+          page_count?: number | null
           progress_step?: string | null
           review_state_id?: string | null
           review_status?: string
           review_status_updated_at?: string | null
           size_bytes?: number | null
           source?: string
+          start_timecode?: string | null
           status?: string
           storage_path: string
           tags?: string[]
@@ -17462,41 +17538,61 @@ export type Database = {
           transcript_segments?: Json | null
           transcript_source?: string | null
           updated_at?: string
+          video_bit_rate?: number | null
+          video_codec?: string | null
           video_insights?: Json | null
           width?: number | null
         }
         Update: {
           ad_creative_analysis?: Json | null
           aspect_ratio?: string | null
+          audio_bit_depth?: number | null
+          audio_bit_rate?: number | null
+          audio_channels?: number | null
+          audio_codec?: string | null
+          audio_sample_rate?: number | null
+          bit_depth?: number | null
+          bit_rate?: number | null
           brand_id?: string
           bucket?: string
           checksum?: string | null
+          color_space?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
           detected_objects?: Json
           duration_ms?: number | null
+          dynamic_range?: string | null
           embedding_image?: string | null
           embedding_model?: string | null
           embedding_text?: string | null
+          end_timecode?: string | null
           error_code?: string | null
           error_message?: string | null
           file_name?: string
+          frame_rate?: number | null
+          has_alpha?: boolean | null
           has_image_embedding?: boolean | null
+          has_location?: boolean | null
           head_version_id?: string | null
           height?: number | null
           id?: string
           integrity_state?: string
           kind?: string
+          media_probe_error?: string | null
+          media_probed_at?: string | null
           mime_type?: string
+          notes?: string | null
           origin_ref?: Json | null
+          page_count?: number | null
           progress_step?: string | null
           review_state_id?: string | null
           review_status?: string
           review_status_updated_at?: string | null
           size_bytes?: number | null
           source?: string
+          start_timecode?: string | null
           status?: string
           storage_path?: string
           tags?: string[]
@@ -17507,6 +17603,8 @@ export type Database = {
           transcript_segments?: Json | null
           transcript_source?: string | null
           updated_at?: string
+          video_bit_rate?: number | null
+          video_codec?: string | null
           video_insights?: Json | null
           width?: number | null
         }
@@ -17760,6 +17858,48 @@ export type Database = {
           },
         ]
       }
+      comment_reactions: {
+        Row: {
+          asset_id: string
+          brand_id: string
+          comment_id: string
+          created_at: string
+          emoji: string
+          user_id: string
+        }
+        Insert: {
+          asset_id: string
+          brand_id: string
+          comment_id: string
+          created_at?: string
+          emoji: string
+          user_id?: string
+        }
+        Update: {
+          asset_id?: string
+          brand_id?: string
+          comment_id?: string
+          created_at?: string
+          emoji?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_reactions_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comment_reactions_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comments: {
         Row: {
           annotation: Json | null
@@ -17771,6 +17911,7 @@ export type Database = {
           created_by: string | null
           deleted_at: string | null
           external_reviewer_session_id: string | null
+          hashtags: string[]
           id: string
           mentions: Json
           parent_comment_id: string | null
@@ -17790,6 +17931,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           external_reviewer_session_id?: string | null
+          hashtags?: string[]
           id?: string
           mentions?: Json
           parent_comment_id?: string | null
@@ -17809,6 +17951,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           external_reviewer_session_id?: string | null
+          hashtags?: string[]
           id?: string
           mentions?: Json
           parent_comment_id?: string | null
@@ -20459,6 +20602,7 @@ export type Database = {
         Returns: string
       }
       collection_role_rank: { Args: { p_role: string }; Returns: number }
+      comment_hashtags: { Args: { p_body: string }; Returns: string[] }
       commit_editor_project_revision: {
         Args: {
           p_actor_id: string
@@ -21050,6 +21194,23 @@ export type Database = {
         Args: { p_payload: Json }
         Returns: Json
       }
+      mark_asset_seen: {
+        Args: { p_asset_id: string }
+        Returns: {
+          asset_id: string
+          brand_id: string
+          first_seen_at: string
+          last_seen_at: string
+          user_id: string
+          view_count: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "asset_views"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       match_asset_frames: {
         Args: {
           exclude_asset_id?: string
@@ -21149,6 +21310,10 @@ export type Database = {
       reap_expired_service_render_jobs: { Args: never; Returns: number }
       reap_expired_service_url_ingest_jobs: { Args: never; Returns: number }
       record_asset_assignments: { Args: { p_rows: Json }; Returns: undefined }
+      record_media_info: {
+        Args: { p_info: Json; p_version_id: string }
+        Returns: Json
+      }
       replace_element: {
         Args: {
           p_brand_id: string
