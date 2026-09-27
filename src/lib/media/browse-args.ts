@@ -50,3 +50,58 @@ export function libraryBrowseSortArg(query: Pick<LibraryBrowseQuery, 'sort' | 's
   }
   return query.sort;
 }
+
+/**
+ * What the browse RPC cannot express and must be applied on top of its ranked rows: custom
+ * review states and custom-field filters (no new RPC argument — a PostgREST overload takes the
+ * whole read down). Every other browse filter stays in the RPC, so nothing is dropped when one
+ * of these is on.
+ */
+export type LibraryBrowseNarrowing = {
+  reviewStateIds: readonly string[];
+  fieldConstraint:
+    | { kind: 'unfiltered' }
+    | { kind: 'ids'; ids: readonly string[] }
+    | { kind: 'exclude'; ids: readonly string[] };
+};
+
+export function isNarrowed(narrowing: LibraryBrowseNarrowing): boolean {
+  return narrowing.reviewStateIds.length > 0 || narrowing.fieldConstraint.kind !== 'unfiltered';
+}
+
+/**
+ * The review statuses the RPC pre-filters on once custom states are chosen: the chosen bases
+ * plus each chosen state's base (a state's assets carry its base). A superset — the exact
+ * "base OR state" test is `browseNarrowingPredicate`.
+ */
+export function reviewPrefilterStatuses(
+  reviewStatuses: readonly string[],
+  stateBases: readonly string[],
+): string[] {
+  return [...new Set([...reviewStatuses, ...stateBases])];
+}
+
+/**
+ * Whether a ranked asset passes the narrowing. Review follows the filter's semantics
+ * (components/library/review/reviewFilterOptions): a chosen base status matches every asset
+ * with that status, its custom states included; a chosen state matches only that state; the
+ * choices are OR'd. Field constraints AND on top.
+ */
+export function browseNarrowingPredicate(
+  reviewStatuses: readonly string[],
+  narrowing: LibraryBrowseNarrowing,
+): (row: { id: string; review_status: string | null; review_state_id: string | null }) => boolean {
+  const statuses = new Set(reviewStatuses);
+  const states = new Set(narrowing.reviewStateIds);
+  const field = narrowing.fieldConstraint;
+  const fieldIds = field.kind === 'unfiltered' ? null : new Set(field.ids);
+  return (row) => {
+    if (field.kind === 'ids' && !fieldIds?.has(row.id)) return false;
+    if (field.kind === 'exclude' && fieldIds?.has(row.id)) return false;
+    if (states.size === 0) return true;
+    return (
+      statuses.has(row.review_status ?? 'none') ||
+      (row.review_state_id !== null && states.has(row.review_state_id))
+    );
+  };
+}

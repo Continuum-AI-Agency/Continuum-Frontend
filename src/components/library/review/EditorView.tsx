@@ -5,7 +5,8 @@
 // (start timecode + frame, drop-frame when the file counts that way) so it can be
 // typed straight into the editor's timecode field — click one to copy it. Resolve
 // boxes write through the same path as the Library, the list updates live, and the
-// four marker exports are one click each.
+// four marker exports are one click each, on a timeline starting at 01:00:00:00
+// or at the clip's own timecode.
 
 import type { MediaComment } from '@continuum/contracts';
 import { Check, Copy, Download, ExternalLink } from 'lucide-react';
@@ -18,6 +19,8 @@ import {
   type CommentExportFormat,
   frameAtMs,
   sourceTimecodeAtMs,
+  TIMELINE_STARTS,
+  type TimelineStart,
 } from '@/lib/library/commentExport';
 import {
   buildCommentThreads,
@@ -35,6 +38,11 @@ const EXPORT_BUTTONS: Record<CommentExportFormat, string> = {
   premiere: 'Premiere XML',
 };
 
+const TIMELINE_LABELS: Record<TimelineStart, string> = {
+  hour: '01:00:00:00',
+  source: 'clip timecode',
+};
+
 type Props = { brandId: string; assetId: string; versionId: string | null };
 
 function authorOf(comment: MediaComment): string {
@@ -45,6 +53,7 @@ export function EditorView({ brandId, assetId, versionId }: Props) {
   const { comments, loading, error, setResolved } = useAssetComments(brandId, assetId);
   const timing = useAssetTiming({ brandId, assetId, versionId });
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [timeline, setTimeline] = useState<TimelineStart>('hour');
 
   // Timed threads of this version. A legacy comment with no version pin belongs to
   // the head, which is what this view shows when no version is named.
@@ -79,7 +88,13 @@ export function EditorView({ brandId, assetId, versionId }: Props) {
 
   const exportAs = (format: CommentExportFormat) =>
     downloadFromRoute(
-      commentExportHref({ brandId, assetId, versionId: timing?.versionId ?? versionId, format }),
+      commentExportHref({
+        brandId,
+        assetId,
+        versionId: timing?.versionId ?? versionId,
+        format,
+        timeline,
+      }),
     ).catch((err: unknown) => toast.error(`Export failed · ${(err as Error).message}`));
 
   const openCount = rows.filter((row) => !row.root.resolvedAt).length;
@@ -111,7 +126,22 @@ export function EditorView({ brandId, assetId, versionId }: Props) {
             : 'Reading the file’s timecode…'}{' '}
           · {openCount} open
         </p>
-        <div className="mt-2 flex flex-wrap gap-1">
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+          <label className="inline-flex items-center gap-1 text-2xs text-muted-foreground">
+            Timeline starts at
+            <select
+              data-testid="editor-timeline-start"
+              value={timeline}
+              onChange={(event) => setTimeline(event.target.value as TimelineStart)}
+              className="rounded-md border border-border bg-background px-1 py-0.5 text-2xs text-foreground"
+            >
+              {TIMELINE_STARTS.map((start) => (
+                <option key={start} value={start}>
+                  {TIMELINE_LABELS[start]}
+                </option>
+              ))}
+            </select>
+          </label>
           {COMMENT_EXPORT_FORMATS.map((format) => (
             <button
               key={format}

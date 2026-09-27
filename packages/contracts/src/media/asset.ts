@@ -193,6 +193,8 @@ export const mediaAssetSchema = z
     originRef: z.record(z.string(), z.unknown()).nullable().optional(),
     status: mediaStatusSchema,
     reviewStatus: mediaReviewStatusSchema.default('none'),
+    // The brand's custom state within reviewStatus (media.review_custom_states).
+    reviewStateId: z.string().nullable().optional(),
     headVersionId: z.string().nullable().optional(),
     integrityState: assetIntegrityStateSchema.optional(),
     checksum: z.string().nullable().optional(),
@@ -252,6 +254,11 @@ export type MediaCollectionKind = z.infer<typeof mediaCollectionKindSchema>;
 export const collectionVisibilitySchema = z.enum(['team', 'private']);
 export type CollectionVisibility = z.infer<typeof collectionVisibilitySchema>;
 
+// 'restricted' = only the collection's member list (and brand owners/admins) can see it
+// and everything inside it; children inherit from the nearest restricted ancestor.
+export const collectionAccessSchema = z.enum(['brand', 'restricted']);
+export type CollectionAccess = z.infer<typeof collectionAccessSchema>;
+
 // How a collection presents itself (media.collections.view_config). SQL does not
 // validate this jsonb, so every level passes unknown keys through untouched.
 export const collectionViewConfigSchema = z
@@ -294,6 +301,7 @@ export const mediaCollectionSchema = z
     /** Product-owned boards (`canvas_outputs`). Null on operator-created ones. */
     systemKey: z.string().min(1).max(64).nullable().optional(),
     visibility: collectionVisibilitySchema.default('team'),
+    access: collectionAccessSchema.optional(),
     viewConfig: collectionViewConfigSchema.default({}),
     createdBy: z.string().nullable().optional(),
     createdAt: z.string(),

@@ -16,6 +16,7 @@ import type {
   CustomFieldValue,
   MediaAsset,
   MediaReviewStatus,
+  ReviewCustomState,
 } from '@continuum/contracts';
 import { customFieldChoiceOptions, mediaReviewStatusSchema } from '@continuum/contracts';
 import { ratingMax } from '@/lib/library/customFields';
@@ -41,6 +42,8 @@ export type BoardLane = {
 
 export type LaneTarget =
   | { kind: 'review_status'; status: MediaReviewStatus }
+  // A brand custom state (media.review_custom_states) within its base status.
+  | { kind: 'review_state'; status: MediaReviewStatus; stateId: string }
   | { kind: 'custom_field'; fieldId: string; optionId: string | null };
 
 /** The lane for assets that hold no value for the grouping field. */
@@ -48,6 +51,7 @@ export const UNSET_LANE_KEY = '__unset';
 export const UNSET_LANE_LABEL = 'Not set';
 
 const REVIEW_PREFIX = 'review:';
+const REVIEW_STATE_PREFIX = 'review-state:';
 const FIELD_PREFIX = 'field:';
 
 const UNSET_DOT = 'bg-muted-foreground/40';
@@ -55,10 +59,20 @@ const OPTION_DOT = 'bg-primary/60';
 
 export function encodeLaneId(target: LaneTarget): string {
   if (target.kind === 'review_status') return `${REVIEW_PREFIX}${target.status}`;
+  if (target.kind === 'review_state') {
+    return `${REVIEW_STATE_PREFIX}${target.status}:${target.stateId}`;
+  }
   return `${FIELD_PREFIX}${target.fieldId}:${target.optionId ?? UNSET_LANE_KEY}`;
 }
 
 export function decodeLaneId(laneId: string): LaneTarget | null {
+  if (laneId.startsWith(REVIEW_STATE_PREFIX)) {
+    const [status, stateId] = laneId.slice(REVIEW_STATE_PREFIX.length).split(':');
+    const parsed = mediaReviewStatusSchema.safeParse(status);
+    return parsed.success && stateId
+      ? { kind: 'review_state', status: parsed.data, stateId }
+      : null;
+  }
   if (laneId.startsWith(REVIEW_PREFIX)) {
     const parsed = mediaReviewStatusSchema.safeParse(laneId.slice(REVIEW_PREFIX.length));
     return parsed.success ? { kind: 'review_status', status: parsed.data } : null;
@@ -94,6 +108,8 @@ export type BuildBoardLanesInput = {
   members?: readonly { userId: string; label: string }[];
   /** Brand labels for the review lanes; the product defaults fill any gap. */
   reviewLabels?: ReviewLaneLabels;
+  /** The brand's custom states: each is its own lane right after its base lane. */
+  customStates?: readonly ReviewCustomState[];
   /** "Today" for date buckets — injectable so the buckets are testable. */
   now?: Date;
 };
@@ -268,18 +284,35 @@ export function buildBoardLanes({
   valueByAssetId,
   members,
   reviewLabels,
+  customStates = [],
   now = new Date(),
 }: BuildBoardLanesInput): BoardLane[] {
   if (grouping.kind === 'review_status') {
     const columns = groupAssetsByReviewStatus([...assets]);
-    return REVIEW_STATUS_ORDER.map((status) => ({
-      id: encodeLaneId({ kind: 'review_status', status }),
-      label: reviewLabels?.[status]?.label ?? REVIEW_STATUS_META[status].columnLabel,
-      dotClass: REVIEW_STATUS_META[status].dotClass,
-      dotColor: reviewLabels?.[status]?.color ?? null,
-      droppable: true,
-      assets: columns[status],
-    }));
+    return REVIEW_STATUS_ORDER.flatMap((status) => {
+      const own = customStates.filter((state) => state.baseStatus === status);
+      // A card holding one of this base's custom states sits in that state's lane;
+      // any other card (no state, or a deleted one) stays in the base lane.
+      const inState = (asset: MediaAsset, stateId: string) => asset.reviewStateId === stateId;
+      return [
+        {
+          id: encodeLaneId({ kind: 'review_status', status }),
+          label: reviewLabels?.[status]?.label ?? REVIEW_STATUS_META[status].columnLabel,
+          dotClass: REVIEW_STATUS_META[status].dotClass,
+          dotColor: reviewLabels?.[status]?.color ?? null,
+          droppable: true,
+          assets: columns[status].filter((asset) => !own.some((state) => inState(asset, state.id))),
+        },
+        ...own.map((state) => ({
+          id: encodeLaneId({ kind: 'review_state', status, stateId: state.id }),
+          label: state.label,
+          dotClass: REVIEW_STATUS_META[status].dotClass,
+          dotColor: state.color,
+          droppable: true,
+          assets: columns[status].filter((asset) => inState(asset, state.id)),
+        })),
+      ];
+    });
   }
 
   const { field } = grouping;

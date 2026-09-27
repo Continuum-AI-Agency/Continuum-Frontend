@@ -16,7 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast-imperative';
 import { listAssetFieldValues, setAssetFieldValue } from '@/lib/library/customFields';
 import { validateCustomFieldValue, valuesByFieldId } from '@/lib/library/customFieldValue';
-import { canEditLibrary, useBrandRole } from '@/lib/library/useBrandRole';
+import { useLibraryAccess } from '@/lib/library/useBrandRole';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import { CustomFieldManagerDialog } from './CustomFieldManagerDialog';
 import { CustomFieldValueEditor } from './CustomFieldValueEditor';
@@ -33,7 +33,7 @@ export function AssetFieldsPanel({ brandId, assetId }: AssetFieldsPanelProps) {
   const [valuesError, setValuesError] = useState<string | null>(null);
   const [savingFieldId, setSavingFieldId] = useState<string | null>(null);
   const [managerOpen, setManagerOpen] = useState(false);
-  const canEdit = canEditLibrary(useBrandRole(brandId));
+  const { canEdit } = useLibraryAccess(brandId, { assetId });
 
   // Another member's write to this asset's fields lands here as the row arrives.
   useEffect(

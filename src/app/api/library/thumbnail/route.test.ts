@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 type Hooks = {
   __testCreateSupabaseServerClient?: (...args: unknown[]) => unknown;
-  __testCreateSupabaseAdminClient?: (...args: unknown[]) => unknown;
   __testCallerHasBrandAccess?: (...args: unknown[]) => unknown;
 };
 const hooks = globalThis as Hooks;
@@ -10,10 +11,6 @@ const hooks = globalThis as Hooks;
 mock.module('@/lib/supabase/server', () => ({
   createSupabaseServerClient: (...args: unknown[]) =>
     hooks.__testCreateSupabaseServerClient?.(...args),
-}));
-mock.module('@/lib/supabase/admin', () => ({
-  createSupabaseAdminClient: (...args: unknown[]) =>
-    hooks.__testCreateSupabaseAdminClient?.(...args),
 }));
 mock.module('@/lib/media/brand-access.server', () => ({
   callerHasBrandAccess: (...args: unknown[]) => hooks.__testCallerHasBrandAccess?.(...args),
@@ -60,7 +57,7 @@ class QueryStub implements PromiseLike<DbResult> {
 
 type Uploaded = { bucket: string; path: string; blob: Blob; options: { contentType?: string } };
 
-function createAdminStub(rows: DbResult[], uploadError: { message: string } | null = null) {
+function createClientStub(rows: DbResult[], uploadError: { message: string } | null = null) {
   const queries: QueryStub[] = [];
   const uploads: Uploaded[] = [];
   const client = {
@@ -85,11 +82,19 @@ function createAdminStub(rows: DbResult[], uploadError: { message: string } | nu
   return { client, queries, uploads };
 }
 
+let currentUser: { id: string } | null = null;
+const auth = () => ({
+  getUser: () => Promise.resolve({ data: { user: currentUser }, error: null }),
+});
+
 function setAuth(user: { id: string } | null) {
-  hooks.__testCreateSupabaseServerClient = () =>
-    Promise.resolve({
-      auth: { getUser: () => Promise.resolve({ data: { user }, error: null }) },
-    });
+  currentUser = user;
+  hooks.__testCreateSupabaseServerClient = () => Promise.resolve({ auth: auth() });
+}
+
+// The route reads and writes through the caller's own (RLS) client — there is no other.
+function useCallerClient(client: object) {
+  hooks.__testCreateSupabaseServerClient = () => Promise.resolve({ ...client, auth: auth() });
 }
 
 function posterRequest(
@@ -131,14 +136,13 @@ beforeEach(() => {
 
 afterEach(() => {
   hooks.__testCreateSupabaseServerClient = undefined;
-  hooks.__testCreateSupabaseAdminClient = undefined;
   hooks.__testCallerHasBrandAccess = undefined;
 });
 
 describe('POST /api/library/thumbnail', () => {
   it('stores the poster in the asset own bucket and persists thumbnail_path', async () => {
-    const { client, queries, uploads } = createAdminStub([VIDEO_ROW, { data: null, error: null }]);
-    hooks.__testCreateSupabaseAdminClient = () => client;
+    const { client, queries, uploads } = createClientStub([VIDEO_ROW, { data: null, error: null }]);
+    useCallerClient(client);
 
     const response = await POST(
       posterRequest(
@@ -166,8 +170,8 @@ describe('POST /api/library/thumbnail', () => {
   });
 
   it('persists source width/height/duration alongside the poster on a fresh upload', async () => {
-    const { client, queries } = createAdminStub([VIDEO_ROW, { data: null, error: null }]);
-    hooks.__testCreateSupabaseAdminClient = () => client;
+    const { client, queries } = createClientStub([VIDEO_ROW, { data: null, error: null }]);
+    useCallerClient(client);
 
     const response = await POST(
       posterRequest(
@@ -195,7 +199,7 @@ describe('POST /api/library/thumbnail', () => {
 
   it('backfills metadata even when the poster already exists (the duration_desc fix)', async () => {
     const existingPath = `${BRAND_ID}/${ASSET_ID}/thumb.webp`;
-    const { client, queries, uploads } = createAdminStub([
+    const { client, queries, uploads } = createClientStub([
       {
         data: {
           id: ASSET_ID,
@@ -210,7 +214,7 @@ describe('POST /api/library/thumbnail', () => {
       },
       { data: null, error: null },
     ]);
-    hooks.__testCreateSupabaseAdminClient = () => client;
+    useCallerClient(client);
 
     const response = await POST(
       posterRequest(
@@ -234,7 +238,7 @@ describe('POST /api/library/thumbnail', () => {
   });
 
   it('never clobbers metadata a row already carries', async () => {
-    const { client, queries } = createAdminStub([
+    const { client, queries } = createClientStub([
       {
         data: {
           id: ASSET_ID,
@@ -248,7 +252,7 @@ describe('POST /api/library/thumbnail', () => {
       },
       { data: null, error: null },
     ]);
-    hooks.__testCreateSupabaseAdminClient = () => client;
+    useCallerClient(client);
 
     const response = await POST(
       posterRequest(
@@ -275,7 +279,7 @@ describe('POST /api/library/thumbnail', () => {
 
   it('leaves an existing poster untouched when registration is replayed', async () => {
     const existingPath = `${BRAND_ID}/${ASSET_ID}/thumb.webp`;
-    const { client, queries, uploads } = createAdminStub([
+    const { client, queries, uploads } = createClientStub([
       {
         data: {
           id: ASSET_ID,
@@ -286,7 +290,7 @@ describe('POST /api/library/thumbnail', () => {
         error: null,
       },
     ]);
-    hooks.__testCreateSupabaseAdminClient = () => client;
+    useCallerClient(client);
 
     const response = await POST(
       posterRequest(
@@ -308,8 +312,8 @@ describe('POST /api/library/thumbnail', () => {
   });
 
   it('rejects a caller without brand access before touching storage', async () => {
-    const { client, uploads } = createAdminStub([VIDEO_ROW]);
-    hooks.__testCreateSupabaseAdminClient = () => client;
+    const { client, uploads } = createClientStub([VIDEO_ROW]);
+    useCallerClient(client);
     hooks.__testCallerHasBrandAccess = () => Promise.resolve(false);
 
     const response = await POST(
@@ -334,8 +338,8 @@ describe('POST /api/library/thumbnail', () => {
   });
 
   it('refuses a poster that is not a webp/jpeg still', async () => {
-    const { client, uploads } = createAdminStub([VIDEO_ROW]);
-    hooks.__testCreateSupabaseAdminClient = () => client;
+    const { client, uploads } = createClientStub([VIDEO_ROW]);
+    useCallerClient(client);
 
     const response = await POST(
       posterRequest(
@@ -348,8 +352,8 @@ describe('POST /api/library/thumbnail', () => {
   });
 
   it('refuses a poster for an asset in another brand (row lookup is brand-scoped)', async () => {
-    const { client, uploads } = createAdminStub([{ data: null, error: null }]);
-    hooks.__testCreateSupabaseAdminClient = () => client;
+    const { client, uploads } = createClientStub([{ data: null, error: null }]);
+    useCallerClient(client);
 
     const response = await POST(
       posterRequest(
@@ -362,10 +366,10 @@ describe('POST /api/library/thumbnail', () => {
   });
 
   it('refuses a poster for a non-video asset', async () => {
-    const { client, uploads } = createAdminStub([
+    const { client, uploads } = createClientStub([
       { data: { id: ASSET_ID, bucket: 'media-library', kind: 'image' }, error: null },
     ]);
-    hooks.__testCreateSupabaseAdminClient = () => client;
+    useCallerClient(client);
 
     const response = await POST(
       posterRequest(
@@ -378,8 +382,8 @@ describe('POST /api/library/thumbnail', () => {
   });
 
   it('refuses an empty or oversized poster', async () => {
-    const { client } = createAdminStub([VIDEO_ROW, VIDEO_ROW]);
-    hooks.__testCreateSupabaseAdminClient = () => client;
+    const { client } = createClientStub([VIDEO_ROW, VIDEO_ROW]);
+    useCallerClient(client);
 
     const empty = await POST(
       posterRequest(
@@ -399,8 +403,8 @@ describe('POST /api/library/thumbnail', () => {
   });
 
   it('422s on a missing poster or malformed ids', async () => {
-    const { client } = createAdminStub([VIDEO_ROW]);
-    hooks.__testCreateSupabaseAdminClient = () => client;
+    const { client } = createClientStub([VIDEO_ROW]);
+    useCallerClient(client);
 
     expect((await POST(posterRequest({ brandId: BRAND_ID, assetId: ASSET_ID }))).status).toBe(422);
     expect(
@@ -416,8 +420,8 @@ describe('POST /api/library/thumbnail', () => {
   });
 
   it('reports a storage failure instead of persisting a path that has no bytes', async () => {
-    const { client, queries } = createAdminStub([VIDEO_ROW], { message: 'bucket exploded' });
-    hooks.__testCreateSupabaseAdminClient = () => client;
+    const { client, queries } = createClientStub([VIDEO_ROW], { message: 'bucket exploded' });
+    useCallerClient(client);
 
     const response = await POST(
       posterRequest(
@@ -429,5 +433,15 @@ describe('POST /api/library/thumbnail', () => {
     expect(queries.flatMap((query) => query.calls).some((call) => call.method === 'update')).toBe(
       false,
     );
+  });
+});
+
+describe('POST /api/library/thumbnail on Vercel', () => {
+  // Vercel has no SUPABASE_SERVICE_ROLE_KEY, by design: a privileged-client path benches
+  // green on a laptop and 500s in production.
+  it('never reaches for the service-role key', () => {
+    const source = readFileSync(join(import.meta.dir, 'route.ts'), 'utf8');
+    expect(source).not.toContain('@/lib/supabase/admin');
+    expect(source).not.toContain('SUPABASE_SERVICE_ROLE_KEY');
   });
 });

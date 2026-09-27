@@ -27,7 +27,7 @@ import {
   RotateCcw,
   Ungroup,
 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pill } from '@/components/kibo-ui/pill';
 import {
   AlertDialog,
@@ -295,6 +295,7 @@ export function VersionRail({
 }: VersionRailProps) {
   const [uploading, setUploading] = useState(false);
   const [uploadPaused, setUploadPaused] = useState(false);
+  const [pausedByNetwork, setPausedByNetwork] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const resumeStateRef = useRef<VersionUploadResumeState | null>(null);
@@ -311,6 +312,7 @@ export function VersionRail({
     uploadControllerRef.current = controller;
     setUploadFile(file);
     setUploadPaused(false);
+    setPausedByNetwork(false);
     setUploading(true);
     try {
       const result = await uploadNewAssetVersion({
@@ -334,6 +336,11 @@ export function VersionRail({
     } catch (err) {
       if ((err as { name?: string }).name === 'AbortError') {
         setUploadPaused(true);
+      } else if (!navigator.onLine) {
+        // A dropped connection is a pause, not a failure: the upload resumes from Storage's
+        // committed offset when the browser is back online.
+        setUploadPaused(true);
+        setPausedByNetwork(true);
       } else {
         toast.error(`Version upload failed · ${(err as Error).message}`);
       }
@@ -342,6 +349,13 @@ export function VersionRail({
       uploadControllerRef.current = null;
     }
   };
+
+  useEffect(() => {
+    if (!pausedByNetwork || !uploadFile) return;
+    const resume = () => void runUpload(uploadFile, resumeStateRef.current);
+    window.addEventListener('online', resume, { once: true });
+    return () => window.removeEventListener('online', resume);
+  }, [pausedByNetwork, uploadFile, runUpload]);
 
   const handleFileSelected = async (file: File | null) => {
     if (!file) return;
@@ -440,23 +454,26 @@ export function VersionRail({
               Compare versions
             </Button>
           ) : null}
-          {uploading && asset.kind === 'file' ? (
+          {uploading ? (
             <Button
               type="button"
               variant="ghost"
               size="sm"
               className="h-7 gap-1 text-xs"
+              data-testid="version-upload-pause"
               onClick={() => uploadControllerRef.current?.abort()}
             >
               <Pause className="size-3" />
               Pause {uploadProgress}%
             </Button>
-          ) : uploadPaused && uploadFile && asset.kind === 'file' ? (
+          ) : uploadPaused && uploadFile ? (
             <Button
               type="button"
               variant="ghost"
               size="sm"
               className="h-7 gap-1 text-xs"
+              data-testid="version-upload-resume"
+              data-paused-by={pausedByNetwork ? 'network' : 'user'}
               onClick={() => void runUpload(uploadFile, resumeStateRef.current)}
             >
               <Play className="size-3" />
@@ -477,6 +494,7 @@ export function VersionRail({
         </div>
         <input
           ref={fileInputRef}
+          data-testid="version-upload-input"
           type="file"
           accept={asset.kind === 'file' ? LIBRARY_ACCEPT_ATTRIBUTE : `${asset.kind}/*`}
           className="hidden"

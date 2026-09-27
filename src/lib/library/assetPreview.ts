@@ -3,8 +3,8 @@
 import {
   type AssetPreviewState,
   classifyLibraryFile,
-  needsPlaybackProxy,
   type SignAssetRenditionOperation,
+  sharePreviewRoleFor,
   signAssetRenditionResponseSchema,
 } from '@continuum/contracts';
 
@@ -198,6 +198,35 @@ async function persistSampledFrames(params: {
   }
 }
 
+// A ≤1600 px WebP preview_image (and the source's true dimensions). False when the browser
+// could not decode the file.
+async function storeRasterPreview(params: {
+  file: File;
+  brandId: string;
+  assetId: string;
+  assetVersionId: string;
+  client: SupabaseBrowserClient;
+}): Promise<boolean> {
+  const preview = await rasterizeBrowserImage(params.file);
+  if (!preview) return false;
+  await persistAssetRendition({
+    ...params,
+    role: 'preview_image',
+    blob: preview.blob,
+    mimeType: 'image/webp',
+    width: preview.width,
+    height: preview.height,
+    renderer: 'browser-image-decoder',
+  });
+  await writeAssetSourceMetadata({
+    client: params.client,
+    brandId: params.brandId,
+    assetId: params.assetId,
+    metadata: { width: preview.sourceWidth, height: preview.sourceHeight, durationMs: null },
+  });
+  return true;
+}
+
 export async function attachAssetPreview(params: {
   file: File;
   brandId: string;
@@ -208,7 +237,20 @@ export async function attachAssetPreview(params: {
   const client = params.client ?? createSupabaseBrowserClient();
   const format = classifyLibraryFile({ fileName: params.file.name, mimeType: params.file.type });
   if (!format.accepted) return 'unsupported';
-  if (format.previewStrategy === 'native') return 'ready';
+  if (format.previewStrategy === 'native') {
+    // The browser shows a JPEG/PNG/WebP as is, but a protected share never signs the
+    // original: it needs a stored preview (prod had none for 9,291 images). Best effort —
+    // the upload itself already succeeded.
+    if (
+      sharePreviewRoleFor({ fileName: params.file.name, mimeType: params.file.type }) ===
+      'preview_image'
+    ) {
+      await storeRasterPreview({ ...params, client }).catch((error: unknown) => {
+        console.warn('[assetPreview] stored image preview failed', error);
+      });
+    }
+    return 'ready';
+  }
   // Office documents: there is no converter, so there is honestly nothing to wait for.
   if (format.previewStrategy === 'none') return 'unsupported';
 
@@ -262,21 +304,15 @@ export async function attachAssetPreview(params: {
       },
     });
     await persistSampledFrames({ ...params, client });
-    if (
-      needsPlaybackProxy({
-        sizeBytes: params.file.size,
-        width: poster.sourceWidth,
-        height: poster.sourceHeight,
-      })
-    ) {
-      void requestLibraryPreviewProxy({
-        brandId: params.brandId,
-        assetId: params.assetId,
-        assetVersionId: params.assetVersionId,
-      }).catch((error: unknown) => {
-        console.error('[assetPreview] playback proxy request failed', error);
-      });
-    }
+    // The server fills what the browser did not make: the six mid-video frames the visual
+    // search vector averages, and the 720p proxy when the original is too heavy to stream.
+    void requestLibraryPreviewProxy({
+      brandId: params.brandId,
+      assetId: params.assetId,
+      assetVersionId: params.assetVersionId,
+    }).catch((error: unknown) => {
+      console.error('[assetPreview] server preview request failed', error);
+    });
     return 'ready';
   }
 
@@ -299,27 +335,11 @@ export async function attachAssetPreview(params: {
     return 'awaiting_companion';
   }
 
-  if (format.previewStrategy === 'browser_raster') {
-    const preview = await rasterizeBrowserImage(params.file);
-    if (preview) {
-      await persistAssetRendition({
-        ...params,
-        client,
-        role: 'preview_image',
-        blob: preview.blob,
-        mimeType: 'image/webp',
-        width: preview.width,
-        height: preview.height,
-        renderer: 'browser-image-decoder',
-      });
-      await writeAssetSourceMetadata({
-        client,
-        brandId: params.brandId,
-        assetId: params.assetId,
-        metadata: { width: preview.sourceWidth, height: preview.sourceHeight, durationMs: null },
-      });
-      return 'ready';
-    }
+  if (
+    format.previewStrategy === 'browser_raster' &&
+    (await storeRasterPreview({ ...params, client }))
+  ) {
+    return 'ready';
   }
 
   await markPreviewState({

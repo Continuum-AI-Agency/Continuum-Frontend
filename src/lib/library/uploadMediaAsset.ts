@@ -14,6 +14,7 @@ import {
   classifyLibraryFile,
   completeMcpUploadIntentRequestSchema,
   completeMcpUploadIntentResponseSchema,
+  LIBRARY_LONG_RECORDING_SEC,
   type LibraryUploadTicket,
   libraryUploadTicketSchema,
   type PinnedLibraryImageRef,
@@ -23,12 +24,13 @@ import {
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { attachAssetPreview } from './assetPreview';
+import { requestLibraryPreviewProxy } from './previewProxy';
 import {
   type ResumableUploadProgress,
   resumableStorageUpload,
   TUS_CHUNK_SIZE_BYTES,
 } from './resumableStorageUpload';
-import { type attachVideoPoster, isVideoMimeType, probeVideoDurationSec } from './videoPoster';
+import { type attachVideoPoster, isVideoMimeType, probeMediaDurationSec } from './videoPoster';
 
 export type SupabaseBrowserClient = ReturnType<typeof createSupabaseBrowserClient>;
 
@@ -103,10 +105,70 @@ export interface UploadMediaAssetDeps {
   /** Injected for tests; decodes a frame in the browser and persists it. */
   attachPoster?: typeof attachVideoPoster;
   attachPreview?: typeof attachAssetPreview;
-  probeDuration?: typeof probeVideoDurationSec;
+  probeDuration?: typeof probeMediaDurationSec;
+  requestServerPreview?: typeof requestLibraryPreviewProxy;
   resumableUpload?: typeof resumableStorageUpload;
   supabaseUrl?: string;
   anonKey?: string;
+  /** Where a resumable upload remembers itself across a reload; null turns it off. */
+  resumeStore?: ResumeStore | null;
+}
+
+type ResumeStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+
+// A resumable upload survives a reload or a closed tab: its ticket and TUS URL are kept
+// under the file's fingerprint, so choosing the same file again continues from Storage's
+// offset instead of byte 0. Two hours is the life of the signed upload ticket. Best effort
+// throughout — no storage (private window, quota) just means a fresh upload.
+const RESUME_KEY_PREFIX = 'continuum:library-upload-resume:';
+const RESUME_TTL_MS = 2 * 60 * 60 * 1000;
+
+export function uploadResumeKey(brandId: string, file: File): string {
+  return `${RESUME_KEY_PREFIX}${brandId}:${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function defaultResumeStore(): ResumeStore | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function readSavedResume(
+  store: ResumeStore | null,
+  key: string,
+  now = Date.now(),
+): UploadResumeState | null {
+  try {
+    const raw = store?.getItem(key);
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as { ticket?: unknown; uploadUrl?: unknown; savedAt?: unknown };
+    const ticket = libraryUploadTicketSchema.safeParse(saved.ticket);
+    const fresh = typeof saved.savedAt === 'number' && now - saved.savedAt < RESUME_TTL_MS;
+    if (!ticket.success || !fresh || typeof saved.uploadUrl !== 'string') {
+      store?.removeItem(key);
+      return null;
+    }
+    return { ticket: ticket.data, uploadUrl: saved.uploadUrl };
+  } catch {
+    return null;
+  }
+}
+
+function saveResume(store: ResumeStore | null, key: string, state: UploadResumeState): void {
+  if (!state.uploadUrl) return;
+  try {
+    store?.setItem(key, JSON.stringify({ ...state, savedAt: Date.now() }));
+  } catch {
+    // Quota or a private window: the upload still runs, it just cannot outlive the page.
+  }
+}
+
+function forgetResume(store: ResumeStore | null, key: string): void {
+  try {
+    store?.removeItem(key);
+  } catch {}
 }
 
 export type UploadResumeState = {
@@ -245,13 +307,28 @@ export async function uploadMediaAsset(
   const refusal = uploadSizeRefusal(file);
   if (refusal) throw new Error(refusal);
 
+  const resumeStore = deps.resumeStore === undefined ? defaultResumeStore() : deps.resumeStore;
+  const resumeKey = uploadResumeKey(brandId, file);
+  const resume = params.resume ?? readSavedResume(resumeStore, resumeKey);
   const ticket =
-    params.resume?.ticket ??
+    resume?.ticket ??
     (await signLibraryUpload(supabase, { brandId, fileName: file.name, mimeType }));
-  params.onResumeState?.({ ticket, uploadUrl: params.resume?.uploadUrl ?? null });
+  params.onResumeState?.({ ticket, uploadUrl: resume?.uploadUrl ?? null });
   try {
     if (isResumableUpload(file)) {
-      await uploadResumable(supabase, ticket, params, deps);
+      await uploadResumable(
+        supabase,
+        ticket,
+        {
+          ...params,
+          resume,
+          onResumeState: (state) => {
+            saveResume(resumeStore, resumeKey, state);
+            params.onResumeState?.(state);
+          },
+        },
+        deps,
+      );
     } else {
       await uploadToLibraryTicket(supabase, ticket, file);
       params.onProgress?.({ uploadedBytes: file.size, totalBytes: file.size, percentage: 100 });
@@ -268,11 +345,12 @@ export async function uploadMediaAsset(
       ? 'skipped_large_file'
       : 'unknown';
   // Read before register because register is what enqueues analysis, and analysis
-  // needs the duration to decide whether this is long-form. Videos only, and never
+  // needs the duration to decide whether this is long-form. Video and audio, and never
   // fatal: a null just leaves analyze_media without that signal.
-  const durationSec = isVideoMimeType(mimeType)
-    ? await (deps.probeDuration ?? probeVideoDurationSec)(file)
-    : null;
+  const durationSec =
+    isVideoMimeType(mimeType) || mimeType.startsWith('audio/')
+      ? await (deps.probeDuration ?? probeMediaDurationSec)(file)
+      : null;
 
   const data = await invokeLibraryUpload(supabase, {
     action: 'register',
@@ -290,6 +368,26 @@ export async function uploadMediaAsset(
 
   const ok = registerMediaResponseSchema.safeParse(data);
   if (ok.success) {
+    forgetResume(resumeStore, resumeKey);
+    // A recording past analyze_media's budget is transcribed on the server (chunked through
+    // Continuum-Render), which the server preview starts. Videos always reach it through
+    // their preview; a browser-playable recording needs no preview, so it is asked here.
+    if (
+      mimeType.startsWith('audio/') &&
+      durationSec !== null &&
+      durationSec > LIBRARY_LONG_RECORDING_SEC
+    ) {
+      void (deps.requestServerPreview ?? requestLibraryPreviewProxy)({
+        brandId,
+        assetId: ok.data.assetId,
+        assetVersionId: ok.data.versionId,
+      }).catch((error: unknown) => {
+        console.warn(
+          '[library/uploadMediaAsset] long-recording transcription request failed',
+          error,
+        );
+      });
+    }
     // The poster rides on top of an upload that has ALREADY succeeded: the row
     // exists and the analysis pipeline is running. So a poster failure of any
     // kind — decode, encode, network, an unexpected throw from an injected dep —

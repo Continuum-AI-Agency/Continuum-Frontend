@@ -35,7 +35,7 @@ async function mutate(request: Request, mode: 'add' | 'remove'): Promise<Respons
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const refused = await refuseViewer(supabase, brandId);
+  const refused = await refuseViewer(supabase, brandId, collectionId);
   if (refused) return refused;
 
   try {

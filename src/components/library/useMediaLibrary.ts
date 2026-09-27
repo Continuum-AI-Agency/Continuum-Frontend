@@ -9,11 +9,9 @@ import {
 } from '@continuum/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseFieldFiltersParam, serializeFieldFilters } from '@/lib/library/customFields';
-import { buildLibraryBrowseParams, buildLibraryQuery, mediaTypeToKind } from '@/lib/media/filters';
+import { buildLibraryBrowseParams, mediaTypeToKind } from '@/lib/media/filters';
 import type { MediaAssetRow } from '@/lib/media/schema';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
-
-const PAGE_SIZE = 48;
 
 // Lightweight Realtime-only mapper — signedUrl comes from SSR seed; Realtime
 // updates only carry status/progress changes so we merge rather than replace.
@@ -82,6 +80,8 @@ export type UseMediaLibraryResult = {
 export function useMediaLibrary(params: {
   query: LibraryBrowseQuery;
   fieldFilters?: readonly CustomFieldFilter[];
+  /** The brand's custom review states to show (review_state_id); resolved by the assets route. */
+  reviewStateIds?: readonly string[];
   seed: MediaAsset[];
   initialNextCursor: string | null;
 }): UseMediaLibraryResult {
@@ -98,71 +98,46 @@ export function useMediaLibrary(params: {
     const parsed = parseFieldFiltersParam(fieldFiltersKey);
     return parsed.ok ? parsed.filters : [];
   }, [fieldFiltersKey]);
+  const reviewStatesKey = [...(params.reviewStateIds ?? [])].sort().join(',');
+  // Custom fields and custom review states narrow the ranked browse on the server (every
+  // other browse filter still applies); the RSC seed knows neither, so page 0 is refetched.
+  const narrowed = activeFieldFilters.length > 0 || reviewStatesKey.length > 0;
   const [assets, setAssets] = useState<MediaAsset[]>(seed);
   const [hasMore, setHasMore] = useState(initialNextCursor !== null);
   const [loadingMore, setLoadingMore] = useState(false);
   const cursorRef = useRef<string | null>(initialNextCursor);
-  const legacyOffsetRef = useRef(seed.length);
 
-  const buildLegacyFieldQuery = useCallback(
-    (offset: number) => {
-      const legacySort = [
-        'created_desc',
-        'updated_desc',
-        'name_asc',
-        'name_desc',
-        'size_desc',
-        'duration_desc',
-      ].includes(query.sort)
-        ? query.sort
-        : 'created_desc';
-      const sp = buildLibraryQuery({
-        brandId,
-        collectionId: query.collectionId,
-        source: query.createdWith[0],
-        kind: mediaTypeToKind(query.mediaType),
-        tags: query.tags,
-        sort: legacySort,
-        offset,
-        limit: PAGE_SIZE,
-      });
+  const buildCursorQuery = useCallback(
+    (cursor: string | null) => {
+      const sp = buildLibraryBrowseParams(query, { includeBrandId: true, cursor });
       if (activeFieldFilters.length > 0) {
         sp.set('fieldFilters', serializeFieldFilters(activeFieldFilters));
       }
+      if (reviewStatesKey) sp.set('reviewStateIds', reviewStatesKey);
       return sp.toString();
     },
-    [brandId, query, activeFieldFilters],
+    [query, activeFieldFilters, reviewStatesKey],
   );
 
-  const buildCursorQuery = useCallback(
-    (cursor: string | null) =>
-      buildLibraryBrowseParams(query, { includeBrandId: true, cursor }).toString(),
-    [query],
-  );
-
-  // The RSC seed is canonical and facet-aware. Custom fields are still resolved
-  // by the legacy route until they join the grouped browse read model.
   useEffect(() => {
-    if (activeFieldFilters.length === 0) {
+    if (!narrowed) {
       setAssets(seed);
       cursorRef.current = initialNextCursor;
       setHasMore(initialNextCursor !== null);
-      legacyOffsetRef.current = seed.length;
       return;
     }
     let cancelled = false;
     setLoadingMore(true);
-    fetch(`/api/library/assets?${buildLegacyFieldQuery(0)}`)
+    fetch(`/api/library/browse?${buildCursorQuery(null)}`)
       .then((r) => {
-        if (!r.ok) throw new Error(`Library field query failed (${r.status})`);
-        return r.json();
+        if (!r.ok) throw new Error(`Library browse failed (${r.status})`);
+        return r.json() as Promise<LibraryBrowsePage>;
       })
-      .then((data: { items?: MediaAsset[]; nextOffset?: number | null }) => {
+      .then((data) => {
         if (cancelled) return;
-        const incoming = data.items ?? [];
-        setAssets(incoming);
-        legacyOffsetRef.current = incoming.length;
-        setHasMore(data.nextOffset != null);
+        setAssets(data.items ?? []);
+        cursorRef.current = data.nextCursor;
+        setHasMore(data.nextCursor !== null);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -176,46 +151,23 @@ export function useMediaLibrary(params: {
     return () => {
       cancelled = true;
     };
-  }, [seed, initialNextCursor, queryKey, activeFieldFilters, buildLegacyFieldQuery]);
+  }, [seed, initialNextCursor, queryKey, narrowed, buildCursorQuery]);
 
   const loadMore = useCallback(() => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
-
-    const request =
-      activeFieldFilters.length > 0
-        ? fetch(`/api/library/assets?${buildLegacyFieldQuery(legacyOffsetRef.current)}`).then(
-            async (response) => {
-              if (!response.ok) throw new Error(`Library field query failed (${response.status})`);
-              const page = (await response.json()) as {
-                items?: MediaAsset[];
-                nextOffset?: number | null;
-              };
-              return {
-                items: page.items ?? [],
-                nextCursor: page.nextOffset == null ? null : String(page.nextOffset),
-              } satisfies LibraryBrowsePage;
-            },
-          )
-        : fetch(`/api/library/browse?${buildCursorQuery(cursorRef.current)}`).then(
-            async (response) => {
-              if (!response.ok) throw new Error(`Library browse failed (${response.status})`);
-              return (await response.json()) as LibraryBrowsePage;
-            },
-          );
-
-    request
+    fetch(`/api/library/browse?${buildCursorQuery(cursorRef.current)}`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Library browse failed (${response.status})`);
+        return (await response.json()) as LibraryBrowsePage;
+      })
       .then((data) => {
         const incoming = data.items ?? [];
         setAssets((prev) => {
           const seen = new Set(prev.map((a) => a.id));
           return [...prev, ...incoming.filter((a) => !seen.has(a.id))];
         });
-        if (activeFieldFilters.length > 0) {
-          legacyOffsetRef.current += incoming.length;
-        } else {
-          cursorRef.current = data.nextCursor;
-        }
+        cursorRef.current = data.nextCursor;
         setHasMore(data.nextCursor !== null);
       })
       .catch((err: unknown) => {
@@ -223,7 +175,7 @@ export function useMediaLibrary(params: {
         setHasMore(false);
       })
       .finally(() => setLoadingMore(false));
-  }, [activeFieldFilters, buildCursorQuery, buildLegacyFieldQuery, hasMore, loadingMore]);
+  }, [buildCursorQuery, hasMore, loadingMore]);
 
   // Fills a realtime-inserted asset's signed URL (INSERT payloads carry none).
   const hydrateSignedUrl = useCallback(
@@ -273,7 +225,8 @@ export function useMediaLibrary(params: {
             // answered from the asset row at all (the values live in their own
             // table, and a brand-new asset holds none), so an insert under one is
             // left to the next fetch rather than guessed at.
-            if (query.collectionId || activeFieldFilters.length > 0) return;
+            // A custom review state is not on the realtime payload's filter either.
+            if (query.collectionId || narrowed) return;
             if (query.sort !== 'created_desc') return;
             if (
               query.placements.length > 0 ||
@@ -323,7 +276,7 @@ export function useMediaLibrary(params: {
         },
       ],
     });
-  }, [brandId, queryKey, query, activeFieldFilters, hydrateSignedUrl]);
+  }, [brandId, queryKey, query, narrowed, hydrateSignedUrl]);
 
   return useMemo(
     () => ({ assets, hasMore, loadingMore, loadMore }),

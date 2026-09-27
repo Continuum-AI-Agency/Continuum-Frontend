@@ -2,11 +2,12 @@
 // against the contracts schemas at the boundary.
 
 import {
-  type AssetReviewEvent,
+  type ListReviewEventsResponse,
   listReviewEventsResponseSchema,
   listReviewStateLabelsResponseSchema,
   REVIEW_EDGE_FUNCTION,
   type RequestCollectionReviewResult,
+  type ReviewCustomState,
   type ReviewEdgeRequest,
   type ReviewStateLabel,
   type ReviewTransitionRequest,
@@ -14,6 +15,8 @@ import {
   requestCollectionReviewResultSchema,
   resolveReviewStateLabels,
   reviewTransitionResponseSchema,
+  type SetAssetReviewStateResult,
+  setAssetReviewStateResultSchema,
   setReviewStateLabelsResultSchema,
 } from '@continuum/contracts';
 import type { z } from 'zod';
@@ -40,10 +43,11 @@ export async function transitionReviewStatus(
   return reviewTransitionResponseSchema.parse(result);
 }
 
+// The audit trail, newest first, and each version's own decided state.
 export async function listReviewEvents(params: {
   brandId: string;
   assetId: string;
-}): Promise<AssetReviewEvent[]> {
+}): Promise<ListReviewEventsResponse> {
   const query = new URLSearchParams({ brandId: params.brandId, assetId: params.assetId });
   const response = await fetch(`/api/library/review?${query.toString()}`);
   if (!response.ok) {
@@ -51,14 +55,16 @@ export async function listReviewEvents(params: {
   }
   const parsed = listReviewEventsResponseSchema.safeParse(await response.json());
   if (!parsed.success) throw new Error('Review history response was malformed');
-  return parsed.data.events;
+  return parsed.data;
 }
 
-export async function fetchReviewStateLabels(brandId: string): Promise<ReviewStateLabel[]> {
+export type BrandReviewStates = { labels: ReviewStateLabel[]; customStates: ReviewCustomState[] };
+
+export async function fetchReviewStateLabels(brandId: string): Promise<BrandReviewStates> {
   const response = await fetch(`/api/library/review/labels?${new URLSearchParams({ brandId })}`);
   if (!response.ok)
     throw new Error(await readErrorMessage(response, 'Loading status labels failed'));
-  return listReviewStateLabelsResponseSchema.parse(await response.json()).labels;
+  return listReviewStateLabelsResponseSchema.parse(await response.json());
 }
 
 // Review writes run through the library-review edge function with the user's
@@ -84,16 +90,32 @@ async function invokeReviewEdge<T>(request: ReviewEdgeRequest, schema: z.ZodType
   return schema.parse(data);
 }
 
+// The five labels and the brand's whole custom-state list in one write; a custom
+// state left out of the list is deleted.
 export async function saveReviewStateLabels(
   brandId: string,
   labels: ReviewStateLabel[],
-): Promise<ReviewStateLabel[]> {
+  customStates: Array<Omit<ReviewCustomState, 'id'> & { id?: string }>,
+): Promise<BrandReviewStates> {
   const result = await invokeReviewEdge(
-    { action: 'set_review_state_labels', brandId, labels },
+    { action: 'set_review_state_labels', brandId, labels, customStates },
     setReviewStateLabelsResultSchema,
   );
-  return Object.values(resolveReviewStateLabels(result.labels)).sort(
-    (a, b) => a.position - b.position,
+  return {
+    labels: Object.values(resolveReviewStateLabels(result.labels)).sort(
+      (a, b) => a.position - b.position,
+    ),
+    customStates: result.customStates,
+  };
+}
+
+// A base status or a custom state on the head, or on one older version.
+export function setAssetReviewState(
+  input: Omit<Extract<ReviewEdgeRequest, { action: 'set_asset_review_state' }>, 'action'>,
+): Promise<SetAssetReviewStateResult> {
+  return invokeReviewEdge(
+    { action: 'set_asset_review_state', ...input },
+    setAssetReviewStateResultSchema,
   );
 }
 

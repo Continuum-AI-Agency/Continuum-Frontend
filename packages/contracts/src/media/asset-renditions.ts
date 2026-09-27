@@ -10,15 +10,34 @@ export const assetPreviewStateSchema = z.enum([
 ]);
 export type AssetPreviewState = z.infer<typeof assetPreviewStateSchema>;
 
-export const assetRenditionRoleSchema = z.enum([
-  'thumbnail',
-  'poster',
-  'preview_image',
-  'preview_video',
-  'first_frame',
-  'last_frame',
+/** A video's search stills, frame_1 … frame_N in time order (the DB admits 1–999). */
+export const SAMPLED_FRAME_ROLE_PATTERN = /^frame_[1-9][0-9]{0,2}$/;
+export type SampledFrameRole = `frame_${number}`;
+
+export function isSampledFrameRole(role: string): role is SampledFrameRole {
+  return SAMPLED_FRAME_ROLE_PATTERN.test(role);
+}
+
+export const assetRenditionRoleSchema = z.union([
+  z.enum(['thumbnail', 'poster', 'preview_image', 'preview_video', 'first_frame', 'last_frame']),
+  z.custom<SampledFrameRole>(
+    (value) => typeof value === 'string' && isSampledFrameRole(value),
+    'a sampled frame role is frame_1 … frame_999',
+  ),
 ]);
 export type AssetRenditionRole = z.infer<typeof assetRenditionRoleSchema>;
+
+/**
+ * The stills every video has besides its sampled ones. A video's visual search matches the
+ * best of these and its frame_N stills, which Continuum-Render samples by the clip's length
+ * and at its scene cuts (it keeps its own copy of the plan — it takes no workspace
+ * dependency).
+ */
+export const LIBRARY_FIXED_FRAME_ROLES = [
+  'poster',
+  'first_frame',
+  'last_frame',
+] as const satisfies readonly AssetRenditionRole[];
 
 export const assetRenditionSchema = z
   .object({

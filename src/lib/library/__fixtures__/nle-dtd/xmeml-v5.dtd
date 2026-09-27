@@ -1,0 +1,290 @@
+<!--===================================================================== -->
+<!-- Copyright 2009 Apple Inc.                                  -->
+<!-- Final Cut Pro XML DTD v1.0 for Final Cut Pro XML Interchange Format v5.0-->
+<!-- July 9, 2009                                                  -->
+<!-- ==================================================================== -->
+
+<!ELEMENT xmeml (project | sequence | bin | clip | importoptions)*>
+
+<!ATTLIST xmeml version NMTOKENS #REQUIRED>
+
+<!-- ================================================================== -->
+<!--                        MAJOR ELEMENTS                              -->
+<!--            Top-level containers specifiable under xmeml root.      -->
+<!-- =================================================================  -->
+
+<!ELEMENT importoptions (createnewproject | targetprojectname | defsequencepresetname | displaynonfatalerrors | filterreconnectmediafiles | filterincludemarkers | filterincludeeffects |  filterincludesequencesettings | deletethisxmlfileatimport | createfcpprojectatxmlfilepath)*>
+
+<!ELEMENT project (name | children)*>
+
+<!ELEMENT children (bin | clip | sequence)*>
+
+<!ELEMENT bin (name | children | labels | comments | uuid | updatebehavior)*>
+
+<!ELEMENT clip (name | duration | rate | enabled | in | out | anamorphic | alphatype | alphareverse | compositemode | masterclipid | ismasterclip | labels | comments | stillframeoffset | subclipinfo | logginginfo | stillframe | file | marker | filter | sourcetrack | subframeoffset | timecode | media | start | end | startoffset | endoffset | pixelaspectratio | defaultangle | filmdata | uuid | updatebehavior | subclipmasterid)*>
+<!ATTLIST clip id CDATA #IMPLIED>
+
+<!ELEMENT sequence (name | duration | rate | timecode | in | out | marker | media | sequence | ismasterclip | labels | comments | logginginfo | description | masterclipid | filmdata | file | pixelaspectratio | fielddominance | filter | uuid | updatebehavior)*>
+<!ATTLIST sequence id CDATA #IMPLIED>
+
+<!-- =================================================================   -->
+<!--                 COMMON ELEMENTS                                     -->
+<!--            Use as necessary to complete top-level containers.       -->
+<!-- =================================================================   -->
+
+<!ELEMENT clipitem (name | duration | rate | enabled | in | out | start | end | anamorphic | alphatype | alphareverse | compositemode | masterclipid | ismasterclip | labels | comments | stillframeoffset | sequence | subclipinfo | logginginfo | stillframe | timecode | syncoffset | file | marker | filter | sourcetrack | link | subframeoffset | multiclip | mediadelay | filmdata | pixelaspectratio | fielddominance | gamma | itemhistory  | primarytimecode | mixedratesoffset | subclipmasterid)*>
+<!ATTLIST clipitem id CDATA #IMPLIED>
+
+<!ELEMENT filmdata (appspecificdata | filmslate | cameraroll | labroll | keycode | dailyroll | inknumber | filmstandard | telecinespeed)*>
+
+<!ELEMENT filmslate (scene | take | slate )*>
+
+<!ELEMENT keycode (prefix | feetframes | perfoffset | reversed )*>
+
+<!ELEMENT inknumber (prefix | feetframes)*>
+
+<!ELEMENT multiclip (name | angle | collapsed | synctype)*>
+<!ATTLIST multiclip id CDATA #IMPLIED>
+
+<!ELEMENT angle (clip | activevideoangle | activeaudioangle )*>
+
+<!ELEMENT transitionitem (name | rate | start | end | alignment | effect)*>
+
+<!ELEMENT generatoritem (name | duration | rate | enabled | in | out | start | end | anamorphic | alphatype | effect | sourcetrack | filter | timecode | primarytimecode | alphareverse  | link | logginginfo | labels | comments | mediadelay | fielddominance | filmdata | subframeoffset | masterclipid | compositemode | syncoffset | marker | subclipmasterid)*>
+<!ATTLIST generatoritem id CDATA #IMPLIED>
+
+<!ELEMENT filter (start | end | effect | enabled)*>
+
+<!ELEMENT sourcetrack (mediatype | trackindex)*>
+
+<!ELEMENT file (name | rate | duration | media | timecode | pathurl | width | height | mediaSource | metadata )*>
+<!ATTLIST file id CDATA #IMPLIED>
+
+<!ELEMENT media (video | audio)*>
+
+<!ELEMENT video (in | out | track | format | samplecharacteristics | duration | trackcount | stillframe | alphatype | layerindex | metadata)*>
+
+<!ELEMENT audio (in | out | track | format | outputs | channelcount | channeldescription | rate | samplecharacteristics | layout | audiochannel | trackcount | filter | duration | metadata)*>
+
+<!ELEMENT track (clipitem | transitionitem | generatoritem | enabled | locked | outputchannelindex)*>
+
+<!ELEMENT format (#PCDATA | samplecharacteristics | appspecificdata)*>
+
+<!ELEMENT samplecharacteristics (width | height | anamorphic | pixelaspectratio | fielddominance | colordepth | codec | depth | samplerate | rate)*>
+
+<!ELEMENT codec (name | appspecificdata)*>
+
+<!ELEMENT appspecificdata (appname | appmanufacturer | appversion | data)*>
+
+<!ELEMENT data (fcpimageprocessing | qtcodec | qteffectid | UUID )*>
+
+<!ELEMENT fcpimageprocessing (useyuv | usesuperwhite | rendermode)*>
+
+<!ELEMENT qtcodec (codecname | codectypename | codectypecode | codecvendorcode | spatialquality | temporalquality | keyframerate | datarate)*>
+
+<!ELEMENT logginginfo (description | good | scene | shottake | lognote | takenote | shotnote | scenenote)*>
+
+<!ELEMENT outputs (group)*>
+
+<!ELEMENT group (index | numchannels | downmix | channel)*>
+
+<!ELEMENT channel (index)>
+
+<!ELEMENT audiochannel ( channellabel | sourcechannel)*>
+
+<!ELEMENT timecode (rate | string | frame | source | displayformat | format | reel | field)*>
+
+<!ELEMENT rate (ntsc | timebase)*>
+
+<!ELEMENT reel (name)>
+
+<!ELEMENT link (mediatype | trackindex | clipindex | groupindex | linkclipref)*>
+
+<!ELEMENT valuelist (valueentry)*>
+
+<!ELEMENT valueentry (name | value)*>
+
+<!ELEMENT value (#PCDATA | horiz | vert | alpha | red | green | blue | timecode | clip | sequence)*>
+
+<!ELEMENT marker (name | in | out | comment)*>
+
+<!ELEMENT effect (name | effectid | effectcategory | effecttype | mediatype | parameter | wipecode | wipeaccuracy | startratio | endratio | reverse | rate | duration | keyframe | appspecificdata | privatestate | multiclip | effectclass)*>
+
+<!ELEMENT parameter (name | parameterid | parameterspecifier | interpolation | valuemin | valuemax | keyframe | valuelist | value | appspecificdata | privatestate)*>
+
+<!ELEMENT keyframe (when | value | inscale | outscale | inbez | outbez | interpolation | hadbezierin | hadbezierout | speedkfstart | speedkfend | speedkfin | speedkfout | speedvirtualkf | origvalue | anchoroffset)*>
+
+<!ELEMENT inbez (horiz | vert)*>
+
+<!ELEMENT outbez (horiz | vert)*>
+
+<!ELEMENT interpolation (name)*>
+
+<!ELEMENT labels (label | label2)*>
+
+<!ELEMENT comments (mastercomment1 | mastercomment2 | mastercomment3 | mastercomment4 | clipcommenta | clipcommentb)*>
+
+<!ELEMENT subclipinfo (startoffset | endoffset)*>
+
+<!ELEMENT metadata (storage | key | updatebehavior | size | type | value)*>
+<!ELEMENT itemhistory (uuid)*>
+
+<!-- ================================================================= -->
+<!--                            TERMINALS                              -->
+<!-- ================================================================= -->
+
+<!ELEMENT in (#PCDATA)*>
+<!ELEMENT out (#PCDATA)*>
+<!ELEMENT index (#PCDATA)*>
+<!ELEMENT numchannels (#PCDATA)*>
+<!ELEMENT downmix (#PCDATA)*>
+<!ELEMENT width (#PCDATA)*>
+<!ELEMENT height (#PCDATA)*>
+<!ELEMENT anamorphic (#PCDATA)*>
+<!ELEMENT pixelaspectratio (#PCDATA)*>
+<!ELEMENT fielddominance (#PCDATA)*>
+<!ELEMENT name (#PCDATA)*>
+<!ELEMENT duration (#PCDATA)*>
+<!ELEMENT masterclipid (#PCDATA)*>
+<!ELEMENT ismasterclip (#PCDATA)*>
+<!ELEMENT subclipmasterid (#PCDATA)*>
+<!ELEMENT good (#PCDATA)*>
+<!ELEMENT lognote (#PCDATA)*>
+<!ELEMENT scene (#PCDATA)*>
+<!ELEMENT ntsc (#PCDATA)*>
+<!ELEMENT timebase (#PCDATA)*>
+<!ELEMENT codecname (#PCDATA)*>
+<!ELEMENT codectypename (#PCDATA)*>
+<!ELEMENT codectypecode (#PCDATA)*>
+<!ELEMENT codecvendorcode (#PCDATA)*>
+<!ELEMENT spatialquality (#PCDATA)*>
+<!ELEMENT temporalquality (#PCDATA)*>
+<!ELEMENT keyframerate (#PCDATA)*>
+<!ELEMENT datarate (#PCDATA)*>
+<!ELEMENT string (#PCDATA)*>
+<!ELEMENT frame (#PCDATA)*>
+<!ELEMENT source (#PCDATA)*>
+<!ELEMENT displayformat (#PCDATA)*>
+<!ELEMENT mediatype (#PCDATA)*>
+<!ELEMENT trackindex (#PCDATA)*>
+<!ELEMENT clipindex (#PCDATA)*>
+<!ELEMENT groupindex (#PCDATA)*>
+<!ELEMENT when (#PCDATA)*>
+<!ELEMENT effectid (#PCDATA)*>
+<!ELEMENT qteffectid (#PCDATA)*>
+<!ELEMENT effectcategory (#PCDATA)*>
+<!ELEMENT effecttype (#PCDATA)*>
+<!ELEMENT effectclass (#PCDATA)*>
+<!ELEMENT privatestate (#PCDATA)*>
+<!ELEMENT parameterid (#PCDATA)*>
+<!ELEMENT parameterspecifier (#PCDATA)*>
+<!ELEMENT valuemin (#PCDATA)*>
+<!ELEMENT valuemax (#PCDATA)*>
+<!ELEMENT inscale (#PCDATA)*>
+<!ELEMENT outscale (#PCDATA)*>
+<!ELEMENT alpha (#PCDATA)*>
+<!ELEMENT red (#PCDATA)*>
+<!ELEMENT green (#PCDATA)*>
+<!ELEMENT blue (#PCDATA)*>
+<!ELEMENT start (#PCDATA)*>
+<!ELEMENT end (#PCDATA)*>
+<!ELEMENT wipecode (#PCDATA)*>
+<!ELEMENT wipeaccuracy (#PCDATA)*>
+<!ELEMENT startratio (#PCDATA)*>
+<!ELEMENT endratio (#PCDATA)*>
+<!ELEMENT reverse (#PCDATA)*>
+<!ELEMENT alphatype (#PCDATA)*>
+<!ELEMENT alphareverse (#PCDATA)*>
+<!ELEMENT compositemode (#PCDATA)*>
+<!ELEMENT label (#PCDATA)*>
+<!ELEMENT label2 (#PCDATA)*>
+<!ELEMENT clipcommenta (#PCDATA)*>
+<!ELEMENT clipcommentb (#PCDATA)*>
+<!ELEMENT mastercomment1 (#PCDATA)*>
+<!ELEMENT mastercomment2 (#PCDATA)*>
+<!ELEMENT mastercomment3 (#PCDATA)*>
+<!ELEMENT mastercomment4 (#PCDATA)*>
+<!ELEMENT comment (#PCDATA)*>
+<!ELEMENT stillframeoffset (#PCDATA)*>
+<!ELEMENT stillframe (#PCDATA)*>
+<!ELEMENT syncoffset (#PCDATA)*>
+<!ELEMENT colordepth (#PCDATA)*>
+<!ELEMENT appname (#PCDATA)*>
+<!ELEMENT appmanufacturer (#PCDATA)*>
+<!ELEMENT appversion (#PCDATA)*>
+<!ELEMENT enabled (#PCDATA)*>
+<!ELEMENT locked (#PCDATA)*>
+<!ELEMENT outputchannelindex (#PCDATA)*>
+<!ELEMENT depth (#PCDATA)*>
+<!ELEMENT useyuv (#PCDATA)*>
+<!ELEMENT usesuperwhite (#PCDATA)*>
+<!ELEMENT rendermode (#PCDATA)*>
+<!ELEMENT samplerate (#PCDATA)*>
+<!ELEMENT createnewproject (#PCDATA)*>
+<!ELEMENT targetprojectname (#PCDATA)*>
+<!ELEMENT defsequencepresetname (#PCDATA)*>
+<!ELEMENT displaynonfatalerrors (#PCDATA)*>
+<!ELEMENT filterreconnectmediafiles (#PCDATA)*>
+<!ELEMENT filterincludemarkers (#PCDATA)*>
+<!ELEMENT filterincludeeffects (#PCDATA)*>
+<!ELEMENT filterincludesequencesettings (#PCDATA)*>
+<!ELEMENT createfcpprojectatxmlfilepath (#PCDATA)*>
+<!ELEMENT deletethisxmlfileatimport (#PCDATA)*>
+<!ELEMENT trackcount (#PCDATA)*>
+<!ELEMENT channeldescription (#PCDATA)*>
+<!ELEMENT subframeoffset (#PCDATA)*>
+<!ELEMENT startoffset (#PCDATA)*>
+<!ELEMENT endoffset (#PCDATA)*>
+<!ELEMENT linkclipref (#PCDATA)*>
+<!ELEMENT description (#PCDATA)*>
+<!ELEMENT shottake (#PCDATA)*>
+<!ELEMENT alignment (#PCDATA)*>
+<!ELEMENT horiz (#PCDATA)*>
+<!ELEMENT vert (#PCDATA)*>
+<!ELEMENT pathurl (#PCDATA)*>
+<!ELEMENT layerindex (#PCDATA)*>
+<!ELEMENT field (#PCDATA)*>
+<!ELEMENT primarytimecode (#PCDATA)*>
+<!ELEMENT hadbezierin (#PCDATA)*>
+<!ELEMENT hadbezierout  (#PCDATA)*>
+<!ELEMENT speedkfstart  (#PCDATA)*>
+<!ELEMENT speedkfend  (#PCDATA)*>
+<!ELEMENT speedkfin  (#PCDATA)*>
+<!ELEMENT speedkfout  (#PCDATA)*>
+<!ELEMENT speedvirtualkf  (#PCDATA)*>
+<!ELEMENT origvalue  (#PCDATA)*>
+<!ELEMENT mediaSource (#PCDATA)*>
+<!ELEMENT collapsed (#PCDATA)*>
+<!ELEMENT synctype (#PCDATA)*>
+<!ELEMENT activevideoangle (#PCDATA)*>
+<!ELEMENT activeaudioangle (#PCDATA)*>
+<!ELEMENT mediadelay (#PCDATA)*>
+<!ELEMENT defaultangle (#PCDATA)*>
+<!ELEMENT channelcount (#PCDATA)*>
+<!ELEMENT layout (#PCDATA)*>
+<!ELEMENT takenote (#PCDATA)*>
+<!ELEMENT shotnote (#PCDATA)*>
+<!ELEMENT scenenote (#PCDATA)*>
+<!ELEMENT take (#PCDATA)*>
+<!ELEMENT slate (#PCDATA)*>
+<!ELEMENT cameraroll (#PCDATA)*>
+<!ELEMENT labroll (#PCDATA)*>
+<!ELEMENT prefix (#PCDATA)*>
+<!ELEMENT feetframes (#PCDATA)*>
+<!ELEMENT perfoffset (#PCDATA)*>
+<!ELEMENT reversed (#PCDATA)*>
+<!ELEMENT dailyroll (#PCDATA)*>
+<!ELEMENT filmstandard (#PCDATA)*>
+<!ELEMENT telecinespeed (#PCDATA)*>
+<!ELEMENT channellabel (#PCDATA)*>
+<!ELEMENT sourcechannel (#PCDATA)*>
+<!ELEMENT UUID (#PCDATA)*>
+<!ELEMENT uuid (#PCDATA)*>
+<!ELEMENT updatebehavior (#PCDATA)*>
+<!ELEMENT storage (#PCDATA)*>
+<!ELEMENT key (#PCDATA)*>
+<!ELEMENT size (#PCDATA)*>
+<!ELEMENT type (#PCDATA)*>
+<!ELEMENT gamma (#PCDATA)*>
+<!ELEMENT mixedratesoffset (#PCDATA)*>
+<!ELEMENT anchoroffset (#PCDATA)*>

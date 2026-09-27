@@ -8255,24 +8255,33 @@ export type Database = {
         Row: {
           attempts: number
           channel: string
+          due_at: string | null
+          frequency: string
           last_error: string | null
           notification_id: string
+          provider_ref: string | null
           status: string
           updated_at: string
         }
         Insert: {
           attempts?: number
           channel: string
+          due_at?: string | null
+          frequency?: string
           last_error?: string | null
           notification_id: string
+          provider_ref?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
           attempts?: number
           channel?: string
+          due_at?: string | null
+          frequency?: string
           last_error?: string | null
           notification_id?: string
+          provider_ref?: string | null
           status?: string
           updated_at?: string
         }
@@ -11932,6 +11941,21 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      claim_notification_deliveries: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          brand_id: string
+          channel: string
+          created_at: string
+          frequency: string
+          kind: string
+          notification_id: string
+          payload: Json
+          recipient_email: string
+          recipient_user_id: string
+        }[]
+      }
       claim_onboarding_creative_run: {
         Args: { p_env: string; p_worker_id: string }
         Returns: {
@@ -12452,6 +12476,10 @@ export type Database = {
         }
         Returns: string
       }
+      notification_frequency: {
+        Args: { p_channel: string; p_kind: string; p_user_id: string }
+        Returns: string
+      }
       open_jaina_tool_gate: {
         Args: {
           p_approval_expires_at: string
@@ -12551,6 +12579,10 @@ export type Database = {
         Returns: undefined
       }
       refresh_virality_brand_stats: { Args: never; Returns: number }
+      release_notification_digests: {
+        Args: { p_frequency: string }
+        Returns: number
+      }
       report_send_recently_sent: {
         Args: { p_brand_id: string; p_within?: string }
         Returns: boolean
@@ -16367,6 +16399,7 @@ export type Database = {
           label_path: Json
           outputs: Json
           parent_row_id: string | null
+          progress_pct: number | null
           reconcile_after: string
           reconcile_completed_at: string | null
           reconcile_lease_expires_at: string | null
@@ -16413,6 +16446,7 @@ export type Database = {
           label_path?: Json
           outputs?: Json
           parent_row_id?: string | null
+          progress_pct?: number | null
           reconcile_after?: string
           reconcile_completed_at?: string | null
           reconcile_lease_expires_at?: string | null
@@ -16459,6 +16493,7 @@ export type Database = {
           label_path?: Json
           outputs?: Json
           parent_row_id?: string | null
+          progress_pct?: number | null
           reconcile_after?: string
           reconcile_completed_at?: string | null
           reconcile_lease_expires_at?: string | null
@@ -16689,6 +16724,60 @@ export type Database = {
             columns: ["field_id"]
             isOneToOne: false
             referencedRelation: "custom_fields"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asset_frame_embeddings: {
+        Row: {
+          asset_id: string
+          asset_version_id: string
+          brand_id: string
+          created_at: string
+          embedding: string
+          id: string
+          model: string
+          rendition_id: string
+          role: string
+          source_timestamp_ms: number | null
+        }
+        Insert: {
+          asset_id: string
+          asset_version_id: string
+          brand_id: string
+          created_at?: string
+          embedding: string
+          id?: string
+          model: string
+          rendition_id: string
+          role: string
+          source_timestamp_ms?: number | null
+        }
+        Update: {
+          asset_id?: string
+          asset_version_id?: string
+          brand_id?: string
+          created_at?: string
+          embedding?: string
+          id?: string
+          model?: string
+          rendition_id?: string
+          role?: string
+          source_timestamp_ms?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_frame_embeddings_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_frame_embeddings_rendition_id_fkey"
+            columns: ["rendition_id"]
+            isOneToOne: false
+            referencedRelation: "asset_renditions"
             referencedColumns: ["id"]
           },
         ]
@@ -16949,11 +17038,13 @@ export type Database = {
           height: number | null
           id: string
           mime_type: string | null
+          poster_source: string | null
           renderer: string | null
           renderer_version: string | null
           role: string
           size_bytes: number | null
           source_checksum: string | null
+          source_timestamp_ms: number | null
           state: string
           storage_path: string | null
           updated_at: string
@@ -16972,11 +17063,13 @@ export type Database = {
           height?: number | null
           id?: string
           mime_type?: string | null
+          poster_source?: string | null
           renderer?: string | null
           renderer_version?: string | null
           role: string
           size_bytes?: number | null
           source_checksum?: string | null
+          source_timestamp_ms?: number | null
           state?: string
           storage_path?: string | null
           updated_at?: string
@@ -16995,11 +17088,13 @@ export type Database = {
           height?: number | null
           id?: string
           mime_type?: string | null
+          poster_source?: string | null
           renderer?: string | null
           renderer_version?: string | null
           role?: string
           size_bytes?: number | null
           source_checksum?: string | null
+          source_timestamp_ms?: number | null
           state?: string
           storage_path?: string | null
           updated_at?: string
@@ -17031,7 +17126,9 @@ export type Database = {
           from_status: string
           id: string
           note: string | null
+          to_state_id: string | null
           to_status: string
+          version_id: string | null
         }
         Insert: {
           actor?: string | null
@@ -17041,7 +17138,9 @@ export type Database = {
           from_status: string
           id?: string
           note?: string | null
+          to_state_id?: string | null
           to_status: string
+          version_id?: string | null
         }
         Update: {
           actor?: string | null
@@ -17051,7 +17150,9 @@ export type Database = {
           from_status?: string
           id?: string
           note?: string | null
+          to_state_id?: string | null
           to_status?: string
+          version_id?: string | null
         }
         Relationships: [
           {
@@ -17059,6 +17160,20 @@ export type Database = {
             columns: ["asset_id"]
             isOneToOne: false
             referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_review_events_to_state_id_fkey"
+            columns: ["to_state_id"]
+            isOneToOne: false
+            referencedRelation: "review_custom_states"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_review_events_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "asset_versions"
             referencedColumns: ["id"]
           },
         ]
@@ -17172,6 +17287,9 @@ export type Database = {
           integrity_state: string
           mime_type: string
           note: string | null
+          review_state_id: string | null
+          review_status: string | null
+          review_status_updated_at: string | null
           size_bytes: number | null
           storage_path: string
           version_number: number
@@ -17193,6 +17311,9 @@ export type Database = {
           integrity_state?: string
           mime_type: string
           note?: string | null
+          review_state_id?: string | null
+          review_status?: string | null
+          review_status_updated_at?: string | null
           size_bytes?: number | null
           storage_path: string
           version_number: number
@@ -17214,6 +17335,9 @@ export type Database = {
           integrity_state?: string
           mime_type?: string
           note?: string | null
+          review_state_id?: string | null
+          review_status?: string | null
+          review_status_updated_at?: string | null
           size_bytes?: number | null
           storage_path?: string
           version_number?: number
@@ -17240,6 +17364,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "asset_versions"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_versions_review_state_fk"
+            columns: ["brand_id", "review_state_id", "review_status"]
+            isOneToOne: false
+            referencedRelation: "review_custom_states"
+            referencedColumns: ["brand_id", "id", "base_status"]
           },
         ]
       }
@@ -17271,6 +17402,7 @@ export type Database = {
           mime_type: string
           origin_ref: Json | null
           progress_step: string | null
+          review_state_id: string | null
           review_status: string
           review_status_updated_at: string | null
           size_bytes: number | null
@@ -17281,6 +17413,7 @@ export type Database = {
           thumbnail_path: string | null
           title: string | null
           transcript: string | null
+          transcript_language: string | null
           transcript_segments: Json | null
           transcript_source: string | null
           updated_at: string
@@ -17314,6 +17447,7 @@ export type Database = {
           mime_type: string
           origin_ref?: Json | null
           progress_step?: string | null
+          review_state_id?: string | null
           review_status?: string
           review_status_updated_at?: string | null
           size_bytes?: number | null
@@ -17324,6 +17458,7 @@ export type Database = {
           thumbnail_path?: string | null
           title?: string | null
           transcript?: string | null
+          transcript_language?: string | null
           transcript_segments?: Json | null
           transcript_source?: string | null
           updated_at?: string
@@ -17357,6 +17492,7 @@ export type Database = {
           mime_type?: string
           origin_ref?: Json | null
           progress_step?: string | null
+          review_state_id?: string | null
           review_status?: string
           review_status_updated_at?: string | null
           size_bytes?: number | null
@@ -17367,6 +17503,7 @@ export type Database = {
           thumbnail_path?: string | null
           title?: string | null
           transcript?: string | null
+          transcript_language?: string | null
           transcript_segments?: Json | null
           transcript_source?: string | null
           updated_at?: string
@@ -17374,6 +17511,13 @@ export type Database = {
           width?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "assets_review_state_fk"
+            columns: ["brand_id", "review_state_id", "review_status"]
+            isOneToOne: false
+            referencedRelation: "review_custom_states"
+            referencedColumns: ["brand_id", "id", "base_status"]
+          },
           {
             foreignKeyName: "media_assets_head_version_fk"
             columns: ["head_version_id"]
@@ -17512,8 +17656,44 @@ export type Database = {
           },
         ]
       }
+      collection_members: {
+        Row: {
+          added_by: string | null
+          brand_id: string
+          collection_id: string
+          created_at: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          added_by?: string | null
+          brand_id: string
+          collection_id: string
+          created_at?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          added_by?: string | null
+          brand_id?: string
+          collection_id?: string
+          created_at?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collection_members_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collections: {
         Row: {
+          access: string
           brand_id: string
           cover_asset_id: string | null
           created_at: string
@@ -17530,6 +17710,7 @@ export type Database = {
           visibility: string
         }
         Insert: {
+          access?: string
           brand_id: string
           cover_asset_id?: string | null
           created_at?: string
@@ -17546,6 +17727,7 @@ export type Database = {
           visibility?: string
         }
         Update: {
+          access?: string
           brand_id?: string
           cover_asset_id?: string | null
           created_at?: string
@@ -18496,6 +18678,27 @@ export type Database = {
           },
         ]
       }
+      library_view_preferences: {
+        Row: {
+          brand_id: string
+          config: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          brand_id: string
+          config?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          brand_id?: string
+          config?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       preview_jobs: {
         Row: {
           adapter: string
@@ -19172,6 +19375,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      review_custom_states: {
+        Row: {
+          base_status: string
+          brand_id: string
+          color: string
+          created_at: string
+          created_by: string | null
+          id: string
+          label: string
+          position: number
+        }
+        Insert: {
+          base_status: string
+          brand_id: string
+          color: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label: string
+          position?: number
+        }
+        Update: {
+          base_status?: string
+          brand_id?: string
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string
+          position?: number
+        }
+        Relationships: []
       }
       review_requests: {
         Row: {
@@ -19989,16 +20225,61 @@ export type Database = {
     Functions: {
       _assert_brand: { Args: { p_brand_id: string }; Returns: undefined }
       _window_metrics: { Args: { w: Json }; Returns: Json }
+      any_restricted_collection: { Args: never; Returns: boolean }
       aspect_ratio_bin: {
         Args: { p_height: number; p_width: number }
+        Returns: string
+      }
+      asset_collection_role: { Args: { p_asset: string }; Returns: string }
+      asset_collection_role_as: {
+        Args: { p_asset: string; p_user: string }
         Returns: string
       }
       asset_in_brand: {
         Args: { p_asset_id: string; p_brand_id: string }
         Returns: boolean
       }
+      asset_in_restricted_collection: {
+        Args: { p_asset: string }
+        Returns: boolean
+      }
+      asset_matches_field_filter: {
+        Args: { p_asset_id: string; p_filter: Json; p_viewer: string }
+        Returns: boolean
+      }
+      asset_matches_smart_query: {
+        Args: {
+          p_asset: Database["media"]["Tables"]["assets"]["Row"]
+          p_query: Json
+          p_viewer: string
+        }
+        Returns: boolean
+      }
+      caller_blocked_anywhere: { Args: never; Returns: boolean }
+      caller_limited_anywhere: { Args: never; Returns: boolean }
+      can_edit_asset: {
+        Args: { p_asset: string; p_brand: string }
+        Returns: boolean
+      }
+      can_edit_collection: {
+        Args: { p_collection: string; p_need: number }
+        Returns: boolean
+      }
       can_operate_brand: {
         Args: { p_brand_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      can_see_asset: {
+        Args: { p_asset: string; p_brand: string }
+        Returns: boolean
+      }
+      can_see_asset_as: {
+        Args: { p_asset: string; p_brand: string; p_user: string }
+        Returns: boolean
+      }
+      can_see_collection: { Args: { p_collection: string }; Returns: boolean }
+      can_see_collection_as: {
+        Args: { p_collection: string; p_user: string }
         Returns: boolean
       }
       claim_client_render_job: {
@@ -20172,6 +20453,12 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      collection_role: { Args: { p_collection: string }; Returns: string }
+      collection_role_as: {
+        Args: { p_collection: string; p_user: string }
+        Returns: string
+      }
+      collection_role_rank: { Args: { p_role: string }; Returns: number }
       commit_editor_project_revision: {
         Args: {
           p_actor_id: string
@@ -20374,6 +20661,39 @@ export type Database = {
         Args: { p_options: Json; p_type: string }
         Returns: boolean
       }
+      drive_authenticate: { Args: { p_token_hash: string }; Returns: Json }
+      drive_brands: {
+        Args: { p_user_id: string }
+        Returns: {
+          brand_id: string
+          brand_name: string
+          role: string
+        }[]
+      }
+      drive_finish_storage: {
+        Args: { p_reservation_id: string; p_settle: boolean }
+        Returns: Json
+      }
+      drive_rename_asset: {
+        Args: {
+          p_actor: string
+          p_asset_id: string
+          p_brand_id: string
+          p_file_name: string
+          p_idempotency_key: string
+        }
+        Returns: Json
+      }
+      drive_reserve_storage: {
+        Args: {
+          p_brand_id: string
+          p_bytes: number
+          p_reservation_id: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      drive_storage_quota: { Args: { p_brand_id: string }; Returns: Json }
       enqueue_editor_generation_batch: {
         Args: {
           p_input_fingerprint: string
@@ -20405,6 +20725,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      ensure_library_system_views: {
+        Args: { p_brand_id: string }
+        Returns: number
       }
       expire_client_render_targets: { Args: never; Returns: number }
       fail_service_render_job: {
@@ -20544,6 +20868,12 @@ export type Database = {
         }
       }
       is_nonempty_string_array: { Args: { value: Json }; Returns: boolean }
+      library_blocked_collections: {
+        Args: { p_brand: string; p_user: string }
+        Returns: {
+          collection_id: string
+        }[]
+      }
       library_browse_facets:
         | {
             Args: {
@@ -20674,6 +21004,13 @@ export type Database = {
               usage_count: number
             }[]
           }
+      library_collection_members: {
+        Args: { p_brand_id: string; p_collection_id: string }
+        Returns: {
+          asset_id: string
+          position: number
+        }[]
+      }
       library_create_goal_artifact: { Args: { p_payload: Json }; Returns: Json }
       library_create_goal_markdown_artifact: {
         Args: { p_payload: Json }
@@ -20682,6 +21019,12 @@ export type Database = {
       library_execute_operation: {
         Args: { p_action: string; p_payload: Json }
         Returns: Json
+      }
+      library_hidden_assets: {
+        Args: { p_brand: string; p_user: string }
+        Returns: {
+          asset_id: string
+        }[]
       }
       library_live_version_performance: {
         Args: { p_brand_id: string; p_performance_window?: string }
@@ -20698,6 +21041,37 @@ export type Database = {
       library_register_goal_markdown_version: {
         Args: { p_payload: Json }
         Returns: Json
+      }
+      library_reorder_asset_versions: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
+      library_unstack_asset_version: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
+      match_asset_frames: {
+        Args: {
+          exclude_asset_id?: string
+          filter_asset_ids?: string[]
+          filter_brand_id: string
+          filter_collection_id?: string
+          filter_exclude_asset_ids?: string[]
+          filter_exclude_tags?: string[]
+          filter_kind?: string
+          filter_review_status?: string
+          filter_source?: string
+          filter_tags?: string[]
+          match_count: number
+          match_threshold: number
+          query_embedding: string
+        }
+        Returns: {
+          frame_role: string
+          id: string
+          similarity: number
+          source_timestamp_ms: number
+        }[]
       }
       match_assets_by_text: {
         Args: {
@@ -20766,9 +21140,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      nearest_restricted_collection: {
+        Args: { p_collection: string }
+        Returns: string
+      }
       reap_expired_client_render_leases: { Args: never; Returns: number }
+      reap_expired_preview_jobs: { Args: never; Returns: Json }
       reap_expired_service_render_jobs: { Args: never; Returns: number }
       reap_expired_service_url_ingest_jobs: { Args: never; Returns: number }
+      record_asset_assignments: { Args: { p_rows: Json }; Returns: undefined }
       replace_element: {
         Args: {
           p_brand_id: string
@@ -20779,6 +21159,19 @@ export type Database = {
           p_title: string
         }
         Returns: undefined
+      }
+      review_set_asset_state: {
+        Args: {
+          p_actor: string
+          p_asset_id: string
+          p_brand_id: string
+          p_idempotency_key: string
+          p_note: string
+          p_state_id: string
+          p_to_status: string
+          p_version_id: string
+        }
+        Returns: Json
       }
       search_assets_ranked: {
         Args: {
@@ -20802,6 +21195,28 @@ export type Database = {
           title: string
         }[]
       }
+      set_collection_access: {
+        Args: { p_access: string; p_collection: string }
+        Returns: Json
+      }
+      set_collection_member: {
+        Args: { p_collection: string; p_role: string; p_user: string }
+        Returns: Json
+      }
+      share_link_members: {
+        Args: {
+          p_asset_id?: string
+          p_limit?: number
+          p_offset?: number
+          p_share_link_id: string
+        }
+        Returns: {
+          asset_id: string
+          rank: number
+          total: number
+          version_id: string
+        }[]
+      }
       storage_object_brand_id: { Args: { p_name: string }; Returns: string }
       transition_asset_review_guarded: {
         Args: {
@@ -20814,6 +21229,10 @@ export type Database = {
           p_to_status: string
         }
         Returns: Json
+      }
+      visible_asset_ids_as: {
+        Args: { p_assets: string[]; p_brand: string; p_user: string }
+        Returns: string[]
       }
     }
     Enums: {

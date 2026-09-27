@@ -1,5 +1,6 @@
 // Read-only comment threads under a shared asset. Server-rendered and inert:
-// no composer, no reply/resolve/delete affordance, no client JS. An external
+// no composer, no reply/resolve/delete affordance; the only client JS is the
+// refresh on an attachment whose stored preview is still being made. An external
 // reviewer reads the brand's open feedback and nothing else.
 //
 // No realtime subscription belongs here. The share route is force-dynamic and
@@ -10,6 +11,38 @@
 import type { PublicShareComment } from '@continuum/contracts';
 import { formatTimecode } from '@/components/library/detail/annotationGeometry';
 import { AttachmentPreviewList } from '@/components/library/review/AttachmentPreviewList';
+import { SharePreparingPreview } from './SharePreparingPreview';
+
+type AttachmentPreview = NonNullable<PublicShareComment['attachmentPreviews']>[number];
+
+// An image or video attachment with no URL is waiting on its stored preview (a protected
+// link signs no originals; an open one always has a URL): show it as preparing — the same
+// marker and refresh as the page's media — and the ready ones as usual.
+function CommentAttachments({ previews }: { previews: AttachmentPreview[] }) {
+  const waiting = previews.filter(
+    (preview) => !preview.url && (preview.kind === 'image' || preview.kind === 'video'),
+  );
+  const ready = previews.filter((preview) => !waiting.includes(preview));
+  return (
+    <>
+      {ready.length > 0 ? <AttachmentPreviewList previews={ready} /> : null}
+      {waiting.length > 0 ? (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {waiting.map((preview) => (
+            <SharePreparingPreview
+              key={preview.assetId}
+              assetId={preview.assetId}
+              label={preview.name}
+              posterUrl={null}
+              compact
+            />
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 import { initialsFor } from '@/lib/library/comments';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { ShareCopyLink } from './ShareCopyLink';
@@ -75,7 +108,7 @@ function CommentBody({ comment }: { comment: PublicShareComment }) {
           {comment.body}
         </p>
         {comment.attachmentPreviews?.length ? (
-          <AttachmentPreviewList previews={comment.attachmentPreviews} />
+          <CommentAttachments previews={comment.attachmentPreviews} />
         ) : null}
       </div>
     </div>

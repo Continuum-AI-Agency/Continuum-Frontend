@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  collectionAccessSchema,
   collectionViewConfigSchema,
   collectionVisibilitySchema,
   mediaCollectionSchema,
@@ -192,3 +193,31 @@ export const libraryTagMutationResponseSchema = z
     updatedAssetCount: z.number().int().nonnegative(),
   })
   .strict();
+
+// Collection-scoped roles (media.collection_members), independent of the brand role.
+export const collectionRoleSchema = z.enum(['manager', 'editor', 'commenter', 'viewer']);
+export type CollectionRole = z.infer<typeof collectionRoleSchema>;
+
+export const collectionMemberSchema = z
+  .object({
+    userId: z.string().uuid(),
+    role: collectionRoleSchema,
+    addedBy: z.string().uuid().nullable(),
+    createdAt: z.string(),
+  })
+  .strict();
+export type CollectionMember = z.infer<typeof collectionMemberSchema>;
+
+// PUT /api/library/collections/members. role null removes; access alone flips the flag.
+export const setCollectionMemberRequestSchema = z
+  .object({
+    collectionId: z.string().uuid(),
+    userId: z.string().uuid().optional(),
+    role: collectionRoleSchema.nullable().optional(),
+    access: collectionAccessSchema.optional(),
+  })
+  .strict()
+  .refine((value) => value.userId !== undefined || value.access !== undefined, {
+    message: 'Send a userId or an access value',
+  });
+export type SetCollectionMemberRequest = z.infer<typeof setCollectionMemberRequestSchema>;

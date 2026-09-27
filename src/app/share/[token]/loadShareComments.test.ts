@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'bun:test';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import type { MediaCommentRow } from '@/lib/library/comments';
-import { loadShareComments, MAX_THREADS_PER_ASSET } from './loadShareComments';
+import {
+  MAX_THREADS_PER_ASSET,
+  projectShareComments,
+  type ShareCommentSource,
+} from './loadShareComments';
 
-// The share page runs on the service-role client, so the fake stands in for the
-// two reads it performs: media.comments and brand_profiles.permissions. Filter
-// calls are recorded so the DB-side guards (brand scope, soft deletes) can be
-// asserted, not just the JS-side ones.
+// The library-share edge function performs the reads (scoped to the brand, the
+// shown assets and versions, shared/external visibility, non-deleted rows); this
+// module threads and projects them. The fixture builds what the edge returns.
 
 const BRAND_ID = 'brand-1';
 const ASSET_ID = 'asset-1';
-
-type FilterCall = { method: string; args: unknown[] };
 
 type PermissionRow = { user_id: string; email: string | null };
 
@@ -33,70 +33,21 @@ function commentRow(overrides: Partial<MediaCommentRow> & { id: string }): Media
   };
 }
 
-function fakeAdmin(
+function source(
   rows: MediaCommentRow[],
-  permissions: PermissionRow[] = [{ user_id: 'user-1', email: 'jane.doe@acme.com' }],
-  externalSessions: Array<{ id: string; display_name: string | null }> = [],
-): { client: SupabaseClient; commentCalls: FilterCall[] } {
-  const commentCalls: FilterCall[] = [];
-
-  const builder = (result: { data: unknown; error: unknown }, calls?: FilterCall[]) => {
-    const chain: Record<string, unknown> = {};
-    for (const method of ['select', 'eq', 'in', 'is', 'order', 'limit']) {
-      chain[method] = (...args: unknown[]) => {
-        calls?.push({ method, args });
-        return chain;
-      };
-    }
-    chain.then = (resolve: (value: { data: unknown; error: unknown }) => unknown) =>
-      resolve(result);
-    return chain;
-  };
-
-  const client = {
-    schema: (name: string) => ({
-      from: (table: string) => {
-        if (name === 'media' && table === 'comments') {
-          return builder({ data: rows, error: null }, commentCalls);
-        }
-        if (name === 'brand_profiles' && table === 'permissions') {
-          return builder({ data: permissions, error: null });
-        }
-        if (name === 'media' && table === 'external_reviewer_sessions') {
-          return builder({ data: externalSessions, error: null });
-        }
-        throw new Error(`unexpected read: ${name}.${table}`);
-      },
-    }),
-  } as unknown as SupabaseClient;
-
-  return { client, commentCalls };
+  authors: PermissionRow[] = [{ user_id: 'user-1', email: 'jane.doe@acme.com' }],
+  externalAuthors: Array<{ id: string; display_name: string | null }> = [],
+): ShareCommentSource {
+  return { rows, authors, externalAuthors, attachmentPreviews: [] };
 }
 
-describe('loadShareComments', () => {
-  it('skips the read entirely when the share carries no assets', async () => {
-    const { client, commentCalls } = fakeAdmin([commentRow({ id: 'c1' })]);
-    const comments = await loadShareComments(client, { brandId: BRAND_ID, assetIds: [] });
-
-    expect(comments).toEqual([]);
-    expect(commentCalls).toHaveLength(0);
+describe('projectShareComments', () => {
+  it('returns nothing for a share with no assets', () => {
+    expect(projectShareComments([], source([commentRow({ id: 'c1' })]))).toEqual([]);
   });
 
-  it('scopes the read to the brand, the shared assets and non-deleted rows', async () => {
-    const { client, commentCalls } = fakeAdmin([commentRow({ id: 'c1' })]);
-    await loadShareComments(client, { brandId: BRAND_ID, assetIds: [ASSET_ID] });
-
-    expect(commentCalls).toContainEqual({ method: 'eq', args: ['brand_id', BRAND_ID] });
-    expect(commentCalls).toContainEqual({ method: 'in', args: ['asset_id', [ASSET_ID]] });
-    expect(commentCalls).toContainEqual({
-      method: 'in',
-      args: ['visibility', ['shared', 'external']],
-    });
-    expect(commentCalls).toContainEqual({ method: 'is', args: ['deleted_at', null] });
-  });
-
-  it('excludes a thread whose root is resolved, including its replies', async () => {
-    const { client } = fakeAdmin([
+  it('excludes a thread whose root is resolved, including its replies', () => {
+    const input = source([
       commentRow({ id: 'open-root', created_at: '2026-07-01T10:00:00.000Z' }),
       commentRow({
         id: 'resolved-root',
@@ -111,13 +62,13 @@ describe('loadShareComments', () => {
       }),
     ]);
 
-    const comments = await loadShareComments(client, { brandId: BRAND_ID, assetIds: [ASSET_ID] });
+    const comments = projectShareComments([ASSET_ID], input);
 
     expect(comments.map((c) => c.id)).toEqual(['open-root']);
   });
 
-  it('includes one level of replies under an open root', async () => {
-    const { client } = fakeAdmin([
+  it('includes one level of replies under an open root', () => {
+    const input = source([
       commentRow({ id: 'root', body: 'Tighten the intro' }),
       commentRow({
         id: 'reply',
@@ -127,14 +78,14 @@ describe('loadShareComments', () => {
       }),
     ]);
 
-    const comments = await loadShareComments(client, { brandId: BRAND_ID, assetIds: [ASSET_ID] });
+    const comments = projectShareComments([ASSET_ID], input);
 
     expect(comments.map((c) => c.id)).toEqual(['root', 'reply']);
     expect(comments[1]?.parentCommentId).toBe('root');
   });
 
-  it('degrades a malformed annotation to null instead of throwing', async () => {
-    const { client } = fakeAdmin([
+  it('degrades a malformed annotation to null instead of throwing', () => {
+    const input = source([
       commentRow({ id: 'bad', annotation: { kind: 'time', timeMs: 'four seconds' } }),
       commentRow({
         id: 'range',
@@ -143,7 +94,7 @@ describe('loadShareComments', () => {
       }),
     ]);
 
-    const comments = await loadShareComments(client, { brandId: BRAND_ID, assetIds: [ASSET_ID] });
+    const comments = projectShareComments([ASSET_ID], input);
 
     expect(comments.find((c) => c.id === 'bad')?.annotation).toBeNull();
     expect(comments.find((c) => c.id === 'range')?.annotation).toEqual({
@@ -153,10 +104,10 @@ describe('loadShareComments', () => {
     });
   });
 
-  it('exposes an author name but never an email, created_by or resolved_by', async () => {
-    const { client } = fakeAdmin([commentRow({ id: 'c1', created_by: 'user-1' })]);
+  it('exposes an author name but never an email, created_by or resolved_by', () => {
+    const input = source([commentRow({ id: 'c1', created_by: 'user-1' })]);
 
-    const comments = await loadShareComments(client, { brandId: BRAND_ID, assetIds: [ASSET_ID] });
+    const comments = projectShareComments([ASSET_ID], input);
     const comment = comments[0];
 
     expect(comment?.authorName).toBe('Jane Doe');
@@ -174,8 +125,8 @@ describe('loadShareComments', () => {
     expect(JSON.stringify(comments)).not.toContain('user-1');
   });
 
-  it('uses an external reviewer display name without exposing their email', async () => {
-    const { client } = fakeAdmin(
+  it('uses an external reviewer display name without exposing their email', () => {
+    const input = source(
       [
         commentRow({
           id: 'external-comment',
@@ -188,12 +139,12 @@ describe('loadShareComments', () => {
       [{ id: 'reviewer-session-1', display_name: 'Alex Reviewer' }],
     );
 
-    const comments = await loadShareComments(client, { brandId: BRAND_ID, assetIds: [ASSET_ID] });
+    const comments = projectShareComments([ASSET_ID], input);
     expect(comments[0]?.authorName).toBe('Alex Reviewer');
     expect(JSON.stringify(comments)).not.toContain('external_reviewer_session_id');
   });
 
-  it('caps the open threads it returns per asset, keeping the newest', async () => {
+  it('caps the open threads it returns per asset, keeping the newest', () => {
     const total = MAX_THREADS_PER_ASSET + 10;
     const rows = Array.from({ length: total }, (_, index) =>
       commentRow({
@@ -202,42 +153,26 @@ describe('loadShareComments', () => {
       }),
     );
 
-    const { client } = fakeAdmin(rows);
-    const comments = await loadShareComments(client, { brandId: BRAND_ID, assetIds: [ASSET_ID] });
+    const input = source(rows);
+    const comments = projectShareComments([ASSET_ID], input);
 
     expect(comments).toHaveLength(MAX_THREADS_PER_ASSET);
     expect(comments[0]?.id).toBe('root-10');
     expect(comments.at(-1)?.id).toBe(`root-${total - 1}`);
   });
 
-  it('groups comments per asset in the order the assets were shared', async () => {
-    const { client } = fakeAdmin([
+  it('groups comments per asset in the order the assets were shared', () => {
+    const input = source([
       commentRow({ id: 'b1', asset_id: 'asset-b' }),
       commentRow({ id: 'a1', asset_id: 'asset-a' }),
     ]);
 
-    const comments = await loadShareComments(client, {
-      brandId: BRAND_ID,
-      assetIds: ['asset-a', 'asset-b'],
-    });
+    const comments = projectShareComments(['asset-a', 'asset-b'], input);
 
     expect(comments.map((c) => c.assetId)).toEqual(['asset-a', 'asset-b']);
   });
 
-  it('degrades to an empty feed when the comment read fails', async () => {
-    const failedQuery: Record<string, unknown> = {};
-    for (const method of ['select', 'eq', 'in', 'is', 'order']) {
-      failedQuery[method] = () => failedQuery;
-    }
-    failedQuery.limit = () => Promise.resolve({ data: null, error: { message: 'boom' } });
-    const client = {
-      schema: () => ({
-        from: () => failedQuery,
-      }),
-    } as unknown as SupabaseClient;
-
-    const comments = await loadShareComments(client, { brandId: BRAND_ID, assetIds: [ASSET_ID] });
-
-    expect(comments).toEqual([]);
+  it('degrades to an empty feed when the comment read failed (no source)', () => {
+    expect(projectShareComments([ASSET_ID], null)).toEqual([]);
   });
 });

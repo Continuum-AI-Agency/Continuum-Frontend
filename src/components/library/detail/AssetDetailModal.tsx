@@ -475,7 +475,12 @@ function AssetDetailDialog({
               action that stays correct on an older version: the toolbar is withdrawn
               off the head, and a reviewer looking at v2 wants v2's bytes. */}
           <div className="ml-auto flex items-center gap-2">
-            <ReviewStatusControl brandId={brandId} asset={asset} onChanged={onAssetChanged} />
+            <ReviewStatusControl
+              brandId={brandId}
+              asset={asset}
+              version={viewedVersion}
+              onChanged={onAssetChanged}
+            />
             <RequestReviewButton brandId={brandId} asset={asset} />
             <ShareLinkMenu brandId={brandId} asset={asset} />
             <AssetDownloadButton brandId={brandId} asset={asset} versionId={viewedVersion?.id} />

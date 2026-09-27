@@ -25,10 +25,16 @@ export const mediaSearchFiltersSchema = z
     kind: mediaKindSchema.optional(),
     source: mediaSourceSchema.optional(),
     collectionId: z.string().min(1).optional(),
+    /** A status read out of the typed query. */
     reviewStatus: mediaReviewStatusSchema.optional(),
+    /** The review statuses picked in the filter bar; OR'd with reviewStatus and the states. */
+    reviewStatuses: z.array(mediaReviewStatusSchema).max(10).optional(),
     fieldFilters: z.array(customFieldFilterSchema).max(20).optional(),
     createdAfter: z.string().datetime().optional(),
     createdBefore: z.string().datetime().optional(),
+    // The brand's custom review states (media.assets.review_state_id), resolved to asset ids
+    // by the search route — no new ranking-RPC argument (a PostgREST overload).
+    reviewStateIds: z.array(z.string().uuid()).max(50).optional(),
   })
   .strict();
 export type MediaSearchFilters = z.infer<typeof mediaSearchFiltersSchema>;

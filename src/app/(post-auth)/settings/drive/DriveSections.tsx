@@ -278,6 +278,13 @@ export function DriveMountBrands({ email }: { email: string }) {
               Name: <span className="text-foreground">{email}</span>. Password: an app token.
             </li>
           </ol>
+          <p data-testid="drive-mac-free-space" className="text-xs text-muted-foreground">
+            Finder shows 0 free space on the drive. That is on purpose: macOS holds a network drive
+            for 90 seconds before you can open it whenever the server reports a storage limit, so
+            Drive doesn’t report one to Macs. Finder still copies onto it. Your allowance still
+            applies — the Library’s storage meter and <code>continuum quota</code> show it, and an
+            upload that would go over it is refused.
+          </p>
         </div>
         <div className="space-y-1.5">
           <h3 className="text-sm font-medium">Windows</h3>
@@ -358,9 +365,34 @@ export function DriveCliDownloads() {
         ))}
       </div>
       <p className="text-xs text-muted-foreground">
-        Uploads resume where they left off after a dropped connection. Sign in with an app token
-        from above.
+        Uploads and downloads resume where they left off after a dropped connection. Sign in with an
+        app token from above.
       </p>
+      <div data-testid="drive-cli-first-run" className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <h3 className="text-sm font-medium">First run on a Mac</h3>
+          <p className="text-xs text-muted-foreground">
+            The app is not notarized by Apple yet, so Gatekeeper blocks the downloaded file. In
+            Terminal, clear the quarantine flag and make it executable once:
+          </p>
+          <CodeLine>
+            {
+              'xattr -d com.apple.quarantine ~/Downloads/continuum-darwin-*; chmod +x ~/Downloads/continuum-darwin-*'
+            }
+          </CodeLine>
+          <p className="text-xs text-muted-foreground">
+            Or open it once from Finder with Control-click → Open, then Open again.
+          </p>
+        </div>
+        <div className="space-y-1.5">
+          <h3 className="text-sm font-medium">First run on Windows</h3>
+          <p className="text-xs text-muted-foreground">
+            The app is not code-signed yet, so SmartScreen may say “Windows protected your PC”.
+            Choose More info → Run anyway, or unblock it once in PowerShell:
+          </p>
+          <CodeLine>{'Unblock-File $HOME\\Downloads\\continuum-windows-x64.exe'}</CodeLine>
+        </div>
+      </div>
     </div>
   );
 }

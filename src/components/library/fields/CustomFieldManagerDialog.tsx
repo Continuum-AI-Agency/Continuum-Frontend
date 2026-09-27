@@ -167,8 +167,8 @@ export function CustomFieldManagerDialog({
           <DialogHeader className="shrink-0 border-b border-border px-4 py-3">
             <DialogTitle className="text-sm">Custom fields</DialogTitle>
             <DialogDescription className="text-xs">
-              Your brand's own metadata on an asset. Every field here can be filtered on, and a
-              single-select, status or user field can group the board.
+              Your brand's own metadata on an asset. Every field here can filter, sort and group the
+              Library.
             </DialogDescription>
           </DialogHeader>
 

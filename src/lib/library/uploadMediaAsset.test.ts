@@ -4,7 +4,9 @@ import { createHash } from 'node:crypto';
 import {
   completeMcpUploadIntent,
   LIBRARY_EFFECTIVE_UPLOAD_CAP_BYTES,
+  readSavedResume,
   uploadMediaAsset,
+  uploadResumeKey,
   uploadSizeRefusal,
 } from './uploadMediaAsset';
 
@@ -144,6 +146,50 @@ describe('uploadMediaAsset', () => {
 
     const register = bodies.find((body) => body.action === 'register');
     expect(register?.durationSec).toBe(96);
+  });
+
+  // Past 20 minutes a recording is transcribed on the server; the upload asks for it.
+  it('asks the server to transcribe a recording longer than 20 minutes, and only that', async () => {
+    const asked: unknown[] = [];
+    const upload = (durationSec: number) =>
+      uploadMediaAsset(
+        {
+          file: new File([new Uint8Array([1, 2, 3])], 'meeting.m4a', { type: 'audio/mp4' }),
+          brandId: 'b1',
+        },
+        {
+          createClient: () => makeClient({ calls: [], bodies: [] }),
+          attachPreview: async () => 'ready',
+          probeDuration: async () => durationSec,
+          requestServerPreview: async (input) => {
+            asked.push(input);
+            return { state: 'skipped', signedUrl: null };
+          },
+        },
+      );
+    await upload(20 * 60 + 5);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toMatchObject({ brandId: 'b1' });
+    await upload(19 * 60);
+    expect(asked).toHaveLength(1);
+  });
+
+  // A long recording is long-form too: without its duration analyze_media sends the whole
+  // file through the short inline path.
+  it('sends a probed duration with register for an audio recording', async () => {
+    const bodies: Record<string, unknown>[] = [];
+    await uploadMediaAsset(
+      {
+        file: new File([new Uint8Array([1, 2, 3])], 'interview.mp3', { type: 'audio/mpeg' }),
+        brandId: 'b1',
+      },
+      {
+        createClient: () => makeClient({ calls: [], bodies }),
+        attachPreview: async () => 'ready',
+        probeDuration: async () => 342.5,
+      },
+    );
+    expect(bodies.find((body) => body.action === 'register')?.durationSec).toBe(342.5);
   });
 
   it('omits the duration for an image, and when the probe cannot read one', async () => {
@@ -434,5 +480,88 @@ describe('uploadMediaAsset', () => {
       uploadMediaAsset({ file: pngFile(), brandId: 'b1' }, { createClient: () => client }),
     ).rejects.toThrow('upload to storage failed: signature expired');
     expect(calls).toEqual(['invoke:sign_upload', 'uploadToSignedUrl']);
+  });
+});
+
+describe('resuming across a reload', () => {
+  const memoryStore = () => {
+    const map = new Map<string, string>();
+    return {
+      map,
+      getItem: (key: string) => map.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        map.set(key, value);
+      },
+      removeItem: (key: string) => {
+        map.delete(key);
+      },
+    };
+  };
+  // A >6 MB file goes over TUS; the same bytes, name and mtime are "the same file" after a reload.
+  const bigFile = () =>
+    new File([new Uint8Array(7 * 1024 * 1024)], 'b-roll.mov', {
+      type: 'video/quicktime',
+      lastModified: 1_700_000_000_000,
+    });
+
+  it('keeps the ticket and TUS URL when the page goes away mid-upload, then resumes from them', async () => {
+    const store = memoryStore();
+    const firstBodies: Record<string, unknown>[] = [];
+    await expect(
+      uploadMediaAsset(
+        { file: bigFile(), brandId: 'b1' },
+        {
+          createClient: () => makeClient({ calls: [], bodies: firstBodies }),
+          supabaseUrl: 'https://db.test',
+          resumeStore: store,
+          resumableUpload: async (params) => {
+            params.onUploadUrl?.('https://db.test/upload/resumable/abc');
+            throw new Error('the tab was closed');
+          },
+        },
+      ),
+    ).rejects.toThrow('the tab was closed');
+    expect(store.map.size).toBe(1);
+    expect(firstBodies.filter((body) => body.action === 'sign_upload')).toHaveLength(1);
+
+    const secondBodies: Record<string, unknown>[] = [];
+    const resumedFrom: unknown[] = [];
+    await uploadMediaAsset(
+      { file: bigFile(), brandId: 'b1' },
+      {
+        createClient: () => makeClient({ calls: [], bodies: secondBodies }),
+        supabaseUrl: 'https://db.test',
+        resumeStore: store,
+        attachPreview: async () => 'ready',
+        probeDuration: async () => null,
+        resumableUpload: async (params) => {
+          resumedFrom.push(params.uploadUrl);
+          return { uploadUrl: params.uploadUrl ?? '' };
+        },
+      },
+    );
+    // No new ticket: the same object, registered under the first attempt's asset id.
+    expect(secondBodies.filter((body) => body.action === 'sign_upload')).toHaveLength(0);
+    expect(resumedFrom).toEqual(['https://db.test/upload/resumable/abc']);
+    expect(secondBodies.find((body) => body.action === 'register')?.assetId).toBe(
+      VALID_TICKET.assetId,
+    );
+    // Done: nothing is left to resume.
+    expect(store.map.size).toBe(0);
+  });
+
+  it('starts over once the saved ticket is older than its signed life', () => {
+    const store = memoryStore();
+    const file = bigFile();
+    store.setItem(
+      uploadResumeKey('b1', file),
+      JSON.stringify({
+        ticket: VALID_TICKET,
+        uploadUrl: 'https://db.test/upload/resumable/abc',
+        savedAt: Date.now() - 3 * 60 * 60 * 1000,
+      }),
+    );
+    expect(readSavedResume(store, uploadResumeKey('b1', file))).toBeNull();
+    expect(store.map.size).toBe(0);
   });
 });
