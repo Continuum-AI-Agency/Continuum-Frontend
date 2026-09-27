@@ -1549,15 +1549,80 @@ const WINDOW_UNITS =
 const FIGURE = String.raw`\d[\d.,]*\s?(?:%|pp|pts?|puntos|points|x|×)?`;
 
 /**
+ * The verbs a proposal moves budget with, EN and ES stems. A percentage one of them
+ * proposes is arithmetic on a read ("reallocate 20%"); a money amount it proposes is not
+ * matched here, because "shift 1500 MXN" must be a figure some read returned.
+ */
+const PROPOSAL_VERBS = [
+  'realloca\\w*',
+  'allocat\\w*',
+  'shift\\w*',
+  'mov(?:e|es|ed|ing)',
+  'cut\\w*',
+  'reduc\\w*',
+  'increas\\w*',
+  'decreas\\w*',
+  'rais\\w*',
+  'lower\\w*',
+  'scal(?:e|es|ed|ing)',
+  'boost\\w*',
+  'trim\\w*',
+  'redirect\\w*',
+  'reassign\\w*',
+  'reasign\\w*',
+  'redistribu\\w*',
+  'asign\\w*',
+  'destin\\w*',
+  'traslad\\w*',
+  'mov(?:er|emos|amos|iendo)',
+  'muev\\w*',
+  'recort\\w*',
+  'sub(?:ir|imos|amos|iendo|a|e)',
+  'baj(?:ar|amos|emos|ando|a|e)',
+  'aument\\w*',
+  'increment\\w*',
+  'escal\\w*',
+].join('|');
+
+const PERCENT = String.raw`\d[\d.,]*\s?%`;
+
+/** A word between a proposal verb and its percentage: "budget", "el presupuesto". */
+const FILLER_WORD = String.raw`[^\s\d.,;:!?]+`;
+
+const THRESHOLD_METRICS = 'roas|cpa|ctr|cpc|cpm|cpl|cvr|cac|cost per \\w+|costo por \\w+';
+
+const THRESHOLD_COMPARATORS = [
+  'below',
+  'under',
+  'above',
+  'over',
+  'less than',
+  'more than',
+  'at least',
+  'at most',
+  'por debajo de',
+  'por encima de',
+  'menos de',
+  'm[áa]s de',
+  'inferior(?:es)? a',
+  'superior(?:es)? a',
+].join('|');
+
+const MONEY_UNIT = String.raw`(?:\s?(?:MXN|USD|EUR|COP|ARS|CLP|PEN|BRL|GBP|CAD|\$|€|pesos?|d[oó]lares|dollars?))?`;
+
+/**
  * The figures a sentence COMPUTES rather than reads, masked before its numbers are held
  * to the turn: the window it names ("last 30 days", "L14D", a date, a year, a time), the
  * rank or count of the entities it lists ("top 3", "#1", "3 campaigns"), a share of a
- * whole ("41% of spend") and a delta it derives ("up 12%", "+8 pp", "2x higher"). No tool
- * returns them and no model invents them — they are the reason prose figures were once
- * left ungraded at all.
+ * whole ("41% of spend"), a delta it derives ("up 12%", "+8 pp", "2x higher"), a
+ * percentage a proposal moves ("reallocate 20%", "subir 10%") and a threshold it states
+ * as a rule ("sub-1.0 ROAS", "por debajo de 1.0 de ROAS", "menos de 30 MXN por lead").
+ * No tool returns them and no model invents them — they are the reason prose figures were
+ * once left ungraded at all. A money amount a proposal moves ("shift 1500 MXN") is NOT
+ * computed: it stays graded and must be a figure some read returned.
  */
 const COMPUTED_PROSE_FIGURES: ReadonlyArray<RegExp> = [
-  new RegExp(String.raw`\d+\s?(?:${WINDOW_UNITS})\b`, 'giu'),
+  new RegExp(String.raw`\d+[\s-]?(?:${WINDOW_UNITS})\b`, 'giu'),
   /\b[Ll]\d+[Dd]\b/gu,
   /\b\d{4}-\d{2}(?:-\d{2})?\b/gu,
   /\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b/gu,
@@ -1574,6 +1639,19 @@ const COMPUTED_PROSE_FIGURES: ReadonlyArray<RegExp> = [
     'giu',
   ),
   new RegExp(String.raw`${FIGURE}\s+(?:${CHANGE_WORDS})\b`, 'giu'),
+  new RegExp(
+    String.raw`\b(?:${PROPOSAL_VERBS})(?:\s+${FILLER_WORD}){0,2}?\s+(?:by\s+|un\s+|en\s+|a\s+)?${PERCENT}`,
+    'giu',
+  ),
+  new RegExp(String.raw`\bsub-?\s?\d[\d.,]*\s?(?:${THRESHOLD_METRICS})\b`, 'giu'),
+  new RegExp(
+    String.raw`\b(?:${THRESHOLD_COMPARATORS})\s+\$?${FIGURE}${MONEY_UNIT}\s?(?:de\s+)?(?:${THRESHOLD_METRICS}|(?:per|por)\s+\w+)\b`,
+    'giu',
+  ),
+  new RegExp(
+    String.raw`\b(?:${THRESHOLD_METRICS})\s+(?:of\s+|de\s+|is\s+|es\s+)?(?:${THRESHOLD_COMPARATORS})\s+\$?${FIGURE}${MONEY_UNIT}`,
+    'giu',
+  ),
 ];
 
 /**
