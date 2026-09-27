@@ -313,3 +313,22 @@ export const projectMembershipListResponseSchema = z.object({
   memberships: z.array(projectMembershipSchema),
 });
 export type ProjectMembershipListResponse = z.infer<typeof projectMembershipListResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Writes go through the `projects` edge function, never a Next route: every write is
+// service-role, and the service-role key does not belong on Vercel. Reads stay on the
+// caller's RLS-scoped client (members may SELECT both tables). The edge function imports
+// this file directly, so it must keep importing nothing but `zod`.
+// ---------------------------------------------------------------------------
+
+export const PROJECTS_EDGE_FUNCTION = 'projects';
+
+export const projectsEdgeRequestSchema = z.discriminatedUnion('action', [
+  projectCreateRequestSchema.extend({ action: z.literal('create') }),
+  projectUpdateRequestSchema.extend({ action: z.literal('update') }),
+  projectArchiveRequestSchema.extend({ action: z.literal('archive') }),
+  projectTagRequestSchema.extend({ action: z.literal('tag') }),
+  projectUntagRequestSchema.extend({ action: z.literal('untag') }),
+]);
+export type ProjectsEdgeRequest = z.infer<typeof projectsEdgeRequestSchema>;
+export type ProjectsEdgeAction = ProjectsEdgeRequest['action'];
