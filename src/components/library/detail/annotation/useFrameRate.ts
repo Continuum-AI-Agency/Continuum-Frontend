@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { FrameRate } from '@/lib/library/commentExport';
+import type { FrameRate, SourceTimecode } from '@/lib/library/commentExport';
 import { measureFrameRate } from '@/lib/library/frameRate';
+import { readStartTimecode } from '@/lib/library/startTimecode';
 
 // The playing file's measured frame rate, for frame-accurate stepping. Null
 // until measured, or when the container cannot be read (the player then steps
@@ -42,4 +43,37 @@ export function useFrameRate(src: string | null): FrameRate | null {
     };
   }, [src]);
   return rate;
+}
+
+// The playing file's own start timecode (its tmcd track), cached per stored file
+// like the rate. `undefined` while reading; null when the file carries none, in
+// which case timecode counts from 00:00:00:00.
+const startByFile = new Map<string, SourceTimecode | null>();
+
+export function useStartTimecode(src: string | null): SourceTimecode | null | undefined {
+  const [start, setStart] = useState<SourceTimecode | null | undefined>(() =>
+    src ? startByFile.get(fileKey(src)) : undefined,
+  );
+  useEffect(() => {
+    if (!src) return;
+    const key = fileKey(src);
+    if (startByFile.has(key)) {
+      setStart(startByFile.get(key) ?? null);
+      return;
+    }
+    let cancelled = false;
+    readStartTimecode(src)
+      .catch((error: unknown) => {
+        console.warn('[useStartTimecode] could not read start timecode', error);
+        return null;
+      })
+      .then((read) => {
+        startByFile.set(key, read);
+        if (!cancelled) setStart(read);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+  return start;
 }

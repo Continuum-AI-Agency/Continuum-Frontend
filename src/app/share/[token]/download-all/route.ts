@@ -20,7 +20,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   const { token } = await params;
   const sessionToken = await reviewerSessionToken(token);
   const ip = await viewerIp();
-  const result = await loadSharePayload(token, sessionToken, ip);
+  // Every member, not one page: the zip is the whole share.
+  const result = await loadSharePayload(token, sessionToken, ip, { pageSize: 1000 });
   if (!result.ok) return new Response('This link is not available.', { status: 404 });
   if (!result.payload.policy.allowDownload) {
     return new Response('Downloads are turned off for this link.', { status: 403 });

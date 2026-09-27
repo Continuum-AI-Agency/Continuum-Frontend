@@ -3,6 +3,8 @@
 // shared by the API route, the realtime merge, and the sidebar.
 
 import {
+  type AssetTiming,
+  assetTimingSchema,
   type CreateCommentRequest,
   commentAnnotationSchema,
   commentAttachmentsSchema,
@@ -258,4 +260,27 @@ export async function downloadFromRoute(href: string): Promise<void> {
   anchor.download = fileName;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+export async function fetchAssetTiming(params: {
+  brandId: string;
+  assetId: string;
+  versionId: string | null;
+}): Promise<AssetTiming> {
+  const query = new URLSearchParams({ brandId: params.brandId, assetId: params.assetId });
+  if (params.versionId) query.set('versionId', params.versionId);
+  const response = await fetch(`/api/library/comments/timing?${query.toString()}`);
+  return assetTimingSchema.parse(await parseJsonOrThrow(response));
+}
+
+// The companion editor view: a compact, chrome-free comment list meant to sit
+// beside the NLE (app/open/review/[assetId]).
+export function editorViewHref(params: {
+  brandId: string;
+  assetId: string;
+  versionId: string | null;
+}): string {
+  const query = new URLSearchParams({ brandId: params.brandId });
+  if (params.versionId) query.set('versionId', params.versionId);
+  return `/open/review/${params.assetId}?${query.toString()}`;
 }

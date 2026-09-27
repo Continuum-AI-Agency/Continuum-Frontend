@@ -32,7 +32,11 @@ import { loadShareComments } from './loadShareComments';
 import { hashReviewerSessionToken } from './reviewerSession.server';
 
 const SIGNED_URL_TTL_SECONDS = 3600;
-const COLLECTION_ASSET_CAP = 100;
+export const SHARE_PAGE_SIZE = 60;
+const SHARE_PAGE_SIZE_MAX = 1000;
+
+// Which slice of a link to load: a page of it, or the one asset a route acts on.
+export type ShareSlice = { page?: number; pageSize?: number; assetId?: string };
 
 export type ShareUnavailableReason = 'missing' | 'revoked' | 'expired';
 
@@ -124,96 +128,114 @@ async function signAssets(admin: AdminClient, paths: SignablePath[]): Promise<Ma
   return map;
 }
 
-type MemberRow = { asset_id: string; version_id: string | null; position: number };
+type MemberRow = { asset_id: string; version_id: string | null };
+export type MemberPage = { rows: MemberRow[]; total: number };
 
-// A link's members in the owner's order. A collection share is live: it reads
-// the collection as it is now, keeping the owner's order for the members the
-// link already knew and appending anything filed since, in collection order.
-// Selection shares stay the snapshot they were created as.
-export async function shareMembers(admin: AdminClient, link: ShareLinkRow): Promise<MemberRow[]> {
+// A page of a link's members in the order the page shows them, resolved by
+// media.share_link_members: the owner's custom order first, then the shared
+// collection as it is now — manual items, sub-collections and smart queries,
+// evaluated as the link owner. Selection and asset shares are their snapshot.
+export async function shareMembers(
+  admin: AdminClient,
+  link: ShareLinkRow,
+  slice: ShareSlice = {},
+): Promise<MemberPage> {
   const media = mediaSchema(admin);
-  const { data: memberships } = await media
-    .from('share_link_assets')
-    .select('asset_id, version_id, position')
-    .eq('share_link_id', link.id)
-    .order('position', { ascending: true })
-    .limit(COLLECTION_ASSET_CAP);
-  const snapshot = (memberships ?? []) as MemberRow[];
-  if (link.scope !== 'collection' || !link.collection_id) return snapshot;
+  const pageSize = Math.min(Math.max(slice.pageSize ?? SHARE_PAGE_SIZE, 1), SHARE_PAGE_SIZE_MAX);
+  const offset = slice.assetId ? 0 : Math.max((slice.page ?? 1) - 1, 0) * pageSize;
+  const call = (limit: number, from: number) =>
+    media.rpc('share_link_members', {
+      p_share_link_id: link.id,
+      p_asset_id: slice.assetId ?? null,
+      p_limit: limit,
+      p_offset: from,
+    });
+  const { data, error } = await call(pageSize, offset);
+  if (error) {
+    console.error('[share] member resolve failed', { linkId: link.id, error });
+    return { rows: [], total: 0 };
+  }
+  const resolved = (data ?? []) as Array<MemberRow & { total: number }>;
+  let total = Number(resolved[0]?.total ?? 0);
+  if (resolved.length === 0 && offset > 0) {
+    const { data: first } = await call(1, 0);
+    total = Number((first as Array<{ total: number }> | null)?.[0]?.total ?? 0);
+  }
+  if (link.scope === 'collection') await joinLateMembers(admin, link, resolved);
+  return { rows: resolved.map(({ asset_id, version_id }) => ({ asset_id, version_id })), total };
+}
 
-  const { data: items } = await media
-    .from('collection_items')
-    .select('asset_id, position')
-    .eq('collection_id', link.collection_id)
-    .order('position', { ascending: true })
-    .limit(COLLECTION_ASSET_CAP);
-  const current = (items ?? []) as Array<{ asset_id: string; position: number }>;
-  const inCollection = new Set(current.map((item) => item.asset_id));
-  const known = snapshot.filter((row) => inCollection.has(row.asset_id));
-  const knownIds = new Set(known.map((row) => row.asset_id));
-  const fresh = current.filter((item) => !knownIds.has(item.asset_id));
-  if (fresh.length === 0) return known;
-
-  // A member filed after the link was made joins the link on first sight, so a
-  // guest can comment on it and decide on it (those checks read
-  // share_link_assets). A pinned link pins the version the guest first saw.
-  const { data: heads } = await media
-    .from('assets')
-    .select('id, head_version_id')
-    .in(
-      'id',
-      fresh.map((item) => item.asset_id),
-    )
-    .eq('brand_id', link.brand_id)
-    .is('deleted_at', null);
+// A member that joined the collection after the link was made joins the link on
+// first sight, so a guest can comment on it and decide on it (those checks read
+// share_link_assets). A pinned link pins the version the guest first saw.
+async function joinLateMembers(admin: AdminClient, link: ShareLinkRow, rows: MemberRow[]) {
+  if (rows.length === 0) return;
+  const media = mediaSchema(admin);
+  const ids = rows.map((row) => row.asset_id);
+  const [{ data: known }, { data: last }, { data: heads }] = await Promise.all([
+    media
+      .from('share_link_assets')
+      .select('asset_id')
+      .eq('share_link_id', link.id)
+      .in('asset_id', ids),
+    media
+      .from('share_link_assets')
+      .select('position')
+      .eq('share_link_id', link.id)
+      .order('position', { ascending: false })
+      .limit(1),
+    media.from('assets').select('id, head_version_id').in('id', ids).eq('brand_id', link.brand_id),
+  ]);
+  const knownIds = new Set(
+    ((known ?? []) as Array<{ asset_id: string }>).map((row) => row.asset_id),
+  );
+  const late = rows.filter((row) => !knownIds.has(row.asset_id));
+  if (late.length === 0) return;
   const headById = new Map(
     ((heads ?? []) as Array<{ id: string; head_version_id: string | null }>).map((row) => [
       row.id,
       row.head_version_id,
     ]),
   );
-  const start = Math.max(-1, ...snapshot.map((row) => row.position)) + 1;
-  const added = fresh
-    .filter((item) => headById.has(item.asset_id))
-    .map((item, index) => ({
-      asset_id: item.asset_id,
-      version_id: link.version_mode === 'pinned' ? (headById.get(item.asset_id) ?? null) : null,
-      position: start + index,
-    }));
-  if (added.length > 0) {
-    const { error } = await media
-      .from('share_link_assets')
-      .upsert(
-        added.map((row) => ({ share_link_id: link.id, ...row })),
-        { onConflict: 'share_link_id,asset_id', ignoreDuplicates: true },
-      );
-    if (error) console.error('[share] live member join failed', { linkId: link.id, error });
+  const start = Number((last as Array<{ position: number }> | null)?.[0]?.position ?? -1) + 1;
+  const pinned = link.version_mode === 'pinned';
+  const joined = late.map((row, index) => ({
+    share_link_id: link.id,
+    asset_id: row.asset_id,
+    version_id: pinned ? (headById.get(row.asset_id) ?? null) : null,
+    position: start + index,
+  }));
+  const { error } = await media
+    .from('share_link_assets')
+    .upsert(joined, { onConflict: 'share_link_id,asset_id', ignoreDuplicates: true });
+  if (error) console.error('[share] live member join failed', { linkId: link.id, error });
+  for (const row of late) {
+    if (pinned) row.version_id = headById.get(row.asset_id) ?? null;
   }
-  return [...known, ...added].slice(0, COLLECTION_ASSET_CAP);
 }
 
-// The asset ids a link exposes, without signing anything.
-export async function shareAssetIds(admin: AdminClient, link: ShareLinkRow): Promise<string[]> {
-  if (link.scope === 'asset') return link.asset_id ? [link.asset_id] : [];
-  return (await shareMembers(admin, link)).map((row) => row.asset_id);
+// Whether a link exposes an asset, without loading the rest of it.
+export async function shareHasAsset(
+  admin: AdminClient,
+  link: ShareLinkRow,
+  assetId: string,
+): Promise<boolean> {
+  return (await shareMembers(admin, link, { assetId })).rows.length > 0;
 }
 
 async function loadAssetRows(
   admin: AdminClient,
   link: ShareLinkRow,
+  slice: ShareSlice,
 ): Promise<{
   entries: SharedAssetEntry[];
   collectionName: string | null;
   versionIdsByAsset: Record<string, string>;
+  total: number;
 } | null> {
   const media = mediaSchema(admin);
-  const memberRows = await shareMembers(admin, link);
-  const assetIds =
-    memberRows.length > 0
-      ? memberRows.map((row) => row.asset_id)
-      : link.scope === 'asset' && link.asset_id
-        ? [link.asset_id]
-        : [];
+  const { rows: memberRows, total } = await shareMembers(admin, link, slice);
+  const assetIds = memberRows.map((row) => row.asset_id);
 
   let collectionName: string | null = null;
   if (link.scope === 'collection') {
@@ -289,7 +311,7 @@ async function loadAssetRows(
       ? {}
       : Object.fromEntries(entries.map((entry) => [entry.row.id, entry.versionId]));
 
-  return { entries, collectionName, versionIdsByAsset };
+  return { entries, collectionName, versionIdsByAsset, total };
 }
 
 type BrandPresentation = {
@@ -319,7 +341,9 @@ async function loadBrandPresentation(
     logo_path: string | null;
   } | null;
   const colors = Array.isArray(row?.brand_colors) ? row.brand_colors : [];
-  const accent = colors.find((color): color is string => typeof color === 'string' && HEX.test(color));
+  const accent = colors.find(
+    (color): color is string => typeof color === 'string' && HEX.test(color),
+  );
 
   let logoUrl: string | null = null;
   if (logoAssetId) {
@@ -361,7 +385,9 @@ async function loadFeaturedField(
     .eq('brand_id', link.brand_id)
     .maybeSingle();
   const type = customFieldTypeSchema.safeParse((data as { type?: unknown } | null)?.type);
-  const options = customFieldOptionsSchema.safeParse((data as { options?: unknown } | null)?.options);
+  const options = customFieldOptionsSchema.safeParse(
+    (data as { options?: unknown } | null)?.options,
+  );
   if (!data || !type.success || !options.success || !isShareFeaturableFieldType(type.data)) {
     return { field: null, values: {} };
   }
@@ -454,12 +480,13 @@ export async function loadSharePayload(
   token: string,
   reviewerSessionToken?: string,
   viewerIp?: string | null,
+  slice: ShareSlice = {},
 ): Promise<LoadShareResult> {
   const resolved = await resolveShareLink(token, reviewerSessionToken);
   if (!resolved.ok) return resolved;
   const { admin, link, session, identityPresent } = resolved;
 
-  const loaded = await loadAssetRows(admin, link);
+  const loaded = await loadAssetRows(admin, link, slice);
   if (!loaded) return { ok: false, reason: 'missing' };
 
   const sharedRows = loaded.entries.map((entry) => entry.row);
@@ -519,6 +546,11 @@ export async function loadSharePayload(
       featuredField: featured.field,
       featuredValues: featured.values,
       viewerIp: viewerIp ?? null,
+      pagination: {
+        page: Math.max(slice.page ?? 1, 1),
+        pageSize: Math.min(Math.max(slice.pageSize ?? SHARE_PAGE_SIZE, 1), 1000),
+        total: loaded.total,
+      },
       reviewer: identityPresent
         ? { displayName: String(session?.display_name), email: String(session?.email) }
         : null,
