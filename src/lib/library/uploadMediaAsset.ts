@@ -23,7 +23,11 @@ import {
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { attachAssetPreview } from './assetPreview';
-import { type ResumableUploadProgress, resumableStorageUpload } from './resumableStorageUpload';
+import {
+  type ResumableUploadProgress,
+  resumableStorageUpload,
+  TUS_CHUNK_SIZE_BYTES,
+} from './resumableStorageUpload';
 import { type attachVideoPoster, isVideoMimeType, probeVideoDurationSec } from './videoPoster';
 
 export type SupabaseBrowserClient = ReturnType<typeof createSupabaseBrowserClient>;
@@ -35,6 +39,34 @@ export const MEDIA_LIBRARY_BUCKET = 'media-library';
 const FALLBACK_MIME_TYPE = 'application/octet-stream';
 const MAX_BUFFERED_CHECKSUM_BYTES = 64 * 1024 * 1024;
 export const MAX_PROJECT_FILE_BYTES = 5 * 1024 * 1024 * 1024;
+
+// The Supabase project-GLOBAL storage upload limit (a dashboard setting, not a
+// bucket limit) — it silently overrides every bucket's own file_size_limit.
+// Measured 2026-09-27 via GET /v1/projects/<ref>/config/storage: fileSizeLimit
+// 524288000, with media-library at 500 MB and media-source at 5 GB, so this is
+// the ceiling every Library upload actually hits. Change it when the dashboard
+// changes; storage's own 413 is mapped to the same sentence below regardless.
+export const LIBRARY_EFFECTIVE_UPLOAD_CAP_BYTES = 500 * 1024 * 1024;
+
+const BYTES_PER_MB = 1024 * 1024;
+
+export function uploadTooLargeMessage(file: { name: string; size: number }): string {
+  const sizeMb = (file.size / BYTES_PER_MB).toFixed(1).replace(/\.0$/, '');
+  const capMb = LIBRARY_EFFECTIVE_UPLOAD_CAP_BYTES / BYTES_PER_MB;
+  return `${file.name} is ${sizeMb} MB — uploads are capped at ${capMb} MB right now.`;
+}
+
+/** The refusal to show before any network call, or null when the file fits. */
+export function uploadSizeRefusal(file: { name: string; size: number }): string | null {
+  return file.size > LIBRARY_EFFECTIVE_UPLOAD_CAP_BYTES ? uploadTooLargeMessage(file) : null;
+}
+
+// Storage says "The object exceeded the maximum allowed size" on a signed PUT
+// and a bare 413 on TUS; both mean the cap above, so both read as that sentence.
+function isStorageSizeRefusal(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /exceeded the maximum allowed size|\(413\)/i.test(message);
+}
 
 function resolveMimeType(file: File): string {
   return file.type || FALLBACK_MIME_TYPE;
@@ -170,7 +202,13 @@ function isProjectFile(file: File): boolean {
   return format.accepted && format.originalKind === 'file';
 }
 
-async function uploadProjectFile(
+// TUS: chunked, resumable after a pause or a dropped connection. Used for
+// project files and for any file bigger than one chunk; smaller files go in one PUT.
+function isResumableUpload(file: File): boolean {
+  return isProjectFile(file) || file.size > TUS_CHUNK_SIZE_BYTES;
+}
+
+async function uploadResumable(
   supabase: SupabaseBrowserClient,
   ticket: LibraryUploadTicket,
   params: UploadMediaAssetParams,
@@ -204,19 +242,23 @@ export async function uploadMediaAsset(
   const supabase = (deps.createClient ?? createSupabaseBrowserClient)();
   const { file, brandId } = params;
   const mimeType = resolveMimeType(file);
-  if (isProjectFile(file) && file.size > MAX_PROJECT_FILE_BYTES) {
-    throw new Error('file_too_large: Project files must be 5 GB or smaller');
-  }
+  const refusal = uploadSizeRefusal(file);
+  if (refusal) throw new Error(refusal);
 
   const ticket =
     params.resume?.ticket ??
     (await signLibraryUpload(supabase, { brandId, fileName: file.name, mimeType }));
   params.onResumeState?.({ ticket, uploadUrl: params.resume?.uploadUrl ?? null });
-  if (isProjectFile(file)) {
-    await uploadProjectFile(supabase, ticket, params, deps);
-  } else {
-    await uploadToLibraryTicket(supabase, ticket, file);
-    params.onProgress?.({ uploadedBytes: file.size, totalBytes: file.size, percentage: 100 });
+  try {
+    if (isResumableUpload(file)) {
+      await uploadResumable(supabase, ticket, params, deps);
+    } else {
+      await uploadToLibraryTicket(supabase, ticket, file);
+      params.onProgress?.({ uploadedBytes: file.size, totalBytes: file.size, percentage: 100 });
+    }
+  } catch (error) {
+    if (isStorageSizeRefusal(error)) throw new Error(uploadTooLargeMessage(file), { cause: error });
+    throw error;
   }
 
   const checksum = await computeChecksum(file);

@@ -1,7 +1,9 @@
 'use client';
 
 import type {
+  CollectionViewConfig,
   CommentDeepLink,
+  CustomField,
   CustomFieldFilter,
   LibraryAspectRatioBin,
   LibraryBrowseDestination,
@@ -23,7 +25,15 @@ import {
   libraryAspectRatioBin,
   templateFamilyForLibraryFormat,
 } from '@continuum/contracts';
-import { Columns3, LayoutGrid, ScanSearch, Upload } from 'lucide-react';
+import {
+  Columns3,
+  GalleryHorizontalEnd,
+  LayoutGrid,
+  List,
+  ScanSearch,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from 'react';
@@ -73,11 +83,28 @@ import { PlacementBar } from './PlacementBar';
 import { RatioShelves } from './RatioShelves';
 import { TemplateGrid } from './TemplateGrid';
 import { TypographyPanel } from './TypographyPanel';
+import { TrashView } from './trash/TrashView';
 import { UploadStrip } from './UploadStrip';
 import { useMediaLibrary } from './useMediaLibrary';
 import { useMediaUpload } from './useMediaUpload';
+import { useCollectionAssetDrop } from './views/assetDrag';
+import { CardOptionsMenu } from './views/CardOptionsMenu';
+import { chosenCustomFieldIds } from './views/cardOptions';
+import { LibraryBreadcrumbs } from './views/LibraryBreadcrumbs';
+import { ListView } from './views/ListView';
+import { ReelView } from './views/ReelView';
+import { stackDroppedAssets } from './views/stackDrop';
+import { useAssetFieldValues } from './views/useAssetFieldValues';
+import { useLibraryViewPreferences } from './views/useLibraryViewPreferences';
 
 const TEMPLATE_ACCEPT_ATTRIBUTE = '.aep,.aepx,.aet,.zip,application/zip';
+
+const LAYOUT_TABS = [
+  { id: 'grid', label: 'Grid', Icon: LayoutGrid },
+  { id: 'list', label: 'List', Icon: List },
+  { id: 'board', label: 'Board', Icon: Columns3 },
+  { id: 'reel', label: 'Reel', Icon: GalleryHorizontalEnd },
+] as const;
 
 type Props = {
   brandId: string;
@@ -92,6 +119,9 @@ type Props = {
   captionStyle: CaptionStyle;
   section: LibrarySection;
   initialDeepLink?: CommentDeepLink;
+  /** The user's saved layout + card options (media.library_view_preferences). */
+  initialViewConfig?: CollectionViewConfig;
+  initialTrashOpen?: boolean;
 };
 
 export function LibraryViewer({
@@ -107,6 +137,8 @@ export function LibraryViewer({
   captionStyle,
   section,
   initialDeepLink,
+  initialViewConfig = {},
+  initialTrashOpen = false,
 }: Props) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
@@ -181,6 +213,15 @@ export function LibraryViewer({
     };
   }, [facetQueryKey, tagRevision]);
 
+  const {
+    card: cardOptions,
+    setLayout: saveLayout,
+    setCard,
+  } = useLibraryViewPreferences(brandId, initialViewConfig);
+  const chosenFields = chosenCustomFieldIds(cardOptions)
+    .map((id) => customFields?.find((field) => field.id === id))
+    .filter((field): field is CustomField => !!field);
+  const [trashOpen, setTrashOpen] = useState(initialTrashOpen);
   const [view, setView] = useState<'media' | 'inspiration'>('media');
   const [detailAsset, setDetailAsset] = useState<MediaAsset | null>(initialDetailAsset);
   const [deepLink, setDeepLink] = useState<CommentDeepLink>(
@@ -218,6 +259,12 @@ export function LibraryViewer({
       return bin != null && allowed.has(bin);
     });
   })();
+  const fieldValues = useAssetFieldValues(
+    brandId,
+    displayedAssets.map((asset) => asset.id),
+    chosenFields.length > 0 && (optimisticLayout === 'grid' || optimisticLayout === 'list'),
+    assetRevision,
+  );
   const activeCollection = selectedCollectionId
     ? initialCollections.find((c) => c.id === selectedCollectionId)
     : null;
@@ -299,6 +346,7 @@ export function LibraryViewer({
       boardGroupBy?: string;
     }) => {
       setSearchResults(null);
+      setTrashOpen(false);
       const nextSource = next.createdWith
         ? (next.createdWith[0] ?? 'all')
         : (next.source ?? optimisticSource);
@@ -429,6 +477,80 @@ export function LibraryViewer({
     router.replace(librarySearchPath(initialBrowseQuery), { scroll: false });
   }, [initialBrowseQuery, router]);
 
+  // The grid re-seeds from the RSC; the board holds its own fetch, so it also needs
+  // an explicit revision bump to re-read.
+  const refreshAssets = useCallback(() => {
+    setAssetRevision((revision) => revision + 1);
+    router.refresh();
+  }, [router]);
+
+  const toggleSelected = useCallback(
+    (asset: MediaAsset) =>
+      setSelectedAssetIds((current) => {
+        const next = new Set(current);
+        if (next.has(asset.id)) next.delete(asset.id);
+        else next.add(asset.id);
+        return next;
+      }),
+    [],
+  );
+
+  // The preference is written BEFORE navigating: a URL without `layout` (grid) makes
+  // the page read the saved one, and it must not read the previous choice.
+  const onLayoutChange = useCallback(
+    (layout: LibraryLayout) => {
+      void saveLayout(layout).then(() => pushFilters({ layout }));
+    },
+    [pushFilters, saveLayout],
+  );
+
+  const onStackDrop = useCallback(
+    (target: MediaAsset, sourceAssetIds: string[]) => {
+      void stackDroppedAssets(brandId, target, sourceAssetIds).then((stacked) => {
+        if (!stacked) return;
+        setSelectedAssetIds((current) => {
+          const next = new Set(current);
+          for (const id of sourceAssetIds) next.delete(id);
+          return next;
+        });
+        refreshAssets();
+      });
+    },
+    [brandId, refreshAssets],
+  );
+
+  const collectionDrop = useCollectionAssetDrop({
+    brandId,
+    collectionName: (id) => initialCollections.find((collection) => collection.id === id)?.name,
+    onDropped: refreshAssets,
+  });
+
+  const setTrashUrl = useCallback(
+    (open: boolean) => {
+      window.history.replaceState(
+        null,
+        '',
+        open ? '/library?view=trash' : librarySearchPath(initialBrowseQuery),
+      );
+    },
+    [initialBrowseQuery],
+  );
+
+  // Card presentation + stacking for every grid, including the ratio shelves, which
+  // forward their props to MediaGrid.
+  const gridCardProps = {
+    card: cardOptions,
+    cardFields: chosenFields,
+    fieldValues,
+    onStackDrop,
+  };
+
+  const detailIndex = detailAsset
+    ? displayedAssets.findIndex((asset) => asset.id === detailAsset.id)
+    : -1;
+  const previousAsset = detailIndex > 0 ? displayedAssets[detailIndex - 1] : undefined;
+  const nextAsset = detailIndex >= 0 ? displayedAssets[detailIndex + 1] : undefined;
+
   const onDeepLinkChange = useCallback(
     (link: CommentDeepLink) => {
       setDeepLink(link);
@@ -536,8 +658,15 @@ export function LibraryViewer({
     },
     [onSelectDestination, router],
   );
-  const { uploads, uploadFiles, pauseUpload, resumeUpload, retryUpload, cancelUpload } =
-    useMediaUpload(brandId, { onUploaded });
+  const {
+    uploads,
+    uploadFiles,
+    pauseUpload,
+    resumeUpload,
+    retryUpload,
+    cancelUpload,
+    moveUpload,
+  } = useMediaUpload(brandId, { onUploaded });
 
   const onSelectSavedView = useCallback(
     (savedView: LibrarySavedView) => {
@@ -609,22 +738,32 @@ export function LibraryViewer({
         <CompetitorInspirationPanel brandId={brandId} />
       ) : (
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <LibrarySidebar
-            brandId={brandId}
-            collections={initialCollections}
-            savedViews={initialSavedViews}
-            currentQuery={initialBrowseQuery}
-            onSelectSavedView={onSelectSavedView}
-            selectedCollectionId={selectedCollectionId}
-            onSelectCollection={onSelectCollection}
-            selectedMediaType={optimisticMediaType}
-            selectedSort={optimisticSort}
-            selectedReviewStatuses={optimisticReviewStatuses}
-            selectedTemplateOnly={showTemplates}
-            section={section}
-            onSelectDestination={onSelectDestination}
-            storageUsedBytes={storageUsedBytes}
-          />
+          {/* Delegated drop target: any sidebar row carrying data-collection-id
+              accepts dragged assets (useCollectionAssetDrop finds the row). */}
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: drop delegation only; the sidebar rows stay the interactive controls */}
+          <div
+            className="flex min-h-0"
+            onDragOver={collectionDrop.onDragOver}
+            onDragLeave={collectionDrop.onDragLeave}
+            onDrop={collectionDrop.onDrop}
+          >
+            <LibrarySidebar
+              brandId={brandId}
+              collections={initialCollections}
+              savedViews={initialSavedViews}
+              currentQuery={initialBrowseQuery}
+              onSelectSavedView={onSelectSavedView}
+              selectedCollectionId={selectedCollectionId}
+              onSelectCollection={onSelectCollection}
+              selectedMediaType={optimisticMediaType}
+              selectedSort={optimisticSort}
+              selectedReviewStatuses={optimisticReviewStatuses}
+              selectedTemplateOnly={showTemplates}
+              section={section}
+              onSelectDestination={onSelectDestination}
+              storageUsedBytes={storageUsedBytes}
+            />
+          </div>
 
           {/* biome-ignore lint/a11y/noStaticElementInteractions: full-area drag-and-drop upload surface; the keyboard-accessible path is the Upload button above */}
           <div
@@ -698,6 +837,21 @@ export function LibraryViewer({
                       </Button>
                       <Button
                         type="button"
+                        variant={trashOpen ? 'secondary' : 'outline'}
+                        size="sm"
+                        data-testid="library-trash-open"
+                        aria-pressed={trashOpen}
+                        onClick={() => {
+                          setTrashOpen(!trashOpen);
+                          setTrashUrl(!trashOpen);
+                        }}
+                        title="Recently deleted assets"
+                      >
+                        <Trash2 className="size-4" />
+                        <span className="hidden sm:inline">Trash</span>
+                      </Button>
+                      <Button
+                        type="button"
                         size="sm"
                         onClick={() => fileInputRef.current?.click()}
                         className="active:scale-[0.96] [transition-property:scale]"
@@ -714,7 +868,8 @@ export function LibraryViewer({
             <div
               className={cn(
                 'flex items-center justify-between gap-3',
-                (showTemplates || showTypography || showPipelines || showElements) && 'hidden',
+                (showTemplates || showTypography || showPipelines || showElements || trashOpen) &&
+                  'hidden',
               )}
             >
               <LibraryFilterBar
@@ -819,23 +974,27 @@ export function LibraryViewer({
                     </SelectContent>
                   </Select>
                 ) : null}
+                {optimisticLayout === 'grid' || optimisticLayout === 'list' ? (
+                  <CardOptionsMenu
+                    card={cardOptions}
+                    customFields={customFields ?? []}
+                    onChange={setCard}
+                    showSizeAndAspect={optimisticLayout === 'grid'}
+                  />
+                ) : null}
                 <div
                   className="flex items-center gap-1 rounded-lg border border-border p-0.5"
                   role="tablist"
                   aria-label="Library layout"
                 >
-                  {(
-                    [
-                      { id: 'grid', label: 'Grid', Icon: LayoutGrid },
-                      { id: 'board', label: 'Board', Icon: Columns3 },
-                    ] as const
-                  ).map(({ id, label, Icon }) => (
+                  {LAYOUT_TABS.map(({ id, label, Icon }) => (
                     <button
                       key={id}
                       type="button"
                       role="tab"
+                      data-testid={`library-layout-${id}`}
                       aria-selected={optimisticLayout === id}
-                      onClick={() => pushFilters({ layout: id })}
+                      onClick={() => onLayoutChange(id)}
                       className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ${
                         optimisticLayout === id
                           ? 'bg-secondary text-foreground'
@@ -872,6 +1031,7 @@ export function LibraryViewer({
                   onResume={resumeUpload}
                   onRetry={retryUpload}
                   onCancel={cancelUpload}
+                  onMove={moveUpload}
                 />
               )}
             </AnimatePresence>
@@ -901,11 +1061,29 @@ export function LibraryViewer({
 
             {view === 'media' ? <LibraryRenderQueue /> : null}
 
+            {selectedCollectionId && !trashOpen ? (
+              <LibraryBreadcrumbs
+                collections={initialCollections}
+                collectionId={selectedCollectionId}
+                onSelectCollection={onSelectCollection}
+                drop={collectionDrop}
+              />
+            ) : null}
+
             <div
               className={`transition-opacity ${isFiltering ? 'pointer-events-none opacity-60' : ''}`}
               aria-busy={isFiltering}
             >
-              {showTypography ? (
+              {trashOpen ? (
+                <TrashView
+                  brandId={brandId}
+                  onClose={() => {
+                    setTrashOpen(false);
+                    setTrashUrl(false);
+                  }}
+                  onRestored={refreshAssets}
+                />
+              ) : showTypography ? (
                 <TypographyPanel
                   key={fontRevision}
                   brandId={brandId}
@@ -952,22 +1130,41 @@ export function LibraryViewer({
                     refreshKey={assetRevision}
                     onOpenDetail={openDetail}
                     selectedAssetIds={selectedAssetIds}
-                    onToggleSelected={(asset) =>
-                      setSelectedAssetIds((current) => {
-                        const next = new Set(current);
-                        if (next.has(asset.id)) next.delete(asset.id);
-                        else next.add(asset.id);
-                        return next;
-                      })
-                    }
+                    onToggleSelected={toggleSelected}
                     groupBy={initialBrowseQuery.boardGroupBy}
                     onGroupByChange={(boardGroupBy) => pushFilters({ boardGroupBy })}
                   />
                 </>
+              ) : optimisticLayout === 'list' ? (
+                <ListView
+                  assets={displayedAssets}
+                  customFields={chosenFields}
+                  fieldValues={fieldValues}
+                  serverSort={optimisticSort}
+                  onServerSort={(sort) => pushFilters({ sort })}
+                  onOpenDetail={openDetail}
+                  selectedAssetIds={selectedAssetIds}
+                  onToggleSelected={toggleSelected}
+                  onLoadMore={isSearching ? undefined : loadMore}
+                  hasMore={isSearching ? false : hasMore}
+                  loadingMore={loadingMore}
+                  emptyHint={emptyHint}
+                />
+              ) : optimisticLayout === 'reel' ? (
+                <ReelView
+                  assets={displayedAssets}
+                  active={!detailAsset}
+                  onOpenDetail={openDetail}
+                  onExit={() => onLayoutChange('grid')}
+                  onLoadMore={isSearching ? undefined : loadMore}
+                  hasMore={isSearching ? false : hasMore}
+                  loadingMore={loadingMore}
+                />
               ) : initialBrowseQuery.destination === 'home' &&
                 !isSearching &&
                 initialBrowseQuery.previewFrame === 'native' ? (
                 <RatioShelves
+                  {...gridCardProps}
                   brandId={brandId}
                   assets={displayedAssets}
                   showBoundingBoxes={showBoundingBoxes}
@@ -978,19 +1175,9 @@ export function LibraryViewer({
                   loadingMore={loadingMore}
                   onOpenDetail={openDetail}
                   onSelectBin={onSelectRatioBin}
-                  onAssetChanged={() => {
-                    setAssetRevision((revision) => revision + 1);
-                    router.refresh();
-                  }}
+                  onAssetChanged={refreshAssets}
                   selectedAssetIds={selectedAssetIds}
-                  onToggleSelected={(asset) =>
-                    setSelectedAssetIds((current) => {
-                      const next = new Set(current);
-                      if (next.has(asset.id)) next.delete(asset.id);
-                      else next.add(asset.id);
-                      return next;
-                    })
-                  }
+                  onToggleSelected={toggleSelected}
                 />
               ) : (
                 <MediaGrid
@@ -1004,19 +1191,10 @@ export function LibraryViewer({
                   loadingMore={loadingMore}
                   previewFrame={initialBrowseQuery.previewFrame}
                   onOpenDetail={openDetail}
-                  onAssetChanged={() => {
-                    setAssetRevision((revision) => revision + 1);
-                    router.refresh();
-                  }}
+                  onAssetChanged={refreshAssets}
                   selectedAssetIds={selectedAssetIds}
-                  onToggleSelected={(asset) =>
-                    setSelectedAssetIds((current) => {
-                      const next = new Set(current);
-                      if (next.has(asset.id)) next.delete(asset.id);
-                      else next.add(asset.id);
-                      return next;
-                    })
-                  }
+                  onToggleSelected={toggleSelected}
+                  {...gridCardProps}
                 />
               )}
             </div>
@@ -1041,12 +1219,9 @@ export function LibraryViewer({
               previewFrame={initialBrowseQuery.previewFrame}
               onDeepLinkChange={onDeepLinkChange}
               onClose={closeDetail}
-              onAssetChanged={() => {
-                // The grid re-seeds from the RSC; the board holds its own fetch,
-                // so it needs an explicit revision bump to re-read the lanes.
-                setAssetRevision((n) => n + 1);
-                router.refresh();
-              }}
+              onAssetChanged={refreshAssets}
+              onPrev={previousAsset ? () => openDetail(previousAsset) : undefined}
+              onNext={nextAsset ? () => openDetail(nextAsset) : undefined}
             />
 
             {/* Full-area drop overlay */}

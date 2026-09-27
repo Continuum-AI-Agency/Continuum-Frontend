@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import { createHash } from 'node:crypto';
 
-import { completeMcpUploadIntent, uploadMediaAsset } from './uploadMediaAsset';
+import {
+  completeMcpUploadIntent,
+  LIBRARY_EFFECTIVE_UPLOAD_CAP_BYTES,
+  uploadMediaAsset,
+  uploadSizeRefusal,
+} from './uploadMediaAsset';
 
 type InvokeResult = { data?: unknown; error?: unknown };
 
@@ -314,16 +319,82 @@ describe('uploadMediaAsset', () => {
     expect('checksum' in (register ?? {})).toBe(false);
   });
 
-  it('rejects an uppercase .AEP above the 5 GB object limit before signing', async () => {
+  it('rejects a file over the project-global storage cap before any network call', async () => {
     const calls: string[] = [];
     const client = makeClient({ calls });
     const aep = new File(['stub'], 'Campaign.AEP', { type: '' });
-    Object.defineProperty(aep, 'size', { value: 5 * 1024 * 1024 * 1024 + 1 });
+    Object.defineProperty(aep, 'size', { value: 600 * 1024 * 1024 });
 
     await expect(
       uploadMediaAsset({ file: aep, brandId: 'b1' }, { createClient: () => client }),
-    ).rejects.toThrow('file_too_large');
+    ).rejects.toThrow('Campaign.AEP is 600 MB — uploads are capped at 500 MB right now.');
     expect(calls).toEqual([]);
+  });
+
+  it('reads storage refusing the object size as the same cap sentence', async () => {
+    const calls: string[] = [];
+    const client = makeClient({
+      calls,
+      upload: { error: { message: 'The object exceeded the maximum allowed size' } },
+    });
+
+    await expect(
+      uploadMediaAsset({ file: pngFile(), brandId: 'b1' }, { createClient: () => client }),
+    ).rejects.toThrow('photo.png is 0 MB — uploads are capped at 500 MB right now.');
+  });
+
+  it('maps a TUS 413 to the cap sentence', async () => {
+    const client = makeClient({ calls: [] });
+    const video = new File(['frames'], 'long.mp4', { type: 'video/mp4' });
+    Object.defineProperty(video, 'size', { value: 40 * 1024 * 1024 });
+
+    await expect(
+      uploadMediaAsset(
+        { file: video, brandId: 'b1' },
+        {
+          createClient: () => client,
+          supabaseUrl: 'https://db.test',
+          resumableUpload: async () => {
+            throw new Error('resumable upload creation failed (413)');
+          },
+        },
+      ),
+    ).rejects.toThrow('long.mp4 is 40 MB — uploads are capped at 500 MB right now.');
+  });
+
+  it('sends a video bigger than one chunk through the resumable path so it can pause', async () => {
+    const calls: string[] = [];
+    const client = makeClient({ calls });
+    const video = new File(['frames'], 'clip.mp4', { type: 'video/mp4' });
+    Object.defineProperty(video, 'size', { value: 40 * 1024 * 1024 });
+    Object.defineProperty(video, 'arrayBuffer', { value: async () => new ArrayBuffer(0) });
+    const resumable: unknown[] = [];
+
+    await uploadMediaAsset(
+      { file: video, brandId: 'b1' },
+      {
+        createClient: () => client,
+        supabaseUrl: 'https://db.test',
+        probeDuration: async () => null,
+        attachPoster: async () => null,
+        resumableUpload: async (params) => {
+          resumable.push(params.objectPath);
+          return { uploadUrl: 'https://db.test/upload/id' };
+        },
+      },
+    );
+
+    expect(resumable).toEqual([VALID_TICKET.path]);
+    expect(calls).not.toContain('uploadToSignedUrl');
+  });
+
+  it('refuses only above the cap', () => {
+    expect(
+      uploadSizeRefusal({ name: 'a.mp4', size: LIBRARY_EFFECTIVE_UPLOAD_CAP_BYTES }),
+    ).toBeNull();
+    expect(uploadSizeRefusal({ name: 'a.mp4', size: LIBRARY_EFFECTIVE_UPLOAD_CAP_BYTES + 1 })).toBe(
+      'a.mp4 is 500 MB — uploads are capped at 500 MB right now.',
+    );
   });
 
   it('throws when the sign response is not a valid ticket', async () => {

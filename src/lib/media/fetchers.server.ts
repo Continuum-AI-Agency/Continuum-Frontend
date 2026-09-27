@@ -13,6 +13,7 @@ import {
   collectionVisibilitySchema,
   DEFAULT_LIBRARY_SORT,
 } from '@continuum/contracts';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveFieldFilterAssetIds } from '@/lib/library/customFields.server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { buildCarousel, carouselSignablePaths, EXCLUDE_CAROUSEL_SLIDES_FILTER } from './carousel';
@@ -167,6 +168,7 @@ export async function fetchMediaAssets(
 
 export async function fetchMediaCollections(brandId: string): Promise<MediaCollection[]> {
   const client = await createSupabaseServerClient();
+  await ensureLibrarySystemViews(client, brandId);
 
   const { data, error } = await mediaSchema(client)
     .from('collections')
@@ -211,4 +213,19 @@ export async function fetchStorageUsedBytes(brandId: string): Promise<number> {
     console.error('[media/fetchers] storage usage query failed', error);
     return 0;
   }
+}
+
+/**
+ * Seeds the brand's system views (Needs my review, Assigned to me, Approved, Forge
+ * renders) the first time its collections are listed. Idempotent in SQL; a failure
+ * only means the views appear on the next listing, so it never fails the read.
+ */
+export async function ensureLibrarySystemViews(
+  client: SupabaseClient,
+  brandId: string,
+): Promise<void> {
+  const { error } = await mediaSchema(client).rpc('ensure_library_system_views', {
+    p_brand_id: brandId,
+  });
+  if (error) console.warn('[media/fetchers] system view seed failed', error.message);
 }

@@ -3,11 +3,13 @@
 import type { LibraryAspectRatioBin, LibraryPreviewFrame, MediaAsset } from '@continuum/contracts';
 import { libraryAspectRatioBin, placementPreviewCrops } from '@continuum/contracts';
 import {
+  AudioLines,
   Check,
   ChevronLeft,
   ChevronRight,
   Copy,
   FileIcon,
+  FileText,
   ImageOff,
   Layers,
   Loader2,
@@ -17,11 +19,12 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import Image from 'next/image';
-import { useEffect, useRef, useState } from 'react';
+import { type DragEvent, useEffect, useRef, useState } from 'react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { ViralityScoreBadge } from '@/components/virality/ViralityScoreBadge';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import { formatUsesCompanionPreview } from '@/lib/library/previewPlayable';
+import { normalizeReviewStatus, REVIEW_STATUS_META } from '@/lib/library/reviewStatus';
 import { seekVideoPreviewFrame } from '@/lib/library/videoPoster';
 import { SOURCE_LABEL } from '@/lib/media/filters';
 import { cn } from '@/lib/utils';
@@ -36,6 +39,20 @@ import { useClipQualityPreference } from './hooks/useClipQualityPreference';
 import { useGenerateClips } from './hooks/useGenerateClips';
 import { MediaBoundingBoxes } from './MediaBoundingBoxes';
 import { QuickReformatMenu } from './reformat/QuickReformatMenu';
+import {
+  assetDragInFlightIncludes,
+  endAssetDrag,
+  isAssetDrag,
+  readAssetDrag,
+} from './views/assetDrag';
+import {
+  type CardViewOptions,
+  cardAspectClass as chosenAspectClass,
+  formatDurationMs,
+  visibleCardFields,
+} from './views/cardOptions';
+
+export type CardFieldValue = { key: string; label: string; value: string };
 
 type Props = {
   brandId: string;
@@ -49,6 +66,14 @@ type Props = {
   onToggleSelected?: (asset: MediaAsset) => void;
   /** Cover-crop into a device frame. Native uses the asset's own ratio. */
   previewFrame?: LibraryPreviewFrame;
+  /** The user's saved card presentation (size is the grid's concern, not the card's). */
+  card?: CardViewOptions;
+  /** Values of the custom fields the user chose to show, already formatted. */
+  customFieldValues?: CardFieldValue[];
+  /** Makes the card draggable; the caller writes the drag payload (it knows the selection). */
+  onDragAssetStart?: (event: DragEvent<HTMLElement>, asset: MediaAsset) => void;
+  /** Makes the card a drop target: other cards dropped here stack onto it as new versions. */
+  onStackDrop?: (target: MediaAsset, sourceAssetIds: string[]) => void;
 };
 
 const BADGE_BASE =
@@ -73,8 +98,14 @@ const FRAME_ASPECT_CLASS: Record<Exclude<LibraryPreviewFrame, 'native'>, string>
   landscape: 'aspect-video',
 };
 
-function cardAspectClass(asset: MediaAsset, previewFrame: LibraryPreviewFrame): string {
+function cardAspectClass(
+  asset: MediaAsset,
+  previewFrame: LibraryPreviewFrame,
+  card: CardViewOptions | undefined,
+): string {
   if (previewFrame !== 'native') return FRAME_ASPECT_CLASS[previewFrame];
+  const chosen = chosenAspectClass(card?.aspect);
+  if (chosen) return chosen;
   const bin = asset.aspectRatio ?? libraryAspectRatioBin(asset.width, asset.height) ?? 'other';
   return NATIVE_ASPECT_CLASS[bin];
 }
@@ -252,6 +283,35 @@ function Thumbnail({
         className="object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
         onError={() => setMediaError(true)}
       />
+    );
+  }
+
+  if (asset.mimeType === 'application/pdf') {
+    return (
+      <div className="flex size-full flex-col items-center justify-center gap-1.5 bg-muted px-3">
+        <FileText className="size-8 text-muted-foreground/50" strokeWidth={1.5} aria-hidden />
+        <span className="rounded border border-border bg-background px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-muted-foreground">
+          PDF
+        </span>
+        <span className="max-w-full truncate text-2xs text-muted-foreground/70">
+          {asset.fileName}
+        </span>
+      </div>
+    );
+  }
+
+  if (asset.kind === 'audio') {
+    const duration = formatDurationMs(asset.durationMs);
+    return (
+      <div className="flex size-full flex-col items-center justify-center gap-1.5 bg-muted px-3">
+        <AudioLines className="size-8 text-muted-foreground/50" strokeWidth={1.5} aria-hidden />
+        {duration ? (
+          <span className="text-2xs tabular-nums text-muted-foreground">{duration}</span>
+        ) : null}
+        <span className="max-w-full truncate text-2xs text-muted-foreground/70">
+          {asset.fileName}
+        </span>
+      </div>
     );
   }
 
@@ -458,7 +518,7 @@ function MediaCardHoverDetail({
     <HoverCardContent side="right" align="start" className="z-40 w-80">
       <div className="flex flex-col gap-2.5">
         <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
-          {asset.signedUrl && asset.kind === 'image' ? (
+          {asset.signedUrl && asset.kind === 'image' && asset.mimeType !== 'application/pdf' ? (
             <Image
               src={asset.signedUrl}
               alt={asset.title ?? asset.fileName}
@@ -592,8 +652,23 @@ export function MediaCard({
   selected = false,
   onToggleSelected,
   previewFrame = 'native',
+  card,
+  customFieldValues = [],
+  onDragAssetStart,
+  onStackDrop,
 }: Props) {
   const reduceMotion = useReducedMotion();
+  const [stackTarget, setStackTarget] = useState(false);
+  const fields = visibleCardFields(card);
+  const reviewStatus = normalizeReviewStatus(asset.reviewStatus);
+  const duration = formatDurationMs(asset.durationMs);
+  const metaFacts = [
+    fields.includes('size') && asset.sizeBytes ? formatBytes(asset.sizeBytes) : null,
+    fields.includes('duration') ? duration : null,
+    fields.includes('review') && reviewStatus !== 'none'
+      ? REVIEW_STATUS_META[reviewStatus].label
+      : null,
+  ].filter((fact): fact is string => !!fact);
   const { generate, isGenerating, progress } = useGenerateClips();
   const { quality, setQuality } = useClipQualityPreference();
   const { captionsEnabled, setCaptionsEnabled } = useClipCaptionPreference();
@@ -628,8 +703,43 @@ export function MediaCard({
     setHoverDetailOpen(open);
   };
 
+  // A card never accepts itself — including when it is part of the dragged selection.
+  const acceptsStack = (event: DragEvent<HTMLElement>) =>
+    !!onStackDrop && isAssetDrag(event) && !assetDragInFlightIncludes(asset.id);
+
   return (
-    <>
+    // biome-ignore lint/a11y/noStaticElementInteractions: drag source/target wrapper; the card inside is the keyboard-accessible control
+    <div
+      data-testid="media-card"
+      data-asset-id={asset.id}
+      data-drop-target={stackTarget ? 'stack' : undefined}
+      className="relative"
+      draggable={!!onDragAssetStart}
+      onDragStart={onDragAssetStart ? (event) => onDragAssetStart(event, asset) : undefined}
+      onDragEnd={endAssetDrag}
+      onDragOver={(event) => {
+        if (!acceptsStack(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        setStackTarget(true);
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setStackTarget(false);
+        }
+      }}
+      onDrop={(event) => {
+        setStackTarget(false);
+        if (!onStackDrop) return;
+        const payload = readAssetDrag(event);
+        if (!payload || payload.brandId !== brandId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        endAssetDrag();
+        const sources = payload.assetIds.filter((id) => id !== asset.id);
+        if (sources.length > 0) onStackDrop(asset, sources);
+      }}
+    >
       <HoverCard
         open={hoverDetailOpen}
         onOpenChange={handleHoverDetailOpenChange}
@@ -669,9 +779,10 @@ export function MediaCard({
               transition={{ type: 'spring', duration: 0.3, bounce: 0 }}
             >
               <div
+                data-card-media
                 className={cn(
                   'relative w-full overflow-hidden bg-muted',
-                  cardAspectClass(asset, previewFrame),
+                  cardAspectClass(asset, previewFrame, card),
                 )}
               >
                 {previewFrame !== 'native' &&
@@ -750,9 +861,11 @@ export function MediaCard({
               </div>
 
               <div className="flex flex-col gap-1.5 p-3">
-                <p className="truncate text-sm font-medium leading-snug text-balance">
-                  {asset.title ?? asset.fileName}
-                </p>
+                {fields.includes('title') ? (
+                  <p className="truncate text-sm font-medium leading-snug text-balance">
+                    {asset.title ?? asset.fileName}
+                  </p>
+                ) : null}
 
                 {asset.description && (
                   <div className="flex items-start gap-1">
@@ -763,8 +876,23 @@ export function MediaCard({
                   </div>
                 )}
 
+                {metaFacts.length > 0 ? (
+                  <p className="truncate text-xs tabular-nums text-muted-foreground">
+                    {metaFacts.join(' · ')}
+                  </p>
+                ) : null}
+
+                {customFieldValues.map((entry) => (
+                  <p key={entry.key} className="truncate text-xs text-muted-foreground">
+                    <span className="text-muted-foreground/60">{entry.label} </span>
+                    {entry.value || '—'}
+                  </p>
+                ))}
+
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs tabular-nums text-muted-foreground/60">{formattedDate}</p>
+                  <p className="text-xs tabular-nums text-muted-foreground/60">
+                    {fields.includes('created') ? formattedDate : null}
+                  </p>
                   {canGenerateClips && !activeProgress && (
                     <div className="flex items-center gap-1.5">
                       <ClipCaptionToggle
@@ -799,6 +927,11 @@ export function MediaCard({
         />
         <MediaCardHoverDetail asset={asset} formattedDate={formattedDate} />
       </HoverCard>
-    </>
+      {stackTarget ? (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-primary/10 p-3 text-center text-xs font-medium text-primary backdrop-blur-[1px]">
+          Drop to stack as a new version
+        </div>
+      ) : null}
+    </div>
   );
 }

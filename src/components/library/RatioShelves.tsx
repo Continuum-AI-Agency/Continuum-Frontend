@@ -7,7 +7,7 @@ import {
   libraryAspectRatioBin,
   type MediaAsset,
 } from '@continuum/contracts';
-import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
+import type { ComponentProps } from 'react';
 import { MediaGrid } from './MediaGrid';
 
 function shelfFor(asset: MediaAsset): LibraryAspectRatioBin {
@@ -23,19 +23,7 @@ export function groupAssetsByRatio(
   })).filter((group) => group.assets.length > 0);
 }
 
-type Props = {
-  brandId: string;
-  assets: MediaAsset[];
-  showBoundingBoxes?: boolean;
-  captionStyle?: CaptionStyle;
-  emptyHint?: string;
-  onLoadMore?: () => void;
-  hasMore?: boolean;
-  loadingMore?: boolean;
-  onOpenDetail?: (asset: MediaAsset) => void;
-  onAssetChanged?: () => void;
-  selectedAssetIds?: ReadonlySet<string>;
-  onToggleSelected?: (asset: MediaAsset) => void;
+type Props = ComponentProps<typeof MediaGrid> & {
   onSelectBin?: (bin: LibraryAspectRatioBin) => void;
 };
 

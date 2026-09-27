@@ -3,9 +3,10 @@
 // Version history rail for the asset detail modal: horizontal strip of version
 // cards (thumbnail, vN badge, comment count, author, relative time), "New
 // version" upload (sign → direct-to-storage PUT → register), rollback with
-// confirm, and a side-by-side compare dialog. Clicking a card puts that
-// version's bytes on the stage — a read-only look, deliberately distinct from
-// rollback, which is still an explicit confirmed write that moves the head.
+// confirm, and the synced compare dialog (compare/VersionCompareDialog). Clicking
+// a card puts that version's bytes on the stage — a read-only look, deliberately
+// distinct from rollback, which is still an explicit confirmed write that moves
+// the head.
 //
 // The versions list itself lives in the modal (see useAssetVersions): the stage
 // and the comment partition need it too, so the rail no longer owns the fetch.
@@ -35,7 +36,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/toast-imperative';
 import {
@@ -45,6 +45,8 @@ import {
 } from '@/lib/library/versions';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
+import { VersionCompareDialog } from './compare/VersionCompareDialog';
+import { resolveStageMedia } from './stageMedia';
 
 export type VersionRailProps = {
   brandId: string;
@@ -451,38 +453,27 @@ export function VersionRail({
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog
-        open={compareTarget !== null}
-        onOpenChange={(open) => (!open ? setCompareTarget(null) : undefined)}
-      >
-        <DialogContent className="max-w-3xl">
-          <DialogTitle className="text-sm">
-            Compare v{compareTarget?.versionNumber} with current
-          </DialogTitle>
-          {compareTarget ? (
-            <div className="grid grid-cols-2 gap-3">
-              {[toDisplay(compareTarget, 0), headDisplay].map((side) => (
-                <figure key={side.key} className="space-y-1.5">
-                  <figcaption className="text-xs text-muted-foreground">
-                    v{side.versionNumber}
-                    {side.isHead ? ' · Current' : ''} · {formatRelativeTime(side.createdAt)}
-                  </figcaption>
-                  {side.signedUrl && side.mimeType.startsWith('video/') ? (
-                    // biome-ignore lint/a11y/useMediaCaption: comparing the user's own uploaded cuts; no caption track exists
-                    <video
-                      src={side.signedUrl}
-                      controls
-                      className="max-h-80 w-full rounded bg-muted object-contain"
-                    />
-                  ) : (
-                    <VersionPreview version={side} className="h-64 w-full" />
-                  )}
-                </figure>
-              ))}
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      {compareTarget ? (
+        <VersionCompareDialog
+          open
+          onOpenChange={(open) => (!open ? setCompareTarget(null) : undefined)}
+          title={`Compare v${compareTarget.versionNumber} with current`}
+          a={{
+            label: `v${compareTarget.versionNumber}`,
+            caption: `v${compareTarget.versionNumber} · ${formatRelativeTime(compareTarget.createdAt)}`,
+            media: resolveStageMedia({ asset, viewedVersion: compareTarget }),
+          }}
+          b={{
+            label: `v${headDisplay.versionNumber}`,
+            caption: `v${headDisplay.versionNumber} · Current · ${formatRelativeTime(headDisplay.createdAt)}`,
+            media: resolveStageMedia({
+              asset,
+              viewedVersion: null,
+              headVersion: versions?.find((version) => version.isHead) ?? null,
+            }),
+          }}
+        />
+      ) : null}
     </section>
   );
 }

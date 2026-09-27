@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { MediaCard } from './MediaCard';
+import { endAssetDrag, writeAssetDrag } from './views/assetDrag';
 
 // Airtable #299's DoD names TWO surfaces — the detail view and the grid card. This
 // covers the card half: the control has to be ON THE RENDERED CARD, for image and
@@ -17,7 +18,10 @@ import { MediaCard } from './MediaCard';
   disconnect() {}
 };
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  endAssetDrag();
+});
 
 function libraryAsset(overrides: Partial<MediaAsset> = {}): MediaAsset {
   return {
@@ -126,5 +130,133 @@ describe('MediaCard thumbnail', () => {
     );
     fireEvent.error(screen.getByAltText('Hero shot'));
     expect(imageSrc()).toBe('https://cdn.test/hero.jpg');
+  });
+});
+
+describe('MediaCard non-visual kinds', () => {
+  it('paints an audio card with its duration instead of an image', () => {
+    const { container } = mount(
+      <MediaCard
+        brandId="brand-1"
+        asset={libraryAsset({
+          kind: 'audio',
+          fileName: 'voiceover.mp3',
+          mimeType: 'audio/mpeg',
+          durationMs: 95_000,
+          signedUrl: 'https://cdn.test/voiceover.mp3',
+        })}
+      />,
+    );
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.getByText('1:35')).not.toBeNull();
+  });
+
+  it('paints a PDF as a document card, never as a broken image', () => {
+    const { container } = mount(
+      <MediaCard
+        brandId="brand-1"
+        asset={libraryAsset({
+          kind: 'image',
+          fileName: 'brief.pdf',
+          mimeType: 'application/pdf',
+          signedUrl: 'https://cdn.test/brief.pdf',
+        })}
+      />,
+    );
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.getByText('PDF')).not.toBeNull();
+  });
+});
+
+describe('MediaCard card options', () => {
+  it('shows the title and created date by default', () => {
+    mount(<MediaCard brandId="brand-1" asset={libraryAsset({ sizeBytes: 2048 })} />);
+    expect(screen.queryByText('Hero shot')).not.toBeNull();
+    expect(screen.queryByText('2.0 KB')).toBeNull();
+  });
+
+  it('shows exactly the chosen fields, including custom field values', () => {
+    mount(
+      <MediaCard
+        brandId="brand-1"
+        asset={libraryAsset({ sizeBytes: 2048, reviewStatus: 'approved' })}
+        card={{ fields: ['size', 'review'] }}
+        customFieldValues={[{ key: 'f1', label: 'Channel', value: 'TikTok' }]}
+      />,
+    );
+    expect(screen.queryByText('Hero shot')).toBeNull();
+    expect(screen.queryByText('2.0 KB · Approved')).not.toBeNull();
+    expect(screen.queryByText('TikTok')).not.toBeNull();
+  });
+});
+
+describe('MediaCard drag to stack', () => {
+  function fakeDataTransfer(): DataTransfer {
+    const store = new Map<string, string>();
+    return {
+      setData: (type: string, value: string) => store.set(type, value),
+      getData: (type: string) => store.get(type) ?? '',
+      get types() {
+        return [...store.keys()];
+      },
+      effectAllowed: 'none',
+      dropEffect: 'none',
+    } as unknown as DataTransfer;
+  }
+
+  const cardRoot = () => screen.getByTestId('media-card');
+
+  it('highlights as a stack target and hands the dropped ids to onStackDrop', () => {
+    const drops: { target: string; sources: string[] }[] = [];
+    mount(
+      <MediaCard
+        brandId="brand-1"
+        asset={libraryAsset()}
+        onStackDrop={(target, sources) => drops.push({ target: target.id, sources })}
+      />,
+    );
+    expect(cardRoot().getAttribute('data-asset-id')).toBe('asset-1');
+
+    const dataTransfer = fakeDataTransfer();
+    writeAssetDrag({ dataTransfer }, 'brand-1', ['asset-2', 'asset-3']);
+    fireEvent.dragOver(cardRoot(), { dataTransfer });
+    expect(cardRoot().getAttribute('data-drop-target')).toBe('stack');
+    expect(screen.getByText('Drop to stack as a new version')).not.toBeNull();
+
+    fireEvent.drop(cardRoot(), { dataTransfer });
+    expect(drops).toEqual([{ target: 'asset-1', sources: ['asset-2', 'asset-3'] }]);
+    expect(cardRoot().getAttribute('data-drop-target')).toBeNull();
+  });
+
+  it('never accepts itself', () => {
+    const drops: string[][] = [];
+    mount(
+      <MediaCard
+        brandId="brand-1"
+        asset={libraryAsset()}
+        onStackDrop={(_target, sources) => drops.push(sources)}
+      />,
+    );
+    const dataTransfer = fakeDataTransfer();
+    writeAssetDrag({ dataTransfer }, 'brand-1', ['asset-1']);
+    fireEvent.dragOver(cardRoot(), { dataTransfer });
+    expect(cardRoot().getAttribute('data-drop-target')).toBeNull();
+    fireEvent.drop(cardRoot(), { dataTransfer });
+    expect(drops).toEqual([]);
+  });
+
+  it('ignores a drag from another brand', () => {
+    const drops: string[][] = [];
+    mount(
+      <MediaCard
+        brandId="brand-1"
+        asset={libraryAsset()}
+        onStackDrop={(_target, sources) => drops.push(sources)}
+      />,
+    );
+    const dataTransfer = fakeDataTransfer();
+    writeAssetDrag({ dataTransfer }, 'brand-2', ['asset-9']);
+    fireEvent.drop(cardRoot(), { dataTransfer });
+    expect(drops).toEqual([]);
   });
 });
