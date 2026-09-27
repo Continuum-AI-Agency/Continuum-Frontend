@@ -136,6 +136,8 @@ describe('Prueba — the 25 Sep cycle: creative, budget and vary-the-winner', ()
       estimate: 19.56,
       target: 25,
       results: 24,
+      // Today's prod rows carry no `evidence.winner`: nothing extra is drawn.
+      winner: null,
     });
     expect(card?.figure).toEqual({
       value: 19.56,
@@ -143,6 +145,35 @@ describe('Prueba — the 25 Sep cycle: creative, budget and vary-the-winner', ()
       label: 'per lead · est.',
       signed: false,
     });
+  });
+});
+
+describe('Prueba — vary-the-winner once C2 carries its winner', () => {
+  const cards = news('pruebaCycleWinner');
+
+  it('places the winning ad at 29.10 on the ad set’s 13.15–30.53 range, against the 25 target', () => {
+    const card = cards[2];
+    expect(visualOf(card, 'range')).toEqual({
+      kind: 'range',
+      low: 13.15,
+      high: 30.53,
+      estimate: 19.56,
+      target: 25,
+      results: 24,
+      winner: {
+        adId: '120210000000000077',
+        adName: 'AV CAMACHO // AGOSTO - LKL - Copy',
+        costPerResult: 29.1,
+      },
+    });
+    // The winner is a mark on the ad set's range, not the card's figure: that stays the
+    // ad set's estimate, and so does the tone.
+    expect(card?.figure?.value).toBe(19.56);
+    expect(card?.tone).toBe('primary');
+  });
+
+  it('keeps the other two cards exactly as they were', () => {
+    expect(cards.map((card) => card.visual.kind)).toEqual(['ctr_step', 'budget_move', 'range']);
   });
 });
 
@@ -242,6 +273,7 @@ describe('the no-data rule', () => {
       estimate: 60,
       target: 40,
       results: 12,
+      winner: null,
     });
     expect(toneForVisual(visual)).toBe('warn');
   });

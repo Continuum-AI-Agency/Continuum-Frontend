@@ -123,6 +123,29 @@ describe('the figures each card draws', () => {
     for (const figure of ['13.15', '30.53', 'est. 19.56', 'target 25.00']) {
       expect(range?.textContent).toContain(figure);
     }
+    // No `evidence.winner` on this row: no winner mark, no invented figure.
+    expect(range?.textContent).not.toContain('winning ad');
+    expect(range?.querySelector('[data-testid="band-winner"]')).toBeNull();
+  });
+
+  it('Prueba with the winner: a labelled mark at 29.10 inside 13.15–30.53, the ad named in its tooltip', () => {
+    const range = cardsOf('pruebaCycleWinner').map(bandOf)[2];
+    expect(range?.getAttribute('data-visual')).toBe('range');
+    for (const figure of ['13.15', '30.53', 'est. 19.56', 'target 25.00', 'winning ad 29.10']) {
+      expect(range?.textContent).toContain(figure);
+    }
+    const mark = range?.querySelector('[data-testid="band-winner"]');
+    expect(mark?.getAttribute('title')).toBe('AV CAMACHO // AGOSTO - LKL - Copy · 29.10 per lead');
+    const aria = range?.querySelector('[data-testid="news-visual"]')?.getAttribute('aria-label');
+    expect(aria).toContain('winning ad AV CAMACHO // AGOSTO - LKL - Copy at 29.10');
+    // Placed between the ad set's own bounds, right of the 25 target.
+    const left = (node: Element | null | undefined) =>
+      Number.parseFloat((node as HTMLElement | null)?.style.left ?? 'NaN');
+    const tick = range?.querySelector('[data-testid="band-winner-tick"]');
+    const x = Number(tick?.getAttribute('x1'));
+    expect(x).toBeGreaterThan(0);
+    expect(x).toBeLessThan(100);
+    expect(left(mark)).toBeGreaterThan(0);
   });
 
   it('MENSAJES: cost per conversation across the 12 ad sets against the 30 target', () => {

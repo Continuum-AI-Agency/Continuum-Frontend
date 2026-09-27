@@ -120,10 +120,48 @@ function pruebaCycle(): Body {
   return body as unknown as Body;
 }
 
+/** The same cycle as the engine writes it once C2 carries its winner (`evidence.winner`): the
+ *  winning ad's own 29.10 per lead against its sibling's 163.68, the figures the reason quotes. */
+function pruebaCycleWinner(): Body {
+  const body = pruebaCycle() as { recommendations: Array<Record<string, unknown>> };
+  const vary = body.recommendations.find((rec) => rec.id === VARY);
+  if (!vary) throw new Error('prueba cycle lost its vary-the-winner recommendation');
+  Object.assign(vary, {
+    trigger: 'C2_creative_winner',
+    ad_id: '120210000000000077',
+    evidence: {
+      metric: 'cpp',
+      value: 29.1,
+      comparator: 'vs 164 (5.63x) for a sibling creative, same audience and budget',
+      threshold: null,
+      window: 'd14',
+      estImpactPerDay: null,
+      headline: {
+        kind: 'efficiency',
+        value: 82,
+        unit: 'percent',
+        label: 'cheaper per result than a peer',
+        from: 29.1,
+        to: 163.68,
+      },
+      winner: {
+        ad_id: '120210000000000077',
+        ad_name: 'AV CAMACHO // AGOSTO - LKL - Copy',
+        cost_per_result: 29.1,
+        results: 26,
+        spend: 756.6,
+      },
+      source: 'engine',
+    },
+  });
+  return body as unknown as Body;
+}
+
 export const REAL_BODIES = {
   formularios: formularios as unknown as Body,
   prueba: prueba as unknown as Body,
   pruebaCycle: pruebaCycle(),
+  pruebaCycleWinner: pruebaCycleWinner(),
   mensajes: mensajes as unknown as Body,
   tours: tours as unknown as Body,
 } as const;

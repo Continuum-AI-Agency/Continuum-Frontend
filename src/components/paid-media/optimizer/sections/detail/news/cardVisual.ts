@@ -13,7 +13,8 @@
 //   pause · zero results      spend as blocks of "one result at target" over a zero baseline
 //   creative · fatigue        the 14-day CTR level with the last days stepping down
 //   budget · move             from → to columns, with what the solver wanted and the cap
-//   interval                  the ad set's own range, its estimate and the target
+//   interval                  the ad set's own range, its estimate and the target — and the
+//                             winning ad on it, when the engine named one (`evidence.winner`)
 //   nothing to change         cost per result against the target, the area over it shaded
 //   nothing to plot           a neutral strip of what the cycle knows, naming what is missing
 //
@@ -22,11 +23,12 @@
 // never a chart of a different quantity, and never the engine's formula string. Null is
 // unknown, never zero — `measureOf` / `boughtAnything` decide what a zero means.
 
-import type {
-  BriefCandidate,
-  BriefGrowth,
-  CycleItemRow,
-  ParsedCycleRunReport,
+import {
+  type BriefCandidate,
+  type BriefGrowth,
+  type CycleItemRow,
+  type ParsedCycleRunReport,
+  recommendationWinnerOf,
 } from '@continuum/contracts';
 import { boughtAnything, costOf, measureOf } from '../heroChart';
 import type { RecapDay } from '../recapModel';
@@ -44,6 +46,14 @@ export type CostPoint = { label: string; cost: number };
 export type StripCell =
   | { kind: 'money'; value: number; label: string }
   | { kind: 'count'; value: number; label: string };
+
+/** The winning ad a "make variations of the winner" card places on its ad set's range. */
+export type RangeWinner = {
+  adId: string;
+  adName: string | null;
+  /** The ad's OWN cost per result — not the ad set's, which is what the range bounds. */
+  costPerResult: number;
+};
 
 export type CardVisual =
   | {
@@ -95,6 +105,8 @@ export type CardVisual =
       estimate: number | null;
       target: number | null;
       results: number | null;
+      /** From the engine's `evidence.winner` (C2); null when the row carries none. */
+      winner: RangeWinner | null;
     }
   | {
       kind: 'cost_line';
@@ -227,8 +239,23 @@ function budgetMoveOf(item: CycleItemRow | null): CardVisual | null {
   return { kind: 'budget_move', from: round2(from), to: round2(to), wanted, cap };
 }
 
+/** The winning ad the engine named in structured evidence — never read out of the prose. */
+function winnerOf(rec: RecommendationRow | null): RangeWinner | null {
+  const winner = recommendationWinnerOf(rec?.evidence);
+  if (!winner) return null;
+  return {
+    adId: winner.ad_id,
+    adName: winner.ad_name,
+    costPerResult: round2(winner.cost_per_result),
+  };
+}
+
 /** The engine's own interval on the ad set's cost per result, when it bounded one. */
-function rangeOf(item: CycleItemRow | null, target: number | null): CardVisual | null {
+function rangeOf(
+  item: CycleItemRow | null,
+  target: number | null,
+  winner: RangeWinner | null,
+): CardVisual | null {
   const measured = measureOf(item?.diagnostics?.ci);
   if (!measured || measured.low == null || measured.high == null) return null;
   return {
@@ -238,6 +265,7 @@ function rangeOf(item: CycleItemRow | null, target: number | null): CardVisual |
     estimate: measured.costPerResult != null ? round2(measured.costPerResult) : null,
     target,
     results: measured.results,
+    winner,
   };
 }
 
@@ -246,10 +274,12 @@ function cycleRow(
   module: BriefCandidate['module'],
   item: CycleItemRow | null,
   target: number | null,
+  rec: RecommendationRow | null,
 ): CardVisual | null {
+  const winner = winnerOf(rec);
   return module === 'budget'
-    ? (budgetMoveOf(item) ?? rangeOf(item, target))
-    : (rangeOf(item, target) ?? budgetMoveOf(item));
+    ? (budgetMoveOf(item) ?? rangeOf(item, target, winner))
+    : (rangeOf(item, target, winner) ?? budgetMoveOf(item));
 }
 
 /** Step 3: what the cycle holds, named by what is missing. */
@@ -339,7 +369,7 @@ export function visualForCard(args: CardVisualArgs): CardVisual {
   const rec = recommendationFor(candidate, recommendations);
   return (
     (candidate.module === 'budget' ? budgetMoveOf(item) : ownEvidence(candidate, rec, item)) ??
-    cycleRow(candidate.module, item, target) ??
+    cycleRow(candidate.module, item, target, rec) ??
     strip({ item, items, growth, resultLabel })
   );
 }

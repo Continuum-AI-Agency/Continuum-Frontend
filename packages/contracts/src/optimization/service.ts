@@ -876,6 +876,37 @@ export const RecommendationEvidenceSchema = z
   .loose();
 export type RecommendationEvidence = z.infer<typeof RecommendationEvidenceSchema>;
 
+/** The winning ad behind a "make variations of the winner" recommendation (engine rule C2),
+ *  carried as `evidence.winner`. The ad's OWN cost per result over the standing's window —
+ *  not the ad set's, which is what the cycle's interval bounds — so a card can place the ad
+ *  on its ad set's range without reading the prose `reason`.
+ *
+ *  Priced or absent, never zero: a winner that bought nothing has no cost per result, and
+ *  the engine omits the field rather than write a 0 a card would draw as a real figure. */
+export const RecommendationWinnerSchema = z.object({
+  ad_id: z.string().min(1),
+  ad_name: z.string().nullable(),
+  cost_per_result: z.number().finite().positive(),
+  results: z.number().finite().positive(),
+  spend: z.number().finite().positive(),
+});
+export type RecommendationWinner = z.infer<typeof RecommendationWinnerSchema>;
+
+/**
+ * The winner an evidence object carries, or null.
+ *
+ * Parsed at the read, not in `RecommendationEvidenceSchema`: evidence is `.loose()` so a new
+ * key reaches the queue with no migration, and a malformed winner must read as "no winner",
+ * never fail the whole report's parse.
+ */
+export function recommendationWinnerOf(evidence: unknown): RecommendationWinner | null {
+  if (!evidence || typeof evidence !== 'object') return null;
+  const raw = (evidence as { winner?: unknown }).winner;
+  if (raw == null) return null;
+  const parsed = RecommendationWinnerSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
+
 export const RecommendationRowSchema = z
   .object({
     id: z.string().uuid(),

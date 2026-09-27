@@ -58,6 +58,8 @@ function Label({
   anchor = 'above',
   tone = 'muted',
   strong = false,
+  hint,
+  testId = 'band-label',
   children,
 }: {
   x: number;
@@ -66,19 +68,24 @@ function Label({
   anchor?: Anchor;
   tone?: keyof typeof TEXT_TONE;
   strong?: boolean;
+  /** A tooltip. A label that carries one takes the pointer so the tooltip can show. */
+  hint?: string;
+  testId?: string;
   children: React.ReactNode;
 }) {
   return (
     <span
       className={cn(
-        'pointer-events-none absolute whitespace-nowrap font-mono tabular-nums leading-tight',
+        'absolute whitespace-nowrap font-mono tabular-nums leading-tight',
+        hint ? 'cursor-default' : 'pointer-events-none',
         strong ? 'font-semibold text-sm' : 'text-xs',
         TEXT_TONE[tone],
         ALIGN[align],
         ANCHOR[anchor],
       )}
-      data-testid="band-label"
+      data-testid={testId}
       style={{ left: pct(x), top: pct(y) }}
+      title={hint}
     >
       {children}
     </span>
@@ -380,8 +387,15 @@ function BudgetMove({
 function Range({
   visual,
   currency,
+  resultLabel,
 }: DrawArgs & { visual: Extract<CardVisual, { kind: 'range' }> }) {
-  const marks = [visual.low, visual.high, visual.target ?? visual.low];
+  const { winner } = visual;
+  const marks = [
+    visual.low,
+    visual.high,
+    visual.target ?? visual.low,
+    winner?.costPerResult ?? visual.low,
+  ];
   const lo = Math.min(...marks) * 0.75;
   const hi = Math.max(...marks) * 1.08;
   const x = (v: number) => ((v - lo) / (hi - lo)) * 100;
@@ -428,6 +442,18 @@ function Range({
             y2={86.8}
           />
         ) : null}
+        {winner ? (
+          <line
+            className="stroke-success"
+            data-testid="band-winner-tick"
+            strokeWidth={2}
+            style={CRISP}
+            x1={x(winner.costPerResult)}
+            x2={x(winner.costPerResult)}
+            y1={44}
+            y2={78.4}
+          />
+        ) : null}
       </Surface>
       <Label align="end" anchor="center" x={x(visual.low) - 1} y={71.2}>
         {formatCurrency(visual.low, currency)}
@@ -443,6 +469,19 @@ function Range({
       {visual.target != null ? (
         <Label align="middle" anchor="below" x={x(visual.target)} y={88}>
           target {formatCurrency(visual.target, currency)}
+        </Label>
+      ) : null}
+      {winner ? (
+        // Above the estimate's row, on whichever side of the tick has room.
+        <Label
+          align={x(winner.costPerResult) > 50 ? 'end' : 'start'}
+          hint={`${winner.adName ?? winner.adId} · ${formatCurrency(winner.costPerResult, currency)} per ${resultNoun(resultLabel)}`}
+          testId="band-winner"
+          tone="good"
+          x={x(winner.costPerResult) + (x(winner.costPerResult) > 50 ? 1 : -1)}
+          y={42.4}
+        >
+          winning ad {formatCurrency(winner.costPerResult, currency)}
         </Label>
       ) : null}
     </>
@@ -596,7 +635,11 @@ export function captionFor(
     case 'range':
       return `Cost per ${noun} between ${money(visual.low)} and ${money(visual.high)}${
         visual.estimate != null ? `, estimate ${money(visual.estimate)}` : ''
-      }${visual.target != null ? `, against a ${money(visual.target)} target` : ''}`;
+      }${visual.target != null ? `, against a ${money(visual.target)} target` : ''}${
+        visual.winner
+          ? `; winning ad ${visual.winner.adName ?? visual.winner.adId} at ${money(visual.winner.costPerResult)}`
+          : ''
+      }`;
     case 'cost_line':
       return `Cost per ${noun} across ${visual.points.length} ${visual.across === 'ad_sets' ? 'ad sets' : 'days'}${
         visual.target != null ? ` against a ${money(visual.target)} target` : ''
