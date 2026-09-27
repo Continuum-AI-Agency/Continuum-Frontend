@@ -259,6 +259,35 @@ export type MediaSearchRpcFilters = {
   filter_exclude_asset_ids: string[] | null;
 };
 
+/**
+ * The search's review filter. The filter-bar statuses, a status typed into the query and the
+ * chosen custom states are ONE choice, OR'd — the grid's semantics (reviewFilterOptions): a
+ * base status matches its custom states too, a state only itself. A single status stays a
+ * ranking-RPC argument; anything wider is a PostgREST `or` the route resolves to asset ids
+ * (a new RPC argument would be an overload). Statuses are enum-checked and states are uuids,
+ * so nothing user-typed reaches the filter string.
+ */
+export function searchReviewFilter(filters: MediaSearchFilters | undefined): {
+  rpcStatus: MediaReviewStatus | null;
+  orFilter: string | null;
+} {
+  const statuses = [
+    ...new Set([
+      ...(filters?.reviewStatuses ?? []),
+      ...(filters?.reviewStatus ? [filters.reviewStatus] : []),
+    ]),
+  ];
+  const states = filters?.reviewStateIds ?? [];
+  if (states.length === 0 && statuses.length <= 1) {
+    return { rpcStatus: statuses[0] ?? null, orFilter: null };
+  }
+  const parts = [
+    ...(statuses.length > 0 ? [`review_status.in.(${statuses.join(',')})`] : []),
+    ...(states.length > 0 ? [`review_state_id.in.(${states.join(',')})`] : []),
+  ];
+  return { rpcStatus: null, orFilter: parts.join(',') };
+}
+
 export function toSearchRpcFilters(filters: MediaSearchFilters | undefined): MediaSearchRpcFilters {
   return {
     filter_source: filters?.source ?? null,
@@ -266,7 +295,7 @@ export function toSearchRpcFilters(filters: MediaSearchFilters | undefined): Med
     filter_tags: filters?.tags && filters.tags.length > 0 ? filters.tags : null,
     filter_exclude_tags: [...HIDDEN_LIBRARY_TAGS],
     filter_collection_id: filters?.collectionId ?? null,
-    filter_review_status: filters?.reviewStatus ?? null,
+    filter_review_status: searchReviewFilter(filters).rpcStatus,
     // The route resolves fieldFilters against the DB and folds the result in;
     // absent them, both stay null and the RPCs behave exactly as before.
     filter_asset_ids: null,

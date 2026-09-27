@@ -27,6 +27,9 @@ import { cn } from '@/lib/utils';
 import { FieldFilterChips } from './fields/FieldFilterChips';
 import { SaveFiltersAsCollection } from './fields/SaveFiltersAsCollection';
 import { SortByFieldPicker } from './fields/SortByFieldPicker';
+import { reviewFilterOptions } from './review/reviewFilterOptions';
+import { useReviewCustomStates, useReviewStateLabels } from './review/useReviewStateLabels';
+import { useFieldFilterLiveRefresh } from './useLibraryLiveRefresh';
 
 type Props = {
   source: SourceFilterValue;
@@ -41,6 +44,11 @@ type Props = {
   onPlacementsChange?: (values: LibraryPlacement[]) => void;
   reviewStatuses?: readonly MediaReviewStatus[];
   onReviewStatusesChange?: (values: MediaReviewStatus[]) => void;
+  // The brand whose review labels and custom states the Workflow options wear; custom
+  // states filter on review_state_id alongside the base statuses.
+  brandId?: string | null;
+  reviewStateIds?: readonly string[];
+  onReviewStateIdsChange?: (ids: string[]) => void;
   used?: boolean | null;
   onUsedChange?: (value: boolean | null) => void;
   shared?: boolean | null;
@@ -84,6 +92,9 @@ export function LibraryFilterBar({
   onPlacementsChange,
   reviewStatuses,
   onReviewStatusesChange,
+  brandId,
+  reviewStateIds,
+  onReviewStateIdsChange,
   used,
   onUsedChange,
   shared,
@@ -104,6 +115,7 @@ export function LibraryFilterBar({
   className,
 }: Props) {
   const reduceMotion = useReducedMotion();
+  useFieldFilterLiveRefresh(customFields?.[0]?.brandId ?? null, (fieldFilters ?? []).length > 0);
   const layoutId = variant === 'compact' ? 'studio-filter-pill' : 'library-filter-pill';
 
   if (variant === 'page' && mediaType && onMediaTypeChange && onCreatedWithChange) {
@@ -118,6 +130,9 @@ export function LibraryFilterBar({
           onPlacementsChange={onPlacementsChange}
           reviewStatuses={reviewStatuses ?? []}
           onReviewStatusesChange={onReviewStatusesChange}
+          brandId={brandId ?? customFields?.[0]?.brandId ?? null}
+          reviewStateIds={reviewStateIds ?? []}
+          onReviewStateIdsChange={onReviewStateIdsChange}
           used={used}
           onUsedChange={onUsedChange}
           shared={shared}
@@ -176,7 +191,9 @@ export function LibraryFilterBar({
             variant={variant}
           />
         )}
-        {customFields && customFields.length > 0 ? <SortByFieldPicker fields={customFields} /> : null}
+        {customFields && customFields.length > 0 ? (
+          <SortByFieldPicker fields={customFields} />
+        ) : null}
         {customFields?.[0] ? (
           <SaveFiltersAsCollection
             brandId={customFields[0].brandId}
@@ -262,13 +279,6 @@ const PLACEMENT_OPTIONS: readonly { value: LibraryPlacement; label: string }[] =
   { value: 'other', label: 'Other' },
 ];
 
-const REVIEW_OPTIONS: readonly { value: MediaReviewStatus; label: string }[] = [
-  { value: 'in_review', label: 'In review' },
-  { value: 'needs_changes', label: 'Needs changes' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'draft', label: 'Draft' },
-];
-
 function AdvancedFilterPopover({
   mediaType,
   onMediaTypeChange,
@@ -278,6 +288,9 @@ function AdvancedFilterPopover({
   onPlacementsChange,
   reviewStatuses,
   onReviewStatusesChange,
+  brandId,
+  reviewStateIds,
+  onReviewStateIdsChange,
   used,
   onUsedChange,
   shared,
@@ -299,6 +312,9 @@ function AdvancedFilterPopover({
   onPlacementsChange?: (values: LibraryPlacement[]) => void;
   reviewStatuses: readonly MediaReviewStatus[];
   onReviewStatusesChange?: (values: MediaReviewStatus[]) => void;
+  brandId: string | null;
+  reviewStateIds: readonly string[];
+  onReviewStateIdsChange?: (ids: string[]) => void;
   used?: boolean | null;
   onUsedChange?: (value: boolean | null) => void;
   shared?: boolean | null;
@@ -315,11 +331,17 @@ function AdvancedFilterPopover({
   const [query, setQuery] = useState('');
   const normalized = query.trim().toLocaleLowerCase();
   const matches = (label: string) => !normalized || label.toLocaleLowerCase().includes(normalized);
+  // Each base status under the brand's own label, then its custom states (indented).
+  const reviewOptions = reviewFilterOptions(
+    useReviewStateLabels(brandId),
+    useReviewCustomStates(brandId),
+  ).filter((option) => option.kind === 'status' || onReviewStateIdsChange);
   const activeCount =
     (mediaType === 'all' ? 0 : 1) +
     createdWith.length +
     placements.length +
     reviewStatuses.length +
+    reviewStateIds.length +
     (used == null ? 0 : 1) +
     (shared == null ? 0 : 1) +
     (leadingOnly ? 1 : 0) +
@@ -398,16 +420,32 @@ function AdvancedFilterPopover({
             </FilterSection>
           ) : null}
 
-          {onReviewStatusesChange && REVIEW_OPTIONS.some((option) => matches(option.label)) ? (
+          {onReviewStatusesChange && reviewOptions.some((option) => matches(option.label)) ? (
             <FilterSection label="Workflow">
-              {REVIEW_OPTIONS.filter((option) => matches(option.label)).map((option) => (
-                <FilterChoice
-                  key={option.value}
-                  label={option.label}
-                  selected={reviewStatuses.includes(option.value)}
-                  onClick={() => onReviewStatusesChange(toggleValue(reviewStatuses, option.value))}
-                />
-              ))}
+              {reviewOptions
+                .filter((option) => matches(option.label))
+                .map((option) =>
+                  option.kind === 'status' ? (
+                    <FilterChoice
+                      key={option.value}
+                      label={option.label}
+                      selected={reviewStatuses.includes(option.value)}
+                      onClick={() =>
+                        onReviewStatusesChange(toggleValue(reviewStatuses, option.value))
+                      }
+                    />
+                  ) : (
+                    <FilterChoice
+                      key={option.value}
+                      label={option.label}
+                      className="pl-4"
+                      selected={reviewStateIds.includes(option.value)}
+                      onClick={() =>
+                        onReviewStateIdsChange?.(toggleValue(reviewStateIds, option.value))
+                      }
+                    />
+                  ),
+                )}
               {onSharedChange && matches('Shared') ? (
                 <FilterChoice
                   label="Shared"
@@ -512,18 +550,23 @@ function FilterChoice({
   count,
   selected,
   onClick,
+  className,
 }: {
   label: string;
   count?: number;
   selected: boolean;
   onClick: () => void;
+  className?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={selected}
-      className="flex min-h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-accent"
+      className={cn(
+        'flex min-h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-accent',
+        className,
+      )}
     >
       <span className="flex size-4 items-center justify-center">
         {selected ? <Check className="size-3.5 text-primary" /> : null}

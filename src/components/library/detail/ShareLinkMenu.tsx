@@ -8,7 +8,7 @@
 import type {
   MediaAsset,
   ShareLink,
-  ShareLinkActivityEvent,
+  ShareLinkActivityResponse,
   ShareVersionMode,
 } from '@continuum/contracts';
 import { Check, Copy, Link2, Loader2, SlidersHorizontal } from 'lucide-react';
@@ -94,7 +94,7 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
   const [passcode, setPasscode] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activity, setActivity] = useState<ShareLinkActivityEvent[]>([]);
+  const [activity, setActivity] = useState<ShareLinkActivityResponse>({ events: [] });
   const [customizingId, setCustomizingId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -103,7 +103,7 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
     try {
       const [nextLinks, nextActivity] = await Promise.all([
         listShareLinks(brandId, asset.id),
-        fetchAssetShareActivity(brandId, asset.id).catch(() => []),
+        fetchAssetShareActivity(brandId, asset.id).catch(() => ({ events: [] })),
       ]);
       setLinks(nextLinks);
       setActivity(nextActivity);
@@ -333,7 +333,11 @@ export function ShareLinkMenu({ brandId, asset }: ShareLinkMenuProps) {
             <h3 className="text-xs font-semibold text-foreground">
               Reviewer activity on this asset
             </h3>
-            <ShareLinkActivity events={activity} emptyLabel="No reviewer has opened it yet." />
+            <ShareLinkActivity
+              events={activity.events}
+              totals={activity.totals}
+              emptyLabel="No reviewer has opened it yet."
+            />
           </div>
         </PopoverContent>
       </Popover>

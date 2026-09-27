@@ -27,6 +27,7 @@ import {
 } from '@continuum/contracts';
 import {
   Columns3,
+  FolderUp,
   GalleryHorizontalEnd,
   LayoutGrid,
   List,
@@ -48,8 +49,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from '@/components/ui/toast-imperative';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
-import { librarySearchPath } from '@/lib/library/libraryHref';
+import {
+  createLibraryCollectionOperation,
+  mutateCollectionMembershipOperation,
+} from '@/lib/library/creativeOperations';
+import {
+  createFolderCollections,
+  type FolderFile,
+  folderFilesFromDrop,
+  folderFilesFromInput,
+  folderPaths,
+} from '@/lib/library/folderUpload';
+import { librarySearchPath, withReviewStates } from '@/lib/library/libraryHref';
 import { fetchTemplateSources } from '@/lib/library/templateSources';
 import {
   buildLibraryBrowseParams,
@@ -63,6 +76,7 @@ import {
 } from '@/lib/media/filters';
 import type { LibrarySection } from '@/lib/media/sections';
 import { useProjects } from '@/lib/projects';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import { LibraryBoardView } from './board/LibraryBoardView';
 import { AssetDetailModal } from './detail/AssetDetailModal';
@@ -115,7 +129,6 @@ type Props = {
   initialBrowseQuery: LibraryBrowseQuery;
   initialCollections: MediaCollection[];
   initialSavedViews: LibrarySavedView[];
-  storageUsedBytes: number;
   captionStyle: CaptionStyle;
   section: LibrarySection;
   initialDeepLink?: CommentDeepLink;
@@ -133,7 +146,6 @@ export function LibraryViewer({
   initialBrowseQuery,
   initialCollections,
   initialSavedViews,
-  storageUsedBytes,
   captionStyle,
   section,
   initialDeepLink,
@@ -184,9 +196,27 @@ export function LibraryViewer({
   // round-trip would buy nothing but an unreadable query string.
   const { fields: customFields } = useCustomFields(brandId);
   const [fieldFilters, setFieldFilters] = useState<CustomFieldFilter[]>([]);
+  // The brand's custom review states (review_state_id). Client state like the field filters —
+  // the browse read model cannot filter on them — mirrored into ?reviewStates= so a link keeps
+  // the view.
+  const [reviewStateIds, setReviewStateIdsState] = useState<string[]>(() =>
+    typeof window === 'undefined'
+      ? []
+      : (new URLSearchParams(window.location.search).get('reviewStates') ?? '')
+          .split(',')
+          .filter(Boolean),
+  );
+  // The URL the filters were last navigated to, while that navigation is still pending: the
+  // custom-state setter and the filter push each build on it, so neither drops the other.
+  const pendingPathRef = useRef<string | null>(null);
+  const reviewStateIdsRef = useRef(reviewStateIds);
+  useEffect(() => {
+    pendingPathRef.current = null;
+  }, [initialBrowseQuery]);
   const { assets, hasMore, loadingMore, loadMore } = useMediaLibrary({
     query: initialBrowseQuery,
     fieldFilters,
+    reviewStateIds,
     seed: initialAssets,
     initialNextCursor,
   });
@@ -239,6 +269,9 @@ export function LibraryViewer({
   const [fontReviewFiles, setFontReviewFiles] = useState<File[]>([]);
   const [fontRevision, setFontRevision] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  // Files from a folder upload → the collection made for the folder each one sat in.
+  const folderTargets = useRef(new Map<File, string>());
   const dragDepth = useRef(0);
 
   const isSearching = searchResults !== null;
@@ -409,12 +442,15 @@ export function LibraryViewer({
         setOptimisticSort(nextSort);
         setOptimisticLayout(nextLayout);
         setOptimisticReviewStatuses(nextQuery.reviewStatuses);
-        router.push(
+        const path = withReviewStates(
           librarySearchPath(nextQuery, {
             assetId: detailAsset?.id,
             deepLink: detailAsset ? deepLink : null,
           }),
+          reviewStateIdsRef.current,
         );
+        pendingPathRef.current = path;
+        router.push(path);
       });
     },
     [
@@ -461,10 +497,13 @@ export function LibraryViewer({
       setDetailAsset(asset);
       setDeepLink(link ?? { commentId: null, timeMs: null, endMs: null });
       router.replace(
-        librarySearchPath(initialBrowseQuery, {
-          assetId: asset.id,
-          deepLink: link,
-        }),
+        withReviewStates(
+          librarySearchPath(initialBrowseQuery, {
+            assetId: asset.id,
+            deepLink: link,
+          }),
+          reviewStateIdsRef.current,
+        ),
         { scroll: false },
       );
     },
@@ -474,7 +513,10 @@ export function LibraryViewer({
   const closeDetail = useCallback(() => {
     setDetailAsset(null);
     setDeepLink({ commentId: null, timeMs: null, endMs: null });
-    router.replace(librarySearchPath(initialBrowseQuery), { scroll: false });
+    router.replace(
+      withReviewStates(librarySearchPath(initialBrowseQuery), reviewStateIdsRef.current),
+      { scroll: false },
+    );
   }, [initialBrowseQuery, router]);
 
   // The grid re-seeds from the RSC; the board holds its own fetch, so it also needs
@@ -521,16 +563,43 @@ export function LibraryViewer({
 
   const collectionDrop = useCollectionAssetDrop({
     brandId,
+    sourceCollectionId: selectedCollectionId,
     collectionName: (id) => initialCollections.find((collection) => collection.id === id)?.name,
     onDropped: refreshAssets,
   });
+
+  const setReviewStateIds = useCallback(
+    (ids: string[]) => {
+      // Like the field filters: narrowing the listing leaves search mode.
+      setSearchResults(null);
+      setReviewStateIdsState(ids);
+      reviewStateIdsRef.current = ids;
+      const path = withReviewStates(
+        pendingPathRef.current ?? `${window.location.pathname}${window.location.search}`,
+        ids,
+      );
+      if (pendingPathRef.current) {
+        // A filter navigation is in flight: supersede it through the router with the URL that
+        // carries both, so the page data (and the grid's refetch) follows. An out-of-band
+        // history write here left the pending navigation stranded — the grid kept the query
+        // without the base status and never refetched.
+        pendingPathRef.current = path;
+        startFilterTransition(() => router.replace(path, { scroll: false }));
+        return;
+      }
+      window.history.replaceState(null, '', path);
+    },
+    [router],
+  );
 
   const setTrashUrl = useCallback(
     (open: boolean) => {
       window.history.replaceState(
         null,
         '',
-        open ? '/library?view=trash' : librarySearchPath(initialBrowseQuery),
+        open
+          ? '/library?view=trash'
+          : withReviewStates(librarySearchPath(initialBrowseQuery), reviewStateIdsRef.current),
       );
     },
     [initialBrowseQuery],
@@ -556,7 +625,10 @@ export function LibraryViewer({
       setDeepLink(link);
       if (!detailAsset) return;
       router.replace(
-        librarySearchPath(initialBrowseQuery, { assetId: detailAsset.id, deepLink: link }),
+        withReviewStates(
+          librarySearchPath(initialBrowseQuery, { assetId: detailAsset.id, deepLink: link }),
+          reviewStateIdsRef.current,
+        ),
         { scroll: false },
       );
     },
@@ -648,7 +720,19 @@ export function LibraryViewer({
   );
 
   const onUploaded = useCallback(
-    ({ file }: { file: File }) => {
+    ({ file, uploaded }: { file: File; uploaded: { assetId: string } }) => {
+      const collectionId = folderTargets.current.get(file);
+      if (collectionId) {
+        folderTargets.current.delete(file);
+        void mutateCollectionMembershipOperation(createSupabaseBrowserClient(), {
+          brandId,
+          collectionId,
+          assetIds: [uploaded.assetId],
+          mode: 'add',
+        })
+          .then(() => router.refresh())
+          .catch(() => toast.error(`${file.name} uploaded, but could not be filed in its folder`));
+      }
       setAssetRevision((revision) => revision + 1);
       router.refresh();
       const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
@@ -656,17 +740,10 @@ export function LibraryViewer({
         onSelectDestination('templates');
       }
     },
-    [onSelectDestination, router],
+    [brandId, onSelectDestination, router],
   );
-  const {
-    uploads,
-    uploadFiles,
-    pauseUpload,
-    resumeUpload,
-    retryUpload,
-    cancelUpload,
-    moveUpload,
-  } = useMediaUpload(brandId, { onUploaded });
+  const { uploads, uploadFiles, pauseUpload, resumeUpload, retryUpload, cancelUpload, moveUpload } =
+    useMediaUpload(brandId, { onUploaded });
 
   const onSelectSavedView = useCallback(
     (savedView: LibrarySavedView) => {
@@ -689,6 +766,30 @@ export function LibraryViewer({
     [uploadFiles],
   );
 
+  const routeFolderFiles = useCallback(
+    async (entries: FolderFile[]) => {
+      try {
+        const ids = await createFolderCollections(folderPaths(entries), ({ name, parentId }) =>
+          createLibraryCollectionOperation(createSupabaseBrowserClient(), {
+            brandId,
+            name,
+            kind: 'manual',
+            parentId,
+          }),
+        );
+        for (const { file, folders } of entries) {
+          const collectionId = ids.get(folders.join('/'));
+          if (collectionId) folderTargets.current.set(file, collectionId);
+        }
+        router.refresh();
+      } catch {
+        toast.error('Could not recreate the folders as collections; uploading the files anyway');
+      }
+      routeUploadFiles(entries.map((entry) => entry.file));
+    },
+    [brandId, routeUploadFiles, router],
+  );
+
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
     dragDepth.current += 1;
@@ -706,7 +807,11 @@ export function LibraryViewer({
     e.preventDefault();
     dragDepth.current = 0;
     setDragging(false);
-    routeUploadFiles(e.dataTransfer.files);
+    const { files, items } = e.dataTransfer;
+    // Started synchronously: the dropped entries are gone once this handler returns.
+    void folderFilesFromDrop(items).then((entries) =>
+      entries ? routeFolderFiles(entries) : routeUploadFiles(files),
+    );
   };
 
   return (
@@ -761,7 +866,6 @@ export function LibraryViewer({
               selectedTemplateOnly={showTemplates}
               section={section}
               onSelectDestination={onSelectDestination}
-              storageUsedBytes={storageUsedBytes}
             />
           </div>
 
@@ -799,6 +903,8 @@ export function LibraryViewer({
                         kind={selectedKind}
                         collectionId={selectedCollectionId}
                         tags={selectedTags}
+                        reviewStateIds={reviewStateIds}
+                        reviewStatuses={optimisticReviewStatuses}
                         onResults={setSearchResults}
                         onClear={() => setSearchResults(null)}
                       />
@@ -852,6 +958,17 @@ export function LibraryViewer({
                       </Button>
                       <Button
                         type="button"
+                        variant="outline"
+                        size="sm"
+                        data-testid="library-upload-folder"
+                        onClick={() => folderInputRef.current?.click()}
+                        title="Upload a folder: its subfolders become nested collections"
+                      >
+                        <FolderUp className="size-4" />
+                        <span className="hidden sm:inline">Folder</span>
+                      </Button>
+                      <Button
+                        type="button"
                         size="sm"
                         onClick={() => fileInputRef.current?.click()}
                         className="active:scale-[0.96] [transition-property:scale]"
@@ -885,6 +1002,9 @@ export function LibraryViewer({
                 onPlacementsChange={(values) => pushFilters({ placements: values })}
                 reviewStatuses={optimisticReviewStatuses}
                 onReviewStatusesChange={(values) => pushFilters({ reviewStatuses: values })}
+                brandId={brandId}
+                reviewStateIds={reviewStateIds}
+                onReviewStateIdsChange={setReviewStateIds}
                 used={initialBrowseQuery.used}
                 onUsedChange={(value) => pushFilters({ used: value })}
                 shared={initialBrowseQuery.shared}
@@ -1017,6 +1137,20 @@ export function LibraryViewer({
               className="hidden"
               onChange={(e) => {
                 if (e.target.files) routeUploadFiles(e.target.files);
+                e.target.value = '';
+              }}
+            />
+            <input
+              ref={folderInputRef}
+              type="file"
+              data-testid="library-folder-input"
+              // Not in React's typings; it makes the picker choose a folder and gives every
+              // file its webkitRelativePath.
+              {...{ webkitdirectory: '' }}
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) void routeFolderFiles(folderFilesFromInput(e.target.files));
                 e.target.value = '';
               }}
             />

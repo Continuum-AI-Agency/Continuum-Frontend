@@ -48,7 +48,7 @@ export function ShareLinkPanel({ by }: { by: { id: string } | { token: string } 
             Refresh
           </Button>
         </div>
-        <ShareLinkActivity events={detail.events} emptyLabel="Nobody has opened this link yet." />
+        <ShareLinkActivity events={detail.events} totals={detail.totals} emptyLabel="Nobody has opened this link yet." />
       </section>
     </div>
   );

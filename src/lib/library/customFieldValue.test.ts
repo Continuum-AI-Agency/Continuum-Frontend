@@ -3,7 +3,6 @@ import { type CustomField, type CustomFieldType, customFieldSchema } from '@cont
 import { MAX_FIELD_TEXT_LENGTH } from './customFields';
 import {
   formatCustomFieldValue,
-  isGroupableField,
   isValueEmpty,
   multiSelectOptionIds,
   ORPHANED_OPTION_LABEL,
@@ -157,20 +156,6 @@ describe('validateCustomFieldValue', () => {
     expect(validateCustomFieldValue(date, '2026-07-12')).toEqual({ ok: true, value: '2026-07-12' });
     expect(validateCustomFieldValue(date, '2026-02-31').ok).toBe(false);
     expect(validateCustomFieldValue(date, '07/12/2026').ok).toBe(false);
-  });
-});
-
-describe('isGroupableField', () => {
-  it('allows the one-value choices — single_select, status, user — to drive board lanes', () => {
-    expect(isGroupableField(singleSelect)).toBe(true);
-    expect(isGroupableField(makeField('status', [{ id: 'a', label: 'A', color: '#000000' }]))).toBe(
-      true,
-    );
-    expect(isGroupableField(makeField('user'))).toBe(true);
-    expect(isGroupableField(multiSelect)).toBe(false);
-    expect(isGroupableField(text)).toBe(false);
-    expect(isGroupableField(date)).toBe(false);
-    expect(isGroupableField(makeField('checkbox'))).toBe(false);
   });
 });
 

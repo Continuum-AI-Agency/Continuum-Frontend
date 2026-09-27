@@ -65,7 +65,7 @@ import {
 } from '@/lib/library/creativeOperations';
 import { createCustomField } from '@/lib/library/customFields';
 import { createShareLink } from '@/lib/library/share';
-import { canEditLibrary, useBrandRole } from '@/lib/library/useBrandRole';
+import { useLibraryAccess } from '@/lib/library/useBrandRole';
 import { useProjectMutations } from '@/lib/projects';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { CustomFieldValueEditor } from './fields/CustomFieldValueEditor';
@@ -118,7 +118,7 @@ export function LibraryBulkToolbar({
   // biome-ignore lint/correctness/useExhaustiveDependencies: selectionKey is the selection
   useEffect(() => setMatchingIds(null), [selectionKey]);
   const targetIds = matchingIds ?? assetIds;
-  const canEdit = canEditLibrary(useBrandRole(brandId));
+  const { canEdit } = useLibraryAccess(brandId, { collectionId: currentCollectionId });
   const userFields = customFields.filter((field) => field.type === 'user');
   const assignField =
     userFields.find((field) => field.id === assignFieldId) ?? userFields[0] ?? null;

@@ -26,7 +26,6 @@ import {
   LayoutGrid,
   LayoutTemplate,
   Link2,
-  Loader2,
   Lock,
   PackageOpen,
   Pencil,
@@ -35,6 +34,7 @@ import {
   Trash2,
   Type,
   UserCheck,
+  UserLock,
   UsersRound,
   Workflow,
 } from 'lucide-react';
@@ -55,6 +55,7 @@ import { canEditLibrary, useBrandRole } from '@/lib/library/useBrandRole';
 import type { LibrarySection } from '@/lib/media/sections';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
+import { CollectionMembersDialog } from './fields/CollectionMembersDialog';
 import { RequestCollectionReviewDialog } from './review/RequestCollectionReviewDialog';
 import { ShareBoxDialog } from './ShareBoxDialog';
 import { StorageQuotaMeter } from './StorageQuotaMeter';
@@ -89,7 +90,6 @@ type Props = {
   selectedTemplateOnly: boolean;
   section: LibrarySection;
   onSelectDestination: (destination: LibraryBrowseDestination) => void;
-  storageUsedBytes: number;
 };
 
 // The permanent sidebar answers "what is it?" only. Creation methods such as
@@ -138,13 +138,6 @@ function activeDestination(
   return null;
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / 1024 ** i).toFixed(1)} ${units[i]}`;
-}
-
 function withoutCursor(query: LibraryBrowseQuery): Omit<LibraryBrowseQuery, 'cursor'> {
   const copy = { ...query };
   delete copy.cursor;
@@ -152,27 +145,33 @@ function withoutCursor(query: LibraryBrowseQuery): Omit<LibraryBrowseQuery, 'cur
 }
 
 function CollectionRow({
+  collectionId,
   selected,
   label,
   kind,
   locked,
   isPrivate,
+  isRestricted,
   dropTarget,
   onClick,
   onShare,
+  onMembers,
   onRequestReview,
   onRename,
   onDelete,
   dragHandlers,
 }: {
+  collectionId: string;
   selected: boolean;
   label: string;
   kind: MediaCollection['kind'];
   locked: boolean;
   isPrivate: boolean;
+  isRestricted: boolean;
   dropTarget: boolean;
   onClick: () => void;
   onShare: (() => void) | null;
+  onMembers: (() => void) | null;
   onRequestReview: (() => void) | null;
   onRename: () => void;
   onDelete: () => void;
@@ -182,6 +181,8 @@ function CollectionRow({
     <div
       {...dragHandlers}
       data-testid="sidebar-collection"
+      // The Library's delegated asset drop finds its target collection by this.
+      data-collection-id={collectionId}
       data-collection-label={label}
       className={cn(
         'group flex items-center gap-0.5 rounded-lg',
@@ -210,7 +211,24 @@ function CollectionRow({
             className="size-3 shrink-0 text-muted-foreground"
           />
         ) : null}
+        {isRestricted ? (
+          <UserLock
+            aria-label="Only members can see it"
+            data-testid="collection-restricted"
+            className="size-3 shrink-0 text-muted-foreground"
+          />
+        ) : null}
       </button>
+      {onMembers ? (
+        <button
+          type="button"
+          onClick={onMembers}
+          aria-label={`Members of ${label}`}
+          className="flex size-7 items-center justify-center rounded-md text-muted-foreground opacity-0 hover:bg-accent group-focus-within:opacity-100 group-hover:opacity-100"
+        >
+          <UserLock className="size-3" />
+        </button>
+      ) : null}
       {onShare ? (
         <button
           type="button"
@@ -297,7 +315,6 @@ export function LibrarySidebar({
   selectedTemplateOnly,
   section,
   onSelectDestination,
-  storageUsedBytes,
 }: Props) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
@@ -315,6 +332,7 @@ export function LibrarySidebar({
   useLibraryLiveRefresh(brandId, selectedCollection);
   const canEdit = canEditLibrary(useBrandRole(brandId));
   const [reviewTarget, setReviewTarget] = useState<MediaCollection | null>(null);
+  const [membersTarget, setMembersTarget] = useState<MediaCollection | null>(null);
   const [dropId, setDropId] = useState<string | null>(null);
   const visibleCollections = orderCollectionsTree(
     collections.filter((collection) => !collection.systemKey),
@@ -694,15 +712,18 @@ export function LibrarySidebar({
                 />
               ) : (
                 <CollectionRow
+                  collectionId={col.id}
                   selected={selectedCollectionId === col.id}
                   label={col.name}
                   kind={col.kind}
                   locked={Boolean(col.systemKey) || !canEdit}
                   isPrivate={col.visibility === 'private'}
+                  isRestricted={col.access === 'restricted'}
                   dropTarget={dropId === col.id}
                   dragHandlers={dragHandlersFor(col)}
                   onClick={() => onSelectCollection(col.id)}
                   onShare={() => void shareCollection(col)}
+                  onMembers={col.systemKey ? null : () => setMembersTarget(col)}
                   onRequestReview={
                     canEdit && col.kind === 'manual' ? () => setReviewTarget(col) : null
                   }
@@ -720,15 +741,8 @@ export function LibrarySidebar({
 
       <Separator />
 
-      <div className="flex items-center gap-2 px-3 py-2.5 text-xs text-muted-foreground/70">
-        {submitting ? (
-          <Loader2 className="size-3.5 shrink-0 animate-spin" />
-        ) : (
-          <HardDrive className="size-3.5 shrink-0" />
-        )}
-        <span className="tabular-nums">{formatBytes(storageUsedBytes)} used</span>
-      </div>
-      <div className="px-3 pb-2.5">
+      {/* The one storage number: the billing quota (F's meter), live. */}
+      <div className="px-3 py-2.5">
         <StorageQuotaMeter brandId={brandId} />
       </div>
       {reviewTarget ? (
@@ -739,6 +753,17 @@ export function LibrarySidebar({
           open
           onOpenChange={(open) => {
             if (!open) setReviewTarget(null);
+          }}
+        />
+      ) : null}
+      {membersTarget ? (
+        <CollectionMembersDialog
+          brandId={brandId}
+          collectionId={membersTarget.id}
+          collectionName={membersTarget.name}
+          open
+          onOpenChange={(open) => {
+            if (!open) setMembersTarget(null);
           }}
         />
       ) : null}

@@ -44,8 +44,14 @@ const StrategicAnalysisStatusPill = dynamic(() =>
 );
 
 // Reads `useSearchParams()`, which is a dynamic read during prerender.
-const BrandWelcomeBanner = dynamic(() =>
-  import('./welcome/BrandWelcomeBanner').then((m) => ({ default: m.BrandWelcomeBanner })),
+// It first renders after hydration (inside <ClientOnly>), so its chunk loads then. An
+// SSR `dynamic()` without `loading` has no Suspense boundary of its own: that load
+// suspended the route's boundary and hid the whole dashboard (display:none) for as
+// long as the chunk took — closing any menu or dialog open at that moment. `loading`
+// gives it its own boundary, so only the banner waits.
+const BrandWelcomeBanner = dynamic(
+  () => import('./welcome/BrandWelcomeBanner').then((m) => ({ default: m.BrandWelcomeBanner })),
+  { loading: () => null },
 );
 
 import type { AuthIdentity } from '@/lib/auth/identity';

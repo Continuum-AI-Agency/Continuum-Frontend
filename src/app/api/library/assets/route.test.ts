@@ -251,3 +251,45 @@ describe('GET /api/library/assets — custom-field filters', () => {
     expect(response.status).toBe(422);
   });
 });
+
+describe('GET /api/library/assets — custom review states', () => {
+  const LEGAL = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
+  const COLOR = '1b2c3d4e-5f60-4a71-8b92-a3b4c5d6e7f8';
+
+  function seedStates(): FakeDb {
+    const db = seedDb();
+    const rows = db.rows('media.assets');
+    Object.assign(rows[0] as FakeRow, { review_status: 'in_review', review_state_id: LEGAL });
+    Object.assign(rows[1] as FakeRow, { review_status: 'in_review', review_state_id: COLOR });
+    Object.assign(rows[2] as FakeRow, { review_status: 'in_review', review_state_id: null });
+    return useDb(db);
+  }
+
+  it('narrows to the assets in the chosen custom states', async () => {
+    seedStates();
+    expect(await idsFrom(await GET(listRequest({ brandId: BRAND_ID, reviewStateIds: LEGAL })))).toEqual([
+      'asset-a',
+    ]);
+    expect(
+      await idsFrom(await GET(listRequest({ brandId: BRAND_ID, reviewStateIds: `${LEGAL},${COLOR}` }))),
+    ).toEqual(['asset-a', 'asset-b']);
+  });
+
+  it('composes with a custom-field filter (they AND)', async () => {
+    seedStates();
+    const response = await GET(
+      listRequest({
+        brandId: BRAND_ID,
+        reviewStateIds: `${LEGAL},${COLOR}`,
+        fieldFilters: filters({ fieldId: RATING_ID, operator: 'any_of', values: ['r3'] }),
+      }),
+    );
+    expect(await idsFrom(response)).toEqual(['asset-b']);
+  });
+
+  it('422s on a state id that is not a uuid rather than widening the result set', async () => {
+    seedStates();
+    const response = await GET(listRequest({ brandId: BRAND_ID, reviewStateIds: 'legal-check' }));
+    expect(response.status).toBe(422);
+  });
+});

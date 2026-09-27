@@ -1,51 +1,50 @@
-// Browser fetchers for the share owner's management API (/api/library/share/manage).
+// Browser calls for the share owner: the library-share edge function, invoked with
+// the signed-in user's JWT. It checks brand access on the caller's own client
+// before any service-role work, so nothing here needs a server key.
 
 import {
-  type ShareLinkActivityEvent,
+  type LibraryShareRequest,
+  type ShareLinkActivityResponse,
   type ShareLinkDetailResponse,
   shareLinkActivityResponseSchema,
   shareLinkDetailResponseSchema,
   type UpdateShareLinkRequest,
 } from '@continuum/contracts';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
-const MANAGE = '/api/library/share/manage';
-
-async function readJson<T>(response: Response, parse: (value: unknown) => T): Promise<T> {
-  const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
-  if (!response.ok) {
-    throw new Error(typeof body?.error === 'string' ? body.error : `Request failed (${response.status})`);
+async function invokeShare<T>(body: LibraryShareRequest, parse: (value: unknown) => T): Promise<T> {
+  const { data, error } = await createSupabaseBrowserClient().functions.invoke('library-share', { body });
+  if (error) {
+    // A non-2xx carries the function's own message in the response body.
+    const context = (error as { context?: Response }).context;
+    const detail = context ? ((await context.json().catch(() => null)) as { error?: unknown } | null) : null;
+    throw new Error(typeof detail?.error === 'string' ? detail.error : error.message);
   }
-  return parse(body);
+  return parse(data);
 }
 
-export async function fetchShareLinkDetail(
+export function fetchShareLinkDetail(
   by: { id: string } | { token: string },
 ): Promise<ShareLinkDetailResponse> {
-  const query = new URLSearchParams('id' in by ? { id: by.id } : { token: by.token });
-  return readJson(await fetch(`${MANAGE}?${query}`), (value) =>
+  return invokeShare({ action: 'share_link_detail', ...by }, (value) =>
     shareLinkDetailResponseSchema.parse(value),
   );
 }
 
-export async function updateShareLinkSettings(
+export function updateShareLinkSettings(
   request: UpdateShareLinkRequest,
 ): Promise<ShareLinkDetailResponse> {
-  const response = await fetch(MANAGE, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(request),
-  });
-  return readJson(response, (value) => shareLinkDetailResponseSchema.parse(value));
+  return invokeShare({ action: 'update_share_link', ...request }, (value) =>
+    shareLinkDetailResponseSchema.parse(value),
+  );
 }
 
-export async function fetchAssetShareActivity(
+export function fetchAssetShareActivity(
   brandId: string,
   assetId: string,
-): Promise<ShareLinkActivityEvent[]> {
-  const query = new URLSearchParams({ brandId, assetId });
-  return readJson(
-    await fetch(`${MANAGE}?${query}`),
-    (value) => shareLinkActivityResponseSchema.parse(value).events,
+): Promise<ShareLinkActivityResponse> {
+  return invokeShare({ action: 'asset_share_activity', brandId, assetId }, (value) =>
+    shareLinkActivityResponseSchema.parse(value),
   );
 }
 

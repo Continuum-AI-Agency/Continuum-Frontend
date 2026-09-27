@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { type AssetRenditionRow, buildAssetPreview } from './renditions';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { type AssetRenditionRow, buildAssetPreview, loadAssetRenditions } from './renditions';
 import type { MediaAssetRow } from './schema';
 
 const asset = (kind: 'image' | 'video' | 'file'): MediaAssetRow =>
@@ -100,5 +101,24 @@ describe('buildAssetPreview', () => {
       role: 'poster',
       signedUrl: 'https://poster',
     });
+  });
+});
+
+describe('loadAssetRenditions', () => {
+  it('loads only the roles the Library shows, never the sampled embedding frames', async () => {
+    const filters: Array<[string, unknown]> = [];
+    const query = {
+      select: () => query,
+      in: (column: string, values: unknown) => {
+        filters.push([column, values]);
+        return filters.length === 2 ? Promise.resolve({ data: [], error: null }) : query;
+      },
+    };
+    const client = { schema: () => ({ from: () => query }) } as unknown as SupabaseClient;
+    await loadAssetRenditions(client, ['v1', 'v1']);
+    expect(filters).toEqual([
+      ['asset_version_id', ['v1']],
+      ['role', ['thumbnail', 'poster', 'preview_image', 'preview_video']],
+    ]);
   });
 });

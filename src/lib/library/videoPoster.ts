@@ -282,12 +282,15 @@ export async function generateVideoPoster(
  * container, a missing video track, or a header carrying no duration. A null only
  * means the long-form skip cannot be applied; it never fails the upload.
  */
-export async function probeVideoDurationSec(file: Blob): Promise<number | null> {
+// Duration of a video OR audio file from its container header (no decode). Audio needs
+// it as much as video: analyze_media only takes the windowed long-form path when it knows
+// a recording is longer than 30 s.
+export async function probeMediaDurationSec(file: Blob): Promise<number | null> {
   try {
     const { Input, BlobSource, ALL_FORMATS } = await import('mediabunny');
     const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
     try {
-      const track = await input.getPrimaryVideoTrack();
+      const track = (await input.getPrimaryVideoTrack()) ?? (await input.getPrimaryAudioTrack());
       if (!track) return null;
       const durationSec = await track.computeDuration().catch(() => null);
       return typeof durationSec === 'number' && Number.isFinite(durationSec) && durationSec > 0

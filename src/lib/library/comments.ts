@@ -18,6 +18,7 @@ import {
   type UpdateCommentRequest,
 } from '@continuum/contracts';
 import { z } from 'zod';
+import type { TimelineStart } from '@/lib/library/commentExport';
 import {
   createAssetCommentOperation,
   deleteAssetCommentOperation,
@@ -236,12 +237,14 @@ export function commentExportHref(params: {
   assetId: string;
   versionId: string | null;
   format: string;
+  timeline?: TimelineStart;
 }): string {
   const query = new URLSearchParams({
     brandId: params.brandId,
     assetId: params.assetId,
     format: params.format,
     ...(params.versionId ? { versionId: params.versionId } : {}),
+    ...(params.timeline ? { timeline: params.timeline } : {}),
   });
   return `/api/library/comments/export?${query.toString()}`;
 }
