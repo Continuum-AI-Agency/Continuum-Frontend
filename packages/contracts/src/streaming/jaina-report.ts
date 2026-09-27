@@ -1606,9 +1606,16 @@ const THRESHOLD_COMPARATORS = [
   'm[áa]s de',
   'inferior(?:es)? a',
   'superior(?:es)? a',
+  'al menos',
+  'como m[áa]ximo',
 ].join('|');
 
-const MONEY_UNIT = String.raw`(?:\s?(?:MXN|USD|EUR|COP|ARS|CLP|PEN|BRL|GBP|CAD|\$|€|pesos?|d[oó]lares|dollars?))?`;
+const CURRENCY = String.raw`(?:MXN|USD|EUR|COP|ARS|CLP|PEN|BRL|GBP|CAD|\$|€|pesos?|d[oó]lares|dollars?)`;
+
+const MONEY_UNIT = String.raw`(?:\s?${CURRENCY})?`;
+
+/** An amount that is money on its face: "$1,500", "1500 MXN", "200 pesos". */
+const MONEY_AMOUNT = String.raw`(?:[$€]\s?${FIGURE}|${FIGURE}\s?${CURRENCY})`;
 
 /**
  * The figures a sentence COMPUTES rather than reads, masked before its numbers are held
@@ -1616,10 +1623,12 @@ const MONEY_UNIT = String.raw`(?:\s?(?:MXN|USD|EUR|COP|ARS|CLP|PEN|BRL|GBP|CAD|\
  * rank or count of the entities it lists ("top 3", "#1", "3 campaigns"), a share of a
  * whole ("41% of spend"), a delta it derives ("up 12%", "+8 pp", "2x higher"), a
  * percentage a proposal moves ("reallocate 20%", "subir 10%") and a threshold it states
- * as a rule ("sub-1.0 ROAS", "por debajo de 1.0 de ROAS", "menos de 30 MXN por lead").
- * No tool returns them and no model invents them — they are the reason prose figures were
- * once left ungraded at all. A money amount a proposal moves ("shift 1500 MXN") is NOT
- * computed: it stays graded and must be a figure some read returned.
+ * as a rule ("sub-1.0 ROAS", "por debajo de 1.0 de ROAS", "menos de 30 MXN por lead"),
+ * a money cut-off included ("consuming over 1500 MXN", "que gastan menos de 200 MXN") — but
+ * only when a comparative stands directly before the amount. No tool returns them and no
+ * model invents them — they are the reason prose figures were once left ungraded at all. A
+ * money amount a proposal moves ("shift 1500 MXN") or a sentence plainly states ("spent
+ * 1,500 MXN") is NOT computed: it stays graded and must be a figure some read returned.
  */
 const COMPUTED_PROSE_FIGURES: ReadonlyArray<RegExp> = [
   new RegExp(String.raw`\d+[\s-]?(?:${WINDOW_UNITS})\b`, 'giu'),
@@ -1652,6 +1661,7 @@ const COMPUTED_PROSE_FIGURES: ReadonlyArray<RegExp> = [
     String.raw`\b(?:${THRESHOLD_METRICS})\s+(?:of\s+|de\s+|is\s+|es\s+)?(?:${THRESHOLD_COMPARATORS})\s+\$?${FIGURE}${MONEY_UNIT}`,
     'giu',
   ),
+  new RegExp(String.raw`\b(?:${THRESHOLD_COMPARATORS})\s+${MONEY_AMOUNT}`, 'giu'),
 ];
 
 /**

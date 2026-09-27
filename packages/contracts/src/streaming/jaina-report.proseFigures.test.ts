@@ -118,10 +118,26 @@ describe('groundingViolationsOf — a proposal percentage or a threshold is comp
     ['ES threshold', 'Pausar campañas por debajo de 1.0 de ROAS.'],
     ['ES per-lead money threshold', 'Pausar si cuesta menos de 30 MXN por lead.'],
     ['EN hyphenated window', 'Based on the 7-day period, hold spend steady.'],
+    ['EN money cut-off, over', 'Pause ad sets consuming over 1500 MXN.'],
+    ['EN money cut-off, under, per day', 'Pause ad sets spending under 200 MXN a day.'],
+    ['EN money cut-off, at least', 'Keep ad sets that spend at least 1,500 MXN.'],
+    ['EN money cut-off, dollar sign', 'Review ad sets with more than $1,500 in spend.'],
+    ['ES money cut-off, más de', 'Pausar los conjuntos con más de 1,500 MXN de gasto.'],
+    ['ES money cut-off, menos de', 'Pausar los conjuntos que gastan menos de 200 MXN.'],
+    ['ES money cut-off, al menos', 'Mantener los conjuntos que gastan al menos 1,500 MXN.'],
+    ['ES money cut-off, como máximo', 'Limitar cada conjunto a como máximo 800 MXN.'],
   ];
 
   it.each(masked)('masks the %s — "%s"', (_label, sentence) => {
     expect(proseViolations(sentence)).toEqual([]);
+  });
+
+  it('clears the real what-to-pause sentence — its 1500 MXN is a cut-off, not a read', () => {
+    expect(
+      proseViolations(
+        'Reviewing Meta campaign delivery over [window: last 7 days] ending yesterday, we define underperforming assets as active sets consuming over 1500 MXN with ROAS below account breakeven.',
+      ),
+    ).toEqual([]);
   });
 
   it('clears the real strategy-next-month sentence — every figure in it is computed', () => {
@@ -139,7 +155,9 @@ describe('groundingViolationsOf — a money amount in a proposal must come from 
     ['EN proposal money, formatted', 'Move 1,500 MXN to Leads // North.'],
     ['ES proposal money', 'Mover 1,500 MXN a Leads // North.'],
     ['ES proposal money with un', 'Reasignar 2,000 MXN a Leads // North.'],
-    ['EN spend cap without a metric', 'Pause ad sets consuming over 1500 MXN.'],
+    ['EN plain stated money', 'Leads // North spent 1,500 MXN.'],
+    ['ES plain stated money', 'Leads // North gastó 1,500 MXN.'],
+    ['EN money after a non-comparative word', 'Leads // North spent a total of 1,500 MXN.'],
     [
       'EN read percentage outside a proposal',
       'Leads // North converted 7.5% of clicks into leads today, a CTR of 3.3%.',
