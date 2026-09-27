@@ -8,6 +8,7 @@
 
 import {
   type CommentAnnotation,
+  type CommentAttachment,
   type MediaComment,
   parseCommentMentions,
 } from '@continuum/contracts';
@@ -20,6 +21,7 @@ import {
   displayNameFromEmail,
   listComments,
   type MediaCommentRow,
+  patchCommentMetadata,
   updateComment,
   upsertComment,
 } from '@/lib/library/comments';
@@ -33,7 +35,28 @@ export type PostCommentInput = {
   /** The version the author is looking at. Omitted only when the asset has no
    *  version rows yet, in which case the API pins to the head it materializes. */
   versionId?: string;
+  /** Lock toggle; omitted means the column default, internal. */
+  visibility?: 'internal' | 'shared';
+  attachments?: CommentAttachment[];
 };
+
+// The Creative Operations create path does not carry visibility and (until it
+// forwards them) attachments, so whatever the created row lacks is patched on
+// straight after. Internal is the default, so a failed patch never exposes a
+// comment to share recipients.
+async function applyReviewMetadata(
+  created: MediaComment,
+  input: PostCommentInput,
+  brandId: string,
+): Promise<MediaComment> {
+  const visibility = input.visibility === 'shared' ? ('shared' as const) : undefined;
+  const attachments =
+    input.attachments && input.attachments.length > 0 && created.attachments.length === 0
+      ? input.attachments
+      : undefined;
+  if (!visibility && !attachments) return created;
+  return patchCommentMetadata({ brandId, commentId: created.id, visibility, attachments });
+}
 
 export type UseAssetCommentsResult = {
   comments: MediaComment[];
@@ -164,7 +187,8 @@ export function useAssetComments(brandId: string, assetId: string): UseAssetComm
         body: input.body,
         mentions: parseCommentMentions(input.body),
         annotation: input.annotation ?? null,
-        attachments: [],
+        attachments: input.attachments ?? [],
+        visibility: input.visibility ?? 'internal',
         resolvedAt: null,
         resolvedBy: null,
         createdBy: user?.id ?? null,
@@ -178,14 +202,21 @@ export function useAssetComments(brandId: string, assetId: string): UseAssetComm
       setError(null);
 
       try {
-        const created = await createComment({
+        let created = await createComment({
           brandId,
           assetId,
           body: input.body,
           annotation: input.annotation,
           parentCommentId: input.parentCommentId,
           versionId: input.versionId,
+          ...(input.attachments?.length ? { attachments: input.attachments } : {}),
         });
+        try {
+          created = await applyReviewMetadata(created, input, brandId);
+        } catch (metadataError: unknown) {
+          console.error('[useAssetComments] review metadata failed', metadataError);
+          setError('Comment posted, but its attachments or sharing could not be saved.');
+        }
         setComments((prev) =>
           upsertComment(
             prev.filter((c) => c.id !== tempId),
