@@ -1,5 +1,8 @@
 import {
+  type CustomFieldOption,
+  type CustomFieldOptions,
   createCustomFieldRequestSchema,
+  customFieldChoiceOptions,
   customFieldSchema,
   deleteCustomFieldRequestSchema,
   listCustomFieldsResponseSchema,
@@ -49,8 +52,10 @@ function isResponse(value: Session | Response): value is Response {
 
 // A select is defined by its options; text and date have none, and letting an
 // option list ride along on them would leave a vocabulary nothing can select.
-function optionsFor(type: string, options: unknown[] | undefined): unknown[] {
-  return type === 'single_select' || type === 'multi_select' ? (options ?? []) : [];
+function optionsFor(type: string, options: CustomFieldOptions | undefined): CustomFieldOption[] {
+  return (type === 'single_select' || type === 'multi_select') && options
+    ? customFieldChoiceOptions({ options })
+    : [];
 }
 
 // GET /api/library/custom-fields?brandId — the brand's field vocabulary, seeded
@@ -161,7 +166,7 @@ export async function PATCH(request: Request) {
         { status: 422 },
       );
     }
-    if (options.length === 0) {
+    if (customFieldChoiceOptions({ options }).length === 0) {
       return NextResponse.json(
         { error: 'A select field needs at least one option' },
         { status: 422 },

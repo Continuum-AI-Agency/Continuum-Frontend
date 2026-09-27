@@ -5,6 +5,7 @@
 import {
   type CreateCommentRequest,
   commentAnnotationSchema,
+  commentAttachmentsSchema,
   commentMentionSchema,
   type DeleteCommentRequest,
   listCommentsResponseSchema,
@@ -30,6 +31,7 @@ export type MediaCommentRow = {
   body: string;
   mentions?: unknown;
   annotation: unknown;
+  attachments?: unknown;
   resolved_at: string | null;
   resolved_by: string | null;
   created_by: string | null;
@@ -63,7 +65,7 @@ export function initialsFor(name: string | null | undefined): string {
   return initials || '?';
 }
 
-// A malformed annotation or mentions payload must never take the whole comment
+// A malformed annotation, mentions or attachments payload must never take the whole comment
 // down with it — the comment degrades to un-annotated / un-tagged instead.
 export function commentRowToMediaComment(
   row: MediaCommentRow,
@@ -71,6 +73,7 @@ export function commentRowToMediaComment(
 ): MediaComment {
   const parsedAnnotation = commentAnnotationSchema.safeParse(row.annotation);
   const parsedMentions = z.array(commentMentionSchema).default([]).safeParse(row.mentions);
+  const parsedAttachments = commentAttachmentsSchema.default([]).safeParse(row.attachments);
   const author = row.created_by ? authors?.get(row.created_by) : undefined;
   return {
     id: row.id,
@@ -81,6 +84,7 @@ export function commentRowToMediaComment(
     body: row.body,
     mentions: parsedMentions.success ? parsedMentions.data : [],
     annotation: parsedAnnotation.success ? parsedAnnotation.data : null,
+    attachments: parsedAttachments.success ? parsedAttachments.data : [],
     resolvedAt: row.resolved_at,
     resolvedBy: row.resolved_by,
     createdBy: row.created_by,

@@ -14,6 +14,7 @@ import {
   type CustomField,
   type CustomFieldFilter,
   type CustomFieldValue,
+  customFieldChoiceOptions,
   customFieldFilterSchema,
   customFieldSchema,
   type DeleteCustomFieldRequest,
@@ -59,7 +60,7 @@ function isCalendarDate(value: string): boolean {
 export function validateFieldValue(field: FieldValueSpec, value: unknown): FieldValueCheck {
   if (value === null || value === undefined) return { ok: true, value: null };
 
-  const optionIds = new Set(field.options.map((option) => option.id));
+  const optionIds = new Set(customFieldChoiceOptions(field).map((option) => option.id));
 
   switch (field.type) {
     case 'single_select': {
