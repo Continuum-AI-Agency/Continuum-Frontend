@@ -79,8 +79,8 @@ export function mediaAssetToMentionSuggestion(
     reference,
     preview: {
       url: previewUrl,
-      // 'file' assets (.aep etc.) have no renderable inline preview.
-      kind: asset.kind === 'file' ? undefined : asset.kind,
+      // 'file' (.aep etc.) and 'audio' assets have no renderable inline preview.
+      kind: asset.kind === 'file' || asset.kind === 'audio' ? undefined : asset.kind,
       label,
     },
   };

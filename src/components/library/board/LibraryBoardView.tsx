@@ -18,7 +18,12 @@
 // option builds the id → option map, and every asset it does not name is (by
 // definition) unset.
 
-import type { CustomField, CustomFieldFilter, MediaAsset } from '@continuum/contracts';
+import {
+  type CustomField,
+  type CustomFieldFilter,
+  customFieldChoiceOptions,
+  type MediaAsset,
+} from '@continuum/contracts';
 import {
   DndContext,
   type DragEndEvent,
@@ -132,7 +137,7 @@ async function fetchOptionByAssetId(
   field: CustomField,
 ): Promise<Map<string, string>> {
   const perOption = await Promise.all(
-    field.options.map(async (option) => {
+    customFieldChoiceOptions(field).map(async (option) => {
       const assets = await fetchBoardAssets(brandId, filters, [
         { fieldId: field.id, operator: 'any_of', values: [option.id] },
       ]);
