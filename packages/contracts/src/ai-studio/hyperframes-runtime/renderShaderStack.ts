@@ -1,4 +1,4 @@
-import type { ShaderEffectV1, ShaderStackV1 } from '@continuum/contracts';
+import type { ShaderEffectV1, ShaderStackV1 } from '../shader-stack';
 
 import shaderStackSource from './shader-stack.wgsl' with { type: 'text' };
 
@@ -281,4 +281,35 @@ export function renderShaderStackFrame(
 /** Initialize the shared WebGPU device and compile both target signatures off the hot path. */
 export async function prewarmShaderStackRenderer(width = 2, height = 2): Promise<void> {
   await acquireRenderer(width, height);
+}
+
+/**
+ * Run a rasterized frame through the stack in place: what every HyperFrames renderer does
+ * after it has a frame's pixels, the browser to its canvas and Continuum Render to the
+ * screenshot it loaded into its runtime page.
+ */
+export async function applyShaderStack(
+  canvas: HTMLCanvasElement | OffscreenCanvas,
+  stack: ShaderStackV1 | undefined,
+  timeSec: number,
+): Promise<void> {
+  if (!stack?.effects.some((effect) => effect.enabled)) return;
+  const bitmap = await renderShaderStackFrame({
+    source: canvas,
+    width: canvas.width,
+    height: canvas.height,
+    stack,
+    timeSec,
+  });
+  try {
+    const context =
+      typeof OffscreenCanvas !== 'undefined' && canvas instanceof OffscreenCanvas
+        ? canvas.getContext('2d')
+        : (canvas as HTMLCanvasElement).getContext('2d');
+    if (!context) throw new Error('2D canvas context is unavailable after shader rendering.');
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  } finally {
+    bitmap.close();
+  }
 }

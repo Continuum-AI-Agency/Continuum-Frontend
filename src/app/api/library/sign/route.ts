@@ -12,6 +12,8 @@ const bodySchema = z.object({
   // what a thumbnail wants; a canvas reference pinned to one render output wants the
   // bytes it was created from, which the head moves away from on the next upload.
   versionId: z.string().uuid().optional(),
+  /** Save as this file name: a GCS URL carries it inside its signature. */
+  download: z.string().min(1).max(255).optional(),
 });
 
 // Mints a single signed URL for one asset. Used by the realtime hook to fill in
@@ -38,7 +40,7 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.message }, { status: 422 });
   }
-  const { brandId, assetId, versionId } = parsed.data;
+  const { brandId, assetId, versionId, download } = parsed.data;
 
   if (!(await callerHasBrandAccess(supabase, brandId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -76,7 +78,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Asset version not found' }, { status: 404 });
     }
     const versionRow = version as { storage_path: string; bucket: string };
-    const versionUrl = await mintSignedUrl(versionRow.storage_path, versionRow.bucket);
+    const versionUrl = await mintSignedUrl(versionRow.storage_path, versionRow.bucket, download);
     if (!versionUrl) {
       return NextResponse.json({ error: 'Sign failed' }, { status: 500 });
     }
@@ -86,7 +88,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ signedUrl: versionUrl, thumbnailUrl: null });
   }
 
-  const signedUrl = await mintSignedUrl(row.storage_path, row.bucket);
+  const signedUrl = await mintSignedUrl(row.storage_path, row.bucket, download);
   if (!signedUrl) {
     return NextResponse.json({ error: 'Sign failed' }, { status: 500 });
   }

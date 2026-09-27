@@ -1,6 +1,7 @@
 import 'server-only';
 
-import { CANVAS_MEDIA_PREVIEW_MAX_EDGE } from '@continuum/contracts';
+import { CANVAS_MEDIA_PREVIEW_MAX_EDGE, isGcsPointer } from '@continuum/contracts';
+import { getApiBaseUrl } from '@/lib/api/config';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { displayDerivativeKey } from './mapper';
 import { toBrowserReachableStorageUrl } from './storage-url';
@@ -44,8 +45,48 @@ export function assetSignablePaths(
   });
 }
 
-export async function mintSignedUrl(storagePath: string, bucket: string): Promise<string | null> {
+type ServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
+
+// A HyperFrames film lives in GCS (bucket `gs://…`), and only the Backend holds a key that
+// can sign it — never Vercel. The server hands the caller's own session to the Backend's
+// signer, which re-checks brand membership and that the path is under the brand.
+async function mintGcsSignedUrl(
+  client: ServerClient,
+  storagePath: string,
+  bucket: string,
+  download?: string,
+): Promise<string | null> {
+  const token = (await client.auth.getSession()).data.session?.access_token;
+  if (!token) return null;
+  const response = await fetch(`${getApiBaseUrl()}/api/organic/agent/hyperframes/sign`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      brandId: storagePath.split('/')[0],
+      bucket,
+      path: storagePath,
+      ...(download ? { download } : {}),
+    }),
+  }).catch(() => null);
+  if (!response?.ok) {
+    console.error('[media/signed-urls] GCS sign failed', {
+      bucket,
+      storagePath,
+      status: response?.status,
+    });
+    return null;
+  }
+  return ((await response.json()) as { signedUrl?: string }).signedUrl ?? null;
+}
+
+/** `download` names the saved file; a GCS URL has to be signed with it. */
+export async function mintSignedUrl(
+  storagePath: string,
+  bucket: string,
+  download?: string,
+): Promise<string | null> {
   const client = await createSupabaseServerClient();
+  if (isGcsPointer(bucket)) return mintGcsSignedUrl(client, storagePath, bucket, download);
   const { data, error } = await client.storage
     .from(bucket)
     .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
@@ -78,6 +119,14 @@ export async function mintSignedUrls(items: SignablePath[]): Promise<Map<string,
   }
 
   const signOriginals = Array.from(pathsByBucket.entries()).map(async ([bucket, paths]) => {
+    if (isGcsPointer(bucket)) {
+      // ponytail: one Backend call per film; batch the sign route when a page holds many films.
+      for (const path of paths) {
+        const url = await mintGcsSignedUrl(client, path, bucket);
+        if (url) map.set(path, url);
+      }
+      return;
+    }
     const { data, error } = await client.storage
       .from(bucket)
       .createSignedUrls(paths, SIGNED_URL_TTL_SECONDS);

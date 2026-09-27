@@ -102,6 +102,28 @@ describe('resignCanvasNodes — asset + exact version references', () => {
     expect(data).not.toHaveProperty('image');
   });
 
+  test('a HyperFrames film re-signs from its Library version, which may live in GCS', async () => {
+    const film = {
+      id: 'hf-1',
+      type: 'hyperframesAgent',
+      position: { x: 0, y: 0 },
+      data: {
+        status: 'completed',
+        generatedVideoUrl: 'https://storage.googleapis.com/hf/brand/canvas/r/film.mp4?stale',
+        generatedVideoStorageBucket: 'gs://hf',
+        generatedVideoStoragePath: 'brand/canvas/r/film.mp4',
+        renderOutputAssetId: ASSET_A,
+        renderOutputAssetVersionId: VERSION_A,
+      },
+    } as never;
+
+    const [node] = await resignCanvasNodes([film], BRAND_ID);
+
+    expect(signCalls).toEqual([{ brandId: BRAND_ID, assetId: ASSET_A, versionId: VERSION_A }]);
+    expect(backendCalls).toEqual([]);
+    expect((node.data as Record<string, unknown>).generatedVideoUrl).toBe(versionUrl(VERSION_A));
+  });
+
   test('two nodes on the same asset and version cost exactly one sign', async () => {
     const nodes = await resignCanvasNodes(
       [versionRef('ref-a', ASSET_A, VERSION_A), versionRef('ref-a-copy', ASSET_A, VERSION_A)],
