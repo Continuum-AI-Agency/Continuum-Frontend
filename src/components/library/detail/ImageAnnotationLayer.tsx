@@ -1,20 +1,23 @@
 'use client';
 
-// Image stage with Figma-style annotated comments: drag a region to open a
-// composer anchored to it; existing annotated threads render as numbered pins
-// whose boxes outline on hover/selection.
+// Image stage with Frame.io-style annotated comments: drop a pin (its composer
+// opens beside it), or draw marks (arrow, line, box, freehand) in a colour with
+// undo/redo and comment in the strip below the image. Existing annotated threads
+// render as numbered pins whose marks re-render in place on hover/selection.
 
-import type { CommentAnnotation } from '@continuum/contracts';
-import { BoxSelect, ImageOff, MousePointer2, Pencil } from 'lucide-react';
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
+import type { DrawingShape } from '@continuum/contracts';
+import { ImageOff } from 'lucide-react';
+import { useEffect, useReducer, useState } from 'react';
 import {
   AnnotationOverlay,
-  type AnnotationTool,
+  draftToSpatialAnnotation,
   type OverlayPin,
   type SpatialAnnotation,
 } from './AnnotationOverlay';
-import { CommentComposer } from './CommentComposer';
+import { DrawingToolbar, handleUndoRedoKey, type StageTool } from './annotation/DrawingToolbar';
+import { DEFAULT_DRAWING_COLOR, drawingHistoryReducer, EMPTY_DRAWING } from './annotation/drawing';
+import type { NormalizedPoint } from './annotationGeometry';
+import { CommentComposer, type ComposerExtras } from './CommentComposer';
 import { useStageGeometry } from './useStageGeometry';
 
 type Props = {
@@ -25,7 +28,7 @@ type Props = {
   posting: boolean;
   /** Brand context enables @mention autocomplete in the annotation composer. */
   brandId?: string;
-  onPostAnnotated: (body: string, annotation: SpatialAnnotation) => void;
+  onPostAnnotated: (body: string, annotation: SpatialAnnotation, extras: ComposerExtras) => void;
 };
 
 export function ImageAnnotationLayer({
@@ -38,9 +41,33 @@ export function ImageAnnotationLayer({
   onPostAnnotated,
 }: Props) {
   const { containerRef, containerSize, contentRect, setNaturalSize } = useStageGeometry();
-  const [tool, setTool] = useState<AnnotationTool>('point');
-  const [draftAnnotation, setDraftAnnotation] = useState<SpatialAnnotation | null>(null);
+  const [tool, setTool] = useState<StageTool>('point');
+  const [color, setColor] = useState<string>(DEFAULT_DRAWING_COLOR);
+  const [draftPoint, setDraftPoint] = useState<NormalizedPoint | null>(null);
+  const [drawing, dispatchDrawing] = useReducer(drawingHistoryReducer, EMPTY_DRAWING);
   const [mediaError, setMediaError] = useState(false);
+
+  const draftAnnotation = draftToSpatialAnnotation(draftPoint, drawing.shapes);
+  const hasDraft = draftAnnotation !== null;
+
+  const clearDraft = () => {
+    setDraftPoint(null);
+    dispatchDrawing({ type: 'clear' });
+  };
+
+  useEffect(() => {
+    if (!hasDraft) return;
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.tagName === 'TEXTAREA' || target?.tagName === 'INPUT') return;
+      handleUndoRedoKey(event, {
+        undo: () => dispatchDrawing({ type: 'undo' }),
+        redo: () => dispatchDrawing({ type: 'redo' }),
+      });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [hasDraft]);
 
   if (!src || mediaError) {
     return (
@@ -50,80 +77,77 @@ export function ImageAnnotationLayer({
     );
   }
 
-  return (
-    <div ref={containerRef} className="relative size-full select-none">
-      <div
-        className="absolute left-3 top-3 z-20 flex items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-sm backdrop-blur"
-        role="toolbar"
-        aria-label="Image annotation tools"
-      >
-        {(
-          [
-            { value: 'point', label: 'Point', icon: MousePointer2 },
-            { value: 'box', label: 'Rectangle', icon: BoxSelect },
-            { value: 'freehand', label: 'Freehand', icon: Pencil },
-          ] as const satisfies ReadonlyArray<{
-            value: Exclude<CommentAnnotation['kind'], 'time'>;
-            label: string;
-            icon: typeof MousePointer2;
-          }>
-        ).map(({ value, label, icon: Icon }) => (
-          <Button
-            key={value}
-            type="button"
-            size="icon"
-            variant={tool === value ? 'secondary' : 'ghost'}
-            className="size-8"
-            aria-label={`${label} annotation`}
-            aria-pressed={tool === value}
-            title={label}
-            onClick={() => {
-              setTool(value);
-              setDraftAnnotation(null);
-            }}
-          >
-            <Icon className="size-3.5" />
-          </Button>
-        ))}
-      </div>
-      {/* Signed storage URL rendered at natural fit for pixel-accurate annotation geometry; next/image transforms would skew the measured intrinsic size. */}
-      {/* biome-ignore lint/performance/noImgElement: annotation math needs the untransformed intrinsic frame */}
-      <img
-        src={src}
-        alt={alt}
-        draggable={false}
-        className="absolute inset-0 size-full object-contain"
-        onLoad={(e) => {
-          const el = e.currentTarget;
-          setNaturalSize({ width: el.naturalWidth, height: el.naturalHeight });
+  // A pin's composer floats beside the pin. With a draw tool chosen the composer
+  // docks in a strip below the image, as on the video stage — over the frame it
+  // would sit where the next stroke starts and swallow it — and it is there from
+  // the moment the tool is chosen, so the image never resizes under a stroke.
+  const docked = tool !== 'point';
+  const composer =
+    docked || draftAnnotation ? (
+      <CommentComposer
+        placeholder={docked ? 'Comment on these marks...' : 'Comment on this spot...'}
+        busy={posting}
+        autoFocus={!docked}
+        brandId={brandId}
+        reviewOptions={Boolean(brandId)}
+        submitDisabled={!draftAnnotation}
+        onSubmit={(body, extras) => {
+          if (!draftAnnotation) return;
+          onPostAnnotated(body, draftAnnotation, extras);
+          clearDraft();
         }}
-        onError={() => setMediaError(true)}
+        onCancel={draftAnnotation ? clearDraft : undefined}
       />
-      <AnnotationOverlay
-        containerSize={containerSize}
-        contentRect={contentRect}
-        pins={pins}
-        onSelectPin={onSelectPin}
-        drawEnabled
-        tool={tool}
-        draftAnnotation={draftAnnotation}
-        onDraftAnnotation={setDraftAnnotation}
-        composer={
-          draftAnnotation ? (
-            <CommentComposer
-              placeholder="Comment on this annotation..."
-              busy={posting}
-              autoFocus
-              brandId={brandId}
-              onSubmit={(body) => {
-                onPostAnnotated(body, draftAnnotation);
-                setDraftAnnotation(null);
-              }}
-              onCancel={() => setDraftAnnotation(null)}
-            />
-          ) : undefined
-        }
-      />
+    ) : null;
+
+  return (
+    <div className="flex size-full flex-col">
+      <div ref={containerRef} className="relative min-h-0 flex-1 select-none">
+        <DrawingToolbar
+          className="absolute left-3 top-3 z-20"
+          tool={tool}
+          onToolChange={(next) => {
+            setTool(next);
+            if (next === 'point' || draftPoint) clearDraft();
+          }}
+          color={color}
+          onColorChange={setColor}
+          canUndo={drawing.shapes.length > 0}
+          canRedo={drawing.redo.length > 0}
+          onUndo={() => dispatchDrawing({ type: 'undo' })}
+          onRedo={() => dispatchDrawing({ type: 'redo' })}
+        />
+        {/* Signed storage URL rendered at natural fit for pixel-accurate annotation geometry; next/image transforms would skew the measured intrinsic size. */}
+        {/* biome-ignore lint/performance/noImgElement: annotation math needs the untransformed intrinsic frame */}
+        <img
+          src={src}
+          alt={alt}
+          draggable={false}
+          className="absolute inset-0 size-full object-contain"
+          onLoad={(e) => {
+            const el = e.currentTarget;
+            setNaturalSize({ width: el.naturalWidth, height: el.naturalHeight });
+          }}
+          onError={() => setMediaError(true)}
+        />
+        <AnnotationOverlay
+          containerSize={containerSize}
+          contentRect={contentRect}
+          pins={pins}
+          onSelectPin={onSelectPin}
+          drawEnabled
+          tool={tool}
+          color={color}
+          draftShapes={drawing.shapes}
+          onShapeDrawn={(shape: DrawingShape) => dispatchDrawing({ type: 'add', shape })}
+          draftPoint={draftPoint}
+          onDraftPoint={setDraftPoint}
+          composer={docked ? undefined : (composer ?? undefined)}
+        />
+      </div>
+      {docked ? (
+        <div className="shrink-0 border-t border-border bg-background px-3 py-2">{composer}</div>
+      ) : null}
     </div>
   );
 }
