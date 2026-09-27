@@ -482,6 +482,46 @@ const sectionFigureIds = (section: Record<string, unknown>): Set<string> => {
   return ids;
 };
 
+/** The one figure a derivation restates: `spend_share_1` (an alias) or `|results_change|` (its size). */
+const RESTATED_ID = /^\|?\s*([a-z][a-z0-9_]*)\s*\|?$/u;
+
+const restatedIdOf = (derivation: string | null): string | null => {
+  const text = (derivation ?? '').trim();
+  const match = RESTATED_ID.exec(text);
+  if (!match) return null;
+  const bars = (text.startsWith('|') ? 1 : 0) + (text.endsWith('|') ? 1 : 0);
+  return bars === 0 || bars === 2 ? match[1] : null;
+};
+
+/**
+ * The figure ids the reader can see below the sentence: every id a section cites, plus every
+ * figure that only restates one of them — an alias (`over_spend_share` = `spend_share_1`) or
+ * a size (`step_abs_1` = `|step_1|`) — when its value is that figure's value, so the same
+ * number stands in the justification. A derivation that computes (`|a − b|`) shows nothing:
+ * the reader would have to do the arithmetic.
+ */
+const justifiedFigureIds = (
+  cited: ReadonlySet<string>,
+  figures: ReadonlyArray<TemplateFigure>,
+): Set<string> => {
+  const byId = new Map(figures.map((figure) => [figure.id, figure]));
+  const shown = new Set(cited);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const figure of figures) {
+      if (shown.has(figure.id)) continue;
+      const target = byId.get(restatedIdOf(figure.derivation) ?? '');
+      if (!target || !shown.has(target.id)) continue;
+      if (figure.value === null || target.value === null) continue;
+      if (Math.abs(figure.value) !== Math.abs(target.value)) continue;
+      shown.add(figure.id);
+      grew = true;
+    }
+  }
+  return shown;
+};
+
 // ---------------------------------------------------------------------------
 // Direction against figures
 // ---------------------------------------------------------------------------
@@ -691,10 +731,11 @@ export function answerShapeOf(report: unknown): AnswerShapeViolation[] {
   if (template && answered) {
     const sentence = stringOf(recordOf(template.executive).sentence);
     const figures = figuresOf(template);
-    const cited = new Set(
-      sectionsOf(template).flatMap((section) => [...sectionFigureIds(section)]),
+    const shown = justifiedFigureIds(
+      new Set(sectionsOf(template).flatMap((section) => [...sectionFigureIds(section)])),
+      figures,
     );
-    const unjustified = [...new Set(figureRefsIn(sentence))].filter((ref) => !cited.has(ref));
+    const unjustified = [...new Set(figureRefsIn(sentence))].filter((ref) => !shown.has(ref));
     if (unjustified.length > 0) {
       add(
         'sentence_figure_unjustified',

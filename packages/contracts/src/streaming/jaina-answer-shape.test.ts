@@ -545,3 +545,248 @@ describe('answerShapeOf — template answers', () => {
     ).toEqual(['sentence_direction_contradicts']);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Which figure the justification shows — built from live golden run 1bad67f0
+// ---------------------------------------------------------------------------
+
+const shareRow = (n: number, label: string) => ({
+  label,
+  entity_id: `c${n}`,
+  cells: {
+    spend: `spend_${n}`,
+    spend_share: `spend_share_${n}`,
+    results: `results_${n}`,
+    results_share: `results_share_${n}`,
+    index: `index_${n}`,
+  },
+});
+
+/** The spend_results_balance block run 1bad67f0 emitted (budget-split-this-month-es), trimmed to what the rule reads. */
+const balanceBlock = (patch: { rows?: number[]; figures?: TemplateFigure[] } = {}) => ({
+  block_id: 'answer_template_spend_results_balance',
+  category: 'answer_template',
+  scope: 'account',
+  title: 'Reparto del gasto',
+  template_id: 'spend_results_balance',
+  executive: {
+    sentence:
+      'En este mes, entre las campañas que buscan conversaciones, CAÑADAS // MENSAJES // AGOSTO 2026 recibe {over_spend_share} del gasto y trae {over_results_share} de las conversaciones, mientras ITESO // MENSAJES // AGOSTO 2026 se lleva {under_spend_share} del gasto y solo aporta {under_results_share}.',
+    hero_chart: null,
+  },
+  justification: {
+    sections: [
+      {
+        kind: 'measured',
+        title: 'Qué medimos',
+        text: 'Leímos gasto y conversaciones de las {campaigns_read} campañas que buscan conversaciones y gastaron en este mes, a nivel campaña: {spend_total} y {results_total} conversaciones. Para cada una dividimos su parte de las conversaciones entre su parte del gasto: un índice de {index_even} es traer exactamente lo que cuesta; arriba, más; abajo, menos.',
+      },
+      {
+        kind: 'found',
+        title: 'Qué encontramos',
+        text: 'CAÑADAS // MENSAJES // AGOSTO 2026 tiene el índice más alto ({over_index}) y ITESO // MENSAJES // AGOSTO 2026 el más bajo ({under_index}).',
+        table: {
+          columns: [
+            { key: 'spend', label: 'Gasto' },
+            { key: 'spend_share', label: '% gasto' },
+            { key: 'results', label: 'Conversaciones' },
+            { key: 'results_share', label: '% conversaciones' },
+            { key: 'index', label: 'Índice' },
+          ],
+          rows: (patch.rows ?? [1, 2, 3, 4]).map((n) => shareRow(n, `Campaña ${n}`)),
+        },
+      },
+      {
+        kind: 'why',
+        title: 'Por qué',
+        text: 'CAÑADAS // MENSAJES // AGOSTO 2026 trae más conversaciones de lo que cuesta; ITESO // MENSAJES // AGOSTO 2026 trae menos.',
+      },
+    ],
+  },
+  figures: patch.figures ?? [
+    fig('spend_total', 56416.78, 'money', 'sum(spend) over 4 campaigns bought for conversations'),
+    fig('results_total', 1538, 'count', 'sum(conversations) over 4 campaigns'),
+    fig('campaigns_read', 4, 'count'),
+    fig('index_even', 1, 'ratio', 'reading rule: share of results = share of spend'),
+    ...[
+      [15271.73, 476, 0.2706948181019903, 0.3094928478543563, 1.1433275672744796],
+      [14555.7, 441, 0.25800302675906, 0.2867360208062419, 1.1113668874668459],
+      [13481.26, 346, 0.23895833828162474, 0.22496749024707413, 0.9414506807539744],
+      [13108.09, 275, 0.23234381685732503, 0.1788036410923277, 0.769564878079477],
+    ].flatMap(([spend, results, spendShare, resultsShare, index], i) => [
+      fig(`spend_${i + 1}`, spend),
+      fig(`results_${i + 1}`, results, 'count'),
+      fig(`spend_share_${i + 1}`, spendShare, 'percent', 'spend / spend_total'),
+      fig(`results_share_${i + 1}`, resultsShare, 'percent', 'conversations / results_total'),
+      fig(`index_${i + 1}`, index, 'ratio', `results_share_${i + 1} / spend_share_${i + 1}`),
+    ]),
+    fig('over_spend_share', 0.2706948181019903, 'percent', 'spend_share_1'),
+    fig('over_results_share', 0.3094928478543563, 'percent', 'results_share_1'),
+    fig('over_index', 1.1433275672744796, 'ratio', 'index_1'),
+    fig('under_spend_share', 0.23234381685732503, 'percent', 'spend_share_4'),
+    fig('under_results_share', 0.1788036410923277, 'percent', 'results_share_4'),
+    fig('under_index', 0.769564878079477, 'ratio', 'index_4'),
+  ],
+});
+
+/** The weekly_bridge block run 1bad67f0 emitted (week-bridge-7d), trimmed to what the rule reads. */
+const weeklyBridgeBlock = (foundText: string) => ({
+  block_id: 'answer_template_weekly_bridge',
+  category: 'answer_template',
+  scope: 'account',
+  title: 'Puente de la semana',
+  template_id: 'weekly_bridge',
+  executive: {
+    sentence:
+      'En los últimos 7 días hubo {results_current}, {results_change_abs} más que en los 7 días anteriores ({results_change_pct_abs}), sobre todo por gastar más ({volume_share} del movimiento); el mayor escalón fue CAÑADAS // MENSAJES // AGOSTO 2026 ({step_abs_1} más).',
+    hero_chart: {
+      kind: 'bridge',
+      title: 'Conversaciones: semana anterior → esta semana, por campaña',
+      points: [
+        { label: 'Semana anterior', figure_id: 'results_prior' },
+        { label: 'CAÑADAS', figure_id: 'step_1' },
+        { label: 'Esta semana', figure_id: 'results_current' },
+      ],
+      lower_is_better: false,
+    },
+  },
+  justification: {
+    sections: [
+      {
+        kind: 'measured',
+        title: 'Qué medimos',
+        text: 'Comparamos gasto y conversaciones de las {campaigns_read} campañas que buscan conversaciones, a nivel campaña, en dos semanas del mismo largo: los 7 días anteriores ({results_prior} conversaciones con {spend_prior}) y los últimos 7 días ({results_current} conversaciones con {spend_current}).',
+      },
+      { kind: 'found', title: 'Qué encontramos', text: foundText },
+      {
+        kind: 'why',
+        title: 'Por qué pasa',
+        text: 'Del movimiento, {volume_share} viene de gastar más y {efficiency_share} de pagar menos por conversación: el gasto subió {spend_change_pct_abs} ({spend_prior} → {spend_current}). El mayor escalón es CAÑADAS // MENSAJES // AGOSTO 2026 ({step_abs_1} más).',
+        items: [{ id: 'step_1', title: 'CAÑADAS', badge_figure_id: 'step_1', text: '' }],
+      },
+    ],
+  },
+  figures: [
+    fig('results_current', 504, 'count', 'sum(conversations) over last_7d, per campaign'),
+    fig('results_prior', 368, 'count', 'sum(conversations) over last_14d − last_7d, per campaign'),
+    fig('results_change', 136, 'count', 'results_current − results_prior = sum(step_n)'),
+    fig('results_change_abs', 136, 'count', '|results_current − results_prior|'),
+    fig(
+      'results_change_pct_abs',
+      0.3695652173913043,
+      'percent',
+      '|results_current / results_prior − 1|',
+    ),
+    fig('spend_current', 20360.29, 'money', 'sum(spend) over 4 campaigns'),
+    fig('spend_prior', 15228.37, 'money', 'sum(spend) over last_14d − last_7d'),
+    fig(
+      'spend_change_pct_abs',
+      0.33699732801343824,
+      'percent',
+      '|spend_current / spend_prior − 1|',
+    ),
+    fig(
+      'volume_share',
+      0.9302839713441498,
+      'percent',
+      '|volume_total| / (|volume_total| + |efficiency_total|)',
+    ),
+    fig(
+      'efficiency_share',
+      0.06971602865585033,
+      'percent',
+      '|efficiency_total| / (|volume_total| + |efficiency_total|)',
+    ),
+    fig('campaigns_read', 4, 'count'),
+    fig('step_1', 52, 'count', 'results_current_1 − results_prior_1'),
+    fig('step_abs_1', 52, 'count', '|step_1|'),
+  ],
+});
+
+const withoutStepAbsText = (block: ReturnType<typeof weeklyBridgeBlock>) => ({
+  ...block,
+  justification: {
+    sections: block.justification.sections.map((section) => ({
+      ...section,
+      text: section.text.replace(' ({step_abs_1} más)', ''),
+    })),
+  },
+});
+
+const unjustifiedOf = (block: unknown): string =>
+  answerShapeOf(templated(block))
+    .filter((violation) => violation.code === 'sentence_figure_unjustified')
+    .map((violation) => violation.message)
+    .join(' ');
+
+describe('answerShapeOf — a sentence figure the justification shows', () => {
+  const cases: ReadonlyArray<{ name: string; block: unknown; unjustified: string[] }> = [
+    {
+      name: 'balance: every share is an alias of a share the table shows',
+      block: balanceBlock(),
+      unjustified: [],
+    },
+    {
+      name: 'balance: the alias of a row the table dropped is unjustified',
+      block: balanceBlock({ rows: [1, 2, 3] }),
+      unjustified: ['under_spend_share', 'under_results_share'],
+    },
+    {
+      name: 'balance: an alias whose value is not its target’s is unjustified',
+      block: balanceBlock({
+        figures: [
+          ...balanceBlock().figures.filter((figure) => figure.id !== 'over_spend_share'),
+          fig('over_spend_share', 0.5, 'percent', 'spend_share_1'),
+        ],
+      }),
+      unjustified: ['over_spend_share'],
+    },
+    {
+      name: 'bridge as emitted: the change and its percent appear nowhere below',
+      block: weeklyBridgeBlock(
+        'Conversaciones pasaron de {results_prior} a {results_current}: la suma de los escalones de cada campaña.',
+      ),
+      unjustified: ['results_change_abs', 'results_change_pct_abs'],
+    },
+    {
+      name: 'bridge: |step_1| is the step its badge shows, even with no {step_abs_1} below',
+      block: withoutStepAbsText(
+        weeklyBridgeBlock(
+          'Conversaciones pasaron de {results_prior} a {results_current} ({results_change_abs} más, {results_change_pct_abs}).',
+        ),
+      ),
+      unjustified: [],
+    },
+    {
+      name: 'bridge: a figure computed from shown figures is not itself shown',
+      block: weeklyBridgeBlock(
+        'Conversaciones pasaron de {results_prior} a {results_current}, un cambio de {results_change}.',
+      ),
+      unjustified: ['results_change_abs', 'results_change_pct_abs'],
+    },
+    {
+      name: 'bridge: the found text states the change and its percent',
+      block: weeklyBridgeBlock(
+        'Conversaciones pasaron de {results_prior} a {results_current} ({results_change_abs} más, {results_change_pct_abs}): la suma de los escalones de cada campaña.',
+      ),
+      unjustified: [],
+    },
+  ];
+
+  for (const { name, block, unjustified } of cases) {
+    it(name, () => {
+      const message = unjustifiedOf(block);
+      if (unjustified.length === 0) expect(message).toBe('');
+      for (const id of unjustified) expect(message).toContain(`{${id}}`);
+      for (const id of [
+        'over_spend_share',
+        'over_results_share',
+        'under_spend_share',
+        'under_results_share',
+        'results_change_abs',
+        'results_change_pct_abs',
+      ])
+        if (!unjustified.includes(id)) expect(message).not.toContain(`{${id}}`);
+    });
+  }
+});
