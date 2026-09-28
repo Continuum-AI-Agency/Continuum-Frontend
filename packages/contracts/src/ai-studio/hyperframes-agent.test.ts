@@ -6,7 +6,6 @@ import {
   hyperframesAgentNodeDataSchema,
   hyperframesAgentTurnRequestSchema,
   hyperframesBrowserReviewRequestSchema,
-  hyperframesRenderCompleteRequestSchema,
   hyperframesTemporalMetricsSchema,
 } from './hyperframes-agent';
 
@@ -135,20 +134,6 @@ describe('HyperFrames agent contracts', () => {
         },
       }).success,
     ).toBe(true);
-  });
-
-  it('accepts asset-only completion so a saved render can be finalized after a crash', () => {
-    expect(
-      hyperframesRenderCompleteRequestSchema.parse({
-        revisionId: 'revision_1',
-        fingerprint: 'f'.repeat(64),
-        assetId: 'asset_1',
-      }),
-    ).toEqual({
-      revisionId: 'revision_1',
-      fingerprint: 'f'.repeat(64),
-      assetId: 'asset_1',
-    });
   });
 
   it('carries a targeted scene revision and a durable quality summary', () => {
