@@ -11,9 +11,6 @@ export function registerDefaultClientRenderExecutors(): void {
   registerLazyClientRenderExecutor('mcp_clip_batch', () =>
     import('./executors/mcpClipBatch').then((m) => m.executeMcpClipBatchClientRender),
   );
-  registerLazyClientRenderExecutor('organic_hyperframe', () =>
-    import('./executors/organicHyperframe').then((m) => m.executeOrganicHyperframeClientRender),
-  );
   registerLazyClientRenderExecutor('planner_reel', () =>
     import('./executors/plannerReel').then((m) => m.executePlannerReelClientRender),
   );
