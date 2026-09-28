@@ -158,6 +158,32 @@ describe('API render contracts', () => {
     expect(contract.variables[0]?.reserved).toBe(false);
   });
 
+  it('accepts Forge clip timing on every variable in the contract response', () => {
+    const variable = { key: 'slot', label: 'Slot', kind: 'text', required: false };
+    const contract = apiRenderTemplateContractSchema.parse({
+      template: {
+        key: '331',
+        name: 'Cards',
+        bindingId: '5f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
+        environment: 'Six_app',
+        contractVersion: '1',
+        contractHash: 'hash',
+        contractSource: 'template_forge',
+        outputKinds: ['video'],
+        variableCount: 22,
+        previewUrl: null,
+        updatedAt: null,
+      },
+      variables: Array.from({ length: 22 }, (_, index) => ({
+        ...variable,
+        key: `slot_${index}`,
+        clip: null,
+      })),
+    });
+    expect(contract.variables).toHaveLength(22);
+    expect(contract.variables.every((item) => item.clip === null)).toBe(true);
+  });
+
   it('carries the frozen watermark pin, and defaults it to null on an older response', () => {
     const base = {
       confirmationToken: 'token',
