@@ -1,107 +1,84 @@
 import { describe, expect, test } from 'bun:test';
 import { libraryBrowseQuerySchema } from '@continuum/contracts';
 import {
-  browseNarrowingPredicate,
-  isNarrowed,
-  libraryBrowseRpcArgs,
-  reviewPrefilterStatuses,
+  decodeLibraryBrowseCursor,
+  encodeLibraryBrowseCursor,
+  libraryBrowseAssetsArgs,
+  libraryBrowseFacetArgs,
 } from './browse-args';
 
 const brandId = '11111111-1111-4111-8111-111111111111';
+const collectionId = '22222222-2222-4222-8222-222222222222';
+const fieldId = '33333333-3333-4333-8333-333333333333';
 
-describe('libraryBrowseRpcArgs destinations', () => {
-  test('Home sends p_destination and aspect-ratio bins by name', () => {
-    const args = libraryBrowseRpcArgs(
-      libraryBrowseQuerySchema.parse({
-        brandId,
-        destination: 'home',
-        aspectRatios: ['9:16', '1:1'],
-      }),
-    );
-    expect(args.p_destination).toBe('home');
-    expect(args.p_aspect_ratios).toEqual(['9:16', '1:1']);
-    expect(args.p_media_type).toBe('all');
+describe('libraryBrowseAssetsArgs', () => {
+  test('a default browse sends no filter and newest first', () => {
+    const args = libraryBrowseAssetsArgs(libraryBrowseQuerySchema.parse({ brandId }), null);
+    expect(args.p_query).toEqual({ performanceWindow: 'd30' });
+    expect(args.p_sorts).toEqual([{ key: 'created', dir: 'desc' }]);
+    expect(args.p_limit).toBe(48);
   });
 
-  test('omits destination and aspect when the caller is on the legacy dump', () => {
-    const args = libraryBrowseRpcArgs(libraryBrowseQuerySchema.parse({ brandId }));
-    expect(args.p_destination).toBeNull();
-    expect(args.p_aspect_ratios).toBeNull();
+  test('every filter rides p_query by its contract name, empties dropped', () => {
+    const query = libraryBrowseQuerySchema.parse({
+      brandId,
+      collectionId,
+      destination: 'home',
+      aspectRatios: ['9:16'],
+      families: ['video', 'design'],
+      ranges: { durationMs: { min: 30_001 }, resolution: { min: 2160 } },
+      technical: { videoCodecs: ['prores'] },
+      reviewStateIds: [fieldId],
+      fieldRanges: [{ fieldId, min: 4 }],
+      used: false,
+      tags: [],
+    });
+    expect(libraryBrowseFacetArgs(query).p_query).toEqual({
+      collectionId,
+      destination: 'home',
+      aspectRatios: ['9:16'],
+      families: ['video', 'design'],
+      ranges: { durationMs: { min: 30_001 }, resolution: { min: 2160 } },
+      technical: { videoCodecs: ['prores'] },
+      reviewStateIds: [fieldId],
+      fieldRanges: [{ fieldId, min: 4 }],
+      used: false,
+      performanceWindow: 'd30',
+    });
+  });
+
+  test('sort then thenBy become ordered keys, a field sort names its field', () => {
+    const query = libraryBrowseQuerySchema.parse({
+      brandId,
+      sort: 'field_desc',
+      sortFieldId: fieldId,
+      thenBy: [
+        { key: 'size', dir: 'asc' },
+        { key: `field:${fieldId}`, dir: 'asc' },
+      ],
+    });
+    expect(libraryBrowseAssetsArgs(query, null).p_sorts).toEqual([
+      { key: `field:${fieldId}`, dir: 'desc' },
+      { key: 'size', dir: 'asc' },
+    ]);
+    expect(
+      libraryBrowseAssetsArgs(libraryBrowseQuerySchema.parse({ brandId, sort: 'most_used' }), null)
+        .p_sorts,
+    ).toEqual([{ key: 'usage', dir: 'desc' }]);
   });
 });
 
-describe('browse narrowing — custom review states and field filters', () => {
-  const LEGAL = 'state-legal';
-  const asset = (id: string, review_status: string, review_state_id: string | null = null) => ({
-    id,
-    review_status,
-    review_state_id,
-  });
-  const unfiltered = { kind: 'unfiltered' } as const;
-
-  test("'Approved' + 'Legal' (a state under In review) keeps both, not only Legal", () => {
-    const passes = browseNarrowingPredicate(['approved'], {
-      reviewStateIds: [LEGAL],
-      fieldConstraint: unfiltered,
-    });
-    expect(passes(asset('a', 'approved'))).toBe(true);
-    expect(passes(asset('b', 'in_review', LEGAL))).toBe(true);
-    expect(passes(asset('c', 'in_review'))).toBe(false);
-    expect(passes(asset('d', 'draft'))).toBe(false);
+describe('browse cursor', () => {
+  test('round-trips its keys and id', () => {
+    const cursor = { keys: ['2026-09-27T10:00:00.123456+00:00', null, 29.97], id: collectionId };
+    expect(decodeLibraryBrowseCursor(encodeLibraryBrowseCursor(cursor))).toEqual(cursor);
   });
 
-  test('a base alone includes its custom states; a state alone is only that state', () => {
-    const baseWithState = browseNarrowingPredicate(['approved'], {
-      reviewStateIds: [LEGAL],
-      fieldConstraint: unfiltered,
-    });
-    expect(baseWithState(asset('a', 'approved', 'state-other'))).toBe(true);
-    const stateOnly = browseNarrowingPredicate([], {
-      reviewStateIds: [LEGAL],
-      fieldConstraint: unfiltered,
-    });
-    expect(stateOnly(asset('a', 'approved', LEGAL))).toBe(true);
-    expect(stateOnly(asset('b', 'approved'))).toBe(false);
-  });
-
-  test('field constraints AND with the review choice', () => {
-    const passes = browseNarrowingPredicate(['approved'], {
-      reviewStateIds: [LEGAL],
-      fieldConstraint: { kind: 'ids', ids: ['a'] },
-    });
-    expect(passes(asset('a', 'approved'))).toBe(true);
-    expect(passes(asset('b', 'approved'))).toBe(false);
-    const excluding = browseNarrowingPredicate([], {
-      reviewStateIds: [],
-      fieldConstraint: { kind: 'exclude', ids: ['a'] },
-    });
-    expect(excluding(asset('a', 'draft'))).toBe(false);
-    expect(excluding(asset('b', 'draft'))).toBe(true);
-  });
-
-  test('the RPC pre-filters on the chosen bases plus each state’s base, every other filter intact', () => {
-    const statuses = reviewPrefilterStatuses(['approved'], ['in_review', 'approved']);
-    expect(statuses).toEqual(['approved', 'in_review']);
-    const args = libraryBrowseRpcArgs(
-      libraryBrowseQuerySchema.parse({
-        brandId,
-        reviewStatuses: statuses,
-        placements: ['feed'],
-        used: true,
-        shared: false,
-      }),
+  test('a pre-keyset cursor restarts rather than misreading, garbage is refused', () => {
+    const legacy = Buffer.from(JSON.stringify({ id: collectionId, time: 'x' })).toString(
+      'base64url',
     );
-    expect(args.p_review_statuses).toEqual(['approved', 'in_review']);
-    expect(args.p_placements).toEqual(['feed']);
-    expect(args.p_used).toBe(true);
-    expect(args.p_shared).toBe(false);
-  });
-
-  test('narrowed only when a state or a field filter is on', () => {
-    expect(isNarrowed({ reviewStateIds: [], fieldConstraint: unfiltered })).toBe(false);
-    expect(isNarrowed({ reviewStateIds: [LEGAL], fieldConstraint: unfiltered })).toBe(true);
-    expect(isNarrowed({ reviewStateIds: [], fieldConstraint: { kind: 'ids', ids: [] } })).toBe(
-      true,
-    );
+    expect(decodeLibraryBrowseCursor(legacy)).toBeNull();
+    expect(() => decodeLibraryBrowseCursor('%%%')).toThrow('Invalid Library cursor');
   });
 });

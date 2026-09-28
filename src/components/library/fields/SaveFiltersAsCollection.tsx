@@ -9,7 +9,11 @@
 import type {
   CollectionVisibility,
   CustomFieldFilter,
+  LibraryFieldRange,
+  LibraryFormatGroup,
   LibraryMediaType,
+  LibraryRangeFilters,
+  LibraryTechnicalFilters,
   MediaReviewStatus,
   MediaSource,
 } from '@continuum/contracts';
@@ -31,7 +35,27 @@ export type SavableFilters = {
   tags: string[];
   reviewStatuses: MediaReviewStatus[];
   fieldFilters: CustomFieldFilter[];
+  // The format, range and technical filters the SQL smart-collection evaluator honours.
+  families?: LibraryFormatGroup[];
+  ranges?: LibraryRangeFilters;
+  technical?: LibraryTechnicalFilters;
+  fieldRanges?: LibraryFieldRange[];
+  reviewStateIds?: string[];
 };
+
+const isSet = (value: object | undefined): boolean =>
+  value !== undefined && Object.values(value).some((entry) => entry !== undefined);
+
+/** The optional filter keys that hold something, ready to spread into a smart query. */
+export function extraSmartQueryFilters(query: SavableFilters) {
+  return {
+    ...(query.families?.length ? { families: query.families } : {}),
+    ...(isSet(query.ranges) ? { ranges: query.ranges } : {}),
+    ...(isSet(query.technical) ? { technical: query.technical } : {}),
+    ...(query.fieldRanges?.length ? { fieldRanges: query.fieldRanges } : {}),
+    ...(query.reviewStateIds?.length ? { reviewStateIds: query.reviewStateIds } : {}),
+  };
+}
 
 function hasAnyFilter(query: SavableFilters): boolean {
   return (
@@ -39,7 +63,8 @@ function hasAnyFilter(query: SavableFilters): boolean {
     query.createdWith.length > 0 ||
     query.tags.length > 0 ||
     query.reviewStatuses.length > 0 ||
-    query.fieldFilters.length > 0
+    query.fieldFilters.length > 0 ||
+    Object.keys(extraSmartQueryFilters(query)).length > 0
   );
 }
 
@@ -77,6 +102,7 @@ export function SaveFiltersAsCollection({
           tags: query.tags,
           reviewStatuses: query.reviewStatuses,
           ...(query.fieldFilters.length > 0 ? { fieldFilters: query.fieldFilters } : {}),
+          ...extraSmartQueryFilters(query),
         },
       });
       setOpen(false);

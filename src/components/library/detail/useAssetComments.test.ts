@@ -149,3 +149,33 @@ describe('useAssetComments — posting pins to the version being viewed', () => 
     expect(lastPost()?.body).not.toHaveProperty('versionId');
   });
 });
+
+describe('useAssetComments — the initial list and a comment posted before it lands', () => {
+  it('keeps a comment posted while the list is still loading', async () => {
+    let releaseList: (response: Response) => void = () => undefined;
+    const slowList = new Promise<Response>((resolve) => {
+      releaseList = resolve;
+    });
+    const fastFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.startsWith('/api/library/comments') && (init?.method ?? 'GET') === 'GET') {
+        return slowList;
+      }
+      return fastFetch(input, init);
+    }) as typeof fetch;
+
+    const { result } = renderHook(() => useAssetComments('brand-1', 'asset-1'));
+    await act(async () => {
+      await result.current.postComment({ body: 'Posted before the list arrived' });
+    });
+    // The list was read before the post: it does not contain the new comment.
+    await act(async () => {
+      releaseList(jsonResponse({ comments: [] }));
+      await slowList;
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.comments.map((c) => c.id)).toContain('comment-created');
+  });
+});

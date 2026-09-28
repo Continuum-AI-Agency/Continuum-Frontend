@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  type CustomField,
   type LibrarySearchParsedFilters,
   type LibrarySearchParseResponse,
   librarySearchParseRequestSchema,
@@ -14,7 +15,12 @@ import {
 import { Loader2, Search, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { http } from '@/lib/api/http';
-import { SOURCE_LABEL } from '@/lib/media/filters';
+import {
+  libraryRatingField,
+  SOURCE_LABEL,
+  structuredFilterChips,
+  withoutStructuredFilter,
+} from '@/lib/media/filters';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -28,6 +34,8 @@ type Props = {
   reviewStateIds?: readonly string[];
   /** The review statuses picked in the filter bar; OR'd with the custom states. */
   reviewStatuses?: readonly MediaReviewStatus[];
+  /** Where a parsed "rated 4+" finds the brand's Rating field. */
+  customFields?: readonly CustomField[];
   onResults: (items: MediaSearchResultItem[]) => void;
   onClear: () => void;
   className?: string;
@@ -82,16 +90,36 @@ export function looksLikeNaturalLanguageQuery(query: string): boolean {
   return words.length >= 3 || words.some((word) => FILTER_WORDS.has(word));
 }
 
+/** A parse with its star rating resolved onto the brand's Rating field: search-request shaped. */
+export type InterpretedFilters = Omit<LibrarySearchParsedFilters, 'rating'> &
+  Pick<MediaSearchFilters, 'fieldRanges'>;
+
+/**
+ * The parse holds no field ids, so "rated 4+" becomes a range on the brand's Rating field —
+ * or nothing, when the brand has none: a filter that cannot apply must not show as applied.
+ */
+export function interpretParsedFilters(
+  parsed: LibrarySearchParsedFilters,
+  fields: readonly CustomField[] = [],
+): InterpretedFilters {
+  const { rating, ...filters } = parsed;
+  const ratingField = libraryRatingField(fields);
+  if (!rating || !ratingField || (rating.min === undefined && rating.max === undefined)) {
+    return filters;
+  }
+  return { ...filters, fieldRanges: [{ fieldId: ratingField.id, ...rating }] };
+}
+
 /** The interpreted filters narrow the chips already on — tags from both apply. */
 export function mergeSearchFilters(
   chips: MediaSearchFilters,
-  parsed: LibrarySearchParsedFilters,
+  interpreted: InterpretedFilters,
 ): MediaSearchFilters {
-  const tags = [...new Set([...(chips.tags ?? []), ...(parsed.tags ?? [])])];
-  return { ...chips, ...parsed, ...(tags.length > 0 ? { tags } : {}) };
+  const tags = [...new Set([...(chips.tags ?? []), ...(interpreted.tags ?? [])])];
+  return { ...chips, ...interpreted, ...(tags.length > 0 ? { tags } : {}) };
 }
 
-export type InterpretedFilterKey = 'kind' | 'tags' | 'source' | 'reviewStatus' | 'created';
+const LEGACY_FILTER_KEYS = ['kind', 'tags', 'source', 'reviewStatus'] as const;
 
 const KIND_LABEL: Record<MediaKind, string> = {
   image: 'Images',
@@ -108,10 +136,12 @@ function shortDate(iso: string): string {
   });
 }
 
+/** One removable chip per interpreted filter; each format group, range and codec is its own. */
 export function interpretedFilterChips(
-  filters: LibrarySearchParsedFilters,
-): { key: InterpretedFilterKey; label: string }[] {
-  const chips: { key: InterpretedFilterKey; label: string }[] = [];
+  filters: InterpretedFilters,
+  fields: readonly CustomField[] = [],
+): { key: string; label: string }[] {
+  const chips: { key: string; label: string }[] = [];
   if (filters.kind) chips.push({ key: 'kind', label: KIND_LABEL[filters.kind] });
   if (filters.tags?.length) chips.push({ key: 'tags', label: `Tagged ${filters.tags.join(', ')}` });
   if (filters.source)
@@ -125,21 +155,28 @@ export function interpretedFilterChips(
     const to = filters.createdBefore ? shortDate(filters.createdBefore) : 'now';
     chips.push({ key: 'created', label: `${from} – ${to}` });
   }
+  for (const chip of structuredFilterChips(filters, fields)) {
+    chips.push({ key: chip.id, label: chip.label });
+  }
   return chips;
 }
 
 export function withoutInterpretedFilter(
-  filters: LibrarySearchParsedFilters,
-  key: InterpretedFilterKey,
-): LibrarySearchParsedFilters {
+  filters: InterpretedFilters,
+  key: string,
+): InterpretedFilters {
   const next = { ...filters };
   if (key === 'created') {
     delete next.createdAfter;
     delete next.createdBefore;
-  } else {
-    delete next[key];
+    return next;
   }
-  return next;
+  const legacy = LEGACY_FILTER_KEYS.find((name) => name === key);
+  if (legacy) {
+    delete next[legacy];
+    return next;
+  }
+  return withoutStructuredFilter(next, key);
 }
 
 function requestSearchParse(brandId: string, query: string): Promise<LibrarySearchParseResponse> {
@@ -160,6 +197,7 @@ export function MediaSearchBar({
   tags,
   reviewStateIds,
   reviewStatuses,
+  customFields,
   onResults,
   onClear,
   className,
@@ -171,7 +209,7 @@ export function MediaSearchBar({
   // removable chip, and removing it re-runs the search without re-asking the model.
   const [interpreted, setInterpreted] = useState<{
     query: string;
-    filters: LibrarySearchParsedFilters;
+    filters: InterpretedFilters;
     visualEmbedding: number[] | null;
   } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -200,7 +238,7 @@ export function MediaSearchBar({
 
   async function search(
     q: string,
-    extra: LibrarySearchParsedFilters,
+    extra: InterpretedFilters,
     seq: number,
     visualEmbedding?: number[] | null,
   ) {
@@ -244,9 +282,10 @@ export function MediaSearchBar({
         // The image-space vector rides along even when nothing parsed into a
         // filter — "red sneakers on a beach" is exactly the untagged-footage case.
         const visualEmbedding = parsed?.visualEmbedding ?? null;
-        if (parsed?.interpreted && Object.keys(parsed.filters).length > 0) {
-          setInterpreted({ query: parsed.query, filters: parsed.filters, visualEmbedding });
-          await search(parsed.query, parsed.filters, seq, visualEmbedding);
+        const filters = parsed ? interpretParsedFilters(parsed.filters, customFields) : {};
+        if (parsed?.interpreted && Object.keys(filters).length > 0) {
+          setInterpreted({ query: parsed.query, filters, visualEmbedding });
+          await search(parsed.query, filters, seq, visualEmbedding);
           return;
         }
         setInterpreted(null);
@@ -262,7 +301,7 @@ export function MediaSearchBar({
     }
   }
 
-  async function removeInterpretedFilter(key: InterpretedFilterKey) {
+  async function removeInterpretedFilter(key: string) {
     if (!interpreted) return;
     const filters = withoutInterpretedFilter(interpreted.filters, key);
     const seq = ++requestSeq.current;
@@ -323,9 +362,9 @@ export function MediaSearchBar({
           </button>
         )}
       </form>
-      {interpreted && interpretedFilterChips(interpreted.filters).length > 0 ? (
+      {interpreted && interpretedFilterChips(interpreted.filters, customFields).length > 0 ? (
         <div data-testid="nl-search-filters" className="flex flex-wrap items-center gap-1 px-1">
-          {interpretedFilterChips(interpreted.filters).map((chip) => (
+          {interpretedFilterChips(interpreted.filters, customFields).map((chip) => (
             <span
               key={chip.key}
               data-testid="nl-search-filter"

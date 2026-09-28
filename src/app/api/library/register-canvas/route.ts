@@ -13,15 +13,19 @@ import {
   readSeedSourceAssetId,
   shouldAnalyzeCanvasAsset,
 } from '@/lib/media/canvas-register';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
+type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
 // Register-in-place: the generator already uploaded the bytes to its own bucket
 // (brand-profile-assets); we only record a media.assets row pointing at that
 // object. No byte copy. Cross-bucket signing already works everywhere the library
 // is read.
+//
+// Every read and write here runs as the CALLER: the graph read is the member's own RLS
+// (canvas_sessions is readable by brand members), registration goes through the
+// library-creative-operations edge function with the caller's JWT, and analysis is
+// enqueued with that JWT too. Vercel holds no service-role key, and this route needs none.
 export async function POST(request: Request) {
   const json = await request.json().catch(() => null);
   const parsed = registerCanvasAssetRequestSchema.safeParse(json);
@@ -42,8 +46,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const admin = createSupabaseAdminClient();
-  const provenance = await resolveProvenance(admin, input.brandProfileId, input.originRef);
+  const provenance = await resolveProvenance(supabase, input.brandProfileId, input.originRef);
   const row = buildCanvasAssetRow(input, user.id, provenance);
   try {
     const identity = `${input.bucket}\0${input.storagePath}`;
@@ -79,7 +82,7 @@ export async function POST(request: Request) {
     // the durable asset/version/lineage graph already exists if the provider is
     // unavailable, and a duplicate registration does not spend twice.
     if (registered.status === 'created' && shouldAnalyzeCanvasAsset(input.kind)) {
-      enqueueAnalyze({
+      enqueueAnalyze(supabase, {
         brandId: input.brandProfileId,
         assetId: registered.assetId,
         storagePath: input.storagePath,
@@ -107,7 +110,7 @@ export async function POST(request: Request) {
 // client, and best-effort: provenance must never be the reason a generation fails
 // to register.
 async function resolveProvenance(
-  admin: AdminClient,
+  supabase: SupabaseServerClient,
   brandProfileId: string,
   originRef: RegisteredAssetOriginRef,
 ): Promise<AssetProvenance | null> {
@@ -119,7 +122,7 @@ async function resolveProvenance(
   }
   if (!originRef.roomId) return null;
   try {
-    const { data } = await admin
+    const { data } = await supabase
       .schema('brand_profiles')
       .from('canvas_sessions')
       .select('nodes, edges')
@@ -148,29 +151,33 @@ async function resolveProvenance(
   }
 }
 
-// Tier-gated inside the edge function. Fire-and-forget; never blocks the response.
-function enqueueAnalyze(params: {
-  brandId: string;
-  assetId: string;
-  storagePath: string;
-  bucket: string;
-  mimeType: string;
-  fileName: string;
-}): void {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return;
-  fetch(`${supabaseUrl}/functions/v1/analyze_media`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${serviceKey}`,
+// Tier-gated inside the edge function, which authorizes a user caller by the asset being
+// visible to them. Fire-and-forget; never blocks the response.
+function enqueueAnalyze(
+  supabase: SupabaseServerClient,
+  params: {
+    brandId: string;
+    assetId: string;
+    storagePath: string;
+    bucket: string;
+    mimeType: string;
+    fileName: string;
+  },
+): void {
+  supabase.functions.invoke('analyze_media', { body: params }).then(
+    ({ error }) => {
+      if (error) {
+        console.warn('[register-canvas] analyze_media enqueue failed', {
+          assetId: params.assetId,
+          error: error.message,
+        });
+      }
     },
-    body: JSON.stringify(params),
-  }).catch((err) => {
-    console.warn('[register-canvas] analyze_media enqueue failed', {
-      assetId: params.assetId,
-      error: String(err),
-    });
-  });
+    (err: unknown) => {
+      console.warn('[register-canvas] analyze_media enqueue failed', {
+        assetId: params.assetId,
+        error: String(err),
+      });
+    },
+  );
 }

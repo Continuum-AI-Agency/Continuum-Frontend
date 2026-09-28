@@ -427,6 +427,38 @@ export async function POST(request: Request) {
     }
   }
 
+  // Format groups, ranges, technical predicates and custom-field ranges are the browse's own
+  // SQL predicates: media.library_matching_asset_ids answers them to an id list, intersected
+  // with any field-filter set above, and the ranking RPCs rank inside it.
+  const filters = req.filters;
+  if (
+    (filters?.families?.length ?? 0) > 0 ||
+    filters?.ranges ||
+    filters?.technical ||
+    (filters?.fieldRanges?.length ?? 0) > 0
+  ) {
+    const { data, error } = await mediaSchema(supabase).rpc('library_matching_asset_ids', {
+      p_brand_id: req.brandId,
+      p_query: {
+        ...(filters?.families?.length ? { families: filters.families } : {}),
+        ...(filters?.ranges ? { ranges: filters.ranges } : {}),
+        ...(filters?.technical ? { technical: filters.technical } : {}),
+        ...(filters?.fieldRanges?.length ? { fieldRanges: filters.fieldRanges } : {}),
+      },
+      p_limit: DATE_RANGE_ID_CAP,
+    });
+    if (error) {
+      console.error('[library/search] technical filter resolution failed', error);
+      return NextResponse.json({ error: 'Query failed' }, { status: 500 });
+    }
+    const matched = ((data ?? []) as { asset_id: string }[]).map((row) => row.asset_id);
+    const within = rpcFilters.filter_asset_ids ? new Set(rpcFilters.filter_asset_ids) : null;
+    const excluded = new Set(rpcFilters.filter_exclude_asset_ids ?? []);
+    rpcFilters.filter_asset_ids = matched.filter(
+      (id) => (!within || within.has(id)) && !excluded.has(id),
+    );
+  }
+
   // A created-at window is resolved to ids the same way, so the ranking RPCs
   // need no new args. It intersects with any field-filter id set because the
   // select below already applies filter_asset_ids / filter_exclude_asset_ids.

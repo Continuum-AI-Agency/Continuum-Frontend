@@ -1,8 +1,8 @@
 // Column sorting for the Library's List layout. A column the server can order by
-// (librarySortSchema) sorts the whole library through the URL; any other column,
-// or direction, sorts only the rows already loaded.
+// (librarySortSchema) sorts the whole library through the URL, in either direction; any
+// other column sorts only the rows already loaded.
 
-import type { LibrarySort, MediaAsset } from '@continuum/contracts';
+import type { LibrarySort, LibrarySortKey, MediaAsset } from '@continuum/contracts';
 
 export type SortDirection = 'asc' | 'desc';
 export type ListSort = { key: string; direction: SortDirection };
@@ -19,28 +19,42 @@ export const BUILT_IN_LIST_COLUMNS = [
   { key: 'updated', label: 'Updated' },
 ] as const;
 
-const SERVER_SORTS: Record<string, Partial<Record<SortDirection, LibrarySort>>> = {
-  name: { asc: 'name_asc', desc: 'name_desc' },
-  size: { desc: 'size_desc' },
-  duration: { desc: 'duration_desc' },
-  created: { desc: 'created_desc' },
-  updated: { desc: 'updated_desc' },
+// List column key (views/cardOptions BUILT_IN_CARD_FIELDS) → the browse sort key that orders
+// the whole library by it. Every one runs both ways; an empty value sorts last either way.
+const SERVER_SORT_KEYS: Record<string, LibrarySortKey> = {
+  name: 'name',
+  kind: 'format',
+  size: 'size',
+  duration: 'duration',
+  dimensions: 'resolution',
+  review: 'review',
+  created: 'created',
+  updated: 'updated',
+  pageCount: 'page_count',
+  frameRate: 'frame_rate',
+  bitRate: 'bit_rate',
+  videoBitRate: 'video_bit_rate',
+  audioBitRate: 'audio_bit_rate',
+  audioSampleRate: 'audio_sample_rate',
+  audioChannels: 'audio_channels',
+  bitDepth: 'bit_depth',
+  comments: 'comments',
 };
 
 // Text reads naturally A→Z first; numbers and dates read biggest/newest first.
 const ASCENDING_FIRST = new Set(['name', 'kind', 'review']);
 
 export function serverSortFor(sort: ListSort): LibrarySort | null {
-  return SERVER_SORTS[sort.key]?.[sort.direction] ?? null;
+  const key = SERVER_SORT_KEYS[sort.key];
+  return key ? `${key}_${sort.direction}` : null;
 }
 
 export function listSortFromServer(sort: LibrarySort): ListSort | null {
-  for (const [key, directions] of Object.entries(SERVER_SORTS)) {
-    for (const [direction, value] of Object.entries(directions)) {
-      if (value === sort) return { key, direction: direction as SortDirection };
-    }
-  }
-  return null;
+  const cut = sort.lastIndexOf('_');
+  const direction = sort.slice(cut + 1);
+  if (direction !== 'asc' && direction !== 'desc') return null;
+  const key = Object.entries(SERVER_SORT_KEYS).find(([, value]) => value === sort.slice(0, cut));
+  return key ? { key: key[0], direction } : null;
 }
 
 export function nextListSort(current: ListSort | null, key: string): ListSort {

@@ -2,7 +2,8 @@ import { libraryBrowseQuerySchema } from '@continuum/contracts';
 import { NextResponse } from 'next/server';
 import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
 import { fetchLibraryBrowseFacets } from '@/lib/media/browse.server';
-import { parseTagsParam } from '@/lib/media/filters';
+import { parseFieldFiltersParam } from '@/lib/library/customFields';
+import { libraryBrowseExtrasFromParams, parseTagsParam } from '@/lib/media/filters';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 function optionalBoolean(value: string | null): boolean | null | undefined {
@@ -20,7 +21,14 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const url = new URL(request.url);
+  const fieldFilterParse = parseFieldFiltersParam(url.searchParams.get('fieldFilters'));
+  if (!fieldFilterParse.ok) {
+    return NextResponse.json({ error: fieldFilterParse.reason }, { status: 422 });
+  }
   const parsed = libraryBrowseQuerySchema.safeParse({
+    ...libraryBrowseExtrasFromParams((key) => url.searchParams.get(key)),
+    reviewStateIds: parseTagsParam(url.searchParams.get('reviewStateIds')),
+    fieldFilters: fieldFilterParse.filters,
     brandId: url.searchParams.get('brandId'),
     mediaType: url.searchParams.get('mediaType') ?? undefined,
     createdWith: parseTagsParam(url.searchParams.get('createdWith')),
@@ -35,6 +43,11 @@ export async function GET(request: Request) {
     used: optionalBoolean(url.searchParams.get('used')),
     shared: optionalBoolean(url.searchParams.get('shared')),
     leadingOnly: optionalBoolean(url.searchParams.get('leadingOnly')) ?? undefined,
+    templateOnly: optionalBoolean(url.searchParams.get('templateOnly')) ?? undefined,
+    destination: url.searchParams.get('destination') ?? undefined,
+    aspectRatios: parseTagsParam(url.searchParams.get('aspectRatios')),
+    ratios: parseTagsParam(url.searchParams.get('ratios')),
+    fonts: parseTagsParam(url.searchParams.get('fonts')),
     search: url.searchParams.get('search') ?? undefined,
     sort: url.searchParams.get('sort') ?? undefined,
     performanceWindow: url.searchParams.get('performanceWindow') ?? undefined,

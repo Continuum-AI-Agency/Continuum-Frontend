@@ -66,6 +66,40 @@ describe('ReviewStateLabelsEditor', () => {
     expect((screen.getByLabelText('Label for draft') as HTMLInputElement).value).toBe('Rough cut');
   });
 
+  it('adding a state before the stored labels load saves the brand labels and states, not the defaults', async () => {
+    let releaseLabels: (response: Response) => void = () => {};
+    globalThis.fetch = (() =>
+      new Promise<Response>((resolve) => {
+        releaseLabels = resolve;
+      })) as unknown as typeof fetch;
+    render(<ReviewStateLabelsEditor brandId={crypto.randomUUID()} open onOpenChange={() => {}} />);
+    // The admin starts on a fresh page: a new state goes in before the fetch answers.
+    fireEvent.click(screen.getByTestId('add-custom-state'));
+    fireEvent.change(screen.getByLabelText('Custom state 1 name'), { target: { value: 'Legal' } });
+    const signedId = crypto.randomUUID();
+    await act(async () =>
+      releaseLabels(
+        Response.json({
+          labels: [{ state: 'approved', label: 'Client OK', color: '#123456', position: 4 }],
+          customStates: [
+            { id: signedId, label: 'Signed', color: '#8B5CF6', baseStatus: 'approved', position: 0 },
+          ],
+        }),
+      ),
+    );
+    saved.length = 0;
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save labels' })));
+    const sent = saved[0] as {
+      labels: { state: string; label: string; color: string }[];
+      customStates: { id?: string; label: string }[];
+    };
+    expect(sent.labels.find((label) => label.state === 'approved')).toEqual(
+      expect.objectContaining({ label: 'Client OK', color: '#123456' }),
+    );
+    expect(sent.customStates.map((state) => state.label)).toEqual(['Signed', 'Legal']);
+    expect(sent.customStates[0]?.id).toBe(signedId);
+  });
+
   it("sends the base picked for a new custom state even when Save's handler is from an earlier render", async () => {
     globalThis.fetch = (async () =>
       Response.json({ labels: [], customStates: [] })) as unknown as typeof fetch;

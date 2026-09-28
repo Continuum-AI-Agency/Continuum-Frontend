@@ -8,6 +8,8 @@ import {
   requestCollectionReviewResultSchema,
   restoreAssetsOperationSchema,
   restoreAssetsResultSchema,
+  setNotesOperationSchema,
+  setNotesResultSchema,
   setReviewStateLabelsOperationSchema,
   setReviewStateLabelsResultSchema,
   stackAssetsOperationSchema,
@@ -220,7 +222,7 @@ describe('register_forge_output', () => {
 
 describe('libraryFoundationOperationSchema', () => {
   it('routes every foundation action by its literal', () => {
-    expect(libraryFoundationActionSchema.options).toHaveLength(6);
+    expect(libraryFoundationActionSchema.options).toHaveLength(7);
     const parsed = libraryFoundationOperationSchema.parse({
       action: 'restore_assets',
       ...base,
@@ -234,5 +236,27 @@ describe('libraryFoundationOperationSchema', () => {
       libraryFoundationOperationSchema.safeParse({ action: 'bulk_delete_assets', ...base }).success,
     ).toBe(false);
     expect(libraryFoundationActionSchema.safeParse('stack').success).toBe(false);
+  });
+});
+
+describe('set_notes', () => {
+  const op = { action: 'set_notes', ...base, assetId: A, notes: 'Final cut for Q4.' } as const;
+
+  it('writes or clears the notes of one asset', () => {
+    expect(setNotesOperationSchema.parse(op)).toEqual(op);
+    expect(setNotesOperationSchema.safeParse({ ...op, notes: null }).success).toBe(true);
+    expect(libraryFoundationOperationSchema.parse(op).action).toBe('set_notes');
+    expect(setNotesResultSchema.parse({ assetId: A, notes: null })).toEqual({
+      assetId: A,
+      notes: null,
+    });
+  });
+
+  it('refuses notes over 10 000 characters and a missing asset', () => {
+    expect(setNotesOperationSchema.safeParse({ ...op, notes: 'x'.repeat(10_001) }).success).toBe(
+      false,
+    );
+    const { assetId: _assetId, ...withoutAsset } = op;
+    expect(setNotesOperationSchema.safeParse(withoutAsset).success).toBe(false);
   });
 });

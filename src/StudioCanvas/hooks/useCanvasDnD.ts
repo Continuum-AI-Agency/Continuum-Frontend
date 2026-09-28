@@ -16,7 +16,7 @@ import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { STUDIO_ASSET_DROP_EFFECT } from '@/lib/creative-assets/studioAssetDrop';
 import { createNodeConfig, isStudioCanvasNodeType } from '../components/canvasNodeTypes';
 import { useStudioStore } from '../stores/useStudioStore';
-import type { StudioNode } from '../types';
+import type { CanvasDocument, StudioNode } from '../types';
 import { resolveCanvasDropBase64 } from '../utils/resolveCanvasDropBase64';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
 import {
@@ -132,51 +132,44 @@ export function useCanvasDnD() {
       let style = { width: 192, height: 192 };
 
       // Library drops keep both the asset and exact version so downstream work is
-      // reproducible instead of silently following a later Library head.
+      // reproducible instead of silently following a later Library head. A node that
+      // draws a Library rendition (PSD preview, MKV proxy) says which one.
+      const libraryRef = {
+        fileName: resolved.fileName,
+        assetId: resolved.assetId,
+        assetVersionId: resolved.assetVersionId,
+        sourcePath: resolved.sourcePath,
+        bucket: resolved.bucket,
+        sourceUrl: resolved.sourceUrl,
+        ...(resolved.renditionRole ? { renditionRole: resolved.renditionRole } : {}),
+      };
       if (assetNodeType === 'image') {
-        assetData = {
-          image: resolved.dataUrl,
-          fileName: resolved.fileName,
-          assetId: resolved.assetId,
-          assetVersionId: resolved.assetVersionId,
-          sourcePath: resolved.sourcePath,
-          bucket: resolved.bucket,
-          sourceUrl: resolved.sourceUrl,
-        };
+        assetData = { image: resolved.dataUrl, ...libraryRef };
       } else if (assetNodeType === 'video') {
         assetData = {
           video: resolved.dataUrl,
-          fileName: resolved.fileName,
-          assetId: resolved.assetId,
-          assetVersionId: resolved.assetVersionId,
-          sourcePath: resolved.sourcePath,
-          bucket: resolved.bucket,
-          sourceUrl: resolved.sourceUrl,
+          ...libraryRef,
           // Present only when the library row recorded one; duration-dependent ops
           // fall back to probing the bytes when it is missing.
           durationMs: resolved.durationMs,
         };
       } else if (assetNodeType === 'audio') {
-        assetData = {
-          audio: resolved.dataUrl,
-          fileName: resolved.fileName,
-          assetId: resolved.assetId,
-          assetVersionId: resolved.assetVersionId,
-          sourcePath: resolved.sourcePath,
-          bucket: resolved.bucket,
-          sourceUrl: resolved.sourceUrl,
-        };
+        assetData = { audio: resolved.dataUrl, ...libraryRef };
         style = { width: 192, height: 100 };
       } else if (assetNodeType === 'document') {
-        assetData = {
-          documents: [
-            {
-              name: resolved.fileName || 'Document',
-              content: resolved.dataUrl,
-              type: resolved.mimeType === 'application/pdf' ? 'pdf' : 'txt',
-            },
-          ],
+        // Storage coordinates + Library identity, so the entry re-signs on reload
+        // (resignCanvasNodes) instead of living only as a data URL the save strips.
+        const droppedDocument: CanvasDocument = {
+          name: resolved.fileName || 'Document',
+          content: resolved.dataUrl,
+          type: resolved.mimeType === 'application/pdf' ? 'pdf' : 'txt',
+          assetId: resolved.assetId,
+          assetVersionId: resolved.assetVersionId,
+          bucket: resolved.bucket,
+          storagePath: resolved.sourcePath,
+          sourceUrl: resolved.sourceUrl,
         };
+        assetData = { documents: [droppedDocument] };
         style = { width: 200, height: 200 };
       }
 

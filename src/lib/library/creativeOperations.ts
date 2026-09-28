@@ -58,8 +58,11 @@ import {
   reviewTransitionResponseSchema,
   revokeShareLinkOperationSchema,
   rollbackAssetVersionOperationSchema,
+  type SetNotesResult,
   type ShareLink,
   type StackAssetsResult,
+  setNotesOperationSchema,
+  setNotesResultSchema,
   type UnstackAssetVersionResult,
   unstackAssetVersionResultSchema,
   shareLinkSchema,
@@ -597,6 +600,20 @@ export async function bulkSetAssetFieldValueOperation(
     libraryBulkCommandResponseSchema,
   );
   return result.updatedAssetIds;
+}
+
+// media.assets.notes through the dispatcher's set_notes; the Edge Function stamps the actor.
+export function setAssetNotesOperation(
+  supabase: SupabaseClient,
+  input: { brandId: string; assetId: string; notes: string | null },
+): Promise<SetNotesResult> {
+  return invokeCreativeOperation(
+    supabase,
+    setNotesOperationSchema
+      .omit({ actor: true })
+      .parse({ action: 'set_notes', ...input, idempotencyKey: crypto.randomUUID() }),
+    setNotesResultSchema,
+  );
 }
 
 export function renameLibraryTagOperation(

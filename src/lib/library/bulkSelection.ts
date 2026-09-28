@@ -38,6 +38,37 @@ export async function writeInChunks(
 }
 
 /**
+ * writeInChunks for a selection another member may be deleting from. The dispatcher refuses
+ * a whole chunk as asset_not_found when one of its ids is gone — ordinary across a thousand
+ * selected assets — so a refused chunk is re-read (`remainingOf`) and written again with the
+ * ids that are left. Returns how many ids were actually written.
+ */
+export async function writeInChunksSkippingVanished(
+  ids: readonly string[],
+  write: (chunk: string[]) => Promise<unknown>,
+  remainingOf: (chunk: string[]) => Promise<string[]>,
+  onProgress?: (done: number, total: number) => void,
+): Promise<number> {
+  let skipped = 0;
+  const done = await writeInChunks(
+    ids,
+    async (chunk) => {
+      try {
+        return await write(chunk);
+      } catch (error) {
+        if (!(error instanceof Error) || !error.message.startsWith('asset_not_found')) throw error;
+        const remaining = await remainingOf(chunk);
+        if (remaining.length === chunk.length) throw error;
+        skipped += chunk.length - remaining.length;
+        return remaining.length > 0 ? write(remaining) : undefined;
+      }
+    },
+    onProgress,
+  );
+  return done - skipped;
+}
+
+/**
  * Every asset id the Library page's current filters match, read through the same
  * browse route the grid pages with. `search` is the page's own query string — the
  * page's URL IS its filter state — so the selection cannot disagree with the grid.

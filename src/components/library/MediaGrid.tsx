@@ -10,8 +10,18 @@ import { formatCustomFieldValue } from '@/lib/library/customFieldValue';
 import { cn } from '@/lib/utils';
 import { type CardFieldValue, MediaCard } from './MediaCard';
 import { assetIdsToDrag, writeAssetDrag } from './views/assetDrag';
-import { type CardViewOptions, cardGridTemplate } from './views/cardOptions';
-import type { FieldValuesByAsset } from './views/useAssetFieldValues';
+import { useMentionTargets } from './detail/useMentionTargets';
+import {
+  BUILT_IN_CARD_FIELDS,
+  CARD_DRAWN_FIELDS,
+  type CardViewOptions,
+  cardFieldValue,
+  cardGridTemplate,
+  isBuiltInCardField,
+  memberNameLookup,
+  visibleCardFields,
+} from './views/cardOptions';
+import { type FieldValuesByAsset, useAssetCommentCounts } from './views/useAssetFieldValues';
 
 type Props = {
   brandId: string;
@@ -77,15 +87,35 @@ export function MediaGrid({
   const reduceMotion = useReducedMotion();
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  const customFieldValuesOf = (asset: MediaAsset): CardFieldValue[] =>
-    cardFields.map((field) => {
+  // MediaCard draws its own few facts; every other chosen built-in field joins the custom
+  // fields as a label row, in the order the user picked them.
+  const builtInRows = visibleCardFields(card).filter(
+    (key) => isBuiltInCardField(key) && !CARD_DRAWN_FIELDS.has(key),
+  );
+  const commentCount = useAssetCommentCounts(
+    assets.map((asset) => asset.id),
+    builtInRows.includes('comments'),
+  );
+  const needsMembers =
+    builtInRows.includes('uploader') ||
+    cardFields.some((field) => field.type === 'user' || field.type === 'user_multi');
+  const members = useMentionTargets(needsMembers ? brandId : null);
+  const memberName = memberNameLookup(members);
+  const customFieldValuesOf = (asset: MediaAsset): CardFieldValue[] => [
+    ...builtInRows.map((key) => ({
+      key,
+      label: BUILT_IN_CARD_FIELDS.find((field) => field.key === key)?.label ?? key,
+      value: cardFieldValue(asset, key, { commentCount, memberName }) ?? '',
+    })),
+    ...cardFields.map((field) => {
       const value = fieldValues?.get(asset.id)?.get(field.id);
       return {
         key: field.id,
         label: field.name,
-        value: value === undefined ? '' : formatCustomFieldValue(field, value),
+        value: value === undefined ? '' : formatCustomFieldValue(field, value, memberName),
       };
-    });
+    }),
+  ];
   const onDragAssetStart = onStackDrop
     ? (event: DragEvent<HTMLElement>, asset: MediaAsset) =>
         writeAssetDrag(

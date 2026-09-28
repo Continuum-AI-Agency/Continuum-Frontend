@@ -10,7 +10,7 @@
 // mints a fresh preview URL on canvas load and rehydrateWorkflowMedia inlines the
 // bytes at run time, so the seed never rots the way a stored signed URL would.
 
-import type { BrandBookPieceKind } from '@continuum/contracts';
+import type { BrandBookPieceKind, CanvasLibraryNodeType } from '@continuum/contracts';
 import { snapNodeDimensionsToAspectRatio } from '@/StudioCanvas/utils/aspectRatioSizing';
 import { QUICK_LOOK_BASE_PROMPT, RESIZE_PRESETS, type ResizePreset } from './quickLook';
 
@@ -25,6 +25,7 @@ export const DEFAULT_SEED_BRAND_PIECES: readonly BrandBookPieceKind[] = ['full']
 const GEN_MODEL = 'nano-banana-2';
 const GEN_IMAGE_SIZE = '1K';
 const REFERENCE_NODE_SIZE = 208;
+const AUDIO_NODE_HEIGHT = 100;
 const GEN_MIN_WIDTH = 260;
 const GEN_MIN_HEIGHT = 180;
 const GEN_TARGET_EDGE = 400;
@@ -34,17 +35,23 @@ const ORIGIN = { x: 120, y: 160 } as const;
 
 export type LibrarySeedAsset = {
   id: string;
-  kind: 'image' | 'video';
+  /** The node the canvas draws this asset as (`canvasLibrarySource(...).nodeType`). */
+  kind: CanvasLibraryNodeType;
+  /** Coordinates of the file the node SHOWS: the original, or its Library rendition. */
   bucket: string;
   storagePath: string;
   fileName: string;
   /** `media.assets.head_version_id`, when the row has one. Pins the reference. */
   headVersionId?: string | null;
+  /** Set when the node shows a rendition (a PSD's preview_image, an MKV's proxy). */
+  renditionRole?: string | null;
+  /** MIME of the shown file; tells a document node pdf from txt. */
+  mimeType?: string;
 };
 
 export type CanvasTemplateNode = {
   id: string;
-  type: 'image' | 'video' | 'nanoGen';
+  type: CanvasLibraryNodeType | 'nanoGen';
   position: { x: number; y: number };
   data: Record<string, unknown>;
   style: { width: number; height: number };
@@ -107,21 +114,48 @@ export function genNodeId(seedId: string, suffix: string): string {
 // reader uses (drag-from-Library writes these). Seeding only `libraryAssetId` is what
 // made Remove Background say "save this to the Library first" about an asset that had
 // come straight out of it, and greyed out the node's Reformat button with it.
+//
+// A document node reads `documents[]`, so its pointer and coordinates live on the entry.
 function buildReferenceNode(asset: LibrarySeedAsset, seedId: string): CanvasTemplateNode {
+  const version = asset.headVersionId ? { assetVersionId: asset.headVersionId } : {};
+  const node = { id: referenceNodeId(seedId), type: asset.kind, position: { ...ORIGIN } };
+  if (asset.kind === 'document') {
+    const isPdf =
+      asset.mimeType === 'application/pdf' || asset.fileName.toLowerCase().endsWith('.pdf');
+    return {
+      ...node,
+      data: {
+        libraryAssetId: asset.id,
+        documents: [
+          {
+            name: asset.fileName,
+            type: isPdf ? 'pdf' : 'txt',
+            bucket: asset.bucket,
+            storagePath: asset.storagePath,
+            assetId: asset.id,
+            ...version,
+          },
+        ],
+      },
+      style: { width: REFERENCE_NODE_SIZE, height: REFERENCE_NODE_SIZE },
+    };
+  }
   return {
-    id: referenceNodeId(seedId),
-    type: asset.kind === 'video' ? 'video' : 'image',
-    position: { ...ORIGIN },
+    ...node,
     data: {
       fileName: asset.fileName,
       bucket: asset.bucket,
       sourcePath: asset.storagePath,
       libraryAssetId: asset.id,
       assetId: asset.id,
-      ...(asset.headVersionId ? { assetVersionId: asset.headVersionId } : {}),
+      ...version,
+      ...(asset.renditionRole ? { renditionRole: asset.renditionRole } : {}),
       ...(asset.kind === 'image' ? { referenceType: 'default' } : {}),
     },
-    style: { width: REFERENCE_NODE_SIZE, height: REFERENCE_NODE_SIZE },
+    style: {
+      width: REFERENCE_NODE_SIZE,
+      height: asset.kind === 'audio' ? AUDIO_NODE_HEIGHT : REFERENCE_NODE_SIZE,
+    },
   };
 }
 
@@ -174,8 +208,8 @@ export function resizePresetPrompt(preset: ResizePreset): string {
   );
 }
 
-// Only image assets can drive a generation node; a video asset lands as a reference
-// the user can wire into a video block themselves.
+// Only an image node can drive a generation node; video, audio and documents land as a
+// reference the user can wire in themselves.
 export function templateSupportsAsset(
   template: LibraryCanvasTemplate,
   kind: LibrarySeedAsset['kind'],

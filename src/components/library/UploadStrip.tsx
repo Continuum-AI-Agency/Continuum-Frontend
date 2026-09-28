@@ -115,7 +115,7 @@ export function UploadStrip({ uploads, onPause, onResume, onRetry, onCancel, onM
                 <Play className="size-3.5" />
               </UploadAction>
             ) : null}
-            {u.status === 'error' ? (
+            {u.status === 'error' && !u.refused ? (
               <UploadAction
                 testId="upload-retry"
                 label={`Retry ${u.name}`}

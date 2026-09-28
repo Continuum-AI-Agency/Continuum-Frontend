@@ -14,6 +14,8 @@ import type {
   LibraryPreviewFrame,
   LibrarySavedView,
   LibrarySort,
+  LibrarySortKey,
+  LibrarySortSpec,
   MediaAsset,
   MediaCollection,
   MediaSearchResultItem,
@@ -23,9 +25,11 @@ import {
   classifyLibraryFile,
   LIBRARY_ACCEPT_ATTRIBUTE,
   libraryAspectRatioBin,
+  MAX_LIBRARY_THEN_BY,
   templateFamilyForLibraryFormat,
 } from '@continuum/contracts';
 import {
+  ChevronDown,
   Columns3,
   FolderUp,
   GalleryHorizontalEnd,
@@ -34,14 +38,24 @@ import {
   ScanSearch,
   Trash2,
   Upload,
+  X,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useOptimistic,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
 import { CompetitorInspirationPanel } from '@/components/competitor-spy/CompetitorInspirationPanel';
 import { FigmaIcon } from '@/components/shared/icons';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -70,9 +84,12 @@ import {
   type KindFilterValue,
   kindToMediaType,
   LIBRARY_SORT_OPTIONS,
+  LIBRARY_THEN_BY_KEYS,
   type LibraryTagOption,
+  librarySortLabel,
   mediaTypeToKind,
   type SourceFilterValue,
+  type StructuredLibraryFilters,
 } from '@/lib/media/filters';
 import type { LibrarySection } from '@/lib/media/sections';
 import { useProjects } from '@/lib/projects';
@@ -191,6 +208,17 @@ export function LibraryViewer({
   const [optimisticReviewStatuses, setOptimisticReviewStatuses] = useOptimistic(
     initialBrowseQuery.reviewStatuses,
   );
+  const committedStructured = useMemo<StructuredLibraryFilters>(
+    () => ({
+      families: initialBrowseQuery.families,
+      ranges: initialBrowseQuery.ranges,
+      technical: initialBrowseQuery.technical,
+      fieldRanges: initialBrowseQuery.fieldRanges,
+    }),
+    [initialBrowseQuery],
+  );
+  const [optimisticStructured, setOptimisticStructured] = useOptimistic(committedStructured);
+  const [optimisticThenBy, setOptimisticThenBy] = useOptimistic(initialBrowseQuery.thenBy);
   // Custom-field filters stay in client state rather than the URL: the RSC seed
   // cannot pre-filter on them (the values live in their own table), so a URL
   // round-trip would buy nothing but an unreadable query string.
@@ -221,6 +249,8 @@ export function LibraryViewer({
     initialNextCursor,
   });
   const [tagOptions, setTagOptions] = useState<LibraryTagOption[]>([]);
+  const [familyCounts, setFamilyCounts] = useState<Record<string, number>>({});
+  const [reviewStateCounts, setReviewStateCounts] = useState<Record<string, number>>({});
   const [tagRevision, setTagRevision] = useState(0);
   const facetQueryKey = buildLibraryBrowseParams(initialBrowseQuery, {
     includeBrandId: true,
@@ -228,11 +258,15 @@ export function LibraryViewer({
   }).toString();
   useEffect(() => {
     let cancelled = false;
+    const countsByValue = (facets: LibraryBrowseFacets['families'] = []) =>
+      Object.fromEntries(facets.map(({ value, count }) => [value, count]));
     fetch(`/api/library/facets?${facetQueryKey}`)
       .then((response) => (response.ok ? response.json() : { tags: [] }))
-      .then((data: Pick<LibraryBrowseFacets, 'tags'>) => {
+      .then((data: Pick<LibraryBrowseFacets, 'tags'> & Partial<LibraryBrowseFacets>) => {
         if (!cancelled) {
           setTagOptions(data.tags.map(({ value, count }) => ({ tag: value, count })));
+          setFamilyCounts(countsByValue(data.families));
+          setReviewStateCounts(countsByValue(data.reviewStates));
         }
       })
       .catch((err: unknown) => {
@@ -318,6 +352,14 @@ export function LibraryViewer({
       ? 'Carousels'
       : KIND_FILTERS.find((option) => option.value === optimisticKind)?.label);
 
+  // A List column header can order by any key in either direction; the select still names it.
+  const sortOptions = LIBRARY_SORT_OPTIONS.filter(
+    (option) => option.value !== 'manual' || selectedCollectionId,
+  );
+  if (!sortOptions.some((option) => option.value === optimisticSort)) {
+    sortOptions.push({ value: optimisticSort, label: librarySortLabel(optimisticSort) });
+  }
+
   const showTemplates = initialBrowseQuery.templateOnly;
   const showTypography = section === 'typography';
   const showPipelines = section === 'pipelines';
@@ -377,6 +419,9 @@ export function LibraryViewer({
       fonts?: string[];
       performanceWindow?: LibraryBrowseQuery['performanceWindow'];
       boardGroupBy?: string;
+      // Replaces all four at once: a key absent here means cleared, not unchanged.
+      structured?: StructuredLibraryFilters;
+      thenBy?: LibrarySortSpec[];
     }) => {
       setSearchResults(null);
       setTrashOpen(false);
@@ -399,6 +444,9 @@ export function LibraryViewer({
       const nextTags = next.tags ?? optimisticTags;
       const nextProjectIds = next.projectIds ?? optimisticProjectIds;
       const nextSort = next.sort ?? optimisticSort;
+      const nextThenBy = next.thenBy ?? optimisticThenBy;
+      const nextStructured = next.structured ?? optimisticStructured;
+      const nextFamilies = nextStructured.families ?? [];
       const nextLayout = next.layout ?? optimisticLayout;
       const nextCollectionId =
         next.collectionId !== undefined ? next.collectionId : selectedCollectionId;
@@ -418,7 +466,12 @@ export function LibraryViewer({
         ratios: next.ratios ?? initialBrowseQuery.ratios,
         fonts: next.fonts ?? initialBrowseQuery.fonts,
         performanceWindow: next.performanceWindow ?? initialBrowseQuery.performanceWindow,
+        families: [...nextFamilies],
+        ranges: nextStructured.ranges,
+        technical: nextStructured.technical,
+        fieldRanges: [...(nextStructured.fieldRanges ?? [])],
         sort: nextSort,
+        thenBy: [...nextThenBy],
         layout: nextLayout,
         boardGroupBy: next.boardGroupBy ?? initialBrowseQuery.boardGroupBy,
         destination: next.destination ?? initialBrowseQuery.destination,
@@ -432,6 +485,10 @@ export function LibraryViewer({
         cursor: null,
       };
       if (nextQuery.sort === 'manual' && !nextCollectionId) nextQuery.sort = 'created_desc';
+      // Home is recent images and videos only, so a Format choice there would read as empty.
+      if (nextFamilies.length > 0 && nextQuery.destination === 'home') {
+        nextQuery.destination = 'everything';
+      }
       startFilterTransition(() => {
         setOptimisticSource(nextSource);
         setOptimisticCreatedWith(nextCreatedWith);
@@ -440,6 +497,8 @@ export function LibraryViewer({
         setOptimisticTags(nextTags);
         setOptimisticProjectIds(nextProjectIds);
         setOptimisticSort(nextSort);
+        setOptimisticThenBy(nextThenBy);
+        setOptimisticStructured(nextStructured);
         setOptimisticLayout(nextLayout);
         setOptimisticReviewStatuses(nextQuery.reviewStatuses);
         const path = withReviewStates(
@@ -465,6 +524,8 @@ export function LibraryViewer({
       optimisticTags,
       optimisticProjectIds,
       optimisticSort,
+      optimisticThenBy,
+      optimisticStructured,
       optimisticLayout,
       initialBrowseQuery,
       setOptimisticSource,
@@ -474,6 +535,8 @@ export function LibraryViewer({
       setOptimisticTags,
       setOptimisticProjectIds,
       setOptimisticSort,
+      setOptimisticThenBy,
+      setOptimisticStructured,
       setOptimisticLayout,
       setOptimisticReviewStatuses,
     ],
@@ -905,6 +968,7 @@ export function LibraryViewer({
                         tags={selectedTags}
                         reviewStateIds={reviewStateIds}
                         reviewStatuses={optimisticReviewStatuses}
+                        customFields={customFields ?? []}
                         onResults={setSearchResults}
                         onClear={() => setSearchResults(null)}
                       />
@@ -1027,6 +1091,10 @@ export function LibraryViewer({
                   setSearchResults(null);
                   setFieldFilters(next);
                 }}
+                structuredFilters={optimisticStructured}
+                onStructuredFiltersChange={(structured) => pushFilters({ structured })}
+                familyCounts={familyCounts}
+                reviewStateCounts={reviewStateCounts}
               />
               {view === 'media' &&
               !showTemplates &&
@@ -1065,18 +1133,24 @@ export function LibraryViewer({
                   onValueChange={(value: LibrarySort) => pushFilters({ sort: value })}
                 >
                   <SelectTrigger size="sm" aria-label="Sort library" className="h-8">
-                    <SelectValue />
+                    <SelectValue
+                      items={Object.fromEntries(
+                        sortOptions.map((option) => [option.value, option.label]),
+                      )}
+                    />
                   </SelectTrigger>
                   <SelectContent align="end">
-                    {LIBRARY_SORT_OPTIONS.filter(
-                      (option) => option.value !== 'manual' || selectedCollectionId,
-                    ).map((option) => (
+                    {sortOptions.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
                         {option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <ThenBySortControl
+                  value={optimisticThenBy}
+                  onChange={(thenBy) => pushFilters({ thenBy })}
+                />
                 {optimisticSort === 'best_performing' ? (
                   <Select
                     value={initialBrowseQuery.performanceWindow}
@@ -1272,6 +1346,7 @@ export function LibraryViewer({
               ) : optimisticLayout === 'list' ? (
                 <ListView
                   assets={displayedAssets}
+                  card={cardOptions}
                   customFields={chosenFields}
                   fieldValues={fieldValues}
                   serverSort={optimisticSort}
@@ -1381,5 +1456,88 @@ export function LibraryViewer({
         </div>
       )}
     </div>
+  );
+}
+
+/** Tie-breaking keys after the main sort, each flipped between ascending and descending. */
+function ThenBySortControl({
+  value,
+  onChange,
+}: {
+  value: readonly LibrarySortSpec[];
+  onChange: (thenBy: LibrarySortSpec[]) => void;
+}) {
+  const labelOf = (key: string) =>
+    LIBRARY_THEN_BY_KEYS.find((option) => option.value === key)?.label ?? key;
+  const unused = LIBRARY_THEN_BY_KEYS.filter(
+    (option) => !value.some((spec) => spec.key === option.value),
+  );
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs font-medium text-foreground hover:bg-accent"
+          >
+            Then by
+            {value.length > 0 ? (
+              <span className="rounded-full bg-primary/10 px-1.5 text-primary">{value.length}</span>
+            ) : null}
+            <ChevronDown className="size-3.5 text-muted-foreground" />
+          </button>
+        }
+      />
+      <PopoverContent align="end" className="w-64 space-y-1 p-2">
+        {value.map((spec, index) => {
+          const label = labelOf(spec.key);
+          const ascending = spec.dir === 'asc';
+          return (
+            <div key={spec.key} className="flex min-h-9 items-center gap-1">
+              <span className="min-w-0 flex-1 truncate px-2 text-sm">{label}</span>
+              <button
+                type="button"
+                onClick={() =>
+                  onChange(
+                    value.map((current, at) =>
+                      at === index ? { ...current, dir: ascending ? 'desc' : 'asc' } : current,
+                    ),
+                  )
+                }
+                aria-label={`${label}: ${ascending ? 'ascending' : 'descending'}. Reverse`}
+                className="rounded-md px-2 py-1 text-sm hover:bg-accent"
+              >
+                {ascending ? '↑' : '↓'}
+              </button>
+              <button
+                type="button"
+                onClick={() => onChange(value.filter((_, at) => at !== index))}
+                aria-label={`Stop sorting by ${label}`}
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          );
+        })}
+        {value.length < MAX_LIBRARY_THEN_BY ? (
+          <Select
+            value={null}
+            onValueChange={(key: LibrarySortKey) => onChange([...value, { key, dir: 'desc' }])}
+          >
+            <SelectTrigger size="sm" aria-label="Add a sort key" className="h-8 w-full">
+              <SelectValue placeholder="Add a sort key" />
+            </SelectTrigger>
+            <SelectContent>
+              {unused.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
+      </PopoverContent>
+    </Popover>
   );
 }

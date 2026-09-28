@@ -13,6 +13,7 @@ import {
   type CustomField,
   type CustomFieldValue,
   customFieldChoiceOptions,
+  MAX_CUSTOM_FIELD_LONG_TEXT_LENGTH,
 } from '@continuum/contracts';
 import { CalendarIcon, ExternalLink, Star, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -20,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -373,6 +375,76 @@ function UserEditor({ field, value, disabled, onChange }: CustomFieldValueEditor
   );
 }
 
+// Several people: the members as toggle chips, like a multi-select over the brand's
+// members. A selected id that is no longer a member stays visible so it can be removed.
+function UserMultiEditor({ field, value, disabled, onChange }: CustomFieldValueEditorProps) {
+  const members = useMentionTargets(field.brandId);
+  const selected = multiSelectOptionIds(value);
+  const known = new Set((members ?? []).map((member) => member.userId));
+  const people = [
+    ...(members ?? []).map((member) => ({ id: member.userId, label: member.label })),
+    ...selected.filter((id) => !known.has(id)).map((id) => ({ id, label: 'Former member' })),
+  ];
+  const toggle = (userId: string) => {
+    const next = selected.includes(userId)
+      ? selected.filter((id) => id !== userId)
+      : [...selected, userId];
+    onChange(next.length > 0 ? next : null);
+  };
+  if (members === null) return <p className="text-xs text-muted-foreground">Loading members…</p>;
+  return (
+    <fieldset
+      aria-label={field.name}
+      disabled={disabled}
+      className="flex flex-wrap items-center gap-1"
+    >
+      {people.map((person) => {
+        const isActive = selected.includes(person.id);
+        return (
+          <button
+            key={person.id}
+            type="button"
+            onClick={() => toggle(person.id)}
+            aria-pressed={isActive}
+            className={cn(
+              'min-h-7 rounded-full border px-2.5 text-xs font-medium transition-colors active:scale-[0.96]',
+              isActive
+                ? 'border-transparent bg-secondary text-foreground'
+                : 'border-border text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {person.label}
+          </button>
+        );
+      })}
+    </fieldset>
+  );
+}
+
+// TextEditor's commit-on-blur, in a box that grows; Enter is a newline here, not a save.
+function LongTextEditor({ field, value, disabled, onChange }: CustomFieldValueEditorProps) {
+  const stored = literalValue(value);
+  const [draft, setDraft] = useState(stored);
+  useEffect(() => setDraft(stored), [stored]);
+  const commit = () => {
+    const trimmed = draft.trim();
+    if (trimmed === stored.trim()) return;
+    onChange(trimmed.length > 0 ? trimmed : null);
+  };
+  return (
+    <Textarea
+      value={draft}
+      disabled={disabled}
+      aria-label={field.name}
+      placeholder="Not set"
+      className="min-h-20 text-xs"
+      maxLength={MAX_CUSTOM_FIELD_LONG_TEXT_LENGTH}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+    />
+  );
+}
+
 function UrlEditor(props: CustomFieldValueEditorProps) {
   const href = literalValue(props.value).trim();
   return (
@@ -413,6 +485,10 @@ export function CustomFieldValueEditor(props: CustomFieldValueEditorProps) {
       return <RatingEditor {...props} />;
     case 'user':
       return <UserEditor {...props} />;
+    case 'user_multi':
+      return <UserMultiEditor {...props} />;
+    case 'long_text':
+      return <LongTextEditor {...props} />;
     case 'url':
       return <UrlEditor {...props} />;
     default:

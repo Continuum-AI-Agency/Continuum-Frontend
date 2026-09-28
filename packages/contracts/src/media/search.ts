@@ -10,6 +10,12 @@ import {
   mediaSourceSchema,
 } from './asset';
 import { customFieldFilterSchema } from './custom-fields';
+import {
+  libraryFieldRangeSchema,
+  libraryFormatGroupSchema,
+  libraryRangeFiltersSchema,
+  libraryTechnicalFiltersSchema,
+} from './library-browse';
 
 // media.assets.embedding_image width (Vertex multimodalembedding@001). Text and
 // images embed into this one space, which is what makes visual text search work.
@@ -35,6 +41,11 @@ export const mediaSearchFiltersSchema = z
     // The brand's custom review states (media.assets.review_state_id), resolved to asset ids
     // by the search route — no new ranking-RPC argument (a PostgREST overload).
     reviewStateIds: z.array(z.string().uuid()).max(50).optional(),
+    // Resolved to ids by media.library_matching_asset_ids — the browse's own predicates.
+    families: z.array(libraryFormatGroupSchema).max(9).optional(),
+    ranges: libraryRangeFiltersSchema.optional(),
+    technical: libraryTechnicalFiltersSchema.optional(),
+    fieldRanges: z.array(libraryFieldRangeSchema).max(10).optional(),
   })
   .strict();
 export type MediaSearchFilters = z.infer<typeof mediaSearchFiltersSchema>;
