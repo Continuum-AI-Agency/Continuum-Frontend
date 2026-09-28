@@ -158,6 +158,12 @@ export const apiRenderVariableSchema = z
     sample: z.string().nullable().default(null),
     /** Where this slot lands, so a picked asset can be placed before a render is spent. */
     placement: slotPlacementSchema.nullable().default(null),
+    /** Clip timing supplied by the Forge contract, including null on non-video slots. */
+    clip: z
+      .object({ fromSec: z.number(), toSec: z.number(), playsSec: z.number() })
+      .strict()
+      .nullable()
+      .default(null),
   })
   .strict();
 export type ApiRenderVariable = z.infer<typeof apiRenderVariableSchema>;
