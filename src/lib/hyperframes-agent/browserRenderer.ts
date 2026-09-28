@@ -13,9 +13,11 @@ import {
 import {
   buildTemporalMetrics,
   canvasLuma,
+  changedPixels,
   contactSheetSampleIndexes,
   createCanvas,
   measureLayout,
+  motionLuma,
   motionStrip,
   reviewPlan,
 } from '@continuum/contracts/ai-studio/hyperframes-runtime/review';
@@ -452,6 +454,9 @@ export async function captureHyperframesReviewEvidence(params: {
   const strip = motionStrip(params.spec.scenes, sampleFps, denseTimestamps.length);
   const frames: Array<Blob | undefined> = Array(frameTimestampsSeconds.length).fill(undefined);
   const samples: Uint8Array[] = [];
+  // Motion is read before the shader: grain re-seeds every pixel of every frame.
+  const motionPixels: number[] = [];
+  let previousMotion: Uint8Array | null = null;
   const clippedTextIds = new Set<string>();
   const lowContrastTextIds = new Set<string>();
   const missingFontFamilies = new Set<string>();
@@ -465,6 +470,11 @@ export async function captureHyperframesReviewEvidence(params: {
         params.composition.width,
         params.composition.height,
       );
+      if (dense.has(timestamp)) {
+        const motion = motionLuma(prepared.canvas);
+        if (previousMotion) motionPixels.push(changedPixels(previousMotion, motion));
+        previousMotion = motion;
+      }
       await applyShaderStack(prepared.canvas, params.composition.shaderStack, timestamp);
       if (dense.has(timestamp)) {
         const sampleIndex = samples.length;
@@ -494,7 +504,7 @@ export async function captureHyperframesReviewEvidence(params: {
       frames: frames as Blob[],
       frameTimestampsSeconds,
       motionStrip: await canvasToPng(strip.canvas),
-      temporalMetrics: buildTemporalMetrics(samples, sampleFps, params.spec.scenes),
+      temporalMetrics: buildTemporalMetrics(samples, sampleFps, params.spec.scenes, motionPixels),
       layoutMetrics: {
         clippedTextIds: [...clippedTextIds],
         lowContrastTextIds: [...lowContrastTextIds],
