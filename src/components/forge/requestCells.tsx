@@ -8,6 +8,7 @@ import {
   type ApiRenderTemplateContract,
   type ApiRenderVariable,
   checkAssetSwap,
+  classifyLibraryFile,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   type MediaAsset,
   readableLayerName,
@@ -27,6 +28,7 @@ import {
   MoreHorizontal,
   Plus,
   RotateCcw,
+  Upload,
   Video,
   X,
 } from 'lucide-react';
@@ -44,6 +46,7 @@ import type { DataGridRowProps } from '@/components/forge/DataGrid';
 import { EncodeOverrideCell } from '@/components/forge/EncodeOverrideCell';
 import { ActionMenuItems, rowActions, takeFocusAfter } from '@/components/forge/gridActions';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
+import { lookupLibraryAsset } from '@/components/forge/RenderRowsImport';
 import {
   effectiveMedia,
   effectiveOutputIds,
@@ -77,7 +80,9 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { TableRow } from '@/components/ui/table';
+import { toast } from '@/components/ui/toast-imperative';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import { cn } from '@/lib/utils';
 import { pickedPins } from '@/StudioCanvas/nodes/api-render/RenderVariableFields';
 
@@ -175,6 +180,8 @@ function MediaPicker({
   onClear: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const pins = pickedPins(value);
   const fit = fitTone(pins.length ? verdict : null);
   const Kind = variable.kind === 'video' ? Video : ImageIcon;
@@ -215,6 +222,49 @@ function MediaPicker({
           </button>
         }
       />
+      <input
+        ref={fileInput}
+        type="file"
+        accept={variable.kind === 'video' ? 'video/*' : 'image/*'}
+        aria-label={`Upload ${variable.label}`}
+        className="sr-only"
+        onChange={async (event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (!file) return;
+          const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
+          if (!format.accepted || format.originalKind !== variable.kind) {
+            toast.error(`Choose an ${variable.kind === 'image' ? 'image' : 'video'} file.`);
+            return;
+          }
+          setUploading(true);
+          try {
+            const uploaded = await uploadMediaAsset({ file, brandId });
+            const asset = await lookupLibraryAsset(brandId, uploaded.assetId);
+            if (!asset || asset.kind !== variable.kind)
+              throw new Error('Uploaded file is not ready in the Library.');
+            onPick([asset]);
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Could not upload this file.');
+          } finally {
+            setUploading(false);
+          }
+        }}
+      />
+      <button
+        type="button"
+        aria-label={`Upload ${variable.label}`}
+        title="Upload a file here"
+        disabled={uploading}
+        className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted/50 disabled:opacity-50"
+        onClick={() => fileInput.current?.click()}
+      >
+        {uploading ? (
+          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+        ) : (
+          <Upload className="size-3.5" aria-hidden />
+        )}
+      </button>
       {fit ? (
         <Badge variant={fit.variant} title={fit.title} className="shrink-0 px-1 py-0 text-2xs">
           {fit.text}
