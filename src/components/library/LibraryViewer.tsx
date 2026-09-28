@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import type {
   CollectionViewConfig,
   CommentDeepLink,
@@ -96,7 +97,6 @@ import { useProjects } from '@/lib/projects';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import { LibraryBoardView } from './board/LibraryBoardView';
-import { AssetDetailModal } from './detail/AssetDetailModal';
 import { FontUploadReviewDialog } from './FontUploadReviewDialog';
 import { useCustomFields } from './fields/useCustomFields';
 import { LibraryBulkToolbar } from './LibraryBulkToolbar';
@@ -127,6 +127,12 @@ import { ReelView } from './views/ReelView';
 import { stackDroppedAssets } from './views/stackDrop';
 import { useAssetFieldValues } from './views/useAssetFieldValues';
 import { useLibraryViewPreferences } from './views/useLibraryViewPreferences';
+
+// The detail stage (zoom, players, waveforms) loads when an asset is opened, not with the grid.
+const AssetDetailModal = dynamic(
+  () => import('./detail/AssetDetailModal').then((module) => module.AssetDetailModal),
+  { ssr: false, loading: () => null },
+);
 
 const TEMPLATE_ACCEPT_ATTRIBUTE = '.aep,.aepx,.aet,.zip,application/zip';
 
