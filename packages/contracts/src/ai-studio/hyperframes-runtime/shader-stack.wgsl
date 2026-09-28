@@ -10,8 +10,20 @@ struct Params {
 @group(0) @binding(1) var srcSampler: sampler;
 @group(0) @binding(2) var<uniform> params: Params;
 
+// PCG over integer inputs, so grain is bit-identical on every GPU: fract(sin(…)) is not
+// (Metal and SwiftShader disagree on sin's low bits — 26 dB between two renders of one
+// frame). The top 24 bits convert to f32 exactly.
+fn pcg(value: u32) -> u32 {
+  let state = value * 747796405u + 2891336453u;
+  let word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+  return (word >> 22u) ^ word;
+}
+
 fn rand(position: vec2f, seed: f32) -> f32 {
-  return fract(sin(dot(position, vec2f(12.9898, 78.233)) + seed * 37.719) * 43758.5453);
+  let x = bitcast<u32>(i32(position.x));
+  let y = bitcast<u32>(i32(position.y));
+  let s = bitcast<u32>(i32(seed));
+  return f32(pcg(x ^ pcg(y ^ pcg(s))) >> 8u) / 16777215.0;
 }
 
 fn chromaKey(color: vec4f) -> vec4f {
