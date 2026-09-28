@@ -84,6 +84,15 @@ describe('the name rule', () => {
     expect(matchOutputFormat('RENDER_Card_3_random.mp4', formats)).toBeNull();
   });
 
+  test('a labeled Card A file retains its parenthetical subtitle', () => {
+    const formats = [
+      { id: 'a', label: 'RENDER Card A (Pre-Match)', ratio: null, mediaType: 'MP4 Video (RGB)' },
+      { id: 'b', label: 'RENDER Card B (Halftime)', ratio: null, mediaType: 'MP4 Video (RGB)' },
+    ];
+    expect(matchOutputFormat('RENDER_Card_A_(Pre-Match)_qxlkb1c.mp4', formats)?.id).toBe('a');
+    expect(matchOutputFormat('RENDER_Card_B_(Halftime)_w7mosy9.mp4', formats)?.id).toBe('b');
+  });
+
   test('runs of separators collapse, and case never matters', () => {
     const formats = [
       { id: 'feed', ratio: '4:5', comp: comp('Promo -- Feed 4:5', 1080, 1350) },

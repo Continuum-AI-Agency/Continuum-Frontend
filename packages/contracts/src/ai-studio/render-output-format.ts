@@ -56,7 +56,7 @@ export function matchOutputFormat<T extends RenderOutputFormatCandidate>(
   const byName = formats.filter(
     (format) =>
       (format.comp && slug(format.comp.name) === named) ||
-      (!format.comp && labelName(format) === named),
+      (!format.comp && (slug(format.label ?? '') === named || labelName(format) === named)),
   );
   if (byName.length > 0) return unique(byName, isVideo);
 
