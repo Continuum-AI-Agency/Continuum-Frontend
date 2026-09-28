@@ -188,7 +188,7 @@ mock.module('../useOptimizerData', () => ({
   useApplyApproved: () => ({ mutate: applyApprovedMutate, isPending: false }),
   useApplyAdsetStatus: () => ({ mutate: applyAdsetStatusMutate, isPending: false }),
   // Reads the queue only touches when a creative row is expanded; empty here.
-  useOptimizerAccountSnapshots: () => ({ data: [], isLoading: false }),
+  useOptimizerAccountSnapshots: () => ({ data: [], isLoading: false, targeting: [] }),
   useOptimizerAdsetAds: () => ({ data: [], isLoading: false }),
   useOptimizerCreativeSwapJobs: () => ({ data: [], isLoading: false, refetch: () => undefined }),
   useOptimizerPortfolioAudiences: () => ({ data: [], isLoading: false }),
@@ -1157,13 +1157,13 @@ describe('OptimizerActionsPortfolioGroup — a CTA lands on an expanded row', ()
       expect(row).not.toBeNull();
       expect(row.querySelector('button[aria-expanded="true"]')).not.toBeNull();
       const card = row.querySelector('[data-testid="audience-recommendation-card"]') as HTMLElement;
-      expect(card.textContent).toContain('No proposal could be built');
+      expect(card.textContent).toContain('Bloqueada');
       expect(card.textContent).toContain('No delivering creative in this portfolio');
       const create = card.querySelector(
         '[data-testid="audience-create-blocked"]',
       ) as HTMLButtonElement;
       expect(create.disabled).toBe(true);
-      expect(card.textContent).not.toContain('Ask Jaina again');
+      expect(card.textContent).not.toContain('Pedírsela a Jaina de nuevo');
       await waitFor(() => expect(scrolled).toContain(`rec:${CARRIED_REC_ID}`));
     } finally {
       Element.prototype.scrollIntoView = nativeScroll;

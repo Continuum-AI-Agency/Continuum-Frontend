@@ -2,6 +2,7 @@ import {
   type AboBudgetSummary,
   type AdSetSnapshot,
   AdSetSnapshotSchema,
+  type AdsetTargeting,
   OptimizerSnapshotsEnvelopeSchema,
 } from '@continuum/contracts';
 
@@ -9,6 +10,8 @@ export type AccountSnapshotsResult = {
   snapshots: AdSetSnapshot[];
   fetchedAt: string | null;
   budgetSummary: AboBudgetSummary | null;
+  /** Each ad set's live targeting spec, carried beside the fleet; [] from an older edge. */
+  targeting: AdsetTargeting[];
 };
 
 /** Parse the reporting envelope while keeping observational ABO totals outside the engine's
@@ -19,5 +22,6 @@ export function parseOptimizerSnapshotEnvelope(value: unknown): AccountSnapshots
     snapshots: AdSetSnapshotSchema.array().catch([]).parse(envelope.snapshots),
     fetchedAt: envelope.fetchedAt,
     budgetSummary: envelope.budgetSummary,
+    targeting: envelope.targeting,
   };
 }

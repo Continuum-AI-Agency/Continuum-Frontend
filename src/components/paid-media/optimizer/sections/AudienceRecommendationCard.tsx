@@ -1,26 +1,26 @@
 'use client';
 
-// An audience recommendation, ready to execute: the current audience on the left, the
-// proposal in the middle (diagnosis, the options per bucket with what Jaina chose and
-// what the brand rules blocked, reach, budget, the creatives that carry over), and on the
-// right the one decision — create the new ad set. Every state of the proposal row has a
-// face here, from "the daily analysis has not run yet" to "here is what Meta now holds".
+// An audience proposal, opened. Five sections in the order a person decides in — qué
+// audiencia, audiencia actual / qué cambia, qué es nuevo, por qué una audiencia nueva, cómo
+// se implementa — and under them the one decision: create the new ad set. Every state of the
+// proposal row keeps the same frame, from "the daily analysis has not run yet" through a
+// blocked proposal (the reason where the audience would be, the button visibly off) to
+// "here is what Meta now holds".
 
 import type {
   AdSetSnapshot,
+  AudienceProposalBlock,
   AudienceProposalPlan,
   ConvertCboResponse,
   RecommendationRow,
 } from '@continuum/contracts';
 import { adsManagerUrls, clampBudgetMinorUnits } from '@continuum/contracts';
 import {
-  CheckIcon,
   ChevronDownIcon,
   ExternalLinkIcon,
   Loader2Icon,
   SparklesIcon,
   UndoIcon,
-  UsersIcon,
 } from 'lucide-react';
 import * as React from 'react';
 import {
@@ -43,13 +43,18 @@ import { formatCurrency } from '../format';
 import * as typeScale from '../typeScale';
 import {
   type AudienceCardView,
+  type AudienceDiffRow,
+  audienceDiff,
+  audienceNovelty,
   estimateLabel,
+  implementationLines,
   implementedRows,
   majorUnits,
   minorUnits,
-  optionsByBucket,
+  type PortfolioAdsetSpec,
+  proposedAudience,
   reachDeltaLabel,
-  targetingSummaryLine,
+  triggerLabel,
 } from './audienceCardModel';
 import { evidenceLine, queueHeadlineLine } from './recQueueModel';
 
@@ -58,6 +63,8 @@ export type AudienceRecommendationCardProps = {
   adsetName: string | null;
   snapshot: AdSetSnapshot | null;
   view: AudienceCardView;
+  /** The portfolio's enrolled ad sets with their live targeting, for "qué es nuevo". */
+  portfolioSpecs: readonly PortfolioAdsetSpec[];
   currency: string | null;
   adAccountId: string;
   onRequest: () => void;
@@ -78,117 +85,268 @@ export type AudienceRecommendationCardProps = {
 /** The card's buttons, one size up from the dense `sm` default. */
 const ROOMY_BUTTON = 'h-8 px-3 text-sm';
 
-function Line({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline gap-2">
-      <dt className="w-24 shrink-0 text-muted-foreground text-xs">{label}</dt>
-      <dd className="min-w-0 text-foreground">{children}</dd>
-    </div>
-  );
-}
+const ASK_AGAIN = 'Pedírsela a Jaina de nuevo';
 
-function CurrentAudience({
-  plan,
-  snapshot,
-  rec,
-  currency,
-  resultWord,
+function Section({
+  label,
+  testId,
+  children,
 }: {
-  plan: AudienceProposalPlan | null;
-  snapshot: AdSetSnapshot | null;
-  rec: RecommendationRow;
-  currency: string | null;
-  resultWord: string;
+  label: string;
+  testId: string;
+  children: React.ReactNode;
 }) {
-  const line = plan ? targetingSummaryLine(plan.previous_spec) : null;
-  const evidence = queueHeadlineLine(rec, currency) ?? evidenceLine(rec.evidence, currency);
   return (
-    <section className="space-y-3">
-      <p className={`${typeScale.label} flex items-center gap-1.5 text-muted-foreground`}>
-        <UsersIcon className="size-3.5" /> Audience today
-      </p>
-      <p className="text-sm text-foreground">{line ?? snapshot?.audienceType ?? 'this ad set'}</p>
-      <dl className="space-y-1.5 text-xs">
-        {plan?.reach.current ? (
-          <Line label="Reach">{estimateLabel(plan.reach.current)}</Line>
-        ) : null}
-        {snapshot?.frequency7d != null ? (
-          <Line label="Frequency">{snapshot.frequency7d.toFixed(2)} · 7d</Line>
-        ) : null}
-        <Line label="Signal">{evidence ?? rec.reason ?? rec.trigger}</Line>
-        {plan?.source.daily_budget_minor_units != null ? (
-          <Line label="Budget">
-            {formatCurrency(majorUnits(plan.source.daily_budget_minor_units), currency)}/day
-          </Line>
-        ) : null}
-        <Line label="Result">{resultWord}</Line>
-      </dl>
+    <section className="space-y-2" data-testid={testId}>
+      <h4 className={`${typeScale.label} text-muted-foreground`}>{label}</h4>
+      {children}
     </section>
   );
 }
 
-function ProposalBody({ plan, currency }: { plan: AudienceProposalPlan; currency: string | null }) {
-  const groups = optionsByBucket(plan);
-  const reach = reachDeltaLabel(plan);
+function Rows({ rows }: { rows: readonly AudienceDiffRow[] }) {
   return (
-    <div className="space-y-4 text-xs">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge
-          className={typeScale.label}
-          variant={plan.mode === 'replace' ? 'default' : 'secondary'}
-        >
-          {plan.mode === 'replace' ? 'Replace audience' : 'Add audience'}
-        </Badge>
-        <span className="text-muted-foreground">
-          {plan.mode === 'replace'
-            ? 'New ad set takes over; the current one pauses once the new one is active.'
-            : 'New ad set beside the current one; both keep running.'}
-        </span>
-      </div>
-      <p className="font-medium text-sm text-foreground">{plan.diagnosis}</p>
-      <p className="text-muted-foreground">{plan.rationale}</p>
-      {groups.map((group) => (
-        <div key={group.bucket}>
-          <p className={`${typeScale.label} mb-1.5 text-muted-foreground`}>{group.label}</p>
-          <ul className="flex flex-wrap gap-1.5">
-            {group.options.map((option) => (
-              <li
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-md border px-2 py-1',
-                  option.chosen
-                    ? 'border-primary/50 bg-primary/10 text-foreground'
-                    : option.blocked_by
-                      ? 'border-border/50 text-muted-foreground line-through'
-                      : 'border-border/60 text-muted-foreground',
-                )}
-                key={`${group.bucket}:${option.id ?? option.name}`}
-                title={option.blocked_by ?? option.rationale ?? undefined}
-              >
-                {option.chosen ? <CheckIcon className="size-3.5" /> : null}
-                {option.name}
-                {option.estimate ? (
-                  <span className="text-xs tabular-nums opacity-70">
-                    {estimateLabel(option.estimate)}
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+    <dl className="space-y-1.5 text-sm">
+      {rows.map((row) => (
+        <div className="flex items-baseline gap-2" key={`${row.label}:${row.value}`}>
+          <dt className="w-28 shrink-0 text-muted-foreground text-xs">{row.label}</dt>
+          <dd className="min-w-0 break-words text-foreground">{row.value}</dd>
         </div>
       ))}
-      <dl className="space-y-1">
-        {reach ? <Line label="Reach">{reach}</Line> : null}
-        <Line label="Advantage+">
-          {plan.advantage_audience.enabled ? 'on' : 'off'}
-          <span className="text-muted-foreground"> · {plan.advantage_audience.rationale}</span>
-        </Line>
-        <Line label="New name">{plan.adset_name}</Line>
-      </dl>
+    </dl>
+  );
+}
+
+function Muted({ children }: { children: React.ReactNode }) {
+  return <p className="text-muted-foreground text-sm">{children}</p>;
+}
+
+// ── Qué audiencia ──────────────────────────────────────────────────────────────────────
+
+function WhatAudience({
+  plan,
+  state,
+  block,
+  errorMessage,
+}: {
+  plan: AudienceProposalPlan | null;
+  state: AudienceCardView['state'];
+  block: AudienceProposalBlock | null;
+  errorMessage: string | null;
+}) {
+  if (plan) {
+    const proposed = proposedAudience(plan);
+    return (
+      <>
+        <p className={`${typeScale.bodyLg} text-foreground`}>{proposed.words}</p>
+        {proposed.reach ? (
+          <p className="text-muted-foreground text-sm tabular-nums">
+            Alcance estimado {proposed.reach}
+          </p>
+        ) : null}
+      </>
+    );
+  }
+  if (state === 'blocked' || state === 'blocked_cbo') {
+    return (
+      <div className="space-y-1.5">
+        <Badge className={typeScale.label} variant="warning">
+          Bloqueada
+        </Badge>
+        <p className="text-foreground text-sm" data-testid="audience-blocked-reason">
+          {block?.message ?? 'No se pudo armar la propuesta.'}
+        </p>
+      </div>
+    );
+  }
+  if (state === 'queued' || state === 'proposing') {
+    return (
+      <p className="flex items-center gap-2 text-muted-foreground text-sm">
+        <Loader2Icon className="size-3.5 animate-spin" />
+        {state === 'queued'
+          ? 'En cola: Jaina la toma en menos de un minuto.'
+          : 'Jaina está leyendo la audiencia, el catálogo y los creativos…'}
+      </p>
+    );
+  }
+  if (state === 'failed') {
+    return (
+      <div className="space-y-1">
+        <p className="font-medium text-foreground text-sm">El análisis falló</p>
+        <Muted>{errorMessage ?? 'Error desconocido.'}</Muted>
+      </div>
+    );
+  }
+  return (
+    <Muted>
+      Jaina la propone con el ciclo diario del optimizador para este conjunto. Pedila ahora para
+      tenerla hoy.
+    </Muted>
+  );
+}
+
+// ── Audiencia actual / Qué cambia ──────────────────────────────────────────────────────
+
+function CurrentAndChanges({
+  plan,
+  snapshot,
+}: {
+  plan: AudienceProposalPlan | null;
+  snapshot: AdSetSnapshot | null;
+}) {
+  const diff = plan ? audienceDiff(plan) : null;
+  const reach = plan ? estimateLabel(plan.reach.current) : null;
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <Section label="Audiencia actual" testId="audience-current">
+        {diff?.hasPrevious ? (
+          <Rows rows={diff.current} />
+        ) : (
+          <Muted>
+            {snapshot?.audienceType
+              ? `Sin registro de la segmentación actual; el conjunto es de ${snapshot.audienceType}.`
+              : 'Sin registro de la segmentación actual.'}
+          </Muted>
+        )}
+        {reach || snapshot?.frequency7d != null ? (
+          <p className="text-muted-foreground text-xs tabular-nums">
+            {[
+              reach ? `Alcance ${reach}` : null,
+              snapshot?.frequency7d != null
+                ? `frecuencia ${snapshot.frequency7d.toFixed(1)} · 7 días`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        ) : null}
+      </Section>
+      <Section label="Qué cambia" testId="audience-changes">
+        {!diff ? (
+          <Muted>Nada todavía: no hay propuesta armada.</Muted>
+        ) : diff.changes.length === 0 ? (
+          <Muted>La propuesta no cambia la segmentación.</Muted>
+        ) : (
+          <>
+            {!diff.hasPrevious ? (
+              <Muted>Sin audiencia previa registrada; esto es la propuesta completa.</Muted>
+            ) : null}
+            <Rows rows={diff.changes} />
+          </>
+        )}
+      </Section>
+    </div>
+  );
+}
+
+// ── Qué es nuevo ───────────────────────────────────────────────────────────────────────
+
+function WhatIsNew({
+  plan,
+  portfolioSpecs,
+}: {
+  plan: AudienceProposalPlan | null;
+  portfolioSpecs: readonly PortfolioAdsetSpec[];
+}) {
+  if (!plan) return <Muted>Se sabe cuando haya propuesta.</Muted>;
+  const novelty = audienceNovelty(plan, portfolioSpecs);
+  const compared =
+    novelty.comparedAdsets > 0
+      ? `Comparado con ${novelty.comparedAdsets === 1 ? 'el otro conjunto' : `los otros ${novelty.comparedAdsets} conjuntos`} del portafolio.`
+      : 'Comparado solo con este conjunto: el portafolio no trajo la segmentación de los demás.';
+  return (
+    <div className="space-y-2 text-sm">
+      {novelty.fresh.length > 0 ? (
+        <ul className="space-y-1" data-testid="audience-fresh">
+          {novelty.fresh.map((item) => (
+            <li className="text-foreground" key={`${item.kindLabel}:${item.name}`}>
+              {item.name}
+              <span className="text-muted-foreground"> · {item.kindLabel} · nadie lo usa hoy</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <Muted>Nada que el portafolio no use ya.</Muted>
+      )}
+      {novelty.reused.length > 0 ? (
+        <ul className="space-y-1" data-testid="audience-reused">
+          {novelty.reused.map((item) => (
+            <li className="text-muted-foreground" key={`${item.kindLabel}:${item.name}`}>
+              {item.name} ya se usa en {item.usedIn.join(', ')}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {novelty.excludedByRule.length > 0 ? (
+        <ul className="space-y-1" data-testid="audience-excluded">
+          {novelty.excludedByRule.map((item) => (
+            <li className="text-muted-foreground" key={item.name}>
+              <span className="line-through">{item.name}</span> · descartado por regla de marca:{' '}
+              {item.rule}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <p className="text-muted-foreground text-xs">{compared}</p>
+    </div>
+  );
+}
+
+// ── Por qué una audiencia nueva ────────────────────────────────────────────────────────
+
+function Why({
+  plan,
+  rec,
+  currency,
+}: {
+  plan: AudienceProposalPlan | null;
+  rec: RecommendationRow;
+  currency: string | null;
+}) {
+  const evidence = queueHeadlineLine(rec, currency) ?? evidenceLine(rec.evidence, currency);
+  return (
+    <div className="space-y-1.5">
+      <p className="text-sm">
+        <span className="font-medium text-foreground">{triggerLabel(rec.trigger)}</span>
+        {evidence ? <span className="text-muted-foreground"> · {evidence}</span> : null}
+      </p>
+      {plan ? (
+        <>
+          <p className={`${typeScale.bodyLg} text-foreground`}>{plan.diagnosis}</p>
+          <Muted>{plan.rationale}</Muted>
+        </>
+      ) : rec.reason ? (
+        <Muted>{rec.reason}</Muted>
+      ) : null}
+    </div>
+  );
+}
+
+// ── Cómo se implementa ─────────────────────────────────────────────────────────────────
+
+function HowItIsImplemented({
+  plan,
+  state,
+  currency,
+}: {
+  plan: AudienceProposalPlan | null;
+  state: AudienceCardView['state'];
+  currency: string | null;
+}) {
+  if (!plan) {
+    return (
+      <Muted>
+        {state === 'blocked' || state === 'blocked_cbo'
+          ? 'No se crea nada mientras la propuesta esté bloqueada.'
+          : 'Un conjunto nuevo, pausado, junto al actual; el actual sigue corriendo.'}
+      </Muted>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <Rows rows={implementationLines(plan, currency)} />
       {plan.creatives.length > 0 ? (
         <div>
-          <p className={`${typeScale.label} mb-1.5 text-muted-foreground`}>
-            Creatives carried over
-          </p>
           <ul className="flex flex-wrap gap-3">
             {plan.creatives.map((creative) => (
               <li className="w-28" key={creative.creative_id}>
@@ -228,8 +386,10 @@ function ProposalBody({ plan, currency }: { plan: AudienceProposalPlan; currency
   );
 }
 
+// ── The card ───────────────────────────────────────────────────────────────────────────
+
 export function AudienceRecommendationCard(props: AudienceRecommendationCardProps) {
-  const { rec, view, currency, adAccountId, resultWord } = props;
+  const { rec, view, currency, adAccountId, portfolioSpecs } = props;
   const { plan, state, block, result, row } = view;
   const [budgetMajor, setBudgetMajor] = React.useState<string>('');
   const [activate, setActivate] = React.useState(false);
@@ -242,6 +402,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
     ? clampBudgetMinorUnits(minorUnits(Number(budgetMajor) || 0), plan.budget.bounds)
     : 0;
   const budgetClamped = plan ? budgetMinor !== minorUnits(Number(budgetMajor) || 0) : false;
+  const reachDelta = plan ? reachDeltaLabel(plan) : null;
   const urls = result
     ? adsManagerUrls({
         adAccountId,
@@ -252,63 +413,35 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
     : null;
 
   return (
-    <div
-      className="grid gap-6 md:grid-cols-[14rem_minmax(0,1fr)_minmax(16rem,20rem)]"
-      data-testid="audience-recommendation-card"
-    >
-      <CurrentAudience
-        currency={currency}
-        plan={plan}
-        rec={rec}
-        resultWord={resultWord}
-        snapshot={props.snapshot}
-      />
+    <div className="space-y-6" data-testid="audience-recommendation-card">
+      <Section label="Qué audiencia" testId="audience-what">
+        <WhatAudience block={block} errorMessage={view.errorMessage} plan={plan} state={state} />
+        {reachDelta ? (
+          <p className="text-muted-foreground text-xs tabular-nums">Alcance {reachDelta}</p>
+        ) : null}
+      </Section>
 
-      {/* Middle — the proposal */}
-      <section className="space-y-3 md:border-border/50 md:border-l md:pl-6">
-        <p className={`${typeScale.label} flex items-center gap-1.5 text-muted-foreground`}>
-          <SparklesIcon className="size-3.5" /> Jaina's proposal
-        </p>
-        {plan ? (
-          <ProposalBody currency={currency} plan={plan} />
-        ) : state === 'queued' || state === 'proposing' ? (
-          <p className="flex items-center gap-2 text-muted-foreground text-xs">
-            <Loader2Icon className="size-3.5 animate-spin" />
-            {state === 'queued'
-              ? 'Queued — Jaina picks it up within a minute.'
-              : 'Jaina is reading the audience, the catalogue and the creatives…'}
-          </p>
-        ) : state === 'blocked_cbo' || state === 'blocked' ? (
-          <div className="space-y-1.5 text-xs">
-            <p className="font-medium text-foreground">
-              {state === 'blocked_cbo'
-                ? 'This campaign holds the budget'
-                : 'No proposal could be built'}
-            </p>
-            <p className="text-muted-foreground">{block?.message}</p>
-          </div>
-        ) : state === 'failed' ? (
-          <div className="space-y-1.5 text-xs">
-            <p className="font-medium text-foreground">The analysis failed</p>
-            <p className="text-muted-foreground">{view.errorMessage ?? 'Unknown error.'}</p>
-          </div>
-        ) : (
-          <p className="text-muted-foreground text-xs">
-            Jaina's audience analysis runs with the daily optimizer cycle for this ad set. Ask now
-            to build the proposal today.
-          </p>
-        )}
-      </section>
+      <CurrentAndChanges plan={plan} snapshot={props.snapshot} />
 
-      {/* Right — the decision */}
-      <section className="space-y-3 md:border-border/50 md:border-l md:pl-6">
-        <p className={`${typeScale.label} text-muted-foreground`}>Decision</p>
+      <Section label="Qué es nuevo" testId="audience-new">
+        <WhatIsNew plan={plan} portfolioSpecs={portfolioSpecs} />
+      </Section>
 
+      <Section label="Por qué una audiencia nueva" testId="audience-why">
+        <Why currency={currency} plan={plan} rec={rec} />
+      </Section>
+
+      <Section label="Cómo se implementa" testId="audience-how">
+        <HowItIsImplemented currency={currency} plan={plan} state={state} />
+      </Section>
+
+      {/* The decision */}
+      <section className="space-y-3 border-border/50 border-t pt-4" data-testid="audience-decision">
         {state === 'none' || state === 'failed' ? (
           <Button
+            className={ROOMY_BUTTON}
             disabled={props.requesting}
             onClick={props.onRequest}
-            className={ROOMY_BUTTON}
             size="sm"
             type="button"
             variant="secondary"
@@ -318,28 +451,29 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
             ) : (
               <SparklesIcon className="size-3.5" />
             )}
-            {state === 'failed' ? 'Ask Jaina again' : 'Ask Jaina now'}
+            {state === 'failed' ? ASK_AGAIN : 'Pedírsela a Jaina ahora'}
           </Button>
         ) : null}
 
         {state === 'blocked_cbo' && block ? (
-          <div className="space-y-3 text-xs">
-            <p className="text-muted-foreground">
-              Recommendations need ad-set daily budgets to pace and compare ad sets. Convert the
-              campaign, then ask Jaina again.
-            </p>
+          <div className="space-y-3 text-sm">
+            <p className="font-medium text-foreground">Esta campaña tiene el presupuesto</p>
+            <Muted>
+              Las recomendaciones necesitan presupuesto diario por conjunto para marcar el ritmo y
+              comparar conjuntos. Convertí la campaña y pedile la propuesta a Jaina de nuevo.
+            </Muted>
             {props.cboPreview?.ok && props.cboPreview.dryRun !== false ? (
               <div className="rounded-md border border-border/60 bg-muted/20 p-3">
                 <p className="mb-1 font-medium text-foreground">
-                  Preview: {props.cboPreview.adset_budgets.length} ad set
-                  {props.cboPreview.adset_budgets.length === 1 ? '' : 's'} get their own daily
-                  budget
+                  Vista previa: {props.cboPreview.adset_budgets.length} conjunto
+                  {props.cboPreview.adset_budgets.length === 1 ? '' : 's'} con presupuesto diario
+                  propio
                 </p>
                 <ul className="space-y-1 text-muted-foreground">
                   {props.cboPreview.adset_budgets.slice(0, 6).map((b) => (
                     <li className="truncate" key={b.adset_id}>
                       {b.adset_name ?? b.adset_id} ·{' '}
-                      {formatCurrency(b.daily_major, props.cboPreview?.currency ?? currency)}/day
+                      {formatCurrency(b.daily_major, props.cboPreview?.currency ?? currency)}/día
                     </li>
                   ))}
                 </ul>
@@ -351,45 +485,45 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                   type="button"
                 >
                   {props.convertingCbo ? <Loader2Icon className="size-3.5 animate-spin" /> : null}
-                  Convert campaign to ad-set budgets
+                  Convertir la campaña a presupuestos por conjunto
                 </Button>
               </div>
             ) : props.cboPreview?.ok && props.cboPreview.dryRun === false ? (
               <p className="text-foreground">
-                Converted{props.cboPreview.deduped ? ' (already today)' : ''}. Ask Jaina again to
-                build the proposal.
+                Convertida{props.cboPreview.deduped ? ' (ya hoy)' : ''}. Pedile la propuesta a Jaina
+                de nuevo.
               </p>
             ) : (
               <Button
+                className={ROOMY_BUTTON}
                 disabled={props.convertingCbo || !block.campaign_id}
                 onClick={() => block.campaign_id && props.onConvertCbo(block.campaign_id, true)}
-                className={ROOMY_BUTTON}
                 size="sm"
                 type="button"
                 variant="secondary"
               >
                 {props.convertingCbo ? <Loader2Icon className="size-3.5 animate-spin" /> : null}
-                Preview the conversion
+                Previsualizar la conversión
               </Button>
             )}
             <Button
+              className={ROOMY_BUTTON}
               disabled={props.requesting}
               onClick={props.onRequest}
-              className={ROOMY_BUTTON}
               size="sm"
               type="button"
               variant="ghost"
             >
-              Ask Jaina again
+              {ASK_AGAIN}
             </Button>
           </div>
         ) : null}
 
         {state === 'blocked' ? (
-          <div className="space-y-3 text-xs">
-            {/* The decision this column exists for, visibly off, with the reason beside it —
-                a blocked proposal must read as blocked here, not as a column with nothing in
-                it. The create button is the same control a ready proposal offers. */}
+          <div className="space-y-3 text-sm">
+            {/* The decision this section exists for, visibly off, with the reason above it in
+                "Qué audiencia" — a blocked proposal must read as blocked here, not as a frame
+                with nothing at the end. Same control a ready proposal offers. */}
             <Button
               className={ROOMY_BUTTON}
               data-testid="audience-create-blocked"
@@ -398,108 +532,109 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
               title={block?.message}
               type="button"
             >
-              Create new ad set
+              Crear el conjunto nuevo (pausado)
             </Button>
-            <p className="text-muted-foreground" data-testid="audience-blocked-reason">
-              {block?.message ?? 'No proposal could be built.'}
-            </p>
             {rec.status === 'pending' ? (
               <Button
+                className={ROOMY_BUTTON}
                 disabled={props.requesting}
                 onClick={props.onRequest}
-                className={ROOMY_BUTTON}
                 size="sm"
                 type="button"
                 variant="secondary"
               >
-                Ask Jaina again
+                {ASK_AGAIN}
               </Button>
             ) : (
-              <p className="text-muted-foreground">
-                The cycle has since closed this recommendation, so it cannot be asked again from
-                here.
-              </p>
+              <Muted>
+                El ciclo ya cerró esta recomendación, así que no se puede volver a pedir desde acá.
+              </Muted>
             )}
           </div>
         ) : null}
 
         {state === 'ready' && plan ? (
-          <div className="space-y-3 text-xs">
+          <div className="space-y-3 text-sm">
             <label className="block space-y-1" htmlFor={`budget-${rec.id}`}>
-              <span className="text-muted-foreground">Daily budget ({plan.budget.currency})</span>
+              <span className="text-muted-foreground">
+                Presupuesto diario ({plan.budget.currency})
+              </span>
               <Input
-                className="h-8 text-sm"
+                className="h-8 max-w-48 text-sm"
                 id={`budget-${rec.id}`}
                 inputMode="decimal"
                 onChange={(event) => setBudgetMajor(event.target.value)}
                 value={budgetMajor}
               />
               <span className="block text-muted-foreground text-xs tabular-nums">
-                {majorUnits(plan.budget.bounds.min_minor_units)}–
+                entre {majorUnits(plan.budget.bounds.min_minor_units)} y{' '}
                 {majorUnits(plan.budget.bounds.max_minor_units)}
-                {budgetClamped ? ' · adjusted to the bounds' : ''}
+                {budgetClamped ? ' · ajustado a los límites' : ''}
                 {plan.budget.note ? ` · ${plan.budget.note}` : ''}
               </span>
             </label>
             <label className="flex items-center gap-2" htmlFor={`activate-${rec.id}`}>
               <Switch checked={activate} id={`activate-${rec.id}`} onCheckedChange={setActivate} />
-              <span className="text-foreground">Start active</span>
+              <span className="text-foreground">Empezar activo</span>
               <span className="text-muted-foreground">
                 {activate
                   ? plan.mode === 'replace'
-                    ? '— pauses the current ad set once the new one is live'
-                    : '— delivers as soon as Meta approves it'
-                  : '— created paused, for review'}
+                    ? '— pausa el conjunto actual cuando el nuevo esté en vivo'
+                    : '— entrega apenas Meta lo apruebe'
+                  : '— se crea pausado; vos lo activás'}
               </span>
             </label>
             <div className="flex flex-wrap gap-2">
               <Button
+                className={ROOMY_BUTTON}
+                data-testid="audience-create"
                 disabled={props.approving || props.busy}
                 onClick={() => setConfirmOpen(true)}
-                className={ROOMY_BUTTON}
                 size="sm"
                 type="button"
               >
                 {props.approving ? <Loader2Icon className="size-3.5 animate-spin" /> : null}
-                Create new ad set
+                Crear el conjunto nuevo ({activate ? 'activo' : 'pausado'})
               </Button>
               <Button
+                className={ROOMY_BUTTON}
                 disabled={props.busy}
                 onClick={props.onCancel}
-                className={ROOMY_BUTTON}
                 size="sm"
                 type="button"
                 variant="ghost"
               >
-                Dismiss
+                Descartar
               </Button>
             </div>
             <AlertDialog onOpenChange={setConfirmOpen} open={confirmOpen}>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Create "{plan.adset_name}" on Meta?</AlertDialogTitle>
+                  <AlertDialogTitle>¿Crear "{plan.adset_name}" en Meta?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    A new ad set in {plan.source.campaign_name ?? 'this campaign'} with the proposed
-                    audience, {formatCurrency(majorUnits(budgetMinor), plan.budget.currency)}/day,{' '}
-                    {plan.creatives.length} ad
-                    {plan.creatives.length === 1 ? '' : 's'} reusing the portfolio's best creatives.{' '}
+                    Un conjunto nuevo en {plan.source.campaign_name ?? 'esta campaña'} con la
+                    audiencia propuesta,{' '}
+                    {formatCurrency(majorUnits(budgetMinor), plan.budget.currency)}
+                    /día y {plan.creatives.length} anuncio
+                    {plan.creatives.length === 1 ? '' : 's'} que reusan los mejores creativos del
+                    portafolio.{' '}
                     {activate
                       ? plan.mode === 'replace'
-                        ? `It starts active and "${plan.source.adset_name ?? 'the current ad set'}" is paused once it is live.`
-                        : 'It starts active.'
-                      : 'It is created paused; you can switch it on from this card.'}{' '}
-                    Meta restarts the learning phase for a new ad set.
+                        ? `Arranca activo y "${plan.source.adset_name ?? 'el conjunto actual'}" se pausa cuando esté en vivo.`
+                        : 'Arranca activo.'
+                      : 'Se crea pausado; lo activás desde esta tarjeta.'}{' '}
+                    Meta reinicia la fase de aprendizaje para un conjunto nuevo.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={() => {
                       setConfirmOpen(false);
                       props.onApprove({ budgetMinorUnits: budgetMinor, activate });
                     }}
                   >
-                    Create ad set
+                    Crear el conjunto
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -511,38 +646,38 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
         state === 'executing' ||
         state === 'switching' ||
         state === 'undoing' ? (
-          <p className="flex items-center gap-2 text-muted-foreground text-xs">
+          <p className="flex items-center gap-2 text-muted-foreground text-sm">
             <Loader2Icon className="size-3.5 animate-spin" />
             {state === 'approved'
-              ? 'Approved — the worker creates it within a minute.'
+              ? 'Aprobada: el worker lo crea en menos de un minuto.'
               : state === 'executing'
-                ? 'Creating the ad set and its ads on Meta…'
+                ? 'Creando el conjunto y sus anuncios en Meta…'
                 : state === 'switching'
-                  ? 'Activating the new ad set…'
-                  : 'Undoing…'}
+                  ? 'Activando el conjunto nuevo…'
+                  : 'Deshaciendo…'}
           </p>
         ) : null}
 
         {(state === 'executed' || state === 'undone') && result ? (
-          <div className="space-y-3 text-xs">
+          <div className="space-y-3 text-sm">
             <div className="space-y-1">
               <p className="font-medium text-foreground">
-                {state === 'undone' ? 'Undone' : 'Created on Meta'}
+                {state === 'undone' ? 'Deshecho' : 'Creado en Meta'}
                 {(row?.approval as { via?: string } | null)?.via === 'autopilot' ? (
                   <Badge className="ml-2 text-xs" variant="success">
-                    Approved by autopilot · created paused
+                    Aprobado por autopilot · creado pausado
                   </Badge>
                 ) : null}
               </p>
               {result.campaign ? (
                 <p className="truncate text-muted-foreground">
-                  Campaign {result.campaign.name ?? ''}{' '}
+                  Campaña {result.campaign.name ?? ''}{' '}
                   <span className="text-xs tabular-nums">{result.campaign.id}</span>
                 </p>
               ) : null}
               {result.adset ? (
                 <p className="truncate">
-                  Ad set {result.adset.name ?? ''}{' '}
+                  Conjunto {result.adset.name ?? ''}{' '}
                   <span className="text-muted-foreground text-xs tabular-nums">
                     {result.adset.id}
                   </span>{' '}
@@ -554,14 +689,14 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                       rel="noreferrer"
                       target="_blank"
                     >
-                      open <ExternalLinkIcon className="size-3.5" />
+                      abrir <ExternalLinkIcon className="size-3.5" />
                     </a>
                   ) : null}
                 </p>
               ) : null}
               {result.ads.map((ad, index) => (
                 <p className="truncate text-muted-foreground" key={ad.id}>
-                  Ad {ad.name ?? ''} <span className="text-xs tabular-nums">{ad.id}</span> ·{' '}
+                  Anuncio {ad.name ?? ''} <span className="text-xs tabular-nums">{ad.id}</span> ·{' '}
                   {ad.effective_status ?? ad.status ?? ''}
                   {urls?.ads[index] ? (
                     <a
@@ -570,7 +705,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                       rel="noreferrer"
                       target="_blank"
                     >
-                      open <ExternalLinkIcon className="size-3.5" />
+                      abrir <ExternalLinkIcon className="size-3.5" />
                     </a>
                   ) : null}
                 </p>
@@ -580,54 +715,50 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
               <CollapsibleTrigger
                 className={cn(
                   buttonVariants({ variant: 'ghost', size: 'sm' }),
-                  'h-8 gap-1.5 px-3 text-xs',
+                  'h-8 gap-1.5 px-3 text-sm',
                 )}
               >
-                <ChevronDownIcon className="size-3.5" /> What was implemented
+                <ChevronDownIcon className="size-3.5" /> Qué se implementó
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <dl className="mt-1.5 space-y-1.5 rounded-md border border-border/60 bg-muted/20 p-3">
-                  {implementedRows(result, plan).map((entry) => (
-                    <Line key={`${entry.label}:${entry.value}`} label={entry.label}>
-                      <span className="break-words">{entry.value}</span>
-                    </Line>
-                  ))}
-                </dl>
+                <div className="mt-1.5 rounded-md border border-border/60 bg-muted/20 p-3">
+                  <Rows rows={implementedRows(result, plan)} />
+                </div>
               </CollapsibleContent>
             </Collapsible>
             {state === 'executed' ? (
               <div className="flex flex-wrap gap-2">
                 {plan?.mode === 'replace' && !result.activation?.requested ? (
                   <Button
+                    className={ROOMY_BUTTON}
                     disabled={props.busy}
                     onClick={props.onActivate}
-                    className={ROOMY_BUTTON}
                     size="sm"
                     type="button"
                   >
-                    Switch over
+                    Cambiar al nuevo
                   </Button>
                 ) : null}
                 {!result.activation?.requested && plan?.mode === 'add' ? (
                   <Button
+                    className={ROOMY_BUTTON}
                     disabled={props.busy}
                     onClick={props.onActivate}
-                    className={ROOMY_BUTTON}
                     size="sm"
                     type="button"
                   >
-                    Activate
+                    Activar
                   </Button>
                 ) : null}
                 <Button
+                  className={ROOMY_BUTTON}
                   disabled={props.busy}
                   onClick={props.onUndo}
-                  className={ROOMY_BUTTON}
                   size="sm"
                   type="button"
                   variant="ghost"
                 >
-                  <UndoIcon className="size-3.5" /> Undo
+                  <UndoIcon className="size-3.5" /> Deshacer
                 </Button>
               </div>
             ) : null}
@@ -635,9 +766,9 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
         ) : null}
 
         {row?.status === 'failed' && result?.adset ? (
-          <p className="text-muted-foreground text-xs">
-            A partial result exists (ad set {result.adset.id}); retrying resumes from it.
-          </p>
+          <Muted>
+            Quedó un resultado parcial (conjunto {result.adset.id}); reintentar retoma desde ahí.
+          </Muted>
         ) : null}
       </section>
     </div>

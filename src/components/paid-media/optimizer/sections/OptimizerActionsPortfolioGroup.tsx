@@ -99,6 +99,8 @@ import {
   audienceCardView,
   carriedRecommendation,
   isAudienceRecommendation,
+  type PortfolioAdsetSpec,
+  portfolioSpecsFrom,
 } from './audienceCardModel';
 import { CostIntervalLine } from './CostIntervalLine';
 import { CreativeRecommendationCard } from './CreativeRecommendationCard';
@@ -179,6 +181,8 @@ type EvidenceContext = {
   implementCreative: (job: CreativeSwapJobRow, assetId: string, target: ImplementTarget) => void;
   implementingKey: string | null;
   audiences: readonly PortfolioAudienceRow[];
+  /** Every enrolled ad set's live targeting, for the audience card's "qué es nuevo". */
+  portfolioSpecs: readonly PortfolioAdsetSpec[];
   currency: string | null;
   /** The objective's result, lower-cased, for the creative comparison chart. */
   resultWord: string;
@@ -768,6 +772,14 @@ export function OptimizerActionsPortfolioGroup({
     }),
     [adAccountId, audienceMutations, brandId, convertCboMutation, noteFor],
   );
+  const portfolioSpecs = React.useMemo(
+    () =>
+      portfolioSpecsFrom(
+        snapshotsQuery.targeting,
+        (adsetId) => snapshotById.get(adsetId)?.name ?? null,
+      ),
+    [snapshotsQuery.targeting, snapshotById],
+  );
   const evidenceContext = React.useMemo<EvidenceContext>(
     () => ({
       snapshotById,
@@ -784,6 +796,7 @@ export function OptimizerActionsPortfolioGroup({
       implementCreative,
       implementingKey,
       audiences: audiencesQuery.data,
+      portfolioSpecs,
       currency,
       resultWord: metric.resultLabel.toLowerCase(),
       audienceProposals: audienceProposalsQuery.data,
@@ -811,6 +824,7 @@ export function OptimizerActionsPortfolioGroup({
       implementCreative,
       implementingKey,
       audiencesQuery.data,
+      portfolioSpecs,
       currency,
       metric.resultLabel,
       audienceProposalsQuery.data,
@@ -1945,6 +1959,7 @@ function AudienceCardHost({
       onConvertCbo={evidence.audienceActions.convertCbo}
       onRequest={() => evidence.audienceActions.request(rec.id)}
       onUndo={() => proposalId && evidence.audienceActions.undo(proposalId)}
+      portfolioSpecs={evidence.portfolioSpecs}
       rec={rec}
       requesting={evidence.audienceBusy.requestingRecId === rec.id}
       resultWord={evidence.resultWord}
