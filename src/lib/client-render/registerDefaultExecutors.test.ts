@@ -10,8 +10,9 @@ describe('default client render executors', () => {
   // precisely the failure it exists to catch.
   it('routes every shared render-job kind through the browser render lane', () => {
     registerDefaultClientRenderExecutors();
-    // HyperFrames films render on the server now; the kind stays so its old rows still parse.
-    const serverRendered = new Set(['hyperframes_agent']);
+    // HyperFrames films (canvas and organic) render on the server now; the kinds stay so
+    // their old rows still parse.
+    const serverRendered = new Set(['hyperframes_agent', 'organic_hyperframe']);
     const unregistered = clientRenderJobKindSchema.options.filter(
       (kind) => !serverRendered.has(kind) && getClientRenderExecutor(kind) === null,
     );

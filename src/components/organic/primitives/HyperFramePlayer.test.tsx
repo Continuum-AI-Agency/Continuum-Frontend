@@ -8,17 +8,10 @@ Object.assign(global.window, {
   TypeError: globalThis.TypeError,
 });
 
-const createClientRenderJobMock = mock(() => Promise.resolve({}));
 const signHyperframeAssetMock = mock(() =>
   Promise.resolve<string | null>('https://signed.example.com/composition.html'),
 );
 
-mock.module('@/lib/api/clientRenderJobs.client', () => ({
-  createClientRenderJob: createClientRenderJobMock,
-}));
-mock.module('@/lib/client-render/ClientRenderProvider', () => ({
-  openClientRenderInbox: mock(() => undefined),
-}));
 mock.module('@/lib/organic/hyperframeSign', () => ({
   signHyperframeAsset: signHyperframeAssetMock,
 }));
@@ -48,7 +41,6 @@ function hyperframeDraft(
 
 afterEach(() => {
   cleanup();
-  createClientRenderJobMock.mockClear();
   signHyperframeAssetMock.mockClear();
 });
 
@@ -91,7 +83,7 @@ describe('HyperFramePlayer shader preview', () => {
     expect(signHyperframeAssetMock).not.toHaveBeenCalled();
   });
 
-  it('plays a server-rendered film from its GCS pointer and never queues a browser render', async () => {
+  it('plays a server-rendered film from its GCS pointer', async () => {
     signHyperframeAssetMock.mockImplementationOnce(() =>
       Promise.resolve('https://storage.googleapis.com/hf/film.mp4?sig'),
     );
@@ -127,7 +119,26 @@ describe('HyperFramePlayer shader preview', () => {
       bucket: 'gs://hf',
       path: 'brand-1/organic/composition-1/film.mp4',
     });
-    expect(createClientRenderJobMock).not.toHaveBeenCalled();
+  });
+
+  it('shows the render error the server filed on the draft', () => {
+    render(
+      <HyperFramePlayer
+        brandId="brand-1"
+        draft={hyperframeDraft({
+          generated: true,
+          compositionId: 'composition-1',
+          bucket: 'gs://hf',
+          htmlPath: 'brand-1/organic/composition-1/composition.html',
+          mp4Status: 'failed',
+          error: 'The film shows nothing: all 4 sampled frames are blank.',
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByText('The film shows nothing: all 4 sampled frames are blank.'),
+    ).toBeTruthy();
   });
 
   it('does not expose an unshaded iframe while the shader render is pending', async () => {
