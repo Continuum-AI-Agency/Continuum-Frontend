@@ -22,6 +22,7 @@ import {
   fetchUserLinkedInAccountIds,
   fetchUserTikTokAccountIds,
   fetchUserXAccountIds,
+  type MetaSyncMode,
   useStartGoogleSync,
   useStartLinkedInSync,
   useStartMetaSync,
@@ -116,7 +117,7 @@ export function BrandIntegrationsManager({
   const startLinkedInSync = useStartLinkedInSync();
   const startXSync = useStartXSync();
 
-  const handleConnect = async (platformKey: string) => {
+  const handleConnect = async (platformKey: string, metaMode?: MetaSyncMode) => {
     if (isProviderComingSoon(platformKey)) return;
     setIsSyncing(true);
     try {
@@ -137,7 +138,7 @@ export function BrandIntegrationsManager({
 
       let popupUrl: string | null = null;
       if (group === 'meta') {
-        const res = await startMetaSync.mutateAsync(callbackUrl);
+        const res = await startMetaSync.mutateAsync({ callbackUrl, mode: metaMode });
         popupUrl = res.url;
       } else if (group === 'tiktok') {
         const res = await startTikTokSync.mutateAsync(callbackUrl);
@@ -157,7 +158,12 @@ export function BrandIntegrationsManager({
       }
 
       if (popupUrl) {
-        const popup = openCenteredPopup(popupUrl, `Connect ${group}`, 600, 700);
+        const popup = openCenteredPopup(
+          popupUrl,
+          metaMode === 'instagram' ? 'Connect Instagram' : `Connect ${group}`,
+          600,
+          700,
+        );
         if (popup) {
           await waitForPopupClosed(popup);
           if (group === 'tiktok' && brandProfileId) {
@@ -431,6 +437,20 @@ export function BrandIntegrationsManager({
                               ? 'Re-sync'
                               : 'Sync'}
                       </Button>
+                      {/* Business Login for Instagram: an Instagram professional account
+                          with no Facebook Page behind it. Sync above is the Facebook login. */}
+                      {group.key === 'meta' && !comingSoon ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title="Connect an Instagram account that has no Facebook Page"
+                          onClick={() => handleConnect(group.key, 'instagram')}
+                          disabled={isSyncing || isLoading}
+                          className="ml-1 h-6 text-2xs font-bold uppercase tracking-wider px-2"
+                        >
+                          Instagram only
+                        </Button>
+                      ) : null}
                     </ShadcnTableCell>
                   </ShadcnTableRow>
 
