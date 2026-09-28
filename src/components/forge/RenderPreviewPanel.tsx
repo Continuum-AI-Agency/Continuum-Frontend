@@ -37,7 +37,7 @@ import {
   useLivePictures,
   VariationStrip,
 } from './livePreview';
-import { type Backdrop, pickBackdrop } from './previewBackdrop';
+import { type Backdrop, currentTemplateJob, pickBackdrop } from './previewBackdrop';
 import {
   effectiveMedia,
   effectiveOutputIds,
@@ -527,6 +527,7 @@ export function RenderPreviewPanel({
           rowJob: lastJob,
           setJobs: setJobs ?? [],
           templateJobs: templateJobs ?? [],
+          templateUpdatedAt: contract.template.updatedAt,
           formats,
           formatId: entry.id,
         })
@@ -799,7 +800,10 @@ export function RenderPreviewPanel({
       plan.backdrop && plan.known && plan.changed.length === 0 && atSec === null
         ? unchangedFrame(plan.backdrop)
         : composedPreview;
-    const own = lastJob ? fileForFormat(lastJob.outputs, formats, entry.id) : null;
+    const own =
+      lastJob && currentTemplateJob(lastJob, contract.template.updatedAt)
+        ? fileForFormat(lastJob.outputs, formats, entry.id)
+        : null;
     let frame: PreviewFrame;
     if (entry.id === format?.id && currentProof?.state === 'ready' && currentProof.signedUrl) {
       frame = {

@@ -39,6 +39,10 @@ export function rowDistance(rows: readonly TreeRow[], from: string, to: string):
 
 const finishedAt = (job: ApiRenderJob) => Date.parse(job.finishedAt ?? job.createdAt);
 
+/** An older AEP can render a file named for this format with entirely different contents. */
+export const currentTemplateJob = (job: ApiRenderJob, updatedAt: string | null): boolean =>
+  !updatedAt || Date.parse(job.createdAt) >= Date.parse(updatedAt);
+
 /** The job's file for one format, by name: its still first, else its video. */
 const fileFor = (
   job: ApiRenderJob,
@@ -67,6 +71,7 @@ export function pickBackdrop(args: {
   rowJob: ApiRenderJob | null | undefined;
   setJobs: readonly ApiRenderJob[];
   templateJobs: readonly ApiRenderJob[];
+  templateUpdatedAt?: string | null;
   formats: readonly RenderOutputFormatCandidate[];
   formatId: string;
 }): Backdrop | null {
@@ -74,9 +79,11 @@ export function pickBackdrop(args: {
     const file = fileFor(job, args.formats, args.formatId);
     return file ? { job, file, from } : null;
   };
-  const own = args.rowJob ? found(args.rowJob, 'row') : null;
+  const current = (job: ApiRenderJob) => currentTemplateJob(job, args.templateUpdatedAt ?? null);
+  const own = args.rowJob && current(args.rowJob) ? found(args.rowJob, 'row') : null;
   if (own) return own;
   const relatives = args.setJobs
+    .filter(current)
     .map((job) => ({
       job,
       distance: job.renderSetRowId
@@ -89,7 +96,9 @@ export function pickBackdrop(args: {
     const hit = found(job, job.renderSetRowId === args.rowId ? 'row' : 'set');
     if (hit) return hit;
   }
-  for (const job of [...args.templateJobs].sort((a, b) => finishedAt(b) - finishedAt(a))) {
+  for (const job of [...args.templateJobs]
+    .filter(current)
+    .sort((a, b) => finishedAt(b) - finishedAt(a))) {
     const hit = found(job, 'template');
     if (hit) return hit;
   }
