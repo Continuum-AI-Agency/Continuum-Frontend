@@ -39,6 +39,9 @@ export * from './onboarding';
 export * from './portfolio-brief';
 // The one reporting range: presets, custom windows, and how a spec resolves to dates.
 export * from './range';
+// The title (entity + figure + comparison) and the typed action beside it, for every
+// recommendation and account candidate — composed from figures, never from prose.
+export * from './recommendation-title';
 // Optimizer-service orchestration DTOs (enrollment, run requests, FE read model).
 export * from './service';
 export * from './stored-account-read';
