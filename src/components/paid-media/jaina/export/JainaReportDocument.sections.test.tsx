@@ -47,7 +47,7 @@ const exportedIdsIn = (section: 'answer' | 'justification') =>
   );
 
 describe('JainaReportDocument — the same sections as the chat', () => {
-  it('sets the answer blocks first and the figures under Justification, each in report order', () => {
+  it('sets the answer blocks first and the figures under Evidence, each in report order', () => {
     render(
       <JainaReportDocument
         report={report}
@@ -64,12 +64,12 @@ describe('JainaReportDocument — the same sections as the chat', () => {
     );
     expect(exportedIdsIn('answer')).toEqual(['reading', 'moves']);
     expect(exportedIdsIn('justification')).toEqual(['scope', 'kpis', 'trend', 'rows']);
-    expect(screen.getByRole('region', { name: 'Justification' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Evidence' })).toBeTruthy();
     // renderExportDocument waits for every block to mount by counting `[data-block-id]`.
     expect(document.querySelectorAll('[data-block-id]').length).toBe(6);
   });
 
-  it('carries no Justification heading when no block is evidence', () => {
+  it('carries no Evidence heading when no block is evidence', () => {
     render(
       <JainaReportDocument
         report={report}
@@ -77,7 +77,7 @@ describe('JainaReportDocument — the same sections as the chat', () => {
         generatedAt={new Date('2026-09-25T00:00:00Z')}
       />,
     );
-    expect(screen.queryByText('Justification')).toBeNull();
+    expect(screen.queryByText('Evidence')).toBeNull();
     expect(exportedIdsIn('answer')).toEqual(['reading']);
   });
 });

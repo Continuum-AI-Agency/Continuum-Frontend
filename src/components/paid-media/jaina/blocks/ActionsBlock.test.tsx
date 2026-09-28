@@ -189,7 +189,7 @@ describe('ActionsBlock', () => {
     expect(container.querySelector('[data-testid="actions-comparator"]')).toBeNull();
   });
 
-  it('keeps the ranking it was given — the lead move is set larger than the ones under it', () => {
+  it('keeps the ranking it was given in the order and the priority, with every figure at the figure step', () => {
     const { container } = render(
       <ActionsBlock
         block={block([row(), row({ priority: 'P2', action: 'Hold' }), row({ priority: 'P3' })])}
@@ -200,9 +200,13 @@ describe('ActionsBlock', () => {
       ...container.querySelectorAll('[data-testid="actions-figure"] span:first-child'),
     ];
     expect(figures).toHaveLength(3);
-    expect(figures[0]?.className).toContain('text-2xl');
-    expect(figures[1]?.className).toContain('text-lg');
-    expect(figures[2]?.className).toContain('text-base');
+    // One scale: a figure is 16px mono/600 wherever it sits. The rank is the position.
+    for (const figure of figures) {
+      expect(figure.className).toContain('font-mono');
+      expect(figure.className).toContain('text-base');
+      expect(figure.className).toContain('font-semibold');
+      expect(figure.className).not.toMatch(/text-(2xl|lg|xl)/);
+    }
     expect(
       [...container.querySelectorAll('[data-testid="actions-row"]')].map((node) =>
         node.getAttribute('data-priority'),

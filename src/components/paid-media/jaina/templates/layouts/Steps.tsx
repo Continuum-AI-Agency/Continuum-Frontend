@@ -7,6 +7,8 @@
 import { STEP_SECTION_KINDS, type TemplateSection } from '@continuum/contracts';
 import type { ComponentType } from 'react';
 import type { AnswerTemplateBlockV2 } from '@/lib/jaina/schemas';
+import { cn } from '@/lib/utils';
+import { JAINA_TYPE } from '../../reading';
 import { FigureText } from '../Figure';
 import type { TemplateSectionBodyProps } from '../types';
 
@@ -30,15 +32,22 @@ export function Steps({ block, SectionBody }: StepsProps) {
   return (
     <ol className="space-y-4" data-template-layout="steps">
       {orderedSteps(block.justification.sections).map((section, index) => (
-        <li key={section.kind} className="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-3" data-step={section.kind}>
+        <li
+          key={section.kind}
+          className="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-3"
+          data-step={section.kind}
+        >
           <span
             aria-hidden="true"
-            className="grid size-6 place-items-center rounded-full bg-muted text-xs font-semibold text-primary"
+            className={cn(
+              'grid size-6 place-items-center rounded-full bg-muted text-primary',
+              JAINA_TYPE.label,
+            )}
           >
             {index + 1}
           </span>
           <div className="min-w-0 space-y-2">
-            <p className="text-sm text-foreground">
+            <p className={cn('text-foreground', JAINA_TYPE.body)}>
               <span className="font-semibold">{section.title}. </span>
               <span className="text-muted-foreground">
                 <FigureText text={section.text} figures={block.figures} />

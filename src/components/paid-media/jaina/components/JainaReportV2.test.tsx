@@ -283,7 +283,8 @@ describe('JainaReportV2 — the answer reads as the answer', () => {
     render(<JainaReportV2 report={report} isStreaming={false} />);
     const summary = screen.getByText('Account performance summary');
     expect(summary.className).toContain('text-foreground');
-    expect(summary.className).toContain('text-base');
+    expect(summary.className).toContain('text-xl');
+    expect(summary.className).toContain('font-medium');
     expect(summary.className).not.toContain('text-muted-foreground');
   });
 
@@ -332,9 +333,9 @@ describe('JainaReportV2 — the justification under the answer', () => {
     expect(moduleIdsIn('answer')).toEqual(['reading', 'moves']);
   });
 
-  it('groups the figures under an always-open Justification, in the backend’s order', () => {
+  it('groups the figures under an always-open Evidence section, in the backend’s order', () => {
     render(<JainaReportV2 report={strategyReport} isStreaming={false} />);
-    const justification = screen.getByRole('region', { name: 'Justification' });
+    const justification = screen.getByRole('region', { name: 'Evidence' });
     expect(justification.tagName).not.toBe('DETAILS');
     expect(justification.textContent).toContain('The data behind the answer');
     expect(moduleIdsIn('justification')).toEqual(['scope', 'kpis', 'trend', 'rows']);
@@ -343,21 +344,21 @@ describe('JainaReportV2 — the justification under the answer', () => {
   it('sets the justification below the answer', () => {
     render(<JainaReportV2 report={strategyReport} isStreaming={false} />);
     const moves = screen.getByTestId('module-moves');
-    const justification = screen.getByRole('region', { name: 'Justification' });
+    const justification = screen.getByRole('region', { name: 'Evidence' });
     expect(
       moves.compareDocumentPosition(justification) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeGreaterThan(0);
   });
 
-  it('shows no Justification heading when the answer carries no figures', () => {
+  it('shows no Evidence heading when the answer carries no figures', () => {
     render(
       <JainaReportV2
         report={{ ...strategyReport, blocks: [moduleBlock('reading', 'insight_list', 'Reading')] }}
         isStreaming={false}
       />,
     );
-    expect(screen.queryByRole('region', { name: 'Justification' })).toBeNull();
-    expect(screen.queryByText('Justification')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Evidence' })).toBeNull();
+    expect(screen.queryByText('Evidence')).toBeNull();
     expect(moduleIdsIn('answer')).toEqual(['reading']);
   });
 
@@ -376,10 +377,88 @@ describe('JainaReportV2 — the justification under the answer', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Hide Headline KPIs module' }));
     expect(screen.queryByTestId('module-kpis')).toBeNull();
-    expect(screen.queryByRole('region', { name: 'Justification' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Evidence' })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Show Headline KPIs module' }));
     expect(moduleIdsIn('justification')).toEqual(['kpis']);
+  });
+
+  const labelsOnScreen = () =>
+    Array.from(document.querySelectorAll('[data-report-label]')).map((node) => ({
+      stratum: node.getAttribute('data-report-label'),
+      text: node.textContent,
+    }));
+
+  it('labels the three strata in the answer’s language — Spanish read from the sentence', () => {
+    render(
+      <JainaReportV2
+        report={{
+          ...strategyReport,
+          executive_summary:
+            'Pausar el anuncio ALEIRA · Copy 3: cada conversación cuesta 54.84 MXN, 38% más que el promedio de la cuenta.',
+        }}
+        isStreaming={false}
+      />,
+    );
+    expect(labelsOnScreen()).toEqual([
+      { stratum: 'why', text: 'Por qué' },
+      { stratum: 'action', text: 'Acción' },
+      { stratum: 'evidence', text: 'Evidencia' },
+    ]);
+    expect(screen.getByRole('region', { name: 'Evidencia' }).textContent).toContain(
+      'Los datos detrás de la respuesta',
+    );
+    expect(screen.queryByText('Justification')).toBeNull();
+    // The labels name the strata; they never reorder the blocks.
+    expect(moduleIdsIn('answer')).toEqual(['reading', 'moves']);
+    expect(moduleIdsIn('justification')).toEqual(['scope', 'kpis', 'trend', 'rows']);
+  });
+
+  it('labels the strata in Spanish when the report states its language, whatever the sentence', () => {
+    render(
+      <JainaReportV2
+        report={{
+          ...strategyReport,
+          language: 'es',
+          executive_summary: 'Account performance summary',
+        }}
+        isStreaming={false}
+      />,
+    );
+    expect(labelsOnScreen().map((label) => label.text)).toEqual(['Por qué', 'Acción', 'Evidencia']);
+  });
+
+  it('labels the strata in English otherwise, each where its stratum begins', () => {
+    render(<JainaReportV2 report={strategyReport} isStreaming={false} />);
+    expect(labelsOnScreen()).toEqual([
+      { stratum: 'why', text: 'Why' },
+      { stratum: 'action', text: 'Action' },
+      { stratum: 'evidence', text: 'Evidence' },
+    ]);
+    const why = screen.getByText('Why');
+    const reading = screen.getByTestId('module-reading');
+    const action = screen.getByText('Action');
+    const moves = screen.getByTestId('module-moves');
+    expect(why.compareDocumentPosition(reading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeGreaterThan(
+      0,
+    );
+    expect(
+      reading.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
+    expect(
+      action.compareDocumentPosition(moves) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
+  });
+
+  it('sets every label at the 12px caps step and nothing smaller', () => {
+    render(<JainaReportV2 report={strategyReport} isStreaming={false} />);
+    const labels = document.querySelectorAll('[data-report-label]');
+    expect(labels.length).toBe(3);
+    for (const node of labels) {
+      expect(node.className).toContain('text-xs');
+      expect(node.className).toContain('uppercase');
+      expect(node.className).not.toMatch(/text-[23]xs/);
+    }
   });
 
   it('still exports the visible modules in the report’s own order', async () => {

@@ -59,7 +59,7 @@ export function JainaReportNav({ idPrefix = 'jaina-report', report }: JainaRepor
   return (
     <div className="sticky top-0 w-full">
       <div className="flex flex-col gap-1">
-        <span className="mb-3 uppercase tracking-widest text-2xs font-semibold text-muted-foreground">
+        <span className="mb-3 uppercase tracking-widest text-xs font-semibold text-muted-foreground">
           Table of Contents
         </span>
         <div className="flex flex-col gap-1">

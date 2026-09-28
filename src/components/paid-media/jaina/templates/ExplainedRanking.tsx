@@ -8,7 +8,7 @@
 import type { TemplateItem } from '@continuum/contracts';
 import { cn } from '@/lib/utils';
 import { useIsExportMode } from '../export/ExportModeContext';
-import { JUDGEMENT_TEXT } from '../reading';
+import { JAINA_TYPE, JUDGEMENT_TEXT } from '../reading';
 import { FigureById, FigureText } from './Figure';
 import { GenericHero, GenericSectionBody, TONE_JUDGEMENT } from './GenericTemplate';
 import type { TemplateRenderer, TemplateSectionBodyProps } from './types';
@@ -31,25 +31,37 @@ function RankedRow({
       className="group rounded-md border border-border/50 bg-card/40 open:bg-muted/20"
     >
       <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-2">
-        <span className="grid size-6 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold text-primary">
+        <span
+          className={cn(
+            'grid size-6 shrink-0 place-items-center rounded-full bg-muted text-primary',
+            JAINA_TYPE.label,
+          )}
+        >
           {position}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-foreground" title={item.title}>
+          <span
+            className={cn('block truncate font-semibold text-foreground', JAINA_TYPE.body)}
+            title={item.title}
+          >
             {item.title}
           </span>
           {item.detail_figure_ids.length > 0 ? (
-            <span className="block text-xs text-muted-foreground">
+            <span className={cn('block text-muted-foreground', JAINA_TYPE.table)}>
               {item.detail_figure_ids.map((id, index) => (
                 <span key={id}>
                   {index > 0 ? ' · ' : null}
-                  <FigureById figures={figures} id={id} className="font-normal text-muted-foreground" />
+                  <FigureById
+                    figures={figures}
+                    id={id}
+                    className="font-normal text-muted-foreground"
+                  />
                 </span>
               ))}
             </span>
           ) : null}
         </span>
-        <span className="shrink-0 rounded-full bg-muted px-2.5 py-0.5 text-xs">
+        <span className={cn('shrink-0 rounded-full bg-muted px-2.5 py-0.5', JAINA_TYPE.table)}>
           <FigureById
             figures={figures}
             id={item.badge_figure_id}
@@ -57,7 +69,7 @@ function RankedRow({
           />
         </span>
       </summary>
-      <p className="px-3 pb-3 pl-12 text-sm text-muted-foreground">
+      <p className={cn('px-3 pb-3 pl-12 text-muted-foreground', JAINA_TYPE.body)}>
         <FigureText text={item.text} figures={figures} />
       </p>
     </details>

@@ -22,6 +22,8 @@ import { CalmRule } from '@/components/paid-media/optimizer/sections/account/can
 import { formatValue } from '@/lib/jaina/formatValue';
 import type { GoalPacingBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
+import { JAINA_TYPE } from '../reading';
+import { BlockHeading } from './BlockHeading';
 
 type GoalPacingBlockProps = { block: GoalPacingBlockV2; isStreaming: boolean };
 
@@ -49,26 +51,31 @@ export default function GoalPacingBlock({ block }: GoalPacingBlockProps) {
 
   return (
     <section data-testid="goal-pacing-block">
-      <div className="mb-2 flex items-center gap-2">
-        <CalmRule play testId="goal-pacing-calm-rule" />
-        <h4 className="font-semibold text-foreground text-sm">{block.title}</h4>
-      </div>
+      <BlockHeading
+        title={block.title}
+        leading={<CalmRule play testId="goal-pacing-calm-rule" />}
+        className="gap-2"
+      />
 
       {/* The one figure. Nothing is appended to the label: "of plan" already carries the
        *  comparison, and pace_ratio is a ratio to the plan by definition. */}
       <p
-        className="flex flex-wrap items-baseline gap-x-1.5 text-2xs text-muted-foreground"
+        className={cn(
+          'flex flex-wrap items-baseline gap-x-1.5 text-muted-foreground',
+          JAINA_TYPE.table,
+        )}
         data-testid="goal-pacing-figure"
       >
-        <span className="font-mono font-semibold text-2xl text-foreground tabular-nums">
-          {pct(block.pace_ratio)}
-        </span>
+        <span className={cn(JAINA_TYPE.figure, 'text-foreground')}>{pct(block.pace_ratio)}</span>
         <span className="text-foreground">of plan · {STATUS_SENTENCE[block.status]}</span>
       </p>
 
       {/* The one sentence. Money, then the calendar it is being judged against — in that
        *  order, because the money is the thing the reader came for. */}
-      <p className="mt-0.5 text-foreground text-sm" data-testid="goal-pacing-sentence">
+      <p
+        className={cn('mt-0.5 text-foreground', JAINA_TYPE.body)}
+        data-testid="goal-pacing-sentence"
+      >
         <span className="tabular-nums">
           {money(block.spent)} of {money(block.budget)}
         </span>{' '}
@@ -92,7 +99,7 @@ export default function GoalPacingBlock({ block }: GoalPacingBlockProps) {
             style={{ left: `${Math.min(100, Math.max(0, block.elapsed_pct * 100))}%` }}
           />
         </span>
-        <p className="mt-1 text-3xs text-muted-foreground">
+        <p className="mt-1 text-xs text-muted-foreground">
           fill: budget spent · tick: time elapsed
         </p>
       </div>
@@ -101,7 +108,7 @@ export default function GoalPacingBlock({ block }: GoalPacingBlockProps) {
        *  inventing the ending it was asked not to invent. */}
       {block.projected_end != null ? (
         <p
-          className="mt-1 text-3xs text-muted-foreground tabular-nums"
+          className={cn('mt-1 text-muted-foreground tabular-nums', JAINA_TYPE.table)}
           data-testid="goal-pacing-projection"
         >
           {money(block.projected_end)} projected by {block.period_end}

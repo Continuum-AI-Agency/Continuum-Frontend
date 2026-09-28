@@ -273,12 +273,12 @@ function CreativeThumb({ tile }: { tile: CreativeTile }) {
           <Icon className="size-5 text-muted-foreground" aria-hidden />
         )}
         {tile.format === 'carousel' ? (
-          <span className="absolute right-1 bottom-1 rounded bg-background/90 px-1 font-medium text-2xs tabular-nums">
+          <span className="absolute right-1 bottom-1 rounded bg-background/90 px-1 font-medium text-xs tabular-nums">
             {tile.cardCount}
           </span>
         ) : null}
       </div>
-      <span className="truncate text-muted-foreground text-2xs" title={tile.adName}>
+      <span className="truncate text-muted-foreground text-xs" title={tile.adName}>
         {tile.format ? tile.adName : 'No creative'}
       </span>
     </li>

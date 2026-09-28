@@ -1,13 +1,18 @@
 'use client';
 
+import { Fragment } from 'react';
 import type { CheckpointBlockV2, CheckpointReportV2 } from '@/lib/jaina/schemas';
+import { answerLanguage } from '../answerLanguage';
 import { BlockRenderer } from '../blocks/BlockRenderer';
 import { countBlockCitations } from '../blocks/citations';
+import { EntityNamesProvider, entityNamesOf } from '../blocks/entityNames';
 import { MediaMapProvider } from '../blocks/mediaText';
 import { JainaProse } from '../blocks/prose';
 import {
   JainaJustificationSection,
   partitionReportBlocks,
+  SectionLabel,
+  stratumOfBlock,
 } from '../components/JainaJustificationSection';
 import {
   isAnswerTemplateBlock,
@@ -80,6 +85,8 @@ export function JainaReportDocument({
   const hasMedia = report._meta.has_media && Object.keys(report.media_map).length > 0;
   const sections = partitionReportBlocks(blocks);
   const templateBlocks = sections.answer.filter(isAnswerTemplateBlock);
+  const language = answerLanguage(report);
+  const entityNames = entityNamesOf(blocks);
   const renderExportBlock = (block: CheckpointBlockV2) => (
     <section
       key={block.block_id}
@@ -120,11 +127,25 @@ export function JainaReportDocument({
       ) : null}
 
       {sections.answer.length > 0 ? (
-        <div data-report-section="answer">{sections.answer.map(renderExportBlock)}</div>
+        <div data-report-section="answer">
+          {sections.answer.map((block, index) => {
+            const stratum = stratumOfBlock(block);
+            const previous = index > 0 ? stratumOfBlock(sections.answer[index - 1]) : null;
+            return (
+              <Fragment key={block.block_id}>
+                {stratum !== 'answer' && stratum !== previous ? (
+                  <SectionLabel stratum={stratum} language={language} />
+                ) : null}
+                {renderExportBlock(block)}
+              </Fragment>
+            );
+          })}
+        </div>
       ) : null}
 
       <JainaJustificationSection
         blocks={sections.justification}
+        language={language}
         renderBlock={renderExportBlock}
         leading={
           templateBlocks.length > 0
@@ -153,7 +174,11 @@ export function JainaReportDocument({
   );
 
   if (!hasMedia) return document;
-  return <MediaMapProvider mediaMap={report.media_map}>{document}</MediaMapProvider>;
+  return (
+    <MediaMapProvider mediaMap={report.media_map}>
+      <EntityNamesProvider names={entityNames}>{document}</EntityNamesProvider>
+    </MediaMapProvider>
+  );
 }
 
 export default JainaReportDocument;

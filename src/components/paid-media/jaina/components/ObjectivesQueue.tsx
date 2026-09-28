@@ -119,7 +119,7 @@ export function ObjectivesQueue({ objectives, isStreaming }: ObjectivesQueueProp
                     <p className={cn('min-w-0 flex-1 leading-snug', look.titleClassName)}>
                       {objective.title}
                     </p>
-                    <span className="shrink-0 text-2xs text-muted-foreground/70">
+                    <span className="shrink-0 text-xs text-muted-foreground/70">
                       {OBJECTIVE_STATUS_LABEL[status]}
                     </span>
                   </div>

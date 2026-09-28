@@ -150,6 +150,48 @@ export const JUDGEMENT_RULE: Record<Judgement, string> = {
 };
 
 /**
+ * The type scale of a finished answer. Five sizes, and the smallest is 12px.
+ *
+ * Measured on the 2026-09-27 EasyFit weekly summary before this existed: nine sizes on one
+ * screen — the sentence at 15px, tiles at 17px mono, sub-labels at 10 and 11px, template
+ * tables at 12px. Four sizes inside a single block is not hierarchy, it is noise, and the
+ * two smallest were below what the design system calls legible. Each block and template
+ * under `jaina/` now takes its sizes from here and nowhere else:
+ *
+ *   answer   20px / 500        the one sentence that answers the question
+ *   figure   16px mono / 600   a number something measured
+ *   body     15px / 400        the prose a figure sits in
+ *   table    14px / 400        table cells, the window line, captions
+ *   label    12px / 600 caps   Why · Evidence · Action, column heads, tile labels
+ *
+ * `text-md` is the 15px step (`--text-md` in globals.css); Tailwind ships no size between
+ * `sm` (14) and `base` (16). the 2xs and 3xs steps (11 and 10px) exist for dense chrome
+ * elsewhere in the app and are not allowed under `jaina/` — `typeScale.test.ts` counts them.
+ */
+export const JAINA_TYPE = {
+  answer: 'text-xl font-medium leading-snug text-foreground',
+  figure: 'font-mono text-base font-semibold tabular-nums',
+  body: 'text-md leading-6',
+  table: 'text-sm',
+  label: 'text-xs font-semibold uppercase tracking-wide',
+} as const;
+
+/**
+ * The one table. `DataTableBlock`, `ComparisonBlock` and the templates' `TemplateTableView`
+ * each drew their own — two borders, two header weights, 14px cells beside 12px cells in
+ * the same answer. Column heads are labels (12px caps), cells are table size, digits are
+ * tabular so the columns line up.
+ */
+export const JAINA_TABLE = {
+  wrap: 'overflow-x-auto rounded-lg border border-border/60',
+  table: `w-full ${JAINA_TYPE.table} tabular-nums`,
+  headRow: 'border-b border-border/60 bg-muted/30',
+  th: `px-3 py-2 ${JAINA_TYPE.label} text-muted-foreground`,
+  row: 'border-b border-border/30 last:border-0',
+  td: 'px-3 py-2',
+} as const;
+
+/**
  * How Jaina's own answer is set, wherever it appears.
  *
  * One constant because the answer arrives by two routes that were drifting apart: a plain
@@ -159,20 +201,19 @@ export const JUDGEMENT_RULE: Record<Judgement, string> = {
  * that second class is not "quieter styling": muted ink means *nobody judged this*, applied
  * to the one paragraph somebody did.
  *
- * `tabular-nums` on the table cells is here because Streamdown's own table classes set
- * padding and alignment and no numeric variant, so a markdown table of figures — which is
- * how Jaina ships most of its evidence today — renders with proportional digits and columns
- * that do not line up.
+ * The answer is the `answer` step of the scale. A markdown table inside it drops to table
+ * size and regular weight: the sentence is the claim, the table is its evidence.
+ * `tabular-nums` on the cells is here because Streamdown's own table classes set padding
+ * and alignment and no numeric variant, so a markdown table of figures renders with
+ * proportional digits and columns that do not line up.
  */
-export const JAINA_ANSWER_PROSE =
-  'text-base leading-7 text-foreground [&_td]:tabular-nums [&_th]:tabular-nums';
+export const JAINA_ANSWER_PROSE = `${JAINA_TYPE.answer} [&_table]:${JAINA_TYPE.table} [&_table]:font-normal [&_td]:tabular-nums [&_th]:tabular-nums`;
 
 /**
- * Supporting prose: a reasoning trace, a block's own body, an aside. Quieter than the
- * answer on purpose — this is the material the answer rests on, not the answer.
+ * Supporting prose: a reasoning trace, a block's own body, an aside. Body size, and quieter
+ * than the answer on purpose — this is the material the answer rests on, not the answer.
  */
-export const JAINA_EVIDENCE_PROSE =
-  'text-sm leading-relaxed text-muted-foreground [&_td]:tabular-nums [&_th]:tabular-nums';
+export const JAINA_EVIDENCE_PROSE = `${JAINA_TYPE.body} text-muted-foreground [&_td]:tabular-nums [&_th]:tabular-nums`;
 
 /**
  * A severity the model actually chose, as opposed to the one the schema filled in.

@@ -54,7 +54,7 @@ describe('ChartBlock', () => {
         tool: 'get_paid_creative_intel',
         period: { since: '2026-08-13', until: '2026-09-11', requested_label: 'd30' },
         entity_label: 'Meta account',
-        record_count: 2,
+        record_count: 3,
       },
       chart_type: 'bar',
       data: [
@@ -63,6 +63,7 @@ describe('ChartBlock', () => {
           angle: 'Product quality and transparent pricing for growing families',
           spend: 8_000,
         },
+        { angle: 'Weekend deals', spend: 1_200 },
       ],
       chart_config: { spend: { label: 'Spend', color: '#3b82f6' } },
       category_key: 'angle',
@@ -77,6 +78,7 @@ describe('ChartBlock', () => {
       data_meta: [
         { angle: 'Family lunch' },
         { angle: 'Product quality and transparent pricing for growing families' },
+        { angle: 'Weekend deals' },
       ],
     };
 
@@ -132,8 +134,89 @@ describe('ChartBlock', () => {
 
     render(<ChartBlock block={block} isStreaming={false} />);
 
-    expect(screen.getByText('Spend (currency unknown)')).toBeTruthy();
+    // Two entities is a pair, and a pair is two tiles — the qualified figure is on them.
+    expect(screen.getByTestId('chart-as-tiles')).toBeTruthy();
     expect(screen.getAllByText('0 (currency unknown)').length).toBeGreaterThan(0);
+    expect(screen.getByText('4 (currency unknown)')).toBeTruthy();
     expect(screen.queryByText('$0.00')).toBeNull();
+  });
+});
+
+const lineBlock = (points: number, seriesKeys: string[] = ['spend']): ChartBlockV2 =>
+  ({
+    block_id: `trend-${points}`,
+    category: 'chart',
+    scope: 'account',
+    title: 'Performance Trend — act_521903353286118',
+    priority: 'primary',
+    provenance: null,
+    grounding: null,
+    chart_type: 'line',
+    data: Array.from({ length: points }, (_, index) => ({
+      day: `2026-09-${String(index + 1).padStart(2, '0')}`,
+      ...Object.fromEntries(
+        seriesKeys.map((key, series) => [key, (index + 1) * (series + 1) * 10]),
+      ),
+    })),
+    chart_config: Object.fromEntries(
+      seriesKeys.map((key) => [key, { label: key.toUpperCase(), color: '#3b82f6' }]),
+    ),
+    category_key: 'day',
+    value_key: null,
+    x_axis_label: null,
+    y_axis_label: null,
+    value_format: 'currency',
+    value_basis: null,
+    currency_code: 'MXN',
+    annotation: null,
+    description: null,
+    dataset_id: 'ds_trend',
+    data_meta: null,
+  }) as unknown as ChartBlockV2;
+
+describe('ChartBlock — a chart only when there is a trend or a comparison', () => {
+  it('degrades a three-point series to the figures as tiles, keeping the heading', () => {
+    render(<ChartBlock block={lineBlock(3)} isStreaming={false} />);
+    const tiles = screen.getByTestId('chart-as-tiles');
+    expect(tiles.getAttribute('data-chart-points')).toBe('3');
+    expect(tiles.getAttribute('data-chart-entities')).toBe('1');
+    expect(screen.queryByRole('img')).toBeNull();
+    expect(document.querySelector('[data-slot="chart"]')).toBeNull();
+    expect(screen.getByRole('heading', { name: /Performance Trend/ })).toBeTruthy();
+    expect(screen.getAllByRole('term').map((node) => node.textContent)).toEqual([
+      '2026-09-01',
+      '2026-09-02',
+      '2026-09-03',
+    ]);
+    expect(screen.getByText('MX$10.00')).toBeTruthy();
+  });
+
+  it('draws a seven-point series as a chart', () => {
+    render(<ChartBlock block={lineBlock(7)} isStreaming={false} />);
+    expect(screen.queryByTestId('chart-as-tiles')).toBeNull();
+    expect(screen.getByRole('img', { name: /Performance Trend/ })).toBeTruthy();
+  });
+
+  it('draws three entities compared over three days as a chart, and labels a pair’s tiles by series', () => {
+    render(<ChartBlock block={lineBlock(3, ['a', 'b', 'c'])} isStreaming={false} />);
+    expect(screen.getByRole('img', { name: /Performance Trend/ })).toBeTruthy();
+    cleanup();
+    render(<ChartBlock block={lineBlock(2, ['a', 'b'])} isStreaming={false} />);
+    const tiles = screen.getByTestId('chart-as-tiles');
+    expect(tiles.getAttribute('data-chart-entities')).toBe('2');
+    expect(screen.getAllByRole('term').map((node) => node.textContent)).toEqual([
+      '2026-09-01 · A',
+      '2026-09-01 · B',
+      '2026-09-02 · A',
+      '2026-09-02 · B',
+    ]);
+  });
+
+  it('is as tall as its ticks need, not a fixed 380px', () => {
+    render(<ChartBlock block={lineBlock(7)} isStreaming={false} />);
+    const chart = document.querySelector('[data-slot="chart"]') as HTMLElement;
+    expect(chart.className).not.toContain('h-[380px]');
+    expect(chart.className).toContain('aspect-auto');
+    expect(chart.style.height).toBe('271px');
   });
 });

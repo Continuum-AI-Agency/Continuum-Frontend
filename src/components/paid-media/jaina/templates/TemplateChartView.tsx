@@ -7,6 +7,7 @@
 
 import { formatFigure, type TemplateChart, type TemplateFigure } from '@continuum/contracts';
 import { cn } from '@/lib/utils';
+import { JAINA_TYPE } from '../reading';
 import { FigureText, figureAttributes, figureById, figureTitle } from './Figure';
 
 type TemplateChartViewProps = {
@@ -15,10 +16,12 @@ type TemplateChartViewProps = {
   className?: string;
 };
 
+// Text is 12 units of mono, about 7.2 units a character: 28 label characters need 202 units
+// and a value such as "$12,345.67" needs 72 plus its 5-unit offset from the bar.
 const ROW_HEIGHT = 30;
-const LABEL_WIDTH = 190;
+const LABEL_WIDTH = 210;
 const PLOT_WIDTH = 250;
-const VALUE_GUTTER = 70;
+const VALUE_GUTTER = 84;
 const TOP = 22;
 
 const truncate = (text: string, max = 28): string =>
@@ -48,7 +51,7 @@ export function TemplateChartView({ chart, figures, className }: TemplateChartVi
         aria-label={`${chart.title}: ${points
           .map(({ point, figure }) => `${point.label} ${formatFigure(figure)}`)
           .join(', ')}`}
-        className="font-mono text-[10px]"
+        className="font-mono text-xs"
       >
         {points.map(({ point, figure }, index) => {
           const y = TOP + index * ROW_HEIGHT;
@@ -78,7 +81,10 @@ export function TemplateChartView({ chart, figures, className }: TemplateChartVi
                 x={end + 5}
                 y={y + 13}
                 {...figureAttributes(figure)}
-                className={cn('fill-muted-foreground', point.emphasis && 'fill-primary font-semibold')}
+                className={cn(
+                  'fill-muted-foreground',
+                  point.emphasis && 'fill-primary font-semibold',
+                )}
               >
                 {formatFigure(figure)}
               </text>
@@ -109,7 +115,7 @@ export function TemplateChartView({ chart, figures, className }: TemplateChartVi
         ) : null}
       </svg>
       {chart.caption ? (
-        <figcaption className="text-xs text-muted-foreground">
+        <figcaption className={cn('text-muted-foreground', JAINA_TYPE.table)}>
           <FigureText text={chart.caption} figures={figures} />
         </figcaption>
       ) : null}

@@ -12,7 +12,7 @@
 
 import { formatFigure, type TemplateChart, type TemplateFigure } from '@continuum/contracts';
 import { cn } from '@/lib/utils';
-import { JUDGEMENT_TEXT } from '../reading';
+import { JAINA_TYPE, JUDGEMENT_TEXT } from '../reading';
 import { FigureById, FigureText, figureAttributes, figureById, figureTitle } from './Figure';
 import { GenericSectionBody, TONE_JUDGEMENT } from './GenericTemplate';
 import { TemplateChartView } from './TemplateChartView';
@@ -60,15 +60,13 @@ function NumberPanel({
       className="min-w-0 rounded-md border border-border/60 bg-muted/20 px-3.5 py-3"
       data-three-number={id}
     >
-      <div className="truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {figure.label}
-      </div>
-      <div className="mt-1 text-2xl">
-        <FigureById figures={figures} id={id} className="font-semibold" />
+      <div className={cn('truncate text-muted-foreground', JAINA_TYPE.label)}>{figure.label}</div>
+      <div className="mt-1">
+        <FigureById figures={figures} id={id} className={JAINA_TYPE.figure} />
       </div>
       {prior && change && direction ? (
         <div
-          className={cn('mt-0.5 text-xs font-semibold', JUDGEMENT_TEXT[judgement])}
+          className={cn('mt-0.5 font-semibold', JAINA_TYPE.table, JUDGEMENT_TEXT[judgement])}
           data-direction={direction}
         >
           <span aria-hidden="true">{ARROW[direction]} </span>
@@ -85,7 +83,9 @@ function NumberPanel({
           />
         </div>
       ) : (
-        <div className="mt-0.5 text-xs text-muted-foreground">{figure.window.label}</div>
+        <div className={cn('mt-0.5 text-muted-foreground', JAINA_TYPE.table)}>
+          {figure.window.label}
+        </div>
       )}
     </div>
   );
@@ -123,13 +123,13 @@ function DailyLine({
   const labelled = peak === last ? [last] : [peak, last];
   return (
     <figure className="space-y-1" data-template-chart={chart.kind}>
-      <div className="text-xs font-semibold text-muted-foreground">{chart.title}</div>
+      <div className={cn('text-muted-foreground', JAINA_TYPE.label)}>{chart.title}</div>
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         width="100%"
         role="img"
         aria-label={`${chart.title}: ${points.map(({ point, figure }) => `${point.label} ${formatFigure(figure)}`).join(', ')}`}
-        className="font-mono text-[10px]"
+        className="font-mono text-xs"
       >
         <line
           x1={PAD_X}
@@ -180,7 +180,7 @@ function DailyLine({
         </text>
       </svg>
       {chart.caption ? (
-        <figcaption className="text-xs text-muted-foreground">
+        <figcaption className={cn('text-muted-foreground', JAINA_TYPE.table)}>
           <FigureText text={chart.caption} figures={figures} />
         </figcaption>
       ) : null}
@@ -215,7 +215,12 @@ export function ThreeNumbersSectionBody({ block, section }: TemplateSectionBodyP
       <div className="grid grid-cols-1 gap-2.5" data-testid="three-numbers-derivations">
         {section.items.map((item) => (
           <div key={item.id} data-derivation={item.badge_figure_id ?? item.id}>
-            <div className="mb-1 flex items-baseline gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <div
+              className={cn(
+                'mb-1 flex items-baseline gap-2 text-muted-foreground',
+                JAINA_TYPE.label,
+              )}
+            >
               <span>{item.title}</span>
               <FigureById
                 figures={block.figures}
@@ -223,7 +228,13 @@ export function ThreeNumbersSectionBody({ block, section }: TemplateSectionBodyP
                 className={cn('normal-case', JUDGEMENT_TEXT[TONE_JUDGEMENT[item.tone]])}
               />
             </div>
-            <p className="overflow-x-auto rounded-md bg-muted/40 px-3 py-2.5 font-mono text-[13px] tabular-nums text-foreground">
+            <p
+              className={cn(
+                'overflow-x-auto rounded-md bg-muted/40 px-3 py-2.5 text-foreground',
+                JAINA_TYPE.figure,
+                'font-normal',
+              )}
+            >
               <FigureText text={item.text} figures={block.figures} figureClassName="text-primary" />
             </p>
           </div>

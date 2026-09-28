@@ -2,7 +2,14 @@
 
 import type { NarrativeBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
-import { JUDGEMENT_LABEL, JUDGEMENT_RULE, judgeValue } from '../reading';
+import {
+  JAINA_EVIDENCE_PROSE,
+  JAINA_TYPE,
+  JUDGEMENT_LABEL,
+  JUDGEMENT_RULE,
+  judgeValue,
+} from '../reading';
+import { BlockHeading } from './BlockHeading';
 import { BlockSourcesFooter } from './citations';
 import { MediaText } from './mediaText';
 import { JainaProse } from './prose';
@@ -20,7 +27,7 @@ function NarrativeBody({ block, isStreaming }: NarrativeBlockProps) {
       content={block.body}
       citations={block.citations}
       mode={isStreaming ? 'streaming' : 'static'}
-      className="text-sm leading-relaxed text-muted-foreground"
+      className={JAINA_EVIDENCE_PROSE}
     />
   );
 }
@@ -28,7 +35,7 @@ function NarrativeBody({ block, isStreaming }: NarrativeBlockProps) {
 export default function NarrativeBlock({ block, isStreaming }: NarrativeBlockProps) {
   return (
     <div className="space-y-3">
-      <h4 className="text-sm font-semibold text-foreground">{block.title}</h4>
+      <BlockHeading title={block.title} className="mb-0" />
       <NarrativeBody block={block} isStreaming={isStreaming} />
       {block.highlights.length > 0 && (
         <ul className="space-y-2">
@@ -49,7 +56,7 @@ export default function NarrativeBlock({ block, isStreaming }: NarrativeBlockPro
                     {highlight.category}
                   </span>
                 )}
-                <p className="text-sm text-foreground">
+                <p className={cn('text-foreground', JAINA_TYPE.body)}>
                   <MediaText>{highlight.text}</MediaText>
                 </p>
               </li>

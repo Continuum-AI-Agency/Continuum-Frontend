@@ -3,6 +3,9 @@ import {
   explicitSeverity,
   fallsAreGood,
   JAINA_ANSWER_PROSE,
+  JAINA_EVIDENCE_PROSE,
+  JAINA_TABLE,
+  JAINA_TYPE,
   JUDGEMENT_LABEL,
   JUDGEMENT_RULE,
   JUDGEMENT_TEXT,
@@ -148,9 +151,11 @@ describe('JUDGEMENT_RULE — the same law, as a left rule', () => {
 });
 
 describe("JAINA_ANSWER_PROSE — the answer is not 'nobody judged this'", () => {
-  it('sets the answer in reading ink at reading size', () => {
+  it('sets the answer in reading ink at the answer step of the scale', () => {
     expect(JAINA_ANSWER_PROSE).toContain('text-foreground');
-    expect(JAINA_ANSWER_PROSE).toContain('text-base');
+    expect(JAINA_ANSWER_PROSE).toContain(JAINA_TYPE.answer);
+    expect(JAINA_ANSWER_PROSE).toContain('text-xl');
+    expect(JAINA_ANSWER_PROSE).toContain('font-medium');
     // The regression it exists to prevent: the report path set the executive summary in
     // muted ink, which by this module's own law means nobody judged it.
     expect(JAINA_ANSWER_PROSE).not.toContain('text-muted-foreground');
@@ -158,5 +163,35 @@ describe("JAINA_ANSWER_PROSE — the answer is not 'nobody judged this'", () => 
 
   it('lines up the digits in a markdown table, which Streamdown does not', () => {
     expect(JAINA_ANSWER_PROSE).toContain('tabular-nums');
+  });
+
+  it('drops a markdown table inside the answer to table size and regular weight', () => {
+    expect(JAINA_ANSWER_PROSE).toContain('[&_table]:text-sm');
+    expect(JAINA_ANSWER_PROSE).toContain('[&_table]:font-normal');
+  });
+});
+
+describe('JAINA_TYPE — one scale, five sizes, nothing under 12px', () => {
+  it('pins each step: answer 20/500, figure 16 mono/600, body 15, table 14, label 12/600 caps', () => {
+    expect(JAINA_TYPE.answer).toBe('text-xl font-medium leading-snug text-foreground');
+    expect(JAINA_TYPE.figure).toBe('font-mono text-base font-semibold tabular-nums');
+    expect(JAINA_TYPE.body).toBe('text-md leading-6');
+    expect(JAINA_TYPE.table).toBe('text-sm');
+    expect(JAINA_TYPE.label).toBe('text-xs font-semibold uppercase tracking-wide');
+  });
+
+  it('has exactly five steps', () => {
+    expect(Object.keys(JAINA_TYPE).sort()).toEqual(['answer', 'body', 'figure', 'label', 'table']);
+  });
+
+  it('sets the evidence prose at body size in the muted ink', () => {
+    expect(JAINA_EVIDENCE_PROSE).toContain(JAINA_TYPE.body);
+    expect(JAINA_EVIDENCE_PROSE).toContain('text-muted-foreground');
+  });
+
+  it('draws one table: label-sized heads over table-sized cells', () => {
+    expect(JAINA_TABLE.table).toContain(JAINA_TYPE.table);
+    expect(JAINA_TABLE.table).toContain('tabular-nums');
+    expect(JAINA_TABLE.th).toContain(JAINA_TYPE.label);
   });
 });

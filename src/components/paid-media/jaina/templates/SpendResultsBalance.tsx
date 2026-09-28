@@ -19,7 +19,7 @@ import {
   type TemplateSection,
 } from '@continuum/contracts';
 import { cn } from '@/lib/utils';
-import { JUDGEMENT_RULE, JUDGEMENT_TEXT } from '../reading';
+import { JAINA_TABLE, JAINA_TYPE, JUDGEMENT_RULE, JUDGEMENT_TEXT } from '../reading';
 import { FigureById, FigureText, figureAttributes, figureById, figureTitle } from './Figure';
 import { GenericHero, GenericSectionBody, TONE_JUDGEMENT } from './GenericTemplate';
 import type { TemplateHeroProps, TemplateRenderer, TemplateSectionBodyProps } from './types';
@@ -31,8 +31,11 @@ const BAR_HEIGHT = 30;
 const SPEND_Y = 8;
 const RESULTS_Y = 88;
 const HEIGHT = RESULTS_Y + BAR_HEIGHT + 4;
-/** A segment narrower than this carries no printed share; the aria-label still names it. */
-const MIN_LABELLED_WIDTH = 30;
+/**
+ * A segment narrower than this carries no printed share; the aria-label still names it. Five
+ * characters ("18.2%") at 12 units, about 7.2 units each.
+ */
+const MIN_LABELLED_WIDTH = 36;
 /** Un-emphasised segments alternate between two strengths so neighbours stay apart. */
 const QUIET_OPACITY = [0.45, 0.25] as const;
 
@@ -153,7 +156,7 @@ export function SpendResultsBalanceHero({ block }: TemplateHeroProps) {
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         width="100%"
         role="img"
-        className="block max-w-[560px] text-[11px]"
+        className="block max-w-[560px] text-xs"
         aria-label={`${chart.title}: ${groups
           .map(
             (group) =>
@@ -202,7 +205,7 @@ export function SpendResultsBalanceHero({ block }: TemplateHeroProps) {
         ))}
       </svg>
       <ul
-        className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"
+        className={cn('flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground', JAINA_TYPE.table)}
         data-balance-legend
       >
         {groups.map((group, index) => (
@@ -230,7 +233,7 @@ export function SpendResultsBalanceHero({ block }: TemplateHeroProps) {
         ))}
       </ul>
       {chart.caption ? (
-        <figcaption className="text-xs text-muted-foreground">
+        <figcaption className={cn('text-muted-foreground', JAINA_TYPE.table)}>
           <FigureText text={chart.caption} figures={block.figures} />
         </figcaption>
       ) : null}
@@ -246,13 +249,13 @@ function ShareTable({ block, section }: TemplateSectionBodyProps) {
   const lastRow = table.rows.length - 1;
   return (
     <div className="space-y-3">
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs tabular-nums" data-balance-table>
+      <div className={JAINA_TABLE.wrap}>
+        <table className={JAINA_TABLE.table} data-balance-table>
           <thead>
-            <tr className="border-b border-border/60 text-muted-foreground">
-              <th className="px-2 py-1.5 text-left font-medium" />
+            <tr className={JAINA_TABLE.headRow}>
+              <th className={cn(JAINA_TABLE.th, 'text-left')} />
               {table.columns.map((column) => (
-                <th key={column.key} className="px-2 py-1.5 text-right font-medium">
+                <th key={column.key} className={cn(JAINA_TABLE.th, 'text-right')}>
                   {column.label}
                 </th>
               ))}
@@ -265,17 +268,17 @@ function ShareTable({ block, section }: TemplateSectionBodyProps) {
               return (
                 <tr
                   key={`${row.label}-${row.entity_id ?? ''}`}
-                  className={cn('border-b border-border/40', isTotal && 'font-semibold')}
+                  className={cn(JAINA_TABLE.row, isTotal && 'font-semibold')}
                   data-tone={tone ?? undefined}
                 >
                   <td
-                    className="max-w-[16rem] truncate px-2 py-1.5 text-foreground"
+                    className={cn(JAINA_TABLE.td, 'max-w-[16rem] truncate text-foreground')}
                     title={row.label}
                   >
                     {row.label}
                   </td>
                   {table.columns.map((column) => (
-                    <td key={column.key} className="px-2 py-1.5 text-right">
+                    <td key={column.key} className={cn(JAINA_TABLE.td, 'text-right')}>
                       {row.cells[column.key] ? (
                         <FigureById
                           figures={block.figures}
@@ -299,7 +302,7 @@ function ShareTable({ block, section }: TemplateSectionBodyProps) {
         </table>
       </div>
       {section.items.length > 0 ? (
-        <ul className="space-y-1 text-xs" data-balance-readings>
+        <ul className={cn('space-y-1', JAINA_TYPE.body)} data-balance-readings>
           {section.items.map((item) => (
             <li key={item.id} className="flex gap-2" data-tone={item.tone}>
               <span
@@ -334,8 +337,8 @@ function WhyPanels({ block, section }: TemplateSectionBodyProps) {
             JUDGEMENT_RULE[TONE_JUDGEMENT[item.tone]],
           )}
         >
-          <p className="text-sm font-semibold text-foreground">{item.title}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className={cn('font-semibold text-foreground', JAINA_TYPE.body)}>{item.title}</p>
+          <p className={cn('mt-1 text-muted-foreground', JAINA_TYPE.body)}>
             <FigureText text={item.text} figures={block.figures} />
           </p>
         </div>

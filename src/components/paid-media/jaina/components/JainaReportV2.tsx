@@ -9,7 +9,7 @@ import {
   Share2Icon,
   Table2Icon,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import { Badge } from '@/components/ui/badge';
@@ -19,8 +19,10 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { http } from '@/lib/api/http';
 import type { CheckpointReportV2, ExecutionObjective } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
+import { answerLanguage } from '../answerLanguage';
 import { BlockRenderer } from '../blocks/BlockRenderer';
 import { countBlockCitations } from '../blocks/citations';
+import { EntityNamesProvider, entityNamesOf } from '../blocks/entityNames';
 import { MediaMapProvider } from '../blocks/mediaText';
 import { JainaProse } from '../blocks/prose';
 import { normalizeJainaMarkdownTables } from '../jainaUtils';
@@ -40,7 +42,12 @@ import {
   TemplateExecutive,
   TemplateJustification,
 } from '../templates/TemplateBlock';
-import { JainaJustificationSection, partitionReportBlocks } from './JainaJustificationSection';
+import {
+  JainaJustificationSection,
+  partitionReportBlocks,
+  SectionLabel,
+  stratumOfBlock,
+} from './JainaJustificationSection';
 import { SaveDashboardButton } from './SaveDashboardButton';
 
 const OBJECTIVE_STATUS_STYLE: Record<ExecutionObjective['status'], string> = {
@@ -78,7 +85,7 @@ function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) 
               <li key={objective.id} className="flex items-start gap-2 text-xs">
                 <span
                   className={cn(
-                    'mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-2xs font-medium capitalize',
+                    'mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-xs font-medium capitalize',
                     OBJECTIVE_STATUS_STYLE[objective.status],
                   )}
                 >
@@ -171,12 +178,16 @@ export function JainaReportV2({
   // and the module toggles still read the full `visibleBlocks` / `report.blocks`.
   const sections = useMemo(() => partitionReportBlocks(visibleBlocks), [visibleBlocks]);
   const templateBlocks = sections.answer.filter(isAnswerTemplateBlock);
+  // One language per answer: the labels around the blocks follow the report, never the app.
+  const language = answerLanguage(report);
 
   const hasMedia = report._meta.has_media && Object.keys(report.media_map).length > 0;
   // Derived from the rendered blocks rather than `_meta.has_citations` (the FE
   // report meta schema does not carry that flag), so the badge reflects exactly
   // the citations the report can surface.
   const citationCount = useMemo(() => countBlockCitations(report.blocks), [report.blocks]);
+  // Names, never ids: every entity the report's own blocks put a name to, for the titles.
+  const entityNames = useMemo(() => entityNamesOf(report.blocks), [report.blocks]);
   const acknowledgeDelivery = useCallback(
     async (kind: 'live_render' | 'hydration_replay' | 'pdf', status: 'success' | 'fallback') => {
       if (!runId) return;
@@ -321,14 +332,27 @@ export function JainaReportV2({
         {sections.answer.length > 0 ? (
           <div data-report-section="answer" className="space-y-4">
             {/* A templated answer puts its sentence and chart here and its steps under the
-             *  justification below — the same answer/justification split as every block. */}
-            {sections.answer.map((block) =>
-              isAnswerTemplateBlock(block) ? (
-                <TemplateExecutive key={block.block_id} block={block} />
-              ) : (
-                <BlockRenderer key={block.block_id} block={block} isStreaming={isStreaming} />
-              ),
-            )}
+             *  justification below — the same answer/justification split as every block.
+             *
+             *  Each stratum is labelled where it BEGINS — Why over the reading, Action over
+             *  the moves — and the blocks stay in the Backend's order; a label is inserted
+             *  when the stratum changes, never a block moved to sit under one. */}
+            {sections.answer.map((block, index) => {
+              const stratum = stratumOfBlock(block);
+              const previous = index > 0 ? stratumOfBlock(sections.answer[index - 1]) : null;
+              return (
+                <Fragment key={block.block_id}>
+                  {stratum !== 'answer' && stratum !== previous ? (
+                    <SectionLabel stratum={stratum} language={language} />
+                  ) : null}
+                  {isAnswerTemplateBlock(block) ? (
+                    <TemplateExecutive block={block} />
+                  ) : (
+                    <BlockRenderer block={block} isStreaming={isStreaming} />
+                  )}
+                </Fragment>
+              );
+            })}
           </div>
         ) : null}
 
@@ -337,6 +361,7 @@ export function JainaReportV2({
          *  are — the data it rests on. */}
         <JainaJustificationSection
           blocks={sections.justification}
+          language={language}
           renderBlock={(block) => <BlockRenderer block={block} isStreaming={isStreaming} />}
           leading={
             templateBlocks.length > 0
@@ -457,5 +482,9 @@ export function JainaReportV2({
 
   if (!hasMedia) return content;
 
-  return <MediaMapProvider mediaMap={report.media_map}>{content}</MediaMapProvider>;
+  return (
+    <MediaMapProvider mediaMap={report.media_map}>
+      <EntityNamesProvider names={entityNames}>{content}</EntityNamesProvider>
+    </MediaMapProvider>
+  );
 }

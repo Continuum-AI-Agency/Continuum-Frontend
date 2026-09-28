@@ -19,14 +19,16 @@ import {
 } from '@continuum/contracts';
 import { cn } from '@/lib/utils';
 import { useIsExportMode } from '../export/ExportModeContext';
-import { JUDGEMENT_TEXT } from '../reading';
+import { JAINA_TYPE, JUDGEMENT_TEXT } from '../reading';
 import { FigureById, FigureText, figureAttributes, figureById, figureTitle } from './Figure';
 import { GenericHero, GenericSectionBody, TONE_JUDGEMENT } from './GenericTemplate';
 import { TemplateTableView } from './TemplateTableView';
 import type { TemplateHeroProps, TemplateRenderer, TemplateSectionBodyProps } from './types';
 
-const BAR_WIDTH = 44;
-const BAR_GAP = 22;
+// Axis labels are up to 11 mono characters at 12 units (about 7.2 units each), so a bar and
+// its gap together must clear 80 units for neighbouring labels not to touch.
+const BAR_WIDTH = 52;
+const BAR_GAP = 30;
 const LEFT = 24;
 const TOP = 26;
 const PLOT_HEIGHT = 140;
@@ -122,7 +124,7 @@ export function WeeklyBridgeHero({ block }: TemplateHeroProps) {
         width="100%"
         role="img"
         aria-label={`${chart.title}: ${bars.map((bar) => `${bar.label} ${bar.kind === 'start' || bar.kind === 'end' ? formatFigure(bar.figure) : signed(bar)}`).join(', ')}`}
-        className="font-mono text-[10px]"
+        className="font-mono text-xs"
       >
         <line x1={LEFT} x2={width - 4} y1={BASELINE} y2={BASELINE} className="stroke-border" />
         {bars.map((bar, index) => {
@@ -186,7 +188,7 @@ export function WeeklyBridgeHero({ block }: TemplateHeroProps) {
         })}
       </svg>
       {chart.caption ? (
-        <figcaption className="text-xs text-muted-foreground">
+        <figcaption className={cn('text-muted-foreground', JAINA_TYPE.table)}>
           <FigureText text={chart.caption} figures={block.figures} />
         </figcaption>
       ) : null}
@@ -211,11 +213,14 @@ function StepRow({
     >
       <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-2">
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-foreground" title={item.title}>
+          <span
+            className={cn('block truncate font-semibold text-foreground', JAINA_TYPE.body)}
+            title={item.title}
+          >
             {item.title}
           </span>
           {item.detail_figure_ids.length > 0 ? (
-            <span className="block text-xs text-muted-foreground">
+            <span className={cn('block text-muted-foreground', JAINA_TYPE.table)}>
               {item.detail_figure_ids.map((id, index) => (
                 <span key={id}>
                   {index > 0 ? ' → ' : null}
@@ -229,7 +234,7 @@ function StepRow({
             </span>
           ) : null}
         </span>
-        <span className="shrink-0 rounded-full bg-muted px-2.5 py-0.5 text-xs">
+        <span className={cn('shrink-0 rounded-full bg-muted px-2.5 py-0.5', JAINA_TYPE.table)}>
           <FigureById
             figures={figures}
             id={item.badge_figure_id}
@@ -237,7 +242,7 @@ function StepRow({
           />
         </span>
       </summary>
-      <p className="px-3 pb-3 text-sm text-muted-foreground">
+      <p className={cn('px-3 pb-3 text-muted-foreground', JAINA_TYPE.body)}>
         <FigureText text={item.text} figures={figures} />
       </p>
     </details>
@@ -255,7 +260,7 @@ function EffectSplit({
   return (
     <div
       data-testid="weekly-bridge-split"
-      className="flex h-7 w-full overflow-hidden rounded-md text-xs"
+      className={cn('flex h-7 w-full overflow-hidden rounded-md', JAINA_TYPE.table)}
     >
       {items.map((item, index) => {
         const share = figureById(figures, item.badge_figure_id)?.value ?? 0;

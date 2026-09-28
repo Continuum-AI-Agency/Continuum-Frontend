@@ -5,7 +5,7 @@
 // ships a dedicated renderer; a finished one may keep using either half.
 
 import { cn } from '@/lib/utils';
-import { JUDGEMENT_TEXT } from '../reading';
+import { JAINA_TYPE, JUDGEMENT_TEXT } from '../reading';
 import { FigureById, FigureText } from './Figure';
 import { TemplateChartView } from './TemplateChartView';
 import { TemplateTableView } from './TemplateTableView';
@@ -32,7 +32,10 @@ export function GenericSectionBody({ block, section }: TemplateSectionBodyProps)
       {section.items.length > 0 ? (
         <ul className="space-y-2">
           {section.items.map((item) => (
-            <li key={item.id} className="rounded-md border border-border/50 px-3 py-2 text-sm">
+            <li
+              key={item.id}
+              className={cn('rounded-md border border-border/50 px-3 py-2', JAINA_TYPE.body)}
+            >
               <div className="flex items-baseline justify-between gap-3">
                 <span className="font-medium text-foreground">{item.title}</span>
                 <FigureById

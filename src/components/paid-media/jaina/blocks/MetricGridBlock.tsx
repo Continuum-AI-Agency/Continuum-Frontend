@@ -4,7 +4,6 @@ import { paidCurrencyCodeSchema } from '@continuum/contracts';
 import { DeltaBadge } from '@/components/shared/DeltaBadge';
 import { formatValue, resolveMetricDisplayFormat } from '@/lib/jaina/formatValue';
 import type { MetricGridBlockV2, MetricItemV2 } from '@/lib/jaina/schemas';
-import { cn } from '@/lib/utils';
 import {
   explicitSeverity,
   fallsAreGood,
@@ -13,7 +12,8 @@ import {
   type Judgement,
   judgeValue,
 } from '../reading';
-import { EvidenceTooltip } from './EvidenceTooltip';
+import { BlockHeading } from './BlockHeading';
+import { type MetricTile, MetricTiles } from './MetricTiles';
 
 type MetricGridBlockProps = { block: MetricGridBlockV2; isStreaming: boolean };
 
@@ -57,6 +57,19 @@ function toFigure(metric: MetricItemV2, composed: boolean): Figure {
   };
 }
 
+const toTile = (figure: Figure): MetricTile => ({
+  key: figure.label,
+  label: figure.label,
+  value: figure.value,
+  valueClassName: JUDGEMENT_TEXT[figure.judgement],
+  // The colour is the judgement, and a screen reader cannot see it.
+  title: `${figure.label}: ${JUDGEMENT_LABEL[figure.judgement]}`,
+  trailing:
+    typeof figure.deltaPct === 'number' ? (
+      <DeltaBadge goodWhenDown={figure.goodWhenDown} value={figure.deltaPct} />
+    ) : null,
+});
+
 /**
  * The headline figures of a report, as a grid a reader can scan down.
  *
@@ -70,7 +83,8 @@ function toFigure(metric: MetricItemV2, composed: boolean): Figure {
  *
  * Colour is unchanged in meaning and still comes from `reading.ts` alone: the value carries
  * the model's `severity`, the delta carries `judgeDelta` through `DeltaBadge` with the
- * metric's polarity, and a figure nobody judged stays in the ink colour.
+ * metric's polarity, and a figure nobody judged stays in the ink colour. The tile itself is
+ * `MetricTiles`, the same drawing a chart degrades to.
  */
 export default function MetricGridBlock({ block }: MetricGridBlockProps) {
   // `dataset_id` is the witness that no model saw these figures.
@@ -101,38 +115,13 @@ export default function MetricGridBlock({ block }: MetricGridBlockProps) {
 
   return (
     <div>
-      <div className="mb-2 flex items-center gap-1.5">
-        <h4 className="text-sm font-semibold text-foreground">{block.title}</h4>
-        <EvidenceTooltip
-          provenance={block.provenance}
-          datasetId={block.dataset_id}
-          evidenceRefs={block.evidence_refs}
-        />
-      </div>
-      <dl className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-px overflow-hidden rounded-lg border border-border/60 bg-border/40">
-        {figures.map((figure) => (
-          <div key={figure.label} className="flex flex-col gap-1 bg-background px-3 py-2.5">
-            <dt className="text-2xs uppercase tracking-wide text-muted-foreground">
-              {figure.label}
-            </dt>
-            <dd className="flex items-baseline gap-1.5">
-              <span
-                className={cn(
-                  'font-mono text-lg font-semibold tabular-nums',
-                  JUDGEMENT_TEXT[figure.judgement],
-                )}
-                // The colour is the judgement, and a screen reader cannot see it.
-                title={`${figure.label}: ${JUDGEMENT_LABEL[figure.judgement]}`}
-              >
-                {figure.value}
-              </span>
-              {typeof figure.deltaPct === 'number' ? (
-                <DeltaBadge goodWhenDown={figure.goodWhenDown} value={figure.deltaPct} />
-              ) : null}
-            </dd>
-          </div>
-        ))}
-      </dl>
+      <BlockHeading
+        title={block.title}
+        provenance={block.provenance}
+        datasetId={block.dataset_id}
+        evidenceRefs={block.evidence_refs}
+      />
+      <MetricTiles tiles={figures.map(toTile)} />
     </div>
   );
 }

@@ -154,7 +154,7 @@ export function JainaInlineReport({
           {report.report_title || 'Checkpoint Analysis'}
         </h2>
         <div className="flex items-center gap-2">
-          <Pill variant="violet" className="uppercase text-2xs tracking-wide">
+          <Pill variant="violet" className="uppercase text-xs tracking-wide">
             {report.language || 'EN'}
           </Pill>
           <Button
@@ -192,10 +192,10 @@ export function JainaInlineReport({
                 className="rounded-lg border border-border/60 bg-background/60 px-3 py-2"
               >
                 <div className="mb-1 flex items-center gap-2">
-                  <Pill variant="outline" className="text-2xs uppercase tracking-wide">
+                  <Pill variant="outline" className="text-xs uppercase tracking-wide">
                     {blockLabel(block.category)}
                   </Pill>
-                  <Pill variant="muted" className="text-2xs">
+                  <Pill variant="muted" className="text-xs">
                     {block.scope}
                   </Pill>
                 </div>
