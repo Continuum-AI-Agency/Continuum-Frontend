@@ -315,7 +315,7 @@ export function PortfolioWizard({
                   : ''}
               </p>
             ) : issues.length > 0 ? (
-              <p className="text-2xs text-muted-foreground" role="status">
+              <p className="text-xs text-muted-foreground" role="status">
                 {issues[0]}
               </p>
             ) : null}

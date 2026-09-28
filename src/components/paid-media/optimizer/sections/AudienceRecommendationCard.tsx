@@ -40,6 +40,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '../format';
+import * as typeScale from '../typeScale';
 import {
   type AudienceCardView,
   estimateLabel,
@@ -103,7 +104,7 @@ function CurrentAudience({
   const evidence = queueHeadlineLine(rec, currency) ?? evidenceLine(rec.evidence, currency);
   return (
     <section className="space-y-3">
-      <p className="flex items-center gap-1.5 text-muted-foreground text-2xs uppercase tracking-wide">
+      <p className={`${typeScale.label} flex items-center gap-1.5 text-muted-foreground`}>
         <UsersIcon className="size-3.5" /> Audience today
       </p>
       <p className="text-sm text-foreground">{line ?? snapshot?.audienceType ?? 'this ad set'}</p>
@@ -133,7 +134,7 @@ function ProposalBody({ plan, currency }: { plan: AudienceProposalPlan; currency
     <div className="space-y-4 text-xs">
       <div className="flex flex-wrap items-center gap-2">
         <Badge
-          className="text-2xs uppercase"
+          className={typeScale.label}
           variant={plan.mode === 'replace' ? 'default' : 'secondary'}
         >
           {plan.mode === 'replace' ? 'Replace audience' : 'Add audience'}
@@ -148,9 +149,7 @@ function ProposalBody({ plan, currency }: { plan: AudienceProposalPlan; currency
       <p className="text-muted-foreground">{plan.rationale}</p>
       {groups.map((group) => (
         <div key={group.bucket}>
-          <p className="mb-1.5 text-muted-foreground text-2xs uppercase tracking-wide">
-            {group.label}
-          </p>
+          <p className={`${typeScale.label} mb-1.5 text-muted-foreground`}>{group.label}</p>
           <ul className="flex flex-wrap gap-1.5">
             {group.options.map((option) => (
               <li
@@ -168,7 +167,7 @@ function ProposalBody({ plan, currency }: { plan: AudienceProposalPlan; currency
                 {option.chosen ? <CheckIcon className="size-3.5" /> : null}
                 {option.name}
                 {option.estimate ? (
-                  <span className="text-2xs tabular-nums opacity-70">
+                  <span className="text-xs tabular-nums opacity-70">
                     {estimateLabel(option.estimate)}
                   </span>
                 ) : null}
@@ -187,7 +186,7 @@ function ProposalBody({ plan, currency }: { plan: AudienceProposalPlan; currency
       </dl>
       {plan.creatives.length > 0 ? (
         <div>
-          <p className="mb-1.5 text-muted-foreground text-2xs uppercase tracking-wide">
+          <p className={`${typeScale.label} mb-1.5 text-muted-foreground`}>
             Creatives carried over
           </p>
           <ul className="flex flex-wrap gap-3">
@@ -203,17 +202,17 @@ function ProposalBody({ plan, currency }: { plan: AudienceProposalPlan; currency
                     src={creative.poster_url}
                   />
                 ) : (
-                  <div className="flex aspect-square w-full items-center justify-center rounded-md border border-border/60 border-dashed text-muted-foreground text-2xs tabular-nums">
+                  <div className="flex aspect-square w-full items-center justify-center rounded-md border border-border/60 border-dashed text-muted-foreground text-xs tabular-nums">
                     #{creative.rank}
                   </div>
                 )}
                 <p
-                  className="mt-1.5 truncate text-foreground text-2xs"
+                  className="mt-1.5 truncate text-foreground text-xs"
                   title={creative.ad_name ?? creative.ad_id}
                 >
                   {creative.ad_name ?? creative.ad_id}
                 </p>
-                <p className="truncate text-muted-foreground text-2xs tabular-nums">
+                <p className="truncate text-muted-foreground text-xs tabular-nums">
                   {creative.cost_per_event != null
                     ? formatCurrency(creative.cost_per_event, currency)
                     : '—'}{' '}
@@ -222,7 +221,7 @@ function ProposalBody({ plan, currency }: { plan: AudienceProposalPlan; currency
               </li>
             ))}
           </ul>
-          <p className="mt-1.5 text-muted-foreground text-2xs">{plan.creatives_disclosure}</p>
+          <p className="mt-1.5 text-muted-foreground text-xs">{plan.creatives_disclosure}</p>
         </div>
       ) : null}
     </div>
@@ -267,7 +266,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
 
       {/* Middle — the proposal */}
       <section className="space-y-3 md:border-border/50 md:border-l md:pl-6">
-        <p className="flex items-center gap-1.5 text-muted-foreground text-2xs uppercase tracking-wide">
+        <p className={`${typeScale.label} flex items-center gap-1.5 text-muted-foreground`}>
           <SparklesIcon className="size-3.5" /> Jaina's proposal
         </p>
         {plan ? (
@@ -303,7 +302,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
 
       {/* Right — the decision */}
       <section className="space-y-3 md:border-border/50 md:border-l md:pl-6">
-        <p className="text-muted-foreground text-2xs uppercase tracking-wide">Decision</p>
+        <p className={`${typeScale.label} text-muted-foreground`}>Decision</p>
 
         {state === 'none' || state === 'failed' ? (
           <Button
@@ -435,7 +434,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
                 onChange={(event) => setBudgetMajor(event.target.value)}
                 value={budgetMajor}
               />
-              <span className="block text-muted-foreground text-2xs tabular-nums">
+              <span className="block text-muted-foreground text-xs tabular-nums">
                 {majorUnits(plan.budget.bounds.min_minor_units)}–
                 {majorUnits(plan.budget.bounds.max_minor_units)}
                 {budgetClamped ? ' · adjusted to the bounds' : ''}
@@ -530,7 +529,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
               <p className="font-medium text-foreground">
                 {state === 'undone' ? 'Undone' : 'Created on Meta'}
                 {(row?.approval as { via?: string } | null)?.via === 'autopilot' ? (
-                  <Badge className="ml-2 text-2xs" variant="success">
+                  <Badge className="ml-2 text-xs" variant="success">
                     Approved by autopilot · created paused
                   </Badge>
                 ) : null}
@@ -636,7 +635,7 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
         ) : null}
 
         {row?.status === 'failed' && result?.adset ? (
-          <p className="text-muted-foreground text-2xs">
+          <p className="text-muted-foreground text-xs">
             A partial result exists (ad set {result.adset.id}); retrying resumes from it.
           </p>
         ) : null}

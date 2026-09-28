@@ -541,10 +541,7 @@ function secondaryOf(portfolio: VitalsPortfolio): HeroHeader['secondary'] {
   return null;
 }
 
-function mismatchOf(
-  report: ParsedCycleRunReport | null,
-  measures: string,
-): HeroHeader['mismatch'] {
+function mismatchOf(report: ParsedCycleRunReport | null, measures: string): HeroHeader['mismatch'] {
   const found = goalMismatchOf({ report, measures });
   if (!found) return null;
   const remove = { setting: 'roster', label: 'Remove these ad sets' } as const;

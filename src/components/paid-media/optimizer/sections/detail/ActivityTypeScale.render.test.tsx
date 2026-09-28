@@ -12,8 +12,9 @@ import { SuggestionAsk } from './SuggestionAsk';
 
 afterEach(cleanup);
 
-// +1 on the original sizes: the old text-3xs lands on text-2xs, so text-3xs is the floor.
-const NO_3XS = /text-3xs/;
+// The optimizer type scale (../../typeScale): nothing renders below 12px, so neither micro
+// size may appear anywhere in the markup.
+const MICRO = /text-[23]xs/;
 
 const gate = (
   category: AdhocSuggestionGate['category'],
@@ -64,7 +65,7 @@ const heroRow: DailyReadRow = {
   cta: { kind: 'queue_row', rowKey: 'rec:1', label: 'Review the pause' },
 };
 
-describe('SuggestionAsk — +1 type scale', () => {
+describe('SuggestionAsk — the optimizer type scale', () => {
   it('gives each of the three options its own icon', () => {
     render(
       <SuggestionAsk
@@ -88,7 +89,7 @@ describe('SuggestionAsk — +1 type scale', () => {
     );
   });
 
-  it('uses no text-3xs anywhere, notes and error included', () => {
+  it('uses no micro type anywhere, notes and error included', () => {
     render(
       <SuggestionAsk
         error="The worker is busy."
@@ -98,11 +99,11 @@ describe('SuggestionAsk — +1 type scale', () => {
       />,
     );
     const section = screen.getByTestId('suggestion-ask');
-    expect(section.outerHTML).not.toMatch(NO_3XS);
+    expect(section.outerHTML).not.toMatch(MICRO);
     expect(within(section).getByRole('heading').className).toContain('text-base');
-    expect(screen.getByText('Read on request, from this portfolio\'s own figures').className).toContain(
-      'text-2xs',
-    );
+    expect(
+      screen.getByText("Read on request, from this portfolio's own figures").className,
+    ).toContain('text-xs');
     for (const button of within(section).getAllByRole('button')) {
       expect(button.className).toContain('h-8');
       expect(button.className).toContain('w-full');
@@ -111,8 +112,8 @@ describe('SuggestionAsk — +1 type scale', () => {
   });
 });
 
-describe('DailyReadList — +1 type scale', () => {
-  it('uses no text-3xs anywhere and shows figures as stat chips', () => {
+describe('DailyReadList — the optimizer type scale', () => {
+  it('uses no micro type anywhere and shows figures as stat chips', () => {
     render(
       <DailyReadList
         currency="MXN"
@@ -124,12 +125,12 @@ describe('DailyReadList — +1 type scale', () => {
       />,
     );
     const section = screen.getByTestId('daily-read');
-    expect(section.outerHTML).not.toMatch(NO_3XS);
+    expect(section.outerHTML).not.toMatch(MICRO);
     expect(within(section).getByRole('heading').className).toContain('text-base');
     expect(screen.getByText(askedRow.title).className).toContain('text-sm');
     expect(screen.getByText(askedRow.reason as string).className).toContain('text-xs');
     const value = screen.getByText('1.25×');
-    expect(value.className).toContain('text-2xs');
+    expect(value.className).toContain('text-xs');
     expect(value.parentElement?.className).toContain('rounded-lg');
     for (const button of within(section).getAllByRole('button')) {
       expect(button.className).toContain('h-8');
@@ -141,7 +142,7 @@ describe('DailyReadList — +1 type scale', () => {
 describe('the shared pieces keep their dense default outside the Activity tab', () => {
   it('LookbackToggle is dense by default and roomy at size lg', () => {
     const { unmount } = render(<LookbackToggle onChange={() => undefined} value={7} />);
-    expect(screen.getByText('7d', { selector: 'button' }).className).toContain('text-2xs');
+    expect(screen.getByText('7d', { selector: 'button' }).className).toContain('text-xs');
     unmount();
     render(<LookbackToggle onChange={() => undefined} size="lg" value={7} />);
     const roomy = screen.getByText('7d', { selector: 'button' });
@@ -165,7 +166,7 @@ describe('the shared pieces keep their dense default outside the Activity tab', 
   });
 });
 
-describe('CreativeRecommendationCard — +1 type scale (Activity and Actions tabs alike)', () => {
+describe('CreativeRecommendationCard — the optimizer type scale (Activity and Actions tabs alike)', () => {
   const creativeRec = {
     id: 'rec-c1',
     adset_id: 'as-1',
@@ -225,15 +226,15 @@ describe('CreativeRecommendationCard — +1 type scale (Activity and Actions tab
       </QueryClientProvider>,
     );
 
-  it('uses no text-3xs: slots, badges, notes and the Generate button', () => {
+  it('uses no micro type: slots, badges, notes and the Generate button', () => {
     renderCard(null);
     const card = screen.getByTestId('creative-recommendation-card');
-    expect(card.outerHTML).not.toMatch(NO_3XS);
+    expect(card.outerHTML).not.toMatch(MICRO);
     expect(screen.getByText('Summer hero').className).toContain('text-xs');
     expect(screen.getByText('Generate with Creative+').className).toContain('h-8');
     expect(screen.getByText('Generate with Creative+').className).toContain('text-sm');
     for (const slot of screen.getAllByTestId('flash-slot')) {
-      expect(slot.className).toContain('text-2xs');
+      expect(slot.className).toContain('text-xs');
     }
   });
 
@@ -259,8 +260,8 @@ describe('CreativeRecommendationCard — +1 type scale (Activity and Actions tab
     const [left, , right] = screen
       .getByTestId('creative-recommendation-card')
       .querySelectorAll(':scope > section');
-    expect(left.outerHTML).not.toMatch(NO_3XS);
-    expect(right.outerHTML).not.toMatch(NO_3XS);
+    expect(left.outerHTML).not.toMatch(MICRO);
+    expect(right.outerHTML).not.toMatch(MICRO);
     const figure = left.querySelector('span.tabular-nums');
     expect(figure?.className).toContain('text-base');
     expect(figure?.className).toContain('font-semibold');

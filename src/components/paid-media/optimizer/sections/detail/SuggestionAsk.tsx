@@ -46,8 +46,10 @@ export function SuggestionAsk({ gates, onAsk, pending, error = null }: Suggestio
       data-testid="suggestion-ask"
     >
       <header className="flex flex-wrap items-baseline justify-between gap-3 border-border/60 border-b px-5 py-4">
-        <h3 className="font-semibold text-foreground text-base tracking-tight">Ask for a suggestion</h3>
-        <p className="text-muted-foreground text-2xs">
+        <h3 className="font-semibold text-foreground text-base tracking-tight">
+          Ask for a suggestion
+        </h3>
+        <p className="text-muted-foreground text-xs">
           Read on request, from this portfolio's own figures
         </p>
       </header>
@@ -88,9 +90,9 @@ export function SuggestionAsk({ gates, onAsk, pending, error = null }: Suggestio
                 >
                   {working ? 'Reading…' : busy ? 'Asking…' : 'Ask'}
                 </Button>
-                {note ? <span className="text-muted-foreground text-2xs">{note}</span> : null}
+                {note ? <span className="text-muted-foreground text-xs">{note}</span> : null}
                 {!note && gate.requests_left <= 1 ? (
-                  <span className="text-muted-foreground text-2xs">
+                  <span className="text-muted-foreground text-xs">
                     {gate.requests_left === 1 ? 'One more today' : 'None left today'}
                   </span>
                 ) : null}
@@ -100,7 +102,7 @@ export function SuggestionAsk({ gates, onAsk, pending, error = null }: Suggestio
         })}
       </ul>
       {error ? (
-        <p className="border-border/60 border-t px-5 py-3 text-destructive text-2xs">{error}</p>
+        <p className="border-border/60 border-t px-5 py-3 text-destructive text-xs">{error}</p>
       ) : null}
     </section>
   );

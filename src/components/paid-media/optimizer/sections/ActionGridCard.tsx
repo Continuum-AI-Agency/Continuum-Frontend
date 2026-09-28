@@ -8,12 +8,13 @@
 
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { HeroFigure } from '../components/HeroFigure';
 import type { OptimizerActionFeedRow } from '../useOptimizerData';
 import {
-  type ActionEntityNames,
   ActionDelta,
   ActionDetailBody,
   ActionEntityId,
+  type ActionEntityNames,
   ActionFamilyBadge,
   ActionRevertedBadge,
   actionEntity,
@@ -58,9 +59,9 @@ export function ActionGridCard({
           {entity.id ? <ActionEntityId id={entity.id} /> : null}
         </div>
         <div className="mt-auto w-full min-w-0">
-          <p className="truncate font-mono font-semibold text-foreground text-lg tabular-nums">
+          <HeroFigure as="p" className="truncate text-foreground" kind="tile">
             {printChangeValue(change, change.after, currency)}
-          </p>
+          </HeroFigure>
           <div className="flex items-baseline justify-between gap-2">
             <ActionDelta change={change} className="text-sm" />
             <time className="ml-auto shrink-0 text-muted-foreground text-xs" dateTime={row.ts}>

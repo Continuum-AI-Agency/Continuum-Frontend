@@ -5,6 +5,7 @@
 // of the recommendation is drawn in the accent; the rest in the muted tone.
 
 import { formatCpa } from '../format';
+import * as typeScale from '../typeScale';
 import type { StandingChart } from './creativeCardModel';
 
 type CreativeStandingBarsProps = {
@@ -17,7 +18,9 @@ type CreativeStandingBarsProps = {
 export function CreativeStandingBars({ chart, resultWord, currency }: CreativeStandingBarsProps) {
   return (
     <figure className="space-y-1.5" data-testid="creative-standing-bars">
-      <figcaption className="flex items-baseline justify-between gap-2 text-2xs text-muted-foreground uppercase tracking-wide">
+      <figcaption
+        className={`${typeScale.label} flex items-baseline justify-between gap-2 text-muted-foreground`}
+      >
         <span>Cost per {resultWord} · 7d</span>
         {chart.median != null ? (
           <span className="normal-case tracking-normal">
@@ -70,7 +73,7 @@ export function CreativeStandingBars({ chart, resultWord, currency }: CreativeSt
         ))}
       </ol>
       {chart.totalAds > chart.eligibleAds ? (
-        <p className="text-2xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           {chart.eligibleAds} of {chart.totalAds} ads had enough {resultWord} to compare.
         </p>
       ) : null}

@@ -90,7 +90,7 @@ function ProjectedConversionCard({
       <div className="space-y-1 px-4 py-3">
         <p className="flex items-center gap-2 font-semibold text-sm tracking-tight">
           <span className="min-w-0 truncate">{projection.campaignName}</span>
-          <Badge variant="outline" className="shrink-0 text-3xs">
+          <Badge variant="outline" className="shrink-0 text-xs">
             projected
           </Badge>
         </p>
@@ -103,7 +103,7 @@ function ProjectedConversionCard({
           in total, scored on {humanize(objective)}.
         </p>
         {floorAdsetCount > 0 ? (
-          <p className="text-2xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {floorAdsetCount} ad set{floorAdsetCount === 1 ? ' has' : 's have'} too little recent
             spend to project from, so {floorAdsetCount === 1 ? 'it sits' : 'they sit'} on an assumed
             account minimum. The real minimum comes back when you convert.
@@ -135,7 +135,7 @@ function ProjectedConversionCard({
               isPending={cyclePreview.isPending}
               currency={currency}
             />
-            <p className="mt-2 text-2xs text-muted-foreground">
+            <p className="mt-2 text-xs text-muted-foreground">
               Estimated from each ad set&rsquo;s recent spend. Convert below to confirm the real
               per-ad-set budgets &mdash; nothing here changes anything on Meta.
             </p>
@@ -194,7 +194,7 @@ function ProjectedCycleBody({
   return (
     <div className="space-y-2">
       <ReallocationFlow items={flowItems} currency={currency} />
-      <p className="text-2xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         {recCount === 0
           ? 'No action recommendations raised on the projected ad sets.'
           : `${recCount} action recommendation${recCount === 1 ? '' : 's'} raised on the projected ad sets.`}

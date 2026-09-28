@@ -604,7 +604,7 @@ export function PortfolioDetailWorkspace({
             <p className="text-xs font-semibold text-foreground">
               {resolvedRange.label}
               {resolvedRange.flightMissing ? (
-                <span className="ml-2 font-normal text-2xs text-muted-foreground">
+                <span className="ml-2 font-normal text-xs text-muted-foreground">
                   set a flight in Manage to report on it
                 </span>
               ) : null}
@@ -636,7 +636,7 @@ export function PortfolioDetailWorkspace({
 
           <OptimizerPanel
             meta={
-              <span className="text-3xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 hover a cycle for its metrics + actions
               </span>
             }
@@ -683,7 +683,7 @@ export function PortfolioDetailWorkspace({
             <OptimizerPanel
               meta={
                 flightPacing.kind === 'ready' ? (
-                  <span className="text-3xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     {flightPacing.source === 'engine' ? 'engine verdict' : 'from daily spend'}
                   </span>
                 ) : null
@@ -699,7 +699,7 @@ export function PortfolioDetailWorkspace({
 
             <OptimizerPanel
               meta={
-                <span className="text-3xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   step conversion · {funnelMeta}
                 </span>
               }
@@ -764,12 +764,12 @@ export function PortfolioDetailWorkspace({
                   </Button>
                 </div>
               ) : (
-                <p className="text-3xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {applyModeExplainer(portfolio.apply_mode)}
                 </p>
               )}
               {update.isError ? (
-                <p className="text-2xs text-destructive" role="status">
+                <p className="text-xs text-destructive" role="status">
                   Could not change the mode. Nothing on Meta was touched — try again, or set it from
                   Manage.
                 </p>
@@ -786,7 +786,7 @@ export function PortfolioDetailWorkspace({
                 target={targetDisplay}
               />
               <details className="group">
-                <summary className="cursor-pointer text-2xs text-muted-foreground hover:text-foreground">
+                <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
                   Exact figures per ad set
                 </summary>
                 <div className="pt-2">
@@ -806,7 +806,7 @@ export function PortfolioDetailWorkspace({
             </OptimizerPanel>
             <OptimizerPanel
               meta={
-                <span className="text-3xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   within-ad-set creative wins · {resolvedRange.lookback}
                 </span>
               }
@@ -830,7 +830,7 @@ export function PortfolioDetailWorkspace({
           <OptimizerPanel
             bodyClassName="space-y-2.5"
             meta={
-              <span className="text-3xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {costCiLegend(metric)} · expand a row for its creative verdicts
               </span>
             }
@@ -878,7 +878,7 @@ export function PortfolioDetailWorkspace({
             <>
               <OptimizerPanel
                 meta={
-                  <span className="text-3xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     {adsetNameById.get(selectedAdsetId) || selectedAdsetId}
                   </span>
                 }
@@ -905,7 +905,7 @@ export function PortfolioDetailWorkspace({
                 </DataState>
               </OptimizerPanel>
               <OptimizerPanel
-                meta={<span className="text-3xs text-muted-foreground">ROAS vs break-even</span>}
+                meta={<span className="text-xs text-muted-foreground">ROAS vs break-even</span>}
                 title="Ad-set profitability"
               >
                 <DataState

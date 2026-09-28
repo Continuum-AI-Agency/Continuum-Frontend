@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/shared/state/EmptyState';
 import { Button } from '@/components/ui/button';
 import { nextCycleLabel, soonestNextCycle } from '../format';
 import { hasPendingWork } from '../reportModel';
+import * as typeScale from '../typeScale';
 import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
 import { RenewalTaskRow } from './RenewalTaskRow';
 
@@ -78,7 +79,7 @@ export function OptimizerActions({
 
       {renewals.length > 0 ? (
         <div>
-          <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <h3 className={`${typeScale.label} mb-2 px-1 font-semibold text-muted-foreground`}>
             Approved renewals · tasks ({renewals.length})
           </h3>
           <div className="space-y-2">

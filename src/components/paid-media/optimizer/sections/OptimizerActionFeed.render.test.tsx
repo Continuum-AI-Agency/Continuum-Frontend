@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render as renderWithoutClient, screen, waitFor, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render as renderWithoutClient,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import type { ReactElement } from 'react';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
@@ -42,7 +49,7 @@ mock.module('./RevertApplyDialog', () => ({
   }) => (
     <button
       type="button"
-      className={triggerTextSize ?? 'text-2xs'}
+      className={triggerTextSize ?? ''}
       data-audit-id={auditId}
       data-scope={scope ?? ''}
     >
@@ -204,8 +211,7 @@ describe('OptimizerActionFeed — featured card and grid', () => {
       entity_id: `12025130388068${String(index).padStart(4, '0')}`,
       ...over,
     });
-  const gridCards = () =>
-    Array.from(screen.getByTestId('action-grid').children) as HTMLElement[];
+  const gridCards = () => Array.from(screen.getByTestId('action-grid').children) as HTMLElement[];
 
   // The RPC is newest-first, but the rule is "the newest action", not "whatever came first".
   it('features the most recent action and grids the rest in feed order', () => {
@@ -368,6 +374,6 @@ describe('OptimizerActionFeed — entity names', () => {
     render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
     const trigger = screen.getByRole('button', { name: 'Revert' });
     expect(trigger.className).toContain('text-xs');
-    expect(trigger.className).not.toContain('text-2xs');
+    expect(trigger.className).not.toMatch(/text-[23]xs/);
   });
 });

@@ -54,7 +54,9 @@ import { motion, useReducedMotion, type Variants } from 'motion/react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { HeroFigure } from '../../components/HeroFigure';
 import { type FigureWindow, figureProps, formatCurrency, formatPercent } from '../../format';
+import * as typeScale from '../../typeScale';
 import { AccountChartView } from './AccountChartView';
 import { CalmRule, HeadlineComparison, HeadlineFigure, MoneyLine } from './candidateHeadline';
 import { doubtedBy, scopeOf } from './guardScope';
@@ -111,7 +113,7 @@ function surenessBasis(candidate: AccountCandidate): string {
 }
 
 function Kicker({ children }: { children: React.ReactNode }) {
-  return <p className="text-3xs uppercase tracking-[0.16em] text-muted-foreground">{children}</p>;
+  return <p className={`${typeScale.label} text-muted-foreground`}>{children}</p>;
 }
 
 /**
@@ -136,7 +138,7 @@ function Row({
       className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-baseline gap-3 px-4 py-3"
       data-testid={testId}
     >
-      <p className="text-3xs uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
+      <p className={`${typeScale.label} text-muted-foreground`}>{label}</p>
       <div className="min-w-0 space-y-1">
         <p className="font-semibold text-foreground text-xs">{value}</p>
         {children}
@@ -146,12 +148,12 @@ function Row({
 }
 
 function Sub({ children }: { children: React.ReactNode }) {
-  return <p className="text-2xs text-muted-foreground">{children}</p>;
+  return <p className="text-xs text-muted-foreground">{children}</p>;
 }
 
 function Warn({ children, testId }: { children: React.ReactNode; testId?: string }) {
   return (
-    <p className="text-3xs text-amber-600 dark:text-amber-400" data-testid={testId}>
+    <p className="text-xs text-amber-600 dark:text-amber-400" data-testid={testId}>
       {children}
     </p>
   );
@@ -280,7 +282,7 @@ export function AccountLeadCard({
       </div>
 
       <p
-        className="border-border/60 border-t px-4 py-2 text-3xs uppercase tracking-[0.13em] text-muted-foreground"
+        className={`${typeScale.label} border-border/60 border-t px-4 py-2 text-muted-foreground`}
         data-testid="account-lead-foot"
       >
         {mode === 'lead' && lead ? `Trigger · ${lead.detector}` : null}
@@ -303,7 +305,7 @@ function GuardStrip({ guards, lead }: { guards: AccountCandidate[]; lead: Accoun
       data-testid="account-lead-guard"
     >
       <AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-      <p className="min-w-0 text-2xs text-foreground">
+      <p className="min-w-0 text-xs text-foreground">
         <span className="font-semibold">
           {guards.map((guard) => ACCOUNT_DETECTOR_META[guard.detector].label).join(' · ')}
         </span>{' '}
@@ -340,7 +342,7 @@ function LeadFace({
     <Face>
       <div className="flex flex-wrap items-center gap-2">
         <Kicker>Across the account</Kicker>
-        <Badge className="text-3xs" variant={TIER_VARIANT[tier]}>
+        <Badge className="text-xs" variant={TIER_VARIANT[tier]}>
           {IMPACT_TIER_COPY[tier]}
         </Badge>
       </div>
@@ -368,9 +370,9 @@ function LeadFace({
         testId="account-lead-money"
       />
       <CalmRule play={play} testId="account-lead-rule" />
-      <p className="text-2xs text-muted-foreground">{clipLine(meta.compares)}</p>
+      <p className="text-xs text-muted-foreground">{clipLine(meta.compares)}</p>
       {candidate.capped_by ? (
-        <p className="text-3xs text-muted-foreground" data-testid="account-lead-cap">
+        <p className="text-xs text-muted-foreground" data-testid="account-lead-cap">
           {candidate.capped_by === 'velocity'
             ? 'Capped by this objective’s per-cycle limit, not by the gap.'
             : 'Capped by your guardrail, not by the gap.'}
@@ -387,8 +389,8 @@ function GuardFace({ guard, play }: { guard: AccountCandidate; play: boolean }) 
       <Kicker>Before anything else</Kicker>
       <h2 className="font-semibold text-base text-foreground">{meta.label}</h2>
       <CalmRule play={play} testId="account-lead-rule" />
-      <p className="text-2xs text-muted-foreground">{clipLine(guard.impact_basis)}</p>
-      <p className="text-3xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground">{clipLine(guard.impact_basis)}</p>
+      <p className="text-xs text-muted-foreground">
         Nothing else cleared today, and a list ordered by money would point precisely at the wrong
         number until this is settled.
       </p>
@@ -525,16 +527,17 @@ function QuietFace({
       <h2 className="font-semibold text-base text-foreground">Nothing worth moving today</h2>
       {perDay != null ? (
         <p
-          className="flex flex-wrap items-baseline gap-x-1.5 text-2xs text-muted-foreground"
+          className="flex flex-wrap items-baseline gap-x-1.5 text-xs text-muted-foreground"
           data-reading={delivered ? 'window' : 'scale'}
           data-testid="account-lead-figure"
         >
-          <span
-            className="font-mono font-semibold text-3xl tabular-nums text-foreground"
+          <HeroFigure
+            className="text-foreground"
+            kind="lead"
             {...figureProps('account-lead.figure', perDay, currency, deliveryWindow(delivered))}
           >
             {formatCurrency(perDay, currency)}
-          </span>
+          </HeroFigure>
           <span className="text-foreground">
             {delivered ? `a day, last ${delivered.days} days` : 'a day across this account'}
           </span>

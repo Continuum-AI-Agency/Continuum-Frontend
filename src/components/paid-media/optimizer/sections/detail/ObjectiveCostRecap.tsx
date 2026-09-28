@@ -7,6 +7,7 @@
 import type { OptimizationMetricDefinition } from '@continuum/contracts';
 import { cn } from '@/lib/utils';
 import { ExplainPopover, ExplainRow } from '../../components/ExplainPopover';
+import { HeroFigure } from '../../components/HeroFigure';
 import { Sparkline } from '../../components/Sparkline';
 import { StatusChip, type StatusTone } from '../../components/StatusChip';
 import {
@@ -16,6 +17,7 @@ import {
   formatCpa,
   formatCurrency,
 } from '../../format';
+import * as typeScale from '../../typeScale';
 import type { ResolvedRange } from './rangeModel';
 import type { RecapModel } from './recapModel';
 
@@ -87,18 +89,15 @@ function Tile({
   return (
     <div className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-border/70 bg-card px-3 py-2.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-2xs text-muted-foreground uppercase tracking-wide">{label}</span>
+        <span className={`${typeScale.label} text-muted-foreground`}>{label}</span>
         {explain}
       </div>
       <div className="flex items-end justify-between gap-2">
         <div className="min-w-0">
-          <p
-            className="truncate font-semibold text-lg text-foreground tabular-nums leading-none"
-            {...figure}
-          >
+          <HeroFigure as="p" className="truncate text-foreground" kind="tile" {...figure}>
             {value}
-          </p>
-          {sub ? <p className="mt-1 text-2xs text-muted-foreground">{sub}</p> : null}
+          </HeroFigure>
+          {sub ? <p className="mt-1 text-xs text-muted-foreground">{sub}</p> : null}
         </div>
         {spark && spark.some((v) => v > 0) ? (
           <Sparkline label={`${label} by day`} stroke={sparkColor} values={spark} width={72} />

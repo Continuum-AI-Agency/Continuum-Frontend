@@ -280,7 +280,7 @@ function CostCell({
   const unboundedNote = upperBoundNote(ci);
   if (cost == null && !hasInterval) {
     return unboundedNote ? (
-      <span className="text-2xs text-muted-foreground">{unboundedNote}</span>
+      <span className="text-xs text-muted-foreground">{unboundedNote}</span>
     ) : (
       <span className="text-muted-foreground">{DASH}</span>
     );
@@ -321,7 +321,7 @@ function CostCell({
         }
       />
       <TooltipContent className="max-w-xs">
-        <p className="text-2xs">{plain}</p>
+        <p className="text-xs">{plain}</p>
       </TooltipContent>
     </Tooltip>
   );

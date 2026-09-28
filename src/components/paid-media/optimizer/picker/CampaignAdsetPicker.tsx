@@ -65,6 +65,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils';
 import { DataFreshnessChip } from '../charts/DataFreshnessChip';
 import { formatCpa, formatCurrency } from '../format';
+import * as typeScale from '../typeScale';
 import { useOptimizerAccountSnapshots } from '../useOptimizerData';
 import { AdsetAdList } from './AdsetAdList';
 import {
@@ -202,33 +203,33 @@ const AdsetRow = memo(function AdsetRow({
                 }
               />
               <TooltipContent className="max-w-xs">
-                <span className="font-mono text-2xs">{row.id}</span>
+                <span className="font-mono text-xs">{row.id}</span>
               </TooltipContent>
             </Tooltip>
             {row.eligible && row.budgetType ? (
-              <Badge variant="outline" className="shrink-0 text-3xs">
+              <Badge variant="outline" className="shrink-0 text-xs">
                 {BUDGET_TYPE_LABEL[row.budgetType]}
               </Badge>
             ) : null}
             {row.providerLifecycle && row.providerLifecycle !== 'active' ? (
-              <Badge variant="warning" className="shrink-0 text-3xs">
+              <Badge variant="warning" className="shrink-0 text-xs">
                 {row.providerStatus?.replaceAll('_', ' ').toLowerCase() ?? 'Unknown status'}
               </Badge>
             ) : null}
             {!row.eligible && (!row.providerLifecycle || row.providerLifecycle === 'active') ? (
-              <Badge variant="warning" className="shrink-0 text-3xs">
+              <Badge variant="warning" className="shrink-0 text-xs">
                 Held
               </Badge>
             ) : null}
             {row.eligible && row.mismatch ? (
-              <Badge variant="warning" className="shrink-0 text-3xs">
+              <Badge variant="warning" className="shrink-0 text-xs">
                 Wrong KPI
               </Badge>
             ) : null}
             {row.enrolledIn ? (
               <Badge
                 variant={row.enrolledIn.canRelease ? 'outline' : 'warning'}
-                className="shrink-0 text-3xs"
+                className="shrink-0 text-xs"
               >
                 {row.enrolledIn.portfolioName
                   ? `In: ${row.enrolledIn.portfolioName}`
@@ -243,7 +244,7 @@ const AdsetRow = memo(function AdsetRow({
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <span className="mt-0.5 line-clamp-1 block text-2xs text-warning">
+                  <span className="mt-0.5 line-clamp-1 block text-xs text-warning">
                     {row.reason}
                   </span>
                 }
@@ -252,7 +253,7 @@ const AdsetRow = memo(function AdsetRow({
             </Tooltip>
           ) : null}
           {row.eligible && row.mismatch ? (
-            <span className="mt-0.5 line-clamp-1 block text-2xs text-warning">
+            <span className="mt-0.5 line-clamp-1 block text-xs text-warning">
               Buys {row.kpiField} — the optimizer freezes it and never moves its budget.
             </span>
           ) : null}
@@ -262,7 +263,7 @@ const AdsetRow = memo(function AdsetRow({
               that dead end is shown here rather than found the hard way. */}
           {row.enrolledIn ? (
             <span
-              className={`mt-0.5 line-clamp-1 block text-2xs ${
+              className={`mt-0.5 line-clamp-1 block text-xs ${
                 row.enrolledIn.canRelease ? 'text-muted-foreground' : 'text-warning'
               }`}
             >
@@ -370,11 +371,11 @@ function CampaignHeaderRow({
           )}
           <span className="truncate font-medium text-xs">{section.campaignName}</span>
         </button>
-        <span className="shrink-0 text-2xs text-muted-foreground tabular-nums">
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
           {selectedCount}/{eligibleIds.length} of {visibleCount}
         </span>
         {section.mismatchCount > 0 ? (
-          <Badge variant="warning" className="shrink-0 text-3xs">
+          <Badge variant="warning" className="shrink-0 text-xs">
             {section.mismatchCount} wrong KPI
           </Badge>
         ) : null}
@@ -638,7 +639,8 @@ export function CampaignAdsetPicker({
               <TableRow
                 className={cn(
                   GRID_COLS,
-                  'py-1.5 text-left font-medium text-2xs text-muted-foreground uppercase tracking-wide hover:bg-transparent',
+                  typeScale.label,
+                  'py-1.5 text-left font-medium text-muted-foreground hover:bg-transparent',
                 )}
               >
                 <TableHead aria-label="Select" className="p-0" />

@@ -341,7 +341,7 @@ export function OptimizerTab({
                 <ListChecksIcon className="size-3.5" />
                 Actions
                 {pendingCount + renewalCount > 0 ? (
-                  <span className="ml-0.5 grid min-w-4 place-items-center rounded-full bg-primary px-1 text-3xs font-semibold text-primary-foreground">
+                  <span className="ml-0.5 grid min-w-4 place-items-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground">
                     {pendingCount + renewalCount}
                   </span>
                 ) : null}

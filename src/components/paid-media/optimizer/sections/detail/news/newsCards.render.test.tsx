@@ -79,7 +79,7 @@ describe('every card on every real body', () => {
       }
     });
 
-    it(`${name}: uses no text-2xs / text-3xs anywhere in a card`, () => {
+    it(`${name}: uses no micro type anywhere in a card`, () => {
       for (const card of cardsOf(name)) {
         const tiny = [card, ...card.querySelectorAll('*')].filter((node) =>
           /\btext-(2|3)xs\b/.test(node.getAttribute('class') ?? ''),

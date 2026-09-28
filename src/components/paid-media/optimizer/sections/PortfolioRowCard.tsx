@@ -122,10 +122,10 @@ export function PortfolioRowCard({
           <p className="truncate font-semibold text-sm tracking-tight">{portfolio.name}</p>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-muted-foreground text-xs">
             <span>{humanize(portfolio.objective)}</span>
-            <Badge className="text-3xs font-medium" variant="muted">
+            <Badge className="text-xs font-medium" variant="muted">
               {portfolioLevelLabel(portfolio.level)}
             </Badge>
-            <Badge className="text-3xs font-medium" variant="teal">
+            <Badge className="text-xs font-medium" variant="teal">
               {humanize(portfolio.mode)}
             </Badge>
             <ApplyModePill
@@ -142,7 +142,7 @@ export function PortfolioRowCard({
           >
             {formatCurrency(portfolio.daily_total, currency)}
           </p>
-          <p className="text-2xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             /day · {portfolio.adset_count} ad {portfolio.adset_count === 1 ? 'set' : 'sets'}
           </p>
         </div>
@@ -187,7 +187,7 @@ export function PortfolioRowCard({
           data-detector={lead.detector}
           data-testid="portfolio-lead"
         >
-          <p className="truncate text-2xs text-muted-foreground">
+          <p className="truncate text-xs text-muted-foreground">
             {clipLine(ACCOUNT_DETECTOR_META[lead.detector]?.label ?? lead.detector)}
           </p>
           <HeadlineFigure

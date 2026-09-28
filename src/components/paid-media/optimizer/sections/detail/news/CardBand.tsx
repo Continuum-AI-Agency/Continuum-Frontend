@@ -12,6 +12,7 @@
 
 import type * as React from 'react';
 import { cn } from '@/lib/utils';
+import { HeroFigure } from '../../../components/HeroFigure';
 import { figureProps, formatCurrency, formatPercent } from '../../../format';
 import type { CardFigure, CardTone, CardVisual } from './cardVisual';
 import { resultNoun } from './cardVisual';
@@ -594,11 +595,11 @@ function Strip({
             className="flex flex-col justify-end rounded-md border border-muted-foreground/40 border-dashed bg-muted/60 px-2 py-1.5"
             key={cell.label}
           >
-            <span className="font-mono text-foreground text-lg tabular-nums leading-none">
+            <HeroFigure className="text-foreground" kind="tile">
               {cell.kind === 'money'
                 ? formatCurrency(cell.value, currency)
                 : cell.value.toLocaleString('en-US')}
-            </span>
+            </HeroFigure>
             <span className="text-muted-foreground text-xs">{cell.label}</span>
           </div>
         ))}

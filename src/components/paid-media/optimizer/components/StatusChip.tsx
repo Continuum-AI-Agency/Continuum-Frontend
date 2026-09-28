@@ -42,7 +42,7 @@ export function StatusChip({ tone, children, hint, className, testId }: StatusCh
   const indicator = INDICATOR[tone];
   return (
     <Pill
-      className={cn('gap-1.5 text-2xs', className)}
+      className={cn('gap-1.5 text-xs', className)}
       data-testid={testId}
       title={hint}
       variant={PILL_VARIANT[tone]}

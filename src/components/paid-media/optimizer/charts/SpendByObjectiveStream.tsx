@@ -21,6 +21,7 @@ import { Area, AreaChart } from '@/components/charts/area-chart';
 import { ChartTooltip } from '@/components/charts/tooltip';
 import { cn } from '@/lib/utils';
 import { figureProps, formatCurrency, humanize } from '../format';
+import * as typeScale from '../typeScale';
 import {
   budgetByObjective,
   lastFullDay,
@@ -113,7 +114,7 @@ export function SpendByObjectiveStream({
   return (
     <div className={cn('grid gap-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]', className)}>
       <div className="min-w-0 space-y-1">
-        <p className="text-3xs text-muted-foreground uppercase tracking-wide">
+        <p className={`${typeScale.label} text-muted-foreground`}>
           Last {days} full days · {windowLabel}
           {snapshotLabel ? ` · ${snapshotLabel}` : ''}
         </p>
@@ -147,12 +148,12 @@ export function SpendByObjectiveStream({
             />
           </AreaChart>
         ) : stream.hasData ? (
-          <div className="flex min-h-28 items-center rounded-md border border-border/60 border-dashed bg-muted/10 px-3 py-2 text-2xs text-muted-foreground">
+          <div className="flex min-h-28 items-center rounded-md border border-border/60 border-dashed bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
             Not enough spend in this window to chart a trend — the enrolled ad sets spent under a
             dollar a day on average. The split beside it is what did go out.
           </div>
         ) : (
-          <div className="flex min-h-28 items-center rounded-md border border-border/60 border-dashed bg-muted/10 px-3 py-2 text-2xs text-muted-foreground">
+          <div className="flex min-h-28 items-center rounded-md border border-border/60 border-dashed bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
             The spend stream draws after the first scored cycle. Until then the split beside it is
             the plan: each portfolio&rsquo;s daily budget by objective.
           </div>
@@ -160,9 +161,9 @@ export function SpendByObjectiveStream({
       </div>
 
       <div className="min-w-0 space-y-1.5">
-        <p className="text-3xs text-muted-foreground uppercase tracking-wide">{legendTitle}</p>
+        <p className={`${typeScale.label} text-muted-foreground`}>{legendTitle}</p>
         {legend.length === 0 ? (
-          <p className="text-2xs text-muted-foreground">No budget yet.</p>
+          <p className="text-xs text-muted-foreground">No budget yet.</p>
         ) : (
           <ul className="space-y-1">
             {legend.map((row) => {
@@ -218,7 +219,7 @@ export function SpendByObjectiveStream({
         )}
         {onFilter && filter ? (
           <button
-            className="text-2xs text-primary hover:underline"
+            className="text-xs text-primary hover:underline"
             onClick={() => onFilter(null)}
             type="button"
           >

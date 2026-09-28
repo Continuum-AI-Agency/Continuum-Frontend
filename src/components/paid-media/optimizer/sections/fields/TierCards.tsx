@@ -70,7 +70,7 @@ export function TierCards({
               ) : null}
               {applyModePill(tier)?.label ?? copy.title}
             </span>
-            <span className="mt-0.5 block text-2xs text-muted-foreground">{copy.body}</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">{copy.body}</span>
           </button>
         );
       })}

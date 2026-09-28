@@ -17,6 +17,7 @@ import type { AccountCandidate, CandidateHeadline } from '@continuum/contracts';
 import { perPeriod } from '@continuum/contracts';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
 import { cn } from '@/lib/utils';
+import { HeroFigure, type HeroFigureKind } from '../../components/HeroFigure';
 import {
   type FigureUnit,
   figureProps,
@@ -66,10 +67,12 @@ export function CalmRule({ play, testId }: { play: boolean; testId?: string }) {
 /** How large the leading figure sits. The card leads a screen; a row leads a line. */
 export type HeadlineSize = 'row' | 'column' | 'card';
 
-const FIGURE_SIZE: Record<HeadlineSize, string> = {
-  row: 'text-base',
-  column: 'text-xl',
-  card: 'text-3xl',
+/** A column's figure is a headline figure and the card's is the account lead figure; a row's
+ *  sits inline in its line and is not a hero figure at all. */
+const FIGURE_KIND: Record<HeadlineSize, HeroFigureKind | null> = {
+  row: null,
+  column: 'headline',
+  card: 'lead',
 };
 
 /** One side of a `from → to`, printed in the headline's own unit. */
@@ -121,16 +124,22 @@ export function HeadlineFigure({
     : figureProps(`${figureKey}.figure`, candidate.impact_per_day, currency);
   return (
     <p
-      className="flex flex-wrap items-baseline gap-x-1.5 text-2xs text-muted-foreground"
+      className="flex flex-wrap items-baseline gap-x-1.5 text-xs text-muted-foreground"
       data-headline={candidate.headline?.kind ?? 'money_fallback'}
       data-testid={testId}
     >
-      <span
-        className={cn('font-mono font-semibold tabular-nums text-foreground', FIGURE_SIZE[size])}
-        {...provenance}
-      >
-        {lead.figure}
-      </span>
+      {FIGURE_KIND[size] ? (
+        <HeroFigure className="text-foreground" kind={FIGURE_KIND[size]} {...provenance}>
+          {lead.figure}
+        </HeroFigure>
+      ) : (
+        <span
+          className="font-mono font-semibold text-base text-foreground tabular-nums"
+          {...provenance}
+        >
+          {lead.figure}
+        </span>
+      )}
       <span className="text-foreground">{lead.label}</span>
     </p>
   );
@@ -157,7 +166,7 @@ export function HeadlineComparison({
   if (!headline || headline.from == null || headline.to == null) return null;
   const unit = headlineFigureUnit(headline.unit);
   return (
-    <p className="text-3xs text-muted-foreground tabular-nums" data-testid={testId}>
+    <p className="text-xs text-muted-foreground tabular-nums" data-testid={testId}>
       <span {...figureProps(`${figureKey}.from`, headline.from, currency, 'none', unit)}>
         {sideFigure(headline.unit, headline.from, currency)}
       </span>{' '}
@@ -199,7 +208,7 @@ export function MoneyLine({
     candidate.headline ? 'per-period' : 'per-month',
   );
   return (
-    <p className="text-2xs text-muted-foreground tabular-nums" data-testid={testId}>
+    <p className="text-xs text-muted-foreground tabular-nums" data-testid={testId}>
       <span className="text-foreground" {...provenance}>
         {money}
       </span>{' '}

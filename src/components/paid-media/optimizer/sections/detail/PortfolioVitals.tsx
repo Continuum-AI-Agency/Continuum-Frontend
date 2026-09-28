@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { HeroFigure } from '../../components/HeroFigure';
+import * as typeScale from '../../typeScale';
 import type {
   BulletBar,
   HeroHeader,
@@ -152,22 +154,15 @@ function Row({ row }: { row: VitalRow }) {
       data-vital={row.key}
     >
       <div className="min-w-0">
-        <p className="font-semibold text-muted-foreground text-xs uppercase tracking-wide">
-          {row.label}
-        </p>
-        <p
-          className={cn(
-            'font-semibold text-xl tabular-nums leading-tight tracking-tight',
-            VALUE_TONE[row.tone],
-          )}
-        >
+        <p className={`${typeScale.label} font-semibold text-muted-foreground`}>{row.label}</p>
+        <HeroFigure as="p" className={cn('tracking-tight', VALUE_TONE[row.tone])} kind="tile">
           {row.value}
           {row.unit ? (
             <span className="ml-1 font-medium text-muted-foreground text-sm tracking-normal">
               {row.unit}
             </span>
           ) : null}
-        </p>
+        </HeroFigure>
       </div>
       <div
         className={cn('order-3 col-span-full @2xl:order-none @2xl:col-span-1', TEXT_TONE[row.tone])}

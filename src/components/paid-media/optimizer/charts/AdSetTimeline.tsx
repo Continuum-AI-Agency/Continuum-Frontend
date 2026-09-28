@@ -136,7 +136,7 @@ export function AdSetTimeline({
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-        <span className="text-3xs text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {active.size} of {chartable.length} creatives
         </span>
       </div>

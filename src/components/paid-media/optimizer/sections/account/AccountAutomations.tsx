@@ -83,7 +83,7 @@ export function AccountAutomations({
       >
         <SectionHeader
           meta={
-            <span className="text-3xs text-muted-foreground" data-testid="portfolio-autonomy-meta">
+            <span className="text-xs text-muted-foreground" data-testid="portfolio-autonomy-meta">
               {autopilot.length} of {portfolios.length} on autopilot
               {stopped > 0 ? ` · ${stopped} stopped` : ''}
               {stale > 0 ? ` · ${stale} stale` : ''}
@@ -100,7 +100,7 @@ export function AccountAutomations({
             >
               <div className="min-w-0">
                 <p className="truncate font-medium text-foreground text-xs">{portfolio.name}</p>
-                <p className="text-3xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {humanize(portfolio.objective)} · {waitingLine(portfolio)}
                 </p>
               </div>
@@ -111,7 +111,7 @@ export function AccountAutomations({
                   scopes={portfolio.autopilot_scopes ?? null}
                 />
                 <Button
-                  className="h-7 px-2 text-2xs"
+                  className="h-7 px-2 text-xs"
                   onClick={() => onManagePortfolio(portfolio.id)}
                   size="sm"
                   type="button"

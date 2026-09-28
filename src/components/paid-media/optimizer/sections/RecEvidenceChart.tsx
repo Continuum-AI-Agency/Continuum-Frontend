@@ -7,6 +7,7 @@
 // recommendations should not have to hover each in turn.
 
 import type { AdSetSnapshot, CycleItemRow, RecommendationRow } from '@continuum/contracts';
+import * as typeScale from '../typeScale';
 import { CpaConfidenceBar } from './CpaConfidenceBar';
 import { type EvidenceSeries, evidenceSeries, formatEvidenceValue } from './recQueueModel';
 
@@ -36,7 +37,7 @@ export function RecEvidenceChart({
   if (isPause && item?.diagnostics?.ci) {
     return (
       <div className="space-y-1.5" data-testid="rec-evidence-ci">
-        <p className="text-muted-foreground text-2xs uppercase tracking-wide">
+        <p className={`${typeScale.label} text-muted-foreground`}>
           Cost per result · 95% interval, narrower = more events
         </p>
         <CpaConfidenceBar
@@ -60,7 +61,7 @@ function EvidenceBars({ series, currency }: { series: EvidenceSeries; currency: 
     series.threshold != null ? Math.min(100, (series.threshold / max) * 100) : null;
   return (
     <div className="space-y-1.5" data-testid="rec-evidence-bars">
-      <p className="text-muted-foreground text-2xs uppercase tracking-wide">
+      <p className={`${typeScale.label} text-muted-foreground`}>
         {series.metric}
         {series.threshold != null && series.thresholdLabel
           ? ` · dashed line = ${series.thresholdLabel} ${formatEvidenceValue(series.unit, series.threshold, currency)}`

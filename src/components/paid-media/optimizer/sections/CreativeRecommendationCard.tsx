@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useSignedAssetUrls } from '@/lib/ai-studio/elements';
 import { cn } from '@/lib/utils';
 import { formatCpa } from '../format';
+import * as typeScale from '../typeScale';
 import { CreativeStandingBars } from './CreativeStandingBars';
 import {
   adImageUrl,
@@ -58,7 +59,7 @@ type CreativeRecommendationCardProps = {
 const FLASH_SLOTS = 3;
 
 /** In-slot actions: a flash slot is a third of the column, so they stay a step under the card buttons. */
-const SLOT_BUTTON = 'h-7 px-2 text-2xs';
+const SLOT_BUTTON = 'h-7 px-2 text-xs';
 
 type FlashSlot = {
   key: string;
@@ -132,7 +133,7 @@ function ImplementMenu({
         <div className="max-h-56 space-y-2 overflow-y-auto">
           {groups.map((group) => (
             <div key={group.relation}>
-              <p className="mb-1 text-muted-foreground text-2xs uppercase tracking-wide">
+              <p className={`${typeScale.label} mb-1 text-muted-foreground`}>
                 {RELATION_LABEL[group.relation]}
               </p>
               <ul className="space-y-0.5">
@@ -200,7 +201,7 @@ export function CreativeRecommendationCard({
     >
       {/* Left — the creative in question */}
       <section className="space-y-3">
-        <p className="text-muted-foreground text-2xs uppercase tracking-wide">
+        <p className={`${typeScale.label} text-muted-foreground`}>
           {copy.because === 'winner' ? 'The winner' : 'Creative to renew'}
         </p>
         {adsLoading && subjects.length === 0 ? (
@@ -276,7 +277,7 @@ export function CreativeRecommendationCard({
         {standing ? (
           <CreativeStandingBars chart={standing} currency={currency} resultWord={resultWord} />
         ) : (
-          <p className="text-muted-foreground text-2xs">
+          <p className="text-muted-foreground text-xs">
             No creative comparison in the latest snapshot for this ad set.
           </p>
         )}
@@ -284,7 +285,7 @@ export function CreativeRecommendationCard({
 
       {/* Right — flash creatives */}
       <section className="space-y-3 md:border-border/50 md:border-l md:pl-6">
-        <p className="flex items-center gap-1.5 text-muted-foreground text-2xs uppercase tracking-wide">
+        <p className={`${typeScale.label} flex items-center gap-1.5 text-muted-foreground`}>
           <SparklesIcon className="size-3.5" /> Flash creatives
         </p>
         <ul className="grid grid-cols-3 gap-2">
@@ -295,7 +296,7 @@ export function CreativeRecommendationCard({
             const busy = implementingKey === slot.key;
             return (
               <li
-                className="flex flex-col gap-1.5 rounded-lg border border-border/70 bg-muted/20 p-2 text-2xs"
+                className="flex flex-col gap-1.5 rounded-lg border border-border/70 bg-muted/20 p-2 text-xs"
                 data-testid="flash-slot"
                 key={slot.key}
                 title={slot.job.id}
@@ -318,7 +319,7 @@ export function CreativeRecommendationCard({
                   </div>
                 )}
                 <Badge
-                  className="w-fit text-2xs"
+                  className="w-fit text-xs"
                   variant={
                     status === 'published'
                       ? 'success'
@@ -330,7 +331,7 @@ export function CreativeRecommendationCard({
                   {SWAP_STATUS_LABEL[status] ?? status}
                 </Badge>
                 {slot.job.enqueued_via === 'autopilot' ? (
-                  <span className="text-muted-foreground text-2xs">by autopilot</span>
+                  <span className="text-muted-foreground text-xs">by autopilot</span>
                 ) : null}
                 {status === 'failed' && failureText(slot.job) ? (
                   <p className="line-clamp-2 text-destructive" title={failureText(slot.job) ?? ''}>
@@ -366,7 +367,7 @@ export function CreativeRecommendationCard({
           {Array.from({ length: emptySlots }, (_, index) => slots.length + index + 1).map(
             (slotNumber) => (
               <li
-                className="flex aspect-square items-center justify-center rounded-lg border border-border/60 border-dashed text-muted-foreground text-2xs"
+                className="flex aspect-square items-center justify-center rounded-lg border border-border/60 border-dashed text-muted-foreground text-xs"
                 key={`slot-${slotNumber}`}
               >
                 slot {slotNumber}
@@ -386,7 +387,7 @@ export function CreativeRecommendationCard({
             {generating ? 'Requesting…' : 'Generate with Creative+'}
           </Button>
         ) : null}
-        {generateNote ? <p className="text-muted-foreground text-2xs">{generateNote}</p> : null}
+        {generateNote ? <p className="text-muted-foreground text-xs">{generateNote}</p> : null}
       </section>
     </div>
   );

@@ -18,6 +18,7 @@ import { ScrollTextIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { EmptyState } from '@/components/shared/state/EmptyState';
 import { Button } from '@/components/ui/button';
+import * as typeScale from '../typeScale';
 import { useOptimizerLogs } from '../useOptimizerData';
 import { FeedFooter, FeedSkeleton, PortfolioFilter, RowHeader } from './feedChrome';
 import {
@@ -43,7 +44,7 @@ const LEVEL_STYLES: Record<OptimizerLogRow['level'], string> = {
 function LevelBadge({ level }: { level: OptimizerLogRow['level'] }) {
   return (
     <span
-      className={`mt-0.5 shrink-0 rounded-md border px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide ${LEVEL_STYLES[level]}`}
+      className={`${typeScale.label} mt-0.5 shrink-0 rounded-md border px-1.5 py-0.5 font-semibold${LEVEL_STYLES[level]}`}
     >
       {level}
     </span>
@@ -56,8 +57,8 @@ function FactList({ facts }: { facts: LifecycleFact[] }) {
     <dl className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
       {facts.map((fact) => (
         <div key={fact.label} className="flex items-baseline gap-1">
-          <dt className="text-2xs text-muted-foreground">{fact.label}</dt>
-          <dd className="font-mono text-2xs font-semibold tabular-nums">{fact.value}</dd>
+          <dt className="text-xs text-muted-foreground">{fact.label}</dt>
+          <dd className="font-mono text-xs font-semibold tabular-nums">{fact.value}</dd>
         </div>
       ))}
     </dl>
@@ -71,12 +72,12 @@ function DetailList({ lines }: { lines: string[] }) {
   if (lines.length === 0) return null;
   return (
     <details className="mt-1">
-      <summary className="cursor-pointer text-2xs text-muted-foreground underline-offset-2 hover:underline">
+      <summary className="cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:underline">
         {lines.length} listed
       </summary>
       <ul className="mt-1 space-y-0.5">
         {lines.map((line) => (
-          <li key={line} className="truncate font-mono text-2xs text-muted-foreground">
+          <li key={line} className="truncate font-mono text-xs text-muted-foreground">
             {line}
           </li>
         ))}
@@ -96,7 +97,7 @@ export function LifecycleLogRow({ row }: { row: OptimizerLogRow }) {
           <span className="text-xs text-muted-foreground">{row.portfolio_name}</span>
         ) : null}
         {read.summary ? (
-          <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">{read.summary}</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{read.summary}</p>
         ) : null}
         <FactList facts={read.facts} />
         <DetailList lines={read.detail} />
@@ -211,7 +212,7 @@ export function OptimizerLogs({ brandId, windowDays = 7 }: OptimizerLogsProps) {
         </div>
       ) : null}
       {archiveRequested && archiveQuery.isError ? (
-        <p className="text-2xs text-destructive">
+        <p className="text-xs text-destructive">
           Older history could not be loaded. The last 30 days are still available.
         </p>
       ) : null}
@@ -220,7 +221,7 @@ export function OptimizerLogs({ brandId, windowDays = 7 }: OptimizerLogsProps) {
       !archiveQuery.isError &&
       archiveRows.length === 0 &&
       !archiveQuery.hasNextPage ? (
-        <p className="text-2xs text-muted-foreground">No events older than 30 days.</p>
+        <p className="text-xs text-muted-foreground">No events older than 30 days.</p>
       ) : null}
     </div>
   );

@@ -853,6 +853,157 @@ test.describe('Paid Media Optimizer — live experience', () => {
     }
   });
 
+  // -------------------------------------------------------------------------
+  // Type scale — Performance+ redesign, stage 1a (optimizer/typeScale.ts).
+  //
+  // Five screens at two widths, and the assertions read the RENDERED page, not the source:
+  // no micro class (text-3xs / text-2xs) anywhere on the surface, no HTML text below 12px,
+  // every uppercase label at 12px, every HeroFigure at its role's size, and nothing inside
+  // the optimizer panel pushed past its right edge unless a scroller owns it.
+  // Screenshots: 16-type-scale-<screen>-<width>.png — look at them.
+  // -------------------------------------------------------------------------
+  test('type scale — Overview, portfolio detail, Automations, Actions and Activity read at one scale with no overflow at 1280 and 390', async ({
+    browser,
+  }) => {
+    test.setTimeout(900_000);
+    await selectBrand(AGENCY_BRAND_ID);
+    const { context } = await benchContext(browser);
+    const page = await context.newPage();
+
+    type ScreenReport = {
+      micro: string[];
+      small: string[];
+      labels: string[];
+      figures: string[];
+      overflow: string[];
+      panelWidth: number;
+      panelScrollWidth: number;
+    };
+
+    const inspect = (): Promise<ScreenReport> =>
+      page.evaluate(() => {
+        const panel =
+          document.querySelector('[role="tabpanel"][data-state="active"]') ??
+          document.querySelector('main') ??
+          document.body;
+        const describe = (el: Element) =>
+          `${el.tagName.toLowerCase()}.${(el.getAttribute('class') ?? '').split(/\s+/).slice(0, 6).join('.')} "${(el.textContent ?? '').trim().slice(0, 40)}"`;
+        const inSvg = (el: Element) => el.closest('svg') !== null;
+        const ownText = (el: Element) =>
+          [...el.childNodes].some((n) => n.nodeType === 3 && (n.textContent ?? '').trim());
+        const px = (el: Element) => Number.parseFloat(getComputedStyle(el).fontSize);
+        const all = [...panel.querySelectorAll('*')].filter((el) => !inSvg(el));
+        const micro = all
+          .filter((el) => /\btext-[23]xs\b/.test(el.getAttribute('class') ?? ''))
+          .map(describe);
+        const small = all
+          .filter((el) => ownText(el) && px(el) < 12)
+          .map((el) => `${px(el)}px ${describe(el)}`);
+        const labels = all
+          .filter((el) => ownText(el) && getComputedStyle(el).textTransform === 'uppercase')
+          .filter((el) => Math.round(px(el)) !== 12)
+          .map((el) => `${px(el)}px ${describe(el)}`);
+        const expectedFigure: Record<string, number> = { tile: 22, headline: 21, lead: 21 };
+        const figures = [...panel.querySelectorAll('[data-figure-role]')]
+          .filter(
+            (el) =>
+              Math.round(px(el)) !== expectedFigure[el.getAttribute('data-figure-role') ?? ''],
+          )
+          .map((el) => `${px(el)}px ${el.getAttribute('data-figure-role')} ${describe(el)}`);
+        const panelRect = panel.getBoundingClientRect();
+        const scrolls = (el: Element | null): boolean => {
+          for (let node = el; node && node !== panel; node = node.parentElement) {
+            const { overflowX } = getComputedStyle(node);
+            if (overflowX === 'auto' || overflowX === 'scroll' || overflowX === 'hidden')
+              return true;
+          }
+          return false;
+        };
+        const overflow = all
+          .filter((el) => {
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.right > panelRect.right + 2 && !scrolls(el.parentElement);
+          })
+          .map(
+            (el) =>
+              `${Math.round(el.getBoundingClientRect().right - panelRect.right)}px past ${describe(el)}`,
+          );
+        return {
+          micro,
+          small,
+          labels,
+          figures,
+          overflow,
+          panelWidth: Math.round(panel.clientWidth),
+          panelScrollWidth: Math.round(panel.scrollWidth),
+        };
+      });
+
+    const settle = async () => {
+      await expect(page.getByRole('status').filter({ hasText: 'Loading optimizer' })).toHaveCount(
+        0,
+        {
+          timeout: 120_000,
+        },
+      );
+      await page.waitForTimeout(1_500);
+    };
+
+    const check = async (screen: string, width: number) => {
+      await settle();
+      const report = await inspect();
+      await shoot(page, `16-type-scale-${screen}-${width}`);
+      console.log(
+        `[optimizer-bench] type scale ${screen}@${width}: panel ${report.panelWidth}px, scrollWidth ${report.panelScrollWidth}px, micro ${report.micro.length}, sub-12px ${report.small.length}, off-scale labels ${report.labels.length}, off-scale figures ${report.figures.length}, overflow ${report.overflow.length}`,
+      );
+      expect(report.micro, `${screen}@${width}: micro classes`).toEqual([]);
+      expect(report.small, `${screen}@${width}: text below 12px`).toEqual([]);
+      expect(report.labels, `${screen}@${width}: uppercase labels off 12px`).toEqual([]);
+      expect(report.figures, `${screen}@${width}: HeroFigure off its role size`).toEqual([]);
+      expect(report.overflow, `${screen}@${width}: pushed past the panel edge`).toEqual([]);
+      expect(
+        report.panelScrollWidth,
+        `${screen}@${width}: the optimizer panel scrolls sideways`,
+      ).toBeLessThanOrEqual(report.panelWidth + 1);
+    };
+
+    try {
+      // Resolve the enrolled portfolio's id once, through the UI, at desktop width.
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
+      await page.getByRole('button').filter({ hasText: ENROLLED_PORTFOLIO_NAME }).first().click();
+      await expect(page.getByRole('button', { name: 'Back to portfolios' })).toBeVisible({
+        timeout: 120_000,
+      });
+      const enrolledId = new URL(page.url()).searchParams.get('portfolio');
+      expect(enrolledId, 'the enrolled portfolio must write its id into the URL').toBeTruthy();
+
+      const screens: Array<[string, string]> = [
+        ['overview', '/scale?tab=performance&optimizerView=overview'],
+        ['portfolio', `/scale?tab=performance&portfolio=${enrolledId}`],
+        ['automations', '/scale?tab=performance&optimizerView=automations'],
+        ['actions', '/scale?tab=performance&optimizerView=actions'],
+        ['activity', '/scale?tab=performance&optimizerView=logs'],
+      ];
+
+      for (const width of [1280, 390]) {
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+        for (const [screen, url] of screens) {
+          await page.goto(url, { waitUntil: 'domcontentloaded' });
+          await pinAdAccount(page, PORTFOLIO_ACCOUNT_ID);
+          if (screen === 'portfolio') {
+            await expect(page.getByRole('button', { name: 'Back to portfolios' })).toBeVisible({
+              timeout: 120_000,
+            });
+          }
+          await check(screen, width);
+        }
+      }
+    } finally {
+      await context.close();
+    }
+  });
+
   test('money safety — no ad-account write was made by this run', async () => {
     const after = await totalMoneyEvents();
     console.log(`[optimizer-bench] money-family actions AFTER (watched brands): ${after}`);

@@ -145,7 +145,7 @@ export function AccountReadFreshness({
   return (
     <div
       className={cn(
-        'flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-2xs text-muted-foreground',
+        'flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground',
         className,
       )}
       data-testid="account-read-freshness"

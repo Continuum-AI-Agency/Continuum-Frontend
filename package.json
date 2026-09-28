@@ -38,7 +38,7 @@
     "studio:config-controls:bench": "bun run e2e/studio-config-controls.bench.ts",
     "render:ui:bench": "bun test ./src/StudioCanvas/nodes/api-render/apiRenderLibrary.bench.tsx",
     "studio:veo-refs:e2e:bench": "set -a; . ./.env.local; set +a; PORT=3001 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3001 NEXT_DIST_DIR=.next/studio-veo-refs-e2e playwright test e2e/studio-veo-reference-connections.spec.ts --workers=1",
-    "optimizer:coverage": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir coverage src/components/paid-media/optimizer",
+    "optimizer:coverage": "bun test --parallel --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir coverage src/components/paid-media/optimizer",
     "optimizer:e2e:bench": "playwright test --config playwright.optimizer.config.ts --workers=1",
     "jaina:canvas:e2e:bench": "playwright test --config playwright.jaina-canvas.config.ts --workers=1",
     "scale:campaigns:e2e:bench": "playwright test --config playwright.scale-campaigns.config.ts --workers=1",

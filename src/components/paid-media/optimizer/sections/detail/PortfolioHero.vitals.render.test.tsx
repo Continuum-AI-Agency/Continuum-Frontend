@@ -121,7 +121,7 @@ describe('PortfolioHero — the vital signs from each real body', () => {
       expect(vitals?.textContent).not.toContain('$');
     });
 
-    it(`${name}: uses no text-2xs / text-3xs anywhere in the vital signs`, () => {
+    it(`${name}: uses no micro type anywhere in the vital signs`, () => {
       const { container } = mount(body);
       const vitals = container.querySelector('[data-testid="portfolio-vitals"]');
       const tiny = [...(vitals?.querySelectorAll('*') ?? [])].filter((node) =>

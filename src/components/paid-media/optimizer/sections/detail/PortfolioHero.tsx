@@ -108,7 +108,7 @@ function Recap({
   return (
     <motion.p
       className={cn(
-        'flex flex-wrap items-center gap-2 text-2xs text-muted-foreground',
+        'flex flex-wrap items-center gap-2 text-xs text-muted-foreground',
         placement === 'beside' && 'self-center',
         className,
       )}
@@ -118,7 +118,7 @@ function Recap({
     >
       {view.pacingLine ? (
         <Badge
-          className="text-3xs"
+          className="text-xs"
           variant={
             view.pacingTone === 'success'
               ? 'success'
@@ -188,7 +188,7 @@ export function PortfolioHero({
         {vitals ? <PortfolioVitals {...vitals} /> : null}
         {askJaina}
         <div className="h-24 animate-pulse rounded-lg bg-muted/70" />
-        <div className="rounded-lg border border-border/60 border-dashed p-4 text-2xs text-muted-foreground">
+        <div className="rounded-lg border border-border/60 border-dashed p-4 text-xs text-muted-foreground">
           Jaina writes your first read after the first cycle.
         </div>
       </section>
@@ -264,7 +264,7 @@ export function PortfolioHero({
 
       {more.length > 0 ? (
         <details className="group" data-testid="portfolio-news-more">
-          <summary className="cursor-pointer list-none text-2xs text-muted-foreground hover:text-foreground">
+          <summary className="cursor-pointer list-none text-xs text-muted-foreground hover:text-foreground">
             <span className="group-open:hidden">
               {more.length} more finding{more.length === 1 ? '' : 's'}
             </span>

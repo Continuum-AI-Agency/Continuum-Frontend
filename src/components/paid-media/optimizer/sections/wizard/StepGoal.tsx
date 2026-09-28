@@ -129,7 +129,7 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
             <h4 className="font-semibold text-xs tracking-tight">
               Which conversion, and how does it behave?
             </h4>
-            <p className="mt-0.5 text-2xs text-muted-foreground">
+            <p className="mt-0.5 text-xs text-muted-foreground">
               Nobody outside your business knows what this event is. Name it, and it is measured
               against whichever calibrated objective behaves the same way.
             </p>
@@ -216,9 +216,9 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
                 </SelectContent>
               </Select>
               {descriptor ? (
-                <p className="text-2xs text-muted-foreground">{analogNote(descriptor)}</p>
+                <p className="text-xs text-muted-foreground">{analogNote(descriptor)}</p>
               ) : (
-                <p className="text-2xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {'error' in built ? built.error : null}
                 </p>
               )}
@@ -258,7 +258,7 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
               {metric.costLabel}
             </p>
           )}
-          <p className="text-2xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Every ad set is scored on {metric.costLabel.toLowerCase()} and the target below is set
             in it.
           </p>
@@ -325,7 +325,7 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
                 type="button"
               >
                 <span className="block font-semibold text-xs">{copy.title}</span>
-                <span className="mt-0.5 block text-2xs text-muted-foreground">{copy.body}</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">{copy.body}</span>
               </button>
             );
           })}
@@ -333,7 +333,7 @@ export function StepGoal({ draft, onChange, currency, advice, disabled }: StepGo
 
         {draft.mode === 'scale' ? (
           <div className="space-y-2 rounded-md border border-border/60 bg-muted/10 p-3">
-            <p className="text-2xs">
+            <p className="text-xs">
               Grow the budget{' '}
               <span className="font-medium text-foreground">{draft.scaleGrowthPct || '…'}%</span>{' '}
               every{' '}

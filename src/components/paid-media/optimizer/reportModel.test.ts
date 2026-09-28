@@ -460,7 +460,11 @@ describe('conversionVolume reads the one term that survives', () => {
       actionables: [
         { code: 'under_event_floor', adsetIds: ['a'], message: 'Consolidate.' },
         { code: 'tracking_gap', adsetIds: ['b'], message: 'Fix the pixel.' },
-        { code: 'kpi_mismatch', adsetIds: ['a', 'b'], message: '2 of 2 ad sets bid for purchases.' },
+        {
+          code: 'kpi_mismatch',
+          adsetIds: ['a', 'b'],
+          message: '2 of 2 ad sets bid for purchases.',
+        },
       ],
     });
     expect(volume?.actionables.map((a) => a.code)).toEqual([

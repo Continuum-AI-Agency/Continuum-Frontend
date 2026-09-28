@@ -969,10 +969,10 @@ describe('queue header — a portfolio dead on Meta says so before its rows', ()
   });
 });
 
-describe('the portfolio Activity tab reads at the +1 type scale', () => {
-  const NO_3XS = /text-3xs/;
+describe('the portfolio Activity tab reads at the optimizer type scale', () => {
+  const MICRO = /text-[23]xs/;
 
-  it('leaves no text-3xs in the queue, the notices, or Recently applied', () => {
+  it('leaves no micro type in the queue, the notices, or Recently applied', () => {
     recentActions = [
       {
         id: RECENT_AUDIT_ID,
@@ -997,7 +997,7 @@ describe('the portfolio Activity tab reads at the +1 type scale', () => {
     expect(screen.getByRole('button', { name: 'Hide detail' })).toBeTruthy();
 
     expect(screen.getByText('Recently applied').className).toContain('text-xs');
-    expect(container.innerHTML).not.toMatch(NO_3XS);
+    expect(container.innerHTML).not.toMatch(MICRO);
   });
 
   it('lifts the Recently applied row title and timestamp, and the lookback buttons', () => {

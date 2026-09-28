@@ -104,12 +104,12 @@ function ChartWithReading({
   currency: string | null;
 }) {
   if (!candidate.chart) {
-    return <p className="text-2xs text-muted-foreground">No chart for this one yet.</p>;
+    return <p className="text-xs text-muted-foreground">No chart for this one yet.</p>;
   }
   return (
     <>
       <AccountChartView chart={candidate.chart} currency={currency} />
-      <p className="text-3xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         {CHART_SHAPE_READING[chartShapeFor(candidate.detector)]}
       </p>
     </>
@@ -131,14 +131,14 @@ function StateNote({ candidate }: { candidate: AccountCandidate }) {
   const family = ACTION_FAMILY_COPY[DETECTOR_ACTION_FAMILY[candidate.detector]].label;
   if (candidate.state_lowered) {
     return (
-      <p className="text-3xs text-amber-600 dark:text-amber-400" data-testid="state-lowered">
+      <p className="text-xs text-amber-600 dark:text-amber-400" data-testid="state-lowered">
         Set to act on its own, but “{family}” does not allow it yet — it will recommend instead.
       </p>
     );
   }
   if (candidate.state === 'autopilot') {
     return (
-      <p className="text-3xs text-muted-foreground">Acts on its own, inside your guardrails.</p>
+      <p className="text-xs text-muted-foreground">Acts on its own, inside your guardrails.</p>
     );
   }
   return null;
@@ -188,7 +188,7 @@ function AlwaysDoThis({
   const on = candidate.state === 'autopilot';
   return (
     <Button
-      className="text-3xs"
+      className="text-xs"
       data-testid="always-do-this"
       onClick={() => onSetState(candidate.detector, on ? 'recommend' : 'autopilot')}
       size="sm"
@@ -204,7 +204,7 @@ function AlwaysDoThis({
 function CapNote({ candidate }: { candidate: AccountCandidate }) {
   if (!candidate.capped_by) return null;
   return (
-    <p className="text-3xs text-muted-foreground">
+    <p className="text-xs text-muted-foreground">
       {candidate.capped_by === 'velocity'
         ? 'Capped by this objective’s per-cycle limit, not by the gap.'
         : 'Capped by your guardrail, not by the gap.'}
@@ -276,17 +276,17 @@ function LeadColumn({
       data-testid="account-lead"
     >
       <div className="flex flex-wrap items-center gap-1.5">
-        <Badge className="text-3xs" variant={TIER_VARIANT[tier]}>
+        <Badge className="text-xs" variant={TIER_VARIANT[tier]}>
           {IMPACT_TIER_COPY[tier]}
         </Badge>
         {/* The class stays on the LEAD cards, not only on the rest. It is what says the
          *  ranking discounted this figure — on the three cards someone actually acts on,
          *  that is the most important thing on the card after the money itself. */}
-        <Badge className="text-3xs" variant="muted">
+        <Badge className="text-xs" variant="muted">
           {IMPACT_CLASS_COPY[candidate.impact_class]}
         </Badge>
         {doubted ? (
-          <span className="text-3xs text-amber-600 dark:text-amber-400">affected by the guard</span>
+          <span className="text-xs text-amber-600 dark:text-amber-400">affected by the guard</span>
         ) : null}
       </div>
       <h3 className="font-semibold text-foreground text-sm">{meta.label}</h3>
@@ -295,7 +295,7 @@ function LeadColumn({
         <ChartWithReading candidate={candidate} currency={currency} />
       </div>
       <Lead candidate={candidate} currency={currency} size="column" />
-      <p className="text-2xs text-muted-foreground">{candidate.impact_basis}</p>
+      <p className="text-xs text-muted-foreground">{candidate.impact_basis}</p>
       <CapNote candidate={candidate} />
       <StateNote candidate={candidate} />
       <AlwaysDoThis candidate={candidate} onSetState={onSetState} />
@@ -341,20 +341,20 @@ function RestRow({
     >
       <div className="min-w-0 space-y-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <Badge className="text-3xs" variant={TIER_VARIANT[tier]}>
+          <Badge className="text-xs" variant={TIER_VARIANT[tier]}>
             {IMPACT_TIER_COPY[tier]}
           </Badge>
-          <Badge className="text-3xs" variant="muted">
+          <Badge className="text-xs" variant="muted">
             {IMPACT_CLASS_COPY[candidate.impact_class]}
           </Badge>
           {doubted ? (
-            <span className="text-3xs text-amber-600 dark:text-amber-400">
+            <span className="text-xs text-amber-600 dark:text-amber-400">
               affected by the guard
             </span>
           ) : null}
         </div>
         <h3 className="font-semibold text-foreground text-sm">{meta.label}</h3>
-        <p className="text-2xs text-muted-foreground">{candidate.impact_basis}</p>
+        <p className="text-xs text-muted-foreground">{candidate.impact_basis}</p>
         <Lead candidate={candidate} currency={currency} size="row" />
         <CapNote candidate={candidate} />
         <StateNote candidate={candidate} />
@@ -425,7 +425,7 @@ export function AccountRead({
               {ACCOUNT_DETECTOR_META[guard.detector].label}
             </h3>
             <p className="text-muted-foreground text-xs">{guard.impact_basis}</p>
-            <p className="text-3xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Read this before the list below: it decides whether the rest of these figures mean
               anything.
             </p>
@@ -443,7 +443,7 @@ export function AccountRead({
                 {sentence ?? 'Across the account, most worth doing first'}
               </span>
             </h2>
-            <p className="text-3xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {source === 'brief' ? 'Jaina, from today’s run' : 'Draft read from today’s run'}
             </p>
           </header>
@@ -469,7 +469,7 @@ export function AccountRead({
             <div>
               <Button
                 aria-expanded={showRest}
-                className="w-full justify-center gap-1.5 text-2xs"
+                className="w-full justify-center gap-1.5 text-xs"
                 onClick={() => setShowRest((open) => !open)}
                 size="sm"
                 type="button"
@@ -537,19 +537,19 @@ function Starved({ starved }: { starved: Array<{ detector: AccountDetector; miss
   if (uncategorised.length > 0) groups.push({ key: 'other', detectors: uncategorised });
 
   return (
-    <details className="text-3xs text-muted-foreground" data-testid="account-starved">
+    <details className="text-xs text-muted-foreground" data-testid="account-starved">
       <summary className="cursor-pointer">
         {starved.length} {starved.length === 1 ? 'check' : 'checks'} could not run today
       </summary>
       <div className="mt-2 space-y-2">
         {groups.map(({ key, detectors }) => (
           <div key={key}>
-            <p className="font-semibold text-3xs text-foreground">
+            <p className="font-semibold text-xs text-foreground">
               {key === 'other' ? 'Something else' : BLOCKED_CATEGORY_COPY[key]}
             </p>
             <ul className="mt-0.5 space-y-0.5">
               {detectors.map((detector) => (
-                <li className="text-2xs text-muted-foreground" key={detector}>
+                <li className="text-xs text-muted-foreground" key={detector}>
                   <span className="text-foreground">{ACCOUNT_DETECTOR_META[detector].label}</span> —{' '}
                   {missingFor.get(detector)}
                 </li>
@@ -580,7 +580,7 @@ function RungNote({
 }) {
   if (!objective) return null;
   return (
-    <p className="text-3xs text-muted-foreground" data-testid="account-rung-note">
+    <p className="text-xs text-muted-foreground" data-testid="account-rung-note">
       {RESULT_RUNG_READING[resultRungFor(objective, analog)]}
     </p>
   );
@@ -597,7 +597,7 @@ function RungNote({
 function AssumptionNote({ assumptions }: { assumptions: string[] }) {
   if (assumptions.length === 0) return null;
   return (
-    <div className="text-3xs text-muted-foreground" data-testid="account-assumptions">
+    <div className="text-xs text-muted-foreground" data-testid="account-assumptions">
       {assumptions.map((line) => (
         <p key={line}>{line}</p>
       ))}

@@ -60,7 +60,7 @@ export function FamilyCeilings({ current, defaults, onSetFamily, error }: Family
     >
       <SectionHeader
         meta={
-          <span className="text-3xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             every portfolio on this account, unless its own settings say less
           </span>
         }
@@ -78,13 +78,13 @@ export function FamilyCeilings({ current, defaults, onSetFamily, error }: Family
             >
               <div className="min-w-0">
                 <p className="text-foreground text-xs">{ACTION_FAMILY_COPY[family].label}</p>
-                <p className="text-3xs text-muted-foreground">{ACTION_FAMILY_COPY[family].body}</p>
+                <p className="text-xs text-muted-foreground">{ACTION_FAMILY_COPY[family].body}</p>
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 {insightStateSchema.options.map((state) => (
                   <Button
                     aria-pressed={state === active}
-                    className={cn('text-3xs', state === active && 'ring-1 ring-primary')}
+                    className={cn('text-xs', state === active && 'ring-1 ring-primary')}
                     data-state-option={state}
                     key={state}
                     onClick={() => onSetFamily(family, state)}
@@ -100,7 +100,7 @@ export function FamilyCeilings({ current, defaults, onSetFamily, error }: Family
               {/* Says the value is the one we shipped, not one anybody chose — so a row nobody
                *  has touched does not read as a decision someone made. */}
               {untouched ? (
-                <p className="w-full text-3xs text-muted-foreground" data-testid="family-shipped">
+                <p className="w-full text-xs text-muted-foreground" data-testid="family-shipped">
                   Not set — using what we ship for this kind of account.
                 </p>
               ) : null}
@@ -108,7 +108,7 @@ export function FamilyCeilings({ current, defaults, onSetFamily, error }: Family
           );
         })}
         {error ? (
-          <p className="text-2xs text-destructive" data-testid="family-error">
+          <p className="text-xs text-destructive" data-testid="family-error">
             {error}
           </p>
         ) : null}

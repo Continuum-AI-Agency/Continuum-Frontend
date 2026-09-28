@@ -3,6 +3,8 @@
 
 import { cn } from '@/lib/utils';
 import type { FigureProps } from '../format';
+import * as typeScale from '../typeScale';
+import { HeroFigure } from './HeroFigure';
 import { Sparkline } from './Sparkline';
 
 type KpiTileProps = {
@@ -37,18 +39,15 @@ export function KpiTile({
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-2xs text-muted-foreground uppercase tracking-wide">{label}</span>
+        <span className={`${typeScale.label} text-muted-foreground`}>{label}</span>
         {action}
       </div>
       <div className="flex items-end justify-between gap-2">
         <div className="min-w-0">
-          <p
-            className="truncate font-semibold text-lg text-foreground tabular-nums leading-none"
-            {...figure}
-          >
+          <HeroFigure as="p" className="truncate text-foreground" kind="tile" {...figure}>
             {value}
-          </p>
-          {sub ? <p className="mt-1 text-2xs text-muted-foreground">{sub}</p> : null}
+          </HeroFigure>
+          {sub ? <p className="mt-1 text-xs text-muted-foreground">{sub}</p> : null}
         </div>
         {spark && spark.some((v) => v > 0) ? (
           <Sparkline label={`${label} by day`} stroke={sparkColor} values={spark} width={72} />

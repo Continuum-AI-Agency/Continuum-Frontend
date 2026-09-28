@@ -19,11 +19,15 @@ import { useMemo, useState } from 'react';
 import { z } from 'zod';
 import { EmptyState } from '@/components/shared/state/EmptyState';
 import { formatCurrency } from '../format';
+import * as typeScale from '../typeScale';
 import {
   type OptimizerActionFeedRow,
   optimizerQueryKeys,
   useOptimizerActions,
 } from '../useOptimizerData';
+import { ActionFeaturedCard } from './ActionFeaturedCard';
+import { ActionGridCard } from './ActionGridCard';
+import type { ActionEntityNames } from './actionCardParts';
 import {
   type ActionChange,
   actorLabel,
@@ -34,9 +38,6 @@ import {
 } from './actionRows';
 import { FeedFooter, FeedSkeleton, PortfolioFilter, ReceiptToken, RowHeader } from './feedChrome';
 import { ALL_PORTFOLIOS, distinctPortfolioNames, filterByPortfolio } from './logFilters';
-import { ActionFeaturedCard } from './ActionFeaturedCard';
-import type { ActionEntityNames } from './actionCardParts';
-import { ActionGridCard } from './ActionGridCard';
 import { OptimizerReadError } from './OptimizerReadError';
 import { RevertApplyDialog } from './RevertApplyDialog';
 
@@ -58,7 +59,9 @@ const FAMILY_LABEL: Record<string, string> = {
 
 function FamilyBadge({ family }: { family: string }) {
   return (
-    <span className="shrink-0 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+    <span
+      className={`${typeScale.label} shrink-0 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-semibold text-muted-foreground`}
+    >
       {FAMILY_LABEL[family] ?? family}
     </span>
   );
@@ -86,7 +89,9 @@ function ChangeLine({ change, currency }: { change: ActionChange; currency: stri
 
 function RevertedBadge() {
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+    <span
+      className={`${typeScale.label} inline-flex shrink-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-semibold text-muted-foreground`}
+    >
       <Undo2Icon aria-hidden="true" className="size-3" />
       Reverted
     </span>

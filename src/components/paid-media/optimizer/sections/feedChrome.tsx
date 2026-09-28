@@ -88,7 +88,7 @@ export function ReceiptToken({ value, className }: { value: string; className?: 
       onClick={copy}
       aria-label={`Copy Meta trace id ${value}`}
       className={cn(
-        'mt-1 inline-flex max-w-full items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-2xs tabular-nums text-muted-foreground transition-colors hover:bg-muted',
+        'mt-1 inline-flex max-w-full items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-xs tabular-nums text-muted-foreground transition-colors hover:bg-muted',
         className,
       )}
     >
@@ -189,7 +189,7 @@ export function FeedFooter({
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-      <p className="text-2xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         {hasMore
           ? `${loaded} ${noun} loaded — there are older ones.`
           : `${loaded} ${noun} — that is all of them.`}

@@ -10,11 +10,12 @@
 // carries no series), and fetching one per card for decoration is not this card's job.
 
 import { ArrowRightIcon } from 'lucide-react';
+import { HeroFigure } from '../components/HeroFigure';
 import type { OptimizerActionFeedRow } from '../useOptimizerData';
 import {
-  type ActionEntityNames,
   ActionDelta,
   ActionEntityId,
+  type ActionEntityNames,
   ActionFamilyBadge,
   ActionMeta,
   ActionRevertControl,
@@ -69,16 +70,16 @@ export function ActionFeaturedCard({
       </div>
 
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="font-mono text-2xl text-muted-foreground tabular-nums">
+        <HeroFigure className="font-normal text-muted-foreground" kind="headline">
           {printChangeValue(change, change.before, currency)}
-        </span>
+        </HeroFigure>
         <ArrowRightIcon
           aria-hidden="true"
           className="size-5 shrink-0 self-center text-muted-foreground"
         />
-        <span className="font-mono font-semibold text-2xl text-foreground tabular-nums">
+        <HeroFigure className="text-foreground" kind="headline">
           {printChangeValue(change, change.after, currency)}
-        </span>
+        </HeroFigure>
         <ActionDelta change={change} className="text-base" />
       </div>
 

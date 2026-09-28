@@ -74,6 +74,7 @@ import {
   severityBadgeVariant,
   severityRank,
 } from '../reportModel';
+import * as typeScale from '../typeScale';
 import {
   fetchAdsetAds,
   type PortfolioAudienceRow,
@@ -995,7 +996,7 @@ export function OptimizerActionsPortfolioGroup({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="flex items-center gap-2.5 text-base font-semibold tracking-tight">
           {portfolio.name}
-          <Badge variant="secondary" className="text-2xs">
+          <Badge variant="secondary" className="text-xs">
             {selectableVisible.length || rows.length}
           </Badge>
         </h3>
@@ -1226,9 +1227,7 @@ function PortfolioRecentActions({
 
   return (
     <div className="space-y-2 rounded-md border border-border/60 bg-muted/20 px-4 py-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Recently applied
-      </p>
+      <p className={`${typeScale.label} font-semibold text-muted-foreground`}>Recently applied</p>
       <ul className="space-y-2">
         {recent.map((row) => (
           <ActionRow key={row.id} row={row} brandId={brandId} currency={currency} />
@@ -1363,7 +1362,7 @@ function QueueToolbar({
             key={option.route}
             aria-pressed={activeFilters.has(option.route)}
             className={cn(
-              'rounded-lg border px-2.5 py-1 text-2xs font-medium transition-colors',
+              'rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
               activeFilters.has(option.route)
                 ? 'border-primary/40 bg-primary/10 text-primary'
                 : 'border-border/70 bg-card text-muted-foreground hover:bg-muted/50',
@@ -1526,7 +1525,7 @@ function CounterpartyLine({
   const rest = entry.parties.length - shown.length;
   if (shown.length === 0) return null;
   return (
-    <span className="text-2xs text-muted-foreground">
+    <span className="text-xs text-muted-foreground">
       {entry.direction === 'funds' ? '→ funds ' : '← funded by '}
       {shown
         .map((party) => `${party.name ?? party.adsetId} ${formatCurrency(party.amount, currency)}`)
@@ -1597,17 +1596,17 @@ function QueueRowView({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <RowHeadline row={row} brandId={brandId} currency={currency} />
             {row.approved ? (
-              <Badge variant="secondary" className="text-2xs uppercase">
+              <Badge variant="secondary" className={typeScale.label}>
                 Approved
               </Badge>
             ) : null}
             {approving ? (
-              <span className="inline-flex items-center gap-1 text-2xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                 <Loader2Icon className="size-3 animate-spin" /> approving
               </span>
             ) : null}
             {failed ? (
-              <Badge variant="destructive" className="text-2xs uppercase">
+              <Badge variant="destructive" className={typeScale.label}>
                 Failed
               </Badge>
             ) : null}
@@ -1623,17 +1622,12 @@ function QueueRowView({
           {row.route !== 'budget' ? <RecEvidenceLine rec={row.rec} currency={currency} /> : null}
           <div className="mt-1 flex flex-wrap items-center gap-2">
             {row.route === 'settings' ? (
-              <span className="text-2xs text-muted-foreground uppercase tracking-wide">
-                Portfolio setting
-              </span>
+              <span className={`${typeScale.label} text-muted-foreground`}>Portfolio setting</span>
             ) : (
               <AdSetIdLabel className="text-xs" id={row.adsetId} />
             )}
             {row.route !== 'budget' && row.rec.severity ? (
-              <Badge
-                variant={severityBadgeVariant(row.rec.severity)}
-                className="text-2xs uppercase"
-              >
+              <Badge variant={severityBadgeVariant(row.rec.severity)} className={typeScale.label}>
                 {row.rec.severity}
               </Badge>
             ) : null}
@@ -2062,7 +2056,7 @@ function CreativeBriefDetail({ rec }: { rec: RecommendationRow }) {
           ) : null}
           <div className="min-w-0 space-y-1">
             {angleLabel ? (
-              <Badge className="text-2xs" variant="teal">
+              <Badge className="text-xs" variant="teal">
                 {angleLabel}
               </Badge>
             ) : null}
@@ -2085,7 +2079,7 @@ function CreativeBriefDetail({ rec }: { rec: RecommendationRow }) {
       {rec.ad_id ? (
         <p>
           <span className="font-medium text-foreground">Winning ad:</span>{' '}
-          <code className="text-2xs">{rec.ad_id}</code>
+          <code className="text-xs">{rec.ad_id}</code>
         </p>
       ) : null}
     </div>
@@ -2175,7 +2169,7 @@ function RecDetail({ rec }: { rec: RecommendationRow }) {
         </p>
       ) : null}
       <p>
-        <Badge variant="outline" className="text-2xs">
+        <Badge variant="outline" className="text-xs">
           {rec.trigger}
         </Badge>
       </p>

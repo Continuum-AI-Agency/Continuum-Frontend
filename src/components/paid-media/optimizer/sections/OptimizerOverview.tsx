@@ -27,6 +27,7 @@ import { KpiTile } from '../components/KpiTile';
 import { StatusChip, type StatusTone } from '../components/StatusChip';
 import { figureProps, formatCurrency, formatPercent, humanize } from '../format';
 import { pendingWorkCount } from '../reportModel';
+import * as typeScale from '../typeScale';
 import {
   useAccountApprovals,
   useInsightApprovalMutations,
@@ -375,7 +376,7 @@ export function OptimizerOverview({
             action={
               pendingCount > 0 ? (
                 <button
-                  className="text-2xs text-primary hover:underline"
+                  className="text-xs text-primary hover:underline"
                   onClick={onOpenActions}
                   type="button"
                 >
@@ -435,7 +436,7 @@ export function OptimizerOverview({
        *  approval RPCs are applied to a database, this write fails — say so where the
        *  person tapped, rather than leaving the card looking like it accepted the change. */}
       {approvals.setInsight.isError ? (
-        <p className="text-2xs text-destructive" data-testid="approval-error">
+        <p className="text-xs text-destructive" data-testid="approval-error">
           {approvals.setInsight.error instanceof Error
             ? approvals.setInsight.error.message
             : 'Could not change this insight.'}
@@ -444,7 +445,7 @@ export function OptimizerOverview({
 
       <OptimizerPanel
         meta={
-          <span className="text-3xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {stream.hasData
               ? `last ${STREAM_DAYS} days · click an objective to filter`
               : 'from enrolled ad sets'}
@@ -465,7 +466,7 @@ export function OptimizerOverview({
 
       <section className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className={`${typeScale.label} font-semibold text-muted-foreground`}>
             Portfolios
             {objectiveFilter ? (
               <span className="ml-2 normal-case tracking-normal">
@@ -484,13 +485,13 @@ export function OptimizerOverview({
               value={sortKey}
               variant="outline"
             >
-              <ToggleGroupItem className="h-7 px-2 text-2xs" value="name">
+              <ToggleGroupItem className="h-7 px-2 text-xs" value="name">
                 Name
               </ToggleGroupItem>
-              <ToggleGroupItem className="h-7 px-2 text-2xs" value="daily">
+              <ToggleGroupItem className="h-7 px-2 text-xs" value="daily">
                 Daily budget
               </ToggleGroupItem>
-              <ToggleGroupItem className="h-7 px-2 text-2xs" value="pending">
+              <ToggleGroupItem className="h-7 px-2 text-xs" value="pending">
                 Pending
               </ToggleGroupItem>
             </ToggleGroup>
@@ -523,7 +524,7 @@ export function OptimizerOverview({
             />
           ))}
           {sorted.length === 0 ? (
-            <p className="text-2xs text-muted-foreground">No portfolios match this objective.</p>
+            <p className="text-xs text-muted-foreground">No portfolios match this objective.</p>
           ) : null}
         </div>
       </section>

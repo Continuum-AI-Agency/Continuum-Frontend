@@ -5,7 +5,7 @@
 // through the one `formatCurrency`, and open the same full detail, so the lead and the grid can
 // never disagree about what an action changed.
 //
-// Type floor: content is `text-sm` and up, labels/meta `text-xs`. The dense `text-2xs` row this
+// Type floor: content is `text-sm` and up, labels/meta `text-xs`. The dense `text-xs` row this
 // replaced is still what `ActionRow` renders for the portfolio group; these cards do not share it.
 
 import {
@@ -17,7 +17,9 @@ import {
 } from 'lucide-react';
 import type * as React from 'react';
 import { cn } from '@/lib/utils';
+import { HeroFigure } from '../components/HeroFigure';
 import { formatCurrency, formatPercent } from '../format';
+import * as typeScale from '../typeScale';
 import type { OptimizerActionFeedRow } from '../useOptimizerData';
 import {
   type ActionChange,
@@ -45,7 +47,9 @@ const FAMILY_ICON: Record<string, React.ComponentType<{ className?: string }>> =
 export function ActionFamilyBadge({ family }: { family: string }) {
   const Icon = FAMILY_ICON[family] ?? SlidersHorizontalIcon;
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-semibold text-muted-foreground text-xs uppercase tracking-wide">
+    <span
+      className={`${typeScale.label} inline-flex shrink-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-semibold text-muted-foreground`}
+    >
       <Icon aria-hidden="true" className="size-3.5" />
       {FAMILY_LABEL[family] ?? family}
     </span>
@@ -54,7 +58,9 @@ export function ActionFamilyBadge({ family }: { family: string }) {
 
 export function ActionRevertedBadge() {
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-semibold text-muted-foreground text-xs uppercase tracking-wide">
+    <span
+      className={`${typeScale.label} inline-flex shrink-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-semibold text-muted-foreground`}
+    >
       <Undo2Icon aria-hidden="true" className="size-3.5" />
       Reverted
     </span>
@@ -228,16 +234,14 @@ export function ActionDetailBody({
         ) : null}
       </dl>
       <div className="flex flex-wrap items-baseline gap-2">
-        <span className="font-mono text-lg text-muted-foreground tabular-nums">
+        <HeroFigure className="font-normal text-muted-foreground" kind="tile">
           {printChangeValue(change, change.before, currency)}
-        </span>
+        </HeroFigure>
         <ArrowRightIcon
           aria-hidden="true"
           className="size-4 shrink-0 self-center text-muted-foreground"
         />
-        <span className="font-mono font-semibold text-lg tabular-nums">
-          {printChangeValue(change, change.after, currency)}
-        </span>
+        <HeroFigure kind="tile">{printChangeValue(change, change.after, currency)}</HeroFigure>
         <ActionDelta change={change} className="text-sm" />
       </div>
       {row.justification ? <ActionWhy text={row.justification} /> : null}

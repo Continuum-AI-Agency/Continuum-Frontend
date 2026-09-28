@@ -22,6 +22,7 @@ import { StatusChip, type StatusTone } from '../components/StatusChip';
 import { DeliveryPill } from '../DeliveryPill';
 import { formatCpa, formatCurrency } from '../format';
 import { HeldPill } from '../HeldPill';
+import * as typeScale from '../typeScale';
 import { LookbackToggle } from './LookbackToggle';
 import {
   buildReallocationStory,
@@ -254,7 +255,9 @@ export function ReallocationStory({
         <LookbackToggle onChange={setLookback} size="lg" value={lookback} />
       </div>
 
-      <div className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1.2fr)_minmax(0,1.4fr)] gap-x-4 px-1 text-muted-foreground text-2xs uppercase tracking-wide sm:grid">
+      <div
+        className={`${typeScale.label} hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1.2fr)_minmax(0,1.4fr)] gap-x-4 px-1 text-muted-foreground sm:grid`}
+      >
         <span>Ad set</span>
         <span>
           {metric.costLabel} · {lookback}d
@@ -282,10 +285,7 @@ export function ReallocationStory({
                 <DeliveryPill state={row.deliveryState} />
               </div>
               {row.reason ? (
-                <p
-                  className="mt-1 line-clamp-2 text-muted-foreground text-xs"
-                  title={row.reason}
-                >
+                <p className="mt-1 line-clamp-2 text-muted-foreground text-xs" title={row.reason}>
                   {row.reason}
                 </p>
               ) : null}
@@ -314,7 +314,7 @@ export function ReallocationStory({
         </Button>
       ) : null}
 
-      <p className="text-muted-foreground text-2xs">
+      <p className="text-muted-foreground text-xs">
         Dot = cost per result over the last {lookback} days
         {lookback === 14 ? ' (bar = likely range)' : ''}; dashed line = target. Budget bar runs from
         today&rsquo;s daily budget to the proposed one.

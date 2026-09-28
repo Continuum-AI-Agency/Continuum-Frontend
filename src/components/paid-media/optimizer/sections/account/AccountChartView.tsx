@@ -88,7 +88,7 @@ function Bar({
   const height = max > 0 ? Math.max(4, Math.round((value / max) * 100)) : 4;
   return (
     <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
-      <span className="font-mono text-2xs tabular-nums text-foreground">{caption}</span>
+      <span className="font-mono text-xs tabular-nums text-foreground">{caption}</span>
       <div className="flex h-24 w-full items-end justify-center">
         <div
           className={cn(
@@ -100,7 +100,7 @@ function Bar({
           style={{ height: `${height}%` }}
         />
       </div>
-      <span className="w-full truncate text-center text-3xs text-muted-foreground" title={label}>
+      <span className="w-full truncate text-center text-xs text-muted-foreground" title={label}>
         {label}
       </span>
     </div>
@@ -127,11 +127,11 @@ function Transfer({
           caption={fmt(chart.from.cost_per_result)}
         />
         <div className="flex flex-col items-center gap-0.5 pb-8 text-center">
-          <span className="text-3xs text-muted-foreground">moves</span>
+          <span className="text-xs text-muted-foreground">moves</span>
           <span className="font-mono text-xs tabular-nums text-foreground">
             {fmt(chart.movable_per_day)}
           </span>
-          <span className="text-3xs text-muted-foreground">/day →</span>
+          <span className="text-xs text-muted-foreground">/day →</span>
         </div>
         <Bar
           value={chart.to.cost_per_result}
@@ -141,7 +141,7 @@ function Transfer({
           caption={fmt(chart.to.cost_per_result)}
         />
       </div>
-      <p className="text-center text-2xs text-muted-foreground">
+      <p className="text-center text-xs text-muted-foreground">
         the same results at the cheaper price keeps{' '}
         <span className="font-mono font-semibold text-foreground">{fmt(chart.saving_per_day)}</span>{' '}
         a day
@@ -172,7 +172,7 @@ function Threshold({
           className="pointer-events-none absolute right-0 left-0 border-foreground/40 border-t border-dashed"
           style={{ bottom: `calc(1.5rem + ${linePct}% * 0.96)` }}
         >
-          <span className="-top-4 absolute right-0 text-3xs text-muted-foreground">
+          <span className="-top-4 absolute right-0 text-xs text-muted-foreground">
             {chart.threshold_label} {fmt(chart.threshold)}
           </span>
         </div>
@@ -222,7 +222,7 @@ function Share({
             title={`${slice.label} · ${pctText(slice.share)} · ${fmt(slice.value)}/day`}
           >
             {slice.share > 0.12 ? (
-              <span className="truncate px-1 text-3xs text-foreground">{pctText(slice.share)}</span>
+              <span className="truncate px-1 text-xs text-foreground">{pctText(slice.share)}</span>
             ) : null}
           </div>
         ))}
@@ -237,7 +237,7 @@ function Share({
             }}
           />
           <span
-            className="absolute top-2 text-3xs text-muted-foreground"
+            className="absolute top-2 text-xs text-muted-foreground"
             style={{ left: `${chart.band.low * 100}%` }}
           >
             {chart.band_label}
@@ -246,7 +246,7 @@ function Share({
       ) : null}
       <ul className="flex flex-wrap gap-x-3 gap-y-0.5 pt-2">
         {chart.slices.map((slice) => (
-          <li key={slice.label} className="text-3xs text-muted-foreground">
+          <li key={slice.label} className="text-xs text-muted-foreground">
             <span
               className={cn(slice.label === chart.focus_label && 'font-semibold text-foreground')}
             >
@@ -352,7 +352,7 @@ function Rates({
     <div className="space-y-2">
       <div className="flex items-baseline justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-3xs text-muted-foreground">{chart.a_label}</p>
+          <p className="truncate text-xs text-muted-foreground">{chart.a_label}</p>
           <p
             className="font-mono text-foreground text-sm tabular-nums"
             data-testid="rates-readout-value"
@@ -361,16 +361,16 @@ function Rates({
           </p>
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-3xs text-muted-foreground" data-testid="rates-readout-day">
+          <p className="text-xs text-muted-foreground" data-testid="rates-readout-day">
             {dayLabel(shown.t, DAY_SHORT)}
           </p>
-          <p className="font-mono text-3xs text-muted-foreground tabular-nums">{secondLine}</p>
+          <p className="font-mono text-xs text-muted-foreground tabular-nums">{secondLine}</p>
         </div>
       </div>
 
       <div className="flex gap-2">
         {/* The value axis, named where it is read rather than in a legend somewhere else. */}
-        <div className="flex w-12 shrink-0 flex-col justify-between text-right font-mono text-3xs text-muted-foreground tabular-nums">
+        <div className="flex w-12 shrink-0 flex-col justify-between text-right font-mono text-xs text-muted-foreground tabular-nums">
           <span>{fmt(max)}</span>
           <span>{fmt(min)}</span>
         </div>
@@ -433,7 +433,7 @@ function Rates({
               style={{ top: `${y(reference)}%` }}
             >
               <span className="flex-1 border-muted-foreground/70 border-t border-dashed" />
-              <span className="ml-1 whitespace-nowrap font-mono text-3xs text-muted-foreground tabular-nums">
+              <span className="ml-1 whitespace-nowrap font-mono text-xs text-muted-foreground tabular-nums">
                 {chart.b_label} {fmt(reference)}
               </span>
             </div>
@@ -482,13 +482,13 @@ function Rates({
       </div>
 
       {/* WHEN. The window's own ends, so any figure above can be checked against a date. */}
-      <div className="flex justify-between gap-2 pl-14 font-mono text-3xs text-muted-foreground tabular-nums">
+      <div className="flex justify-between gap-2 pl-14 font-mono text-xs text-muted-foreground tabular-nums">
         <span>{dayLabel(points[0].t, DAY_SHORT)}</span>
         <span>{dayLabel(points[lastIndex].t, DAY_SHORT)}</span>
       </div>
 
       {bIsSeries ? (
-        <div className="flex flex-wrap items-baseline gap-x-3 text-3xs text-muted-foreground">
+        <div className="flex flex-wrap items-baseline gap-x-3 text-xs text-muted-foreground">
           <span>
             <span className="inline-block h-0.5 w-3 bg-primary align-middle" /> {chart.a_label}
           </span>
@@ -500,7 +500,7 @@ function Rates({
       ) : null}
 
       {chart.gap_per_day != null ? (
-        <p className="text-2xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           gap{' '}
           <span className="font-mono font-semibold text-foreground">{fmt(chart.gap_per_day)}</span>{' '}
           a day
@@ -552,7 +552,7 @@ function Interval({
           {active === 'reference' && referenceReading ? referenceReading : bandReading}
         </p>
         {chart.at_stake_per_day != null ? (
-          <p className="shrink-0 text-3xs text-muted-foreground">
+          <p className="shrink-0 text-xs text-muted-foreground">
             <span className="font-mono font-semibold text-foreground tabular-nums">
               {fmt(chart.at_stake_per_day)}
             </span>{' '}
@@ -619,7 +619,7 @@ function Interval({
           >
             <span
               className={cn(
-                '-translate-x-1/2 absolute top-0 left-1/2 whitespace-nowrap font-mono text-3xs tabular-nums',
+                '-translate-x-1/2 absolute top-0 left-1/2 whitespace-nowrap font-mono text-xs tabular-nums',
                 active === 'reference' ? 'text-foreground' : 'text-muted-foreground',
               )}
             >
@@ -631,7 +631,7 @@ function Interval({
       </div>
 
       {/* The axis: what it measures, between the two ends the drawing actually reaches. */}
-      <div className="flex items-baseline justify-between gap-2 text-3xs text-muted-foreground">
+      <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
         <span className="font-mono tabular-nums" data-testid="interval-axis-low">
           {fmt(0)}
         </span>
@@ -665,7 +665,7 @@ function Headroom({
           : gauge.value >= gauge.ceiling;
         return (
           <div className="space-y-1" key={gauge.label}>
-            <div className="flex items-baseline justify-between text-2xs">
+            <div className="flex items-baseline justify-between text-xs">
               <span className="text-muted-foreground">{gauge.label}</span>
               <span className="font-mono tabular-nums text-foreground">
                 {fmt(gauge.value)} / {fmt(gauge.ceiling)}
@@ -681,7 +681,7 @@ function Headroom({
         );
       })}
       {chart.step_per_day != null ? (
-        <p className="text-2xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           room for{' '}
           <span className="font-mono font-semibold text-foreground">
             {formatCurrency(chart.step_per_day, currency)}
@@ -732,7 +732,7 @@ function Quadrant({ chart }: { chart: Extract<AccountChart, { shape: 'quadrant' 
           />
         ))}
       </div>
-      <div className="flex justify-between text-3xs text-muted-foreground">
+      <div className="flex justify-between text-xs text-muted-foreground">
         <span>{chart.x_label} →</span>
         <span>↑ {chart.y_label}</span>
       </div>

@@ -36,7 +36,7 @@ export function Stepper({ current, completed, onSelect }: StepperProps) {
             >
               <span
                 className={cn(
-                  'grid size-5 place-items-center rounded-full text-3xs font-semibold',
+                  'grid size-5 place-items-center rounded-full text-xs font-semibold',
                   done ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
                   active && !done && 'bg-primary/15 text-primary',
                 )}
@@ -44,7 +44,7 @@ export function Stepper({ current, completed, onSelect }: StepperProps) {
                 {done ? <CheckIcon aria-hidden className="size-3" /> : index + 1}
               </span>
               <span className="font-medium">{step.label}</span>
-              <span className="hidden text-2xs text-muted-foreground lg:inline">{step.hint}</span>
+              <span className="hidden text-xs text-muted-foreground lg:inline">{step.hint}</span>
             </button>
             {index < WIZARD_STEPS.length - 1 ? (
               <span aria-hidden className="h-px w-4 bg-border" />

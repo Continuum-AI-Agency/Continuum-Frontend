@@ -407,7 +407,7 @@ describe('AccountLeadCard — a quiet day is not an empty day', () => {
     expect(figure.getAttribute('data-reading')).toBe('window');
 
     // And nowhere on the card is a check count printed at headline size.
-    const headline = card.querySelector('.text-3xl');
+    const headline = card.querySelector('[data-figure-role="lead"]');
     expect(headline?.textContent).toBe('$200');
   });
 

@@ -311,22 +311,22 @@ describe('AudienceRecommendationCard', () => {
   });
 });
 
-describe('AudienceRecommendationCard — +1 type scale', () => {
-  const NO_3XS = /text-3xs/;
+describe('AudienceRecommendationCard — the optimizer type scale', () => {
+  const MICRO = /text-[23]xs/;
 
-  it('a ready proposal carries no text-3xs and one-step-up buttons', () => {
+  it('a ready proposal carries no micro type and one-step-up buttons', () => {
     const view = audienceCardView([row({})], rec);
     const { container } = render(<AudienceRecommendationCard {...baseProps} view={view} />);
-    expect(container.innerHTML).not.toMatch(NO_3XS);
+    expect(container.innerHTML).not.toMatch(MICRO);
     expect(screen.getByText(plan.diagnosis).className).toContain('text-sm');
-    expect(screen.getByText('Replace audience').className).toContain('text-2xs');
+    expect(screen.getByText('Replace audience').className).toContain('text-xs');
     for (const button of container.querySelectorAll('button[data-slot="button"]')) {
       expect(button.className).toContain('h-8');
       expect(button.className).toContain('text-sm');
     }
   });
 
-  it('the no-proposal, CBO-preview and executed faces carry no text-3xs either', () => {
+  it('the no-proposal, CBO-preview and executed faces carry no micro type either', () => {
     const faces = [
       audienceCardView([], rec),
       audienceCardView(
@@ -361,7 +361,7 @@ describe('AudienceRecommendationCard — +1 type scale', () => {
           view={view}
         />,
       );
-      expect(container.innerHTML).not.toMatch(NO_3XS);
+      expect(container.innerHTML).not.toMatch(MICRO);
       unmount();
     }
   });

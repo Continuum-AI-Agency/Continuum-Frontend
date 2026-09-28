@@ -100,10 +100,10 @@ function PortfolioCard({
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2 font-semibold text-sm tracking-tight">
             <span className="truncate">{portfolio.name}</span>
-            <Badge variant="muted" className="text-3xs">
+            <Badge variant="muted" className="text-xs">
               {portfolioLevelLabel(portfolio.level)}
             </Badge>
-            <Badge variant="teal" className="text-3xs">
+            <Badge variant="teal" className="text-xs">
               {humanize(portfolio.mode)}
             </Badge>
             <ApplyModePill
@@ -111,7 +111,7 @@ function PortfolioCard({
               autopilotPaused={portfolio.autopilot_paused}
             />
             {pendingWorkCount(portfolio) > 0 ? (
-              <Badge variant="secondary" className="text-3xs">
+              <Badge variant="secondary" className="text-xs">
                 {pendingWorkCount(portfolio)} pending
               </Badge>
             ) : null}
@@ -141,7 +141,7 @@ function PortfolioCard({
           data-detector={lead.detector}
           data-testid="portfolio-lead"
         >
-          <p className="truncate text-2xs text-muted-foreground">
+          <p className="truncate text-xs text-muted-foreground">
             {clipLine(ACCOUNT_DETECTOR_META[lead.detector]?.label ?? lead.detector)}
           </p>
           <HeadlineFigure
