@@ -9,11 +9,13 @@ import {
   API_RENDER_IMPORT_PREVIEW_ROUTE,
   API_RENDER_INPUT_SETS_ROUTE,
   API_RENDER_JOBS_ROUTE,
+  API_RENDER_MOTION_PROOF_FORMATS_ROUTE,
+  API_RENDER_MOTION_PROOFS_ROUTE,
   API_RENDER_PREFLIGHT_ROUTE,
+  API_RENDER_PREVIEW_LIVE_ROUTE,
+  API_RENDER_PREVIEW_PICTURES_ROUTE,
   API_RENDER_PREVIEW_ROUTE,
   API_RENDER_PREVIEW_SKETCH_ROUTE,
-  API_RENDER_MOTION_PROOFS_ROUTE,
-  API_RENDER_MOTION_PROOF_FORMATS_ROUTE,
   API_RENDER_SETS_ROUTE,
   API_RENDER_SLACK_CHANNELS_ROUTE,
   API_RENDER_SUGGEST_ROWS_ROUTE,
@@ -61,31 +63,37 @@ import {
   apiRenderTemplateContractSchema,
   apiRenderTemplateListResponseSchema,
   type CreateForgeRenderSetRequest,
+  type ForgeMotionProof,
+  type ForgeMotionProofFormat,
+  type ForgeMotionProofRequest,
   type ForgeRenderDriveSnapshot,
   type ForgeRenderDriveSnapshotRequest,
   type ForgeRenderImportMediaRequest,
   type ForgeRenderImportMediaResponse,
   type ForgeRenderImportPreview,
   type ForgeRenderImportPreviewRequest,
+  type ForgeRenderLive,
+  type ForgeRenderLiveRequest,
+  type ForgeRenderPictures,
+  type ForgeRenderPicturesRequest,
   type ForgeRenderPreview,
   type ForgeRenderPreviewRequest,
-  type ForgeRenderSketch,
-  type ForgeRenderSketchRequest,
-  type ForgeMotionProof,
-  type ForgeMotionProofRequest,
-  type ForgeMotionProofFormat,
   type ForgeRenderSet,
   type ForgeRenderSetRevision,
+  type ForgeRenderSketch,
+  type ForgeRenderSketchRequest,
+  forgeMotionProofFormatsSchema,
+  forgeMotionProofSchema,
   forgeRenderDriveSnapshotSchema,
   forgeRenderImportMediaResponseSchema,
   forgeRenderImportPreviewSchema,
+  forgeRenderLiveSchema,
+  forgeRenderPicturesSchema,
   forgeRenderPreviewSchema,
-  forgeRenderSketchSchema,
-  forgeMotionProofSchema,
-  forgeMotionProofFormatsSchema,
   forgeRenderSetListResponseSchema,
   forgeRenderSetRevisionListResponseSchema,
   forgeRenderSetSchema,
+  forgeRenderSketchSchema,
   type UpdateForgeRenderSetRequest,
 } from '@continuum/contracts';
 import { getApiBaseUrl } from '@/lib/api/config';
@@ -153,12 +161,31 @@ export const apiRendersApi = {
     });
   },
   /** One row composed over the closest real render (or drawn whole from the template) on the server. */
-  composePreview(input: ForgeRenderPreviewRequest) {
+  composePreview(input: ForgeRenderPreviewRequest, signal?: AbortSignal) {
     return http.request<ForgeRenderPreview>({
       path: API_RENDER_PREVIEW_ROUTE,
       method: 'POST',
       body: input,
       schema: forgeRenderPreviewSchema,
+      signal,
+    });
+  },
+  livePreview(input: ForgeRenderLiveRequest, signal?: AbortSignal) {
+    return http.request<ForgeRenderLive>({
+      path: API_RENDER_PREVIEW_LIVE_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: forgeRenderLiveSchema,
+      signal,
+    });
+  },
+  previewPictures(input: ForgeRenderPicturesRequest, signal?: AbortSignal) {
+    return http.request<ForgeRenderPictures>({
+      path: API_RENDER_PREVIEW_PICTURES_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: forgeRenderPicturesSchema,
+      signal,
     });
   },
   sketchPreview(input: ForgeRenderSketchRequest) {
@@ -172,7 +199,9 @@ export const apiRendersApi = {
   startMotionProof(input: ForgeMotionProofRequest) {
     return http.request<ForgeMotionProof>({
       path: API_RENDER_MOTION_PROOFS_ROUTE,
-      method: 'POST', body: input, schema: forgeMotionProofSchema,
+      method: 'POST',
+      body: input,
+      schema: forgeMotionProofSchema,
     });
   },
   listMotionProofFormats(brandId: string, bindingId: string, templateKey: string) {

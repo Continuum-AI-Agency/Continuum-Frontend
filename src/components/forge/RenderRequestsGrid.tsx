@@ -2259,6 +2259,7 @@ export function RenderRequestsGrid({
                         rows={rows}
                         rowId={previewId}
                         renderSetId={activeSet?.id ?? null}
+                        onRowChange={setPreviewRowId}
                       />
                     </div>
                     {/* The previewed row's fields at the pane's full width: room for long copy. */}

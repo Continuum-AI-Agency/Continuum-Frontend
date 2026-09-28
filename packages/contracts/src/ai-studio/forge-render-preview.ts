@@ -3,13 +3,16 @@ import {
   type ApiRenderInputValue,
   type ApiRenderVariable,
   apiRenderInputValueSchema,
+  apiRenderVariableKindSchema,
+  pinnedRenderAssetSchema,
 } from './api-renders';
+import { forgeSceneSchema } from './forge-scene';
 
-// The Render tab's live preview: one row, one format, composed on the server. The Backend paints
+// The Render tab's EXACT preview: one row, one format, composed on the server. The Backend paints
 // the row's changed layers — set by the template parser in the template's own faces — over the
 // closest real render, or draws the whole comp from the template when nothing has rendered yet.
-// The browser only ever receives the finished picture: brand faces never leave the server, and
-// the render bucket sends no CORS headers, so no pixel of it can be read in a browser anyway.
+// The browser receives the finished picture: the render bucket sends no CORS headers, so no pixel
+// of it can be read in a browser anyway. The LIVE preview (below) is drawn in the browser instead.
 
 export const API_RENDER_PREVIEW_ROUTE = '/api/ai-studio/renders/preview';
 
@@ -95,6 +98,72 @@ export const forgeRenderSketchSchema = z
   })
   .strict();
 export type ForgeRenderSketch = z.infer<typeof forgeRenderSketchSchema>;
+
+// The LIVE preview: the template's scene for one format, fetched once and repainted in the browser
+// on every keystroke, colour drag and picture swap — for every row, from the same kit. Each text
+// layer a variable writes carries a layout kit and the scene carries the glyph outlines of the
+// faces they set in (never a face file), so a row's text is laid out in the browser exactly as
+// the parser lays it out. Footage arrives embedded with its natural size.
+
+export const API_RENDER_PREVIEW_LIVE_ROUTE = '/api/ai-studio/renders/preview/live';
+
+export const forgeRenderLiveRequestSchema = forgeRenderPreviewRequestSchema
+  .pick({ brandId: true, environment: true, templateKey: true, format: true, atSec: true })
+  .strict();
+export type ForgeRenderLiveRequest = z.infer<typeof forgeRenderLiveRequestSchema>;
+
+/** A picture ready to draw: a data URI and its natural size, which a fit rig's clamp reads. */
+export const forgeScenePictureSchema = z
+  .object({
+    uri: z.string().startsWith('data:image/'),
+    width: z.number().positive(),
+    height: z.number().positive(),
+  })
+  .strict();
+
+export const forgeRenderLiveSchema = z
+  .object({
+    scene: forgeSceneSchema,
+    /** The template's variables and the layers each writes, as the Exact preview joins them. */
+    variables: z.array(
+      z
+        .object({
+          key: z.string(),
+          label: z.string(),
+          kind: apiRenderVariableKindSchema,
+          reserved: z.boolean(),
+          layerIds: z.array(z.number()),
+        })
+        .strict(),
+    ),
+    /** What Continuum's own slot shows — the brand's mark — when the template has one. */
+    brandMark: forgeScenePictureSchema.nullable(),
+    comp: z.string().min(1),
+    at: z.number().nonnegative(),
+    notes: z.array(z.string()),
+  })
+  .strict();
+export type ForgeRenderLive = z.infer<typeof forgeRenderLiveSchema>;
+
+export const API_RENDER_PREVIEW_PICTURES_ROUTE = '/api/ai-studio/renders/preview/pictures';
+
+/** Library pictures for the Live preview's slots; a video slot is shown as its frame at `at`. */
+export const forgeRenderPicturesRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    at: z.number().nonnegative(),
+    pins: z
+      .array(pinnedRenderAssetSchema.extend({ kind: z.enum(['image', 'video']) }).strict())
+      .min(1)
+      .max(24),
+  })
+  .strict();
+export type ForgeRenderPicturesRequest = z.infer<typeof forgeRenderPicturesRequestSchema>;
+
+export const forgeRenderPicturesSchema = z
+  .object({ pictures: z.array(forgeScenePictureSchema.nullable()) })
+  .strict();
+export type ForgeRenderPictures = z.infer<typeof forgeRenderPicturesSchema>;
 
 type DiffVariable = Pick<ApiRenderVariable, 'key' | 'kind' | 'reserved'>;
 
