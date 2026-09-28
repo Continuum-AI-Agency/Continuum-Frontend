@@ -406,6 +406,75 @@ describe('RenderPreviewPanel', () => {
       { timeout: 3000 },
     );
   });
+
+  test('shows worker and canvas measurement findings on a render row', () => {
+    const contract = {
+      ...CONTRACT,
+      publishCheck: {
+        state: 'warn',
+        issues: ['Worker graph pointer check was denied by Template Forge permissions.'],
+        workerAttachmentId: null,
+        media: [
+          { key: 'hero', label: 'Hero', comp: null, box: null, source: [254, 305], rigged: true },
+        ],
+      },
+    } as ApiRenderTemplateContract;
+    render(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={contract}
+        rows={rowWith('Hola')}
+        rowId={ROW}
+        renderSetId={null}
+      />,
+    );
+    expect(screen.getByText(/Template placement needs review/)).toBeTruthy();
+    expect(screen.getByText(/Worker graph pointer check was denied/)).toBeTruthy();
+    expect(screen.getByText(/Hero: source 254×305 px/)).toBeTruthy();
+  });
+
+  test('gives Inyogo jersey preparation guidance before rendering', () => {
+    const contract = {
+      ...CONTRACT,
+      template: {
+        ...CONTRACT.template,
+        key: '331',
+        environment: 'Six_app',
+        updatedAt: '2026-09-28T03:23:47.118Z',
+      },
+    } as ApiRenderTemplateContract;
+    const { rerender } = render(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={contract}
+        rows={rowWith('Hola')}
+        rowId={ROW}
+        renderSetId={null}
+      />,
+    );
+
+    const guidance = screen.getByRole('note');
+    expect(guidance.textContent).toContain('254×305 px canvas for Left Jersey');
+    expect(guidance.textContent).toContain('249×311 px for Right Jersey');
+    expect(guidance.textContent).toContain('Bet Amount and Win Amount as short numbers');
+    expect(guidance.textContent).toContain('Lside/Rside Value as numeric odds');
+    expect(guidance.textContent).toContain('Check a Proof before Final');
+
+    rerender(
+      <RenderPreviewPanel
+        brandId={BRAND}
+        contract={{
+          ...contract,
+          template: { ...contract.template, updatedAt: '2026-09-29T00:00:00.000Z' },
+        }}
+        rows={rowWith('Hola')}
+        rowId={ROW}
+        renderSetId={null}
+      />,
+    );
+    expect(screen.queryByRole('note')).toBeNull();
+  });
+
   test('draws text in its box and flags overflow live from props', () => {
     const props = { brandId: BRAND, contract: CONTRACT, rowId: ROW, renderSetId: null };
     const { container, rerender } = render(

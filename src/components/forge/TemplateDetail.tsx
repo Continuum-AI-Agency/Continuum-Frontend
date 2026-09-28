@@ -40,9 +40,9 @@ import {
 import { ForgeRunProgress } from '@/components/forge/ForgeRunProgress';
 import { FormatPreview, previewFormats } from '@/components/forge/FormatPreview';
 import { LineagePanel } from '@/components/forge/LineagePanel';
+import { CommentCount, OpenInLibrary, useLibraryState } from '@/components/forge/libraryState';
 import { MappingQuestions } from '@/components/forge/MappingQuestions';
 import { OutputSettingsPanel } from '@/components/forge/OutputSettingsPanel';
-import { CommentCount, OpenInLibrary, useLibraryState } from '@/components/forge/libraryState';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
@@ -420,6 +420,10 @@ export function TemplateDetail({
     try {
       await advanceTemplateForgeRun(brandId, assetId, action);
       await Promise.all([refreshRun(), onChanged()]);
+      if (templateKey)
+        await queryClient.invalidateQueries({
+          queryKey: forgeQueryKeys.contract(brandId, null, templateKey),
+        });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : `Could not ${action}`);
     } finally {
@@ -469,6 +473,15 @@ export function TemplateDetail({
     staleTime: 60_000,
     select: (response) => response.items.filter((job) => job.templateKey === templateKey),
   });
+  const { data: publishedContract, isError: publishCheckFailed } = useQuery({
+    queryKey: forgeQueryKeys.contract(brandId, null, templateKey ?? ''),
+    queryFn: () => apiRendersApi.getContract(brandId, templateKey ?? ''),
+    enabled: Boolean(templateKey),
+    staleTime: 0,
+    refetchInterval: 60_000,
+    retry: false,
+  });
+  const publishVerification = publishedContract?.publishCheck ?? null;
   // The template is a Library asset too: its thread and versions live there.
   const library = useLibraryState(brandId, [assetId]).get(assetId);
   const { data: setCount } = useQuery({
@@ -829,6 +842,32 @@ export function TemplateDetail({
     parse: parseDetail,
     fonts: fontsDetail,
     build: buildDetail,
+    publish: publishVerification ? (
+      <div className="flex flex-col gap-2">
+        {publishVerification.issues.length ? (
+          <ul className="list-disc pl-4">
+            {publishVerification.issues.map((issue) => (
+              <li key={issue}>{issue}</li>
+            ))}
+          </ul>
+        ) : (
+          <p>Worker graph and displayed contract agree.</p>
+        )}
+        {publishVerification.media.length ? (
+          <ul className="flex flex-col gap-1" aria-label="Media placement measurements">
+            {publishVerification.media.map((slot) => (
+              <li key={slot.key}>
+                {slot.label}:{' '}
+                {slot.box && slot.source
+                  ? `${slot.source[0]} × ${slot.source[1]} px source → ${Math.round(slot.box[2] - slot.box[0])} × ${Math.round(slot.box[3] - slot.box[1])} px box in ${slot.comp}`
+                  : 'placement or source size unmeasured'}
+                {slot.rigged ? ' · render-time rig' : ''}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    ) : undefined,
   };
   const checks: CheckRow[] = templateChecks({
     parseState,
@@ -840,6 +879,8 @@ export function TemplateDetail({
     run,
     forgeState: source.forgeState,
     templateKey,
+    publishVerification,
+    publishCheckFailed,
   }).map((check) => ({
     name: check.name,
     what: check.what,
@@ -907,7 +948,11 @@ export function TemplateDetail({
               against an unpromoted package and hand back a blank frame, which reads as success.
               Only a template key means renderable.
             */}
-            {templateKey ? 'Ready to render' : 'Not renderable yet'}
+            {templateKey
+              ? publishVerification?.state === 'pass'
+                ? 'Ready to render'
+                : 'Published · check layout'
+              : 'Not renderable yet'}
             {run && !run.done && !pushed ? ' · live updates unavailable' : null}
           </p>
         </div>

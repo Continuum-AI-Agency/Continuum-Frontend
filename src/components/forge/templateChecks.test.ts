@@ -230,10 +230,50 @@ describe('templateChecks', () => {
     }
   });
 
-  test('PUBLISH: only a template key is published; a published run without one is not', () => {
+  test('PUBLISH: a key alone waits for live worker and contract verification', () => {
     expect(row({ templateKey: '133' }, 'publish')).toMatchObject({
+      state: 'running',
+      result: 'Checking the worker graph and layout…',
+    });
+    expect(row({ templateKey: '133', publishCheckFailed: true }, 'publish')).toMatchObject({
+      state: 'warn',
+    });
+    const published = { state: 'pass' as const, issues: [], workerAttachmentId: 7, media: [] };
+    expect(row({ templateKey: '133', publishVerification: published }, 'publish')).toMatchObject({
       state: 'pass',
-      result: 'Published',
+      result: 'Published · worker graph and 0 media slots measured',
+    });
+    expect(
+      row(
+        {
+          templateKey: '133',
+          publishVerification: {
+            ...published,
+            state: 'warn',
+            issues: ['Left Jersey: no measured canvas position.'],
+          },
+        },
+        'publish',
+      ),
+    ).toMatchObject({
+      state: 'warn',
+      result: 'Left Jersey: no measured canvas position.',
+    });
+    expect(
+      row(
+        {
+          templateKey: '133',
+          publishVerification: {
+            ...published,
+            state: 'fail',
+            issues: ['Worker graph has no reachable AEP attachment.'],
+          },
+        },
+        'publish',
+      ),
+    ).toMatchObject({
+      state: 'fail',
+      result: 'Worker graph has no reachable AEP attachment.',
     });
     expect(row({ run: runRow({ state: 'published' }) }, 'publish')).toMatchObject({
       state: 'todo',

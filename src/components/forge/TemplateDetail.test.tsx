@@ -250,6 +250,9 @@ mock.module('@/lib/supabase/realtime', () => ({
 }));
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
   apiRendersApi: {
+    getContract: async () => ({
+      publishCheck: { state: 'pass', issues: [], workerAttachmentId: 7, media: [] },
+    }),
     listJobs: async () => ({ items: jobs, nextCursor: null }),
     listRenderSets: async () => ({ items: [{ id: 'set-1' }, { id: 'set-2' }], nextCursor: null }),
     libraryState: async (_brandId: string, assetIds: string[]) => ({
@@ -362,8 +365,7 @@ describe('TemplateDetail', () => {
     const comments = await screen.findByTitle('Comments in the Library');
     expect(comments.textContent).toBe('3 comments');
     expect(screen.getByText('4 versions')).toBeTruthy();
-    const href =
-      screen.getByRole('link', { name: /Open in Library/ }).getAttribute('href') ?? '';
+    const href = screen.getByRole('link', { name: /Open in Library/ }).getAttribute('href') ?? '';
     expect(href.startsWith('/library?')).toBe(true);
     expect(new URLSearchParams(href.split('?')[1]).get('assetId')).toBe(ASSET);
   });

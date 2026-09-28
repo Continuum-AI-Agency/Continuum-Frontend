@@ -711,6 +711,30 @@ export const apiRenderTemplateContractSchema = z
      * a picked asset in it before spending a render. Null when the template has no parsed source.
      */
     layout: apiRenderTemplateLayoutSchema.nullable().default(null),
+    /** Live publish audit from the worker pointer and the displayed contract. Null means unchecked. */
+    publishCheck: z
+      .object({
+        state: z.enum(['pass', 'warn', 'fail']),
+        issues: z.array(z.string()),
+        workerAttachmentId: z.number().int().positive().nullable(),
+        media: z.array(
+          z
+            .object({
+              key: z.string(),
+              label: z.string(),
+              comp: z.string().nullable(),
+              box: pixelBoxSchema.nullable(),
+              source: z
+                .tuple([z.number().int().positive(), z.number().int().positive()])
+                .nullable(),
+              rigged: z.boolean(),
+            })
+            .strict(),
+        ),
+      })
+      .strict()
+      .nullable()
+      .optional(),
     /**
      * Where the LIVE template and its stored contract disagree, straight from the forge. A
      * template whose fields moved under its contract is one whose renders quietly stop matching
