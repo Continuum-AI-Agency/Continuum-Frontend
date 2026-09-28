@@ -144,6 +144,10 @@ const environment = (bindingId: string, workspace: string, isDefault: boolean) =
 });
 
 let jobsFixture: ApiRenderJob[] = [];
+const prepareMasterDownload = mock(async () => ({
+  path: '/api/ai-studio/renders/master-downloads/test',
+}));
+const masterDownloadStatus = mock(async () => ({ status: 'failed' as const }));
 let templatesFixture: Partial<ApiRenderTemplateSummary>[] = [];
 let clientTemplatesFixture: Partial<ApiRenderTemplateSummary>[] = [];
 let environmentsFixture = [environment(DEFAULT_BINDING, 'Continuum_app', true)];
@@ -175,6 +179,8 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
     listEnvironments,
     listTemplates,
     shareBatch,
+    prepareMasterDownload,
+    masterDownloadStatus,
   },
 }));
 mock.module('@/lib/supabase/client', () => ({
@@ -203,7 +209,14 @@ const rowOrder = () => {
 
 /** The brand's ledger opens on batches; its "Pieces" cell is what makes a row read as one. */
 const findBatchRow = async () =>
-  (await screen.findAllByText(/^\d+ renders? · \d+ files?$/))[0]?.closest('tr') as HTMLElement;
+  waitFor(() => {
+    const row = screen
+      .getAllByText(/^\d+ renders? · \d+ files?$/)
+      .map((element) => element.closest('tr'))
+      .find((element): element is HTMLTableRowElement => element !== null);
+    if (!row) throw new Error('Batch row is not in the table yet');
+    return row;
+  });
 
 /**
  * Every fixture shares one batch, so the job-level assertions below run inside it: the list a
@@ -252,6 +265,8 @@ beforeEach(() => {
   getJob.mockClear();
   listEnvironments.mockClear();
   listTemplates.mockClear();
+  prepareMasterDownload.mockClear();
+  masterDownloadStatus.mockClear();
 });
 
 afterEach(() => {
@@ -867,5 +882,47 @@ describe('RenderJobsGrid', () => {
       within(preview).getByText('This browser can’t play this file. Download it below.'),
     ).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Download MXF' })).toBeTruthy();
+  }, 30_000);
+
+  test('an MP4-only render offers on-demand MOV and MXF downloads for that exact output', async () => {
+    const output = {
+      id: 'mp4-output',
+      kind: 'video' as const,
+      fileName: 'Story_9_16_ab12cd.mp4',
+      mimeType: 'video/mp4',
+      url: 'https://cdn.test/Story_9_16_ab12cd.mp4',
+      width: null,
+      height: null,
+      assetId: null,
+      versionId: null,
+    };
+    jobsFixture = [{ ...BASE, outputs: [output], label: 'Card 1', labelPath: ['Card 1'] }];
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <RenderJobsGrid
+          brandId={BRAND}
+          formats={[{ id: 'story', label: 'Story', ratio: '9:16', width: 1080, height: 1920 }]}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await findBatchRow());
+    fireEvent.click(await screen.findByText('Card 1'));
+    await screen.findByRole('heading', { name: 'Card 1' });
+    expect(screen.getByRole('link', { name: 'Download MP4' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generate MOV download' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generate MXF download' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Generate MOV download' }));
+    await waitFor(() =>
+      expect(prepareMasterDownload).toHaveBeenCalledWith(BASE.id, {
+        brandId: BRAND,
+        outputId: output.id,
+        format: 'mov',
+      }),
+    );
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'MOV conversion failed. Try again.',
+    );
   }, 30_000);
 });
