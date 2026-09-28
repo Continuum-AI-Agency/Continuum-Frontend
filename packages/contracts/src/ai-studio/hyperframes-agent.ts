@@ -361,45 +361,6 @@ export const hyperframesBrowserReviewRequestSchema = z
   .strict();
 export type HyperframesBrowserReviewRequest = z.infer<typeof hyperframesBrowserReviewRequestSchema>;
 
-export const hyperframesReviewUploadRequestSchema = z
-  .object({
-    revisionId: z.string().min(1),
-    fingerprint: z.string().length(64),
-    frameCount: z.number().int().min(1).max(5),
-  })
-  .strict();
-export type HyperframesReviewUploadRequest = z.infer<typeof hyperframesReviewUploadRequestSchema>;
-
-export const hyperframesReviewUploadResponseSchema = z
-  .object({
-    uploads: z.array(
-      z
-        .object({
-          storage: hyperframesStoragePointerSchema,
-          signedUrl: z.string().url(),
-        })
-        .strict(),
-    ),
-  })
-  .strict();
-export type HyperframesReviewUploadResponse = z.infer<typeof hyperframesReviewUploadResponseSchema>;
-
-export const hyperframesRenderCompleteRequestSchema = z
-  .object({
-    revisionId: z.string().min(1),
-    fingerprint: z.string().length(64),
-    assetId: z.string().min(1),
-    // Optional for crash recovery: the Backend can reload durable media metadata by assetId.
-    storage: hyperframesStoragePointerSchema.optional(),
-    durationSeconds: z.number().positive().optional(),
-    width: z.number().int().positive().optional(),
-    height: z.number().int().positive().optional(),
-  })
-  .strict();
-export type HyperframesRenderCompleteRequest = z.infer<
-  typeof hyperframesRenderCompleteRequestSchema
->;
-
 export const hyperframesAssetDecisionSchema = z
   .object({
     assetId: z.string().min(1),
