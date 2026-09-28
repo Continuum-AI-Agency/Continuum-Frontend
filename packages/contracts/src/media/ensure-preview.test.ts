@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import {
-  ensureAssetPreviewRequestSchema,
-  ensureAssetPreviewResponseSchema,
-  sharePreviewRoleFor,
-} from './ensure-preview';
+import { sharePreviewRoleFor } from './asset-formats';
+import { ensureAssetPreviewRequestSchema, ensureAssetPreviewResponseSchema } from './ensure-preview';
 
 describe('sharePreviewRoleFor', () => {
   it('stores a WebP still for JPEG / PNG / WebP photos', () => {
