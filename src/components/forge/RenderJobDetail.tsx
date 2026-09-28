@@ -482,7 +482,7 @@ export function RenderJobDetail({
               },
               {
                 icon: Timer,
-                label: 'Duration',
+                label: 'Time to recorded completion',
                 numeric: true,
                 value: job.finishedAt
                   ? formatDuration(Date.parse(job.finishedAt) - Date.parse(job.createdAt))
