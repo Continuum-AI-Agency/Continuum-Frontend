@@ -15,11 +15,20 @@ import {
 } from '@/components/ui/table';
 import { formatCustomFieldValue } from '@/lib/library/customFieldValue';
 import { normalizeReviewStatus } from '@/lib/library/reviewStatus';
-import { formatBytes } from '../detail/assetFileMeta';
+import { useMentionTargets } from '../detail/useMentionTargets';
 import { reviewDisplay } from '../review/reviewDisplay';
 import { useReviewCustomStates, useReviewStateLabels } from '../review/useReviewStateLabels';
 import { AssetThumb } from './AssetThumb';
-import { formatDurationMs } from './cardOptions';
+import {
+  BUILT_IN_CARD_FIELDS,
+  type CardFieldLookups,
+  type CardViewOptions,
+  cardFieldSortValue,
+  cardFieldValue,
+  isBuiltInCardField,
+  memberNameLookup,
+  visibleCardFields,
+} from './cardOptions';
 import {
   BUILT_IN_LIST_COLUMNS,
   builtInSortValue,
@@ -30,39 +39,17 @@ import {
   serverSortFor,
   sortRows,
 } from './listSort';
-import type { FieldValuesByAsset } from './useAssetFieldValues';
+import { type FieldValuesByAsset, useAssetCommentCounts } from './useAssetFieldValues';
 
-const DATE_FORMAT: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
-
-function builtInCell(
-  asset: MediaAsset,
-  key: string,
-  reviewLabel: (asset: MediaAsset) => string,
-): string {
-  switch (key) {
-    case 'name':
-      return asset.title ?? asset.fileName;
-    case 'kind':
-      return asset.kind;
-    case 'size':
-      return asset.sizeBytes ? formatBytes(asset.sizeBytes) : '—';
-    case 'duration':
-      return formatDurationMs(asset.durationMs) ?? '—';
-    case 'dimensions':
-      return asset.width && asset.height ? `${asset.width} × ${asset.height}` : '—';
-    case 'review':
-      return reviewLabel(asset);
-    case 'created':
-      return new Date(asset.createdAt).toLocaleDateString(undefined, DATE_FORMAT);
-    case 'updated':
-      return new Date(asset.updatedAt).toLocaleDateString(undefined, DATE_FORMAT);
-    default:
-      return '';
-  }
-}
+// A built-in the List always shows, by its List key; 'name' is the card's 'title'.
+const DEFAULT_COLUMN_KEYS: ReadonlySet<string> = new Set([
+  ...BUILT_IN_LIST_COLUMNS.map((column) => column.key),
+  'title',
+]);
 
 export function ListView({
   assets,
+  card,
   customFields,
   fieldValues,
   serverSort,
@@ -76,6 +63,8 @@ export function ListView({
   emptyHint,
 }: {
   assets: MediaAsset[];
+  /** The chosen card fields; a built-in one the List does not already show adds a column. */
+  card?: CardViewOptions;
   /** The custom fields the user chose to show, in column order. */
   customFields: CustomField[];
   fieldValues: FieldValuesByAsset;
@@ -101,14 +90,34 @@ export function ListView({
     ).label;
   const activeSort = clientSort ?? listSortFromServer(serverSort);
 
+  const extraColumns = visibleCardFields(card).filter(
+    (key) => isBuiltInCardField(key) && !DEFAULT_COLUMN_KEYS.has(key),
+  );
+  const commentCount = useAssetCommentCounts(
+    assets.map((asset) => asset.id),
+    extraColumns.includes('comments'),
+  );
+  const needsMembers =
+    extraColumns.includes('uploader') ||
+    customFields.some((field) => field.type === 'user' || field.type === 'user_multi');
+  const members = useMentionTargets(needsMembers ? assets[0]?.brandId : null);
+  const memberName = memberNameLookup(members);
+  const lookups: CardFieldLookups = { commentCount, memberName, reviewLabel };
+  const builtInCell = (asset: MediaAsset, key: string): string =>
+    cardFieldValue(asset, key === 'name' ? 'title' : key, lookups) ?? '—';
+
   const fieldById = new Map(customFields.map((field) => [field.id, field]));
   const customCell = (asset: MediaAsset, fieldId: string): string => {
     const field = fieldById.get(fieldId);
     const value = fieldValues.get(asset.id)?.get(fieldId);
-    return field && value !== undefined ? formatCustomFieldValue(field, value) : '';
+    return field && value !== undefined ? formatCustomFieldValue(field, value, memberName) : '';
   };
-  const sortValue = (asset: MediaAsset, key: string): SortValue =>
-    fieldById.has(key) ? customCell(asset, key).toLocaleLowerCase() : builtInSortValue(asset, key);
+  const sortValue = (asset: MediaAsset, key: string): SortValue => {
+    if (fieldById.has(key)) return customCell(asset, key).toLocaleLowerCase();
+    return DEFAULT_COLUMN_KEYS.has(key)
+      ? builtInSortValue(asset, key)
+      : cardFieldSortValue(asset, key, lookups);
+  };
 
   // ponytail: a client-side sort orders only the loaded page(s); a server sort per
   // column (and per custom field) if users need whole-library ordering here.
@@ -127,8 +136,15 @@ export function ListView({
     }
   };
 
-  const columns = [
+  const builtInColumns = [
     ...BUILT_IN_LIST_COLUMNS,
+    ...extraColumns.map((key) => ({
+      key,
+      label: BUILT_IN_CARD_FIELDS.find((field) => field.key === key)?.label ?? key,
+    })),
+  ];
+  const columns = [
+    ...builtInColumns,
     ...customFields.map((field) => ({ key: field.id, label: field.name })),
   ];
 
@@ -207,7 +223,7 @@ export function ListView({
                   <TableCell>
                     <AssetThumb asset={asset} />
                   </TableCell>
-                  {BUILT_IN_LIST_COLUMNS.map((column) =>
+                  {builtInColumns.map((column) =>
                     column.key === 'name' ? (
                       <TableCell key={column.key} className="max-w-72 font-medium">
                         <button
@@ -218,12 +234,16 @@ export function ListView({
                           }}
                           className="block max-w-full truncate text-left hover:underline"
                         >
-                          {builtInCell(asset, column.key, reviewLabel)}
+                          {builtInCell(asset, column.key)}
                         </button>
                       </TableCell>
                     ) : (
-                      <TableCell key={column.key} className="tabular-nums text-muted-foreground">
-                        {builtInCell(asset, column.key, reviewLabel)}
+                      <TableCell
+                        key={column.key}
+                        data-testid={`library-list-cell-${column.key}`}
+                        className="max-w-48 truncate tabular-nums text-muted-foreground"
+                      >
+                        {builtInCell(asset, column.key)}
                       </TableCell>
                     ),
                   )}

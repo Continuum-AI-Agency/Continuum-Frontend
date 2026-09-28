@@ -2,14 +2,16 @@
 // yet include the `media` schema. Kept in sync with the migration manually.
 // Map to the camelCase MediaAsset contract shape via rowToMediaAsset().
 
-import type {
-  AssetIntegrityState,
-  LibraryAspectRatioBin,
-  MediaKind,
-  MediaReviewStatus,
-  MediaSource,
-  MediaStatus,
-  VideoCreativeInsights,
+import {
+  type AssetIntegrityState,
+  type DynamicRange,
+  type LibraryAspectRatioBin,
+  MEDIA_ASSET_TECHNICAL_COLUMNS,
+  type MediaKind,
+  type MediaReviewStatus,
+  type MediaSource,
+  type MediaStatus,
+  type VideoCreativeInsights,
 } from '@continuum/contracts';
 
 export type MediaAssetRow = {
@@ -57,6 +59,31 @@ export type MediaAssetRow = {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  // Optional for the same reason as review_status: rows cached before the columns existed.
+  notes?: string | null;
+} & Partial<MediaAssetTechnicalRow>;
+
+/** The head version's probe, as media.assets stores it (MEDIA_ASSET_TECHNICAL_COLUMNS). */
+export type MediaAssetTechnicalRow = {
+  video_codec: string | null;
+  frame_rate: number | string | null;
+  bit_rate: number | null;
+  video_bit_rate: number | null;
+  color_space: string | null;
+  dynamic_range: DynamicRange | null;
+  bit_depth: number | null;
+  has_alpha: boolean | null;
+  start_timecode: string | null;
+  end_timecode: string | null;
+  audio_codec: string | null;
+  audio_bit_rate: number | null;
+  audio_channels: number | null;
+  audio_sample_rate: number | null;
+  audio_bit_depth: number | null;
+  page_count: number | null;
+  has_location: boolean | null;
+  media_probed_at: string | null;
+  media_probe_error: string | null;
 };
 
 // Explicit column projection for media.assets — every column EXCEPT the heavy
@@ -68,7 +95,8 @@ export const MEDIA_ASSET_SELECT =
   'review_status, review_state_id, head_version_id, integrity_state, checksum, ' +
   'progress_step, error_code, error_message, title, description, tags, ' +
   'ad_creative_analysis, detected_objects, video_insights, thumbnail_path, embedding_model, has_image_embedding, ' +
-  'created_at, updated_at, deleted_at';
+  'created_at, updated_at, deleted_at, notes, ' +
+  Object.values(MEDIA_ASSET_TECHNICAL_COLUMNS).join(', ');
 
 export type MediaCollectionRow = {
   id: string;

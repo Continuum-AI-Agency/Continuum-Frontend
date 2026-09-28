@@ -445,6 +445,32 @@ describe('POST /api/library/search — comments and date filters', () => {
     expect(fromCalls.some((call) => call.ops.some((op) => op[0] === 'or'))).toBe(false);
   });
 
+  it('resolves Format, ranges and technical predicates to ids through the browse SQL', async () => {
+    const PRORES_ID = '66666666-6666-4666-8666-666666666666';
+    installSupabaseStub({
+      rpcCalls,
+      fromCalls,
+      rpcResults: {
+        library_matching_asset_ids: [{ asset_id: PRORES_ID }],
+        search_assets_ranked: [{ id: PRORES_ID, similarity: 3 }],
+      },
+      hydrateIds: [PRORES_ID],
+    });
+
+    const filters = {
+      families: ['video'],
+      ranges: { resolution: { min: 2160 }, durationMs: { min: 30_001 } },
+      technical: { videoCodecs: ['prores'] },
+    };
+    const response = await POST(searchRequest('launch', filters));
+    expect(response.status).toBe(200);
+
+    const resolve = rpcCalls.find((call) => call.fn === 'library_matching_asset_ids');
+    expect(resolve?.args).toEqual({ p_brand_id: BRAND_ID, p_query: filters, p_limit: 1_000 });
+    const lexicalCall = rpcCalls.find((call) => call.fn === 'search_assets_ranked');
+    expect(lexicalCall?.args.filter_asset_ids).toEqual([PRORES_ID]);
+  });
+
   it('lists the filtered assets newest-first when the query is only filters', async () => {
     installSupabaseStub({
       rpcCalls,

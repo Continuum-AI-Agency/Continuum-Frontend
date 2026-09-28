@@ -1,6 +1,8 @@
 'use server';
 
 import {
+  type CommentAnnotation,
+  commentAnnotationSchema,
   createExternalShareCommentRequestSchema,
   createExternalShareCommentResponseSchema,
   decideExternalShareReviewRequestSchema,
@@ -94,6 +96,29 @@ async function reviewerSessionForMutation(
   return { ok: true, token: session.data.sessionToken };
 }
 
+// A guest pins feedback to the player's moment or the I/O range they marked, or
+// sends the pin / marks they drew on a still (JSON, held to the contract here and
+// again by the edge function).
+function guestAnnotation(formData: FormData): CommentAnnotation | undefined | 'invalid' {
+  const timeMs = String(formData.get('timeMs') ?? '');
+  const endMs = String(formData.get('endMs') ?? '');
+  if (/^\d+$/.test(timeMs)) {
+    return {
+      kind: 'time',
+      timeMs: Number(timeMs),
+      ...(/^\d+$/.test(endMs) ? { endMs: Number(endMs) } : {}),
+    };
+  }
+  const drawn = formData.get('annotation');
+  if (typeof drawn !== 'string' || drawn === '') return undefined;
+  try {
+    const parsed = commentAnnotationSchema.safeParse(JSON.parse(drawn));
+    return parsed.success && parsed.data.kind !== 'time' ? parsed.data : 'invalid';
+  } catch {
+    return 'invalid';
+  }
+}
+
 export async function postExternalComment(
   token: string,
   assetId: string,
@@ -104,16 +129,10 @@ export async function postExternalComment(
   const reviewerSession = await reviewerSessionForMutation(token, formData);
   if (!reviewerSession.ok) return { error: reviewerSession.error, posted: false };
 
-  // A guest pins feedback to the player's moment, or the I/O range they marked.
-  const timeMs = String(formData.get('timeMs') ?? '');
-  const endMs = String(formData.get('endMs') ?? '');
-  const annotation = /^\d+$/.test(timeMs)
-    ? {
-        kind: 'time' as const,
-        timeMs: Number(timeMs),
-        ...(/^\d+$/.test(endMs) ? { endMs: Number(endMs) } : {}),
-      }
-    : undefined;
+  const annotation = guestAnnotation(formData);
+  if (annotation === 'invalid') {
+    return { error: 'Those marks could not be read; draw them again.', posted: false };
+  }
   const input = createExternalShareCommentRequestSchema.safeParse({
     token,
     sessionToken: reviewerSession.token,

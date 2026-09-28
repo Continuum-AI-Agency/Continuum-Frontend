@@ -1,7 +1,12 @@
 // Single mapper from DB snake_case row to the camelCase MediaAsset contract shape.
 // Validated against mediaAssetSchema at the boundary so callers get a typed object.
 
-import type { AssetPreview, DetectedObject, MediaAsset } from '@continuum/contracts';
+import type {
+  AssetPreview,
+  DetectedObject,
+  MediaAsset,
+  MediaAssetTechnicalFields,
+} from '@continuum/contracts';
 import { libraryAspectRatioBin, libraryAspectRatioBinSchema } from '@continuum/contracts';
 import type { MediaAssetRow } from './schema';
 
@@ -76,6 +81,39 @@ export function rowToMediaAsset(
     updatedAt: row.updated_at,
     signedUrl: signedUrl ?? null,
     thumbnailUrl: thumbnailUrl ?? null,
+    notes: row.notes ?? null,
+    ...rowToTechnicalFields(row),
+  };
+}
+
+// numeric(8,3) can arrive as a string on some PostgREST paths.
+function numberOrNull(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function rowToTechnicalFields(row: MediaAssetRow): MediaAssetTechnicalFields {
+  return {
+    videoCodec: row.video_codec ?? null,
+    frameRate: numberOrNull(row.frame_rate),
+    bitRate: numberOrNull(row.bit_rate),
+    videoBitRate: numberOrNull(row.video_bit_rate),
+    colorSpace: row.color_space ?? null,
+    dynamicRange: row.dynamic_range ?? null,
+    bitDepth: row.bit_depth ?? null,
+    hasAlpha: row.has_alpha ?? null,
+    startTimecode: row.start_timecode ?? null,
+    endTimecode: row.end_timecode ?? null,
+    audioCodec: row.audio_codec ?? null,
+    audioBitRate: numberOrNull(row.audio_bit_rate),
+    audioChannels: row.audio_channels ?? null,
+    audioSampleRate: row.audio_sample_rate ?? null,
+    audioBitDepth: row.audio_bit_depth ?? null,
+    pageCount: row.page_count ?? null,
+    hasLocation: row.has_location ?? null,
+    mediaProbedAt: row.media_probed_at ?? null,
+    mediaProbeError: row.media_probe_error ?? null,
   };
 }
 

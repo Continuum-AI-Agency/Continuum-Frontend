@@ -8,7 +8,7 @@ import {
 } from '@xyflow/react';
 import { Copy, FileText, Library, Loader2, Trash2, Unlink, Upload, X } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { type DocumentView, describeError } from '@/components/documents/types';
 import { useDocuments } from '@/components/documents/useDocuments';
@@ -73,6 +73,51 @@ function inferDocType(name: string, kind: string | null): 'pdf' | 'txt' {
   if (kind === 'pdf') return 'pdf';
   const ext = name.split('.').pop()?.toLowerCase();
   return ext === 'pdf' ? 'pdf' : 'txt';
+}
+
+const ATTACHMENT_KEYS = [
+  'assetId',
+  'assetVersionId',
+  'sourcePath',
+  'bucket',
+  'sourceUrl',
+  'fileName',
+] as const;
+
+/**
+ * An agent attaches a Library document the way it attaches any media — top-level
+ * assetId/assetVersionId/sourcePath/bucket/fileName (workflow-builder `attach_media`) —
+ * but this node and every consumer read `documents[]`. Returns the patch that MOVES the
+ * attachment into an entry (so removing the chip cannot resurrect it), or null.
+ */
+export function foldAttachedDocument(
+  data: DocumentNodeData,
+): { documents: CanvasDocument[] } | null {
+  const attached = data as Record<string, unknown>;
+  const { sourcePath, bucket } = attached;
+  if (typeof sourcePath !== 'string' || !sourcePath || typeof bucket !== 'string' || !bucket) {
+    return null;
+  }
+  const text = (key: string) =>
+    typeof attached[key] === 'string' && attached[key] ? (attached[key] as string) : undefined;
+  const name = text('fileName') ?? sourcePath.split('/').pop() ?? 'Document';
+  const existing = data.documents ?? [];
+  const alreadyHeld = existing.some(
+    (doc) => doc.storagePath === sourcePath && doc.bucket === bucket,
+  );
+  const entry: CanvasDocument = {
+    name,
+    type: inferDocType(name, null),
+    storagePath: sourcePath,
+    bucket,
+    assetId: text('assetId'),
+    assetVersionId: text('assetVersionId'),
+    sourceUrl: text('sourceUrl'),
+  };
+  return {
+    documents: alreadyHeld ? existing : [...existing, entry],
+    ...Object.fromEntries(ATTACHMENT_KEYS.map((key) => [key, undefined])),
+  };
 }
 
 // Resolves live status for a CanvasDocument entry: platform docs tracked via
@@ -155,6 +200,13 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
     () => new Map(liveDocuments.map((doc) => [doc.id, doc])),
     [liveDocuments],
   );
+
+  useEffect(() => {
+    const patch = foldAttachedDocument(data);
+    if (!patch) return;
+    updateNodeData(id, patch);
+    triggerSave();
+  }, [data, id, triggerSave, updateNodeData]);
 
   const addDocuments = useCallback(
     (newDocs: CanvasDocument[]) => {
@@ -333,6 +385,8 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
             sourceUrl: resolved.sourceUrl,
             storagePath: resolved.sourcePath,
             bucket: resolved.bucket,
+            assetId: resolved.assetId,
+            assetVersionId: resolved.assetVersionId,
             content: resolved.dataUrl,
           },
         ]);

@@ -514,6 +514,11 @@ export interface AttachMediaInput {
   /** The asset's real pixel size, when the Library knows it — see `attach_media`. */
   width?: number;
   height?: number;
+  /**
+   * Set when bucket/storagePath are a Library RENDITION of the asset (a PSD's
+   * `preview_image`, an MKV's proxy) rather than its original. Server-resolved only.
+   */
+  renditionRole?: string;
 }
 
 export type WorkflowEditOp =
@@ -556,6 +561,7 @@ const MEDIA_DATA_KEYS = [
   'sourceUrl',
   'fileName',
   'referenceType',
+  'renditionRole',
 ];
 
 /**
@@ -748,6 +754,9 @@ export function applyOps(graph: WorkflowGraph, ops: WorkflowEditOp[]): ApplyResu
             sourcePath: op.media.storagePath,
             bucket: op.media.bucket,
             fileName: op.media.fileName,
+            // Written even when undefined, like assetId: the canvas must know it shows a
+            // rendition, and new media must not inherit the old one's flag.
+            renditionRole: op.media.renditionRole,
             ...(ratio ? { aspectRatio: ratio } : {}),
             ...(node.type === 'image'
               ? { referenceType: op.media.referenceType ?? 'default' }

@@ -11,9 +11,26 @@ import {
   CARD_ASPECTS,
   CARD_SIZES,
   type CardViewOptions,
+  type LibraryFieldGroup,
   toggleCardField,
   visibleCardFields,
 } from './cardOptions';
+import { BUILT_IN_LIST_COLUMNS } from './listSort';
+
+const GROUP_LABEL: Record<LibraryFieldGroup | 'custom', string> = {
+  file: 'File',
+  document: 'Document',
+  video: 'Video',
+  audio: 'Audio',
+  workflow: 'Workflow',
+  custom: 'Custom fields',
+};
+
+// The List always shows these; offering them there would only toggle them on cards.
+const LIST_COLUMN_KEYS: ReadonlySet<string> = new Set([
+  ...BUILT_IN_LIST_COLUMNS.map((column) => column.key),
+  'title',
+]);
 
 function Segment<T extends string>({
   label,
@@ -63,14 +80,22 @@ export function CardOptionsMenu({
   card: CardViewOptions | undefined;
   customFields: CustomField[];
   onChange: (patch: Partial<CardViewOptions>) => void;
-  /** List view has no cards to size — it only picks its custom-field columns. */
+  /** List view has no cards to size — it only picks the columns it does not always show. */
   showSizeAndAspect?: boolean;
 }) {
   const fields = visibleCardFields(card);
-  const fieldOptions = [
-    ...(showSizeAndAspect ? BUILT_IN_CARD_FIELDS : []),
-    ...customFields.map((field) => ({ key: field.id, label: field.name })),
-  ];
+  const builtIns = showSizeAndAspect
+    ? BUILT_IN_CARD_FIELDS
+    : BUILT_IN_CARD_FIELDS.filter((field) => !LIST_COLUMN_KEYS.has(field.key));
+  const groups = (Object.keys(GROUP_LABEL) as (LibraryFieldGroup | 'custom')[])
+    .map((group) => ({
+      group,
+      options:
+        group === 'custom'
+          ? customFields.map((field) => ({ key: field.id, label: field.name }))
+          : builtIns.filter((field) => field.group === group),
+    }))
+    .filter((entry) => entry.options.length > 0);
 
   return (
     <Popover>
@@ -108,27 +133,32 @@ export function CardOptionsMenu({
             />
           </>
         ) : null}
-        <fieldset className="flex flex-col gap-2">
+        <fieldset className="flex max-h-80 flex-col gap-2 overflow-y-auto">
           <legend className="mb-1.5 text-xs font-medium text-muted-foreground">
-            {showSizeAndAspect ? 'Show on cards' : 'Custom field columns'}
+            {showSizeAndAspect ? 'Show on cards' : 'Columns'}
           </legend>
-          {fieldOptions.length === 0 ? (
-            <p className="text-xs text-muted-foreground">This brand has no custom fields yet.</p>
-          ) : (
-            fieldOptions.map((option) => (
-              <div key={option.key} className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  id={`card-field-option-${option.key}`}
-                  data-testid={`card-field-${option.key}`}
-                  checked={fields.includes(option.key)}
-                  onCheckedChange={() => onChange({ fields: toggleCardField(fields, option.key) })}
-                />
-                <label htmlFor={`card-field-option-${option.key}`} className="truncate">
-                  {option.label}
-                </label>
-              </div>
-            ))
-          )}
+          {groups.map(({ group, options }) => (
+            <div key={group} className="flex flex-col gap-1.5">
+              <p className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">
+                {GROUP_LABEL[group]}
+              </p>
+              {options.map((option) => (
+                <div key={option.key} className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    id={`card-field-option-${option.key}`}
+                    data-testid={`card-field-${option.key}`}
+                    checked={fields.includes(option.key)}
+                    onCheckedChange={() =>
+                      onChange({ fields: toggleCardField(fields, option.key) })
+                    }
+                  />
+                  <label htmlFor={`card-field-option-${option.key}`} className="truncate">
+                    {option.label}
+                  </label>
+                </div>
+              ))}
+            </div>
+          ))}
         </fieldset>
       </PopoverContent>
     </Popover>

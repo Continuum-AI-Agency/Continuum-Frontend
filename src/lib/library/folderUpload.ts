@@ -1,12 +1,15 @@
 // A folder dropped on the Library (or picked with "Upload folder") keeps its shape: every
 // directory becomes a collection nested under its parent, and each file is filed into the
-// collection of the folder it sat in.
+// collection of the folder it sat in. Collections nest 10 levels; a file deeper than that is
+// filed into its 10th-level folder rather than failing the whole tree.
+
+import { LIBRARY_COLLECTION_MAX_LEVELS } from '@continuum/contracts';
 
 export type FolderFile = { file: File; folders: string[] };
 
 /** "Shoot/Day 1/a.mp4" → folders ["Shoot", "Day 1"]. A loose file has none. */
 export function foldersOf(relativePath: string): string[] {
-  return relativePath.split('/').filter(Boolean).slice(0, -1);
+  return relativePath.split('/').filter(Boolean).slice(0, -1).slice(0, LIBRARY_COLLECTION_MAX_LEVELS);
 }
 
 // Finder and Explorer litter folders with these; they would only show up as refused uploads.
@@ -65,7 +68,7 @@ async function walk(entry: Entry, folders: string[], out: FolderFile[]): Promise
   if (isSystemFile(entry.name)) return;
   if (entry.isFile && entry.file) {
     const file = await new Promise<File>((resolve, reject) => entry.file?.(resolve, reject));
-    out.push({ file, folders });
+    out.push({ file, folders: folders.slice(0, LIBRARY_COLLECTION_MAX_LEVELS) });
     return;
   }
   if (!entry.isDirectory || !entry.createReader) return;

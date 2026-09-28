@@ -13,17 +13,46 @@
 // Frame stepping uses the file's MEASURED frame rate and lands on each frame's
 // first millisecond, so the timecode a comment stores maps back to the frame the
 // reviewer saw (see lib/library/commentExport frameAtMs/msForFrame).
+//
+// Given the asset and version, it also reads the version's playback renditions: a
+// quality menu over the proxy ladder (Auto picks by stage size and HDR support), a
+// speed menu, a loop toggle, sprite thumbnails over the seek lane, and a PNG still of
+// the frame on screen.
 
-import type { CommentAttachment, DrawingShape, TimeAnnotation } from '@continuum/contracts';
-import { ImageOff, MessageSquarePlus, Pause, Play, SquareDashedBottom, X } from 'lucide-react';
+import {
+  type CommentAttachment,
+  type DrawingShape,
+  type LibraryPlaybackRung,
+  SCRUB_SPRITE_GRID,
+  scrubSpriteTile,
+  type TimeAnnotation,
+} from '@continuum/contracts';
+import {
+  Camera,
+  ImageOff,
+  MessageSquarePlus,
+  Pause,
+  Play,
+  Repeat,
+  SquareDashedBottom,
+  X,
+} from 'lucide-react';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/toast-imperative';
 import {
   type FrameRate,
   frameAtMs,
   framesPerSecond,
   msForFrame,
 } from '@/lib/library/commentExport';
+import { useLibraryPlayback } from '@/lib/library/libraryPlayback';
+import {
+  activeStageVideo,
+  downloadVideoStill,
+  registerStageVideo,
+} from '@/lib/library/videoPoster';
+import { cn } from '@/lib/utils';
 import {
   formatStageRange,
   formatStageTime,
@@ -43,6 +72,7 @@ import {
 import { useFrameRate, useStartTimecode } from './annotation/useFrameRate';
 import { formatTimecode, type NormalizedBox, seekFraction } from './annotationGeometry';
 import { CommentComposer, type ComposerExtras } from './CommentComposer';
+import { detectHdrPlayback, pickPlaybackRung } from './stageMedia';
 import { TimelineMarkerStrip, type TimeMarker } from './TimelineMarkerStrip';
 import { useStageGeometry } from './useStageGeometry';
 
@@ -77,12 +107,36 @@ type Props = {
   registerSeek: (seek: (ms: number) => void) => void;
   /** Playhead position, for followers (the transcript panel) that coalesce it themselves. */
   onTimeChange?: (timeMs: number) => void;
+  /** With `assetVersionId` and `brandId`, loads the version's proxy ladder and scrub sprite. */
+  assetId?: string;
+  assetVersionId?: string | null;
 };
 
 // Stepping still works on a file whose container cannot be read; it just says
 // it is guessing.
 const NOMINAL_RATE: FrameRate = { num: 30, den: 1 };
 const SHUTTLE_SPEEDS = [1, 2, 4] as const;
+const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75] as const;
+
+type RungRole = LibraryPlaybackRung['role'];
+/** `original` is the `src` the stage handed in; a role is one rung of the proxy ladder. */
+type Quality = 'auto' | 'original' | RungRole;
+type PlayingSource = { role: RungRole; src: string };
+
+const SELECT_CLASS =
+  'h-7 rounded-md border border-border bg-background px-1.5 text-2xs text-muted-foreground';
+
+// The still is named after the asset's own file. Without playback (no asset context) the
+// signed URL's last path segment is the best name there is.
+function fileStem(src: string, fileName: string | undefined): string {
+  if (fileName) return fileName.replace(/\.[^.]+$/, '') || 'frame';
+  try {
+    const name = decodeURIComponent(new URL(src).pathname.split('/').pop() ?? '');
+    return name.replace(/\.[^.]+$/, '') || 'frame';
+  } catch {
+    return 'frame';
+  }
+}
 
 type Range = { inMs: number; outMs: number | null };
 
@@ -117,6 +171,8 @@ export function VideoAnnotationPlayer({
   onPostAtTime,
   registerSeek,
   onTimeChange,
+  assetId,
+  assetVersionId,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const laneRef = useRef<HTMLDivElement>(null);
@@ -139,6 +195,23 @@ export function VideoAnnotationPlayer({
   const [color, setColor] = useState<string>(DEFAULT_DRAWING_COLOR);
   const [drawing, dispatchDrawing] = useReducer(drawingHistoryReducer, EMPTY_DRAWING);
   const [mediaError, setMediaError] = useState(false);
+  const playback = useLibraryPlayback({
+    brandId,
+    assetId,
+    versionId: assetVersionId,
+    enabled: Boolean(assetVersionId),
+  });
+  const [quality, setQuality] = useState<Quality>('auto');
+  // Null plays the incoming `src`.
+  const [source, setSource] = useState<PlayingSource | null>(null);
+  const [speed, setSpeed] = useState(1);
+  const [loop, setLoop] = useState(false);
+  const [hoverFraction, setHoverFraction] = useState<number | null>(null);
+  // Where a source swap picks back up once the new bytes have their metadata.
+  const resumeRef = useRef<{ atSec: number; play: boolean } | null>(null);
+  const autoAppliedRef = useRef(false);
+  const playingSrc = source?.src ?? src;
+  const sprite = playback?.sprite ?? null;
 
   const publishTime = useCallback(
     (ms: number) => {
@@ -174,12 +247,87 @@ export function VideoAnnotationPlayer({
   // frame step lands must not drag the playhead back after it.
   const reversingRef = useRef(false);
 
+  // Back to the speed the reviewer chose, not 1×.
   const stopShuttle = useCallback(() => {
     reversingRef.current = false;
     setShuttle(null);
     const video = videoRef.current;
-    if (video) video.playbackRate = 1;
-  }, []);
+    if (video) video.playbackRate = speed;
+  }, [speed]);
+
+  const autoRung = useCallback(() => {
+    if (!playback) return null;
+    const box = containerRef.current?.getBoundingClientRect();
+    const shortSide = box ? Math.min(box.width, box.height) : 0;
+    return pickPlaybackRung(playback.rungs, {
+      ...detectHdrPlayback(),
+      stageShortSidePx: shortSide * (window.devicePixelRatio || 1),
+    });
+  }, [playback, containerRef]);
+
+  // A swap keeps the playhead and the play/pause state: the new bytes seek back and
+  // resume once their metadata loads.
+  const switchSource = useCallback(
+    (next: PlayingSource | null) => {
+      const video = videoRef.current;
+      if ((next?.src ?? src) === playingSrc) return;
+      if (video) resumeRef.current = { atSec: video.currentTime, play: !video.paused };
+      stopShuttle();
+      setSource(next);
+    },
+    [src, playingSrc, stopShuttle],
+  );
+
+  const selectQuality = (next: Quality) => {
+    setQuality(next);
+    const rung =
+      next === 'original'
+        ? null
+        : next === 'auto'
+          ? autoRung()
+          : (playback?.rungs.find((r) => r.role === next) ?? null);
+    switchSource(rung ? { role: rung.role, src: rung.signedUrl } : null);
+  };
+
+  // Auto takes over silently only while nothing has happened yet; swapping under a
+  // reviewer who already pressed play would stall them, so then the menu offers it.
+  useEffect(() => {
+    if (!playback || autoAppliedRef.current) return;
+    autoAppliedRef.current = true;
+    const video = videoRef.current;
+    if (quality !== 'auto' || !video || !video.paused || video.currentTime > 0) return;
+    const rung = autoRung();
+    if (rung) setSource({ role: rung.role, src: rung.signedUrl });
+  }, [playback, quality, autoRung]);
+
+  const selectSpeed = (next: number) => {
+    setSpeed(next);
+    const video = videoRef.current;
+    if (!video) return;
+    // The default survives a source swap, which resets playbackRate to it.
+    video.defaultPlaybackRate = next;
+    if (!shuttle) video.playbackRate = next;
+  };
+
+  // The download menu in the header grabs the frame from this same element.
+  useEffect(() => {
+    const video = src ? videoRef.current : null;
+    registerStageVideo(video, measuredRate);
+    return () => {
+      if (activeStageVideo() === video) registerStageVideo(null);
+    };
+  }, [src, measuredRate]);
+
+  const saveStill = () => {
+    const video = videoRef.current;
+    if (!video || !src) return;
+    downloadVideoStill(video, fileStem(src, playback?.fileName)).catch((error: unknown) => {
+      console.error('[VideoAnnotationPlayer] still capture failed', error);
+      toast.error('Could not save the still', {
+        description: error instanceof Error ? error.message : undefined,
+      });
+    });
+  };
 
   // The pause event follows asynchronously (or never, when already paused); the
   // draw tools must not wait on it.
@@ -440,29 +588,48 @@ export function VideoAnnotationPlayer({
       data-frame-rate={measuredRate ? `${measuredRate.num}/${measuredRate.den}` : ''}
       data-range-in={range?.inMs ?? ''}
       data-range-out={range?.outMs ?? ''}
+      data-playing-role={source?.role ?? 'original'}
+      data-quality={quality}
+      data-playback-rate={speed}
     >
       <div ref={containerRef} className="relative min-h-0 flex-1 select-none">
         {/* biome-ignore lint/a11y/useMediaCaption: user-uploaded creative under review; no caption track exists */}
         <video
           ref={videoRef}
-          src={src}
+          src={playingSrc ?? undefined}
+          // Signed Storage URLs answer CORS; without this the still's canvas is tainted.
+          crossOrigin="anonymous"
           playsInline
           preload="metadata"
+          loop={loop}
           className="absolute inset-0 size-full object-contain"
           onLoadedMetadata={(e) => {
             const el = e.currentTarget;
             setDurationMs(Math.floor(el.duration * 1000));
             setNaturalSize({ width: el.videoWidth, height: el.videoHeight });
+            const resume = resumeRef.current;
+            if (!resume) return;
+            resumeRef.current = null;
+            el.currentTime = resume.atSec;
+            if (resume.play) void el.play();
           }}
           onTimeUpdate={(e) => {
             if (shuttle?.direction === -1) return;
-            publishTime(msFromSeconds(e.currentTarget.currentTime, measuredRate));
+            const el = e.currentTarget;
+            const ms = msFromSeconds(el.currentTime, measuredRate);
+            // With a range marked, loop plays the range rather than the whole clip.
+            if (loop && range?.outMs != null && !el.paused && ms >= range.outMs) {
+              el.currentTime = range.inMs / 1000;
+              return;
+            }
+            publishTime(ms);
           }}
           onSeeked={(e) => publishTime(msFromSeconds(e.currentTarget.currentTime, measuredRate))}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
           onEnded={stopShuttle}
-          onError={() => setMediaError(true)}
+          // A proxy that will not play falls back to the original before calling it lost.
+          onError={() => (source ? switchSource(null) : setMediaError(true))}
         />
         {mediaError ? (
           <div
@@ -543,7 +710,42 @@ export function VideoAnnotationPlayer({
             ) : null}
           </span>
 
-          <div ref={laneRef} className="relative min-w-0 flex-1 pt-4">
+          <div
+            ref={laneRef}
+            className="relative min-w-0 flex-1 pt-4"
+            onPointerMove={(event) => {
+              if (!sprite) return;
+              const bounds = event.currentTarget.getBoundingClientRect();
+              setHoverFraction(
+                bounds.width > 0
+                  ? Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width))
+                  : null,
+              );
+            }}
+            onPointerLeave={() => setHoverFraction(null)}
+          >
+            {sprite && hoverFraction !== null ? (
+              <div
+                data-testid="timeline-hover-thumb"
+                data-tile-index={scrubSpriteTile(hoverFraction).index}
+                className="pointer-events-none absolute bottom-full z-30 mb-1 flex -translate-x-1/2 flex-col items-center gap-1"
+                // Held 80px (half the thumb) inside the lane so the ends stay on screen.
+                style={{ left: `clamp(80px, ${hoverFraction * 100}%, calc(100% - 80px))` }}
+              >
+                <div
+                  className="w-40 rounded-md bg-black bg-no-repeat shadow-md ring-1 ring-border"
+                  style={{
+                    aspectRatio: `${sprite.width} / ${sprite.height}`,
+                    backgroundImage: `url("${sprite.signedUrl}")`,
+                    backgroundSize: `${SCRUB_SPRITE_GRID * 100}% ${SCRUB_SPRITE_GRID * 100}%`,
+                    backgroundPosition: scrubSpriteTile(hoverFraction).backgroundPosition,
+                  }}
+                />
+                <span className="rounded bg-black/75 px-1.5 py-0.5 text-2xs tabular-nums text-white">
+                  {stageTime(hoverFraction * durationMs)}
+                </span>
+              </div>
+            ) : null}
             <TimelineMarkerStrip
               markers={markers}
               durationMs={durationMs}
@@ -593,6 +795,68 @@ export function VideoAnnotationPlayer({
               className="h-1.5 w-full cursor-pointer accent-primary"
             />
           </div>
+
+          {playback && playback.rungs.length > 0 ? (
+            <select
+              data-testid="player-quality"
+              aria-label="Playback quality"
+              value={quality}
+              className={SELECT_CLASS}
+              onChange={(event) => {
+                selectQuality(event.target.value as Quality);
+                // A focused select swallows the transport hotkeys (it counts as typing).
+                event.currentTarget.blur();
+              }}
+            >
+              <option value="auto">Auto</option>
+              {playback.rungs.map((rung) => (
+                <option key={rung.role} value={rung.role}>
+                  {rung.label}
+                </option>
+              ))}
+              <option value="original">Original</option>
+            </select>
+          ) : null}
+          <select
+            data-testid="player-speed"
+            aria-label="Playback speed"
+            value={speed}
+            className={SELECT_CLASS}
+            onChange={(event) => {
+              selectSpeed(Number(event.target.value));
+              event.currentTarget.blur();
+            }}
+          >
+            {PLAYBACK_SPEEDS.map((option) => (
+              <option key={option} value={option}>
+                {option}×
+              </option>
+            ))}
+          </select>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            data-testid="player-loop"
+            aria-pressed={loop}
+            aria-label={range?.outMs != null ? 'Loop the marked range' : 'Loop'}
+            title={range?.outMs != null ? 'Loop the marked range' : 'Loop'}
+            className={cn(loop && 'bg-accent text-accent-foreground')}
+            onClick={() => setLoop((on) => !on)}
+          >
+            <Repeat className="size-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            data-testid="player-download-still"
+            aria-label="Download still"
+            title="Download this frame as a PNG"
+            onClick={saveStill}
+          >
+            <Camera className="size-4" />
+          </Button>
 
           {!composerOpen ? (
             <Button

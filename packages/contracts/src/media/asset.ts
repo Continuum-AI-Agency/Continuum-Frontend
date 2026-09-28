@@ -6,7 +6,12 @@
 import { z } from 'zod';
 import { libraryAspectRatioBinSchema } from './aspect-ratio';
 import { assetPreviewSchema } from './asset-renditions';
+import { LIBRARY_COLLECTION_MAX_DEPTH } from './collection-nesting';
 import { assetIntegrityStateSchema } from './creative-operations';
+import { mediaAssetTechnicalFieldsSchema } from './media-info';
+
+/** media.assets.notes — free text, written only through the dispatcher's set_notes. */
+export const MAX_ASSET_NOTES_LENGTH = 10_000;
 
 // 'file' covers non-renderable source files (After Effects projects, RAW
 // bundles) stored for the future rendering backend; the grid shows a generic
@@ -243,6 +248,9 @@ export const mediaAssetSchema = z
       .nullable()
       .optional(),
     groupId: z.string().uuid().nullable().optional(),
+    notes: z.string().max(MAX_ASSET_NOTES_LENGTH).nullable().optional(),
+    // Typed copies of the head version's probe (media-info.ts).
+    ...mediaAssetTechnicalFieldsSchema.shape,
   })
   .strict();
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;
@@ -294,10 +302,10 @@ export const mediaCollectionSchema = z
     smartQuery: z.record(z.string(), z.unknown()).nullable().optional(),
     coverAssetId: z.string().nullable().optional(),
     itemCount: z.number().int().nonnegative().default(0),
-    /** Null on a root board. Same brand, no cycles, depth ≤ 5. */
+    /** Null on a root board. Same brand, no cycles, depth ≤ LIBRARY_COLLECTION_MAX_DEPTH. */
     parentId: z.string().uuid().nullable().optional(),
-    /** 0 = root. A row at 5 cannot grow children. */
-    depth: z.number().int().min(0).max(5).default(0),
+    /** 0 = root. A row at LIBRARY_COLLECTION_MAX_DEPTH (9, i.e. 10 levels) cannot grow children. */
+    depth: z.number().int().min(0).max(LIBRARY_COLLECTION_MAX_DEPTH).default(0),
     /** Product-owned boards (`canvas_outputs`). Null on operator-created ones. */
     systemKey: z.string().min(1).max(64).nullable().optional(),
     visibility: collectionVisibilitySchema.default('team'),

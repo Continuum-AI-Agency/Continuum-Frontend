@@ -4,14 +4,16 @@
 // lines. Clicking a line seeks the stage player to the moment it was said — which
 // is the whole point when a search for a spoken phrase is what brought you here.
 // The line under the playhead highlights and scrolls itself into view as it plays.
-// Export hands the same lines on as SRT / WebVTT captions or plain text.
+// Shift+click selects a span of lines, and a range comment can be written on it —
+// the same time+endMs comment the player's I/O keys make. Export hands the same
+// lines on as SRT / WebVTT captions or plain text.
 
-import { Check, Copy, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Check, Copy, Loader2, MessageSquarePlus, X } from 'lucide-react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { type TranscriptExportFormat, toSrt, toTxt, toVtt } from '@/lib/library/transcriptExport';
 import { cn } from '@/lib/utils';
-import { formatTimecode } from './annotationGeometry';
+import { formatTimecode, formatTimecodeRange } from './annotationGeometry';
 import type { PlaybackClock } from './playbackClock';
 import {
   activeSegmentAt,
@@ -30,7 +32,11 @@ type Props = {
   fileName: string;
   clock: PlaybackClock;
   onSeek: (timeMs: number) => void;
+  /** The composer for a comment on the selected lines; omitted, the panel is read-only. */
+  renderRangeComposer?: (range: TranscriptRange) => ReactNode;
 };
+
+export type TranscriptRange = { timeMs: number; endMs: number | null; clear: () => void };
 
 // timeupdate fires ~4x/second; the highlight only ever changes when the playhead
 // crosses a line boundary. Coalescing through one rAF and re-rendering only on an
@@ -139,9 +145,17 @@ export function TranscriptPanel({
   fileName,
   clock,
   onSeek,
+  renderRangeComposer,
 }: Props) {
   const activeIndex = useActiveSegmentIndex(clock, view);
   const lineRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  // The last line clicked anchors a Shift+click span.
+  const [selection, setSelection] = useState<{ anchor: number; end: number } | null>(null);
+  const [composing, setComposing] = useState(false);
+  const clearSelection = useCallback(() => {
+    setSelection(null);
+    setComposing(false);
+  }, []);
 
   useEffect(() => {
     if (activeIndex < 0) return;
@@ -174,6 +188,14 @@ export function TranscriptPanel({
   // Captions need timecodes; a transcript without them only exports as text.
   const formats: TranscriptExportFormat[] =
     view.segments.length > 0 ? ['srt', 'vtt', 'txt'] : ['txt'];
+  const low = selection ? Math.min(selection.anchor, selection.end) : -1;
+  const high = selection ? Math.max(selection.anchor, selection.end) : -1;
+  const first = view.segments[low];
+  const last = view.segments[high];
+  const range =
+    first && last
+      ? { timeMs: first.startMs, endMs: last.endMs > first.startMs ? last.endMs : null }
+      : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -221,11 +243,23 @@ export function TranscriptPanel({
               <button
                 ref={registerLine(index)}
                 type="button"
-                onClick={() => onSeek(segment.startMs)}
+                data-segment-index={index}
+                data-selected={index >= low && index <= high ? 'true' : undefined}
+                onClick={(event) => {
+                  onSeek(segment.startMs);
+                  if (!renderRangeComposer) return;
+                  setComposing(false);
+                  setSelection((current) =>
+                    event.shiftKey && current
+                      ? { anchor: current.anchor, end: index }
+                      : { anchor: index, end: index },
+                  );
+                }}
                 aria-current={index === activeIndex ? 'true' : undefined}
                 className={cn(
                   'flex w-full gap-2.5 px-3 py-1.5 text-left transition-colors hover:bg-muted/60',
                   index === activeIndex && 'bg-primary/10',
+                  index >= low && index <= high && 'bg-amber-400/15 hover:bg-amber-400/20',
                 )}
               >
                 <span
@@ -249,6 +283,44 @@ export function TranscriptPanel({
           ))}
         </ol>
       )}
+      {renderRangeComposer && range ? (
+        <div
+          data-testid="transcript-range-bar"
+          data-range-start={range.timeMs}
+          data-range-end={range.endMs ?? ''}
+          className="shrink-0 border-t border-border px-3 py-2"
+        >
+          {composing ? (
+            renderRangeComposer({ ...range, clear: clearSelection })
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="rounded bg-amber-400/15 px-1.5 py-0.5 text-2xs tabular-nums text-amber-700 dark:text-amber-300">
+                {formatTimecodeRange(range.timeMs, range.endMs)}
+              </span>
+              <span className="text-2xs text-muted-foreground">Shift+click to extend</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="ml-auto h-7 text-xs"
+                data-testid="transcript-comment-range"
+                onClick={() => setComposing(true)}
+              >
+                <MessageSquarePlus className="size-3.5" />
+                Comment
+              </Button>
+              <button
+                type="button"
+                aria-label="Clear the selected lines"
+                onClick={clearSelection}
+                className="rounded-sm p-1 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

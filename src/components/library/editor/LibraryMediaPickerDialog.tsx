@@ -41,6 +41,8 @@ export type LibraryMediaPickerDialogProps = {
   onPickAssets?: (assets: MediaAsset[]) => void;
   /** Images only, for surfaces that cannot place a clip — the stills compositor. */
   accept?: 'media' | 'image';
+  /** The dialog's words, for a caller that is not placing media (compare picks one). */
+  copy?: { title: string; description: string; confirm: string };
   /** Controlled open. Supplying it also hides the built-in trigger button. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -119,6 +121,7 @@ function MediaTile({
       onClick={onToggle}
       disabled={disabled}
       aria-pressed={selected}
+      data-asset-id={asset.id}
       className={cn(
         'group relative flex flex-col overflow-hidden rounded-md border text-left transition-colors',
         selected
@@ -169,6 +172,7 @@ export function LibraryMediaPickerDialog({
   onAdd,
   onPickAssets,
   accept = 'media',
+  copy,
   open: controlledOpen,
   onOpenChange,
 }: LibraryMediaPickerDialogProps) {
@@ -273,12 +277,14 @@ export function LibraryMediaPickerDialog({
         <DialogContent className="flex h-[70dvh] max-w-3xl flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="shrink-0 border-b border-border px-4 py-3">
             <DialogTitle className="text-sm font-medium">
-              {accept === 'image' ? 'Add an image from the Library' : 'Add media from the Library'}
+              {copy?.title ??
+                (accept === 'image' ? 'Add an image from the Library' : 'Add media from the Library')}
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              {accept === 'image'
-                ? 'Pick images to place as layers.'
-                : 'Pick images, videos, or audio to place on the timeline.'}
+              {copy?.description ??
+                (accept === 'image'
+                  ? 'Pick images to place as layers.'
+                  : 'Pick images, videos, or audio to place on the timeline.')}
             </DialogDescription>
           </DialogHeader>
 
@@ -329,7 +335,7 @@ export function LibraryMediaPickerDialog({
               Cancel
             </Button>
             <Button type="button" size="sm" disabled={selected.size === 0} onClick={confirm}>
-              Add {selected.size > 0 ? selected.size : ''}
+              {copy?.confirm ?? `Add ${selected.size > 0 ? selected.size : ''}`}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -18,10 +18,17 @@ import type {
   ShareLinkWatermark,
   ShareWatermarkViewer,
 } from '@continuum/contracts';
-import { buildShareDeepLinkHref, commentDeepLinkFromAnnotation } from '@continuum/contracts';
+// viewerFamily from the contracts, not the viewers module: that one is 'use client', and a
+// Server Component cannot call a client export.
+import {
+  buildShareDeepLinkHref,
+  commentDeepLinkFromAnnotation,
+  viewerFamily,
+} from '@continuum/contracts';
 import { Download, FileArchive } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
 import { type StaticMark, StaticMarks } from '@/components/library/detail/annotation/StaticMarks';
+import { FamilyViewer } from '@/components/library/viewers';
 import { initialsFor } from '@/lib/library/comments';
 import { ExternalApprovalControl } from './ExternalApprovalControl';
 import { ExternalCommentComposer } from './ExternalCommentComposer';
@@ -32,7 +39,9 @@ import {
   type PublicShareThread,
   ShareCommentThreads,
 } from './ShareCommentThreads';
+import { ShareAudioPlayer } from './ShareAudioPlayer';
 import { ShareAssetBeacon, ShareOpenBeacon } from './ShareEventBeacon';
+import { ShareImageReview } from './ShareImageReview';
 import { ShareMediaFrame } from './ShareMediaFrame';
 import { SharePreparingPreview } from './SharePreparingPreview';
 import { ShareReel } from './ShareReel';
@@ -117,6 +126,22 @@ function videoGuard(protect: boolean) {
     : {};
 }
 
+function FileCard({ asset }: { asset: MediaAsset }) {
+  const size = formatBytes(asset.sizeBytes);
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-lg border border-border bg-muted/40 px-8 py-12 text-center">
+      <FileArchive className="size-10 text-muted-foreground" aria-hidden />
+      <div>
+        <p className="text-sm font-medium text-foreground">{asset.fileName}</p>
+        <p className="text-xs text-muted-foreground">
+          {asset.mimeType}
+          {size ? ` · ${size}` : ''}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function AssetPreviewMedia({
   asset,
   markers,
@@ -195,6 +220,19 @@ function AssetPreviewMedia({
       />
     );
   }
+  // 3D, HTML bundles and paged files get their own viewer whenever the guest holds the
+  // original — ahead of the poster or first-page still their preview would otherwise show.
+  // A protected link has no original, so it keeps that still.
+  if (viewerFamily(asset) && asset.signedUrl) {
+    return (
+      <FamilyViewer
+        asset={asset}
+        version={null}
+        surface="share"
+        fallback={<FileCard asset={asset} />}
+      />
+    );
+  }
   // A video's image preview is its poster: the reviewer gets the playable file, or
   // the poster when a protected link has no preview proxy to play.
   if (
@@ -202,6 +240,17 @@ function AssetPreviewMedia({
     preview.signedUrl &&
     (asset.kind !== 'video' || !asset.signedUrl)
   ) {
+    if (commentable && asset.kind === 'image') {
+      return (
+        <ShareImageReview
+          assetId={asset.id}
+          src={preview.signedUrl}
+          alt={asset.title ?? asset.fileName}
+          comments={comments}
+          initialSelectedId={deepLink?.commentId ?? null}
+        />
+      );
+    }
     return (
       <div className="relative overflow-hidden rounded-lg border border-border">
         <img
@@ -242,6 +291,18 @@ function AssetPreviewMedia({
     );
   }
   if (asset.kind === 'image' && asset.signedUrl) {
+    // A guest who may comment gets the Library's still viewer: zoom, pins and marks.
+    if (commentable) {
+      return (
+        <ShareImageReview
+          assetId={asset.id}
+          src={asset.signedUrl}
+          alt={asset.title ?? asset.fileName}
+          comments={comments}
+          initialSelectedId={deepLink?.commentId ?? null}
+        />
+      );
+    }
     return (
       <div className="relative overflow-hidden rounded-lg border border-border">
         {/* Signed storage URLs are transient and cross-origin; next/image adds nothing here. */}
@@ -284,19 +345,22 @@ function AssetPreviewMedia({
       />
     );
   }
-  const size = formatBytes(asset.sizeBytes);
-  return (
-    <div className="flex flex-col items-center gap-3 rounded-lg border border-border bg-muted/40 px-8 py-12 text-center">
-      <FileArchive className="size-10 text-muted-foreground" aria-hidden />
-      <div>
-        <p className="text-sm font-medium text-foreground">{asset.fileName}</p>
-        <p className="text-xs text-muted-foreground">
-          {asset.mimeType}
-          {size ? ` · ${size}` : ''}
-        </p>
-      </div>
-    </div>
-  );
+  // Open links play the original; a protected one, its stored audio proxy (the loader
+  // puts that in signedUrl, as it does a video's preview proxy).
+  const audioSrc = asset.kind === 'audio' ? asset.signedUrl : null;
+  if (audioSrc) {
+    return (
+      <ShareAudioPlayer
+        assetId={asset.id}
+        src={audioSrc}
+        label={asset.title ?? asset.fileName}
+        markers={markers}
+        initialSelectedId={deepLink?.commentId ?? null}
+        pinnable={commentable}
+      />
+    );
+  }
+  return <FileCard asset={asset} />;
 }
 
 type WatermarkOverlay = {
@@ -359,7 +423,8 @@ function SharedAssetTile({
   const threads = buildPublicShareThreads(comments);
   // Time-pinned threads ride the scrubber (with their marks, drawn on the frame
   // when selected); spatial ones are drawn over the image by StaticMarks.
-  const markers = asset.kind === 'video' ? timeMarkersFor(threads) : [];
+  const markers =
+    asset.kind === 'video' || asset.kind === 'audio' ? timeMarkersFor(threads) : [];
 
   const preview = (
     <AssetPreview
@@ -420,7 +485,13 @@ function SharedAssetTile({
           versionId={versionId}
           hasIdentity={hasIdentity}
           hasPasscode={hasPasscode}
-          pinnable={asset.kind === 'video'}
+          pinMode={
+            asset.kind === 'video' || asset.kind === 'audio'
+              ? 'time'
+              : asset.kind === 'image'
+                ? 'spatial'
+                : null
+          }
         />
       ) : null}
       {allowApproval ? (

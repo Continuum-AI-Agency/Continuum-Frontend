@@ -10,6 +10,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Check,
+  Columns2,
   FolderInput,
   FolderOpen,
   Layers,
@@ -22,7 +23,7 @@ import {
   Workflow,
   X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,7 +55,7 @@ import { createElement, elementsQueryKey } from '@/lib/ai-studio/elements';
 import {
   BULK_CHUNK_SIZE,
   fetchAllMatchingAssetIds,
-  writeInChunks,
+  writeInChunksSkippingVanished,
 } from '@/lib/library/bulkSelection';
 import {
   bulkDeleteAssetsOperation,
@@ -65,9 +66,11 @@ import {
 } from '@/lib/library/creativeOperations';
 import { createCustomField } from '@/lib/library/customFields';
 import { createShareLink } from '@/lib/library/share';
+import { mediaSchema } from '@/lib/media/supabase-media';
 import { useLibraryAccess } from '@/lib/library/useBrandRole';
 import { useProjectMutations } from '@/lib/projects';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { CompareAssetsDialog } from './detail/compare/CompareAssetsDialog';
 import { CustomFieldValueEditor } from './fields/CustomFieldValueEditor';
 import { ShareBoxDialog } from './ShareBoxDialog';
 
@@ -126,6 +129,7 @@ export function LibraryBulkToolbar({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
   const queryClient = useQueryClient();
   const client = () => createSupabaseBrowserClient();
   // Tagging is what makes the Library's Project filter mean anything: without it the filter
@@ -137,10 +141,25 @@ export function LibraryBulkToolbar({
   } = useProjectMutations(brandId);
   const selectedField = customFields.find((field) => field.id === fieldId) ?? null;
 
-  const writeChunked = (write: (chunk: string[]) => Promise<unknown>) =>
-    writeInChunks(targetIds, write, (done, total) =>
-      setProgress(total > BULK_CHUNK_SIZE ? `${done} / ${total}` : null),
+  // How many assets the last chunked write actually reached; run() reports it.
+  const writtenCount = useRef<number | null>(null);
+
+  // A chunk refused because a teammate deleted one of its assets is rewritten without it.
+  const writeChunked = async (write: (chunk: string[]) => Promise<unknown>) => {
+    writtenCount.current = await writeInChunksSkippingVanished(
+      targetIds,
+      write,
+      async (chunk) => {
+        const { data } = await mediaSchema(client())
+          .from('assets')
+          .select('id')
+          .in('id', chunk)
+          .is('deleted_at', null);
+        return ((data ?? []) as { id: string }[]).map((row) => row.id);
+      },
+      (count, total) => setProgress(total > BULK_CHUNK_SIZE ? `${count} / ${total}` : null),
     );
+  };
 
   async function selectAllMatching() {
     setBusy('Selecting');
@@ -199,9 +218,11 @@ export function LibraryBulkToolbar({
   async function run(label: string, operation: () => Promise<unknown>) {
     setBusy(label);
     setMessage(null);
+    writtenCount.current = null;
     try {
       await operation();
-      setMessage(`${label} · ${targetIds.length} ${targetIds.length === 1 ? 'asset' : 'assets'}`);
+      const count = writtenCount.current ?? targetIds.length;
+      setMessage(`${label} · ${count} ${count === 1 ? 'asset' : 'assets'}`);
       onCompleted();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : `${label} failed`);
@@ -211,8 +232,32 @@ export function LibraryBulkToolbar({
     }
   }
 
-  // Every action here is a write the dispatcher refuses a viewer, so a viewer gets the
-  // selection and nothing to press.
+  // Two hand-picked assets can be compared side by side; comparing is a read, so a viewer
+  // gets it too.
+  const compare =
+    assetIds.length === 2 && matchingIds === null ? (
+      <>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          data-testid="bulk-compare"
+          onClick={() => setCompareOpen(true)}
+        >
+          <Columns2 className="size-3.5" />
+          Compare
+        </Button>
+        <CompareAssetsDialog
+          brandId={brandId}
+          assetIds={assetIds}
+          open={compareOpen}
+          onOpenChange={setCompareOpen}
+        />
+      </>
+    ) : null;
+
+  // Every write here is one the dispatcher refuses a viewer, so a viewer gets the
+  // selection and the read-only Compare.
   if (!canEdit) {
     return (
       <div className="sticky top-0 z-20 flex items-center gap-2 rounded-lg border border-border bg-background/95 p-2 shadow-sm backdrop-blur">
@@ -223,6 +268,7 @@ export function LibraryBulkToolbar({
         <span className="flex-1 text-xs text-muted-foreground">
           View only — your role cannot change these assets.
         </span>
+        {compare}
         <Button
           type="button"
           size="icon"
@@ -646,6 +692,7 @@ export function LibraryBulkToolbar({
         <Link2 className="size-3.5" />
         Share box
       </Button>
+      {compare}
       <Button
         type="button"
         size="sm"

@@ -11,11 +11,13 @@
 
 import {
   type AssetPreviewState,
-  classifyLibraryFile,
+  classifyLibraryFileOrGeneric,
   completeMcpUploadIntentRequestSchema,
   completeMcpUploadIntentResponseSchema,
   LIBRARY_LONG_RECORDING_SEC,
+  LIBRARY_UPLOAD_MAX_BYTES,
   type LibraryUploadTicket,
+  libraryUploadRefusal,
   libraryUploadTicketSchema,
   type PinnedLibraryImageRef,
   registerMediaErrorSchema,
@@ -40,15 +42,10 @@ export const MEDIA_LIBRARY_BUCKET = 'media-library';
 // requires a non-empty one and derives kind 'file' for non-image/video.
 const FALLBACK_MIME_TYPE = 'application/octet-stream';
 const MAX_BUFFERED_CHECKSUM_BYTES = 64 * 1024 * 1024;
-export const MAX_PROJECT_FILE_BYTES = 5 * 1024 * 1024 * 1024;
 
-// The Supabase project-GLOBAL storage upload limit (a dashboard setting, not a
-// bucket limit) — it silently overrides every bucket's own file_size_limit.
-// Measured 2026-09-27 via GET /v1/projects/<ref>/config/storage: fileSizeLimit
-// 524288000, with media-library at 500 MB and media-source at 5 GB, so this is
-// the ceiling every Library upload actually hits. Change it when the dashboard
-// changes; storage's own 413 is mapped to the same sentence below regardless.
-export const LIBRARY_EFFECTIVE_UPLOAD_CAP_BYTES = 500 * 1024 * 1024;
+// The Supabase project-GLOBAL storage upload limit, from the contracts registry (measured
+// there). Storage's own 413 is mapped to the same sentence below regardless.
+export const LIBRARY_EFFECTIVE_UPLOAD_CAP_BYTES = LIBRARY_UPLOAD_MAX_BYTES;
 
 const BYTES_PER_MB = 1024 * 1024;
 
@@ -58,9 +55,12 @@ export function uploadTooLargeMessage(file: { name: string; size: number }): str
   return `${file.name} is ${sizeMb} MB — uploads are capped at ${capMb} MB right now.`;
 }
 
-/** The refusal to show before any network call, or null when the file fits. */
-export function uploadSizeRefusal(file: { name: string; size: number }): string | null {
-  return file.size > LIBRARY_EFFECTIVE_UPLOAD_CAP_BYTES ? uploadTooLargeMessage(file) : null;
+/**
+ * The refusal to show before any network call, or null: the Storage cap, the forge's
+ * project-file cap, or a font (which belongs in the brand font store).
+ */
+export function uploadSizeRefusal(file: { name: string; size: number; type?: string }): string | null {
+  return libraryUploadRefusal({ fileName: file.name, mimeType: file.type, sizeBytes: file.size });
 }
 
 // Storage says "The object exceeded the maximum allowed size" on a signed PUT
@@ -237,7 +237,7 @@ async function invokeLibraryUpload(
  *  route to storage without also inheriting `register`'s `source:"upload"` row. */
 export async function signLibraryUpload(
   supabase: SupabaseBrowserClient,
-  body: { brandId: string; fileName: string; mimeType: string },
+  body: { brandId: string; fileName: string; mimeType: string; sizeBytes?: number },
 ): Promise<LibraryUploadTicket> {
   const data = await invokeLibraryUpload(supabase, { action: 'sign_upload', ...body });
   const parsed = libraryUploadTicketSchema.safeParse(data);
@@ -260,8 +260,7 @@ export async function uploadToLibraryTicket(
 }
 
 function isProjectFile(file: File): boolean {
-  const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
-  return format.accepted && format.originalKind === 'file';
+  return classifyLibraryFileOrGeneric({ fileName: file.name, mimeType: file.type }).originalKind === 'file';
 }
 
 // TUS: chunked, resumable after a pause or a dropped connection. Used for
@@ -312,7 +311,12 @@ export async function uploadMediaAsset(
   const resume = params.resume ?? readSavedResume(resumeStore, resumeKey);
   const ticket =
     resume?.ticket ??
-    (await signLibraryUpload(supabase, { brandId, fileName: file.name, mimeType }));
+    (await signLibraryUpload(supabase, {
+      brandId,
+      fileName: file.name,
+      mimeType,
+      sizeBytes: file.size,
+    }));
   params.onResumeState?.({ ticket, uploadUrl: resume?.uploadUrl ?? null });
   try {
     if (isResumableUpload(file)) {

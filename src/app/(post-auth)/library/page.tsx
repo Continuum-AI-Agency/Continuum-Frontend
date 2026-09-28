@@ -2,12 +2,16 @@ import {
   libraryAspectRatioBinSchema,
   libraryBrowseDestinationSchema,
   libraryBrowseQuerySchema,
+  libraryFieldRangeSchema,
+  libraryFormatGroupSchema,
   libraryLayoutSchema,
   libraryMediaTypeSchema,
   libraryPerformanceWindowSchema,
   libraryPlacementSchema,
   libraryPreviewFrameSchema,
   librarySortSchema,
+  libraryRangeFiltersSchema,
+  libraryTechnicalFiltersSchema,
   mediaKindSchema,
   mediaReviewStatusSchema,
   mediaSourceSchema,
@@ -26,7 +30,11 @@ import { setActiveBrandPreference } from '@/lib/brands/preferences';
 import { buildCaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import { fetchLibraryBrowsePage } from '@/lib/media/browse.server';
 import { fetchMediaAssets, fetchMediaCollections } from '@/lib/media/fetchers.server';
-import { kindToMediaType, parseTagsParam } from '@/lib/media/filters';
+import {
+  kindToMediaType,
+  libraryBrowseExtrasFromParams,
+  parseTagsParam,
+} from '@/lib/media/filters';
 import { fetchLibrarySavedViews } from '@/lib/media/saved-views.server';
 import { parseLibrarySection } from '@/lib/media/sections';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -78,6 +86,26 @@ function isUuid(value: string | undefined): value is string {
   );
 }
 
+/**
+ * The structured filters off the URL, each kept only when it validates: a hand-edited or
+ * stale link drops the one bad filter rather than failing the whole page.
+ */
+function parseBrowseExtras(params: LibrarySearchParams) {
+  const extras = libraryBrowseExtrasFromParams((key) => first(params[key]) ?? null);
+  const valid = <T,>(schema: { safeParse: (value: unknown) => { success: boolean; data?: T } }, value: unknown) => {
+    const parsed = schema.safeParse(value);
+    return parsed.success ? parsed.data : undefined;
+  };
+  return {
+    families: extras.families.filter((value) => libraryFormatGroupSchema.safeParse(value).success),
+    ranges: valid(libraryRangeFiltersSchema, extras.ranges),
+    technical: valid(libraryTechnicalFiltersSchema, extras.technical),
+    fieldRanges: valid(libraryFieldRangeSchema.array().max(10), extras.fieldRanges) ?? [],
+    thenBy: extras.thenBy,
+    reviewStateIds: parseTagsParam(first(params.reviewStates)).filter(isUuid).slice(0, 50),
+  };
+}
+
 function parseBrowseQuery(brandId: string, params: LibrarySearchParams) {
   const legacySource = mediaSourceSchema.safeParse(first(params.source));
   const legacyKind = mediaKindSchema.safeParse(first(params.kind));
@@ -94,9 +122,12 @@ function parseBrowseQuery(brandId: string, params: LibrarySearchParams) {
     !first(params.mediaType) &&
     !first(params.sort) &&
     !collection &&
-    !first(params.section);
+    !first(params.section) &&
+    // A format or technical filter asks for more than Home's recent images and videos.
+    !['families', 'ranges', 'technical', 'fieldRanges'].some((key) => first(params[key]));
 
   return libraryBrowseQuerySchema.parse({
+    ...parseBrowseExtras(params),
     brandId,
     destination: destination.success ? destination.data : defaultHome ? 'home' : undefined,
     previewFrame: libraryPreviewFrameSchema.safeParse(first(params.frame)).success

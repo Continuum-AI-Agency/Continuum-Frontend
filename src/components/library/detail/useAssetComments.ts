@@ -105,7 +105,12 @@ export function useAssetComments(brandId: string, assetId: string): UseAssetComm
             });
           }
         }
-        setComments(fetched);
+        // A comment posted (or received live) while the list was loading is newer than it:
+        // the list must not overwrite it.
+        setComments((prev) => {
+          const fetchedIds = new Set(fetched.map((comment) => comment.id));
+          return [...fetched, ...prev.filter((comment) => !fetchedIds.has(comment.id))];
+        });
       })
       .catch((err: unknown) => {
         if (cancelled) return;

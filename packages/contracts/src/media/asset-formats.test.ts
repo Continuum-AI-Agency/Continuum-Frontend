@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   classifyLibraryFile,
+  classifyLibraryFileOrGeneric,
+  classifyZipEntries,
+  htmlBundleEntryPoint,
   isLibraryFontFile,
   isPlayableSidecarPreview,
   LIBRARY_ACCEPT_ATTRIBUTE,
+  LIBRARY_FORMATS,
+  LIBRARY_PROJECT_FILE_MAX_BYTES,
+  LIBRARY_UPLOAD_MAX_BYTES,
+  LIBRARY_ZIP_FORMATS,
   libraryStorageBucket,
+  libraryUploadRefusal,
 } from './asset-formats';
 
 describe('Library format registry', () => {
@@ -30,17 +40,13 @@ describe('Library format registry', () => {
     expect(
       classifyLibraryFile({ fileName: 'raw.cr3', mimeType: 'image/x-canon-cr3' }).accepted,
     ).toBe(false);
-    expect(classifyLibraryFile({ fileName: 'clip.flv', mimeType: 'video/x-flv' }).accepted).toBe(
-      false,
-    );
+    expect(
+      classifyLibraryFile({ fileName: 'clip.r3d', mimeType: 'video/x-red-r3d' }).accepted,
+    ).toBe(false);
   });
 
-  it('publishes one picker accept value from the registry', () => {
-    expect(LIBRARY_ACCEPT_ATTRIBUTE).toContain('.aep');
-    expect(LIBRARY_ACCEPT_ATTRIBUTE).toContain('.psd');
-    expect(LIBRARY_ACCEPT_ATTRIBUTE).toContain('.zip');
-    expect(LIBRARY_ACCEPT_ATTRIBUTE).toContain('.mxf');
-    expect(LIBRARY_ACCEPT_ATTRIBUTE).toContain('.prproj');
+  it('lets the Library pickers choose any file', () => {
+    expect(LIBRARY_ACCEPT_ATTRIBUTE).toBe('');
   });
 
   it('files MXF next to project files, not in the 500MB viewer bucket', () => {
@@ -77,12 +83,6 @@ describe('container video (MKV / AVI / WMV)', () => {
       isPlayableSidecarPreview({ sourceFileName: 'tape.wmv', companionFileName: 'tape.mp4' }),
     ).toBe(true);
   });
-
-  it('is offered by the picker', () => {
-    for (const extension of ['.mkv', '.avi', '.wmv']) {
-      expect(LIBRARY_ACCEPT_ATTRIBUTE.split(',')).toContain(extension);
-    }
-  });
 });
 
 describe('office documents', () => {
@@ -102,12 +102,6 @@ describe('office documents', () => {
     expect(format.originalKind).toBe('file');
     expect(format.previewStrategy).toBe('none');
     expect(libraryStorageBucket(format)).toBe('media-source');
-  });
-
-  it('is offered by the picker', () => {
-    for (const extension of ['.docx', '.pptx', '.xlsx', '.doc', '.ppt', '.xls']) {
-      expect(LIBRARY_ACCEPT_ATTRIBUTE.split(',')).toContain(extension);
-    }
   });
 });
 
@@ -185,10 +179,158 @@ describe('fonts are accepted but never stored as media', () => {
       expect(isLibraryFontFile({ fileName, mimeType: '' })).toBe(false);
     }
   });
+});
 
-  it('offers fonts on the drop target', () => {
-    for (const extension of ['.ttf', '.otf', '.woff', '.woff2']) {
-      expect(LIBRARY_ACCEPT_ATTRIBUTE).toContain(extension);
+describe('format parity widening (Wave 0)', () => {
+  it.each([
+    ['clip.3gp', '', 'container_video', 'video', 'proxy_transcode'],
+    ['clip.3g2', 'video/3gpp2', 'container_video', 'video', 'proxy_transcode'],
+    ['clip.flv', 'video/x-flv', 'container_video', 'video', 'proxy_transcode'],
+    ['scan.bmp', 'image/bmp', 'raster_image', 'image', 'native'],
+    ['vo.aiff', 'audio/aiff', 'audio', 'audio', 'proxy_transcode'],
+    ['vo.aif', '', 'audio', 'audio', 'proxy_transcode'],
+    ['vo.wma', 'audio/x-ms-wma', 'audio', 'audio', 'proxy_transcode'],
+    ['plate.tga', '', 'design_source', 'file', 'none'],
+    ['plate.exr', 'image/x-exr', 'design_source', 'file', 'none'],
+    ['logo.eps', '', 'design_source', 'file', 'companion'],
+    ['layout.indd', '', 'design_source', 'file', 'embedded_pages'],
+    ['cut.prproj', 'application/octet-stream', 'premiere_project', 'file', 'companion'],
+    ['bottle.glb', 'model/gltf-binary', 'model_3d', 'file', 'model_viewer'],
+    ['part.STEP', '', 'model_3d', 'file', 'model_viewer'],
+    ['part.igs', '', 'model_3d', 'file', 'model_viewer'],
+    ['scene.usdz', 'model/vnd.usdz+zip', 'model_3d', 'file', 'model_viewer'],
+  ] as const)('%s (%s) is %s, kind %s, preview %s', (fileName, mimeType, family, kind, strategy) => {
+    const format = classifyLibraryFile({ fileName, mimeType });
+    if (!format.accepted) throw new Error(`expected ${fileName} to be accepted`);
+    expect(format.family).toBe(family);
+    expect(format.originalKind).toBe(kind);
+    expect(format.previewStrategy).toBe(strategy);
+  });
+
+  it('files every 3D model and InDesign document in media-source', () => {
+    for (const fileName of [
+      'a.glb',
+      'a.gltf',
+      'a.obj',
+      'a.stl',
+      'a.fbx',
+      'a.ply',
+      'a.dae',
+      'a.3ds',
+      'a.stp',
+      'a.iges',
+      'a.indd',
+    ]) {
+      const format = classifyLibraryFile({ fileName });
+      if (!format.accepted) throw new Error(`expected ${fileName} to be accepted`);
+      expect(libraryStorageBucket(format)).toBe('media-source');
     }
+  });
+
+  it('never claims one extension for two formats, so extension order cannot decide', () => {
+    const extensions = LIBRARY_FORMATS.flatMap((format) => format.extensions);
+    expect(new Set(extensions).size).toBe(extensions.length);
+  });
+
+  it('is importable by path from an edge function: the module imports nothing', () => {
+    const source = readFileSync(join(import.meta.dir, 'asset-formats.ts'), 'utf8');
+    expect(source).not.toMatch(/^\s*import\s/m);
+  });
+});
+
+describe('accept anything', () => {
+  it.each([
+    ['notes.txt', 'text/plain'],
+    ['mail.eml', 'message/rfc822'],
+    ['plan.dwg', ''],
+    ['README', ''],
+    ['clip.r3d', 'application/octet-stream'],
+  ] as const)('%s is a generic file in media-source, never drawn', (fileName, mimeType) => {
+    expect(classifyLibraryFile({ fileName, mimeType }).accepted).toBe(false);
+    const format = classifyLibraryFileOrGeneric({ fileName, mimeType });
+    expect(format).toMatchObject({
+      accepted: true,
+      family: 'generic',
+      originalKind: 'file',
+      previewStrategy: 'none',
+    });
+    expect(libraryStorageBucket(format)).toBe('media-source');
+  });
+
+  it('keeps a known format when there is one', () => {
+    expect(classifyLibraryFileOrGeneric({ fileName: 'hero.png' }).family).toBe('raster_image');
+    expect(classifyLibraryFileOrGeneric({ fileName: 'Inter.woff2' }).family).toBe('font');
+  });
+});
+
+describe('ZIP contents decide the family', () => {
+  it('finds an After Effects Collect Files export', () => {
+    expect(
+      classifyZipEntries(['Spot/', 'Spot/Spot.aep', 'Spot/(Footage)/a.mov', 'Spot/index.html']),
+    ).toBe('aep_package');
+    expect(classifyZipEntries(['scene.AEPX'])).toBe('aep_package');
+  });
+
+  it('finds an HTML bundle at the root or under one wrapping folder', () => {
+    expect(classifyZipEntries(['index.html', 'main.js', 'img/a.png'])).toBe('html_bundle');
+    expect(
+      classifyZipEntries([
+        'banner/',
+        'banner/INDEX.HTM',
+        'banner/app.js',
+        '__MACOSX/banner/._app.js',
+      ]),
+    ).toBe('html_bundle');
+    expect(htmlBundleEntryPoint(['banner/index.html', 'banner/app.js', '.DS_Store'])).toBe(
+      'banner/index.html',
+    );
+    expect(htmlBundleEntryPoint(['site\\index.html', 'site\\a.css'])).toBe('site/index.html');
+  });
+
+  it('calls anything else an archive', () => {
+    expect(classifyZipEntries(['a/index.html', 'b/index.html'])).toBe('archive');
+    expect(classifyZipEntries(['docs/deep/index.html', 'docs/other.txt'])).toBe('archive');
+    expect(classifyZipEntries(['__MACOSX/._scene.aep', 'photo.jpg'])).toBe('archive');
+    expect(classifyZipEntries([])).toBe('archive');
+  });
+
+  it('maps each kind to a format definition', () => {
+    expect(LIBRARY_ZIP_FORMATS.aep_package.family).toBe('after_effects_package');
+    expect(LIBRARY_ZIP_FORMATS.html_bundle).toMatchObject({
+      family: 'html_bundle',
+      previewStrategy: 'html_sandbox',
+    });
+    expect(libraryStorageBucket(LIBRARY_ZIP_FORMATS.html_bundle)).toBe('media-source');
+    expect(LIBRARY_ZIP_FORMATS.archive.family).toBe('generic');
+    // By extension alone a ZIP is still an AE package, exactly as before.
+    expect(classifyLibraryFile({ fileName: 'x.zip' })).toMatchObject({
+      family: 'after_effects_package',
+    });
+  });
+});
+
+describe('libraryUploadRefusal (decided before any byte is sent)', () => {
+  const MB = 1024 * 1024;
+
+  it('accepts any file under the caps, including unknown types and big documents', () => {
+    for (const fileName of ['notes.msg', 'mail.eml', 'a.txt', 'clip.r3d', 'scene.usdz', 'x']) {
+      expect(libraryUploadRefusal({ fileName, sizeBytes: 10 * MB })).toBeNull();
+    }
+    expect(libraryUploadRefusal({ fileName: 'deck.pdf', sizeBytes: 400 * MB })).toBeNull();
+    expect(libraryUploadRefusal({ fileName: 'unsized.bin' })).toBeNull();
+  });
+
+  it('names every refusal: fonts, the Storage cap, and the forge project-file cap', () => {
+    expect(libraryUploadRefusal({ fileName: 'Brand.otf', sizeBytes: 1 })).toContain('is a font');
+    expect(
+      libraryUploadRefusal({ fileName: 'huge.mov', sizeBytes: LIBRARY_UPLOAD_MAX_BYTES + 1 }),
+    ).toBe('huge.mov is 500 MB — uploads are capped at 500 MB right now.');
+    expect(
+      libraryUploadRefusal({ fileName: 'comp.aep', sizeBytes: LIBRARY_PROJECT_FILE_MAX_BYTES + MB }),
+    ).toBe('comp.aep is 251 MB — After Effects projects and packages must be 250 MB or smaller.');
+    expect(libraryUploadRefusal({ fileName: 'pkg.zip', sizeBytes: 300 * MB })).toContain(
+      'must be 250 MB',
+    );
+    expect(libraryUploadRefusal({ fileName: 'comp.aep', sizeBytes: 250 * MB })).toBeNull();
   });
 });

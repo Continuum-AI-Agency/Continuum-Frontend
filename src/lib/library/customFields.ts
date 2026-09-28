@@ -23,7 +23,9 @@ import {
   type DeleteCustomFieldRequest,
   listAssetFieldValuesResponseSchema,
   listCustomFieldsResponseSchema,
+  MAX_CUSTOM_FIELD_LONG_TEXT_LENGTH,
   MAX_CUSTOM_FIELD_URL_LENGTH,
+  MAX_CUSTOM_FIELD_USERS,
   type SetAssetFieldValueRequest,
   type UpdateCustomFieldRequest,
 } from '@continuum/contracts';
@@ -148,6 +150,32 @@ export function validateFieldValue(field: FieldValueSpec, value: unknown): Field
       if (value.length === 0) return { ok: true, value: null };
       if (!UUID_PATTERN.test(value)) return { ok: false, reason: `"${value}" is not a user id` };
       return { ok: true, value };
+    }
+    case 'user_multi': {
+      if (!Array.isArray(value)) return { ok: false, reason: 'This field takes a list of user ids' };
+      const people: string[] = [];
+      for (const entry of value) {
+        if (typeof entry !== 'string' || !UUID_PATTERN.test(entry)) {
+          return { ok: false, reason: `"${String(entry)}" is not a user id` };
+        }
+        if (!people.includes(entry)) people.push(entry);
+      }
+      if (people.length > MAX_CUSTOM_FIELD_USERS) {
+        return { ok: false, reason: `At most ${MAX_CUSTOM_FIELD_USERS} people` };
+      }
+      return people.length === 0 ? { ok: true, value: null } : { ok: true, value: people };
+    }
+    case 'long_text': {
+      if (typeof value !== 'string') return { ok: false, reason: 'This field takes text' };
+      const trimmed = value.trim();
+      if (trimmed.length === 0) return { ok: true, value: null };
+      if (trimmed.length > MAX_CUSTOM_FIELD_LONG_TEXT_LENGTH) {
+        return {
+          ok: false,
+          reason: `Text is longer than ${MAX_CUSTOM_FIELD_LONG_TEXT_LENGTH} characters`,
+        };
+      }
+      return { ok: true, value: trimmed };
     }
     case 'url': {
       if (typeof value !== 'string') return { ok: false, reason: 'This field takes a link' };

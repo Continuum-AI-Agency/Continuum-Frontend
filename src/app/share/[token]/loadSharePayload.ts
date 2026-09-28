@@ -110,31 +110,36 @@ export async function loadSharePayload(
   // A protected link's page holds no original: videos play their preview proxy,
   // images show a stored rendition or thumbnail (never a transform over the
   // original, whose token would replay on it), else nothing and a placeholder.
-  const previewVideoUrl = (versionId: string) => {
-    const proxy = renditions.find(
+  // A member the probe found a position in is guarded the same way on any link:
+  // the edge function does not sign its original (GPS never leaves through a share).
+  const readyRenditionUrl = (versionId: string, role: string) => {
+    const rendition = renditions.find(
       (row) =>
         row.asset_version_id === versionId &&
-        row.role === 'preview_video' &&
+        row.role === role &&
         row.state === 'ready' &&
         row.storage_path,
     );
-    return proxy?.storage_path ? (signed.get(proxy.storage_path) ?? null) : null;
+    return rendition?.storage_path ? (signed.get(rendition.storage_path) ?? null) : null;
   };
   const assets: PublicShareAsset[] = entries.map((entry) => {
     const preview = buildAssetPreview(entry.row, renditions, signed);
     const mapped = rowToSignedMediaAsset(entry.row, signed, preview);
-    const asset = data.protected
+    const guarded = data.protected || entry.row.has_location === true;
+    const asset = guarded
       ? {
           ...mapped,
           signedUrl:
             mapped.kind === 'video'
-              ? previewVideoUrl(entry.versionId)
+              ? readyRenditionUrl(entry.versionId, 'preview_video')
               : mapped.kind === 'image'
                 ? ((preview?.kind === 'image' ? preview.signedUrl : null) ?? mapped.thumbnailUrl ?? null)
-                : null,
+                : mapped.kind === 'audio'
+                  ? readyRenditionUrl(entry.versionId, 'audio_proxy')
+                  : null,
         }
       : mapped;
-    const carousel = data.protected ? null : buildCarousel(entry.row, signed);
+    const carousel = guarded ? null : buildCarousel(entry.row, signed);
     return {
       asset: carousel ? { ...asset, carousel } : asset,
       versionId: entry.versionId,
