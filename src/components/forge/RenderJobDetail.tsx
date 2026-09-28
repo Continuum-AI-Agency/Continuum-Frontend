@@ -10,11 +10,12 @@ import {
   ExternalLink,
   FileDigit,
   Layers,
+  Loader2,
   RectangleHorizontal,
   RefreshCw,
   Timer,
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { formatRelativeTime } from '@/components/approvals/formatters';
 import { type CheckRow, CheckTable } from '@/components/forge/CheckTable';
 import { DeliveryChain } from '@/components/forge/DeliveryChain';
@@ -31,6 +32,7 @@ import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { templateVersionOf, templateVersionTitle } from '@/components/forge/templateVersion';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
+import { getApiBaseUrl } from '@/lib/api/config';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { formatDuration, renderJobChecks } from './renderJobChecks';
 
@@ -277,6 +279,13 @@ export function RenderJobDetail({
     );
   const fileFor = (formatId: string) => filesFor(formatId)[0] ?? null;
   const [picked, setPicked] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState<'mov' | 'mxf' | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   const value =
     formats.find((format) => format.id === picked)?.id ??
     formats.find((format) => fileFor(format.id))?.id ??
@@ -284,6 +293,41 @@ export function RenderJobDetail({
     '';
   const name = job.label ?? job.labelPath.at(-1) ?? templateName;
   const current = filesFor(value);
+  const source =
+    current.find((file) => extOf(file.fileName) === 'mov') ??
+    current.find((file) => extOf(file.fileName) === 'mxf') ??
+    current.find((file) => extOf(file.fileName) === 'mp4');
+  const missingMasters = (['mov', 'mxf'] as const).filter(
+    (format) => !current.some((file) => extOf(file.fileName) === format),
+  );
+  const prepareDownload = async (format: 'mov' | 'mxf') => {
+    if (!source || preparing) return;
+    setPreparing(format);
+    setDownloadError(null);
+    try {
+      const { path } = await apiRendersApi.prepareMasterDownload(job.id, {
+        brandId: job.brandId,
+        outputId: source.id,
+        format,
+      });
+      const deadline = Date.now() + 11 * 60_000;
+      while (mounted.current && Date.now() < deadline) {
+        const { status } = await apiRendersApi.masterDownloadStatus(path);
+        if (status === 'ready') {
+          if (mounted.current) window.location.assign(`${getApiBaseUrl()}${path}`);
+          return;
+        }
+        if (status === 'failed')
+          throw new Error(`${format.toUpperCase()} conversion failed. Try again.`);
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+      }
+      if (mounted.current) throw new Error(`${format.toUpperCase()} is taking too long. Try again.`);
+    } catch (error) {
+      if (mounted.current) setDownloadError(error instanceof Error ? error.message : 'Could not prepare this download.');
+    } finally {
+      if (mounted.current) setPreparing(null);
+    }
+  };
   const rendered = formats.filter((format) => fileFor(format.id));
   const inLibrary = files.flatMap((output) =>
     output.assetId ? [{ fileName: output.fileName, assetId: output.assetId }] : [],
@@ -369,6 +413,27 @@ export function RenderJobDetail({
                 </a>
               );
             })}
+            {job.status === 'finished' &&
+              source &&
+              missingMasters.map((format) => (
+                <button
+                  key={format}
+                  type="button"
+                  disabled={preparing !== null}
+                  onClick={() => void prepareDownload(format)}
+                  aria-label={`Generate ${format.toUpperCase()} download`}
+                  className="inline-flex items-center gap-1 text-primary hover:underline disabled:opacity-50"
+                >
+                  {preparing === format ? (
+                    <Loader2 className="size-3 animate-spin" aria-hidden />
+                  ) : (
+                    <Download className="size-3" aria-hidden />
+                  )}
+                  {preparing === format
+                    ? `Preparing ${format.toUpperCase()}…`
+                    : `Generate ${format.toUpperCase()}`}
+                </button>
+              ))}
             {job.slackDelivery?.permalink ? (
               <a
                 href={job.slackDelivery.permalink}
@@ -380,6 +445,16 @@ export function RenderJobDetail({
               </a>
             ) : null}
           </div>
+          {job.status === 'finished' && source && missingMasters.length > 0 ? (
+            <p className="m-0 text-2xs text-muted-foreground">
+              Generated files are converted from the existing video.
+            </p>
+          ) : null}
+          {downloadError ? (
+            <p role="alert" className="m-0 text-xs text-destructive">
+              {downloadError}
+            </p>
+          ) : null}
           {/* Each file as the Library holds it: where its review stands, and its thread. */}
           {inLibrary.length ? (
             <ul aria-label="In the Library" className="m-0 flex list-none flex-col gap-1 p-0">

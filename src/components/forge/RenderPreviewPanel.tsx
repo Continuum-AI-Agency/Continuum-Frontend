@@ -417,6 +417,10 @@ export function RenderPreviewPanel({
 }): JSX.Element {
   const queryClient = useQueryClient();
   const templateKey = contract.template.key;
+  const isInyogoJerseys =
+    templateKey === '331' &&
+    contract.template.environment === 'Six_app' &&
+    contract.template.updatedAt === '2026-09-28T03:23:47.118Z';
   // The format picked per template, so moving between rows keeps looking at the same format.
   const [picked, setPicked] = useState<Record<string, string>>({});
   const [atSec, setAtSec] = useState<number | null>(null);
@@ -712,6 +716,36 @@ export function RenderPreviewPanel({
         {/* What this template DELIVERS. A one-frame comp and a 15s one draw the same boxes. */}
         {motion ? <span className="shrink-0 text-2xs text-muted-foreground">{motion}</span> : null}
       </div>
+      {contract.publishCheck && contract.publishCheck.state !== 'pass' ? (
+        <details className="rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-2xs">
+          <summary className="cursor-pointer font-medium">
+            Template placement needs review ({contract.publishCheck.issues.length})
+          </summary>
+          <ul className="mb-0 mt-1 pl-4">
+            {contract.publishCheck.issues.map((issue) => (
+              <li key={issue}>{issue}</li>
+            ))}
+          </ul>
+          {contract.publishCheck.media.map((item) => (
+            <p key={item.key} className="mb-0 mt-1">
+              {item.label}: source{' '}
+              {item.source ? `${item.source[0]}×${item.source[1]} px` : 'unmeasured'}; canvas{' '}
+              {item.box ? item.box.join(', ') : 'unmeasured'}
+            </p>
+          ))}
+        </details>
+      ) : null}
+      {isInyogoJerseys ? (
+        <p
+          role="note"
+          className="m-0 rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-2xs"
+        >
+          Use a 254×305 px canvas for Left Jersey and 249×311 px for Right Jersey, with the whole
+          shirt centered. Larger images crop because this template keeps the original layer scale.
+          Enter Bet Amount and Win Amount as short numbers and Lside/Rside Value as numeric odds.
+          Check a Proof before Final.
+        </p>
+      ) : null}
       {format ? (
         <FormatPreview
           label="Row preview"

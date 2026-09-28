@@ -30,6 +30,8 @@ import {
   type ApiRenderInputSetListResponse,
   type ApiRenderJob,
   type ApiRenderJobListResponse,
+  type ApiRenderMasterDownloadRequest,
+  type ApiRenderMasterDownloadResponse,
   type ApiRenderPreflightRequest,
   type ApiRenderPreflightResponse,
   type ApiRenderSlackChannelListResponse,
@@ -49,6 +51,8 @@ import {
   apiRenderInputSetSchema,
   apiRenderJobListResponseSchema,
   apiRenderJobSchema,
+  apiRenderMasterDownloadResponseSchema,
+  apiRenderMasterDownloadStatusSchema,
   apiRenderPreflightResponseSchema,
   apiRenderSlackChannelListResponseSchema,
   apiRenderSuggestRowsResponseSchema,
@@ -193,6 +197,20 @@ export const apiRendersApi = {
     return http.request<ApiRenderJob>({
       path: `${API_RENDER_JOBS_ROUTE}/${encodeURIComponent(jobId)}?${query({ brandId })}`,
       schema: apiRenderJobSchema,
+    });
+  },
+  prepareMasterDownload(jobId: string, input: ApiRenderMasterDownloadRequest) {
+    return http.request<ApiRenderMasterDownloadResponse>({
+      path: `${API_RENDER_JOBS_ROUTE}/${encodeURIComponent(jobId)}/master-download`,
+      method: 'POST',
+      body: input,
+      schema: apiRenderMasterDownloadResponseSchema,
+    });
+  },
+  masterDownloadStatus(path: string) {
+    return http.request<{ status: 'processing' | 'ready' | 'failed' }>({
+      path: `${path}/status`,
+      schema: apiRenderMasterDownloadStatusSchema,
     });
   },
 

@@ -1,4 +1,4 @@
-import type { TemplateFontReadiness } from '@continuum/contracts';
+import type { ApiRenderTemplateContract, TemplateFontReadiness } from '@continuum/contracts';
 import type { ForgeLadderAction, TemplateRunRow } from '@/lib/library/templateSources';
 import type { CheckState, CheckTick } from './CheckTable';
 
@@ -176,11 +176,26 @@ function publishCheck(input: TemplateChecksInput, state: string | null): Templat
   const base = {
     id: 'publish' as const,
     name: 'Publish',
-    what: 'Adds it to the render catalog so this brand can render it.',
+    what: 'Checks the worker AEP pointer, displayed contract, and measured media boxes.',
   };
-  // Only a template key means renderable: a run can say `published` against a package the fleet
-  // never promoted, and that template renders a blank frame.
-  if (input.templateKey) return { ...base, state: 'pass', result: 'Published' };
+  if (input.templateKey) {
+    const check = input.publishVerification;
+    if (check)
+      return {
+        ...base,
+        state: check.state,
+        result:
+          check.issues[0] ??
+          `Published · worker graph and ${plural(check.media.length, 'media slot')} measured`,
+      };
+    return input.publishCheckFailed
+      ? {
+          ...base,
+          state: 'warn',
+          result: 'Published, but the worker graph and layout could not be checked',
+        }
+      : { ...base, state: 'running', result: 'Checking the worker graph and layout…' };
+  }
   if (state === 'promoting') return { ...base, state: 'running', result: 'Publishing…' };
   return {
     ...base,
@@ -201,6 +216,8 @@ export type TemplateChecksInput = {
   /** The source's own record of the last run, for when the run row itself is not loaded. */
   forgeState: string | null | undefined;
   templateKey: string | null;
+  publishVerification?: ApiRenderTemplateContract['publishCheck'];
+  publishCheckFailed?: boolean;
 };
 
 export function templateChecks(input: TemplateChecksInput): TemplateCheck[] {

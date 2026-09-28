@@ -7,6 +7,24 @@ import { apiRenderJudgeSchema } from './api-render-judge';
 export const API_RENDER_TEMPLATES_ROUTE = '/api/ai-studio/renders/templates';
 export const API_RENDER_PREFLIGHT_ROUTE = '/api/ai-studio/renders/preflight';
 export const API_RENDER_JOBS_ROUTE = '/api/ai-studio/renders/jobs';
+export const API_RENDER_MASTER_DOWNLOADS_ROUTE = '/api/ai-studio/renders/master-downloads';
+export const apiRenderMasterDownloadRequestSchema = z
+  .object({
+    brandId: z.string().uuid(),
+    outputId: z.string().min(1),
+    format: z.enum(['mov', 'mxf']),
+  })
+  .strict();
+export type ApiRenderMasterDownloadRequest = z.infer<typeof apiRenderMasterDownloadRequestSchema>;
+export const apiRenderMasterDownloadResponseSchema = z
+  .object({ path: z.string().startsWith('/') })
+  .strict();
+export type ApiRenderMasterDownloadResponse = z.infer<typeof apiRenderMasterDownloadResponseSchema>;
+export const apiRenderMasterDownloadStatusSchema = z
+  .object({
+    status: z.enum(['processing', 'ready', 'failed']),
+  })
+  .strict();
 export const API_RENDER_INPUT_SETS_ROUTE = '/api/ai-studio/renders/input-sets';
 export const API_RENDER_BATCH_PREFLIGHT_ROUTE = '/api/ai-studio/renders/batch-preflight';
 export const API_RENDER_BATCHES_ROUTE = '/api/ai-studio/renders/batches';
@@ -676,6 +694,30 @@ export const apiRenderTemplateContractSchema = z
      * a picked asset in it before spending a render. Null when the template has no parsed source.
      */
     layout: apiRenderTemplateLayoutSchema.nullable().default(null),
+    /** Live publish audit from the worker pointer and the displayed contract. Null means unchecked. */
+    publishCheck: z
+      .object({
+        state: z.enum(['pass', 'warn', 'fail']),
+        issues: z.array(z.string()),
+        workerAttachmentId: z.number().int().positive().nullable(),
+        media: z.array(
+          z
+            .object({
+              key: z.string(),
+              label: z.string(),
+              comp: z.string().nullable(),
+              box: pixelBoxSchema.nullable(),
+              source: z
+                .tuple([z.number().int().positive(), z.number().int().positive()])
+                .nullable(),
+              rigged: z.boolean(),
+            })
+            .strict(),
+        ),
+      })
+      .strict()
+      .nullable()
+      .optional(),
     /**
      * Where the LIVE template and its stored contract disagree, straight from the forge. A
      * template whose fields moved under its contract is one whose renders quietly stop matching
@@ -1544,11 +1586,22 @@ export const apiRenderRowGateSchema = z
 export type ApiRenderRowGate = z.infer<typeof apiRenderRowGateSchema>;
 
 export const forgeRowEvidenceSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('document'), documentId: z.string().uuid(), name: z.string().min(1), excerpt: z.string().min(1).max(500), sheet: z.string().min(1).optional() }).strict(),
+  z
+    .object({
+      kind: z.literal('document'),
+      documentId: z.string().uuid(),
+      name: z.string().min(1),
+      excerpt: z.string().min(1).max(500),
+      sheet: z.string().min(1).optional(),
+    })
+    .strict(),
   z.object({ kind: z.literal('media'), assetId: z.string().uuid() }).strict(),
 ]);
 export type ForgeRowEvidence = z.infer<typeof forgeRowEvidenceSchema>;
-export const forgeRowEvidenceMapSchema = z.record(apiRenderVariableKeySchema, forgeRowEvidenceSchema);
+export const forgeRowEvidenceMapSchema = z.record(
+  apiRenderVariableKeySchema,
+  forgeRowEvidenceSchema,
+);
 
 export const apiRenderSuggestRowsResponseSchema = z
   .object({
