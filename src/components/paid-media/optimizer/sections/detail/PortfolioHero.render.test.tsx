@@ -361,6 +361,48 @@ describe('the day’s news is one row, highest impact on the left', () => {
   });
 });
 
+describe('PortfolioHero — the Ask Jaina band sits between the vitals and the news', () => {
+  it('renders askJaina after the vitals and before the news row', () => {
+    const { container } = render(
+      <PortfolioHero
+        askJaina={<div data-testid="jaina-entry-chips" />}
+        currency="USD"
+        dailyTotal={1000}
+        explainHref="#"
+        nextCycleAt={null}
+        onCta={() => undefined}
+        portfolioId="p1"
+        view={view()}
+        vitals={{
+          header: {
+            name: 'Leads MX',
+            mode: null,
+            freshness: null,
+            roster: null,
+            chips: [],
+            mismatch: null,
+            secondary: null,
+          },
+          rows: null,
+          onEditSetting: () => undefined,
+          onSecondary: () => undefined,
+          onRun: () => undefined,
+          running: false,
+        }}
+      />,
+    );
+    const hero = container.querySelector('[data-testid="portfolio-hero"]');
+    const vitals = hero?.querySelector('[data-testid="portfolio-vitals"]');
+    const chips = hero?.querySelector('[data-testid="jaina-entry-chips"]');
+    const newsRow = hero?.querySelector('[data-testid="portfolio-news-row"]');
+    expect(vitals && chips && newsRow).toBeTruthy();
+    const follows = (a: Element, b: Element) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(vitals as Element, chips as Element)).toBe(true);
+    expect(follows(chips as Element, newsRow as Element)).toBe(true);
+  });
+});
+
 describe('PortfolioHero — a stale portfolio is promised an attempt, not a cycle', () => {
   const mount = (stale: boolean | undefined) =>
     render(

@@ -7,7 +7,7 @@ import {
   mintSessionForEmail,
   type PlaywrightStorageState,
 } from './support/auth';
-import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
+import { benchBrowserChannel, loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 
 // ---------------------------------------------------------------------------
 // optimizer:e2e:bench — the Paid Media Optimizer experience, end to end.
@@ -32,6 +32,10 @@ import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 //      through the deployed optimizer-cycle-preview edge → the reallocation flow and the
 //      recommendation count. The UI degrades quietly when that route is missing; this
 //      bench does NOT. An `unavailable` outcome FAILS the run and says so.
+//   5. Portfolio CTAs — "Open the audience proposal" on an asked-for row and "Open the
+//      creative recommendation" on a news card each land on ONE expanded, on-screen queue
+//      row; a blocked proposal shows its reason and a disabled create button; and the
+//      Ask-Jaina band sits between the vital signs and the news cards.
 //
 // ── MONEY SAFETY — this is a READ/BROWSE bench, and it cannot move money ──
 //   * Nothing here clicks Apply, Convert, Revert, "Run now", Create, Enroll, Archive, or
@@ -53,7 +57,7 @@ import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 // Usage: cd Continuum-Frontend && bun run optimizer:e2e:bench
 // ---------------------------------------------------------------------------
 
-test.use({ channel: 'chrome' });
+test.use(benchBrowserChannel());
 
 const { serviceRoleKey, publishableKey } = loadProdSupabaseEnv();
 
@@ -88,6 +92,19 @@ const CBO_ACCOUNT_ID = '1164707387246066';
 // regression: ENROLLED must be the one with active portfolio_adsets, EMPTY the one without.
 const ENROLLED_PORTFOLIO_NAME = 'Citas Agosto - check leads';
 const EMPTY_PORTFOLIO_NAME = 'Reporte Agosto - Citas y Mensajes';
+
+// Two portfolios on the LEDGER brand whose read rows carry a CTA into the queue, read from
+// production on 2026-09-28. Both premises are checked against optimizer.audience_proposals /
+// optimizer.recommendations before assuming a failure here is a regression:
+//   TOURS — an asked-for audience row (ad-hoc suggestion 89a4a5ec, adopted) handed off to
+//     recommendation 1a36cfc3 and proposal 622bc858; the worker BLOCKED the proposal
+//     (no_creatives, proposal null) and the next cycle superseded it, expiring the
+//     recommendation. "Open the audience proposal" must still land on that row, expanded,
+//     with the block's reason and a disabled create button.
+//   PRUEBA — a pending C2 variate_creative recommendation (e4093df7) the brief lists as a
+//     secondary candidate, so its insight card offers "Open the creative recommendation".
+const TOURS_PORTFOLIO_NAME = 'Septiembre - Tours Programados';
+const PRUEBA_PORTFOLIO_NAME = 'Prueba';
 
 const SHOTS_DIR = resolve(__dirname, '__screenshots__/optimizer-e2e');
 
@@ -700,6 +717,137 @@ test.describe('Paid Media Optimizer — live experience', () => {
       // ...and undo lives with the action, never with the lifecycle row.
       await expect(page.getByRole('button', { name: /^(Revert|Unpause)$/ })).toHaveCount(0);
       await shoot(page, '15-activity-server-log');
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("portfolio CTAs — a read row's button lands on an expanded queue row, and the Ask-Jaina band sits under the vitals", async ({
+    browser,
+  }) => {
+    await selectBrand(EASYFIT_LEDGER_BRAND_ID);
+    const { context } = await benchContext(browser);
+    const page = await context.newPage();
+
+    /** The one queue row whose expander is open, once the CTA has switched to Activity. */
+    const expandedQueueRow = () =>
+      page
+        .locator('li[data-row-key^="rec:"], li[data-row-key^="budget:"]')
+        .filter({ has: page.locator('button[aria-expanded="true"]') });
+    /** Runs in the page: is the node's top edge inside the panel that scrolls it? */
+    const inScrollView = (node: Element) => {
+      const box = node.getBoundingClientRect();
+      const panel = node.closest('[role="tabpanel"]');
+      const frame = panel ? panel.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+      return box.top >= frame.top - 1 && box.top < frame.bottom;
+    };
+    /** The workspace's own Activity tab — the optimizer bar above it has a tab of the same
+     *  name, so the tablist is picked by its sibling "Manage" first. */
+    const workspaceActivityTab = () =>
+      page
+        .getByRole('tablist')
+        .filter({ has: page.getByRole('tab', { name: 'Manage' }) })
+        .getByRole('tab', { name: 'Activity' });
+
+    try {
+      await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
+
+      // ── TOURS: the blocked, superseded audience proposal ──
+      await page.getByRole('button').filter({ hasText: TOURS_PORTFOLIO_NAME }).first().click();
+      await expect(
+        page.getByRole('heading', { level: 2 }).filter({ hasText: TOURS_PORTFOLIO_NAME }),
+      ).toBeVisible({ timeout: 120_000 });
+
+      // The Ask-Jaina band: the first row after the portfolio's name and vital signs, before
+      // the news cards, five prepared questions.
+      const band = page.getByTestId('jaina-entry-chips');
+      await expect(band).toBeVisible({ timeout: 120_000 });
+      await expect(band.getByRole('link')).toHaveCount(5);
+      const order = await page.evaluate(() => {
+        const hero = document.querySelector('[data-testid="portfolio-hero"]');
+        const pick = (id: string) => hero?.querySelector(`[data-testid="${id}"]`) ?? null;
+        const vitals = pick('portfolio-vitals');
+        const chips = pick('jaina-entry-chips');
+        const news = pick('portfolio-news-row');
+        if (!vitals || !chips || !news) return { vitals: !!vitals, chips: !!chips, news: !!news };
+        const follows = (a: Element, b: Element) =>
+          Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+        return { vitalsBeforeChips: follows(vitals, chips), chipsBeforeNews: follows(chips, news) };
+      });
+      console.log(`[optimizer-bench] Ask-Jaina band order: ${JSON.stringify(order)}`);
+      expect(order).toEqual({ vitalsBeforeChips: true, chipsBeforeNews: true });
+      await shoot(page, '16-tours-ask-jaina-band');
+
+      // The asked-for rows and the queue live on the workspace's Activity section. The row
+      // says what became of the proposal it opened — blocked, and why — instead of "being
+      // built", and its button is the one this bench presses.
+      await workspaceActivityTab().click();
+      await expect(page).toHaveURL(/section=activity/);
+      const askedRow = page
+        .locator('[data-row-key^="read:asked:"]')
+        .filter({ hasText: 'Open the audience proposal' })
+        .first();
+      await expect(askedRow).toBeVisible({ timeout: 120_000 });
+      await expect(askedRow.getByText('Blocked', { exact: true })).toBeVisible();
+      await expect(askedRow.getByText(/^Blocked — /)).toContainText('creative');
+      await askedRow.getByRole('button', { name: 'Open the audience proposal' }).click();
+
+      await expect(expandedQueueRow()).toHaveCount(1, { timeout: 120_000 });
+      const landedKey = await expandedQueueRow().getAttribute('data-row-key');
+      console.log(`[optimizer-bench] Tours "Open the audience proposal" landed on ${landedKey}`);
+      expect(landedKey).toMatch(/^rec:[0-9a-f-]{36}$/);
+
+      // Expanded AND on screen: the row's top edge inside the visible box of the panel that
+      // scrolls it (the workspace tab panel clips; the window alone would not tell).
+      await expect
+        .poll(() => expandedQueueRow().evaluate(inScrollView), {
+          message: 'the focused row must be scrolled into view',
+          timeout: 15_000,
+        })
+        .toBe(true);
+
+      // The blocked proposal's face: the reason, and the create button visibly off.
+      const card = expandedQueueRow().getByTestId('audience-recommendation-card');
+      await expect(card).toBeVisible();
+      await expect(card.getByText('No proposal could be built')).toBeVisible();
+      await expect(card.getByTestId('audience-blocked-reason')).toContainText('creative');
+      await expect(card.getByTestId('audience-create-blocked')).toBeDisabled();
+      console.log(
+        `[optimizer-bench] Tours blocked reason: "${await card
+          .getByTestId('audience-blocked-reason')
+          .innerText()}"`,
+      );
+      await shoot(page, '17-tours-blocked-proposal-row');
+
+      // ── PRUEBA: the creative candidate's card → its pending recommendation row ──
+      await page.getByRole('button', { name: 'Back to portfolios' }).click();
+      await page.getByRole('button').filter({ hasText: PRUEBA_PORTFOLIO_NAME }).first().click();
+      await expect(
+        page.getByRole('heading', { level: 2 }).filter({ hasText: PRUEBA_PORTFOLIO_NAME }),
+      ).toBeVisible({ timeout: 120_000 });
+      const creativeCta = page
+        .getByRole('button', { name: 'Open the creative recommendation' })
+        .first();
+      await expect(creativeCta).toBeVisible({ timeout: 120_000 });
+      await creativeCta.click();
+
+      await expect(page).toHaveURL(/section=activity/);
+      await expect(expandedQueueRow()).toHaveCount(1, { timeout: 120_000 });
+      const creativeKey = await expandedQueueRow().getAttribute('data-row-key');
+      console.log(
+        `[optimizer-bench] Prueba "Open the creative recommendation" landed on ${creativeKey}`,
+      );
+      expect(creativeKey).toMatch(/^rec:[0-9a-f-]{36}$/);
+      await expect(expandedQueueRow().getByRole('button', { name: 'Hide detail' })).toBeVisible();
+      // This section mounts fresh on the press, so the lists above the queue land AFTER the
+      // first scroll; the row has to end up in view all the same.
+      await expect
+        .poll(() => expandedQueueRow().evaluate(inScrollView), {
+          message: 'the focused creative row must be scrolled into view',
+          timeout: 15_000,
+        })
+        .toBe(true);
+      await shoot(page, '18-prueba-creative-row');
     } finally {
       await context.close();
     }

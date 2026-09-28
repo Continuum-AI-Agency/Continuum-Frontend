@@ -387,16 +387,41 @@ export function AudienceRecommendationCard(props: AudienceRecommendationCardProp
         ) : null}
 
         {state === 'blocked' ? (
-          <Button
-            disabled={props.requesting}
-            onClick={props.onRequest}
-            className={ROOMY_BUTTON}
-            size="sm"
-            type="button"
-            variant="secondary"
-          >
-            Ask Jaina again
-          </Button>
+          <div className="space-y-3 text-xs">
+            {/* The decision this column exists for, visibly off, with the reason beside it —
+                a blocked proposal must read as blocked here, not as a column with nothing in
+                it. The create button is the same control a ready proposal offers. */}
+            <Button
+              className={ROOMY_BUTTON}
+              data-testid="audience-create-blocked"
+              disabled
+              size="sm"
+              title={block?.message}
+              type="button"
+            >
+              Create new ad set
+            </Button>
+            <p className="text-muted-foreground" data-testid="audience-blocked-reason">
+              {block?.message ?? 'No proposal could be built.'}
+            </p>
+            {rec.status === 'pending' ? (
+              <Button
+                disabled={props.requesting}
+                onClick={props.onRequest}
+                className={ROOMY_BUTTON}
+                size="sm"
+                type="button"
+                variant="secondary"
+              >
+                Ask Jaina again
+              </Button>
+            ) : (
+              <p className="text-muted-foreground">
+                The cycle has since closed this recommendation, so it cannot be asked again from
+                here.
+              </p>
+            )}
+          </div>
         ) : null}
 
         {state === 'ready' && plan ? (

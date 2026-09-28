@@ -94,7 +94,11 @@ import {
   useOptimizerPortfolioAudiences,
 } from '../useOptimizerData';
 import { AudienceRecommendationCard } from './AudienceRecommendationCard';
-import { audienceCardView, isAudienceRecommendation } from './audienceCardModel';
+import {
+  audienceCardView,
+  carriedRecommendation,
+  isAudienceRecommendation,
+} from './audienceCardModel';
 import { CostIntervalLine } from './CostIntervalLine';
 import { CreativeRecommendationCard } from './CreativeRecommendationCard';
 import { isCreativeRecommendation, standingChart, subjectAdId } from './creativeCardModel';
@@ -238,11 +242,12 @@ export function isSelectableRow(row: QueueRow): boolean {
 export function buildActionQueue(
   report: ParsedCycleRunReport | null,
   nameById?: Map<string, string> | null,
+  carried: readonly RecommendationRow[] = [],
 ): QueueRow[] {
-  if (!report) return [];
+  if (!report && carried.length === 0) return [];
   const rows: QueueRow[] = [];
 
-  for (const item of report.latest_items) {
+  for (const item of report?.latest_items ?? []) {
     const status = item.apply_status ?? null;
     const changed = (item.change_abs ?? 0) !== 0;
     // A held item (autopilot over-cap), an approved item (awaiting drain), or a scored move
@@ -260,7 +265,7 @@ export function buildActionQueue(
     });
   }
 
-  for (const rec of report.recommendations) {
+  for (const rec of report?.recommendations ?? []) {
     // Budget is never a recommendation route (budget moves are cycle_items), so the rec route
     // is one of pause | fatigue | hidden — narrow it so the row's union type is exact.
     const route = actionRoute(rec.kind);
@@ -277,6 +282,27 @@ export function buildActionQueue(
       name: resolveAdsetName(rec, nameById),
       rec,
       approved: rec.status === 'approved',
+    });
+  }
+
+  // Recommendations an asked-for handoff points at that the report no longer lists (see
+  // carriedRecommendation in ./audienceCardModel). "Open the audience proposal" resolves to
+  // `rec:<id>` and lands HERE, so the row has to exist for as long as the row that opened it
+  // does — otherwise the press switches tabs and focuses nothing. A rec the report does list
+  // is not duplicated.
+  const present = new Set(rows.map((row) => row.key));
+  for (const rec of carried) {
+    const key = `rec:${rec.id}`;
+    if (present.has(key)) continue;
+    present.add(key);
+    const route = actionRoute(rec.kind);
+    rows.push({
+      key,
+      route: route === 'budget' ? 'fatigue' : route,
+      adsetId: rec.adset_id,
+      name: resolveAdsetName(rec, nameById),
+      rec,
+      approved: false,
     });
   }
 
@@ -326,6 +352,62 @@ export function buildCounterparties(
   return byAdset;
 }
 
+const FOCUS_PIN_INTERVAL_MS = 200;
+const FOCUS_PIN_DURATION_MS = 3_000;
+const USER_SCROLL_EVENTS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
+
+/**
+ * Bring a row into view and keep it there while the panel settles.
+ *
+ * The panels above this queue (the ask cards, the day's read) may still be loading when the
+ * row is first brought into view, and each one that lands pushes the row back out of it — a
+ * smooth scroll started on mount is cancelled by that very relayout. So after the first
+ * smooth scroll the row is re-centred whenever it has left the panel's visible box, for a
+ * few seconds at most, and never past the person's own first scroll, which is theirs to keep.
+ * Returns the stop function.
+ */
+function pinRowInView(rowKey: string): () => void {
+  const node = () =>
+    document.querySelector<HTMLElement>(`[data-row-key="${selectorValue(rowKey)}"]`);
+  const frame = requestAnimationFrame(() =>
+    node()?.scrollIntoView({ block: 'start', behavior: 'smooth' }),
+  );
+  const stop = () => {
+    cancelAnimationFrame(frame);
+    clearInterval(pin);
+    clearTimeout(release);
+    for (const event of USER_SCROLL_EVENTS) window.removeEventListener(event, stop);
+  };
+  const pin = setInterval(() => {
+    const row = node();
+    if (row && !isInScrollView(row)) row.scrollIntoView({ block: 'start', behavior: 'auto' });
+  }, FOCUS_PIN_INTERVAL_MS);
+  const release = setTimeout(stop, FOCUS_PIN_DURATION_MS);
+  for (const event of USER_SCROLL_EVENTS) window.addEventListener(event, stop, { passive: true });
+  return stop;
+}
+
+/** Whether a row's top edge sits inside the visible box of the panel that scrolls it — the
+ *  tab panel when the queue is inside one, else the window. The row is aligned to the top
+ *  (`block: 'start'`, with the `scroll-mt-2` on the row as its margin) rather than centred:
+ *  an expanded card is often taller than the panel, and centring it hides the headline. */
+function isInScrollView(node: HTMLElement): boolean {
+  const box = node.getBoundingClientRect();
+  const panel = node.closest<HTMLElement>('[role="tabpanel"]');
+  const frame = panel
+    ? panel.getBoundingClientRect()
+    : { top: 0, bottom: window.innerHeight || document.documentElement.clientHeight };
+  return box.top >= frame.top - 1 && box.top < frame.bottom;
+}
+
+/** A row key inside an attribute selector. `CSS.escape` where the platform has it; the
+ *  quote-and-backslash escape otherwise (happy-dom in tests has no `CSS`). */
+function selectorValue(value: string): string {
+  return typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+    ? CSS.escape(value)
+    : value.replace(/["\\]/g, '\\$&');
+}
+
 /** Sort key: needs-decision first, approved-awaiting-execute next, hidden last; within the
  *  needs-decision band, higher-severity recs rise. */
 function rowImpactPerDay(row: QueueRow): number {
@@ -346,6 +428,9 @@ type OptimizerActionsPortfolioGroupProps = {
   /** A row the hero asked to land on: filters clear, the row expands and scrolls into view. */
   focusRowKey?: string | null;
   onFocusRowConsumed?: () => void;
+  /** Recommendations the portfolio's asked-for handoffs point at. One the report no longer
+   *  lists is carried into the queue from its audience proposal (see buildActionQueue). */
+  askedRecommendationIds?: readonly string[];
 };
 
 export function OptimizerActionsPortfolioGroup({
@@ -354,6 +439,7 @@ export function OptimizerActionsPortfolioGroup({
   portfolio,
   focusRowKey = null,
   onFocusRowConsumed,
+  askedRecommendationIds,
 }: OptimizerActionsPortfolioGroupProps) {
   const performanceQuery = useOptimizerPerformance(portfolio.id);
   const enrolledQuery = useOptimizerEnrolledAdsets(portfolio.id);
@@ -392,21 +478,6 @@ export function OptimizerActionsPortfolioGroup({
   const [expanded, setExpanded] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState('');
   const [routeFilters, setRouteFilters] = React.useState<Set<QueueRow['route']>>(new Set());
-  // The hero's CTA: clear whatever narrows the list, open the row, bring it into view.
-  React.useEffect(() => {
-    if (!focusRowKey) return;
-    setSearch('');
-    setRouteFilters(new Set());
-    setExpanded(focusRowKey);
-    const timer = setTimeout(() => {
-      const node = document.querySelector<HTMLElement>(
-        `[data-row-key="${CSS.escape(focusRowKey)}"]`,
-      );
-      node?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      onFocusRowConsumed?.();
-    }, 50);
-    return () => clearTimeout(timer);
-  }, [focusRowKey, onFocusRowConsumed]);
   const [executeNote, setExecuteNote] = React.useState<string | null>(null);
   const [failedAdsets, setFailedAdsets] = React.useState<Set<string>>(new Set());
   const [confirm, setConfirm] = React.useState<null | 'budget' | 'pause'>(null);
@@ -416,7 +487,51 @@ export function OptimizerActionsPortfolioGroup({
     () => new Map(enrolledQuery.data.map((row) => [row.adset_id, row.adset_name ?? ''])),
     [enrolledQuery.data],
   );
-  const rows = React.useMemo(() => buildActionQueue(report, nameById), [report, nameById]);
+  const audienceProposalsQuery = useOptimizerAudienceProposals(brandId);
+  // The recommendations the asked-for rows hand off to that the report does not carry any
+  // more, rebuilt from the proposal each one opened. Empty unless the workspace named some.
+  const carriedRecs = React.useMemo(() => {
+    if (!askedRecommendationIds || askedRecommendationIds.length === 0) return [];
+    const wanted = new Set(askedRecommendationIds);
+    const listed = new Set((report?.recommendations ?? []).map((rec) => rec.id));
+    const out: RecommendationRow[] = [];
+    for (const proposal of audienceProposalsQuery.data) {
+      const id = proposal.recommendation_id;
+      if (!id || !wanted.has(id) || listed.has(id)) continue;
+      const rec = carriedRecommendation(proposal, nameById.get(proposal.adset_id) ?? null);
+      if (rec) out.push(rec);
+    }
+    return out;
+  }, [askedRecommendationIds, audienceProposalsQuery.data, nameById, report?.recommendations]);
+  const rows = React.useMemo(
+    () => buildActionQueue(report, nameById, carriedRecs),
+    [report, nameById, carriedRecs],
+  );
+  // A CTA's row, in two steps. First, the moment the key arrives: clear whatever narrows the
+  // list and open the row. Then — only once the row is actually in the queue and painted —
+  // bring it into view and hand the key back. Consuming before the row exists (the queue may
+  // still be reading) is how a press used to expand nothing: the key was cleared on a timer
+  // while the list was still empty. The second step keys on a boolean, not on `rows`, so a
+  // re-derived row list never re-runs the reset.
+  React.useEffect(() => {
+    if (!focusRowKey) return;
+    setSearch('');
+    setRouteFilters(new Set());
+    setExpanded(focusRowKey);
+  }, [focusRowKey]);
+  const focusRowPresent = focusRowKey != null && rows.some((row) => row.key === focusRowKey);
+  // The pin outlives the key on purpose: handing the key back re-runs this effect with null,
+  // and a pin tied to the effect's cleanup died there — right after a first smooth scroll
+  // that the still-loading panels above had already cancelled.
+  const pinRef = React.useRef<(() => void) | null>(null);
+  React.useEffect(() => () => pinRef.current?.(), []);
+  React.useEffect(() => {
+    if (!focusRowKey || !focusRowPresent) return;
+    pinRef.current?.();
+    pinRef.current = pinRowInView(focusRowKey);
+    const frame = requestAnimationFrame(() => onFocusRowConsumed?.());
+    return () => cancelAnimationFrame(frame);
+  }, [focusRowKey, focusRowPresent, onFocusRowConsumed]);
 
   const runId = (report?.latest_run as { id?: string } | null)?.id ?? null;
   const asOf = asOfLine(
@@ -606,7 +721,6 @@ export function OptimizerActionsPortfolioGroup({
     },
     [adAccountId, brandId, flash.implement, noteFor, swapJobsQuery],
   );
-  const audienceProposalsQuery = useOptimizerAudienceProposals(brandId);
   const audienceMutations = useAudienceProposalMutations(brandId);
   const convertCboMutation = useConvertCbo(brandId);
   const [cboPreviewByCampaign, setCboPreviewByCampaign] = React.useState<
@@ -1458,7 +1572,7 @@ function QueueRowView({
     // biome-ignore lint/a11y/useKeyWithClickEvents: the whole-row click is a pointer convenience; the accessible, keyboard-operable selection control is the Checkbox inside. Making the <li> a role=button would nest interactive controls (checkbox, expander, hover card).
     <li
       className={cn(
-        'rounded-lg border bg-card px-4 py-3.5 transition-colors',
+        'scroll-mt-2 rounded-lg border bg-card px-4 py-3.5 transition-colors',
         selected ? 'border-primary/60 bg-accent/40 ring-1 ring-primary/40' : 'border-border/70',
         selectable && !writesBlocked && 'cursor-pointer hover:bg-muted/30',
       )}

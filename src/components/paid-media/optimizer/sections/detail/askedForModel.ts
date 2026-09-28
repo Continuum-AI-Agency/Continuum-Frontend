@@ -27,6 +27,8 @@ import type {
   AdhocSuggestionHandoff,
   AdhocSuggestionPlan,
   AdhocSuggestionRow,
+  AudienceProposalBlock,
+  AudienceProposalRow,
   HeroModule,
   ImpactTier,
 } from '@continuum/contracts';
@@ -40,9 +42,11 @@ import {
   impactTier,
   readAdhocHandoff,
   readAdhocSuggestion,
+  readProposalBlock,
+  readProposalPlan,
 } from '@continuum/contracts';
 import type { DailyReadRow } from './dailyReadModel';
-import type { HeroCta } from './heroModel';
+import { type HeroCta, queueRowKeyFor } from './heroModel';
 
 /** A suggestion row, as the shared list sees it. Every field `DailyReadRow` has, plus what
  *  only an asked-for row can offer: the steps, its own figures, and the single-use grant
@@ -108,7 +112,45 @@ function waitingRow(row: AdhocSuggestionRow): AskedForRow {
   };
 }
 
-function settledRow(row: AdhocSuggestionRow, dailyTotal: number | null | undefined): AskedForRow {
+/** What the asked-for rows read besides their own rows: the brand's audience proposals, so
+ *  a handoff that opened a proposal can say what became of it. */
+export type AskedForContext = {
+  proposals?: readonly AudienceProposalRow[];
+};
+
+/**
+ * The block on the proposal a handoff opened, when the proposal is blocked and never got a
+ * body. `closed` is true once the cycle superseded it — the trigger stopped firing, so the
+ * recommendation it belonged to was expired in the same pass (public.optimizer_supersede_
+ * recommendations). Both facts come from the proposal row; nothing here is inferred.
+ */
+export function blockedHandoff(
+  handoff: AdhocSuggestionHandoff | null,
+  proposals: readonly AudienceProposalRow[] | undefined,
+): { block: AudienceProposalBlock; closed: boolean; closedReason: string | null } | null {
+  if (!handoff?.proposal_id || !proposals) return null;
+  const row = proposals.find((candidate) => candidate.id === handoff.proposal_id);
+  if (!row || readProposalPlan(row)) return null;
+  const block = readProposalBlock(row);
+  if (!block) return null;
+  const error = row.error;
+  const closedReason =
+    error && typeof error.message === 'string' && error.message.trim() ? error.message : null;
+  return { block, closed: row.status === 'superseded', closedReason };
+}
+
+function blockedNote(blocked: NonNullable<ReturnType<typeof blockedHandoff>>): string {
+  const head = `Blocked — ${blocked.block.message}`;
+  if (!blocked.closed) return head;
+  const why = blocked.closedReason ?? 'The trigger did not fire again.';
+  return `${head} ${why} The cycle has closed the recommendation it opened.`;
+}
+
+function settledRow(
+  row: AdhocSuggestionRow,
+  dailyTotal: number | null | undefined,
+  context: AskedForContext,
+): AskedForRow {
   const copy = ADHOC_SUGGESTION_CATEGORY_COPY[row.category];
   const plan = readAdhocSuggestion(row);
   const module = MODULE_BY_CATEGORY[row.category];
@@ -150,6 +192,7 @@ function settledRow(row: AdhocSuggestionRow, dailyTotal: number | null | undefin
   const tier: ImpactTier = sized ? impactTier(plan.impact_per_day ?? 0, dailyTotal) : 'low';
   const adopted = row.status === 'adopted';
   const handoff = readAdhocHandoff(row);
+  const blocked = blockedHandoff(handoff, context.proposals);
 
   return {
     id: `asked:${row.id}`,
@@ -160,9 +203,11 @@ function settledRow(row: AdhocSuggestionRow, dailyTotal: number | null | undefin
     category: copy.label,
     tier,
     tierLabel: adopted
-      ? handoff
-        ? 'Handed off'
-        : 'Taken on'
+      ? blocked
+        ? 'Blocked'
+        : handoff
+          ? 'Handed off'
+          : 'Taken on'
       : sized
         ? IMPACT_TIER_COPY[tier]
         : 'Not sized',
@@ -176,7 +221,9 @@ function settledRow(row: AdhocSuggestionRow, dailyTotal: number | null | undefin
     detail: { steps: plan.steps, figures: plan.figures },
     adoptToken: adopted ? null : (plan.adopt?.token ?? null),
     handoff,
-    nextNote: nextNoteFor(row.category, plan, handoff, adopted),
+    // A blocked proposal's reason outranks the "being built" promise: the row that asked
+    // must say what actually became of the ask, not what the build was going to be.
+    nextNote: blocked ? blockedNote(blocked) : nextNoteFor(row.category, plan, handoff, adopted),
     cta: ctaFor(plan, module, row.category, adopted, handoff),
   };
 }
@@ -225,15 +272,20 @@ function ctaFor(
   handoff: AdhocSuggestionHandoff | null,
 ): HeroCta {
   const cta = plan.cta;
-  if (cta?.kind === 'queue_row' && cta.target_id) {
+  // ONE resolver with the hero card (heroModel.queueRowKeyFor). An `audience_card` CTA
+  // carries the PROPOSAL id and no queue row is keyed by it — the card renders nested inside
+  // its recommendation's row — so the key is the CTA's own only when it already is a row
+  // key, else the recommendation the handoff says the plan became. Nothing else is a key.
+  const rowKey = queueRowKeyFor(cta, { recommendationId: handoff?.recommendation_id ?? null });
+  if (cta?.kind === 'queue_row' && rowKey) {
     return {
       kind: 'queue_row',
-      rowKey: cta.target_id,
+      rowKey,
       label: module === 'budget' ? 'Review the budget moves' : 'Open it in the queue',
     };
   }
-  if (cta?.kind === 'audience_card' && cta.target_id) {
-    return { kind: 'audience_card', rowKey: cta.target_id, label: 'Open the audience proposal' };
+  if (cta?.kind === 'audience_card' && rowKey) {
+    return { kind: 'audience_card', rowKey, label: 'Open the audience proposal' };
   }
 
   if (handoff) {
@@ -266,14 +318,27 @@ function ctaFor(
 export function buildAskedForRows(
   rows: readonly AdhocSuggestionRow[],
   dailyTotal: number | null | undefined,
+  context: AskedForContext = {},
 ): AskedForRow[] {
   return rows
     .filter((row) => SHOWN.has(row.status))
     .map((row) =>
       row.status === 'queued' || row.status === 'proposing'
         ? waitingRow(row)
-        : settledRow(row, dailyTotal),
+        : settledRow(row, dailyTotal, context),
     );
+}
+
+/** The recommendations the asked-for handoffs point at. The queue is built from the cycle's
+ *  PENDING recommendations, so one a later cycle expired is absent from it while the row that
+ *  opened it still says "Open the audience proposal" — the queue carries these ids so that
+ *  press always has a row to land on (see buildActionQueue). */
+export function askedRecommendationIds(rows: readonly AskedForRow[]): string[] {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (row.handoff?.recommendation_id) ids.add(row.handoff.recommendation_id);
+  }
+  return [...ids];
 }
 
 /** The one line above the list saying what the day's read and the asks add up to. */

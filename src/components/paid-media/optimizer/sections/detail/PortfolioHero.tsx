@@ -1,8 +1,10 @@
 'use client';
 
 // What a portfolio opens on: its vital signs (./PortfolioVitals — name, mode, settings and six
-// readings against their references), then the day's news as ONE ROW — three cards across the pane, highest
-// impact on the left — and the growth recap as the row's footer. Then the rest of the modules.
+// readings against their references), then the "Ask Jaina" band (`askJaina`, the prepared
+// questions for this portfolio) between the vitals and the news, then the day's news as ONE
+// ROW — three cards across the pane, highest impact on the left — and the growth recap as the
+// row's footer. Then the rest of the modules.
 //
 // The row is the whole layout decision. Three equal columns on a desktop pane, two on a
 // tablet, one on a phone, measured on the pane and not the window (`NEWS_PANE` /
@@ -89,6 +91,8 @@ export type PortfolioHeroProps = {
   explainHref: string;
   /** The header and vital-sign rows above the news. Absent, the hero is the news alone. */
   vitals?: PortfolioVitalsProps;
+  /** The "Ask Jaina" band, rendered between the vitals and the news row. */
+  askJaina?: React.ReactNode;
 };
 
 /** The growth read: the flight's pacing pill when there is a flight, and the sentence. */
@@ -156,6 +160,7 @@ export function PortfolioHero({
   onCta,
   explainHref,
   vitals,
+  askJaina,
 }: PortfolioHeroProps) {
   const reduce = useReducedMotion();
   // Play the entrance once per portfolio, not on every refetch.
@@ -181,6 +186,7 @@ export function PortfolioHero({
     return (
       <section className="grid gap-3" data-testid="portfolio-hero">
         {vitals ? <PortfolioVitals {...vitals} /> : null}
+        {askJaina}
         <div className="h-24 animate-pulse rounded-lg bg-muted/70" />
         <div className="rounded-lg border border-border/60 border-dashed p-4 text-2xs text-muted-foreground">
           Jaina writes your first read after the first cycle.
@@ -238,6 +244,8 @@ export function PortfolioHero({
           <PortfolioVitals {...vitals} />
         </motion.div>
       ) : null}
+
+      {askJaina ? <motion.div variants={tileVariants}>{askJaina}</motion.div> : null}
 
       <motion.div className={NEWS_ROW} data-testid="portfolio-news-row" variants={groupVariants}>
         {row.map(cell)}

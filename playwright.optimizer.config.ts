@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-import { loadProdSupabaseEnv } from './e2e/support/prodEnv';
+import { benchBrowserChannel, loadProdSupabaseEnv } from './e2e/support/prodEnv';
 
 // Dedicated harness for `optimizer:e2e:bench` — the Paid Media Optimizer live UI bench.
 //
@@ -38,7 +38,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
     video: 'off',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], channel: 'chrome' } }],
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], ...benchBrowserChannel() } }],
   webServer: {
     command: 'bun run dev',
     env: {

@@ -67,6 +67,7 @@ import {
   useOptimizerAdDailyTrends,
   useOptimizerAdsetAds,
   useOptimizerAdsetCreativeWinrates,
+  useOptimizerAudienceProposals,
   useOptimizerBackfillAdsetNames,
   useOptimizerCpaSeries,
   useOptimizerEnrolledAdsets,
@@ -78,7 +79,7 @@ import {
 import type { OptimizerAdMetric, WorkspaceSection } from '../useOptimizerUrlState';
 import { AdsetCreativeVerdicts } from './AdsetCreativeVerdicts';
 import { ApplyReallocationDialog } from './ApplyReallocationDialog';
-import { buildAskedForRows } from './detail/askedForModel';
+import { askedRecommendationIds, buildAskedForRows } from './detail/askedForModel';
 import { DailyReadList } from './detail/DailyReadList';
 import type { DailyReadRow } from './detail/dailyReadModel';
 import { buildDailyRead } from './detail/dailyReadModel';
@@ -341,11 +342,20 @@ export function PortfolioDetailWorkspace({
   const suggestionsQuery = useAdhocSuggestions(portfolio.id);
   const { ask, adopt, implement, dismiss } = useAdhocSuggestionMutations(portfolio.id);
   const [asking, setAsking] = useState<AdhocSuggestionCategory | null>(null);
+  // The brand's audience proposals (the same read the queue's audience card uses): an
+  // asked-for handoff that opened a proposal says on its own row what became of it.
+  const audienceProposalsQuery = useOptimizerAudienceProposals(brandId);
   const askedRows = useMemo(
-    () => buildAskedForRows(suggestionsQuery.data.rows, portfolio.daily_total),
-    [suggestionsQuery.data.rows, portfolio.daily_total],
+    () =>
+      buildAskedForRows(suggestionsQuery.data.rows, portfolio.daily_total, {
+        proposals: audienceProposalsQuery.data,
+      }),
+    [suggestionsQuery.data.rows, portfolio.daily_total, audienceProposalsQuery.data],
   );
   const askedById = useMemo(() => new Map(askedRows.map((row) => [row.id, row])), [askedRows]);
+  // The recommendations those handoffs point at; the queue carries one the cycle report has
+  // since dropped, so "Open the audience proposal" always has a row to land on.
+  const askedRecIds = useMemo(() => askedRecommendationIds(askedRows), [askedRows]);
   // What you just asked for comes first, then the day's read. Sorting the two together by
   // money would bury the answer to the button somebody pressed eight seconds ago.
   // The brief half keeps its original gate: a portfolio on its first cycle has no read to
@@ -433,7 +443,9 @@ export function PortfolioDetailWorkspace({
     return asked ? asked.status === 'queued' || asked.status === 'proposing' : false;
   };
   const onHeroCta = (cta: HeroCta) => {
-    if (cta.kind === 'manage') {
+    // No row to land on is Manage, never a tab switch that focuses nothing. The resolvers
+    // (heroModel.queueRowKeyFor) only hand out real keys, so this is the belt to their braces.
+    if (cta.kind === 'manage' || !cta.rowKey) {
       onSectionChange('manage');
       return;
     }
@@ -564,6 +576,7 @@ export function PortfolioDetailWorkspace({
           ) : null}
 
           <PortfolioHero
+            askJaina={<JainaEntryChips portfolio={portfolio} />}
             currency={currency ?? null}
             dailyTotal={portfolio.daily_total ?? null}
             explainHref={jainaPromptHref(
@@ -585,8 +598,6 @@ export function PortfolioDetailWorkspace({
               running: run.isPending,
             }}
           />
-
-          <JainaEntryChips portfolio={portfolio} />
 
           {/* The one period every panel below reports on, and the objective recap for it. */}
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -957,9 +968,10 @@ export function PortfolioDetailWorkspace({
               here. The group carries its own search + approve/execute toolbar.
               pendingWorkCount comes from the LIST read, so a failed performance read (which
               zeroes movedCount) can no longer hide a portfolio's own actionable work. */}
-          {pendingWorkCount(portfolio) > 0 || movedCount > 0 ? (
+          {pendingWorkCount(portfolio) > 0 || movedCount > 0 || askedRecIds.length > 0 ? (
             <OptimizerActionsPortfolioGroup
               adAccountId={adAccountId}
+              askedRecommendationIds={askedRecIds}
               brandId={brandId}
               focusRowKey={focusRowKey}
               onFocusRowConsumed={() => setFocusRowKey(null)}

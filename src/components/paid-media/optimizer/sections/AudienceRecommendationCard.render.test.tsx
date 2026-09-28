@@ -250,6 +250,45 @@ describe('AudienceRecommendationCard', () => {
     expect(text).toContain('Preview the conversion');
     expect(text).not.toContain('Create new ad set');
   });
+  it('blocked for want of creatives: the reason, a disabled create button, and Ask again only while the rec is pending', () => {
+    const blocked = row({
+      status: 'blocked',
+      proposal: null,
+      blocked_by: {
+        code: 'no_creatives',
+        message: 'No delivering creative has enough results to carry into a new ad set yet.',
+        campaign_id: 'c1',
+        campaign_name: 'Tours',
+      },
+    });
+    const pending = render(
+      <AudienceRecommendationCard {...baseProps} view={audienceCardView([blocked], rec)} />,
+    );
+    const create = pending.getByTestId('audience-create-blocked') as HTMLButtonElement;
+    expect(create.disabled).toBe(true);
+    expect(create.textContent).toBe('Create new ad set');
+    expect(pending.getByTestId('audience-blocked-reason').textContent).toContain(
+      'No delivering creative',
+    );
+    expect(pending.container.textContent).toContain('Ask Jaina again');
+    cleanup();
+
+    // Superseded by the next cycle: the reason stays, the ask does not (the rec has expired).
+    const expiredRec = { ...(rec as object), status: 'expired' } as never;
+    const closed = render(
+      <AudienceRecommendationCard
+        {...baseProps}
+        rec={expiredRec}
+        view={audienceCardView([{ ...blocked, status: 'superseded' }], expiredRec)}
+      />,
+    );
+    expect((closed.getByTestId('audience-create-blocked') as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    expect(closed.container.textContent).toContain('No delivering creative');
+    expect(closed.container.textContent).not.toContain('Ask Jaina again');
+    expect(closed.container.textContent).toContain('closed this recommendation');
+  });
   it('executed: lists the identifiers, the What was implemented dropdown, Switch over and Undo', () => {
     const view = audienceCardView(
       [

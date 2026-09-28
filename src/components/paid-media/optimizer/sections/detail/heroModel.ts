@@ -5,6 +5,7 @@
 
 import type {
   BriefCandidate,
+  BriefCta,
   BriefGrowth,
   CycleRunPacing,
   OptimizationMetricDefinition,
@@ -27,6 +28,42 @@ export type HeroCta = {
   rowKey: string | null;
   label: string;
 };
+
+/** The only two shapes `buildActionQueue` keys a row by. A CTA that names anything else —
+ *  a bare audience-proposal id, a candidate id like `audience:<uuid>` — has nothing to land on. */
+const QUEUE_ROW_KEY = /^(rec|budget):.+/;
+
+export function isQueueRowKey(key: string | null | undefined): key is string {
+  return typeof key === 'string' && QUEUE_ROW_KEY.test(key);
+}
+
+/**
+ * The ONE resolver for where a CTA lands, shared by the hero card and the asked-for rows.
+ *
+ * A brief or an ad-hoc plan may point at a queue row directly (`queue_row`) or at an
+ * audience proposal (`audience_card`, whose `target_id` is the PROPOSAL id — the audience card
+ * renders nested inside its recommendation's row, so the proposal id itself is never a row
+ * key). The row is found in this order, and only a real key is ever returned:
+ *
+ *   1. the CTA's own `target_id`, when it already is a row key;
+ *   2. the candidate's id (`rec:<id>` on every candidate the deterministic brief mints);
+ *   3. the recommendation a handoff says the plan became (`rec:<recommendation_id>`).
+ *
+ * Null means the CTA cannot land anywhere the queue knows — the caller then offers a
+ * different door instead of a button that focuses nothing. Two resolvers used to disagree
+ * here (heroModel used the candidate id, askedForModel the bare proposal id); this is the
+ * function both call now.
+ */
+export function queueRowKeyFor(
+  cta: Pick<BriefCta, 'kind' | 'target_id'> | null | undefined,
+  fallback: { candidateId?: string | null; recommendationId?: string | null } = {},
+): string | null {
+  if (!cta || cta.kind === 'manage') return null;
+  if (isQueueRowKey(cta.target_id)) return cta.target_id;
+  if (isQueueRowKey(fallback.candidateId)) return fallback.candidateId;
+  if (fallback.recommendationId) return `rec:${fallback.recommendationId}`;
+  return null;
+}
 
 export type HeroView = {
   state: 'first_cycle' | 'ready';
@@ -237,12 +274,12 @@ export function ctaForCandidate(
   observe: boolean,
 ): HeroCta {
   if (observe) return { kind: 'manage', rowKey: null, label: 'See what Recommend would do' };
-  const rowKey =
-    candidate.cta.kind === 'audience_card'
-      ? candidate.id
-      : candidate.cta.kind === 'queue_row'
-        ? candidate.cta.target_id
-        : null;
+  const rowKey = queueRowKeyFor(candidate.cta, { candidateId: candidate.id });
+  // A card whose target the queue cannot hold gets Manage, named as Manage — never a button
+  // labelled "Open the audience proposal" that switches tabs and focuses nothing.
+  if (candidate.cta.kind !== 'manage' && !rowKey) {
+    return { kind: 'manage', rowKey: null, label: 'Open Manage' };
+  }
   const label =
     candidate.module === 'pause'
       ? 'Review the pause'

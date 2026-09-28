@@ -37,6 +37,56 @@ export type AudienceCardView = {
   errorMessage: string | null;
 };
 
+/**
+ * The card's state for a row. `audienceProposalCardState` reads a superseded row as `none`
+ * — the terminal states no longer own a decision — but a proposal that was BLOCKED and then
+ * superseded still holds the one fact the person came for: why nothing could be built. The
+ * reason outlives the signal, so that row keeps its blocked face (reason shown, create
+ * disabled) instead of offering a fresh analysis as if nothing had been tried.
+ */
+export function audienceCardStateFor(
+  row: AudienceProposalRow | null,
+): ReturnType<typeof audienceProposalCardState> {
+  const state = audienceProposalCardState(row);
+  if (state !== 'none' || !row || row.status !== 'superseded') return state;
+  if (readProposalPlan(row) || !readProposalBlock(row)) return state;
+  return readProposalBlock(row)?.code === 'cbo_campaign' ? 'blocked_cbo' : 'blocked';
+}
+
+/**
+ * A recommendation row rebuilt from the proposal it opened, for a recommendation the cycle
+ * report no longer carries.
+ *
+ * The report lists PENDING recommendations. When a later cycle does not raise a signal
+ * again, public.optimizer_supersede_recommendations sets its proposal to `superseded` and,
+ * in the same pass, its recommendation to `expired` — so a superseded proposal tells us both
+ * that its recommendation exists and how it closed. Every field here is the proposal's own
+ * (id, ad set, kind, trigger, run, dates) or that documented consequence (`status`); the
+ * severity the engine scored is not on the proposal and is left null rather than guessed.
+ * Only proposals an asked-for handoff points at are carried this way, so the row someone's
+ * own press created still has somewhere to land.
+ */
+export function carriedRecommendation(
+  proposal: AudienceProposalRow,
+  adsetName: string | null = null,
+): RecommendationRow | null {
+  if (!proposal.recommendation_id || proposal.status !== 'superseded') return null;
+  const block = readProposalBlock(proposal);
+  return {
+    id: proposal.recommendation_id,
+    adset_id: proposal.adset_id,
+    adset_name: adsetName,
+    ad_id: null,
+    kind: proposal.kind,
+    trigger: proposal.trigger,
+    severity: null,
+    reason: block?.message ?? null,
+    status: 'expired',
+    run_id: proposal.cycle_run_id,
+    created_at: proposal.created_at,
+  };
+}
+
 export function audienceCardView(
   rows: readonly AudienceProposalRow[],
   rec: Pick<RecommendationRow, 'id' | 'adset_id' | 'trigger'>,
@@ -46,7 +96,7 @@ export function audienceCardView(
   const message = error && typeof error.message === 'string' ? error.message : null;
   return {
     row,
-    state: audienceProposalCardState(row),
+    state: audienceCardStateFor(row),
     plan: row ? readProposalPlan(row) : null,
     block: row ? readProposalBlock(row) : null,
     result: row ? readProposalResult(row) : null,

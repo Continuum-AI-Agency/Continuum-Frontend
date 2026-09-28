@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { type CycleRunReport, getOptimizationMetricDefinition } from '@continuum/contracts';
 import formularios from '../../__fixtures__/optimizer-status-formularios.json';
 import { parseReport } from '../../reportModel';
-import { buildHeroView } from './heroModel';
+import { buildHeroView, ctaForCandidate, isQueueRowKey, queueRowKeyFor } from './heroModel';
 import { buildPortfolioNews } from './news/newsModel';
 
 const metric = {
@@ -426,5 +426,58 @@ describe('the real FORMULARIOS // TODOS body — a pause that bought 8 leads', (
     const news = buildPortfolioNews({ view, items: report?.latest_items ?? [], target: 35 });
     const dead = news.insights.find((card) => card.claim.includes('Ad set B'));
     expect(dead?.visual.kind).toBe('spend_blocks');
+  });
+});
+
+// The one resolver both the hero card and the asked-for rows use for where a CTA lands.
+describe('queueRowKeyFor', () => {
+  it('accepts only the two keys buildActionQueue mints', () => {
+    expect(isQueueRowKey('rec:abc')).toBe(true);
+    expect(isQueueRowKey('budget:120210')).toBe(true);
+    expect(isQueueRowKey('prop-1')).toBe(false);
+    expect(isQueueRowKey('audience:prop-1')).toBe(false);
+    expect(isQueueRowKey('rec:')).toBe(false);
+    expect(isQueueRowKey(null)).toBe(false);
+  });
+
+  it("takes the CTA's own target when it already is a row key", () => {
+    expect(queueRowKeyFor({ kind: 'queue_row', target_id: 'budget:120210' })).toBe('budget:120210');
+    expect(queueRowKeyFor({ kind: 'audience_card', target_id: 'rec:abc' })).toBe('rec:abc');
+  });
+
+  it('resolves a bare proposal id through the candidate, then the handoff — never as itself', () => {
+    const cta = { kind: 'audience_card' as const, target_id: 'prop-1' };
+    expect(queueRowKeyFor(cta, { candidateId: 'rec:a' })).toBe('rec:a');
+    expect(queueRowKeyFor(cta, { candidateId: 'audience:prop-1', recommendationId: 'r1' })).toBe(
+      'rec:r1',
+    );
+    expect(queueRowKeyFor(cta)).toBeNull();
+    expect(
+      queueRowKeyFor({ kind: 'manage', target_id: null }, { candidateId: 'rec:a' }),
+    ).toBeNull();
+  });
+});
+
+describe('ctaForCandidate', () => {
+  it('names Manage when the target cannot land on any row, instead of a button that focuses nothing', () => {
+    expect(
+      ctaForCandidate(
+        {
+          id: 'audience:prop-1',
+          module: 'audience',
+          cta: { kind: 'audience_card', target_id: 'prop-1' },
+        },
+        false,
+      ),
+    ).toEqual({ kind: 'manage', rowKey: null, label: 'Open Manage' });
+  });
+
+  it('lands an audience card on its recommendation row', () => {
+    expect(
+      ctaForCandidate(
+        { id: 'rec:a', module: 'audience', cta: { kind: 'audience_card', target_id: 'prop-1' } },
+        false,
+      ),
+    ).toEqual({ kind: 'audience_card', rowKey: 'rec:a', label: 'Open the audience proposal' });
   });
 });

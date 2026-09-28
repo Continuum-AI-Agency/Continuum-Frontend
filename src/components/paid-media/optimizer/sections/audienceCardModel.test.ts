@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  audienceCardStateFor,
   audienceCardView,
+  carriedRecommendation,
   implementedRows,
   isAudienceRecommendation,
   optionsByBucket,
@@ -196,5 +198,84 @@ describe('audience card model', () => {
       ]),
     );
     expect(rows.find((r) => r.label === 'Advantage+ audience')?.value).toBe('on');
+  });
+});
+
+// A blocked proposal the next cycle superseded (Easy Fit → Tours, 2026-09-28: no_creatives,
+// proposal null, status superseded). The block is the one fact the row still holds.
+describe('audience card model — a superseded blocked proposal', () => {
+  const superseded = {
+    id: 'p-1',
+    brand_id: '33333333-3333-4333-8333-333333333333',
+    ad_account_id: 'act_1',
+    campaign_id: 'c1',
+    adset_id: 'as-1',
+    trigger: 'F3_audience_exhausted',
+    kind: 'audience_expand',
+    recommendation_id: '44444444-4444-4444-8444-444444444444',
+    cycle_run_id: '22222222-2222-4222-8222-222222222222',
+    utc_day: '2026-09-27',
+    status: 'superseded',
+    requested_via: 'human',
+    requested_by: null,
+    attempts: 1,
+    proposal: null,
+    proposal_built_at: null,
+    blocked_by: {
+      code: 'no_creatives',
+      message: 'No delivering creative has enough results yet.',
+      campaign_id: 'c1',
+      campaign_name: 'Tours',
+    },
+    approved_at: null,
+    approved_by: null,
+    approval: null,
+    result: null,
+    executed_at: null,
+    undo_requested_at: null,
+    undo_result: null,
+    undone_at: null,
+    error: { code: 'signal_stopped', message: 'The trigger did not fire again.' },
+    created_at: '2026-09-27T09:20:16Z',
+    updated_at: '2026-09-28T00:20:00Z',
+  } as never;
+
+  it('keeps its blocked face instead of offering a fresh analysis', () => {
+    expect(audienceCardStateFor(superseded)).toBe('blocked');
+    expect(audienceCardStateFor({ ...(superseded as object), proposal: plan } as never)).toBe(
+      'none',
+    );
+    expect(audienceCardStateFor({ ...(superseded as object), blocked_by: null } as never)).toBe(
+      'none',
+    );
+    const view = audienceCardView([superseded], {
+      id: '44444444-4444-4444-8444-444444444444',
+      adset_id: 'as-1',
+      trigger: 'F3_audience_exhausted',
+    });
+    expect(view.state).toBe('blocked');
+    expect(view.block?.code).toBe('no_creatives');
+  });
+
+  it("rebuilds the expired recommendation it belonged to from the proposal's own fields", () => {
+    expect(carriedRecommendation(superseded, 'ITESO // AGOSTO // 2 - LKL')).toEqual({
+      id: '44444444-4444-4444-8444-444444444444',
+      adset_id: 'as-1',
+      adset_name: 'ITESO // AGOSTO // 2 - LKL',
+      ad_id: null,
+      kind: 'audience_expand',
+      trigger: 'F3_audience_exhausted',
+      severity: null,
+      reason: 'No delivering creative has enough results yet.',
+      status: 'expired',
+      run_id: '22222222-2222-4222-8222-222222222222',
+      created_at: '2026-09-27T09:20:16Z',
+    });
+    expect(
+      carriedRecommendation({ ...(superseded as object), status: 'blocked' } as never),
+    ).toBeNull();
+    expect(
+      carriedRecommendation({ ...(superseded as object), recommendation_id: null } as never),
+    ).toBeNull();
   });
 });
