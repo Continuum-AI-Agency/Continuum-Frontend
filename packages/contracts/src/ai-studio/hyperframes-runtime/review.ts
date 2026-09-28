@@ -10,6 +10,15 @@ import type { HyperframesLayoutMetrics, HyperframesTemporalMetrics } from '../hy
 const DUPLICATE_MAD = 1.5;
 const SCENE_CHANGE_MAD = 12;
 const REVIEW_SAMPLE_FPS = 10;
+/**
+ * Motion is read at 480 px on the long side, per pixel, before any shader: a mean over the
+ * 32x18 sample (the MAD) cannot see a thin progress bar or a small entrance, so films with
+ * both were judged frozen; and film grain re-seeds every frame, so it is sampled first.
+ * A frame is still when fewer than MOTION_MIN_PIXELS moved more than MOTION_PIXEL_DELTA.
+ */
+const MOTION_LONG_SIDE = 480;
+const MOTION_PIXEL_DELTA = 2;
+const MOTION_MIN_PIXELS = 3;
 
 type ReviewScene = { id: string; start_seconds: number; duration_seconds: number };
 type Canvas2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -25,10 +34,24 @@ export const createCanvas = (
   return canvas;
 };
 
+/** Pixels of two motion samples that differ past the noise floor. */
+export const changedPixels = (previous: Uint8Array, current: Uint8Array): number => {
+  let changed = 0;
+  for (let pixel = 0; pixel < current.length; pixel += 1) {
+    if (Math.abs((current[pixel] ?? 0) - (previous[pixel] ?? 0)) > MOTION_PIXEL_DELTA) changed += 1;
+  }
+  return changed;
+};
+
+/**
+ * `motionPixels[i]`: pixels changed between dense samples i and i + 1 (`changedPixels` over
+ * `motionLuma`). Without it, frozen intervals and entrances fall back to the frame mean.
+ */
 export function buildTemporalMetrics(
   samples: readonly Uint8Array[],
   sampleFps: number,
   scenes: readonly ReviewScene[],
+  motionPixels?: readonly number[],
 ): HyperframesTemporalMetrics {
   const adjacentFrameMad = samples.slice(1).map((sample, index) => {
     const previous = samples[index];
@@ -39,11 +62,15 @@ export function buildTemporalMetrics(
     }
     return difference / sample.length;
   });
+  const moving = (index: number): boolean =>
+    motionPixels
+      ? (motionPixels[index] ?? 0) >= MOTION_MIN_PIXELS
+      : (adjacentFrameMad[index] ?? 0) > DUPLICATE_MAD;
   const frozenIntervals: HyperframesTemporalMetrics['frozenIntervals'] = [];
   let frozenStart: number | null = null;
-  adjacentFrameMad.forEach((difference, index) => {
-    if (difference <= DUPLICATE_MAD && frozenStart === null) frozenStart = index / sampleFps;
-    if (difference > DUPLICATE_MAD && frozenStart !== null) {
+  adjacentFrameMad.forEach((_, index) => {
+    if (!moving(index) && frozenStart === null) frozenStart = index / sampleFps;
+    if (moving(index) && frozenStart !== null) {
       frozenIntervals.push({
         startSeconds: frozenStart,
         durationSeconds: index / sampleFps - frozenStart,
@@ -59,13 +86,11 @@ export function buildTemporalMetrics(
   }
   const entranceMotionSceneIds = scenes.flatMap((scene) => {
     const entranceEnd = scene.start_seconds + Math.min(1, scene.duration_seconds);
-    const moving = adjacentFrameMad.some((difference, index) => {
+    const entered = adjacentFrameMad.some((_, index) => {
       const timestamp = (index + 1) / sampleFps;
-      return (
-        timestamp >= scene.start_seconds && timestamp <= entranceEnd && difference > DUPLICATE_MAD
-      );
+      return timestamp >= scene.start_seconds && timestamp <= entranceEnd && moving(index);
     });
-    return moving ? [scene.id] : [];
+    return entered ? [scene.id] : [];
   });
   return {
     sampleFps,
@@ -115,14 +140,17 @@ export function reviewPlan(durationSeconds: number, timestampsSeconds: readonly 
   return { sampleFps, denseTimestamps, timestamps, frameTimestampsSeconds };
 }
 
-/** 32×18 Rec. 709 luma of a frame: the temporal metrics' sample. */
-export const canvasLuma = (source: HTMLCanvasElement | OffscreenCanvas): Uint8Array => {
-  const sample = createCanvas(32, 18);
+const lumaAt = (
+  source: HTMLCanvasElement | OffscreenCanvas,
+  width: number,
+  height: number,
+): Uint8Array => {
+  const sample = createCanvas(width, height);
   const context = sample.getContext('2d') as Canvas2D | null;
   if (!context) throw new Error('Review sample context is unavailable.');
-  context.drawImage(source, 0, 0, 32, 18);
-  const pixels = context.getImageData(0, 0, 32, 18).data;
-  const luma = new Uint8Array(32 * 18);
+  context.drawImage(source, 0, 0, width, height);
+  const pixels = context.getImageData(0, 0, width, height).data;
+  const luma = new Uint8Array(width * height);
   for (let index = 0; index < luma.length; index += 1) {
     const offset = index * 4;
     luma[index] = Math.round(
@@ -132,6 +160,20 @@ export const canvasLuma = (source: HTMLCanvasElement | OffscreenCanvas): Uint8Ar
     );
   }
   return luma;
+};
+
+/** 32×18 Rec. 709 luma of a frame: the sample for scene changes and duplicates. */
+export const canvasLuma = (source: HTMLCanvasElement | OffscreenCanvas): Uint8Array =>
+  lumaAt(source, 32, 18);
+
+/** Luma at MOTION_LONG_SIDE on the long side: the sample `changedPixels` compares. */
+export const motionLuma = (source: HTMLCanvasElement | OffscreenCanvas): Uint8Array => {
+  const scale = MOTION_LONG_SIDE / Math.max(source.width, source.height);
+  return lumaAt(
+    source,
+    Math.max(1, Math.round(source.width * scale)),
+    Math.max(1, Math.round(source.height * scale)),
+  );
 };
 
 /** The scene contact sheet: six 240×180 tiles a row, each drawn from its scene's midpoint sample. */
