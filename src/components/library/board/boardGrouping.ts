@@ -21,6 +21,7 @@ import type {
 import { customFieldChoiceOptions, mediaReviewStatusSchema } from '@continuum/contracts';
 import { ratingMax } from '@/lib/library/customFields';
 import { REVIEW_STATUS_META, REVIEW_STATUS_ORDER } from '@/lib/library/reviewStatus';
+import type { BrandRole } from '@/lib/library/useBrandRole';
 import { groupAssetsByReviewStatus } from './groupAssetsByReviewStatus';
 
 export type BoardGrouping =
@@ -193,9 +194,14 @@ function fieldLanes(
       };
     }
     case 'user':
+    case 'user_multi':
       return {
         lanes: (members ?? []).map((member) => ({ key: member.userId, label: member.label })),
-        keyOf: (value) => (typeof value === 'string' ? value : null),
+        // Several people sit in the lane of the first, as a multi-select does.
+        keyOf: (value) => {
+          const id = Array.isArray(value) ? value[0] : value;
+          return typeof id === 'string' ? id : null;
+        },
       };
     case 'rating':
       return {
@@ -245,9 +251,22 @@ function fieldLanes(
   }
 }
 
+/**
+ * Whether the board acts on a drop. Only a role KNOWN to be read-only refuses one: while
+ * brand_role is still loading (undefined) the drop goes through, and the server — which
+ * enforces the same rule — refuses a viewer with a toast. Gating on `canEdit` alone ignored
+ * a quick first drop silently: the cards are draggable as soon as the assets arrive.
+ */
+export function boardAcceptsDrops(
+  brandRole: BrandRole | null | undefined,
+  canEdit: boolean,
+): boolean {
+  return canEdit || brandRole === undefined;
+}
+
 /** Can a drop on this field's lanes write a value? Buckets only group. */
 export function isDroppableField(field: CustomField): boolean {
-  return !['date', 'number', 'text', 'url'].includes(field.type);
+  return !['date', 'number', 'text', 'long_text', 'url'].includes(field.type);
 }
 
 /**
@@ -267,7 +286,8 @@ export function dropValue(
       return Number(laneKey);
     case 'checkbox':
       return laneKey === 'true';
-    case 'multi_select': {
+    case 'multi_select':
+    case 'user_multi': {
       const held = Array.isArray(current) ? current : [];
       const [grouped, ...rest] = held;
       if (grouped === laneKey) return held;

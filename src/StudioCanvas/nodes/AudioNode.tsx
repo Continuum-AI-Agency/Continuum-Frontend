@@ -38,6 +38,8 @@ import { useStudioStore } from '../stores/useStudioStore';
 import type { AudioNodeData } from '../types';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
 import { stageAndUploadReferenceFile } from '../utils/uploadReferenceFile';
+import { MediaTrimStrip } from './media/MediaTrimStrip';
+import { CLEARED_TRIM } from './media/mediaTrim';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
@@ -67,23 +69,17 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
     }
   }, [data.audio]);
 
-  const togglePlay = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (audioRef.current) {
-        if (isPlaying) {
-          audioRef.current.pause();
-        } else {
-          audioRef.current.play().catch(console.error);
-        }
-        setIsPlaying(!isPlaying);
-      }
-    },
-    [isPlaying],
-  );
-
-  const handleEnded = useCallback(() => {
-    setIsPlaying(false);
+  // isPlaying follows the element's own play/pause events, because the trim strip
+  // pauses playback at the out-point without going through this button.
+  const togglePlay = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (audio.paused) {
+      audio.play().catch(console.error);
+    } else {
+      audio.pause();
+    }
   }, []);
 
   const handleFileUpload = useCallback(
@@ -109,12 +105,13 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
                   sourcePath: undefined,
                   bucket: undefined,
                   sourceUrl: undefined,
+                  ...CLEARED_TRIM,
                 },
               },
               { updateNodeData, triggerSave },
             );
           } else {
-            updateNodeData(id, { audio: result, fileName: file.name });
+            updateNodeData(id, { audio: result, fileName: file.name, ...CLEARED_TRIM });
           }
         };
         reader.readAsDataURL(file);
@@ -173,12 +170,13 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
                   sourcePath: undefined,
                   bucket: undefined,
                   sourceUrl: undefined,
+                  ...CLEARED_TRIM,
                 },
               },
               { updateNodeData, triggerSave },
             );
           } else {
-            updateNodeData(id, { audio: result, fileName: file.name });
+            updateNodeData(id, { audio: result, fileName: file.name, ...CLEARED_TRIM });
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to read dropped file';
@@ -227,6 +225,7 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
         bucket: resolved.bucket,
         sourceUrl: resolved.sourceUrl,
         referenceStatus: resolved.assetId ? 'ready' : undefined,
+        ...CLEARED_TRIM,
       });
       triggerSave();
     },
@@ -260,20 +259,21 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
                 selected={selected}
                 className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
               >
-                <NodeContent className="relative flex-1 min-h-0 p-0 bg-muted/30">
+                <NodeContent className="relative flex flex-1 min-h-0 flex-col p-0 bg-muted/30">
                   <Label
                     htmlFor={`file-${id}`}
-                    className="cursor-pointer flex h-full w-full items-center justify-center transition-colors hover:bg-muted/40"
+                    className="cursor-pointer flex min-h-0 w-full flex-1 items-center justify-center transition-colors hover:bg-muted/40"
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                   >
                     {audioSrc ? (
-                      <div className="flex h-full w-full items-center justify-center p-4">
+                      <div className="flex h-full w-full items-center justify-center p-2">
                         {/* biome-ignore lint/a11y/useMediaCaption: this is an arbitrary user audio reference, not authored dialogue */}
                         <audio
                           ref={audioRef}
                           src={audioSrc}
-                          onEnded={handleEnded}
+                          onPlay={() => setIsPlaying(true)}
+                          onPause={() => setIsPlaying(false)}
                           className="hidden"
                         />
 
@@ -317,6 +317,17 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
                       </Empty>
                     )}
                   </Label>
+                  {/* Outside the Label, so a drag on a trim handle never opens the file picker. */}
+                  {audioSrc && (
+                    <MediaTrimStrip
+                      nodeId={id}
+                      src={audioSrc}
+                      mediaRef={audioRef}
+                      trimStartMs={data.trimStartMs}
+                      trimEndMs={data.trimEndMs}
+                      atOutPoint="pause"
+                    />
+                  )}
                   <Input
                     id={`file-${id}`}
                     type="file"

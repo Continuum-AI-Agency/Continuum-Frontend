@@ -228,6 +228,8 @@ export function useMediaLibrary(params: {
             // A custom review state is not on the realtime payload's filter either.
             if (query.collectionId || narrowed) return;
             if (query.sort !== 'created_desc') return;
+            // Format groups, ranges, codecs and field ranges are SQL predicates the payload
+            // cannot answer; a then-by ordering is likewise left to the next fetch.
             if (
               query.placements.length > 0 ||
               query.campaignIds.length > 0 ||
@@ -235,7 +237,12 @@ export function useMediaLibrary(params: {
               query.used != null ||
               query.shared != null ||
               query.leadingOnly ||
-              query.search
+              query.search ||
+              query.families.length > 0 ||
+              query.ranges ||
+              query.technical ||
+              query.fieldRanges.length > 0 ||
+              query.thenBy.length > 0
             ) {
               return;
             }

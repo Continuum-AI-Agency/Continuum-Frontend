@@ -1,13 +1,20 @@
 'use client';
 
-import type {
-  CustomField,
-  CustomFieldFilter,
-  LibraryMediaType,
-  LibraryPlacement,
-  MediaReviewStatus,
-  MediaSource,
-  Project,
+import {
+  type CustomField,
+  type CustomFieldFilter,
+  HDR_DYNAMIC_RANGES,
+  LIBRARY_FORMAT_GROUP_LABELS,
+  LIBRARY_FORMAT_GROUPS,
+  type LibraryMediaType,
+  type LibraryNumericRange,
+  type LibraryPlacement,
+  type LibraryRangeFilters,
+  type LibraryTechnicalFilters,
+  type MediaReviewStatus,
+  type MediaSource,
+  type Project,
+  VIDEO_CODEC_FAMILIES,
 } from '@continuum/contracts';
 import { Check, ChevronDown, Search, SlidersHorizontal, Tags, X } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
@@ -17,11 +24,17 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   CREATION_METHOD_GROUPS,
+  compactFilters,
   KIND_FILTERS,
   type KindFilterValue,
+  LIBRARY_RESOLUTION_PRESETS,
   type LibraryTagOption,
+  libraryRatingField,
   SOURCE_FILTERS,
   type SourceFilterValue,
+  type StructuredLibraryFilters,
+  structuredFilterChips,
+  withoutStructuredFilter,
 } from '@/lib/media/filters';
 import { cn } from '@/lib/utils';
 import { FieldFilterChips } from './fields/FieldFilterChips';
@@ -71,6 +84,14 @@ type Props = {
   customFields?: readonly CustomField[];
   fieldFilters?: readonly CustomFieldFilter[];
   onFieldFiltersChange?: (filters: CustomFieldFilter[]) => void;
+  // Format groups, technical ranges and custom-field ranges (the ★ Rating control). One
+  // handler for the set: a popover edit and a chip's removal both hand back all four.
+  structuredFilters?: StructuredLibraryFilters;
+  onStructuredFiltersChange?: (filters: StructuredLibraryFilters) => void;
+  /** Format-group counts, computed without the Format filter itself. */
+  familyCounts?: Readonly<Record<string, number>>;
+  /** Custom review state id → matching assets. */
+  reviewStateCounts?: Readonly<Record<string, number>>;
   // Visual density: "page" for the library route, "compact" for the studio sheet.
   variant?: 'page' | 'compact';
   // The full Library page already exposes source in its collection sidebar.
@@ -110,6 +131,10 @@ export function LibraryFilterBar({
   customFields,
   fieldFilters,
   onFieldFiltersChange,
+  structuredFilters = {},
+  onStructuredFiltersChange,
+  familyCounts,
+  reviewStateCounts,
   variant = 'page',
   showSource = true,
   className,
@@ -119,9 +144,16 @@ export function LibraryFilterBar({
   const layoutId = variant === 'compact' ? 'studio-filter-pill' : 'library-filter-pill';
 
   if (variant === 'page' && mediaType && onMediaTypeChange && onCreatedWithChange) {
+    const structuredChips = structuredFilterChips(structuredFilters, customFields);
     return (
       <div className={cn('flex flex-wrap items-center gap-2', className)}>
         <AdvancedFilterPopover
+          structuredFilters={structuredFilters}
+          onStructuredFiltersChange={onStructuredFiltersChange}
+          structuredCount={structuredChips.length}
+          familyCounts={familyCounts}
+          reviewStateCounts={reviewStateCounts}
+          customFields={customFields ?? []}
           mediaType={mediaType}
           onMediaTypeChange={onMediaTypeChange}
           createdWith={createdWith ?? []}
@@ -168,21 +200,25 @@ export function LibraryFilterBar({
           ];
         })}
         {(selectedTags ?? []).map((tag) => (
-          <span
+          <RemovableChip
             key={tag}
-            className="inline-flex min-h-8 max-w-44 items-center gap-1 rounded-full bg-muted px-2.5 text-xs text-foreground"
-          >
-            <span className="truncate">{tag}</span>
-            <button
-              type="button"
-              onClick={() => onTagsChange?.((selectedTags ?? []).filter((item) => item !== tag))}
-              className="rounded-full p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
-              aria-label={`Remove ${tag} tag filter`}
-            >
-              <X className="size-3" />
-            </button>
-          </span>
+            label={tag}
+            removeLabel={`Remove ${tag} tag filter`}
+            onRemove={() => onTagsChange?.((selectedTags ?? []).filter((item) => item !== tag))}
+          />
         ))}
+        {onStructuredFiltersChange
+          ? structuredChips.map((chip) => (
+              <RemovableChip
+                key={chip.id}
+                label={chip.label}
+                removeLabel={`Remove ${chip.label} filter`}
+                onRemove={() =>
+                  onStructuredFiltersChange(withoutStructuredFilter(structuredFilters, chip.id))
+                }
+              />
+            ))
+          : null}
         {onFieldFiltersChange && customFields && customFields.length > 0 && (
           <FieldFilterChips
             fields={customFields}
@@ -203,6 +239,11 @@ export function LibraryFilterBar({
               tags: [...(selectedTags ?? [])],
               reviewStatuses: [...(reviewStatuses ?? [])],
               fieldFilters: [...(fieldFilters ?? [])],
+              families: [...(structuredFilters.families ?? [])],
+              ranges: structuredFilters.ranges,
+              technical: structuredFilters.technical,
+              fieldRanges: [...(structuredFilters.fieldRanges ?? [])],
+              reviewStateIds: [...(reviewStateIds ?? [])],
             }}
             onSaved={() => onFieldFiltersChange?.([])}
           />
@@ -262,14 +303,27 @@ export function LibraryFilterBar({
   );
 }
 
-const MEDIA_TYPE_OPTIONS: readonly { value: LibraryMediaType; label: string }[] = [
-  { value: 'all', label: 'All assets' },
-  { value: 'image', label: 'Images' },
-  { value: 'video', label: 'Videos' },
-  { value: 'carousel', label: 'Carousels' },
-  { value: 'project_file', label: 'Project files' },
-  { value: 'audio', label: 'Audio' },
+// What the popover search matches the Technical section on.
+const TECHNICAL_SEARCH_TERMS = [
+  'Technical',
+  'Duration',
+  'Resolution',
+  ...LIBRARY_RESOLUTION_PRESETS.map((preset) => preset.label),
+  'Frame rate',
+  'Bit rate',
+  'File size',
+  'Date added',
+  'Codec',
+  ...Object.values(VIDEO_CODEC_FAMILIES).map((family) => family.label),
+  'HDR',
+  'Transparency',
+  'Alpha',
 ];
+
+const RATING_STARS = [1, 2, 3, 4, 5] as const;
+
+const toggleValue = <T extends string>(values: readonly T[], value: T): T[] =>
+  values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
 
 const PLACEMENT_OPTIONS: readonly { value: LibraryPlacement; label: string }[] = [
   { value: 'reel', label: 'Reel / short-form' },
@@ -280,6 +334,12 @@ const PLACEMENT_OPTIONS: readonly { value: LibraryPlacement; label: string }[] =
 ];
 
 function AdvancedFilterPopover({
+  structuredFilters,
+  onStructuredFiltersChange,
+  structuredCount,
+  familyCounts,
+  reviewStateCounts,
+  customFields,
   mediaType,
   onMediaTypeChange,
   createdWith,
@@ -304,6 +364,12 @@ function AdvancedFilterPopover({
   selectedProjectIds,
   onProjectIdsChange,
 }: {
+  structuredFilters: StructuredLibraryFilters;
+  onStructuredFiltersChange?: (filters: StructuredLibraryFilters) => void;
+  structuredCount: number;
+  familyCounts?: Readonly<Record<string, number>>;
+  reviewStateCounts?: Readonly<Record<string, number>>;
+  customFields: readonly CustomField[];
   mediaType: LibraryMediaType;
   onMediaTypeChange: (value: LibraryMediaType) => void;
   createdWith: readonly MediaSource[];
@@ -336,8 +402,25 @@ function AdvancedFilterPopover({
     useReviewStateLabels(brandId),
     useReviewCustomStates(brandId),
   ).filter((option) => option.kind === 'status' || onReviewStateIdsChange);
+  const families = structuredFilters.families ?? [];
+  const ratingField = libraryRatingField(customFields);
+  const ratingMin = structuredFilters.fieldRanges?.find(
+    (range) => range.fieldId === ratingField?.id,
+  )?.min;
+  const setRating = (stars: number | undefined) => {
+    if (!ratingField || !onStructuredFiltersChange) return;
+    const others = (structuredFilters.fieldRanges ?? []).filter(
+      (range) => range.fieldId !== ratingField.id,
+    );
+    onStructuredFiltersChange({
+      ...structuredFilters,
+      fieldRanges: stars ? [...others, { fieldId: ratingField.id, min: stars }] : others,
+    });
+  };
+  // The legacy single media types are sidebar destinations now; only Carousels is chosen here.
   const activeCount =
-    (mediaType === 'all' ? 0 : 1) +
+    (mediaType === 'carousel' ? 1 : 0) +
+    structuredCount +
     createdWith.length +
     placements.length +
     reviewStatuses.length +
@@ -347,8 +430,6 @@ function AdvancedFilterPopover({
     (leadingOnly ? 1 : 0) +
     selectedTags.length +
     selectedProjectIds.length;
-  const toggleValue = <T extends string>(values: readonly T[], value: T): T[] =>
-    values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
 
   return (
     <Popover>
@@ -381,16 +462,36 @@ function AdvancedFilterPopover({
           </div>
         </div>
         <div className="max-h-[min(65vh,32rem)] space-y-4 overflow-y-auto p-3">
-          {MEDIA_TYPE_OPTIONS.some((option) => matches(option.label)) ? (
-            <FilterSection label="Media type">
-              {MEDIA_TYPE_OPTIONS.filter((option) => matches(option.label)).map((option) => (
+          {LIBRARY_FORMAT_GROUPS.some((group) => matches(LIBRARY_FORMAT_GROUP_LABELS[group])) ||
+          matches('Carousels') ? (
+            <FilterSection label="Format">
+              {onStructuredFiltersChange
+                ? LIBRARY_FORMAT_GROUPS.filter((group) =>
+                    matches(LIBRARY_FORMAT_GROUP_LABELS[group]),
+                  ).map((group) => (
+                    <FilterChoice
+                      key={group}
+                      label={LIBRARY_FORMAT_GROUP_LABELS[group]}
+                      count={familyCounts?.[group]}
+                      selected={families.includes(group)}
+                      onClick={() =>
+                        onStructuredFiltersChange({
+                          ...structuredFilters,
+                          families: toggleValue(families, group),
+                        })
+                      }
+                    />
+                  ))
+                : null}
+              {/* A carousel is a set of images or videos, not a file format, so it stays a
+                  media-type choice beside the groups. */}
+              {matches('Carousels') ? (
                 <FilterChoice
-                  key={option.value}
-                  label={option.label}
-                  selected={mediaType === option.value}
-                  onClick={() => onMediaTypeChange(option.value)}
+                  label="Carousels"
+                  selected={mediaType === 'carousel'}
+                  onClick={() => onMediaTypeChange(mediaType === 'carousel' ? 'all' : 'carousel')}
                 />
-              ))}
+              ) : null}
             </FilterSection>
           ) : null}
 
@@ -438,6 +539,7 @@ function AdvancedFilterPopover({
                     <FilterChoice
                       key={option.value}
                       label={option.label}
+                      count={reviewStateCounts?.[option.value]}
                       className="pl-4"
                       selected={reviewStateIds.includes(option.value)}
                       onClick={() =>
@@ -481,6 +583,26 @@ function AdvancedFilterPopover({
                 />
               ) : null}
             </FilterSection>
+          ) : null}
+
+          {onStructuredFiltersChange && ratingField && ['Rating', 'Stars'].some(matches) ? (
+            <FilterSection label="Rating">
+              <div className="flex flex-wrap gap-1 px-2">
+                {RATING_STARS.map((stars) => (
+                  <PillChoice
+                    key={stars}
+                    label={`★ ${stars}+`}
+                    ariaLabel={`Rated ${stars} or more`}
+                    selected={ratingMin === stars}
+                    onClick={() => setRating(ratingMin === stars ? undefined : stars)}
+                  />
+                ))}
+              </div>
+            </FilterSection>
+          ) : null}
+
+          {onStructuredFiltersChange && TECHNICAL_SEARCH_TERMS.some(matches) ? (
+            <TechnicalSection filters={structuredFilters} onChange={onStructuredFiltersChange} />
           ) : null}
 
           {/* Two different empties, and only one of them should hide the section. NO PROJECTS
@@ -576,6 +698,300 @@ function FilterChoice({
         <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
       ) : null}
     </button>
+  );
+}
+
+function PillChoice({
+  label,
+  ariaLabel,
+  selected,
+  onClick,
+}: {
+  label: string;
+  ariaLabel?: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      aria-label={ariaLabel}
+      className={cn(
+        'min-h-8 rounded-full border border-border px-2.5 text-xs hover:bg-accent',
+        selected && 'border-primary/40 bg-primary/10 text-primary hover:bg-primary/15',
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function RemovableChip({
+  label,
+  removeLabel,
+  onRemove,
+}: {
+  label: string;
+  removeLabel: string;
+  onRemove: () => void;
+}) {
+  return (
+    <span className="inline-flex min-h-8 max-w-44 items-center gap-1 rounded-full bg-muted px-2.5 text-xs text-foreground">
+      <span className="truncate">{label}</span>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="rounded-full p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
+        aria-label={removeLabel}
+      >
+        <X className="size-3" />
+      </button>
+    </span>
+  );
+}
+
+/** Sets one end of a range; a min typed past the max swaps them rather than failing the schema. */
+function withRangeBound(
+  range: LibraryNumericRange | undefined,
+  bound: 'min' | 'max',
+  value: number | undefined,
+): LibraryNumericRange | undefined {
+  const next = compactFilters({ ...range, [bound]: value });
+  if (next?.min !== undefined && next.max !== undefined && next.min > next.max) {
+    return { min: next.max, max: next.min };
+  }
+  return next;
+}
+
+/** A date input's day as the ISO instant it starts at, locally; `addDays` 1 = the exclusive end. */
+function dayStartIso(value: string, addDays = 0): string | undefined {
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day + addDays).toISOString();
+}
+
+function dateInputValue(iso: string | undefined, offsetMs = 0): string {
+  if (!iso) return '';
+  const date = new Date(Date.parse(iso) + offsetMs);
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/**
+ * A number committed on blur or Enter, not per keystroke: every commit is a navigation.
+ * Keyed on the committed value so a chip removal elsewhere resets what it shows.
+ */
+function BoundInput({
+  label,
+  placeholder,
+  value,
+  onCommit,
+}: {
+  label: string;
+  placeholder: string;
+  value: number | undefined;
+  onCommit: (value: number | undefined) => void;
+}) {
+  return (
+    <Input
+      key={value ?? ''}
+      type="number"
+      inputMode="decimal"
+      min={0}
+      step="any"
+      inputSize="sm"
+      defaultValue={value ?? ''}
+      placeholder={placeholder}
+      aria-label={label}
+      className="w-20 text-xs"
+      onBlur={(event) => {
+        const raw = event.target.value.trim();
+        const parsed = raw === '' ? undefined : Number(raw);
+        const next =
+          parsed !== undefined && Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+        if (next !== value) onCommit(next);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') event.currentTarget.blur();
+      }}
+    />
+  );
+}
+
+function RangeRow({
+  label,
+  unit,
+  scale,
+  range,
+  onChange,
+  minOnly = false,
+}: {
+  label: string;
+  unit: string;
+  // Stored units per displayed unit: ms per second, bits per megabit, bytes per MB.
+  scale: number;
+  range: LibraryNumericRange | undefined;
+  onChange: (range: LibraryNumericRange | undefined) => void;
+  minOnly?: boolean;
+}) {
+  const shown = (stored: number | undefined) => (stored === undefined ? undefined : stored / scale);
+  const set = (bound: 'min' | 'max', value: number | undefined) =>
+    onChange(
+      withRangeBound(
+        range,
+        bound,
+        value === undefined ? undefined : scale === 1 ? value : Math.round(value * scale),
+      ),
+    );
+  const name = label.toLowerCase();
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="w-24 shrink-0 text-xs text-muted-foreground">
+        {label} <span className="text-2xs">({unit})</span>
+      </span>
+      <BoundInput
+        label={`Minimum ${name} in ${unit}`}
+        placeholder={minOnly ? 'At least' : 'Min'}
+        value={shown(range?.min)}
+        onCommit={(value) => set('min', value)}
+      />
+      {minOnly ? null : (
+        <>
+          <span aria-hidden className="text-xs text-muted-foreground">
+            –
+          </span>
+          <BoundInput
+            label={`Maximum ${name} in ${unit}`}
+            placeholder="Max"
+            value={shown(range?.max)}
+            onCommit={(value) => set('max', value)}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+function TechnicalSection({
+  filters,
+  onChange,
+}: {
+  filters: StructuredLibraryFilters;
+  onChange: (filters: StructuredLibraryFilters) => void;
+}) {
+  const ranges = filters.ranges ?? {};
+  const technical = filters.technical ?? {};
+  const videoCodecs = technical.videoCodecs ?? [];
+  const created = ranges.createdAt ?? {};
+  const hdr = HDR_DYNAMIC_RANGES.every((range) => technical.dynamicRanges?.includes(range));
+  const setRanges = (patch: Partial<LibraryRangeFilters>) =>
+    onChange({ ...filters, ranges: compactFilters({ ...ranges, ...patch }) });
+  const setTechnical = (patch: Partial<LibraryTechnicalFilters>) =>
+    onChange({ ...filters, technical: compactFilters({ ...technical, ...patch }) });
+  const setCreated = (bound: 'after' | 'before', iso: string | undefined) =>
+    setRanges({ createdAt: compactFilters({ ...created, [bound]: iso }) });
+
+  return (
+    <FilterSection label="Technical">
+      <div className="space-y-2 px-2 pb-1">
+        <RangeRow
+          label="Duration"
+          unit="s"
+          scale={1000}
+          range={ranges.durationMs}
+          onChange={(durationMs) => setRanges({ durationMs })}
+        />
+        <fieldset
+          aria-label="Resolution"
+          className="flex min-w-0 items-center gap-1.5 border-0 p-0"
+        >
+          <span aria-hidden className="w-24 shrink-0 text-xs text-muted-foreground">
+            Resolution
+          </span>
+          {LIBRARY_RESOLUTION_PRESETS.map((preset) => {
+            const selected =
+              ranges.resolution?.min === preset.min && ranges.resolution.max === undefined;
+            return (
+              <PillChoice
+                key={preset.min}
+                label={preset.label}
+                selected={selected}
+                onClick={() =>
+                  setRanges({ resolution: selected ? undefined : { min: preset.min } })
+                }
+              />
+            );
+          })}
+        </fieldset>
+        <RangeRow
+          label="Frame rate"
+          unit="fps"
+          scale={1}
+          minOnly
+          range={ranges.frameRate}
+          onChange={(frameRate) => setRanges({ frameRate })}
+        />
+        <RangeRow
+          label="Bit rate"
+          unit="Mb/s"
+          scale={1e6}
+          minOnly
+          range={ranges.bitRate}
+          onChange={(bitRate) => setRanges({ bitRate })}
+        />
+        <RangeRow
+          label="File size"
+          unit="MB"
+          scale={1e6}
+          range={ranges.sizeBytes}
+          onChange={(sizeBytes) => setRanges({ sizeBytes })}
+        />
+        <div className="flex items-center gap-1.5">
+          <span className="w-24 shrink-0 text-xs text-muted-foreground">Date added</span>
+          <Input
+            type="date"
+            inputSize="sm"
+            aria-label="Added on or after"
+            value={dateInputValue(created.after)}
+            onChange={(event) => setCreated('after', dayStartIso(event.target.value))}
+            className="min-w-0 flex-1 px-1.5 text-xs"
+          />
+          <span aria-hidden className="text-xs text-muted-foreground">
+            –
+          </span>
+          <Input
+            type="date"
+            inputSize="sm"
+            aria-label="Added on or before"
+            value={dateInputValue(created.before, -1)}
+            onChange={(event) => setCreated('before', dayStartIso(event.target.value, 1))}
+            className="min-w-0 flex-1 px-1.5 text-xs"
+          />
+        </div>
+        <fieldset aria-label="Video codec" className="flex min-w-0 flex-wrap gap-1 border-0 p-0">
+          {Object.entries(VIDEO_CODEC_FAMILIES).map(([codec, { label }]) => (
+            <PillChoice
+              key={codec}
+              label={label}
+              selected={videoCodecs.includes(codec)}
+              onClick={() => setTechnical({ videoCodecs: toggleValue(videoCodecs, codec) })}
+            />
+          ))}
+        </fieldset>
+      </div>
+      <FilterChoice
+        label="HDR"
+        selected={hdr}
+        onClick={() => setTechnical({ dynamicRanges: hdr ? undefined : [...HDR_DYNAMIC_RANGES] })}
+      />
+      <FilterChoice
+        label="Transparency (alpha)"
+        selected={technical.hasAlpha === true}
+        onClick={() => setTechnical({ hasAlpha: technical.hasAlpha === true ? undefined : true })}
+      />
+    </FilterSection>
   );
 }
 
@@ -703,20 +1119,12 @@ function TagChipRow({
         </PopoverContent>
       </Popover>
       {selected.map((tag) => (
-        <span
+        <RemovableChip
           key={tag}
-          className="inline-flex min-h-8 max-w-44 items-center gap-1 rounded-full bg-muted px-2.5 text-xs text-foreground"
-        >
-          <span className="truncate">{tag}</span>
-          <button
-            type="button"
-            onClick={() => toggle(tag)}
-            className="rounded-full p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
-            aria-label={`Remove ${tag} tag filter`}
-          >
-            <X className="size-3" />
-          </button>
-        </span>
+          label={tag}
+          removeLabel={`Remove ${tag} tag filter`}
+          onRemove={() => toggle(tag)}
+        />
       ))}
     </fieldset>
   );

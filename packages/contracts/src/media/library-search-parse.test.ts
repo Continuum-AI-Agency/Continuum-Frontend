@@ -73,3 +73,37 @@ describe('visualEmbedding on the parse response', () => {
     ).toBe(false);
   });
 });
+
+describe('format, technical and rating filters on the parse response', () => {
+  const respond = (filters: Record<string, unknown>) =>
+    librarySearchParseResponseSchema.safeParse({ query: '', filters, interpreted: true });
+
+  it('accepts "4K ProRes over 30 s", HDR, 5.1 and "rated 4+"', () => {
+    expect(
+      respond({
+        kind: 'video',
+        families: ['video'],
+        ranges: {
+          resolution: { min: 2160 },
+          durationMs: { min: 30_001 },
+          audioChannels: { min: 6, max: 6 },
+        },
+        technical: {
+          videoCodecs: ['prores'],
+          dynamicRanges: ['hdr10', 'hlg', 'dolby_vision', 'hdr10plus'],
+          hasAlpha: true,
+        },
+        rating: { min: 4 },
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects a family, range or rating outside the contract', () => {
+    expect(respond({ families: ['pdf'] }).success).toBe(false);
+    expect(respond({ ranges: { resolution: { min: '4k' } } }).success).toBe(false);
+    expect(respond({ ranges: { durationMs: { min: 120_001, max: 9_999 } } }).success).toBe(false);
+    expect(respond({ ranges: { fps: { min: 60 } } }).success).toBe(false);
+    expect(respond({ technical: { dynamicRanges: ['hdr'] } }).success).toBe(false);
+    expect(respond({ rating: { min: 11 } }).success).toBe(false);
+  });
+});

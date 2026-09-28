@@ -5,6 +5,8 @@
 import {
   type AssetTiming,
   assetTimingSchema,
+  type CommentReaction,
+  commentReactionSchema,
   type CreateCommentRequest,
   commentAnnotationSchema,
   commentAttachmentsSchema,
@@ -15,6 +17,7 @@ import {
   type MediaComment,
   mediaCommentSchema,
   type PatchCommentMetadataRequest,
+  parseCommentHashtags,
   type UpdateCommentRequest,
 } from '@continuum/contracts';
 import { z } from 'zod';
@@ -38,6 +41,7 @@ export type MediaCommentRow = {
   mentions?: unknown;
   annotation: unknown;
   attachments?: unknown;
+  hashtags?: unknown;
   resolved_at: string | null;
   resolved_by: string | null;
   created_by: string | null;
@@ -92,6 +96,11 @@ export function commentRowToMediaComment(
     mentions: parsedMentions.success ? parsedMentions.data : [],
     annotation: parsedAnnotation.success ? parsedAnnotation.data : null,
     attachments: parsedAttachments.success ? parsedAttachments.data : [],
+    // The database derives them on write; a row selected without the column (or an
+    // optimistic one) gets the same parse the trigger runs.
+    hashtags: Array.isArray(row.hashtags)
+      ? row.hashtags.filter((tag): tag is string => typeof tag === 'string' && tag.length > 0)
+      : parseCommentHashtags(row.body),
     // Absent only on rows selected without the column; the column default is internal.
     visibility: parsedVisibility.success ? parsedVisibility.data : 'internal',
     resolvedAt: row.resolved_at,
@@ -286,4 +295,50 @@ export function editorViewHref(params: {
   const query = new URLSearchParams({ brandId: params.brandId });
   if (params.versionId) query.set('versionId', params.versionId);
   return `/open/review/${params.assetId}?${query.toString()}`;
+}
+
+// Emoji reactions, through /api/library/comments/reactions (the caller's own client,
+// the table's RLS). Realtime keeps the list live afterwards.
+const reactionListSchema = z.object({ reactions: z.array(commentReactionSchema) });
+
+export async function listCommentReactions(
+  brandId: string,
+  assetId: string,
+): Promise<CommentReaction[]> {
+  const params = new URLSearchParams({ brandId, assetId });
+  const response = await fetch(`/api/library/comments/reactions?${params.toString()}`);
+  return reactionListSchema.parse(await parseJsonOrThrow(response)).reactions;
+}
+
+export async function setCommentReaction(input: {
+  brandId: string;
+  commentId: string;
+  emoji: string;
+  on: boolean;
+}): Promise<void> {
+  const response = await fetch('/api/library/comments/reactions', {
+    method: input.on ? 'POST' : 'DELETE',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ brandId: input.brandId, commentId: input.commentId, emoji: input.emoji }),
+  });
+  await parseJsonOrThrow(response);
+}
+
+export type ReactionSummary = { emoji: string; count: number; mine: boolean };
+
+// Per comment, emoji in order of first use, with whether the viewer is among them.
+export function summarizeReactions(
+  reactions: readonly CommentReaction[],
+  currentUserId: string | null,
+): Map<string, ReactionSummary[]> {
+  const byComment = new Map<string, Map<string, ReactionSummary>>();
+  for (const reaction of reactions) {
+    const emojis = byComment.get(reaction.commentId) ?? new Map<string, ReactionSummary>();
+    const summary = emojis.get(reaction.emoji) ?? { emoji: reaction.emoji, count: 0, mine: false };
+    summary.count += 1;
+    summary.mine ||= reaction.userId === currentUserId;
+    emojis.set(reaction.emoji, summary);
+    byComment.set(reaction.commentId, emojis);
+  }
+  return new Map([...byComment].map(([id, emojis]) => [id, [...emojis.values()]]));
 }

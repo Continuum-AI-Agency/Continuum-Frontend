@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import type { MediaAsset } from '@continuum/contracts';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { LibraryPlayback, MediaAsset } from '@continuum/contracts';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { clearLibraryPlaybackCache } from '@/lib/library/libraryPlayback';
+import { registerStageVideo } from '@/lib/library/videoPoster';
 import { AssetDownloadButton } from './AssetDownloadButton';
 
 const realFetch = globalThis.fetch;
@@ -10,6 +12,8 @@ afterEach(() => {
   cleanup();
   globalThis.fetch = realFetch;
   document.createElement = realCreateElement;
+  clearLibraryPlaybackCache();
+  registerStageVideo(null);
 });
 
 function libraryAsset(overrides: Partial<MediaAsset> = {}): MediaAsset {
@@ -34,49 +38,170 @@ function libraryAsset(overrides: Partial<MediaAsset> = {}): MediaAsset {
   } as MediaAsset;
 }
 
-function stubSign(signedUrl: string) {
-  const bodies: unknown[] = [];
-  globalThis.fetch = (async (_url: unknown, init?: { body?: string }) => {
-    bodies.push(JSON.parse(init?.body ?? 'null'));
+const videoAsset = () =>
+  libraryAsset({ kind: 'video', fileName: 'hero.mov', mimeType: 'video/quicktime' });
+
+const PLAYBACK: LibraryPlayback = {
+  assetId: '9a1bb67e-5c2a-4c0f-9f26-3f9b2f9a9a22',
+  assetVersionId: '1c1bb67e-5c2a-4c0f-9f26-3f9b2f9a9a33',
+  rungs: [
+    {
+      role: 'proxy_1080',
+      label: '1080p',
+      width: 1920,
+      height: 1080,
+      sizeBytes: 1000,
+      mimeType: 'video/mp4',
+      hdr: false,
+      signedUrl: 'https://cdn.test/proxy_1080.mp4',
+    },
+  ],
+  sprite: null,
+  audioProxy: {
+    signedUrl: 'https://cdn.test/audio_proxy.m4a',
+    mimeType: 'audio/mp4',
+    sizeBytes: 100,
+  },
+};
+
+// The sign route answers `signedUrl`; the playback route answers PLAYBACK.
+function stubRoutes(signedUrl: string) {
+  const signBodies: unknown[] = [];
+  const playbackUrls: string[] = [];
+  globalThis.fetch = (async (url: unknown, init?: { body?: string }) => {
+    if (String(url).startsWith('/api/library/playback')) {
+      playbackUrls.push(String(url));
+      return Response.json(PLAYBACK);
+    }
+    signBodies.push(JSON.parse(init?.body ?? 'null'));
     return { ok: true, status: 200, json: async () => ({ signedUrl }) };
   }) as unknown as typeof fetch;
-  return bodies;
+  return { signBodies, playbackUrls };
 }
 
 function captureAnchor() {
-  const clicked: string[] = [];
+  const clicked: { href: string; download: string }[] = [];
   document.createElement = ((tag: string) => {
     const element = realCreateElement(tag);
-    if (tag === 'a') element.click = () => clicked.push((element as HTMLAnchorElement).href);
+    if (tag === 'a') {
+      const anchor = element as HTMLAnchorElement;
+      anchor.click = () => clicked.push({ href: anchor.href, download: anchor.download });
+    }
     return element;
   }) as typeof document.createElement;
   return clicked;
 }
 
-describe('AssetDownloadButton', () => {
-  it('saves the stored original when pressed', async () => {
-    const bodies = stubSign('https://cdn.test/signed');
+async function openMenu() {
+  const trigger = screen.getByTestId('download-menu');
+  await act(async () => {
+    fireEvent.click(trigger);
+  });
+  await waitFor(() => expect(screen.queryByTestId('download-original')).not.toBeNull());
+}
+
+describe('AssetDownloadButton — labelled menu', () => {
+  it('saves the stored original from the menu', async () => {
+    const { signBodies } = stubRoutes('https://cdn.test/signed');
     const clicked = captureAnchor();
     render(<AssetDownloadButton brandId="brand-1" asset={libraryAsset()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Download' }));
+    expect(screen.getByRole('button', { name: 'Download' })).toBeDefined();
+    await openMenu();
+    fireEvent.click(screen.getByTestId('download-original'));
 
     await waitFor(() => expect(clicked).toHaveLength(1));
-    expect(bodies[0]).toEqual({ brandId: 'brand-1', assetId: 'asset-1' });
-    expect(clicked[0]).toBe('https://cdn.test/signed?download=hero.jpg');
+    expect(signBodies[0]).toEqual({ brandId: 'brand-1', assetId: 'asset-1' });
+    expect(clicked[0]?.href).toBe('https://cdn.test/signed?download=hero.jpg');
   });
 
   it('downloads the version the reviewer is looking at, not the head', async () => {
-    const bodies = stubSign('https://cdn.test/v2');
+    const { signBodies } = stubRoutes('https://cdn.test/v2');
     captureAnchor();
     render(<AssetDownloadButton brandId="brand-1" asset={libraryAsset()} versionId="ver-2" />);
 
     // The name changes too: a control that would hand back different bytes than the
     // one beside it must not be called the same thing.
-    fireEvent.click(screen.getByRole('button', { name: 'Download this version' }));
+    expect(screen.getByRole('button', { name: 'Download this version' })).toBeDefined();
+    await openMenu();
+    fireEvent.click(screen.getByTestId('download-original'));
 
-    await waitFor(() => expect(bodies).toHaveLength(1));
-    expect(bodies[0]).toEqual({ brandId: 'brand-1', assetId: 'asset-1', versionId: 'ver-2' });
+    await waitFor(() => expect(signBodies).toHaveLength(1));
+    expect(signBodies[0]).toEqual({ brandId: 'brand-1', assetId: 'asset-1', versionId: 'ver-2' });
+  });
+
+  it('looks playback up only when the menu opens, then offers each proxy by name', async () => {
+    const { playbackUrls } = stubRoutes('https://cdn.test/signed');
+    const clicked = captureAnchor();
+    render(<AssetDownloadButton brandId="brand-1" asset={videoAsset()} versionId="ver-2" />);
+    await act(async () => {});
+    expect(playbackUrls).toEqual([]);
+
+    await openMenu();
+    await waitFor(() => expect(screen.queryByTestId('download-proxy-proxy_1080')).not.toBeNull());
+    expect(playbackUrls[0]).toContain('versionId=ver-2');
+
+    fireEvent.click(screen.getByTestId('download-proxy-proxy_1080'));
+    expect(clicked.at(-1)).toEqual({
+      href: 'https://cdn.test/proxy_1080.mp4?download=hero-1080p.mp4',
+      download: 'hero-1080p.mp4',
+    });
+  });
+
+  it('offers the audio proxy as an .m4a', async () => {
+    stubRoutes('https://cdn.test/signed');
+    const clicked = captureAnchor();
+    render(
+      <AssetDownloadButton
+        brandId="brand-1"
+        asset={libraryAsset({ kind: 'audio', fileName: 'vo.aiff', mimeType: 'audio/aiff' })}
+      />,
+    );
+
+    await openMenu();
+    await waitFor(() => expect(screen.queryByTestId('download-proxy-audio_proxy')).not.toBeNull());
+    fireEvent.click(screen.getByTestId('download-proxy-audio_proxy'));
+    expect(clicked.at(-1)?.download).toBe('vo-proxy.m4a');
+    // A still is a video's frame; audio has none to offer.
+    expect(screen.queryByTestId('download-still')).toBeNull();
+  });
+
+  it('never looks playback up for an image', async () => {
+    const { playbackUrls } = stubRoutes('https://cdn.test/signed');
+    render(<AssetDownloadButton brandId="brand-1" asset={libraryAsset()} />);
+
+    await openMenu();
+    await act(async () => {});
+    expect(playbackUrls).toEqual([]);
+    expect(screen.queryByTestId('download-still')).toBeNull();
+  });
+
+  it('offers a still only while a video is on stage', async () => {
+    stubRoutes('https://cdn.test/signed');
+    const { unmount } = render(<AssetDownloadButton brandId="brand-1" asset={videoAsset()} />);
+    await openMenu();
+    expect(screen.getByTestId('download-still').hasAttribute('data-disabled')).toBe(true);
+    unmount();
+
+    registerStageVideo(document.createElement('video'));
+    render(<AssetDownloadButton brandId="brand-1" asset={videoAsset()} />);
+    await openMenu();
+    expect(screen.getByTestId('download-still').hasAttribute('data-disabled')).toBe(false);
+  });
+});
+
+describe('AssetDownloadButton — grid card icon', () => {
+  it('keeps the one-click original download', async () => {
+    const { signBodies, playbackUrls } = stubRoutes('https://cdn.test/signed');
+    const clicked = captureAnchor();
+    render(<AssetDownloadButton brandId="brand-1" asset={videoAsset()} variant="icon" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download' }));
+
+    await waitFor(() => expect(clicked).toHaveLength(1));
+    expect(signBodies[0]).toEqual({ brandId: 'brand-1', assetId: 'asset-1' });
+    expect(playbackUrls).toEqual([]);
+    expect(screen.queryByTestId('download-menu')).toBeNull();
   });
 
   it('renders without a ToastProvider — a card outside the app shell still offers the save', () => {
@@ -91,7 +216,7 @@ describe('AssetDownloadButton', () => {
       json: async () => ({}),
     })) as unknown as typeof fetch;
     const clicked = captureAnchor();
-    render(<AssetDownloadButton brandId="brand-1" asset={libraryAsset()} />);
+    render(<AssetDownloadButton brandId="brand-1" asset={libraryAsset()} variant="icon" />);
     const button = screen.getByRole('button', { name: 'Download' }) as HTMLButtonElement;
 
     fireEvent.click(button);

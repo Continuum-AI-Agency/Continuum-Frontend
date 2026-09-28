@@ -5,6 +5,7 @@
 // imports creative-operations.ts — putting them there would close a cycle.
 
 import { z } from 'zod';
+import { MAX_ASSET_NOTES_LENGTH } from './asset';
 import { reviewCustomStateSchema, reviewStateLabelSchema, reviewStateLabelsSchema } from './review';
 import { shareLinkBrandingSchema, shareLinkLayoutSchema, shareLinkWatermarkSchema } from './share';
 
@@ -180,6 +181,22 @@ export const registerForgeOutputResultSchema = z
   .strict();
 export type RegisterForgeOutputResult = z.infer<typeof registerForgeOutputResultSchema>;
 
+// media.assets.notes. Blank clears the field; the database trims. Viewers are refused.
+export const setNotesOperationSchema = z
+  .object({
+    action: z.literal('set_notes'),
+    ...foundationCommandBase,
+    assetId: uuid(),
+    notes: z.string().max(MAX_ASSET_NOTES_LENGTH).nullable(),
+  })
+  .strict();
+export type SetNotesOperation = z.infer<typeof setNotesOperationSchema>;
+
+export const setNotesResultSchema = z
+  .object({ assetId: uuid(), notes: z.string().nullable() })
+  .strict();
+export type SetNotesResult = z.infer<typeof setNotesResultSchema>;
+
 export const libraryFoundationActionSchema = z.enum([
   'stack_assets',
   'restore_assets',
@@ -187,6 +204,7 @@ export const libraryFoundationActionSchema = z.enum([
   'request_collection_review',
   'set_review_state_labels',
   'register_forge_output',
+  'set_notes',
 ]);
 export type LibraryFoundationAction = z.infer<typeof libraryFoundationActionSchema>;
 
@@ -197,5 +215,6 @@ export const libraryFoundationOperationSchema = z.discriminatedUnion('action', [
   requestCollectionReviewOperationSchema,
   setReviewStateLabelsOperationSchema,
   registerForgeOutputOperationSchema,
+  setNotesOperationSchema,
 ]);
 export type LibraryFoundationOperation = z.infer<typeof libraryFoundationOperationSchema>;

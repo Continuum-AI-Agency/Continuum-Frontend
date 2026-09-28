@@ -32,6 +32,12 @@ type DraftState = Omit<ReviewCustomState, 'id' | 'position'> & { id?: string; ke
 
 const MAX_CUSTOM_STATES = 20;
 
+// What the admin changed since the dialog opened: these fields keep the draft when the
+// stored ones arrive; everything else follows the store.
+function emptyTouched() {
+  return { labels: new Set<MediaReviewStatus>(), custom: false, removed: new Set<string>() };
+}
+
 type Props = {
   brandId: string;
   open: boolean;
@@ -56,25 +62,37 @@ export function ReviewStateLabelsEditor({ brandId, open, onOpenChange }: Props) 
   };
   const { labels: draft, custom: customDraft } = draftRef.current;
   const [saving, setSaving] = useState(false);
-  // Once the admin has typed, the stored labels arriving (or changing) must not
-  // replace the draft: that silently threw the edit away and saved the defaults.
-  const [edited, setEdited] = useState(false);
+  // The stored labels and states can land after the admin has started (the dialog opens
+  // straight after a page load). They fold in under what the admin touched: a typed field
+  // keeps its text, and every untouched one takes the stored value. Freezing the whole
+  // draft on the first edit saved the defaults over the brand's labels, and an empty
+  // custom-state list over its states.
+  const touched = useRef(emptyTouched());
 
   useEffect(() => {
-    if (!open) setEdited(false);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open || edited) return;
-    update({
-      labels: current,
-      custom: currentCustom.map((state) => ({ ...state, key: state.id })),
-    });
+    if (!open) {
+      touched.current = emptyTouched();
+      return;
+    }
+    const { labels: draftLabels, custom: draftCustom } = draftRef.current;
+    const mine = touched.current;
+    const labels = { ...current };
+    for (const state of mine.labels) labels[state] = draftLabels[state];
+    const stored = currentCustom
+      .filter((state) => !mine.removed.has(state.id))
+      .map(
+        (state) =>
+          (mine.custom && draftCustom.find((row) => row.id === state.id)) || {
+            ...state,
+            key: state.id,
+          },
+      );
+    update({ labels, custom: [...stored, ...draftCustom.filter((row) => !row.id)] });
     // biome-ignore lint/correctness/useExhaustiveDependencies: update only writes the ref
-  }, [open, edited, current, currentCustom]);
+  }, [open, current, currentCustom]);
 
   const editCustom = (key: string, patch: Partial<DraftState>) => {
-    setEdited(true);
+    touched.current.custom = true;
     update({
       custom: draftRef.current.custom.map((state) =>
         state.key === key ? { ...state, ...patch } : state,
@@ -83,7 +101,7 @@ export function ReviewStateLabelsEditor({ brandId, open, onOpenChange }: Props) 
   };
 
   const edit = (state: MediaReviewStatus, patch: Partial<ReviewStateLabel>) => {
-    setEdited(true);
+    touched.current.labels.add(state);
     const labels = draftRef.current.labels;
     update({ labels: { ...labels, [state]: { ...labels[state], ...patch } } });
   };
@@ -161,7 +179,7 @@ export function ReviewStateLabelsEditor({ brandId, open, onOpenChange }: Props) 
               data-testid="add-custom-state"
               disabled={customDraft.length >= MAX_CUSTOM_STATES}
               onClick={() => {
-                setEdited(true);
+                touched.current.custom = true;
                 update({
                   custom: [
                     ...draftRef.current.custom,
@@ -232,7 +250,8 @@ export function ReviewStateLabelsEditor({ brandId, open, onOpenChange }: Props) 
                 className="size-7 shrink-0 text-muted-foreground"
                 aria-label={`Remove custom state ${index + 1}`}
                 onClick={() => {
-                  setEdited(true);
+                  touched.current.custom = true;
+                  if (state.id) touched.current.removed.add(state.id);
                   update({
                     custom: draftRef.current.custom.filter((row) => row.key !== state.key),
                   });

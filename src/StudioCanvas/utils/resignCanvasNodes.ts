@@ -6,29 +6,36 @@ import {
   type CanvasMediaSignResponse,
 } from '@continuum/contracts';
 import { request } from '@/lib/api/http';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { CanvasDocument, StudioNode } from '../types';
-import { resolveSignedUrls } from './signedUrlCache';
+import { resolveSignedUrls, type SignedUrlCoordinate } from './signedUrlCache';
 
 // Same-origin Next route (NOT the Backend `request` helper): it is what mints from an
 // exact `media.asset_versions` row.
 const LIBRARY_SIGN_ROUTE = '/api/library/sign';
 
+// Library renditions a node draws in place of an original the browser cannot (a PSD's
+// preview, an MKV's proxy). Members read this bucket under their own storage RLS, so it is
+// signed with the browser client — the Backend canvas route refuses it by design.
+const LIBRARY_PREVIEW_BUCKET = 'media-previews';
+const LIBRARY_PREVIEW_TTL_SECONDS = 60 * 60;
+
 function signKey(bucket: string, path: string): string {
   return `${bucket}\n${path}`;
 }
 
-function addSignItem(items: CanvasMediaCoordinate[], bucket: unknown, path: unknown): void {
-  if (
-    typeof bucket === 'string' &&
-    typeof path === 'string' &&
-    (CANVAS_MEDIA_BUCKETS as readonly string[]).includes(bucket)
-  ) {
-    items.push({ bucket: bucket as CanvasMediaCoordinate['bucket'], path });
-  }
+function isCanvasMediaCoordinate(item: SignedUrlCoordinate): item is CanvasMediaCoordinate {
+  return (CANVAS_MEDIA_BUCKETS as readonly string[]).includes(item.bucket);
 }
 
-function collectSignItems(nodes: StudioNode[]): CanvasMediaCoordinate[] {
-  const items: CanvasMediaCoordinate[] = [];
+function addSignItem(items: SignedUrlCoordinate[], bucket: unknown, path: unknown): void {
+  if (typeof bucket !== 'string' || typeof path !== 'string') return;
+  const item = { bucket, path };
+  if (isCanvasMediaCoordinate(item) || bucket === LIBRARY_PREVIEW_BUCKET) items.push(item);
+}
+
+function collectSignItems(nodes: StudioNode[]): SignedUrlCoordinate[] {
+  const items: SignedUrlCoordinate[] = [];
   for (const node of nodes) {
     const data = node.data as Record<string, unknown>;
 
@@ -86,6 +93,14 @@ interface VersionRef {
   versionId: string;
 }
 
+// The field each reference node paints its media from. An audio node reads `audio`
+// only, so a fresh URL written anywhere else leaves a reloaded clip silent.
+const MEDIA_FIELD = new Map<string, 'image' | 'video' | 'audio'>([
+  ['image', 'image'],
+  ['video', 'video'],
+  ['audio', 'audio'],
+]);
+
 function versionRefKey(assetId: string, versionId: string): string {
   return `${assetId}\n${versionId}`;
 }
@@ -99,7 +114,7 @@ function versionRefKey(assetId: string, versionId: string): string {
 function collectVersionRefs(nodes: StudioNode[]): VersionRef[] {
   const refs = new Map<string, VersionRef>();
   for (const node of nodes) {
-    if (node.type !== 'image' && node.type !== 'video') continue;
+    if (!MEDIA_FIELD.has(node.type ?? '')) continue;
     const data = node.data as Record<string, unknown>;
     const assetId = data.assetId;
     const versionId = data.assetVersionId;
@@ -146,9 +161,66 @@ async function signVersionRefs(
   return new Map(entries.filter((entry): entry is [string, string] => entry !== null));
 }
 
-/** Re-signing the storage-coordinate references, batched the way the backend route caps them. */
-async function signCoordinates(
+/** The canvas-media buckets, through the Backend route and batched the way it caps them. */
+async function signThroughBackend(
   items: CanvasMediaCoordinate[],
+  brandProfileId: string,
+): Promise<Array<[string, string]>> {
+  if (items.length === 0) return [];
+  try {
+    const chunks: CanvasMediaCoordinate[][] = [];
+    for (let index = 0; index < items.length; index += CANVAS_MEDIA_SIGN_MAX_ITEMS) {
+      chunks.push(items.slice(index, index + CANVAS_MEDIA_SIGN_MAX_ITEMS));
+    }
+
+    // Parallel, not sequential: the chunks are independent, and awaiting them in
+    // turn put every round-trip after the first on the critical path before any
+    // media could paint.
+    const responses = await Promise.all(
+      chunks.map((chunk) =>
+        request<CanvasMediaSignResponse>({
+          path: CANVAS_MEDIA_SIGN_ROUTE,
+          method: 'POST',
+          // Node previews are painted into boxes a few hundred pixels wide, so ask for
+          // a derivative rather than the stored original (mean 2.1 MB, tail to 32 MB).
+          // The client renderer signs through this same route and must NOT set this.
+          body: { brandProfileId, items: chunk, preview: true },
+        }),
+      ),
+    );
+
+    return responses
+      .flatMap((response) => response.items)
+      .map((result) => [signKey(result.bucket, result.path), result.signedUrl]);
+  } catch (err) {
+    console.warn('[studio] resignCanvasNodes: failed to re-sign, using stale URLs', err);
+    return [];
+  }
+}
+
+/** Library renditions, with the member's own client (storage RLS decides). */
+async function signLibraryPreviews(paths: string[]): Promise<Array<[string, string]>> {
+  if (paths.length === 0) return [];
+  try {
+    const { data, error } = await createSupabaseBrowserClient()
+      .storage.from(LIBRARY_PREVIEW_BUCKET)
+      .createSignedUrls(paths, LIBRARY_PREVIEW_TTL_SECONDS);
+    if (error) throw error;
+    return (data ?? []).flatMap(
+      (entry): Array<[string, string]> =>
+        entry.path && entry.signedUrl
+          ? [[signKey(LIBRARY_PREVIEW_BUCKET, entry.path), entry.signedUrl]]
+          : [],
+    );
+  } catch (err) {
+    console.warn('[studio] resignCanvasNodes: failed to re-sign Library previews', err);
+    return [];
+  }
+}
+
+/** Re-signing the storage-coordinate references, each bucket family on its own failure boundary. */
+async function signCoordinates(
+  items: SignedUrlCoordinate[],
   brandProfileId: string,
 ): Promise<Map<string, string>> {
   if (items.length === 0) return new Map();
@@ -159,37 +231,13 @@ async function signCoordinates(
   // from several places that overlap on a cold open, so those callers have to share
   // one fetch per pointer rather than each minting their own.
   return resolveSignedUrls(items, async (pending) => {
-    try {
-      const chunks: CanvasMediaCoordinate[][] = [];
-      for (let index = 0; index < pending.length; index += CANVAS_MEDIA_SIGN_MAX_ITEMS) {
-        chunks.push(pending.slice(index, index + CANVAS_MEDIA_SIGN_MAX_ITEMS));
-      }
-
-      // Parallel, not sequential: the chunks are independent, and awaiting them in
-      // turn put every round-trip after the first on the critical path before any
-      // media could paint.
-      const responses = await Promise.all(
-        chunks.map((chunk) =>
-          request<CanvasMediaSignResponse>({
-            path: CANVAS_MEDIA_SIGN_ROUTE,
-            method: 'POST',
-            // Node previews are painted into boxes a few hundred pixels wide, so ask for
-            // a derivative rather than the stored original (mean 2.1 MB, tail to 32 MB).
-            // The client renderer signs through this same route and must NOT set this.
-            body: { brandProfileId, items: chunk, preview: true },
-          }),
-        ),
-      );
-
-      return new Map(
-        responses
-          .flatMap((response) => response.items)
-          .map((result) => [signKey(result.bucket, result.path), result.signedUrl]),
-      );
-    } catch (err) {
-      console.warn('[studio] resignCanvasNodes: failed to re-sign, using stale URLs', err);
-      return new Map();
-    }
+    const [backend, previews] = await Promise.all([
+      signThroughBackend(pending.filter(isCanvasMediaCoordinate), brandProfileId),
+      signLibraryPreviews(
+        pending.filter((item) => item.bucket === LIBRARY_PREVIEW_BUCKET).map((item) => item.path),
+      ),
+    ]);
+    return new Map([...backend, ...previews]);
   });
 }
 
@@ -219,10 +267,10 @@ function applySignedUrls(
         ? urlMap.get(signKey(refBucket, refPath))
         : undefined;
     // Asset/version references carry no coordinates, so they resolve out of the Library
-    // map instead. Coordinates still win where a node has both. Only image/video nodes
-    // hold a reference field to paint, so nothing else is looked up.
+    // map instead. Coordinates still win where a node has both. Only reference nodes
+    // hold a media field to paint, so nothing else is looked up.
     const versionUrl =
-      (node.type === 'image' || node.type === 'video') &&
+      MEDIA_FIELD.has(node.type ?? '') &&
       typeof data.assetId === 'string' &&
       typeof data.assetVersionId === 'string'
         ? versionUrlMap.get(versionRefKey(data.assetId, data.assetVersionId))
@@ -260,7 +308,9 @@ function applySignedUrls(
           ...(imgUrl ? { generatedImageUrl: imgUrl } : {}),
           ...(vidUrl ? { generatedVideoUrl: vidUrl } : {}),
           ...(imgUrl || vidUrl ? { isComplete: true } : {}),
-          ...(mediaUrl ? { image: mediaUrl, sourceUrl: mediaUrl } : {}),
+          // A document node paints no `image`; the top-level URL is only an agent
+          // attachment's, which DocumentNode folds into `documents`.
+          ...(mediaUrl ? { sourceUrl: mediaUrl } : {}),
         } as StudioNode['data'],
       };
     }
@@ -292,7 +342,7 @@ function applySignedUrls(
 
     if (!imgUrl && !vidUrl && !mediaUrl && !collectionChanged) return node;
 
-    const refField = node.type === 'video' ? 'video' : 'image';
+    const refField = MEDIA_FIELD.get(node.type ?? '') ?? 'image';
     return {
       ...node,
       data: {

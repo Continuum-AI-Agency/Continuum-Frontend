@@ -23,6 +23,12 @@ describe('folder upload', () => {
     ).toEqual([{ file: expect.any(File), folders: ['Shoot'] }]);
   });
 
+  it('keeps ten levels and files anything deeper into the tenth folder', () => {
+    const levels = Array.from({ length: 12 }, (_, index) => `L${index + 1}`);
+    expect(foldersOf(`${levels.join('/')}/deep.mp4`)).toEqual(levels.slice(0, 10));
+    expect(foldersOf(`${levels.slice(0, 10).join('/')}/ten.mp4`)).toHaveLength(10);
+  });
+
   it('lists every folder once, parents first, including ones holding only folders', () => {
     const entries: FolderFile[] = [
       { file: file('c.png'), folders: ['Shoot', 'Day 1', 'Stills'] },

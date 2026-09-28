@@ -18720,6 +18720,414 @@ export type Database = {
           },
         ]
       }
+      headless_brand_facts: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          brand_id: string
+          created_at: string
+          created_by: string
+          id: string
+          kind: string
+          revoked_at: string | null
+          sha256: string
+          source_ref: string
+          text: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          brand_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          kind: string
+          revoked_at?: string | null
+          sha256: string
+          source_ref: string
+          text: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          brand_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          kind?: string
+          revoked_at?: string | null
+          sha256?: string
+          source_ref?: string
+          text?: string
+        }
+        Relationships: []
+      }
+      headless_content_revisions: {
+        Row: {
+          brand_id: string
+          content_id: string
+          created_at: string
+          created_by: string | null
+          revision: number
+          schema_version: number
+          spec: Json
+        }
+        Insert: {
+          brand_id: string
+          content_id: string
+          created_at?: string
+          created_by?: string | null
+          revision: number
+          schema_version: number
+          spec: Json
+        }
+        Update: {
+          brand_id?: string
+          content_id?: string
+          created_at?: string
+          created_by?: string | null
+          revision?: number
+          schema_version?: number
+          spec?: Json
+        }
+        Relationships: []
+      }
+      headless_element_approvals: {
+        Row: {
+          approved_at: string
+          approved_by: string
+          brand_id: string
+          element_id: string
+          revision: number
+          revoked_at: string | null
+        }
+        Insert: {
+          approved_at?: string
+          approved_by: string
+          brand_id: string
+          element_id: string
+          revision: number
+          revoked_at?: string | null
+        }
+        Update: {
+          approved_at?: string
+          approved_by?: string
+          brand_id?: string
+          element_id?: string
+          revision?: number
+          revoked_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "headless_element_approvals_element_id_revision_fkey"
+            columns: ["element_id", "revision"]
+            isOneToOne: true
+            referencedRelation: "headless_element_revisions"
+            referencedColumns: ["element_id", "revision"]
+          },
+        ]
+      }
+      headless_element_revisions: {
+        Row: {
+          brand_id: string
+          created_at: string
+          created_by: string | null
+          element_id: string
+          kind: string
+          payload: Json
+          revision: number
+          rights_ref: string
+          schema_version: number
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          created_by?: string | null
+          element_id: string
+          kind: string
+          payload: Json
+          revision: number
+          rights_ref: string
+          schema_version: number
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          created_by?: string | null
+          element_id?: string
+          kind?: string
+          payload?: Json
+          revision?: number
+          rights_ref?: string
+          schema_version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "headless_element_revisions_element_id_fkey"
+            columns: ["element_id"]
+            isOneToOne: false
+            referencedRelation: "asset_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      headless_executions: {
+        Row: {
+          attempt_count: number
+          brand_id: string
+          created_at: string
+          error_code: string | null
+          id: string
+          input: Json
+          lease_expires_at: string | null
+          lease_token: string | null
+          operation: string
+          provider_interaction_id: string | null
+          result: Json | null
+          signature: string
+          state: string
+          updated_at: string
+          worker_id: string | null
+        }
+        Insert: {
+          attempt_count?: number
+          brand_id: string
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          input: Json
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          operation: string
+          provider_interaction_id?: string | null
+          result?: Json | null
+          signature: string
+          state?: string
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Update: {
+          attempt_count?: number
+          brand_id?: string
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          input?: Json
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          operation?: string
+          provider_interaction_id?: string | null
+          result?: Json | null
+          signature?: string
+          state?: string
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Relationships: []
+      }
+      headless_output_reviews: {
+        Row: {
+          asset_id: string
+          decided_at: string
+          decided_by: string
+          decision: string
+          output_id: string
+          run_id: string
+          version_id: string
+        }
+        Insert: {
+          asset_id: string
+          decided_at?: string
+          decided_by: string
+          decision: string
+          output_id: string
+          run_id: string
+          version_id: string
+        }
+        Update: {
+          asset_id?: string
+          decided_at?: string
+          decided_by?: string
+          decision?: string
+          output_id?: string
+          run_id?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "headless_output_reviews_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "headless_output_reviews_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "headless_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "headless_output_reviews_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "asset_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      headless_prepared_characters: {
+        Row: {
+          approved: boolean
+          brand_id: string
+          created_at: string
+          element_id: string
+          manifest: Json
+          preparation_signature: string
+          revision: number
+        }
+        Insert: {
+          approved?: boolean
+          brand_id: string
+          created_at?: string
+          element_id: string
+          manifest: Json
+          preparation_signature: string
+          revision: number
+        }
+        Update: {
+          approved?: boolean
+          brand_id?: string
+          created_at?: string
+          element_id?: string
+          manifest?: Json
+          preparation_signature?: string
+          revision?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "headless_prepared_characters_element_id_revision_fkey"
+            columns: ["element_id", "revision"]
+            isOneToOne: false
+            referencedRelation: "headless_element_revisions"
+            referencedColumns: ["element_id", "revision"]
+          },
+        ]
+      }
+      headless_run_steps: {
+        Row: {
+          depends_on: string[]
+          execution_id: string | null
+          operation: string
+          result: Json | null
+          run_id: string
+          state: string
+          step_id: string
+          updated_at: string
+        }
+        Insert: {
+          depends_on?: string[]
+          execution_id?: string | null
+          operation: string
+          result?: Json | null
+          run_id: string
+          state?: string
+          step_id: string
+          updated_at?: string
+        }
+        Update: {
+          depends_on?: string[]
+          execution_id?: string | null
+          operation?: string
+          result?: Json | null
+          run_id?: string
+          state?: string
+          step_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "headless_run_steps_execution_id_fkey"
+            columns: ["execution_id"]
+            isOneToOne: false
+            referencedRelation: "headless_executions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "headless_run_steps_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "headless_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      headless_runs: {
+        Row: {
+          brand_id: string
+          budget_cap_usd: number
+          concurrency: number
+          content_id: string
+          content_revision: number
+          created_at: string
+          created_by: string | null
+          id: string
+          idempotency_key: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          plan: Json
+          request_hash: string
+          state: string
+          updated_at: string
+          worker_id: string | null
+        }
+        Insert: {
+          brand_id: string
+          budget_cap_usd: number
+          concurrency?: number
+          content_id: string
+          content_revision: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key: string
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          plan: Json
+          request_hash: string
+          state?: string
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Update: {
+          brand_id?: string
+          budget_cap_usd?: number
+          concurrency?: number
+          content_id?: string
+          content_revision?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key?: string
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          plan?: Json
+          request_hash?: string
+          state?: string
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "headless_runs_content_id_content_revision_fkey"
+            columns: ["content_id", "content_revision"]
+            isOneToOne: false
+            referencedRelation: "headless_content_revisions"
+            referencedColumns: ["content_id", "revision"]
+          },
+        ]
+      }
       intake_forms: {
         Row: {
           allowed_extensions: string[]
@@ -18841,6 +19249,69 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      media_probe_jobs: {
+        Row: {
+          asset_id: string
+          asset_version_id: string
+          attempts: number
+          available_at: string
+          brand_id: string
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          lease_expires_at: string | null
+          leased_by: string | null
+          max_attempts: number
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          asset_id: string
+          asset_version_id: string
+          attempts?: number
+          available_at?: string
+          brand_id: string
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          lease_expires_at?: string | null
+          leased_by?: string | null
+          max_attempts?: number
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          asset_id?: string
+          asset_version_id?: string
+          attempts?: number
+          available_at?: string
+          brand_id?: string
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          lease_expires_at?: string | null
+          leased_by?: string | null
+          max_attempts?: number
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_probe_jobs_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_probe_jobs_asset_version_id_fkey"
+            columns: ["asset_version_id"]
+            isOneToOne: true
+            referencedRelation: "asset_versions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       preview_jobs: {
         Row: {
@@ -20390,6 +20861,10 @@ export type Database = {
         Args: { p_asset_id: string; p_filter: Json; p_viewer: string }
         Returns: boolean
       }
+      asset_matches_field_range: {
+        Args: { p_asset_id: string; p_range: Json }
+        Returns: boolean
+      }
       asset_matches_smart_query: {
         Args: {
           p_asset: Database["media"]["Tables"]["assets"]["Row"]
@@ -20424,6 +20899,14 @@ export type Database = {
       can_see_collection_as: {
         Args: { p_collection: string; p_user: string }
         Returns: boolean
+      }
+      canvas_library_context: {
+        Args: {
+          p_asset_ids: string[]
+          p_brand_id: string
+          p_version_ids?: string[]
+        }
+        Returns: Json
       }
       claim_client_render_job: {
         Args: {
@@ -20501,6 +20984,88 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "editor_generation_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_headless_execution: {
+        Args: {
+          p_brand_id: string
+          p_lease_seconds?: number
+          p_signature: string
+          p_worker_id: string
+        }
+        Returns: {
+          attempt_count: number
+          brand_id: string
+          created_at: string
+          error_code: string | null
+          id: string
+          input: Json
+          lease_expires_at: string | null
+          lease_token: string | null
+          operation: string
+          provider_interaction_id: string | null
+          result: Json | null
+          signature: string
+          state: string
+          updated_at: string
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "headless_executions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_headless_run: {
+        Args: { p_lease_seconds?: number; p_worker_id: string }
+        Returns: {
+          brand_id: string
+          budget_cap_usd: number
+          concurrency: number
+          content_id: string
+          content_revision: number
+          created_at: string
+          created_by: string | null
+          id: string
+          idempotency_key: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          plan: Json
+          request_hash: string
+          state: string
+          updated_at: string
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "headless_runs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_media_probe_jobs: {
+        Args: { p_lease_seconds: number; p_limit: number; p_worker: string }
+        Returns: {
+          asset_id: string
+          asset_version_id: string
+          attempts: number
+          available_at: string
+          brand_id: string
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          lease_expires_at: string | null
+          leased_by: string | null
+          max_attempts: number
+          state: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "media_probe_jobs"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -21018,6 +21583,27 @@ export type Database = {
           collection_id: string
         }[]
       }
+      library_browse_assets: {
+        Args: {
+          p_brand_id: string
+          p_cursor?: Json
+          p_limit?: number
+          p_query?: Json
+          p_sorts?: Json
+        }
+        Returns: {
+          asset_id: string
+          sort_keys: Json
+        }[]
+      }
+      library_browse_facet_counts: {
+        Args: { p_brand_id: string; p_query?: Json }
+        Returns: {
+          facet: string
+          result_count: number
+          value: string
+        }[]
+      }
       library_browse_facets:
         | {
             Args: {
@@ -21148,6 +21734,10 @@ export type Database = {
               usage_count: number
             }[]
           }
+      library_codec_family: {
+        Args: { p_codec: string; p_track: string }
+        Returns: string
+      }
       library_collection_members: {
         Args: { p_brand_id: string; p_collection_id: string }
         Returns: {
@@ -21164,6 +21754,15 @@ export type Database = {
         Args: { p_action: string; p_payload: Json }
         Returns: Json
       }
+      library_format_group: {
+        Args: {
+          p_file_name: string
+          p_kind: string
+          p_mime_type: string
+          p_zip?: string
+        }
+        Returns: string
+      }
       library_hidden_assets: {
         Args: { p_brand: string; p_user: string }
         Returns: {
@@ -21178,6 +21777,12 @@ export type Database = {
           version_id: string
         }[]
       }
+      library_matching_asset_ids: {
+        Args: { p_brand_id: string; p_limit?: number; p_query?: Json }
+        Returns: {
+          asset_id: string
+        }[]
+      }
       library_register_goal_artifact_version: {
         Args: { p_payload: Json }
         Returns: Json
@@ -21190,6 +21795,7 @@ export type Database = {
         Args: { p_payload: Json }
         Returns: Json
       }
+      library_try_timestamptz: { Args: { p_value: string }; Returns: string }
       library_unstack_asset_version: {
         Args: { p_payload: Json }
         Returns: Json
@@ -21310,6 +21916,16 @@ export type Database = {
       reap_expired_service_render_jobs: { Args: never; Returns: number }
       reap_expired_service_url_ingest_jobs: { Args: never; Returns: number }
       record_asset_assignments: { Args: { p_rows: Json }; Returns: undefined }
+      record_canvas_lineage: {
+        Args: {
+          p_brand_id: string
+          p_derived_version_id: string
+          p_operation: string
+          p_parameters?: Json
+          p_sources: Json
+        }
+        Returns: number
+      }
       record_media_info: {
         Args: { p_info: Json; p_version_id: string }
         Returns: Json

@@ -6,8 +6,10 @@
 // surface shares. A PDF skips all of that: the browser's own viewer renders it
 // straight from its signed URL (PdfPreview). An Office document has no converter,
 // so it says exactly that and offers the download — no companion upload, no wait.
+// A 3D model, an HTML bundle or an InDesign file goes to its FamilyViewer, and this card
+// is only its fallback (a ZIP that turns out to be a plain archive).
 
-import type { MediaAsset } from '@continuum/contracts';
+import type { MediaAsset, MediaAssetVersion } from '@continuum/contracts';
 import { Download, ExternalLink, FileIcon, ImagePlus, Loader2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -17,6 +19,7 @@ import { ensureAssetHeadVersion } from '@/lib/library/creativeOperations';
 import { officeDocumentType } from '@/lib/library/previewPlayable';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { OfficeDocumentIcon } from '../OfficeDocumentIcon';
+import { FamilyViewer, type ViewerReview, viewerFamily } from '../viewers';
 import { fileExtension, formatBytes } from './assetFileMeta';
 
 export function PdfPreview({ src, title }: { src: string; title: string }) {
@@ -41,10 +44,14 @@ export function PdfPreview({ src, title }: { src: string; title: string }) {
 type Props = {
   brandId: string;
   asset: MediaAsset;
+  /** The version on stage (head or older); the viewers read its bytes. */
+  version?: MediaAssetVersion | null;
+  /** Comment wiring for the viewers (orbit and page pins). */
+  review?: ViewerReview;
   onPreviewChanged?: () => void;
 };
 
-export function FilePreviewStage({ brandId, asset, onPreviewChanged }: Props) {
+export function FilePreviewStage({ brandId, asset, version, review, onPreviewChanged }: Props) {
   const [downloading, setDownloading] = useState(false);
   const [uploadingPreview, setUploadingPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,7 +100,7 @@ export function FilePreviewStage({ brandId, asset, onPreviewChanged }: Props) {
     }
   };
 
-  return (
+  const card = (
     <div className="flex size-full flex-col items-center justify-center gap-4 p-8">
       <div className="relative">
         {isAfterEffects ? (
@@ -193,5 +200,16 @@ export function FilePreviewStage({ brandId, asset, onPreviewChanged }: Props) {
 
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
+  );
+
+  if (!viewerFamily(version ?? asset)) return card;
+  return (
+    <FamilyViewer
+      asset={asset}
+      version={version ?? null}
+      surface="detail"
+      review={review}
+      fallback={card}
+    />
   );
 }

@@ -20,7 +20,12 @@ export async function invokePublicCreativeOperation(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return { ok: false, message: 'Review service is not configured.' };
   try {
-    const response = await fetch(`${url}/functions/v1/library-creative-operations`, {
+    // LIBRARY_CREATIVE_OPERATIONS_FUNCTION_URL points at a locally served copy of the
+    // function (a bench proving an undeployed change), as LIBRARY_SHARE_FUNCTION_URL does.
+    const endpoint =
+      process.env.LIBRARY_CREATIVE_OPERATIONS_FUNCTION_URL ??
+      `${url}/functions/v1/library-creative-operations`;
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         apikey: key,

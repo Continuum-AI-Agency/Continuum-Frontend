@@ -25,6 +25,25 @@ mock.module('@/lib/api/http', () => ({
   },
 }));
 
+// Library renditions (bucket media-previews) are signed with the member's own browser
+// client; the Backend canvas route refuses that bucket by design.
+let previewSignCalls: Array<{ bucket: string; paths: string[] }> = [];
+mock.module('@/lib/supabase/client', () => ({
+  createSupabaseBrowserClient: () => ({
+    storage: {
+      from: (bucket: string) => ({
+        createSignedUrls: async (paths: string[]) => {
+          previewSignCalls.push({ bucket, paths });
+          return {
+            data: paths.map((path) => ({ path, signedUrl: `https://previews.example/${path}` })),
+            error: null,
+          };
+        },
+      }),
+    },
+  }),
+}));
+
 const { resignCanvasNodes } = await import('./resignCanvasNodes');
 
 type SignBody = { brandId: string; assetId: string; versionId: string };
@@ -43,6 +62,7 @@ beforeEach(() => {
   backendCalls = [];
   backendItems = [];
   backendThrows = false;
+  previewSignCalls = [];
   signCalls = [];
   refusedVersions = [];
   globalThis.fetch = (async (url: string, init: RequestInit) => {
@@ -248,5 +268,151 @@ describe('resignCanvasNodes — asset + exact version references', () => {
       'https://fresh/b.png',
     ]);
     expect((node.data as Record<string, unknown>).generatedImage).toBe('https://fresh/a.png');
+  });
+});
+
+describe('resignCanvasNodes — Library renditions and non-image references', () => {
+  test('a node drawing a Library rendition re-signs through the browser client, never the Backend', async () => {
+    backendItems = [
+      { bucket: 'media-library', path: 'brand/ref.png', signedUrl: 'https://coords.example/fresh' },
+    ];
+    const [psd, png] = await resignCanvasNodes(
+      [
+        {
+          id: 'psd',
+          type: 'image',
+          position: { x: 0, y: 0 },
+          data: {
+            image: 'stale',
+            bucket: 'media-previews',
+            sourcePath: 'brand/previews/hero.png',
+            assetId: ASSET_A,
+            assetVersionId: VERSION_A,
+            renditionRole: 'preview_image',
+          },
+        } as never,
+        {
+          id: 'png',
+          type: 'image',
+          position: { x: 0, y: 0 },
+          data: { image: 'stale', bucket: 'media-library', sourcePath: 'brand/ref.png' },
+        } as never,
+      ],
+      BRAND_ID,
+    );
+
+    expect(previewSignCalls).toEqual([
+      { bucket: 'media-previews', paths: ['brand/previews/hero.png'] },
+    ]);
+    // The Backend route only ever sees the bucket it accepts.
+    expect(backendCalls).toEqual([
+      {
+        brandProfileId: BRAND_ID,
+        items: [{ bucket: 'media-library', path: 'brand/ref.png' }],
+        preview: true,
+      },
+    ]);
+    // Coordinates win, so the source asset + version are not signed as the ORIGINAL.
+    expect(signCalls).toEqual([]);
+    const psdData = psd.data as Record<string, unknown>;
+    expect(psdData.image).toBe('https://previews.example/brand/previews/hero.png');
+    expect(psdData.assetVersionId).toBe(VERSION_A);
+    expect(psdData.renditionRole).toBe('preview_image');
+    expect((png.data as Record<string, unknown>).image).toBe('https://coords.example/fresh');
+  });
+
+  test('an audio reference lands on the audio field its node plays', async () => {
+    const [node] = await resignCanvasNodes(
+      [
+        {
+          id: 'aiff',
+          type: 'audio',
+          position: { x: 0, y: 0 },
+          data: {
+            bucket: 'media-previews',
+            sourcePath: 'brand/previews/mix.m4a',
+            assetId: ASSET_A,
+            assetVersionId: VERSION_A,
+            renditionRole: 'audio_proxy',
+          },
+        } as never,
+      ],
+      BRAND_ID,
+    );
+
+    const data = node.data as Record<string, unknown>;
+    expect(data.audio).toBe('https://previews.example/brand/previews/mix.m4a');
+    expect(data).not.toHaveProperty('image');
+  });
+
+  test('a version-only audio reference re-signs onto `audio`', async () => {
+    const [node] = await resignCanvasNodes(
+      [
+        {
+          id: 'audio-version',
+          type: 'audio',
+          position: { x: 0, y: 0 },
+          data: { audio: 'stale', assetId: ASSET_B, assetVersionId: VERSION_B },
+        } as never,
+      ],
+      BRAND_ID,
+    );
+
+    expect(signCalls).toEqual([{ brandId: BRAND_ID, assetId: ASSET_B, versionId: VERSION_B }]);
+    expect((node.data as Record<string, unknown>).audio).toBe(versionUrl(VERSION_B));
+  });
+
+  test('a Library document dropped on the canvas gets a fresh URL on reload, identity intact', async () => {
+    backendItems = [
+      { bucket: 'media-library', path: 'brand/brief.pdf', signedUrl: 'https://coords.example/pdf' },
+    ];
+    const [node] = await resignCanvasNodes(
+      [
+        {
+          id: 'doc',
+          type: 'document',
+          position: { x: 0, y: 0 },
+          data: {
+            documents: [
+              {
+                name: 'brief.pdf',
+                type: 'pdf',
+                content: '',
+                bucket: 'media-library',
+                storagePath: 'brand/brief.pdf',
+                sourceUrl: 'https://expired.example/pdf',
+                assetId: ASSET_A,
+                assetVersionId: VERSION_A,
+              },
+            ],
+          },
+        } as never,
+      ],
+      BRAND_ID,
+    );
+
+    const [doc] = (node.data as { documents: Array<Record<string, unknown>> }).documents;
+    expect(doc.sourceUrl).toBe('https://coords.example/pdf');
+    expect(doc.assetId).toBe(ASSET_A);
+    expect(doc.assetVersionId).toBe(VERSION_A);
+    expect(node.data).not.toHaveProperty('image');
+  });
+
+  test('a dead Backend route costs a Library rendition node nothing', async () => {
+    backendThrows = true;
+    const [node] = await resignCanvasNodes(
+      [
+        {
+          id: 'psd',
+          type: 'image',
+          position: { x: 0, y: 0 },
+          data: { image: 'stale', bucket: 'media-previews', sourcePath: 'brand/previews/a.png' },
+        } as never,
+      ],
+      BRAND_ID,
+    );
+    expect((node.data as Record<string, unknown>).image).toBe(
+      'https://previews.example/brand/previews/a.png',
+    );
   });
 });

@@ -146,7 +146,88 @@ describe('buildLibraryCanvasTemplate — resize pack', () => {
   });
 });
 
+describe('buildLibraryCanvasTemplate — every placeable Library family', () => {
+  const VERSION = '22222222-2222-4222-8222-222222222222';
+
+  it('places a PSD as an image node showing its preview, pinned to the SOURCE asset + version', () => {
+    const graph = buildLibraryCanvasTemplate({
+      template: 'brand-align',
+      asset: {
+        ...asset,
+        bucket: 'media-previews',
+        storagePath: 'brand/previews/hero.png',
+        fileName: 'hero.psd',
+        headVersionId: VERSION,
+        renditionRole: 'preview_image',
+      },
+      seedId: SEED,
+    });
+    expect(refNode(graph)).toMatchObject({
+      type: 'image',
+      data: {
+        bucket: 'media-previews',
+        sourcePath: 'brand/previews/hero.png',
+        assetId: asset.id,
+        assetVersionId: VERSION,
+        libraryAssetId: asset.id,
+        renditionRole: 'preview_image',
+      },
+    });
+  });
+
+  it('places audio as an audio node', () => {
+    const graph = buildLibraryCanvasTemplate({
+      template: 'blank',
+      asset: { ...asset, kind: 'audio', fileName: 'mix.aiff', renditionRole: 'audio_proxy' },
+      seedId: SEED,
+    });
+    expect(graph.nodes).toHaveLength(1);
+    expect(graph.nodes[0]).toMatchObject({
+      type: 'audio',
+      data: { assetId: asset.id, libraryAssetId: asset.id, renditionRole: 'audio_proxy' },
+    });
+    expect(graph.nodes[0].data).not.toHaveProperty('referenceType');
+  });
+
+  it('places a PDF as a document node whose entry carries the Library coordinates', () => {
+    const graph = buildLibraryCanvasTemplate({
+      template: 'blank',
+      asset: {
+        ...asset,
+        kind: 'document',
+        storagePath: 'brand/brief',
+        fileName: 'brief',
+        mimeType: 'application/pdf',
+        headVersionId: VERSION,
+      },
+      seedId: SEED,
+    });
+    expect(graph.nodes[0].type).toBe('document');
+    expect(graph.nodes[0].data).toEqual({
+      libraryAssetId: asset.id,
+      documents: [
+        {
+          name: 'brief',
+          type: 'pdf',
+          bucket: 'media-library',
+          storagePath: 'brand/brief',
+          assetId: asset.id,
+          assetVersionId: VERSION,
+        },
+      ],
+    });
+  });
+});
+
 describe('templateSupportsAsset', () => {
+  it('keeps generation templates image-only', () => {
+    for (const kind of ['audio', 'document'] as const) {
+      expect(templateSupportsAsset('brand-align', kind)).toBe(false);
+      expect(templateSupportsAsset('resize-pack', kind)).toBe(false);
+      expect(templateSupportsAsset('blank', kind)).toBe(true);
+    }
+  });
+
   it('rejects generation templates for video and throws when forced', () => {
     expect(templateSupportsAsset('brand-align', 'video')).toBe(false);
     expect(templateSupportsAsset('resize-pack', 'video')).toBe(false);

@@ -54,7 +54,7 @@ mock.module('@/lib/supabase/client', () => ({
   }),
 }));
 
-const { DocumentNode } = await import('./DocumentNode');
+const { DocumentNode, foldAttachedDocument } = await import('./DocumentNode');
 
 function row(overrides: Row): Row {
   return {
@@ -70,7 +70,10 @@ function row(overrides: Row): Row {
 }
 
 function renderNode(documents: CanvasDocument[]) {
-  const data: DocumentNodeData = { documents };
+  return renderNodeData({ documents });
+}
+
+function renderNodeData(data: DocumentNodeData) {
   return render(
     <ToastProvider>
       <ReactFlowProvider>
@@ -171,5 +174,86 @@ describe('DocumentNode — mounted after the document reached its state', () => 
 
     await waitFor(() => expect(screen.getByText('unavailable')).toBeDefined());
     expect(screen.queryByText('processing…')).toBeNull();
+  });
+});
+
+// What workflow-builder's `attach_media` writes onto a document node: the Library
+// pointer at the TOP level, where no document consumer looks.
+const ASSET = '33333333-3333-4333-8333-333333333333';
+const VERSION = '44444444-4444-4444-8444-444444444444';
+const agentAttached = {
+  assetId: ASSET,
+  assetVersionId: VERSION,
+  sourcePath: 'brand/library/brief.pdf',
+  bucket: 'media-library',
+  fileName: 'brief.pdf',
+} as DocumentNodeData;
+
+describe('DocumentNode — a document an agent attached', () => {
+  beforeEach(() => {
+    tableRows = [];
+    useStudioStore.setState({ brandId: BRAND, nodes: [], edges: [] });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('moves the top-level Library pointer into a documents entry', () => {
+    const patch = foldAttachedDocument(agentAttached) as Record<string, unknown>;
+
+    expect(patch.documents).toEqual([
+      {
+        name: 'brief.pdf',
+        type: 'pdf',
+        storagePath: 'brand/library/brief.pdf',
+        bucket: 'media-library',
+        assetId: ASSET,
+        assetVersionId: VERSION,
+        sourceUrl: undefined,
+      },
+    ]);
+    // Moved, not copied: removing the chip must not bring it back on the next render.
+    for (const key of ['assetId', 'assetVersionId', 'sourcePath', 'bucket', 'fileName']) {
+      expect(key in patch && patch[key] === undefined).toBe(true);
+    }
+  });
+
+  it('does not add a second entry for a document the node already holds', () => {
+    const held: CanvasDocument = {
+      name: 'brief.pdf',
+      type: 'pdf',
+      storagePath: 'brand/library/brief.pdf',
+      bucket: 'media-library',
+    };
+    const patch = foldAttachedDocument({ ...agentAttached, documents: [held] });
+    expect(patch?.documents).toEqual([held]);
+  });
+
+  it('leaves a node with no attachment alone', () => {
+    expect(foldAttachedDocument({ documents: [] })).toBeNull();
+  });
+
+  it('writes the folded entry to the canvas when the node mounts', async () => {
+    useStudioStore.setState({
+      brandId: BRAND,
+      nodes: [{ id: 'doc-1', type: 'document', position: { x: 0, y: 0 }, data: agentAttached }],
+      edges: [],
+    });
+
+    renderNodeData(agentAttached);
+
+    await waitFor(() => {
+      const data = useStudioStore.getState().nodes[0]?.data as DocumentNodeData &
+        Record<string, unknown>;
+      expect(data.documents?.[0]).toMatchObject({
+        name: 'brief.pdf',
+        assetId: ASSET,
+        assetVersionId: VERSION,
+        storagePath: 'brand/library/brief.pdf',
+        bucket: 'media-library',
+      });
+      expect(data.sourcePath).toBeUndefined();
+    });
   });
 });

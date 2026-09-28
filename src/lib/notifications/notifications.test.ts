@@ -73,6 +73,17 @@ describe('describeNotification', () => {
     expect(display.href).toBe('/library?assetId=asset-1');
   });
 
+  it('links a comment notification to the exact comment', () => {
+    const commentId = '0b1f7c9e-3a57-4f0e-9c2d-6f1a2b3c4d5e';
+    const display = describeNotification(
+      notification({
+        kind: 'comment_mention',
+        payload: { assetId: 'asset-1', assetName: 'Reel', commentId, excerpt: 'look' },
+      }),
+    );
+    expect(display.href).toBe(`/library?assetId=asset-1&comment=${commentId}`);
+  });
+
   it('describes replies and mentions with the comment excerpt as detail', () => {
     const reply = describeNotification(
       notification({

@@ -227,6 +227,22 @@ async function storeRasterPreview(params: {
   return true;
 }
 
+// The server (Render) makes what the browser does not: the poster when no frame decodes
+// here, the proxy ladder, the scrub sprite, and an audio proxy. Best effort — the upload
+// already succeeded, and a missed request is picked up by the preview backfill.
+function requestServerPreview(
+  params: { brandId: string; assetId: string; assetVersionId: string },
+  what: string,
+): void {
+  void requestLibraryPreviewProxy({
+    brandId: params.brandId,
+    assetId: params.assetId,
+    assetVersionId: params.assetVersionId,
+  }).catch((error: unknown) => {
+    console.error(`[assetPreview] ${what} request failed`, error);
+  });
+}
+
 export async function attachAssetPreview(params: {
   file: File;
   brandId: string;
@@ -249,6 +265,9 @@ export async function attachAssetPreview(params: {
         console.warn('[assetPreview] stored image preview failed', error);
       });
     }
+    // The browser plays the original; the server still writes the AAC proxy that shares
+    // and the download menu offer.
+    if (format.originalKind === 'audio') requestServerPreview(params, 'audio proxy');
     return 'ready';
   }
   // Office documents: there is no converter, so there is honestly nothing to wait for.
@@ -256,27 +275,18 @@ export async function attachAssetPreview(params: {
 
   if (format.previewStrategy === 'browser_video') {
     const poster = await generateVideoPoster(params.file);
+    // No frame decodes here (HEVC in Firefox, ProRes, a codec this browser lacks) is not
+    // a failed upload: the server decodes it and makes the poster, ladder and sprite.
     if (!poster) {
-      const wantsProxy = params.file.name.toLowerCase().endsWith('.mov');
       await markPreviewState({
         ...params,
         client,
-        state: wantsProxy ? 'awaiting_companion' : 'failed',
-        errorCode: wantsProxy ? 'proxy_transcode_pending' : 'browser_decode_failed',
-        errorMessage: wantsProxy
-          ? 'This MOV is not browser-playable. Building an H.264 proxy, or add an MP4 companion.'
-          : 'This browser could not decode a representative video frame.',
+        state: 'awaiting_companion',
+        errorCode: 'server_preview_pending',
+        errorMessage: 'Building the preview on our servers. It will appear here shortly.',
       });
-      if (wantsProxy) {
-        void requestLibraryPreviewProxy({
-          brandId: params.brandId,
-          assetId: params.assetId,
-          assetVersionId: params.assetVersionId,
-        }).catch((error: unknown) => {
-          console.error('[assetPreview] MOV proxy request failed', error);
-        });
-      }
-      return wantsProxy ? 'awaiting_companion' : 'failed';
+      requestServerPreview(params, 'server preview');
+      return 'awaiting_companion';
     }
     await persistAssetRendition({
       ...params,
@@ -305,14 +315,8 @@ export async function attachAssetPreview(params: {
     });
     await persistSampledFrames({ ...params, client });
     // The server fills what the browser did not make: the six mid-video frames the visual
-    // search vector averages, and the 720p proxy when the original is too heavy to stream.
-    void requestLibraryPreviewProxy({
-      brandId: params.brandId,
-      assetId: params.assetId,
-      assetVersionId: params.assetVersionId,
-    }).catch((error: unknown) => {
-      console.error('[assetPreview] server preview request failed', error);
-    });
+    // search vector averages, the proxy ladder, and the scrub sprite.
+    requestServerPreview(params, 'server preview');
     return 'ready';
   }
 
@@ -325,13 +329,7 @@ export async function attachAssetPreview(params: {
       errorMessage:
         'Building an H.264 proxy so this can play in Continuum. You can also drop a same-stem MP4.',
     });
-    void requestLibraryPreviewProxy({
-      brandId: params.brandId,
-      assetId: params.assetId,
-      assetVersionId: params.assetVersionId,
-    }).catch((error: unknown) => {
-      console.error('[assetPreview] MXF proxy request failed', error);
-    });
+    requestServerPreview(params, 'MXF proxy');
     return 'awaiting_companion';
   }
 

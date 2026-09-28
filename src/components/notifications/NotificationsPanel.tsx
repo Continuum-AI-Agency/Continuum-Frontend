@@ -60,7 +60,13 @@ export function NotificationsPanel({
     const { href } = describeNotification(notification);
     if (href) {
       onNavigate?.();
-      router.push(href);
+      // The Library opens the asset and comment its URL names when it mounts; already on
+      // /library, a client push would change the URL and leave the old view open.
+      if (href.startsWith('/library') && window.location.pathname === '/library') {
+        window.location.assign(href);
+      } else {
+        router.push(href);
+      }
     }
   };
 

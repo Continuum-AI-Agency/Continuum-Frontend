@@ -12,6 +12,7 @@
 import { z } from 'zod';
 import { slotPlacementSchema } from '../ai-studio/api-render-fit';
 import { apiRenderVariableKindSchema } from '../ai-studio/api-renders';
+import { LIBRARY_PROJECT_FILE_MAX_BYTES } from './asset-formats';
 import { type FontLicenceScope, fontLicenceScopeSchema } from './fonts';
 
 /**
@@ -45,7 +46,7 @@ import { type FontLicenceScope, fontLicenceScopeSchema } from './fonts';
  * empirically by pushing one byte over it and requiring the upload to refuse. Change this when
  * the dashboard changes and let the bench tell you if you are wrong.
  */
-export const FORGE_PROJECT_FILE_MAX_BYTES = 250 * 1024 * 1024;
+export const FORGE_PROJECT_FILE_MAX_BYTES = LIBRARY_PROJECT_FILE_MAX_BYTES;
 
 /** The same ceiling in whole MB, for the sentence a refusal shows a person. */
 export const FORGE_PROJECT_FILE_MAX_MB = Math.floor(FORGE_PROJECT_FILE_MAX_BYTES / (1024 * 1024));
@@ -133,6 +134,22 @@ export const templateSlotSchema = z
             compSize: z.array(z.number()).length(2).nullish(),
             charBudget: z.number().int().nonnegative().nullish(),
             sample: z.string().nullish(),
+            /**
+             * Video only: when this layer is on screen in `comp` (`inSec..outSec`) and which
+             * seconds of its clip it plays (`clipInSec..clipOutSec`). A render swaps the clip and
+             * keeps the layer's timing, so a clip shorter than `clipOutSec` runs out early and the
+             * layer is empty for the rest. `clipWhy` says why a video instance has none.
+             */
+            clip: z
+              .object({
+                inSec: z.number(),
+                outSec: z.number(),
+                clipInSec: z.number(),
+                clipOutSec: z.number(),
+              })
+              .passthrough()
+              .nullish(),
+            clipWhy: z.string().nullish(),
           })
           .passthrough(),
       )
@@ -595,7 +612,10 @@ export function templateFontStatuses(
       layers: font.layers,
       held,
       ...(scope ? { scope } : {}),
-      ...(held ? { via: substitutedBy ? ('substitute' as const) : ('direct' as const) } : {}),
+      // Only when it is a substitution. `templateFontStatusSchema` is strict, so a field on
+      // EVERY held face would be rejected outright by any client built before it existed —
+      // and `direct` tells a reader nothing the `held` flag has not already said.
+      ...(substitutedBy ? { via: 'substitute' as const } : {}),
       ...(substitutedBy ? { substitutedBy } : {}),
     };
   });

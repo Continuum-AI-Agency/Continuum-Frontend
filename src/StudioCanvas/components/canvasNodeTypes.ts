@@ -4,8 +4,8 @@ import {
   isStudioNodeType,
   type StudioNodeType,
 } from '@continuum/contracts';
-
 import { Edge as AiElementsEdge } from '@/components/ai-elements/edge';
+import { withLibraryStatus } from '../library/withLibraryStatus';
 import { ApiRenderBlock } from '../nodes/ApiRenderBlock';
 import { AudioNode } from '../nodes/AudioNode';
 import { ActionNode } from '../nodes/action/ActionNode';
@@ -214,14 +214,16 @@ export const createNodeConfig = (
   };
 };
 
+// Nodes that can hold Library media draw the Library strip (status, version, comments,
+// drift, revision) under themselves — see library/withLibraryStatus.
 export const nodeTypes = {
-  nanoGen: ImageGenBlock,
-  videoGen: VideoGenBlock,
-  veoDirector: VideoGenBlock,
-  veoFast: VideoGenBlock,
-  omniGen: OmniGenBlock,
-  extendVideo: ExtendVideoBlock,
-  hyperframesAgent: HyperframesAgentBlock,
+  nanoGen: withLibraryStatus(ImageGenBlock),
+  videoGen: withLibraryStatus(VideoGenBlock),
+  veoDirector: withLibraryStatus(VideoGenBlock),
+  veoFast: withLibraryStatus(VideoGenBlock),
+  omniGen: withLibraryStatus(OmniGenBlock),
+  extendVideo: withLibraryStatus(ExtendVideoBlock),
+  hyperframesAgent: withLibraryStatus(HyperframesAgentBlock),
   timelineEditor: TimelineEditorBlock,
   plannerDraft: PlannerDraftBlock,
   organicPublish: OrganicPublishBlock,
@@ -229,19 +231,19 @@ export const nodeTypes = {
   apiRender: ApiRenderBlock,
   string: StringNode,
   note: NoteNode,
-  image: ImageNode,
-  audio: AudioNode,
-  document: DocumentNode,
-  video: VideoReferenceNode,
+  image: withLibraryStatus(ImageNode),
+  audio: withLibraryStatus(AudioNode),
+  document: withLibraryStatus(DocumentNode),
+  video: withLibraryStatus(VideoReferenceNode),
   videoDecode: VideoDecoderBlock,
   frameExtract: FrameExtractBlock,
-  action: ActionNode,
+  action: withLibraryStatus(ActionNode),
   designRef: DesignRefNode,
   element: ElementNode,
   export: ExportNode,
   router: RouterNode,
   batch: BatchNode,
-  layerEditor: LayerEditorBlock,
+  layerEditor: withLibraryStatus(LayerEditorBlock),
 };
 
 export const edgeTypes = {

@@ -296,6 +296,38 @@ describe('applyOps', () => {
     expect((reattachedNode?.data as Record<string, unknown>).assetId).toBeUndefined();
   });
 
+  it('marks a node that shows a Library rendition, and clears it for the next media', () => {
+    const withImg = applyOps(seed(), [{ op: 'add_node', ref: 'ref', type: 'image' }]).graph;
+    const attached = applyOps(withImg, [
+      {
+        op: 'attach_media',
+        id: 'ref',
+        media: {
+          assetId: 'asset-psd',
+          bucket: 'media-previews',
+          storagePath: 'b/hero.preview.png',
+          fileName: 'hero.psd',
+          mediaKind: 'image',
+          renditionRole: 'preview_image',
+        },
+      },
+    ]);
+    const data = (graph: typeof attached.graph) =>
+      graph.nodes.find((n) => n.id === 'ref')?.data as Record<string, unknown>;
+    expect(data(attached.graph).renditionRole).toBe('preview_image');
+
+    const reattached = applyOps(attached.graph, [
+      {
+        op: 'attach_media',
+        id: 'ref',
+        media: { bucket: 'media-library', storagePath: 'b/a.png', mediaKind: 'image' },
+      },
+    ]);
+    expect(data(reattached.graph).renditionRole).toBeUndefined();
+    const detached = applyOps(attached.graph, [{ op: 'detach_media', id: 'ref' }]);
+    expect('renditionRole' in data(detached.graph)).toBe(false);
+  });
+
   it('drops the library asset id on detach_media', () => {
     const withImg = applyOps(seed(), [{ op: 'add_node', ref: 'ref', type: 'image' }]).graph;
     const attached = applyOps(withImg, [

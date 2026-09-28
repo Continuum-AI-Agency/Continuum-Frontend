@@ -205,3 +205,14 @@ describe('the six Wave-1 field types', () => {
     expect(validateCustomFieldValue(makeField('url'), 'ftp://x').ok).toBe(false);
   });
 });
+
+describe('formatCustomFieldValue — user_multi', () => {
+  it('names each member in stored order and marks one who left', () => {
+    const people = makeField('user_multi');
+    const names: Record<string, string> = { u1: 'Ana', u2: 'Bo' };
+    expect(formatCustomFieldValue(people, ['u2', 'u1', 'gone'], (id) => names[id])).toBe(
+      'Bo, Ana, Former member',
+    );
+    expect(formatCustomFieldValue(people, null)).toBe('');
+  });
+});

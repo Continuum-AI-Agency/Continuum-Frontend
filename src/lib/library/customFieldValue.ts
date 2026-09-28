@@ -121,6 +121,10 @@ export function formatCustomFieldValue(
       const userId = literalValue(value);
       return userId ? (userLabel?.(userId) ?? ORPHANED_USER_LABEL) : '';
     }
+    case 'user_multi':
+      return multiSelectOptionIds(value)
+        .map((userId) => userLabel?.(userId) ?? ORPHANED_USER_LABEL)
+        .join(', ');
     default:
       return literalValue(value).trim();
   }
