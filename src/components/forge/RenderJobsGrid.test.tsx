@@ -182,7 +182,6 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
     listRenderSets: async () => ({ items: [], nextCursor: null }),
     listEnvironments,
     listTemplates,
-    shareBatch,
     prepareMasterDownload,
     masterDownloadStatus,
     libraryState,
