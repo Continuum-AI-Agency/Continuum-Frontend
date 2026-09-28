@@ -202,12 +202,32 @@ const contrastRatio = (foreground: string, background: string): number | null =>
 };
 
 /** Every `[data-hf-copy]` element at the document's current time: out of frame, or under 3:1. */
+/**
+ * Copy the viewer can see at this instant: rendered, not visibility-hidden, at least half
+ * opaque through its ancestors, with a box. Copy in a scene outside its window is hidden and
+ * often parked off-frame for its entrance, so judging it reported clipped, unreadable titles
+ * that were never on screen. Render's probeLayout applies the same rule.
+ */
+export const isShownCopy = (
+  chain: readonly Pick<CSSStyleDeclaration, 'display' | 'visibility' | 'opacity'>[],
+  box: { width: number; height: number },
+): boolean =>
+  chain.every((style) => style.display !== 'none' && style.visibility !== 'hidden') &&
+  chain.reduce((opacity, style) => opacity * Number(style.opacity), 1) >= 0.5 &&
+  box.width >= 2 &&
+  box.height >= 2;
+
 export const measureLayout = (doc: Document, view: Window): HyperframesLayoutMetrics => {
   const clippedTextIds = new Set<string>();
   const lowContrastTextIds = new Set<string>();
   for (const element of Array.from(doc.querySelectorAll<HTMLElement>('[data-hf-copy]'))) {
     const id = element.dataset.hfId ?? element.id;
     const rect = element.getBoundingClientRect();
+    const chain: CSSStyleDeclaration[] = [];
+    for (let node: HTMLElement | null = element; node; node = node.parentElement) {
+      chain.push(view.getComputedStyle(node));
+    }
+    if (!isShownCopy(chain, rect)) continue;
     if (
       rect.left < 0 ||
       rect.top < 0 ||
