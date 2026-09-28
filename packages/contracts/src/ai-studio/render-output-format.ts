@@ -15,6 +15,7 @@ import { encodeContainerOf } from './api-renders';
 export interface RenderOutputFormatCandidate {
   id: string;
   ratio: string | null;
+  label?: string;
   comp?: { name: string; width: number; height: number } | null;
   mediaType?: string | null;
 }
@@ -51,8 +52,24 @@ export function matchOutputFormat<T extends RenderOutputFormatCandidate>(
   if (underscore <= 0) return null;
   const named = slug(stem.slice(0, underscore));
 
-  const byComp = formats.filter((format) => format.comp && slug(format.comp.name) === named);
-  if (byComp.length > 0) return unique(byComp, isVideo);
+  const labelName = (format: T) => slug(format.label?.replace(/\s*\([^)]*\)\s*$/, '') ?? '');
+  const byName = formats.filter(
+    (format) =>
+      (format.comp && slug(format.comp.name) === named) ||
+      (!format.comp && labelName(format) === named),
+  );
+  if (byName.length > 0) return unique(byName, isVideo);
+
+  // Some renderers number Card 1/2 files while the contract calls them Card A/B.
+  const numberedCard = /(?:^|_)card_(\d+)$/.exec(named);
+  if (numberedCard) {
+    const number = Number(numberedCard[1]);
+    if (number >= 1 && number <= 26) {
+      const alias = `${named.slice(0, -numberedCard[1]!.length)}${String.fromCharCode(96 + number)}`;
+      const byLabel = formats.filter((format) => !format.comp && labelName(format) === alias);
+      if (byLabel.length > 0) return unique(byLabel, isVideo);
+    }
+  }
 
   const token = /(?:^|_)(\d+)_(\d+)$/.exec(named);
   if (!token) return null;

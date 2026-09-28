@@ -72,6 +72,18 @@ describe('the three real template-133 jobs, in the order the fleet returned them
 });
 
 describe('the name rule', () => {
+  test('numbered Card files resolve the authored Card A/B labels without depending on file order', () => {
+    const formats = [
+      { id: 'a', label: 'RENDER Card A (Pre-Match)', ratio: null, mediaType: 'MP4 Video (RGB)' },
+      { id: 'b', label: 'RENDER Card B (Halftime)', ratio: null, mediaType: 'MP4 Video (RGB)' },
+    ];
+    expect(idsOf(['RENDER_Card_2_5chzkn4.mp4', 'RENDER_Card_1_w39zkn3.mp4'], formats)).toEqual([
+      'b',
+      'a',
+    ]);
+    expect(matchOutputFormat('RENDER_Card_3_random.mp4', formats)).toBeNull();
+  });
+
   test('runs of separators collapse, and case never matters', () => {
     const formats = [
       { id: 'feed', ratio: '4:5', comp: comp('Promo -- Feed 4:5', 1080, 1350) },

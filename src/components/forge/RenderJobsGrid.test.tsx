@@ -925,4 +925,39 @@ describe('RenderJobsGrid', () => {
       'MOV conversion failed. Try again.',
     );
   }, 30_000);
+
+  test('the recorded Card 1 and Card 2 MP4s preview under Card A and Card B', async () => {
+    const card = (id: string, fileName: string) => ({
+      id,
+      kind: 'video' as const,
+      fileName,
+      mimeType: 'video/mp4',
+      url: `https://cdn.test/${fileName}`,
+      width: null,
+      height: null,
+      assetId: null,
+      versionId: null,
+    });
+    const first = card('card-1', 'RENDER_Card_1_w39zkn3.mp4');
+    const second = card('card-2', 'RENDER_Card_2_5chzkn4.mp4');
+    jobsFixture = [{ ...BASE, outputs: [first, second], label: 'Cards', labelPath: ['Cards'] }];
+    const formats = [
+      { id: 'format-a', label: 'RENDER Card A (Pre-Match)', ratio: null, mediaType: 'MP4 Video (RGB)', width: null, height: null },
+      { id: 'format-b', label: 'RENDER Card B (Halftime)', ratio: null, mediaType: 'MP4 Video (RGB)', width: null, height: null },
+    ];
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <RenderJobsGrid brandId={BRAND} formats={formats} />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await findBatchRow());
+    fireEvent.click(await screen.findByText('Cards'));
+    await screen.findByRole('heading', { name: 'Cards' });
+    const preview = screen.getByRole('group', { name: 'Render preview' });
+    expect(preview.querySelector('video')?.getAttribute('src')).toBe(first.url);
+    expect(screen.getByRole('button', { name: 'Generate MOV download' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'RENDER Card B (Halftime)' }));
+    expect(preview.querySelector('video')?.getAttribute('src')).toBe(second.url);
+    expect(screen.getByRole('link', { name: 'Download MP4' }).getAttribute('href')).toBe(second.url);
+  }, 30_000);
 });
