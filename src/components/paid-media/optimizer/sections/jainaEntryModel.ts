@@ -41,3 +41,75 @@ export function jainaEntryPrompts(
     },
   ];
 }
+
+// The account-level band. The Overview is read in Spanish, so its questions are Spanish
+// too; each prompt names the account and every portfolio (name + objective) so Jaina has
+// the whole scope in one line. Two questions are conditional: "why is X expensive" only
+// exists when some portfolio is over its target, and "how is X doing" replaces the generic
+// risks question when one portfolio is spending with nothing to show for it.
+
+export type JainaAccountContext = {
+  accountLabel: string | null;
+  portfolios: Array<{ name: string; objective: string }>;
+  /** the portfolio furthest over its target, if any */
+  worstOverTarget: string | null;
+  /** a portfolio spending with zero results, if any */
+  noResults: string | null;
+};
+
+export function jainaAccountEntryPrompts(account: JainaAccountContext): JainaEntry[] {
+  const accountName = account.accountLabel
+    ? `la cuenta "${account.accountLabel}"`
+    : 'la cuenta activa';
+  const portfolioList =
+    account.portfolios.length > 0
+      ? account.portfolios
+          .map((portfolio) => `"${portfolio.name}" (objetivo: ${humanize(portfolio.objective)})`)
+          .join(', ')
+      : 'ninguno activo';
+  const who = `${accountName}, con los portafolios del optimizer: ${portfolioList}`;
+  const scopeAndActions =
+    'Dame la línea de alcance, una tabla por portafolio y las acciones para esta semana.';
+
+  const expensive: JainaEntry[] = account.worstOverTarget
+    ? [
+        {
+          key: 'expensive',
+          label: `¿Por qué ${account.worstOverTarget} está caro?`,
+          prompt: `Para ${who}: ¿por qué "${account.worstOverTarget}" está caro? Es el portafolio más lejos por encima de su costo objetivo. Compara su costo por resultado de los últimos 7 días contra el objetivo y contra los 14 días previos, nombra los ad sets que empujan el costo con su evidencia, y dime qué cambiar. ${scopeAndActions}`,
+        },
+      ]
+    : [];
+
+  const silentOrRisks: JainaEntry = account.noResults
+    ? {
+        key: 'silent',
+        label: `¿Cómo va ${account.noResults}?`,
+        prompt: `Para ${who}: ¿cómo va "${account.noResults}"? Está gastando sin resultados. Revisa la entrega, el tracking, la audiencia y los creativos de sus ad sets, di si el problema es de medición o de desempeño, y qué hacer hoy. ${scopeAndActions}`,
+      }
+    : {
+        key: 'risks',
+        label: '¿Qué está por salir mal?',
+        prompt: `Para ${who}: ¿qué está por salir mal? En cada portafolio: ad sets bajo el piso de eventos, huecos de tracking, saturación de audiencia, fatiga creativa y problemas de entrega, cada uno con su evidencia. ${scopeAndActions}`,
+      };
+
+  return [
+    ...expensive,
+    {
+      key: 'pause',
+      label: '¿Qué pausar esta semana?',
+      prompt: `Para ${who}: ¿qué pausar esta semana? Señala en cada portafolio los ad sets y anuncios que gastan sin resultados, con un costo muy por encima del objetivo o con fatiga creativa, con el gasto que libera cada pausa y el riesgo de hacerla. ${scopeAndActions}`,
+    },
+    silentOrRisks,
+    {
+      key: 'budget',
+      label: '¿Dónde está el presupuesto?',
+      prompt: `Para ${who}: ¿dónde está el presupuesto? Presupuesto diario y gasto real de cada portafolio, si vamos a ritmo, qué movió el optimizer en su último ciclo y qué quedó retenido. ${scopeAndActions}`,
+    },
+    {
+      key: 'summary',
+      label: 'Resumen para el cliente',
+      prompt: `Para ${who}: escribe un resumen para el cliente. Qué pasó esta semana en cada portafolio (gasto, resultados y costo por resultado contra el objetivo), qué se cambió y por qué, y qué sigue. Tono claro y sin jerga, con una tabla por portafolio y tres puntos de acción al final.`,
+    },
+  ];
+}

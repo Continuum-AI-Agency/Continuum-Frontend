@@ -36,6 +36,10 @@ import { benchBrowserChannel, loadProdSupabaseEnv, PROD_SUPABASE_URL } from './s
 //      creative recommendation" on a news card each land on ONE expanded, on-screen queue
 //      row; a blocked proposal shows its reason and a disabled create button; and the
 //      Ask-Jaina band sits between the vital signs and the news cards.
+//   6. The Overview as proposal O1 orders it (Performance+ redesign, stage 1b): the sentence
+//      with figures, the sub-line, the Jaina band, four to six state-coloured tiles, the
+//      recommendation cards with the lead marked, then the portfolio rows — in that order,
+//      nothing else above the fold, no chart, and none of the old copy.
 //
 // ── MONEY SAFETY — this is a READ/BROWSE bench, and it cannot move money ──
 //   * Nothing here clicks Apply, Convert, Revert, "Run now", Create, Enroll, Archive, or
@@ -233,7 +237,7 @@ async function benchContext(
  *  one now, where it owned none), so resolve it at run time instead of pinning it. */
 async function openSetupSurface(page: Page): Promise<void> {
   const onboarding = page.getByRole('heading', { name: 'Set up the Optimizer' });
-  const newPortfolio = page.getByRole('button', { name: 'New portfolio' });
+  const newPortfolio = page.getByRole('button', { name: 'Nuevo portafolio' });
   await expect(onboarding.or(newPortfolio).first()).toBeVisible({ timeout: 120_000 });
   if ((await onboarding.count()) > 0) return;
   await newPortfolio.click();
@@ -498,7 +502,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
     }
   });
 
-  test('create view — the New portfolio action opens the create page state, and Back returns to Portfolios', async ({
+  test('create view — the Nuevo portafolio action opens the create page state, and Back returns to Portfolios', async ({
     browser,
   }) => {
     await selectBrand(AGENCY_BRAND_ID);
@@ -508,9 +512,9 @@ test.describe('Paid Media Optimizer — live experience', () => {
     try {
       await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
 
-      // The Overview carries the primary "New portfolio" action → the dedicated create page
+      // The Overview carries the primary "Nuevo portafolio" action → the dedicated create page
       // state (NOT a sheet overlay). Render-only: the Create/Preview controls are never clicked.
-      await page.getByRole('button', { name: 'New portfolio' }).click();
+      await page.getByRole('button', { name: 'Nuevo portafolio' }).click();
       await expect(page).toHaveURL(/optimizerView=create/);
       await expect(page.getByRole('heading', { name: 'Start from a suggestion' })).toBeVisible({
         timeout: 120_000,
@@ -552,7 +556,8 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await page.getByRole('tab', { name: 'Manage' }).click();
       await expect(page).toHaveURL(/section=manage/);
       // Manage controls render. Save/Archive are NEVER clicked.
-      await expect(page.getByText('Autonomy tier')).toBeVisible();
+      // The field carries a visible label and a screen-reader legend of the same text.
+      await expect(page.getByText('Autonomy tier').first()).toBeVisible();
       await expect(page.getByText(/Enrolled (ad sets|campaigns)/)).toBeVisible();
 
       // Every config field carries the portfolio's CURRENT value — the whole point of the
@@ -620,7 +625,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
         timeout: 120_000,
       });
       await expect(page).toHaveURL(/section=manage/);
-      await expect(page.getByText('Autonomy tier')).toBeVisible({ timeout: 120_000 });
+      await expect(page.getByText('Autonomy tier').first()).toBeVisible({ timeout: 120_000 });
       await shoot(page, '13-deeplink-manage');
     } finally {
       await context.close();
@@ -862,6 +867,187 @@ test.describe('Paid Media Optimizer — live experience', () => {
   // the optimizer panel pushed past its right edge unless a scroller owns it.
   // Screenshots: 16-type-scale-<screen>-<width>.png — look at them.
   // -------------------------------------------------------------------------
+  test('overview — O1: the sentence, the sub-line, the Jaina band, the tiles, the cards and the rows, in that order and nothing else above the fold', async ({
+    browser,
+  }) => {
+    await selectBrand(EASYFIT_LEDGER_BRAND_ID);
+    const { context } = await benchContext(browser);
+    const page = await context.newPage();
+
+    // A read that fails at load is what turns a whole-account figure into a partial one, so
+    // every non-2xx answer from the optimizer RPCs is printed with the run.
+    page.on('response', (response) => {
+      const url = response.url();
+      if (url.includes('/rest/v1/rpc/optimizer_') && response.status() >= 400) {
+        console.log(`[optimizer-bench] RPC ${response.status()} ${new URL(url).pathname}`);
+      }
+    });
+
+    try {
+      await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
+
+      // The sentence is composed once every portfolio's efficiency series has landed; until
+      // then it says it is still reading, and that state must clear on a live account. A
+      // read that failed says the figure is incomplete instead of printing a partial sum;
+      // one retry is allowed here, because the failure it guards against is transient.
+      const headline = page.getByTestId('overview-headline');
+      await expect(headline).toBeVisible({ timeout: 120_000 });
+      await expect(headline).not.toHaveAttribute('data-pending', 'true', { timeout: 120_000 });
+      if ((await headline.getAttribute('data-incomplete')) === 'true') {
+        console.log(`[optimizer-bench] incomplete read: ${await headline.textContent()}`);
+        await page.getByTestId('overview-retry').click();
+        await expect(headline).not.toHaveAttribute('data-incomplete', 'true', {
+          timeout: 60_000,
+        });
+      }
+      const sentence = (await headline.textContent()) ?? '';
+      console.log(`[optimizer-bench] Overview sentence: ${sentence}`);
+      expect(sentence).toMatch(/^La cuenta gastó .+ en 7 días/);
+      expect(sentence).toMatch(/decisi(ón espera|ones esperan)\.$/);
+      expect(sentence).toMatch(/\d/);
+
+      const report = await page.evaluate(() => {
+        const root = document.querySelector('[data-testid="optimizer-overview"]');
+        const ids = [...(root?.children ?? [])].map(
+          (child) => child.getAttribute('data-testid') ?? `(${child.tagName.toLowerCase()})`,
+        );
+        const inner = (id: string) => root?.querySelector(`[data-testid="${id}"]`) ?? null;
+        const follows = (a: Element | null, b: Element | null) =>
+          Boolean(a && b && a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+        const sequence = [
+          'overview-headline',
+          'overview-subline',
+          'jaina-entry-chips',
+          'account-tiles',
+          'account-cards',
+          'portfolio-rows',
+        ]
+          .map((id) => inner(id))
+          .filter((node): node is Element => node !== null);
+        const ordered = sequence.every(
+          (node, i) => i === 0 || follows(sequence[i - 1] ?? null, node),
+        );
+        const tiles = [
+          ...(inner('account-tiles')?.querySelectorAll('[data-testid^="tile-"]') ?? []),
+        ];
+        const tileStates = tiles.map((tile) => tile.getAttribute('data-state'));
+        const tileBorders = tiles.map((tile) =>
+          (tile.getAttribute('class') ?? '')
+            .split(/\s+/)
+            .filter((c) => /^border-t-[a-z]/.test(c))
+            .join(' '),
+        );
+        const tileCharts = tiles.filter((tile) => tile.querySelector('svg, canvas')).length;
+        const noTarget = tiles
+          .filter((tile) => tile.getAttribute('data-testid')?.startsWith('tile-kind-'))
+          .filter((tile) => !/objetivo \d/.test(tile.textContent ?? ''))
+          .map((tile) => ({
+            state: tile.getAttribute('data-state'),
+            saysSinObjetivo: (tile.textContent ?? '').includes('sin objetivo'),
+            saysSinResultado: (tile.textContent ?? '').includes('sin resultado'),
+          }));
+        const cards = [
+          ...(inner('account-cards')?.querySelectorAll('[data-testid="account-card"]') ?? []),
+        ];
+        const rows = [
+          ...(inner('portfolio-rows')?.querySelectorAll('[data-testid="portfolio-row"]') ?? []),
+        ];
+        const heroCharts = root?.querySelectorAll(
+          '[data-testid="overview-hero"] svg, [data-testid="overview-hero"] canvas, [data-testid="account-cards"] svg.recharts-surface, [data-testid="account-cards"] canvas',
+        ).length;
+        const sortPressed = inner('portfolio-rows')
+          ?.querySelector('[aria-pressed="true"], [data-pressed], [data-state="on"]')
+          ?.textContent?.trim();
+        return {
+          ids,
+          ordered,
+          jainaLabel: inner('jaina-entry-chips')?.textContent?.includes('Preguntale a Jaina'),
+          jainaLinks: inner('jaina-entry-chips')?.querySelectorAll('a').length ?? 0,
+          tiles: tiles.length,
+          tileStates,
+          tileBorders,
+          tileCharts,
+          noTarget,
+          cards: cards.length,
+          leadFlags: cards.map((card) => card.getAttribute('data-lead')),
+          rows: rows.length,
+          rowStates: rows.map((row) => row.getAttribute('data-state')),
+          heroCharts: heroCharts ?? 0,
+          sortPressed,
+          bookLine: inner('book-line')?.textContent ?? '',
+        };
+      });
+      console.log(`[optimizer-bench] Overview O1: ${JSON.stringify(report)}`);
+
+      // In this order and nothing else: the header line, the sentence block, the band, the
+      // tiles, the cards (when a read has landed), the rows.
+      const expectedIds = ['(div)', 'overview-hero', 'jaina-entry-chips', 'account-tiles'];
+      if (report.ids.includes('overview-recommendations'))
+        expectedIds.push('overview-recommendations');
+      expectedIds.push('portfolio-rows');
+      expect(report.ids).toEqual(expectedIds);
+      expect(report.ordered).toBe(true);
+      expect(report.jainaLabel).toBe(true);
+      expect(report.jainaLinks).toBeGreaterThanOrEqual(4);
+
+      // Four to six tiles, each coloured by a state on its top border and never by a chart.
+      expect(report.tiles).toBeGreaterThanOrEqual(4);
+      expect(report.tiles).toBeLessThanOrEqual(6);
+      for (const state of report.tileStates) expect(['ok', 'warn', 'bad', 'none']).toContain(state);
+      for (const border of report.tileBorders) {
+        expect(border).toMatch(/^border-t-(success|warning|destructive|border)$/);
+      }
+      expect(report.tileCharts).toBe(0);
+      expect(report.heroCharts).toBe(0);
+      // A result kind with no target reads neutral and says so; one with no results says that.
+      for (const tile of report.noTarget) {
+        expect(tile.state).toBe('none');
+        expect(tile.saysSinObjetivo || tile.saysSinResultado).toBe(true);
+      }
+
+      // The cards, when today's read carries any, lead with exactly one marked card.
+      if (report.cards > 0) {
+        expect(report.leadFlags[0]).toBe('true');
+        expect(report.leadFlags.filter((flag) => flag === 'true')).toHaveLength(1);
+      } else {
+        console.log(
+          '[optimizer-bench] UN-EXERCISED: no account read row today — no cards to grade',
+        );
+      }
+
+      // Every portfolio in the book is one row, sorted by distance to target by default.
+      const bookCount = Number.parseInt(/^(\d+)/.exec(report.bookLine)?.[1] ?? '0', 10);
+      expect(report.rows).toBe(bookCount);
+      expect(report.rows).toBeGreaterThan(0);
+      for (const state of report.rowStates) expect(['ok', 'warn', 'bad', 'none']).toContain(state);
+      expect(report.sortPressed).toBe('Distancia al objetivo');
+
+      // The old surface is gone: none of its copy anywhere on the tab.
+      const panelText = await page.evaluate(
+        () =>
+          (
+            document.querySelector('[role="tabpanel"][data-state="active"]') ??
+            document.querySelector('main') ??
+            document.body
+          ).textContent ?? '',
+      );
+      for (const gone of [
+        'The auction moved',
+        'Across the account',
+        'checks could not run',
+        'Spend by objective',
+        'How sure',
+        'Daily budget',
+        'Spent yesterday',
+      ]) {
+        expect(panelText, `old copy still on screen: ${gone}`).not.toContain(gone);
+      }
+      await shoot(page, '17-overview-o1');
+    } finally {
+      await context.close();
+    }
+  });
+
   test('type scale — Overview, portfolio detail, Automations, Actions and Activity read at one scale with no overflow at 1280 and 390', async ({
     browser,
   }) => {
@@ -892,17 +1078,24 @@ test.describe('Paid Media Optimizer — live experience', () => {
         const ownText = (el: Element) =>
           [...el.childNodes].some((n) => n.nodeType === 3 && (n.textContent ?? '').trim());
         const px = (el: Element) => Number.parseFloat(getComputedStyle(el).fontSize);
+        // The app runs a root font-size ladder (15px, 14.5px under 1536 wide, 13.5px and
+        // 13px below), so the scale is measured in rem: `text-xs` is the 0.75rem floor at
+        // every tier, and a label is on scale when it sits exactly on that step. The
+        // figure roles are absolute pixel classes and stay measured in px.
+        const root = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+        const rem = (el: Element) => px(el) / root;
+        const FLOOR_REM = 0.75;
         const all = [...panel.querySelectorAll('*')].filter((el) => !inSvg(el));
         const micro = all
           .filter((el) => /\btext-[23]xs\b/.test(el.getAttribute('class') ?? ''))
           .map(describe);
         const small = all
-          .filter((el) => ownText(el) && px(el) < 12)
-          .map((el) => `${px(el)}px ${describe(el)}`);
+          .filter((el) => ownText(el) && rem(el) < FLOOR_REM - 0.005)
+          .map((el) => `${rem(el).toFixed(3)}rem ${describe(el)}`);
         const labels = all
           .filter((el) => ownText(el) && getComputedStyle(el).textTransform === 'uppercase')
-          .filter((el) => Math.round(px(el)) !== 12)
-          .map((el) => `${px(el)}px ${describe(el)}`);
+          .filter((el) => Math.abs(rem(el) - FLOOR_REM) > 0.01)
+          .map((el) => `${rem(el).toFixed(3)}rem ${describe(el)}`);
         const expectedFigure: Record<string, number> = { tile: 22, headline: 21, lead: 21 };
         const figures = [...panel.querySelectorAll('[data-figure-role]')]
           .filter(
@@ -954,11 +1147,33 @@ test.describe('Paid Media Optimizer — live experience', () => {
       const report = await inspect();
       await shoot(page, `16-type-scale-${screen}-${width}`);
       console.log(
-        `[optimizer-bench] type scale ${screen}@${width}: panel ${report.panelWidth}px, scrollWidth ${report.panelScrollWidth}px, micro ${report.micro.length}, sub-12px ${report.small.length}, off-scale labels ${report.labels.length}, off-scale figures ${report.figures.length}, overflow ${report.overflow.length}`,
+        `[optimizer-bench] type scale ${screen}@${width}: panel ${report.panelWidth}px, scrollWidth ${report.panelScrollWidth}px, micro ${report.micro.length}, under-floor ${report.small.length}, off-scale labels ${report.labels.length}, off-scale figures ${report.figures.length}, overflow ${report.overflow.length}`,
       );
+      // Name what is off before failing on it: a count alone sends the next person back to
+      // the browser to find out which node.
+      if (
+        report.micro.length +
+          report.small.length +
+          report.labels.length +
+          report.figures.length +
+          report.overflow.length >
+        0
+      ) {
+        console.log(
+          `[optimizer-bench] type scale ${screen}@${width} offenders: ${JSON.stringify({
+            micro: report.micro,
+            small: report.small.slice(0, 60),
+            labels: report.labels,
+            figures: report.figures,
+            overflow: report.overflow.slice(0, 20),
+          })}`,
+        );
+      }
       expect(report.micro, `${screen}@${width}: micro classes`).toEqual([]);
-      expect(report.small, `${screen}@${width}: text below 12px`).toEqual([]);
-      expect(report.labels, `${screen}@${width}: uppercase labels off 12px`).toEqual([]);
+      expect(report.small, `${screen}@${width}: text below the 0.75rem floor`).toEqual([]);
+      expect(report.labels, `${screen}@${width}: uppercase labels off the 0.75rem step`).toEqual(
+        [],
+      );
       expect(report.figures, `${screen}@${width}: HeroFigure off its role size`).toEqual([]);
       expect(report.overflow, `${screen}@${width}: pushed past the panel edge`).toEqual([]);
       expect(

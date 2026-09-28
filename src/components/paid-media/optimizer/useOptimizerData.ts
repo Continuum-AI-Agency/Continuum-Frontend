@@ -18,6 +18,7 @@ import {
   type AdsetAd,
   AdsetAdsResponseSchema,
   type AdsetCreativeWinRateRow,
+  type AdsetTargeting,
   type ApplyAdsetStatusRequest,
   type ApplyAdsetStatusResponse,
   ApplyAdsetStatusResponseSchema,
@@ -46,6 +47,7 @@ import {
   type CycleRunReport,
   CycleRunReportSchema,
   type CycleSkipReason,
+  type EfficiencySeriesPoint,
   type EnrollRequest,
   type EnrollResult,
   EnrollResultSchema,
@@ -85,6 +87,7 @@ import {
   type QueryClient,
   useInfiniteQuery,
   useMutation,
+  useQueries,
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
@@ -1063,6 +1066,7 @@ const EMPTY_RENEWALS: RenewalTask[] = [];
 const EMPTY_LOGS: OptimizerLogRow[] = [];
 const EMPTY_ACTIONS: OptimizerActionFeedRow[] = [];
 const EMPTY_SNAPSHOTS: AdSetSnapshot[] = [];
+const EMPTY_TARGETING: AdsetTargeting[] = [];
 const EMPTY_ENROLLED: PortfolioAdset[] = [];
 const EMPTY_ACCOUNT_ENROLLMENTS: AccountEnrollment[] = [];
 const EMPTY_TIMELINE_EVENTS: TimelineEvent[] = [];
@@ -1495,6 +1499,60 @@ export function useOptimizerCpaSeries(
   });
 }
 
+/** One efficiency series per portfolio, in the order the ids were given. */
+export type PortfolioEfficiencySeries = {
+  series: EfficiencySeriesPoint[][];
+  /** True while any portfolio's series is still on its way. */
+  pending: boolean;
+  /** How many portfolios' series could not be read. A sum over the rest is not the account. */
+  failed: number;
+  /** Ask again for the ones that failed. */
+  retryFailed: () => void;
+};
+
+function combineEfficiencySeries(
+  results: Array<{
+    data: EfficiencySeriesPoint[] | undefined;
+    isPending: boolean;
+    isError: boolean;
+    refetch: () => unknown;
+  }>,
+): PortfolioEfficiencySeries {
+  const failed = results.filter((result) => result.isError);
+  return {
+    series: results.map((result) => result.data ?? EMPTY_CPA),
+    pending: results.some((result) => result.isPending),
+    failed: failed.length,
+    retryFailed: () => {
+      for (const result of failed) void result.refetch();
+    },
+  };
+}
+
+/**
+ * The efficiency series of every listed portfolio at once — the Overview's source for spend,
+ * results and cost per result over the window, per portfolio and summed across the account.
+ *
+ * Same key and same limit as the detail's own read and the hover prefetch, so the three share
+ * one cache entry per portfolio and opening a portfolio paints from what the Overview fetched.
+ */
+export function useOptimizerPortfolioEfficiency(
+  portfolioIds: readonly string[],
+): PortfolioEfficiencySeries {
+  return useQueries({
+    queries: portfolioIds.map((portfolioId) => ({
+      queryKey: optimizerQueryKeys.cpaSeries(portfolioId),
+      queryFn: () => withReadTimeout(fetchCpaSeries(portfolioId, DEFAULT_CPA_SERIES_LIMIT)),
+      staleTime: FIVE_MINUTES,
+      gcTime: THIRTY_MINUTES,
+      // The Overview fires one of these per portfolio the moment the page mounts, which is
+      // also when the session is still settling; two retries ride that out where one did not.
+      retry: 2,
+    })),
+    combine: combineEfficiencySeries,
+  });
+}
+
 const EMPTY_SWAP_JOBS: CreativeSwapJobRow[] = [];
 
 async function fetchCreativeSwapJobs(brandId: string): Promise<CreativeSwapJobRow[]> {
@@ -1922,6 +1980,7 @@ export function useOptimizerAccountSnapshots(
   return {
     ...query,
     data: query.data?.snapshots ?? EMPTY_SNAPSHOTS,
+    targeting: query.data?.targeting ?? EMPTY_TARGETING,
     fetchedAt: query.data?.fetchedAt ?? null,
     budgetSummary: query.data?.budgetSummary ?? null,
     refresh,

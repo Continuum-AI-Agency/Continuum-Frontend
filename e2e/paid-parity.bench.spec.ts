@@ -40,8 +40,8 @@ import { PROD_SUPABASE_URL } from './support/prodEnv';
 // (`plugin_mcp.list_brand_ad_accounts.currency`, null on every live Mexican account today —
 // so `none`, and a bare figure, is the common case).
 //
-// Surfaces: the Overview (lead card, four tiles, spend-by-objective legend, portfolio
-// cards), the Portfolios list, one portfolio page (news cards, recap sentence, four KPI
+// Surfaces: the Overview (headline, tiles, account cards, portfolio rows), the Portfolios
+// list, one portfolio page (news cards, recap sentence, four KPI
 // tiles, CPL timeline projection), the Actions queue.
 //
 // Masked snapshots: after a surface's parity is green, a full-page screenshot with every
@@ -298,7 +298,7 @@ function candidatesOfRead(): Row[] {
 }
 
 /** The lead candidate the card is about, read from the card's own foot line. */
-let leadDetector: string | null = null;
+const leadDetector: string | null = null;
 
 function candidateFigure(candidate: Row, part: 'figure' | 'money' | 'from' | 'to' | 'sure') {
   const headline = obj(candidate.headline);
@@ -1067,28 +1067,16 @@ test.describe('Performance+ — the screen agrees with the payload it fetched', 
     printBenchEnvelope();
   });
 
-  test('overview — lead card, four tiles, legend, portfolio cards', async () => {
+  test('overview — headline, tiles, cards, portfolio rows', async () => {
     await openSurface('overview');
     await expect(page.getByTestId('account-tiles')).toBeVisible({ timeout: 120_000 });
     await waitForCapture('optimizer_list_portfolios');
     await waitForCapture('list_brand_ad_accounts');
-    await waitForCapture('optimizer_get_spend_by_objective');
     await waitForCapture('optimizer_get_account_read');
-    // The account read renders when the worker has written one; absent is a real state.
-    const leadCard = page.getByTestId('account-lead-card');
-    await leadCard.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => null);
-    if ((await leadCard.count()) === 0) {
-      note(
-        'UN-EXERCISED: no account read row for this account today — the lead card did not render, so its figures are not graded',
-      );
-    } else {
-      const foot = (await page.getByTestId('account-lead-foot').textContent()) ?? '';
-      leadDetector = /Trigger · (\S+)/.exec(foot)?.[1] ?? null;
-      note(
-        `lead card mode: ${await leadCard.getAttribute('data-mode')}${leadDetector ? ` · ${leadDetector}` : ''}`,
-      );
-    }
-    // Let the legend and the cards settle: the stream folds after the spend rows land.
+    // The headline is a sentence over the CPA series the page fetches once per portfolio.
+    await waitForCapture('optimizer_get_cpa_series');
+    note(`headline: ${(await page.getByTestId('overview-headline').textContent()) ?? ''}`);
+    // Let the tiles, cards and portfolio rows settle after the series land.
     await page.waitForTimeout(1_500);
 
     const account = rows(payload('list_brand_ad_accounts')).find(

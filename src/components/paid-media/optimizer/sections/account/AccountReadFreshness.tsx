@@ -31,18 +31,18 @@ export function agoLabel(from: string, now: Date): string | null {
   const taken = Date.parse(from);
   if (Number.isNaN(taken)) return null;
   const elapsed = now.getTime() - taken;
-  if (elapsed < 0) return 'just now';
-  if (elapsed < MINUTE) return 'just now';
+  if (elapsed < 0) return 'recién';
+  if (elapsed < MINUTE) return 'recién';
   if (elapsed < HOUR) {
     const minutes = Math.floor(elapsed / MINUTE);
-    return `${minutes} min ago`;
+    return `hace ${minutes} min`;
   }
   if (elapsed < DAY) {
     const hours = Math.floor(elapsed / HOUR);
-    return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+    return `hace ${hours} ${hours === 1 ? 'hora' : 'horas'}`;
   }
   const days = Math.floor(elapsed / DAY);
-  return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+  return `hace ${days} ${days === 1 ? 'día' : 'días'}`;
 }
 
 /** The clock time the cooldown lifts, in the reader's own zone. */
@@ -61,7 +61,7 @@ export function clockLabel(at: string): string | null {
 export function takenLine(readyAt: string | null, now: Date): string | null {
   if (!readyAt) return null;
   const ago = agoLabel(readyAt, now);
-  return ago ? `Read taken ${ago}` : null;
+  return ago ? `Leído ${ago}` : null;
 }
 
 /** What the control should say, given what the server decided. */
@@ -74,23 +74,23 @@ export function refreshCopy(refresh: AccountReadRefresh): {
   if (!refresh) return { note: null, running: false };
   if (refresh.state === 'queued' || refresh.state === 'generating') {
     return {
-      note: 'Re-reading this account now — a new read lands in a few minutes.',
+      note: 'Releyendo la cuenta — una lectura nueva llega en unos minutos.',
       running: true,
     };
   }
   if (refresh.state === 'stalled') {
-    return { note: 'The last read stopped part-way through.', running: false };
+    return { note: 'La última lectura se detuvo a medias.', running: false };
   }
   if (refresh.reason === 'too_soon') {
     const at = refresh.retry_after ? clockLabel(refresh.retry_after) : null;
     return {
-      note: at ? `Can be re-read again at ${at}.` : 'Re-read again shortly.',
+      note: at ? `Se puede releer a las ${at}.` : 'Se puede releer en un rato.',
       running: false,
     };
   }
   if (refresh.reason === 'daily_limit') {
     return {
-      note: 'Re-read three times today — the next one is tomorrow morning.',
+      note: 'Ya se releyó tres veces hoy — la próxima es mañana por la mañana.',
       running: false,
     };
   }
@@ -157,7 +157,7 @@ export function AccountReadFreshness({
             {utcDay ? <span className="text-muted-foreground/70"> · {utcDay} UTC</span> : null}
           </span>
         ) : (
-          <span data-testid="account-read-taken">No read taken yet</span>
+          <span data-testid="account-read-taken">Sin lectura todavía</span>
         )}
         {note ? (
           <span
@@ -184,7 +184,7 @@ export function AccountReadFreshness({
             type="button"
             variant="outline"
           >
-            {requesting || running ? 'Re-reading…' : 'Re-read'}
+            {requesting || running ? 'Releyendo…' : 'Releer'}
           </Button>
         ) : null}
       </span>

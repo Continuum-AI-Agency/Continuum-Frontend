@@ -48,3 +48,48 @@ describe('JainaEntryChips', () => {
     }
   });
 });
+
+// The account variant: the Overview hands the band its own label and its own entries;
+// the band is otherwise the same primary-accented row.
+
+const accountEntries = [
+  {
+    key: 'pause',
+    label: '¿Qué pausar esta semana?',
+    prompt: 'Para la cuenta "Acme": ¿qué pausar?',
+  },
+  { key: 'budget', label: '¿Dónde está el presupuesto?', prompt: 'Para la cuenta "Acme": ¿dónde?' },
+  { key: 'summary', label: 'Resumen para el cliente', prompt: 'Para la cuenta "Acme": resumen.' },
+];
+
+const mountAccount = () =>
+  render(<JainaEntryChips entries={accountEntries} label="Pregúntale a Jaina sobre esta cuenta" />);
+
+describe('JainaEntryChips (account variant)', () => {
+  it('draws the same primary-accented band under the given label', () => {
+    const { container, getByText } = mountAccount();
+    const band = container.querySelector('[data-testid="jaina-entry-chips"]');
+    expect(band?.className).toContain('bg-primary/10');
+    expect(band?.className).toContain('border-primary');
+    const label = getByText(/Pregúntale a Jaina sobre esta cuenta/);
+    expect(label.className).toContain('text-primary');
+    expect(container.textContent).not.toContain('Ask Jaina about this portfolio');
+  });
+
+  it('renders one readable link per entry, in order', () => {
+    const { container } = mountAccount();
+    const links = [...container.querySelectorAll('a')];
+    expect(links.map((link) => link.textContent)).toEqual(accountEntries.map((e) => e.label));
+    for (const link of links) expect(link.className).toContain('text-sm');
+  });
+
+  it('deep-links each entry into Jaina with its own prompt', () => {
+    const { container } = mountAccount();
+    const links = [...container.querySelectorAll('a')];
+    links.forEach((link, index) => {
+      expect(link.getAttribute('href')).toBe(
+        `/scale?tab=jaina&prompt=${encodeURIComponent(accountEntries[index].prompt)}`,
+      );
+    });
+  });
+});
