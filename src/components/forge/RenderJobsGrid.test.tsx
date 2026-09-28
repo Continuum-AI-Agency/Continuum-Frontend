@@ -958,6 +958,44 @@ describe('RenderJobsGrid', () => {
     expect(screen.getByRole('button', { name: 'Generate MOV download' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Generate MXF download' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'RENDER Card B (Halftime)' }));
-    expect(preview.textContent).toContain('No file for this format');
+    expect(preview.textContent).toContain('This job did not render this format.');
+  }, 30_000);
+
+  test('a finished file remains previewable and downloadable when no template format matches', async () => {
+    const fileName = 'Unexpected_Card_A_qxlkb1c.mp4';
+    const output = {
+      id: 'unmatched-video',
+      kind: 'video' as const,
+      fileName,
+      mimeType: 'video/mp4',
+      url: `https://cdn.test/${fileName}`,
+      width: null,
+      height: null,
+      assetId: null,
+      versionId: null,
+    };
+    jobsFixture = [{ ...BASE, outputs: [output], label: 'Base', labelPath: ['Base'] }];
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <RenderJobsGrid
+          brandId={BRAND}
+          formats={[
+            { id: 'card-a', label: 'RENDER Card A (Pre-Match)', ratio: null, width: null, height: null },
+            { id: 'card-b', label: 'RENDER Card B (Halftime)', ratio: null, width: null, height: null },
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await findBatchRow());
+    fireEvent.click(await screen.findByText('Base'));
+    const preview = screen.getByRole('group', { name: 'Render preview' });
+    expect(preview.querySelector('video')?.getAttribute('src')).toBe(output.url);
+    expect(screen.getByRole('link', { name: 'Download MP4' }).getAttribute('href')).toBe(output.url);
+    expect(screen.getByRole('button', { name: 'Generate MOV download' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generate MXF download' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'RENDER Card A (Pre-Match)' }));
+    expect(preview.textContent).toContain('Select the rendered file tab above.');
+    fireEvent.click(screen.getByRole('button', { name: fileName }));
+    expect(preview.querySelector('video')?.getAttribute('src')).toBe(output.url);
   }, 30_000);
 });

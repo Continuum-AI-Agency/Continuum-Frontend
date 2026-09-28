@@ -258,24 +258,28 @@ export function RenderJobDetail({
   onRefresh: () => void;
 }) {
   const { formats: templateFormats, labelByKey } = useJobFormats(job, givenFormats);
-  // ponytail: with no contract, parse or judged ratio to name them, each file is its own format
-  // drawn from its stored size (square when the fleet stored none). Goes once contracts always load.
-  const formats: PreviewFormat[] = templateFormats.length
-    ? templateFormats
-    : job.outputs.map((output) => ({
-        id: output.id,
-        label: output.fileName,
-        ratio: null,
-        width: output.width,
-        height: output.height,
-      }));
   const files = playableFirst(job.outputs);
+  const matched = files.map((file) => ({
+    file,
+    format: matchOutputFormat(file.fileName, templateFormats),
+  }));
+  // A real file remains available even when the template cannot name its format.
+  const formats: PreviewFormat[] = [
+    ...templateFormats,
+    ...matched
+      .filter(({ format }) => format === null)
+      .map(({ file }) => ({
+        id: `file:${file.id}`,
+        label: file.fileName,
+        ratio: null,
+        width: file.width,
+        height: file.height,
+      })),
+  ];
   const filesFor = (formatId: string) =>
-    files.filter((output) =>
-      templateFormats.length
-        ? matchOutputFormat(output.fileName, formats)?.id === formatId
-        : output.id === formatId,
-    );
+    matched
+      .filter(({ file, format }) => (format?.id ?? `file:${file.id}`) === formatId)
+      .map(({ file }) => file);
   const fileFor = (formatId: string) => filesFor(formatId)[0] ?? null;
   const [picked, setPicked] = useState<string | null>(null);
   const [preparing, setPreparing] = useState<'mov' | 'mxf' | null>(null);
@@ -385,7 +389,9 @@ export function RenderJobDetail({
                           job.status === 'failed'
                             ? 'This render failed.'
                             : job.status === 'finished'
-                              ? 'No file for this format'
+                              ? matched.some(({ format }) => format === null)
+                                ? 'No file matched this format. Select the rendered file tab above.'
+                                : 'This job did not render this format.'
                               : 'No file yet.',
                       };
                 }}
