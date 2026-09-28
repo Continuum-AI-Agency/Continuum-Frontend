@@ -4,11 +4,13 @@
 // what keeps an image v1 under a video head from rendering as a broken <video>,
 // and keeps the scrubber's duration honest for the cut actually on screen.
 
-import type {
-  AssetPreview,
-  AssetRenditionRole,
-  MediaAsset,
-  MediaAssetVersion,
+import {
+  type AssetPreview,
+  type AssetRenditionRole,
+  LIBRARY_PROXY_LADDER,
+  type LibraryPlaybackRung,
+  type MediaAsset,
+  type MediaAssetVersion,
 } from '@continuum/contracts';
 import {
   assetShowsCompanionStage,
@@ -38,6 +40,9 @@ export type StageMedia = {
    *  draft in-point or a playhead from one cut never carries onto another. */
   key: string;
   sourceRole: StageSourceRole;
+  /** The version whose bytes are on stage — what its playback ladder is read for.
+   *  Optional so a hand-built stage (a carousel slide, another asset) need not name one. */
+  assetVersionId?: string | null;
 };
 
 type StageBytes = {
@@ -110,6 +115,18 @@ function pickSource(bytes: StageBytes, label: string, keyPrefix: string): StageM
 // truthful source. Keying on the version id also remounts the player, so a
 // playhead never survives the bytes changing underneath it.
 export function resolveStageMedia(params: {
+  asset: MediaAsset;
+  viewedVersion: MediaAssetVersion | null;
+  headVersion?: MediaAssetVersion | null;
+}): StageMedia {
+  const { asset, viewedVersion, headVersion } = params;
+  return {
+    ...resolveStageBytes(params),
+    assetVersionId: viewedVersion?.id ?? headVersion?.id ?? asset.headVersionId ?? null,
+  };
+}
+
+function resolveStageBytes(params: {
   asset: MediaAsset;
   viewedVersion: MediaAssetVersion | null;
   headVersion?: MediaAssetVersion | null;
@@ -204,4 +221,46 @@ export function resolveStageMedia(params: {
     key: viewedVersion.id,
     sourceRole: 'original',
   };
+}
+
+export type PlaybackCapability = { hdrDisplay: boolean; hevcMain10: boolean };
+
+const LADDER_SHORT_SIDE = new Map<string, number>(
+  LIBRARY_PROXY_LADDER.map((rung) => [rung.role, rung.shortSide]),
+);
+
+function rungShortSide(rung: LibraryPlaybackRung): number {
+  return rung.width && rung.height
+    ? Math.min(rung.width, rung.height)
+    : (LADDER_SHORT_SIDE.get(rung.role) ?? 0);
+}
+
+// Which rendition Auto plays. The HDR proxy only where it can be shown as HDR — on an
+// SDR screen or without a Main 10 decoder it would play washed out or not at all. Else
+// the smallest SDR rung that still fills the stage at device pixels, so a thumbnail-
+// sized stage never pulls 4K; a stage bigger than every rung gets the largest.
+export function pickPlaybackRung(
+  rungs: readonly LibraryPlaybackRung[],
+  options: PlaybackCapability & { stageShortSidePx: number },
+): LibraryPlaybackRung | null {
+  if (options.hdrDisplay && options.hevcMain10) {
+    const hdr = rungs.find((rung) => rung.hdr);
+    if (hdr) return hdr;
+  }
+  const sdr = rungs.filter((rung) => !rung.hdr).sort((a, b) => rungShortSide(a) - rungShortSide(b));
+  return sdr.find((rung) => rungShortSide(rung) >= options.stageShortSidePx) ?? sdr.at(-1) ?? null;
+}
+
+// HEVC Main 10, level 4.0 — the codec string the HDR proxy is written with.
+const HEVC_MAIN10 = 'video/mp4; codecs="hvc1.2.4.L120.90"';
+
+/** Whether this browser can show the HDR proxy as HDR. Both false on the server. */
+export function detectHdrPlayback(): PlaybackCapability {
+  if (typeof window === 'undefined') return { hdrDisplay: false, hevcMain10: false };
+  const hdrDisplay = window.matchMedia?.('(dynamic-range: high)').matches ?? false;
+  const hevcMain10 =
+    typeof MediaSource !== 'undefined' && typeof MediaSource.isTypeSupported === 'function'
+      ? MediaSource.isTypeSupported(HEVC_MAIN10)
+      : document.createElement('video').canPlayType(HEVC_MAIN10) !== '';
+  return { hdrDisplay, hevcMain10 };
 }

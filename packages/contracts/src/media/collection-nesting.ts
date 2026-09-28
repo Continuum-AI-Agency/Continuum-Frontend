@@ -1,8 +1,12 @@
 /**
- * Collections nest like Air sub-boards, bounded so a tree cannot become a DAM.
- * Root depth is 0. "5 sub-boards deep" means a collection at depth 5 is a leaf.
+ * Collections nest like Frame.io folders: 10 levels, so a dropped folder tree keeps its shape.
+ * Root depth is 0, so a collection at depth 9 is a leaf. Mirrors media.enforce_collection_nesting
+ * (supabase/migrations/20260927232415_formats_fmt-ingest.sql).
  */
-export const LIBRARY_COLLECTION_MAX_DEPTH = 5;
+export const LIBRARY_COLLECTION_MAX_DEPTH = 9;
+
+/** Levels a folder tree keeps, root included. */
+export const LIBRARY_COLLECTION_MAX_LEVELS = LIBRARY_COLLECTION_MAX_DEPTH + 1;
 
 export function nextCollectionDepth(parentDepth: number | null | undefined): number {
   if (parentDepth == null) return 0;

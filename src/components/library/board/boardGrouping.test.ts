@@ -7,6 +7,7 @@ import {
   mediaAssetSchema,
 } from '@continuum/contracts';
 import {
+  boardAcceptsDrops,
   buildBoardLanes,
   decodeLaneId,
   dropValue,
@@ -335,5 +336,39 @@ describe('dropValue', () => {
     ]);
     expect(dropValue(multi, 'c', ['a', 'b'])).toEqual(['c', 'b']);
     expect(dropValue(multi, 'b', ['a', 'b'])).toEqual(['b']);
+  });
+
+  it('moves a People field like a multi-select and never drops onto long text', () => {
+    expect(dropValue(field('user_multi'), 'u3', ['u1', 'u2'])).toEqual(['u3', 'u2']);
+    expect(dropValue(field('long_text'), 'x', 'y')).toBeUndefined();
+  });
+
+  it('lanes a People field by its first member', () => {
+    const lanes = buildBoardLanes({
+      grouping: { kind: 'custom_field', field: field('user_multi') },
+      assets: [makeAsset('a1'), makeAsset('a2')],
+      valueByAssetId: new Map([['a1', ['u-2', 'u-1']]]),
+      members: [
+        { userId: 'u-1', label: 'Ada' },
+        { userId: 'u-2', label: 'Grace' },
+      ],
+    });
+    expect(ids(lanes.find((lane) => lane.label === 'Grace'))).toEqual(['a1']);
+    expect(ids(lanes[0])).toEqual(['a2']);
+  });
+});
+
+describe('boardAcceptsDrops', () => {
+  it('acts on a drop while the brand role is still loading — the server refuses a viewer', () => {
+    // The race: cards are draggable as soon as assets load, and a quick first drop landed
+    // before brand_role answered, so it was ignored with no write and no toast.
+    expect(boardAcceptsDrops(undefined, false)).toBe(true);
+  });
+
+  it('refuses only a role known to be read-only', () => {
+    expect(boardAcceptsDrops('viewer', false)).toBe(false);
+    expect(boardAcceptsDrops(null, false)).toBe(false);
+    expect(boardAcceptsDrops('operator', true)).toBe(true);
+    expect(boardAcceptsDrops('owner', true)).toBe(true);
   });
 });

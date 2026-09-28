@@ -30,6 +30,8 @@ const RENDITION_SELECT =
 export const DISPLAYED_RENDITION_ROLES: AssetRenditionRole[] = [
   'thumbnail',
   'poster',
+  // A 3D model's card image, rendered by the viewer on first open.
+  'model_poster',
   'preview_image',
   'preview_video',
 ];
@@ -56,7 +58,7 @@ export function renditionSignablePaths(rows: readonly AssetRenditionRow[]): Sign
   );
 }
 
-const CARD_ROLES: AssetRenditionRole[] = ['thumbnail', 'poster', 'preview_image'];
+const CARD_ROLES: AssetRenditionRole[] = ['thumbnail', 'poster', 'model_poster', 'preview_image'];
 
 export function buildAssetPreview(
   asset: Pick<

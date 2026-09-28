@@ -8,7 +8,11 @@
 // a canvas creation registers into the Library with this asset stamped on its
 // origin_ref, and can be promoted onto it as a new version.
 
-import type { MediaAsset } from '@continuum/contracts';
+import {
+  type CanvasLibraryNodeType,
+  canvasLibrarySource,
+  type MediaAsset,
+} from '@continuum/contracts';
 import { ExternalLink, Loader2, Workflow } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -16,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -53,6 +58,24 @@ const TEMPLATE_ROWS: { template: LibraryCanvasTemplate; label: string; hint: str
     hint: 'Drop the asset in and wire it yourself',
   },
 ];
+
+// What the canvas would place this asset as, from what the detail row already knows. The
+// seeding route decides for real from the head version's renditions; a PSD whose card
+// preview is ready but whose canvas rendition is not gets the route's own error.
+export function canvasPlacement(asset: MediaAsset): CanvasLibraryNodeType | null {
+  if (asset.kind === 'image' || asset.kind === 'video' || asset.kind === 'audio') return asset.kind;
+  const original = canvasLibrarySource({
+    kind: asset.kind,
+    fileName: asset.fileName,
+    mimeType: asset.mimeType,
+    bucket: asset.bucket,
+    storagePath: asset.storagePath,
+    renditions: [],
+  });
+  if (original) return original.nodeType;
+  if (asset.preview?.state !== 'ready') return null;
+  return asset.preview.kind === 'video' ? 'video' : 'image';
+}
 
 export function OpenInCanvasButton({ brandId, asset, onAssetChanged }: OpenInCanvasButtonProps) {
   const router = useRouter();
@@ -119,10 +142,10 @@ export function OpenInCanvasButton({ brandId, asset, onAssetChanged }: OpenInCan
 
   const busy = seeding !== null;
 
-  // Source-file bytes are never coerced to an image. A companion rendition is
-  // review media, not a replacement for the source identity; Canvas can expose
-  // this again when its handoff accepts an explicit rendition id.
-  if (asset.kind === 'file') return null;
+  // A source file (PSD, INDD, 3D, MKV) reaches the canvas as its Library rendition while
+  // the node keeps the SOURCE asset + version; nothing drawable yet means no menu.
+  const placement = canvasPlacement(asset);
+  if (!placement) return null;
 
   return (
     <div className="flex items-center gap-2">
@@ -140,53 +163,55 @@ export function OpenInCanvasButton({ brandId, asset, onAssetChanged }: OpenInCan
           }
         />
         <DropdownMenuContent align="end" className="w-72">
-          <DropdownMenuLabel>Pre-made workflows</DropdownMenuLabel>
-          {TEMPLATE_ROWS.map((row) => {
-            const supported = templateSupportsAsset(
-              row.template,
-              asset.kind === 'video' ? 'video' : 'image',
-            );
-            const unsupported = asset.kind !== 'image' && !supported;
-            return (
-              <DropdownMenuItem
-                key={row.template}
-                disabled={unsupported || busy}
-                onSelect={(event) => {
-                  event.preventDefault();
-                  void handleOpen(row.template);
-                }}
-              >
-                <div className="flex min-w-0 flex-col">
-                  <span className="text-sm">{row.label}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {unsupported ? 'Images only' : row.hint}
-                  </span>
-                </div>
-              </DropdownMenuItem>
-            );
-          })}
+          {/* Base UI's GroupLabel throws outside a Group: an ungrouped label crashed the
+              menu on open, and took the asset dialog down with it. */}
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Pre-made workflows</DropdownMenuLabel>
+            {TEMPLATE_ROWS.map((row) => {
+              const unsupported = !templateSupportsAsset(row.template, placement);
+              return (
+                <DropdownMenuItem
+                  key={row.template}
+                  disabled={unsupported || busy}
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    void handleOpen(row.template);
+                  }}
+                >
+                  <div className="flex min-w-0 flex-col">
+                    <span className="text-sm">{row.label}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {unsupported ? 'Images only' : row.hint}
+                    </span>
+                  </div>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuGroup>
 
           {derived.length > 0 ? (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuLabel>Canvas outputs ({derived.length})</DropdownMenuLabel>
-              {derived.map((output) => (
-                <DropdownMenuItem
-                  key={output.id}
-                  disabled={savingId !== null}
-                  onSelect={(event) => {
-                    event.preventDefault();
-                    void handleSaveVersion(output);
-                  }}
-                >
-                  <div className="flex min-w-0 flex-col">
-                    <span className="truncate text-sm">{output.title ?? output.fileName}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {savingId === output.id ? 'Saving…' : 'Save as new version'}
-                    </span>
-                  </div>
-                </DropdownMenuItem>
-              ))}
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Canvas outputs ({derived.length})</DropdownMenuLabel>
+                {derived.map((output) => (
+                  <DropdownMenuItem
+                    key={output.id}
+                    disabled={savingId !== null}
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      void handleSaveVersion(output);
+                    }}
+                  >
+                    <div className="flex min-w-0 flex-col">
+                      <span className="truncate text-sm">{output.title ?? output.fileName}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {savingId === output.id ? 'Saving…' : 'Save as new version'}
+                      </span>
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
             </>
           ) : null}
         </DropdownMenuContent>

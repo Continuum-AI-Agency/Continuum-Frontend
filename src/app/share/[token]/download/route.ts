@@ -1,7 +1,8 @@
 // One asset's file from a share link. The edge function checks the link, the
 // session and the download policy, records the download, and either hands back
-// a signed URL to the original (no watermark to burn) or sends us to the Backend,
-// which streams a copy marked with this reviewer's identity.
+// a signed URL to the original (no watermark to burn, no position it could carry)
+// or sends us to the Backend, which streams a copy marked with this reviewer's
+// identity and stripped of any location.
 
 import type { SharePreparedDownload } from '@continuum/contracts';
 import { invokeLibraryShare } from '../shareEdge.server';

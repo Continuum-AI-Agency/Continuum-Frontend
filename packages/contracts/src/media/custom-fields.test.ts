@@ -6,6 +6,8 @@ import {
   customFieldFilterSchema,
   customFieldSchema,
   DEFAULT_CUSTOM_FIELDS,
+  MAX_CUSTOM_FIELD_LONG_TEXT_LENGTH,
+  optionsSchemaFor,
   ratingOptionsSchema,
   setAssetFieldValueRequestSchema,
   smartQueryFieldFiltersSchema,
@@ -30,6 +32,8 @@ describe('custom field types', () => {
       'user',
       'url',
       'status',
+      'user_multi',
+      'long_text',
     ]);
   });
 
@@ -298,5 +302,44 @@ describe('customFieldChoiceOptions', () => {
     expect(customFieldChoiceOptions({ options: { max: 7 } })).toEqual([]);
     expect(customFieldChoiceOptions({ options: {} })).toEqual([]);
     expect(customFieldChoiceOptions({ options: [] })).toEqual([]);
+  });
+});
+
+describe('user_multi and long_text', () => {
+  const OTHER = '33333333-3333-4333-8333-333333333333';
+
+  it('are creatable field types', () => {
+    for (const type of ['user_multi', 'long_text'] as const) {
+      expect(createCustomFieldRequestSchema.safeParse({ brandId: BRAND, name: 'N', type }).success).toBe(true);
+    }
+    expect(customFieldSchema.shape.type.safeParse('long_text').success).toBe(true);
+  });
+
+  it('carry no options, like the database requires', () => {
+    for (const type of ['user_multi', 'long_text'] as const) {
+      expect(optionsSchemaFor(type).safeParse([]).success).toBe(true);
+      expect(optionsSchemaFor(type).safeParse([{ id: 'a', label: 'A' }]).success).toBe(false);
+    }
+  });
+
+  it('user_multi holds distinct user ids, at most 50', () => {
+    const schema = valueSchemaFor('user_multi', []);
+    expect(schema.safeParse([ASSET, OTHER]).success).toBe(true);
+    expect(schema.safeParse([]).success).toBe(true);
+    expect(schema.safeParse([ASSET, ASSET]).success).toBe(false);
+    expect(schema.safeParse(['ana']).success).toBe(false);
+    expect(schema.safeParse(ASSET).success).toBe(false);
+    const many = Array.from(
+      { length: 51 },
+      (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+    );
+    expect(schema.safeParse(many).success).toBe(false);
+  });
+
+  it('long_text holds up to 20 000 characters', () => {
+    const schema = valueSchemaFor('long_text', []);
+    expect(schema.safeParse('y'.repeat(MAX_CUSTOM_FIELD_LONG_TEXT_LENGTH)).success).toBe(true);
+    expect(schema.safeParse('y'.repeat(MAX_CUSTOM_FIELD_LONG_TEXT_LENGTH + 1)).success).toBe(false);
+    expect(valueSchemaFor('text', []).safeParse('y'.repeat(5000)).success).toBe(false);
   });
 });

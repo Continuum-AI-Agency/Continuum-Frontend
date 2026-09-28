@@ -4,6 +4,9 @@ import {
   assetRenditionRoleSchema,
   assetRenditionSchema,
   completeAssetRenditionOperationSchema,
+  isPageRenditionRole,
+  PROXY_LADDER_ROLES,
+  pageRenditionRole,
   preferredAssetPreview,
 } from './asset-renditions';
 
@@ -64,7 +67,7 @@ describe('asset rendition contracts', () => {
     expect(assetRenditionRoleSchema.parse('last_frame')).toBe('last_frame');
     // Search stills sampled by the clip's length: frame_1 … frame_999, nothing else.
     for (const role of ['frame_1', 'frame_7', 'frame_120', 'frame_999']) {
-      expect(assetRenditionRoleSchema.parse(role)).toBe(role);
+      expect<string>(assetRenditionRoleSchema.parse(role)).toBe(role);
     }
     for (const role of ['frame_0', 'frame_1000', 'frame_01', 'frame_x']) {
       expect(assetRenditionRoleSchema.safeParse(role).success).toBe(false);
@@ -150,5 +153,42 @@ describe('asset rendition contracts', () => {
       completeAssetRenditionOperationSchema.safeParse({ ...completeBody, sourceTimestampMs: -5 })
         .success,
     ).toBe(false);
+  });
+});
+
+describe('format-parity rendition roles', () => {
+  it.each([
+    ...PROXY_LADDER_ROLES,
+    'hdr_proxy',
+    'scrub_sprite',
+    'audio_proxy',
+    'model_poster',
+    'model_glb',
+    'html_bundle',
+    'page_1',
+    'page_9999',
+    'frame_999',
+  ])('admits %s', (role) => {
+    expect(assetRenditionRoleSchema.safeParse(role).success).toBe(true);
+  });
+
+  it.each([
+    'page_0',
+    'page_01',
+    'page_10000',
+    'page_',
+    'proxy_720',
+    'model',
+    'frame_1000',
+  ])('refuses %s', (role) => {
+    expect(assetRenditionRoleSchema.safeParse(role).success).toBe(false);
+  });
+
+  it('builds and recognises page roles', () => {
+    expect(pageRenditionRole(3)).toBe('page_3');
+    expect(isPageRenditionRole(pageRenditionRole(9999))).toBe(true);
+    expect(() => pageRenditionRole(0)).toThrow(RangeError);
+    expect(() => pageRenditionRole(1.5)).toThrow(RangeError);
+    expect(() => pageRenditionRole(10_000)).toThrow(RangeError);
   });
 });

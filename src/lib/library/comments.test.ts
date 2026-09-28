@@ -8,6 +8,7 @@ import {
   listComments,
   listCommentsWithVersion,
   type MediaCommentRow,
+  summarizeReactions,
   upsertComment,
 } from './comments';
 
@@ -234,5 +235,26 @@ describe('listCommentsWithVersion', () => {
 
     const comments = await listComments('brand-1', 'asset-1');
     expect(comments.map((c) => c.id)).toEqual(['c1']);
+  });
+});
+
+describe('summarizeReactions', () => {
+  test('groups by comment and emoji in first-use order, counting people and marking your own', () => {
+    const at = '2026-09-27T00:00:00Z';
+    const base = { brandId: 'b', assetId: 'a', createdAt: at };
+    const summaries = summarizeReactions(
+      [
+        { ...base, commentId: 'c1', userId: 'me', emoji: '👍' },
+        { ...base, commentId: 'c1', userId: 'you', emoji: '🎉' },
+        { ...base, commentId: 'c1', userId: 'you', emoji: '👍' },
+        { ...base, commentId: 'c2', userId: 'you', emoji: '👀' },
+      ],
+      'me',
+    );
+    expect(summaries.get('c1')).toEqual([
+      { emoji: '👍', count: 2, mine: true },
+      { emoji: '🎉', count: 1, mine: false },
+    ]);
+    expect(summaries.get('c2')).toEqual([{ emoji: '👀', count: 1, mine: false }]);
   });
 });

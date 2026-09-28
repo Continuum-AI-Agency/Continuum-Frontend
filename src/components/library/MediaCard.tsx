@@ -42,6 +42,7 @@ import { OfficeDocumentIcon } from './OfficeDocumentIcon';
 import { QuickReformatMenu } from './reformat/QuickReformatMenu';
 import { reviewDisplay } from './review/reviewDisplay';
 import { useReviewCustomStates, useReviewStateLabels } from './review/useReviewStateLabels';
+import { useCardScrub } from './ScrubSprite';
 import {
   assetDragInFlight,
   assetDragInFlightIncludes,
@@ -142,7 +143,8 @@ const HOVER_CHROME_BUTTON =
 // `preload="none"` plus a withheld `src` — until the pointer enters, at which
 // point the real video mounts and plays over the still. A video WITHOUT a poster
 // keeps the old behavior (lazy src + preload="metadata"), so un-postered assets
-// are unchanged rather than broken.
+// are unchanged rather than broken. Once the clip's scrub sprite is known, hovering
+// scrubs through it by pointer x instead of playing the video at all.
 function VideoThumbnail({
   asset,
   priority,
@@ -160,6 +162,12 @@ function VideoThumbnail({
   const hoveredRef = useRef(false);
   const { ref: videoRef, activeSrc } = useLazyVideoSrc(asset.signedUrl, priority && !posterUrl);
   const src = !posterUrl || hovered ? activeSrc : undefined;
+  const scrub = useCardScrub(asset);
+
+  // The first hover plays while the sprite is still being looked up; it stops once known.
+  useEffect(() => {
+    if (scrub.sprite) videoRef.current?.pause();
+  }, [scrub.sprite, videoRef]);
 
   return (
     <>
@@ -177,18 +185,23 @@ function VideoThumbnail({
           if (!posterUrl && videoRef.current) seekVideoPreviewFrame(videoRef.current);
         }}
         onLoadedData={() => {
-          if (hoveredRef.current) void videoRef.current?.play();
+          if (hoveredRef.current && !scrub.sprite) void videoRef.current?.play();
         }}
-        onPointerEnter={() => {
+        onPointerEnter={(event) => {
           hoveredRef.current = true;
+          scrub.arm(event);
+          if (scrub.sprite) return;
           setHovered(true);
           if (src) void videoRef.current?.play();
         }}
+        onPointerMove={scrub.track}
         onPointerLeave={() => {
           hoveredRef.current = false;
+          scrub.release();
           videoRef.current?.pause();
         }}
       />
+      {scrub.overlay}
       <div className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/50 p-1.5 text-white transition-opacity group-hover:opacity-0">
         <Play className="size-3 fill-current" />
       </div>

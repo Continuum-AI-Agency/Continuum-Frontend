@@ -60,7 +60,13 @@ import { useMentionTargets } from '../detail/useMentionTargets';
 import { useReviewCustomStates, useReviewStateLabels } from '../review/useReviewStateLabels';
 import { BoardCardContent } from './BoardCard';
 import { BoardColumn } from './BoardColumn';
-import { type BoardGrouping, buildBoardLanes, decodeLaneId, dropValue } from './boardGrouping';
+import {
+  type BoardGrouping,
+  boardAcceptsDrops,
+  buildBoardLanes,
+  decodeLaneId,
+  dropValue,
+} from './boardGrouping';
 
 const PAGE_SIZE = 96;
 const MAX_BOARD_ASSETS = 192;
@@ -189,7 +195,10 @@ export function LibraryBoardView({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeAsset, setActiveAsset] = useState<MediaAsset | null>(null);
   const [valueByAssetId, setValueByAssetId] = useState<Map<string, CustomFieldValue>>(new Map());
-  const { canEdit } = useLibraryAccess(brandId, { collectionId: filters.collectionId });
+  const { brandRole, canEdit } = useLibraryAccess(brandId, {
+    collectionId: filters.collectionId,
+  });
+  const acceptsDrops = boardAcceptsDrops(brandRole, canEdit);
   const reviewLabels = useReviewStateLabels(brandId);
   const customStates = useReviewCustomStates(brandId);
 
@@ -313,7 +322,9 @@ export function LibraryBoardView({
     });
   }, [brandId, groupFieldId]);
 
-  const members = useMentionTargets(groupField?.type === 'user' ? brandId : null);
+  const members = useMentionTargets(
+    groupField?.type === 'user' || groupField?.type === 'user_multi' ? brandId : null,
+  );
   const lanes = useMemo(
     () =>
       buildBoardLanes({
@@ -374,14 +385,14 @@ export function LibraryBoardView({
   }, []);
 
   const handleDragStart = (event: DragStartEvent) => {
-    if (!canEdit) return;
+    if (!acceptsDrops) return;
     const asset = (assets ?? []).find((candidate) => candidate.id === String(event.active.id));
     setActiveAsset(asset ?? null);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveAsset(null);
-    if (!canEdit) return;
+    if (!acceptsDrops) return;
     const { active, over } = event;
     if (!over) return;
 

@@ -50,6 +50,7 @@ import { CANVAS_NODE_TYPES_WITH_FOLD, useFoldedGraph } from '../hooks/useFoldedG
 import { usePlannerSeedHydration } from '../hooks/usePlannerSeedHydration';
 import { useTimelineRenderContinuations } from '../hooks/useTimelineRenderContinuations';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
+import { LibraryContextSync } from '../library/LibraryContextSync';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { StudioNode } from '../types';
 import { DEFAULT_BRAND_BOOK_PIECES } from '../utils/brandEnforcement';
@@ -837,6 +838,7 @@ export function StudioCanvas({
 
         <main className="relative flex-1 min-h-0 overflow-hidden bg-slate-50 dark:bg-slate-950">
           <CanvasRuntimeProvider value={canvasRuntime}>
+            <LibraryContextSync />
             <Flow
               brandProfileId={brandProfileId}
               realtime={realtime}

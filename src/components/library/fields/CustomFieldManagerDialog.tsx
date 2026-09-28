@@ -67,8 +67,10 @@ const TYPE_LABEL: Record<CustomFieldType, string> = {
   checkbox: 'Checkbox',
   rating: 'Rating',
   user: 'User',
+  user_multi: 'People',
   url: 'URL',
   status: 'Status',
+  long_text: 'Long text',
 };
 
 const CREATABLE_TYPES = Object.keys(TYPE_LABEL) as CustomFieldType[];

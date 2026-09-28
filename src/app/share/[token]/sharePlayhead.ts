@@ -1,10 +1,11 @@
 'use client';
 
-// Where a guest is in a shared video — the playhead and any in/out range they
-// marked — published by ShareVideoPlayer and read by ExternalCommentComposer, so
-// guest feedback is pinned to the moment (or span) they were looking at, as a
-// member's is. Keyed by asset: a share page can hold many players.
+// Where a guest is in a shared asset, published by its viewer and read by
+// ExternalCommentComposer so guest feedback lands where they were looking, as a
+// member's does: the playhead and any in/out range of a video or audio player,
+// or the pin / marks drafted on a still. Keyed by asset: a share page can hold many.
 
+import type { SpatialAnnotation } from '@/components/library/detail/AnnotationOverlay';
 import { useSyncExternalStore } from 'react';
 
 export type SharePlayhead = { timeMs: number; inMs: number | null; outMs: number | null };
@@ -46,4 +47,34 @@ export function pinnedMoment(playhead: SharePlayhead): { timeMs: number; endMs: 
     return { timeMs: playhead.inMs, endMs: playhead.outMs };
   }
   return { timeMs: playhead.inMs ?? playhead.timeMs, endMs: null };
+}
+
+// ─── Still drafts ─────────────────────────────────────────────────────────────
+// `reset` counts posts, so the viewer clears its drawing once the comment carrying
+// it is saved.
+type ShareDraft = { annotation: SpatialAnnotation | null; reset: number };
+const drafts = new Map<string, ShareDraft>();
+
+function draftOf(assetId: string): ShareDraft {
+  return drafts.get(assetId) ?? { annotation: null, reset: 0 };
+}
+
+export function publishShareDraft(assetId: string, annotation: SpatialAnnotation | null) {
+  const previous = draftOf(assetId);
+  if (previous.annotation === annotation) return;
+  drafts.set(assetId, { ...previous, annotation });
+  for (const listener of listeners) listener();
+}
+
+export function clearShareDraft(assetId: string) {
+  drafts.set(assetId, { annotation: null, reset: draftOf(assetId).reset + 1 });
+  for (const listener of listeners) listener();
+}
+
+export function useShareDraft(assetId: string | null): ShareDraft | null {
+  return useSyncExternalStore(
+    subscribe,
+    () => (assetId ? (drafts.get(assetId) ?? null) : null),
+    () => null,
+  );
 }

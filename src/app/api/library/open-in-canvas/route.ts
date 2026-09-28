@@ -2,6 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { resolveInitialCanvasRoomId } from '@/lib/ai-studio/canvas-room.server';
 import {
+  pickCanvasLibrarySource,
+  readCanvasLibraryContext,
+} from '@/lib/creative-assets/canvasLibrarySource';
+import {
   type CanvasGraphStore,
   CanvasSeedConflictError,
   seedCanvasGraph,
@@ -15,20 +19,10 @@ import {
 } from '@/lib/library/canvasTemplates';
 import { openInCanvasRequestSchema } from '@/lib/library/openInCanvas';
 import { callerHasBrandAccess } from '@/lib/media/brand-access.server';
-import { mediaSchema } from '@/lib/media/supabase-media';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { Json } from '@/lib/supabase/types';
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
-
-type SeedAssetRow = {
-  id: string;
-  kind: string;
-  bucket: string;
-  storage_path: string;
-  file_name: string;
-  head_version_id: string | null;
-};
 
 function asFailure(error: unknown): string {
   return error instanceof Error ? error.message : 'Internal server error';
@@ -98,29 +92,27 @@ function canvasGraphStore(
   };
 }
 
+// Whatever the canvas can draw for the head version: the original when the browser can,
+// else the Library's rendition (PSD preview, INDD page, 3D poster, MKV proxy, AIFF proxy).
+// Read with the caller's own client, so RLS — not this route — decides visibility.
 async function loadSeedAsset(
   supabase: SupabaseServerClient,
   brandId: string,
   assetId: string,
-): Promise<LibrarySeedAsset | null> {
-  const { data } = await mediaSchema(supabase)
-    .from('assets')
-    .select('id, kind, bucket, storage_path, file_name, head_version_id')
-    .eq('id', assetId)
-    .eq('brand_id', brandId)
-    .is('deleted_at', null)
-    .maybeSingle();
-
-  const row = data as SeedAssetRow | null;
-  if (!row) return null;
-  if (row.kind !== 'image' && row.kind !== 'video') return null;
+): Promise<LibrarySeedAsset | 'missing' | 'no_preview'> {
+  const context = await readCanvasLibraryContext(supabase, { brandId, assetIds: [assetId] });
+  const pick = pickCanvasLibrarySource(context, assetId);
+  if (!pick) return 'missing';
+  if (!pick.source) return 'no_preview';
   return {
-    id: row.id,
-    kind: row.kind,
-    bucket: row.bucket,
-    storagePath: row.storage_path,
-    fileName: row.file_name,
-    headVersionId: row.head_version_id,
+    id: assetId,
+    kind: pick.source.nodeType,
+    bucket: pick.source.bucket,
+    storagePath: pick.source.storagePath,
+    fileName: pick.version.fileName,
+    headVersionId: pick.version.id,
+    renditionRole: pick.source.renditionRole,
+    mimeType: pick.source.mimeType,
   };
 }
 
@@ -149,8 +141,14 @@ export async function POST(request: Request) {
     }
 
     const asset = await loadSeedAsset(supabase, brandId, assetId);
-    if (!asset) {
+    if (asset === 'missing') {
       return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
+    }
+    if (asset === 'no_preview') {
+      return NextResponse.json(
+        { error: 'This asset has no canvas preview yet.' },
+        { status: 422 },
+      );
     }
     if (!templateSupportsAsset(template, asset.kind)) {
       return NextResponse.json(

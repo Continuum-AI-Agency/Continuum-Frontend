@@ -15,16 +15,26 @@ describe('server sort mapping', () => {
     expect(serverSortFor({ key: 'created', direction: 'desc' })).toBe('created_desc');
   });
 
-  it('keeps a direction or column the server lacks on the client', () => {
-    expect(serverSortFor({ key: 'size', direction: 'asc' })).toBeNull();
-    expect(serverSortFor({ key: 'kind', direction: 'asc' })).toBeNull();
+  it('sorts every server-ordered column both ways, technical ones included', () => {
+    expect(serverSortFor({ key: 'size', direction: 'asc' })).toBe('size_asc');
+    expect(serverSortFor({ key: 'duration', direction: 'asc' })).toBe('duration_asc');
+    expect(serverSortFor({ key: 'kind', direction: 'asc' })).toBe('format_asc');
+    expect(serverSortFor({ key: 'dimensions', direction: 'desc' })).toBe('resolution_desc');
+    expect(serverSortFor({ key: 'frameRate', direction: 'asc' })).toBe('frame_rate_asc');
+    expect(serverSortFor({ key: 'comments', direction: 'desc' })).toBe('comments_desc');
+  });
+
+  it('keeps a column the server cannot order on the client', () => {
     expect(serverSortFor({ key: 'field-id', direction: 'desc' })).toBeNull();
+    expect(serverSortFor({ key: 'uploader', direction: 'asc' })).toBeNull();
   });
 
   it('reads the URL sort back as a column, and nothing for non-column sorts', () => {
     expect(listSortFromServer('updated_desc')).toEqual({ key: 'updated', direction: 'desc' });
     expect(listSortFromServer('name_desc')).toEqual({ key: 'name', direction: 'desc' });
+    expect(listSortFromServer('frame_rate_asc')).toEqual({ key: 'frameRate', direction: 'asc' });
     expect(listSortFromServer('most_used')).toBeNull();
+    expect(listSortFromServer('field_asc')).toBeNull();
   });
 });
 

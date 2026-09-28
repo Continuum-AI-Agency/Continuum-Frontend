@@ -1,5 +1,5 @@
-// Downloads that must be made (a watermark burned in) or assembled (a zip) come
-// from the Backend's share delivery. The reviewer cookie is httpOnly and scoped to
+// Downloads that must be made (a watermark burned in, a location stripped out) or
+// assembled (a zip) come from the Backend's share delivery. The reviewer cookie is httpOnly and scoped to
 // /share/<token>, so this server forwards the session token; the Backend re-checks
 // the link and the session and signs the originals itself.
 
@@ -30,7 +30,7 @@ export async function fetchShareDelivery(
     });
   }
   const headers = new Headers();
-  for (const name of ['content-type', 'content-disposition', 'x-share-watermark']) {
+  for (const name of ['content-type', 'content-disposition', 'x-share-watermark', 'x-share-location']) {
     const value = upstream.headers.get(name);
     if (value) headers.set(name, value);
   }

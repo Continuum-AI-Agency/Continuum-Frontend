@@ -118,7 +118,7 @@ describe('loadAssetRenditions', () => {
     await loadAssetRenditions(client, ['v1', 'v1']);
     expect(filters).toEqual([
       ['asset_version_id', ['v1']],
-      ['role', ['thumbnail', 'poster', 'preview_image', 'preview_video']],
+      ['role', ['thumbnail', 'poster', 'model_poster', 'preview_image', 'preview_video']],
     ]);
   });
 });

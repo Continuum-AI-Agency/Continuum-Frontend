@@ -14,10 +14,15 @@
 // Review metadata lives here too: a lock marks a comment internal (never shown
 // on a share link), a globe marks one shared with share recipients, and either
 // can be flipped in place; attachments preview inline; and the timed comments of
-// the version on stage export as editing-app markers.
+// the version on stage export as editing-app markers. #hashtags render as chips and
+// filter the list; any comment takes emoji reactions.
 
 import type { CommentVisibility, MediaComment } from '@continuum/contracts';
-import { splitCommentBodyForRender } from '@continuum/contracts';
+import {
+  HASHTAG_TOKEN_PATTERN,
+  parseCommentHashtags,
+  splitCommentBodyForRender,
+} from '@continuum/contracts';
 import {
   Check,
   CheckCircle2,
@@ -30,7 +35,9 @@ import {
   Lock,
   PanelRight,
   RotateCcw,
+  SmilePlus,
   Trash2,
+  X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -63,6 +70,7 @@ import {
   initialsFor,
   listCommentAttachmentPreviews,
   patchCommentMetadata,
+  type ReactionSummary,
 } from '@/lib/library/comments';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { cn } from '@/lib/utils';
@@ -95,7 +103,117 @@ type Props = {
   onResolve: (commentId: string, resolved: boolean) => void;
   onDelete: (commentId: string) => void;
   commentHref?: (comment: MediaComment) => string;
+  /** Emoji reactions by comment id; with onReact, every comment offers them. */
+  reactions?: ReadonlyMap<string, ReactionSummary[]>;
+  onReact?: (commentId: string, emoji: string) => void;
 };
+
+const QUICK_REACTIONS = ['👍', '❤️', '🎉', '😂', '👀', '✅'] as const;
+
+type Reacting = {
+  reactions?: ReadonlyMap<string, ReactionSummary[]>;
+  onReact?: (commentId: string, emoji: string) => void;
+};
+
+function ReactionBar({ commentId, reacting }: { commentId: string; reacting: Reacting }) {
+  const { reactions, onReact } = reacting;
+  if (!onReact) return null;
+  const summaries = reactions?.get(commentId) ?? [];
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1 pl-8" data-reactions-for={commentId}>
+      {summaries.map((summary) => (
+        <button
+          key={summary.emoji}
+          type="button"
+          data-testid="reaction-chip"
+          data-emoji={summary.emoji}
+          data-count={summary.count}
+          aria-pressed={summary.mine}
+          aria-label={`${summary.emoji} ${summary.count}${summary.mine ? ', including you' : ''}`}
+          onClick={() => onReact(commentId, summary.emoji)}
+          className={cn(
+            'flex h-6 items-center gap-1 rounded-full border px-1.5 text-xs tabular-nums transition-colors',
+            summary.mine
+              ? 'border-primary/50 bg-primary/10 text-foreground'
+              : 'border-border bg-background text-muted-foreground hover:bg-muted',
+          )}
+        >
+          <span>{summary.emoji}</span>
+          {summary.count}
+        </button>
+      ))}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <button
+              type="button"
+              aria-label="Add a reaction"
+              data-testid="reaction-add"
+              className="flex h-6 items-center rounded-full px-1 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <SmilePlus className="size-3.5" />
+            </button>
+          }
+        />
+        <DropdownMenuContent align="start" className="flex min-w-0 gap-0.5 p-1">
+          {QUICK_REACTIONS.map((emoji) => (
+            <DropdownMenuItem
+              key={emoji}
+              data-emoji={emoji}
+              className="px-1.5 text-base"
+              onSelect={() => onReact(commentId, emoji)}
+            >
+              {emoji}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+// Plain text with its #tags pulled out as chips. The pattern (mirrored from the
+// database trigger) consumes the character before the '#', so a tag's start is
+// found from the end of the match.
+function TextWithHashtags({ text }: { text: string }) {
+  const parts: Array<{ text: string } | { tag: string; raw: string }> = [];
+  let cursor = 0;
+  for (const match of text.matchAll(HASHTAG_TOKEN_PATTERN)) {
+    const raw = `#${match[1]}`;
+    const start = (match.index ?? 0) + match[0].length - raw.length;
+    if (start > cursor) parts.push({ text: text.slice(cursor, start) });
+    parts.push({ tag: match[1].toLowerCase(), raw });
+    cursor = start + raw.length;
+  }
+  if (cursor < text.length) parts.push({ text: text.slice(cursor) });
+  return (
+    <>
+      {parts.map((part, index) =>
+        'tag' in part ? (
+          <span
+            // biome-ignore lint/suspicious/noArrayIndexKey: a pure derived split of an immutable string
+            key={index}
+            data-hashtag={part.tag}
+            className="rounded bg-sky-500/10 px-0.5 font-medium text-sky-700 dark:text-sky-300"
+          >
+            {part.raw}
+          </span>
+        ) : (
+          // biome-ignore lint/suspicious/noArrayIndexKey: same derived-split rationale
+          <span key={index}>{part.text}</span>
+        ),
+      )}
+    </>
+  );
+}
+
+// A comment just posted comes back without the database's hashtags (the trigger fills
+// them on the row), so it is parsed the same way the trigger does until realtime brings them.
+function threadHashtags(thread: CommentThread): string[] {
+  return [thread.root, ...thread.replies].flatMap(
+    (comment) => comment.hashtags ?? parseCommentHashtags(comment.body),
+  );
+}
 
 function authorLabel(comment: MediaComment): string {
   return comment.authorName ?? displayNameFromEmail(comment.authorEmail) ?? 'Member';
@@ -109,7 +227,7 @@ function CommentBodyText({ body }: { body: string }) {
       {segments.map((segment, index) =>
         segment.kind === 'text' ? (
           // biome-ignore lint/suspicious/noArrayIndexKey: segments are a pure derived split of an immutable string
-          <span key={index}>{segment.text}</span>
+          <TextWithHashtags key={index} text={segment.text} />
         ) : (
           // biome-ignore lint/suspicious/noArrayIndexKey: same derived-split rationale
           <span key={index} className="rounded bg-primary/10 px-0.5 font-medium text-primary">
@@ -240,7 +358,9 @@ function ThreadCard({
   onResolve,
   onDelete,
   href,
+  reacting,
 }: {
+  reacting: Reacting;
   brandId?: string;
   thread: CommentThread;
   pinLabel?: string;
@@ -293,6 +413,7 @@ function ThreadCard({
     <div
       ref={cardRef}
       data-thread-id={thread.root.id}
+      aria-current={selected ? 'true' : undefined}
       className={cn(
         'group rounded-lg border p-2.5 transition-colors',
         selected ? 'border-primary/50 bg-primary/5' : 'border-border/60 bg-card',
@@ -324,6 +445,7 @@ function ThreadCard({
           pending={pendingIds.has(thread.root.id)}
         />
       </button>
+      <ReactionBar commentId={thread.root.id} reacting={reacting} />
 
       {thread.replies.length > 0 && (
         <div className="mt-2 flex flex-col gap-2 border-l border-border/60 pl-3">
@@ -331,6 +453,7 @@ function ThreadCard({
             <div key={reply.id} className="flex items-start gap-1">
               <div className="min-w-0 flex-1">
                 <CommentBody brandId={brandId} comment={reply} pending={pendingIds.has(reply.id)} />
+                <ReactionBar commentId={reply.id} reacting={reacting} />
               </div>
               {currentUserId && reply.createdBy === currentUserId && (
                 <button
@@ -486,7 +609,11 @@ export function CommentThreads({
   onResolve,
   onDelete,
   commentHref,
+  reactions,
+  onReact,
 }: Props) {
+  const reacting: Reacting = { reactions, onReact };
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [showResolved, setShowResolved] = useState(false);
   const [showOtherVersions, setShowOtherVersions] = useState(false);
   const [timeline, setTimeline] = useState<TimelineStart>('hour');
@@ -529,6 +656,17 @@ export function CommentThreads({
   }
 
   const currentCount = threads.open.length + threads.resolved.length;
+  const allTags = [
+    ...new Set(
+      [...threads.open, ...threads.resolved, ...otherVersionThreads].flatMap(threadHashtags),
+    ),
+  ].sort();
+  const activeTag = tagFilter && allTags.includes(tagFilter) ? tagFilter : null;
+  const tagged = (list: CommentThread[]) =>
+    activeTag ? list.filter((thread) => threadHashtags(thread).includes(activeTag)) : list;
+  const openShown = tagged(threads.open);
+  const resolvedShown = tagged(threads.resolved);
+  const otherShown = tagged(otherVersionThreads);
 
   if (currentCount === 0 && otherVersionThreads.length === 0) {
     return (
@@ -630,8 +768,32 @@ export function CommentThreads({
         </div>
       ) : null}
 
-      {threads.open.map((thread) => (
+      {allTags.length > 0 ? (
+        <div data-testid="hashtag-filter" className="flex flex-wrap items-center gap-1">
+          {allTags.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              data-hashtag={tag}
+              aria-pressed={activeTag === tag}
+              onClick={() => setTagFilter((current) => (current === tag ? null : tag))}
+              className={cn(
+                'flex h-6 items-center gap-0.5 rounded-full border px-2 text-2xs font-medium transition-colors',
+                activeTag === tag
+                  ? 'border-sky-500/60 bg-sky-500/15 text-sky-700 dark:text-sky-300'
+                  : 'border-border text-muted-foreground hover:bg-muted',
+              )}
+            >
+              #{tag}
+              {activeTag === tag ? <X className="size-3" aria-hidden /> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {openShown.map((thread) => (
         <ThreadCard
+          reacting={reacting}
           key={thread.root.id}
           brandId={brandId}
           thread={thread}
@@ -649,14 +811,15 @@ export function CommentThreads({
         />
       ))}
 
-      {threads.resolved.length > 0 && (
+      {resolvedShown.length > 0 && (
         <>
           <SectionToggle open={showResolved} onToggle={() => setShowResolved((v) => !v)}>
-            Resolved ({threads.resolved.length})
+            Resolved ({resolvedShown.length})
           </SectionToggle>
           {showResolved &&
-            threads.resolved.map((thread) => (
+            resolvedShown.map((thread) => (
               <ThreadCard
+                reacting={reacting}
                 key={thread.root.id}
                 brandId={brandId}
                 thread={thread}
@@ -676,18 +839,19 @@ export function CommentThreads({
         </>
       )}
 
-      {otherVersionThreads.length > 0 && (
+      {otherShown.length > 0 && (
         <>
           <SectionToggle open={showOtherVersions} onToggle={() => setShowOtherVersions((v) => !v)}>
             <History className="size-3.5" />
             {otherVersionsLabel}
           </SectionToggle>
           {showOtherVersions &&
-            otherVersionThreads.map((thread) => {
+            otherShown.map((thread) => {
               const versionId = thread.root.versionId ?? null;
               const versionLabel = versionId ? versionLabels.get(versionId) : undefined;
               return (
                 <ThreadCard
+                  reacting={reacting}
                   key={thread.root.id}
                   brandId={brandId}
                   thread={thread}

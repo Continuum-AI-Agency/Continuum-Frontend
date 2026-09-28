@@ -43,6 +43,7 @@ export function filterChoices(
         { id: 'false', label: 'No' },
       ];
     case 'user':
+    case 'user_multi':
       return [
         { id: CURRENT_USER_FILTER_TOKEN, label: 'Me' },
         ...members.map((member) => ({ id: member.userId, label: member.label })),

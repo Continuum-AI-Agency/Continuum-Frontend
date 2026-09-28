@@ -39,6 +39,8 @@ type Props = {
   pins: OverlayPin[];
   /** Numbered pin markers (image mode). Video mode shows only the selected marks. */
   showPinMarkers?: boolean;
+  /** "View all annotations": every pin's marks, not only the hovered or selected one's. */
+  showAllMarks?: boolean;
   onSelectPin?: (id: string | null) => void;
   drawEnabled: boolean;
   tool?: StageTool;
@@ -80,6 +82,7 @@ export function AnnotationOverlay({
   contentRect,
   pins,
   showPinMarkers = true,
+  showAllMarks = false,
   onSelectPin,
   drawEnabled,
   tool = 'box',
@@ -196,7 +199,7 @@ export function AnnotationOverlay({
       {contentRect &&
         pins.map((pin) => {
           const marker = annotationAnchor(pin.annotation);
-          const outlined = pin.selected || hoveredPinId === pin.id;
+          const outlined = showAllMarks || pin.selected || hoveredPinId === pin.id;
           const shapes = annotationShapes(pin.annotation, LEGACY_COLOR);
           return (
             <div key={pin.id}>

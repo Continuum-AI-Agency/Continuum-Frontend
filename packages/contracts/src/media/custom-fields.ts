@@ -15,6 +15,9 @@
 
 import { z } from 'zod';
 
+// Exactly the media.custom_fields type CHECK. `user_multi` holds several brand members
+// (at most MAX_CUSTOM_FIELD_USERS) and `long_text` up to MAX_CUSTOM_FIELD_LONG_TEXT_LENGTH
+// characters; both carry options [].
 export const CUSTOM_FIELD_TYPES = [
   'single_select',
   'multi_select',
@@ -26,6 +29,8 @@ export const CUSTOM_FIELD_TYPES = [
   'user',
   'url',
   'status',
+  'user_multi',
+  'long_text',
 ] as const;
 export const customFieldTypeSchema = z.enum(CUSTOM_FIELD_TYPES);
 export type CustomFieldType = z.infer<typeof customFieldTypeSchema>;
@@ -160,15 +165,17 @@ export type DeleteCustomFieldRequest = z.infer<typeof deleteCustomFieldRequestSc
 // field at the boundary: a single_select holding an option id that the field
 // does not define is a lie the DB cannot catch (the column is jsonb).
 export const customFieldValueSchema = z.union([
-  z.string(), // single_select · status (option id) · text · date (ISO yyyy-mm-dd) · user (uuid) · url
+  z.string(), // single_select · status (option id) · text · long_text · date (ISO yyyy-mm-dd) · user (uuid) · url
   z.number(), // number · rating
   z.boolean(), // checkbox
-  z.array(z.string()), // multi_select (option ids)
+  z.array(z.string()), // multi_select (option ids) · user_multi (user uuids)
   z.null(), // cleared
 ]);
 export type CustomFieldValue = z.infer<typeof customFieldValueSchema>;
 
 export const MAX_CUSTOM_FIELD_TEXT_LENGTH = 2000;
+export const MAX_CUSTOM_FIELD_LONG_TEXT_LENGTH = 20_000;
+export const MAX_CUSTOM_FIELD_USERS = 50;
 export const MAX_CUSTOM_FIELD_URL_LENGTH = 2048;
 
 /** The choosable options of a select or status field; [] for every other shape (e.g. rating's {max}). */
@@ -217,6 +224,13 @@ export function valueSchemaFor(
     }
     case 'user':
       return z.string().uuid();
+    case 'user_multi':
+      return z
+        .array(z.string().uuid())
+        .max(MAX_CUSTOM_FIELD_USERS)
+        .refine((ids) => new Set(ids).size === ids.length, { message: 'Each person once' });
+    case 'long_text':
+      return z.string().max(MAX_CUSTOM_FIELD_LONG_TEXT_LENGTH);
     case 'url':
       return z
         .string()

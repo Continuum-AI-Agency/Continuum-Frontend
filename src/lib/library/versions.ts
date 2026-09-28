@@ -25,7 +25,7 @@ import {
   signVersionUpload as signVersionUploadOperation,
 } from './creativeOperations';
 import { type ResumableUploadProgress, resumableStorageUpload } from './resumableStorageUpload';
-import { MAX_PROJECT_FILE_BYTES } from './uploadMediaAsset';
+import { uploadSizeRefusal } from './uploadMediaAsset';
 
 type SupabaseBrowserClient = ReturnType<typeof createSupabaseBrowserClient>;
 
@@ -203,9 +203,8 @@ export async function uploadNewAssetVersion(
 ): Promise<RegisterVersionResponse> {
   const { brandId, assetId, baseVersionId, file, note } = params;
   const contentType = file.type || 'application/octet-stream';
-  if (isProjectFile(file) && file.size > MAX_PROJECT_FILE_BYTES) {
-    throw new Error('file_too_large: Project files must be 5 GB or smaller');
-  }
+  const refusal = uploadSizeRefusal(file);
+  if (refusal) throw new Error(`file_too_large: ${refusal}`);
 
   const ticket =
     params.resume?.ticket ??

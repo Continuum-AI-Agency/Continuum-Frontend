@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import type { MediaAsset, MediaAssetVersion } from '@continuum/contracts';
-import { resolveStageMedia, stageKindForMimeType } from './stageMedia';
+import type { LibraryPlaybackRung, MediaAsset, MediaAssetVersion } from '@continuum/contracts';
+import { pickPlaybackRung, resolveStageMedia, stageKindForMimeType } from './stageMedia';
 
 const HEAD_ASSET: MediaAsset = {
   id: 'asset-1',
@@ -350,5 +350,114 @@ describe('resolveStageMedia — which bytes play', () => {
       viewedVersion: null,
     });
     expect(pdf).toMatchObject({ kind: 'pdf', src: 'https://storage.test/brief.pdf' });
+  });
+});
+
+describe('resolveStageMedia — the version on stage', () => {
+  it('names the head version row once the list has loaded', () => {
+    const stage = resolveStageMedia({
+      asset: { ...HEAD_ASSET, headVersionId: 'v1' },
+      viewedVersion: null,
+      headVersion: version({ id: 'v2', isHead: true }),
+    });
+    expect(stage.assetVersionId).toBe('v2');
+  });
+
+  it('falls back to the asset’s head version id before the list loads', () => {
+    const stage = resolveStageMedia({
+      asset: { ...HEAD_ASSET, headVersionId: 'v1' },
+      viewedVersion: null,
+    });
+    expect(stage.assetVersionId).toBe('v1');
+  });
+
+  it('names the older version a reviewer picked, not the head', () => {
+    const stage = resolveStageMedia({
+      asset: { ...HEAD_ASSET, headVersionId: 'v2' },
+      viewedVersion: version({ id: 'v1' }),
+      headVersion: version({ id: 'v2', isHead: true }),
+    });
+    expect(stage.assetVersionId).toBe('v1');
+  });
+
+  it('is null for an asset that has never had a version', () => {
+    expect(resolveStageMedia({ asset: HEAD_ASSET, viewedVersion: null }).assetVersionId).toBeNull();
+  });
+});
+
+describe('pickPlaybackRung', () => {
+  function rung(
+    role: LibraryPlaybackRung['role'],
+    width: number | null,
+    height: number | null,
+    hdr = false,
+  ): LibraryPlaybackRung {
+    return {
+      role,
+      label: role,
+      width,
+      height,
+      sizeBytes: null,
+      mimeType: 'video/mp4',
+      hdr,
+      signedUrl: `https://storage.test/${role}.mp4`,
+    };
+  }
+  // Largest first, HDR last — the order the playback route returns.
+  const LADDER = [
+    rung('proxy_2160', 3840, 2160),
+    rung('proxy_1080', 1920, 1080),
+    rung('preview_video', 1280, 720),
+    rung('proxy_540', 960, 540),
+    rung('proxy_360', 640, 360),
+    rung('hdr_proxy', 1920, 1080, true),
+  ];
+  const SDR = { hdrDisplay: false, hevcMain10: false };
+
+  it('plays the smallest SDR rung that still fills the stage', () => {
+    expect(pickPlaybackRung(LADDER, { ...SDR, stageShortSidePx: 700 })?.role).toBe('preview_video');
+    expect(pickPlaybackRung(LADDER, { ...SDR, stageShortSidePx: 720 })?.role).toBe('preview_video');
+    expect(pickPlaybackRung(LADDER, { ...SDR, stageShortSidePx: 721 })?.role).toBe('proxy_1080');
+    expect(pickPlaybackRung(LADDER, { ...SDR, stageShortSidePx: 100 })?.role).toBe('proxy_360');
+  });
+
+  it('falls back to the largest SDR rung when the stage outgrows them all', () => {
+    const noUhd = LADDER.filter((r) => r.role !== 'proxy_2160');
+    expect(pickPlaybackRung(noUhd, { ...SDR, stageShortSidePx: 4000 })?.role).toBe('proxy_1080');
+  });
+
+  it('measures a portrait rung by its short side (the width)', () => {
+    const portrait = [rung('proxy_1080', 1080, 1920), rung('preview_video', 720, 1280)];
+    expect(pickPlaybackRung(portrait, { ...SDR, stageShortSidePx: 800 })?.role).toBe('proxy_1080');
+  });
+
+  it('reads the ladder’s nominal size for a rung with no dimensions', () => {
+    const unsized = [rung('proxy_1080', null, null), rung('proxy_540', null, null)];
+    expect(pickPlaybackRung(unsized, { ...SDR, stageShortSidePx: 500 })?.role).toBe('proxy_540');
+  });
+
+  it('plays the HDR proxy only on an HDR display that decodes HEVC Main 10', () => {
+    const stage = { stageShortSidePx: 700 };
+    expect(pickPlaybackRung(LADDER, { hdrDisplay: true, hevcMain10: true, ...stage })?.role).toBe(
+      'hdr_proxy',
+    );
+    expect(pickPlaybackRung(LADDER, { hdrDisplay: true, hevcMain10: false, ...stage })?.role).toBe(
+      'preview_video',
+    );
+    expect(pickPlaybackRung(LADDER, { hdrDisplay: false, hevcMain10: true, ...stage })?.role).toBe(
+      'preview_video',
+    );
+  });
+
+  it('never hands an SDR screen the HDR proxy, even when it is all there is', () => {
+    expect(
+      pickPlaybackRung([LADDER[5] as LibraryPlaybackRung], { ...SDR, stageShortSidePx: 700 }),
+    ).toBeNull();
+  });
+
+  it('is null for an empty ladder', () => {
+    expect(
+      pickPlaybackRung([], { hdrDisplay: true, hevcMain10: true, stageShortSidePx: 700 }),
+    ).toBeNull();
   });
 });

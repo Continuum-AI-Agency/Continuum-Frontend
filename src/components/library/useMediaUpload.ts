@@ -1,6 +1,5 @@
 'use client';
 
-import { classifyLibraryFile } from '@continuum/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { uploadCompanionPreview } from '@/lib/library/assetPreview';
@@ -32,6 +31,8 @@ export type UploadItem = {
   pausedBy?: 'user' | 'network';
   // A sidecar preview waits for its source asset to exist before it can attach.
   afterId?: string;
+  // Refused before any byte moved (a cap, a font): named in the strip, never retried.
+  refused?: boolean;
 };
 
 type UploadJob = {
@@ -40,10 +41,6 @@ type UploadJob = {
   controller: AbortController | null;
   cancelled: boolean;
 };
-
-export function isAcceptedUploadFile(file: File): boolean {
-  return classifyLibraryFile({ fileName: file.name, mimeType: file.type }).accepted;
-}
 
 // ---- Pure queue transitions: the order of `items` IS the queue order. --------
 
@@ -82,7 +79,7 @@ export function moveUploadItem(
 /** Back into the queue at its current position (resume after pause, or retry after error). */
 export function requeueUpload(items: readonly UploadItem[], id: string): UploadItem[] {
   return items.map((item) =>
-    item.id === id && (item.status === 'paused' || item.status === 'error')
+    item.id === id && !item.refused && (item.status === 'paused' || item.status === 'error')
       ? { ...item, status: 'queued', error: undefined, pausedBy: undefined }
       : item,
   );
@@ -239,7 +236,9 @@ export function useMediaUpload(
   }, []);
 
   const uploadFiles = useCallback(async (fileList: FileList | File[] | null) => {
-    const files = Array.from(fileList ?? []).filter(isAcceptedUploadFile);
+    // Every file is queued — the Library takes any type. One it cannot take (a cap, a font)
+    // is still listed, by name, with the reason; nothing is dropped silently.
+    const files = Array.from(fileList ?? []);
     if (files.length === 0) return;
 
     const idFor = new Map<File, string>();
@@ -265,7 +264,7 @@ export function useMediaUpload(
         sizeBytes: file.size,
         progress: 0,
         status: refusal ? 'error' : 'queued',
-        ...(refusal ? { error: refusal } : {}),
+        ...(refusal ? { error: refusal, refused: true } : {}),
         ...(afterId ? { afterId } : {}),
       };
     });

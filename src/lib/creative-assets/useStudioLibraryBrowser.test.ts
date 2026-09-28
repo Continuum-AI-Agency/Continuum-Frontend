@@ -35,6 +35,29 @@ describe('Studio library browse destinations', () => {
     expect(params?.get('mediaType')).toBe('project_file');
   });
 
+  test('Home + Audio or + Project files browses the whole Library, not an image/video-only Home', () => {
+    for (const [kind, mediaType] of [
+      ['audio', 'audio'],
+      ['file', 'project_file'],
+    ] as const) {
+      const params = buildStudioLibraryBrowseParams(
+        brandId,
+        { source: 'all', kind, destination: 'home' },
+        null,
+      );
+      expect(params?.get('destination')).toBe('everything');
+      expect(params?.get('mediaType')).toBe(mediaType);
+    }
+    // Home + Images keeps its own meaning.
+    expect(
+      buildStudioLibraryBrowseParams(
+        brandId,
+        { source: 'all', kind: 'image', destination: 'home' },
+        null,
+      )?.get('destination'),
+    ).toBe('home');
+  });
+
   test('Elements is not an asset list', () => {
     expect(
       buildStudioLibraryBrowseParams(
