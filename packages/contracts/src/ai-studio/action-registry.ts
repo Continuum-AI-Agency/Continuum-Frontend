@@ -324,6 +324,45 @@ const textPlacementConfig = z.object({
    * colour or not exist".
    */
   fallbackInk: z.boolean().default(true),
+  /**
+   * A solid plate behind the block, snug to the words — what makes a CTA read as a button.
+   *
+   * Part of the TREATMENT, not a second layer: the contrast probe composites it before it
+   * measures, so a plated block clears on the plate's own contrast rather than walking a ladder
+   * built for a headline over a photo. The plate is black or white, whichever the ink reads on.
+   */
+  plate: z.enum(['none', 'pill', 'box', 'band', 'column']).default('none'),
+  /**
+   * The plate's colour — a brand or product colour the caller contrast-checked against the
+   * ink. Null keeps black or white. `band` is the split layout's colour block: full width, on to
+   * the nearer frame edge; `column` is the same block split the other way, full height, on to
+   * the nearer side edge.
+   */
+  plateHex: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullable()
+    .default(null),
+  /** Paragraphs of a stack sit flush right (the reference headline) or centred on the column. */
+  align: z.enum(['right', 'center']).default('right'),
+  /**
+   * Type size against the calibrated reference headline; 1 IS the reference. The measure is not
+   * scaled, so a bigger headline breaks into more lines rather than overrunning its column. Up
+   * to 10 for one display word set at 70-90 % of the frame width.
+   */
+  scale: z.number().min(0.5).max(10).default(1),
+  /**
+   * The size of an all-light paragraph — a subhead under a cover headline — on the same scale.
+   * Null sizes it with `scale`, which is right for the reference headline and far too big under
+   * a 1.6x cover line.
+   */
+  subScale: z.number().min(0.5).max(4).nullable().default(null),
+  /**
+   * A face Continuum ships and Render serves, named by the step instead of read off the brand:
+   * the display face of a two-face layout (one giant word over a caption in the brand's face).
+   * Null reads the brand's face.
+   */
+  family: z.enum(['Anton', 'Montserrat', 'Inter', 'Cormorant Garamond']).nullable().default(null),
 });
 
 /** WHERE a mark sits and how strongly it reads. Shared by the still and the clip

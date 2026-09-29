@@ -1480,10 +1480,12 @@ export type ApiRenderBatchShareResponse = z.infer<typeof apiRenderBatchShareResp
 
 export const API_RENDER_SUGGEST_ROWS_ROUTE = '/api/ai-studio/renders/suggest-rows';
 export const API_RENDER_DRAFT_SOURCES_STATUS_ROUTE = '/api/ai-studio/renders/draft-sources/status';
+export const API_RENDER_DRAFT_DOCUMENTS_MAX = 40;
+export const API_RENDER_DRAFT_MEDIA_MAX = 40;
 export const apiRenderDraftSourcesStatusRequestSchema = z
   .object({
     brandId: z.string().uuid(),
-    documentIds: z.array(z.string().uuid()).min(1).max(5),
+    documentIds: z.array(z.string().uuid()).min(1).max(API_RENDER_DRAFT_DOCUMENTS_MAX),
   })
   .strict();
 export type ApiRenderDraftSourcesStatusRequest = z.infer<
@@ -1512,8 +1514,8 @@ export const apiRenderSuggestRowsRequestSchema = z
     count: z.number().int().min(1).max(API_RENDER_SUGGEST_ROWS_MAX).default(5),
     /** Count is a ceiling; the model chooses the useful rows and variations. */
     autoCount: z.boolean().default(false),
-    documentIds: z.array(z.string().uuid()).max(5).default([]),
-    mediaAssetIds: z.array(z.string().uuid()).max(6).default([]),
+    documentIds: z.array(z.string().uuid()).max(API_RENDER_DRAFT_DOCUMENTS_MAX).default([]),
+    mediaAssetIds: z.array(z.string().uuid()).max(API_RENDER_DRAFT_MEDIA_MAX).default([]),
     /** Variations drafted under each new row, each changing one or two of its values. */
     forksPerRow: z.number().int().min(0).max(API_RENDER_SUGGEST_FORKS_MAX).default(0),
     /** Values to keep across every proposed row — a product already chosen, a fixed price. */

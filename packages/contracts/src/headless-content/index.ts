@@ -11,6 +11,13 @@ export const headlessAssetRefSchema = z
   })
   .strict();
 export type HeadlessAssetRef = z.infer<typeof headlessAssetRefSchema>;
+export const headlessVisualReferenceSchema = z
+  .object({
+    role: z.enum(['product', 'scene', 'style', 'pose']),
+    asset: headlessAssetRefSchema,
+  })
+  .strict();
+export type HeadlessVisualReference = z.infer<typeof headlessVisualReferenceSchema>;
 
 export const characterSpecSchema = z
   .object({
@@ -203,6 +210,7 @@ export const headlessShotSchema = z
       .strict(),
     continuityFromShotId: z.string().min(1).nullable(),
     approvedStartFrame: headlessAssetRefSchema.nullable(),
+    referenceImages: z.array(headlessVisualReferenceSchema).max(2).default([]),
     selectedClip: z
       .object({ asset: headlessAssetRefSchema, durationSec: z.number().positive() })
       .strict()

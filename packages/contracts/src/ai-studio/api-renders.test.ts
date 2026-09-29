@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import {
   API_RENDER_DESTINATIONS_ROUTE,
+  API_RENDER_DRAFT_DOCUMENTS_MAX,
+  API_RENDER_DRAFT_MEDIA_MAX,
   API_RENDER_MEDIA_LIST_MAX,
   apiRenderApprovalSummarySchema,
   apiRenderBatchPreflightRequestSchema,
@@ -9,11 +11,13 @@ import {
   apiRenderDeliveryDestinationsResponseSchema,
   apiRenderDeliveryTargetSchema,
   apiRenderDestinationRoute,
+  apiRenderDraftSourcesStatusRequestSchema,
   apiRenderJobListQuerySchema,
   apiRenderJobSchema,
   apiRenderPreflightRequestSchema,
   apiRenderPreflightResponseSchema,
   apiRenderSlackChannelListResponseSchema,
+  apiRenderSuggestRowsRequestSchema,
   apiRenderTemplateContractSchema,
   apiRenderTemplateSummarySchema,
   apiRenderVariableKeySchema,
@@ -30,6 +34,33 @@ import {
 } from './workflow-graph';
 
 describe('API render contracts', () => {
+  it('accepts larger draft folders in the standalone frontend contract', () => {
+    expect(API_RENDER_DRAFT_DOCUMENTS_MAX).toBe(40);
+    expect(API_RENDER_DRAFT_MEDIA_MAX).toBe(40);
+    const ids = (count: number) =>
+      Array.from(
+        { length: count },
+        (_, index) => `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      );
+    const brandId = '00000000-0000-4000-8000-000000000001';
+    expect(
+      apiRenderSuggestRowsRequestSchema.safeParse({
+        brandId,
+        templateKey: 'vivo-hero',
+        contractHash: 'contract-1',
+        prompt: '',
+        documentIds: ids(API_RENDER_DRAFT_DOCUMENTS_MAX),
+        mediaAssetIds: ids(API_RENDER_DRAFT_MEDIA_MAX),
+      }).success,
+    ).toBe(true);
+    expect(
+      apiRenderDraftSourcesStatusRequestSchema.safeParse({
+        brandId,
+        documentIds: ids(API_RENDER_DRAFT_DOCUMENTS_MAX),
+      }).success,
+    ).toBe(true);
+  });
+
   it('accepts stable public aliases and version-pinned image inputs', () => {
     const request = apiRenderPreflightRequestSchema.parse({
       brandId: '00000000-0000-4000-8000-000000000001',

@@ -833,7 +833,7 @@ describe('RenderJobsGrid', () => {
       outputs: [
         { ...MADRID.outputs[0]!, id: 'preview', fileName: 'preview_4_5.jpg',
           url: 'https://cdn.test/preview.jpg', assetId: null, versionId: null },
-        { ...MADRID.outputs[0]!, id: 'asset', fileName: 'asset_4_5.jpg',
+        { ...MADRID.outputs[0]!, id: 'asset', fileName: '_crl3e9n.jpg',
           url: 'https://cdn.test/asset.jpg' },
       ],
     };
@@ -849,7 +849,9 @@ describe('RenderJobsGrid', () => {
     const row = (await screen.findByText('UTEC 4:5')).closest('tr') as HTMLElement;
     expect(row.querySelector('img')?.getAttribute('src')).toBe('https://cdn.test/asset.jpg');
     fireEvent.click(row);
-    expect(screen.getByRole('group', { name: 'Render preview' }).querySelector('img')?.getAttribute('src'))
+    const preview = screen.getByRole('group', { name: 'Render preview' });
+    expect(preview.querySelector('[aria-pressed="true"]')?.textContent).toContain('4:5');
+    expect(preview.querySelector('img')?.getAttribute('src'))
       .toBe('https://cdn.test/asset.jpg');
   }, 30_000);
   test('a failed render reads its whole sentence, a broken thumbnail falls back to the tile, and Proof and Final are marked', async () => {

@@ -56,6 +56,7 @@ import { SendContinuumReportDialog } from '@/components/dashboard/SendContinuumR
 import { Reel, ReelContent, type ReelItem, ReelVideo } from '@/components/kibo-ui/reel';
 import { PinToAgentButton } from '@/components/organic/agent/PinToAgentButton';
 import { CreativeStrategyCard } from '@/components/organic/CreativeStrategyCard';
+import { OrganicWinnersSection } from '@/components/organic/OrganicWinnersSection';
 import { PostQuickLook } from '@/components/organic/cards/PostQuickLook';
 import {
   type CompareExportSelection,
@@ -1881,6 +1882,8 @@ function Dashboard({
       ) : null}
 
       {isAccountView ? <CreativeStrategyCard brandId={brandId} /> : null}
+
+      {isAccountView && platform === 'instagram' ? <OrganicWinnersSection brandId={brandId} /> : null}
 
       {isAccountView && platform !== 'tiktok' ? (
         <OrganicAudienceLocationMapCard

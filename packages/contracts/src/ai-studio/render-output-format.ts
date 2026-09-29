@@ -10,6 +10,7 @@ import { encodeContainerOf } from './api-renders';
  *
  * The rule is inferred from real template-133 renders, so it refuses rather than guesses: a name
  * two formats could answer is `null`, and a caller shows the estimate instead of the wrong frame.
+ * Opaque PSD output names are unambiguous when the template has one delivery format.
  */
 
 export interface RenderOutputFormatCandidate {
@@ -47,6 +48,8 @@ export function matchOutputFormat<T extends RenderOutputFormatCandidate>(
   const dot = fileName.lastIndexOf('.');
   const stem = dot > 0 ? fileName.slice(0, dot) : fileName;
   const isVideo = dot > 0 && VIDEO_EXTENSIONS.has(fileName.slice(dot + 1).toLowerCase());
+  if (formats.length === 1 && /^_[a-z0-9]+$/i.test(stem) && /\.(?:jpe?g|png|webp|mp4|mov|mxf|webm|gif)$/i.test(fileName))
+    return formats[0] ?? null;
   const underscore = stem.lastIndexOf('_');
   if (underscore <= 0) return null;
   const named = slug(stem.slice(0, underscore));

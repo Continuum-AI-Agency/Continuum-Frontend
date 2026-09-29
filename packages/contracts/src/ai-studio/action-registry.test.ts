@@ -123,6 +123,14 @@ describe('image.text', () => {
       escalate: true,
       fallbackType: true,
       fallbackInk: true,
+      // No plate unless asked: a headline over a photo is rescued by the ladder, not a button.
+      plate: 'none',
+      plateHex: null,
+      align: 'right',
+      scale: 1,
+      subScale: null,
+      // The brand's face unless a step names one Continuum ships (a display word in Anton).
+      family: null,
     });
   });
 
@@ -162,10 +170,14 @@ describe('image.text', () => {
   it('asks nothing about design SECTIONS — type is typography, ink is the palette', () => {
     const parsed = ACTION_DEFS['image.text'].config.parse({});
     expect(Object.keys(parsed as object).sort()).toEqual([
+      // How a stack's paragraphs line up: layout, not a colour or a section.
+      'align',
       'anchor',
       'escalate',
       'fallbackInk',
       'fallbackType',
+      // A face Continuum ships, named by a step: typography, not a design-system section.
+      'family',
       // The ONE colour knob, and it is a colour rather than a section: `inkHex` is a literal
       // #rrggbb the user pointed at, mutually exclusive with `inkToken`. Added here
       // deliberately — this list is the guard against a knob arriving unnoticed, so a change
@@ -177,6 +189,13 @@ describe('image.text', () => {
       'minContrast',
       'offsetX',
       'offsetY',
+      // A shape behind the block (a CTA button, a colour block), and its colour: a value the
+      // caller contrast-checked against the ink, never a second palette source.
+      'plate',
+      'plateHex',
+      // Sizes, not sources: the faces and the ink still come from the brand.
+      'scale',
+      'subScale',
     ]);
   });
 

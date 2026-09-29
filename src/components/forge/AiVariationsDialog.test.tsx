@@ -76,6 +76,12 @@ beforeEach(() => {
   draftSourcesStatus.mockClear();
   uploadBrandDocument.mockClear();
   uploadMediaAsset.mockClear();
+  uploadBrandDocument.mockImplementation(async () => ({
+    documentId: '99999999-9999-4999-8999-999999999999',
+  }));
+  uploadMediaAsset.mockImplementation(async () => ({
+    assetId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  }));
 });
 afterEach(cleanup);
 
@@ -173,6 +179,182 @@ describe('AiDraftDialog', () => {
       documentIds: ['99999999-9999-4999-8999-999999999999'],
       mediaAssetIds: ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'],
     });
+  });
+
+  test('starts every selected upload before waiting for any one to finish', async () => {
+    let finishDocument!: (value: { documentId: string }) => void;
+    let finishMedia!: (value: { assetId: string }) => void;
+    uploadBrandDocument.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishDocument = resolve;
+        }),
+    );
+    uploadMediaAsset.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishMedia = resolve;
+        }),
+    );
+    render(
+      <AiDraftDialog
+        open
+        onOpenChange={() => undefined}
+        brandId={BRAND}
+        bindingId={null}
+        contract={CONTRACT}
+        parent={null}
+        onDrafted={() => undefined}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Choose source files'), {
+      target: {
+        files: [
+          new File(['offer'], 'offer.txt', { type: 'text/plain' }),
+          new File(['image'], 'hero.png', { type: 'image/png' }),
+        ],
+      },
+    });
+    await waitFor(() => {
+      expect(uploadBrandDocument).toHaveBeenCalledTimes(1);
+      expect(uploadMediaAsset).toHaveBeenCalledTimes(1);
+    });
+    finishDocument({ documentId: '99999999-9999-4999-8999-999999999999' });
+    finishMedia({ assetId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Draft' }).hasAttribute('disabled')).toBe(false),
+    );
+  });
+
+  test('starts every file in a larger selection before any upload finishes', async () => {
+    const finish: Array<(value: { documentId: string }) => void> = [];
+    uploadBrandDocument.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish.push(resolve);
+        }),
+    );
+    render(
+      <AiDraftDialog
+        open
+        onOpenChange={() => undefined}
+        brandId={BRAND}
+        bindingId={null}
+        contract={CONTRACT}
+        parent={null}
+        onDrafted={() => undefined}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Choose source files'), {
+      target: {
+        files: Array.from(
+          { length: 7 },
+          (_, index) => new File(['offer'], `offer-${index}.txt`, { type: 'text/plain' }),
+        ),
+      },
+    });
+    await waitFor(() => expect(uploadBrandDocument).toHaveBeenCalledTimes(7));
+    finish.forEach((resolve, index) =>
+      resolve({
+        documentId: `99999999-9999-4999-8999-${String(index + 1).padStart(12, '0')}`,
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Draft' }).hasAttribute('disabled')).toBe(false),
+    );
+  });
+
+  test('flattens a picked folder and validates limits before uploading', async () => {
+    render(
+      <AiDraftDialog
+        open
+        onOpenChange={() => undefined}
+        brandId={BRAND}
+        bindingId={null}
+        contract={CONTRACT}
+        parent={null}
+        onDrafted={() => undefined}
+      />,
+    );
+    const document = new File(['offer'], 'offer.txt', { type: 'text/plain' });
+    const image = new File(['image'], 'hero.png', { type: 'image/png' });
+    Object.defineProperty(document, 'webkitRelativePath', { value: 'Campaign/Copy/offer.txt' });
+    Object.defineProperty(image, 'webkitRelativePath', { value: 'Campaign/Photos/hero.png' });
+    fireEvent.change(screen.getByLabelText('Choose source folder'), {
+      target: { files: [document, image] },
+    });
+    await waitFor(() => expect(uploadMediaAsset).toHaveBeenCalledTimes(1));
+    expect(uploadBrandDocument).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/Campaign\/Copy\/offer.txt/)).toBeTruthy();
+
+    const excess = Array.from({ length: 40 }, (_, index) => {
+      const file = new File(['offer'], `extra-${index}.txt`, { type: 'text/plain' });
+      Object.defineProperty(file, 'webkitRelativePath', { value: `Campaign/${file.name}` });
+      return file;
+    });
+    fireEvent.change(screen.getByLabelText('Choose source folder'), { target: { files: excess } });
+    expect((await screen.findByRole('alert')).textContent).toContain('40 documents');
+    expect(uploadBrandDocument).toHaveBeenCalledTimes(1);
+  });
+
+  test('accepts a dropped folder and keeps successful files when another upload fails', async () => {
+    uploadBrandDocument.mockImplementationOnce(async () => {
+      throw new Error('storage unavailable');
+    });
+    render(
+      <AiDraftDialog
+        open
+        onOpenChange={() => undefined}
+        brandId={BRAND}
+        bindingId={null}
+        contract={CONTRACT}
+        parent={null}
+        onDrafted={() => undefined}
+      />,
+    );
+    const document = new File(['offer'], 'offer.txt', { type: 'text/plain' });
+    const image = new File(['image'], 'hero.png', { type: 'image/png' });
+    let read = false;
+    const folder = {
+      kind: 'file',
+      webkitGetAsEntry: () => ({
+        isFile: false,
+        isDirectory: true,
+        name: 'Campaign',
+        createReader: () => ({
+          readEntries: (resolve: (entries: unknown[]) => void) => {
+            resolve(
+              read
+                ? []
+                : [
+                    {
+                      isFile: true,
+                      isDirectory: false,
+                      name: 'offer.txt',
+                      file: (done: (file: File) => void) => done(document),
+                    },
+                    {
+                      isFile: true,
+                      isDirectory: false,
+                      name: 'hero.png',
+                      file: (done: (file: File) => void) => done(image),
+                    },
+                  ],
+            );
+            read = true;
+          },
+        }),
+      }),
+    };
+    fireEvent.drop(screen.getByRole('dialog'), { dataTransfer: { files: [], items: [folder] } });
+    await waitFor(() => {
+      expect(uploadBrandDocument).toHaveBeenCalledTimes(1);
+      expect(uploadMediaAsset).toHaveBeenCalledTimes(1);
+    });
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Campaign/offer.txt: storage unavailable',
+    );
+    expect(screen.getByText(/Campaign\/hero.png · Ready/)).toBeTruthy();
   });
 
   test('an unavailable writer is said plainly and nothing reaches the grid', async () => {

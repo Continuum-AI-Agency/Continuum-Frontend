@@ -22202,6 +22202,39 @@ export type Database = {
         }
         Relationships: []
       }
+      instagram_webhook_events: {
+        Row: {
+          event_key: string
+          event_time: string | null
+          field: string
+          id: number
+          ig_account_id: string
+          object: string
+          payload: Json
+          received_at: string
+        }
+        Insert: {
+          event_key: string
+          event_time?: string | null
+          field: string
+          id?: never
+          ig_account_id: string
+          object: string
+          payload: Json
+          received_at?: string
+        }
+        Update: {
+          event_key?: string
+          event_time?: string | null
+          field?: string
+          id?: never
+          ig_account_id?: string
+          object?: string
+          payload?: Json
+          received_at?: string
+        }
+        Relationships: []
+      }
       media_insights_cache: {
         Row: {
           expires_at: string

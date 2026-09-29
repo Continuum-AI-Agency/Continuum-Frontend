@@ -72,6 +72,12 @@ describe('the three real template-133 jobs, in the order the fleet returned them
 });
 
 describe('the name rule', () => {
+  test('an opaque farm filename belongs to a template with one 4:5 delivery comp', () => {
+    const formats = [{ id: '4:5', ratio: '4:5', comp: comp('Variante 1', 1080, 1350) }];
+    expect(matchOutputFormat('_crl3e9n.jpg', formats)?.id).toBe('4:5');
+    expect(matchOutputFormat('_crl3e9n.jpg', TEMPLATE_133)).toBeNull();
+  });
+
   test('runs of separators collapse, and case never matters', () => {
     const formats = [
       { id: 'feed', ratio: '4:5', comp: comp('Promo -- Feed 4:5', 1080, 1350) },

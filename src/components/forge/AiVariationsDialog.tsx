@@ -1,6 +1,8 @@
 'use client';
 
 import {
+  API_RENDER_DRAFT_DOCUMENTS_MAX,
+  API_RENDER_DRAFT_MEDIA_MAX,
   API_RENDER_SUGGEST_ROWS_MAX,
   type ApiRenderInputValue,
   type ApiRenderRowGate,
@@ -9,7 +11,7 @@ import {
   classifyLibraryFile,
   readableLayerName,
 } from '@continuum/contracts';
-import { Loader2, Paperclip, Sparkles, TriangleAlert, X } from 'lucide-react';
+import { FolderOpen, Loader2, Paperclip, Sparkles, TriangleAlert, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { Button } from '@/components/ui/button';
@@ -19,6 +21,7 @@ import { Popover, PopoverContent } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
 import { uploadBrandDocument } from '@/lib/documents/uploadBrandDocument';
 import { ACCEPTED_DOCUMENT_EXTENSIONS, hasDocumentExtension } from '@/lib/documents/uploadLimits';
+import { folderFilesFromDrop, folderFilesFromInput } from '@/lib/library/folderUpload';
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { describeRenderDiscoveryFailure } from '@/StudioCanvas/nodes/api-render/renderDiscoveryCopy';
@@ -71,7 +74,13 @@ export type AiDraftParent = {
   values: Record<string, ApiRenderInputValue>;
 };
 
-type DraftFile = { name: string; id: string; kind: 'document' | 'media'; status: 'uploading' | 'processing' | 'ready' | 'error' };
+type DraftFile = {
+  name: string;
+  id: string;
+  kind: 'document' | 'media';
+  status: 'uploading' | 'processing' | 'ready' | 'error';
+};
+type SelectedFile = { file: File; name: string };
 
 export function AiDraftDialog({
   open,
@@ -103,6 +112,7 @@ export function AiDraftDialog({
   const [files, setFiles] = useState<DraftFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [drafted, setDrafted] = useState<ApiRenderSuggestRowsResponse | null>(null);
@@ -118,72 +128,149 @@ export function AiDraftDialog({
   }, [open, parent?.id]);
 
   useEffect(() => {
-    const pending = files.filter((file) => file.kind === 'document' && file.status === 'processing');
+    const pending = files.filter(
+      (file) => file.kind === 'document' && file.status === 'processing',
+    );
     if (!open || pending.length === 0) return;
     const timer = setTimeout(() => {
-      void Promise.all(pending.map(async (file) => {
-        try {
-          const result = await apiRendersApi.draftSourcesStatus({ brandId, documentIds: [file.id] });
-          setFiles((current) => current.map((item) => item.id === file.id ? { ...item, status: result.status } : item));
-        } catch {
-          setFiles((current) => current.map((item) => item.id === file.id ? { ...item, status: 'error' } : item));
-        }
-      }));
+      void Promise.all(
+        pending.map(async (file) => {
+          try {
+            const result = await apiRendersApi.draftSourcesStatus({
+              brandId,
+              documentIds: [file.id],
+            });
+            setFiles((current) =>
+              current.map((item) =>
+                item.id === file.id ? { ...item, status: result.status } : item,
+              ),
+            );
+          } catch {
+            setFiles((current) =>
+              current.map((item) => (item.id === file.id ? { ...item, status: 'error' } : item)),
+            );
+          }
+        }),
+      );
     }, 2_000);
     return () => clearTimeout(timer);
   }, [brandId, files, open]);
 
-  const upload = async (selected: FileList | null) => {
-    if (!selected?.length) return;
-    setUploading(true);
+  const upload = async (selected: SelectedFile[]) => {
+    if (!selected.length || uploading || busy) return;
     setProblem(null);
-    const next = [...files];
+    const entries = selected.map(({ file, name }) => {
+      const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
+      const kind =
+        format.accepted && (format.originalKind === 'image' || format.originalKind === 'video')
+          ? 'media'
+          : hasDocumentExtension(file.name)
+            ? 'document'
+            : null;
+      return {
+        file,
+        pending: { name, id: crypto.randomUUID(), kind, status: 'uploading' as const },
+      };
+    });
+    const unsupported = entries.find(({ pending }) => !pending.kind);
+    if (unsupported) {
+      setProblem(`Unsupported file: ${unsupported.pending.name}`);
+      return;
+    }
+    const active = files.filter((file) => file.status !== 'error');
+    if (
+      active.filter((file) => file.kind === 'document').length +
+        entries.filter(({ pending }) => pending.kind === 'document').length >
+      API_RENDER_DRAFT_DOCUMENTS_MAX
+    ) {
+      setProblem(`Add at most ${API_RENDER_DRAFT_DOCUMENTS_MAX} documents per draft.`);
+      return;
+    }
+    if (
+      active.filter((file) => file.kind === 'media').length +
+        entries.filter(({ pending }) => pending.kind === 'media').length >
+      API_RENDER_DRAFT_MEDIA_MAX
+    ) {
+      setProblem(`Add at most ${API_RENDER_DRAFT_MEDIA_MAX} images or videos per draft.`);
+      return;
+    }
+    setUploading(true);
+    setFiles((current) => [...current, ...entries.map(({ pending }) => pending as DraftFile)]);
     try {
-      for (const file of Array.from(selected)) {
-        const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
-        if (
-          format.accepted &&
-          (format.originalKind === 'image' || format.originalKind === 'video')
-        ) {
-          if (next.filter((item) => item.kind === 'media').length >= 6)
-            throw new Error('Add at most six images or videos per draft.');
-          const pending = { name: file.name, id: crypto.randomUUID(), kind: 'media' as const, status: 'uploading' as const };
-          setFiles((current) => [...current, pending]);
-          try {
-            const result = await uploadMediaAsset({ brandId, file });
-            const ready: DraftFile = { ...pending, id: result.assetId, status: 'ready' };
-            next.push(ready);
-            setFiles((current) => current.map((item) => item.id === pending.id ? ready : item));
-          } catch (error) {
-            setFiles((current) => current.map((item) => item.id === pending.id ? { ...item, status: 'error' } : item));
-            throw error;
-          }
-        } else if (hasDocumentExtension(file.name)) {
-          if (next.filter((item) => item.kind === 'document').length >= 5)
-            throw new Error('Add at most five documents per draft.');
-          const pending = { name: file.name, id: crypto.randomUUID(), kind: 'document' as const, status: 'uploading' as const };
-          setFiles((current) => [...current, pending]);
-          try {
-            const result = await uploadBrandDocument({ brandId, file });
-            const processing: DraftFile = { ...pending, id: result.documentId, status: 'processing' };
-            next.push(processing);
-            setFiles((current) => current.map((item) => item.id === pending.id ? processing : item));
-          } catch (error) {
-            setFiles((current) => current.map((item) => item.id === pending.id ? { ...item, status: 'error' } : item));
-            throw error;
-          }
-        } else throw new Error(`Unsupported file: ${file.name}`);
-      }
-    } catch (error) {
-      setProblem(error instanceof Error ? error.message : 'Could not upload this file.');
+      const results = await Promise.allSettled(
+        entries.map(async ({ file, pending }) => {
+          const uploaded =
+            pending.kind === 'media'
+              ? {
+                  id: (await uploadMediaAsset({ brandId, file })).assetId,
+                  status: 'ready' as const,
+                }
+              : {
+                  id: (await uploadBrandDocument({ brandId, file })).documentId,
+                  status: 'processing' as const,
+                };
+          setFiles((current) =>
+            current.map((item) => (item.id === pending.id ? { ...item, ...uploaded } : item)),
+          );
+        }),
+      );
+      const failed = results.flatMap((result, index) => {
+        if (result.status === 'fulfilled') return [];
+        const pending = entries[index].pending;
+        setFiles((current) =>
+          current.map((item) => (item.id === pending.id ? { ...item, status: 'error' } : item)),
+        );
+        return [
+          `${pending.name}: ${result.reason instanceof Error ? result.reason.message : 'upload failed'}`,
+        ];
+      });
+      if (failed.length) setProblem(failed.join(' '));
     } finally {
-      if (fileInput.current) fileInput.current.value = '';
       setUploading(false);
     }
   };
 
+  const uploadFolder = (selected: FileList | null) => {
+    if (selected) {
+      const entries = folderFilesFromInput(selected)
+        .filter(({ folders }) => !folders.some((folder) => folder.startsWith('.')))
+        .map(({ file, folders }) => ({
+          file,
+          name: [...folders, file.name].join('/'),
+        }));
+      if (entries.length) void upload(entries);
+      else setProblem('This folder has no supported files.');
+    }
+  };
+
+  const dropFiles = (event: React.DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (uploading || busy) return;
+    const loose = Array.from(event.dataTransfer.files);
+    void folderFilesFromDrop(event.dataTransfer.items)
+      .then((entries) =>
+        upload(
+          entries
+            ? entries.map(({ file, folders }) => ({
+                file,
+                name: [...folders, file.name].join('/'),
+              }))
+            : loose.map((file) => ({ file, name: file.name })),
+        ),
+      )
+      .catch((error: unknown) =>
+        setProblem(error instanceof Error ? error.message : 'Could not read the folder.'),
+      );
+  };
+
   const draft = async () => {
-    if ((!prompt.trim() && files.length === 0) || maxRows < 1 || files.some((file) => file.status === 'error' || file.status === 'uploading')) return;
+    if (
+      (!prompt.trim() && files.length === 0) ||
+      maxRows < 1 ||
+      files.some((file) => file.status === 'error' || file.status === 'uploading')
+    )
+      return;
     setBusy(true);
     setProblem(null);
     try {
@@ -334,6 +421,8 @@ export function AiDraftDialog({
         align="start"
         className="max-h-[70vh] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto"
         aria-label={parent ? `Vary ${parent.label} with AI` : 'Draft rows with AI'}
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={dropFiles}
       >
         <h2 className="text-sm font-semibold">
           {parent ? `Vary “${parent.label}” with AI` : 'Draft rows with AI'}
@@ -367,23 +456,55 @@ export function AiDraftDialog({
             accept={`${ACCEPTED_DOCUMENT_EXTENSIONS},image/*,video/*`}
             className="sr-only"
             aria-label="Choose source files"
-            onChange={(event) => void upload(event.target.files)}
+            onChange={(event) => {
+              const entries = Array.from(event.target.files ?? []).map((file) => ({
+                file,
+                name: file.name,
+              }));
+              event.target.value = '';
+              void upload(entries);
+            }}
           />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="self-start gap-1.5"
-            disabled={uploading || busy}
-            onClick={() => fileInput.current?.click()}
-          >
-            {uploading ? (
-              <Loader2 className="size-3.5 animate-spin" aria-hidden />
-            ) : (
-              <Paperclip className="size-3.5" aria-hidden />
-            )}
-            {uploading ? 'Uploading…' : 'Add files'}
-          </Button>
+          <input
+            ref={folderInput}
+            type="file"
+            {...{ webkitdirectory: '' }}
+            multiple
+            className="sr-only"
+            aria-label="Choose source folder"
+            onChange={(event) => {
+              uploadFolder(event.target.files);
+              event.target.value = '';
+            }}
+          />
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={uploading || busy}
+              onClick={() => fileInput.current?.click()}
+            >
+              {uploading ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Paperclip className="size-3.5" aria-hidden />
+              )}
+              {uploading ? 'Uploading…' : 'Add files'}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={uploading || busy}
+              onClick={() => folderInput.current?.click()}
+            >
+              <FolderOpen className="size-3.5" aria-hidden />
+              Add folder
+            </Button>
+          </div>
           {files.length ? (
             <ul className="flex flex-col gap-1 text-xs">
               {files.map((file) => (
@@ -391,7 +512,16 @@ export function AiDraftDialog({
                   key={file.id}
                   className="flex items-center justify-between gap-2 rounded border px-2 py-1"
                 >
-                  <span className="truncate">{file.name} · {file.status === 'error' ? 'Could not read; remove and add again' : file.status === 'ready' ? `Ready · ${file.id}` : file.status === 'processing' ? 'Reading file…' : 'Uploading…'}</span>
+                  <span className="truncate">
+                    {file.name} ·{' '}
+                    {file.status === 'error'
+                      ? 'Could not read; remove and add again'
+                      : file.status === 'ready'
+                        ? `Ready · ${file.id}`
+                        : file.status === 'processing'
+                          ? 'Reading file…'
+                          : 'Uploading…'}
+                  </span>
                   <button
                     type="button"
                     aria-label={`Remove ${file.name}`}
@@ -408,7 +538,8 @@ export function AiDraftDialog({
           ) : null}
           <p className="text-xs text-muted-foreground">
             PDF, Word, PowerPoint, Excel, CSV, text, images, and video. Files stay in your brand
-            files.
+            files. Drop files or a folder here. Up to {API_RENDER_DRAFT_DOCUMENTS_MAX} documents and{' '}
+            {API_RENDER_DRAFT_MEDIA_MAX} images or videos.
           </p>
           {problem ? (
             <p role="alert" className="text-sm text-destructive">
@@ -428,7 +559,13 @@ export function AiDraftDialog({
           <Button
             type="button"
             className="gap-2"
-            disabled={busy || uploading || maxRows < 1 || files.some((file) => file.status === 'error' || file.status === 'uploading') || (!prompt.trim() && files.length === 0)}
+            disabled={
+              busy ||
+              uploading ||
+              maxRows < 1 ||
+              files.some((file) => file.status === 'error' || file.status === 'uploading') ||
+              (!prompt.trim() && files.length === 0)
+            }
             onClick={() => void draft()}
           >
             {busy ? (
