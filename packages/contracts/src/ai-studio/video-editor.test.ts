@@ -72,6 +72,20 @@ describe('editorRenderBlockers', () => {
     expect(editorRenderBlockers(withFootage(blank()))).toEqual([]);
   });
 
+  test('muting a video track silences it; its picture still renders', () => {
+    const project = withFootage(blank());
+    const muted = {
+      ...project,
+      tracks: project.tracks.map((track) => ({ ...track, muted: true })),
+    };
+    expect(editorRenderBlockers(muted)).toEqual([]);
+    const hidden = {
+      ...project,
+      tracks: project.tracks.map((track) => ({ ...track, enabled: false })),
+    };
+    expect(editorRenderBlockers(hidden)).toEqual(['The timeline is empty.']);
+  });
+
   test('a production project still answers to its approval gates', () => {
     const project = withFootage(blank());
     const production = editorProjectV2Schema.parse({
@@ -129,7 +143,11 @@ describe('op vocabulary', () => {
       expectedRevision: 3,
       commands: [{ commandType: 'split_clip', clipId: 'clip-1', splitAtSec: 2 }],
     });
-    expect(parsed.commands[0]).toEqual({ commandType: 'split_clip', clipId: 'clip-1', splitAtSec: 2 });
+    expect(parsed.commands[0]).toEqual({
+      commandType: 'split_clip',
+      clipId: 'clip-1',
+      splitAtSec: 2,
+    });
   });
 });
 
@@ -201,9 +219,15 @@ describe('whole-state undo', () => {
   test('restoring a snapshot brings back the format and the markers, not only the tracks', () => {
     const before = withFootage(blank());
     const after = batch(before, [
-      { commandType: 'set_project_metadata', canvas: { ...before.canvas, width: 1920, height: 1080 } },
+      {
+        commandType: 'set_project_metadata',
+        canvas: { ...before.canvas, width: 1920, height: 1080 },
+      },
       { commandType: 'set_export_settings', exportSettings: exportSettingsForPreset('youtube') },
-      { commandType: 'set_markers', markers: [{ id: 'm', kind: 'beat', timeSec: 1, label: 'Beat 1' }] },
+      {
+        commandType: 'set_markers',
+        markers: [{ id: 'm', kind: 'beat', timeSec: 1, label: 'Beat 1' }],
+      },
     ]);
     const restored = batch(after, [
       {

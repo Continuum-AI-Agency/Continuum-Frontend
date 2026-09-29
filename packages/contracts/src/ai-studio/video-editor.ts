@@ -100,12 +100,9 @@ export const editorRenderBlockers = (project: EditorProjectV2): string[] => {
       blockers.push('Finish the production approval gates before rendering.');
     }
   }
+  // `muted` silences a video track; only `enabled` takes its picture away.
   const hasPicture = project.tracks.some(
-    (track) =>
-      track.kind === 'video' &&
-      track.enabled &&
-      !track.muted &&
-      track.clips.some((clip) => clip.enabled),
+    (track) => track.kind === 'video' && track.enabled && track.clips.some((clip) => clip.enabled),
   );
   if (!hasPicture) blockers.push('The timeline is empty.');
   return blockers;

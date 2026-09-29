@@ -560,7 +560,7 @@ const OVERLAP_TRANSITION_TYPES = new Set(['crossfade', 'slide', 'wipe', 'zoom', 
 
 const assertCanonicalTransitionGeometry = (project: EditorProjectV2): void => {
   const primary = project.tracks
-    .filter((track) => track.kind === 'video' && track.enabled && !track.muted)
+    .filter((track) => track.kind === 'video' && track.enabled)
     .sort((left, right) => left.order - right.order)[0];
   if (!primary) {
     throw new EditorProjectConflictError(
