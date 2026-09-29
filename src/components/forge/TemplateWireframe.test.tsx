@@ -69,13 +69,16 @@ describe('wireframeFrames', () => {
     const [square, story] = wireframeFrames(PARSE);
     expect(square).toEqual({
       ratio: '1:1',
+      comp: 'Square',
       width: 1080,
       height: 1080,
       // Measured in a 540 px comp, drawn on the 1080 px frame.
-      boxes: [{ key: 'Headline', kind: 'text', label: 'Headline', box: [0, 0, 1080, 200] }],
+      boxes: [{ key: 'Headline', kind: 'text', label: 'Headline', box: [0, 0, 1080, 200],
+        instance: { compId: 1, layerId: 1, compSize: [540, 540] } }],
     });
     expect(story?.boxes).toEqual([
-      { key: 'Headline', kind: 'text', label: 'Headline', box: [10, 20, 30, 40] },
+      { key: 'Headline', kind: 'text', label: 'Headline', box: [10, 20, 30, 40],
+        instance: { compId: 2, layerId: 1, compSize: [1080, 1920] } },
       { key: 'Product', kind: 'image', label: 'Product', box: [100, 100, 900, 900] },
     ]);
   });

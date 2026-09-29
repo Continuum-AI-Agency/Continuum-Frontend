@@ -628,3 +628,27 @@ export function normalizeTemplateFontFamily(value: string): string {
     .toLowerCase()
     .replace(/[\s_-]+/g, '');
 }
+
+/** A text move is measured in the layer's own composition, not the browser's preview pixels. */
+export const templateTextMoveRequestSchema = z.object({
+  brandId: z.string().uuid(),
+  expectedVersionId: z.string().uuid(),
+  moves: z.array(z.object({
+    compId: z.number().int().positive(),
+    layerId: z.number().int().positive(),
+    dx: z.number().finite(),
+    dy: z.number().finite(),
+    dw: z.number().finite().optional(),
+    dh: z.number().finite().optional(),
+    font: z.string().trim().min(1).max(200).optional(),
+  }).strict()).min(1),
+}).strict();
+export type TemplateTextMoveRequest = z.infer<typeof templateTextMoveRequestSchema>;
+
+export const templateTextMoveResponseSchema = z.object({
+  filename: z.string().min(1),
+  checksum: z.string().regex(/^[a-f0-9]{64}$/),
+  slotKeys: z.array(z.string().min(1)).min(1),
+  inlineBase64: z.string().min(1),
+}).strict();
+export type TemplateTextMoveResponse = z.infer<typeof templateTextMoveResponseSchema>;

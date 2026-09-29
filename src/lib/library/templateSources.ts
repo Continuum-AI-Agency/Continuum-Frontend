@@ -11,12 +11,16 @@ import type {
   WorkspaceTemplate,
 } from '@continuum/contracts';
 import {
+  type FontInventoryRow,
+  fontInventoryResponseSchema,
   type RenameTemplateSourceRequest,
   readFontNames,
   type TemplateFontAliasRequest,
   type TemplateFontCandidatesResponse,
   type TemplateFontHealResult,
   type TemplateSourceEvent,
+  type TemplateTextMoveRequest,
+  type TemplateTextMoveResponse,
   templateFontAliasRequestSchema,
   templateFontCandidatesResponseSchema,
   templateFontHealResultSchema,
@@ -27,11 +31,31 @@ import {
   templateSourceEventsResponseSchema,
   templateSourceSchema,
   templateSourceSummarySchema,
+  templateTextMoveResponseSchema,
 } from '@continuum/contracts';
 import { getApiUrl } from '@/lib/api/config';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export type TemplateFontReadiness = import('@continuum/contracts').TemplateFontReadiness;
+
+export async function repairTemplateText(
+  assetId: string,
+  request: TemplateTextMoveRequest,
+): Promise<TemplateTextMoveResponse> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/repair-text`,
+    { method: 'POST', body: JSON.stringify(request) },
+  );
+  return templateTextMoveResponseSchema.parse(await unwrap(response, 'Text layout repair'));
+}
+
+export async function editableTemplateFonts(brandId: string): Promise<FontInventoryRow[]> {
+  const response = await authorizedFetch(`/api/ai-studio/fonts?brandId=${encodeURIComponent(brandId)}`);
+  const inventory = fontInventoryResponseSchema.parse(await unwrap(response, 'Available fonts'));
+  return inventory.fonts.filter((font) =>
+    (font.brandId === brandId || font.brandId === null) &&
+    !!font.postScriptName && (font.format === 'ttf' || font.format === 'otf'));
+}
 
 // Client for the template-source routes on the Fastify backend. They live there rather than
 // in a Next route handler because they reach Template Forge with a server-only token, and

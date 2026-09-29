@@ -162,6 +162,18 @@ const healTemplateFonts = mock(async (_brandId: string, _assetId: string) => ({
   fromGoogle: ['Fresh Parsed Face'],
   stillMissing: [],
 }));
+const repairTemplateText = mock(async (..._args: unknown[]) => ({
+  filename: 'repaired.aep', checksum: 'a'.repeat(64), slotKeys: ['text__headline'],
+  inlineBase64: 'YWJj',
+}));
+const uploadNewAssetVersion = mock(async (..._args: unknown[]) => ({
+  versionId: '99999999-9999-4999-8999-999999999999',
+}));
+const previewTemplateRebind = mock(async (..._args: unknown[]) => ({
+  checksum: 'b'.repeat(64), requiresReview: false,
+  slots: [{ slotKey: 'text__headline', kind: 'text', status: 'bound' }],
+}));
+const confirmTemplateRebind = mock(async (..._args: unknown[]) => undefined);
 
 mock.module('@/lib/library/templateSources', () => ({
   fetchTemplateVariables: async () => ({
@@ -197,6 +209,10 @@ mock.module('@/lib/library/templateSources', () => ({
   }),
   fetchRenderWorkspaces: async () => workspaces,
   fetchTemplateFonts: async () => fontReadiness,
+  editableTemplateFonts: async () => [{
+    id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', brandId: BRAND,
+    family: 'Geneva', style: 'normal', format: 'ttf', postScriptName: 'Geneva',
+  }],
   pushTemplateFonts,
   saveTemplateVariables: async () => undefined,
   sendTemplateToForge,
@@ -213,8 +229,9 @@ mock.module('@/lib/library/templateSources', () => ({
     log: [],
     worktrees: [],
   }),
-  previewTemplateRebind: async () => null,
-  confirmTemplateRebind: async () => null,
+  previewTemplateRebind,
+  confirmTemplateRebind,
+  repairTemplateText,
   fetchTemplateRun: async () => null,
   healTemplateFonts,
   fetchTemplateEvents: async () => [
@@ -239,7 +256,7 @@ mock.module('@/components/forge/useForgeRun', () => ({
 }));
 mock.module('@/lib/library/versions', () => ({
   listAssetVersions: async () => [],
-  uploadNewAssetVersion: async () => ({ versionId: null }),
+  uploadNewAssetVersion,
 }));
 mock.module('@/components/forge/OutputSettingsPanel', () => ({
   OutputSettingsPanel: () => <h3>Output settings</h3>,
@@ -292,6 +309,10 @@ afterEach(() => {
   healTemplateFonts.mockClear();
   pushTemplateFonts.mockClear();
   advanceTemplateForgeRun.mockClear();
+  repairTemplateText.mockClear();
+  uploadNewAssetVersion.mockClear();
+  previewTemplateRebind.mockClear();
+  confirmTemplateRebind.mockClear();
 });
 
 /** What a person sees: everything except a hidden (inactive, kept-mounted) tab panel. */
@@ -578,6 +599,34 @@ describe('TemplateDetail', () => {
     // Its renders, grouped by the set that asked for them.
     expect(await screen.findByRole('button', { name: /Launch week/ })).toBeTruthy();
     expect(screen.getByText('Spain')).toBeTruthy();
+  });
+
+  test('a moved text box becomes a reviewed AEP revision, not just a preview offset', async () => {
+    const source = { ...SOURCE, parse: { ...SOURCE.parse!, slots: [{
+      key: 'text__headline', name: 'Headline', kind: 'text' as const,
+      origin: 'direct' as const, driver: 'static' as const,
+      comps: ['Main 1x1'], layerIds: [25],
+      instances: [{ compId: 3, comp: 'Main 1x1', layerId: 25,
+        box: [100, 100, 300, 200], compSize: [1080, 1080] }],
+    }] } } as TemplateSource;
+    renderDetail(undefined, source);
+    fireEvent.click(await screen.findByRole('button', { name: 'Repair text' }));
+    const box = screen.getByRole('button', { name: 'Move Headline' });
+    fireEvent.keyDown(box, { key: 'ArrowRight' });
+    await screen.findByRole('option', { name: 'Geneva · normal' });
+    fireEvent.change(await screen.findByLabelText('Font for Headline'), {
+      target: { value: 'Geneva' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save text layout' }));
+    await waitFor(() => expect(confirmTemplateRebind).toHaveBeenCalledTimes(1));
+    expect(repairTemplateText).toHaveBeenCalledWith(ASSET, {
+      brandId: BRAND, expectedVersionId: SOURCE.versionId,
+      moves: [{ compId: 3, layerId: 25, dx: 1, dy: 0, dw: 0, dh: 0, font: 'Geneva' }],
+    });
+    expect(uploadNewAssetVersion.mock.calls[0]?.[0]).toMatchObject({
+      brandId: BRAND, assetId: ASSET, baseVersionId: SOURCE.versionId,
+    });
+    expect(previewTemplateRebind).toHaveBeenCalledTimes(1);
   });
 
   test('switching tabs keeps an unsaved variable edit', async () => {

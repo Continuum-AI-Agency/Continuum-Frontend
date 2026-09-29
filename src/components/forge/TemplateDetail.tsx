@@ -2,6 +2,7 @@
 
 import {
   type ApiRenderJob,
+  type FontInventoryRow,
   readableLayerName,
   type TemplateFontCandidatesResponse,
   type TemplateFontPushResponse,
@@ -49,6 +50,7 @@ import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import { TemplateActivity, templateEventsKey } from '@/components/forge/TemplateActivity';
 import { TemplateRenders } from '@/components/forge/TemplateRenders';
+import { TemplateTextRepairCanvas, type TextMove, textMoveKey } from '@/components/forge/TemplateTextRepairCanvas';
 import { useForgeRun } from '@/components/forge/useForgeRun';
 import { VariableEditor } from '@/components/forge/VariableEditor';
 import { VariantsPanel } from '@/components/forge/VariantsPanel';
@@ -70,11 +72,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toast-imperative';
 import {
   advanceTemplateForgeRun,
+  editableTemplateFonts,
   type ForgeLadderAction,
   fetchTemplateFontCandidates,
   fetchTemplateFonts,
   fetchTemplateVariables,
   healTemplateFonts,
+  confirmTemplateRebind,
+  previewTemplateRebind,
+  repairTemplateText,
   pushTemplateFonts,
   saveTemplateVariables,
   sendTemplateToForge,
@@ -83,6 +89,7 @@ import {
   type TemplateVariable,
   uploadTemplateFontFiles,
 } from '@/lib/library/templateSources';
+import { uploadNewAssetVersion } from '@/lib/library/versions';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import {
@@ -223,6 +230,9 @@ export function TemplateDetail({
     [source.parse, source.ratios],
   );
   const [formatId, setFormatId] = useState<string | undefined>(undefined);
+  const [editingText, setEditingText] = useState(false);
+  const [textMoves, setTextMoves] = useState<Record<string, TextMove>>({});
+  const [savingText, setSavingText] = useState(false);
   // Read once: the dropped file is handed off moments after mount, and the tab must not follow it.
   const [tab, setTab] = useState(revisionFile ? 'source' : 'variables');
   const missingFootage = source.parse?.missingFootage ?? [];
@@ -242,6 +252,57 @@ export function TemplateDetail({
     formats.find((entry) => entry.ratio && boxedRatios.has(entry.ratio)) ??
     formats[0];
   const rendered = useLatestRenderFrame(brandId, templateKey, formats, format?.id);
+  const { data: editableFonts = [] } = useQuery<FontInventoryRow[]>({
+    queryKey: ['template-editable-fonts', brandId],
+    queryFn: () => editableTemplateFonts(brandId),
+    enabled: editingText,
+  });
+  const textFrame = wireframeFrames(source.parse).find((frame) => frame.comp === format?.comp?.name) ??
+    wireframeFrames(source.parse).find((frame) => frame.ratio === format?.ratio);
+  const saveTextMoves = async () => {
+    const moves = Object.values(textMoves).filter((move) =>
+      move.dx !== 0 || move.dy !== 0 || move.dw || move.dh || move.font);
+    if (!moves.length || savingText) return;
+    setSavingText(true);
+    let uploaded = false;
+    try {
+      const repaired = await repairTemplateText(assetId, {
+        brandId, expectedVersionId: source.versionId, moves,
+      });
+      const bytes = Uint8Array.from(atob(repaired.inlineBase64), (char) => char.charCodeAt(0));
+      const file = new File([bytes], repaired.filename, {
+        type: repaired.filename.toLowerCase().endsWith('.zip')
+          ? 'application/zip' : 'application/octet-stream',
+      });
+      const registered = await uploadNewAssetVersion({
+        brandId, assetId, baseVersionId: source.versionId, file,
+        note: `Repaired ${moves.length} text layer${moves.length === 1 ? '' : 's'} in Forge`,
+      });
+      if (!registered.versionId) throw new Error('The Library did not return the repaired version');
+      uploaded = true;
+      const inspected = await previewTemplateRebind({
+        brandId, assetId, versionId: registered.versionId,
+        expectedVersionId: source.versionId,
+      });
+      if (inspected.requiresReview || inspected.slots.some((slot) => slot.status === 'missing')) {
+        throw new Error('The new AEP needs a source revision review before it can be used.');
+      }
+      await confirmTemplateRebind({
+        brandId, assetId, versionId: registered.versionId,
+        expectedVersionId: source.versionId,
+        expectedChecksum: inspected.checksum, acceptMissing: false,
+      });
+      setTextMoves({});
+      setEditingText(false);
+      await onChanged();
+      toast.success('Text layout saved to a new AEP version. Build and test render it before publishing.');
+    } catch (error) {
+      if (uploaded) setTab('source');
+      toast.error(error instanceof Error ? error.message : 'Could not save text layout');
+    } finally {
+      setSavingText(false);
+    }
+  };
   const [variables, setVariables] = useState<TemplateVariable[]>([]);
   const [savedDefaults, setSavedDefaults] = useState<Record<string, unknown>>({});
   const [parseState, setParseState] = useState<string>(source.parseState);
@@ -563,6 +624,7 @@ export function TemplateDetail({
           ),
         );
         void refreshEvents();
+        await queryClient.invalidateQueries({ queryKey: ['template-editable-fonts', brandId] });
       }
       await Promise.all([reloadFonts(), onChanged()]);
     } finally {
@@ -684,19 +746,6 @@ export function TemplateDetail({
         {/* Always mounted, not gated on `missingFonts`: once a face is substituted the count is
             zero while the panel still offers "Add the real files", and a button wired to an
             input that is no longer in the tree silently does nothing. */}
-        <input
-          ref={fontInput}
-          type="file"
-          multiple
-          accept=".ttf,.otf"
-          className="sr-only"
-          tabIndex={-1}
-          aria-label="Font files"
-          onChange={(event) => {
-            void addFontFiles(Array.from(event.target.files ?? []));
-            event.target.value = '';
-          }}
-        />
         {missingFonts > 0 ? (
           <Button
             type="button"
@@ -710,7 +759,7 @@ export function TemplateDetail({
             Add font files
           </Button>
         ) : null}
-        {fontCandidates && fontCandidates.missing.length > 0 ? (
+        {!editingText && fontCandidates && fontCandidates.missing.length > 0 ? (
           <FontSubstitutions
             candidates={fontCandidates}
             busy={fontBusy}
@@ -994,6 +1043,12 @@ export function TemplateDetail({
         </div>
       </header>
 
+      <input ref={fontInput} type="file" multiple accept=".ttf,.otf"
+        className="sr-only" tabIndex={-1} aria-label="Font files"
+        onChange={(event) => {
+          void addFontFiles(Array.from(event.target.files ?? []));
+          event.target.value = '';
+        }} />
       {/* The picture on the left; the facts and then the checks on the right, the way a deployment
           reads. Stacked below lg. */}
       <div className="grid divide-y divide-border lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:divide-x lg:divide-y-0">
@@ -1009,6 +1064,22 @@ export function TemplateDetail({
                 onValueChange={setFormatId}
                 wellClassName="h-[min(60vh,40rem)]"
                 frame={(picked) => {
+                  if (editingText && source.parse) return {
+                    mode: 'estimate' as const,
+                    node: <TemplateTextRepairCanvas
+                      parse={source.parse}
+                      ratio={picked.ratio}
+                      comp={picked.comp?.name ?? null}
+                      backgroundUrl={rendered?.kind === 'image' &&
+                        renderedJob?.templateSource?.versionId === source.versionId
+                        ? rendered.url : undefined}
+                      moves={textMoves}
+                      onMove={(move) => setTextMoves((previous) => ({
+                        ...previous, [textMoveKey(move)]: move,
+                      }))}
+                    />,
+                    caption: 'Drag to move; drag the corner to resize. Arrow keys also work. A matching render supplies the backdrop; Save creates a new AEP version.',
+                  };
                   const estimate =
                     picked.ratio && drawnRatios.has(picked.ratio) ? (
                       <TemplateWireframe
@@ -1016,6 +1087,7 @@ export function TemplateDetail({
                         templateKey={templateKey}
                         parse={source.parse}
                         ratio={picked.ratio}
+                        comp={picked.comp?.name}
                         className="size-full bg-background"
                       />
                     ) : undefined;
@@ -1055,6 +1127,69 @@ export function TemplateDetail({
               </div>
             )}
           </TemplateMorph>
+          {(source.family === 'after_effects' || source.family === 'after_effects_package') &&
+          source.parseState === 'parsed' ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {editingText ? (
+                <>
+                  <Button type="button" size="sm" disabled={savingText ||
+                    !Object.values(textMoves).some((move) =>
+                      move.dx || move.dy || move.dw || move.dh || move.font)}
+                    onClick={() => void saveTextMoves()}>
+                    {savingText ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
+                    Save text layout
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" disabled={savingText}
+                    onClick={() => { setEditingText(false); setTextMoves({}); }}>Cancel</Button>
+                </>
+              ) : (
+                <Button type="button" size="sm" variant="outline"
+                  disabled={!wireframeFrames(source.parse).some((frame) =>
+                    frame.boxes.some((box) => box.kind === 'text' && box.instance))}
+                  title="Move and resize measured text layers in the uploaded AEP"
+                  onClick={() => setEditingText(true)}>Repair text</Button>
+              )}
+            </div>
+          ) : null}
+          {editingText ? <div className="flex flex-col gap-2 text-xs">
+            {textFrame?.boxes.filter((box) => box.kind === 'text' && box.instance)
+              .map((box) => {
+                const instance = box.instance!;
+                const key = textMoveKey(instance);
+                return <label key={key} className="flex items-center gap-2">
+                  <span className="min-w-32 truncate">{box.label}</span>
+                  <select className="min-w-0 flex-1 rounded border border-input bg-background p-1"
+                    aria-label={`Font for ${box.label}`}
+                    value={textMoves[key]?.font ?? ''}
+                    onChange={(event) => {
+                      const selectedFont = event.currentTarget.value;
+                      setTextMoves((previous) => {
+                        const current = previous[key];
+                        return { ...previous, [key]: {
+                          compId: instance.compId, layerId: instance.layerId,
+                          dx: current?.dx ?? 0, dy: current?.dy ?? 0,
+                          dw: current?.dw ?? 0, dh: current?.dh ?? 0,
+                          ...(selectedFont ? { font: selectedFont } : {}),
+                        } };
+                      });
+                    }}>
+                    <option value="">Keep current font</option>
+                    {editableFonts.map((font) => <option key={font.id}
+                      value={font.postScriptName ?? ''}>
+                      {font.family} · {font.style}
+                    </option>)}
+                  </select>
+                </label>;
+              })}
+            <Button type="button" size="xs" variant="outline" className="w-fit"
+              disabled={fontBusy} onClick={() => fontInput.current?.click()}>
+              Add font files
+            </Button>
+            {fontCandidates && fontCandidates.missing.length > 0 ? <FontSubstitutions
+              candidates={fontCandidates} busy={fontBusy}
+              onUpload={() => fontInput.current?.click()}
+              onApply={applyFontSubstitutions} /> : null}
+          </div> : null}
           {!rendered && source.parse && drawnRatios.size > 0 ? (
             <p className="text-xs text-muted-foreground">
               Quick layout check is ready from the uploaded template. The full test render verifies
