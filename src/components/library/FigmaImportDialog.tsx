@@ -1,6 +1,6 @@
 'use client';
 
-import type { FigmaFile, FigmaFrame, FigmaProject } from '@continuum/contracts';
+import type { FigmaFile, FigmaFolder, FigmaFrame } from '@continuum/contracts';
 import { Check, Loader2, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { FigmaIcon } from '@/components/shared/icons';
@@ -26,11 +26,11 @@ import {
   beginFigmaConnection,
   importFigmaFrames,
   listFigmaFiles,
+  listFigmaFolders,
   listFigmaFrames,
-  listFigmaProjects,
 } from '@/lib/library/figma';
 
-type BusyState = 'projects' | 'files' | 'frames' | 'import' | 'connect' | null;
+type BusyState = 'folders' | 'files' | 'frames' | 'import' | 'connect' | null;
 
 export function FigmaImportDialog({
   brandId,
@@ -41,8 +41,9 @@ export function FigmaImportDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [teamId, setTeamId] = useState('');
-  const [projects, setProjects] = useState<FigmaProject[]>([]);
-  const [projectId, setProjectId] = useState('');
+  // Every folder seen so far; choosing one adds its subfolders, so nesting needs no extra UI.
+  const [folders, setFolders] = useState<FigmaFolder[]>([]);
+  const [folderId, setFolderId] = useState('');
   const [files, setFiles] = useState<FigmaFile[]>([]);
   const [fileKey, setFileKey] = useState('');
   const [frames, setFrames] = useState<FigmaFrame[]>([]);
@@ -50,13 +51,18 @@ export function FigmaImportDialog({
   const [busy, setBusy] = useState<BusyState>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function loadProjects() {
+  const folderLabel = (folder: FigmaFolder): string => {
+    const parent = folders.find((candidate) => candidate.id === folder.parentFolderId);
+    return parent ? `${folderLabel(parent)} / ${folder.name}` : folder.name;
+  };
+
+  async function loadFolders() {
     if (!teamId.trim()) return;
-    setBusy('projects');
+    setBusy('folders');
     setError(null);
     try {
-      setProjects(await listFigmaProjects(brandId, teamId.trim()));
-      setProjectId('');
+      setFolders(await listFigmaFolders(brandId, { teamId: teamId.trim() }));
+      setFolderId('');
       setFiles([]);
       setFrames([]);
     } catch (cause) {
@@ -66,14 +72,22 @@ export function FigmaImportDialog({
     }
   }
 
-  async function chooseProject(value: string) {
-    setProjectId(value);
+  async function chooseFolder(value: string) {
+    setFolderId(value);
     setFileKey('');
     setFrames([]);
     setBusy('files');
     setError(null);
     try {
-      setFiles(await listFigmaFiles(brandId, value));
+      const [children, found] = await Promise.all([
+        listFigmaFolders(brandId, { folderId: value }),
+        listFigmaFiles(brandId, value),
+      ]);
+      setFolders((known) => [
+        ...known,
+        ...children.filter((child) => !known.some((folder) => folder.id === child.id)),
+      ]);
+      setFiles(found);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'provider_unavailable');
     } finally {
@@ -153,16 +167,16 @@ export function FigmaImportDialog({
               placeholder="Figma team ID"
               aria-label="Figma team ID"
               onKeyDown={(event) => {
-                if (event.key === 'Enter') void loadProjects();
+                if (event.key === 'Enter') void loadFolders();
               }}
             />
             <Button
               type="button"
               variant="secondary"
               disabled={!teamId.trim() || busy !== null}
-              onClick={() => void loadProjects()}
+              onClick={() => void loadFolders()}
             >
-              {busy === 'projects' ? (
+              {busy === 'folders' ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <RefreshCw className="size-4" />
@@ -200,17 +214,20 @@ export function FigmaImportDialog({
             </div>
           ) : null}
 
-          {projects.length ? (
-            <Select value={projectId} onValueChange={(value) => void chooseProject(value)}>
-              <SelectTrigger aria-label="Figma project">
-                <SelectValue placeholder="Choose a project" />
+          {folders.length ? (
+            <Select value={folderId} onValueChange={(value) => void chooseFolder(value)}>
+              <SelectTrigger aria-label="Figma folder">
+                <SelectValue placeholder="Choose a folder" />
               </SelectTrigger>
               <SelectContent>
-                {projects.map((project) => (
-                  <SelectItem key={project.id} value={project.id}>
-                    {project.name}
-                  </SelectItem>
-                ))}
+                {folders
+                  .map((folder) => ({ id: folder.id, label: folderLabel(folder) }))
+                  .sort((a, b) => a.label.localeCompare(b.label))
+                  .map((folder) => (
+                    <SelectItem key={folder.id} value={folder.id}>
+                      {folder.label}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           ) : null}

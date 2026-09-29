@@ -73,6 +73,23 @@ export async function fetchProviderReconnectPrompts(
   ];
 }
 
+/** Figma is a design source with no ad assets, so the summary never carries it. */
+export async function fetchFigmaAccountNames(userId: string): Promise<string[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .schema('brand_profiles')
+    .from('user_integrations')
+    .select('platform_email, platform_user_id')
+    .eq('user_id', userId)
+    .eq('provider', 'figma')
+    .eq('status', 'active');
+  if (error) {
+    console.error('[fetchFigmaAccountNames] user_integrations query failed', error);
+    return [];
+  }
+  return (data ?? []).map((row) => row.platform_email ?? row.platform_user_id ?? 'Figma');
+}
+
 export function createEmptyUserIntegrationSummary(): UserIntegrationSummary {
   return PLATFORM_KEYS.reduce((acc, key) => {
     acc[key] = { accounts: [] };

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 
-import { listFigmaProjects } from './figma';
+import { listFigmaFolders } from './figma';
 
 const originalFetch = globalThis.fetch;
 
@@ -16,17 +16,19 @@ describe('Figma Library client', () => {
     globalThis.fetch = mock(async (url, init) => {
       requestedUrl = String(url);
       requestedInit = init;
-      return Response.json({ projects: [{ id: 'project-1', name: 'Campaign', fileCount: 2 }] });
+      return Response.json({
+        folders: [{ id: 'folder-1', name: 'Campaign', parentFolderId: null }],
+      });
     }) as typeof fetch;
 
-    const projects = await listFigmaProjects(
+    const folders = await listFigmaFolders(
       '11111111-1111-4111-8111-111111111111',
-      'team 1',
+      { teamId: 'team 1' },
       async () => 'user-jwt',
     );
-    expect(projects).toEqual([{ id: 'project-1', name: 'Campaign', fileCount: 2 }]);
+    expect(folders).toEqual([{ id: 'folder-1', name: 'Campaign', parentFolderId: null }]);
     expect(requestedUrl).toBe(
-      'https://api.example.com/integrations/figma/projects?brandId=11111111-1111-4111-8111-111111111111&teamId=team+1',
+      'https://api.example.com/integrations/figma/folders?brandId=11111111-1111-4111-8111-111111111111&teamId=team+1',
     );
     expect((requestedInit?.headers as Record<string, string>).Authorization).toBe(
       'Bearer user-jwt',

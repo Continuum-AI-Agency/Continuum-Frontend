@@ -48,6 +48,7 @@ import { fetchPulseRecipients } from '@/lib/brands/pulseRecipients';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import {
   createEmptyUserIntegrationSummary,
+  fetchFigmaAccountNames,
   fetchProviderReconnectPrompts,
   fetchUserIntegrationSummary,
 } from '@/lib/integrations/userIntegrations';
@@ -397,6 +398,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     const reconnectPrompts = user
       ? await fetchProviderReconnectPrompts(user.id, userIntegrationSummary)
       : [];
+    const figmaAccounts = user ? await fetchFigmaAccountNames(user.id) : [];
 
     activeSectionSlot = (
       <>
@@ -407,6 +409,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           <UserConnectionsSwitcher
             integrations={userIntegrationSummary}
             reconnectPrompts={reconnectPrompts}
+            figmaAccounts={figmaAccounts}
           />
         </SettingsSection>
         {user?.id ? (
