@@ -23,12 +23,22 @@ export const orderedSteps = (sections: ReadonlyArray<TemplateSection>): Template
     .sort((a, b) => orderOf(a.section.kind) - orderOf(b.section.kind) || a.position - b.position)
     .map(({ section }) => section);
 
+/** The steps whose text a three-box narrative restates: what was found, and why. */
+const NARRATED_STEP_KINDS: ReadonlySet<string> = new Set(['found', 'why']);
+
 type StepsProps = {
   block: AnswerTemplateBlockV2;
   SectionBody: ComponentType<TemplateSectionBodyProps>;
+  /**
+   * True when the report also carries a J2 narrative (what / so_what / now_what) built from
+   * this template's found and why sections. Those two steps then keep their title and their
+   * visual — the table, the chart, the items are the evidence — and drop the sentence the
+   * three boxes already say, so the reader is not told the same thing twice in two places.
+   */
+  narrated?: boolean;
 };
 
-export function Steps({ block, SectionBody }: StepsProps) {
+export function Steps({ block, SectionBody, narrated = false }: StepsProps) {
   return (
     <ol className="space-y-4" data-template-layout="steps">
       {orderedSteps(block.justification.sections).map((section, index) => (
@@ -36,6 +46,7 @@ export function Steps({ block, SectionBody }: StepsProps) {
           key={section.kind}
           className="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-3"
           data-step={section.kind}
+          data-step-narrated={narrated && NARRATED_STEP_KINDS.has(section.kind) ? '' : undefined}
         >
           <span
             aria-hidden="true"
@@ -49,9 +60,11 @@ export function Steps({ block, SectionBody }: StepsProps) {
           <div className="min-w-0 space-y-2">
             <p className={cn('text-foreground', JAINA_TYPE.body)}>
               <span className="font-semibold">{section.title}. </span>
-              <span className="text-muted-foreground">
-                <FigureText text={section.text} figures={block.figures} />
-              </span>
+              {narrated && NARRATED_STEP_KINDS.has(section.kind) ? null : (
+                <span className="text-muted-foreground">
+                  <FigureText text={section.text} figures={block.figures} />
+                </span>
+              )}
             </p>
             <SectionBody block={block} section={section} />
           </div>

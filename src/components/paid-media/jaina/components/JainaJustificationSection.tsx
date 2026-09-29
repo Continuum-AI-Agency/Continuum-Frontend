@@ -3,6 +3,8 @@ import { Fragment, type ReactNode, useId } from 'react';
 import type { CheckpointBlockV2 } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
 import { type AnswerLanguage, SECTION_LABELS } from '../answerLanguage';
+import { BlockHeading } from '../blocks/BlockHeading';
+import { narrativeThreeOf } from '../blocks/narrativeShape';
 import { JAINA_TYPE } from '../reading';
 
 export type PartitionedReportBlocks = {
@@ -30,13 +32,25 @@ export function partitionReportBlocks(blocks: CheckpointBlockV2[]): PartitionedR
 /**
  * The three strata of a finished answer, in the words of the answer's language. An
  * answer-section block is the WHY (the reading the sentence rests on) unless it is the
- * ACTION (the moves); a templated executive is the answer itself and takes no label.
+ * ACTION (the moves). The J2 card's own parts take no label: the templated executive, the
+ * window line, the metric tiles and a narrative that carries its three boxes each say what
+ * they are on their own face, and "Por qué" over a row of tiles would label a label.
  */
 export type AnswerStratum = 'answer' | 'why' | 'action';
 
 export function stratumOfBlock(block: CheckpointBlockV2): AnswerStratum {
-  if (block.category === 'answer_template') return 'answer';
-  return block.category === 'actions' ? 'action' : 'why';
+  switch (block.category) {
+    case 'answer_template':
+    case 'data_scope':
+    case 'metric_grid':
+      return 'answer';
+    case 'actions':
+      return 'action';
+    case 'narrative':
+      return narrativeThreeOf(block) ? 'answer' : 'why';
+    default:
+      return 'why';
+  }
 }
 
 type SectionLabelProps = {
@@ -58,6 +72,43 @@ export function SectionLabel({ stratum, language, id }: SectionLabelProps) {
   );
 }
 
+/**
+ * One evidence block, folded. The disclosure line is the block's own heading — title and
+ * provenance affordance — so the heading the block draws for itself is hidden inside the
+ * fold rather than printed twice. The first fold is open by default (J3's rule, adopted by
+ * the recommendation: everything that is neither the answer nor its reading folds, and the
+ * reader still sees the first table without a click); the rest open on demand.
+ */
+function EvidenceFold({
+  block,
+  open,
+  children,
+}: {
+  block: CheckpointBlockV2;
+  open: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details
+      className="group rounded-lg border border-border/50"
+      data-evidence-fold={block.block_id}
+      open={open}
+    >
+      <summary className="cursor-pointer list-none px-3 py-2 marker:content-none">
+        <BlockHeading
+          title={block.title}
+          provenance={block.provenance}
+          datasetId={'dataset_id' in block ? block.dataset_id : undefined}
+          evidenceRefs={'evidence_refs' in block ? block.evidence_refs : undefined}
+          className="mb-0"
+        />
+      </summary>
+      {/* The block draws this same heading for itself; inside the fold the summary is it. */}
+      <div className="px-3 pb-3 [&_[data-block-heading]]:hidden">{children}</div>
+    </details>
+  );
+}
+
 type JainaJustificationSectionProps = {
   blocks: CheckpointBlockV2[];
   renderBlock: (block: CheckpointBlockV2) => ReactNode;
@@ -65,20 +116,25 @@ type JainaJustificationSectionProps = {
   leading?: ReactNode;
   /** The answer's language; the heading follows it. */
   language?: AnswerLanguage;
+  /** False on paper: an export prints every block unfolded, because paper cannot click. */
+  fold?: boolean;
   className?: string;
 };
 
 /**
- * The charts, tables and figures the executive answer rests on, under a heading
- * that says so. Always open: the evidence is part of the report, not a disclosure
- * the reader has to find. Renders nothing when there is no evidence to show, so an
- * answer without figures never carries an empty heading.
+ * The charts, tables and figures the executive answer rests on, under a heading that says
+ * so. The section is always open — the evidence is part of the report, not a disclosure
+ * the reader has to find — and each block inside it folds, the first open by default.
+ * Paper cannot click, so the export document passes `fold={false}`. Renders nothing when
+ * there is no evidence to show, so an answer without figures never carries an empty
+ * heading.
  */
 export function JainaJustificationSection({
   blocks,
   renderBlock,
   leading,
   language = 'en',
+  fold = true,
   className,
 }: JainaJustificationSectionProps) {
   const headingId = useId();
@@ -101,11 +157,17 @@ export function JainaJustificationSection({
         </h3>
         <p className="text-xs text-muted-foreground">{labels.evidenceDetail}</p>
       </header>
-      <div className="space-y-4 border-l border-border/50 pl-3">
+      <div className="space-y-3">
         {leading}
-        {blocks.map((block) => (
-          <Fragment key={block.block_id}>{renderBlock(block)}</Fragment>
-        ))}
+        {blocks.map((block, index) =>
+          fold ? (
+            <EvidenceFold key={block.block_id} block={block} open={index === 0}>
+              {renderBlock(block)}
+            </EvidenceFold>
+          ) : (
+            <Fragment key={block.block_id}>{renderBlock(block)}</Fragment>
+          ),
+        )}
       </div>
     </section>
   );

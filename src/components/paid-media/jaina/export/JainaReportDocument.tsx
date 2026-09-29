@@ -7,6 +7,7 @@ import { BlockRenderer } from '../blocks/BlockRenderer';
 import { countBlockCitations } from '../blocks/citations';
 import { EntityNamesProvider, entityNamesOf } from '../blocks/entityNames';
 import { MediaMapProvider } from '../blocks/mediaText';
+import { narrativeThreeOf } from '../blocks/narrativeShape';
 import { JainaProse } from '../blocks/prose';
 import {
   JainaJustificationSection,
@@ -85,6 +86,9 @@ export function JainaReportDocument({
   const hasMedia = report._meta.has_media && Object.keys(report.media_map).length > 0;
   const sections = partitionReportBlocks(blocks);
   const templateBlocks = sections.answer.filter(isAnswerTemplateBlock);
+  const narrated = blocks.some(
+    (block) => block.category === 'narrative' && narrativeThreeOf(block) !== null,
+  );
   const language = answerLanguage(report);
   const entityNames = entityNamesOf(blocks);
   const renderExportBlock = (block: CheckpointBlockV2) => (
@@ -146,6 +150,7 @@ export function JainaReportDocument({
       <JainaJustificationSection
         blocks={sections.justification}
         language={language}
+        fold={false}
         renderBlock={renderExportBlock}
         leading={
           templateBlocks.length > 0
@@ -156,7 +161,7 @@ export function JainaReportDocument({
                   data-block-id={`${block.block_id}:justification`}
                   data-category={block.category}
                 >
-                  <TemplateJustification block={block} />
+                  <TemplateJustification block={block} narrated={narrated} />
                 </section>
               ))
             : undefined

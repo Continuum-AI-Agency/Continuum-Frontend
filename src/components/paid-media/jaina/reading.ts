@@ -32,6 +32,7 @@
 // No emojis anywhere. A severity that needs a picture to be legible is a severity the colour
 // and the word should have carried.
 
+import type { MetricRead } from '@continuum/contracts';
 import type { Severity } from '@/lib/jaina/schemas';
 
 /** What a figure's colour means. `unjudged` is a real state, not a fallback. */
@@ -55,6 +56,19 @@ export const JUDGEMENT_LABEL: Record<Judgement, string> = {
   watch: 'worth watching',
   neutral: 'normal',
   unjudged: 'not judged',
+};
+
+/**
+ * What a metric's one-word read means as a colour. The read is derived on the Backend from
+ * the figure's direction against its target or its prior, so it IS a judgement — `mejor` is
+ * good news, `peor` a problem, `igual` judged and unremarkable — and `sin_comparacion` is
+ * the one honest "nobody could judge this", which is the muted ink by this module's law.
+ */
+export const READ_JUDGEMENT: Record<MetricRead, Judgement> = {
+  mejor: 'positive',
+  peor: 'risk',
+  igual: 'neutral',
+  sin_comparacion: 'unjudged',
 };
 
 /** Jaina's own sentence, as opposed to a figure something measured. */

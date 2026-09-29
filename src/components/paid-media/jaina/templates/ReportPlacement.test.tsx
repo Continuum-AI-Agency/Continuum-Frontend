@@ -88,12 +88,10 @@ describe('a templated answer in the chat report', () => {
   it('puts the sentence and chart in the answer, the steps first under the justification', () => {
     const blocks = [scope, templateBlock, table];
     const { container } = render(<JainaReportV2 report={report(blocks)} isStreaming={false} />);
-    expect(partsIn(container, 'answer')).toEqual(['executive']);
-    expect(partsIn(container, 'justification')).toEqual([
-      'justification',
-      'module-scope',
-      'module-rows',
-    ]);
+    // The J2 split: the window line opens the answer (the Backend's order, scope first), the
+    // template's steps lead the evidence and the table follows them.
+    expect(partsIn(container, 'answer')).toEqual(['module-scope', 'executive']);
+    expect(partsIn(container, 'justification')).toEqual(['justification', 'module-rows']);
   });
 
   it('adds no empty justification heading when nothing else is there', () => {
@@ -107,12 +105,8 @@ describe('a templated answer in the export document', () => {
   it('prints the same split as the chat', () => {
     const blocks = [scope, templateBlock, table];
     const { container } = render(<JainaReportDocument report={report(blocks)} blocks={blocks} />);
-    expect(partsIn(container, 'answer')).toEqual(['executive']);
-    expect(partsIn(container, 'justification')).toEqual([
-      'justification',
-      'module-scope',
-      'module-rows',
-    ]);
+    expect(partsIn(container, 'answer')).toEqual(['module-scope', 'executive']);
+    expect(partsIn(container, 'justification')).toEqual(['justification', 'module-rows']);
     const rows = [...container.querySelectorAll('details[data-rank]')] as HTMLDetailsElement[];
     expect(rows).toHaveLength(4);
   });

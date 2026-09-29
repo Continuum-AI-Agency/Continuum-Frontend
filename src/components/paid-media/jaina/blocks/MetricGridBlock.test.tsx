@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { cleanup, render, screen } from '@testing-library/react';
 import type { MetricGridBlockV2 } from '@/lib/jaina/schemas';
+import type { AnswerLanguage } from '../answerLanguage';
+import { AnswerLanguageProvider } from '../answerLanguageContext';
 import MetricGridBlock from './MetricGridBlock';
 
 afterEach(cleanup);
@@ -144,5 +146,98 @@ describe('MetricGridBlock — figures a reader can scan down a column', () => {
     );
     const figure = document.querySelector('dd > span:first-child');
     expect(figure?.className).toContain('text-destructive');
+  });
+});
+
+describe('MetricGridBlock — the J2 tile: this period, the prior, and the read', () => {
+  const j2 = (overrides: Partial<Metric>): Metric =>
+    metric({
+      label: 'Cost per conversation',
+      value: 36.55,
+      unit: 'MXN',
+      format: 'currency',
+      change: 4,
+      change_direction: 'up',
+      prior_value: 35.1,
+      prior_label: '1 al 27 de agosto',
+      read: 'peor',
+      ...overrides,
+    });
+
+  const renderIn = (language: AnswerLanguage, metrics: Metric[]) =>
+    render(
+      <AnswerLanguageProvider language={language}>
+        <MetricGridBlock block={{ ...gridOf(metrics), dataset_id: null }} isStreaming={false} />
+      </AnswerLanguageProvider>,
+    );
+
+  it('prints the prior period under the figure, in the metric’s own format and window', () => {
+    renderIn('es', [j2({})]);
+    expect(screen.getByTestId('metric-prior').textContent).toBe('vs MX$35.10 · 1 al 27 de agosto');
+  });
+
+  it('prints no prior line when no prior period was read', () => {
+    renderIn('es', [j2({ prior_value: null, prior_label: null, read: 'sin_comparacion' })]);
+    expect(screen.queryByTestId('metric-prior')).toBeNull();
+    expect(screen.getByTestId('metric-read').textContent).toBe('sin comparación');
+  });
+
+  it('colours the read by what it means: mejor good, peor a problem, igual ink, sin comparación muted', () => {
+    renderIn('es', [
+      j2({ label: 'Conversaciones', read: 'mejor' }),
+      j2({ label: 'Costo por conversación', read: 'peor' }),
+      j2({ label: 'Gasto', read: 'igual' }),
+      j2({ label: 'Leads', read: 'sin_comparacion', prior_value: null, prior_label: null }),
+    ]);
+    const reads = screen.getAllByTestId('metric-read');
+    expect(reads.map((node) => node.textContent)).toEqual([
+      'mejor',
+      'peor',
+      'igual',
+      'sin comparación',
+    ]);
+    expect(reads[0].className).toContain('text-success');
+    expect(reads[1].className).toContain('text-destructive');
+    expect(reads[2].className).toContain('text-foreground');
+    expect(reads[2].className).not.toContain('text-muted-foreground');
+    expect(reads[3].className).toContain('text-muted-foreground');
+    // The colour is the judgement, and a screen reader cannot see it.
+    expect(reads[0].getAttribute('title')).toBe('Conversaciones: good');
+    expect(reads[1].getAttribute('title')).toBe('Costo por conversación: a problem');
+  });
+
+  it('says the read in English when the answer is English', () => {
+    renderIn('en', [
+      j2({ label: 'Conversations', read: 'mejor' }),
+      j2({ label: 'Cost per conversation', read: 'peor' }),
+      j2({ label: 'Spend', read: 'igual' }),
+      j2({ label: 'Leads', read: 'sin_comparacion', prior_value: null, prior_label: null }),
+    ]);
+    expect(screen.getAllByTestId('metric-read').map((node) => node.textContent)).toEqual([
+      'better',
+      'worse',
+      'same',
+      'no comparison',
+    ]);
+  });
+
+  it('draws the tiles in the Backend’s order — the result the account buys leads, never re-sorted', () => {
+    renderIn('es', [
+      j2({ label: 'Conversaciones', read: 'mejor' }),
+      j2({ label: 'Costo por conversación', read: 'peor' }),
+      j2({ label: 'Gasto', read: 'igual' }),
+    ]);
+    expect(Array.from(document.querySelectorAll('dt')).map((node) => node.textContent)).toEqual([
+      'Conversaciones',
+      'Costo por conversación',
+      'Gasto',
+    ]);
+  });
+
+  it('draws a pre-J2 metric with no read exactly as before: figure and delta, no read line', () => {
+    renderIn('es', [j2({ prior_value: null, prior_label: null, read: null })]);
+    expect(screen.queryByTestId('metric-read')).toBeNull();
+    expect(screen.queryByTestId('metric-prior')).toBeNull();
+    expect(screen.getByRole('img', { name: 'Up 4%, a problem' })).toBeTruthy();
   });
 });

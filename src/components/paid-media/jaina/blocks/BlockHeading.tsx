@@ -36,7 +36,7 @@ export function BlockHeading({
   const showTooltip =
     provenance !== undefined || datasetId !== undefined || evidenceRefs !== undefined;
   return (
-    <div className={cn('mb-2 flex items-center gap-1.5', className)}>
+    <div className={cn('mb-2 flex items-center gap-1.5', className)} data-block-heading>
       {leading}
       <h4 className={BLOCK_TITLE_CLASS}>{displayBlockTitle(title, names)}</h4>
       {showTooltip ? (

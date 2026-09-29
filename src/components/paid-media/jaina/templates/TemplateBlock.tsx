@@ -27,17 +27,29 @@ export function TemplateExecutive({ block }: { block: AnswerTemplateBlockV2 }) {
   );
 }
 
-export function TemplateJustification({ block }: { block: AnswerTemplateBlockV2 }) {
+export function TemplateJustification({
+  block,
+  narrated = false,
+}: {
+  block: AnswerTemplateBlockV2;
+  /** The report carries a three-box narrative restating this template's found and why. */
+  narrated?: boolean;
+}) {
   const { SectionBody } = TEMPLATE_RENDERERS[block.template_id];
   // `steps` is the one layout built and the default for every template; null reads as steps.
   return (
     <div data-template={block.template_id} data-template-part="justification">
-      <Steps block={block} SectionBody={SectionBody} />
+      <Steps block={block} SectionBody={SectionBody} narrated={narrated} />
     </div>
   );
 }
 
-export default function TemplateBlock({ block }: { block: AnswerTemplateBlockV2; isStreaming: boolean }) {
+export default function TemplateBlock({
+  block,
+}: {
+  block: AnswerTemplateBlockV2;
+  isStreaming: boolean;
+}) {
   return (
     <div className="space-y-4">
       <TemplateExecutive block={block} />

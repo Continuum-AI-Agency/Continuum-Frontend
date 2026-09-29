@@ -328,17 +328,43 @@ describe('JainaReportV2 — the justification under the answer', () => {
       document.querySelectorAll(`[data-report-section="${section}"] [data-testid^="module-"]`),
     ).map((node) => node.getAttribute('data-testid')?.replace('module-', ''));
 
-  it('keeps the reading and the moves with the answer, in the backend’s order', () => {
+  it('keeps the window, the reading, the tiles and the moves with the answer, in the backend’s order', () => {
+    // The J2 card: the window line and the metric tiles are part of the answer, not evidence
+    // under it (`sectionOfBlockCategory` in the contract puts data_scope and metric_grid in
+    // the answer section). The order is the Backend's, untouched.
     render(<JainaReportV2 report={strategyReport} isStreaming={false} />);
-    expect(moduleIdsIn('answer')).toEqual(['reading', 'moves']);
+    expect(moduleIdsIn('answer')).toEqual(['scope', 'reading', 'kpis', 'moves']);
   });
 
-  it('groups the figures under an always-open Evidence section, in the backend’s order', () => {
+  it('groups the figures under an always-open Evidence section, each block folded, in the backend’s order', () => {
     render(<JainaReportV2 report={strategyReport} isStreaming={false} />);
     const justification = screen.getByRole('region', { name: 'Evidence' });
     expect(justification.tagName).not.toBe('DETAILS');
     expect(justification.textContent).toContain('The data behind the answer');
-    expect(moduleIdsIn('justification')).toEqual(['scope', 'kpis', 'trend', 'rows']);
+    expect(moduleIdsIn('justification')).toEqual(['trend', 'rows']);
+    const folds = Array.from(justification.querySelectorAll('details'));
+    expect(folds.map((fold) => fold.getAttribute('data-evidence-fold'))).toEqual(['trend', 'rows']);
+  });
+
+  it('opens the first evidence fold by default and leaves the rest closed', () => {
+    render(<JainaReportV2 report={strategyReport} isStreaming={false} />);
+    const folds = Array.from(document.querySelectorAll('[data-evidence-fold]'));
+    expect(folds.map((fold) => fold.hasAttribute('open'))).toEqual([true, false]);
+    // The disclosure line is the block's title, so a closed fold still says what it holds.
+    expect(folds[1].querySelector('summary')?.textContent).toContain('Campaign table');
+  });
+
+  it('puts the follow-up questions last, after the evidence and the export chrome', () => {
+    render(<JainaReportV2 report={strategyReport} isStreaming={false} />);
+    const followUps = document.querySelector('[data-report-section="follow-ups"]');
+    expect(followUps?.textContent).toContain('Where can we scale next?');
+    const evidence = screen.getByRole('region', { name: 'Evidence' });
+    const exportButton = screen.getByRole('button', { name: 'Export report as PDF' });
+    for (const before of [evidence, exportButton]) {
+      expect(
+        before.compareDocumentPosition(followUps as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeGreaterThan(0);
+    }
   });
 
   it('sets the justification below the answer', () => {
@@ -369,18 +395,18 @@ describe('JainaReportV2 — the justification under the answer', () => {
           ...strategyReport,
           blocks: [
             moduleBlock('reading', 'insight_list', 'What stands out'),
-            moduleBlock('kpis', 'metric_grid', 'Headline KPIs'),
+            moduleBlock('trend', 'chart', 'Spend trend'),
           ],
         }}
         isStreaming={false}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Hide Headline KPIs module' }));
-    expect(screen.queryByTestId('module-kpis')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Spend trend module' }));
+    expect(screen.queryByTestId('module-trend')).toBeNull();
     expect(screen.queryByRole('region', { name: 'Evidence' })).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show Headline KPIs module' }));
-    expect(moduleIdsIn('justification')).toEqual(['kpis']);
+    fireEvent.click(screen.getByRole('button', { name: 'Show Spend trend module' }));
+    expect(moduleIdsIn('justification')).toEqual(['trend']);
   });
 
   const labelsOnScreen = () =>
@@ -410,8 +436,8 @@ describe('JainaReportV2 — the justification under the answer', () => {
     );
     expect(screen.queryByText('Justification')).toBeNull();
     // The labels name the strata; they never reorder the blocks.
-    expect(moduleIdsIn('answer')).toEqual(['reading', 'moves']);
-    expect(moduleIdsIn('justification')).toEqual(['scope', 'kpis', 'trend', 'rows']);
+    expect(moduleIdsIn('answer')).toEqual(['scope', 'reading', 'kpis', 'moves']);
+    expect(moduleIdsIn('justification')).toEqual(['trend', 'rows']);
   });
 
   it('labels the strata in Spanish when the report states its language, whatever the sentence', () => {
@@ -436,9 +462,14 @@ describe('JainaReportV2 — the justification under the answer', () => {
       { stratum: 'evidence', text: 'Evidence' },
     ]);
     const why = screen.getByText('Why');
+    const scope = screen.getByTestId('module-scope');
     const reading = screen.getByTestId('module-reading');
     const action = screen.getByText('Action');
     const moves = screen.getByTestId('module-moves');
+    // The window line opens the card and takes no label; Why sits over the reading.
+    expect(scope.compareDocumentPosition(why) & Node.DOCUMENT_POSITION_FOLLOWING).toBeGreaterThan(
+      0,
+    );
     expect(why.compareDocumentPosition(reading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeGreaterThan(
       0,
     );
@@ -475,5 +506,85 @@ describe('JainaReportV2 — the justification under the answer', () => {
       'rows',
       'moves',
     ]);
+  });
+});
+
+describe('JainaReportV2 — the J2 card takes no label over its own parts', () => {
+  const j2Block = (block: Record<string, unknown>) =>
+    ({
+      scope: 'current_account',
+      priority: 1,
+      provenance: null,
+      ...block,
+    }) as unknown as CheckpointReportV2['blocks'][number];
+
+  // The Backend's J2 order: the window, the tiles, the three-box reading, the moves, then
+  // the evidence. Nothing here re-sorts it.
+  const j2Report = {
+    ...report,
+    language: 'es',
+    executive_summary:
+      'Este mes llevamos 68,109 MXN de gasto, 1,552 conversaciones y un costo por conversación de 36.55 MXN, 4% arriba del objetivo de 35.',
+    blocks: [
+      j2Block({ block_id: 'scope', category: 'data_scope', title: 'Alcance de los datos' }),
+      j2Block({ block_id: 'tiles', category: 'metric_grid', title: 'Este mes' }),
+      j2Block({
+        block_id: 'reading',
+        category: 'narrative',
+        title: 'Lectura',
+        body: 'x',
+        what: 'SEDE Cañadas trae el 31% de las conversaciones con el 27% del gasto.',
+        so_what: 'El costo promedio está 1.55 MXN arriba del objetivo.',
+        now_what: 'Mover 300 MXN al día de ITESO a Cañadas.',
+        highlights: [],
+        citations: [],
+      }),
+      j2Block({ block_id: 'moves', category: 'actions', title: 'Acciones' }),
+      j2Block({ block_id: 'rows', category: 'data_table', title: 'Las 4 campañas' }),
+      j2Block({ block_id: 'trend', category: 'chart', title: 'Gasto por día' }),
+    ],
+  } as CheckpointReportV2;
+
+  it('labels only Acción and Evidencia: the window, the tiles and the three boxes label themselves', () => {
+    render(<JainaReportV2 report={j2Report} isStreaming={false} />);
+    expect(
+      Array.from(document.querySelectorAll('[data-report-label]')).map((node) => node.textContent),
+    ).toEqual(['Acción', 'Evidencia']);
+  });
+
+  it('keeps the Backend’s J2 order across both sections', () => {
+    render(<JainaReportV2 report={j2Report} isStreaming={false} />);
+    const ids = Array.from(document.querySelectorAll('[data-testid^="module-"]')).map((node) =>
+      node.getAttribute('data-testid')?.replace('module-', ''),
+    );
+    expect(ids).toEqual(['scope', 'tiles', 'reading', 'moves', 'rows', 'trend']);
+  });
+
+  it('still says Por qué over a narrative that carries only a body', () => {
+    render(
+      <JainaReportV2
+        report={{
+          ...j2Report,
+          blocks: [
+            j2Report.blocks[0],
+            j2Block({
+              block_id: 'reading',
+              category: 'narrative',
+              title: 'Lectura',
+              body: 'x',
+              what: null,
+              so_what: null,
+              now_what: null,
+              highlights: [],
+              citations: [],
+            }),
+          ],
+        }}
+        isStreaming={false}
+      />,
+    );
+    expect(
+      Array.from(document.querySelectorAll('[data-report-label]')).map((node) => node.textContent),
+    ).toEqual(['Por qué']);
   });
 });

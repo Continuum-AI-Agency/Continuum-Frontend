@@ -11,24 +11,65 @@
 // a report that never said which language it is in arrives saying English. A non-default
 // value is a statement; the default is silence, and silence is read from the sentence.
 
+import type { MetricRead } from '@continuum/contracts';
+
 export type AnswerLanguage = 'es' | 'en';
 
 /** The words the report's chrome is set in, per language, in the order they appear. */
 export const SECTION_LABELS: Record<
   AnswerLanguage,
-  { why: string; action: string; evidence: string; evidenceDetail: string }
+  {
+    why: string;
+    action: string;
+    evidence: string;
+    evidenceDetail: string;
+    /** The three boxes of a J2 narrative, in reading order. */
+    what: string;
+    soWhat: string;
+    nowWhat: string;
+    /** Set before a tile's prior-period figure: "vs 24,214 · Sep 14–20". */
+    versus: string;
+  }
 > = {
   es: {
     why: 'Por qué',
     action: 'Acción',
     evidence: 'Evidencia',
     evidenceDetail: 'Los datos detrás de la respuesta',
+    what: 'Qué pasó',
+    soWhat: 'Qué significa',
+    nowWhat: 'Qué hacer',
+    versus: 'vs',
   },
   en: {
     why: 'Why',
     action: 'Action',
     evidence: 'Evidence',
     evidenceDetail: 'The data behind the answer',
+    what: 'What',
+    soWhat: 'So what',
+    nowWhat: 'Now what',
+    versus: 'vs',
+  },
+};
+
+/**
+ * The one-word read of a metric against its target or its prior, in the answer's language.
+ * The contract carries the read as a language-neutral key (`mejor` / `peor` / `igual` /
+ * `sin_comparacion`, derived on the Backend); the word the reader sees follows the answer.
+ */
+export const METRIC_READ_LABEL: Record<AnswerLanguage, Record<MetricRead, string>> = {
+  es: {
+    mejor: 'mejor',
+    peor: 'peor',
+    igual: 'igual',
+    sin_comparacion: 'sin comparación',
+  },
+  en: {
+    mejor: 'better',
+    peor: 'worse',
+    igual: 'same',
+    sin_comparacion: 'no comparison',
   },
 };
 

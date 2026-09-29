@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-import { answerLanguage, readsAsSpanish, SECTION_LABELS } from './answerLanguage';
+import {
+  answerLanguage,
+  METRIC_READ_LABEL,
+  readsAsSpanish,
+  SECTION_LABELS,
+} from './answerLanguage';
 
 const SPANISH =
   'Tus campañas mantuvieron un desempeño global rentable durante esta semana, sosteniendo conversiones comerciales consistentes.';
@@ -57,17 +62,47 @@ describe('readsAsSpanish — small and deterministic', () => {
 
 describe('SECTION_LABELS', () => {
   it('names the three strata in each language', () => {
-    expect(SECTION_LABELS.es).toEqual({
+    expect(SECTION_LABELS.es).toMatchObject({
       why: 'Por qué',
       action: 'Acción',
       evidence: 'Evidencia',
       evidenceDetail: 'Los datos detrás de la respuesta',
     });
-    expect(SECTION_LABELS.en).toEqual({
+    expect(SECTION_LABELS.en).toMatchObject({
       why: 'Why',
       action: 'Action',
       evidence: 'Evidence',
       evidenceDetail: 'The data behind the answer',
     });
+  });
+});
+
+describe('METRIC_READ_LABEL — the read word follows the answer', () => {
+  it('says the four reads in Spanish and in English', () => {
+    expect(METRIC_READ_LABEL.es).toEqual({
+      mejor: 'mejor',
+      peor: 'peor',
+      igual: 'igual',
+      sin_comparacion: 'sin comparación',
+    });
+    expect(METRIC_READ_LABEL.en).toEqual({
+      mejor: 'better',
+      peor: 'worse',
+      igual: 'same',
+      sin_comparacion: 'no comparison',
+    });
+  });
+
+  it('names the three boxes of a J2 narrative per language', () => {
+    expect([SECTION_LABELS.es.what, SECTION_LABELS.es.soWhat, SECTION_LABELS.es.nowWhat]).toEqual([
+      'Qué pasó',
+      'Qué significa',
+      'Qué hacer',
+    ]);
+    expect([SECTION_LABELS.en.what, SECTION_LABELS.en.soWhat, SECTION_LABELS.en.nowWhat]).toEqual([
+      'What',
+      'So what',
+      'Now what',
+    ]);
   });
 });

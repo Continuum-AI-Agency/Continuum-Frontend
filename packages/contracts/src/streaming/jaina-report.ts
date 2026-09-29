@@ -115,19 +115,24 @@ export type BlockCategory = z.infer<typeof blockCategorySchema>;
  * Where a block sits on the page: in the answer itself, or under the
  * justification that holds the figures the answer rests on. A presentation
  * grouping only — it never reorders `report.blocks`, whose order the backend
- * grades (`data_scope_not_first`) and each section keeps.
+ * emits (`J2_BLOCK_ORDER`) and grades (`data_scope_not_first`) and each section keeps.
+ *
+ * The J2 card (docs/performance-plus-redesign/jaina.html, "Ficha Prism") reads: the
+ * sentence, the window line under it (`data_scope`), the tiles (`metric_grid`), the three
+ * boxes (`narrative`), the action — and only then the evidence, folded. So the frame and
+ * the grid are part of the ANSWER, not of the justification under it.
  */
 export type JainaReportSection = 'answer' | 'justification';
 
 const SECTION_OF_BLOCK_CATEGORY: Record<BlockCategory, JainaReportSection> = {
+  data_scope: 'answer',
+  answer_template: 'answer',
+  metric_grid: 'answer',
   narrative: 'answer',
   insight_list: 'answer',
   actions: 'answer',
-  survey: 'answer',
-  answer_template: 'answer',
-  data_scope: 'justification',
-  metric_grid: 'justification',
   chart: 'justification',
+  survey: 'justification',
   data_table: 'justification',
   comparison: 'justification',
   goal_pacing: 'justification',
@@ -135,6 +140,49 @@ const SECTION_OF_BLOCK_CATEGORY: Record<BlockCategory, JainaReportSection> = {
 
 export function sectionOfBlockCategory(category: BlockCategory): JainaReportSection {
   return SECTION_OF_BLOCK_CATEGORY[category];
+}
+
+/**
+ * The order a finished report's blocks are emitted in — the J2 card top to bottom. The
+ * Backend sorts by it at the emit boundary (`withJ2BlockOrder`) and the Frontend renders
+ * `report.blocks` as given, never re-sorting; two blocks of one category keep their order.
+ * `survey` (the reading chosen for an ambiguous word) is evidence, so it closes the card.
+ */
+export const J2_BLOCK_ORDER: ReadonlyArray<BlockCategory> = [
+  'data_scope',
+  'answer_template',
+  'metric_grid',
+  'narrative',
+  'insight_list',
+  'actions',
+  'goal_pacing',
+  'comparison',
+  'chart',
+  'data_table',
+  'survey',
+];
+
+const J2_RANK: ReadonlyMap<BlockCategory, number> = new Map(
+  J2_BLOCK_ORDER.map((category, index) => [category, index]),
+);
+
+/** Where a category sits in the J2 order; an unknown category sorts last. */
+export const j2RankOf = (category: string): number =>
+  J2_RANK.get(category as BlockCategory) ?? J2_BLOCK_ORDER.length;
+
+/**
+ * The blocks in J2 order. A stable sort by category rank only: nothing is added, dropped
+ * or rewritten, and blocks of one category keep the order they came in. Returns the SAME
+ * array when it is already in order, so a caller can tell whether anything moved.
+ */
+export function withJ2BlockOrder<B extends { category: string }>(
+  blocks: ReadonlyArray<B>,
+): ReadonlyArray<B> {
+  const sorted = blocks
+    .map((block, index) => ({ block, index }))
+    .sort((a, b) => j2RankOf(a.block.category) - j2RankOf(b.block.category) || a.index - b.index)
+    .map((entry) => entry.block);
+  return sorted.every((block, index) => block === blocks[index]) ? blocks : sorted;
 }
 
 export const blockPrioritySchema = z.enum(['primary', 'secondary', 'supplementary']);
@@ -193,7 +241,23 @@ export const blockBaseSchema = z.object({
 
 export const narrativeBlockSchema = blockBaseSchema.extend({
   category: z.literal('narrative'),
+  /**
+   * The whole justification as one text. Kept for one release beside the three fields
+   * below: a renderer that has all three shows the boxes and not the body; one that has
+   * only the body (a persisted pre-J2 report) still has the words.
+   */
   body: z.string().min(1),
+  /**
+   * The J2 card's three boxes (docs/performance-plus-redesign/jaina.html, "Ficha Prism"):
+   * what happened — the entity, its figure and its comparison; what it means — the gap
+   * against the target or the prior and the entity that explains it; what to do — a move
+   * that names an entity and a sizing (an amount, a percentage, a pause). Null on a report
+   * written before J2; `validateReport` refuses a finished report missing any of them
+   * (`narrative_fields_missing`, `now_what_unsized`).
+   */
+  what: z.string().nullable().default(null),
+  so_what: z.string().nullable().default(null),
+  now_what: z.string().nullable().default(null),
   highlights: z.array(insightItemSchema).default([]),
   citations: z.array(citationSchema).default([]),
 });
@@ -202,6 +266,56 @@ export type NarrativeBlock = z.infer<typeof narrativeBlockSchema>;
 // ---------------------------------------------------------------------------
 // Metric grid block
 // ---------------------------------------------------------------------------
+
+/**
+ * The one-word read of a tile: which way the figure moved against its target or its
+ * prior, in the direction the business wants. `sin_comparacion` is the explicit "no
+ * comparison" the content rules require in place of a silent blank — a metric with no
+ * comparable prior says so, it never shows a delta against another window.
+ */
+export const METRIC_READS = ['mejor', 'peor', 'igual', 'sin_comparacion'] as const;
+export const metricReadSchema = z.enum(METRIC_READS);
+export type MetricRead = z.infer<typeof metricReadSchema>;
+
+/** Which way a metric should move: down for every cost and for frequency, up for the rest. */
+export type MetricPolarity = 'higher_is_better' | 'lower_is_better';
+
+const LOWER_IS_BETTER_LABEL =
+  /(?:^|[^\p{L}])(?:cost|costo|coste|cpc|cpm|cpa|cpl|cpr|frequency|frecuencia)(?![\p{L}])/iu;
+
+/** A metric's polarity from its label; spend and every count or rate read as higher-is-better. */
+export const metricPolarityOf = (label: string): MetricPolarity =>
+  LOWER_IS_BETTER_LABEL.test(label) ? 'lower_is_better' : 'higher_is_better';
+
+/** Under this relative move a figure reads `igual`. */
+export const METRIC_READ_FLAT_BAND = 0.005;
+
+const numberOf = (value: unknown): number | null => {
+  const parsed =
+    typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+/**
+ * The read of a figure against its prior: `sin_comparacion` with no numeric prior, `igual`
+ * inside the flat band, else `mejor` or `peor` by the metric's polarity. A prior of 0 with a
+ * figure above it is a move from nothing — read by direction, with no percentage.
+ */
+export const metricReadOf = (
+  value: unknown,
+  prior: unknown,
+  polarity: MetricPolarity,
+): MetricRead => {
+  const now = numberOf(value);
+  const before = numberOf(prior);
+  if (now === null || before === null) return 'sin_comparacion';
+  if (before === 0 && now === 0) return 'igual';
+  const relative =
+    before === 0 ? Number.POSITIVE_INFINITY : Math.abs(now - before) / Math.abs(before);
+  if (relative < METRIC_READ_FLAT_BAND) return 'igual';
+  const rising = now > before;
+  return (polarity === 'higher_is_better') === rising ? 'mejor' : 'peor';
+};
 
 export const metricItemSchema = z.object({
   label: z.string(),
@@ -218,6 +332,13 @@ export const metricItemSchema = z.object({
   prior_value: z.union([z.number(), z.string()]).nullable().default(null),
   /** The window `prior_value` covers, e.g. "2026-09-13 → 2026-09-19". */
   prior_label: z.string().nullable().default(null),
+  /**
+   * The one-word read (`metricReadOf`), derived by the Backend from `prior_value` and the
+   * metric's polarity — never typed by a model. `sin_comparacion` goes with a null prior;
+   * `mejor` / `peor` / `igual` with a prior and its label. Null only on a report written
+   * before J2; `validateReport` refuses a finished report with one (`metric_read_missing`).
+   */
+  read: metricReadSchema.nullable().default(null),
   severity: z.enum(['positive', 'neutral', 'watch', 'risk']).default('neutral'),
 });
 export type MetricItem = z.infer<typeof metricItemSchema>;
@@ -739,7 +860,13 @@ export type ReportViolation = {
     | 'action_entity_is_account'
     | 'claim_without_source'
     | 'claim_uncited'
-    | 'answer_template_invalid';
+    | 'answer_template_invalid'
+    // The J2 card: every tile carries its read and, with it, its prior; the narrative carries
+    // what / so_what / now_what, and now_what names an entity and a sizing.
+    | 'metric_read_missing'
+    | 'metric_read_prior_mismatch'
+    | 'narrative_fields_missing'
+    | 'now_what_unsized';
   block_id: string | null;
   message: string;
 };
@@ -1513,7 +1640,11 @@ const summedTotalsCellsOf = (block: Record<string, unknown>): Set<string> => {
       const tokens = numberTokensOfCell(rows[index][key]);
       if (tokens.length !== 1) continue;
       const tolerance = Math.max(slack, Math.abs(sum) * FIGURE_RELATIVE_TOLERANCE);
-      if (tokens[0].some((reading) => Math.abs(reading.value - sum) <= tolerance + 0.5 * 10 ** -reading.decimals)) {
+      if (
+        tokens[0].some(
+          (reading) => Math.abs(reading.value - sum) <= tolerance + 0.5 * 10 ** -reading.decimals,
+        )
+      ) {
         out.add(`${id}.rows[${index}].${key}`);
       }
     }
@@ -1858,6 +1989,135 @@ const mentionsTruncation = (notes: string | null): boolean =>
 const hasTotalsRow = (rows: Record<string, string | number | null>[]): boolean =>
   rows.some((row) => Object.values(row).some((v) => typeof v === 'string' && /^total/i.test(v)));
 
+// ---------------------------------------------------------------------------
+// The J2 card's own rules — exported so the Backend's answer rules and the golden grader
+// read the same function the validator does.
+// ---------------------------------------------------------------------------
+
+/**
+ * Every tile of a metric grid carries its read, and the read agrees with the prior it was
+ * derived from: `sin_comparacion` beside no prior, `mejor` / `peor` / `igual` beside a prior
+ * and its label. A tile that shows a delta with no word, or a word with no delta, is a tile
+ * the reader has to re-derive.
+ */
+export const metricReadViolationsOf = (
+  block: Pick<MetricGridBlock, 'block_id' | 'metrics'>,
+): ReportViolation[] => {
+  const out: ReportViolation[] = [];
+  for (const m of block.metrics) {
+    if (m.read == null) {
+      out.push({
+        code: 'metric_read_missing',
+        block_id: block.block_id,
+        message: `Metric "${m.label}" carries no read (mejor / peor / igual / sin_comparacion).`,
+      });
+      continue;
+    }
+    const hasPrior = m.prior_value != null && m.prior_label != null;
+    if (m.read === 'sin_comparacion' ? m.prior_value != null : !hasPrior) {
+      out.push({
+        code: 'metric_read_prior_mismatch',
+        block_id: block.block_id,
+        message:
+          m.read === 'sin_comparacion'
+            ? `Metric "${m.label}" reads sin_comparacion but carries a prior value.`
+            : `Metric "${m.label}" reads ${m.read} with no prior value or prior label to read against.`,
+      });
+    }
+  }
+  return out;
+};
+
+/** The nouns a sizing can be counted in, beside a bare figure: "6 conversaciones", "3 días". */
+const SIZING_NOUNS = [
+  'conversaciones',
+  'conversaci[oó]n',
+  'conversations?',
+  'leads?',
+  'compras?',
+  'purchases?',
+  'clics?',
+  'clicks?',
+  'resultados?',
+  'results?',
+  'mensajes',
+  'messages?',
+  'd[ií]as?',
+  'days?',
+  'semanas?',
+  'weeks?',
+  'campa[ñn]as?',
+  'campaigns?',
+  'anuncios?',
+  'ads?',
+  'conjuntos?',
+  'ad sets?',
+].join('|');
+
+/**
+ * A move's size: a money amount, a percentage, a multiplier, a counted noun — or a pause,
+ * which is the whole of the entity and needs no figure. A `{figure_id}` ref counts too: a
+ * template's text carries its figures as refs until they are rendered.
+ */
+const SIZING_IN_TEXT = new RegExp(
+  String.raw`(?:[$€]\s?${FIGURE}|${FIGURE}\s?(?:${CURRENCY}|%|x|×|pp|pts?|puntos|points)(?![\p{L}])|${FIGURE}\s?(?:${SIZING_NOUNS})(?![\p{L}])|\{[a-z][a-z0-9_]*\}|(?<![\p{L}])(?:paus\p{L}*|apag\p{L}*|switch(?:ed|ing)? off|turn(?:ed|ing)? off|detener|deten\p{L}*)(?![\p{L}]))`,
+  'iu',
+);
+
+/** The account as the entity a move is about: "la cuenta", "the account", "this account". */
+const ACCOUNT_WORD_IN_TEXT =
+  /(?<![\p{L}])(?:la|the|esta|this|toda la|the whole)\s+(?:ad\s+)?(?:cuenta|account)(?![\p{L}])/iu;
+
+/** True when `text` names a move's entity: a turn entity, a bold span, or the account. */
+export const namesMoveEntity = (text: string, entities: ReadonlyArray<ReportEntity>): boolean =>
+  entitiesNamedIn(text, entities).length > 0 ||
+  boldSpans(text).length > 0 ||
+  ACCOUNT_WORD_IN_TEXT.test(text);
+
+/** True when `text` states a sizing for its move. */
+export const statesMoveSizing = (text: string): boolean => SIZING_IN_TEXT.test(text);
+
+const isFilled = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
+/**
+ * The narrative carries the J2 card's three boxes, and the third names its entity and its
+ * size. A `supplementary` narrative is the fail-visible placeholder a block that could not
+ * render degrades to (`degradeToNarrativeBlockV2`); it is a note, not the answer, and is
+ * not held to this.
+ */
+export const narrativeThreePartViolationsOf = (
+  block: Pick<NarrativeBlock, 'block_id' | 'priority' | 'what' | 'so_what' | 'now_what'>,
+  entities: ReadonlyArray<ReportEntity> = [],
+): ReportViolation[] => {
+  if (block.priority === 'supplementary') return [];
+  const missing = (['what', 'so_what', 'now_what'] as const).filter(
+    (field) => !isFilled(block[field]),
+  );
+  if (missing.length > 0) {
+    return [
+      {
+        code: 'narrative_fields_missing',
+        block_id: block.block_id,
+        message: `The narrative carries no ${missing.join(', ')}; a finished answer carries what, so_what and now_what.`,
+      },
+    ];
+  }
+  const nowWhat = block.now_what as string;
+  const lacks = [
+    ...(namesMoveEntity(nowWhat, entities) ? [] : ['an entity']),
+    ...(statesMoveSizing(nowWhat) ? [] : ['a sizing']),
+  ];
+  if (lacks.length === 0) return [];
+  return [
+    {
+      code: 'now_what_unsized',
+      block_id: block.block_id,
+      message: `now_what names ${lacks.join(' or ')} nowhere; a move names the entity it is on and how big it is.`,
+    },
+  ];
+};
+
 export function validateReport(
   blocks: readonly AnyBlock[],
   options: ValidateReportOptions = {},
@@ -1897,7 +2157,9 @@ export function validateReport(
   }
 
   for (const b of blocks) {
+    if (b.category === 'narrative') out.push(...narrativeThreePartViolationsOf(b, entities));
     if (b.category === 'metric_grid') {
+      out.push(...metricReadViolationsOf(b));
       for (const m of b.metrics) {
         if (m.format === 'percent' && m.percent_basis == null) {
           out.push({

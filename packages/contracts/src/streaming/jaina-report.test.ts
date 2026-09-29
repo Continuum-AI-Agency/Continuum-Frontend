@@ -13,13 +13,19 @@ import {
   hasProseMarks,
   headersOfBlocks,
   insightListItemSchema,
+  J2_BLOCK_ORDER,
+  metricPolarityOf,
+  metricReadOf,
+  metricReadViolationsOf,
   narrativeBlockSchema,
+  narrativeThreePartViolationsOf,
   numberReadingsOfToken,
   numbersInText,
   parseProseMarks,
   sectionOfBlockCategory,
   stripProseMarks,
   validateReport,
+  withJ2BlockOrder,
 } from './jaina-report';
 
 describe('checkpointBlockV2LenientSchema', () => {
@@ -269,6 +275,7 @@ describe('Prism blocks + validateReport', () => {
     expect(violations.map((v) => v.code)).toEqual([
       'data_scope_missing',
       'context_floor_missing',
+      'metric_read_missing',
       'percent_basis_missing',
       'table_truncation_undeclared',
       'table_totals_missing',
@@ -1074,20 +1081,27 @@ describe('cellsOfBlocks / headersOfBlocks', () => {
 });
 
 describe('sectionOfBlockCategory', () => {
+  // The J2 card: the window line and the tiles are the answer, with the sentence and the
+  // three boxes; the evidence folds under it.
   it('keeps the blocks that state the answer in the answer', () => {
-    for (const category of ['narrative', 'insight_list', 'actions', 'survey'] as const) {
+    for (const category of [
+      'data_scope',
+      'metric_grid',
+      'narrative',
+      'insight_list',
+      'actions',
+    ] as const) {
       expect(sectionOfBlockCategory(category)).toBe('answer');
     }
   });
 
-  it('files the figures the answer rests on under its justification', () => {
+  it('files the evidence the answer rests on under its justification — the survey included, it closes the card', () => {
     for (const category of [
-      'data_scope',
-      'metric_grid',
       'chart',
       'data_table',
       'comparison',
       'goal_pacing',
+      'survey',
     ] as const) {
       expect(sectionOfBlockCategory(category)).toBe('justification');
     }
@@ -1097,5 +1111,192 @@ describe('sectionOfBlockCategory', () => {
     for (const category of blockCategorySchema.options) {
       expect(['answer', 'justification']).toContain(sectionOfBlockCategory(category));
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The J2 card (docs/performance-plus-redesign/jaina.html, "Ficha Prism"): every tile carries
+// a one-word read beside its prior, the narrative carries what / so_what / now_what, and
+// now_what names an entity and a sizing. Each rule is a check in `validateReport`.
+// ---------------------------------------------------------------------------
+
+describe('metricReadOf', () => {
+  it('reads the direction the business wants: a falling cost is mejor, a falling count is peor', () => {
+    expect(metricPolarityOf('Costo por conversación')).toBe('lower_is_better');
+    expect(metricPolarityOf('Cost per lead')).toBe('lower_is_better');
+    expect(metricPolarityOf('Cpc')).toBe('lower_is_better');
+    expect(metricPolarityOf('Conversaciones')).toBe('higher_is_better');
+    expect(metricPolarityOf('Spend')).toBe('higher_is_better');
+    expect(metricReadOf(36.55, 39.62, 'lower_is_better')).toBe('mejor');
+    expect(metricReadOf(54.84, 39.62, 'lower_is_better')).toBe('peor');
+    expect(metricReadOf(1552, 1600, 'higher_is_better')).toBe('peor');
+    expect(metricReadOf(1552, 1400, 'higher_is_better')).toBe('mejor');
+  });
+
+  it('reads igual inside the flat band and sin_comparacion with no numeric prior', () => {
+    expect(metricReadOf(20251.54, 20300, 'higher_is_better')).toBe('igual');
+    expect(metricReadOf(0, 0, 'lower_is_better')).toBe('igual');
+    expect(metricReadOf(51, null, 'higher_is_better')).toBe('sin_comparacion');
+    expect(metricReadOf('—', 30, 'higher_is_better')).toBe('sin_comparacion');
+    expect(metricReadOf('51', '30', 'higher_is_better')).toBe('mejor');
+    // A move from nothing has a direction and no percentage.
+    expect(metricReadOf(30, 0, 'higher_is_better')).toBe('mejor');
+  });
+});
+
+describe('validateReport — the J2 card', () => {
+  const base = { scope: 'account', title: 'T', priority: 'primary' as const };
+  const metric = (over: Record<string, unknown>) => ({
+    label: 'Conversaciones',
+    value: 1552,
+    unit: null,
+    format: 'number',
+    percent_basis: null,
+    change: null,
+    change_direction: null,
+    prior_value: null,
+    prior_label: null,
+    read: null,
+    severity: 'neutral',
+    ...over,
+  });
+  const grid = (metrics: Record<string, unknown>[]) =>
+    ({ ...base, block_id: 'grid', category: 'metric_grid', metrics, dataset_id: null }) as never;
+
+  it('refuses a tile with no read, and a read that disagrees with its prior', () => {
+    expect(metricReadViolationsOf(grid([metric({})])).map((v) => v.code)).toEqual([
+      'metric_read_missing',
+    ]);
+    expect(
+      metricReadViolationsOf(
+        grid([
+          metric({
+            read: 'sin_comparacion',
+            prior_value: 1400,
+            prior_label: '2026-08-01 → 2026-08-27',
+          }),
+        ]),
+      ).map((v) => v.code),
+    ).toEqual(['metric_read_prior_mismatch']);
+    expect(metricReadViolationsOf(grid([metric({ read: 'mejor' })])).map((v) => v.code)).toEqual([
+      'metric_read_prior_mismatch',
+    ]);
+    expect(
+      metricReadViolationsOf(
+        grid([
+          metric({ read: 'mejor', prior_value: 1400, prior_label: '2026-08-01 → 2026-08-27' }),
+          metric({ label: 'Gasto', value: 68109, read: 'sin_comparacion' }),
+        ]),
+      ),
+    ).toEqual([]);
+  });
+
+  const narrative = (over: Record<string, unknown>) =>
+    ({
+      ...base,
+      block_id: 'prose',
+      category: 'narrative',
+      body: 'b',
+      what: 'SEDE Cañadas trae el 31% de las conversaciones con el 27% del gasto.',
+      so_what:
+        'El costo promedio está 1.55 MXN arriba del objetivo, y la diferencia la explica ITESO.',
+      now_what: 'Mover 300 MXN al día de **ITESO // MENSAJES** a **CAÑADAS // MENSAJES**.',
+      highlights: [],
+      citations: [],
+      ...over,
+    }) as never;
+
+  it('refuses a narrative missing a box, and a now_what with no entity or no sizing', () => {
+    expect(
+      narrativeThreePartViolationsOf(narrative({ now_what: null })).map((v) => v.code),
+    ).toEqual(['narrative_fields_missing']);
+    expect(
+      narrativeThreePartViolationsOf(narrative({ what: '  ', so_what: null })).map(
+        (v) => v.message,
+      ),
+    ).toEqual([
+      'The narrative carries no what, so_what; a finished answer carries what, so_what and now_what.',
+    ]);
+    expect(
+      narrativeThreePartViolationsOf(
+        narrative({ now_what: 'Revisar el reparto la semana que viene.' }),
+      ).map((v) => v.code),
+    ).toEqual(['now_what_unsized']);
+    // An entity the turn saw, named plainly, with a sizing in a counted noun.
+    expect(
+      narrativeThreePartViolationsOf(
+        narrative({ now_what: 'Subir ITESO // MENSAJES a 6 conversaciones por día.' }),
+        [{ level: 'campaign', id: '1', name: 'ITESO // MENSAJES' }],
+      ),
+    ).toEqual([]);
+    // A pause is a whole-entity move and needs no figure.
+    expect(
+      narrativeThreePartViolationsOf(narrative({ now_what: 'Pausar **ALEIRA // Copy 3**.' })),
+    ).toEqual([]);
+    // The account is an entity; a template's ref is a sizing until it is rendered.
+    expect(
+      narrativeThreePartViolationsOf(
+        narrative({ now_what: 'Mantener la cuenta en {cpr} por conversación.' }),
+      ),
+    ).toEqual([]);
+    expect(narrativeThreePartViolationsOf(narrative({}))).toEqual([]);
+  });
+
+  it('leaves the fail-visible placeholder alone', () => {
+    expect(
+      narrativeThreePartViolationsOf(degradeToNarrativeBlockV2({ category: 'chart' })),
+    ).toEqual([]);
+  });
+
+  it('grades both through validateReport', () => {
+    const codes = validateReport([
+      {
+        ...base,
+        block_id: 's',
+        category: 'data_scope',
+        dates: 'L7D',
+        timezone: 'UTC',
+        source: 'api',
+        notes: [],
+      } as never,
+      grid([metric({ change: 10.9, change_direction: 'up', prior_value: 1400, prior_label: 'x' })]),
+      narrative({ now_what: null }),
+    ]).map((v) => v.code);
+    expect(codes).toEqual(['metric_read_missing', 'narrative_fields_missing']);
+  });
+});
+
+describe('withJ2BlockOrder', () => {
+  const block = (category: string, id: string) => ({ category, block_id: id });
+
+  it('sorts by the J2 card top to bottom and keeps siblings in their order', () => {
+    const ordered = withJ2BlockOrder([
+      block('narrative', 'prose'),
+      block('data_scope', 'scope'),
+      block('insight_list', 'insights'),
+      block('actions', 'actions'),
+      block('chart', 'c1'),
+      block('metric_grid', 'grid'),
+      block('data_table', 't1'),
+      block('chart', 'c2'),
+      block('survey', 'survey'),
+    ]);
+    expect(ordered.map((b) => b.block_id)).toEqual([
+      'scope',
+      'grid',
+      'prose',
+      'insights',
+      'actions',
+      'c1',
+      'c2',
+      't1',
+      'survey',
+    ]);
+  });
+
+  it('returns the same array when nothing moves, and ranks every category', () => {
+    const blocks = J2_BLOCK_ORDER.map((category, i) => block(category, String(i)));
+    expect(withJ2BlockOrder(blocks)).toBe(blocks);
+    expect(new Set(J2_BLOCK_ORDER)).toEqual(new Set(blockCategorySchema.options));
   });
 });

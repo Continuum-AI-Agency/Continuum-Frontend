@@ -62,9 +62,12 @@ describe('JainaReportDocument — the same sections as the chat', () => {
         generatedAt={new Date('2026-09-25T00:00:00Z')}
       />,
     );
-    expect(exportedIdsIn('answer')).toEqual(['reading', 'moves']);
-    expect(exportedIdsIn('justification')).toEqual(['scope', 'kpis', 'trend', 'rows']);
+    // The J2 split: the window line and the tiles belong to the answer, the chart and the
+    // table are the evidence — and paper cannot click, so the export folds nothing.
+    expect(exportedIdsIn('answer')).toEqual(['scope', 'reading', 'kpis', 'moves']);
+    expect(exportedIdsIn('justification')).toEqual(['trend', 'rows']);
     expect(screen.getByRole('region', { name: 'Evidence' })).toBeTruthy();
+    expect(document.querySelectorAll('details').length).toBe(0);
     // renderExportDocument waits for every block to mount by counting `[data-block-id]`.
     expect(document.querySelectorAll('[data-block-id]').length).toBe(6);
   });
