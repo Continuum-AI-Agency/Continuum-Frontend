@@ -503,6 +503,27 @@ async function deleteSeed(value: Seed): Promise<void> {
  * calling the tool" (a finished row with events). Those three read identically at the
  * DOM and have completely different causes.
  */
+/**
+ * The conversations in `sessionIds` this run may delete: those with no run from before
+ * `since`. `POST /chat/conversations` also answers for a thread the panel RESTORED on mount,
+ * so collecting every session id it returns and deleting them all once aimed at a thread
+ * another bench owned (`bench:golden:smoke:*`, 2026-09-28) — a restored thread has history.
+ */
+async function sessionsThisRunOwns(sessionIds: Iterable<string>, since: string): Promise<string[]> {
+  const owned: string[] = [];
+  for (const sessionId of sessionIds) {
+    const { count } = await admin
+      .schema('jaina')
+      .from('jaina_conversation_runs')
+      .select('run_id', { count: 'exact', head: true })
+      .eq('session_id', sessionId)
+      .lt('created_at', since);
+    if ((count ?? 0) === 0) owned.push(sessionId);
+    else notes.push(`kept conversation ${sessionId}: it has runs from before this test`);
+  }
+  return owned;
+}
+
 async function latestRun(
   brandId: string,
   since: string,
@@ -997,6 +1018,7 @@ test.describe('campaign flow canvas', () => {
     const ownerUserId = await brandMemberId(STARCRAFT_BRAND_ID, SANDBOX_OWNER_EMAIL);
     await selectBrand(ownerUserId, STARCRAFT_BRAND_ID);
     const saveSeed = await seedSaveScaffold(ownerUserId);
+    const testStartedAt = new Date().toISOString();
     const { context, page } = await signedInPage(browser, SANDBOX_OWNER_EMAIL);
     const createdSessions = new Set<string>();
     page.on('response', async (response) => {
@@ -1314,7 +1336,7 @@ test.describe('campaign flow canvas', () => {
         .delete()
         .eq('id', saveSeed.scaffoldId);
       if (error) console.warn(`[canvas-bench] cleanup ${saveSeed.scaffoldId}: ${error.message}`);
-      for (const sessionId of createdSessions) {
+      for (const sessionId of await sessionsThisRunOwns(createdSessions, testStartedAt)) {
         const response = await page.request
           .delete(`/api/agents/jaina/chat/conversations/${encodeURIComponent(sessionId)}`)
           .catch(() => null);
@@ -1322,6 +1344,365 @@ test.describe('campaign flow canvas', () => {
           console.warn(`[canvas-bench] cleanup conversation ${sessionId}: ${response?.status()}`);
         }
       }
+      await context.close();
+    }
+  });
+
+  // ---------------------------------------------------------------------------------------
+  // THE COMPANION LOOP — the owner's 09-28 notes, end to end, on the armed sandbox only (no
+  // client brand, no client login). Every hop runs through the real UI, the Fastify this spec
+  // spawns, and production rows; each is graded on a row, a URL or a rendered pixel:
+  //   1. a plain campaign ask — the recording's own sentence, no "scaffold" in it — proposes
+  //   2. the proposal opens the chat's companion canvas beside it, on that scaffold
+  //   3. an edit on the companion shows in the chat's card as it is made, and saves (v2)
+  //   4. "Open on canvas" carries the thread; a Library image placed there is still drawn
+  //      after Save reloads the version (v3)
+  //   5. "Generate with Jaina" hands an empty ad to Jaina in the SAME thread, pinned to v3
+  //   6. "Back to chat" lands in that thread, and its card draws the attached image
+  // MONEY: generation is approval-gated and nothing here approves — a gate is left pending and
+  // deleted by id. Scaffolds, gates and the one conversation this test made are id-diffed and
+  // deleted by id.
+  // ---------------------------------------------------------------------------------------
+  test('companion loop — a plain campaign ask proposes, the side canvas follows, an image survives save, back to the thread, Generate hands the ad to Jaina', async ({
+    browser,
+  }, testInfo) => {
+    testInfo.setTimeout(1_800_000);
+    const NATURAL_ASK =
+      'Plan a starter ad account and then make two creative to put into an ad set.';
+    const testStartedAt = new Date().toISOString();
+    const ownerUserId = await brandMemberId(STARCRAFT_BRAND_ID, SANDBOX_OWNER_EMAIL);
+    await selectBrand(ownerUserId, STARCRAFT_BRAND_ID);
+
+    const scaffoldIds = async (): Promise<string[]> =>
+      (
+        (
+          await brandProfiles()
+            .from('paid_scaffolds')
+            .select('id')
+            .eq('brand_id', STARCRAFT_BRAND_ID)
+        ).data ?? []
+      ).map((row) => String((row as { id: string }).id));
+    const gateIds = async (): Promise<string[]> =>
+      (
+        (
+          await brandProfiles()
+            .from('jaina_tool_gate_approvals')
+            .select('id')
+            .eq('brand_id', STARCRAFT_BRAND_ID)
+        ).data ?? []
+      ).map((row) => String((row as { id: string }).id));
+    const currentVersionOf = async (scaffoldId: string): Promise<string> => {
+      const { data } = await brandProfiles()
+        .from('paid_scaffolds')
+        .select('current_version_id')
+        .eq('id', scaffoldId)
+        .single();
+      return String((data as { current_version_id: string }).current_version_id);
+    };
+    const runEventsText = async (runId: string): Promise<string> => {
+      const { data } = await admin
+        .schema('jaina')
+        .from('jaina_conversation_run_events')
+        .select('event_type,payload')
+        .eq('run_id', runId)
+        .order('seq', { ascending: true });
+      return JSON.stringify(data ?? []);
+    };
+    const settledRun = async (since: string) => {
+      await expect
+        .poll(async () => (await latestRun(STARCRAFT_BRAND_ID, since))?.status, {
+          timeout: 420_000,
+          intervals: [3_000, 5_000],
+        })
+        .toMatch(/completed|failed|paused|awaiting|cancel/);
+      return latestRun(STARCRAFT_BRAND_ID, since);
+    };
+    // Next keeps the page navigated AWAY from mounted but hidden, so on the canvas page the Scale
+    // page's companion canvas (and its record bar, inspector and nodes) is still in the DOM.
+    // Every canvas locator below is scoped to what is on screen.
+    const shown = (selector: string) => page.locator(`${selector}:visible`);
+    const selectShownNode = async (nodeId: string) => {
+      await shown(`.react-flow__node[data-id="${nodeId}"]`).click({ position: { x: 24, y: 12 } });
+      const inspector = shown('[data-testid="canvas-inspector"]');
+      await expect(inspector).toHaveAttribute('data-node-id', nodeId);
+      return inspector;
+    };
+    /** Saves the canvas on screen and returns the version it made current. */
+    const saveCanvas = async (scaffoldId: string, before: string): Promise<string> => {
+      await shown('[data-testid="canvas-save"]').click();
+      await expect.poll(() => currentVersionOf(scaffoldId), { timeout: 180_000 }).not.toBe(before);
+      await expect(shown('[data-testid="canvas-record-dirty"]')).toHaveCount(0, {
+        timeout: 180_000,
+      });
+      return currentVersionOf(scaffoldId);
+    };
+
+    const scaffoldsBefore = new Set(await scaffoldIds());
+    const gatesBefore = new Set(await gateIds());
+    const { context, page } = await signedInPage(browser, SANDBOX_OWNER_EMAIL);
+    const createdSessions = new Set<string>();
+    page.on('response', async (response) => {
+      if (
+        response.request().method() === 'POST' &&
+        response.url().endsWith('/api/agents/jaina/chat/conversations')
+      ) {
+        const body = (await response.json().catch(() => null)) as { session_id?: unknown } | null;
+        if (typeof body?.session_id === 'string') createdSessions.add(body.session_id);
+      }
+    });
+    let createdScaffolds: string[] = [];
+
+    try {
+      // ---- 1. the plain ask proposes ------------------------------------------------------
+      await page.goto('/scale?tab=jaina', { waitUntil: 'domcontentloaded' });
+      const composer = page.getByRole('textbox', { name: 'Message Jaina' });
+      await expect(composer).toBeVisible({ timeout: 240_000 });
+      // The panel restores the newest thread on mount, and a "new" clicked before that lands is
+      // undone by it — the turn then goes into an old thread. `isVisible` does not wait (its
+      // timeout is ignored), which is how two runs landed in `bench:golden:smoke:*`.
+      const conversations = page.locator('[data-testid^="jaina-conversation-"]');
+      const restored = await conversations
+        .first()
+        .waitFor({ state: 'visible', timeout: 90_000 })
+        .then(() => true)
+        .catch(() => false);
+      if (restored) await expect(conversations.first()).toBeDisabled({ timeout: 90_000 });
+      await page.getByRole('button', { name: 'Create new conversation' }).click();
+      await expect(conversations.and(page.locator(':disabled'))).toHaveCount(0, {
+        timeout: 15_000,
+      });
+      await composer.click();
+      await composer.pressSequentially(NATURAL_ASK);
+      const askedAt = new Date().toISOString();
+      await page.getByRole('button', { name: 'Send message' }).click();
+
+      const proposed = await expect
+        .poll(async () => (await scaffoldIds()).filter((id) => !scaffoldsBefore.has(id)).length, {
+          timeout: 420_000,
+          intervals: [2_000, 5_000],
+        })
+        .toBeGreaterThan(0)
+        .then(() => true)
+        .catch(() => false);
+      createdScaffolds = (await scaffoldIds()).filter((id) => !scaffoldsBefore.has(id));
+      const askRun = await settledRun(askedAt).catch(() => latestRun(STARCRAFT_BRAND_ID, askedAt));
+      grade(
+        'trigger.plain-ask',
+        proposed,
+        proposed
+          ? `"${NATURAL_ASK}" wrote ${createdScaffolds.length} scaffold(s) — no "scaffold" in the ask`
+          : `no scaffold row; run ${askRun?.runId ?? 'none'} status=${askRun?.status ?? '—'}`,
+      );
+      if (!proposed) throw new Error('[canvas-bench] the plain campaign ask proposed nothing');
+      const { data: askRunRow } = await admin
+        .schema('jaina')
+        .from('jaina_conversation_runs')
+        .select('session_id')
+        .eq('run_id', askRun?.runId ?? 'none')
+        .maybeSingle();
+      const askSession = String((askRunRow as { session_id?: string } | null)?.session_id ?? '');
+      const freshThread = (await sessionsThisRunOwns([askSession], testStartedAt)).length === 1;
+      grade('trigger.fresh-thread', freshThread, `the ask ran in ${askSession}`);
+      if (!freshThread) {
+        throw new Error(`[canvas-bench] the ask landed in an existing thread ${askSession}`);
+      }
+
+      const scaffoldId = createdScaffolds[0] as string;
+      const v1 = await currentVersionOf(scaffoldId);
+      const { data: scaffoldRow } = await brandProfiles()
+        .from('paid_scaffolds')
+        .select('name')
+        .eq('id', scaffoldId)
+        .single();
+      const scaffoldName = String((scaffoldRow as { name: string }).name);
+      const card = page
+        .locator(`[data-testid="paid-scaffold-card"][data-scaffold-version="${v1}"]`)
+        .first();
+      await expect(card).toBeVisible({ timeout: 120_000 });
+
+      // ---- 2. the proposal opens the companion canvas on it ---------------------------------
+      await expect(page.getByTestId('canvas-record-bar')).toBeVisible({ timeout: 120_000 });
+      await expect(page.getByTestId('canvas-scaffold-picker')).toContainText(
+        scaffoldName.slice(0, 24),
+        { timeout: 120_000 },
+      );
+      await expect(page.getByTestId('canvas-record-version')).toContainText('v1');
+      await expect(page.getByTestId('canvas-propose-via-jaina')).toHaveCount(0);
+      grade('companion.opened', true, `side canvas loaded "${scaffoldName}" v1, no Propose button`);
+
+      // ---- 3. an edit on the companion shows in the card as it is made, then saves ----------
+      const { data: v1Nodes } = await brandProfiles()
+        .from('paid_scaffold_nodes')
+        .select('id,level')
+        .eq('version_id', v1)
+        .order('path_key', { ascending: true });
+      const adSetRow = ((v1Nodes ?? []) as { id: string; level: string }[]).find(
+        (row) => row.level === 'adset',
+      );
+      if (!adSetRow) throw new Error('[canvas-bench] the proposal has no ad set');
+      const liveName = `Live ${RUN_ID} ad set`;
+      const adSetInspector = await selectShownNode(adSetRow.id);
+      await adSetInspector.getByTestId('inspector-field-label').fill(liveName);
+      await adSetInspector.getByTestId('inspector-field-label').press('Enter');
+      await expect(card.getByTestId('scaffold-live-canvas')).toBeVisible({ timeout: 30_000 });
+      await expect(card).toContainText(liveName, { timeout: 30_000 });
+      grade(
+        'companion.live-card',
+        true,
+        'renamed on the side canvas → the chat card shows it, "Live on canvas"',
+      );
+      const v2 = await saveCanvas(scaffoldId, v1);
+      grade('companion.save', v2 !== v1, `the side canvas saved v2 ${v2}`);
+
+      // ---- 4. Open on canvas carries the thread; a Library image survives Save -------------
+      const openLink = card.getByTestId('scaffold-open-canvas');
+      const href = (await openLink.getAttribute('href')) ?? '';
+      const threadSessionId = new URL(href, 'http://bench').searchParams.get('session');
+      expect(threadSessionId, 'Open on canvas carries the thread').toBeTruthy();
+      await openLink.click();
+      await page.waitForURL(/\/scale\/campaign-canvas\?/, { timeout: 60_000 });
+      // The page first shows the store's copy of the graph, then the record bar loads the
+      // requested scaffold and replaces every node — closing any inspector (and the Library
+      // picker inside it) opened in between. Touch nothing until that load has landed.
+      await expect(shown('[data-testid="canvas-scaffold-picker"]')).toBeVisible({
+        timeout: 180_000,
+      });
+      await expect(shown('[data-testid="canvas-record-bar"]')).not.toContainText('Loading', {
+        timeout: 180_000,
+      });
+      await expect(shown('[data-testid="canvas-record-version"]')).toContainText('v2', {
+        timeout: 180_000,
+      });
+
+      const creatives = shown('.react-flow__node-creative');
+      await expect(creatives.first()).toBeVisible({ timeout: 60_000 });
+      const firstCreativeId = (await creatives.first().getAttribute('data-id')) ?? '';
+      // The record bar loads the requested scaffold AFTER the page shows the store's copy, and
+      // that load replaces every node — dropping a selection made in between. Select again.
+      await expect(async () => {
+        const inspector = await selectShownNode(firstCreativeId);
+        await inspector.getByTestId('inspector-creative-library').click({ timeout: 5_000 });
+      }).toPass({ timeout: 120_000 });
+      // Named: a "Saved as v2" toast is a dialog too.
+      const picker = page.getByRole('dialog', { name: /from the Library/ });
+      const tiles = picker.locator('button[aria-pressed]');
+      await expect(tiles.first()).toBeVisible({ timeout: 60_000 });
+      await tiles.first().click();
+      const add = picker.getByRole('button', { name: /^Add\b/ });
+      if (await add.isVisible({ timeout: 3_000 }).catch(() => false)) await add.click();
+      await expect(picker).toBeHidden({ timeout: 15_000 });
+      const v3 = await saveCanvas(scaffoldId, v2);
+      // The reload replaced every node: read the pixels of whatever creative now holds an image.
+      const savedImage = shown('.react-flow__node-creative img').first();
+      await expect(savedImage).toBeVisible({ timeout: 60_000 });
+      await expect
+        .poll(
+          () =>
+            savedImage.evaluate((img: HTMLImageElement) => (img.complete ? img.naturalWidth : 0)),
+          { timeout: 60_000 },
+        )
+        .toBeGreaterThan(0);
+      await page.screenshot({ path: shotPath('companion-after-save') });
+      grade('preview.survives-save', true, `v3 ${v3}: the reloaded creative draws a real image`);
+
+      // ---- 5. Generate with Jaina, into the saved version, in the same thread ---------------
+      const emptyCreative = creatives.filter({ hasNot: page.locator('img') }).first();
+      if (await emptyCreative.isVisible({ timeout: 15_000 }).catch(() => false)) {
+        const targetId = (await emptyCreative.getAttribute('data-id')) ?? '';
+        const generatedAt = new Date().toISOString();
+        await expect(async () => {
+          const inspector = await selectShownNode(targetId);
+          const generate = inspector.getByTestId('inspector-creative-generate');
+          await expect(generate).toBeEnabled({ timeout: 5_000 });
+          await generate.click({ timeout: 5_000 });
+        }).toPass({ timeout: 120_000 });
+        const run = await settledRun(generatedAt).catch(() =>
+          latestRun(STARCRAFT_BRAND_ID, generatedAt),
+        );
+        const events = run ? await runEventsText(run.runId) : '';
+        const handedOff = /paid_creative_generate|paid_scaffold_attach_creative/.test(events);
+        const { data: runRow } = await admin
+          .schema('jaina')
+          .from('jaina_conversation_runs')
+          .select('session_id,query')
+          .eq('run_id', run?.runId ?? 'none')
+          .maybeSingle();
+        const runQuery = String((runRow as { query?: string } | null)?.query ?? '');
+        grade(
+          'generate.handoff',
+          handedOff,
+          `run ${run?.runId ?? 'none'} status=${run?.status ?? '—'}: ${
+            handedOff ? 'reached generate / attach' : 'no generate or attach tool in its events'
+          }`,
+        );
+        grade(
+          'generate.pinned-to-saved-version',
+          runQuery.includes(v3),
+          runQuery.includes(v3) ? `the turn names v3 ${v3}` : 'the turn does not name v3',
+        );
+        grade(
+          'generate.same-thread',
+          (runRow as { session_id?: string } | null)?.session_id === threadSessionId,
+          'the canvas chat is the thread the card lives in',
+        );
+      } else {
+        graded.push({
+          step: 'generate.handoff',
+          grade: 'SKIP',
+          detail: 'every creative already held an image, so no empty ad was left to generate into',
+        });
+      }
+
+      // ---- 6. Back to chat lands in the same thread, its card drawing the image ------------
+      // Generate opened the chat maximized over the canvas; its footprint covers the top bar.
+      const minimize = page.getByRole('button', { name: 'Minimize chat' });
+      if (await minimize.count()) await minimize.click();
+      const back = shown('[data-testid="canvas-back-to-chat"]');
+      await expect(back).toHaveAttribute('href', `/scale?tab=jaina&sessionId=${threadSessionId}`);
+      await back.click();
+      await page.waitForURL(/\/scale\?tab=jaina&sessionId=/, { timeout: 60_000 });
+      const cardAgain = shown(
+        `[data-testid="paid-scaffold-card"][data-scaffold-version="${v1}"]`,
+      ).first();
+      await expect(cardAgain).toBeVisible({ timeout: 180_000 });
+      grade('canvas.back-to-thread', true, `returned to thread ${threadSessionId}, card on screen`);
+      const tileImage = cardAgain.getByTestId('scaffold-creative').locator('img').first();
+      await expect(tileImage).toBeVisible({ timeout: 60_000 });
+      await expect
+        .poll(
+          () =>
+            tileImage.evaluate((img: HTMLImageElement) => (img.complete ? img.naturalWidth : 0)),
+          { timeout: 60_000 },
+        )
+        .toBeGreaterThan(0);
+      grade('card.creative-preview', true, "the card's Creatives tile draws the attached image");
+      await page.screenshot({ path: shotPath('companion-back-in-thread') });
+    } finally {
+      const newGates = (await gateIds()).filter((id) => !gatesBefore.has(id));
+      for (const id of newGates) {
+        const { error } = await brandProfiles()
+          .from('jaina_tool_gate_approvals')
+          .delete()
+          .eq('id', id);
+        if (error) console.warn(`[canvas-bench] cleanup gate ${id}: ${error.message}`);
+      }
+      for (const id of createdScaffolds) {
+        const { error } = await brandProfiles().from('paid_scaffolds').delete().eq('id', id);
+        if (error) console.warn(`[canvas-bench] cleanup scaffold ${id}: ${error.message}`);
+      }
+      const ownedSessions = await sessionsThisRunOwns(createdSessions, testStartedAt);
+      for (const sessionId of ownedSessions) {
+        const response = await context.request
+          .delete(`/api/agents/jaina/chat/conversations/${encodeURIComponent(sessionId)}`)
+          .catch(() => null);
+        if (!response?.ok()) {
+          console.warn(`[canvas-bench] cleanup conversation ${sessionId}: ${response?.status()}`);
+        }
+      }
+      notes.push(
+        `companion loop cleaned: ${newGates.length} gate(s), ${createdScaffolds.length} scaffold(s), ` +
+          `${ownedSessions.length} conversation(s)`,
+      );
       await context.close();
     }
   });

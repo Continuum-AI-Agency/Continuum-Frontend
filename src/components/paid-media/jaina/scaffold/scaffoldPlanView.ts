@@ -124,6 +124,12 @@ export type CreativeTile = {
   adName: string;
   format: 'image' | 'video' | 'carousel' | null;
   thumbnails: string[];
+  /**
+   * The still to sign when no thumbnail is stored — true of every creative a canvas save
+   * or an attach placed, since only a deploy records one. Never a video: its signed URL is
+   * the film, not a picture.
+   */
+  previewAssetId: string | null;
   cardCount: number;
 };
 
@@ -149,6 +155,10 @@ export const creativeTilesOf = (
       adName: ad.name,
       format: ad.creative?.format ?? null,
       thumbnails: [],
+      previewAssetId:
+        ad.creative && ad.creative.format !== 'video'
+          ? (ad.creative.cards[0]?.asset_id ?? null)
+          : null,
       cardCount: ad.creative?.cards.length ?? 0,
     }));
   }
@@ -175,6 +185,12 @@ export const creativeTilesOf = (
       thumbnails: (cards.length > 0 ? cards.map(thumbOf) : [thumbOf(media)]).filter(
         (url): url is string => Boolean(url),
       ),
+      previewAssetId:
+        attached && format !== 'video'
+          ? (cards.map((card) => readString(card, 'asset_id')).find(Boolean) ??
+            ad.creativeAssetId ??
+            null)
+          : null,
       cardCount: cards.length > 0 ? cards.length : attached ? 1 : 0,
     };
   });

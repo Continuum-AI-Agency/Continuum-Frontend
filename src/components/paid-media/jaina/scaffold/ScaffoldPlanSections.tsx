@@ -5,6 +5,7 @@ import { Film, GalleryHorizontal, ImageIcon, ImageOff } from 'lucide-react';
 import * as React from 'react';
 import { formatCurrency } from '@/components/paid-media/optimizer/format';
 import { Button } from '@/components/ui/button';
+import { useSignedAssetUrls } from '@/lib/ai-studio/elements';
 import { cn } from '@/lib/utils';
 import {
   type AudienceLine,
@@ -244,10 +245,10 @@ export function ScaffoldAudiences({ audiences }: { audiences: AudienceLine[] }) 
 const FORMAT_ICON = { image: ImageIcon, video: Film, carousel: GalleryHorizontal } as const;
 const TILE_LIMIT = 8;
 
-function CreativeThumb({ tile }: { tile: CreativeTile }) {
+function CreativeThumb({ tile, signedUrl }: { tile: CreativeTile; signedUrl?: string }) {
   const Icon = tile.format ? FORMAT_ICON[tile.format] : ImageOff;
   const [broken, setBroken] = React.useState(false);
-  const src = broken ? null : (tile.thumbnails[0] ?? null);
+  const src = broken ? null : (tile.thumbnails[0] ?? signedUrl ?? null);
   return (
     <li
       className="flex w-16 flex-col gap-1"
@@ -285,7 +286,19 @@ function CreativeThumb({ tile }: { tile: CreativeTile }) {
   );
 }
 
-export function ScaffoldCreatives({ tiles }: { tiles: CreativeTile[] }) {
+export function ScaffoldCreatives({
+  tiles,
+  brandId,
+}: {
+  tiles: CreativeTile[];
+  brandId?: string | null;
+}) {
+  const signed = useSignedAssetUrls(
+    brandId || undefined,
+    tiles.flatMap((tile) =>
+      tile.thumbnails.length === 0 && tile.previewAssetId ? [tile.previewAssetId] : [],
+    ),
+  );
   if (tiles.length === 0) return null;
   const hidden = tiles.length - TILE_LIMIT;
   return (
@@ -293,7 +306,11 @@ export function ScaffoldCreatives({ tiles }: { tiles: CreativeTile[] }) {
       <SectionHeading>Creatives</SectionHeading>
       <ul className="flex flex-wrap gap-2">
         {tiles.slice(0, TILE_LIMIT).map((tile) => (
-          <CreativeThumb key={tile.pathKey} tile={tile} />
+          <CreativeThumb
+            key={tile.pathKey}
+            tile={tile}
+            signedUrl={tile.previewAssetId ? signed[tile.previewAssetId] : undefined}
+          />
         ))}
         {hidden > 0 ? (
           <li className="flex size-16 items-center justify-center rounded-md border text-muted-foreground text-xs tabular-nums">

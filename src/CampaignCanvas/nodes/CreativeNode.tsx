@@ -1,9 +1,18 @@
 'use client';
-import { Copy, Film, GalleryHorizontal, Image as ImageIcon, Play, Trash2 } from 'lucide-react';
+import {
+  Copy,
+  Film,
+  GalleryHorizontal,
+  Image as ImageIcon,
+  Play,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 import Image from 'next/image';
 import type React from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { Node } from '@/components/ai-elements/node';
+import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -21,7 +30,11 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
+import { useSignedAssetUrls } from '@/lib/ai-studio/elements';
+import { cn } from '@/lib/utils';
+import { useCanvasJaina } from '../canvasJaina';
 import { NodeProvenance } from '../components/NodeProvenance';
+import { useCreativeAssetPlacement } from '../hooks/useCreativeAssetPlacement';
 import { useCampaignStore } from '../stores/useCampaignStore';
 import {
   CAROUSEL_MAX_CARDS,
@@ -29,6 +42,7 @@ import {
   type CampaignNodeProps,
   type CarouselCard,
   type CreativeAssetType,
+  type CreativeData,
 } from '../types';
 import { DEFAULT_CREATIVE_ASSET_TYPE } from '../types/adCreativeCompatibility';
 
@@ -64,6 +78,43 @@ export function resolveCreativePreviewRatio(
   }
 
   return widthPart / heightPart;
+}
+
+/**
+ * The asset ids a creative names but holds no URL for.
+ *
+ * Signed URLs never persist: a pick or upload carries them only in this browser, and a
+ * saved or reloaded version names its assets by id alone. Without a fresh signature
+ * every creative went blank the moment it was saved.
+ */
+export function unsignedCreativeAssetIds(
+  data: Pick<CreativeData, 'mediaId' | 'thumbnailUrl' | 'assetUrl' | 'cards'>,
+): string[] {
+  const ids = data.mediaId && !data.thumbnailUrl && !data.assetUrl ? [data.mediaId] : [];
+  for (const card of data.cards ?? []) {
+    if (card.mediaId && !card.thumbnailUrl) ids.push(card.mediaId);
+  }
+  return ids;
+}
+
+/** What a creative draws: its stored URLs, else a fresh signature of its asset. */
+export function creativePreviewSources(
+  data: Pick<CreativeData, 'assetType' | 'mediaId' | 'thumbnailUrl' | 'assetUrl'>,
+  signed: Readonly<Record<string, string | undefined>>,
+): { thumbnailUrl?: string; assetUrl?: string } {
+  const fresh = data.mediaId ? signed[data.mediaId] : undefined;
+  const assetType = data.assetType ?? DEFAULT_CREATIVE_ASSET_TYPE;
+  return {
+    // A video's signed URL is the film itself, never an <img> source.
+    thumbnailUrl: data.thumbnailUrl ?? (assetType === 'image' ? fresh : undefined),
+    assetUrl: data.assetUrl ?? fresh,
+  };
+}
+
+/** The same signatures, shared by every creative on screen through the query cache. */
+export function useSignedCreativeUrls(ids: readonly string[]) {
+  const { activeBrandId } = useActiveBrandContext();
+  return useSignedAssetUrls(activeBrandId || undefined, ids);
 }
 
 const FORMAT_OPTIONS: Array<{ value: CreativeAssetType; label: string; description: string }> = [
@@ -103,7 +154,13 @@ function MediaPlaceholder({ kind, label }: { kind: CreativeAssetType; label?: st
   );
 }
 
-function CarouselStrip({ cards }: { cards: CarouselCard[] }) {
+function CarouselStrip({
+  cards,
+  signed,
+}: {
+  cards: CarouselCard[];
+  signed: Readonly<Record<string, string | undefined>>;
+}) {
   if (cards.length === 0) {
     return (
       <AspectRatio ratio={2} className="w-full overflow-hidden">
@@ -123,9 +180,9 @@ function CarouselStrip({ cards }: { cards: CarouselCard[] }) {
           key={`${card.mediaId}:${index}`}
           className="relative aspect-square flex-1 overflow-hidden rounded-sm bg-muted"
         >
-          {card.thumbnailUrl ? (
+          {card.thumbnailUrl || (card.kind === 'image' && signed[card.mediaId]) ? (
             <Image
-              src={card.thumbnailUrl}
+              src={(card.thumbnailUrl || signed[card.mediaId]) as string}
               alt={card.headline ?? `Card ${index + 1}`}
               fill
               unoptimized
@@ -150,18 +207,25 @@ function CarouselStrip({ cards }: { cards: CarouselCard[] }) {
 export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'creative'>) => {
   const { duplicateNode, removeNode, setCreativeFormat } = useCampaignStore();
 
+  const { dropActive, dropHandlers, notice, uploads } = useCreativeAssetPlacement(id);
+  const canvasJaina = useCanvasJaina();
+  const isDirty = useCampaignStore((store) => store.isDirty);
+  const uploading = uploads.some((upload) => upload.status !== 'done' && upload.status !== 'error');
+
   const handleDuplicate = useCallback(() => duplicateNode(id), [duplicateNode, id]);
   const handleDelete = useCallback(() => removeNode(id), [removeNode, id]);
 
   const selectedAssetType = data.assetType ?? DEFAULT_CREATIVE_ASSET_TYPE;
   const cards = data.cards ?? [];
+  const signed = useSignedCreativeUrls(unsignedCreativeAssetIds(data));
+  const { thumbnailUrl, assetUrl } = creativePreviewSources(data, signed);
   const [previewRatio, setPreviewRatio] = useState(() =>
     resolveCreativePreviewRatio(data.aspectRatio, selectedAssetType),
   );
 
   useEffect(() => {
     setPreviewRatio(resolveCreativePreviewRatio(data.aspectRatio, selectedAssetType));
-  }, [data.aspectRatio, selectedAssetType, data.thumbnailUrl]);
+  }, [data.aspectRatio, selectedAssetType, thumbnailUrl]);
 
   const handlePreviewLoad = useCallback((image: HTMLImageElement) => {
     if (image.naturalWidth > 0 && image.naturalHeight > 0) {
@@ -185,15 +249,23 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
           <Node
             handles={{ target: true, source: false }}
             selected={selected}
-            className="overflow-hidden border-border/60 p-0 transition-shadow hover:shadow-sm cursor-grab active:cursor-grabbing"
+            data-testid="canvas-creative-node"
+            {...dropHandlers}
+            className={cn(
+              'overflow-hidden border-border/60 p-0 transition-shadow hover:shadow-sm cursor-grab active:cursor-grabbing',
+              dropActive && 'ring-2 ring-primary ring-offset-2',
+            )}
           >
             {selectedAssetType === 'carousel' ? (
-              <CarouselStrip cards={cards} />
+              <CarouselStrip cards={cards} signed={signed} />
             ) : (
-              <AspectRatio ratio={previewRatio} className="relative w-full overflow-hidden bg-muted">
-                {data.thumbnailUrl ? (
+              <AspectRatio
+                ratio={previewRatio}
+                className="relative w-full overflow-hidden bg-muted"
+              >
+                {thumbnailUrl ? (
                   <Image
-                    src={data.thumbnailUrl}
+                    src={thumbnailUrl}
                     alt="Creative Preview"
                     fill
                     unoptimized
@@ -203,10 +275,10 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
                     onDragStart={handlePreviewDragStart}
                     onLoadingComplete={handlePreviewLoad}
                   />
-                ) : selectedAssetType === 'video' && data.assetUrl ? (
+                ) : selectedAssetType === 'video' && assetUrl ? (
                   // No poster was stored: the first decoded frame IS the poster.
                   <video
-                    src={data.assetUrl}
+                    src={assetUrl}
                     muted
                     playsInline
                     preload="metadata"
@@ -215,7 +287,12 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
                 ) : (
                   <MediaPlaceholder kind={selectedAssetType} />
                 )}
-                {selectedAssetType === 'video' && (data.thumbnailUrl || data.assetUrl) ? (
+                {dropActive || uploading ? (
+                  <span className="absolute inset-0 flex items-center justify-center bg-background/70 text-xs font-medium text-foreground">
+                    {uploading ? 'Uploading…' : 'Drop to use'}
+                  </span>
+                ) : null}
+                {selectedAssetType === 'video' && (thumbnailUrl || assetUrl) ? (
                   <span className="absolute bottom-2 left-2 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white">
                     <Play className="h-3 w-3 fill-current" aria-hidden />
                   </span>
@@ -232,6 +309,11 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
                 {caption}
               </Badge>
             </div>
+            {notice ? (
+              <p className="px-3 pb-2 text-2xs leading-snug text-destructive" role="alert">
+                {notice}
+              </p>
+            ) : null}
             {data.provenance ? (
               <div className="px-3 pb-2">
                 <NodeProvenance data={data} />
@@ -266,6 +348,23 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
             </ContextMenuSubContent>
           </ContextMenuSub>
         </ContextMenuGroup>
+
+        {canvasJaina ? (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem disabled={isDirty} onClick={() => canvasJaina.generateForCreative(id)}>
+              <Sparkles className="mr-2 h-4 w-4" /> Generate with Jaina
+              <ContextMenuItemInfo
+                className="ml-2"
+                description={
+                  isDirty
+                    ? 'Save first — Jaina fills the saved version.'
+                    : "Jaina makes this creative from its ad's copy and attaches it. Spend waits for your approval."
+                }
+              />
+            </ContextMenuItem>
+          </>
+        ) : null}
 
         <ContextMenuSeparator />
 

@@ -88,6 +88,12 @@ interface CampaignStore {
    */
   editLocked: boolean;
   setEditLocked: (locked: boolean) => void;
+  /**
+   * Bumped when something outside the canvas changed the scaffold on screen — Jaina
+   * attaching a creative. The record bar reloads on it, unless the graph has unsaved edits.
+   */
+  reloadNonce: number;
+  requestReload: () => void;
   loadHydratedGraph: (graph: HydratedCanvasGraph) => void;
   loadOpenAiGraph: (graph: HydratedOpenAiGraph) => void;
   startOpenAiDraft: () => void;
@@ -283,8 +289,10 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
   openAiBaseline: {},
   isDirty: false,
   editLocked: false,
+  reloadNonce: 0,
 
   setEditLocked: (editLocked) => set({ editLocked }),
+  requestReload: () => set((state) => ({ reloadNonce: state.reloadNonce + 1 })),
 
   loadHydratedGraph: ({ nodes, edges, hydration }) => {
     if (validationTimer) {

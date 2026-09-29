@@ -91,6 +91,21 @@ describe('PromptInput queued text', () => {
 
     expect(screen.getByRole('textbox').textContent).toBe(queued);
   });
+
+  // The 09-28 recording: two "Propose via Jaina" clicks left the request in the composer twice.
+  it('replaces the draft with a host prefill instead of appending a second copy', () => {
+    const queued = 'Propose the campaign on my canvas.';
+    const props = {
+      attachments: attachmentController(),
+      onSubmit: mock(),
+      queuedTextMode: 'replace' as const,
+    };
+    const { rerender } = render(<PromptInput {...props} queuedText={queued} />);
+    rerender(<PromptInput {...props} queuedText={null} />);
+    rerender(<PromptInput {...props} queuedText={queued} />);
+
+    expect(screen.getByRole('textbox').textContent).toBe(queued);
+  });
 });
 
 describe('PromptInput dropped references', () => {

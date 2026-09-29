@@ -44,6 +44,8 @@ import {
   deployBlockersOf,
   scaffoldSummaryOf,
 } from './scaffoldPlanView';
+import { scaffoldCanvasHref, useScaffoldThread } from './scaffoldThreadContext';
+import { useLiveCanvasTree } from './useLiveCanvasTree';
 import { usePaidScaffoldTree } from './usePaidScaffoldTree';
 
 /**
@@ -285,11 +287,20 @@ export function PaidScaffoldCard({
   const measureRef = React.useRef<HTMLDivElement | null>(null);
   const width = useCardWidth(measureRef);
 
-  const { tree, header, isLoading, isError, error } = usePaidScaffoldTree({
+  const {
+    tree: savedTree,
+    header,
+    isLoading,
+    isError,
+    error,
+  } = usePaidScaffoldTree({
     scaffoldVersionId: scaffold.scaffoldId,
     overlay: scaffold.progressByNode,
     settledAt: scaffold.receipt?.completedAt ?? null,
   });
+  // A canvas holding this scaffold draws it live — its edits show here as they are made.
+  const liveTree = useLiveCanvasTree(scaffold.parentScaffoldId ?? header?.scaffoldId ?? null);
+  const tree = liveTree ?? savedTree;
 
   const accountCurrency = useAdAccountCurrency(
     scaffold.brandId ?? header?.brandId ?? '',
@@ -306,9 +317,13 @@ export function PaidScaffoldCard({
     'Scaffold';
   const version = scaffold.version ?? header?.version ?? null;
   const parentScaffoldId = scaffold.parentScaffoldId ?? header?.scaffoldId ?? null;
-  const canvasHref = parentScaffoldId
-    ? `/scale/campaign-canvas?scaffold=${encodeURIComponent(parentScaffoldId)}`
-    : null;
+  const { sessionId, onScaffoldFocus } = useScaffoldThread();
+  const canvasHref = parentScaffoldId ? scaffoldCanvasHref(parentScaffoldId, sessionId) : null;
+  // Beside a companion canvas, Expand edits the scaffold there; elsewhere it opens the dialog.
+  const handleExpand =
+    onScaffoldFocus && parentScaffoldId
+      ? () => onScaffoldFocus(parentScaffoldId)
+      : () => setCanvasOpen(true);
 
   const summary = React.useMemo(
     () => scaffoldSummaryOf(plan, tree, currency),
@@ -405,6 +420,14 @@ export function PaidScaffoldCard({
                     v{version}
                   </span>
                 ) : null}
+                {liveTree ? (
+                  <span
+                    className="ml-1.5 font-normal text-primary text-xs"
+                    data-testid="scaffold-live-canvas"
+                  >
+                    Live on canvas
+                  </span>
+                ) : null}
               </AgentCardTitle>
             ) : null}
             <AgentCardSummary>{summaryLine(scaffold, tree)}</AgentCardSummary>
@@ -434,7 +457,7 @@ export function PaidScaffoldCard({
 
           <ScaffoldEvidence plan={plan} />
           <ScaffoldAudiences audiences={audiences} />
-          <ScaffoldCreatives tiles={creatives} />
+          <ScaffoldCreatives tiles={creatives} brandId={scaffold.brandId ?? header?.brandId} />
 
           {isError ? (
             <p className="text-destructive text-sm">
@@ -445,7 +468,7 @@ export function PaidScaffoldCard({
               <ViewSwitch
                 view={view}
                 onChange={setView}
-                onExpand={() => setCanvasOpen(true)}
+                onExpand={handleExpand}
                 canvasHref={canvasHref}
               />
               {view === 'graph' && width !== null && width < NARROW_CARD_PX ? (

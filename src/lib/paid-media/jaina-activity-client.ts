@@ -22,11 +22,11 @@
 import { type PaidScaffoldPlan, paidScaffoldPlanSchema } from '@continuum/contracts';
 import { fetchBrandAuthors } from '@/lib/library/commentAuthors';
 import { displayNameFromEmail } from '@/lib/library/comments';
+import { mediaSchema } from '@/lib/media/supabase-media';
 import {
   fetchPaidScaffoldTreeRows,
   type PaidScaffoldTreeRead,
 } from '@/lib/paid-media/scaffold-tree-client';
-import { mediaSchema } from '@/lib/media/supabase-media';
 import type { PaidScaffoldNodeRow } from '@/lib/paid-media/scaffoldTree';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -376,9 +376,7 @@ export type CanvasScaffoldRead = {
 };
 
 /** The one version's hash and typed plan. Selected apart from the list: manifests are large. */
-async function fetchScaffoldVersionDetail(params: {
-  versionId: string;
-}): Promise<{
+async function fetchScaffoldVersionDetail(params: { versionId: string }): Promise<{
   contentHash: string;
   plan: PaidScaffoldPlan | null;
   specialAdCategories: string[];
@@ -405,7 +403,10 @@ async function fetchScaffoldVersionDetail(params: {
 }
 
 /** Every asset a version's creatives name: the plan's cards and the rows' current attachments. */
-export function creativeAssetIdsOf(rows: PaidScaffoldNodeRow[], plan: PaidScaffoldPlan | null): string[] {
+export function creativeAssetIdsOf(
+  rows: PaidScaffoldNodeRow[],
+  plan: PaidScaffoldPlan | null,
+): string[] {
   const ids = new Set<string>();
   for (const ad of plan?.ads ?? []) {
     for (const card of ad.creative?.cards ?? []) ids.add(card.asset_id);
@@ -423,7 +424,7 @@ export function creativeAssetIdsOf(rows: PaidScaffoldNodeRow[], plan: PaidScaffo
 }
 
 /** id → image | video for the brand's own assets, under RLS. Unreadable ids are left out. */
-async function fetchAssetKinds(params: {
+export async function fetchAssetKinds(params: {
   brandId: string;
   assetIds: string[];
 }): Promise<Record<string, 'image' | 'video'>> {
@@ -436,7 +437,11 @@ async function fetchAssetKinds(params: {
   // Best-effort: a kind that cannot be read leaves the card's stored kind in charge.
   if (error) return {};
   const kinds: Record<string, 'image' | 'video'> = {};
-  for (const entry of (data ?? []) as { id: string; kind: string | null; mime_type: string | null }[]) {
+  for (const entry of (data ?? []) as {
+    id: string;
+    kind: string | null;
+    mime_type: string | null;
+  }[]) {
     const video = entry.kind === 'video' || (entry.mime_type ?? '').startsWith('video/');
     kinds[entry.id] = video ? 'video' : 'image';
   }

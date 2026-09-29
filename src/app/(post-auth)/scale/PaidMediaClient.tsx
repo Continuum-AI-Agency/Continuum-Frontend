@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
+import { useDeployRequest } from '@/CampaignCanvas/hooks/useDeployRequest';
 import { type AdAccount, AdAccountSelector } from '@/components/paid-media/AdAccountSelector';
 import { CampaignsTabSkeleton } from '@/components/paid-media/campaigns/CampaignsTabSkeleton';
 import { usePrefetchScaleCampaigns } from '@/components/paid-media/campaigns/usePrefetchScaleCampaigns';
@@ -112,6 +113,13 @@ const JainaChatSurface = dynamic(
   () =>
     import('@/components/paid-media/jaina/JainaChatSurface').then((mod) => mod.JainaChatSurface),
   { ssr: false, loading: () => <JainaSkeleton /> },
+);
+
+// The chat's companion canvas. Dynamic like the chat: the canvas store carries React Flow, and
+// the Scale page's first load must not.
+const ScaleCompanionCanvas = dynamic(
+  () => import('@/CampaignCanvas/ScaleCompanionCanvas').then((mod) => mod.ScaleCompanionCanvas),
+  { ssr: false, loading: () => <Skeleton className="h-full w-full rounded-none" /> },
 );
 
 // The win-rate explorer is a pop-out, not a tab: it needs full height, and the
@@ -233,6 +241,13 @@ export default function PaidMediaClientPage({
     normalizedTabParam ?? (jainaSessionIdParam || jainaInitialPrompt ? 'jaina' : 'dashboard'),
   );
   const [isCanvasOpen, setIsCanvasOpen] = React.useState(false);
+  // The scaffold the Jaina thread is about, shown on its companion canvas.
+  const [companionScaffoldId, setCompanionScaffoldId] = React.useState<string | null>(null);
+  // A turn the companion canvas hands the chat ("Generate with Jaina"), and its Deploy paused.
+  const [companionTurn, setCompanionTurn] = React.useState<{ id: string; text: string } | null>(
+    null,
+  );
+  const companionDeploy = useDeployRequest();
   // The ads-manager panel on the Dashboard tab. Separate from `isCanvasOpen`, which is
   // Jaina's canvas: the two tabs open the same canvas for different reasons and closing
   // one must not close the other.
@@ -345,6 +360,20 @@ export default function PaidMediaClientPage({
   const handleCanvasActionApplied = React.useCallback(() => {
     setIsCanvasOpen(true);
   }, []);
+
+  // A proposal or a card's Expand opens the companion; a loaded thread only points it, so
+  // switching threads never reopens a canvas someone closed.
+  const handleScaffoldFocus = React.useCallback(
+    (parentScaffoldId: string, reason: 'proposed' | 'thread' | 'expand') => {
+      setCompanionScaffoldId(parentScaffoldId);
+      if (reason !== 'thread') setIsCanvasOpen(true);
+    },
+    [],
+  );
+  const sendCompanionTurn = React.useCallback((text: string) => {
+    setCompanionTurn({ id: crypto.randomUUID(), text });
+  }, []);
+  const clearCompanionTurn = React.useCallback(() => setCompanionTurn(null), []);
 
   const getCanvasWidthLimits = React.useCallback(() => {
     const shellWidth = canvasShellRef.current?.clientWidth ?? 1200;
@@ -717,6 +746,12 @@ export default function PaidMediaClientPage({
                   initialPrompt={jainaInitialPrompt}
                   onInitialPromptConsumed={clearJainaPrompt}
                   onCanvasActionApplied={handleCanvasActionApplied}
+                  onScaffoldFocus={handleScaffoldFocus}
+                  autoSendPrompt={companionTurn}
+                  onAutoSendConsumed={clearCompanionTurn}
+                  operatorActionRequest={companionDeploy.request}
+                  onOperatorActionConsumed={companionDeploy.consumed}
+                  onOperatorActionSettled={companionDeploy.settled}
                   onOpenAccountRead={handleOpenAccountRead}
                   goalsAccessEnabled={goalsAccessEnabled}
                   className="rounded-none border-none bg-transparent backdrop-blur-none"
@@ -758,9 +793,14 @@ export default function PaidMediaClientPage({
                         animate={{ opacity: 1 }}
                         transition={{ duration: 0.2 }}
                       >
-                        <ReactFlowProvider>
-                          <CampaignCanvas />
-                        </ReactFlowProvider>
+                        <ScaleCompanionCanvas
+                          brandId={brandProfileId}
+                          scaffoldId={companionScaffoldId}
+                          onSend={sendCompanionTurn}
+                          onDeploy={companionDeploy.requestDeploy}
+                          deployInFlight={companionDeploy.inFlight}
+                          deployRefusal={companionDeploy.refusal}
+                        />
                       </motion.div>
                     </motion.aside>
                   </>

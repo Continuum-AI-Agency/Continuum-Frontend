@@ -2,12 +2,9 @@
 
 /*
  * A creative is one image, one video, or a carousel of 2-10 ordered cards. Assets come
- * from the brand's Library — picked, or uploaded into it first — so every `mediaId` the
- * canvas holds is a real `media.assets` row the save can resolve.
- *
- * Asset writes read the node FRESH from the store: an upload finishes long after the
- * render that started it, and several can finish together, so a closure's copy of
- * `cards` would drop whichever landed second.
+ * from the brand's Library — picked, uploaded into it first, or dropped on the node — so
+ * every `mediaId` the canvas holds is a real `media.assets` row the save can resolve.
+ * Placement itself lives in `useCreativeAssetPlacement`, shared with the node's drop.
  */
 
 import type { MediaAsset } from '@continuum/contracts';
@@ -36,16 +33,22 @@ import {
   GripVertical,
   ImageIcon,
   LibraryBig,
+  Sparkles,
   Trash2,
   Upload,
 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { LibraryMediaPickerDialog } from '@/components/library/editor/LibraryMediaPickerDialog';
-import { useMediaUpload } from '@/components/library/useMediaUpload';
-import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
+import { creativeGenerationPrompt, useCanvasJaina } from '../../canvasJaina';
+import { type PickedAsset, useCreativeAssetPlacement } from '../../hooks/useCreativeAssetPlacement';
+import {
+  creativePreviewSources,
+  unsignedCreativeAssetIds,
+  useSignedCreativeUrls,
+} from '../../nodes/CreativeNode';
 import { useCampaignStore } from '../../stores/useCampaignStore';
 import {
   CAROUSEL_MAX_CARDS,
@@ -53,17 +56,9 @@ import {
   type CampaignCanvasNodeMap,
   type CarouselCard,
   type CreativeAssetType,
-  type CreativeData,
 } from '../../types';
 import { ChipGroup, CommitInput, InspectorField, InspectorSection, isHttpUrl } from './fields';
 import { NameField } from './NodeSections';
-
-type PickedAsset = {
-  id: string;
-  kind: 'image' | 'video';
-  thumbnailUrl?: string;
-  assetUrl?: string;
-};
 
 const FORMAT_OPTIONS: { value: CreativeAssetType; label: string }[] = [
   { value: 'image', label: 'Image' },
@@ -127,6 +122,7 @@ function Thumb({
 function CarouselCardRow({
   sortableId,
   card,
+  signedUrl,
   index,
   count,
   onChange,
@@ -135,6 +131,7 @@ function CarouselCardRow({
 }: {
   sortableId: string;
   card: CarouselCard;
+  signedUrl?: string;
   index: number;
   count: number;
   onChange: (patch: Partial<CarouselCard>) => void;
@@ -169,7 +166,8 @@ function CarouselCardRow({
       </button>
       <Thumb
         kind={card.kind}
-        thumbnailUrl={card.thumbnailUrl}
+        thumbnailUrl={card.thumbnailUrl ?? (card.kind === 'image' ? signedUrl : undefined)}
+        assetUrl={signedUrl}
         className="size-14 shrink-0 rounded-md"
       />
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -242,6 +240,7 @@ function CarouselCardRow({
 
 function CarouselCards({ nodeId, cards }: { nodeId: string; cards: CarouselCard[] }) {
   const updateNodeData = useCampaignStore((store) => store.updateNodeData);
+  const signed = useSignedCreativeUrls(unsignedCreativeAssetIds({ cards }));
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -274,6 +273,7 @@ function CarouselCards({ nodeId, cards }: { nodeId: string; cards: CarouselCard[
               key={ids[index]}
               sortableId={ids[index]!}
               card={card}
+              signedUrl={signed[card.mediaId]}
               index={index}
               count={cards.length}
               onChange={(patch) =>
@@ -291,70 +291,39 @@ function CarouselCards({ nodeId, cards }: { nodeId: string; cards: CarouselCard[
 
 export function CreativeSection({ node }: { node: CampaignCanvasNodeMap['creative'] }) {
   const { data } = node;
-  const { activeBrandId } = useActiveBrandContext();
   const setCreativeFormat = useCampaignStore((store) => store.setCreativeFormat);
   const updateNodeData = useCampaignStore((store) => store.updateNodeData);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const {
+    brandId: activeBrandId,
+    place: placeAssets,
+    notice,
+    uploads,
+    uploadFiles,
+  } = useCreativeAssetPlacement(node.id);
+  const signed = useSignedCreativeUrls(unsignedCreativeAssetIds(data));
+  const preview = creativePreviewSources(data, signed);
+  const canvasJaina = useCanvasJaina();
+  const isDirty = useCampaignStore((store) => store.isDirty);
+  const feedsSavedAd = useCampaignStore(
+    (store) =>
+      creativeGenerationPrompt({
+        nodes: store.nodes,
+        edges: store.edges,
+        hydration: store.hydration,
+        creativeNodeId: node.id,
+      }) !== null,
+  );
+  const generateBlockedBecause = isDirty
+    ? 'Save first — Jaina fills the saved version.'
+    : !feedsSavedAd
+      ? 'Connect this creative to a saved ad first.'
+      : null;
 
   const format = data.assetType ?? 'image';
   const cards = data.cards ?? [];
 
-  const placeAssets = (assets: PickedAsset[]) => {
-    setNotice(null);
-    const current = useCampaignStore.getState().nodes.find((entry) => entry.id === node.id)?.data as
-      | CreativeData
-      | undefined;
-    if (!current || assets.length === 0) return;
-    const currentFormat = current.assetType ?? 'image';
-
-    if (currentFormat === 'carousel') {
-      const existing = current.cards ?? [];
-      const room = Math.max(0, CAROUSEL_MAX_CARDS - existing.length);
-      const added: CarouselCard[] = assets.slice(0, room).map((asset) => ({
-        mediaId: asset.id,
-        kind: asset.kind,
-        ...(asset.thumbnailUrl ? { thumbnailUrl: asset.thumbnailUrl } : {}),
-      }));
-      if (assets.length > added.length) {
-        setNotice(
-          `A carousel holds at most ${CAROUSEL_MAX_CARDS} cards, so ${assets.length - added.length} were left out.`,
-        );
-      }
-      if (added.length > 0) updateNodeData(node.id, { cards: [...existing, ...added] });
-      return;
-    }
-
-    const match = assets.find((asset) => asset.kind === currentFormat);
-    if (!match) {
-      setNotice(
-        currentFormat === 'image'
-          ? 'That is a video. Pick an image, or switch the format to Video.'
-          : 'That is an image. Pick a video, or switch the format to Image.',
-      );
-      return;
-    }
-    updateNodeData(node.id, {
-      mediaId: match.id,
-      thumbnailUrl: match.thumbnailUrl,
-      assetUrl: match.assetUrl,
-    });
-  };
-
-  const { uploads, uploadFiles } = useMediaUpload(activeBrandId, {
-    onUploaded: ({ file, uploaded }) => {
-      const kind = file.type.startsWith('video/') ? 'video' : 'image';
-      placeAssets([
-        {
-          id: uploaded.assetId,
-          kind,
-          assetUrl: uploaded.signedUrl,
-          ...(kind === 'image' ? { thumbnailUrl: uploaded.signedUrl } : {}),
-        },
-      ]);
-    },
-  });
   const activeUploads = uploads.filter((upload) => upload.status !== 'done');
 
   const excludeAssetIds =
@@ -407,8 +376,8 @@ export function CreativeSection({ node }: { node: CampaignCanvasNodeMap['creativ
           <div className="overflow-hidden rounded-lg border border-border/70">
             <Thumb
               kind={format}
-              thumbnailUrl={data.thumbnailUrl}
-              assetUrl={data.assetUrl}
+              thumbnailUrl={preview.thumbnailUrl}
+              assetUrl={preview.assetUrl}
               className="aspect-video w-full"
             />
             <div className="flex items-center justify-between gap-2 border-t border-border/70 px-3 py-2 text-xs">
@@ -464,6 +433,25 @@ export function CreativeSection({ node }: { node: CampaignCanvasNodeMap['creativ
             From library
           </Button>
         </div>
+        {canvasJaina ? (
+          <div className="flex flex-col gap-1">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              data-testid="inspector-creative-generate"
+              disabled={Boolean(generateBlockedBecause)}
+              onClick={() => canvasJaina.generateForCreative(node.id)}
+            >
+              <Sparkles aria-hidden />
+              Generate with Jaina
+            </Button>
+            <p className="text-2xs leading-snug text-muted-foreground">
+              {generateBlockedBecause ??
+                "Made from this ad's copy and attached to it. Spend waits for your approval."}
+            </p>
+          </div>
+        ) : null}
         <input
           ref={fileInputRef}
           type="file"

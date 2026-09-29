@@ -1,8 +1,10 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, Rocket, Save, Send } from 'lucide-react';
 import React from 'react';
 import { Pill, PillIndicator } from '@/components/kibo-ui/pill';
+import { PAID_SCAFFOLD_TREE_QUERY_ROOT } from '@/components/paid-media/jaina/scaffold/usePaidScaffoldTree';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -102,7 +104,11 @@ export function ScaffoldRecordBar({
   requestedScaffoldId?: string | null;
   /** The ad account the chat should run against: the loaded scaffold owns it. */
   onAdAccountChange: (adAccountId: string | null) => void;
-  onPropose: () => void;
+  /**
+   * Omitted beside the Scale chat: there the canvas saves versions and the chat follows the
+   * saved one, so re-proposing the graph through a turn has nothing left to do.
+   */
+  onPropose?: () => void;
   /** Opens the deploy gate for the loaded version in the canvas's Jaina panel. */
   onDeploy: (request: CanvasDeployRequest) => void;
   /** A Deploy paused is on its way to the panel; a second click must not open a second gate. */
@@ -111,7 +117,9 @@ export function ScaffoldRecordBar({
   deployRefusal?: string | null;
 }) {
   const { show: toast } = useToast();
+  const queryClient = useQueryClient();
   const hydration = useCampaignStore((store) => store.hydration);
+  const reloadNonce = useCampaignStore((store) => store.reloadNonce);
   const isDirty = useCampaignStore((store) => store.isDirty);
   const nodeCount = useCampaignStore((store) => store.nodes.length);
   const loadHydratedGraph = useCampaignStore((store) => store.loadHydratedGraph);
@@ -195,6 +203,9 @@ export function ScaffoldRecordBar({
         );
         return;
       }
+      // The chat's card for this scaffold redraws from the saved rows. Not awaited: a slow
+      // refetch must never hold the save's own spinner.
+      void queryClient.invalidateQueries({ queryKey: [PAID_SCAFFOLD_TREE_QUERY_ROOT] });
       toast({
         title: `Saved as v${saved.version}`,
         description: 'A new version of this scaffold. Nothing reached Meta.',
@@ -211,7 +222,19 @@ export function ScaffoldRecordBar({
       useCampaignStore.getState().setEditLocked(false);
       setIsSaving(false);
     }
-  }, [loadScaffold, scaffolds, toast]);
+  }, [loadScaffold, queryClient, scaffolds, toast]);
+
+  // Jaina changed the scaffold on screen (attached a creative): show it. Once per request, and
+  // never over unsaved edits — those are the person's, and a reload would erase them.
+  const handledReloadRef = React.useRef(reloadNonce);
+  React.useEffect(() => {
+    if (handledReloadRef.current === reloadNonce) return;
+    handledReloadRef.current = reloadNonce;
+    const { hydration: current, isDirty: dirty, editLocked } = useCampaignStore.getState();
+    const scaffold = scaffolds?.find((entry) => entry.id === current?.scaffoldId);
+    if (!scaffold || dirty || editLocked) return;
+    void loadScaffold(scaffold);
+  }, [loadScaffold, reloadNonce, scaffolds]);
 
   const blockers = recordBarBlockers({ hydration, isDirty, isSaving, deployInFlight });
   const saveBlockedBecause = blockers.save;
@@ -346,29 +369,31 @@ export function ScaffoldRecordBar({
             </TooltipContent>
           </Tooltip>
 
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  size="sm"
-                  // On a loaded record, Deploy is the primary action and Jaina the alternative.
-                  variant={hydration ? 'ghost' : 'default'}
-                  className="gap-1.5"
-                  disabled={Boolean(proposeBlockedBecause)}
-                  onClick={onPropose}
-                  data-testid="canvas-propose-via-jaina"
-                >
-                  <Send className="h-3.5 w-3.5" />
-                  Propose via Jaina
-                </Button>
-              }
-            />
-            <TooltipContent side="bottom">
-              {proposeBlockedBecause ??
-                'Sends this graph to Jaina. Building it on Meta still needs your approval.'}
-            </TooltipContent>
-          </Tooltip>
+          {onPropose ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="sm"
+                    // On a loaded record, Deploy is the primary action and Jaina the alternative.
+                    variant={hydration ? 'ghost' : 'default'}
+                    className="gap-1.5"
+                    disabled={Boolean(proposeBlockedBecause)}
+                    onClick={onPropose}
+                    data-testid="canvas-propose-via-jaina"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    Propose via Jaina
+                  </Button>
+                }
+              />
+              <TooltipContent side="bottom">
+                {proposeBlockedBecause ??
+                  'Sends this graph to Jaina. Building it on Meta still needs your approval.'}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
 
           {hydration ? (
             <Tooltip>
