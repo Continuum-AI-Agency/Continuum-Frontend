@@ -51,6 +51,7 @@ import {
   impactTier,
   readAdhocHandoff,
   readAdhocSuggestion,
+  proposalForRecommendation,
   readProposalBlock,
 } from '@continuum/contracts';
 import {
@@ -159,8 +160,18 @@ export function handoffProposal(
   proposals: readonly AudienceProposalRow[] | undefined,
 ): HandoffProposal | null {
   if (!handoff?.proposal_id || !proposals) return null;
-  const row = proposals.find((candidate) => candidate.id === handoff.proposal_id);
-  if (!row) return null;
+  const opened = proposals.find((candidate) => candidate.id === handoff.proposal_id);
+  if (!opened) return null;
+  // The handoff names the proposal it OPENED, but asking again supersedes that row and opens
+  // a new one on the same recommendation (MENSAJES // TODOS, 2026-09-29: e2310011 went to
+  // superseded / "refreshed" when 1e89d5e7 replaced it). Follow the row the card reads, so
+  // the two agree; a proposal the cycle closed has no successor and stays the answer.
+  const row =
+    proposalForRecommendation(proposals, {
+      id: opened.recommendation_id ?? handoff.recommendation_id ?? '',
+      adset_id: opened.adset_id,
+      trigger: opened.trigger,
+    }) ?? opened;
   const state = audienceCardStateFor(row);
   const block = readProposalBlock(row);
   const closed = row.status === 'superseded';

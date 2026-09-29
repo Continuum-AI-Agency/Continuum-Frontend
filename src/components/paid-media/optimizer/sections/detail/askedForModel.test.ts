@@ -481,6 +481,33 @@ describe('buildAskedForRows — the state of the proposal a handoff opened', () 
     expect(row?.proposal?.retryable).toBe(false);
   });
 
+  it('asked again: the row follows the proposal that replaced the one the handoff opened', () => {
+    // Production, 2026-09-29 21:11: "Pedirla de nuevo" superseded e2310011 ("refreshed") and
+    // opened 1e89d5e7 on the same recommendation. The row must read 1e89d5e7, as the card
+    // does, not report the refreshed row as closed by the cycle.
+    const [row] = buildAskedForRows([suggestion()], 500, {
+      proposals: [
+        proposal({
+          status: 'superseded',
+          error: { code: 'refreshed', message: 'Re-analysed on request.' },
+          updated_at: '2026-09-29T21:11:24Z',
+        }),
+        proposal({
+          id: '1e89d5e7-0000-4000-8000-000000000000',
+          status: 'failed',
+          error: { code: 'execute_failed', message: 'Meta rechazó el conjunto: sin permiso.' },
+          created_at: '2026-09-29T21:11:24Z',
+          updated_at: '2026-09-29T21:13:56Z',
+        }),
+      ],
+    });
+    expect(row?.proposal?.row.id).toBe('1e89d5e7-0000-4000-8000-000000000000');
+    expect(row?.proposal?.closed).toBe(false);
+    expect(row?.tierLabel).toBe('No se pudo construir');
+    expect(row?.nextNote).toBe('No se pudo construir — Meta rechazó el conjunto: sin permiso.');
+    expect(row?.proposal?.retryable).toBe(true);
+  });
+
   it('executed: created on Meta', () => {
     const row = rowFor({ status: 'executed', proposal: { version: 1 }, result: {} });
     expect(row?.tierLabel).toBe('Creada en Meta');

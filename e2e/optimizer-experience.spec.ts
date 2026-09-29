@@ -121,9 +121,10 @@ const PRUEBA_PORTFOLIO_NAME = 'Prueba';
 /** The state badge an asked-for row wears once its proposal exists, in the card's words. */
 const PROPOSAL_STATE =
   /^(En cola|Jaina está leyendo|Lista|Bloqueada|No se pudo construir|Cerrada|Aprobada|Creando el conjunto|Creada en Meta|Activando|Deshaciendo|Deshecha)$/;
-/** The note under the row for the same states — always a sentence, never a dump. */
+/** The note under the row for the same states — always a sentence, never a dump. A proposal
+ *  the cycle closed ("Cerrada") leads with its reason and ends on the closing sentence. */
 const PROPOSAL_NOTE =
-  /^(En cola|Jaina está leyendo|Lista|Bloqueada —|No se pudo construir —|Aprobada|Creando|Creada en Meta|Activando|Deshaciendo|Deshecha)/;
+  /^(En cola|Jaina está leyendo|Lista|Bloqueada —|No se pudo construir —|Aprobada|Creando|Creada en Meta|Activando|Deshaciendo|Deshecha)|El ciclo cerró la recomendación que abrió\.$/;
 /** The portfolio every idea on the redesign page is drawn with (portafolio.html): 9 ad sets on
  *  autopilot, leads against a 35 MXN target, pending decisions. Same ledger brand. */
 const FORMULARIOS_PORTFOLIO_NAME = 'FORMULARIOS // TODOS';
