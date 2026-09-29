@@ -159,7 +159,9 @@ async function bakeImageShader(
   }
   const image = await loadImage(input);
   try {
-    const { renderShaderStackFrame } = await import('@/lib/vgpu/renderShaderStack');
+    const { renderShaderStackFrame } = await import(
+      '@continuum/contracts/ai-studio/hyperframes-runtime/renderShaderStack'
+    );
     const bitmap = await renderShaderStackFrame({
       source: image,
       width: image.width,

@@ -186,7 +186,7 @@ describe('JainaMessageItem renders parts and persistence identically', () => {
     expect(screen.getAllByText('Which ad account should I pause it in?').length).toBeGreaterThan(0);
 
     // The gate: a uuid on a card is consent to nothing, so the change itself must be on screen.
-    expect(screen.getByText('Pause ad set / ad')).toBeTruthy();
+    expect(screen.getByText('Pause campaign / ad set / ad')).toBeTruthy();
     expect(screen.getByText('Awaiting your approval')).toBeTruthy();
     // ACTIVE appears twice on purpose: once as the table's `before`, once in the exact input the
     // approval actually authorises. The table summarises; the argument list IS the call.
@@ -203,7 +203,7 @@ describe('JainaMessageItem renders parts and persistence identically', () => {
       { wrapper },
     );
 
-    expect(screen.getByText('Pause ad set / ad')).toBeTruthy();
+    expect(screen.getByText('Pause campaign / ad set / ad')).toBeTruthy();
     expect(screen.getByText('PAUSED')).toBeTruthy();
   });
 
@@ -269,6 +269,26 @@ describe('JainaMessageItem renders parts and persistence identically', () => {
     );
 
     expect(screen.getByText('How is spend doing?')).toBeTruthy();
+  });
+});
+
+describe('a turn whose prose carries emphasis', () => {
+  const marked = (): JainaChatMessage =>
+    ({
+      ...persistedMessage(),
+      content: 'Spend on **ITESO** fell to [risk: 0.49 ROAS] over the [window: last 30 days].',
+      pendingClarification: undefined,
+    }) as unknown as JainaChatMessage;
+
+  it('sets the judged figure in its severity tone rather than printing the mark', () => {
+    render(<JainaMessageItem message={marked()} />, { wrapper });
+    const risk = document.querySelector('[data-prose-mark="risk"]');
+    expect(risk?.textContent).toBe('0.49 ROAS');
+    expect(risk?.className).toContain('text-destructive');
+    expect(document.querySelector('[data-prose-mark="window"]')?.className).toContain(
+      'text-muted-foreground',
+    );
+    expect(document.body.textContent).not.toContain('[risk:');
   });
 });
 

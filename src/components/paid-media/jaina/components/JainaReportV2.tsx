@@ -9,7 +9,7 @@ import {
   Share2Icon,
   Table2Icon,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import { Badge } from '@/components/ui/badge';
@@ -19,9 +19,14 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { http } from '@/lib/api/http';
 import type { CheckpointReportV2, ExecutionObjective } from '@/lib/jaina/schemas';
 import { cn } from '@/lib/utils';
+import { answerLanguage } from '../answerLanguage';
 import { BlockRenderer } from '../blocks/BlockRenderer';
 import { countBlockCitations } from '../blocks/citations';
+import { EntityNamesProvider, entityNamesOf } from '../blocks/entityNames';
 import { MediaMapProvider } from '../blocks/mediaText';
+import { JainaProse } from '../blocks/prose';
+import { normalizeJainaMarkdownTables } from '../jainaUtils';
+import { JAINA_ANSWER_PROSE, JAINA_EVIDENCE_PROSE } from '../reading';
 import {
   buildJainaReportV2SheetsExportRequest,
   createJainaReportV2HtmlFile,
@@ -32,6 +37,17 @@ import {
   openJainaReportMailDraft,
   shareJainaReportFile,
 } from '../reportExport';
+import {
+  isAnswerTemplateBlock,
+  TemplateExecutive,
+  TemplateJustification,
+} from '../templates/TemplateBlock';
+import {
+  JainaJustificationSection,
+  partitionReportBlocks,
+  SectionLabel,
+  stratumOfBlock,
+} from './JainaJustificationSection';
 import { SaveDashboardButton } from './SaveDashboardButton';
 
 const OBJECTIVE_STATUS_STYLE: Record<ExecutionObjective['status'], string> = {
@@ -69,7 +85,7 @@ function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) 
               <li key={objective.id} className="flex items-start gap-2 text-xs">
                 <span
                   className={cn(
-                    'mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-2xs font-medium capitalize',
+                    'mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-xs font-medium capitalize',
                     OBJECTIVE_STATUS_STYLE[objective.status],
                   )}
                 >
@@ -91,7 +107,7 @@ function ReportSupplementaryDetails({ report }: { report: CheckpointReportV2 }) 
           </summary>
           <SafeMarkdown
             content={reasoning}
-            className="mt-2 text-xs leading-relaxed text-muted-foreground/80"
+            className={cn('mt-2', JAINA_EVIDENCE_PROSE)}
             mode="static"
           />
         </details>
@@ -116,6 +132,8 @@ type JainaReportV2Props = {
   isStreaming: boolean;
   runId?: string;
   deliverySource?: 'live_render' | 'hydration_replay';
+  /** The user turn this report answered, so saving it keeps the question with the blocks. */
+  sourcePrompt?: string | null;
   onSuggestionClick?: (query: string) => void;
 };
 
@@ -124,25 +142,52 @@ export function JainaReportV2({
   isStreaming,
   runId,
   deliverySource,
+  sourcePrompt,
   onSuggestionClick,
 }: JainaReportV2Props) {
   const { show } = useToast();
   const [hiddenBlockIds, setHiddenBlockIds] = useState<Set<string>>(() => new Set());
   const [exporting, setExporting] = useState<'sheets' | 'share' | 'pdf' | 'html' | null>(null);
-  const sortedBlocks = useMemo(
-    () => [...report.blocks].sort((a, b) => a.priority - b.priority),
-    [report.blocks],
-  );
+  // READING ORDER IS THE BACKEND'S, and re-sorting here destroyed it.
+  //
+  // `selectBlocksForPresentation` emits a report in exactly the order it is meant to be
+  // read: the framing block that states the window, then the plan's modules in the order
+  // the plan names them, then the closing blocks that read what is above them. Sorting that
+  // array by `priority` threw all three away, because `priority` is an EMPHASIS rank
+  // (primary/secondary), not a position — and `priorityFor` gives `primary` to the plan's
+  // first module and `secondary` to everything else, including the opening `data_scope`
+  // frame, which `composeDataScopeBlock` hard-codes to `secondary`.
+  //
+  // Measured on a live strategy turn (2026-09-21): the backend emitted
+  // [data_scope, metric_grid, insight_list, actions] with ranks [1, 0, 0, 0], and this sort
+  // rendered [metric_grid, insight_list, actions, data_scope] — the metric grid promoted to
+  // the top of every answer, and the scope strip, whose whole job is to say what window the
+  // figures cover BEFORE the figures, pushed below the closing actions. The Backend bench
+  // asserts "the data_scope frame opens the report" and was green throughout, because it
+  // grades the array and this component reordered it afterwards.
+  //
+  // `priority` is still projected to a numeric rank at the schema (persisted reports and the
+  // export path read it); nothing renders position from it any more.
+  const orderedBlocks = report.blocks;
   const visibleBlocks = useMemo(
-    () => sortedBlocks.filter((block) => !hiddenBlockIds.has(block.block_id)),
-    [hiddenBlockIds, sortedBlocks],
+    () => orderedBlocks.filter((block) => !hiddenBlockIds.has(block.block_id)),
+    [hiddenBlockIds, orderedBlocks],
   );
+  // Presentation only: the answer's own blocks stay with the answer, the figures it rests
+  // on go under the justification. Each keeps the order above; exports, saved dashboards
+  // and the module toggles still read the full `visibleBlocks` / `report.blocks`.
+  const sections = useMemo(() => partitionReportBlocks(visibleBlocks), [visibleBlocks]);
+  const templateBlocks = sections.answer.filter(isAnswerTemplateBlock);
+  // One language per answer: the labels around the blocks follow the report, never the app.
+  const language = answerLanguage(report);
 
   const hasMedia = report._meta.has_media && Object.keys(report.media_map).length > 0;
   // Derived from the rendered blocks rather than `_meta.has_citations` (the FE
   // report meta schema does not carry that flag), so the badge reflects exactly
   // the citations the report can surface.
   const citationCount = useMemo(() => countBlockCitations(report.blocks), [report.blocks]);
+  // Names, never ids: every entity the report's own blocks put a name to, for the titles.
+  const entityNames = useMemo(() => entityNamesOf(report.blocks), [report.blocks]);
   const acknowledgeDelivery = useCallback(
     async (kind: 'live_render' | 'hydration_replay' | 'pdf', status: 'success' | 'fallback') => {
       if (!runId) return;
@@ -249,32 +294,6 @@ export function JainaReportV2({
 
   const content = (
     <section className="mt-4 space-y-4">
-      {!isStreaming && sortedBlocks.length > 0 ? (
-        <fieldset
-          aria-label="Report modules"
-          className="flex flex-wrap items-center gap-2 rounded-lg border border-border/50 bg-muted/20 p-2"
-        >
-          <legend className="px-1 text-xs font-medium text-muted-foreground">Report modules</legend>
-          {sortedBlocks.map((block) => {
-            const isVisible = !hiddenBlockIds.has(block.block_id);
-            return (
-              <Button
-                key={block.block_id}
-                type="button"
-                size="xs"
-                variant={isVisible ? 'secondary' : 'outline'}
-                aria-label={`${isVisible ? 'Hide' : 'Show'} ${block.title} module`}
-                aria-pressed={isVisible}
-                onClick={() => toggleBlock(block.block_id)}
-              >
-                {isVisible ? <EyeIcon aria-hidden="true" /> : <EyeOffIcon aria-hidden="true" />}
-                {block.title}
-              </Button>
-            );
-          })}
-        </fieldset>
-      ) : null}
-
       <div className="space-y-4">
         {citationCount > 0 ? (
           <div className="flex items-center">
@@ -289,17 +308,100 @@ export function JainaReportV2({
           </div>
         ) : null}
 
-        {report.executive_summary ? (
-          <SafeMarkdown
-            content={report.executive_summary}
-            className="text-sm leading-relaxed text-muted-foreground"
+        {/* Jaina's answer, set as an answer.
+         *
+         *  This was `text-sm leading-relaxed text-muted-foreground` — smaller and quieter
+         *  than the very same sentence rendered by the plain-prose path in
+         *  `JainaMessageItem`, and, by `reading.ts`'s own law, in the ink that means NOBODY
+         *  JUDGED THIS. Streamdown sets no colour of its own on headings, bold runs or
+         *  table cells, so that one class muted the entire answer: every `###`, every
+         *  figure, every row. `JAINA_ANSWER_PROSE` is the one constant both routes now
+         *  share, so the answer reads the same whether the turn shipped a report or not. */}
+        {/* A templated answer's sentence IS the executive answer: printing Phase B's summary
+         *  above it would state the answer twice, in two sets of words and possibly two sets
+         *  of numbers. Only a report with no (visible) template block keeps the summary. */}
+        {report.executive_summary && templateBlocks.length === 0 ? (
+          <JainaProse
+            content={normalizeJainaMarkdownTables(report.executive_summary)}
+            className={JAINA_ANSWER_PROSE}
             mode={isStreaming ? 'streaming' : 'static'}
           />
         ) : null}
 
-        {visibleBlocks.map((block) => (
-          <BlockRenderer key={block.block_id} block={block} isStreaming={isStreaming} />
-        ))}
+        {/* The rest of the answer — the reading, the moves — set as part of it. */}
+        {sections.answer.length > 0 ? (
+          <div data-report-section="answer" className="space-y-4">
+            {/* A templated answer puts its sentence and chart here and its steps under the
+             *  justification below — the same answer/justification split as every block.
+             *
+             *  Each stratum is labelled where it BEGINS — Why over the reading, Action over
+             *  the moves — and the blocks stay in the Backend's order; a label is inserted
+             *  when the stratum changes, never a block moved to sit under one. */}
+            {sections.answer.map((block, index) => {
+              const stratum = stratumOfBlock(block);
+              const previous = index > 0 ? stratumOfBlock(sections.answer[index - 1]) : null;
+              return (
+                <Fragment key={block.block_id}>
+                  {stratum !== 'answer' && stratum !== previous ? (
+                    <SectionLabel stratum={stratum} language={language} />
+                  ) : null}
+                  {isAnswerTemplateBlock(block) ? (
+                    <TemplateExecutive block={block} />
+                  ) : (
+                    <BlockRenderer block={block} isStreaming={isStreaming} />
+                  )}
+                </Fragment>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {/* The evidence under the answer, marked as such. Without a heading and a rule the
+         *  figures read as further paragraphs of the same statement rather than as what they
+         *  are — the data it rests on. */}
+        <JainaJustificationSection
+          blocks={sections.justification}
+          language={language}
+          renderBlock={(block) => <BlockRenderer block={block} isStreaming={isStreaming} />}
+          leading={
+            templateBlocks.length > 0
+              ? templateBlocks.map((block) => (
+                  <TemplateJustification key={block.block_id} block={block} />
+                ))
+              : undefined
+          }
+        />
+
+        {/* Chrome, so it sits under the thing it controls. A row of toggles named after
+         *  every block used to be the first element in the report — the reader met the
+         *  table of contents before the answer. */}
+        {!isStreaming && orderedBlocks.length > 0 ? (
+          <fieldset
+            aria-label="Report modules"
+            className="flex flex-wrap items-center gap-2 rounded-lg border border-border/50 bg-muted/20 p-2"
+          >
+            <legend className="px-1 text-xs font-medium text-muted-foreground">
+              Report modules
+            </legend>
+            {orderedBlocks.map((block) => {
+              const isVisible = !hiddenBlockIds.has(block.block_id);
+              return (
+                <Button
+                  key={block.block_id}
+                  type="button"
+                  size="xs"
+                  variant={isVisible ? 'secondary' : 'outline'}
+                  aria-label={`${isVisible ? 'Hide' : 'Show'} ${block.title} module`}
+                  aria-pressed={isVisible}
+                  onClick={() => toggleBlock(block.block_id)}
+                >
+                  {isVisible ? <EyeIcon aria-hidden="true" /> : <EyeOffIcon aria-hidden="true" />}
+                  {block.title}
+                </Button>
+              );
+            })}
+          </fieldset>
+        ) : null}
 
         {!isStreaming ? <ReportSupplementaryDetails report={report} /> : null}
       </div>
@@ -327,6 +429,7 @@ export function JainaReportV2({
             blocks={visibleBlocks}
             disabled={isStreaming || exporting !== null}
             report={report}
+            sourcePrompt={sourcePrompt}
           />
           <Button
             type="button"
@@ -379,5 +482,9 @@ export function JainaReportV2({
 
   if (!hasMedia) return content;
 
-  return <MediaMapProvider mediaMap={report.media_map}>{content}</MediaMapProvider>;
+  return (
+    <MediaMapProvider mediaMap={report.media_map}>
+      <EntityNamesProvider names={entityNames}>{content}</EntityNamesProvider>
+    </MediaMapProvider>
+  );
 }

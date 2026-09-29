@@ -6,7 +6,6 @@ import {
   Layout,
   Plus,
   Settings,
-  ShieldCheck,
   Trash2,
   XCircle,
 } from 'lucide-react';
@@ -40,82 +39,7 @@ import { EditableLabel } from '../components/EditableLabel';
 import { NodeProvenance } from '../components/NodeProvenance';
 import { useCampaignStore } from '../stores/useCampaignStore';
 import type { CampaignData, CampaignNodeProps } from '../types';
-
-const OBJECTIVES: Array<{ value: CampaignData['objective']; label: string; description: string }> =
-  [
-    {
-      value: 'OUTCOME_AWARENESS',
-      label: 'Awareness',
-      description: 'Awareness optimization prioritizes people likely to remember your ad.',
-    },
-    {
-      value: 'OUTCOME_TRAFFIC',
-      label: 'Traffic',
-      description:
-        'Traffic optimization favors people likely to click through to your destination.',
-    },
-    {
-      value: 'OUTCOME_ENGAGEMENT',
-      label: 'Engagement',
-      description:
-        'Engagement optimization prioritizes likes, comments, shares, and similar interactions.',
-    },
-    {
-      value: 'OUTCOME_LEADS',
-      label: 'Leads',
-      description: 'Leads optimization targets users likely to submit forms or inquiries.',
-    },
-    {
-      value: 'OUTCOME_APP_PROMOTION',
-      label: 'App Promotion',
-      description: 'App Promotion optimization focuses on installs and in-app actions.',
-    },
-    {
-      value: 'OUTCOME_SALES',
-      label: 'Sales',
-      description: 'Sales optimization prioritizes users likely to complete purchases.',
-    },
-  ];
-
-const BUYING_TYPES: Array<{
-  value: CampaignData['buyingType'];
-  label: string;
-  description: string;
-}> = [
-  {
-    value: 'AUCTION',
-    label: 'Auction',
-    description: 'Auction buys impressions in real time based on bid competitiveness.',
-  },
-  {
-    value: 'RESERVATION',
-    label: 'Reservation',
-    description: 'Reservation pre-books inventory at fixed terms for predictable delivery.',
-  },
-];
-
-const SPECIAL_CATEGORIES = [
-  {
-    value: 'HOUSING',
-    label: 'Housing',
-    description: 'Housing covers ads related to homes, rentals, or mortgage opportunities.',
-  },
-  {
-    value: 'EMPLOYMENT',
-    label: 'Employment',
-    description: 'Employment covers job listings, recruiting, and hiring-related ads.',
-  },
-  {
-    value: 'CREDIT',
-    label: 'Credit',
-    description: 'Credit covers lending, financing, and related credit offers.',
-  },
-  {
-    value: 'ISSUES_ELECTIONS_POLITICS',
-    label: 'Issues, Elections or Politics',
-    description: 'This category flags social issue, election, or political content.',
-  },
-];
+import { OBJECTIVES, SPECIAL_CATEGORIES } from '../types/nodeOptions';
 
 export const CampaignNode = memo(({ id, data, selected }: CampaignNodeProps<'campaign'>) => {
   const { duplicateNode, removeNode, updateNodeData, addConnectedNode } = useCampaignStore();
@@ -132,13 +56,6 @@ export const CampaignNode = memo(({ id, data, selected }: CampaignNodeProps<'cam
   const handleObjectiveChange = useCallback(
     (objective: CampaignData['objective']) => {
       updateNodeData(id, { objective });
-    },
-    [id, updateNodeData],
-  );
-
-  const handleBuyingTypeChange = useCallback(
-    (buyingType: CampaignData['buyingType']) => {
-      updateNodeData(id, { buyingType });
     },
     [id, updateNodeData],
   );
@@ -253,31 +170,6 @@ export const CampaignNode = memo(({ id, data, selected }: CampaignNodeProps<'cam
                 >
                   {obj.label}
                   <ContextMenuItemInfo description={obj.description} />
-                </ContextMenuCheckboxItem>
-              ))}
-            </ContextMenuSubContent>
-          </ContextMenuSub>
-
-          <ContextMenuSub>
-            <ContextMenuSubTrigger>
-              <ShieldCheck className="mr-2 h-4 w-4" />
-              Buying Type
-              <ContextMenuItemInfo
-                className="ml-2 mr-4"
-                description="Buying type determines whether delivery uses auction or reserved inventory."
-              />
-            </ContextMenuSubTrigger>
-            <ContextMenuSubContent className="w-48">
-              {BUYING_TYPES.map((type) => (
-                <ContextMenuCheckboxItem
-                  key={type.value}
-                  checked={
-                    data.buyingType === type.value || (!data.buyingType && type.value === 'AUCTION')
-                  }
-                  onClick={() => handleBuyingTypeChange(type.value)}
-                >
-                  {type.label}
-                  <ContextMenuItemInfo description={type.description} />
                 </ContextMenuCheckboxItem>
               ))}
             </ContextMenuSubContent>

@@ -39,7 +39,7 @@ export function BreakevenLine() {
         y1={y}
         y2={y}
       />
-      <text className="text-3xs" fill="var(--chart-foreground-muted)" x={4} y={y - 4}>
+      <text className="text-xs" fill="var(--chart-foreground-muted)" x={4} y={y - 4}>
         break-even
       </text>
     </g>

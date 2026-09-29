@@ -99,6 +99,9 @@ export const DETECTOR_ACTION_FAMILY: Record<AccountDetector, ActionFamily> = {
 
   measurement_integrity: 'measurement',
   target_economics: 'measurement',
+  // Nothing here can be applied — a budget that is not going out is restored by a person
+  // finding out why — and a report that the money stopped must not have an off switch.
+  delivery_collapse: 'measurement',
   decision_window: 'measurement',
   seasonality: 'measurement',
   auction_pressure: 'measurement',

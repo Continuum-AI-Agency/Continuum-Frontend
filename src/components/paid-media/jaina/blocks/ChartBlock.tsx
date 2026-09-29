@@ -30,21 +30,34 @@ import {
 } from '@/components/ui/chart';
 import { formatValue } from '@/lib/jaina/formatValue';
 import type { ChartBlockV2 } from '@/lib/jaina/schemas';
+import { cn } from '@/lib/utils';
 import { useIsExportMode } from '../export/ExportModeContext';
 import { EXPORT_CHART_HEIGHT_PX, EXPORT_CHART_WIDTH_PX } from '../export/exportStyles';
-import { EvidenceTooltip } from './EvidenceTooltip';
+import { JAINA_TYPE } from '../reading';
+import { BlockHeading } from './BlockHeading';
+import { chartHeight, chartShapeOf, tickAreaHeight, wrapTickLabel } from './chartShape';
+import { displayEntity, type EntityNames, useEntityNames } from './entityNames';
+import { type MetricTile, MetricTiles } from './MetricTiles';
 
 type ChartBlockProps = { block: ChartBlockV2; isStreaming: boolean };
 
 // Compact, human line for a datapoint's harness metadata (entity, source) —
 // shown under the axis label in the tooltip when the chart is dataset-backed.
-function formatDatapointMeta(meta: Record<string, unknown>, categoryKey: string): string | null {
+// The entity by its name when the point or the report carries one; the id only otherwise.
+function formatDatapointMeta(
+  meta: Record<string, unknown>,
+  categoryKey: string,
+  names: EntityNames,
+): string | null {
   const entityType = typeof meta.entity_type === 'string' ? meta.entity_type : null;
   const entityId = typeof meta.entity_id === 'string' ? meta.entity_id : null;
-  if (entityType && entityId) return `${entityType} · ${entityId}`;
+  const entityName = typeof meta.entity_name === 'string' ? meta.entity_name : null;
+  if (entityType && (entityName || entityId)) {
+    return `${entityType} · ${entityName ?? displayEntity(entityId ?? '', names)}`;
+  }
   const parts: string[] = [];
   for (const [key, value] of Object.entries(meta)) {
-    if (key === categoryKey) continue;
+    if (key === categoryKey || key === 'entity_name') continue;
     if (typeof value === 'string' || typeof value === 'number') parts.push(`${key}: ${value}`);
   }
   return parts.length > 0 ? parts.join(' · ') : null;
@@ -59,15 +72,6 @@ function formatChartValue(value: string | number, block: ChartBlockV2): string {
     block.value_format,
     block.currency_code ? { currency: block.currency_code } : undefined,
   );
-}
-
-function wrapTickLabel(value: string): string[] {
-  return value.split(/\s+/).reduce<string[]>((lines, word) => {
-    const previous = lines.at(-1);
-    if (!previous || `${previous} ${word}`.length > 18) lines.push(word);
-    else lines[lines.length - 1] = `${previous} ${word}`;
-    return lines;
-  }, []);
 }
 
 function WrappedXAxisTick({ x, y, payload, fill, className }: XAxisTickContentProps) {
@@ -91,7 +95,35 @@ function WrappedXAxisTick({ x, y, payload, fill, className }: XAxisTickContentPr
   );
 }
 
+/**
+ * The same figures as tiles, for a chart that does not earn its space (`chartShapeOf`):
+ * one tile per point and series, labelled by the category and, when the chart carries more
+ * than one series, the series.
+ */
+function chartTiles(block: ChartBlockV2): MetricTile[] {
+  const isPie = block.chart_type === 'pie' || block.chart_type === 'doughnut';
+  const configKeys = Object.keys(block.chart_config);
+  const valueKeys = isPie ? [block.value_key ?? configKeys[0] ?? 'value'] : configKeys;
+  return block.data.flatMap((row, rowIndex) => {
+    const category = String(row[block.category_key] ?? '');
+    return valueKeys.flatMap((key) => {
+      const value = row[key];
+      if (typeof value !== 'string' && typeof value !== 'number') return [];
+      const seriesLabel = block.chart_config[key]?.label ?? key;
+      return [
+        {
+          key: `${rowIndex}-${key}`,
+          label: valueKeys.length > 1 || isPie ? `${category} · ${seriesLabel}` : category,
+          value: formatChartValue(value, block),
+        },
+      ];
+    });
+  });
+}
+
 export function ChartBlock({ block }: ChartBlockProps) {
+  const isExport = useIsExportMode();
+  const names = useEntityNames();
   // Index the per-point metadata by its category value so the tooltip can look
   // it up from the hovered row. Empty when the chart is not dataset-backed.
   const metaByCategory = useMemo(() => {
@@ -128,12 +160,12 @@ export function ChartBlock({ block }: ChartBlockProps) {
           const categoryValue = payload?.[0]?.payload?.[block.category_key];
           const meta =
             categoryValue != null ? metaByCategory.get(String(categoryValue)) : undefined;
-          const detail = meta ? formatDatapointMeta(meta, block.category_key) : null;
+          const detail = meta ? formatDatapointMeta(meta, block.category_key, names) : null;
           return (
             <span className="flex flex-col gap-0.5">
               <span>{String(value ?? categoryValue ?? '')}</span>
               {detail ? (
-                <span className="text-2xs font-normal text-muted-foreground">{detail}</span>
+                <span className="text-xs font-normal text-muted-foreground">{detail}</span>
               ) : null}
             </span>
           );
@@ -142,8 +174,6 @@ export function ChartBlock({ block }: ChartBlockProps) {
     ) : (
       <ChartTooltipContent formatter={tooltipFormatter} />
     );
-
-  const isExport = useIsExportMode();
 
   const chartConfig: ChartConfig = Object.fromEntries(
     Object.entries(block.chart_config).map(([key, entry]) => [
@@ -154,9 +184,8 @@ export function ChartBlock({ block }: ChartBlockProps) {
 
   const configKeys = Object.keys(block.chart_config);
   const isCartesian = ['line', 'bar', 'stacked_bar', 'area'].includes(block.chart_type);
-  const hasLongCategories = block.data.some(
-    (point) => String(point[block.category_key] ?? '').length > 18,
-  );
+  const categories = block.data.map((point) => String(point[block.category_key] ?? ''));
+  const hasLongCategories = categories.some((category) => category.length > 18);
   const minChartWidth =
     isCartesian && hasLongCategories ? Math.max(640, block.data.length * 128) : undefined;
   const accessibleData = block.data
@@ -177,16 +206,18 @@ export function ChartBlock({ block }: ChartBlockProps) {
   // do not. The chart looks structurally fine and is empty.
   const animate = !isExport;
 
-  // The screen chart is 380px tall and can spend 112px on wrapped date ticks. The
-  // paper chart is 240px, where that leaves almost nothing for the plot — and every
-  // tick is drawn because interval={0}, so 14 dates collapse into a smear.
+  // The screen chart is a 240px plot over an axis area sized to its tallest wrapped tick
+  // (`chartHeight`); it was a fixed 380px that spent 112px on ticks whether the dates
+  // wrapped or not. The paper chart is 240px in all, where that leaves almost nothing for
+  // the plot — and every tick is drawn because interval={0}, so 14 dates collapse into a
+  // smear.
   const sharedCartesian = (
     <>
       <CartesianGrid vertical={false} />
       <XAxis
         dataKey={block.category_key}
         interval={isExport ? 'preserveStartEnd' : 0}
-        height={isExport ? 40 : 112}
+        height={isExport ? 40 : tickAreaHeight(categories)}
         tick={isExport ? undefined : WrappedXAxisTick}
         label={
           block.x_axis_label
@@ -311,37 +342,57 @@ export function ChartBlock({ block }: ChartBlockProps) {
     );
   }
 
+  // A chart shows a trend or a comparison. With fewer points than a week and fewer
+  // entities than three there is neither, and the block is its figures as tiles.
+  const shape = chartShapeOf(block);
+
   return (
     <div>
-      <div className="mb-2 flex items-center gap-1.5">
-        <h4 className="text-sm font-semibold text-foreground">{block.title}</h4>
-        <EvidenceTooltip
-          provenance={block.provenance}
-          datasetId={block.dataset_id}
-          evidenceRefs={block.evidence_refs}
-        />
-      </div>
+      <BlockHeading
+        title={block.title}
+        provenance={block.provenance}
+        datasetId={block.dataset_id}
+        evidenceRefs={block.evidence_refs}
+      />
       {block.description ? (
-        <p className="mb-2 text-xs leading-5 text-muted-foreground">{block.description}</p>
+        <p className={cn('mb-2 leading-5 text-muted-foreground', JAINA_TYPE.table)}>
+          {block.description}
+        </p>
       ) : null}
-      <div className="overflow-x-auto">
-        <ChartContainer
-          config={chartConfig}
-          explicitSize={
-            isExport ? { width: EXPORT_CHART_WIDTH_PX, height: EXPORT_CHART_HEIGHT_PX } : undefined
-          }
-          className={isExport ? 'w-full' : 'h-[380px] w-full'}
-          style={!isExport && minChartWidth ? { minWidth: minChartWidth } : undefined}
-          role="img"
-          aria-label={[block.title, block.x_axis_label, block.y_axis_label, accessibleData]
-            .filter(Boolean)
-            .join('. ')}
-        >
-          {chart}
-        </ChartContainer>
-      </div>
+      {shape.earnsChart ? (
+        <div className="overflow-x-auto">
+          <ChartContainer
+            config={chartConfig}
+            explicitSize={
+              isExport
+                ? { width: EXPORT_CHART_WIDTH_PX, height: EXPORT_CHART_HEIGHT_PX }
+                : undefined
+            }
+            className={isExport ? 'w-full' : 'aspect-auto w-full'}
+            style={
+              isExport ? undefined : { height: chartHeight(categories), minWidth: minChartWidth }
+            }
+            role="img"
+            aria-label={[block.title, block.x_axis_label, block.y_axis_label, accessibleData]
+              .filter(Boolean)
+              .join('. ')}
+          >
+            {chart}
+          </ChartContainer>
+        </div>
+      ) : (
+        <MetricTiles
+          tiles={chartTiles(block)}
+          aria-label={block.title}
+          data-testid="chart-as-tiles"
+          data-chart-points={shape.points}
+          data-chart-entities={shape.entities}
+        />
+      )}
       {block.annotation ? (
-        <p className="mt-1.5 text-xs italic text-muted-foreground/70">{block.annotation}</p>
+        <p className={cn('mt-1.5 italic text-muted-foreground/70', JAINA_TYPE.table)}>
+          {block.annotation}
+        </p>
       ) : null}
     </div>
   );

@@ -1,0 +1,1058 @@
+{
+  "block_id": "answer_template_spend_results_balance",
+  "category": "answer_template",
+  "scope": "account",
+  "title": "Balanza de gasto contra resultados",
+  "priority": "primary",
+  "provenance": {
+    "source": "computed",
+    "tool": "get_key_metrics",
+    "period": {
+      "since": "2026-09-01",
+      "until": "2026-09-25",
+      "requested_label": "this_month"
+    },
+    "entity_label": null,
+    "record_count": 42
+  },
+  "grounding": null,
+  "template_id": "spend_results_balance",
+  "layout": "steps",
+  "executive": {
+    "sentence": "En este mes, entre las campañas que buscan conversaciones, SEDE C // MENSAJES // AGOSTO 2026 recibe {over_spend_share} del gasto y trae {over_results_share} de las conversaciones, mientras SEDE D // MENSAJES // AGOSTO 2026 se lleva {under_spend_share} del gasto y solo aporta {under_results_share}.",
+    "hero_chart": {
+      "kind": "bar_horizontal",
+      "title": "Reparto del gasto contra reparto de las conversaciones",
+      "caption": "Arriba, la parte del gasto de cada campaña en este mes; abajo, la parte de las conversaciones que trae. Si la franja se ensancha, rinde más de lo que cuesta.",
+      "points": [
+        {
+          "label": "SEDE C // MENSAJES // AGOSTO 2026",
+          "figure_id": "spend_share_1",
+          "entity_id": "900000000000000003",
+          "emphasis": true
+        },
+        {
+          "label": "SEDE B // MENSAJES // AGOSTO 2026",
+          "figure_id": "spend_share_2",
+          "entity_id": "900000000000000002",
+          "emphasis": false
+        },
+        {
+          "label": "SEDE A // MENSAJES // AGOSTO 2026",
+          "figure_id": "spend_share_3",
+          "entity_id": "900000000000000001",
+          "emphasis": false
+        },
+        {
+          "label": "SEDE D // MENSAJES // AGOSTO 2026",
+          "figure_id": "spend_share_4",
+          "entity_id": "900000000000000004",
+          "emphasis": true
+        },
+        {
+          "label": "SEDE C // MENSAJES // AGOSTO 2026",
+          "figure_id": "results_share_1",
+          "entity_id": "900000000000000003",
+          "emphasis": true
+        },
+        {
+          "label": "SEDE B // MENSAJES // AGOSTO 2026",
+          "figure_id": "results_share_2",
+          "entity_id": "900000000000000002",
+          "emphasis": false
+        },
+        {
+          "label": "SEDE A // MENSAJES // AGOSTO 2026",
+          "figure_id": "results_share_3",
+          "entity_id": "900000000000000001",
+          "emphasis": false
+        },
+        {
+          "label": "SEDE D // MENSAJES // AGOSTO 2026",
+          "figure_id": "results_share_4",
+          "entity_id": "900000000000000004",
+          "emphasis": true
+        }
+      ],
+      "reference": null,
+      "lower_is_better": false
+    }
+  },
+  "justification": {
+    "sections": [
+      {
+        "kind": "measured",
+        "title": "Qué medimos",
+        "text": "Leímos gasto y conversaciones de las {campaigns_read} campañas que buscan conversaciones y gastaron en este mes, a nivel campaña: {spend_total} y {results_total} conversaciones. Para cada una dividimos su parte de las conversaciones entre su parte del gasto: un índice de {index_even} es traer exactamente lo que cuesta; arriba, más; abajo, menos. Otras {campaigns_other} campañas buscan otro resultado y no entran: sus resultados no son conversaciones.",
+        "chart": null,
+        "table": null,
+        "items": []
+      },
+      {
+        "kind": "found",
+        "title": "Qué encontramos",
+        "text": "SEDE C // MENSAJES // AGOSTO 2026 tiene el índice más alto ({over_index}) y SEDE D // MENSAJES // AGOSTO 2026 el más bajo ({under_index}).",
+        "chart": null,
+        "table": {
+          "columns": [
+            {
+              "key": "spend",
+              "label": "Gasto"
+            },
+            {
+              "key": "spend_share",
+              "label": "% gasto"
+            },
+            {
+              "key": "results",
+              "label": "Conversaciones"
+            },
+            {
+              "key": "results_share",
+              "label": "% conversaciones"
+            },
+            {
+              "key": "index",
+              "label": "Índice"
+            }
+          ],
+          "rows": [
+            {
+              "label": "SEDE C // MENSAJES // AGOSTO 2026",
+              "entity_id": "900000000000000003",
+              "cells": {
+                "spend": "spend_1",
+                "spend_share": "spend_share_1",
+                "results": "results_1",
+                "results_share": "results_share_1",
+                "index": "index_1"
+              }
+            },
+            {
+              "label": "SEDE B // MENSAJES // AGOSTO 2026",
+              "entity_id": "900000000000000002",
+              "cells": {
+                "spend": "spend_2",
+                "spend_share": "spend_share_2",
+                "results": "results_2",
+                "results_share": "results_share_2",
+                "index": "index_2"
+              }
+            },
+            {
+              "label": "SEDE A // MENSAJES // AGOSTO 2026",
+              "entity_id": "900000000000000001",
+              "cells": {
+                "spend": "spend_3",
+                "spend_share": "spend_share_3",
+                "results": "results_3",
+                "results_share": "results_share_3",
+                "index": "index_3"
+              }
+            },
+            {
+              "label": "SEDE D // MENSAJES // AGOSTO 2026",
+              "entity_id": "900000000000000004",
+              "cells": {
+                "spend": "spend_4",
+                "spend_share": "spend_share_4",
+                "results": "results_4",
+                "results_share": "results_share_4",
+                "index": "index_4"
+              }
+            },
+            {
+              "label": "Total",
+              "entity_id": null,
+              "cells": {
+                "spend": "spend_total",
+                "spend_share": "share_total",
+                "results": "results_total",
+                "results_share": "share_total",
+                "index": "index_total"
+              }
+            }
+          ]
+        },
+        "items": [
+          {
+            "id": "row_1",
+            "title": "SEDE C // MENSAJES // AGOSTO 2026",
+            "entity_id": "900000000000000003",
+            "badge_figure_id": "index_1",
+            "detail_figure_ids": [
+              "spend_share_1",
+              "results_share_1"
+            ],
+            "text": "Rinde más de lo que cuesta: recibe {spend_share_1} del gasto y trae {results_share_1} de las conversaciones.",
+            "tone": "good"
+          },
+          {
+            "id": "row_2",
+            "title": "SEDE B // MENSAJES // AGOSTO 2026",
+            "entity_id": "900000000000000002",
+            "badge_figure_id": "index_2",
+            "detail_figure_ids": [
+              "spend_share_2",
+              "results_share_2"
+            ],
+            "text": "Rinde más de lo que cuesta: recibe {spend_share_2} del gasto y trae {results_share_2} de las conversaciones.",
+            "tone": "good"
+          },
+          {
+            "id": "row_3",
+            "title": "SEDE A // MENSAJES // AGOSTO 2026",
+            "entity_id": "900000000000000001",
+            "badge_figure_id": "index_3",
+            "detail_figure_ids": [
+              "spend_share_3",
+              "results_share_3"
+            ],
+            "text": "En equilibrio: recibe {spend_share_3} del gasto y trae {results_share_3} de las conversaciones.",
+            "tone": "neutral"
+          },
+          {
+            "id": "row_4",
+            "title": "SEDE D // MENSAJES // AGOSTO 2026",
+            "entity_id": "900000000000000004",
+            "badge_figure_id": "index_4",
+            "detail_figure_ids": [
+              "spend_share_4",
+              "results_share_4"
+            ],
+            "text": "Rinde algo menos de lo que cuesta: recibe {spend_share_4} del gasto y trae {results_share_4} de las conversaciones.",
+            "tone": "warn"
+          }
+        ]
+      },
+      {
+        "kind": "why",
+        "title": "Por qué",
+        "text": "SEDE C // MENSAJES // AGOSTO 2026 y SEDE B // MENSAJES // AGOSTO 2026 traen más conversaciones de lo que cuestan (índice sobre {balance_high}); SEDE D // MENSAJES // AGOSTO 2026 trae menos (índice bajo {balance_low}).",
+        "chart": null,
+        "table": null,
+        "items": [
+          {
+            "id": "rule_out_type",
+            "title": "Descartamos: «es el tipo de campaña»",
+            "entity_id": "900000000000000003",
+            "badge_figure_id": "peer_index",
+            "detail_figure_ids": [],
+            "text": "SEDE C // MENSAJES // AGOSTO 2026 tiene el mismo objetivo que SEDE D // MENSAJES // AGOSTO 2026 y su índice es {peer_index}, no {under_index}: la diferencia es propia de la campaña, no del tipo de campaña.",
+            "tone": "good"
+          },
+          {
+            "id": "gap",
+            "title": "Qué cambiaría el reparto",
+            "entity_id": "900000000000000004",
+            "badge_figure_id": "results_gap",
+            "detail_figure_ids": [],
+            "text": "Si SEDE D // MENSAJES // AGOSTO 2026 rindiera en equilibrio (índice {index_even}), con el mismo gasto traería {under_results_at_avg} conversaciones en vez de {under_results}. Esa es la brecha: {results_gap} conversaciones en este mes.",
+            "tone": "warn"
+          }
+        ]
+      }
+    ]
+  },
+  "figures": [
+    {
+      "id": "spend_total",
+      "label": "Gasto · total",
+      "value": 53577.32,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "sum(spend) over 4 campaigns bought for conversations"
+    },
+    {
+      "id": "results_total",
+      "label": "conversaciones · total",
+      "value": 1463,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "sum(conversations) over 4 campaigns bought for conversations"
+    },
+    {
+      "id": "cpr_avg",
+      "label": "Costo por conversación · Total",
+      "value": 36.621544771018456,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "sum(spend) / sum(conversations) over 4 campaigns bought for conversations"
+    },
+    {
+      "id": "campaigns_read",
+      "label": "campaigns bought for conversations",
+      "value": 4,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "campaigns with spend in the window whose objective buys conversations"
+    },
+    {
+      "id": "campaigns_other",
+      "label": "campaigns buying another result",
+      "value": 12,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "campaigns with spend whose objective buys something other than conversations, or is unknown"
+    },
+    {
+      "id": "share_total",
+      "label": "Total · share",
+      "value": 1,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "sum of the shares"
+    },
+    {
+      "id": "index_total",
+      "label": "Índice · Total",
+      "value": 1,
+      "unit": "ratio",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "share_total / share_total"
+    },
+    {
+      "id": "index_even",
+      "label": "index of a campaign that brings exactly what it costs",
+      "value": 1,
+      "unit": "ratio",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "reading rule: share of results = share of spend"
+    },
+    {
+      "id": "balance_low",
+      "label": "balance band · low",
+      "value": 0.9,
+      "unit": "ratio",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "reading rule"
+    },
+    {
+      "id": "balance_high",
+      "label": "balance band · high",
+      "value": 1.1,
+      "unit": "ratio",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "reading rule"
+    },
+    {
+      "id": "spend_1",
+      "label": "Gasto · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 14455.18,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": null
+    },
+    {
+      "id": "results_1",
+      "label": "conversaciones · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 449,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": null
+    },
+    {
+      "id": "spend_share_1",
+      "label": "% gasto · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 0.2698003558222024,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": "spend / spend_total"
+    },
+    {
+      "id": "results_share_1",
+      "label": "% conversaciones · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 0.3069036226930964,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": "conversations / results_total"
+    },
+    {
+      "id": "index_1",
+      "label": "Índice · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 1.1375211932461087,
+      "unit": "ratio",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": "results_share_1 / spend_share_1"
+    },
+    {
+      "id": "spend_2",
+      "label": "Gasto · SEDE B // MENSAJES // AGOSTO 2026",
+      "value": 13793.4,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000002"
+      },
+      "derivation": null
+    },
+    {
+      "id": "results_2",
+      "label": "conversaciones · SEDE B // MENSAJES // AGOSTO 2026",
+      "value": 416,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000002"
+      },
+      "derivation": null
+    },
+    {
+      "id": "spend_share_2",
+      "label": "% gasto · SEDE B // MENSAJES // AGOSTO 2026",
+      "value": 0.2574484875316645,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000002"
+      },
+      "derivation": "spend / spend_total"
+    },
+    {
+      "id": "results_share_2",
+      "label": "% conversaciones · SEDE B // MENSAJES // AGOSTO 2026",
+      "value": 0.2843472317156528,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000002"
+      },
+      "derivation": "conversations / results_total"
+    },
+    {
+      "id": "index_2",
+      "label": "Índice · SEDE B // MENSAJES // AGOSTO 2026",
+      "value": 1.1044820439299723,
+      "unit": "ratio",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000002"
+      },
+      "derivation": "results_share_2 / spend_share_2"
+    },
+    {
+      "id": "spend_3",
+      "label": "Gasto · SEDE A // MENSAJES // AGOSTO 2026",
+      "value": 12853.91,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000001"
+      },
+      "derivation": null
+    },
+    {
+      "id": "results_3",
+      "label": "conversaciones · SEDE A // MENSAJES // AGOSTO 2026",
+      "value": 332,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000001"
+      },
+      "derivation": null
+    },
+    {
+      "id": "spend_share_3",
+      "label": "% gasto · SEDE A // MENSAJES // AGOSTO 2026",
+      "value": 0.23991326927140066,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000001"
+      },
+      "derivation": "spend / spend_total"
+    },
+    {
+      "id": "results_share_3",
+      "label": "% conversaciones · SEDE A // MENSAJES // AGOSTO 2026",
+      "value": 0.22693096377306904,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000001"
+      },
+      "derivation": "conversations / results_total"
+    },
+    {
+      "id": "index_3",
+      "label": "Índice · SEDE A // MENSAJES // AGOSTO 2026",
+      "value": 0.94588750535659,
+      "unit": "ratio",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000001"
+      },
+      "derivation": "results_share_3 / spend_share_3"
+    },
+    {
+      "id": "spend_4",
+      "label": "Gasto · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 12474.829999999996,
+      "unit": "money",
+      "currency": "MXN",
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": null
+    },
+    {
+      "id": "results_4",
+      "label": "conversaciones · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 266,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": null
+    },
+    {
+      "id": "spend_share_4",
+      "label": "% gasto · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 0.23283788737473238,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": "spend / spend_total"
+    },
+    {
+      "id": "results_share_4",
+      "label": "% conversaciones · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 0.18181818181818182,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": "conversations / results_total"
+    },
+    {
+      "id": "index_4",
+      "label": "Índice · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 0.780878850380399,
+      "unit": "ratio",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": "results_share_4 / spend_share_4"
+    },
+    {
+      "id": "over_spend_share",
+      "label": "% gasto · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 0.2698003558222024,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": "spend_share_1"
+    },
+    {
+      "id": "over_results_share",
+      "label": "% conversaciones · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 0.3069036226930964,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": "results_share_1"
+    },
+    {
+      "id": "over_index",
+      "label": "Índice · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 1.1375211932461087,
+      "unit": "ratio",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": "index_1"
+    },
+    {
+      "id": "under_spend_share",
+      "label": "% gasto · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 0.23283788737473238,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": "spend_share_4"
+    },
+    {
+      "id": "under_results_share",
+      "label": "% conversaciones · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 0.18181818181818182,
+      "unit": "percent",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": "results_share_4"
+    },
+    {
+      "id": "under_index",
+      "label": "Índice · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 0.780878850380399,
+      "unit": "ratio",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": "index_4"
+    },
+    {
+      "id": "under_results",
+      "label": "conversaciones · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 266,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": "results_4"
+    },
+    {
+      "id": "under_results_at_avg",
+      "label": "conversaciones at index 1 · SEDE D // MENSAJES // AGOSTO 2026",
+      "value": 340.64182922923345,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000004"
+      },
+      "derivation": "spend_4 × results_total / spend_total"
+    },
+    {
+      "id": "results_gap",
+      "label": "conversaciones short of balance",
+      "value": 74.64182922923345,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "sum over campaigns with index < balance_low of (spend × results_total / spend_total − conversations)"
+    },
+    {
+      "id": "campaigns_over",
+      "label": "campaigns above the balance band",
+      "value": 2,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "shown campaigns with index > balance_high"
+    },
+    {
+      "id": "campaigns_under",
+      "label": "campaigns below the balance band",
+      "value": 1,
+      "unit": "count",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": null
+      },
+      "derivation": "shown campaigns with index < balance_low"
+    },
+    {
+      "id": "peer_index",
+      "label": "Índice · SEDE C // MENSAJES // AGOSTO 2026",
+      "value": 1.1375211932461087,
+      "unit": "ratio",
+      "currency": null,
+      "window": {
+        "since": "2026-09-01",
+        "until": "2026-09-25",
+        "label": "este mes"
+      },
+      "source": {
+        "tool": "get_key_metrics",
+        "datasetId": "ds_ab4b2be5",
+        "level": "campaign",
+        "entityId": "900000000000000003"
+      },
+      "derivation": "index_1"
+    }
+  ],
+  "fallback_from": null
+}

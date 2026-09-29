@@ -1,4 +1,5 @@
 'use client';
+import { Position } from '@xyflow/react';
 import { Copy, Layout, Settings, Trash2, Users } from 'lucide-react';
 import React, { memo, useCallback } from 'react';
 import {
@@ -29,87 +30,18 @@ import { EditableLabel } from '../components/EditableLabel';
 import { NodeProvenance } from '../components/NodeProvenance';
 import { useCampaignStore } from '../stores/useCampaignStore';
 import type { AudienceData, CampaignNodeProps } from '../types';
+import { AGE_RANGES, LOCATIONS } from '../types/nodeOptions';
 
-const LOCATIONS = [
-  {
-    value: 'MX',
-    label: 'Mexico',
-    description: 'Mexico targeting restricts delivery to users located in Mexico.',
-  },
-  {
-    value: 'BR',
-    label: 'Brazil',
-    description: 'Brazil targeting restricts delivery to users located in Brazil.',
-  },
-  {
-    value: 'AR',
-    label: 'Argentina',
-    description: 'Argentina targeting restricts delivery to users located in Argentina.',
-  },
-  {
-    value: 'CO',
-    label: 'Colombia',
-    description: 'Colombia targeting restricts delivery to users located in Colombia.',
-  },
-  {
-    value: 'CL',
-    label: 'Chile',
-    description: 'Chile targeting restricts delivery to users located in Chile.',
-  },
-  {
-    value: 'PE',
-    label: 'Peru',
-    description: 'Peru targeting restricts delivery to users located in Peru.',
-  },
-  {
-    value: 'EC',
-    label: 'Ecuador',
-    description: 'Ecuador targeting restricts delivery to users located in Ecuador.',
-  },
-  {
-    value: 'UY',
-    label: 'Uruguay',
-    description: 'Uruguay targeting restricts delivery to users located in Uruguay.',
-  },
-  {
-    value: 'PY',
-    label: 'Paraguay',
-    description: 'Paraguay targeting restricts delivery to users located in Paraguay.',
-  },
-  {
-    value: 'BO',
-    label: 'Bolivia',
-    description: 'Bolivia targeting restricts delivery to users located in Bolivia.',
-  },
-  {
-    value: 'CR',
-    label: 'Costa Rica',
-    description: 'Costa Rica targeting restricts delivery to users located in Costa Rica.',
-  },
-  {
-    value: 'PA',
-    label: 'Panama',
-    description: 'Panama targeting restricts delivery to users located in Panama.',
-  },
-  {
-    value: 'DO',
-    label: 'Dominican Republic',
-    description:
-      'Dominican Republic targeting restricts delivery to users located in the Dominican Republic.',
-  },
-];
-
-const AGE_RANGES = [
-  { min: 18, max: 24, label: '18-24', description: 'Targets adults between ages 18 and 24.' },
-  { min: 25, max: 34, label: '25-34', description: 'Targets adults between ages 25 and 34.' },
-  { min: 35, max: 44, label: '35-44', description: 'Targets adults between ages 35 and 44.' },
-  { min: 45, max: 54, label: '45-54', description: 'Targets adults between ages 45 and 54.' },
-  { min: 55, max: 64, label: '55-64', description: 'Targets adults between ages 55 and 64.' },
-  { min: 65, max: 100, label: '65+', description: 'Targets adults age 65 and older.' },
-];
+/** An audience has no parent: its one handle is the right-hand source into ad sets. */
+const AUDIENCE_HANDLES = { target: false, source: { position: Position.Right } } as const;
 
 export const AudienceNode = memo(({ id, data, selected }: CampaignNodeProps<'audience'>) => {
   const { duplicateNode, removeNode, updateNodeData } = useCampaignStore();
+  const fedAdSetCount = useCampaignStore(
+    (store) => store.edges.filter((edge) => edge.source === id).length,
+  );
+  const isGroup = data.mode === 'group';
+  const scaffoldBacked = useCampaignStore((store) => store.hydration !== null);
 
   const handleDuplicate = useCallback(() => duplicateNode(id), [duplicateNode, id]);
   const handleDelete = useCallback(() => removeNode(id), [removeNode, id]);
@@ -153,29 +85,47 @@ export const AudienceNode = memo(({ id, data, selected }: CampaignNodeProps<'aud
     <ContextMenu>
       <ContextMenuTrigger>
         <Node
-          handles={{ target: true, source: false }}
+          handles={AUDIENCE_HANDLES}
           selected={selected}
           className="hover:shadow-md transition-shadow cursor-pointer"
         >
           <NodeHeader>
-            <div className="flex items-center gap-2">
-              <div className="rounded-md bg-orange-500/10 p-1.5 text-orange-500">
-                <Users className="h-4 w-4" />
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="rounded-md bg-orange-500/10 p-1.5 text-orange-500">
+                  <Users className="h-4 w-4" />
+                </div>
+                <NodeTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Audience
+                </NodeTitle>
               </div>
-              <NodeTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Audience
-              </NodeTitle>
+              <Badge
+                variant="outline"
+                className="h-5 px-1.5 text-3xs font-medium"
+                data-testid="canvas-audience-mode"
+              >
+                {isGroup ? 'Published group' : 'Broad'}
+              </Badge>
             </div>
           </NodeHeader>
 
           <NodeContent className="space-y-1">
             <h3 className="font-semibold text-foreground leading-tight">
-              <EditableLabel value={data.label} onSave={handleLabelSave} />
+              {scaffoldBacked ? (
+                // A saved version does not keep an audience's name, so a scaffold shows it, never edits it.
+                data.label
+              ) : (
+                <EditableLabel value={data.label} onSave={handleLabelSave} />
+              )}
             </h3>
             <Separator className="my-1.5 opacity-50" />
             <div className="flex flex-col gap-1">
               <NodeDescription className="text-xs text-muted-foreground">
-                {data.locations?.length ? `${data.locations.length} locations` : 'Global targeting'}
+                {data.locations?.length
+                  ? data.locations.join(', ')
+                  : isGroup
+                    ? 'Targeting from the published group'
+                    : 'No countries yet'}
               </NodeDescription>
               <div className="flex flex-wrap items-center gap-1 mt-1">
                 <Badge variant="secondary" className="text-3xs px-1 py-0 opacity-80 h-4">
@@ -185,22 +135,34 @@ export const AudienceNode = memo(({ id, data, selected }: CampaignNodeProps<'aud
                       : 'WOMEN'
                     : 'ALL GENDERS'}
                 </Badge>
-                {data.ageMin && (
+                {data.ageMin ? (
                   <Badge variant="outline" className="text-3xs px-1 py-0 opacity-80 h-4">
-                    AGE: {data.ageMin}-{data.ageMax === 100 ? '65+' : data.ageMax}
+                    AGE: {data.ageMin}-{(data.ageMax ?? 65) >= 65 ? '65+' : data.ageMax}
                   </Badge>
-                )}
+                ) : null}
+                {isGroup && data.customAudiences?.length ? (
+                  <Badge variant="outline" className="text-3xs px-1 py-0 opacity-80 h-4">
+                    {data.customAudiences.length} MEMBERS
+                  </Badge>
+                ) : null}
               </div>
+              <span className="text-2xs text-muted-foreground" data-testid="canvas-audience-feeds">
+                {fedAdSetCount === 0
+                  ? 'Not feeding an ad set'
+                  : `Feeds ${fedAdSetCount} ad ${fedAdSetCount === 1 ? 'set' : 'sets'}`}
+              </span>
             </div>
             <NodeProvenance data={data} />
           </NodeContent>
         </Node>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-64">
-        <ContextMenuLabel>Targeting Actions</ContextMenuLabel>
+        <ContextMenuLabel>
+          {isGroup ? 'Targeting comes from the published group' : 'Targeting Actions'}
+        </ContextMenuLabel>
         <ContextMenuGroup>
           <ContextMenuSub>
-            <ContextMenuSubTrigger>
+            <ContextMenuSubTrigger disabled={isGroup}>
               <Users className="mr-2 h-4 w-4" />
               Genders
               <ContextMenuItemInfo
@@ -227,7 +189,7 @@ export const AudienceNode = memo(({ id, data, selected }: CampaignNodeProps<'aud
           </ContextMenuSub>
 
           <ContextMenuSub>
-            <ContextMenuSubTrigger>
+            <ContextMenuSubTrigger disabled={isGroup}>
               <Layout className="mr-2 h-4 w-4" />
               Locations
               <ContextMenuItemInfo
@@ -250,7 +212,7 @@ export const AudienceNode = memo(({ id, data, selected }: CampaignNodeProps<'aud
           </ContextMenuSub>
 
           <ContextMenuSub>
-            <ContextMenuSubTrigger>
+            <ContextMenuSubTrigger disabled={isGroup}>
               <Settings className="mr-2 h-4 w-4" />
               Age Range
               <ContextMenuItemInfo

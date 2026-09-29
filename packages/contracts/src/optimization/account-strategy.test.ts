@@ -24,9 +24,9 @@ const candidate = (over: Partial<AccountCandidate>): AccountCandidate =>
   });
 
 describe('the account detector catalogue', () => {
-  it('describes all 25 detectors, each with a class, a cadence and an honest data verdict', () => {
+  it('describes all 26 detectors, each with a class, a cadence and an honest data verdict', () => {
     const detectors = accountDetectorSchema.options;
-    expect(detectors).toHaveLength(25);
+    expect(detectors).toHaveLength(26);
     for (const detector of detectors) {
       const meta = ACCOUNT_DETECTOR_META[detector];
       expect(meta).toBeDefined();
@@ -42,7 +42,8 @@ describe('the account detector catalogue', () => {
     const daily = detectorsForCadence('daily');
     const weekly = detectorsForCadence('weekly');
     const monthly = detectorsForCadence('monthly');
-    expect(daily.length + weekly.length + monthly.length).toBe(25);
+    expect(daily.length + weekly.length + monthly.length).toBe(26);
+    expect(daily).toContain('delivery_collapse');
     expect(daily).toContain('dead_tail');
     expect(weekly).toContain('angle_concentration');
     expect(monthly).toContain('target_economics');
@@ -193,17 +194,17 @@ describe('deckFor', () => {
   // appear on a rung where it means nothing, and a mute removed by accident
   // must fail here rather than on someone's screen.
   const EXPECTED: Record<string, number> = {
-    purchase: 25,
-    signup: 25,
-    lead: 25,
-    app_install: 24,
-    conversations: 24,
-    traffic: 23,
-    link_clicks: 22,
-    clicks: 22,
-    thruplays: 22,
-    post_engagement: 22,
-    awareness: 20,
+    purchase: 26,
+    signup: 26,
+    lead: 26,
+    app_install: 25,
+    conversations: 25,
+    traffic: 24,
+    link_clicks: 23,
+    clicks: 23,
+    thruplays: 23,
+    post_engagement: 23,
+    awareness: 21,
   };
 
   for (const [objective, size] of Object.entries(EXPECTED)) {
@@ -212,11 +213,11 @@ describe('deckFor', () => {
     });
   }
 
-  it('never falls below the twenty that cannot be muted', () => {
+  it('never falls below the twenty-one that cannot be muted', () => {
     const floor = DETECTORS.filter((d) => !DETECTOR_MUTES[d] || isGuardDetector(d)).length;
-    expect(floor).toBe(20);
+    expect(floor).toBe(21);
     for (const objective of OBJECTIVES) {
-      expect(deckFor(objective).length).toBeGreaterThanOrEqual(20);
+      expect(deckFor(objective).length).toBeGreaterThanOrEqual(21);
     }
   });
 

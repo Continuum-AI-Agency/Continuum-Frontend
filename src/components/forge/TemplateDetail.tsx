@@ -1615,6 +1615,31 @@ export function TemplateDetail({
         <TemplateRenders brandId={brandId} templateKey={templateKey} formats={formats} />
       ) : null}
 
+      {missingFootage.length > 0 ? (
+        <section
+          className="mx-[var(--card-pad)] my-3 rounded-md border border-destructive/50 p-3 text-xs"
+          role="alert"
+        >
+          <p className="font-semibold">
+            This template package is missing {missingFootage.length} media file
+            {missingFootage.length === 1 ? '' : 's'}.
+          </p>
+          <p>
+            Upload a new ZIP that includes the AEP and these files. Keep their paths relative to the
+            AEP.
+          </p>
+          <ul className="my-2 max-h-40 list-disc overflow-y-auto pl-4">
+            {missingFootage.map((item) => (
+              <li key={item.file}>
+                {item.name || item.file.split(/[\\/]/).pop()} — {item.file}
+              </li>
+            ))}
+          </ul>
+          <Button type="button" size="sm" variant="outline" onClick={() => setTab('source')}>
+            Upload corrected ZIP
+          </Button>
+        </section>
+      ) : null}
       {/* Every panel stays mounted while hidden: switching tabs must never drop an unsaved edit. */}
       <Tabs value={tab} onValueChange={setTab} className="gap-0">
         <TabsList

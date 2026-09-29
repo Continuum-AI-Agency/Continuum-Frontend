@@ -1,4 +1,4 @@
-import { Handle, Position } from '@xyflow/react';
+import { Handle, type HandleType, Position } from '@xyflow/react';
 import type { ComponentProps } from 'react';
 import {
   Card,
@@ -11,15 +11,34 @@ import {
 } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
+/** `true` keeps the default side (target Top, source Bottom); an object moves or names it. */
+export type NodeHandleSpec = boolean | { position?: Position; id?: string };
+
+export type NodeExtraHandle = { type: HandleType; position: Position; id: string };
+
 export type NodeProps = ComponentProps<typeof Card> & {
   handles: {
-    target: boolean;
-    source: boolean;
+    target: NodeHandleSpec;
+    source: NodeHandleSpec;
   };
+  /**
+   * Handles beyond the default pair. They render AFTER it, which matters: an edge with
+   * no handle id attaches to the first handle of its type, so the default pair keeps
+   * every id-less edge.
+   */
+  extraHandles?: readonly NodeExtraHandle[];
   selected?: boolean;
 };
 
-export const Node = ({ handles, className, selected, ...props }: NodeProps) => (
+const handleClassName = '!h-3.5 !w-3.5';
+
+const renderHandle = (spec: NodeHandleSpec, type: HandleType, defaultPosition: Position) => {
+  if (!spec) return null;
+  const { position = defaultPosition, id } = spec === true ? {} : spec;
+  return <Handle className={handleClassName} position={position} type={type} id={id} />;
+};
+
+export const Node = ({ handles, extraHandles, className, selected, ...props }: NodeProps) => (
   <Card
     data-selected={selected ? 'true' : undefined}
     className={cn(
@@ -28,10 +47,17 @@ export const Node = ({ handles, className, selected, ...props }: NodeProps) => (
     )}
     {...props}
   >
-    {handles.target && <Handle className="!h-3.5 !w-3.5" position={Position.Top} type="target" />}
-    {handles.source && (
-      <Handle className="!h-3.5 !w-3.5" position={Position.Bottom} type="source" />
-    )}
+    {renderHandle(handles.target, 'target', Position.Top)}
+    {renderHandle(handles.source, 'source', Position.Bottom)}
+    {extraHandles?.map((handle) => (
+      <Handle
+        key={`${handle.type}:${handle.id}`}
+        className={handleClassName}
+        position={handle.position}
+        type={handle.type}
+        id={handle.id}
+      />
+    ))}
     {props.children}
   </Card>
 );

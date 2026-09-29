@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { ShaderEffectV1 } from '@continuum/contracts';
-import { resolveShaderParameter } from '@/lib/vgpu/renderShaderStack';
+import { resolveShaderParameter } from '@continuum/contracts/ai-studio/hyperframes-runtime/renderShaderStack';
 import { hasShaderStack, mergeClipShaderEffects, shaderStackFromClipEffects } from './shaderStack';
 
 describe('shaderStackFromClipEffects', () => {

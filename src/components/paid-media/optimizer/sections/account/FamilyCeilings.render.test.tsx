@@ -9,6 +9,19 @@ afterEach(cleanup);
 const DEFAULTS = { budget: 'recommend', creative_swap: 'recommend', structure: 'recommend' };
 
 describe('what this account may do on its own', () => {
+  // It was a folded `<details>` strip on Overview; a control that has to be found before it
+  // can be used stays on its defaults. On the Automations tab it is open on arrival.
+  it('is an open panel, not a fold', () => {
+    const { getByTestId, container } = render(
+      <FamilyCeilings current={{}} defaults={DEFAULTS} onSetFamily={() => {}} />,
+    );
+    expect(container.querySelector('details')).toBeNull();
+    expect(getByTestId('family-ceilings').textContent).toContain(
+      'What this account is allowed to do on its own',
+    );
+    expect(container.querySelectorAll('[aria-pressed]').length).toBeGreaterThan(0);
+  });
+
   it('offers every approvable family, and never measurement', () => {
     const { container } = render(
       <FamilyCeilings current={{}} defaults={DEFAULTS} onSetFamily={() => {}} />,

@@ -81,12 +81,19 @@ export function loadProdSupabaseEnv(): {
   const frontend = parseEnvFile(FRONTEND_ENV);
   const backend = parseEnvFile(BACKEND_ENV);
 
-  const url = frontend.NEXT_PUBLIC_SUPABASE_URL ?? '';
+  // The runner's own environment outranks both files, as it does for Next itself: a
+  // checkout whose .env is the placeholder the build gate needs (or that has no Backend
+  // .env at all) can still run the bench by exporting the prod values. The prod-URL check
+  // below still applies to whatever wins, so nothing here loosens the one guarantee.
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? frontend.NEXT_PUBLIC_SUPABASE_URL ?? '';
   const publishableKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY ??
     frontend.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ??
     frontend.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY ??
     '';
-  const serviceRoleKey = backend.SUPABASE_SERVICE_ROLE_KEY ?? '';
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ?? backend.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
   if (!url || !publishableKey) {
     throw new Error(
@@ -127,4 +134,18 @@ export function loadProdSupabaseEnv(): {
   }
 
   return { url, publishableKey, serviceRoleKey };
+}
+
+/**
+ * Which Chromium the live benches drive. The default is the installed Google Chrome
+ * (`channel: 'chrome'`), the browser the product's users actually run. Set
+ * OPTIMIZER_E2E_BROWSER_CHANNEL=bundled to use Playwright's own Chromium instead — the
+ * case when the machine's Chrome has moved ahead of the installed Playwright's protocol and
+ * `browserType.launch` aborts before the first page (Chrome 153 against Playwright 1.61.1
+ * on 2026-09-28). Per-environment configuration, never a code-path switch.
+ */
+export function benchBrowserChannel(): { channel?: string } {
+  const channel = process.env.OPTIMIZER_E2E_BROWSER_CHANNEL;
+  if (channel === 'bundled') return {};
+  return { channel: channel && channel.length > 0 ? channel : 'chrome' };
 }

@@ -7,6 +7,7 @@
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { AdThumb } from '../AdThumb';
+import * as typeScale from '../typeScale';
 import { useOptimizerAdsetAds } from '../useOptimizerData';
 
 type AdsetAdListProps = {
@@ -29,16 +30,14 @@ export function AdsetAdList({ brandId, accountId, adsetId }: AdsetAdListProps) {
 
   if (isError) {
     return (
-      <p className="px-2 py-1.5 pl-9 text-2xs text-warning">
+      <p className="px-2 py-1.5 pl-9 text-xs text-warning">
         Couldn&rsquo;t load the ads in this ad set.
       </p>
     );
   }
 
   if (ads.length === 0) {
-    return (
-      <p className="px-2 py-1.5 pl-9 text-2xs text-muted-foreground">No ads in this ad set.</p>
-    );
+    return <p className="px-2 py-1.5 pl-9 text-xs text-muted-foreground">No ads in this ad set.</p>;
   }
 
   return (
@@ -53,11 +52,11 @@ export function AdsetAdList({ brandId, accountId, adsetId }: AdsetAdListProps) {
             sizeClassName="size-5"
             thumbnailUrl={ad.thumbnailUrl}
           />
-          <span className="min-w-0 flex-1 truncate text-2xs text-foreground">
+          <span className="min-w-0 flex-1 truncate text-xs text-foreground">
             {ad.name || ad.id}
           </span>
           {ad.status ? (
-            <span className="shrink-0 text-3xs uppercase tracking-wide text-muted-foreground">
+            <span className={`${typeScale.label} shrink-0 text-muted-foreground`}>
               {ad.status.toLowerCase()}
             </span>
           ) : null}

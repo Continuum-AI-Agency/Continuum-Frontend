@@ -5,18 +5,14 @@ import { ReactFlowProvider } from '@xyflow/react';
 import type { ComponentProps } from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { useAgentRunStore } from '@/lib/agents/runStore';
-import { ClientRenderContext } from '@/lib/client-render/ClientRenderProvider';
-import {
-  markRenderStartedHere,
-  resetRendersStartedHere,
-  shouldAutoRunClientRenderJob,
-} from '@/lib/client-render/ownedRuns';
 import { clearVideoAspectCache } from '../hooks/useSnapToVideoAspect';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { HyperframesAgentNodeData } from '../types';
 import { HyperframesAgentBlock } from './HyperframesAgentBlock';
 
 const NODE_ID = 'hyper-1';
+const RUN_ID = '2b0d1647-fce9-46db-a1ce-49b18973cd96';
+const BRAND_ID = '1d1eac52-2955-42bd-81b5-a47808214ae2';
 
 const baseProps: Omit<ComponentProps<typeof HyperframesAgentBlock>, 'data'> = {
   id: NODE_ID,
@@ -46,9 +42,7 @@ const hyperData = (overrides: Partial<HyperframesAgentNodeData> = {}): Hyperfram
 let originalCreateElement: typeof document.createElement;
 let videosCreated: HTMLVideoElement[] = [];
 
-type Queue = NonNullable<ComponentProps<typeof ClientRenderContext.Provider>['value']>;
-
-const renderNode = (data: HyperframesAgentNodeData, queue: Queue | null = null) => {
+const renderNode = (data: HyperframesAgentNodeData) => {
   useStudioStore.setState({
     brandId: undefined,
     edges: [],
@@ -67,50 +61,15 @@ const renderNode = (data: HyperframesAgentNodeData, queue: Queue | null = null) 
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
       <ToastProvider>
-        <ClientRenderContext.Provider value={queue}>
-          <ReactFlowProvider>
-            <HyperframesAgentBlock {...baseProps} data={data} />
-          </ReactFlowProvider>
-        </ClientRenderContext.Provider>
+        <ReactFlowProvider>
+          <HyperframesAgentBlock {...baseProps} data={data} />
+        </ReactFlowProvider>
       </ToastProvider>
     </QueryClientProvider>,
   );
 };
 
 const node = () => useStudioStore.getState().nodes.find((n) => n.id === NODE_ID);
-
-const RENDER_JOB = {
-  id: 'de3e6121-89d0-49ed-ade8-733e68773003',
-  brandId: '1d1eac52-2955-42bd-81b5-a47808214ae2',
-  kind: 'hyperframes_agent',
-  state: 'ready',
-  sourceId: '2b0d1647-fce9-46db-a1ce-49b18973cd96',
-  executionSpec: {
-    kind: 'hyperframes_agent',
-    runId: '2b0d1647-fce9-46db-a1ce-49b18973cd96',
-    canvasId: 'e08281d4-a740-497f-b4b2-260f32991379',
-    nodeId: NODE_ID,
-    origin: { label: 'HyperFrames Agent', viewHref: '/ai-studio' },
-  },
-} as unknown as Queue['jobs'][number];
-
-const queueWith = (jobs: Queue['jobs'], overrides: Partial<Queue> = {}): Queue =>
-  ({
-    jobs,
-    readyCount: jobs.length,
-    inboxOpen: false,
-    setInboxOpen: () => undefined,
-    run: async () => undefined,
-    retry: async () => undefined,
-    stop: async () => undefined,
-    refresh: async () => undefined,
-    canExecute: () => true,
-    isRunningLocally: () => false,
-    // The real provider answers this with the viewer bound in; the fixture keeps the
-    // same predicate so `markRenderStartedHere` still means what it means in the app.
-    willAutoRun: (job: Queue['jobs'][number]) => shouldAutoRunClientRenderJob(job),
-    ...overrides,
-  }) as Queue;
 
 describe('HyperframesAgentBlock rendered-composition preview', () => {
   beforeEach(() => {
@@ -126,7 +85,6 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
     }) as typeof document.createElement;
     useStudioStore.setState({ brandId: undefined, nodes: [], edges: [] });
     useAgentRunStore.getState().reset();
-    resetRendersStartedHere();
   });
 
   afterEach(() => {
@@ -202,52 +160,26 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
     expect(video.getAttribute('playsinline')).not.toBeNull();
     expect(video.className).toContain('object-contain');
   });
-  // Airtable #296. The node promised "rendering continues in this tab" over a job that
-  // nothing was running: three sat `ready` for days, giving no feedback and offering no
-  // way out. A waiting job must say so and be one click from rendering.
-  it('offers to render here when the job is waiting for a device', () => {
-    const ran: unknown[] = [];
+
+  it('says a running film renders on the server, with nothing to claim in this tab', () => {
     const { getByText, queryByText } = renderNode(
-      hyperData({ status: 'queued', isExecuting: true }),
-      queueWith([RENDER_JOB], { run: async (target: unknown) => void ran.push(target) }),
-    );
-
-    expect(queryByText(/rendering continues in this tab/i)).toBeNull();
-    expect(getByText(/Waiting for a device to render/i)).not.toBeNull();
-    fireEvent.click(getByText('Render here'));
-    expect(ran).toEqual([RENDER_JOB]);
-  });
-
-  it('does not flash "waiting" over a run this tab is about to claim', () => {
-    markRenderStartedHere(RENDER_JOB.sourceId as string);
-    const { getByText, queryByText } = renderNode(
-      hyperData({ status: 'queued', isExecuting: true }),
-      queueWith([RENDER_JOB]),
-    );
-
-    expect(queryByText('Render here')).toBeNull();
-    expect(getByText(/rendering continues in this tab/i)).not.toBeNull();
-  });
-
-  it('keeps the in-tab promise while the job is actually being rendered here', () => {
-    const { getByText } = renderNode(
       hyperData({ status: 'rendering', isExecuting: true }),
-      queueWith([RENDER_JOB], { isRunningLocally: () => true }),
     );
-    expect(getByText(/rendering continues in this tab/i)).not.toBeNull();
+    expect(getByText(/the film renders on our servers/i)).not.toBeNull();
+    expect(queryByText('Render here')).toBeNull();
   });
 
   it('projects durable model and media feedback into a production timeline', () => {
     useAgentRunStore.getState().upsertRun({
-      runId: RENDER_JOB.sourceId,
+      runId: RUN_ID,
       agent: 'hyperframes',
       sessionId: 'session-1',
-      brandId: RENDER_JOB.brandId,
+      brandId: BRAND_ID,
       status: 'running',
       createdAt: '2026-09-10T00:00:00.000Z',
       title: 'HyperFrames Agent',
     });
-    useAgentRunStore.getState().appendEvents(RENDER_JOB.sourceId, [
+    useAgentRunStore.getState().appendEvents(RUN_ID, [
       {
         eventId: 'event-0',
         seq: 0,
@@ -288,11 +220,10 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
 
     const { getByText } = renderNode(
       hyperData({
-        activeRunId: RENDER_JOB.sourceId,
+        activeRunId: RUN_ID,
         status: 'reviewing',
         isExecuting: true,
       }),
-      queueWith([{ ...RENDER_JOB, state: 'claimed', phase: 'Agent checking review' }]),
     );
 
     expect(getByText('Inputs')).not.toBeNull();
@@ -365,7 +296,7 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
     fireEvent.click(getByLabelText('Revise cta scene'));
 
     expect(node()?.data).toMatchObject({
-      prompt: 'Make the CTA entrance legible.',
+      revisionPrompt: 'Make the CTA entrance legible.',
       status: 'idle',
       revisionTarget: {
         revisionId: 'revision-1',
@@ -375,22 +306,10 @@ describe('HyperframesAgentBlock rendered-composition preview', () => {
     });
   });
 
-  it('shows the render failure over a stale queued node and retries the same job', () => {
-    const retried: unknown[] = [];
-    const failed = {
-      ...RENDER_JOB,
-      state: 'failed' as const,
-      phase: 'Loading composition',
-      errorMessage: 'Could not load the composition. Check your connection and retry.',
-    };
-    const { getByText, queryByText } = renderNode(
-      hyperData({ status: 'queued', isExecuting: true }),
-      queueWith([failed], { retry: async (target: unknown) => void retried.push(target) }),
+  it('shows a server render failure on the node', () => {
+    const { getByText } = renderNode(
+      hyperData({ status: 'failed', error: 'Copy left the frame: headline.' }),
     );
-
-    expect(queryByText(/^Queued$/)).toBeNull();
-    expect(getByText(/Could not load the composition/i)).not.toBeNull();
-    fireEvent.click(getByText('Retry'));
-    expect(retried).toEqual([failed]);
+    expect(getByText(/Copy left the frame/i)).not.toBeNull();
   });
 });

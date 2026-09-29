@@ -657,12 +657,6 @@ async function main(): Promise<void> {
       projected: rendered.pendingClarification,
     });
     gradeProjectedField({
-      field: 'reportAssembly',
-      evidence: JAINA_UI_DATA_PART.reportAssembly,
-      evidenceCount: countOf(finalMessage, JAINA_UI_DATA_PART.reportAssembly),
-      projected: rendered.reportAssembly,
-    });
-    gradeProjectedField({
       field: 'pendingToolApprovals',
       evidence: `${JAINA_UI_DATA_PART.approval} / tool state approval-requested`,
       evidenceCount:

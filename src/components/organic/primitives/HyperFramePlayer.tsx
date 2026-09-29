@@ -3,24 +3,9 @@
 import type { ShaderStackV1 } from '@continuum/contracts';
 import { Loader2, Play } from 'lucide-react';
 import * as React from 'react';
-import { createClientRenderJob } from '@/lib/api/clientRenderJobs.client';
-import { openClientRenderInbox } from '@/lib/client-render/ClientRenderProvider';
-import { signHyperframeComposition } from '@/lib/organic/hyperframeSign';
+import { signHyperframeAsset } from '@/lib/organic/hyperframeSign';
 import { cn } from '@/lib/utils';
 import type { OrganicCalendarDraft } from './types';
-
-const DEFAULT_DURATION_SEC = 15;
-
-// 720p render dimensions per aspect ratio (short edge = 720) so the generated
-// MP4 matches the composition's authored shape instead of always being forced
-// to landscape. Unknown/absent aspect ratios fall back to 16:9.
-const RENDER_DIMENSIONS_720P = {
-  '16:9': { width: 1280, height: 720 },
-  '9:16': { width: 720, height: 1280 },
-  '1:1': { width: 720, height: 720 },
-} as const;
-
-const DEFAULT_DIMENSIONS = RENDER_DIMENSIONS_720P['16:9'];
 
 type PlayerState = 'idle' | 'loading' | 'playing' | 'error';
 
@@ -46,54 +31,6 @@ function resolveCoverUrl(draft: OrganicCalendarDraft): string | null {
   return null;
 }
 
-// The authored values win. `spec` is the legacy scene graph and is null on
-// everything the composition agent writes — reading only from it silently
-// letterboxed every vertical piece into 16:9 at a fixed 15s.
-function resolveDurationSec(draft: OrganicCalendarDraft): number {
-  const hyperframe = draft.mediaSuggestion?.hyperframe;
-  const authored = hyperframe?.durationSeconds;
-  if (typeof authored === 'number' && Number.isFinite(authored) && authored > 0) return authored;
-  const spec = hyperframe?.spec;
-  if (spec && typeof spec === 'object' && !Array.isArray(spec)) {
-    const candidate = (spec as Record<string, unknown>).durationSec;
-    if (typeof candidate === 'number' && Number.isFinite(candidate) && candidate > 0) {
-      return candidate;
-    }
-  }
-  return DEFAULT_DURATION_SEC;
-}
-
-function resolveRenderDimensions(draft: OrganicCalendarDraft): { width: number; height: number } {
-  const hyperframe = draft.mediaSuggestion?.hyperframe;
-  const width = hyperframe?.width;
-  const height = hyperframe?.height;
-  if (
-    typeof width === 'number' &&
-    typeof height === 'number' &&
-    Number.isFinite(width) &&
-    Number.isFinite(height) &&
-    width > 0 &&
-    height > 0
-  ) {
-    return { width, height };
-  }
-  const spec = hyperframe?.spec;
-  if (spec && typeof spec === 'object' && !Array.isArray(spec)) {
-    const candidate = (spec as Record<string, unknown>).aspectRatio;
-    if (candidate === '16:9' || candidate === '9:16' || candidate === '1:1') {
-      return RENDER_DIMENSIONS_720P[candidate];
-    }
-  }
-  return DEFAULT_DIMENSIONS;
-}
-
-function resolveSourceAssets(
-  draft: OrganicCalendarDraft,
-): Array<{ assetId: string; kind: 'image' | 'video' | 'audio' }> {
-  const assets = draft.mediaSuggestion?.hyperframe?.sourceAssets;
-  return Array.isArray(assets) ? assets : [];
-}
-
 export function HyperFramePlayer({
   draft,
   brandId,
@@ -110,58 +47,6 @@ export function HyperFramePlayer({
   const [state, setState] = React.useState<PlayerState>('idle');
   const [signedUrl, setSignedUrl] = React.useState<string | null>(null);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
-  // Project the composition into the durable brand queue. Viewing or playing the
-  // preview never consents to an encode and never claims the job.
-  React.useEffect(() => {
-    if (
-      !hyperframe ||
-      !hasText(hyperframe.htmlPath) ||
-      !hyperframe.compositionId ||
-      !draft.backendDraftId ||
-      mp4Status === 'ready'
-    ) {
-      return;
-    }
-    const dimensions = resolveRenderDimensions(draft);
-    void createClientRenderJob({
-      brandId,
-      sourceId: hyperframe.compositionId,
-      sourceRevision: hyperframe.compositionId,
-      title: `HyperFrame: ${draft.title}`,
-      inputs: [
-        {
-          position: 0,
-          kind: 'composition',
-          sourceId: hyperframe.compositionId,
-          label: 'HyperFrame composition',
-          sourceRevision: hyperframe.compositionId,
-          storage: { bucket: 'hyperframes-compositions', path: hyperframe.htmlPath },
-          durationSeconds: resolveDurationSec(draft),
-          mimeType: 'text/html',
-        },
-      ],
-      executionSpec: {
-        kind: 'organic_hyperframe',
-        draftId: draft.backendDraftId,
-        compositionId: hyperframe.compositionId,
-        htmlPath: hyperframe.htmlPath,
-        durationSeconds: resolveDurationSec(draft),
-        width: dimensions.width,
-        height: dimensions.height,
-        assets: resolveSourceAssets(draft),
-        shaderStack: hyperframe.shaderStack ?? undefined,
-        origin: {
-          label: 'Organic HyperFrame',
-          viewHref: '/planner',
-        },
-      },
-    }).catch(() => undefined);
-  }, [brandId, draft, hyperframe, mp4Status]);
-
-  const handleRetry = React.useCallback(() => {
-    openClientRenderInbox();
-  }, []);
-
   const handlePlay = React.useCallback(async () => {
     if (!hyperframe || !hasText(hyperframe.htmlPath)) {
       setErrorMessage('This HyperFrame has no playable composition yet.');
@@ -171,16 +56,29 @@ export function HyperFramePlayer({
     setState('loading');
     setErrorMessage(null);
     if (usesRenderedShaderPreview) {
-      if (!renderedPreviewUrl) {
+      const filmUrl =
+        renderedPreviewUrl ??
+        (hasText(hyperframe.mp4Path) && hasText(hyperframe.mp4Bucket)
+          ? await signHyperframeAsset({
+              brandId,
+              bucket: hyperframe.mp4Bucket,
+              path: hyperframe.mp4Path,
+            })
+          : null);
+      if (!filmUrl) {
         setErrorMessage('Shader preview is still rendering.');
         setState('error');
         return;
       }
-      setSignedUrl(renderedPreviewUrl);
+      setSignedUrl(filmUrl);
       setState('playing');
       return;
     }
-    const url = await signHyperframeComposition(brandId, hyperframe.htmlPath);
+    const url = await signHyperframeAsset({
+      brandId,
+      bucket: hyperframe.bucket ?? 'hyperframes-compositions',
+      path: hyperframe.htmlPath,
+    });
     if (!url) {
       setErrorMessage('Could not load the HyperFrame composition.');
       setState('error');
@@ -249,12 +147,9 @@ export function HyperFramePlayer({
       ) : null}
 
       {state !== 'playing' && mp4Status === 'failed' ? (
-        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-black/70 px-3 py-1.5 text-xs text-white">
-          <span>Video render needs attention.</span>
-          <button type="button" onClick={handleRetry}>
-            Render inbox
-          </button>
-        </div>
+        <p className="absolute inset-x-0 bottom-0 bg-black/70 px-3 py-1.5 text-center text-xs text-white">
+          {hyperframe?.error ?? 'The film did not render.'}
+        </p>
       ) : null}
     </div>
   );

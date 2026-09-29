@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { deriveEfficiency, formatCpa, formatCurrency, humanize } from '../../format';
+import * as typeScale from '../../typeScale';
 import { SuggestionExplorer } from '../SuggestionExplorer';
 import { CONVERSION_OBJECTIVES } from '../suggestionModel';
 
@@ -81,7 +82,7 @@ function SpreadStrip({
           />
         ))}
       </div>
-      <p className="text-3xs text-muted-foreground tabular-nums">
+      <p className="text-xs text-muted-foreground tabular-nums">
         Cost per result spreads from {formatCpa(cheapest.cost, currency)} to{' '}
         {formatCpa(priciest.cost, currency)} across {dots.length} ad sets
         {priciest.cost > cheapest.cost * 1.5 ? ' — room to move money.' : '.'}
@@ -128,10 +129,10 @@ function SuggestionCard({
         <div className="min-w-0">
           <p className="truncate font-semibold text-sm tracking-tight">{suggestion.name}</p>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            <Badge className="text-3xs" variant="secondary">
+            <Badge className="text-xs" variant="secondary">
               {humanize(suggestion.objective)}
             </Badge>
-            <Badge className="text-3xs" variant="teal">
+            <Badge className="text-xs" variant="teal">
               {humanize(suggestion.mode)}
             </Badge>
           </div>
@@ -141,17 +142,17 @@ function SuggestionCard({
 
       <dl className="grid grid-cols-3 gap-2 text-center">
         <div className="rounded-md bg-muted/40 px-2 py-1.5">
-          <dt className="text-3xs text-muted-foreground uppercase">Ad sets</dt>
+          <dt className={`${typeScale.label} text-muted-foreground`}>Ad sets</dt>
           <dd className="font-semibold text-sm tabular-nums">{suggestion.summary.adsets}</dd>
         </div>
         <div className="rounded-md bg-muted/40 px-2 py-1.5">
-          <dt className="text-3xs text-muted-foreground uppercase">Per day</dt>
+          <dt className={`${typeScale.label} text-muted-foreground`}>Per day</dt>
           <dd className="font-semibold text-sm tabular-nums">
             {formatCurrency(suggestion.daily_total, currency)}
           </dd>
         </div>
         <div className="rounded-md bg-muted/40 px-2 py-1.5">
-          <dt className="text-3xs text-muted-foreground uppercase">{metric.costLabel}</dt>
+          <dt className={`${typeScale.label} text-muted-foreground`}>{metric.costLabel}</dt>
           <dd className="font-semibold text-sm tabular-nums">
             {blended != null ? formatCpa(blended, currency) : '—'}
           </dd>
@@ -160,11 +161,11 @@ function SuggestionCard({
 
       <SpreadStrip blended={blended} currency={currency} dots={dots} />
 
-      <p className="text-2xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         <span className="font-medium text-foreground">Why this group:</span> {suggestion.reason}
       </p>
       {noConversions ? (
-        <p className="text-2xs text-warning">
+        <p className="text-xs text-warning">
           No tracked {metric.resultLabel.toLowerCase()} in 14 days — consider Traffic for a decisive
           first cycle.
         </p>
@@ -290,7 +291,7 @@ export function StepStart({
                 <PencilRulerIcon aria-hidden className="size-4 text-muted-foreground" />
                 <span className="font-semibold text-sm tracking-tight">Start from scratch</span>
               </span>
-              <span className="text-2xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 Pick the ad sets or whole campaigns yourself, then set the goal, the plan and who
                 applies the moves.
               </span>

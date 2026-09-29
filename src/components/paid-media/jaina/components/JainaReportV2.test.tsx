@@ -15,7 +15,10 @@ mock.module('@/components/ui/ToastProvider', () => ({
 }));
 
 mock.module('@/components/ui/SafeMarkdownLazy', () => ({
-  SafeMarkdown: ({ content }: { content: string }) => <p>{content}</p>,
+  // Keeps `className`: the ink the answer is set in is the thing under test below.
+  SafeMarkdown: ({ content, className }: { content: string; className?: string }) => (
+    <p className={className}>{content}</p>
+  ),
 }));
 
 mock.module('@/components/ai-elements/suggestion', () => ({
@@ -116,6 +119,28 @@ const report = {
     primary_scope: 'current_account',
   },
 } as CheckpointReportV2;
+
+describe('JainaReportV2 executive summary', () => {
+  it('sets the judged figure of the answer in its severity tone, inside the sentence', () => {
+    render(
+      <JainaReportV2
+        report={{
+          ...report,
+          executive_summary:
+            'Over the [window: last 30 days] **ITESO** returned [risk: 0.49 ROAS] on its spend.',
+        }}
+        isStreaming={false}
+      />,
+    );
+    const risk = document.querySelector('[data-prose-mark="risk"]');
+    expect(risk?.textContent).toBe('0.49 ROAS');
+    expect(risk?.className).toContain('text-destructive');
+    expect(document.querySelector('[data-prose-mark="window"]')?.className).toContain(
+      'text-muted-foreground',
+    );
+    expect(document.body.textContent).not.toContain('[risk:');
+  });
+});
 
 describe('JainaReportV2 module controls', () => {
   it('shows every selected module by default and lets each one be hidden and shown', () => {
@@ -227,15 +252,228 @@ describe('JainaReportV2 module controls', () => {
     );
   });
 
-  // The export receives blocks in PRIORITY order, not authoring order — that is what
-  // puts the primary modules on page one.
-  it('exports the visible modules as HTML, highest priority first', async () => {
+  // The export receives blocks in the order the report carries them — which is the order
+  // `selectBlocksForPresentation` built: framing, then the plan's modules in plan order,
+  // then the closing blocks that read what is above them.
+  //
+  // It used to re-sort by `priority`, and so did the screen. `priority` is an EMPHASIS rank,
+  // not a position: `priorityFor` gives `primary` to the plan's FIRST module and `secondary`
+  // to everything else including the opening `data_scope` frame, which is hard-coded
+  // `secondary`. Measured on a live strategy turn, that sort rendered
+  // [metric_grid, insight_list, actions, data_scope] from a report the backend emitted as
+  // [data_scope, metric_grid, insight_list, actions] — the figures hoisted above the reading
+  // and the window strip pushed below the closing moves, on screen and in the PDF alike.
+  it('exports the visible modules as HTML in the report’s own reading order', async () => {
     downloadHtmlMock.mockClear();
     render(<JainaReportV2 report={report} isStreaming={false} runId="run_42" />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Export report as HTML' }));
     await waitFor(() => expect(downloadHtmlMock).toHaveBeenCalledTimes(1));
     const blocks = downloadHtmlMock.mock.calls[0][0].blocks as Array<{ block_id: string }>;
-    expect(blocks.map((block) => block.block_id)).toEqual(['wins', 'risks']);
+    expect(blocks.map((block) => block.block_id)).toEqual(['risks', 'wins']);
+  });
+});
+
+describe('JainaReportV2 — the answer reads as the answer', () => {
+  it('sets the executive summary in reading ink, not the unjudged muted ink', () => {
+    // It used to render `text-sm leading-relaxed text-muted-foreground`. Streamdown sets no
+    // colour of its own on headings, bold runs or table cells, so that single class muted the
+    // whole answer — and by `reading.ts`'s law muted ink means "nobody judged this", applied
+    // to the one paragraph somebody did.
+    render(<JainaReportV2 report={report} isStreaming={false} />);
+    const summary = screen.getByText('Account performance summary');
+    expect(summary.className).toContain('text-foreground');
+    expect(summary.className).toContain('text-xl');
+    expect(summary.className).toContain('font-medium');
+    expect(summary.className).not.toContain('text-muted-foreground');
+  });
+
+  it('puts the answer above the module controls that operate on its evidence', () => {
+    render(<JainaReportV2 report={report} isStreaming={false} />);
+    const summary = screen.getByText('Account performance summary');
+    const controls = screen.getByRole('group', { name: 'Report modules' });
+    expect(
+      summary.compareDocumentPosition(controls) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
+  });
+});
+
+describe('JainaReportV2 — the justification under the answer', () => {
+  const moduleBlock = (block_id: string, category: string, title: string) =>
+    ({
+      block_id,
+      category,
+      scope: 'current_account',
+      title,
+      priority: 1,
+      provenance: null,
+    }) as unknown as CheckpointReportV2['blocks'][number];
+
+  // The backend's reading order, which each section keeps: the scope frame opens the
+  // report, the figures sit between the reading and the closing moves.
+  const strategyReport = {
+    ...report,
+    blocks: [
+      moduleBlock('scope', 'data_scope', 'Data scope'),
+      moduleBlock('reading', 'insight_list', 'What stands out'),
+      moduleBlock('kpis', 'metric_grid', 'Headline KPIs'),
+      moduleBlock('trend', 'chart', 'Spend trend'),
+      moduleBlock('rows', 'data_table', 'Campaign table'),
+      moduleBlock('moves', 'actions', 'Next moves'),
+    ],
+  } as CheckpointReportV2;
+
+  const moduleIdsIn = (section: 'answer' | 'justification') =>
+    Array.from(
+      document.querySelectorAll(`[data-report-section="${section}"] [data-testid^="module-"]`),
+    ).map((node) => node.getAttribute('data-testid')?.replace('module-', ''));
+
+  it('keeps the reading and the moves with the answer, in the backend’s order', () => {
+    render(<JainaReportV2 report={strategyReport} isStreaming={false} />);
+    expect(moduleIdsIn('answer')).toEqual(['reading', 'moves']);
+  });
+
+  it('groups the figures under an always-open Evidence section, in the backend’s order', () => {
+    render(<JainaReportV2 report={strategyReport} isStreaming={false} />);
+    const justification = screen.getByRole('region', { name: 'Evidence' });
+    expect(justification.tagName).not.toBe('DETAILS');
+    expect(justification.textContent).toContain('The data behind the answer');
+    expect(moduleIdsIn('justification')).toEqual(['scope', 'kpis', 'trend', 'rows']);
+  });
+
+  it('sets the justification below the answer', () => {
+    render(<JainaReportV2 report={strategyReport} isStreaming={false} />);
+    const moves = screen.getByTestId('module-moves');
+    const justification = screen.getByRole('region', { name: 'Evidence' });
+    expect(
+      moves.compareDocumentPosition(justification) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
+  });
+
+  it('shows no Evidence heading when the answer carries no figures', () => {
+    render(
+      <JainaReportV2
+        report={{ ...strategyReport, blocks: [moduleBlock('reading', 'insight_list', 'Reading')] }}
+        isStreaming={false}
+      />,
+    );
+    expect(screen.queryByRole('region', { name: 'Evidence' })).toBeNull();
+    expect(screen.queryByText('Evidence')).toBeNull();
+    expect(moduleIdsIn('answer')).toEqual(['reading']);
+  });
+
+  it('keeps hidden modules hidden, and drops the heading once every figure is hidden', () => {
+    render(
+      <JainaReportV2
+        report={{
+          ...strategyReport,
+          blocks: [
+            moduleBlock('reading', 'insight_list', 'What stands out'),
+            moduleBlock('kpis', 'metric_grid', 'Headline KPIs'),
+          ],
+        }}
+        isStreaming={false}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Headline KPIs module' }));
+    expect(screen.queryByTestId('module-kpis')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Evidence' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show Headline KPIs module' }));
+    expect(moduleIdsIn('justification')).toEqual(['kpis']);
+  });
+
+  const labelsOnScreen = () =>
+    Array.from(document.querySelectorAll('[data-report-label]')).map((node) => ({
+      stratum: node.getAttribute('data-report-label'),
+      text: node.textContent,
+    }));
+
+  it('labels the three strata in the answer’s language — Spanish read from the sentence', () => {
+    render(
+      <JainaReportV2
+        report={{
+          ...strategyReport,
+          executive_summary:
+            'Pausar el anuncio ALEIRA · Copy 3: cada conversación cuesta 54.84 MXN, 38% más que el promedio de la cuenta.',
+        }}
+        isStreaming={false}
+      />,
+    );
+    expect(labelsOnScreen()).toEqual([
+      { stratum: 'why', text: 'Por qué' },
+      { stratum: 'action', text: 'Acción' },
+      { stratum: 'evidence', text: 'Evidencia' },
+    ]);
+    expect(screen.getByRole('region', { name: 'Evidencia' }).textContent).toContain(
+      'Los datos detrás de la respuesta',
+    );
+    expect(screen.queryByText('Justification')).toBeNull();
+    // The labels name the strata; they never reorder the blocks.
+    expect(moduleIdsIn('answer')).toEqual(['reading', 'moves']);
+    expect(moduleIdsIn('justification')).toEqual(['scope', 'kpis', 'trend', 'rows']);
+  });
+
+  it('labels the strata in Spanish when the report states its language, whatever the sentence', () => {
+    render(
+      <JainaReportV2
+        report={{
+          ...strategyReport,
+          language: 'es',
+          executive_summary: 'Account performance summary',
+        }}
+        isStreaming={false}
+      />,
+    );
+    expect(labelsOnScreen().map((label) => label.text)).toEqual(['Por qué', 'Acción', 'Evidencia']);
+  });
+
+  it('labels the strata in English otherwise, each where its stratum begins', () => {
+    render(<JainaReportV2 report={strategyReport} isStreaming={false} />);
+    expect(labelsOnScreen()).toEqual([
+      { stratum: 'why', text: 'Why' },
+      { stratum: 'action', text: 'Action' },
+      { stratum: 'evidence', text: 'Evidence' },
+    ]);
+    const why = screen.getByText('Why');
+    const reading = screen.getByTestId('module-reading');
+    const action = screen.getByText('Action');
+    const moves = screen.getByTestId('module-moves');
+    expect(why.compareDocumentPosition(reading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeGreaterThan(
+      0,
+    );
+    expect(
+      reading.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
+    expect(
+      action.compareDocumentPosition(moves) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
+  });
+
+  it('sets every label at the 12px caps step and nothing smaller', () => {
+    render(<JainaReportV2 report={strategyReport} isStreaming={false} />);
+    const labels = document.querySelectorAll('[data-report-label]');
+    expect(labels.length).toBe(3);
+    for (const node of labels) {
+      expect(node.className).toContain('text-xs');
+      expect(node.className).toContain('uppercase');
+      expect(node.className).not.toMatch(/text-[23]xs/);
+    }
+  });
+
+  it('still exports the visible modules in the report’s own order', async () => {
+    downloadHtmlMock.mockClear();
+    render(<JainaReportV2 report={strategyReport} isStreaming={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Export report as HTML' }));
+    await waitFor(() => expect(downloadHtmlMock).toHaveBeenCalledTimes(1));
+    const blocks = downloadHtmlMock.mock.calls[0][0].blocks as Array<{ block_id: string }>;
+    expect(blocks.map((block) => block.block_id)).toEqual([
+      'scope',
+      'reading',
+      'kpis',
+      'trend',
+      'rows',
+      'moves',
+    ]);
   });
 });

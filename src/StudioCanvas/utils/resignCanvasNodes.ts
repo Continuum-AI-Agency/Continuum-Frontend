@@ -116,6 +116,19 @@ function collectVersionRefs(nodes: StudioNode[]): VersionRef[] {
   for (const node of nodes) {
     if (!MEDIA_FIELD.has(node.type ?? '')) continue;
     const data = node.data as Record<string, unknown>;
+    // A HyperFrames film is a Library asset, possibly in GCS, which only /api/library/sign
+    // can sign — the canvas coordinate route takes Supabase buckets alone.
+    if (node.type === 'hyperframesAgent') {
+      const filmAssetId = data.renderOutputAssetId;
+      const filmVersionId = data.renderOutputAssetVersionId;
+      if (typeof filmAssetId === 'string' && typeof filmVersionId === 'string')
+        refs.set(versionRefKey(filmAssetId, filmVersionId), {
+          assetId: filmAssetId,
+          versionId: filmVersionId,
+        });
+      continue;
+    }
+    if (!MEDIA_FIELD.has(node.type ?? '')) continue;
     const assetId = data.assetId;
     const versionId = data.assetVersionId;
     if (typeof assetId !== 'string' || typeof versionId !== 'string') continue;
@@ -248,6 +261,18 @@ function applySignedUrls(
 ): StudioNode[] {
   return nodes.map((node) => {
     const data = node.data as Record<string, unknown>;
+    if (node.type === 'hyperframesAgent') {
+      const filmUrl =
+        typeof data.renderOutputAssetId === 'string' &&
+        typeof data.renderOutputAssetVersionId === 'string'
+          ? versionUrlMap.get(
+              versionRefKey(data.renderOutputAssetId, data.renderOutputAssetVersionId),
+            )
+          : undefined;
+      return filmUrl
+        ? { ...node, data: { ...data, generatedVideoUrl: filmUrl } as StudioNode['data'] }
+        : node;
+    }
     const imgPath = data.generatedImageStoragePath;
     const vidPath = data.generatedVideoStoragePath;
     const refPath = data.sourcePath;

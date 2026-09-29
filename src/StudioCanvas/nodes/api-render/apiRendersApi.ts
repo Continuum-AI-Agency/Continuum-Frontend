@@ -9,8 +9,13 @@ import {
   API_RENDER_IMPORT_PREVIEW_ROUTE,
   API_RENDER_INPUT_SETS_ROUTE,
   API_RENDER_JOBS_ROUTE,
+  API_RENDER_MOTION_PROOF_FORMATS_ROUTE,
+  API_RENDER_MOTION_PROOFS_ROUTE,
   API_RENDER_PREFLIGHT_ROUTE,
+  API_RENDER_PREVIEW_LIVE_ROUTE,
+  API_RENDER_PREVIEW_PICTURES_ROUTE,
   API_RENDER_PREVIEW_ROUTE,
+  API_RENDER_PREVIEW_SKETCH_ROUTE,
   API_RENDER_SETS_ROUTE,
   API_RENDER_SLACK_CHANNELS_ROUTE,
   API_RENDER_SUGGEST_ROWS_ROUTE,
@@ -69,6 +74,10 @@ import {
   type ForgeRenderImportMediaResponse,
   type ForgeRenderImportPreview,
   type ForgeRenderImportPreviewRequest,
+  type ForgeRenderLive,
+  type ForgeRenderLiveRequest,
+  type ForgeRenderPictures,
+  type ForgeRenderPicturesRequest,
   type ForgeRenderPreview,
   type ForgeRenderPreviewRequest,
   type ForgeRenderSet,
@@ -79,6 +88,8 @@ import {
   forgeRenderDriveSnapshotSchema,
   forgeRenderImportMediaResponseSchema,
   forgeRenderImportPreviewSchema,
+  forgeRenderLiveSchema,
+  forgeRenderPicturesSchema,
   forgeRenderPreviewSchema,
   forgeRenderSetListResponseSchema,
   forgeRenderSetRevisionListResponseSchema,
@@ -154,12 +165,59 @@ export const apiRendersApi = {
     });
   },
   /** One row composed over the closest real render (or drawn whole from the template) on the server. */
-  composePreview(input: ForgeRenderPreviewRequest) {
+  composePreview(input: ForgeRenderPreviewRequest, signal?: AbortSignal) {
     return http.request<ForgeRenderPreview>({
       path: API_RENDER_PREVIEW_ROUTE,
       method: 'POST',
       body: input,
       schema: forgeRenderPreviewSchema,
+      signal,
+    });
+  },
+  livePreview(input: ForgeRenderLiveRequest, signal?: AbortSignal) {
+    return http.request<ForgeRenderLive>({
+      path: API_RENDER_PREVIEW_LIVE_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: forgeRenderLiveSchema,
+      signal,
+    });
+  },
+  previewPictures(input: ForgeRenderPicturesRequest, signal?: AbortSignal) {
+    return http.request<ForgeRenderPictures>({
+      path: API_RENDER_PREVIEW_PICTURES_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: forgeRenderPicturesSchema,
+      signal,
+    });
+  },
+  sketchPreview(input: ForgeRenderSketchRequest) {
+    return http.request<ForgeRenderSketch>({
+      path: API_RENDER_PREVIEW_SKETCH_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: forgeRenderSketchSchema,
+    });
+  },
+  startMotionProof(input: ForgeMotionProofRequest) {
+    return http.request<ForgeMotionProof>({
+      path: API_RENDER_MOTION_PROOFS_ROUTE,
+      method: 'POST',
+      body: input,
+      schema: forgeMotionProofSchema,
+    });
+  },
+  listMotionProofFormats(brandId: string, bindingId: string, templateKey: string) {
+    return http.request<ForgeMotionProofFormat[]>({
+      path: `${API_RENDER_MOTION_PROOF_FORMATS_ROUTE}?${query({ brandId, bindingId, templateKey })}`,
+      schema: forgeMotionProofFormatsSchema,
+    });
+  },
+  getMotionProof(brandId: string, proofId: string) {
+    return http.request<ForgeMotionProof>({
+      path: `${API_RENDER_MOTION_PROOFS_ROUTE}/${encodeURIComponent(proofId)}?${query({ brandId })}`,
+      schema: forgeMotionProofSchema,
     });
   },
   createJob(input: ApiRenderCreateJobRequest) {

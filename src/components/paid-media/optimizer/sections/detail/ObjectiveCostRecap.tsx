@@ -7,9 +7,17 @@
 import type { OptimizationMetricDefinition } from '@continuum/contracts';
 import { cn } from '@/lib/utils';
 import { ExplainPopover, ExplainRow } from '../../components/ExplainPopover';
+import { HeroFigure } from '../../components/HeroFigure';
 import { Sparkline } from '../../components/Sparkline';
 import { StatusChip, type StatusTone } from '../../components/StatusChip';
-import { formatCpa, formatCurrency } from '../../format';
+import {
+  type FigureProps,
+  type FigureWindow,
+  figureProps,
+  formatCpa,
+  formatCurrency,
+} from '../../format';
+import * as typeScale from '../../typeScale';
 import type { ResolvedRange } from './rangeModel';
 import type { RecapModel } from './recapModel';
 
@@ -19,6 +27,36 @@ function pct(value: number | null | undefined): string | null {
   if (value == null || !Number.isFinite(value)) return null;
   const rounded = Math.round(value * 100);
   return `${rounded > 0 ? '+' : ''}${rounded}%`;
+}
+
+/** A fractional delta in display units, for the provenance attribute — 12 for +12%. */
+function pctRaw(value: number | null | undefined): number | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  return Math.round(value * 100);
+}
+
+/** The range's window in the figure-provenance vocabulary; a custom range is `none`. */
+function rangeWindow(range: ResolvedRange): FigureWindow {
+  return range.spec.kind === 'preset' && range.spec.preset !== 'flight'
+    ? range.spec.preset
+    : 'none';
+}
+
+/** A signed-percent chip figure, keyed under its tile. */
+function DeltaFigure({
+  figureKey,
+  value,
+  window,
+}: {
+  figureKey: string;
+  value: number | null | undefined;
+  window: FigureWindow;
+}) {
+  return (
+    <span {...figureProps(figureKey, pctRaw(value), null, window, 'percent-signed')}>
+      {pct(value)}
+    </span>
+  );
 }
 
 /** Delta tone: for spend/results up is neutral-good, for cost up is bad. */
@@ -32,6 +70,7 @@ function deltaTone(value: number | null, lowerIsBetter: boolean): StatusTone {
 function Tile({
   label,
   value,
+  figure,
   sub,
   chip,
   spark,
@@ -40,6 +79,7 @@ function Tile({
 }: {
   label: string;
   value: string;
+  figure: FigureProps;
   sub?: React.ReactNode;
   chip?: React.ReactNode;
   spark?: number[];
@@ -49,15 +89,15 @@ function Tile({
   return (
     <div className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-border/70 bg-card px-3 py-2.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-2xs text-muted-foreground uppercase tracking-wide">{label}</span>
+        <span className={`${typeScale.label} text-muted-foreground`}>{label}</span>
         {explain}
       </div>
       <div className="flex items-end justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate font-semibold text-lg text-foreground tabular-nums leading-none">
+          <HeroFigure as="p" className="truncate text-foreground" kind="tile" {...figure}>
             {value}
-          </p>
-          {sub ? <p className="mt-1 text-2xs text-muted-foreground">{sub}</p> : null}
+          </HeroFigure>
+          {sub ? <p className="mt-1 text-xs text-muted-foreground">{sub}</p> : null}
         </div>
         {spark && spark.some((v) => v > 0) ? (
           <Sparkline label={`${label} by day`} stroke={sparkColor} values={spark} width={72} />
@@ -103,6 +143,7 @@ export function ObjectiveCostRecap({
 
   const costDelta = pct(delta.costPerResult);
   const vsTarget = pct(recap.vsTarget);
+  const window = rangeWindow(range);
   const targetTone: StatusTone =
     recap.vsTarget == null
       ? 'muted'
@@ -117,9 +158,13 @@ export function ObjectiveCostRecap({
       <Tile
         chip={
           delta.spend != null ? (
-            <StatusChip tone="muted">{pct(delta.spend)} spend</StatusChip>
+            <StatusChip tone="muted">
+              <DeltaFigure figureKey="recap.spend.delta" value={delta.spend} window={window} />{' '}
+              spend
+            </StatusChip>
           ) : null
         }
+        figure={figureProps('recap.spend', current.spend, currency, window)}
         label="Spend"
         spark={spendSpark}
         sub={periodNote}
@@ -129,17 +174,30 @@ export function ObjectiveCostRecap({
         chip={
           delta.results != null ? (
             <StatusChip tone={deltaTone(delta.results, false)}>
-              {pct(delta.results)} {metric.resultLabel.toLowerCase()}
+              <DeltaFigure figureKey="recap.results.delta" value={delta.results} window={window} />{' '}
+              {metric.resultLabel.toLowerCase()}
             </StatusChip>
           ) : null
         }
+        figure={figureProps('recap.results', current.results, null, window, 'count')}
         label={metric.resultLabel}
         spark={resultSpark}
         sparkColor="var(--chart-2)"
         sub={
-          current.impressions > 0
-            ? `${INT.format(current.impressions)} impressions · ${INT.format(current.clicks)} clicks`
-            : undefined
+          current.impressions > 0 ? (
+            <>
+              <span
+                {...figureProps('recap.impressions', current.impressions, null, window, 'count')}
+              >
+                {INT.format(current.impressions)}
+              </span>{' '}
+              impressions ·{' '}
+              <span {...figureProps('recap.clicks', current.clicks, null, window, 'count')}>
+                {INT.format(current.clicks)}
+              </span>{' '}
+              clicks
+            </>
+          ) : undefined
         }
         value={INT.format(current.results)}
       />
@@ -154,7 +212,12 @@ export function ObjectiveCostRecap({
               }
               tone={deltaTone(delta.costPerResult, true)}
             >
-              {costDelta} vs prior
+              <DeltaFigure
+                figureKey="recap.cost.delta"
+                value={delta.costPerResult}
+                window={window}
+              />{' '}
+              vs prior
             </StatusChip>
           ) : null
         }
@@ -179,6 +242,7 @@ export function ObjectiveCostRecap({
             ) : null}
           </ExplainPopover>
         }
+        figure={figureProps('recap.cost', current.costPerResult, currency, window)}
         label={metric.costLabel}
         spark={costSpark}
         sparkColor="var(--chart-4)"
@@ -197,21 +261,32 @@ export function ObjectiveCostRecap({
               }
               tone={targetTone}
             >
-              {recap.vsTarget == null
-                ? 'No results yet'
-                : recap.vsTarget <= 0
-                  ? `Below target · ${vsTarget}`
-                  : `Above target · ${vsTarget}`}
+              {recap.vsTarget == null ? (
+                'No results yet'
+              ) : (
+                <>
+                  {recap.vsTarget <= 0 ? 'Below target' : 'Above target'} ·{' '}
+                  <DeltaFigure figureKey="recap.target.vs" value={recap.vsTarget} window={window} />
+                </>
+              )}
             </StatusChip>
           ) : (
             <StatusChip tone="muted">No target set</StatusChip>
           )
         }
+        figure={figureProps('recap.target', target != null && target > 0 ? target : null, currency)}
         label={metric.targetLabel}
         sub={
-          target != null && target > 0 && current.costPerResult != null
-            ? `${formatCpa(current.costPerResult, currency)} actual`
-            : undefined
+          target != null && target > 0 && current.costPerResult != null ? (
+            <>
+              <span
+                {...figureProps('recap.target.actual', current.costPerResult, currency, window)}
+              >
+                {formatCpa(current.costPerResult, currency)}
+              </span>{' '}
+              actual
+            </>
+          ) : undefined
         }
         value={target != null && target > 0 ? formatCpa(target, currency) : '—'}
       />

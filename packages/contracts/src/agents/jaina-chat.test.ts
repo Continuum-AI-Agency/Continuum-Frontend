@@ -147,3 +147,49 @@ describe('resolveJainaDataScope', () => {
     expect(resolveJainaDataScope(context)).toBe(context.dataScope);
   });
 });
+
+describe('operator_action exclusivity', () => {
+  const operatorAction = {
+    tool: 'pause_meta_entity',
+    input: {
+      entity_id: '120200000000001',
+      level: 'adset',
+      reason: 'No conversions in 14 days.',
+      dry_run: false,
+      expected_status: 'ACTIVE',
+    },
+  };
+
+  it('accepts an operator_action on its own', () => {
+    const parsed = jainaChatRequestSchema.safeParse({
+      ...baseRequest({ adAccountId: 'act_1' }),
+      operator_action: operatorAction,
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it.each([
+    ['tool_action', { decision: 'approve', approval_id: 'appr_1' }],
+    [
+      'scaffold_action',
+      {
+        decision: 'approve',
+        approval_id: 'appr_1',
+        scaffold_version_id: '11111111-1111-4111-8111-111111111111',
+        gate: 'build',
+      },
+    ],
+    ['plan_action', { type: 'approve', plan_id: 'plan_1' }],
+    ['clarification', { id: 'clar_1' }],
+  ])('refuses operator_action alongside %s, naming both', (field, value) => {
+    const parsed = jainaChatRequestSchema.safeParse({
+      ...baseRequest({ adAccountId: 'act_1' }),
+      operator_action: operatorAction,
+      [field]: value,
+    });
+    expect(parsed.success).toBe(false);
+    const issue = parsed.success ? null : parsed.error.issues[0];
+    expect(issue?.path).toEqual(['operator_action']);
+    expect(issue?.message).toContain(field);
+  });
+});

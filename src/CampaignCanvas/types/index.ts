@@ -36,7 +36,35 @@ export const isOpenAiCampaignNodeType = (
 export type CampaignCanvasPlatform = 'meta' | 'openai';
 
 export type AdFormat = 'IMAGE' | 'VIDEO' | 'CAROUSEL' | 'COLLECTION';
-export type CreativeAssetType = 'image' | 'video';
+/**
+ * What a creative node IS on Meta. `carousel` is a format of its own, not a flag on an
+ * image: it carries 2-10 ordered cards and builds as `child_attachments`, and an ad that
+ * uses one is a CAROUSEL ad whatever its cards contain.
+ */
+export type CreativeAssetType = 'image' | 'video' | 'carousel';
+
+/** One card of a carousel creative. Order in `CreativeData.cards` IS the order on Meta. */
+export interface CarouselCard {
+  /** `brand_profiles.media_assets.id` — what the build resolves the bytes from. */
+  mediaId: string;
+  kind: 'image' | 'video';
+  thumbnailUrl?: string;
+  headline?: string;
+  linkUrl?: string;
+}
+
+export const CAROUSEL_MIN_CARDS = 2;
+export const CAROUSEL_MAX_CARDS = 10;
+
+/**
+ * The id of an ad set's LEFT target handle. An audience feeds an ad set from the side,
+ * not from above: the top handle is the campaign's, and an edge landing on the wrong one
+ * is refused. In the DOM: `[data-handleid="audience"]`.
+ */
+export const AUDIENCE_HANDLE_ID = 'audience';
+
+/** Meta's placement choice: automatic (`advantage_plus`) or an explicit surface list. */
+export type PlacementMode = 'advantage_plus' | 'manual';
 
 /**
  * Present only on a node hydrated from a real row — a RECORD of something Jaina
@@ -85,7 +113,14 @@ export interface AdSetData extends BaseCampaignNodeData {
   budgetCurrency?: string;
   startTime?: string;
   endTime?: string;
+  /** Display labels of the placement ('Advantage+', 'facebook', 'fb:feed'); derived. */
   pacingType?: string[];
+  placementMode?: PlacementMode;
+  /** Manual placement only. Meta's `publisher_platforms`. */
+  publisherPlatforms?: string[];
+  facebookPositions?: string[];
+  instagramPositions?: string[];
+  devicePlatforms?: string[];
 }
 
 export interface AdData extends BaseCampaignNodeData {
@@ -94,9 +129,24 @@ export interface AdData extends BaseCampaignNodeData {
   headline: string;
   description?: string;
   callToAction: string;
+  /** The destination URL the ad's link and CTA open. */
+  linkUrl?: string;
 }
 
+/**
+ * How an audience node targets. `group` = a PUBLISHED audience group version (its own
+ * approval gate already passed); `broad` = explicit countries / age / genders. An ad set
+ * with neither is refused at propose time, so every audience node is exactly one of these.
+ */
+export type AudienceMode = 'group' | 'broad';
+
 export interface AudienceData extends BaseCampaignNodeData {
+  /** Absent on a node drawn before modes existed; read as `broad`. */
+  mode?: AudienceMode;
+  /** `audience_groups.id`, when `mode === 'group'`. */
+  audienceGroupId?: string;
+  /** `audience_group_versions.id` — the published version the ad set compiles from. */
+  audienceGroupVersionId?: string;
   locations: string[];
   ageMin?: number;
   ageMax?: number;
@@ -110,8 +160,11 @@ export interface CreativeData extends BaseCampaignNodeData {
   assetType: CreativeAssetType;
   assetUrl?: string;
   thumbnailUrl?: string;
+  /** The single asset of an image or video creative. Unused by a carousel. */
   mediaId?: string;
   aspectRatio?: string;
+  /** Carousel only: 2-10 ordered cards. */
+  cards?: CarouselCard[];
 }
 
 /**

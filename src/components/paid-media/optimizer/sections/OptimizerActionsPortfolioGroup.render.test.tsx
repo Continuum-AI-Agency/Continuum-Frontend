@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 (globalThis as unknown as { window: { SyntaxError: typeof SyntaxError } }).window.SyntaxError =
   SyntaxError;
@@ -134,6 +134,9 @@ const executableReport = {
 // The mocked performance read returns whichever report the current test installed. Defaults
 // back to the pure-selection `report` in afterEach so the existing suites are untouched.
 let activeReport: unknown = report;
+// The brand's audience proposals, as optimizer_get_audience_proposals returns them. Empty by
+// default; the carried-row specs install one.
+let activeProposals: unknown[] = [];
 
 // The portfolio's recent ad-account writes, as public.optimizer_list_actions returns them.
 // Empty by default so the existing queue specs are unaffected.
@@ -185,7 +188,7 @@ mock.module('../useOptimizerData', () => ({
   useApplyApproved: () => ({ mutate: applyApprovedMutate, isPending: false }),
   useApplyAdsetStatus: () => ({ mutate: applyAdsetStatusMutate, isPending: false }),
   // Reads the queue only touches when a creative row is expanded; empty here.
-  useOptimizerAccountSnapshots: () => ({ data: [], isLoading: false }),
+  useOptimizerAccountSnapshots: () => ({ data: [], isLoading: false, targeting: [] }),
   useOptimizerAdsetAds: () => ({ data: [], isLoading: false }),
   useOptimizerCreativeSwapJobs: () => ({ data: [], isLoading: false, refetch: () => undefined }),
   useOptimizerPortfolioAudiences: () => ({ data: [], isLoading: false }),
@@ -196,7 +199,7 @@ mock.module('../useOptimizerData', () => ({
   }),
   useAdAccountCurrency: () => 'USD',
   fetchAdsetAds: async () => [],
-  useOptimizerAudienceProposals: () => ({ data: [], isLoading: false }),
+  useOptimizerAudienceProposals: () => ({ data: activeProposals, isLoading: false }),
   useAudienceProposalMutations: () => ({
     request: { mutate: () => undefined, isPending: false },
     approve: { mutate: () => undefined, isPending: false },
@@ -276,6 +279,7 @@ afterEach(() => {
   applyApprovedHandler = () => {};
   applyAdsetStatusHandler = () => {};
   activeReport = report;
+  activeProposals = [];
   recentActions = [];
 });
 
@@ -301,6 +305,48 @@ const renderGroup = (over: Partial<PortfolioListItem> = {}) =>
   render(
     <OptimizerActionsPortfolioGroup adAccountId="act_1" brandId="b1" portfolio={portfolio(over)} />,
   );
+
+// Easy Fit → Tours, 2026-09-28: an asked-for row's handoff opened this proposal, the worker
+// blocked it for want of creatives, and the next cycle superseded it — expiring the
+// recommendation, which therefore left the report. The row that opened it still says "Open
+// the audience proposal", and that press has to land here.
+const CARRIED_REC_ID = '77777777-7777-4777-8777-777777777777';
+const supersededProposal = {
+  id: '88888888-8888-4888-8888-888888888888',
+  brand_id: '2f1c1c1e-0000-4000-8000-000000000003',
+  ad_account_id: 'act_1',
+  campaign_id: 'c1',
+  adset_id: 'as-tours',
+  trigger: 'F3_audience_exhausted',
+  kind: 'audience_expand',
+  recommendation_id: CARRIED_REC_ID,
+  cycle_run_id: RUN_ID,
+  utc_day: '2026-09-27',
+  status: 'superseded',
+  requested_via: 'human',
+  requested_by: null,
+  attempts: 1,
+  proposal: null,
+  proposal_built_at: null,
+  blocked_by: {
+    code: 'no_creatives',
+    message:
+      'No delivering creative in this portfolio has enough results to carry into a new ad set yet.',
+    campaign_id: 'c1',
+    campaign_name: 'ITESO // TOURS',
+  },
+  approved_at: null,
+  approved_by: null,
+  approval: null,
+  result: null,
+  executed_at: null,
+  undo_requested_at: null,
+  undo_result: null,
+  undone_at: null,
+  error: { code: 'signal_stopped', message: 'The trigger did not fire again.' },
+  created_at: '2026-09-27T09:20:16Z',
+  updated_at: '2026-09-28T00:20:00Z',
+};
 
 describe('buildActionQueue — pure inclusion + selectability', () => {
   it('builds a budget row, a pause row, a creative row, and a hidden ad-level row', () => {
@@ -612,11 +658,11 @@ describe('a conserved rebalance reads as ONE decision without losing per-ad-set 
     const { container } = renderGroup();
 
     fireEvent.click(screen.getByLabelText('Select budget move for Retarget 30d'));
-    expect(container.textContent).toContain('Net +$15/day');
+    expect(container.textContent).toContain('Net +$15.00/day');
 
     fireEvent.click(screen.getByLabelText('Select budget move for Cold Lookalike'));
     expect(container.textContent).toContain('Spend stays flat');
-    expect(container.textContent).not.toContain('Net +$15/day');
+    expect(container.textContent).not.toContain('Net +$15.00/day');
   });
 
   it('selects the whole group from the header checkbox, then clears it', () => {
@@ -671,7 +717,7 @@ describe('a conserved rebalance reads as ONE decision without losing per-ad-set 
     activeReport = rebalanceReport;
     const { container } = renderGroup();
     fireEvent.click(screen.getAllByLabelText('Show detail')[1]);
-    expect(container.textContent).toContain('Before → after: $50 → $65');
+    expect(container.textContent).toContain('Before → after: $50.00 → $65.00');
     // The row's own detail carries no why; the story above may still explain the donor.
     const detail = screen.getByText(/Before → after/).closest('.rounded-md');
     expect(detail?.textContent ?? '').not.toContain('Why:');
@@ -817,5 +863,338 @@ describe('two decisions on one ad set are separately nameable', () => {
       recommendations: [],
     });
     expect(selectionLabel(rows[0])).toBe('Select budget move for as-nameless');
+  });
+});
+
+// The queue and the account cards are two views of one finding. Before this, a row led with
+// the structured line while the card led with the detector's own figure, so the same finding
+// read two ways depending on where you were standing.
+//
+// The evidence below satisfies RecommendationEvidenceSchema exactly. It has to: the report is
+// parsed at the boundary, so an invalid `window` takes the whole group off the screen rather
+// than degrading one line — which is the schema working, and worth knowing while reading this.
+describe('a queue row leads with the trigger own headline', () => {
+  const withHeadline = (headline: unknown) =>
+    ({
+      ...report,
+      recommendations: report.recommendations.map((rec, index) =>
+        index === 0
+          ? {
+              ...rec,
+              evidence: {
+                metric: 'ctr',
+                value: 0.00745,
+                comparator: 'vs 1.03%',
+                threshold: 0.01031,
+                window: 'd14',
+                estImpactPerDay: 25.54,
+                source: 'F1_creative_fatigue',
+                ...(headline === undefined ? {} : { headline }),
+              },
+            }
+          : rec,
+      ),
+    }) as never;
+
+  it('prints the headline the engine declared', () => {
+    activeReport = withHeadline({
+      kind: 'drift',
+      value: 28,
+      unit: 'percent',
+      label: 'less click-through than 14d',
+    });
+    expect(renderGroup().container.textContent).toContain('28% less click-through than 14d');
+  });
+
+  it('falls back to the structured line when the engine declared none', () => {
+    activeReport = withHeadline(undefined);
+    const text = renderGroup().container.textContent ?? '';
+    expect(text).not.toContain('less click-through than 14d');
+    expect(text).toContain('CTR 0.74% vs 1.03%');
+  });
+
+  it('treats a malformed headline as no headline, never as an invented figure', () => {
+    activeReport = withHeadline({ kind: 'not_a_kind', value: 'lots' });
+    const text = renderGroup().container.textContent ?? '';
+    expect(text).not.toContain('lots');
+    expect(text).toContain('CTR 0.74% vs 1.03%');
+  });
+});
+
+describe('queue header — a portfolio dead on Meta says so before its rows', () => {
+  // "Citas Agosto - check leads" as the live bench read it on 2026-09-23.
+  const citas = {
+    name: 'Citas Agosto - check leads',
+    apply_mode: 'autopilot',
+    next_realloc_at: '2026-09-24T06:00:00Z',
+    adset_count: 12,
+    last_actual_cycle_at: '2026-08-05T12:00:00Z',
+    stale_for_days: 49,
+    roster_state: 'absent' as const,
+    roster_absent_since: '2026-08-06T12:00:00Z',
+    roster_missing_count: 12,
+  };
+
+  it('reads exactly as before when the row carries no staleness fields', () => {
+    const { container, queryByTestId } = renderGroup({
+      next_realloc_at: '2026-09-24T06:00:00Z',
+    });
+    expect(container.textContent).toMatch(/next cycle Sep 2[34]/);
+    expect(queryByTestId('queue-staleness')).toBeNull();
+  });
+
+  it('calls the next claim an attempt and wears the stale and roster chips', () => {
+    const { container, getByTestId } = renderGroup(citas);
+    const text = container.textContent ?? '';
+    expect(text).toMatch(/next attempt Sep 2[34]/);
+    expect(text).not.toContain('next cycle');
+    const header = getByTestId('queue-staleness');
+    expect(header.querySelector('[data-testid="stale-chip"]')?.textContent).toBe(
+      'last cycle 49 days ago',
+    );
+    expect(header.querySelector('[data-testid="roster-chip"]')?.textContent).toBe(
+      'roster gone since Aug 6 · 12 of 12 ad sets',
+    );
+  });
+
+  it('adds nothing to a fresh portfolio after the migration', () => {
+    const { container, queryByTestId } = renderGroup({
+      next_realloc_at: '2026-09-24T06:00:00Z',
+      stale_for_days: null,
+      roster_state: 'present',
+      roster_missing_count: 0,
+    });
+    expect(container.textContent).toMatch(/next cycle Sep 2[34]/);
+    expect(queryByTestId('queue-staleness')).toBeNull();
+  });
+});
+
+describe('the portfolio Activity tab reads at the optimizer type scale', () => {
+  const MICRO = /text-[23]xs/;
+
+  it('leaves no micro type in the queue, the notices, or Recently applied', () => {
+    recentActions = [
+      {
+        id: RECENT_AUDIT_ID,
+        ts: '2026-08-26T09:00:00Z',
+        family: 'money',
+        op: 'budget',
+        portfolio_id: '11111111-1111-4111-8111-111111111111',
+        portfolio_name: 'Prospecting',
+        before: { minor: 5000 },
+        after: { minor: 3500 },
+        actor_kind: 'autopilot',
+        reversible: true,
+      },
+    ];
+    // Observe mode is what surfaces the writes-blocked notice, so it is in the markup too.
+    const { container } = renderGroup({ apply_mode: 'observe' });
+    const expander = container.querySelector(
+      '[data-row-key^="budget:"] button[aria-label="Show detail"]',
+    );
+    expect(expander).not.toBeNull();
+    fireEvent.click(expander as Element);
+    expect(screen.getByRole('button', { name: 'Hide detail' })).toBeTruthy();
+
+    expect(screen.getByText('Recently applied').className).toContain('text-xs');
+    expect(container.innerHTML).not.toMatch(MICRO);
+  });
+
+  it('lifts the Recently applied row title and timestamp, and the lookback buttons', () => {
+    recentActions = [
+      {
+        id: RECENT_AUDIT_ID,
+        ts: '2026-08-26T09:00:00Z',
+        family: 'money',
+        op: 'budget',
+        portfolio_id: '11111111-1111-4111-8111-111111111111',
+        portfolio_name: 'Prospecting',
+        before: { minor: 5000 },
+        after: { minor: 3500 },
+        actor_kind: 'autopilot',
+        reversible: true,
+      },
+    ];
+    const { container } = renderGroup();
+    const recent = screen.getByText('Recently applied').parentElement as HTMLElement;
+    const header = recent.querySelector('li span.truncate') as HTMLElement;
+    expect(header.className).toContain('text-base');
+    expect(header.className).toContain('font-semibold');
+    expect((header.nextElementSibling as HTMLElement).className).toContain('text-sm');
+    for (const days of ['3d', '7d', '14d']) {
+      const toggle = screen.getByText(days, { selector: 'button' });
+      expect(toggle.className).toContain('h-7');
+      expect(toggle.className).toContain('text-xs');
+    }
+    expect(container.querySelector('li[data-row-key]')?.className).toContain('py-3.5');
+  });
+});
+
+describe('buildActionQueue — recommendations carried in from asked-for handoffs', () => {
+  const carried: RecommendationRow = {
+    id: CARRIED_REC_ID,
+    adset_id: 'as-tours',
+    adset_name: 'ITESO // AGOSTO // 2 - LKL',
+    ad_id: null,
+    kind: 'audience_expand',
+    trigger: 'F3_audience_exhausted',
+    severity: null,
+    reason: 'No delivering creative has enough results yet.',
+    status: 'expired',
+  };
+
+  it('adds a rec:<id> row the report does not carry, on the audience route, never selectable', () => {
+    const rows = buildActionQueue(
+      {
+        portfolio: null,
+        latest_run: { id: RUN_ID } as never,
+        latest_items: [],
+        recommendations: report.recommendations as never,
+        history: [],
+      },
+      null,
+      [carried],
+    );
+    const row = rows.find((candidate) => candidate.key === `rec:${CARRIED_REC_ID}`);
+    expect(row?.route).toBe('fatigue');
+    expect(row && isSelectableRow(row)).toBe(false);
+    // The report's three recommendations plus the carried one.
+    expect(rows).toHaveLength(4);
+  });
+
+  it('does not duplicate a recommendation the report already lists', () => {
+    const rows = buildActionQueue(
+      {
+        portfolio: null,
+        latest_run: { id: RUN_ID } as never,
+        latest_items: [],
+        recommendations: [{ ...carried, status: 'pending' }],
+        history: [],
+      },
+      null,
+      [carried],
+    );
+    expect(rows.filter((row) => row.key === `rec:${CARRIED_REC_ID}`)).toHaveLength(1);
+    expect(rows[0]?.route === 'fatigue' && rows[0].rec.status).toBe('pending');
+  });
+
+  it('holds the carried rows even before the report has loaded', () => {
+    expect(buildActionQueue(null, null, [carried]).map((row) => row.key)).toEqual([
+      `rec:${CARRIED_REC_ID}`,
+    ]);
+    expect(buildActionQueue(null, null, [])).toEqual([]);
+  });
+});
+
+describe('OptimizerActionsPortfolioGroup — a CTA lands on an expanded row', () => {
+  const scrolled: string[] = [];
+  const nativeScroll = Element.prototype.scrollIntoView;
+  const scrollSpy = function (this: Element) {
+    scrolled.push(this.getAttribute('data-row-key') ?? '');
+  };
+
+  it('expands the focused row, scrolls it into view and hands the key back once the row exists', async () => {
+    Element.prototype.scrollIntoView = scrollSpy as never;
+    scrolled.length = 0;
+    const consumed = mock(() => {});
+    try {
+      const { container } = render(
+        <OptimizerActionsPortfolioGroup
+          adAccountId="act_1"
+          brandId="b1"
+          focusRowKey={`rec:${PAUSE_ID}`}
+          onFocusRowConsumed={consumed}
+          portfolio={portfolio()}
+        />,
+      );
+      const row = container.querySelector(`li[data-row-key="rec:${PAUSE_ID}"]`) as HTMLElement;
+      expect(row.querySelector('button[aria-expanded="true"]')).not.toBeNull();
+      await waitFor(() => expect(consumed).toHaveBeenCalledTimes(1));
+      expect(scrolled).toEqual([`rec:${PAUSE_ID}`]);
+    } finally {
+      Element.prototype.scrollIntoView = nativeScroll;
+    }
+  });
+
+  it('does not hand the key back while the row is not in the queue yet', async () => {
+    Element.prototype.scrollIntoView = scrollSpy as never;
+    scrolled.length = 0;
+    const consumed = mock(() => {});
+    try {
+      render(
+        <OptimizerActionsPortfolioGroup
+          adAccountId="act_1"
+          brandId="b1"
+          focusRowKey="rec:not-in-the-queue"
+          onFocusRowConsumed={consumed}
+          portfolio={portfolio()}
+        />,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(consumed).not.toHaveBeenCalled();
+      expect(scrolled).toEqual([]);
+    } finally {
+      Element.prototype.scrollIntoView = nativeScroll;
+    }
+  });
+
+  it('carries the recommendation an asked-for handoff points at and shows its blocked proposal', async () => {
+    Element.prototype.scrollIntoView = scrollSpy as never;
+    activeProposals = [supersededProposal];
+    try {
+      const { container } = render(
+        <OptimizerActionsPortfolioGroup
+          adAccountId="act_1"
+          askedRecommendationIds={[CARRIED_REC_ID]}
+          brandId="b1"
+          focusRowKey={`rec:${CARRIED_REC_ID}`}
+          portfolio={portfolio()}
+        />,
+      );
+      const row = container.querySelector(
+        `li[data-row-key="rec:${CARRIED_REC_ID}"]`,
+      ) as HTMLElement;
+      expect(row).not.toBeNull();
+      expect(row.querySelector('button[aria-expanded="true"]')).not.toBeNull();
+      const card = row.querySelector('[data-testid="audience-recommendation-card"]') as HTMLElement;
+      expect(card.textContent).toContain('Bloqueada');
+      expect(card.textContent).toContain('No delivering creative in this portfolio');
+      const create = card.querySelector(
+        '[data-testid="audience-create-blocked"]',
+      ) as HTMLButtonElement;
+      expect(create.disabled).toBe(true);
+      expect(card.textContent).not.toContain('Pedírsela a Jaina de nuevo');
+      await waitFor(() => expect(scrolled).toContain(`rec:${CARRIED_REC_ID}`));
+    } finally {
+      Element.prototype.scrollIntoView = nativeScroll;
+    }
+  });
+
+  it('a recommendation the report still lists is not carried twice', () => {
+    activeProposals = [supersededProposal];
+    activeReport = {
+      ...report,
+      recommendations: [
+        ...report.recommendations,
+        {
+          id: CARRIED_REC_ID,
+          adset_id: 'as-tours',
+          kind: 'audience_expand',
+          trigger: 'F3_audience_exhausted',
+          severity: 'medium',
+          reason: 'Audience exhausted',
+          status: 'pending',
+        },
+      ],
+    };
+    const { container } = render(
+      <OptimizerActionsPortfolioGroup
+        adAccountId="act_1"
+        askedRecommendationIds={[CARRIED_REC_ID]}
+        brandId="b1"
+        portfolio={portfolio()}
+      />,
+    );
+    expect(container.querySelectorAll(`li[data-row-key="rec:${CARRIED_REC_ID}"]`)).toHaveLength(1);
   });
 });

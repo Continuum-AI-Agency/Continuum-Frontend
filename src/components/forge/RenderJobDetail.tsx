@@ -399,7 +399,9 @@ export function RenderJobDetail({
                           job.status === 'failed'
                             ? 'This render failed.'
                             : job.status === 'finished'
-                              ? 'No file for this format'
+                              ? matched.some(({ format }) => format === null)
+                                ? 'No file matched this format. Select the rendered file tab above.'
+                                : 'This job did not render this format.'
                               : 'No file yet.',
                       };
                 }}

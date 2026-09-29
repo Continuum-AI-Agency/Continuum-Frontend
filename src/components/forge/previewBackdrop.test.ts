@@ -117,6 +117,27 @@ describe('pickBackdrop', () => {
     expect(picked).toMatchObject({ from: 'template', job: { id: 'template-new' } });
   });
 
+  test('Card B skips a saved render made before the AEP was corrected', () => {
+    const formats: RenderOutputFormatCandidate[] = [
+      { id: 'a', label: 'RENDER Card A (Pre-Match)', ratio: null },
+      { id: 'b', label: 'RENDER Card B (Halftime)', ratio: null },
+    ];
+    const oldSet = job('old-card-b', 'child', 4, [file('RENDER_Card_2_old.mp4', 'video')]);
+    const corrected = job('correct-card-b', null, 1, [
+      file('RENDER_Card_B_(Halftime)_new.mp4', 'video'),
+    ]);
+    const picked = pickBackdrop({
+      ...base,
+      formats,
+      formatId: 'b',
+      rowJob: oldSet,
+      setJobs: [oldSet],
+      templateJobs: [corrected],
+      templateUpdatedAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+    });
+    expect(picked).toMatchObject({ from: 'template', job: { id: 'correct-card-b' } });
+  });
+
   test('no file of the format anywhere is no backdrop', () => {
     expect(
       pickBackdrop({

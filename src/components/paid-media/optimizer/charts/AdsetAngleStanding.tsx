@@ -51,25 +51,25 @@ function AngleRow({ row, currency }: { row: AdsetAngleRow; currency?: string | n
             }
           />
           <TooltipContent className="max-w-xs">
-            <span className="font-mono text-2xs">{row.adsetId}</span>
+            <span className="font-mono text-xs">{row.adsetId}</span>
           </TooltipContent>
         </Tooltip>
         <span className="flex shrink-0 items-center gap-1.5">
           {row.confidence === 'thin' ? (
-            <Badge className="text-3xs" variant="outline">
+            <Badge className="text-xs" variant="outline">
               thin
             </Badge>
           ) : null}
-          <Badge className="text-3xs" variant={meta.variant}>
+          <Badge className="text-xs" variant={meta.variant}>
             {meta.label}
           </Badge>
         </span>
       </div>
 
-      <p className="text-2xs text-muted-foreground">{row.action}</p>
+      <p className="text-xs text-muted-foreground">{row.action}</p>
 
       {recommended ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-3xs text-muted-foreground tabular-nums">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground tabular-nums">
           <span>
             wins <span className="text-foreground">{pct(recommended.winRate)}</span> of{' '}
             {recommended.eligibleAds} ads

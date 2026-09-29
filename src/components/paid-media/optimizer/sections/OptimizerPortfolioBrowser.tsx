@@ -50,7 +50,7 @@ function PortfolioBrowserRow({
             autopilotPaused={portfolio.autopilot_paused}
           />
           {pendingWorkCount(portfolio) > 0 ? (
-            <Badge variant="secondary" className="text-3xs">
+            <Badge variant="secondary" className="text-xs">
               {pendingWorkCount(portfolio)} pending
             </Badge>
           ) : null}
@@ -111,7 +111,7 @@ export function OptimizerPortfolioBrowser({
           <header className="flex items-center gap-2 px-1">
             <h4 className="truncate font-semibold text-xs tracking-tight">{group.label}</h4>
             {group.isSelected ? (
-              <Badge variant="teal" className="text-3xs">
+              <Badge variant="teal" className="text-xs">
                 Selected
               </Badge>
             ) : null}

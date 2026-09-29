@@ -4,7 +4,9 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
 import { parseRangeParam, type RangeSpec, serializeRange } from './sections/detail/rangeModel';
 
-const VIEWS = ['overview', 'portfolios', 'actions', 'create', 'logs'] as const;
+// `automations` sits first in the tablist: it is where the account-level autonomy controls
+// live, and they used to be a strip inside Overview that nobody could find again.
+const VIEWS = ['automations', 'overview', 'portfolios', 'actions', 'create', 'logs'] as const;
 const SECTIONS = ['performance', 'manage', 'activity'] as const;
 const METRICS = ['spend', 'cost', 'roas', 'ctr'] as const;
 

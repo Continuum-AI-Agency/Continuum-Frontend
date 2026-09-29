@@ -121,8 +121,14 @@ const report = ParsedCycleRunReportSchema.parse({
       events: 67,
       band: 'high',
     },
-    // pacing rides as loose jsonb on the run row
+    // pacing rides as loose jsonb on the run row; dailyTotal / status / note have always
+    // been stored, and CycleRunPacingSchema requires them (a row without them is not a row
+    // the wire delivers)
     pacing: {
+      dailyTotal: 200,
+      status: 'on_track',
+      note: 'Spend is tracking the flight plan.',
+      source: 'pacing',
       actualSpendToDate: 2400,
       idealCumulative: 2500,
       pacingRatio: 0.96,

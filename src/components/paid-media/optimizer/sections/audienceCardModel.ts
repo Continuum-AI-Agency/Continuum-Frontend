@@ -1,5 +1,7 @@
 // Pure reads for the audience recommendation card. No React, no fetch: what to show for a
-// proposal row, how the buckets group, what the executed result lists as implemented.
+// proposal row, the five sections an open proposal is read through (qué audiencia, qué
+// cambia, qué es nuevo, por qué, cómo se implementa), and what the executed result lists as
+// implemented.
 
 import type {
   AudienceExpansionOption,
@@ -7,18 +9,22 @@ import type {
   AudienceProposalResult,
   AudienceProposalRow,
   AudienceSizeEstimate,
+  MetaTargetingRef,
   MetaTargetingSpec,
   RecommendationRow,
 } from '@continuum/contracts';
 import {
   audienceProposalCardState,
+  behaviorRefsOf,
+  interestRefsOf,
+  metaTargetingSpecSchema,
   proposalForRecommendation,
   readProposalBlock,
   readProposalPlan,
   readProposalResult,
   summarizeTargetingSpec,
-  targetingSummaryLine,
 } from '@continuum/contracts';
+import { formatCurrency } from '../format';
 
 export const AUDIENCE_TRIGGERS = new Set(['F2_audience_saturation', 'F3_audience_exhausted']);
 
@@ -37,6 +43,56 @@ export type AudienceCardView = {
   errorMessage: string | null;
 };
 
+/**
+ * The card's state for a row. `audienceProposalCardState` reads a superseded row as `none`
+ * — the terminal states no longer own a decision — but a proposal that was BLOCKED and then
+ * superseded still holds the one fact the person came for: why nothing could be built. The
+ * reason outlives the signal, so that row keeps its blocked face (reason shown, create
+ * disabled) instead of offering a fresh analysis as if nothing had been tried.
+ */
+export function audienceCardStateFor(
+  row: AudienceProposalRow | null,
+): ReturnType<typeof audienceProposalCardState> {
+  const state = audienceProposalCardState(row);
+  if (state !== 'none' || !row || row.status !== 'superseded') return state;
+  if (readProposalPlan(row) || !readProposalBlock(row)) return state;
+  return readProposalBlock(row)?.code === 'cbo_campaign' ? 'blocked_cbo' : 'blocked';
+}
+
+/**
+ * A recommendation row rebuilt from the proposal it opened, for a recommendation the cycle
+ * report no longer carries.
+ *
+ * The report lists PENDING recommendations. When a later cycle does not raise a signal
+ * again, public.optimizer_supersede_recommendations sets its proposal to `superseded` and,
+ * in the same pass, its recommendation to `expired` — so a superseded proposal tells us both
+ * that its recommendation exists and how it closed. Every field here is the proposal's own
+ * (id, ad set, kind, trigger, run, dates) or that documented consequence (`status`); the
+ * severity the engine scored is not on the proposal and is left null rather than guessed.
+ * Only proposals an asked-for handoff points at are carried this way, so the row someone's
+ * own press created still has somewhere to land.
+ */
+export function carriedRecommendation(
+  proposal: AudienceProposalRow,
+  adsetName: string | null = null,
+): RecommendationRow | null {
+  if (!proposal.recommendation_id || proposal.status !== 'superseded') return null;
+  const block = readProposalBlock(proposal);
+  return {
+    id: proposal.recommendation_id,
+    adset_id: proposal.adset_id,
+    adset_name: adsetName,
+    ad_id: null,
+    kind: proposal.kind,
+    trigger: proposal.trigger,
+    severity: null,
+    reason: block?.message ?? null,
+    status: 'expired',
+    run_id: proposal.cycle_run_id,
+    created_at: proposal.created_at,
+  };
+}
+
 export function audienceCardView(
   rows: readonly AudienceProposalRow[],
   rec: Pick<RecommendationRow, 'id' | 'adset_id' | 'trigger'>,
@@ -46,7 +102,7 @@ export function audienceCardView(
   const message = error && typeof error.message === 'string' ? error.message : null;
   return {
     row,
-    state: audienceProposalCardState(row),
+    state: audienceCardStateFor(row),
     plan: row ? readProposalPlan(row) : null,
     block: row ? readProposalBlock(row) : null,
     result: row ? readProposalResult(row) : null,
@@ -54,30 +110,407 @@ export function audienceCardView(
   };
 }
 
-export { summarizeTargetingSpec, targetingSummaryLine };
+// ── The portfolio's other ad sets ──────────────────────────────────────────────────────
 
-export const BUCKET_LABEL: Record<AudienceExpansionOption['bucket'], string> = {
-  currently_live: 'Targets today',
-  existing_inventory: 'Already in the account',
-  net_new_verified: 'New, verified in the catalogue',
+/** One enrolled ad set's live targeting, for the "qué es nuevo" comparison. */
+export type PortfolioAdsetSpec = {
+  adsetId: string;
+  adsetName: string | null;
+  spec: MetaTargetingSpec;
 };
 
-export function optionsByBucket(plan: AudienceProposalPlan): Array<{
-  bucket: AudienceExpansionOption['bucket'];
-  label: string;
-  options: Array<AudienceExpansionOption & { chosen: boolean }>;
-}> {
-  const chosen = new Set(plan.chosen_option_ids);
-  return (['net_new_verified', 'existing_inventory', 'currently_live'] as const)
-    .map((bucket) => ({
-      bucket,
-      label: BUCKET_LABEL[bucket],
-      options: plan.options
-        .filter((o) => o.bucket === bucket)
-        .map((o) => ({ ...o, chosen: o.id != null && chosen.has(o.id) })),
-    }))
-    .filter((group) => group.options.length > 0);
+/** The specs the snapshot envelope carries beside the fleet, parsed at the boundary. A spec
+ *  that does not parse is left out rather than compared as an empty audience — an empty
+ *  audience would make every option look new. */
+export function portfolioSpecsFrom(
+  targeting: readonly { adsetId: string; spec: Record<string, unknown> }[],
+  nameOf: (adsetId: string) => string | null,
+): PortfolioAdsetSpec[] {
+  const specs: PortfolioAdsetSpec[] = [];
+  for (const entry of targeting) {
+    const parsed = metaTargetingSpecSchema.safeParse(entry.spec);
+    if (!parsed.success) continue;
+    specs.push({ adsetId: entry.adsetId, adsetName: nameOf(entry.adsetId), spec: parsed.data });
+  }
+  return specs;
 }
+
+// ── Reading a spec in words ────────────────────────────────────────────────────────────
+
+const GENDER_WORD: Record<'all' | 'women' | 'men', string> = {
+  all: 'todos',
+  women: 'mujeres',
+  men: 'hombres',
+};
+
+type Facets = {
+  age: string | null;
+  gender: 'all' | 'women' | 'men' | null;
+  geo: string[];
+  interests: string[];
+  behaviors: string[];
+  seeds: string[];
+  excludedSeeds: string[];
+  advantage: boolean | null;
+};
+
+const refNames = (refs: readonly MetaTargetingRef[] | undefined): string[] =>
+  (refs ?? []).map((ref) => ref.name ?? ref.id);
+
+function facetsOf(spec: MetaTargetingSpec): Facets {
+  const summary = summarizeTargetingSpec(spec);
+  return {
+    age: summary.age,
+    gender: spec.genders && spec.genders.length > 0 ? summary.gender : null,
+    geo: summary.geo,
+    interests: summary.interests,
+    behaviors: summary.behaviors,
+    seeds: refNames(spec.custom_audiences),
+    excludedSeeds: refNames(spec.excluded_custom_audiences),
+    advantage: summary.advantageAudience,
+  };
+}
+
+function hasFacets(facets: Facets): boolean {
+  return (
+    facets.age != null ||
+    facets.gender != null ||
+    facets.geo.length > 0 ||
+    facets.interests.length > 0 ||
+    facets.behaviors.length > 0 ||
+    facets.seeds.length > 0 ||
+    facets.excludedSeeds.length > 0 ||
+    facets.advantage != null
+  );
+}
+
+function wordsOf(facets: Facets): string | null {
+  const parts: string[] = [];
+  if (facets.seeds.length > 0) parts.push(facets.seeds.join(', '));
+  if (facets.geo.length > 0) parts.push(facets.geo.join(', '));
+  if (facets.age) parts.push(facets.age);
+  if (facets.gender && facets.gender !== 'all') parts.push(GENDER_WORD[facets.gender]);
+  if (facets.interests.length > 0) parts.push(`intereses: ${facets.interests.join(', ')}`);
+  if (facets.behaviors.length > 0) parts.push(`comportamientos: ${facets.behaviors.join(', ')}`);
+  if (facets.excludedSeeds.length > 0) parts.push(`excluye ${facets.excludedSeeds.join(', ')}`);
+  if (facets.advantage === true) parts.push('Advantage+ activo');
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+/** "Lookalike 1% compradores · MX · 25–45 · intereses: Gimnasios" — or null for an empty spec. */
+export function audienceWords(spec: MetaTargetingSpec): string | null {
+  return wordsOf(facetsOf(spec));
+}
+
+const chosenOptions = (plan: AudienceProposalPlan): AudienceExpansionOption[] => {
+  const chosen = new Set(plan.chosen_option_ids);
+  return plan.options.filter((o) => o.id != null && chosen.has(o.id) && o.blocked_by == null);
+};
+
+const SEED_KINDS = new Set<AudienceExpansionOption['kind']>([
+  'custom_audience',
+  'lookalike',
+  'saved_audience',
+]);
+
+/** The proposed facets: the proposal's own spec, or — when the builder wrote none — the
+ *  current spec with the chosen options folded in by kind. */
+function proposedFacets(plan: AudienceProposalPlan): { facets: Facets; fromSpec: boolean } {
+  const own = facetsOf(plan.targeting_spec);
+  if (hasFacets(own)) return { facets: own, fromSpec: true };
+  const base = facetsOf(plan.previous_spec);
+  const union = (list: string[], add: string[]) => [...new Set([...list, ...add])];
+  const names = (kinds: (kind: AudienceExpansionOption['kind']) => boolean) =>
+    chosenOptions(plan)
+      .filter((o) => kinds(o.kind))
+      .map((o) => o.name);
+  return {
+    fromSpec: false,
+    facets: {
+      ...base,
+      interests: union(
+        base.interests,
+        names((k) => k === 'interest'),
+      ),
+      behaviors: union(
+        base.behaviors,
+        names((k) => k === 'behavior'),
+      ),
+      seeds: union(
+        base.seeds,
+        names((k) => SEED_KINDS.has(k)),
+      ),
+      geo: union(
+        base.geo,
+        names((k) => k === 'geo'),
+      ),
+    },
+  };
+}
+
+export type ProposedAudience = {
+  /** The proposed targeting in words; never empty. */
+  words: string;
+  /** "1.2M" — the delivery estimate for the proposal, or null when none was made. */
+  reach: string | null;
+};
+
+/** Qué audiencia: the proposal in words with its estimated reach. */
+export function proposedAudience(plan: AudienceProposalPlan): ProposedAudience {
+  const { facets } = proposedFacets(plan);
+  return {
+    words: wordsOf(facets) ?? 'La propuesta no trae una segmentación legible.',
+    reach: estimateLabel(plan.reach.proposed),
+  };
+}
+
+export type AudienceDiffRow = { label: string; value: string };
+
+export type AudienceDiff = {
+  /** Whether the row recorded the ad set's targeting before the proposal. */
+  hasPrevious: boolean;
+  /** Audiencia actual — one row per facet the current spec sets. */
+  current: AudienceDiffRow[];
+  /** Qué cambia — one row per facet the proposal changes; plain facets when nothing was
+   *  recorded to compare against. */
+  changes: AudienceDiffRow[];
+};
+
+const listLine = (
+  noun: { one: string; many: string },
+  before: string[],
+  after: string[],
+): string | null => {
+  const added = after.filter((name) => !before.includes(name));
+  const removed = before.filter((name) => !after.includes(name));
+  if (added.length === 0 && removed.length === 0) return null;
+  const parts: string[] = [];
+  if (added.length > 0) {
+    const count = added.length === 1 ? noun.one : `${added.length} ${noun.many}`;
+    parts.push(`Se ${added.length === 1 ? 'suma' : 'suman'} ${count}: ${added.join(', ')}`);
+  }
+  if (removed.length > 0) {
+    parts.push(`Se ${removed.length === 1 ? 'quita' : 'quitan'} ${removed.join(', ')}`);
+  }
+  return parts.join(' · ');
+};
+
+const scalarLine = (after: string | null, before: string | null): string | null => {
+  if (after == null || after === before) return null;
+  return before == null ? after : `${after} (antes ${before})`;
+};
+
+const advantageWord = (value: boolean | null): string | null =>
+  value == null ? null : value ? 'activo' : 'apagado';
+
+/** Audiencia actual / Qué cambia, from previous_spec against the proposal. */
+export function audienceDiff(plan: AudienceProposalPlan): AudienceDiff {
+  const before = facetsOf(plan.previous_spec);
+  const { facets: after } = proposedFacets(plan);
+  const hasPrevious = hasFacets(before);
+
+  const current: AudienceDiffRow[] = [];
+  if (hasPrevious) {
+    current.push({
+      label: 'Audiencias',
+      value: before.seeds.join(', ') || 'Sin audiencias guardadas',
+    });
+    current.push({ label: 'Ubicación', value: before.geo.join(', ') || 'Sin ubicación' });
+    current.push({ label: 'Edad', value: before.age ?? 'Cualquier edad' });
+    current.push({ label: 'Género', value: GENDER_WORD[before.gender ?? 'all'] });
+    current.push({ label: 'Intereses', value: before.interests.join(', ') || 'Sin intereses' });
+    if (before.behaviors.length > 0) {
+      current.push({ label: 'Comportamientos', value: before.behaviors.join(', ') });
+    }
+    if (before.excludedSeeds.length > 0) {
+      current.push({ label: 'Exclusiones', value: before.excludedSeeds.join(', ') });
+    }
+    const advantage = advantageWord(before.advantage);
+    if (advantage) current.push({ label: 'Advantage+', value: advantage });
+  }
+
+  const changes: AudienceDiffRow[] = [];
+  if (!hasPrevious) {
+    if (after.seeds.length > 0)
+      changes.push({ label: 'Audiencias', value: after.seeds.join(', ') });
+    if (after.geo.length > 0) changes.push({ label: 'Ubicación', value: after.geo.join(', ') });
+    if (after.age) changes.push({ label: 'Edad', value: after.age });
+    if (after.gender) changes.push({ label: 'Género', value: GENDER_WORD[after.gender] });
+    if (after.interests.length > 0) {
+      changes.push({ label: 'Intereses', value: after.interests.join(', ') });
+    }
+    if (after.behaviors.length > 0) {
+      changes.push({ label: 'Comportamientos', value: after.behaviors.join(', ') });
+    }
+    const advantage = advantageWord(after.advantage);
+    if (advantage) changes.push({ label: 'Advantage+', value: advantage });
+    return { hasPrevious, current, changes };
+  }
+
+  const seeds = listLine({ one: 'una audiencia', many: 'audiencias' }, before.seeds, after.seeds);
+  if (seeds) changes.push({ label: 'Audiencias', value: seeds });
+  const geo = listLine({ one: 'una ubicación', many: 'ubicaciones' }, before.geo, after.geo);
+  if (geo) changes.push({ label: 'Ubicación', value: geo });
+  const age = scalarLine(after.age, before.age);
+  if (age) changes.push({ label: 'Edad', value: age });
+  const gender = scalarLine(
+    after.gender ? GENDER_WORD[after.gender] : null,
+    before.gender ? GENDER_WORD[before.gender] : null,
+  );
+  if (gender) changes.push({ label: 'Género', value: gender });
+  const interests = listLine(
+    { one: 'un interés', many: 'intereses' },
+    before.interests,
+    after.interests,
+  );
+  if (interests) changes.push({ label: 'Intereses', value: interests });
+  const behaviors = listLine(
+    { one: 'un comportamiento', many: 'comportamientos' },
+    before.behaviors,
+    after.behaviors,
+  );
+  if (behaviors) changes.push({ label: 'Comportamientos', value: behaviors });
+  const exclusions = listLine(
+    { one: 'una exclusión', many: 'exclusiones' },
+    before.excludedSeeds,
+    after.excludedSeeds,
+  );
+  if (exclusions) changes.push({ label: 'Exclusiones', value: exclusions });
+  const advantage = scalarLine(advantageWord(after.advantage), advantageWord(before.advantage));
+  if (advantage) changes.push({ label: 'Advantage+', value: advantage });
+  return { hasPrevious, current, changes };
+}
+
+// ── Qué es nuevo ───────────────────────────────────────────────────────────────────────
+
+const KIND_LABEL: Record<AudienceExpansionOption['kind'], string> = {
+  interest: 'interés',
+  behavior: 'comportamiento',
+  demographic: 'demografía',
+  geo: 'ubicación',
+  custom_audience: 'audiencia personalizada',
+  lookalike: 'lookalike',
+  saved_audience: 'audiencia guardada',
+};
+
+export type AudienceNovelty = {
+  /** Other enrolled ad sets whose spec was available to compare against. */
+  comparedAdsets: number;
+  /** Chosen options and seeds no ad set of the portfolio targets today. */
+  fresh: Array<{ name: string; kindLabel: string }>;
+  /** Chosen options and seeds some other ad set of the portfolio already targets. */
+  reused: Array<{ name: string; kindLabel: string; usedIn: string[] }>;
+  /** Options the brand rules crossed out, with the rule. */
+  excludedByRule: Array<{ name: string; rule: string }>;
+};
+
+/** Every platform id a spec targets: interests, behaviours and custom audiences. */
+function targetedIds(spec: MetaTargetingSpec): Set<string> {
+  const ids = new Set<string>();
+  for (const ref of interestRefsOf(spec)) ids.add(ref.id);
+  for (const ref of behaviorRefsOf(spec)) ids.add(ref.id);
+  for (const ref of spec.custom_audiences ?? []) ids.add(ref.id);
+  return ids;
+}
+
+/** Qué es nuevo: what the proposal adds that no ad set of the portfolio targets today —
+ *  the chosen options and the seeds of the proposed spec, each checked against previous_spec
+ *  and every OTHER enrolled ad set's spec. An option the current ad set already targets is
+ *  neither new nor reused, so it is not listed. */
+export function audienceNovelty(
+  plan: AudienceProposalPlan,
+  portfolioSpecs: readonly PortfolioAdsetSpec[],
+): AudienceNovelty {
+  const others = portfolioSpecs
+    .filter((entry) => entry.adsetId !== plan.source.adset_id)
+    .map((entry) => ({ name: entry.adsetName ?? entry.adsetId, ids: targetedIds(entry.spec) }));
+  const live = targetedIds(plan.previous_spec);
+  const fresh: AudienceNovelty['fresh'] = [];
+  const reused: AudienceNovelty['reused'] = [];
+  const seen = new Set<string>();
+  const place = (id: string, name: string, kindLabel: string) => {
+    if (seen.has(id) || live.has(id)) return;
+    seen.add(id);
+    const usedIn = others.filter((other) => other.ids.has(id)).map((other) => other.name);
+    if (usedIn.length > 0) reused.push({ name, kindLabel, usedIn });
+    else fresh.push({ name, kindLabel });
+  };
+  for (const option of chosenOptions(plan)) {
+    if (option.id) place(option.id, option.name, KIND_LABEL[option.kind]);
+  }
+  for (const seed of plan.targeting_spec.custom_audiences ?? []) {
+    place(seed.id, seed.name ?? seed.id, KIND_LABEL.custom_audience);
+  }
+  return {
+    comparedAdsets: others.length,
+    fresh,
+    reused,
+    excludedByRule: plan.options
+      .filter((option) => option.blocked_by != null)
+      .map((option) => ({ name: option.name, rule: option.blocked_by as string })),
+  };
+}
+
+// ── Por qué / cómo ─────────────────────────────────────────────────────────────────────
+
+const TRIGGER_LABEL: Record<string, string> = {
+  F2_audience_saturation: 'Frecuencia saturada',
+  F3_audience_exhausted: 'Alcance agotado',
+};
+
+export function triggerLabel(trigger: string): string {
+  return TRIGGER_LABEL[trigger] ?? trigger;
+}
+
+export type ImplementationLine = { label: string; value: string };
+
+/** Cómo se implementa: the new paused ad set beside the current one, its budget and the
+ *  creatives it carries — from the plan, before anything is written. */
+export function implementationLines(
+  plan: AudienceProposalPlan,
+  currency: string | null,
+): ImplementationLine[] {
+  const code = currency ?? plan.budget.currency;
+  const source = plan.source.adset_name ?? plan.source.adset_id;
+  const lines: ImplementationLine[] = [
+    {
+      label: 'Conjunto nuevo',
+      value: `"${plan.adset_name}", pausado, junto a "${source}"${
+        plan.mode === 'add'
+          ? '; los dos siguen corriendo'
+          : '; el actual se pausa cuando el nuevo esté activo'
+      }`,
+    },
+    {
+      label: 'Presupuesto',
+      value: `${formatCurrency(majorUnits(plan.budget.suggested_minor_units), code)}/día · entre ${formatCurrency(
+        majorUnits(plan.budget.bounds.min_minor_units),
+        code,
+      )} y ${formatCurrency(majorUnits(plan.budget.bounds.max_minor_units), code)}${
+        plan.budget.note ? ` · ${plan.budget.note}` : ''
+      }`,
+    },
+    {
+      label: 'Anuncios',
+      value:
+        plan.creatives.length > 0
+          ? `${plan.creatives.length} con resultados: ${plan.creatives
+              .map((creative) => creative.ad_name ?? creative.ad_id)
+              .join(', ')}`
+          : 'Ninguno con resultados suficientes',
+    },
+    {
+      label: 'Advantage+',
+      value: `${plan.advantage_audience.enabled ? 'activo' : 'apagado'} · ${plan.advantage_audience.rationale}`,
+    },
+  ];
+  if (plan.source.campaign_name) {
+    lines.push({ label: 'Campaña', value: plan.source.campaign_name });
+  }
+  return lines;
+}
+
+// ── Figures ────────────────────────────────────────────────────────────────────────────
 
 const compact = (n: number): string =>
   n >= 1_000_000
@@ -117,7 +550,7 @@ export function minorUnits(major: number): number {
 
 export type ImplementedRow = { label: string; value: string };
 
-/** "What was implemented" — from the read-back, never from the intent. */
+/** "Qué se implementó" — from the read-back, never from the intent. */
 export function implementedRows(
   result: AudienceProposalResult,
   plan: AudienceProposalPlan | null,
@@ -125,64 +558,64 @@ export function implementedRows(
   const rows: ImplementedRow[] = [];
   if (result.campaign)
     rows.push({
-      label: 'Campaign',
+      label: 'Campaña',
       value: `${result.campaign.name ?? ''} (${result.campaign.id})`.trim(),
     });
   if (result.adset) {
     const a = result.adset;
-    rows.push({ label: 'Ad set', value: `${a.name ?? ''} (${a.id})`.trim() });
-    rows.push({ label: 'Status', value: a.effective_status ?? a.status ?? '—' });
+    rows.push({ label: 'Conjunto', value: `${a.name ?? ''} (${a.id})`.trim() });
+    rows.push({ label: 'Estado', value: a.effective_status ?? a.status ?? '—' });
     if (a.daily_budget)
       rows.push({
-        label: 'Daily budget',
-        value: `${majorUnits(Number(a.daily_budget))} (minor ${a.daily_budget})`,
+        label: 'Presupuesto diario',
+        value: `${majorUnits(Number(a.daily_budget))} (menor ${a.daily_budget})`,
       });
-    if (a.optimization_goal) rows.push({ label: 'Optimisation goal', value: a.optimization_goal });
-    if (a.billing_event) rows.push({ label: 'Billing event', value: a.billing_event });
-    if (a.bid_strategy) rows.push({ label: 'Bid strategy', value: a.bid_strategy });
+    if (a.optimization_goal) rows.push({ label: 'Objetivo', value: a.optimization_goal });
+    if (a.billing_event) rows.push({ label: 'Evento de cobro', value: a.billing_event });
+    if (a.bid_strategy) rows.push({ label: 'Puja', value: a.bid_strategy });
     if (a.targeting) {
-      rows.push({
-        label: 'Targeting',
-        value: targetingSummaryLine(a.targeting as MetaTargetingSpec),
-      });
-      const s = summarizeTargetingSpec(a.targeting as MetaTargetingSpec);
-      if (s.interests.length) rows.push({ label: 'Interests', value: s.interests.join(', ') });
-      if (s.behaviors.length) rows.push({ label: 'Behaviours', value: s.behaviors.join(', ') });
+      const spec = a.targeting as MetaTargetingSpec;
+      rows.push({ label: 'Segmentación', value: audienceWords(spec) ?? '—' });
+      const s = summarizeTargetingSpec(spec);
+      if (s.interests.length) rows.push({ label: 'Intereses', value: s.interests.join(', ') });
+      if (s.behaviors.length)
+        rows.push({ label: 'Comportamientos', value: s.behaviors.join(', ') });
       if (s.customAudienceCount)
-        rows.push({ label: 'Custom audiences', value: String(s.customAudienceCount) });
+        rows.push({ label: 'Audiencias personalizadas', value: String(s.customAudienceCount) });
       rows.push({
-        label: 'Advantage+ audience',
-        value: s.advantageAudience == null ? 'not set' : s.advantageAudience ? 'on' : 'off',
+        label: 'Advantage+',
+        value:
+          s.advantageAudience == null ? 'sin fijar' : s.advantageAudience ? 'activo' : 'apagado',
       });
     }
     if (a.promoted_object)
-      rows.push({ label: 'Promoted object', value: JSON.stringify(a.promoted_object) });
+      rows.push({ label: 'Objeto promocionado', value: JSON.stringify(a.promoted_object) });
   }
   for (const ad of result.ads) {
     const source = ad.source_adset_name ?? ad.source_adset_id;
     rows.push({
-      label: 'Ad',
-      value: `${ad.name ?? ad.id} (${ad.id}) · ${ad.effective_status ?? ad.status ?? '—'} · creative ${ad.creative_id ?? '?'}${source ? ` · from ${source}` : ''}`,
+      label: 'Anuncio',
+      value: `${ad.name ?? ad.id} (${ad.id}) · ${ad.effective_status ?? ad.status ?? '—'} · creativo ${ad.creative_id ?? '?'}${source ? ` · de ${source}` : ''}`,
     });
   }
   if (result.source_adset) {
     rows.push({
-      label: 'Source ad set',
-      value: `${result.source_adset.name ?? result.source_adset.id} · ${result.source_adset.paused ? `paused (was ${result.source_adset.prior_status ?? '?'})` : `left ${result.source_adset.status_after ?? result.source_adset.prior_status ?? 'as is'}`}${result.source_adset.note ? ` · ${result.source_adset.note}` : ''}`,
+      label: 'Conjunto origen',
+      value: `${result.source_adset.name ?? result.source_adset.id} · ${result.source_adset.paused ? `pausado (antes ${result.source_adset.prior_status ?? '?'})` : `sigue ${result.source_adset.status_after ?? result.source_adset.prior_status ?? 'como estaba'}`}${result.source_adset.note ? ` · ${result.source_adset.note}` : ''}`,
     });
   }
   if (result.activation) {
     rows.push({
-      label: 'Activation',
+      label: 'Activación',
       value: result.activation.requested
-        ? `requested · ad set ${result.activation.adset_status_after ?? '?'} · ads ${result.activation.ads_status_after.join(', ') || '—'}`
-        : 'not requested (created paused)',
+        ? `pedida · conjunto ${result.activation.adset_status_after ?? '?'} · anuncios ${result.activation.ads_status_after.join(', ') || '—'}`
+        : 'no pedida (creado pausado)',
     });
   }
   if (plan)
     rows.push({
-      label: 'Mode',
-      value: plan.mode === 'replace' ? 'Replace the current audience' : 'Add a new audience',
+      label: 'Modo',
+      value: plan.mode === 'replace' ? 'Reemplaza la audiencia actual' : 'Suma una audiencia nueva',
     });
   return rows;
 }

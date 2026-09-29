@@ -360,10 +360,184 @@ export function growthSentence(growth: BriefGrowth): string {
   return line.slice(0, 160);
 }
 
+// ── The calm hero ───────────────────────────────────────────────────────────
+// When no candidate clears the impact floor, the hero has nothing to point at — but it still
+// has to tell the truth about where the portfolio stands. "On its plan" is a claim, and it
+// is only made when the figures back it: cost per result within 15% of target, results in
+// the window, and at least one ad set the optimizer is actually allowed to move. Otherwise
+// the hero states the true status with the figures, placed here by code, and names the lever.
+
+/** Cost per result this far over target, read with enough confidence, is off plan. */
+export const MATERIAL_OVER_TARGET = 0.15;
+/** The engine's event floor: with no persisted confidence band, this many results in the
+ *  window is enough to read the cost as real (the Frontend fallback has no band). */
+export const STANDING_EVENT_FLOOR = 20;
+
+export const briefStandingSchema = z.object({
+  /** The cycle's confidence band, null when the run carries none. */
+  confidence: z.enum(['low', 'medium', 'high']).nullable(),
+  adsets_total: z.number().int().nonnegative(),
+  /** Ad sets the cycle held (froze) rather than scored. */
+  adsets_held: z.number().int().nonnegative(),
+  /** The engine freeze reason most held ad sets share ('kpi_mismatch', …). */
+  held_reason: z.string().nullable(),
+});
+export type BriefStanding = z.infer<typeof briefStandingSchema>;
+
+const asRecord = (v: unknown): Record<string, unknown> | null =>
+  v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+
+/** The standing, read from a persisted cycle run and its items (the rows as stored:
+ *  `latest_run.confidence.band`, `item.diagnostics.status` / `freezeReason`). */
+export function readBriefStanding(latestRun: unknown, items: readonly unknown[]): BriefStanding {
+  const band = asRecord(asRecord(latestRun)?.confidence)?.band;
+  const reasons = new Map<string, number>();
+  let held = 0;
+  for (const item of items) {
+    const diagnostics = asRecord(asRecord(item)?.diagnostics);
+    const reason = typeof diagnostics?.freezeReason === 'string' ? diagnostics.freezeReason : null;
+    if (diagnostics?.status !== 'frozen' && !reason) continue;
+    held += 1;
+    if (reason) reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
+  }
+  let heldReason: string | null = null;
+  for (const [reason, count] of reasons) {
+    if (heldReason === null || count > (reasons.get(heldReason) ?? 0)) heldReason = reason;
+  }
+  return {
+    confidence: band === 'low' || band === 'medium' || band === 'high' ? band : null,
+    adsets_total: items.length,
+    adsets_held: held,
+    held_reason: heldReason,
+  };
+}
+
+const HELD_COPY: Record<string, { why: (resultLabel: string) => string; lever: string }> = {
+  kpi_mismatch: {
+    why: (label) => `bid for a different result than the ${label} this portfolio measures`,
+    lever: 'Move them to a portfolio that measures what they buy.',
+  },
+  no_own_budget: {
+    why: () => 'have no ad-set daily budget the optimizer can move',
+    lever: 'Give them ad-set daily budgets in Meta.',
+  },
+  unsupported_budget: {
+    why: () => 'have no ad-set daily budget the optimizer can move',
+    lever: 'Give them ad-set daily budgets in Meta.',
+  },
+  lifetime_budget: {
+    why: () => 'run on a lifetime budget, not a daily one',
+    lever: 'Switch them to ad-set daily budgets in Meta.',
+  },
+  no_declared_objective: {
+    why: () => 'declare no optimization goal',
+    lever: 'Set a goal on each ad set in Meta.',
+  },
+  missing_window: {
+    why: () => 'lack the trailing history to score',
+    lever: 'They are scored again once the history fills in.',
+  },
+};
+
+/** A figure as a person writes it: at most two decimals, the currency code after it
+ *  ("40.53 MXN"), or bare when the account's currency is unknown — never assumed. */
+const figure = (n: number, currency: string | null): string => {
+  const plain = String(Math.round(n * 100) / 100);
+  return currency ? `${plain} ${currency}` : plain;
+};
+
+const costPerLabel = (resultLabel: string): string =>
+  resultLabel === 'impressions'
+    ? 'Cost per 1,000 impressions'
+    : `Cost per ${resultLabel.endsWith('s') ? resultLabel.slice(0, -1) : resultLabel}`;
+
+const CALM_HEADLINE = 'Nothing worth changing today — the portfolio is on its plan.';
+
+export function calmHero(args: {
+  growth: BriefGrowth;
+  /** Ranked; the first is the largest, still under the floor. */
+  candidates: readonly BriefCandidate[];
+  dailyTotal: number | null | undefined;
+  standing: BriefStanding | null;
+}): BriefHero {
+  const { growth, standing } = args;
+  const cur = growth.currency;
+  const days = growth.window.slice(1);
+  const label = growth.result_label;
+  const top = args.candidates[0];
+  const underFloor = top
+    ? `No single change clears the impact floor today (largest: ${figure(top.impact_per_day, cur)}/day vs a ${figure(heroMinImpact(args.dailyTotal), cur)}/day floor).`
+    : 'No open recommendations to act on today.';
+
+  const allHeld =
+    standing !== null &&
+    standing.adsets_total > 0 &&
+    standing.adsets_held === standing.adsets_total;
+  const held = standing?.held_reason ? HELD_COPY[standing.held_reason] : undefined;
+  const heldWhy = allHeld
+    ? `All ${standing.adsets_total} ad sets ${held ? held.why(label) : 'are held this cycle'}, so none is optimized.${held ? ` ${held.lever}` : ''}`
+    : '';
+
+  let headline = CALM_HEADLINE;
+  let why = top
+    ? 'The open recommendations are below the impact floor.'
+    : 'No open recommendations.';
+
+  const cpr = growth.cost_per_result;
+  const target = growth.target;
+  const over = cpr != null && target != null && target > 0 ? cpr / target - 1 : null;
+  const confident =
+    standing?.confidence != null
+      ? standing.confidence !== 'low'
+      : growth.results >= STANDING_EVENT_FLOOR;
+
+  if (growth.results === 0) {
+    headline =
+      growth.spend <= 0
+        ? `No spend and no ${label} in ${days} days`
+        : allHeld
+          ? `No ${label} in ${days} days — all ${standing.adsets_total} ad sets are held`
+          : `No ${label} in ${days} days on ${figure(growth.spend, cur)} spent`;
+    const lead =
+      growth.spend <= 0
+        ? 'Nothing delivered in the window.'
+        : `${figure(growth.spend, cur)} spent over ${days} days bought no ${label}.`;
+    why = allHeld
+      ? `${lead} ${heldWhy}`
+      : `${lead} Check that the ad sets optimize for ${label} and the event is tracked, then the creatives.`;
+  } else if (allHeld) {
+    headline = `All ${standing.adsets_total} ad sets are held — the optimizer is not moving budget`;
+    why = heldWhy;
+  } else if (over != null && over > MATERIAL_OVER_TARGET && cpr != null && target != null) {
+    if (confident) {
+      headline = `${costPerLabel(label)} is ${figure(cpr, cur)}, ${Math.round(over * 100)}% over the ${figure(target, cur)} target`;
+      why = `${underFloor} The gap is portfolio-wide: new creatives, less budget until cost falls, or a target that fits what ${growth.results} ${label} cost.`;
+    } else {
+      headline = `${costPerLabel(label)} is ${figure(cpr, cur)} against a ${figure(target, cur)} target`;
+      why = `Confidence is low: too little data to say the gap will hold. ${underFloor}`;
+    }
+  }
+
+  return {
+    module: 'none',
+    candidate_id: null,
+    headline: headline.slice(0, 90),
+    why: why.slice(0, 240),
+    impact_per_day: null,
+    impact_unit: 'currency',
+    impact_basis: null,
+    justification: null,
+    confidence_note: null,
+    cta: null,
+  };
+}
+
 export function deterministicBrief(args: {
   growth: BriefGrowth;
   candidates: readonly BriefCandidate[];
   dailyTotal: number | null | undefined;
+  /** What the cycle held and how sure it is; absent on the Frontend fallback. */
+  standing?: BriefStanding | null;
   promptVersion: string;
   generatedAt: string;
 }): PortfolioBrief {
@@ -383,21 +557,12 @@ export function deterministicBrief(args: {
           confidence_note: null,
           cta: top.cta,
         }
-      : {
-          module: 'none',
-          candidate_id: null,
-          headline: 'Nothing worth changing today — the portfolio is on its plan.',
-          why:
-            ranked.length > 0
-              ? 'The open recommendations are below the impact floor.'
-              : 'No open recommendations.',
-          impact_per_day: null,
-          impact_unit: 'currency',
-          impact_basis: null,
-          justification: null,
-          confidence_note: null,
-          cta: null,
-        };
+      : calmHero({
+          growth: args.growth,
+          candidates: ranked,
+          dailyTotal: args.dailyTotal,
+          standing: args.standing ?? null,
+        });
   return {
     version: 1,
     growth: args.growth,

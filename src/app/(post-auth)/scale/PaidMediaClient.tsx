@@ -6,7 +6,10 @@ import { AnimatePresence, motion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
+import { useDeployRequest } from '@/CampaignCanvas/hooks/useDeployRequest';
 import { type AdAccount, AdAccountSelector } from '@/components/paid-media/AdAccountSelector';
+import { CampaignsTabSkeleton } from '@/components/paid-media/campaigns/CampaignsTabSkeleton';
+import { usePrefetchScaleCampaigns } from '@/components/paid-media/campaigns/usePrefetchScaleCampaigns';
 import { SavedDashboardsPanel } from '@/components/paid-media/jaina/components/SavedDashboardsPanel';
 import {
   useOptimizerAdAccounts,
@@ -27,7 +30,7 @@ import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
 import { prefetchPaidMediaDashboard } from '@/lib/prefetch/paid-media-cache';
 import { cn } from '@/lib/utils';
 
-const PAID_MEDIA_TABS = ['dashboard', 'performance', 'jaina'] as const;
+const PAID_MEDIA_TABS = ['dashboard', 'performance', 'campaigns', 'jaina'] as const;
 type PaidMediaTab = (typeof PAID_MEDIA_TABS)[number];
 
 function normalizePaidMediaTab(value: string | null): PaidMediaTab | null {
@@ -112,6 +115,13 @@ const JainaChatSurface = dynamic(
   { ssr: false, loading: () => <JainaSkeleton /> },
 );
 
+// The chat's companion canvas. Dynamic like the chat: the canvas store carries React Flow, and
+// the Scale page's first load must not.
+const ScaleCompanionCanvas = dynamic(
+  () => import('@/CampaignCanvas/ScaleCompanionCanvas').then((mod) => mod.ScaleCompanionCanvas),
+  { ssr: false, loading: () => <Skeleton className="h-full w-full rounded-none" /> },
+);
+
 // The win-rate explorer is a pop-out, not a tab: it needs full height, and the
 // dashboard keeps only the compact kill/scale/iterate calls.
 const WhatsWorkingExplorerPopover = dynamic(
@@ -128,6 +138,13 @@ const WhatsWorkingExplorerPopover = dynamic(
 const OptimizerTab = dynamic(
   () => import('@/components/paid-media/optimizer/OptimizerTab').then((mod) => mod.OptimizerTab),
   { ssr: false, loading: () => <OptimizerSurfaceSkeleton /> },
+);
+
+// Meta only: every campaign on the account, active and paused, with Pause / Unpause through a
+// Jaina approval.
+const CampaignsTab = dynamic(
+  () => import('@/components/paid-media/campaigns/CampaignsTab').then((mod) => mod.CampaignsTab),
+  { ssr: false, loading: () => <CampaignsTabSkeleton /> },
 );
 
 type PaidMediaClientPageProps = {
@@ -197,6 +214,7 @@ export default function PaidMediaClientPage({
   const [platform, setPlatform] = React.useState<PaidMediaPlatform>('meta');
   const [selectedCampaign, setSelectedCampaign] = React.useState<string | null>(null);
   const prefetchOptimizerOverview = usePrefetchOptimizerOverview(brandProfileId, selectedAdAccount);
+  const prefetchScaleCampaigns = usePrefetchScaleCampaigns(brandProfileId, selectedAdAccount);
 
   // The optimizer admits only ad accounts ASSIGNED to this brand
   // (plugin_mcp.list_brand_ad_accounts). Scope the picker to that exact set so it
@@ -223,6 +241,13 @@ export default function PaidMediaClientPage({
     normalizedTabParam ?? (jainaSessionIdParam || jainaInitialPrompt ? 'jaina' : 'dashboard'),
   );
   const [isCanvasOpen, setIsCanvasOpen] = React.useState(false);
+  // The scaffold the Jaina thread is about, shown on its companion canvas.
+  const [companionScaffoldId, setCompanionScaffoldId] = React.useState<string | null>(null);
+  // A turn the companion canvas hands the chat ("Generate with Jaina"), and its Deploy paused.
+  const [companionTurn, setCompanionTurn] = React.useState<{ id: string; text: string } | null>(
+    null,
+  );
+  const companionDeploy = useDeployRequest();
   // The ads-manager panel on the Dashboard tab. Separate from `isCanvasOpen`, which is
   // Jaina's canvas: the two tabs open the same canvas for different reasons and closing
   // one must not close the other.
@@ -335,6 +360,20 @@ export default function PaidMediaClientPage({
   const handleCanvasActionApplied = React.useCallback(() => {
     setIsCanvasOpen(true);
   }, []);
+
+  // A proposal or a card's Expand opens the companion; a loaded thread only points it, so
+  // switching threads never reopens a canvas someone closed.
+  const handleScaffoldFocus = React.useCallback(
+    (parentScaffoldId: string, reason: 'proposed' | 'thread' | 'expand') => {
+      setCompanionScaffoldId(parentScaffoldId);
+      if (reason !== 'thread') setIsCanvasOpen(true);
+    },
+    [],
+  );
+  const sendCompanionTurn = React.useCallback((text: string) => {
+    setCompanionTurn({ id: crypto.randomUUID(), text });
+  }, []);
+  const clearCompanionTurn = React.useCallback(() => setCompanionTurn(null), []);
 
   const getCanvasWidthLimits = React.useCallback(() => {
     const shellWidth = canvasShellRef.current?.clientWidth ?? 1200;
@@ -545,6 +584,22 @@ export default function PaidMediaClientPage({
               >
                 Optimization
               </TabsTrigger>
+              {platform === 'meta' ? (
+                <TabsTrigger
+                  value="campaigns"
+                  className="px-3 text-xs"
+                  onMouseEnter={() => {
+                    void import('@/components/paid-media/campaigns/CampaignsTab');
+                    prefetchScaleCampaigns();
+                  }}
+                  onFocus={() => {
+                    void import('@/components/paid-media/campaigns/CampaignsTab');
+                    prefetchScaleCampaigns();
+                  }}
+                >
+                  Campaigns
+                </TabsTrigger>
+              ) : null}
               <TabsTrigger
                 value="jaina"
                 data-tour-id="paid-jaina-tab"
@@ -655,6 +710,22 @@ export default function PaidMediaClientPage({
           )}
         </TabsContent>
 
+        <TabsContent value="campaigns" className="box-border min-h-0 overflow-hidden">
+          {!selectedAdAccount ? (
+            renderBlockedState()
+          ) : platform === 'meta' ? (
+            <CampaignsTab
+              key={`${brandProfileId}:${selectedAdAccount}`}
+              brandId={brandProfileId}
+              adAccountId={selectedAdAccount}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center p-4 text-muted-foreground text-sm">
+              Campaign controls are available for Meta ad accounts.
+            </div>
+          )}
+        </TabsContent>
+
         <TabsContent value="jaina" className="box-border flex min-h-0 flex-col overflow-hidden">
           <JainaBrandScopeProvider adAccountId={selectedAdAccount} brandId={brandProfileId}>
             <div
@@ -675,6 +746,12 @@ export default function PaidMediaClientPage({
                   initialPrompt={jainaInitialPrompt}
                   onInitialPromptConsumed={clearJainaPrompt}
                   onCanvasActionApplied={handleCanvasActionApplied}
+                  onScaffoldFocus={handleScaffoldFocus}
+                  autoSendPrompt={companionTurn}
+                  onAutoSendConsumed={clearCompanionTurn}
+                  operatorActionRequest={companionDeploy.request}
+                  onOperatorActionConsumed={companionDeploy.consumed}
+                  onOperatorActionSettled={companionDeploy.settled}
                   onOpenAccountRead={handleOpenAccountRead}
                   goalsAccessEnabled={goalsAccessEnabled}
                   className="rounded-none border-none bg-transparent backdrop-blur-none"
@@ -716,9 +793,14 @@ export default function PaidMediaClientPage({
                         animate={{ opacity: 1 }}
                         transition={{ duration: 0.2 }}
                       >
-                        <ReactFlowProvider>
-                          <CampaignCanvas />
-                        </ReactFlowProvider>
+                        <ScaleCompanionCanvas
+                          brandId={brandProfileId}
+                          scaffoldId={companionScaffoldId}
+                          onSend={sendCompanionTurn}
+                          onDeploy={companionDeploy.requestDeploy}
+                          deployInFlight={companionDeploy.inFlight}
+                          deployRefusal={companionDeploy.refusal}
+                        />
                       </motion.div>
                     </motion.aside>
                   </>

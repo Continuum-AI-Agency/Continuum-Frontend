@@ -8,8 +8,10 @@ import {
 } from '@continuum/contracts';
 import { formatValue } from '@/lib/jaina/formatValue';
 import type { DataTableBlockV2 } from '@/lib/jaina/schemas';
+import { cn } from '@/lib/utils';
+import { JAINA_TABLE, JAINA_TYPE } from '../reading';
+import { BlockHeading } from './BlockHeading';
 import { CreativeCell } from './CreativeCell';
-import { EvidenceTooltip } from './EvidenceTooltip';
 import { MediaText } from './mediaText';
 
 type DataTableBlockProps = { block: DataTableBlockV2; isStreaming: boolean };
@@ -172,14 +174,12 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
 
   return (
     <div>
-      <div className="mb-2 flex items-center gap-1.5">
-        <h4 className="text-sm font-semibold text-foreground">{block.title}</h4>
-        <EvidenceTooltip
-          provenance={block.provenance}
-          datasetId={block.dataset_id}
-          evidenceRefs={block.evidence_refs}
-        />
-      </div>
+      <BlockHeading
+        title={block.title}
+        provenance={block.provenance}
+        datasetId={block.dataset_id}
+        evidenceRefs={block.evidence_refs}
+      />
       {cardFields ? (
         <ul
           aria-label={block.title}
@@ -244,10 +244,12 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
                           const column = columnsByKey.get(key);
                           return (
                             <div key={key} className="min-w-0">
-                              <dt className="truncate text-xs text-muted-foreground">
+                              <dt
+                                className={cn('truncate text-muted-foreground', JAINA_TYPE.label)}
+                              >
                                 {column?.label ?? key}
                               </dt>
-                              <dd className="mt-0.5 text-sm font-medium tabular-nums text-foreground">
+                              <dd className={cn('mt-0.5 text-foreground', JAINA_TYPE.figure)}>
                                 {displayValue(
                                   row[key],
                                   column?.format,
@@ -270,14 +272,14 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
           })}
         </ul>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border/60">
-          <table className="w-full text-sm">
+        <div className={JAINA_TABLE.wrap}>
+          <table className={JAINA_TABLE.table}>
             <thead>
-              <tr className="border-b border-border/60 bg-muted/30">
+              <tr className={JAINA_TABLE.headRow}>
                 {block.columns.map((column) => (
                   <th
                     key={column.key}
-                    className={`px-3 py-2 text-xs font-medium text-muted-foreground text-${column.align ?? 'left'}`}
+                    className={cn(JAINA_TABLE.th, `text-${column.align ?? 'left'}`)}
                   >
                     {column.label}
                   </th>
@@ -298,14 +300,14 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
                 );
                 const audience = parsedAudience.success ? parsedAudience.data : null;
                 return (
-                  <tr key={rowIndex} className="border-b border-border/30 last:border-0">
+                  <tr key={rowIndex} className={JAINA_TABLE.row}>
                     {block.columns.map((column, columnIndex) => {
                       const value = displayValue(row[column.key], column.format, rowCurrency);
                       const showEntityId = columnIndex === 0 && entityId !== null;
                       return (
                         <td
                           key={column.key}
-                          className="px-3 py-2 tabular-nums"
+                          className={JAINA_TABLE.td}
                           style={{ textAlign: column.align ?? 'left' }}
                         >
                           {column.format === 'creative' ? (
@@ -336,7 +338,9 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
         </div>
       )}
       {block.notes && (
-        <p className="mt-1.5 text-xs text-muted-foreground/70 italic">{block.notes}</p>
+        <p className={cn('mt-1.5 italic text-muted-foreground/70', JAINA_TYPE.table)}>
+          {block.notes}
+        </p>
       )}
     </div>
   );

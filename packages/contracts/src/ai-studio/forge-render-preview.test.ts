@@ -68,4 +68,11 @@ describe('forgeRenderPreviewRequestSchema', () => {
   test('a field the server does not read is refused, not dropped', () => {
     expect(forgeRenderPreviewRequestSchema.safeParse({ ...request, url: 'x' }).success).toBe(false);
   });
+
+  test('a specific timeline frame is accepted', () => {
+    expect(forgeRenderPreviewRequestSchema.parse({ ...request, atSec: 2.5 }).atSec).toBe(2.5);
+    expect(forgeRenderPreviewRequestSchema.safeParse({ ...request, atSec: -1 }).success).toBe(
+      false,
+    );
+  });
 });

@@ -88,7 +88,7 @@ export function SuggestionExplorer({
         <div className="min-w-0">
           <p className="flex items-center gap-2 text-sm font-semibold tracking-tight">
             {suggestion.name}
-            <Badge className="text-3xs" variant="teal">
+            <Badge className="text-xs" variant="teal">
               {humanize(mode)}
             </Badge>
           </p>
@@ -98,13 +98,13 @@ export function SuggestionExplorer({
             {cpa != null ? ` · ${metric.costLabel} ${formatCpa(cpa, currency)}` : ''}
           </p>
           {noConversions ? (
-            <p className="mt-1 text-2xs text-warning">
+            <p className="mt-1 text-xs text-warning">
               No conversions tracked in the last 14 days — a conversion objective will score as Low
               confidence. Consider <b>Traffic</b> for a decisive first cycle.
             </p>
           ) : null}
           {enrollFailed ? (
-            <p className="mt-1 text-2xs text-warning" role="status">
+            <p className="mt-1 text-xs text-warning" role="status">
               Portfolio created, but its ad sets didn&rsquo;t enroll. Press Create again to retry —
               nothing has been changed on Meta.
             </p>
@@ -127,7 +127,7 @@ export function SuggestionExplorer({
             </SelectContent>
           </Select>
           {created ? (
-            <Badge className="gap-1 text-3xs" variant="success">
+            <Badge className="gap-1 text-xs" variant="success">
               <CheckCircle2Icon className="size-3" /> created
             </Badge>
           ) : (

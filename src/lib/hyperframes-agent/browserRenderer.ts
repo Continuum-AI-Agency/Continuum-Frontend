@@ -7,12 +7,29 @@ import type {
   ShaderStackV1,
 } from '@continuum/contracts';
 import {
+  audioElements,
+  seekComposition as seekDocument,
+} from '@continuum/contracts/ai-studio/hyperframes-runtime/composition';
+import {
+  buildTemporalMetrics,
+  canvasLuma,
+  changedPixels,
+  contactSheetSampleIndexes,
+  createCanvas,
+  measureLayout,
+  motionLuma,
+  motionStrip,
+  reviewPlan,
+} from '@continuum/contracts/ai-studio/hyperframes-runtime/review';
+import {
   AUDIO_CHANNELS,
   AUDIO_SAMPLE_RATE,
   type AudioPlanItem,
   feedMixdown,
   mixdownTimelineAudio,
 } from '@/StudioCanvas/utils/splice/audioMix';
+
+export { buildTemporalMetrics, contactSheetSampleIndexes };
 
 export type HyperframesBrowserAsset = {
   assetId: string;
@@ -28,7 +45,7 @@ export type HyperframesBrowserComposition = {
   width: number;
   height: number;
   durationSeconds: number;
-  fps: 30;
+  fps: 30 | 60;
   shaderStack?: ShaderStackV1;
 };
 
@@ -45,65 +62,6 @@ export type HyperframesRenderResult = {
 };
 
 const XHTML_NS = 'http://www.w3.org/1999/xhtml';
-const DUPLICATE_MAD = 1.5;
-const SCENE_CHANGE_MAD = 12;
-
-export function buildTemporalMetrics(
-  samples: readonly Uint8Array[],
-  sampleFps: number,
-  scenes: readonly { id: string; start_seconds: number; duration_seconds: number }[],
-): HyperframesTemporalMetrics {
-  const adjacentFrameMad = samples.slice(1).map((sample, index) => {
-    const previous = samples[index];
-    if (!previous || previous.length !== sample.length || sample.length === 0) return 0;
-    let difference = 0;
-    for (let pixel = 0; pixel < sample.length; pixel += 1) {
-      difference += Math.abs((sample[pixel] ?? 0) - (previous[pixel] ?? 0));
-    }
-    return difference / sample.length;
-  });
-  const frozenIntervals: HyperframesTemporalMetrics['frozenIntervals'] = [];
-  let frozenStart: number | null = null;
-  adjacentFrameMad.forEach((difference, index) => {
-    if (difference <= DUPLICATE_MAD && frozenStart === null) frozenStart = index / sampleFps;
-    if (difference > DUPLICATE_MAD && frozenStart !== null) {
-      frozenIntervals.push({
-        startSeconds: frozenStart,
-        durationSeconds: index / sampleFps - frozenStart,
-      });
-      frozenStart = null;
-    }
-  });
-  if (frozenStart !== null) {
-    frozenIntervals.push({
-      startSeconds: frozenStart,
-      durationSeconds: adjacentFrameMad.length / sampleFps - frozenStart,
-    });
-  }
-  const entranceMotionSceneIds = scenes.flatMap((scene) => {
-    const entranceEnd = scene.start_seconds + Math.min(1, scene.duration_seconds);
-    const moving = adjacentFrameMad.some((difference, index) => {
-      const timestamp = (index + 1) / sampleFps;
-      return (
-        timestamp >= scene.start_seconds && timestamp <= entranceEnd && difference > DUPLICATE_MAD
-      );
-    });
-    return moving ? [scene.id] : [];
-  });
-  return {
-    sampleFps,
-    adjacentFrameMad,
-    sceneChanges: adjacentFrameMad.filter((difference) => difference >= SCENE_CHANGE_MAD).length,
-    duplicateFrameCount: adjacentFrameMad.filter((difference) => difference <= DUPLICATE_MAD)
-      .length,
-    longestFrozenSeconds: Math.max(
-      0,
-      ...frozenIntervals.map((interval) => interval.durationSeconds),
-    ),
-    frozenIntervals,
-    entranceMotionSceneIds,
-  };
-}
 
 const throwIfAborted = (signal?: AbortSignal): void => {
   if (signal?.aborted) throw new DOMException('HyperFrames render aborted', 'AbortError');
@@ -231,53 +189,11 @@ async function loadIframe(html: string, width: number, height: number): Promise<
   return iframe;
 }
 
-const waitForSeek = (media: HTMLMediaElement, timestamp: number): Promise<void> => {
-  if (!Number.isFinite(media.duration) || media.readyState < 1) return Promise.resolve();
-  const target = Math.max(0, Math.min(timestamp, Math.max(0, media.duration - 0.001)));
-  if (Math.abs(media.currentTime - target) < 0.01) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => reject(new Error('Media seek timed out')), 10_000);
-    media.addEventListener(
-      'seeked',
-      () => {
-        window.clearTimeout(timer);
-        resolve();
-      },
-      { once: true },
-    );
-    media.currentTime = target;
-  });
-};
-
-async function seekComposition(iframe: HTMLIFrameElement, timestamp: number): Promise<void> {
-  const doc = iframe.contentDocument;
-  const view = iframe.contentWindow as
-    | (Window & {
-        __hyperframe?: { seek?: (seconds: number) => void | Promise<void> };
-        __timelines?: Record<string, { seek?: (seconds: number) => void }>;
-      })
-    | null;
-  await view?.__hyperframe?.seek?.(timestamp);
-  for (const timeline of Object.values(view?.__timelines ?? {})) timeline.seek?.(timestamp);
-  for (const animation of doc?.getAnimations() ?? []) {
-    animation.pause();
-    animation.currentTime = timestamp * 1000;
+const seekComposition = async (iframe: HTMLIFrameElement, timestamp: number): Promise<void> => {
+  if (iframe.contentDocument && iframe.contentWindow) {
+    await seekDocument(iframe.contentDocument, iframe.contentWindow, timestamp);
   }
-  await Promise.all(
-    Array.from(doc?.querySelectorAll('video') ?? []).map(async (video) => {
-      video.muted = true;
-      video.pause();
-      // `data-source-start` is the in-point within the source clip. audioElements()
-      // already honours it when building the mixdown, so ignoring it here would
-      // drift the picture against its own audio by exactly that offset.
-      const start = Number(video.dataset.start ?? 0);
-      const sourceStart = Number(video.dataset.sourceStart ?? 0);
-      const offset = Number.isFinite(sourceStart) ? sourceStart : 0;
-      await waitForSeek(video, Math.max(0, timestamp - start + offset));
-    }),
-  );
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-}
+};
 
 /**
  * Snapshot the current video frame as an embeddable data URL.
@@ -431,16 +347,6 @@ const canvasToPng = async (canvas: HTMLCanvasElement | OffscreenCanvas): Promise
   );
 };
 
-type Canvas2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
-
-const createCanvas = (width: number, height: number): HTMLCanvasElement | OffscreenCanvas => {
-  if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(width, height);
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  return canvas;
-};
-
 export type PreparedHyperframesComposition = {
   composition: HyperframesBrowserComposition;
   rawHtml: string;
@@ -481,25 +387,10 @@ const applyShaderStack = async (
   timeSec: number,
 ): Promise<void> => {
   if (!stack?.effects.some((effect) => effect.enabled)) return;
-  const { renderShaderStackFrame } = await import('@/lib/vgpu/renderShaderStack');
-  const bitmap = await renderShaderStackFrame({
-    source: canvas,
-    width: canvas.width,
-    height: canvas.height,
-    stack,
-    timeSec,
-  });
-  try {
-    const context =
-      typeof OffscreenCanvas !== 'undefined' && canvas instanceof OffscreenCanvas
-        ? canvas.getContext('2d')
-        : (canvas as HTMLCanvasElement).getContext('2d');
-    if (!context) throw new Error('2D canvas context is unavailable after shader rendering.');
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  } finally {
-    bitmap.close();
-  }
+  const runtime = await import(
+    '@continuum/contracts/ai-studio/hyperframes-runtime/renderShaderStack'
+  );
+  await runtime.applyShaderStack(canvas, stack, timeSec);
 };
 
 export async function probeHyperframesCapabilities(): Promise<HyperframesBrowserCapabilities> {
@@ -539,84 +430,6 @@ export async function captureHyperframesReviewFrames(params: {
   }
 }
 
-const canvasLuma = (source: HTMLCanvasElement | OffscreenCanvas): Uint8Array => {
-  const sample = createCanvas(32, 18);
-  const context = sample.getContext('2d') as Canvas2D | null;
-  if (!context) throw new Error('Review sample context is unavailable.');
-  context.drawImage(source, 0, 0, 32, 18);
-  const pixels = context.getImageData(0, 0, 32, 18).data;
-  const luma = new Uint8Array(32 * 18);
-  for (let index = 0; index < luma.length; index += 1) {
-    const offset = index * 4;
-    luma[index] = Math.round(
-      (pixels[offset] ?? 0) * 0.2126 +
-        (pixels[offset + 1] ?? 0) * 0.7152 +
-        (pixels[offset + 2] ?? 0) * 0.0722,
-    );
-  }
-  return luma;
-};
-
-const parseRgb = (value: string): [number, number, number] | null => {
-  const channels = value
-    .match(/[\d.]+/g)
-    ?.slice(0, 3)
-    .map(Number);
-  return channels?.length === 3 ? (channels as [number, number, number]) : null;
-};
-
-const relativeLuminance = ([red, green, blue]: [number, number, number]): number =>
-  [red, green, blue]
-    .map((channel) => channel / 255)
-    .map((channel) => (channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4))
-    .reduce((sum, channel, index) => sum + channel * ([0.2126, 0.7152, 0.0722][index] ?? 0), 0);
-
-const contrastRatio = (foreground: string, background: string): number | null => {
-  const foregroundRgb = parseRgb(foreground);
-  const backgroundRgb = parseRgb(background);
-  if (!foregroundRgb || !backgroundRgb) return null;
-  const [bright, dark] = [relativeLuminance(foregroundRgb), relativeLuminance(backgroundRgb)].sort(
-    (left, right) => right - left,
-  );
-  return ((bright ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
-};
-
-const measureLayout = (iframe: HTMLIFrameElement): HyperframesLayoutMetrics => {
-  const doc = iframe.contentDocument;
-  const view = iframe.contentWindow;
-  if (!doc || !view) throw new Error('Composition document is unavailable for layout review.');
-  const clippedTextIds = new Set<string>();
-  const lowContrastTextIds = new Set<string>();
-  for (const element of Array.from(doc.querySelectorAll<HTMLElement>('[data-hf-copy]'))) {
-    const id = element.dataset.hfId ?? element.id;
-    const rect = element.getBoundingClientRect();
-    if (
-      rect.left < 0 ||
-      rect.top < 0 ||
-      rect.right > view.innerWidth ||
-      rect.bottom > view.innerHeight
-    ) {
-      clippedTextIds.add(id);
-    }
-    const style = view.getComputedStyle(element);
-    let background = 'rgb(255, 255, 255)';
-    for (let parent = element.parentElement; parent; parent = parent.parentElement) {
-      const candidate = view.getComputedStyle(parent).backgroundColor;
-      if (candidate && candidate !== 'rgba(0, 0, 0, 0)' && candidate !== 'transparent') {
-        background = candidate;
-        break;
-      }
-    }
-    const ratio = contrastRatio(style.color, background);
-    if (ratio !== null && ratio < 3) lowContrastTextIds.add(id);
-  }
-  return {
-    clippedTextIds: [...clippedTextIds],
-    lowContrastTextIds: [...lowContrastTextIds],
-    missingFontFamilies: doc.fonts.status === 'loaded' ? [] : ['document-fonts'],
-  };
-};
-
 export async function captureHyperframesReviewEvidence(params: {
   composition: HyperframesBrowserComposition;
   spec: CompositionSpec;
@@ -632,28 +445,18 @@ export async function captureHyperframesReviewEvidence(params: {
 }> {
   const prepared =
     params.prepared ?? (await prepareHyperframesComposition(params.composition, params.signal));
-  const sampleFps = 10;
-  const last = Math.max(0, params.composition.durationSeconds - 1 / sampleFps);
-  const denseTimestamps = Array.from(
-    { length: Math.max(1, Math.ceil(params.composition.durationSeconds * sampleFps)) },
-    (_, index) => Math.min(last, index / sampleFps),
+  const { sampleFps, denseTimestamps, timestamps, frameTimestampsSeconds } = reviewPlan(
+    params.composition.durationSeconds,
+    params.timestampsSeconds,
   );
-  const timestamps = [...new Set([...denseTimestamps, ...params.timestampsSeconds])].sort(
-    (left, right) => left - right,
-  );
-  const frameTimestampsSeconds = params.timestampsSeconds
-    .filter((_, index, values) => index === 0 || index === values.length - 1 || index % 2 === 1)
-    .slice(0, 4);
   const requested = new Map(frameTimestampsSeconds.map((timestamp, index) => [timestamp, index]));
   const dense = new Set(denseTimestamps);
-  const stripIndexes = new Set(
-    Array.from({ length: 8 }, (_, index) => Math.round(((denseTimestamps.length - 1) * index) / 7)),
-  );
-  const strip = createCanvas(1280, 90);
-  const stripContext = strip.getContext('2d') as Canvas2D | null;
-  if (!stripContext) throw new Error('Review motion-strip context is unavailable.');
+  const strip = motionStrip(params.spec.scenes, sampleFps, denseTimestamps.length);
   const frames: Array<Blob | undefined> = Array(frameTimestampsSeconds.length).fill(undefined);
   const samples: Uint8Array[] = [];
+  // Motion is read before the shader: grain re-seeds every pixel of every frame.
+  const motionPixels: number[] = [];
+  let previousMotion: Uint8Array | null = null;
   const clippedTextIds = new Set<string>();
   const lowContrastTextIds = new Set<string>();
   const missingFontFamilies = new Set<string>();
@@ -667,19 +470,30 @@ export async function captureHyperframesReviewEvidence(params: {
         params.composition.width,
         params.composition.height,
       );
+      if (dense.has(timestamp)) {
+        const motion = motionLuma(prepared.canvas);
+        if (previousMotion) motionPixels.push(changedPixels(previousMotion, motion));
+        previousMotion = motion;
+      }
       await applyShaderStack(prepared.canvas, params.composition.shaderStack, timestamp);
       if (dense.has(timestamp)) {
         const sampleIndex = samples.length;
         samples.push(canvasLuma(prepared.canvas));
-        if (stripIndexes.has(sampleIndex)) {
-          const stripIndex = [...stripIndexes].indexOf(sampleIndex);
-          stripContext.drawImage(prepared.canvas, stripIndex * 160, 0, 160, 90);
-        }
+        strip.draw(
+          prepared.canvas,
+          sampleIndex,
+          params.composition.width,
+          params.composition.height,
+        );
       }
       const frameIndex = requested.get(timestamp);
       if (frameIndex !== undefined) {
         frames[frameIndex] = await canvasToPng(prepared.canvas);
-        const measured = measureLayout(prepared.iframe);
+        const { contentDocument, contentWindow } = prepared.iframe;
+        if (!contentDocument || !contentWindow) {
+          throw new Error('Composition document is unavailable for layout review.');
+        }
+        const measured = measureLayout(contentDocument, contentWindow);
         for (const id of measured.clippedTextIds) clippedTextIds.add(id);
         for (const id of measured.lowContrastTextIds) lowContrastTextIds.add(id);
         for (const family of measured.missingFontFamilies) missingFontFamilies.add(family);
@@ -689,8 +503,8 @@ export async function captureHyperframesReviewEvidence(params: {
     return {
       frames: frames as Blob[],
       frameTimestampsSeconds,
-      motionStrip: await canvasToPng(strip),
-      temporalMetrics: buildTemporalMetrics(samples, sampleFps, params.spec.scenes),
+      motionStrip: await canvasToPng(strip.canvas),
+      temporalMetrics: buildTemporalMetrics(samples, sampleFps, params.spec.scenes, motionPixels),
       layoutMetrics: {
         clippedTextIds: [...clippedTextIds],
         lowContrastTextIds: [...lowContrastTextIds],
@@ -700,31 +514,6 @@ export async function captureHyperframesReviewEvidence(params: {
   } finally {
     if (!params.prepared) prepared.dispose();
   }
-}
-
-function audioElements(html: string): Array<{
-  assetId: string;
-  start: number;
-  duration: number;
-  sourceStart: number;
-  gain: number;
-}> {
-  const document = new DOMParser().parseFromString(html, 'text/html');
-  return Array.from(
-    document.querySelectorAll('audio[src^="hf-asset://"], video[src^="hf-asset://"]'),
-  )
-    .map((element) => {
-      const source = element.getAttribute('src') ?? '';
-      const assetId = source.slice('hf-asset://'.length);
-      return {
-        assetId,
-        start: Number(element.getAttribute('data-start') ?? 0),
-        duration: Number(element.getAttribute('data-duration') ?? 0),
-        sourceStart: Number(element.getAttribute('data-source-start') ?? 0),
-        gain: Number(element.getAttribute('data-volume') ?? 1),
-      };
-    })
-    .filter((element) => element.assetId && element.duration > 0);
 }
 
 export async function renderHyperframesVideo(params: {
@@ -771,7 +560,7 @@ export async function renderHyperframesVideo(params: {
         sourceEndSec: element.sourceStart + element.duration,
         speed: 1,
         outputStartSec: element.start,
-        gain: Number.isFinite(element.gain) ? element.gain : 1,
+        gain: element.gain,
         fadeInSec: 0,
         fadeOutSec: 0,
       });

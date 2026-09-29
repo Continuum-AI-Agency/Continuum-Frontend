@@ -91,6 +91,60 @@ describe('PromptInput queued text', () => {
 
     expect(screen.getByRole('textbox').textContent).toBe(queued);
   });
+
+  // The 09-28 recording: two "Propose via Jaina" clicks left the request in the composer twice.
+  it('replaces the draft with a host prefill instead of appending a second copy', () => {
+    const queued = 'Propose the campaign on my canvas.';
+    const props = {
+      attachments: attachmentController(),
+      onSubmit: mock(),
+      queuedTextMode: 'replace' as const,
+    };
+    const { rerender } = render(<PromptInput {...props} queuedText={queued} />);
+    rerender(<PromptInput {...props} queuedText={null} />);
+    rerender(<PromptInput {...props} queuedText={queued} />);
+
+    expect(screen.getByRole('textbox').textContent).toBe(queued);
+  });
+});
+
+describe('PromptInput dropped references', () => {
+  it('turns a dragged session item into a chip the turn carries as a reference', () => {
+    const onSubmit = mock();
+    render(<PromptInput attachments={attachmentController()} onSubmit={onSubmit} />);
+    const reference = {
+      id: 'draft-1',
+      type: 'draft' as const,
+      label: 'Summer launch',
+      source: 'organic' as const,
+      metadata: { draftId: 'draft-1' },
+    };
+    const payload = JSON.stringify({ key: 'draft:draft-1', ...reference, reference });
+    const dataTransfer = {
+      types: [MENTION_DRAG_TYPE],
+      files: [],
+      getData: (type: string) => (type === MENTION_DRAG_TYPE ? payload : ''),
+    };
+
+    const form = screen.getByRole('textbox').closest('form') as HTMLFormElement;
+    expect(fireEvent.dragOver(form, { dataTransfer })).toBe(false);
+    fireEvent.drop(form, { dataTransfer });
+    expect(screen.getByRole('textbox').textContent).toContain('Summer launch');
+
+    fireEvent.submit(form);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0]?.[2]).toEqual([reference]);
+  });
+
+  it('ignores a malformed payload under the reference type', () => {
+    const onSubmit = mock();
+    render(<PromptInput attachments={attachmentController()} onSubmit={onSubmit} />);
+    const form = screen.getByRole('textbox').closest('form') as HTMLFormElement;
+    fireEvent.drop(form, {
+      dataTransfer: { types: [MENTION_DRAG_TYPE], files: [], getData: () => '{not json' },
+    });
+    expect(screen.getByRole('textbox').textContent).toBe('');
+  });
 });
 
 describe('PromptInput dropped references', () => {

@@ -5,9 +5,9 @@ import * as React from 'react';
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import { Pill } from '@/components/kibo-ui/pill';
 import { Button } from '@/components/ui/button';
-import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { useToast } from '@/components/ui/ToastProvider';
 import { type FrontendCheckpointReport, hasReportContent } from '@/lib/jaina/schemas';
+import { JainaProse } from '../blocks/prose';
 import {
   buildLegacyJainaSheetsExportRequest,
   createJainaReportHtmlFile,
@@ -154,7 +154,7 @@ export function JainaInlineReport({
           {report.report_title || 'Checkpoint Analysis'}
         </h2>
         <div className="flex items-center gap-2">
-          <Pill variant="violet" className="uppercase text-2xs tracking-wide">
+          <Pill variant="violet" className="uppercase text-xs tracking-wide">
             {report.language || 'EN'}
           </Pill>
           <Button
@@ -174,7 +174,7 @@ export function JainaInlineReport({
       {report.executive_summary ? (
         <div className="space-y-2">
           <span className="text-sm font-medium text-foreground/85">Executive Summary</span>
-          <SafeMarkdown
+          <JainaProse
             content={report.executive_summary}
             className="text-base leading-6 text-muted-foreground"
             mode={isStreaming ? 'streaming' : 'static'}
@@ -192,10 +192,10 @@ export function JainaInlineReport({
                 className="rounded-lg border border-border/60 bg-background/60 px-3 py-2"
               >
                 <div className="mb-1 flex items-center gap-2">
-                  <Pill variant="outline" className="text-2xs uppercase tracking-wide">
+                  <Pill variant="outline" className="text-xs uppercase tracking-wide">
                     {blockLabel(block.category)}
                   </Pill>
-                  <Pill variant="muted" className="text-2xs">
+                  <Pill variant="muted" className="text-xs">
                     {block.scope}
                   </Pill>
                 </div>

@@ -1,7 +1,10 @@
 import {
+  formatFigure,
   type JainaSheetsExportRequest,
   type JainaSheetsExportResponse,
   jainaSheetsExportRequestSchema,
+  renderFigureRefs,
+  stripProseMarks,
 } from '@continuum/contracts';
 import { ApiError } from '@/lib/api/errors';
 import { exportJainaReportToGoogleSheets, startGoogleWorkspaceSync } from '@/lib/api/integrations';
@@ -104,7 +107,7 @@ export function buildLegacyJainaSheetsExportRequest({
       title: 'Summary',
       rows: [
         ['Report', title],
-        ['Executive summary', report.executive_summary],
+        ['Executive summary', stripProseMarks(report.executive_summary)],
       ],
     },
     ...report.sections.flatMap((section) =>
@@ -181,9 +184,9 @@ function projectV2Block(block: CheckpointReportV2['blocks'][number]): SheetCandi
           ...block.items.map((item) => [
             item.item_type,
             item.title,
-            item.summary,
-            item.rationale ?? null,
-            item.impact ?? null,
+            stripProseMarks(item.summary),
+            item.rationale ? stripProseMarks(item.rationale) : null,
+            item.impact ? stripProseMarks(item.impact) : null,
             item.priority,
           ]),
         ],
@@ -220,7 +223,7 @@ function projectV2Block(block: CheckpointReportV2['blocks'][number]): SheetCandi
           ...block.rows.map((row) => [
             row.priority,
             row.entity.name,
-            row.action,
+            stripProseMarks(row.action),
             row.sizing ?? null,
             row.evidence.metric,
             row.evidence.value,
@@ -252,6 +255,29 @@ function projectV2Block(block: CheckpointReportV2['blocks'][number]): SheetCandi
           ...block.alternatives.map((alt) => ['Alternative', alt]),
         ],
       };
+    // The sentence as the reader saw it, then every figure it rests on with its read.
+    case 'answer_template':
+      return {
+        title: block.title,
+        rows: [
+          [
+            'Answer',
+            renderFigureRefs(block.executive.sentence, block.figures, formatFigure, {
+              onUnresolved: 'mark',
+            }).text,
+          ],
+          ['Figure', 'Value', 'Unit', 'Currency', 'Window', 'Source', 'Derivation'],
+          ...block.figures.map((figure) => [
+            figure.label,
+            figure.value,
+            figure.unit,
+            figure.currency,
+            `${figure.window.since} → ${figure.window.until}`,
+            `${figure.source.tool} · ${figure.source.datasetId}`,
+            figure.derivation,
+          ]),
+        ],
+      };
   }
 }
 
@@ -267,7 +293,7 @@ export function buildJainaReportV2SheetsExportRequest({
       title: 'Summary',
       rows: [
         ['Report', 'Jaina Performance Analysis'],
-        ['Executive summary', report.executive_summary],
+        ['Executive summary', stripProseMarks(report.executive_summary)],
       ],
     },
     ...visibleBlocks.map(projectV2Block),
@@ -834,7 +860,7 @@ export function renderReportPdf(
   addParagraph(`Language: ${report.language || 'EN'}`);
 
   addHeading('Executive Summary');
-  addParagraph(report.executive_summary || 'No summary provided.');
+  addParagraph(stripProseMarks(report.executive_summary) || 'No summary provided.');
 
   if (report.performance_snapshot.length > 0) {
     addHeading('Performance Snapshot');
@@ -1095,7 +1121,7 @@ export function buildJainaReportHtml({
   const body = `
     ${
       report.executive_summary
-        ? `<section class="card"><h2>Executive Summary</h2>${renderParagraph(report.executive_summary)}</section>`
+        ? `<section class="card"><h2>Executive Summary</h2>${renderParagraph(stripProseMarks(report.executive_summary))}</section>`
         : ''
     }
     ${metrics ? `<section class="card"><h2>Performance Snapshot</h2><div class="grid">${metrics}</div></section>` : ''}

@@ -1,5 +1,5 @@
-import type { ToolCallEventData, ToolResultEventData } from '@/lib/jaina/schemas';
 import type { JainaProgressEntry } from '@/components/paid-media/jaina/types';
+import type { ToolCallEventData, ToolResultEventData } from '@/lib/jaina/schemas';
 
 export type AgentLifecycleSegment = {
   kind: 'agent_lifecycle';
@@ -64,7 +64,6 @@ export const STAGE_LABELS: Record<string, string> = {
   agent_narration: 'Finding',
   synthesis_start: 'Writing report',
   synthesis_complete: 'Report ready',
-  assembly_start: 'Assembling report',
   report_ready: 'Report ready',
   canvas_start: 'Updating canvas',
   canvas_complete: 'Canvas updated',

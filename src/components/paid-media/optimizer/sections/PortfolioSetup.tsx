@@ -233,18 +233,18 @@ function AccountHeader({
       </div>
       <div className="flex items-center gap-1.5">
         {platform ? (
-          <Badge className="text-3xs" variant="outline">
+          <Badge className="text-xs" variant="outline">
             {humanize(platform)}
           </Badge>
         ) : null}
         {currency ? (
-          <Badge className="text-3xs" variant="secondary">
+          <Badge className="text-xs" variant="secondary">
             {currency}
           </Badge>
         ) : null}
         {status ? (
           <Badge
-            className="text-3xs"
+            className="text-xs"
             variant={status.toLowerCase() === 'active' ? 'success' : 'outline'}
           >
             {humanize(status)}
@@ -273,7 +273,7 @@ function TrackingGapBanner({
           objective — check the pixel/conversion tracking before enrolling.
         </p>
         {samples.length > 0 ? (
-          <p className="mt-1 font-mono text-2xs opacity-80">{samples.slice(0, 4).join(', ')}</p>
+          <p className="mt-1 font-mono text-xs opacity-80">{samples.slice(0, 4).join(', ')}</p>
         ) : null}
       </div>
     </div>

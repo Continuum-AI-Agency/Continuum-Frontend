@@ -5,6 +5,7 @@ import {
   agentDocumentAttachmentSchema,
   checkpointBlockV2LenientSchema,
   actionsBlockSchema as contractActionsBlockSchema,
+  answerTemplateBlockSchema as contractAnswerTemplateBlockSchema,
   blockBaseSchema as contractBlockBaseSchema,
   chartBlockBaseSchema as contractChartBlockBaseSchema,
   chartBlockSchema as contractChartBlockSchema,
@@ -26,6 +27,7 @@ import {
   tableColumnSchema as contractTableColumnSchema,
   jainaPaidCreativeRenderPayloadSchema,
   jainaScaffoldActionSchema,
+  jainaOperatorActionSchema,
   jainaToolActionSchema,
   jainaToolApprovalRequiredPayloadSchema,
   jainaToolApprovalResolvedPayloadSchema,
@@ -78,6 +80,10 @@ export { jainaScaffoldActionSchema };
 export type JainaToolAction = z.infer<typeof jainaToolActionSchema>;
 export { jainaToolActionSchema };
 
+/** A gated call a button opened, with no model turn. The answer is a `JainaToolAction`. */
+export type JainaOperatorAction = z.infer<typeof jainaOperatorActionSchema>;
+export { jainaOperatorActionSchema };
+
 export const jainaChatRequestSchema = z.object({
   query: z.string().min(1),
   include_thoughts: z.boolean().optional(),
@@ -106,6 +112,11 @@ export const jainaChatRequestSchema = z.object({
    * an undeclared field vanishes silently and the approval never arrives.
    */
   tool_action: jainaToolActionSchema.optional(),
+  /**
+   * A gated call a BUTTON opened (Deploy paused, Pause, Unpause) — no model turn. Same
+   * stripping hazard: without this line the action never leaves the browser.
+   */
+  operator_action: jainaOperatorActionSchema.optional(),
   context: z.object({
     adAccountId: z.string().min(1),
     brandId: z.string().min(1),
@@ -573,6 +584,11 @@ export const surveyBlockV2Schema = contractSurveyBlockSchema.extend({
 });
 export type SurveyBlockV2 = z.infer<typeof surveyBlockV2Schema>;
 
+export const answerTemplateBlockV2Schema = contractAnswerTemplateBlockSchema.extend({
+  priority: blockPriorityV2Schema,
+});
+export type AnswerTemplateBlockV2 = z.infer<typeof answerTemplateBlockV2Schema>;
+
 const checkpointBlockV2UnionSchema = z.discriminatedUnion('category', [
   narrativeBlockV2Schema,
   metricGridBlockV2Schema,
@@ -584,6 +600,7 @@ const checkpointBlockV2UnionSchema = z.discriminatedUnion('category', [
   actionsBlockV2Schema,
   goalPacingBlockV2Schema,
   surveyBlockV2Schema,
+  answerTemplateBlockV2Schema,
 ]);
 
 // Re-apply the contract's chart-renderability invariants (category_key present
@@ -684,56 +701,6 @@ export const checkpointReportV2Schema = z.object({
   _meta: checkpointReportV2MetaSchema,
 });
 export type CheckpointReportV2 = z.infer<typeof checkpointReportV2Schema>;
-
-export const chartDatasetSchema = z.object({
-  label: z.string(),
-  data: z.array(z.number()),
-  backgroundColor: z.string().optional(),
-  borderColor: z.string().optional(),
-});
-
-export type ChartDataset = z.infer<typeof chartDatasetSchema>;
-
-export const chartSpecificationSchema = z.object({
-  title: z.string(),
-  chart_type: z.enum(['bar', 'line', 'pie', 'doughnut']),
-  labels: z.array(z.string()),
-  datasets: z.array(chartDatasetSchema),
-  options: z.record(z.string(), z.any()).optional(),
-});
-
-export type ChartSpecification = z.infer<typeof chartSpecificationSchema>;
-
-export const metricComparisonSchema = z.object({
-  label: z.string(),
-  planned: z.union([z.number(), z.string()]),
-  actual: z.union([z.number(), z.string()]),
-  index_percent: z.number(),
-  unit: z.string(),
-  deviation_type: z.enum(['positive', 'negative', 'neutral']),
-});
-
-export type MetricComparison = z.infer<typeof metricComparisonSchema>;
-
-export const reportAssemblySchema = z.object({
-  header: z.object({
-    title: z.string(),
-    subtitle: z.string().optional(),
-    period: z.string(),
-    report_tags: z.array(z.string()),
-  }),
-  summary: z.object({
-    narrative: z.string(),
-    principal_deviation: z.string().optional(),
-  }),
-  metrics: z.array(metricComparisonSchema),
-  charts: z.array(chartSpecificationSchema),
-  insights: z.array(insightSchema),
-  recommendations: z.array(z.union([recommendationItemSchema, z.string()])),
-  metadata: z.record(z.string(), z.any()).optional(),
-});
-
-export type ReportAssembly = z.infer<typeof reportAssemblySchema>;
 
 export const responseCreatedSchema = streamEventSchema(
   'response.created',
@@ -1010,16 +977,6 @@ export const responseBlockDeltaV2TolerantSchema = streamEventSchema(
   }),
 );
 
-export const responseReportAssemblySchema = streamEventSchema(
-  'response.report_assembly',
-  z.object({
-    item_id: z.string(),
-    part_id: z.string(),
-    report: reportAssemblySchema,
-    html_preview: z.string(),
-  }),
-);
-
 export const responseReportArtifactJobStartedSchema = streamEventSchema(
   'response.report_artifact_job.started',
   z
@@ -1178,7 +1135,6 @@ export type JainaStreamEvent =
   | z.infer<typeof responseCheckpointReportSchema>
   | z.infer<typeof responseBlockDeltaV2TolerantSchema>
   | z.infer<typeof responseBlockDeltaSchema>
-  | z.infer<typeof responseReportAssemblySchema>
   | z.infer<typeof responseReportArtifactJobStartedSchema>
   | z.infer<typeof responseOutputJsonDeltaSchema>
   | z.infer<typeof outputTextDeltaSchema>
@@ -1259,7 +1215,6 @@ export const jainaStreamEventSchema = z.union([
   responseCheckpointReportSchema,
   responseBlockDeltaV2TolerantSchema,
   responseBlockDeltaSchema,
-  responseReportAssemblySchema,
   responseReportArtifactJobStartedSchema,
   responseOutputJsonDeltaSchema,
   outputTextDeltaSchema,

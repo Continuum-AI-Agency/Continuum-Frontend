@@ -31,6 +31,7 @@ import { usePaidCreativeReport } from '@/hooks/usePaidCreativeReport';
 import { cn } from '@/lib/utils';
 import { CreativeHoverCard } from '../charts/CreativeHoverCard';
 import { formatCpa, humanize } from '../format';
+import * as typeScale from '../typeScale';
 import {
   useOptimizerAdAngles,
   useOptimizerAdDailyTrends,
@@ -53,14 +54,14 @@ export function AngleChip({ angle }: { angle: PaidAdAngle }) {
     <Tooltip>
       <TooltipTrigger
         render={
-          <Badge className="shrink-0 text-3xs" variant="secondary">
+          <Badge className="shrink-0 text-xs" variant="secondary">
             {humanize(angle.angle)}
           </Badge>
         }
       />
       <TooltipContent className="max-w-xs space-y-1">
-        {angle.hook ? <p className="text-2xs">&ldquo;{angle.hook}&rdquo;</p> : null}
-        <p className="text-3xs text-muted-foreground">
+        {angle.hook ? <p className="text-xs">&ldquo;{angle.hook}&rdquo;</p> : null}
+        <p className="text-xs text-muted-foreground">
           {humanize(angle.angle)}
           {confidence ? ` · ${confidence} confidence` : ''}
         </p>
@@ -122,25 +123,26 @@ function CreativeRow({
           />
         </span>
       ) : (
-        <span className="grid size-10 shrink-0 place-items-center rounded bg-muted text-3xs text-muted-foreground">
+        <span className="grid size-10 shrink-0 place-items-center rounded bg-muted text-xs text-muted-foreground">
           AD
         </span>
       )}
       <span className="min-w-0 flex-1 truncate text-xs text-foreground">{label}</span>
       {angle ? <AngleChip angle={angle} /> : null}
       {trend?.virality ? (
-        <span className="shrink-0 text-3xs text-muted-foreground tabular-nums">
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
           V{trend.virality.predicted_overall}
         </span>
       ) : null}
       {trend?.outcome?.result ? (
-        <span className="shrink-0 text-3xs text-muted-foreground">{trend.outcome.result}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">{trend.outcome.result}</span>
       ) : null}
       {verdict ? (
         <>
           <span
             className={cn(
-              'shrink-0 rounded px-1.5 py-0.5 font-semibold text-3xs uppercase tracking-wide',
+              typeScale.label,
+              'shrink-0 rounded px-1.5 py-0.5 font-semibold',
               VERDICT_STYLE[verdict.verdict],
               thinEvidence && 'opacity-60',
             )}
@@ -148,14 +150,14 @@ function CreativeRow({
             {verdict.verdict}
           </span>
           {thinEvidence ? (
-            <span className="shrink-0 text-3xs text-muted-foreground">thin evidence</span>
+            <span className="shrink-0 text-xs text-muted-foreground">thin evidence</span>
           ) : null}
-          <span className="shrink-0 text-3xs text-muted-foreground tabular-nums">
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
             {formatCpa(verdict.cpa, currency)}
           </span>
         </>
       ) : (
-        <span className="shrink-0 text-3xs text-muted-foreground">no verdict</span>
+        <span className="shrink-0 text-xs text-muted-foreground">no verdict</span>
       )}
     </div>
   );
@@ -222,7 +224,7 @@ export function AdsetCreativeVerdicts({
 
   if (adsQuery.isError) {
     return (
-      <p className="py-1.5 pl-6 text-2xs text-warning">
+      <p className="py-1.5 pl-6 text-xs text-warning">
         Couldn&rsquo;t load the ads in this ad set, so no creative verdicts are shown.
       </p>
     );
@@ -230,7 +232,7 @@ export function AdsetCreativeVerdicts({
 
   const ads = adsQuery.data;
   if (ads.length === 0) {
-    return <p className="py-1.5 pl-6 text-2xs text-muted-foreground">No ads in this ad set.</p>;
+    return <p className="py-1.5 pl-6 text-xs text-muted-foreground">No ads in this ad set.</p>;
   }
 
   const rows = joinAdsetCreativeRows({ ads, verdicts: report?.verdicts ?? [] });
@@ -255,7 +257,7 @@ export function AdsetCreativeVerdicts({
           />
         ))}
       </ul>
-      {notice ? <p className="px-1 pb-1 text-3xs text-muted-foreground">{notice}</p> : null}
+      {notice ? <p className="px-1 pb-1 text-xs text-muted-foreground">{notice}</p> : null}
     </div>
   );
 }

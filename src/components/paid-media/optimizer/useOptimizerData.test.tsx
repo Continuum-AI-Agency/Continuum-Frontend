@@ -237,6 +237,59 @@ describe('runCycle outcomes', () => {
     expect(await runOnce()).toEqual({ status: 'unavailable', kind: 'malformed' });
   });
 
+  // optimizer_record_cycle is `on conflict (portfolio_id, utc_day) do nothing` and returns the
+  // run already recorded today. A second Run now the same day therefore gets back the id that is
+  // ALREADY on screen: nothing new was scored, and the notice has to say so.
+  async function runWithLatestOnScreen(latestRunId: string | null) {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(optimizerQueryKeys.performance(RAN.portfolioId), {
+      portfolio: null,
+      latest_run: latestRunId ? { id: latestRunId } : null,
+      latest_items: [],
+      recommendations: [],
+      history: [],
+    });
+    const { result } = renderHook(() => useOptimizerMutations('brand', 'act_1'), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+    result.current.run.mutate(RAN.portfolioId);
+    await waitFor(() => expect(result.current.run.isSuccess).toBe(true));
+    return result.current.run.data;
+  }
+
+  it('flags a run that returned the cycle already on screen as already scored today', async () => {
+    rpc.mockResolvedValueOnce({ data: RAN, error: null } as never);
+    expect(await runWithLatestOnScreen(RAN.runId)).toMatchObject({
+      status: 'ran',
+      alreadyScoredToday: true,
+    });
+  });
+
+  it('does not flag a run that produced a new cycle', async () => {
+    rpc.mockResolvedValueOnce({ data: RAN, error: null } as never);
+    const outcome = await runWithLatestOnScreen('33333333-3333-4333-8333-333333333333');
+    expect(outcome).toMatchObject({ status: 'ran' });
+    expect((outcome as { alreadyScoredToday?: boolean }).alreadyScoredToday).toBeUndefined();
+  });
+
+  it('logs the unreadable body itself, not just the schema issues', async () => {
+    const error = console.error;
+    const logged: unknown[][] = [];
+    console.error = (...args: unknown[]) => {
+      logged.push(args);
+    };
+    try {
+      const body = { ...RAN, recommendations: [{}] };
+      rpc.mockResolvedValueOnce({ data: body, error: null } as never);
+      expect(await runOnce()).toEqual({ status: 'unavailable', kind: 'malformed' });
+      expect(JSON.stringify(logged)).toContain('"recommendations":[{}]');
+    } finally {
+      console.error = error;
+    }
+  });
+
   it('treats runId:null with no skip reason as malformed, not as success', async () => {
     rpc.mockResolvedValueOnce({ data: { ...RAN, runId: null }, error: null } as never);
     expect(await runOnce()).toEqual({ status: 'unavailable', kind: 'malformed' });
