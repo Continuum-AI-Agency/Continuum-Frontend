@@ -1,4 +1,5 @@
 export * from './conflicts';
+export * from './fontMetrics';
 export * from './image-analysis';
 export * from './learned-rules';
 export * from './lint';

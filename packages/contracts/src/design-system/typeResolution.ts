@@ -44,8 +44,9 @@ import {
   type Rgb,
 } from './image-analysis';
 import type { DesignSystemSnapshot } from './manifest';
+import type { DesignSystemFontEmbed } from './render';
 import { projectSectionsToBrandTokens, sectionForToken } from './sections';
-import { isLiteralHex } from './tokens';
+import { type DesignToken, isLiteralHex } from './tokens';
 
 /** Ordered worst-last. The array IS the precedence; nothing re-declares it. */
 export const BRAND_TYPE_SOURCES = [
@@ -53,6 +54,7 @@ export const BRAND_TYPE_SOURCES = [
   'brand-md',
   'brand-kit',
   'scrape',
+  'ads',
   'fallback',
 ] as const;
 export type BrandTypeSource = (typeof BRAND_TYPE_SOURCES)[number];
@@ -71,6 +73,7 @@ export const BRAND_TYPE_SOURCE_LABEL: Record<BrandTypeSource, string> = {
   'brand-md': 'the brand book',
   'brand-kit': 'the brand kit',
   scrape: 'the website',
+  ads: "the brand's own ads",
   fallback: 'no brand face found',
 };
 
@@ -92,6 +95,32 @@ export const BRAND_INK_SOURCE_LABEL: Record<BrandTypeSource, string> = {
  */
 export const PRELOADED_TYPE_FACES = { display: 'Montserrat', body: 'Inter' } as const;
 
+/**
+ * Every family the product ships bytes for (`captionFonts.ts` `CAPTION_FONTS`, served by Render's
+ * `/fonts/`). A face on this list draws in itself with no embed; any other face needs one.
+ */
+export const SHIPPED_TYPE_FACES = [
+  'Anton',
+  'Inter',
+  'Montserrat',
+  'JetBrains Mono',
+  'Cormorant Garamond',
+  'Allura',
+] as const;
+
+/** How a face is built, coarsely: enough to pick a near licensed face or a reel face for it. */
+export const FACE_CLASSES = [
+  'geometric-sans',
+  'grotesque-sans',
+  'humanist-sans',
+  'condensed-sans',
+  'serif',
+  'slab',
+  'script',
+  'mono',
+] as const;
+export type FaceClass = (typeof FACE_CLASSES)[number];
+
 /** Whatever brand shapes the caller could reach. Every field is optional by design: a read
  *  that failed and a value that is absent are the same thing to this resolver. */
 export interface BrandTypeInputs {
@@ -105,6 +134,26 @@ export interface BrandTypeInputs {
     readonly typography?: BrandTypography | null;
     readonly palette?: BrandPalette | null;
   } | null;
+  /**
+   * Faces READ OFF the brand's own ads by a vision pass and matched to licensed faces. The last
+   * brand rung: a measurement of what the brand published, never something it wrote down.
+   */
+  readonly ads?: {
+    readonly typography?: BrandTypography | null;
+    readonly classes?: { readonly display?: FaceClass; readonly body?: FaceClass } | null;
+  } | null;
+  /**
+   * The bytes a renderer can embed. PRESENT (even empty) means the caller resolved bytes, and a
+   * rung whose face has none — no embed, not shipped — is skipped rather than drawn in whatever
+   * the machine substitutes. Absent keeps the old rule: the first named face wins.
+   */
+  readonly fontEmbeds?: readonly DesignSystemFontEmbed[] | null;
+}
+
+/** A rung whose face was named but could not be drawn, so the chain walked past it. */
+export interface SkippedBrandFace {
+  readonly source: BrandTypeSource;
+  readonly family: string;
 }
 
 export interface ResolvedBrandType {
@@ -113,6 +162,13 @@ export interface ResolvedBrandType {
   /** The supporting face; equal to `display` when the source names only one. */
   readonly body: string;
   readonly source: BrandTypeSource;
+  /**
+   * Where `body` came from when it is not `source`: the ads rung, filling a body face the rung
+   * that named the display face left empty. Absent when both came from one rung.
+   */
+  readonly bodySource?: BrandTypeSource;
+  /** Rungs walked past for want of bytes. Only when the caller resolved bytes (`fontEmbeds`). */
+  readonly skipped?: readonly SkippedBrandFace[];
 }
 
 export interface ResolvedBrandInk {
@@ -208,12 +264,33 @@ function rungsOf(inputs: BrandTypeInputs): TypeRung[] {
     });
   }
 
+  if (inputs.ads) {
+    rungs.push({
+      source: 'ads',
+      colors: [],
+      typography: extractBrandFontTokens(inputs.ads.typography),
+    });
+  }
+
   return rungs;
 }
 
+const sameFamily = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/** The embeds for one family, in the order given. */
+export const embedsFor = (
+  embeds: readonly DesignSystemFontEmbed[] | null | undefined,
+  family: string,
+): DesignSystemFontEmbed[] => (embeds ?? []).filter((embed) => sameFamily(embed.family, family));
+
+/** True when a renderer can draw `family` in itself: an embed carries it, or the product ships it. */
+export const hasFaceBytes = (inputs: BrandTypeInputs, family: string): boolean =>
+  embedsFor(inputs.fontEmbeds, family).length > 0 ||
+  SHIPPED_TYPE_FACES.some((shipped) => sameFamily(shipped, family));
+
 const facesFrom = (
   typography: readonly BrandFontToken[],
-): { display: string; body: string } | null => {
+): { display: string; body: string; bodyNamed: boolean } | null => {
   const usable = typography
     .map((token) => ({ role: token.role, family: cleanFamily(token.family) }))
     .filter(
@@ -221,8 +298,28 @@ const facesFrom = (
     );
   if (usable.length === 0) return null;
   const display = usable.find((token) => token.role === 'display') ?? usable[0];
-  const body = usable.find((token) => token.role === 'body') ?? display;
-  return { display: display.family, body: body.family };
+  const named = usable.find((token) => token.role === 'body');
+  return { display: display.family, body: (named ?? display).family, bodyNamed: Boolean(named) };
+};
+
+/**
+ * The brand's own rungs decide; the ads rung only FILLS what they leave empty. A brand book that
+ * names a display face and no body (Easy Fit: Montserrat, secondary null) keeps its display face,
+ * labelled with its own rung, and takes the body face read off its ads.
+ */
+const withAdsBody = (
+  resolved: ResolvedBrandType,
+  winner: { bodyNamed: boolean },
+  inputs: BrandTypeInputs,
+  drawable: (family: string) => boolean,
+): ResolvedBrandType => {
+  if (winner.bodyNamed || resolved.source === 'ads' || resolved.source === 'fallback')
+    return resolved;
+  const ads = rungsOf(inputs).find((rung) => rung.source === 'ads');
+  const faces = ads ? facesFrom(ads.typography) : null;
+  return faces?.bodyNamed && drawable(faces.body)
+    ? { ...resolved, body: faces.body, bodySource: 'ads' }
+    : resolved;
 };
 
 /**
@@ -233,11 +330,77 @@ const facesFrom = (
  * it replaces.
  */
 export function resolveBrandType(inputs: BrandTypeInputs): ResolvedBrandType {
+  // ponytail: without bytes the old rule stands (the Studio canvas, whose own machine may hold
+  // the face); a caller that resolved bytes gets the guard below.
+  if (inputs.fontEmbeds === undefined) {
+    for (const rung of rungsOf(inputs)) {
+      const faces = facesFrom(rung.typography);
+      if (faces)
+        return withAdsBody(
+          { display: faces.display, body: faces.body, source: rung.source },
+          faces,
+          inputs,
+          () => true,
+        );
+    }
+    return { ...PRELOADED_TYPE_FACES, source: 'fallback' };
+  }
+  // A face with no bytes behind it draws in Helvetica, which is worse than the face we ship: the
+  // rung is walked past and NAMED, so the report says which brand face was not drawn.
+  const skipped: SkippedBrandFace[] = [];
   for (const rung of rungsOf(inputs)) {
     const faces = facesFrom(rung.typography);
-    if (faces) return { ...faces, source: rung.source };
+    if (!faces) continue;
+    if (!hasFaceBytes(inputs, faces.display)) {
+      skipped.push({ source: rung.source, family: faces.display });
+      continue;
+    }
+    const body = hasFaceBytes(inputs, faces.body) ? faces.body : faces.display;
+    return withAdsBody(
+      { display: faces.display, body, source: rung.source, skipped },
+      faces,
+      inputs,
+      (family) => hasFaceBytes(inputs, family),
+    );
   }
-  return { ...PRELOADED_TYPE_FACES, source: 'fallback' };
+  return { ...PRELOADED_TYPE_FACES, source: 'fallback', skipped };
+}
+
+const bareTokenName = (name: string): string => name.trim().toLowerCase().replace(/^--/, '');
+
+const weightToken = (tokens: readonly DesignToken[], match: RegExp): number | null => {
+  for (const token of tokens) {
+    if (!match.test(bareTokenName(token.name))) continue;
+    const value = Number.parseInt((token.resolvedValue ?? token.value).trim(), 10);
+    if (Number.isFinite(value) && value >= 1 && value <= 1000) return value;
+  }
+  return null;
+};
+
+/**
+ * The two weights a headline in `family` is set in: the design system's `w-light` / `w-bold`
+ * type-scale tokens, else 300 / 700 — each moved to the nearest weight an embed of the family
+ * actually holds, because asking a file for a weight it lacks draws a synthesised one that no
+ * planner measured. One function, so the planner that measures and the op that draws agree.
+ */
+export function headlineWeights(
+  inputs: BrandTypeInputs,
+  family: string,
+): { light: number; bold: number } {
+  const scale = (inputs.designSystem?.tokens ?? []).filter(
+    (token) => sectionForToken(token) === 'typography',
+  );
+  const light = weightToken(scale, /light|thin/) ?? 300;
+  const bold = weightToken(scale, /bold|black|heavy/) ?? 700;
+  const held = embedsFor(inputs.fontEmbeds, family).map((embed) => embed.weight);
+  // An embed with no weight is a variable file: it holds every weight.
+  if (held.length === 0 || held.some((weight) => weight === undefined)) return { light, bold };
+  const weights = held as number[];
+  const nearest = (want: number) =>
+    weights.reduce((best, weight) =>
+      Math.abs(weight - want) < Math.abs(best - want) ? weight : best,
+    );
+  return { light: nearest(light), bold: nearest(bold) };
 }
 
 /**

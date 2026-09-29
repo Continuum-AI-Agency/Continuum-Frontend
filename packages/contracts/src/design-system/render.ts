@@ -234,6 +234,16 @@ const fontEmbedFormats: Record<
   ttf: { mime: 'font/ttf', hint: 'truetype' },
 };
 
+/**
+ * One embed as an `@font-face` rule with its bytes inline, or null when it fails the contract.
+ * The ops that set type in an SVG draw through this: an SVG rasterised as an image can load no
+ * webfont, so the only face it can see is one written into it.
+ */
+export function fontEmbedFaceCss(embed: DesignSystemFontEmbed): string | null {
+  const parsed = designSystemFontEmbedSchema.safeParse(embed);
+  return parsed.success ? fontFaceBlock(parsed.data) : null;
+}
+
 function fontFaceBlock(embed: ValidatedFontEmbed): string {
   const { mime, hint } = fontEmbedFormats[embed.format];
   const lines = [

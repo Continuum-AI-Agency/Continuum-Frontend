@@ -18,6 +18,7 @@ import {
   createProbe,
   describeHeadlineFaces,
   describeHeadlineInk,
+  embedFace,
   type HeadlineInk,
   headlineSvg,
   headlineSvgDataUri,
@@ -26,6 +27,7 @@ import {
   parseHexColour,
   plateRect,
   readSettings,
+  refuseSplitWords,
   resolveCustomInk,
   resolveHeadlineFaces,
   resolveHeadlineInk,
@@ -967,6 +969,61 @@ describe('a word never breaks mid-word (the Easy Fit stills: "descuent / o", "an
     expect(wordFitScale([{ text: 'Tu primer mes', weight: 'bold' }], FRAME, wide, 0.7, 1.2)).toBe(
       1.2,
     );
+  });
+});
+
+describe('a brand face carried as bytes (headless lanes)', () => {
+  const embed = (weight: number) => ({
+    family: 'Oswald',
+    weight,
+    format: 'ttf' as const,
+    base64: 'AAEAAA==',
+  });
+
+  it('inlines the brand embeds for the draw, and leaves a face with none to the shipped path', async () => {
+    const css = await embedFace('Oswald', [embed(300), embed(700)]);
+    expect(css).toContain("font-family: 'Oswald';");
+    expect(css).toContain('font-weight: 300;');
+    expect(css).toContain('font-weight: 700;');
+    expect(css).toContain('data:font/ttf;base64,AAEAAA==');
+    expect(await embedFace('Oswald', [])).toBeNull();
+  });
+
+  it('sets the weights the embeds hold, so the planner and the draw ask the same file', () => {
+    const faces = resolveHeadlineFaces({
+      ads: { typography: { primary: 'Oswald' } },
+      fontEmbeds: [embed(400), embed(600)],
+    });
+    expect(faces).toMatchObject({ family: 'Oswald', source: 'ads', lightWeight: 400, boldWeight: 600 });
+  });
+});
+
+describe('refuseSplitWords (image.text refuseSplit)', () => {
+  const plan = (lines: string[][]) =>
+    ({
+      lines: lines.map((words) => ({ words: words.map((text) => ({ text })) })),
+    }) as unknown as PlacementPlan;
+
+  it('throws on a piece that is no whole word of the text', () => {
+    expect(() =>
+      refuseSplitWords('**50% de descuento en tu anualidad**', [
+        plan([['50%', 'de'], ['descuent'], ['o', 'en', 'tu'], ['anualidad']]),
+      ]),
+    ).toThrow('layout_fault:split_word:descuent / o');
+  });
+
+  it('passes whole words across paragraphs', () => {
+    expect(() =>
+      refuseSplitWords('**50% de descuento**\nEntrena cómodo', [
+        plan([['50%', 'de'], ['descuento']]),
+        plan([['Entrena', 'cómodo']]),
+      ]),
+    ).not.toThrow();
+  });
+
+  it('is off unless a step asks for it', () => {
+    expect(readSettings({}).refuseSplit).toBe(false);
+    expect(readSettings({ refuseSplit: true }).refuseSplit).toBe(true);
   });
 });
 

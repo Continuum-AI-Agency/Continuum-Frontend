@@ -212,7 +212,7 @@ export async function setImageCta(args: {
     ? shippedFaces(settings.family)
     : resolveHeadlineFaces(args.brand ?? {});
   // Registered before the measure, embedded in the SVG for the draw: one face on both sides.
-  const fontFaceCss = await embedFace(faces.family);
+  const fontFaceCss = await embedFace(faces.family, args.brand?.fontEmbeds);
   const frame: Size = { width: args.image.width, height: args.image.height };
   const canvas = new OffscreenCanvas(frame.width, frame.height);
   const ctx = canvas.getContext('2d');

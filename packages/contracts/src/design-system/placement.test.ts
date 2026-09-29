@@ -84,6 +84,19 @@ describe('breakLines', () => {
     // 12 light chars = 120 > 100, so it breaks into 10 + 2.
     const result = breakLines([light('AAAAAAAAAAAA')], measureText, { measure: 100, ...SIZES });
     expect(texts(result.lines)).toEqual(['AAAAAAAAAA', 'AA']);
+    expect(result.splitWords).toEqual(['AAAAAAAAAAAA']);
+    expect(result.overlong).toEqual([]);
+  });
+
+  it('keeps an overlong word whole and names it when splitting is refused', () => {
+    const result = breakLines([light('BB AAAAAAAAAAAA')], measureText, {
+      measure: 100,
+      ...SIZES,
+      splitOverlong: false,
+    });
+    expect(texts(result.lines)).toEqual(['BB', 'AAAAAAAAAAAA']);
+    expect(result.splitWords).toEqual([]);
+    expect(result.overlong).toEqual(['AAAAAAAAAAAA']);
   });
 
   it('returns no lines for an empty headline', () => {

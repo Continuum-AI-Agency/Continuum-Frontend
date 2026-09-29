@@ -31,16 +31,17 @@ import {
   type BurnInAnchor,
   breakLines,
   contrastRatio,
-  type DesignSection,
-  type DesignToken,
+  type DesignSystemFontEmbed,
   darkPercentileContrast,
   deriveLegibleInk,
+  embedsFor,
   FALLBACK_INK_DARK,
   FALLBACK_INK_LIGHT,
   type FractionalBox,
   FULL_FRAME,
   type HeadlineToken,
   hasAnyBrandShape,
+  headlineWeights,
   isLiteralHex,
   type MeasureText,
   type PixelBuffer,
@@ -54,23 +55,19 @@ import {
   resolveBrandInk,
   resolveBrandType,
   type Size,
-  sectionForToken,
   type TextStyle,
   type TreatmentStep,
   VERNE_TITLE_BOLD_SIZE,
   VERNE_TITLE_LIGHT_SIZE,
 } from '@continuum/contracts';
-import { captionFontFaceCss, captionFontSpec, ensureCaptionFonts } from '@/lib/clips/captionFonts';
+import {
+  captionFontFaceCss,
+  captionFontSpec,
+  embedBrandFonts,
+  ensureCaptionFonts,
+} from '@/lib/clips/captionFonts';
 import { type BlockExtent, blockOrigin, blockRect, headlineBlockExtent } from './burnInPlacement';
 import type { DrawableImage } from './imageOps';
-
-// Type comes from typography. This was a config field once — a `designSectionSchema` enum that
-// offered `motion`, `voice`, `radii` and `iconography` as the source of a headline face, purely
-// so the generic Zod panel had something to render. It is a constant because there is no second
-// right answer, and a question with one right answer and eleven wrong ones is not a setting.
-// The ink's own section died with it: `resolveBrandInk` walks the brand's shapes and names the
-// one it read, which is strictly more than a section name ever said.
-const TYPE_SECTION: DesignSection = 'typography';
 
 // ── Ink ──────────────────────────────────────────────────────────────────────────────────
 
@@ -168,21 +165,10 @@ export interface HeadlineFaces {
 
 const FALLBACK_STACK = "'Helvetica Neue', Helvetica, Arial, sans-serif";
 
-const bareName = (name: string): string => name.trim().toLowerCase().replace(/^--/, '');
-
 /** A family name safe to interpolate into a font shorthand and an XML attribute. */
 const quoteFamily = (family: string): string | null => {
   const clean = family.trim().replace(/^['"]|['"]$/g, '');
   return /^[^'"(){};\\\r\n<>&]+$/.test(clean) && clean.length > 0 ? `'${clean}'` : null;
-};
-
-const weightFrom = (tokens: readonly DesignToken[], match: RegExp): number | null => {
-  for (const token of tokens) {
-    if (!match.test(bareName(token.name))) continue;
-    const value = Number.parseInt((token.resolvedValue ?? token.value).trim(), 10);
-    if (Number.isFinite(value) && value >= 1 && value <= 1000) return value;
-  }
-  return null;
 };
 
 /**
@@ -192,18 +178,17 @@ const weightFrom = (tokens: readonly DesignToken[], match: RegExp): number | nul
  * anything else that has to name the face read the same rung. WHAT WEIGHTS is still a design
  * system question: `w-light` / `w-bold` are type-scale tokens and no other brand shape carries
  * them, so a brand resolved off its brand book gets the 300/700 defaults rather than a weight
- * invented from a family name.
+ * invented from a family name — moved to the weights an embed of the family actually holds
+ * (`headlineWeights`, shared with the Backend planner that measures the same file).
  */
 export function resolveHeadlineFaces(inputs: BrandTypeInputs): HeadlineFaces {
   const type = resolveBrandType(inputs);
   const family = quoteFamily(type.display);
-  const scale = (inputs.designSystem?.tokens ?? []).filter(
-    (token) => sectionForToken(token) === TYPE_SECTION,
-  );
+  const weights = headlineWeights(inputs, type.display);
   return {
     stack: family ? `${family}, ${FALLBACK_STACK}` : FALLBACK_STACK,
-    lightWeight: weightFrom(scale, /light|thin/) ?? 300,
-    boldWeight: weightFrom(scale, /bold|black|heavy/) ?? 700,
+    lightWeight: weights.light,
+    boldWeight: weights.bold,
     family: type.display,
     source: type.source,
   };
@@ -661,20 +646,22 @@ export function headlineSvg(
  * either and the piece breaks in the direction that is hardest to see — a plan measured in
  * Montserrat and drawn in Helvetica breaks its own lines in the wrong places.
  *
- * Null for a family we do not hold bytes for, which today is every brand face.
- *
- * CEILING, unchanged and now stated where it bites: an SVG rasterised as an image cannot fetch
- * a webfont, so a BRAND family that is not installed on this machine still resolves to
- * `FALLBACK_STACK` in both paths. Consistent, and not yet the brand's face. `HeadlineFaces.source`
- * is honest about which SHAPE named the family; it does not claim the bytes were found. The
- * upgrade is a byte source for brand faces (`designSystemFontEmbedSchema` already describes the
- * shape) — and when it lands it plugs in exactly here.
+ * A brand face travels as bytes with the request (`BrandTypeInputs.fontEmbeds`, which the server
+ * lanes fill): when `embeds` carry the family, THOSE bytes are registered and inlined. Otherwise a
+ * face we ship is, and null for a family we hold no bytes for — which then resolves to
+ * `FALLBACK_STACK` in both paths: consistent, and not the brand's face. `HeadlineFaces.source` is
+ * honest about which SHAPE named the family; it does not claim the bytes were found.
  *
  * Exported for the benches that call `renderHeadline` directly to read back a plan: they have to
  * feed it the SAME face this op fed it, or the frame they grade is not the frame the op drew.
  */
-export async function embedFace(family: string): Promise<string | null> {
+export async function embedFace(
+  family: string,
+  embeds?: readonly DesignSystemFontEmbed[] | null,
+): Promise<string | null> {
   try {
+    const own = embedsFor(embeds, family);
+    if (own.length) return await embedBrandFonts(own);
     const [css] = await Promise.all([captionFontFaceCss(family), ensureCaptionFonts([family])]);
     return css;
   } catch {
@@ -746,6 +733,8 @@ export interface ImageTextSettings {
   readonly subScale: number | null;
   /** A face Continuum ships, named by the step; null reads the brand's (see {@link shippedFaces}). */
   readonly family: string | null;
+  /** Throw on a word the lines broke in two instead of drawing it (headless stills set this). */
+  readonly refuseSplit: boolean;
 }
 
 /** `textPlacementConfig`, already parsed by `parseActionConfig`, read as the shape it is. */
@@ -773,6 +762,7 @@ export const readSettings = (config: Record<string, unknown>): ImageTextSettings
   scale: typeof config.scale === 'number' && config.scale > 0 ? config.scale : 1,
   subScale: typeof config.subScale === 'number' && config.subScale > 0 ? config.subScale : null,
   family: typeof config.family === 'string' && config.family.trim() ? config.family : null,
+  refuseSplit: config.refuseSplit === true,
 });
 
 /**
@@ -1024,6 +1014,7 @@ export async function renderHeadline(args: {
   });
   const first = planned[0];
   if (!first) throw new Error('Nothing is connected to this action\'s "text-in" input');
+  if (args.settings.refuseSplit) refuseSplitWords(args.headline, planned.map(({ plan }) => plan));
 
   // Every treatment and plate first, then every glyph run: a lower paragraph's plate must never
   // be painted over the words of the one above it.
@@ -1038,6 +1029,20 @@ export async function renderHeadline(args: {
     svg: svgs[0] ?? '',
     canvas,
   };
+}
+
+/**
+ * Throw when any drawn word is no whole word of the text: a word the lines broke in two. Opt-in
+ * (`refuseSplit`) — a headless still refuses the frame and tries its next layout, where the canvas
+ * keeps drawing. `wordFitScale` should make this unreachable; this is what makes it certain.
+ */
+export function refuseSplitWords(text: string, plans: readonly PlacementPlan[]): void {
+  const whole = new Set(parseHeadline(text.replace(/\n/g, ' ')).flatMap((token) => token.text.split(/\s+/)));
+  const pieces = plans.flatMap((plan) =>
+    plan.lines.flatMap((line) => line.words.map((word) => word.text)),
+  );
+  const broken = pieces.filter((piece) => piece && !whole.has(piece));
+  if (broken.length) throw new Error(`layout_fault:split_word:${broken.join(' / ')}`);
 }
 
 function pinnedToRungZero(plan: PlacementPlan, minContrast: number): PlacementPlan {
@@ -1085,7 +1090,7 @@ export async function setImageText(args: {
 
   // The face has to be registered BEFORE anything measures: `createMeasurer` reads this
   // thread's font set at call time, and the ink is chosen over the box those metrics produce.
-  const fontFaceCss = await embedFace(faces.family);
+  const fontFaceCss = await embedFace(faces.family, brand.fontEmbeds);
 
   // A HAND-PICKED INK SKIPS THE LADDER ENTIRELY, and has to: every rung below exists to answer
   // "the brand did not carry the colour we asked for", which a literal hex cannot be. Running
