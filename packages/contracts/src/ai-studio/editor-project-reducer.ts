@@ -1044,6 +1044,9 @@ const applyTimelineCommand = (
         tracks: command.snapshot.tracks,
         transitions: command.snapshot.transitions,
         nestedSequences: command.snapshot.nestedSequences,
+        canvas: command.snapshot.canvas ?? project.canvas,
+        exportSettings: command.snapshot.exportSettings ?? project.exportSettings,
+        markers: command.snapshot.markers ?? project.markers,
       };
     case 'set_nested_sequence': {
       if (command.sequence.tracks.some((track) => track.kind === 'nested_sequence')) {
@@ -1261,6 +1264,11 @@ const applyTimelineCommand = (
       return {
         ...project,
         markers: project.markers.filter((marker) => marker.id !== command.markerId),
+      };
+    case 'set_markers':
+      return {
+        ...project,
+        markers: [...command.markers].sort((left, right) => left.timeSec - right.timeSec),
       };
     default:
       return project;

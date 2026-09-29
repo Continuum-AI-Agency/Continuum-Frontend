@@ -430,6 +430,12 @@ export const editorTextClipSchema = z
   .strict();
 export type EditorTextClip = z.infer<typeof editorTextClipSchema>;
 
+/**
+ * One spoken word of a caption clip. `startSec`/`endSec` are seconds from the CLIP's
+ * start, not the timeline's: moving or rippling a caption clip then needs no word
+ * rewrite, and trim/split (the reducer) cut words on the clip's own clock. Anything that
+ * draws captions adds `timelineStartSec`.
+ */
 export const editorCaptionWordSchema = z
   .object({
     text: z.string().min(1).max(500),
@@ -633,6 +639,19 @@ export const editorExportSettingsSchema = z
   .strict();
 export type EditorExportSettings = z.infer<typeof editorExportSettingsSchema>;
 
+export const editorMarkerSchema = z
+  .object({
+    id: editorIdSchema,
+    kind: z.enum(['timeline', 'beat']).default('timeline'),
+    timeSec: secondsSchema,
+    label: z.string().min(1).max(500),
+    color: colorSchema.optional(),
+    beatIndex: z.number().int().nonnegative().optional(),
+    barIndex: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+export type EditorMarker = z.infer<typeof editorMarkerSchema>;
+
 export const editorTimelineSnapshotSchema = z
   .object({
     sourceRevision: revisionNumberSchema,
@@ -641,6 +660,12 @@ export const editorTimelineSnapshotSchema = z
     tracks: z.array(editorTrackSchema).max(200),
     transitions: z.array(editorTransitionSchema).max(2_000),
     nestedSequences: z.array(editorNestedSequenceSchema).max(32).default([]),
+    // The rest of the editable state. Optional so snapshots written before these were
+    // captured still restore; when present, undoing a format change or a beat
+    // detection restores them with the timeline instead of leaving them behind.
+    canvas: editorCanvasSchema.optional(),
+    exportSettings: editorExportSettingsSchema.optional(),
+    markers: z.array(editorMarkerSchema).max(2_000).optional(),
   })
   .strict();
 export type EditorTimelineSnapshot = z.infer<typeof editorTimelineSnapshotSchema>;
@@ -897,18 +922,6 @@ export const editorProductionSchema = z
   });
 export type EditorProduction = z.infer<typeof editorProductionSchema>;
 
-export const editorMarkerSchema = z
-  .object({
-    id: editorIdSchema,
-    kind: z.enum(['timeline', 'beat']).default('timeline'),
-    timeSec: secondsSchema,
-    label: z.string().min(1).max(500),
-    color: colorSchema.optional(),
-    beatIndex: z.number().int().nonnegative().optional(),
-    barIndex: z.number().int().nonnegative().optional(),
-  })
-  .strict();
-export type EditorMarker = z.infer<typeof editorMarkerSchema>;
 
 export const editorProjectV2Schema = z
   .object({
@@ -1252,6 +1265,15 @@ export const editorCommandSchema = z.discriminatedUnion('commandType', [
       ...editorCommandMetadataShape,
       commandType: z.literal('remove_marker'),
       markerId: editorIdSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      // Replaces every marker at once: a beat grid is hundreds of markers, past what one
+      // batch of upsert_marker commands can carry atomically.
+      commandType: z.literal('set_markers'),
+      markers: z.array(editorMarkerSchema).max(2_000),
     })
     .strict(),
   z

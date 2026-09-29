@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import { videoEditorAgentFrameSchema } from '../streaming/video-editor';
 import {
   analyzePcmBeats,
+  applyEditorCommandBatch,
   createEditorProjectV2,
+  type EditorCommandBatch,
   type EditorProjectV2,
   editorExportSettingsSchema,
   editorProjectV2Schema,
@@ -159,4 +161,68 @@ test('the shared beat grid finds a steady 120 bpm click', () => {
   const analysis = analyzePcmBeats(samples, sampleRate);
   expect(Math.abs(analysis.bpm - 120)).toBeLessThanOrEqual(2);
   expect(analysis.markers[0]?.kind).toBe('beat');
+});
+
+describe('whole-state undo', () => {
+  const user = { actorId: 'user-1', actorType: 'user' as const };
+  const batch = (project: EditorProjectV2, commands: Record<string, unknown>[]) =>
+    applyEditorCommandBatch(project, {
+      batchId: `b-${project.revision}`,
+      projectId: project.projectId,
+      sequenceId: project.sequenceId,
+      idempotencyKey: `batch-${project.revision}-key`,
+      expectedRevision: project.revision,
+      expectedFingerprint: project.fingerprint,
+      atomic: true,
+      issuedAt: '2026-09-29T00:00:00.000Z',
+      actor: user,
+      commands: commands.map((command, index) => ({
+        ...command,
+        commandId: `c-${project.revision}-${index}`,
+        idempotencyKey: `command-${project.revision}-${index}`,
+        expectedRevision: project.revision,
+        issuedAt: '2026-09-29T00:00:00.000Z',
+        actor: user,
+      })),
+    } as EditorCommandBatch);
+
+  test('set_markers replaces every marker in one command, sorted', () => {
+    const beats = Array.from({ length: 300 }, (_, i) => ({
+      id: `beat:${i}`,
+      kind: 'beat' as const,
+      timeSec: (299 - i) * 0.5,
+      label: `Beat ${i + 1}`,
+    }));
+    const next = batch(withFootage(blank()), [{ commandType: 'set_markers', markers: beats }]);
+    expect(next.markers).toHaveLength(300);
+    expect(next.markers[0]?.timeSec).toBe(0);
+  });
+
+  test('restoring a snapshot brings back the format and the markers, not only the tracks', () => {
+    const before = withFootage(blank());
+    const after = batch(before, [
+      { commandType: 'set_project_metadata', canvas: { ...before.canvas, width: 1920, height: 1080 } },
+      { commandType: 'set_export_settings', exportSettings: exportSettingsForPreset('youtube') },
+      { commandType: 'set_markers', markers: [{ id: 'm', kind: 'beat', timeSec: 1, label: 'Beat 1' }] },
+    ]);
+    const restored = batch(after, [
+      {
+        commandType: 'restore_timeline_snapshot',
+        snapshot: {
+          sourceRevision: before.revision,
+          sourceFingerprint: before.fingerprint,
+          durationSec: before.durationSec,
+          tracks: before.tracks,
+          transitions: before.transitions,
+          nestedSequences: before.nestedSequences,
+          canvas: before.canvas,
+          exportSettings: before.exportSettings,
+          markers: before.markers,
+        },
+      },
+    ]);
+    expect(restored.canvas).toEqual(before.canvas);
+    expect(restored.exportSettings).toEqual(before.exportSettings);
+    expect(restored.markers).toEqual(before.markers);
+  });
 });
