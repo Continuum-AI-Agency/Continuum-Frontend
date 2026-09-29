@@ -184,6 +184,86 @@ describe('timeline editor client render executor', () => {
     ).rejects.toThrow('does not match its pinned version');
   });
 
+  it('draws caption words at clip start + word time and keeps a muted track in picture', async () => {
+    globalThis.fetch = (async () =>
+      new Response(new Blob(['media-bytes'], { type: 'video/mp4' }), {
+        status: 200,
+      })) as typeof fetch;
+    const created = createEditorProjectV2({
+      projectId: '00000000-0000-4000-8000-000000000333',
+      title: 'Clip-relative words',
+      width: 1080,
+      height: 1920,
+      now: '2026-09-29T12:00:00.000Z',
+    });
+    const project = editorProjectV2Schema.parse({
+      ...created,
+      durationSec: 4,
+      exportSettings: { ...created.exportSettings, captionMode: 'burn_in' },
+      tracks: [
+        {
+          id: 'v1',
+          name: 'V1',
+          order: 0,
+          kind: 'video',
+          muted: true,
+          clips: [
+            {
+              id: 'shot',
+              timelineStartSec: 0,
+              durationSec: 4,
+              kind: 'video',
+              source: {
+                sourceType: 'library_asset',
+                assetId: 'asset-shot',
+                renditionId: 'version-shot',
+              },
+            },
+          ],
+        },
+        {
+          id: 'captions',
+          name: 'Captions',
+          order: 1,
+          kind: 'caption',
+          clips: [
+            {
+              id: 'caption:late',
+              timelineStartSec: 2,
+              durationSec: 1.5,
+              kind: 'caption',
+              text: 'Late words',
+              language: 'en',
+              words: [
+                { text: 'Late', startSec: 0.25, endSec: 0.6 },
+                { text: 'words', startSec: 0.7, endSec: 1.2 },
+              ],
+              style: { fontFamily: 'Inter', fontSizePx: 64, fontWeight: 700, color: '#ffffff' },
+            },
+          ],
+        },
+      ],
+    });
+    const plan = await buildTimelineEditorRenderPlan({
+      project,
+      jobInputs: [
+        {
+          sourceId: 'shot',
+          sourceAssetId: 'asset-shot',
+          sourceRevision: 'version-shot',
+          storage: { bucket: 'media-library', path: 'brand/shot.bin' },
+        },
+      ],
+      signedUrls: new Map([['media-library\nbrand/shot.bin', 'https://signed.example/shot']]),
+      signal: new AbortController().signal,
+    });
+    expect(plan.items.map((item) => [item.itemId, item.muteAudio])).toEqual([['shot', true]]);
+    expect(plan.captionCues[0]?.words.map((word) => [word.startSec, word.endSec])).toEqual([
+      [2.25, 2.6],
+      [2.7, 3.2],
+    ]);
+  });
+
   it('preserves V2 transitions, layers, audio, captions, text, looks, and keyframes', async () => {
     globalThis.fetch = (async () =>
       new Response(new Blob(['media-bytes'], { type: 'video/mp4' }), {

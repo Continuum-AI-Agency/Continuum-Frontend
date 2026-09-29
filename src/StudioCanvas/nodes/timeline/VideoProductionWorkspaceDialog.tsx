@@ -1,37 +1,32 @@
 'use client';
 
 import {
-  type EditorCommand,
   type EditorGenerationKind,
-  type EditorProjectV2,
   type EditorTake,
-  editorCommandBatchSchema,
+  editorRenderBlockers,
+  type VideoEditorPoolAsset,
 } from '@continuum/contracts';
-import { ArrowLeft, Check, ImageIcon, Loader2, Sparkles, Waves } from 'lucide-react';
+import { ArrowLeft, Check, ImageIcon, Loader2, Scissors, Sparkles, Waves } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  applyVideoProjectCommands,
   enqueueVideoProjectRender,
   generateVideoCandidates,
-  getVideoProject,
   getVideoProjectSummary,
-  restoreVideoProjectTimeline,
 } from '@/lib/api/videoProjects.client';
 import { listAssetVersions } from '@/lib/library/versions';
 import { cn } from '@/lib/utils';
 import type { TimelineInputSource } from '../../types';
 import { buildBeatMarkers } from '../../utils/audio/beatAnalysis';
 import { EditorProjectV2Assembly } from './EditorProjectV2Assembly';
-import {
-  type EditorAssemblyOperation,
-  exactVersionPreviewUrl,
-} from './editorProjectV2AssemblyModel';
+import { type EditorCommandDraft, exactVersionPreviewUrl } from './editorProjectV2AssemblyModel';
+import { EditWorkspace } from './workspace/EditWorkspace';
+import { type EditorProjectController, useEditorProject } from './workspace/useEditorProject';
 
 const STAGES = [
   { id: 'style', label: 'Style' },
@@ -42,19 +37,11 @@ const STAGES = [
   { id: 'assembly', label: 'Assembly' },
 ] as const;
 type WorkspaceStage = (typeof STAGES)[number]['id'];
-type WithoutCommandMetadata<T> = T extends unknown
-  ? Omit<T, 'commandId' | 'idempotencyKey' | 'expectedRevision' | 'issuedAt' | 'actor'>
-  : never;
-type EditorCommandDraft = WithoutCommandMetadata<EditorCommand>;
-interface AssemblyHistoryEntry {
-  label: string;
-  beforeRevision: number;
-  afterRevision: number;
-}
-type UndoEntry = AssemblyHistoryEntry & { appliedFingerprint: string };
-type RedoEntry = AssemblyHistoryEntry & { redoFingerprint: string };
+type LoadedController = EditorProjectController & {
+  project: NonNullable<EditorProjectController['project']>;
+};
 
-const stageFor = (project: EditorProjectV2): WorkspaceStage => {
+const stageFor = (project: LoadedController['project']): WorkspaceStage => {
   const stage = project.production.workflowStage;
   if (stage.startsWith('style')) return 'style';
   if (stage.startsWith('frame')) return 'frames';
@@ -97,213 +84,117 @@ function TakePreview({ take, brandId }: { take: EditorTake; brandId: string }) {
   );
 }
 
+/** Assets the edit can draw on (graph wiring, project sources) as the stages' pool. */
+const poolSource = (asset: VideoEditorPoolAsset): TimelineInputSource => ({
+  nodeId: asset.assetId,
+  kind: asset.kind,
+  label: asset.title,
+  sourceAssetId: asset.assetId,
+  ...(asset.versionId ? { sourceVersionId: asset.versionId } : {}),
+  ...(asset.durationSec ? { durationSec: asset.durationSec } : {}),
+});
+
+/**
+ * `/studio/video/[projectId]`. Edit mode — the CapCut-style workspace — is the default.
+ * The production stages (Style → Assembly) are a second mode, offered only to projects
+ * that have shots, or when the canvas opened the motion editor.
+ */
 export function VideoStudioWorkspace({
   projectId,
   brandId,
-  pool,
   origin,
   view,
 }: {
   projectId: string;
   brandId: string;
-  pool: TimelineInputSource[];
   origin: 'canvas' | 'library';
   view?: 'assembly' | 'motion';
 }) {
-  const { show } = useToast();
-  const [project, setProject] = useState<EditorProjectV2 | null>(null);
-  const [activeStage, setActiveStage] = useState<WorkspaceStage>(
-    view || origin === 'canvas' ? 'assembly' : 'style',
+  const controller = useEditorProject(projectId);
+  const [mode, setMode] = useState<'edit' | 'production'>(
+    view === 'motion' ? 'production' : 'edit',
   );
-  const [busy, setBusy] = useState<string | null>(null);
+  const { project } = controller;
+  if (!project) {
+    return (
+      <div className="flex h-[var(--app-content-h)] items-center justify-center text-xs text-muted-foreground">
+        <Loader2 className="mr-2 size-4 animate-spin" /> Opening the editor…
+      </div>
+    );
+  }
+  const loaded = { ...controller, project };
+  const productionAvailable = project.production.shots.length > 0 || view === 'motion';
+  return mode === 'production' && productionAvailable ? (
+    <ProductionStages
+      controller={loaded}
+      brandId={brandId}
+      origin={origin}
+      view={view}
+      onOpenEdit={() => setMode('edit')}
+    />
+  ) : (
+    <EditWorkspace
+      controller={loaded}
+      brandId={brandId}
+      origin={origin}
+      productionAvailable={productionAvailable}
+      onOpenProduction={() => setMode('production')}
+    />
+  );
+}
+
+function ProductionStages({
+  controller,
+  brandId,
+  origin,
+  view,
+  onOpenEdit,
+}: {
+  controller: LoadedController;
+  brandId: string;
+  origin: 'canvas' | 'library';
+  view?: 'assembly' | 'motion';
+  onOpenEdit: () => void;
+}) {
+  const { show } = useToast();
+  const { project, refresh, commit: commitCommands, runOp } = controller;
+  const projectId = project.projectId;
+  const [activeStage, setActiveStage] = useState<WorkspaceStage>(() =>
+    view ? 'assembly' : stageFor(project),
+  );
+  const [localBusy, setBusy] = useState<string | null>(null);
+  const busy = localBusy ?? controller.busy;
+  const [pool, setPool] = useState<TimelineInputSource[]>([]);
   const [scriptText, setScriptText] = useState('');
   const [styleText, setStyleText] = useState('');
   const [narrationText, setNarrationText] = useState('');
   const [musicPrompt, setMusicPrompt] = useState('');
   const [bpm, setBpm] = useState('120');
   const [beatOffset, setBeatOffset] = useState('0');
-  const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
-  const [redoStack, setRedoStack] = useState<RedoEntry[]>([]);
 
-  const refresh = useCallback(async () => {
-    const next = await getVideoProject(projectId);
-    setProject(next);
-    setScriptText(next.production.sourceScript ?? '');
-    setStyleText(next.production.styleContract?.lockedText ?? '');
-    setNarrationText(
-      next.production.soundPlan?.narrationText ?? next.production.sourceScript ?? '',
-    );
-    setMusicPrompt(next.production.soundPlan?.musicPrompt ?? '');
-    setBpm(String(next.production.soundPlan?.bpm ?? 120));
-    setBeatOffset(String(next.production.soundPlan?.beatOffsetSec ?? 0));
-    setActiveStage((current) =>
-      current === 'style' && next.revision === 0 ? stageFor(next) : current,
-    );
-    return next;
-  }, [projectId]);
+  // The drafts follow the project whenever a new revision lands — ours or anyone's.
+  const { production } = project;
+  useEffect(() => {
+    setScriptText(production.sourceScript ?? '');
+    setStyleText(production.styleContract?.lockedText ?? '');
+    setNarrationText(production.soundPlan?.narrationText ?? production.sourceScript ?? '');
+    setMusicPrompt(production.soundPlan?.musicPrompt ?? '');
+    setBpm(String(production.soundPlan?.bpm ?? 120));
+    setBeatOffset(String(production.soundPlan?.beatOffsetSec ?? 0));
+  }, [production]);
 
   useEffect(() => {
-    void refresh().catch((error) =>
-      show({
-        title: 'Could not open video production',
-        description: error instanceof Error ? error.message : 'Project loading failed.',
-        variant: 'error',
-      }),
-    );
-    const interval = window.setInterval(() => void refresh().catch(() => undefined), 3_000);
-    return () => window.clearInterval(interval);
-  }, [refresh, show]);
-
-  const commitCommands = useCallback(
-    async (commands: EditorCommandDraft[], label: string) => {
-      if (!project) return;
-      const issuedAt = new Date().toISOString();
-      const batchId = crypto.randomUUID();
-      const actor = { actorId: 'current-user', actorType: 'user' as const };
-      const batch = editorCommandBatchSchema.parse({
-        batchId,
-        projectId: project.projectId,
-        sequenceId: project.sequenceId,
-        idempotencyKey: `ui:${batchId}`,
-        expectedRevision: project.revision,
-        expectedFingerprint: project.fingerprint,
-        atomic: true,
-        issuedAt,
-        actor,
-        commands: commands.map((command, index) => {
-          const commandId = crypto.randomUUID();
-          return {
-            ...command,
-            commandId,
-            idempotencyKey: `ui-command:${batchId}:${index}:${commandId}`,
-            expectedRevision: project.revision,
-            issuedAt,
-            actor,
-          };
-        }),
-      });
-      setBusy(label);
-      try {
-        const next = await applyVideoProjectCommands(batch);
-        setProject(next);
-        setScriptText(next.production.sourceScript ?? '');
-        setStyleText(next.production.styleContract?.lockedText ?? '');
-        setNarrationText(next.production.soundPlan?.narrationText ?? '');
-        setMusicPrompt(next.production.soundPlan?.musicPrompt ?? '');
-        return next;
-      } finally {
-        setBusy(null);
-      }
-    },
-    [project],
-  );
+    void runOp('get_pool', {})
+      .then((output) => setPool(output.assets.map(poolSource)))
+      .catch(() => setPool([]));
+  }, [runOp]);
 
   const commit = useCallback(
     (command: EditorCommandDraft) => commitCommands([command], command.commandType),
     [commitCommands],
   );
 
-  const applyAssemblyOperation = useCallback(
-    async (operation: EditorAssemblyOperation) => {
-      if (busy || !project) return;
-      const beforeRevision = project.revision;
-      try {
-        const next = await commitCommands(operation.forward, operation.label);
-        if (!next) return;
-        setUndoStack((current) => [
-          ...current,
-          {
-            label: operation.label,
-            beforeRevision,
-            afterRevision: next.revision,
-            appliedFingerprint: next.fingerprint,
-          },
-        ]);
-        setRedoStack([]);
-      } catch (error) {
-        show({
-          title: 'Assembly edit failed',
-          description: error instanceof Error ? error.message : 'The project could not be updated.',
-          variant: 'error',
-        });
-      }
-    },
-    [busy, commitCommands, project, show],
-  );
-
-  const restoreTimelineRevision = useCallback(
-    async (restoreRevision: number, label: string) => {
-      if (!project) return;
-      setBusy(label);
-      try {
-        const next = await restoreVideoProjectTimeline(project.projectId, {
-          expectedRevision: project.revision,
-          expectedFingerprint: project.fingerprint,
-          restoreRevision,
-          idempotencyKey: `ui-restore:${project.projectId}:${project.revision}:${restoreRevision}:${crypto.randomUUID()}`,
-        });
-        setProject(next);
-        setScriptText(next.production.sourceScript ?? '');
-        setStyleText(next.production.styleContract?.lockedText ?? '');
-        return next;
-      } finally {
-        setBusy(null);
-      }
-    },
-    [project],
-  );
-
-  const undoAssembly = useCallback(async () => {
-    const entry = undoStack.at(-1);
-    if (!entry || !project || busy) return;
-    if (entry.appliedFingerprint !== project.fingerprint) {
-      show({
-        title: 'Undo needs the latest revision',
-        description: 'The project changed after this edit. Refresh before making another change.',
-        variant: 'warning',
-      });
-      return;
-    }
-    try {
-      const next = await restoreTimelineRevision(entry.beforeRevision, `Undo ${entry.label}`);
-      if (!next) return;
-      setUndoStack((current) => current.slice(0, -1));
-      setRedoStack((current) => [...current, { ...entry, redoFingerprint: next.fingerprint }]);
-    } catch (error) {
-      show({
-        title: 'Undo failed',
-        description: error instanceof Error ? error.message : 'The edit could not be reversed.',
-        variant: 'error',
-      });
-    }
-  }, [busy, project, restoreTimelineRevision, show, undoStack]);
-
-  const redoAssembly = useCallback(async () => {
-    const entry = redoStack.at(-1);
-    if (!entry || !project || busy) return;
-    if (entry.redoFingerprint !== project.fingerprint) {
-      show({
-        title: 'Redo needs the latest revision',
-        description: 'The project changed after undo. Redo was left unapplied.',
-        variant: 'warning',
-      });
-      return;
-    }
-    try {
-      const next = await restoreTimelineRevision(entry.afterRevision, `Redo ${entry.label}`);
-      if (!next) return;
-      setRedoStack((current) => current.slice(0, -1));
-      setUndoStack((current) => [...current, { ...entry, appliedFingerprint: next.fingerprint }]);
-    } catch (error) {
-      show({
-        title: 'Redo failed',
-        description: error instanceof Error ? error.message : 'The edit could not be replayed.',
-        variant: 'error',
-      });
-    }
-  }, [busy, project, redoStack, restoreTimelineRevision, show]);
-
-  const queueRender = useCallback(() => {
+  const queueRender = () => {
     setBusy('render');
     void enqueueVideoProjectRender(projectId)
       .then(() => {
@@ -322,47 +213,38 @@ export function VideoStudioWorkspace({
         }),
       )
       .finally(() => setBusy(null));
-  }, [projectId, refresh, show]);
+  };
 
-  const generate = useCallback(
-    async (kind: EditorGenerationKind, shotId?: string) => {
-      setBusy(`${kind}:${shotId ?? 'project'}`);
-      try {
-        await generateVideoCandidates({ projectId, kind, shotId });
-        show({
-          title: 'Generation queued',
-          description: 'Candidates will appear here automatically.',
-        });
-        await refresh();
-      } catch (error) {
-        show({
-          title: 'Generation blocked',
-          description: error instanceof Error ? error.message : 'The request could not start.',
-          variant: 'warning',
-        });
-      } finally {
-        setBusy(null);
-      }
-    },
-    [projectId, refresh, show],
-  );
+  const generate = async (kind: EditorGenerationKind, shotId?: string) => {
+    setBusy(`${kind}:${shotId ?? 'project'}`);
+    try {
+      await generateVideoCandidates({ projectId, kind, shotId });
+      show({
+        title: 'Generation queued',
+        description: 'Candidates will appear here automatically.',
+      });
+      await refresh();
+    } catch (error) {
+      show({
+        title: 'Generation blocked',
+        description: error instanceof Error ? error.message : 'The request could not start.',
+        variant: 'warning',
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
 
-  const pinnedPool = useMemo(
-    () => pool.filter((source) => source.sourceAssetId && source.sourceVersionId),
-    [pool],
-  );
-  const counts = useMemo(() => {
-    const shots = project?.production.shots ?? [];
-    return {
-      shots: shots.length,
-      frames: shots.filter((shot) => shot.selection.frameTakeId).length,
-      motion: shots.filter((shot) => shot.selection.motionDraftTakeId).length,
-      masters: shots.filter((shot) => shot.selection.motionMasterTakeId).length,
-    };
-  }, [project]);
+  const pinnedPool = pool.filter((source) => source.sourceAssetId && source.sourceVersionId);
+  const counts = {
+    shots: production.shots.length,
+    frames: production.shots.filter((shot) => shot.selection.frameTakeId).length,
+    motion: production.shots.filter((shot) => shot.selection.motionDraftTakeId).length,
+    masters: production.shots.filter((shot) => shot.selection.motionMasterTakeId).length,
+  };
 
   const addShot = () => {
-    const order = project?.production.shots.length ?? 0;
+    const order = production.shots.length;
     void commit({
       commandType: 'upsert_shot',
       shot: {
@@ -381,7 +263,6 @@ export function VideoStudioWorkspace({
     });
   };
 
-  if (!project) return null;
   const style = project.production.styleContract;
   const soundPlan = project.production.soundPlan;
   const soundDraft = (status: 'draft' | 'approved' = 'draft') => ({
@@ -501,6 +382,9 @@ export function VideoStudioWorkspace({
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline">{project.production.workflowStage.replaceAll('_', ' ')}</Badge>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={onOpenEdit}>
+            <Scissors className="size-3.5" /> Edit
+          </Button>
           <Link
             href={origin === 'library' ? '/library' : '/ai-studio'}
             className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-1.5')}
@@ -852,13 +736,13 @@ export function VideoStudioWorkspace({
             // sources is what made a connected video invisible in Assembly (#294).
             pool={pool}
             busy={Boolean(busy)}
-            canUndo={undoStack.at(-1)?.appliedFingerprint === project.fingerprint}
-            canRedo={redoStack.at(-1)?.redoFingerprint === project.fingerprint}
-            canRender={counts.shots > 0 && counts.masters === counts.shots}
+            canUndo={controller.canUndo}
+            canRedo={controller.canRedo}
+            renderBlockers={editorRenderBlockers(project)}
             initialTimelineMode={view === 'motion' ? 'motion' : 'edit'}
-            onApply={(operation) => void applyAssemblyOperation(operation)}
-            onUndo={() => void undoAssembly()}
-            onRedo={() => void redoAssembly()}
+            onApply={(operation) => void controller.apply(operation)}
+            onUndo={() => void controller.undo()}
+            onRedo={() => void controller.redo()}
             onRender={queueRender}
           />
         ) : null}

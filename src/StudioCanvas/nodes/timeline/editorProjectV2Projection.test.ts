@@ -307,6 +307,40 @@ describe('projectTimelineDocumentToEditorProjectV2', () => {
     expect(warnings).toEqual([]);
   });
 
+  test('writes caption words from the clip start, not the timeline start', () => {
+    const { project } = projectTimelineDocumentToEditorProjectV2({
+      pool: canvasPool,
+      sourceScope: 'canvas',
+      projectId: 'canvas-room-1',
+      document: {
+        ...timelineFixture(),
+        captionCues: [
+          {
+            id: 'late',
+            startSec: 3,
+            endSec: 4,
+            words: [
+              { text: 'Late', startSec: 3.1, endSec: 3.4 },
+              { text: 'cue', startSec: 3.5, endSec: 3.9 },
+            ],
+          },
+        ],
+      },
+    });
+    const clip = project.tracks.find((track) => track.kind === 'caption')?.clips[0];
+    expect(clip?.timelineStartSec).toBe(3);
+    expect(
+      clip?.kind === 'caption'
+        ? clip.words.map((word) =>
+            [word.startSec, word.endSec].map((sec) => Math.round(sec * 10) / 10),
+          )
+        : [],
+    ).toEqual([
+      [0.1, 0.4],
+      [0.5, 0.9],
+    ]);
+  });
+
   test('content-addresses the fallback revision and reports missing pool sources', () => {
     const first = projectTimelineDocumentToEditorProjectV2({
       document: timelineFixture(),

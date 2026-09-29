@@ -10,25 +10,14 @@ import {
   type EditorProjectV2,
   editorProjectV2Schema,
 } from '@continuum/contracts';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import type { TimelineInputSource } from '../../types';
 import { EditorProjectV2Assembly } from './EditorProjectV2Assembly';
 import type { EditorAssemblyOperation } from './editorProjectV2AssemblyModel';
-import { VideoProductionWorkspaceDialog } from './VideoProductionWorkspaceDialog';
 
 mock.module('@/lib/library/versions', () => ({ listAssetVersions: async () => [] }));
-mock.module('@/lib/api/videoProjects.client', () => ({
-  getVideoProject: async () => assemblyProject(),
-  getVideoProjectSummary: async () => {
-    throw new Error('the media bin must not need a summary to list a wired clip');
-  },
-  applyVideoProjectCommands: async () => assemblyProject(),
-  enqueueVideoProjectRender: async () => undefined,
-  generateVideoCandidates: async () => undefined,
-  restoreVideoProjectTimeline: async () => assemblyProject(),
-}));
-
 afterEach(cleanup);
 
 const noop = () => {};
@@ -43,13 +32,6 @@ const emptyProject = (): EditorProjectV2 =>
       now: '2026-09-01T00:00:00.000Z',
     }),
   );
-
-/** The stage the record's screenshot was taken on, with nothing produced yet. */
-const assemblyProject = (): EditorProjectV2 =>
-  editorProjectV2Schema.parse({
-    ...emptyProject(),
-    production: { ...emptyProject().production, workflowStage: 'assembly' },
-  });
 
 // A clip straight off the canvas: an edge into the node, no Library pin. This is the
 // shape the record was filed against.
@@ -115,21 +97,23 @@ const projectWithClip = (): EditorProjectV2 => {
 
 const renderAssembly = (applied: EditorAssemblyOperation[], project = emptyProject()) =>
   render(
-    <ToastProvider>
-      <EditorProjectV2Assembly
-        project={project}
-        brandId="00000000-0000-4000-8000-0000000000b2"
-        pool={[wiredClip]}
-        busy={false}
-        canUndo={false}
-        canRedo={false}
-        canRender={false}
-        onApply={(operation) => applied.push(operation)}
-        onUndo={noop}
-        onRedo={noop}
-        onRender={noop}
-      />
-    </ToastProvider>,
+    <QueryClientProvider client={new QueryClient()}>
+      <ToastProvider>
+        <EditorProjectV2Assembly
+          project={project}
+          brandId="00000000-0000-4000-8000-0000000000b2"
+          pool={[wiredClip]}
+          busy={false}
+          canUndo={false}
+          canRedo={false}
+          renderBlockers={['Every shot needs a human-approved 1080p master.']}
+          onApply={(operation) => applied.push(operation)}
+          onUndo={noop}
+          onRedo={noop}
+          onRender={noop}
+        />
+      </ToastProvider>
+    </QueryClientProvider>,
   );
 
 describe('Assembly media bin', () => {
@@ -156,23 +140,5 @@ describe('Assembly media bin', () => {
   it('previews a deferred source shader on the durable project clip', () => {
     renderAssembly([], projectWithClip());
     expect(screen.getByLabelText('GPU shader preview')).toBeDefined();
-  });
-});
-
-describe('the Video Editor production workspace', () => {
-  it('hands the media bin every connected source, not only the Library-pinned ones', async () => {
-    render(
-      <ToastProvider>
-        <VideoProductionWorkspaceDialog
-          projectId="00000000-0000-4000-8000-000000000294"
-          brandId="00000000-0000-4000-8000-0000000000b2"
-          pool={[wiredClip]}
-          open
-          onOpenChange={noop}
-        />
-      </ToastProvider>,
-    );
-
-    expect(await screen.findByText('bench-clip.mp4')).toBeDefined();
   });
 });

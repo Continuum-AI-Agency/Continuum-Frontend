@@ -5,12 +5,8 @@ import {
   type EditorClip,
   type EditorOverlayClip,
   type EditorProjectV2,
-  type EditorTextClip,
   type EditorTrack,
-  type EditorTransition,
   type EditorVideoClip,
-  MOTION_BEZIER_PRESETS,
-  MOTION_SPRING_PRESETS,
   motionRecipeFromClip,
   parentPositionDelta,
   parseMotionRecipe,
@@ -24,29 +20,26 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { Diamond, Plus, Redo2, Trash2, Type, Undo2 } from 'lucide-react';
-import { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { Plus, Redo2, Undo2 } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ColorField } from '@/components/ui/color-field';
-import { Input } from '@/components/ui/input';
-import { NumberScrubField } from '@/components/ui/number-field';
-import { SliderField } from '@/components/ui/slider-field';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useElementMutations, useElements } from '@/lib/ai-studio/elements';
 import { clipEffectSpecFromEditorClip } from '@/lib/client-render/executors/timelineEditor';
 import { captionAnimationFromEditorId, captionMotionTransform } from '@/lib/clips/captionAnimation';
-import { listAssetVersions } from '@/lib/library/versions';
 import type { TimelineInputSource, TimelineItem } from '../../types';
 import { clipEffectsToCss, type ResolvedTextOverlay } from '../../utils/render/effectSpec';
 import { mergeClipShaderEffects } from '../../utils/render/shaderStack';
 import { AUDIO_DROP_ID, AudioTracks } from './AudioTracks';
+import { MediaOverlayEditor } from './assembly/MediaOverlayEditor';
+import { TextOverlayEditor } from './assembly/TextOverlayEditor';
+import { TransitionEditor } from './assembly/TransitionEditor';
 import {
   applyAnimationStyleOperation,
   applyMotionRecipeOperation,
   applyNestedSequenceEdit,
   type EditorAssemblyOperation,
   editorProjectV2CommentPlacements,
-  exactVersionPreviewUrl,
   orderedVideoClips,
   patchAudioOperation,
   placeAudioOperation,
@@ -54,31 +47,27 @@ import {
   precomposeClipsOperation,
   primaryVideoTrack,
   removeClipOperation,
-  removeTransitionOperation,
   reorderVideoOperation,
-  setClipParentOperation,
   splitClipOperation,
   trimAnimationStyleOperation,
   trimClipOperation,
   upsertKeyframeOperation,
   upsertOverlayOperation,
-  upsertTextOperation,
-  upsertTransitionOperation,
   videoLayout,
   viewProjectForSequence,
 } from './editorProjectV2AssemblyModel';
 import { BIN_DRAG_PREFIX, MediaBin } from './MediaBin';
 import { probeAudioDuration, probeVideoDuration } from './mediaProbe';
-import { KeyframeDiamond } from './motion/KeyframeDiamond';
 import { MotionPathOverlay } from './motion/MotionPathOverlay';
 import { MotionTimeline } from './motion/MotionTimeline';
-import { currentPropertyValue, type MotionPropertyName } from './motion/motionLayers';
+import { currentPropertyValue } from './motion/motionLayers';
 import { nestedPreviewGroups } from './nestedSequencePreview';
 import type { OverlayPreviewLayer } from './overlayPreview';
 import { CLIP_DRAG_PREFIX } from './TimelineClipBlock';
 import { TimelineCommentLayer } from './TimelineCommentLayer';
 import { TimelinePreview } from './TimelinePreview';
 import { TIMELINE_DROP_ID, TimelineTrack } from './TimelineTrack';
+import { useExactPreviewUrls } from './useClipPreviewUrls';
 import { useEditorProjectV2AudioPreview } from './useEditorProjectV2AudioPreview';
 import { type ClipMedia, usePlayheadPlayback } from './usePlayheadPlayback';
 
@@ -87,12 +76,6 @@ const PX_PER_SEC = 80;
 type AudioTrack = Extract<EditorTrack, { kind: 'audio' }>;
 type OverlayTrack = Extract<EditorTrack, { kind: 'overlay' }>;
 type TextTrack = Extract<EditorTrack, { kind: 'text' }>;
-
-function sourceCoordinates(clip: EditorVideoClip | EditorAudioClip | EditorOverlayClip) {
-  const source = clip.source;
-  if (source.sourceType !== 'library_asset' || !source.renditionId) return null;
-  return { assetId: source.assetId, versionId: source.renditionId };
-}
 
 function poolSourceForClip(
   clip: EditorVideoClip | EditorAudioClip | EditorOverlayClip,
@@ -118,949 +101,6 @@ const probeSourceDuration = (
     .then((seconds) => (seconds > 0 ? seconds : undefined))
     .catch(() => undefined);
 
-/** Clips placed straight off the canvas preview through the media bin's own URL. */
-function allProjectTracks(project: EditorProjectV2): EditorProjectV2['tracks'] {
-  return [...project.tracks, ...project.nestedSequences.flatMap((sequence) => sequence.tracks)];
-}
-
-function canvasNodeClipIds(project: EditorProjectV2): Array<{ clipId: string; nodeId: string }> {
-  return allProjectTracks(project).flatMap((track) =>
-    track.clips.flatMap((clip) =>
-      'source' in clip && clip.source.sourceType === 'canvas_node'
-        ? [{ clipId: clip.id, nodeId: clip.source.nodeId }]
-        : [],
-    ),
-  );
-}
-
-function useExactPreviewUrls(
-  project: EditorProjectV2,
-  brandId: string,
-  pool: TimelineInputSource[],
-): ReadonlyMap<string, string> {
-  const [urls, setUrls] = useState<Map<string, string>>(new Map());
-  const coordinates = useMemo(() => {
-    const values = allProjectTracks(project).flatMap((track) =>
-      track.clips.flatMap((clip) => {
-        if (clip.kind !== 'video' && clip.kind !== 'audio' && clip.kind !== 'overlay') return [];
-        const source = sourceCoordinates(clip);
-        return source ? [{ clipId: clip.id, ...source }] : [];
-      }),
-    );
-    return values;
-  }, [project]);
-  const canvasClips = useMemo(() => canvasNodeClipIds(project), [project]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const poolUrls = new Map<string, string>();
-    for (const canvasClip of canvasClips) {
-      const url = pool.find((candidate) => candidate.nodeId === canvasClip.nodeId)?.previewUrl;
-      if (url) poolUrls.set(canvasClip.clipId, url);
-    }
-    for (const coordinate of coordinates) {
-      const source = pool.find(
-        (candidate) =>
-          candidate.sourceAssetId === coordinate.assetId &&
-          candidate.sourceVersionId === coordinate.versionId &&
-          candidate.previewUrl,
-      );
-      if (source?.previewUrl) poolUrls.set(coordinate.clipId, source.previewUrl);
-    }
-    setUrls(poolUrls);
-
-    const assets = [...new Set(coordinates.map((coordinate) => coordinate.assetId))];
-    void Promise.all(
-      assets.map(async (assetId) => ({
-        assetId,
-        versions: await listAssetVersions({ brandId, assetId }),
-      })),
-    )
-      .then((results) => {
-        if (cancelled) return;
-        const byAsset = new Map(
-          results.map((result) => [result.assetId, result.versions] as const),
-        );
-        setUrls((current) => {
-          const next = new Map(current);
-          for (const coordinate of coordinates) {
-            const url = exactVersionPreviewUrl(
-              byAsset.get(coordinate.assetId) ?? [],
-              coordinate.versionId,
-            );
-            if (url) next.set(coordinate.clipId, url);
-          }
-          return next;
-        });
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [brandId, canvasClips, coordinates, pool]);
-
-  return urls;
-}
-
-function TextOverlayEditor({
-  project,
-  textTrack,
-  playheadSec,
-  onApply,
-}: {
-  project: EditorProjectV2;
-  textTrack?: TextTrack;
-  playheadSec: number;
-  onApply: (operation: EditorAssemblyOperation) => void;
-}) {
-  const [draft, setDraft] = useState('');
-  const addText = () => {
-    if (!draft.trim()) return;
-    onApply(
-      upsertTextOperation(project, {
-        text: draft,
-        timelineStartSec: playheadSec,
-        durationSec: Math.min(3, Math.max(0.1, project.durationSec - playheadSec)),
-      }),
-    );
-    setDraft('');
-  };
-
-  return (
-    <section className="space-y-2 rounded-lg border border-border/60 bg-card p-3">
-      <div className="flex items-center gap-2">
-        <Type className="size-3.5 text-muted-foreground" />
-        <h3 className="text-xs font-semibold">Text overlays</h3>
-      </div>
-      <div className="flex gap-2">
-        <Input
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder="Add text at the playhead"
-          className="h-8 text-xs"
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') addText();
-          }}
-        />
-        <Button size="sm" className="h-8" onClick={addText} disabled={!draft.trim()}>
-          <Plus className="size-3.5" /> Add
-        </Button>
-      </div>
-      <div className="max-h-52 space-y-2 overflow-y-auto">
-        {(textTrack?.clips ?? []).map((clip) => (
-          <TextOverlayRow
-            key={clip.id}
-            project={project}
-            trackId={textTrack?.id as string}
-            clip={clip}
-            onApply={onApply}
-          />
-        ))}
-        {!textTrack?.clips.length ? (
-          <p className="rounded-md border border-dashed p-3 text-center text-2xs text-muted-foreground">
-            No text overlays yet.
-          </p>
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
-function TextOverlayRow({
-  project,
-  trackId,
-  clip,
-  onApply,
-}: {
-  project: EditorProjectV2;
-  trackId: string;
-  clip: EditorTextClip;
-  onApply: (operation: EditorAssemblyOperation) => void;
-}) {
-  const colorInputId = useId();
-  const [text, setText] = useState(clip.text);
-  const [start, setStart] = useState(clip.timelineStartSec);
-  const [duration, setDuration] = useState(clip.durationSec);
-  const [fontSize, setFontSize] = useState(clip.style.fontSizePx);
-  const [color, setColor] = useState(clip.style.color);
-  const [x, setX] = useState(clip.transform.position.x);
-  const [y, setY] = useState(clip.transform.position.y);
-  const [animationIn, setAnimationIn] = useState(clip.animationIn ?? 'none');
-  const [animationOut, setAnimationOut] = useState(clip.animationOut ?? 'none');
-  useEffect(() => {
-    setText(clip.text);
-    setStart(clip.timelineStartSec);
-    setDuration(clip.durationSec);
-    setFontSize(clip.style.fontSizePx);
-    setColor(clip.style.color);
-    setX(clip.transform.position.x);
-    setY(clip.transform.position.y);
-    setAnimationIn(clip.animationIn ?? 'none');
-    setAnimationOut(clip.animationOut ?? 'none');
-  }, [clip]);
-  return (
-    <div className="space-y-2 rounded-md border border-border/50 bg-muted/20 p-2">
-      <Input
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-        className="h-8 text-xs"
-      />
-      <div className="grid grid-cols-2 gap-2">
-        <NumberScrubField
-          min={0}
-          step={0.1}
-          label="At"
-          value={start}
-          max={project.durationSec}
-          onChange={setStart}
-        />
-        <NumberScrubField
-          step={0.1}
-          label="Duration"
-          value={duration}
-          min={0.1}
-          onChange={setDuration}
-        />
-        <NumberScrubField
-          label="Size"
-          value={fontSize}
-          min={1}
-          max={2000}
-          step={1}
-          onChange={setFontSize}
-        />
-        <div className="space-y-1 text-3xs text-muted-foreground">
-          <span>Color</span>
-          <ColorField id={colorInputId} label="Text" value={color} onChange={setColor} />
-        </div>
-        <SliderField
-          format={{ style: 'percent', maximumFractionDigits: 0 }}
-          label="X"
-          max={1}
-          min={0}
-          step={0.05}
-          value={x}
-          onChange={setX}
-        />
-        <SliderField
-          format={{ style: 'percent', maximumFractionDigits: 0 }}
-          label="Y"
-          max={1}
-          min={0}
-          step={0.05}
-          value={y}
-          onChange={setY}
-        />
-        <label className="space-y-1 text-3xs text-muted-foreground">
-          <span>Animate in</span>
-          <select
-            aria-label="Animate text in"
-            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground"
-            value={animationIn}
-            onChange={(event) => setAnimationIn(event.target.value)}
-          >
-            <option value="none">None</option>
-            <option value="pop">Pop</option>
-            <option value="scaleIn">Scale in</option>
-            <option value="floatIn">Float in</option>
-          </select>
-        </label>
-        <label className="space-y-1 text-3xs text-muted-foreground">
-          <span>Animate out</span>
-          <select
-            aria-label="Animate text out"
-            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground"
-            value={animationOut}
-            onChange={(event) => setAnimationOut(event.target.value)}
-          >
-            <option value="none">None</option>
-            <option value="pop">Pop</option>
-            <option value="scaleIn">Scale out</option>
-            <option value="floatIn">Float out</option>
-          </select>
-        </label>
-      </div>
-      <div className="flex justify-end gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7"
-          onClick={() => onApply(removeClipOperation(project, trackId, clip.id))}
-          aria-label="Delete text overlay"
-        >
-          <Trash2 className="size-3.5" />
-        </Button>
-        <Button
-          size="sm"
-          className="h-7 text-xs"
-          disabled={!text.trim()}
-          onClick={() =>
-            onApply(
-              upsertTextOperation(project, {
-                clipId: clip.id,
-                text,
-                timelineStartSec: start,
-                durationSec: duration,
-                fontSizePx: fontSize,
-                color,
-                x,
-                y,
-                animationIn: animationIn as 'none' | 'pop' | 'scaleIn' | 'floatIn',
-                animationOut: animationOut as 'none' | 'pop' | 'scaleIn' | 'floatIn',
-              }),
-            )
-          }
-        >
-          Save
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function MediaOverlayEditor({
-  project,
-  overlayTrack,
-  urls,
-  playheadSec,
-  autoKey,
-  onApply,
-}: {
-  project: EditorProjectV2;
-  overlayTrack?: OverlayTrack;
-  urls: ReadonlyMap<string, string>;
-  playheadSec: number;
-  autoKey: boolean;
-  onApply: (operation: EditorAssemblyOperation) => void;
-}) {
-  return (
-    <section className="space-y-2 rounded-lg border border-border/60 bg-card p-3">
-      <h3 className="text-xs font-semibold">Media overlays</h3>
-      {(overlayTrack?.clips ?? []).map((clip) => (
-        <MediaOverlayRow
-          key={clip.id}
-          project={project}
-          trackId={overlayTrack?.id as string}
-          clip={clip}
-          previewUrl={urls.get(clip.id)}
-          playheadSec={playheadSec}
-          autoKey={autoKey}
-          onApply={onApply}
-        />
-      ))}
-      {!overlayTrack?.clips.length ? (
-        <p className="rounded-md border border-dashed p-3 text-center text-2xs text-muted-foreground">
-          Add a pinned image or video from the media bin.
-        </p>
-      ) : null}
-    </section>
-  );
-}
-
-function writeOverlayKeyframe(
-  project: EditorProjectV2,
-  trackId: string,
-  clip: EditorOverlayClip,
-  property: MotionPropertyName,
-  timeSec: number,
-  value: EditorOverlayClip['keyframes'][number]['value'],
-) {
-  return upsertKeyframeOperation(project, {
-    trackId,
-    clipId: clip.id,
-    keyframe: {
-      id: crypto.randomUUID(),
-      property,
-      timeSec,
-      value,
-      interpolation: 'linear',
-    },
-  });
-}
-
-function MediaOverlayRow({
-  project,
-  trackId,
-  clip,
-  previewUrl,
-  playheadSec,
-  autoKey,
-  onApply,
-}: {
-  project: EditorProjectV2;
-  trackId: string;
-  clip: EditorOverlayClip;
-  previewUrl?: string;
-  playheadSec: number;
-  autoKey: boolean;
-  onApply: (operation: EditorAssemblyOperation) => void;
-}) {
-  const [start, setStart] = useState(clip.timelineStartSec);
-  const [duration, setDuration] = useState(clip.durationSec);
-  const [x, setX] = useState(clip.transform.position.x);
-  const [y, setY] = useState(clip.transform.position.y);
-  const [scale, setScale] = useState(clip.transform.scaleX);
-  const [rotation, setRotation] = useState(clip.transform.rotationDeg);
-  const [rotateX, setRotateX] = useState(clip.transform.rotateXDeg ?? 0);
-  const [rotateY, setRotateY] = useState(clip.transform.rotateYDeg ?? 0);
-  const [perspective, setPerspective] = useState(clip.transform.perspective ?? 0);
-  const [anchorX, setAnchorX] = useState(clip.transform.anchorX);
-  const [opacity, setOpacity] = useState(clip.transform.opacity);
-  useEffect(() => {
-    setStart(clip.timelineStartSec);
-    setDuration(clip.durationSec);
-    setX(clip.transform.position.x);
-    setY(clip.transform.position.y);
-    setScale(clip.transform.scaleX);
-    setRotation(clip.transform.rotationDeg);
-    setRotateX(clip.transform.rotateXDeg ?? 0);
-    setRotateY(clip.transform.rotateYDeg ?? 0);
-    setPerspective(clip.transform.perspective ?? 0);
-    setAnchorX(clip.transform.anchorX);
-    setOpacity(clip.transform.opacity);
-  }, [clip]);
-  const localSec = Math.max(0, Math.min(clip.durationSec, playheadSec - clip.timelineStartSec));
-  const playheadOnClip =
-    playheadSec >= clip.timelineStartSec && playheadSec <= clip.timelineStartSec + clip.durationSec;
-  const opacityKeyed = clip.keyframes.some(
-    (keyframe) =>
-      keyframe.property === 'transform.opacity' && Math.abs(keyframe.timeSec - localSec) <= 0.05,
-  );
-  const opacityKeys = clip.keyframes
-    .filter((keyframe) => keyframe.property === 'transform.opacity')
-    .toSorted((left, right) => left.timeSec - right.timeSec);
-  const departingOpacity = [...opacityKeys]
-    .reverse()
-    .find((keyframe) => keyframe.timeSec <= localSec + 0.001);
-  const source = clip.source;
-  if (source.sourceType !== 'library_asset' || !source.renditionId) return null;
-  const versionId = source.renditionId;
-  return (
-    <div className="space-y-2 rounded-md border border-border/50 bg-muted/20 p-2">
-      <div className="flex items-center gap-2">
-        {previewUrl && clip.mediaKind === 'image' ? (
-          // biome-ignore lint/performance/noImgElement: exact signed Library rendition in an editor thumbnail
-          <img src={previewUrl} alt="" className="size-8 rounded object-cover" />
-        ) : (
-          <div className="flex size-8 items-center justify-center rounded bg-muted text-3xs uppercase">
-            {clip.mediaKind.slice(0, 3)}
-          </div>
-        )}
-        <span className="min-w-0 flex-1 truncate text-xs font-medium">
-          {clip.name ?? 'Overlay'}
-        </span>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <NumberScrubField
-          min={0}
-          step={0.1}
-          label="At"
-          value={start}
-          max={project.durationSec}
-          onChange={setStart}
-        />
-        <NumberScrubField
-          step={0.1}
-          label="Duration"
-          value={duration}
-          min={0.1}
-          onChange={setDuration}
-        />
-        <SliderField
-          format={{ style: 'percent', maximumFractionDigits: 0 }}
-          label="X"
-          max={1}
-          min={0}
-          step={0.05}
-          value={x}
-          onChange={setX}
-          onCommit={(value) => {
-            setX(value);
-            if (autoKey && playheadOnClip) {
-              onApply(
-                writeOverlayKeyframe(project, trackId, clip, 'transform.position', localSec, {
-                  x: value,
-                  y,
-                }),
-              );
-            }
-          }}
-        />
-        <SliderField
-          format={{ style: 'percent', maximumFractionDigits: 0 }}
-          label="Y"
-          max={1}
-          min={0}
-          step={0.05}
-          value={y}
-          onChange={setY}
-          onCommit={(value) => {
-            setY(value);
-            if (autoKey && playheadOnClip) {
-              onApply(
-                writeOverlayKeyframe(project, trackId, clip, 'transform.position', localSec, {
-                  x,
-                  y: value,
-                }),
-              );
-            }
-          }}
-        />
-        <SliderField
-          label="Scale"
-          max={4}
-          min={0.05}
-          step={0.05}
-          suffix="x"
-          value={scale}
-          onChange={setScale}
-          onCommit={(value) => {
-            setScale(value);
-            if (autoKey && playheadOnClip) {
-              onApply(
-                writeOverlayKeyframe(project, trackId, clip, 'transform.scaleX', localSec, value),
-              );
-              onApply(
-                writeOverlayKeyframe(project, trackId, clip, 'transform.scaleY', localSec, value),
-              );
-            }
-          }}
-        />
-        <SliderField
-          label="Rotation"
-          max={360}
-          min={-360}
-          step={1}
-          suffix="°"
-          value={rotation}
-          onChange={setRotation}
-          onCommit={(value) => {
-            setRotation(value);
-            if (autoKey && playheadOnClip) {
-              onApply(
-                writeOverlayKeyframe(
-                  project,
-                  trackId,
-                  clip,
-                  'transform.rotationDeg',
-                  localSec,
-                  value,
-                ),
-              );
-            }
-          }}
-        />
-        <SliderField
-          label="Rotate X"
-          max={90}
-          min={-90}
-          step={1}
-          suffix="°"
-          value={rotateX}
-          onChange={setRotateX}
-          onCommit={(value) => {
-            setRotateX(value);
-            if (autoKey && playheadOnClip) {
-              onApply(
-                writeOverlayKeyframe(
-                  project,
-                  trackId,
-                  clip,
-                  'transform.rotateXDeg',
-                  localSec,
-                  value,
-                ),
-              );
-            }
-          }}
-        />
-        <SliderField
-          label="Rotate Y"
-          max={90}
-          min={-90}
-          step={1}
-          suffix="°"
-          value={rotateY}
-          onChange={setRotateY}
-          onCommit={(value) => {
-            setRotateY(value);
-            if (autoKey && playheadOnClip) {
-              onApply(
-                writeOverlayKeyframe(
-                  project,
-                  trackId,
-                  clip,
-                  'transform.rotateYDeg',
-                  localSec,
-                  value,
-                ),
-              );
-            }
-          }}
-        />
-        <SliderField
-          label="Perspective"
-          max={4}
-          min={0}
-          step={0.05}
-          value={perspective}
-          onChange={setPerspective}
-        />
-        <label className="col-span-2 flex items-center justify-between gap-2 text-2xs">
-          <span className="text-muted-foreground">Parent</span>
-          <select
-            aria-label="Parent clip"
-            className="h-7 min-w-0 flex-1 rounded-md border border-input bg-background px-1.5 text-xs"
-            value={clip.parentClipId ?? ''}
-            onChange={(event) =>
-              onApply(
-                setClipParentOperation(project, {
-                  trackId,
-                  clipId: clip.id,
-                  parentClipId: event.target.value || null,
-                }),
-              )
-            }
-          >
-            <option value="">None</option>
-            {project.tracks
-              .flatMap((track): EditorClip[] => track.clips)
-              .filter((candidate) => candidate.id !== clip.id)
-              .map((candidate) => (
-                <option key={candidate.id} value={candidate.id}>
-                  {candidate.name ?? candidate.id}
-                </option>
-              ))}
-          </select>
-        </label>
-        <div className="flex items-end gap-1">
-          <SliderField
-            format={{ style: 'percent', maximumFractionDigits: 0 }}
-            label="Anchor"
-            max={1}
-            min={0}
-            step={0.05}
-            value={anchorX}
-            onChange={setAnchorX}
-            className="min-w-0 flex-1"
-          />
-          <KeyframeDiamond
-            labeled="rotation"
-            keyed={clip.keyframes.some(
-              (keyframe) =>
-                keyframe.property === 'transform.rotationDeg' &&
-                Math.abs(keyframe.timeSec - localSec) <= 0.05,
-            )}
-            disabled={!playheadOnClip}
-            onToggle={() =>
-              onApply(
-                writeOverlayKeyframe(
-                  project,
-                  trackId,
-                  clip,
-                  'transform.rotationDeg',
-                  localSec,
-                  rotation,
-                ),
-              )
-            }
-          />
-        </div>
-        <div className="col-span-2 flex items-end gap-1">
-          <SliderField
-            format={{ style: 'percent', maximumFractionDigits: 0 }}
-            label="Opacity"
-            max={1}
-            min={0}
-            step={0.05}
-            value={opacity}
-            onChange={setOpacity}
-            className="min-w-0 flex-1"
-            onCommit={(value) => {
-              setOpacity(value);
-              if (autoKey && playheadOnClip) {
-                onApply(
-                  writeOverlayKeyframe(
-                    project,
-                    trackId,
-                    clip,
-                    'transform.opacity',
-                    localSec,
-                    value,
-                  ),
-                );
-              }
-            }}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="mb-0.5 size-7 shrink-0"
-            disabled={!playheadOnClip}
-            aria-label={
-              opacityKeyed
-                ? 'Update opacity keyframe at playhead'
-                : 'Add opacity keyframe at playhead'
-            }
-            aria-pressed={opacityKeyed}
-            onClick={() =>
-              onApply(
-                upsertKeyframeOperation(project, {
-                  trackId,
-                  clipId: clip.id,
-                  keyframe: {
-                    id: crypto.randomUUID(),
-                    property: 'transform.opacity',
-                    timeSec: localSec,
-                    value: opacity,
-                    interpolation: 'linear',
-                  },
-                }),
-              )
-            }
-          >
-            <Diamond className={opacityKeyed ? 'size-3.5 fill-current' : 'size-3.5'} />
-          </Button>
-        </div>
-        {opacityKeys.length >= 2 &&
-        departingOpacity &&
-        typeof departingOpacity.value === 'number' ? (
-          <label className="col-span-2 flex items-center justify-between gap-2 text-2xs">
-            <span className="text-muted-foreground">Opacity easing</span>
-            <select
-              className="h-7 rounded-md border border-input bg-background px-1.5 text-xs"
-              value={
-                departingOpacity.interpolation === 'bezier'
-                  ? 'easeOutBack'
-                  : departingOpacity.interpolation === 'spring'
-                    ? 'spring'
-                    : departingOpacity.interpolation
-              }
-              onChange={(event) => {
-                const next = event.target.value;
-                const interpolation =
-                  next === 'hold'
-                    ? 'hold'
-                    : next === 'spring'
-                      ? 'spring'
-                      : next === 'easeOutBack'
-                        ? 'bezier'
-                        : 'linear';
-                onApply(
-                  upsertKeyframeOperation(project, {
-                    trackId,
-                    clipId: clip.id,
-                    keyframe: {
-                      id: departingOpacity.id,
-                      property: 'transform.opacity',
-                      timeSec: departingOpacity.timeSec,
-                      value: departingOpacity.value,
-                      interpolation,
-                      ...(interpolation === 'bezier'
-                        ? { easing: MOTION_BEZIER_PRESETS.easeOutBack }
-                        : {}),
-                      ...(interpolation === 'spring'
-                        ? { spring: { bounce: MOTION_SPRING_PRESETS.gentle } }
-                        : {}),
-                    },
-                  }),
-                );
-              }}
-            >
-              <option value="linear">Linear</option>
-              <option value="hold">Hold</option>
-              <option value="easeOutBack">Ease out back</option>
-              <option value="spring">Spring</option>
-            </select>
-          </label>
-        ) : null}
-      </div>
-      <div className="flex justify-end gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7"
-          onClick={() => onApply(removeClipOperation(project, trackId, clip.id))}
-          aria-label="Delete media overlay"
-        >
-          <Trash2 className="size-3.5" />
-        </Button>
-        <Button
-          size="sm"
-          className="h-7 text-xs"
-          onClick={() =>
-            onApply(
-              upsertOverlayOperation(project, {
-                clipId: clip.id,
-                assetId: source.assetId,
-                versionId,
-                label: clip.name ?? 'Overlay',
-                mediaKind: clip.mediaKind === 'video' ? 'video' : 'image',
-                timelineStartSec: start,
-                durationSec: duration,
-                x,
-                y,
-                scale,
-                opacity,
-                rotationDeg: rotation,
-                rotateXDeg: rotateX,
-                rotateYDeg: rotateY,
-                perspective,
-              }),
-            )
-          }
-        >
-          Save
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-const TRANSITION_OPTIONS: Array<{
-  value: 'cut' | Exclude<EditorTransition['transitionType'], 'cut' | 'blur' | 'custom'>;
-  label: string;
-}> = [
-  { value: 'cut', label: 'Cut' },
-  { value: 'crossfade', label: 'Crossfade' },
-  { value: 'dip_to_black', label: 'Dip to black' },
-  { value: 'dip_to_white', label: 'Dip to white' },
-  { value: 'wipe', label: 'Wipe' },
-  { value: 'slide', label: 'Slide' },
-  { value: 'zoom', label: 'Zoom' },
-];
-
-function TransitionEditor({
-  project,
-  videoTrack,
-  clips,
-  onApply,
-}: {
-  project: EditorProjectV2;
-  videoTrack?: Extract<EditorTrack, { kind: 'video' }>;
-  clips: EditorVideoClip[];
-  onApply: (operation: EditorAssemblyOperation) => void;
-}) {
-  if (!videoTrack || clips.length < 2) return null;
-  return (
-    <section className="space-y-2 rounded-lg border border-border/60 bg-card p-3">
-      <h3 className="text-xs font-semibold">Transitions</h3>
-      {clips.slice(1).map((to, index) => {
-        const from = clips[index];
-        const transition = project.transitions.find(
-          (candidate) =>
-            candidate.trackId === videoTrack.id &&
-            candidate.fromClipId === from.id &&
-            candidate.toClipId === to.id,
-        );
-        return (
-          <TransitionRow
-            key={`${from.id}:${to.id}`}
-            project={project}
-            trackId={videoTrack.id}
-            from={from}
-            to={to}
-            transition={transition}
-            onApply={onApply}
-          />
-        );
-      })}
-    </section>
-  );
-}
-
-function TransitionRow({
-  project,
-  trackId,
-  from,
-  to,
-  transition,
-  onApply,
-}: {
-  project: EditorProjectV2;
-  trackId: string;
-  from: EditorVideoClip;
-  to: EditorVideoClip;
-  transition?: EditorTransition;
-  onApply: (operation: EditorAssemblyOperation) => void;
-}) {
-  const [type, setType] = useState<EditorTransition['transitionType']>(
-    transition?.transitionType ?? 'cut',
-  );
-  const [duration, setDuration] = useState(transition?.durationSec ?? 0.6);
-  useEffect(() => {
-    setType(transition?.transitionType ?? 'cut');
-    setDuration(transition?.durationSec ?? 0.6);
-  }, [transition]);
-  return (
-    <div className="space-y-2 rounded-md border border-border/50 bg-muted/20 p-2">
-      <p className="truncate text-3xs text-muted-foreground">
-        {from.name ?? 'Clip'} → {to.name ?? 'Clip'}
-      </p>
-      <div className="grid grid-cols-[1fr_72px] gap-2">
-        <select
-          value={type}
-          onChange={(event) =>
-            setType(event.currentTarget.value as EditorTransition['transitionType'])
-          }
-          className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-          aria-label={`Transition from ${from.name ?? from.id} to ${to.name ?? to.id}`}
-        >
-          {TRANSITION_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <NumberScrubField
-          label="Seconds"
-          value={duration}
-          min={0.1}
-          step={0.1}
-          onChange={setDuration}
-        />
-      </div>
-      <div className="flex justify-end gap-1">
-        {transition ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7"
-            onClick={() => onApply(removeTransitionOperation(project, transition.id))}
-            aria-label="Delete transition"
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        ) : null}
-        <Button
-          size="sm"
-          className="h-7 text-xs"
-          onClick={() => {
-            if (type === 'cut') {
-              if (transition) onApply(removeTransitionOperation(project, transition.id));
-              return;
-            }
-            onApply(
-              upsertTransitionOperation(project, {
-                transitionId: transition?.id,
-                trackId,
-                fromClipId: from.id,
-                toClipId: to.id,
-                transitionType: type,
-                durationSec: duration,
-              }),
-            );
-          }}
-          disabled={type === 'cut' && !transition}
-        >
-          Apply
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 export function EditorProjectV2Assembly({
   project,
   brandId,
@@ -1068,7 +108,7 @@ export function EditorProjectV2Assembly({
   busy,
   canUndo,
   canRedo,
-  canRender,
+  renderBlockers,
   initialTimelineMode = 'edit',
   onApply,
   onUndo,
@@ -1081,7 +121,8 @@ export function EditorProjectV2Assembly({
   busy: boolean;
   canUndo: boolean;
   canRedo: boolean;
-  canRender: boolean;
+  /** `editorRenderBlockers(project)` — empty means the project can render. */
+  renderBlockers: readonly string[];
   initialTimelineMode?: 'edit' | 'motion';
   onApply: (operation: EditorAssemblyOperation) => void;
   onUndo: () => void;
@@ -1471,13 +512,14 @@ export function EditorProjectV2Assembly({
           <Button
             className="mt-auto w-full"
             onClick={onRender}
-            disabled={busy || !clips.length || !canRender}
-            title={
-              canRender ? undefined : 'Approve one final master for every shot before rendering.'
-            }
+            disabled={busy || !clips.length || renderBlockers.length > 0}
+            title={renderBlockers.length > 0 ? renderBlockers.join(' ') : undefined}
           >
             Render final 1080p
           </Button>
+          {renderBlockers.length > 0 ? (
+            <p className="mt-1.5 text-2xs text-muted-foreground">{renderBlockers[0]}</p>
+          ) : null}
         </aside>
 
         <div className="grid min-w-0 grid-rows-[minmax(280px,1fr)_220px_auto_110px] gap-3 lg:min-h-0">

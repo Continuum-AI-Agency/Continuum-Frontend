@@ -230,7 +230,7 @@ function positionedVideoClips(
   }));
 }
 
-function moveCommands(
+export function moveCommands(
   trackId: string,
   clips: readonly EditorVideoClip[],
   transitions: readonly EditorTransition[] = [],

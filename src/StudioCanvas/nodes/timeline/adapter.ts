@@ -8,9 +8,8 @@
 // about their host, so the same timeline can be opened from the Library on a
 // media.assets row with no canvas anywhere in sight.
 //
-// Implementations: useCanvasTimelineAdapter (node data + canvas_sessions +
-// workflow resume) and useLibraryTimelineAdapter (media.timeline_drafts + a
-// Library media bin + save-as-version/new-asset).
+// Implementation: useCanvasTimelineAdapter (node data + canvas_sessions + workflow
+// resume). The Library now opens the durable EditorProjectV2 workspace instead.
 
 import type { ReactNode } from 'react';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';

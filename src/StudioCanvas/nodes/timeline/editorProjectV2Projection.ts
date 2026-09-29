@@ -268,6 +268,40 @@ function effectsFor(itemId: string, effects: ClipEffectSpec | undefined): Editor
   return instances;
 }
 
+/**
+ * The spec-owned fields of a V2 visual clip — the inverse of `clipEffectSpecFromEditorClip`,
+ * built from the same privates the projection uses so an inspector edit and a projected
+ * document cannot map one spec two ways.
+ *
+ * Unlike `transformFor`, this honours the `scaleX`/`scaleY` and 3D rotation the reader hands
+ * back beside the uniform `scale` a slider drives, so a non-uniform or tilted clip keeps its
+ * shape when only `scale` moves. Keyframes are clip-local, the way the reducer stores them.
+ */
+export function editorClipFieldsFromEffectSpec(
+  clipId: string,
+  spec: ClipEffectSpec,
+  durationSec: number,
+): Pick<EditorVideoClip, 'transform' | 'effects' | 'blendMode' | 'playbackRate' | 'keyframes'> {
+  const transform = transformFor(spec);
+  const legacy = spec.transform;
+  const widest = Math.max(Math.abs(legacy?.scaleX ?? 0), Math.abs(legacy?.scaleY ?? 0));
+  if (legacy && widest > 0) {
+    const ratio = (legacy.scale ?? widest) / widest;
+    transform.scaleX = (legacy.scaleX ?? widest) * ratio * (spec.flipH ? -1 : 1);
+    transform.scaleY = (legacy.scaleY ?? widest) * ratio * (spec.flipV ? -1 : 1);
+  }
+  transform.rotateXDeg = legacy?.rotateX ?? 0;
+  transform.rotateYDeg = legacy?.rotateY ?? 0;
+  transform.perspective = legacy?.perspective ?? 0;
+  return {
+    transform,
+    effects: effectsFor(clipId, spec),
+    blendMode: spec.blendMode ?? 'normal',
+    playbackRate: speedFor(spec),
+    keyframes: transformKeyframes(clipId, 0, durationSec, spec),
+  };
+}
+
 function clipSourceDuration(
   item: TimelineItem,
   poolById: ReadonlyMap<string, TimelineInputSource>,
@@ -439,7 +473,7 @@ function textStyleForCaption(
   };
 }
 
-function transitionKind(
+export function transitionKind(
   transition: ClipTransition,
 ): Pick<EditorTransition, 'transitionType' | 'transitionId' | 'parameters'> {
   switch (transition.type) {
@@ -720,7 +754,12 @@ export function projectTimelineDocumentToEditorProjectV2(
       kind: 'caption' as const,
       text: captionCueText(cue),
       language: 'und',
-      words: cue.words,
+      // Cue words are timeline seconds; a V2 caption clip counts from its own start.
+      words: cue.words.map((word) => ({
+        ...word,
+        startSec: Math.max(0, word.startSec - cue.startSec),
+        endSec: Math.max(0, word.endSec - cue.startSec),
+      })),
       style: textStyleForCaption(document, cue.style, exportSettings.height),
       transform: {
         position: {

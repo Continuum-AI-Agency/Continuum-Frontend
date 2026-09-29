@@ -524,9 +524,10 @@ export async function buildTimelineEditorRenderPlan(input: {
     return result;
   };
 
+  // `muted` silences a video track; only `enabled` takes its picture away.
   const videoTracks = input.project.tracks
     .filter(isVideoTrack)
-    .filter((track) => track.enabled && !track.muted)
+    .filter((track) => track.enabled)
     .sort((left, right) => left.order - right.order);
   const primary = videoTracks[0];
   if (!primary) throw new Error('The editor project has no enabled video track.');
@@ -562,7 +563,7 @@ export async function buildTimelineEditorRenderPlan(input: {
       trimStartSec: clip.sourceInSec,
       trimEndSec: clip.sourceInSec + clip.durationSec * clip.playbackRate,
       durationSec: clip.durationSec,
-      muteAudio: !clip.audioEnabled,
+      muteAudio: !clip.audioEnabled || primary.muted,
       effects: effectsFor(clip),
       transition: transitionFor(incomingTransitionByClip.get(clip.id)),
     })),
@@ -657,12 +658,13 @@ export async function buildTimelineEditorRenderPlan(input: {
           id: clip.id,
           startSec: clip.timelineStartSec,
           endSec: clip.timelineStartSec + clip.durationSec,
+          // Word times are seconds from the clip's start (editorCaptionWordSchema).
           words:
             clip.words.length > 0
               ? clip.words.map((word) => ({
                   text: word.text,
-                  startSec: word.startSec,
-                  endSec: word.endSec,
+                  startSec: clip.timelineStartSec + word.startSec,
+                  endSec: clip.timelineStartSec + word.endSec,
                 }))
               : wordsForCaptionText(
                   clip.text,

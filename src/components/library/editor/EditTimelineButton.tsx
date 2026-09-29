@@ -5,10 +5,11 @@
 // editor closes first and the detail view stays put.
 
 import { editorCommandBatchSchema, type MediaAsset } from '@continuum/contracts';
-import { Loader2, Scissors } from 'lucide-react';
+import { Loader2, Plus, Scissors } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { studioVideoHref } from '@/lib/ai-studio/studioVideoHref';
 import {
@@ -139,9 +140,7 @@ export function EditTimelineButton({ brandId, asset, onAssetChanged }: EditTimel
         );
       }
       onAssetChanged?.();
-      router.push(
-        studioVideoHref({ projectId: project.projectId, origin: 'library', view: 'assembly' }),
-      );
+      router.push(studioVideoHref({ projectId: project.projectId, origin: 'library' }));
     } catch (error) {
       show({
         title: 'Could not open video studio',
@@ -154,19 +153,24 @@ export function EditTimelineButton({ brandId, asset, onAssetChanged }: EditTimel
   };
 
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      disabled={opening}
-      onClick={() => void openStudio()}
-    >
-      {opening ? (
-        <Loader2 className="size-3.5 animate-spin" aria-hidden />
-      ) : (
-        <Scissors className="size-3.5" aria-hidden />
-      )}
-      Edit video
-    </Button>
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={opening}
+        onClick={() => void openStudio()}
+      >
+        {opening ? (
+          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+        ) : (
+          <Scissors className="size-3.5" aria-hidden />
+        )}
+        Edit video
+      </Button>
+      <Link href="/studio/video/new" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
+        <Plus className="size-3.5" aria-hidden /> New edit
+      </Link>
+    </>
   );
 }
