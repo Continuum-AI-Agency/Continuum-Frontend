@@ -1138,6 +1138,41 @@ describe('OptimizerActionsPortfolioGroup — a CTA lands on an expanded row', ()
     }
   });
 
+  // A key with no row is a pressed button that did nothing. Silence there is the dead end
+  // the read rows exist to close; after the delay the queue says so, and stops the moment
+  // the row exists.
+  it('says so, in words, once a focus key has gone unmatched for the delay — and not before', async () => {
+    Element.prototype.scrollIntoView = scrollSpy as never;
+    try {
+      const { rerender } = render(
+        <OptimizerActionsPortfolioGroup
+          adAccountId="act_1"
+          brandId="b1"
+          focusMissingDelayMs={40}
+          focusRowKey="rec:not-in-the-queue"
+          portfolio={portfolio()}
+        />,
+      );
+      expect(screen.queryByTestId('queue-focus-missing')).toBeNull();
+      await waitFor(() => expect(screen.getByTestId('queue-focus-missing')).toBeTruthy());
+      expect(screen.getByTestId('queue-focus-missing').textContent).toContain(
+        'todavía no está en la cola',
+      );
+      rerender(
+        <OptimizerActionsPortfolioGroup
+          adAccountId="act_1"
+          brandId="b1"
+          focusMissingDelayMs={40}
+          focusRowKey={`rec:${PAUSE_ID}`}
+          portfolio={portfolio()}
+        />,
+      );
+      await waitFor(() => expect(screen.queryByTestId('queue-focus-missing')).toBeNull());
+    } finally {
+      Element.prototype.scrollIntoView = nativeScroll;
+    }
+  });
+
   it('carries the recommendation an asked-for handoff points at and shows its blocked proposal', async () => {
     Element.prototype.scrollIntoView = scrollSpy as never;
     activeProposals = [supersededProposal];

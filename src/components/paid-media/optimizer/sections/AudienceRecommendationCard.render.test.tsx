@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { AudienceRecommendationCard } from './AudienceRecommendationCard';
 import { audienceCardView, portfolioSpecsFrom } from './audienceCardModel';
@@ -441,6 +441,38 @@ describe('AudienceRecommendationCard — the other faces', () => {
     expect(container.textContent).toContain('Previsualizar la conversión');
     expect(screen.queryByTestId('audience-create')).toBeNull();
     expect(screen.queryByTestId('audience-create-blocked')).toBeNull();
+  });
+
+  // MENSAJES // TODOS, 2026-09-29: proposal e2310011 failed in the propose phase and the
+  // worker stored the Zod issue list as `error.message`. The face prints the human line and
+  // offers to ask again; the dump never reaches the screen.
+  it('failed: the same frame, a one-line human reason where the audience would be, and the retry', () => {
+    const zodDump =
+      '[\n  {\n    "origin": "string",\n    "code": "too_big",\n    "maximum": 240,\n    "path": ["blocked_option_ids", 0, "rule"]\n  }\n]';
+    const view = audienceCardView(
+      [
+        row({
+          status: 'failed',
+          proposal: null,
+          error: { code: 'propose_failed', phase: 'propose', message: zodDump },
+        }),
+      ],
+      rec,
+    );
+    const onRequest = mock(() => {});
+    const { container } = render(
+      <AudienceRecommendationCard {...baseProps} onRequest={onRequest} view={view} />,
+    );
+    expect(frameOrder(container)).toEqual([...SECTION_LABELS, 'audience-decision']);
+    expect(screen.getByTestId('audience-what').textContent).toContain('No se pudo construir');
+    expect(screen.getByTestId('audience-failed-reason').textContent).toBe(
+      'Jaina no pudo armar la propuesta.',
+    );
+    expect(container.textContent).not.toContain('too_big');
+    expect(container.textContent).not.toContain('blocked_option_ids');
+    expect(screen.queryByTestId('audience-create')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Pedírsela a Jaina de nuevo' }));
+    expect(onRequest).toHaveBeenCalledTimes(1);
   });
 
   it('executed: the identifiers, the Qué se implementó dropdown, Activar and Deshacer', () => {

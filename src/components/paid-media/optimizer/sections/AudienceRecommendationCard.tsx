@@ -123,7 +123,11 @@ function Muted({ children }: { children: React.ReactNode }) {
 
 // ── Qué audiencia ──────────────────────────────────────────────────────────────────────
 
-function WhatAudience({
+/** The proposal's state where the audience would be: the audience in words once there is a
+ *  plan, else the queue, Jaina reading, the block with its reason, or the failure with its
+ *  one-line reason. Shared with the asked-for row's inline panel, so a proposal reads the
+ *  same on the row that asked for it and on the card that decides it. */
+export function WhatAudience({
   plan,
   state,
   block,
@@ -172,8 +176,12 @@ function WhatAudience({
   if (state === 'failed') {
     return (
       <div className="space-y-1">
-        <p className="font-medium text-foreground text-sm">El análisis falló</p>
-        <Muted>{errorMessage ?? 'Error desconocido.'}</Muted>
+        <Badge className={typeScale.label} variant="destructive">
+          No se pudo construir
+        </Badge>
+        <p className="text-foreground text-sm" data-testid="audience-failed-reason">
+          {errorMessage ?? 'La propuesta no se pudo construir.'}
+        </p>
       </div>
     );
   }

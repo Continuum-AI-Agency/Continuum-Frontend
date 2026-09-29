@@ -32,10 +32,12 @@ import { benchBrowserChannel, loadProdSupabaseEnv, PROD_SUPABASE_URL } from './s
 //      through the deployed optimizer-cycle-preview edge → the reallocation flow and the
 //      recommendation count. The UI degrades quietly when that route is missing; this
 //      bench does NOT. An `unavailable` outcome FAILS the run and says so.
-//   5. Portfolio CTAs — "Open the audience proposal" on an asked-for row and "Open the
-//      creative recommendation" on a news card each land on ONE expanded, on-screen queue
-//      row; a blocked proposal shows its reason and a disabled create button; and the
-//      Ask-Jaina band sits between the vital signs and the news cards.
+//   5. Portfolio CTAs — an asked-for row whose handoff opened an audience proposal shows
+//      the proposal's STATE on itself (en cola / Jaina está leyendo / lista / bloqueada /
+//      no se pudo construir, with a one-line human reason and never a raw error dump), and
+//      "Open the audience proposal" opens the proposal INLINE on that row; "Open the
+//      creative recommendation" on a news card lands on ONE expanded, on-screen queue row;
+//      and the Ask-Jaina band sits between the name line and the news cards.
 //   6. The Overview as proposal O1 orders it (Performance+ redesign, stage 1b): the sentence
 //      with figures, the sub-line, the Jaina band, four to six state-coloured tiles, the
 //      recommendation cards with the lead marked, then the portfolio rows — in that order,
@@ -102,18 +104,26 @@ const CBO_ACCOUNT_ID = '1164707387246066';
 const ENROLLED_PORTFOLIO_NAME = 'Citas Agosto - check leads';
 const EMPTY_PORTFOLIO_NAME = 'Reporte Agosto - Citas y Mensajes';
 
-// Two portfolios on the LEDGER brand whose read rows carry a CTA into the queue, read from
-// production on 2026-09-28. Both premises are checked against optimizer.audience_proposals /
-// optimizer.recommendations before assuming a failure here is a regression:
-//   TOURS — an asked-for audience row (ad-hoc suggestion 89a4a5ec, adopted) handed off to
-//     recommendation 1a36cfc3 and proposal 622bc858; the worker BLOCKED the proposal
-//     (no_creatives, proposal null) and the next cycle superseded it, expiring the
-//     recommendation. "Open the audience proposal" must still land on that row, expanded,
-//     with the block's reason and a disabled create button.
+// Two portfolios on the LEDGER brand whose read rows carry a CTA, read from production on
+// 2026-09-29. Both premises are checked against optimizer.adhoc_suggestions /
+// optimizer.audience_proposals / optimizer.recommendations before assuming a failure here
+// is a regression:
+//   MENSAJES — an asked-for audience row (ad-hoc suggestion 1f2426b1, adopted 19:08 UTC)
+//     handed off to recommendation 2b89167f (pending) and proposal e2310011; the worker
+//     FAILED the proposal (error.code propose_failed, a Zod issue list for a message). The
+//     row must wear the proposal's state — whichever state the proposal is in when the
+//     bench runs, since a person may ask again — with a human reason and no raw dump, and
+//     "Open the audience proposal" must open the proposal on the row itself.
 //   PRUEBA — a pending C2 variate_creative recommendation (e4093df7) the brief lists as a
 //     secondary candidate, so its insight card offers "Open the creative recommendation".
-const TOURS_PORTFOLIO_NAME = 'Septiembre - Tours Programados';
+const MENSAJES_PORTFOLIO_NAME = 'MENSAJES // TODOS';
 const PRUEBA_PORTFOLIO_NAME = 'Prueba';
+/** The state badge an asked-for row wears once its proposal exists, in the card's words. */
+const PROPOSAL_STATE =
+  /^(En cola|Jaina está leyendo|Lista|Bloqueada|No se pudo construir|Cerrada|Aprobada|Creando el conjunto|Creada en Meta|Activando|Deshaciendo|Deshecha)$/;
+/** The note under the row for the same states — always a sentence, never a dump. */
+const PROPOSAL_NOTE =
+  /^(En cola|Jaina está leyendo|Lista|Bloqueada —|No se pudo construir —|Aprobada|Creando|Creada en Meta|Activando|Deshaciendo|Deshecha)/;
 /** The portfolio every idea on the redesign page is drawn with (portafolio.html): 9 ad sets on
  *  autopilot, leads against a 35 MXN target, pending decisions. Same ledger brand. */
 const FORMULARIOS_PORTFOLIO_NAME = 'FORMULARIOS // TODOS';
@@ -580,9 +590,12 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await expect(page.getByLabel(/^Daily budget/)).toHaveValue('3500');
 
       // And the autopilot guardrails stay off screen until they matter: this portfolio runs
-      // on Recommend, so its opt-in entry point stands in for the section.
+      // on Recommend, so the Autonomy tier's Autopilot button — the opt-in entry point — is
+      // on screen and not pressed.
       await expect(page.getByText('Autopilot guardrails')).toHaveCount(0);
-      await expect(page.getByRole('button', { name: /Set up autopilot/ })).toBeVisible();
+      const autopilotTier = page.getByRole('button', { name: /^Autopilot/ }).first();
+      await expect(autopilotTier).toBeVisible();
+      await expect(autopilotTier).toHaveAttribute('aria-pressed', 'false');
       await shoot(page, '11-workspace-manage');
 
       // Performance restores the headline (and the section param drops).
@@ -740,7 +753,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
     }
   });
 
-  test("portfolio CTAs — a read row's button lands on an expanded queue row, and the Jaina panel sits under the name line", async ({
+  test("portfolio CTAs — an asked-for row wears its proposal's state and opens the proposal inline, a news card's button lands on an expanded queue row, and the Jaina panel sits under the name line", async ({
     browser,
   }) => {
     await selectBrand(EASYFIT_LEDGER_BRAND_ID);
@@ -770,10 +783,10 @@ test.describe('Paid Media Optimizer — live experience', () => {
     try {
       await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
 
-      // ── TOURS: the blocked, superseded audience proposal ──
-      await page.getByRole('button').filter({ hasText: TOURS_PORTFOLIO_NAME }).first().click();
+      // ── MENSAJES: the asked-for row wears its proposal's state and opens it inline ──
+      await page.getByRole('button').filter({ hasText: MENSAJES_PORTFOLIO_NAME }).first().click();
       await expect(
-        page.getByRole('heading', { level: 2 }).filter({ hasText: TOURS_PORTFOLIO_NAME }),
+        page.getByRole('heading', { level: 2 }).filter({ hasText: MENSAJES_PORTFOLIO_NAME }),
       ).toBeVisible({ timeout: 120_000 });
 
       // The Jaina panel: the first block after the portfolio's name line, before the
@@ -797,11 +810,11 @@ test.describe('Paid Media Optimizer — live experience', () => {
       });
       console.log(`[optimizer-bench] Jaina panel order: ${JSON.stringify(order)}`);
       expect(order).toEqual({ headerBeforeChips: true, chipsBeforeNews: true });
-      await shoot(page, '16-tours-ask-jaina-band');
+      await shoot(page, '16-mensajes-ask-jaina-band');
 
-      // The asked-for rows and the queue live on the workspace's Activity section. The row
-      // says what became of the proposal it opened — blocked, and why — instead of "being
-      // built", and its button is the one this bench presses.
+      // The asked-for rows live on the workspace's Activity section. The row that opened a
+      // proposal says what the proposal IS right now — read off the proposals query, never
+      // "being built" — and its button is the one this bench presses.
       await workspaceActivityTab().click();
       await expect(page).toHaveURL(/section=activity/);
       const askedRow = page
@@ -809,36 +822,72 @@ test.describe('Paid Media Optimizer — live experience', () => {
         .filter({ hasText: 'Open the audience proposal' })
         .first();
       await expect(askedRow).toBeVisible({ timeout: 120_000 });
-      await expect(askedRow.getByText('Blocked', { exact: true })).toBeVisible();
-      await expect(askedRow.getByText(/^Blocked — /)).toContainText('creative');
+      const askedKey = (await askedRow.getAttribute('data-row-key')) ?? '';
+      // The same row, pinned by its key: the press below relabels its button to "Cerrar la
+      // propuesta", so a locator that filters on the open label would lose it.
+      const openedRow = page.locator(`[data-row-key="${askedKey}"]`);
+      const stateBadge = askedRow.getByText(PROPOSAL_STATE).first();
+      await expect(stateBadge).toBeVisible({ timeout: 60_000 });
+      await expect(askedRow.getByText('Handed off', { exact: true })).toHaveCount(0);
+      const note = askedRow.locator('[data-testid^="read-next-note:"]');
+      await expect(note).toBeVisible();
+      const noteText = (await note.innerText()).trim();
+      console.log(
+        `[optimizer-bench] MENSAJES asked row ${askedKey}: state "${await stateBadge.innerText()}", note "${noteText}"`,
+      );
+      expect(noteText).toMatch(PROPOSAL_NOTE);
+      // A one-line human reason, never the worker's error dump (production carries a Zod
+      // issue list in error.message for this very proposal).
+      expect(noteText).not.toMatch(/[{}[\]]/);
+      expect(noteText).not.toContain('too_big');
+      expect(noteText.split('\n')).toHaveLength(1);
+
       await askedRow.getByRole('button', { name: 'Open the audience proposal' }).click();
 
-      await expect(expandedQueueRow()).toHaveCount(1, { timeout: 120_000 });
-      const landedKey = await expandedQueueRow().getAttribute('data-row-key');
-      console.log(`[optimizer-bench] Tours "Open the audience proposal" landed on ${landedKey}`);
-      expect(landedKey).toMatch(/^rec:[0-9a-f-]{36}$/);
+      // The proposal opens ON THE ROW: the expansion is a child of the asked row, not a queue
+      // row somewhere below. With a plan it is the five sections and the create flow; without
+      // one it is the state, what is known, and — failed or blocked — asking again.
+      const expansion = openedRow.getByTestId(`read-expansion:${askedKey.replace(/^read:/, '')}`);
+      await expect(expansion).toBeVisible({ timeout: 60_000 });
+      const card = expansion.getByTestId('audience-recommendation-card');
+      const panel = expansion.getByTestId('asked-proposal-panel');
+      await expect(card.or(panel).first()).toBeVisible({ timeout: 60_000 });
+      const face = (await card.count()) > 0 ? 'five sections' : 'state panel';
+      console.log(`[optimizer-bench] MENSAJES proposal opened inline as: ${face}`);
+      if (face === 'five sections') {
+        for (const section of [
+          'audience-what',
+          'audience-changes',
+          'audience-new',
+          'audience-why',
+          'audience-how',
+        ]) {
+          await expect(card.getByTestId(section)).toBeVisible();
+        }
+      } else {
+        await expect(
+          panel.getByTestId('asked-proposal-state').getByText(PROPOSAL_STATE),
+        ).toBeVisible();
+        const facts = panel.getByTestId('asked-proposal-facts');
+        await expect(facts).toContainText('Conjunto');
+        await expect(facts).toContainText('Pedida');
+        const retry = panel.getByTestId('asked-proposal-retry');
+        const retryable = (await retry.count()) > 0;
+        console.log(`[optimizer-bench] MENSAJES proposal offers "Pedirla de nuevo": ${retryable}`);
+        // Offered, and deliberately NOT pressed: it writes a proposal request to production.
+        if (retryable) await expect(retry).toBeEnabled();
+      }
+      const expansionText = await expansion.innerText();
+      expect(expansionText).not.toContain('too_big');
+      expect(expansionText).not.toContain('"code"');
+      await shoot(page, '17-mensajes-proposal-inline');
 
-      // Expanded AND on screen: the row's top edge inside the visible box of the panel that
-      // scrolls it (the workspace tab panel clips; the window alone would not tell).
-      await expect
-        .poll(() => expandedQueueRow().evaluate(inScrollView), {
-          message: 'the focused row must be scrolled into view',
-          timeout: 15_000,
-        })
-        .toBe(true);
-
-      // The blocked proposal's face: the reason, and the create button visibly off.
-      const card = expandedQueueRow().getByTestId('audience-recommendation-card');
-      await expect(card).toBeVisible();
-      await expect(card.getByText('Bloqueada', { exact: true })).toBeVisible();
-      await expect(card.getByTestId('audience-blocked-reason')).toContainText('creative');
-      await expect(card.getByTestId('audience-create-blocked')).toBeDisabled();
-      console.log(
-        `[optimizer-bench] Tours blocked reason: "${await card
-          .getByTestId('audience-blocked-reason')
-          .innerText()}"`,
-      );
-      await shoot(page, '17-tours-blocked-proposal-row');
+      // The same button closes what it opened.
+      await openedRow.getByRole('button', { name: 'Cerrar la propuesta' }).click();
+      await expect(expansion).toHaveCount(0);
+      await expect(
+        openedRow.getByRole('button', { name: 'Open the audience proposal' }),
+      ).toBeVisible();
 
       // ── PRUEBA: the creative candidate's card → its pending recommendation row ──
       await page.getByRole('button', { name: 'Back to portfolios' }).click();
@@ -918,9 +967,23 @@ test.describe('Paid Media Optimizer — live experience', () => {
           'portfolio-headline',
           'portfolio-tiles',
           'portfolio-before-after',
+          'portfolio-jaina',
           'portfolio-news-row',
         ];
         const nodes = blocks.map((id) => pick(id));
+        // One surface: the module's own children draw no border; only the tiles' state
+        // rule is allowed, and it lives a level down.
+        const module = pick('portfolio-module');
+        const bordered = (el: Element) => {
+          const style = getComputedStyle(el);
+          return ['Top', 'Right', 'Bottom', 'Left'].some(
+            (side) =>
+              Number.parseFloat(style.getPropertyValue(`border-${side.toLowerCase()}-width`)) > 0,
+          );
+        };
+        const oneSurface =
+          Boolean(module) && [...(module?.children ?? [])].every((child) => !bordered(child));
+        const anchorFigure = pick('portfolio-anchor')?.querySelector('[data-figure-role="anchor"]');
         const present = nodes.map((node) => node !== null);
         const ordered = nodes.every((node, i) => i === 0 || follows(nodes[i - 1] ?? null, node));
         const tiles = [
@@ -963,23 +1026,9 @@ test.describe('Paid Media Optimizer — live experience', () => {
           readInJainaBar: Boolean(jaina?.querySelector('[data-testid="jaina-read"]')),
           status: pick('headline-status')?.textContent ?? '',
           statusFigures:
-          'portfolio-jaina',
             pick('headline-status')?.querySelectorAll('[data-testid="figure"]').length ?? 0,
           opportunity: pick('headline-opportunity')?.textContent ?? '',
           blocker: pick('headline-blocker')?.getAttribute('data-blocker') ?? null,
-        // One surface: the module's own children draw no border; only the tiles' state
-        // rule is allowed, and it lives a level down.
-        const module = pick('portfolio-module');
-        const bordered = (el: Element) => {
-          const style = getComputedStyle(el);
-          return ['Top', 'Right', 'Bottom', 'Left'].some(
-            (side) =>
-              Number.parseFloat(style.getPropertyValue(`border-${side.toLowerCase()}-width`)) > 0,
-          );
-        };
-        const oneSurface =
-          Boolean(module) && [...(module?.children ?? [])].every((child) => !bordered(child));
-        const anchorFigure = pick('portfolio-anchor')?.querySelector('[data-figure-role="anchor"]');
           tiles: tiles.map((tile) => tile.getAttribute('data-testid')),
           tileStates: tiles.map((tile) => tile.getAttribute('data-state')),
           tileCharts: tiles.filter((tile) => tile.querySelector('svg, canvas')).length,
@@ -1012,6 +1061,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
       // The module's blocks and the cards, all present, in this order, on one surface.
       expect(report.present).toEqual([true, true, true, true, true, true, true]);
       expect(report.ordered).toBe(true);
+      expect(report.oneSurface).toBe(true);
       expect(report.headerName).toBe(FORMULARIOS_PORTFOLIO_NAME);
       // Each setting beside the figure it governs: the grey line, the anchor, the spend tile.
       expect(report.facts).toEqual(['objective', 'strategy', 'window', 'target', 'budget']);
@@ -1054,7 +1104,6 @@ test.describe('Paid Media Optimizer — live experience', () => {
       expect(report.vitals).toBe(false);
       expect(report.bars, 'full-width success/destructive bars under the hero').toEqual([]);
 
-      expect(report.oneSurface).toBe(true);
       // The body: the ad-set ranking first; the funnel and the reallocation behind the
       // disclosure, closed.
       expect(report.firstBodyBlock).toContain('per ad set');

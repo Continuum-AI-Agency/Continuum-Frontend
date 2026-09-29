@@ -5,6 +5,7 @@
 
 import type {
   AudienceExpansionOption,
+  AudienceProposalCardState,
   AudienceProposalPlan,
   AudienceProposalResult,
   AudienceProposalRow,
@@ -59,24 +60,46 @@ export function audienceCardStateFor(
   return readProposalBlock(row)?.code === 'cbo_campaign' ? 'blocked_cbo' : 'blocked';
 }
 
+/** The recommendation's status once its proposal reached the given status: the cycle expires
+ *  the recommendation when it supersedes the proposal (public.optimizer_supersede_
+ *  recommendations), a cancelled proposal rejects it, an executed one is applied, and every
+ *  state before a decision leaves it pending. Documented consequences, never guesses. */
+function recommendationStatusFor(status: AudienceProposalRow['status']): string {
+  switch (status) {
+    case 'superseded':
+      return 'expired';
+    case 'cancelled':
+      return 'rejected';
+    case 'executed':
+    case 'activate_requested':
+    case 'activating':
+    case 'undo_requested':
+    case 'undoing':
+    case 'undone':
+      return 'applied';
+    default:
+      return 'pending';
+  }
+}
+
 /**
  * A recommendation row rebuilt from the proposal it opened, for a recommendation the cycle
- * report no longer carries.
+ * report does not carry.
  *
- * The report lists PENDING recommendations. When a later cycle does not raise a signal
- * again, public.optimizer_supersede_recommendations sets its proposal to `superseded` and,
- * in the same pass, its recommendation to `expired` — so a superseded proposal tells us both
- * that its recommendation exists and how it closed. Every field here is the proposal's own
- * (id, ad set, kind, trigger, run, dates) or that documented consequence (`status`); the
+ * The report lists PENDING recommendations, and it is a cached read: the recommendation a
+ * press just minted is not in it until the next fetch, and one a later cycle expired never
+ * comes back (public.optimizer_supersede_recommendations sets the proposal to `superseded`
+ * and, in the same pass, the recommendation to `expired`). Every field here is the proposal's
+ * own (id, ad set, kind, trigger, run, dates) or a documented consequence of its status; the
  * severity the engine scored is not on the proposal and is left null rather than guessed.
  * Only proposals an asked-for handoff points at are carried this way, so the row someone's
- * own press created still has somewhere to land.
+ * own press created always has somewhere to land.
  */
 export function carriedRecommendation(
   proposal: AudienceProposalRow,
   adsetName: string | null = null,
 ): RecommendationRow | null {
-  if (!proposal.recommendation_id || proposal.status !== 'superseded') return null;
+  if (!proposal.recommendation_id) return null;
   const block = readProposalBlock(proposal);
   return {
     id: proposal.recommendation_id,
@@ -87,10 +110,63 @@ export function carriedRecommendation(
     trigger: proposal.trigger,
     severity: null,
     reason: block?.message ?? null,
-    status: 'expired',
+    status: recommendationStatusFor(proposal.status),
     run_id: proposal.cycle_run_id,
     created_at: proposal.created_at,
   };
+}
+
+/** What each proposal state is called on screen — on the asked-for row that opened it, on
+ *  the inline panel, and on the card. One table, so the three cannot drift. */
+export const AUDIENCE_PROPOSAL_STATE_LABEL: Record<AudienceProposalCardState, string> = {
+  none: 'Sin propuesta',
+  queued: 'En cola',
+  proposing: 'Jaina está leyendo',
+  ready: 'Lista',
+  blocked: 'Bloqueada',
+  blocked_cbo: 'Bloqueada',
+  failed: 'No se pudo construir',
+  approved: 'Aprobada',
+  executing: 'Creando el conjunto',
+  executed: 'Creada en Meta',
+  switching: 'Activando',
+  undoing: 'Deshaciendo',
+  undone: 'Deshecha',
+};
+
+const FAILURE_COPY_BY_CODE: Record<string, string> = {
+  propose_failed: 'Jaina no pudo armar la propuesta.',
+  execute_failed: 'No se pudo crear el conjunto en Meta.',
+  activate_failed: 'No se pudo activar el conjunto nuevo.',
+  undo_failed: 'No se pudo deshacer el conjunto nuevo.',
+  signal_stopped: 'La señal dejó de dispararse.',
+};
+const FAILURE_COPY_DEFAULT = 'La propuesta no se pudo construir.';
+/** Past this a message is a dump, not a sentence a person is meant to read. */
+const HUMAN_MESSAGE_MAX = 240;
+
+/** Whether an error message was written for a person: one line, not a JSON dump, short. */
+function isHumanMessage(message: string): boolean {
+  const trimmed = message.trim();
+  if (trimmed.length === 0 || trimmed.length > HUMAN_MESSAGE_MAX) return false;
+  if (/[\n\r]/.test(trimmed)) return false;
+  return !/^[[{]/.test(trimmed);
+}
+
+/**
+ * Why a proposal failed, in one line a person can read.
+ *
+ * The worker stores whatever the failing step threw in `error.message` — for MENSAJES //
+ * TODOS on 2026-09-29 that was a 40-line Zod issue list. A row must never print that. A
+ * message written as a sentence is used as is; anything else is replaced by the sentence the
+ * error code stands for.
+ */
+export function proposalFailureReason(error: AudienceProposalRow['error']): string | null {
+  if (!error) return null;
+  const message = typeof error.message === 'string' ? error.message : '';
+  if (isHumanMessage(message)) return message.trim();
+  const code = typeof error.code === 'string' ? error.code : '';
+  return FAILURE_COPY_BY_CODE[code] ?? FAILURE_COPY_DEFAULT;
 }
 
 export function audienceCardView(
@@ -98,15 +174,13 @@ export function audienceCardView(
   rec: Pick<RecommendationRow, 'id' | 'adset_id' | 'trigger'>,
 ): AudienceCardView {
   const row = proposalForRecommendation(rows, rec);
-  const error = row?.error ?? null;
-  const message = error && typeof error.message === 'string' ? error.message : null;
   return {
     row,
     state: audienceCardStateFor(row),
     plan: row ? readProposalPlan(row) : null,
     block: row ? readProposalBlock(row) : null,
     result: row ? readProposalResult(row) : null,
-    errorMessage: message,
+    errorMessage: row ? proposalFailureReason(row.error) : null,
   };
 }
 

@@ -10,6 +10,7 @@ import {
   implementedRows,
   isAudienceRecommendation,
   portfolioSpecsFrom,
+  proposalFailureReason,
   proposedAudience,
   reachDeltaLabel,
   triggerLabel,
@@ -406,11 +407,92 @@ describe('audience card model — a blocked proposal', () => {
       created_at: '2026-09-27T09:20:16Z',
     });
     expect(
-      carriedRecommendation({ ...(superseded as object), status: 'blocked' } as never),
-    ).toBeNull();
-    expect(
       carriedRecommendation({ ...(superseded as object), recommendation_id: null } as never),
     ).toBeNull();
+  });
+
+  // The report is a cached read: the recommendation a press just minted is not in it until
+  // the next fetch, so a live proposal's recommendation is carried too, with the status its
+  // proposal's state implies.
+  it('carries a live proposal as a pending recommendation, and a cancelled one as rejected', () => {
+    const status = (proposalStatus: string) =>
+      carriedRecommendation({ ...(superseded as object), status: proposalStatus } as never)?.status;
+    expect(status('queued')).toBe('pending');
+    expect(status('proposing')).toBe('pending');
+    expect(status('ready')).toBe('pending');
+    expect(status('blocked')).toBe('pending');
+    expect(status('failed')).toBe('pending');
+    expect(status('cancelled')).toBe('rejected');
+    expect(status('executed')).toBe('applied');
+    expect(status('undone')).toBe('applied');
+    expect(status('superseded')).toBe('expired');
+  });
+});
+
+// MENSAJES // TODOS, 2026-09-29: proposal e2310011 failed in the propose phase and the worker
+// stored the Zod issue list as `error.message`. A row is a sentence for a person, never a dump.
+describe('audience card model — why a proposal failed, in one line', () => {
+  const zodDump =
+    '[\n  {\n    "origin": "string",\n    "code": "too_big",\n    "maximum": 240,\n    "message": "Too big: expected string to have <=240 characters"\n  }\n]';
+
+  it('replaces a JSON dump with the sentence the code stands for', () => {
+    expect(
+      proposalFailureReason({ code: 'propose_failed', phase: 'propose', message: zodDump }),
+    ).toBe('Jaina no pudo armar la propuesta.');
+    expect(proposalFailureReason({ code: 'execute_failed', message: '{"error":1}' })).toBe(
+      'No se pudo crear el conjunto en Meta.',
+    );
+    expect(proposalFailureReason({ code: 'something_else', message: '' })).toBe(
+      'La propuesta no se pudo construir.',
+    );
+  });
+
+  it('keeps a message written as one short sentence', () => {
+    expect(
+      proposalFailureReason({
+        code: 'propose_failed',
+        message: '  Jaina se quedó sin catálogo.  ',
+      }),
+    ).toBe('Jaina se quedó sin catálogo.');
+    expect(
+      proposalFailureReason({ code: 'signal_stopped', message: 'The trigger did not fire again.' }),
+    ).toBe('The trigger did not fire again.');
+  });
+
+  it('treats a multi-line or over-long message as a dump', () => {
+    expect(proposalFailureReason({ code: 'propose_failed', message: 'line one\nline two' })).toBe(
+      'Jaina no pudo armar la propuesta.',
+    );
+    expect(proposalFailureReason({ code: 'propose_failed', message: 'x'.repeat(241) })).toBe(
+      'Jaina no pudo armar la propuesta.',
+    );
+  });
+
+  it('reads nothing off a row with no error, and hands the card the human line', () => {
+    expect(proposalFailureReason(null)).toBeNull();
+    const failed = {
+      id: 'p-2',
+      brand_id: '33333333-3333-4333-8333-333333333333',
+      ad_account_id: 'act_1',
+      adset_id: 'as-1',
+      trigger: 'F3_audience_exhausted',
+      kind: 'audience_expand',
+      recommendation_id: '44444444-4444-4444-8444-444444444444',
+      utc_day: '2026-09-29',
+      status: 'failed',
+      proposal: null,
+      blocked_by: null,
+      error: { code: 'propose_failed', phase: 'propose', message: zodDump },
+      created_at: '2026-09-29T19:08:58Z',
+      updated_at: '2026-09-29T19:09:45Z',
+    } as never;
+    const view = audienceCardView([failed], {
+      id: '44444444-4444-4444-8444-444444444444',
+      adset_id: 'as-1',
+      trigger: 'F3_audience_exhausted',
+    });
+    expect(view.state).toBe('failed');
+    expect(view.errorMessage).toBe('Jaina no pudo armar la propuesta.');
   });
 });
 

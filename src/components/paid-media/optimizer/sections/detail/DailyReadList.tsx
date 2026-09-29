@@ -1,6 +1,7 @@
 'use client';
 
 import type { AdhocSuggestionFigure } from '@continuum/contracts';
+import type * as React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -37,7 +38,15 @@ type DailyReadListProps = {
   /** Why the last build on a row did not happen, printed on that row. A refusal nobody can
    *  see is the dead end this list exists to close, wearing a different hat. */
   failure?: { rowId: string; message: string } | null;
+  /** The row opened in place — an asked-for row whose handoff opened an audience proposal
+   *  shows that proposal under itself. Null ⇒ nothing is open. */
+  expandedRowId?: string | null;
+  /** What the open row shows. Absent ⇒ no row can open. */
+  renderExpansion?: (row: DailyReadRow) => React.ReactNode;
 };
+
+/** The control's label while its row is open: the same button closes what it opened. */
+const CLOSE_LABEL = 'Cerrar la propuesta';
 
 function formatFigure(figure: AdhocSuggestionFigure, currency: string | null): string {
   switch (figure.unit) {
@@ -71,6 +80,8 @@ export function DailyReadList({
   busyRowId = null,
   isWaiting,
   failure = null,
+  expandedRowId = null,
+  renderExpansion,
 }: DailyReadListProps) {
   if (rows.length === 0) return null;
   const asked = rows.filter((row) => row.origin === 'asked').length;
@@ -91,6 +102,7 @@ export function DailyReadList({
         {rows.map((row) => {
           const waiting = isWaiting?.(row) ?? false;
           const busy = busyRowId === row.id;
+          const expanded = expandedRowId === row.id && Boolean(renderExpansion);
           return (
             <li
               className={cn(
@@ -185,6 +197,7 @@ export function DailyReadList({
                     </Button>
                   ) : null}
                   <Button
+                    aria-expanded={renderExpansion ? expanded : undefined}
                     className="h-8 px-4 text-xs"
                     disabled={waiting || busy}
                     onClick={() => onCta(row.cta, row)}
@@ -192,10 +205,18 @@ export function DailyReadList({
                     type="button"
                     variant="secondary"
                   >
-                    {busy ? 'Working…' : row.cta.label}
+                    {busy ? 'Working…' : expanded ? CLOSE_LABEL : row.cta.label}
                   </Button>
                 </div>
               </div>
+              {expanded && renderExpansion ? (
+                <div
+                  className="rounded-lg border border-border/60 bg-card px-4 py-4 sm:col-span-2"
+                  data-testid={`read-expansion:${row.id}`}
+                >
+                  {renderExpansion(row)}
+                </div>
+              ) : null}
             </li>
           );
         })}

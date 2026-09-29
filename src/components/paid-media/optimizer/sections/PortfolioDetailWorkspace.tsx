@@ -80,6 +80,8 @@ import type { OptimizerAdMetric, WorkspaceSection } from '../useOptimizerUrlStat
 import { AdsetCreativeVerdicts } from './AdsetCreativeVerdicts';
 import { ApplyReallocationDialog } from './ApplyReallocationDialog';
 import { resultWords } from './account/overviewModel';
+import { carriedRecommendation, portfolioSpecsFrom } from './audienceCardModel';
+import { AskedProposalPanel } from './detail/AskedProposalPanel';
 import { askedRecommendationIds, buildAskedForRows } from './detail/askedForModel';
 import { buildBeforeAfter } from './detail/beforeAfterModel';
 import { DailyReadList } from './detail/DailyReadList';
@@ -94,7 +96,10 @@ import { type RangeSpec, resolveRange, todayIso } from './detail/rangeModel';
 import { buildRecap } from './detail/recapModel';
 import { SuggestionAsk } from './detail/SuggestionAsk';
 import { useAdhocSuggestionMutations, useAdhocSuggestions } from './detail/useAdhocSuggestions';
-import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
+import {
+  OptimizerActionsPortfolioGroup,
+  useAudienceCardActions,
+} from './OptimizerActionsPortfolioGroup';
 import { OptimizerPanel } from './OptimizerPanel';
 import { OptimizerReadError } from './OptimizerReadError';
 import { PortfolioManagePanel } from './PortfolioManagePanel';
@@ -359,7 +364,7 @@ export function PortfolioDetailWorkspace({
   // two are concatenated into the ONE list below. A suggestion whose plan names a queue row
   // focuses that row in the group underneath, exactly as a brief candidate does.
   const suggestionsQuery = useAdhocSuggestions(portfolio.id);
-  const { ask, adopt, implement, dismiss } = useAdhocSuggestionMutations(portfolio.id);
+  const { ask, adopt, implement, dismiss } = useAdhocSuggestionMutations(portfolio.id, brandId);
   const [asking, setAsking] = useState<AdhocSuggestionCategory | null>(null);
   // The brand's audience proposals (the same read the queue's audience card uses): an
   // asked-for handoff that opened a proposal says on its own row what became of it.
@@ -372,6 +377,18 @@ export function PortfolioDetailWorkspace({
     [suggestionsQuery.data.rows, portfolio.daily_total, audienceProposalsQuery.data],
   );
   const askedById = useMemo(() => new Map(askedRows.map((row) => [row.id, row])), [askedRows]);
+  /** The asked-for row whose audience proposal is open under it. */
+  const [expandedAskedRowId, setExpandedAskedRowId] = useState<string | null>(null);
+  // The audience card's actions, wired once for the queue below and for the row that opens
+  // its proposal in place; a request that fails prints on the row that asked for it.
+  const noteAskedRow = useCallback(
+    (recId: string, message: string) => {
+      const asked = askedRows.find((row) => row.handoff?.recommendation_id === recId);
+      if (asked) setBuildFailure({ rowId: asked.id, message });
+    },
+    [askedRows],
+  );
+  const audienceCard = useAudienceCardActions(brandId, adAccountId, noteAskedRow);
   // The recommendations those handoffs point at; the queue carries one the cycle report has
   // since dropped, so "Open the audience proposal" always has a row to land on.
   const askedRecIds = useMemo(() => askedRecommendationIds(askedRows), [askedRows]);
@@ -447,6 +464,12 @@ export function PortfolioDetailWorkspace({
       });
       return;
     }
+    if (asked && cta.kind === 'audience_card' && asked.handoff?.proposal_id) {
+      // The proposal opens on the row itself, and the same press closes it again. No tab
+      // switch, no queue row to hunt for: the row that asked is where the answer shows.
+      setExpandedAskedRowId((current) => (current === asked.id ? null : asked.id));
+      return;
+    }
     onHeroCta(cta);
   };
 
@@ -482,6 +505,39 @@ export function PortfolioDetailWorkspace({
   // snapshot for the objective's spend/results, resolved to a human name, and given
   // the shared CI scale so the cost cell's confidence bars line up across rows.
   const snapshotById = new Map(snapshotsQuery.data.map((snapshot) => [snapshot.id, snapshot]));
+  const portfolioSpecs = useMemo(
+    () =>
+      portfolioSpecsFrom(
+        snapshotsQuery.targeting,
+        (adsetId) => snapshotsQuery.data.find((snapshot) => snapshot.id === adsetId)?.name ?? null,
+      ),
+    [snapshotsQuery.targeting, snapshotsQuery.data],
+  );
+  /** What an opened asked-for row shows: its proposal, on the recommendation the handoff
+   *  minted — the report's row when it lists it, else the one rebuilt from the proposal. */
+  const renderAskedExpansion = (row: DailyReadRow) => {
+    const asked = askedById.get(row.id);
+    if (!asked?.handoff?.proposal_id) return null;
+    const recId = asked.handoff.recommendation_id;
+    const rec =
+      report?.recommendations.find((candidate) => candidate.id === recId) ??
+      (asked.proposal ? carriedRecommendation(asked.proposal.row, asked.handoff.adset_name) : null);
+    const adsetId = asked.handoff.adset_id;
+    return (
+      <AskedProposalPanel
+        actions={audienceCard.actions}
+        adAccountId={adAccountId}
+        busy={audienceCard.busy}
+        cboPreviewByCampaign={audienceCard.cboPreviewByCampaign}
+        currency={currency ?? null}
+        portfolioSpecs={portfolioSpecs}
+        rec={rec}
+        resultWord={resultWord}
+        row={asked}
+        snapshot={adsetId ? (snapshotById.get(adsetId) ?? null) : null}
+      />
+    );
+  };
   const adsetRows = items.map((item) =>
     itemToRow(item, {
       metric,
@@ -992,10 +1048,12 @@ export function PortfolioDetailWorkspace({
             <DailyReadList
               busyRowId={busyRowId}
               currency={currency}
+              expandedRowId={expandedAskedRowId}
               failure={buildFailure}
               isWaiting={isReadRowWaiting}
               onCta={onReadCta}
               onDismiss={onReadDismiss}
+              renderExpansion={renderAskedExpansion}
               rows={readRows}
               source={heroView.source}
             />
@@ -1005,7 +1063,10 @@ export function PortfolioDetailWorkspace({
               here. The group carries its own search + approve/execute toolbar.
               pendingWorkCount comes from the LIST read, so a failed performance read (which
               zeroes movedCount) can no longer hide a portfolio's own actionable work. */}
-          {pendingWorkCount(portfolio) > 0 || movedCount > 0 || askedRecIds.length > 0 ? (
+          {pendingWorkCount(portfolio) > 0 ||
+          movedCount > 0 ||
+          askedRecIds.length > 0 ||
+          focusRowKey !== null ? (
             <OptimizerActionsPortfolioGroup
               adAccountId={adAccountId}
               askedRecommendationIds={askedRecIds}

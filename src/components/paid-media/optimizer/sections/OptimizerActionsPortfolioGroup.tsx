@@ -210,6 +210,11 @@ type EvidenceContext = {
   cboPreviewByCampaign: ReadonlyMap<string, ConvertCboResponse>;
 };
 
+/** The audience card's actions and their busy flags, as `useAudienceCardActions` hands them
+ *  out — to this queue's rows and to the asked-for row that opens its proposal in place. */
+export type AudienceCardActions = EvidenceContext['audienceActions'];
+export type AudienceCardBusy = EvidenceContext['audienceBusy'];
+
 type SettingsActions = {
   busy: boolean;
   apply: (rec: RecommendationRow, patch: SettingsPatch) => Promise<void>;
@@ -359,6 +364,8 @@ export function buildCounterparties(
 
 const FOCUS_PIN_INTERVAL_MS = 200;
 const FOCUS_PIN_DURATION_MS = 3_000;
+/** How long a focus key may go unmatched before the queue says so out loud. */
+const FOCUS_MISSING_DELAY_MS = 3_000;
 const USER_SCROLL_EVENTS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
 
 /**
@@ -436,7 +443,89 @@ type OptimizerActionsPortfolioGroupProps = {
   /** Recommendations the portfolio's asked-for handoffs point at. One the report no longer
    *  lists is carried into the queue from its audience proposal (see buildActionQueue). */
   askedRecommendationIds?: readonly string[];
+  /** After this long with a `focusRowKey` no row matches, the queue prints a note instead of
+   *  staying silent. The default is the real wait; tests shorten it. */
+  focusMissingDelayMs?: number;
 };
+
+/**
+ * The audience card's actions, wired once to the brand's proposal mutations and the CBO
+ * conversion, with the busy flags each button reads. The queue rows use it through the
+ * evidence context; the asked-for row that opens its proposal in place uses it directly,
+ * so both surfaces press the same RPCs and never wire a second copy of the same request.
+ * `noteFor` receives the recommendation id and the message when a request fails.
+ */
+export function useAudienceCardActions(
+  brandId: string,
+  adAccountId: string,
+  noteFor: (recId: string, message: string) => void,
+): {
+  actions: AudienceCardActions;
+  busy: AudienceCardBusy;
+  cboPreviewByCampaign: ReadonlyMap<string, ConvertCboResponse>;
+} {
+  const audienceMutations = useAudienceProposalMutations(brandId);
+  const convertCboMutation = useConvertCbo(brandId);
+  const [cboPreviewByCampaign, setCboPreviewByCampaign] = React.useState<
+    ReadonlyMap<string, ConvertCboResponse>
+  >(new Map());
+  const [requestingRecId, setRequestingRecId] = React.useState<string | null>(null);
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const actions = React.useMemo<AudienceCardActions>(
+    () => ({
+      request: (recId) => {
+        setRequestingRecId(recId);
+        audienceMutations.request.mutate(recId, {
+          onError: (error) =>
+            noteFor(recId, error instanceof Error ? error.message : 'Could not ask Jaina.'),
+          onSettled: () => setRequestingRecId(null),
+        });
+      },
+      approve: (input) => {
+        setBusyId(input.proposalId);
+        audienceMutations.approve.mutate(input, { onSettled: () => setBusyId(null) });
+      },
+      cancel: (proposalId) => {
+        setBusyId(proposalId);
+        audienceMutations.cancel.mutate(proposalId, { onSettled: () => setBusyId(null) });
+      },
+      activate: (proposalId) => {
+        setBusyId(proposalId);
+        audienceMutations.activate.mutate(proposalId, { onSettled: () => setBusyId(null) });
+      },
+      undo: (proposalId) => {
+        setBusyId(proposalId);
+        audienceMutations.undo.mutate(proposalId, { onSettled: () => setBusyId(null) });
+      },
+      convertCbo: (campaignId, dryRun) => {
+        convertCboMutation.mutate(
+          { brandId, accountId: adAccountId, campaignId, dryRun },
+          {
+            onSuccess: (data: ConvertCboResponse | null) => {
+              if (data) setCboPreviewByCampaign((prev) => new Map(prev).set(campaignId, data));
+            },
+          },
+        );
+      },
+    }),
+    [adAccountId, audienceMutations, brandId, convertCboMutation, noteFor],
+  );
+  const approving = audienceMutations.approve.isPending;
+  const convertingCbo = convertCboMutation.isPending;
+  return React.useMemo(
+    () => ({
+      actions,
+      busy: {
+        requestingRecId,
+        approvingId: approving ? busyId : null,
+        busyId,
+        convertingCbo,
+      },
+      cboPreviewByCampaign,
+    }),
+    [actions, requestingRecId, approving, busyId, convertingCbo, cboPreviewByCampaign],
+  );
+}
 
 export function OptimizerActionsPortfolioGroup({
   brandId,
@@ -445,6 +534,7 @@ export function OptimizerActionsPortfolioGroup({
   focusRowKey = null,
   onFocusRowConsumed,
   askedRecommendationIds,
+  focusMissingDelayMs = FOCUS_MISSING_DELAY_MS,
 }: OptimizerActionsPortfolioGroupProps) {
   const performanceQuery = useOptimizerPerformance(portfolio.id);
   const enrolledQuery = useOptimizerEnrolledAdsets(portfolio.id);
@@ -525,6 +615,19 @@ export function OptimizerActionsPortfolioGroup({
     setExpanded(focusRowKey);
   }, [focusRowKey]);
   const focusRowPresent = focusRowKey != null && rows.some((row) => row.key === focusRowKey);
+  // A key with no row for a while is a pressed button that did nothing, and silence there is
+  // the dead end the read rows exist to close, wearing another hat. After the delay the queue
+  // says so in words, and keeps saying it until the row arrives (a build's row lands with the
+  // next fetch of the report) or the key is dropped.
+  const [focusMissing, setFocusMissing] = React.useState(false);
+  React.useEffect(() => {
+    if (!focusRowKey || focusRowPresent) {
+      setFocusMissing(false);
+      return;
+    }
+    const timer = setTimeout(() => setFocusMissing(true), focusMissingDelayMs);
+    return () => clearTimeout(timer);
+  }, [focusRowKey, focusRowPresent, focusMissingDelayMs]);
   // The pin outlives the key on purpose: handing the key back re-runs this effect with null,
   // and a pin tied to the effect's cleanup died there — right after a first smooth scroll
   // that the still-loading panels above had already cancelled.
@@ -726,52 +829,7 @@ export function OptimizerActionsPortfolioGroup({
     },
     [adAccountId, brandId, flash.implement, noteFor, swapJobsQuery],
   );
-  const audienceMutations = useAudienceProposalMutations(brandId);
-  const convertCboMutation = useConvertCbo(brandId);
-  const [cboPreviewByCampaign, setCboPreviewByCampaign] = React.useState<
-    ReadonlyMap<string, ConvertCboResponse>
-  >(new Map());
-  const [audienceRequestingRecId, setAudienceRequestingRecId] = React.useState<string | null>(null);
-  const [audienceBusyId, setAudienceBusyId] = React.useState<string | null>(null);
-  const audienceActions = React.useMemo<EvidenceContext['audienceActions']>(
-    () => ({
-      request: (recId) => {
-        setAudienceRequestingRecId(recId);
-        audienceMutations.request.mutate(recId, {
-          onError: (error) =>
-            noteFor(recId, error instanceof Error ? error.message : 'Could not ask Jaina.'),
-          onSettled: () => setAudienceRequestingRecId(null),
-        });
-      },
-      approve: (input) => {
-        setAudienceBusyId(input.proposalId);
-        audienceMutations.approve.mutate(input, { onSettled: () => setAudienceBusyId(null) });
-      },
-      cancel: (proposalId) => {
-        setAudienceBusyId(proposalId);
-        audienceMutations.cancel.mutate(proposalId, { onSettled: () => setAudienceBusyId(null) });
-      },
-      activate: (proposalId) => {
-        setAudienceBusyId(proposalId);
-        audienceMutations.activate.mutate(proposalId, { onSettled: () => setAudienceBusyId(null) });
-      },
-      undo: (proposalId) => {
-        setAudienceBusyId(proposalId);
-        audienceMutations.undo.mutate(proposalId, { onSettled: () => setAudienceBusyId(null) });
-      },
-      convertCbo: (campaignId, dryRun) => {
-        convertCboMutation.mutate(
-          { brandId, accountId: adAccountId, campaignId, dryRun },
-          {
-            onSuccess: (data: ConvertCboResponse | null) => {
-              if (data) setCboPreviewByCampaign((prev) => new Map(prev).set(campaignId, data));
-            },
-          },
-        );
-      },
-    }),
-    [adAccountId, audienceMutations, brandId, convertCboMutation, noteFor],
-  );
+  const audienceCard = useAudienceCardActions(brandId, adAccountId, noteFor);
   const portfolioSpecs = React.useMemo(
     () =>
       portfolioSpecsFrom(
@@ -800,14 +858,9 @@ export function OptimizerActionsPortfolioGroup({
       currency,
       resultWord: metric.resultLabel.toLowerCase(),
       audienceProposals: audienceProposalsQuery.data,
-      audienceActions,
-      audienceBusy: {
-        requestingRecId: audienceRequestingRecId,
-        approvingId: audienceMutations.approve.isPending ? audienceBusyId : null,
-        busyId: audienceBusyId,
-        convertingCbo: convertCboMutation.isPending,
-      },
-      cboPreviewByCampaign,
+      audienceActions: audienceCard.actions,
+      audienceBusy: audienceCard.busy,
+      cboPreviewByCampaign: audienceCard.cboPreviewByCampaign,
     }),
     [
       snapshotById,
@@ -828,12 +881,7 @@ export function OptimizerActionsPortfolioGroup({
       currency,
       metric.resultLabel,
       audienceProposalsQuery.data,
-      audienceActions,
-      audienceRequestingRecId,
-      audienceMutations.approve.isPending,
-      audienceBusyId,
-      convertCboMutation.isPending,
-      cboPreviewByCampaign,
+      audienceCard,
     ],
   );
 
@@ -1126,6 +1174,16 @@ export function OptimizerActionsPortfolioGroup({
         </div>
       ) : null}
 
+      {focusMissing ? (
+        <p
+          className="mb-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-foreground text-sm"
+          data-testid="queue-focus-missing"
+          role="status"
+        >
+          La fila a la que apunta ese botón todavía no está en la cola. Si se acaba de crear,
+          aparece con la próxima lectura del ciclo.
+        </p>
+      ) : null}
       <ul className="space-y-2">
         {visibleRows.map((row, index) => (
           <React.Fragment key={row.key}>
