@@ -18,6 +18,7 @@ export const templateRebindPreviewSchema = z
     versionId: z.string().uuid(),
     checksum: z.string().regex(/^[a-f0-9]{64}$/),
     slots: z.array(templateRebindSlotSchema),
+    missingFootage: z.array(z.object({ name: z.string().nullable(), file: z.string() })).optional(),
     requiresReview: z.boolean(),
   })
   .strict();

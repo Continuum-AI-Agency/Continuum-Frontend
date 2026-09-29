@@ -6,7 +6,14 @@ import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-export const FORGE_PROJECT_ACCEPT = '.aep,.aepx,.aet,.zip,.ttf,.otf';
+export const FORGE_PROJECT_ACCEPT = '.aep,.aepx,.aet,.zip,.psd,.ai,.ttf,.otf';
+
+/** Layered Photoshop and Illustrator files the Forge turns into a template: every layer comes in,
+ * text stays live. */
+export const FORGE_DESIGN_EXTENSIONS = ['.psd', '.ai'];
+
+export const isForgeDesignFile = (name: string) =>
+  FORGE_DESIGN_EXTENSIONS.includes(name.slice(name.lastIndexOf('.')).toLowerCase());
 
 /** The Library upload records no checksum above this size, so a bigger file has nothing to match. */
 const HASHED_UP_TO_BYTES = 64 * 1024 * 1024;
@@ -72,7 +79,8 @@ export function partitionForgeProjectFiles(files: File[]): {
   return files.reduce<{ accepted: File[]; fonts: File[]; rejected: File[] }>(
     (result, file) => {
       const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
-      if (['.aep', '.aepx', '.aet', '.zip'].includes(extension)) result.accepted.push(file);
+      if (['.aep', '.aepx', '.aet', '.zip', ...FORGE_DESIGN_EXTENSIONS].includes(extension))
+        result.accepted.push(file);
       else if (['.ttf', '.otf'].includes(extension)) result.fonts.push(file);
       else result.rejected.push(file);
       return result;
@@ -145,8 +153,9 @@ export function ForgeProjectDrop({
           New template
         </span>
         <span className="max-w-60 text-xs font-normal text-muted-foreground">
-          Drop an After Effects project (.aep, .aepx, .aet or .zip), with its .ttf or .otf fonts if
-          they came separately, or click to choose.
+          Drop an After Effects project (.aep, .aepx, .aet or .zip), a layered Photoshop (.psd) or
+          Illustrator (.ai) file, with its .ttf or .otf fonts if they came separately, or click to
+          choose.
         </span>
       </Button>
     </>

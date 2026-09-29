@@ -259,23 +259,37 @@ export function RenderJobDetail({
   onRefresh: () => void;
 }) {
   const { formats: templateFormats, labelByKey } = useJobFormats(job, givenFormats);
+  const files = playableFirst(job.outputs);
+  const unmatched = templateFormats.length
+    ? files.filter((output) => !matchOutputFormat(output.fileName, templateFormats))
+    : [];
   // ponytail: with no contract, parse or judged ratio to name them, each file is its own format
   // drawn from its stored size (square when the fleet stored none). Goes once contracts always load.
   const formats: PreviewFormat[] = templateFormats.length
-    ? templateFormats
-    : job.outputs.map((output) => ({
+    ? [
+        ...templateFormats,
+        ...unmatched.map((output) => ({
+          id: `file:${output.id}`,
+          label: output.fileName,
+          ratio: null,
+          width: output.width,
+          height: output.height,
+        })),
+      ]
+    : files.map((output) => ({
         id: output.id,
         label: output.fileName,
         ratio: null,
         width: output.width,
         height: output.height,
       }));
-  const files = playableFirst(job.outputs);
   const filesFor = (formatId: string) =>
     files.filter((output) =>
-      templateFormats.length
-        ? matchOutputFormat(output.fileName, formats)?.id === formatId
-        : output.id === formatId,
+      formatId.startsWith('file:')
+        ? `file:${output.id}` === formatId
+        : templateFormats.length
+          ? matchOutputFormat(output.fileName, templateFormats)?.id === formatId
+          : output.id === formatId,
     );
   const fileFor = (formatId: string) => filesFor(formatId)[0] ?? null;
   const [picked, setPicked] = useState<string | null>(null);

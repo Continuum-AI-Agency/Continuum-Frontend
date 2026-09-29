@@ -472,6 +472,7 @@ export type SharedTemplate = {
   updatedAt: string | null;
   /** The binding this template lives in. Always set — adoption and rendering both need it. */
   workspaceId: string;
+  sourceAssetId?: string | null;
 };
 
 /**

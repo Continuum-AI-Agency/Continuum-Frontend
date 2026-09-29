@@ -710,7 +710,7 @@ describe('RenderJobsGrid', () => {
     expect(rowOrder()).toEqual(['Promo B']);
   }, 30_000);
 
-  test('one template’s ledger: filtered by the server, grouped by set, its thumbnail the first format’s file', async () => {
+  test('one template’s ledger: filtered by the server, grouped by set, its thumbnail the first available format’s file', async () => {
     const file = (fileName: string) => ({
       id: `hash-${fileName}`,
       kind: 'image' as const,
@@ -744,6 +744,7 @@ describe('RenderJobsGrid', () => {
     };
     jobsFixture = [launch, loose];
     const formats = [
+      { id: '4:5', label: '4:5', ratio: '4:5', width: null, height: null },
       { id: '1:1', label: '1:1', ratio: '1:1', width: null, height: null },
       { id: '16:9', label: '16:9', ratio: '16:9', width: null, height: null },
     ];

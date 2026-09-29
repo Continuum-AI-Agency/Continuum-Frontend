@@ -8,6 +8,7 @@ import {
   type TemplateFontPushResponse,
   type TemplateFontReadiness,
   type TemplateSourceSummary,
+  publicationCompsOfParse,
   templateNameProblem,
   UNTITLED_TEMPLATE_NAME,
 } from '@continuum/contracts';
@@ -49,6 +50,7 @@ import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
 import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import { TemplateActivity, templateEventsKey } from '@/components/forge/TemplateActivity';
+import { TemplateMappingReviewPanel } from '@/components/forge/TemplateMappingReview';
 import { TemplateRenders } from '@/components/forge/TemplateRenders';
 import { TemplateTextRepairCanvas, type TextMove, textMoveKey } from '@/components/forge/TemplateTextRepairCanvas';
 import { useForgeRun } from '@/components/forge/useForgeRun';
@@ -71,11 +73,14 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toast-imperative';
 import {
+  advanceTemplateForgeBundle,
   advanceTemplateForgeRun,
   editableTemplateFonts,
   type ForgeLadderAction,
   fetchTemplateFontCandidates,
+  fetchTemplateForgeBundle,
   fetchTemplateFonts,
+  fetchTemplateMappingReview,
   fetchTemplateVariables,
   healTemplateFonts,
   confirmTemplateRebind,
@@ -224,6 +229,16 @@ export function TemplateDetail({
   );
   const name = sourceDisplayName(source);
   const { run, pushed, refresh: refreshRun } = useForgeRun(brandId, assetId);
+  const multiDelivery = publicationCompsOfParse(source.parse).length > 1;
+  const bundleKey = ['template-forge-bundle', brandId, assetId, source.versionId];
+  const { data: bundle, refetch: refreshBundle } = useQuery({
+    queryKey: bundleKey,
+    queryFn: () => fetchTemplateForgeBundle(brandId, assetId),
+    enabled: Boolean(source.forgeRunId && multiDelivery),
+    refetchInterval: (query) => query.state.data?.activation?.state === 'published' ? false : 5000,
+    retry: false,
+  });
+  const [bundleBusy, setBundleBusy] = useState<string | null>(null);
   // The formats the file delivers — its parse's comps, else its ratio labels — and the one on screen.
   const formats = useMemo(
     () => previewFormats({ parse: source.parse, ratios: source.ratios }),
@@ -467,7 +482,7 @@ export function TemplateDetail({
       // sub-app. Which one that is, is our deployment topology, not a question for the person
       // naming a template.
       await sendTemplateToForge(brandId, assetId, templateName.trim());
-      await Promise.all([onChanged(), refreshRun()]);
+      await Promise.all([onChanged(), refreshRun(), refreshBundle()]);
       toast.success('Sent to the forge');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not start the run');
@@ -490,6 +505,21 @@ export function TemplateDetail({
     } finally {
       setBusy(null);
       void refreshEvents();
+    }
+  };
+
+  const onBundleAdvance = async (
+    action: 'smoke' | 'promotion-plan' | 'approve' | 'resume',
+    options: { confirmation?: string; runId?: string } = {},
+  ) => {
+    setBundleBusy(action);
+    try {
+      await advanceTemplateForgeBundle(brandId, assetId, action, options);
+      await Promise.all([refreshBundle(), onChanged()]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : `Could not ${action}`);
+    } finally {
+      setBundleBusy(null);
     }
   };
 
@@ -543,6 +573,13 @@ export function TemplateDetail({
     retry: false,
   });
   const publishVerification = publishedContract?.publishCheck ?? null;
+  const { data: mappingReview, isError: mappingCheckFailed } = useQuery({
+    queryKey: forgeQueryKeys.mappingReview(brandId, assetId, source.versionId, run?.state ?? null),
+    queryFn: () => fetchTemplateMappingReview(brandId, assetId),
+    enabled: Boolean(source.forgeRunId && parseState === 'parsed'),
+    staleTime: FORGE_STALE_MS.active,
+    retry: false,
+  });
   // The template is a Library asset too: its thread and versions live there.
   const library = useLibraryState(brandId, [assetId]).get(assetId);
   const { data: setCount } = useQuery({
@@ -584,7 +621,10 @@ export function TemplateDetail({
   const drawnRatios = new Set(wireframeFrames(source.parse).map((frame) => frame.ratio));
 
   const ladder = ladderFor(run?.state);
+  const mappingBlocked =
+    mappingReview?.identityAvailable === true && mappingReview.state === 'needs_review';
   const ladderButton = (action: ForgeLadderAction | undefined) => {
+    if (multiDelivery) return undefined;
     const step = ladder.find((entry) => entry.action === action);
     if (!step) return undefined;
     const { Icon } = step;
@@ -594,8 +634,12 @@ export function TemplateDetail({
         size="xs"
         variant="outline"
         className="gap-1"
-        title={step.hint}
-        disabled={busy !== null}
+        title={
+          action === 'promote' && mappingBlocked
+            ? 'Review unmatched After Effects layers before publishing.'
+            : step.hint
+        }
+        disabled={busy !== null || (action === 'promote' && mappingBlocked)}
         onClick={() => void onAdvance(step.action)}
       >
         {busy === step.action ? (
@@ -805,7 +849,7 @@ export function TemplateDetail({
 
   const buildDetail = (
     <div className="flex flex-col gap-3">
-      {!run || run.state === 'failed' ? (
+      {(!run || run.state === 'failed' || (multiDelivery && !bundle)) ? (
         <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <Input
@@ -849,8 +893,43 @@ export function TemplateDetail({
           </p>
         </div>
       ) : null}
-      {run ? <ForgeRunProgress run={run} /> : null}
-      {mappingNeeds.length ? (
+      {bundle ? (
+        <div className="rounded-md border p-3 space-y-3">
+          <p className="font-medium">Delivery templates</p>
+          <p className="text-sm text-muted-foreground">Each format has its own fields and render selection.</p>
+          {bundle.children.map((child) => (
+            <div key={child.runId} className="flex flex-wrap items-center justify-between gap-2 border-t pt-2 text-sm">
+              <span>{child.compName}</span>
+              <span className="text-muted-foreground">{child.state.replaceAll('_', ' ')}{child.smoke && typeof child.smoke === 'object' && 'state' in child.smoke ? ` · test ${String(child.smoke.state)}` : ''}</span>
+              {child.smokeFiles?.map((url, index) => (
+                <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                  View test {index + 1}
+                </a>
+              ))}
+              {(child.state === 'needs_input' || child.state === 'failed') ? (
+                <Button type="button" size="xs" variant="outline" disabled={bundleBusy !== null}
+                  onClick={() => void onBundleAdvance('resume', { runId: child.runId })}>Retry build</Button>
+              ) : null}
+            </div>
+          ))}
+          <div className="flex gap-2">
+            {bundle.children.some((child) => child.state === 'draft_ready') ? (
+              <Button type="button" size="sm" disabled={bundleBusy !== null}
+                onClick={() => void onBundleAdvance('smoke')}>Test all formats</Button>
+            ) : null}
+            {bundle.children.every((child) => child.state === 'review_ready') && !bundle.approval ? (
+              <Button type="button" size="sm" disabled={bundleBusy !== null}
+                onClick={() => void onBundleAdvance('promotion-plan')}>Review publication</Button>
+            ) : null}
+            {bundle.approval && bundle.activation?.state !== 'published' ? (
+              <Button type="button" size="sm" disabled={bundleBusy !== null}
+                onClick={() => void onBundleAdvance('approve', { confirmation: bundle.approval?.confirmation })}>Publish all formats</Button>
+            ) : null}
+            {bundle.activation?.state === 'published' ? <span className="text-sm text-success">All formats published</span> : null}
+          </div>
+        </div>
+      ) : !multiDelivery && run ? <ForgeRunProgress run={run} /> : null}
+      {!multiDelivery && mappingNeeds.length ? (
         <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2">
           <MappingQuestions
             key={mappingNeeds.map((need) => need.id).join('|')}
@@ -860,7 +939,7 @@ export function TemplateDetail({
           />
         </div>
       ) : null}
-      {otherNeeds.length ? (
+      {!multiDelivery && otherNeeds.length ? (
         <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2">
           {/*
             An `asset` need is where EVERY from-scratch build lands — the table is built, the
@@ -930,6 +1009,8 @@ export function TemplateDetail({
     templateKey,
     publishVerification,
     publishCheckFailed,
+    mappingReview,
+    mappingCheckFailed,
   }).map((check) => ({
     name: check.name,
     what: check.what,
@@ -942,7 +1023,14 @@ export function TemplateDetail({
       </Pill>
     )),
     detail: detailOf[check.id],
-    action: ladderButton(check.action),
+    action:
+      check.id === 'mapping' && mappingReview?.state === 'needs_review' ? (
+        <Button type="button" size="xs" variant="outline" onClick={() => setTab('mapping')}>
+          Review mapping
+        </Button>
+      ) : (
+        ladderButton(check.action)
+      ),
   }));
 
   const hasProblem = checks.some((check) => check.state === 'fail' || check.state === 'warn');
@@ -1282,10 +1370,7 @@ export function TemplateDetail({
             This template package is missing {missingFootage.length} media file
             {missingFootage.length === 1 ? '' : 's'}.
           </p>
-          <p>
-            Upload a new ZIP that includes the AEP and these files. Keep their paths relative to the
-            AEP.
-          </p>
+          <p>Open Source revision to drop each missing file onto its repair row.</p>
           <ul className="my-2 max-h-40 list-disc overflow-y-auto pl-4">
             {missingFootage.map((item) => (
               <li key={item.file}>
@@ -1294,7 +1379,7 @@ export function TemplateDetail({
             ))}
           </ul>
           <Button type="button" size="sm" variant="outline" onClick={() => setTab('source')}>
-            Upload corrected ZIP
+            Repair missing media
           </Button>
         </section>
       ) : null}
@@ -1306,6 +1391,9 @@ export function TemplateDetail({
         >
           <TabsTrigger value="variables" className="flex-none px-0 text-xs">
             Variables
+          </TabsTrigger>
+          <TabsTrigger value="mapping" className="flex-none px-0 text-xs">
+            Mapping
           </TabsTrigger>
           {templateKey ? (
             <TabsTrigger value="output" className="flex-none px-0 text-xs">
@@ -1335,6 +1423,9 @@ export function TemplateDetail({
             onSave={onSave}
           />
         </TabsContent>
+        <TabsContent value="mapping" keepMounted className="p-[var(--card-pad)]">
+          <TemplateMappingReviewPanel review={mappingReview ?? null} />
+        </TabsContent>
         {templateKey ? (
           <TabsContent value="output" keepMounted className="p-[var(--card-pad)]">
             {/* Renders nothing until the template's contract carries output settings. */}
@@ -1347,6 +1438,8 @@ export function TemplateDetail({
             brandId={brandId}
             assetId={assetId}
             expectedVersionId={source.versionId}
+            aepName={source.parse?.filename}
+            missingFootage={missingFootage}
             initialFile={revisionFile}
             onInitialFileTaken={onRevisionTaken}
             onConfirmed={async () => {

@@ -35,7 +35,8 @@ const SOURCE: TemplateSource = {
 const toastError = mock((_message: string) => undefined);
 let discovered: unknown[] = [];
 let fetchedSources: TemplateSource[] = [SOURCE];
-let uploadFinished: (() => void) | undefined;
+type UploadFinished = (result: { file: File; uploaded: { assetId: string } }) => void;
+let uploadFinished: UploadFinished | undefined;
 const fetchTemplateSources = mock(async () => fetchedSources);
 const fetchRenderWorkspaces = mock(async () => []);
 const discoverWorkspaceTemplates = mock(async () => ({ items: discovered }));
@@ -68,7 +69,7 @@ mock.module('@/components/library/useMediaUpload', () => ({
   useMediaUpload: (
     _brandId: string,
     options?: {
-      onUploaded?: () => void;
+      onUploaded?: UploadFinished;
     },
   ) => {
     uploadFinished = options?.onUploaded;
@@ -151,7 +152,7 @@ describe('ForgeWorkbench', () => {
     });
     try {
       fetchedSources = [{ ...SOURCE, parseState: 'pending' }];
-      uploadFinished?.();
+      uploadFinished?.({ file: new File(['x'], 'promo.aep'), uploaded: { assetId: 'asset-new' } });
 
       expect(await screen.findByText('Unpacking')).toBeTruthy();
       expect(screen.getByRole('button', { name: 'Open Untitled template' })).toBeTruthy();
@@ -221,6 +222,18 @@ describe('ForgeWorkbench', () => {
     expect(screen.getByRole('button', { name: /^Shared with you\s*1$/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Remove Hero offer from StarCraft' })).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/\[DRAFT|template \d+|Continuum_app/);
+  });
+
+  test('published delivery compositions appear as separate template choices', async () => {
+    fetchedSources = [{ ...SOURCE, templateKey: '99' }];
+    discovered = [
+      workspaceTemplate({ templateKey: '101', name: 'Inyogo · Card A', sourceAssetId: ASSET, granted: true }),
+      workspaceTemplate({ templateKey: '102', name: 'Inyogo · Card B', sourceAssetId: ASSET, granted: true }),
+    ];
+    renderWorkbench();
+    expect(await screen.findByRole('button', { name: 'Open Inyogo · Card A' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open Inyogo · Card B' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Open Untitled template' })).toBeNull();
   });
 
   test('a card opens into its detail panel through a transition, and Templates goes back', async () => {

@@ -287,6 +287,46 @@ export const templateParseSchema = z
   .strip();
 export type TemplateParse = z.infer<typeof templateParseSchema>;
 
+export function publicationCompsOfParse<T extends { name: string; isDelivery: boolean }>(
+  parse: { comps: T[] } | null | undefined,
+): T[] {
+  const candidates = parse?.comps.filter((comp) => comp.isDelivery) ?? [];
+  const explicit = candidates.filter((comp) => /^RENDER\b/i.test(comp.name));
+  return explicit.length > 1 ? explicit : candidates;
+}
+
+/** The AEP-to-Forge field review shown before and after publication. */
+export const templateMappingReviewSchema = z
+  .object({
+    state: z.enum(['ready', 'needs_review', 'unavailable']),
+    identityAvailable: z.boolean(),
+    slotCount: z.number().int().nonnegative(),
+    matchedSlots: z.number().int().nonnegative(),
+    fields: z.array(z.object({
+      key: z.string(),
+      label: z.string(),
+      kind: apiRenderVariableKindSchema,
+      slotKey: z.string().nullable(),
+      slotName: z.string().nullable(),
+      comps: z.array(z.string()),
+      sample: z.string().nullable(),
+      match: z.enum(['layer_id', 'name', 'forge_only', 'ambiguous']),
+    }).strict()),
+    unmatchedSlots: z.array(z.object({
+      key: z.string(),
+      name: z.string(),
+      kind: apiRenderVariableKindSchema,
+      comps: z.array(z.string()),
+    }).strict()),
+    ignoredSlots: z.array(z.object({
+      key: z.string(),
+      name: z.string(),
+      comps: z.array(z.string()),
+    }).strict()),
+  })
+  .strict();
+export type TemplateMappingReview = z.infer<typeof templateMappingReviewSchema>;
+
 /** The geometry a gallery card needs, without the full AEP parse document. */
 export const templatePreviewSchema = z
   .object({
@@ -392,6 +432,27 @@ export const templateSourceSummarySchema = templateSourceSchema
   .extend({ parse: templatePreviewSchema.nullable().default(null) })
   .strict();
 export type TemplateSourceSummary = z.infer<typeof templateSourceSummarySchema>;
+
+/** One uploaded project can publish several independently rendered delivery compositions. */
+export const templateForgeBundleSchema = z.object({
+  id: z.string().min(1),
+  sourceSha256: z.string().regex(/^[a-f0-9]{64}$/i),
+  children: z.array(z.object({
+    compId: z.number().int(),
+    compName: z.string().min(1),
+    runId: z.string().min(1),
+    templateKey: z.string().min(1),
+    state: z.string().min(1),
+    draftId: z.number().int().nullable().optional(),
+    smoke: z.unknown().nullable().optional(),
+    smokeFiles: z.array(z.string().url()).optional(),
+    needs: z.array(z.unknown()).optional(),
+    error: z.unknown().nullable().optional(),
+  }).passthrough()).min(1),
+  approval: z.object({ confirmation: z.string().min(1) }).passthrough().nullable().optional(),
+  activation: z.object({ state: z.string() }).passthrough().nullable().optional(),
+}).passthrough();
+export type TemplateForgeBundle = z.infer<typeof templateForgeBundleSchema>;
 
 /** `PATCH /api/ai-studio/templates/:assetId` — rename the template's Library asset. */
 export const renameTemplateSourceRequestSchema = z

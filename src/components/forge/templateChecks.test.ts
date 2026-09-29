@@ -46,16 +46,33 @@ const row = (input: Partial<TemplateChecksInput>, id: TemplateCheck['id']) =>
   templateChecks({ ...PARSED, ...input }).find((check) => check.id === id)!;
 
 describe('templateChecks', () => {
-  test('five rows in order, each saying what it checks', () => {
+  test('six rows in order, each saying what it checks', () => {
     const checks = templateChecks(PARSED);
     expect(checks.map((check) => check.name)).toEqual([
       'Parse',
       'Fonts',
       'Build',
+      'Mapping',
       'Test render',
       'Publish',
     ]);
     for (const check of checks) expect(check.what).toMatch(/^[A-Z].+\.$/);
+  });
+
+  test('MAPPING distinguishes verified identity from a name guess and unresolved layers', () => {
+    const ready = {
+      state: 'ready' as const, identityAvailable: true, slotCount: 1, matchedSlots: 1,
+      fields: [{ key: 'headline', label: 'Headline', kind: 'text' as const,
+        slotKey: 'text__headline', slotName: 'Headline', comps: ['wide'], sample: 'Hi',
+      match: 'layer_id' as const }], unmatchedSlots: [], ignoredSlots: [],
+    };
+    expect(row({ mappingReview: ready, run: runRow({ state: 'review_ready' }) }, 'mapping'))
+      .toMatchObject({ state: 'pass', result: '1 of 1 layers mapped' });
+    expect(row({ mappingReview: { ...ready, identityAvailable: false } , run: runRow({ state: 'review_ready' }) }, 'mapping').state)
+      .toBe('warn');
+    expect(row({ mappingReview: { ...ready, state: 'needs_review', matchedSlots: 0,
+      unmatchedSlots: [{ key: 'text__headline', name: 'Headline', kind: 'text', comps: ['wide'] }] },
+      run: runRow({ state: 'review_ready' }) }, 'mapping').state).toBe('fail');
   });
 
   test('PARSE: read, not opened, unreadable, unsupported', () => {

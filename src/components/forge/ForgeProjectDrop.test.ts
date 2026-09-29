@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'bun:test';
 import { createHash } from 'node:crypto';
-import { type TemplateSourceSummary, templateSourceSummarySchema } from '@continuum/contracts';
+import {
+  FORGE_PROJECT_FILE_MAX_MB,
+  type TemplateSourceSummary,
+  templateSourceSummarySchema,
+} from '@continuum/contracts';
 
 import {
   fileSha256,
+  isForgeDesignFile,
   matchDroppedFile,
   partitionForgeProjectFiles,
   uploadRefusal,
@@ -46,6 +51,8 @@ describe('partitionForgeProjectFiles', () => {
       file('2f0cf1733d838e005b2ef333cfea82b6.ttf'),
       file('Brand-Bold.OTF'),
       file('preview.mov'),
+      file('Invitados.PSD'),
+      file('travel.ai'),
     ]);
 
     expect(result.accepted.map((item) => item.name)).toEqual([
@@ -53,12 +60,25 @@ describe('partitionForgeProjectFiles', () => {
       'master.AEPX',
       'starter.aet',
       'collected.zip',
+      // A layered Photoshop or Illustrator file becomes a template too (uploaded, then imported).
+      'Invitados.PSD',
+      'travel.ai',
     ]);
     expect(result.fonts.map((item) => item.name)).toEqual([
       '2f0cf1733d838e005b2ef333cfea82b6.ttf',
       'Brand-Bold.OTF',
     ]);
     expect(result.rejected.map((item) => item.name)).toEqual(['preview.mov']);
+  });
+});
+
+describe('isForgeDesignFile', () => {
+  it('is a layered Photoshop or Illustrator file, by extension, any case', () => {
+    expect(isForgeDesignFile('Invitados.psd')).toBe(true);
+    expect(isForgeDesignFile('travel.AI')).toBe(true);
+    expect(isForgeDesignFile('Invitados.PSD')).toBe(true);
+    expect(isForgeDesignFile('promo.aep')).toBe(false);
+    expect(isForgeDesignFile('psd.zip')).toBe(false);
   });
 });
 
@@ -104,11 +124,12 @@ describe('matchDroppedFile', () => {
 });
 
 describe('uploadRefusal', () => {
-  const inyogo = { name: 'inyogo.zip', sizeBytes: 210 * 1024 * 1024 };
+  // Over whatever the ceiling is today: the sentence names the contract's own number.
+  const overMb = FORGE_PROJECT_FILE_MAX_MB + 50;
+  const inyogo = { name: 'inyogo.zip', sizeBytes: overMb * 1024 * 1024 };
 
   it('names the file, its size and the limit for either form of the refusal', () => {
-    const sentence =
-      'inyogo.zip is 210 MB, over the 50 MB upload limit, so it was not uploaded. Ask an admin to raise the limit.';
+    const sentence = `inyogo.zip is ${overMb} MB, over the ${FORGE_PROJECT_FILE_MAX_MB} MB upload limit, so it was not uploaded. Ask an admin to raise the limit.`;
     expect(uploadRefusal(inyogo, 'resumable upload creation failed (413)')).toBe(sentence);
     expect(
       uploadRefusal(

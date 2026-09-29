@@ -128,6 +128,30 @@ describe('VariableEditor', () => {
     expect(onSave).toHaveBeenCalledTimes(2);
   });
 
+  test('a switched-off field reads Off, cannot be required, and switching it on is a saved edit', async () => {
+    const onSave = mock(async (_edits: TemplateSlotEdit[]) => true);
+    render(
+      <VariableEditor
+        brandId="22222222-2222-4222-8222-222222222222"
+        variables={[variable({ key: 'image__rosa', label: 'ROSA', kind: 'image', charBudget: null, exposed: false })]}
+        savedDefaults={{}}
+        parseState="parsed"
+        saving={false}
+        onSave={onSave}
+      />,
+    );
+    expect(within(screen.getByRole('list', { name: 'Variables' })).getByText('Off')).toBeTruthy();
+    const ask = screen.getByRole('switch', { name: 'Ask for it' });
+    expect(ask.getAttribute('aria-checked')).toBe('false');
+    const required = screen.getByRole('switch', { name: 'Required' });
+    expect(required.getAttribute('aria-disabled') ?? required.getAttribute('data-disabled')).not.toBeNull();
+
+    fireEvent.click(ask);
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0]?.[0]).toEqual([{ slotKey: 'image__rosa', exposed: true }]);
+  });
+
   test('what a save sent is settled; an edit typed while it was in flight stays a draft', async () => {
     const answers: Array<(saved: boolean) => void> = [];
     const onSave = mock(

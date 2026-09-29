@@ -5,12 +5,17 @@ import type {
   RenderWorkspace,
   TemplateFontPushResponse,
   TemplateForgeNeed,
+  TemplateForgeBundle,
+  TemplateMappingReview,
   TemplateRebindPreview,
   TemplateSource,
   TemplateSourceSummary,
   WorkspaceTemplate,
 } from '@continuum/contracts';
 import {
+  type DesignImportRequest,
+  type DesignImportResponse,
+  designImportResponseSchema,
   type FontInventoryRow,
   fontInventoryResponseSchema,
   type RenameTemplateSourceRequest,
@@ -27,6 +32,8 @@ import {
   templateFontPushRequestSchema,
   templateFontPushResponseSchema,
   templateFontReadinessSchema,
+  templateForgeBundleSchema,
+  templateMappingReviewSchema,
   templateRebindPreviewSchema,
   templateSourceEventsResponseSchema,
   templateSourceSchema,
@@ -90,6 +97,29 @@ export async function fetchTemplateSources(brandId: string): Promise<TemplateSou
   );
   const body = await unwrap<{ items?: unknown[] }>(response, 'Template list');
   return (body.items ?? []).map((item) => templateSourceSummarySchema.parse(item));
+}
+
+export async function fetchTemplateForgeBundle(brandId: string, assetId: string): Promise<TemplateForgeBundle | null> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/bundle?brandId=${encodeURIComponent(brandId)}`,
+  );
+  const body = await unwrap<{ bundle: unknown }>(response, 'Template bundle');
+  return body.bundle == null ? null : templateForgeBundleSchema.parse(body.bundle);
+}
+
+export async function advanceTemplateForgeBundle(
+  brandId: string, assetId: string,
+  action: 'smoke' | 'promotion-plan' | 'approve' | 'resume',
+  options: { confirmation?: string; runId?: string } = {},
+): Promise<TemplateForgeBundle> {
+  const path = action === 'resume'
+    ? `/api/ai-studio/templates/${encodeURIComponent(assetId)}/bundle/children/${encodeURIComponent(options.runId ?? '')}/resume`
+    : `/api/ai-studio/templates/${encodeURIComponent(assetId)}/bundle/${action}`;
+  const response = await authorizedFetch(path, {
+    method: 'POST', body: JSON.stringify({ brandId, confirmation: options.confirmation }),
+  });
+  const body = await unwrap<{ bundle: unknown }>(response, 'Template bundle action');
+  return templateForgeBundleSchema.parse(body.bundle);
 }
 
 /** Rename a template: writes its Library asset's title, which becomes `displayName` everywhere. */
@@ -245,6 +275,23 @@ export async function sendTemplateToForge(
   return unwrap<TemplateSource>(response, 'Template Forge hand-off');
 }
 
+/**
+ * A Photoshop file already in the Library → an editable template beside it. Takes seconds: the
+ * Backend reads every layer and the forge writes the project. `exists` when this exact version was
+ * imported before — the call is idempotent, so a double drop makes one template.
+ */
+export async function importDesignTemplate(
+  brandId: string,
+  assetId: string,
+): Promise<DesignImportResponse> {
+  const body: DesignImportRequest = { brandId };
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/import-design`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+  return designImportResponseSchema.parse(await unwrap(response, 'Design import'));
+}
+
 export async function uploadBrandFont(input: {
   brandId: string;
   family: string;
@@ -369,6 +416,8 @@ export type TemplateVariable = {
   placement: null;
   /** A video slot's clip seconds — see `apiRenderVariableSchema.clip`. Null for anything else. */
   clip: { fromSec: number; toSec: number; playsSec: number } | null;
+  /** False: in the template but switched off — no form asks for it; renders what the file says. */
+  exposed?: boolean;
 };
 
 export type TemplateSlotEdit = {
@@ -377,6 +426,7 @@ export type TemplateSlotEdit = {
   role?: string | null;
   charBudget?: number | null;
   required?: boolean | null;
+  exposed?: boolean | null;
   defaultValue?: unknown;
   binding?: { source: string; path: string; label?: string } | null;
 };
@@ -456,6 +506,16 @@ export async function fetchTemplateRun(
   );
   const body = await unwrap<{ run: TemplateRunRow | null }>(response, 'Template run');
   return body.run;
+}
+
+export async function fetchTemplateMappingReview(
+  brandId: string,
+  assetId: string,
+): Promise<TemplateMappingReview> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${assetId}/mapping-review?brandId=${encodeURIComponent(brandId)}`,
+  );
+  return templateMappingReviewSchema.parse(await unwrap<unknown>(response, 'Template mapping'));
 }
 
 export type ForgeLadderAction = 'decisions' | 'draft' | 'smoke' | 'promote' | 'resume';

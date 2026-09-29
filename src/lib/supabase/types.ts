@@ -20461,6 +20461,89 @@ export type Database = {
           },
         ]
       }
+      template_source_publications: {
+        Row: {
+          activated_at: string | null
+          aep_sha256: string | null
+          asset_id: string
+          brand_id: string
+          bundle_id: string
+          comp_id: number
+          comp_name: string
+          content_hash: string | null
+          contract_version: string | null
+          created_at: string
+          render_binding_id: string | null
+          render_template_id: number | null
+          render_workspace: string | null
+          run_id: string
+          slot_roles: Json
+          template_key: string | null
+          version_id: string
+        }
+        Insert: {
+          activated_at?: string | null
+          aep_sha256?: string | null
+          asset_id: string
+          brand_id: string
+          bundle_id: string
+          comp_id: number
+          comp_name: string
+          content_hash?: string | null
+          contract_version?: string | null
+          created_at?: string
+          render_binding_id?: string | null
+          render_template_id?: number | null
+          render_workspace?: string | null
+          run_id: string
+          slot_roles?: Json
+          template_key?: string | null
+          version_id: string
+        }
+        Update: {
+          activated_at?: string | null
+          aep_sha256?: string | null
+          asset_id?: string
+          brand_id?: string
+          bundle_id?: string
+          comp_id?: number
+          comp_name?: string
+          content_hash?: string | null
+          contract_version?: string | null
+          created_at?: string
+          render_binding_id?: string | null
+          render_template_id?: number | null
+          render_workspace?: string | null
+          run_id?: string
+          slot_roles?: Json
+          template_key?: string | null
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_source_publications_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "template_sources"
+            referencedColumns: ["asset_id"]
+          },
+          {
+            foreignKeyName: "template_source_publications_render_binding_id_fkey"
+            columns: ["render_binding_id"]
+            isOneToOne: false
+            referencedRelation: "render_workspace_bindings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_source_publications_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "asset_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+
       template_source_runs: {
         Row: {
           application: string | null
@@ -20536,6 +20619,7 @@ export type Database = {
           brand_id: string
           char_budget: number | null
           default_value: Json | null
+          exposed: boolean | null
           kind: string
           public_name: string | null
           required: boolean | null
@@ -20551,6 +20635,7 @@ export type Database = {
           brand_id: string
           char_budget?: number | null
           default_value?: Json | null
+          exposed?: boolean | null
           kind: string
           public_name?: string | null
           required?: boolean | null
@@ -20566,6 +20651,7 @@ export type Database = {
           brand_id?: string
           char_budget?: number | null
           default_value?: Json | null
+          exposed?: boolean | null
           kind?: string
           public_name?: string | null
           required?: boolean | null
@@ -20595,6 +20681,7 @@ export type Database = {
           created_at: string
           family: string
           fonts: string[]
+          forge_bundle_id: string | null
           forge_run_id: string | null
           forge_state: string | null
           parse: Json
@@ -20622,6 +20709,7 @@ export type Database = {
           created_at?: string
           family: string
           fonts?: string[]
+          forge_bundle_id?: string | null
           forge_run_id?: string | null
           forge_state?: string | null
           parse?: Json
@@ -20649,6 +20737,7 @@ export type Database = {
           created_at?: string
           family?: string
           fonts?: string[]
+          forge_bundle_id?: string | null
           forge_run_id?: string | null
           forge_state?: string | null
           parse?: Json
@@ -20840,6 +20929,16 @@ export type Database = {
       _assert_brand: { Args: { p_brand_id: string }; Returns: undefined }
       _window_metrics: { Args: { w: Json }; Returns: Json }
       any_restricted_collection: { Args: never; Returns: boolean }
+      activate_template_source_bundle: {
+        Args: {
+          p_asset_id: string
+          p_brand_id: string
+          p_bundle_id: string
+          p_children: Json
+          p_version_id: string
+        }
+        Returns: number
+      }
       aspect_ratio_bin: {
         Args: { p_height: number; p_width: number }
         Returns: string

@@ -22,7 +22,7 @@ import { formatRelativeTime } from '@/components/approvals/formatters';
 import { type CheckTick, checkSummary, TickBar } from '@/components/forge/CheckTable';
 import { DataGrid, STICKY_LEFT, selectColumn } from '@/components/forge/DataGrid';
 import { DeliveryChain, deliverySearchText } from '@/components/forge/DeliveryChain';
-import { fileForFormat, type PreviewFormat } from '@/components/forge/FormatPreview';
+import { fileForFormat, playableFirst, type PreviewFormat } from '@/components/forge/FormatPreview';
 import {
   ReviewStatusPill,
   reviewSummary,
@@ -302,11 +302,16 @@ export function RenderJobsGrid({
     sets.find((set) => set.id === job.renderSetId)?.name ??
     (templateKey ? 'No set' : 'Unassigned');
   const nameOf = (job: ApiRenderJob) => job.label ?? job.labelPath.at(-1) ?? templateOf(job);
-  // The first format's file, found by its name: the fleet lists files in a different order per
-  // job. No file for that format is an empty tile, never whichever came first.
+  // Prefer the first format that actually rendered; older jobs can lack their first format.
   const firstFileOf = (job: ApiRenderJob) => {
     const jobFormats = formats ?? formatsNamedByJob(job);
-    return jobFormats[0] ? fileForFormat(job.outputs, jobFormats, jobFormats[0].id) : null;
+    return (
+      jobFormats
+        .map((format) => fileForFormat(job.outputs, jobFormats, format.id))
+        .find((output) => output !== null) ??
+      playableFirst(job.outputs)[0] ??
+      null
+    );
   };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the name helpers read only sets and formats.

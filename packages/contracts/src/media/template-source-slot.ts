@@ -71,6 +71,11 @@ export const templateSourceSlotSchema = z
      */
     charBudget: z.number().int().nonnegative().nullable(),
     required: z.boolean().nullable(),
+    /**
+     * Whether this slot is a field someone fills. False: present in the template but switched
+     * off — no form asks for it and a render uses what the file says. Null means yes.
+     */
+    exposed: z.boolean().nullable(),
     defaultValue: templateSlotDefaultValueSchema.nullable(),
     binding: templateSlotBindingSchema.nullable(),
     updatedBy: z.string().uuid().nullable(),
@@ -87,6 +92,7 @@ export const templateSourceSlotEditSchema = z
     role: slotRoleSchema.nullable().optional(),
     charBudget: z.number().int().nonnegative().max(100_000).nullable().optional(),
     required: z.boolean().nullable().optional(),
+    exposed: z.boolean().nullable().optional(),
     defaultValue: templateSlotDefaultValueSchema.nullable().optional(),
     binding: templateSlotBindingSchema.nullable().optional(),
   })
@@ -181,6 +187,7 @@ export function templateSlotAsRenderVariable(
     role?: string | null;
     charBudget?: number | null;
     required?: boolean | null;
+    exposed?: boolean | null;
   } | null,
 ): {
   key: string;
@@ -198,6 +205,8 @@ export function templateSlotAsRenderVariable(
   comps: string[];
   sample: string | null;
   placement: null;
+  exposed: boolean;
+  fallback: null;
 } {
   return {
     key: slot.key,
@@ -219,5 +228,8 @@ export function templateSlotAsRenderVariable(
     // Placement comes from the parse's own slot boxes and is attached by the render path's
     // adapter, which has the fit math. A Library editor has no frame to place anything against.
     placement: null,
+    exposed: edit?.exposed ?? true,
+    // What a switched-off field renders is the render path's to fill: it holds the published run.
+    fallback: null,
   };
 }

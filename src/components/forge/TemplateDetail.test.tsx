@@ -233,6 +233,12 @@ mock.module('@/lib/library/templateSources', () => ({
   confirmTemplateRebind,
   repairTemplateText,
   fetchTemplateRun: async () => null,
+  fetchTemplateMappingReview: async () => ({
+    state: 'ready', identityAvailable: true, slotCount: 1, matchedSlots: 1,
+    fields: [{ key: 'headline', label: 'Headline', kind: 'text', slotKey: 'Headline',
+      slotName: 'Headline', comps: ['Main 1x1'], sample: 'Hello', match: 'layer_id' }],
+    unmatchedSlots: [], ignoredSlots: [],
+  }),
   healTemplateFonts,
   fetchTemplateEvents: async () => [
     {
@@ -498,7 +504,7 @@ describe('TemplateDetail', () => {
     );
   });
 
-  test('missing AEP footage names each file and directs a corrected ZIP upload', async () => {
+  test('missing AEP footage names each file and opens its repair row', async () => {
     renderDetail(undefined, {
       ...SOURCE,
       parse: {
@@ -508,7 +514,7 @@ describe('TemplateDetail', () => {
     });
     expect(screen.getByText(/This template package is missing 1 media file/)).toBeTruthy();
     expect(screen.getByText(/Hero video — Footage\/hero.mov/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Upload corrected ZIP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Repair missing media' }));
     expect(screen.getByRole('tab', { name: 'Source revision' }).getAttribute('aria-selected')).toBe(
       'true',
     );
@@ -530,7 +536,7 @@ describe('TemplateDetail', () => {
     ]);
   });
 
-  test('five checks say what they look at; a draft offers its test render on its own row', async () => {
+  test('mapping and render checks say what they proved; a draft offers its test render', async () => {
     run = { ...PUBLISHED_RUN, state: 'draft_ready' };
     renderDetail(undefined, { ...SOURCE, templateKey: null, forgeState: 'draft_ready' });
     const rows = within(await screen.findByRole('list', { name: 'Checks' })).getAllByRole(
@@ -540,6 +546,7 @@ describe('TemplateDetail', () => {
       'Parse',
       'Fonts',
       'Build',
+      'Mapping',
       'Test render',
       'Publish',
     ]);

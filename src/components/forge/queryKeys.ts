@@ -28,6 +28,8 @@ export const forgeQueryKeys = {
     ['forge', brandId, 'render-sets', templateKey ?? 'all'] as const,
   runs: (brandId: string) => ['forge', brandId, 'runs'] as const,
   run: (brandId: string, assetId: string) => ['forge', brandId, 'runs', assetId] as const,
+  mappingReview: (brandId: string, assetId: string, versionId: string, state: string | null) =>
+    ['forge', brandId, 'mapping-review', assetId, versionId, state] as const,
   renderJobs: (brandId: string) => ['forge', brandId, 'render-jobs'] as const,
   renderJobLists: (brandId: string) => ['forge', brandId, 'render-jobs', 'list'] as const,
   renderJobList: (

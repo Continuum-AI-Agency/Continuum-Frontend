@@ -1,13 +1,13 @@
-import type { ApiRenderTemplateContract, TemplateFontReadiness } from '@continuum/contracts';
+import type { ApiRenderTemplateContract, TemplateFontReadiness, TemplateMappingReview } from '@continuum/contracts';
 import type { ForgeLadderAction, TemplateRunRow } from '@/lib/library/templateSources';
 import type { CheckState, CheckTick } from './CheckTable';
 
-// What a template has been through, as five checks that each say what they look at and what they
+// What a template has been through, as checks that each say what they look at and what they
 // found. Pure: every fact is an argument, so every state's copy is pinned by a test and the sheet
 // only decides where the words go.
 
 export type TemplateCheck = {
-  id: 'parse' | 'fonts' | 'build' | 'test' | 'publish';
+  id: 'parse' | 'fonts' | 'build' | 'mapping' | 'test' | 'publish';
   name: string;
   what: string;
   state: CheckState;
@@ -155,6 +155,30 @@ function buildCheck(input: TemplateChecksInput, state: string | null): TemplateC
   return { ...base, state: 'running', result: labelForState(state), ...extras };
 }
 
+function mappingCheck(input: TemplateChecksInput): TemplateCheck {
+  const base = {
+    id: 'mapping' as const,
+    name: 'Mapping',
+    what: 'Matches each editable After Effects layer to the Forge field that renders it.',
+  };
+  if (input.parseState !== 'parsed' || (!input.run && !input.templateKey))
+    return { ...base, state: 'todo', result: 'Available after the build starts' };
+  if (input.mappingCheckFailed)
+    return { ...base, state: 'warn', result: "Couldn't read the mapping review" };
+  const review = input.mappingReview;
+  if (!review) return { ...base, state: 'running', result: 'Checking the field mapping…' };
+  if (review.state === 'unavailable')
+    return { ...base, state: 'warn', result: 'Forge has not supplied field identities yet' };
+  const additional = review.fields.filter((field) => field.match === 'forge_only').length;
+  if (review.state === 'needs_review')
+    return { ...base, state: 'fail', result: `${review.matchedSlots} of ${review.slotCount} layers mapped · review ${review.unmatchedSlots.length} unmatched` };
+  return {
+    ...base,
+    state: review.identityAvailable ? 'pass' : 'warn',
+    result: `${review.matchedSlots} of ${review.slotCount} layers mapped${additional ? ` · ${additional} Forge-only fields` : ''}${review.identityAvailable ? '' : ' by name only'}`,
+  };
+}
+
 function testRenderCheck(state: string | null): TemplateCheck {
   const base = {
     id: 'test' as const,
@@ -218,6 +242,8 @@ export type TemplateChecksInput = {
   templateKey: string | null;
   publishVerification?: ApiRenderTemplateContract['publishCheck'];
   publishCheckFailed?: boolean;
+  mappingReview?: TemplateMappingReview | null;
+  mappingCheckFailed?: boolean;
 };
 
 export function templateChecks(input: TemplateChecksInput): TemplateCheck[] {
@@ -226,6 +252,7 @@ export function templateChecks(input: TemplateChecksInput): TemplateCheck[] {
     parseCheck(input),
     fontsCheck(input),
     buildCheck(input, state),
+    mappingCheck(input),
     testRenderCheck(state),
     publishCheck(input, state),
   ];

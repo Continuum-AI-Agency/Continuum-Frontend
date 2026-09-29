@@ -10,6 +10,7 @@ import {
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { uploadRefusal } from '@/components/forge/ForgeProjectDrop';
+import { repairMissingMediaZip } from '@/components/forge/repairMissingMedia';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -38,7 +39,9 @@ type SourceRebindProps = {
   brandId: string;
   assetId: string;
   expectedVersionId: string;
+  aepName?: string;
   onConfirmed: () => Promise<void>;
+  missingFootage?: Array<{ name: string | null; file: string }>;
   /** A file dropped on the gallery as this template's next revision: uploaded once, on arrival. */
   initialFile?: File;
   onInitialFileTaken?: () => void;
@@ -57,9 +60,11 @@ function SourceRebindForm({
   brandId,
   assetId,
   expectedVersionId,
+  aepName,
   onConfirmed,
   initialFile,
   onInitialFileTaken,
+  missingFootage = [],
 }: SourceRebindProps) {
   const [versions, setVersions] = useState<MediaAssetVersion[]>([]);
   const [versionId, setVersionId] = useState('');
@@ -144,6 +149,68 @@ function SourceRebindForm({
     }
   };
 
+  const repair = async (missingFile: string, file: File | null) => {
+    if (busy) return;
+    setBusy(true);
+    setUploading(file?.name ?? missingFile.split(/[\\/]/).pop() ?? 'media');
+    try {
+      const current = (await listAssetVersions({ brandId, assetId })).find(
+        (item) => item.id === expectedVersionId,
+      );
+      if (!current?.signedUrl || !current.fileName.toLowerCase().endsWith('.zip'))
+        throw new Error('The current source ZIP is unavailable for repair.');
+      const response = await fetch(current.signedUrl);
+      if (!response.ok) throw new Error('Could not download the current source ZIP.');
+      const repaired = repairMissingMediaZip(
+        new Uint8Array(await response.arrayBuffer()),
+        missingFile,
+        file ? new Uint8Array(await file.arrayBuffer()) : undefined,
+        aepName,
+      );
+      const head = (await listAssetVersions({ brandId, assetId })).find((item) => item.isHead);
+      const result = await uploadNewAssetVersion({
+        brandId,
+        assetId,
+        baseVersionId: head?.id ?? expectedVersionId,
+        file: new File([new Uint8Array(repaired)], current.fileName, { type: 'application/zip' }),
+        note: `Repaired ${missingFile.split(/[\\/]/).pop()}`,
+      });
+      if (!result.versionId) throw new Error('Repair upload did not create a Library version.');
+      const inspected = await previewTemplateRebind({
+        brandId,
+        assetId,
+        versionId: result.versionId,
+        expectedVersionId,
+      });
+      if (inspected.missingFootage?.some((item) => item.file === missingFile))
+        throw new Error('Forge still cannot find this file. Check the AEP media path.');
+      if (inspected.requiresReview || inspected.slots.some((slot) => slot.status === 'missing')) {
+        setVersionId(result.versionId);
+        setPreview(inspected);
+        throw new Error('The repaired ZIP changed template slots. Review this revision below.');
+      }
+      await confirmTemplateRebind({
+        brandId,
+        assetId,
+        versionId: result.versionId,
+        expectedVersionId,
+        expectedChecksum: inspected.checksum,
+        acceptMissing: false,
+      });
+      if (!alive.current) return;
+      await onConfirmed();
+      toast.success(
+        `${file?.name ?? missingFile.split(/[\\/]/).pop()} repaired in the template source`,
+      );
+    } catch (error) {
+      if (!alive.current) return;
+      toast.error(error instanceof Error ? error.message : 'Could not repair media');
+    } finally {
+      setBusy(false);
+      setUploading(null);
+    }
+  };
+
   // After the listing effect, so a StrictMode remount has already set `alive` back when this
   // upload's awaits resume. `took` keeps the second run from uploading the same file twice.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs once, for the file this panel opened with
@@ -183,6 +250,53 @@ function SourceRebindForm({
 
   return (
     <div ref={root} className="flex flex-col gap-3">
+      {missingFootage.length > 0 ? (
+        <fieldset className="flex flex-col gap-2">
+          <legend className="sr-only">Missing media repair</legend>
+          {missingFootage.map((item, index) => (
+            <div key={item.file} className="flex items-center gap-2">
+              <label
+                htmlFor={`repair-media-${assetId}-${index}`}
+                className="flex cursor-pointer items-center justify-between gap-3 rounded-md border border-dashed border-destructive/50 p-3 text-xs"
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const file = event.dataTransfer.files[0];
+                  if (file) void repair(item.file, file);
+                }}
+              >
+                <span>
+                  <strong>{item.name || item.file.split(/[\\/]/).pop()}</strong>
+                  <span className="block text-muted-foreground">
+                    Drop this file here or click to choose
+                  </span>
+                  <span className="block break-all text-muted-foreground">{item.file}</span>
+                </span>
+                <Input
+                  id={`repair-media-${assetId}-${index}`}
+                  type="file"
+                  className="sr-only"
+                  disabled={busy}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void repair(item.file, file);
+                    event.target.value = '';
+                  }}
+                />
+              </label>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => void repair(item.file, null)}
+              >
+                Find in ZIP
+              </Button>
+            </div>
+          ))}
+        </fieldset>
+      ) : null}
       <p className="text-xs text-muted-foreground">
         Compare a Library version before changing what this template parses. Building and publishing
         remain separate.

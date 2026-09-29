@@ -172,6 +172,10 @@ export const apiRenderVariableSchema = z
     charBudget: z.number().int().nonnegative().nullable().default(null),
     /** Which delivery comps carry this slot. One slot in seven ratios is one slot. */
     comps: z.array(z.string()).default([]),
+    /** Exact parsed AEP slot behind this field, or null when the parse did not expose one. */
+    sourceSlotKey: z.string().nullable().default(null),
+    /** Layer identity is stronger than the legacy name fallback. */
+    sourceMatch: z.enum(['layer_id', 'name']).nullable().default(null),
     /** The designer's own value, when the parse read one. Useful as a placeholder. */
     sample: z.string().nullable().default(null),
     /** Where this slot lands, so a picked asset can be placed before a render is spent. */
@@ -187,6 +191,15 @@ export const apiRenderVariableSchema = z
       .strict()
       .nullable()
       .default(null),
+    /**
+     * Whether a form asks for this field. False: the template carries it but it is switched off
+     * (a design import publishes every layer and switches on only text and smart objects), and a
+     * render that does not supply it uses `fallback` — what the file itself says.
+     */
+    exposed: z.boolean().default(true),
+    /** The value a switched-off field renders with: the authored copy, the layer's own picture
+     * URL, the file's own visibility. Null when the field is on, or nothing was authored. */
+    fallback: z.union([z.string(), z.number(), z.boolean()]).nullable().default(null),
   })
   .strict();
 export type ApiRenderVariable = z.infer<typeof apiRenderVariableSchema>;

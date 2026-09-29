@@ -51,6 +51,7 @@ import {
   useState,
   useTransition,
 } from 'react';
+import { isForgeDesignFile } from '@/components/forge/ForgeProjectDrop';
 import { CompetitorInspirationPanel } from '@/components/competitor-spy/CompetitorInspirationPanel';
 import { FigmaIcon } from '@/components/shared/icons';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -77,7 +78,7 @@ import {
   folderPaths,
 } from '@/lib/library/folderUpload';
 import { librarySearchPath, withReviewStates } from '@/lib/library/libraryHref';
-import { fetchTemplateSources } from '@/lib/library/templateSources';
+import { fetchTemplateSources, importDesignTemplate } from '@/lib/library/templateSources';
 import {
   buildLibraryBrowseParams,
   KIND_FILTERS,
@@ -128,7 +129,7 @@ import { stackDroppedAssets } from './views/stackDrop';
 import { useAssetFieldValues } from './views/useAssetFieldValues';
 import { useLibraryViewPreferences } from './views/useLibraryViewPreferences';
 
-const TEMPLATE_ACCEPT_ATTRIBUTE = '.aep,.aepx,.aet,.zip,application/zip';
+const TEMPLATE_ACCEPT_ATTRIBUTE = '.aep,.aepx,.aet,.zip,application/zip,.psd,.ai';
 
 const LAYOUT_TABS = [
   { id: 'grid', label: 'Grid', Icon: LayoutGrid },
@@ -782,8 +783,23 @@ export function LibraryViewer({
     [pushFilters, router],
   );
 
+  // A Photoshop/Illustrator file dropped on Templates becomes one (anywhere else it is just a file).
+  const templateDesigns = useRef(new Set<File>());
   const onUploaded = useCallback(
     ({ file, uploaded }: { file: File; uploaded: { assetId: string } }) => {
+      if (templateDesigns.current.delete(file)) {
+        toast.info(`Making a template from ${file.name}…`);
+        void importDesignTemplate(brandId, uploaded.assetId)
+          .then((imported) => {
+            toast.success(
+              imported.status === 'exists' ? `${file.name} is already a template` : `Template made from ${file.name}`,
+            );
+            router.refresh();
+          })
+          .catch((error: unknown) =>
+            toast.error(`${file.name}: ${error instanceof Error ? error.message : 'the import failed'}`),
+          );
+      }
       const collectionId = folderTargets.current.get(file);
       if (collectionId) {
         folderTargets.current.delete(file);
@@ -824,9 +840,12 @@ export function LibraryViewer({
     (fileList: FileList | File[]) => {
       const { fonts, media } = partitionLibraryUploadFiles(fileList);
       if (fonts.length > 0) setFontReviewFiles(fonts);
+      if (showTemplates) {
+        for (const file of media) if (isForgeDesignFile(file.name)) templateDesigns.current.add(file);
+      }
       if (media.length > 0) void uploadFiles(media);
     },
-    [uploadFiles],
+    [showTemplates, uploadFiles],
   );
 
   const routeFolderFiles = useCallback(
