@@ -22,3 +22,4 @@ export * from './organic';
 export * from './organic-pipeline';
 export * from './paid-creative';
 export * from './trends';
+export * from './video-editor';

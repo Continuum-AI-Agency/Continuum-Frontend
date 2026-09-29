@@ -12,6 +12,7 @@
 // in a later release, already-rendered projects must not silently change with them. Same
 // discipline as the frozen SIG1 literal in generationSignature.
 
+import { VIDEO_EDITOR_CAPTION_STYLES } from '@continuum/contracts';
 import { isRegistrableCaptionFont } from './captionFonts';
 import type { BrandStyleInput, CaptionStyle } from './clipCaptionStyle';
 import { buildCaptionStyle, DEFAULT_CAPTION_STYLE, resolveCaptionStyle } from './clipCaptionStyle';
@@ -43,7 +44,7 @@ export type CaptionPreset = {
   brandAware?: boolean;
 };
 
-export const CAPTION_PRESET_IDS = ['classic', 'pop', 'pulse', 'glide', 'fusion', 'boxed'] as const;
+export const CAPTION_PRESET_IDS = VIDEO_EDITOR_CAPTION_STYLES;
 export type CaptionPresetId = (typeof CAPTION_PRESET_IDS)[number];
 
 export const DEFAULT_CAPTION_PRESET_ID: CaptionPresetId = 'classic';
