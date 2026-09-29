@@ -9,6 +9,8 @@ import { OrganicWorkspaceTabs } from '@/components/organic/OrganicWorkspaceTabs'
 import { OrganicCalendarWorkspace } from '@/components/organic/primitives/OrganicCalendarWorkspace';
 import { PlannerViewSkeleton } from '@/components/organic/primitives/PlannerViewSkeletons';
 import type { OrganicTrendGroup, OrganicTrendType } from '@/components/organic/primitives/types';
+import { ReviewQueueLazy } from '@/components/organic/review/ReviewQueueLazy';
+import { StylesShelfLazy } from '@/components/styles/StylesShelfLazy';
 import { fetchBrandInsights } from '@/lib/api/brandInsights.server';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { fetchBrandIntegrationSummary } from '@/lib/integrations/brandProfile';
@@ -418,6 +420,8 @@ async function OrganicContent({
             initialSessionId={initialAgentSessionId}
           />
         }
+        reviewSlot={<ReviewQueueLazy brandId={brandProfileId} />}
+        stylesSlot={<StylesShelfLazy brandId={brandProfileId} />}
       />
     </>
   );

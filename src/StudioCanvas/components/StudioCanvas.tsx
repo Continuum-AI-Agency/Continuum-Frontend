@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '@xyflow/react/dist/style.css';
 import type { ContextMenu as ContextMenuPrimitive } from '@base-ui/react/context-menu';
 import { type ActionId, type UnsplashPhoto, validateWorkflowGraph } from '@continuum/contracts';
-import { AtSign, Camera, FolderOpen } from 'lucide-react';
+import { AtSign, Camera, FolderOpen, Palette } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { useShallow } from 'zustand/react/shallow';
@@ -28,6 +28,7 @@ import { useCanvasRooms } from '@/components/ai-studio/hooks/useCanvasRooms';
 import { useCanvasRunRequests } from '@/components/ai-studio/hooks/useCanvasRunRequests';
 import { StudioMediaLibraryPanel } from '@/components/creative-assets/StudioMediaLibraryPanel';
 import { Cursor } from '@/components/realtime/cursor';
+import { StylesShelfLazy } from '@/components/styles/StylesShelfLazy';
 import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -241,6 +242,7 @@ function Flow({
   const [isInstagramBrowserOpen, setIsInstagramBrowserOpen] = useState(false);
   const [isUnsplashBrowserOpen, setIsUnsplashBrowserOpen] = useState(false);
   const [isLibraryBrowserOpen, setIsLibraryBrowserOpen] = useState(false);
+  const [isStylesOpen, setIsStylesOpen] = useState(false);
   const [isSaveWorkflowOpen, setIsSaveWorkflowOpen] = useState(false);
   // Where an added node lands: the right-click point, pinned when the Add Node submenu
   // opens. Read from a ref at add time rather than lastMousePositionRef, because the
@@ -643,6 +645,16 @@ function Flow({
                 <Camera className="mr-2 h-4 w-4" />
                 Unsplash
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsStylesOpen((open) => !open)}
+                aria-label="Browse styles"
+              >
+                <Palette className="mr-2 h-4 w-4" />
+                Styles
+              </Button>
             </Panel>
 
             {isLibraryBrowserOpen && (
@@ -653,6 +665,17 @@ function Flow({
                 className="h-[560px] w-[360px]"
               >
                 <StudioMediaLibraryPanel brandProfileId={brandProfileId || ''} />
+              </CanvasFloatingPanel>
+            )}
+
+            {isStylesOpen && (
+              <CanvasFloatingPanel
+                title="Styles"
+                icon={<Palette className="size-4" aria-hidden />}
+                onClose={() => setIsStylesOpen(false)}
+                className="h-[560px] w-[360px]"
+              >
+                <StylesShelfLazy brandId={brandProfileId || ''} className="p-3" />
               </CanvasFloatingPanel>
             )}
 

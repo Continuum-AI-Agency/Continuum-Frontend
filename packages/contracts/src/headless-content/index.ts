@@ -1,5 +1,12 @@
 import { z } from 'zod';
 
+export {
+  type HeadlessGrammar,
+  type HeadlessVariationAxis,
+  headlessGrammarSchema,
+  headlessVariationAxisSchema,
+} from './grammar';
+
 // The JSON is the source of truth. Media references are pinned separately so an
 // expiring URL, a renamed Element, or a revised pack never changes a run in place.
 const detail = z.string().trim().min(1).max(600);
