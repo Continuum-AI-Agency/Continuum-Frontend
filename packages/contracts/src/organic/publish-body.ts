@@ -14,6 +14,7 @@
  */
 import { z } from 'zod';
 import { buildPlatformCaption, type HashtagTiers } from '../media/instagram-caption';
+import { trialGraduationStrategySchema } from '../trial-reels/index';
 import {
   PLATFORM_CAPABILITIES,
   type PublishFormat,
@@ -42,6 +43,13 @@ export const publishOptionsSchema = z
       ])
       .optional(),
     aiGenerated: z.boolean().optional(),
+    /**
+     * Publish as an Instagram TRIAL reel: shown to non-followers only, then graduated to
+     * followers by the owner in the app (MANUAL) or by Instagram on performance (SS_PERFORMANCE).
+     * Irreversible at publish time: Graph takes `trial_params` on the container and has no way to
+     * turn an ordinary reel into a trial afterwards.
+     */
+    trial: z.object({ graduationStrategy: trialGraduationStrategySchema }).strict().optional(),
   })
   .strict();
 export type PublishOptions = z.infer<typeof publishOptionsSchema>;
@@ -76,10 +84,11 @@ export function unsupportedPublishOptions(
   platform: PublishPlatform,
   format: PublishFormat,
   options: PublishOptions | null | undefined,
-): Array<'firstComment' | 'thumbnail'> {
+): Array<'firstComment' | 'thumbnail' | 'trial'> {
   const can = PLATFORM_CAPABILITIES[platform].publishOptions;
-  const unsupported: Array<'firstComment' | 'thumbnail'> = [];
+  const unsupported: Array<'firstComment' | 'thumbnail' | 'trial'> = [];
   if (options?.firstComment && !can.firstComment) unsupported.push('firstComment');
+  if (options?.trial && !(format === 'REEL' && can.trialReel)) unsupported.push('trial');
   const thumbnail = options?.thumbnail;
   if (thumbnail) {
     const supported =

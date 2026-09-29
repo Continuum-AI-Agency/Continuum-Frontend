@@ -1,7 +1,8 @@
 'use client';
 
 // The planner's Publish tab: what one destination platform does with this post beyond the
-// caption — the account's first comment, the video cover, and TikTok's AI-generated label.
+// caption — the account's first comment, the video cover, an Instagram trial reel, and TikTok's
+// AI-generated label.
 // Every control is gated by PLATFORM_CAPABILITIES, the same table the publisher refuses on,
 // so the UI never offers an option the publish would reject.
 
@@ -151,6 +152,14 @@ export function PublishOptionsPanel({
         )}
       </Section>
 
+      {can.trialReel && isVideo ? (
+        <TrialReelToggle
+          trial={saved.trial}
+          disabled={disabled}
+          onChange={(trial) => save({ ...saved, trial }, 'discrete')}
+        />
+      ) : null}
+
       {can.aiGeneratedLabel && isVideo ? (
         <AiLabelToggle
           generated={publishesGeneratedVideo(draft)}
@@ -162,6 +171,62 @@ export function PublishOptionsPanel({
         />
       ) : null}
     </div>
+  );
+}
+
+const GRADUATION_LABEL: Record<NonNullable<PublishOptions['trial']>['graduationStrategy'], string> = {
+  MANUAL: 'I share it to followers myself',
+  SS_PERFORMANCE: 'Instagram shares it if it performs',
+};
+
+function TrialReelToggle({
+  trial,
+  disabled,
+  onChange,
+}: {
+  trial: PublishOptions['trial'];
+  disabled?: boolean;
+  onChange: (trial: PublishOptions['trial']) => void;
+}) {
+  const descriptionId = React.useId();
+  return (
+    <Section title="Trial reel">
+      <div className="flex items-start justify-between gap-3">
+        <p id={descriptionId} className="text-xs text-muted-foreground">
+          Shown to non-followers first, so you learn whether the hook works before your followers
+          see it. Continuum scores it against your other reels three days after it posts. This
+          cannot be changed once it is published.
+        </p>
+        <Switch
+          aria-label="Trial reel"
+          aria-describedby={descriptionId}
+          checked={trial !== undefined}
+          disabled={disabled}
+          onCheckedChange={(checked) =>
+            onChange(checked ? { graduationStrategy: 'MANUAL' } : undefined)
+          }
+        />
+      </div>
+      {trial ? (
+        <select
+          aria-label="When it reaches followers"
+          value={trial.graduationStrategy}
+          disabled={disabled}
+          onChange={(event) =>
+            onChange({
+              graduationStrategy: event.target.value as typeof trial.graduationStrategy,
+            })
+          }
+          className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+        >
+          {Object.entries(GRADUATION_LABEL).map(([value, text]) => (
+            <option key={value} value={value}>
+              {text}
+            </option>
+          ))}
+        </select>
+      ) : null}
+    </Section>
   );
 }
 

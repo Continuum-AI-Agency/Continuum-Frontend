@@ -313,3 +313,30 @@ export const trialReelPublishSpecSchema = z
   })
   .strict();
 export type TrialReelPublishSpec = z.infer<typeof trialReelPublishSpecSchema>;
+
+// --- the one-off trial verdict ---------------------------------------------------------
+
+/**
+ * The nightly verdict on ONE trial reel published from the calendar (no rounds, no slate):
+ * did it beat the account's own ordinary reels? Stored on `organic_published_posts.trial_verdict`.
+ *
+ * `unmeasured` is not a loss: Instagram had not delivered enough, or reported no skip rate, or the
+ * account has too few ordinary reels to compare against. It is written so the poller stops asking,
+ * and it never enters the winners pool or the rankings.
+ */
+export const trialReelVerdictSchema = z
+  .object({
+    verdict: z.enum(['winner', 'loser', 'unmeasured']),
+    reason: textSchema.max(500),
+    /** 100 − reels_skip_rate: the share who stayed past the opening. */
+    hookRate: z.number().nullable(),
+    medianHookRate: z.number().nullable(),
+    engagementRate: z.number().nullable(),
+    medianEngagementRate: z.number().nullable(),
+    reach: z.number().nullable(),
+    /** How many of the account's ordinary reels the medians were taken over. */
+    baselineReels: z.number().int().nonnegative(),
+    measuredAt: timestampSchema,
+  })
+  .strict();
+export type TrialReelVerdict = z.infer<typeof trialReelVerdictSchema>;

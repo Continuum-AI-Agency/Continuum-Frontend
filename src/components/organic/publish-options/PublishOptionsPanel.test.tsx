@@ -239,4 +239,59 @@ describe('PublishOptionsPanel', () => {
     );
     expect(screen.queryByRole('switch', { name: 'AI-generated content' })).toBeNull();
   });
+
+  it('saves an Instagram reel as a MANUAL trial, and offers a trial nowhere else', () => {
+    const onChange = mock();
+    render(
+      <PublishOptionsPanel
+        publishOptions={undefined}
+        draft={draft()}
+        platform="instagram"
+        format="REEL"
+        onChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole('switch', { name: 'Trial reel' }));
+    expect(onChange).toHaveBeenLastCalledWith(
+      { instagram: { trial: { graduationStrategy: 'MANUAL' } } },
+      'discrete',
+    );
+    cleanup();
+    for (const [platform, format] of [
+      ['instagram', 'CAROUSEL'],
+      ['tiktok', 'REEL'],
+    ] as const) {
+      render(
+        <PublishOptionsPanel
+          publishOptions={undefined}
+          draft={draft({ platforms: [platform] })}
+          platform={platform}
+          format={format}
+          onChange={mock()}
+        />,
+      );
+      expect(screen.queryByRole('switch', { name: 'Trial reel' })).toBeNull();
+      cleanup();
+    }
+  });
+
+  it('switches a saved trial to Instagram-led graduation', () => {
+    const onChange = mock();
+    render(
+      <PublishOptionsPanel
+        publishOptions={{ instagram: { trial: { graduationStrategy: 'MANUAL' } } }}
+        draft={draft()}
+        platform="instagram"
+        format="REEL"
+        onChange={onChange}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('When it reaches followers'), {
+      target: { value: 'SS_PERFORMANCE' },
+    });
+    expect(onChange).toHaveBeenLastCalledWith(
+      { instagram: { trial: { graduationStrategy: 'SS_PERFORMANCE' } } },
+      'discrete',
+    );
+  });
 });

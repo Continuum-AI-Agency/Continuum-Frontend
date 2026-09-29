@@ -122,6 +122,8 @@ export interface PublishOptionCapability {
   readonly thumbnailOffset: boolean;
   /** A native "AI-generated" label on the post. Video (REEL) posts only. */
   readonly aiGeneratedLabel: boolean;
+  /** A trial reel, shown to non-followers first. Video (REEL) posts only. */
+  readonly trialReel: boolean;
 }
 
 export interface PlatformCapability {
@@ -146,6 +148,7 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
       thumbnailUrl: true,
       thumbnailOffset: true,
       aiGeneratedLabel: false,
+      trialReel: true,
     },
   },
   facebook: {
@@ -161,6 +164,7 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
       thumbnailUrl: false,
       thumbnailOffset: false,
       aiGeneratedLabel: false,
+      trialReel: false,
     },
   },
   linkedin: {
@@ -175,6 +179,7 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
       thumbnailUrl: false,
       thumbnailOffset: false,
       aiGeneratedLabel: false,
+      trialReel: false,
     },
   },
   youtube: {
@@ -195,6 +200,7 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
       thumbnailUrl: false,
       thumbnailOffset: false,
       aiGeneratedLabel: false,
+      trialReel: false,
     },
   },
   tiktok: {
@@ -219,6 +225,7 @@ export const PLATFORM_CAPABILITIES: Readonly<Record<PublishPlatform, PlatformCap
       thumbnailUrl: true,
       thumbnailOffset: true,
       aiGeneratedLabel: true,
+      trialReel: false,
     },
   },
 };

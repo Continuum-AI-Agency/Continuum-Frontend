@@ -181,6 +181,14 @@ function WinnerRow({ winner, onPromote }: { winner: OrganicWinner; onPromote: ()
     <tr className="border-t border-subtle" data-testid="organic-winner-row">
       <td className="py-2 pr-3 text-xs text-muted-foreground">
         {MEDIA_LABEL[winner.mediaType ?? ''] ?? 'Post'}
+        {winner.trial ? (
+          <span
+            className="block text-2xs font-medium text-primary"
+            title={winner.trial.verdict?.reason}
+          >
+            Trial winner
+          </span>
+        ) : null}
       </td>
       <td className="max-w-80 py-2 pr-3">
         {winner.permalink ? (

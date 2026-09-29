@@ -213,6 +213,13 @@ describe('unsupportedPublishOptions', () => {
     ).toEqual(['thumbnail']);
   });
 
+  it('allows a trial only on an Instagram reel', () => {
+    const trial = { trial: { graduationStrategy: 'MANUAL' as const } };
+    expect(unsupportedPublishOptions('instagram', 'REEL', trial)).toEqual([]);
+    expect(unsupportedPublishOptions('instagram', 'CAROUSEL', trial)).toEqual(['trial']);
+    expect(unsupportedPublishOptions('tiktok', 'REEL', trial)).toEqual(['trial']);
+  });
+
   it('carries the options onto the body the planner sends', () => {
     const body = buildPublishBody(draft({ format: 'reel' }), 'tiktok', 'acct', null, {
       aiGenerated: true,

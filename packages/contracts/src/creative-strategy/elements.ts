@@ -18,6 +18,9 @@ export const creativeElementSourceSchema = z.enum([
   'own_organic',
   'own_paid',
   'competitor_organic',
+  /** Own posts published as Instagram TRIAL reels: ranked on hook rate against the brand's own
+   *  ordinary reels, never mixed into `own_organic` (their reach is non-followers only). */
+  'own_trial',
 ]);
 export type CreativeElementSource = z.infer<typeof creativeElementSourceSchema>;
 

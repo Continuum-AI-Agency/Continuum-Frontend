@@ -8,6 +8,7 @@
 // the other: the original post as a PAUSED ad, and a variations job seeded from it.
 
 import { z } from 'zod';
+import { trialGraduationStrategySchema, trialReelVerdictSchema } from '../trial-reels/index';
 
 const nullableString = z.string().nullable();
 const nullableNumber = z.number().nullable();
@@ -45,6 +46,14 @@ export const organicWinnerSchema = z.object({
     })
     .nullable(),
   variationJobs: z.array(z.object({ id: z.string(), status: z.string() })),
+  /** Set when the post went out as an Instagram trial reel. A trial is a winner only by its
+   *  nightly verdict: its reach is non-followers only, so it never counts against the medians. */
+  trial: z
+    .object({
+      graduationStrategy: trialGraduationStrategySchema,
+      verdict: trialReelVerdictSchema.nullable(),
+    })
+    .nullable(),
 });
 export type OrganicWinner = z.infer<typeof organicWinnerSchema>;
 
