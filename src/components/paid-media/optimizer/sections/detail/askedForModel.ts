@@ -26,8 +26,8 @@
 // that asked reads that state off the proposals query rather than repeating "being built"
 // forever (`handoffProposal`). MENSAJES // TODOS, 2026-09-29: suggestion 1f2426b1 was
 // adopted, its handoff opened proposal e2310011, the worker failed it with a 40-line Zod
-// dump in `error.message`, and the row said "being built". It now says "No se pudo
-// construir" with a one-line reason and offers to ask again.
+// dump in `error.message`, and the row said "being built". It now says "Failed" with a
+// one-line reason and offers to ask again.
 
 import type {
   AdhocSuggestionCategory,
@@ -49,9 +49,9 @@ import {
   HERO_MODULE_COPY,
   IMPACT_TIER_COPY,
   impactTier,
+  proposalForRecommendation,
   readAdhocHandoff,
   readAdhocSuggestion,
-  proposalForRecommendation,
   readProposalBlock,
 } from '@continuum/contracts';
 import {
@@ -191,14 +191,15 @@ export function handoffProposal(
   };
 }
 
-/** The badge on the row: the proposal's state in the card's own words, or "Cerrada" for a
+/** The badge on the row: the proposal's state in the card's own words, or "Closed" for a
  *  proposal the cycle closed without ever giving it a body. */
 export function proposalStateLabel(proposal: HandoffProposal): string {
-  if (proposal.state === 'none' && proposal.closed) return 'Cerrada';
+  if (proposal.state === 'none' && proposal.closed) return 'Closed';
   return AUDIENCE_PROPOSAL_STATE_LABEL[proposal.state];
 }
 
-const CLOSED_NOTE = 'El ciclo cerró la recomendación que abrió.';
+const SIGNAL_STOPPED = 'The signal stopped firing.';
+const CLOSED_NOTE = 'The cycle closed the recommendation it opened.';
 
 /**
  * The sentence under the row once the proposal exists: what state it is in and, for a
@@ -206,35 +207,35 @@ const CLOSED_NOTE = 'El ciclo cerró la recomendación que abrió.';
  */
 export function proposalNote(proposal: HandoffProposal): string | null {
   const closedTail = proposal.closed
-    ? ` ${proposalFailureReason(proposal.row.error) ?? 'La señal dejó de dispararse.'} ${CLOSED_NOTE}`
+    ? ` ${proposalFailureReason(proposal.row.error) ?? SIGNAL_STOPPED} ${CLOSED_NOTE}`
     : '';
   switch (proposal.state) {
     case 'queued':
-      return 'En cola: Jaina la toma en menos de un minuto.';
+      return 'Queued: Jaina picks it up in under a minute.';
     case 'proposing':
-      return 'Jaina está leyendo la audiencia, el catálogo y los creativos…';
+      return 'Jaina is reading the audience, the catalogue and the creatives…';
     case 'ready':
-      return 'Lista: abrila para ver qué audiencia, qué cambia y crear el conjunto nuevo (pausado).';
+      return 'Ready: open it to compare the audiences and create the new ad set (paused).';
     case 'blocked':
     case 'blocked_cbo':
-      return `Bloqueada — ${proposal.reason ?? 'No se pudo armar la propuesta.'}${closedTail}`;
+      return `Blocked — ${proposal.reason ?? "The proposal couldn't be put together."}${closedTail}`;
     case 'failed':
-      return `No se pudo construir — ${proposal.reason ?? 'La propuesta no se pudo construir.'}`;
+      return `Failed — ${proposal.reason ?? 'The proposal could not be built.'}`;
     case 'approved':
-      return 'Aprobada: el worker crea el conjunto en menos de un minuto.';
+      return 'Approved: the worker creates the ad set in under a minute.';
     case 'executing':
-      return 'Creando el conjunto y sus anuncios en Meta…';
+      return 'Creating the ad set and its ads in Meta…';
     case 'executed':
-      return 'Creada en Meta. Se activa desde la propuesta.';
+      return 'Created in Meta. Activate it from the proposal.';
     case 'switching':
-      return 'Activando el conjunto nuevo…';
+      return 'Activating the new ad set…';
     case 'undoing':
-      return 'Deshaciendo…';
+      return 'Undoing…';
     case 'undone':
-      return 'Deshecha: el conjunto nuevo quedó pausado.';
+      return 'Undone: the new ad set was left paused.';
     case 'none':
       return proposal.closed
-        ? `${proposalFailureReason(proposal.row.error) ?? 'La señal dejó de dispararse.'} ${CLOSED_NOTE}`
+        ? `${proposalFailureReason(proposal.row.error) ?? SIGNAL_STOPPED} ${CLOSED_NOTE}`
         : null;
   }
 }

@@ -1804,7 +1804,14 @@ export function useAudienceProposalMutations(brandId: string) {
       ),
     onSuccess: refresh,
   });
-  return { request, approve, cancel, activate, undo, refresh };
+  /** A failed Meta write (execute / activate / undo) on a sound plan goes back to the queue
+   *  for the phase that failed; the worker picks it up as if it had never stopped. */
+  const retry = useMutation({
+    mutationFn: (proposalId: string) =>
+      rpcVoid('optimizer_retry_audience_proposal', { p_id: proposalId }, 'Could not retry in Meta'),
+    onSuccess: refresh,
+  });
+  return { request, approve, cancel, activate, undo, retry, refresh };
 }
 
 /** While the latest cycle has no brief yet, nudge the performance read every 30s for up

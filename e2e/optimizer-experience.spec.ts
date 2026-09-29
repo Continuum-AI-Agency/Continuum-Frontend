@@ -120,11 +120,11 @@ const MENSAJES_PORTFOLIO_NAME = 'MENSAJES // TODOS';
 const PRUEBA_PORTFOLIO_NAME = 'Prueba';
 /** The state badge an asked-for row wears once its proposal exists, in the card's words. */
 const PROPOSAL_STATE =
-  /^(En cola|Jaina está leyendo|Lista|Bloqueada|No se pudo construir|Cerrada|Aprobada|Creando el conjunto|Creada en Meta|Activando|Deshaciendo|Deshecha)$/;
+  /^(Queued|Jaina is reading|Ready|Blocked|Failed|Closed|Approved|Creating the ad set|Created in Meta|Activating|Undoing|Undone)$/;
 /** The note under the row for the same states — always a sentence, never a dump. A proposal
- *  the cycle closed ("Cerrada") leads with its reason and ends on the closing sentence. */
+ *  the cycle closed ("Closed") leads with its reason and ends on the closing sentence. */
 const PROPOSAL_NOTE =
-  /^(En cola|Jaina está leyendo|Lista|Bloqueada —|No se pudo construir —|Aprobada|Creando|Creada en Meta|Activando|Deshaciendo|Deshecha)|El ciclo cerró la recomendación que abrió\.$/;
+  /^(Queued|Jaina is reading|Ready|Blocked —|Failed —|Approved|Creating|Created in Meta|Activating|Undoing|Undone)|The cycle closed the recommendation it opened\.$/;
 /** The portfolio every idea on the redesign page is drawn with (portafolio.html): 9 ad sets on
  *  autopilot, leads against a 35 MXN target, pending decisions. Same ledger brand. */
 const FORMULARIOS_PORTFOLIO_NAME = 'FORMULARIOS // TODOS';
@@ -824,8 +824,8 @@ test.describe('Paid Media Optimizer — live experience', () => {
         .first();
       await expect(askedRow).toBeVisible({ timeout: 120_000 });
       const askedKey = (await askedRow.getAttribute('data-row-key')) ?? '';
-      // The same row, pinned by its key: the press below relabels its button to "Cerrar la
-      // propuesta", so a locator that filters on the open label would lose it.
+      // The same row, pinned by its key: the press below relabels its button to "Close the
+      // proposal", so a locator that filters on the open label would lose it.
       const openedRow = page.locator(`[data-row-key="${askedKey}"]`);
       const stateBadge = askedRow.getByText(PROPOSAL_STATE).first();
       await expect(stateBadge).toBeVisible({ timeout: 60_000 });
@@ -846,35 +846,76 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await askedRow.getByRole('button', { name: 'Open the audience proposal' }).click();
 
       // The proposal opens ON THE ROW: the expansion is a child of the asked row, not a queue
-      // row somewhere below. With a plan it is the five sections and the create flow; without
-      // one it is the state, what is known, and — failed or blocked — asking again.
+      // row somewhere below. With a plan it is the before → after, the rail and the create flow;
+      // without one it is the state, what is known, and — failed or blocked — asking again.
       const expansion = openedRow.getByTestId(`read-expansion:${askedKey.replace(/^read:/, '')}`);
       await expect(expansion).toBeVisible({ timeout: 60_000 });
       const card = expansion.getByTestId('audience-recommendation-card');
       const panel = expansion.getByTestId('asked-proposal-panel');
       await expect(card.or(panel).first()).toBeVisible({ timeout: 60_000 });
-      const face = (await card.count()) > 0 ? 'five sections' : 'state panel';
+      const face = (await card.count()) > 0 ? 'proposal card' : 'state panel';
       console.log(`[optimizer-bench] MENSAJES proposal opened inline as: ${face}`);
-      if (face === 'five sections') {
+      if (face === 'proposal card') {
         for (const section of [
-          'audience-what',
-          'audience-changes',
-          'audience-new',
+          'audience-current',
+          'audience-proposed',
           'audience-why',
+          'audience-new',
           'audience-how',
         ]) {
           await expect(card.getByTestId(section)).toBeVisible();
         }
+        // A proposal whose Meta write failed says so at the top, even with a plan beside it,
+        // and offers the retry of the write, never a re-analysis. On 2026-09-29 this row
+        // (1e89d5e7) showed the plan and only "ask again", with the reason hidden.
+        const failure = card.getByTestId('audience-failure');
+        if ((await failure.count()) > 0) {
+          const failureText = (await failure.innerText()).trim();
+          console.log(`[optimizer-bench] MENSAJES failure block: ${failureText.split('\n')[0]}`);
+          // The reason is ours, in English; Meta's own words (the connected user's language)
+          // only ever ride on the small "Meta said" line.
+          const reason = (await card.getByTestId('audience-failed-reason').innerText()).trim();
+          expect(reason).not.toMatch(/^Meta rejected/);
+          expect(reason).not.toMatch(/[áéíóúñ¿]|\b(tienes|permiso|cuenta)\b/i);
+          // Offered, and deliberately NOT pressed: it re-queues a Meta write in production.
+          await expect(card.getByTestId('audience-retry')).toBeEnabled();
+        }
+        // The plan's ad posters are signed Meta URLs that expire; the card recovers them
+        // through the creative-preview path. Report what actually rendered.
+        const ads = card.getByTestId('audience-ads');
+        await expect
+          .poll(
+            async () =>
+              ads.evaluate((tile) =>
+                [...tile.querySelectorAll('img')].filter(
+                  (img) => img.complete && img.naturalWidth > 0,
+                ).length,
+              ),
+            { timeout: 30_000 },
+          )
+          .toBeGreaterThan(0)
+          .catch(() => undefined);
+        const posters = await ads.evaluate((tile) => ({
+          loaded: [...tile.querySelectorAll('img')].filter(
+            (img) => img.complete && img.naturalWidth > 0,
+          ).length,
+          placeholders: tile.querySelectorAll('[data-testid="audience-ad-placeholder"]').length,
+        }));
+        console.log(`[optimizer-bench] MENSAJES ad posters: ${JSON.stringify(posters)}`);
+        await page.setViewportSize({ width: 1280, height: 2400 });
+        await card.scrollIntoViewIfNeeded();
+        await card.screenshot({ path: resolve(SHOTS_DIR, '17b-mensajes-audience-card.png') });
+        await page.setViewportSize({ width: 1280, height: 720 });
       } else {
         await expect(
           panel.getByTestId('asked-proposal-state').getByText(PROPOSAL_STATE),
         ).toBeVisible();
         const facts = panel.getByTestId('asked-proposal-facts');
-        await expect(facts).toContainText('Conjunto');
-        await expect(facts).toContainText('Pedida');
+        await expect(facts).toContainText('Ad set');
+        await expect(facts).toContainText('Asked for');
         const retry = panel.getByTestId('asked-proposal-retry');
         const retryable = (await retry.count()) > 0;
-        console.log(`[optimizer-bench] MENSAJES proposal offers "Pedirla de nuevo": ${retryable}`);
+        console.log(`[optimizer-bench] MENSAJES proposal offers "Ask Jaina again": ${retryable}`);
         // Offered, and deliberately NOT pressed: it writes a proposal request to production.
         if (retryable) await expect(retry).toBeEnabled();
       }
@@ -884,7 +925,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await shoot(page, '17-mensajes-proposal-inline');
 
       // The same button closes what it opened.
-      await openedRow.getByRole('button', { name: 'Cerrar la propuesta' }).click();
+      await openedRow.getByRole('button', { name: 'Close the proposal' }).click();
       await expect(expansion).toHaveCount(0);
       await expect(
         openedRow.getByRole('button', { name: 'Open the audience proposal' }),

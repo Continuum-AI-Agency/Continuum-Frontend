@@ -206,6 +206,7 @@ mock.module('../useOptimizerData', () => ({
     cancel: { mutate: () => undefined, isPending: false },
     activate: { mutate: () => undefined, isPending: false },
     undo: { mutate: () => undefined, isPending: false },
+    retry: { mutate: () => undefined, isPending: false },
     refresh: () => undefined,
   }),
   useConvertCbo: () => ({ mutate: () => undefined, isPending: false }),
@@ -1156,7 +1157,7 @@ describe('OptimizerActionsPortfolioGroup — a CTA lands on an expanded row', ()
       expect(screen.queryByTestId('queue-focus-missing')).toBeNull();
       await waitFor(() => expect(screen.getByTestId('queue-focus-missing')).toBeTruthy());
       expect(screen.getByTestId('queue-focus-missing').textContent).toContain(
-        'todavía no está en la cola',
+        "isn't in the queue yet",
       );
       rerender(
         <OptimizerActionsPortfolioGroup
@@ -1192,13 +1193,13 @@ describe('OptimizerActionsPortfolioGroup — a CTA lands on an expanded row', ()
       expect(row).not.toBeNull();
       expect(row.querySelector('button[aria-expanded="true"]')).not.toBeNull();
       const card = row.querySelector('[data-testid="audience-recommendation-card"]') as HTMLElement;
-      expect(card.textContent).toContain('Bloqueada');
+      expect(card.textContent).toContain('Blocked');
       expect(card.textContent).toContain('No delivering creative in this portfolio');
       const create = card.querySelector(
         '[data-testid="audience-create-blocked"]',
       ) as HTMLButtonElement;
       expect(create.disabled).toBe(true);
-      expect(card.textContent).not.toContain('Pedírsela a Jaina de nuevo');
+      expect(card.textContent).not.toContain('Ask Jaina again');
       await waitFor(() => expect(scrolled).toContain(`rec:${CARRIED_REC_ID}`));
     } finally {
       Element.prototype.scrollIntoView = nativeScroll;

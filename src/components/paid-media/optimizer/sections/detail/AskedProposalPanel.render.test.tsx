@@ -109,9 +109,16 @@ const actions = {
   cancel: mock(() => {}),
   activate: mock(() => {}),
   undo: mock(() => {}),
+  retry: mock(() => {}),
   convertCbo: mock(() => {}),
 };
-const idle = { requestingRecId: null, approvingId: null, busyId: null, convertingCbo: false };
+const idle = {
+  requestingRecId: null,
+  retryingId: null,
+  approvingId: null,
+  busyId: null,
+  convertingCbo: false,
+};
 
 const panelFor = (proposals: unknown[], recRow: unknown = rec) => {
   const [row] = buildAskedForRows([suggestion], 500, { proposals: proposals as never });
@@ -120,6 +127,7 @@ const panelFor = (proposals: unknown[], recRow: unknown = rec) => {
     <AskedProposalPanel
       actions={actions}
       adAccountId="act_521903353286118"
+      brandId="6f597f42-b5b5-4b9a-baa5-9a4d9fdb9b64"
       busy={idle}
       cboPreviewByCampaign={new Map()}
       currency="MXN"
@@ -133,19 +141,40 @@ const panelFor = (proposals: unknown[], recRow: unknown = rec) => {
 };
 
 describe('AskedProposalPanel — a proposal with no body', () => {
-  it('failed: the state, the one-line reason, what is known, and asking again', () => {
+  it('failed: the failure block with the one-line reason, what is known, and asking again', () => {
     actions.request.mockClear();
     const { container } = render(panelFor([failedProposal]));
     const state = screen.getByTestId('asked-proposal-state');
-    expect(state.textContent).toContain('No se pudo construir');
-    expect(state.textContent).toContain('Jaina no pudo armar la propuesta.');
+    expect(state.textContent).toContain('Failed');
+    const failure = screen.getByTestId('audience-failure');
+    expect(failure.textContent).toContain("Jaina couldn't build the proposal.");
+    expect(failure.textContent).toContain(
+      'Jaina ran into an error while reading the audience, catalogue and creatives.',
+    );
+    expect(failure.textContent).toContain('Nothing was created in Meta.');
     expect(container.textContent).not.toContain('too_big');
     const facts = screen.getByTestId('asked-proposal-facts');
     expect(facts.textContent).toContain('ALEIRA // AGOSTO - LKL - Mensajes');
-    expect(facts.textContent).toContain('Alcance agotado');
+    expect(facts.textContent).toContain('Reach exhausted');
     expect(facts.textContent).toContain('2026');
+    const retry = screen.getByTestId('asked-proposal-retry');
+    expect(retry.textContent).toBe('Ask Jaina again');
+    fireEvent.click(retry);
+    expect(actions.request).toHaveBeenCalledTimes(1);
+    expect((actions.request.mock.calls[0] as unknown[])[0]).toBe(REC);
+  });
+
+  it('failed and re-asked within the hour: says when Jaina can look again instead of nothing', () => {
+    actions.request.mockClear();
+    actions.request.mockImplementationOnce(((
+      _recId: string,
+      handlers?: { onDone?: (id: string) => void },
+    ) => handlers?.onDone?.(PROPOSAL)) as never);
+    render(panelFor([failedProposal]));
     fireEvent.click(screen.getByTestId('asked-proposal-retry'));
-    expect(actions.request).toHaveBeenCalledWith(REC);
+    expect(screen.getByTestId('audience-action-notice').textContent).toMatch(
+      /^Jaina already re-analysed this in the last hour\. Try again after .+\.$/,
+    );
   });
 
   it('blocked and closed by the cycle: the reason stays, the retry does not', () => {
@@ -157,29 +186,29 @@ describe('AskedProposalPanel — a proposal with no body', () => {
           error: { code: 'signal_stopped', message: 'The trigger did not fire again.' },
           blocked_by: {
             code: 'no_creatives',
-            message: 'Ningún creativo tiene resultados suficientes.',
+            message: 'No creative has enough results.',
             campaign_id: null,
             campaign_name: null,
           },
         },
       ]),
     );
-    expect(screen.getByTestId('asked-proposal-state').textContent).toContain('Bloqueada');
-    expect(container.textContent).toContain('Ningún creativo tiene resultados suficientes.');
-    expect(container.textContent).toContain('El ciclo cerró la recomendación');
+    expect(screen.getByTestId('asked-proposal-state').textContent).toContain('Blocked');
+    expect(container.textContent).toContain('No creative has enough results.');
+    expect(container.textContent).toContain('The cycle closed the recommendation');
     expect(screen.queryByTestId('asked-proposal-retry')).toBeNull();
   });
 
   it('queued: says Jaina takes it shortly and offers nothing to press', () => {
     render(panelFor([{ ...(failedProposal as object), status: 'queued', error: null }]));
-    expect(screen.getByTestId('asked-proposal-state').textContent).toContain('En cola');
+    expect(screen.getByTestId('asked-proposal-state').textContent).toContain('Queued');
     expect(screen.queryByTestId('asked-proposal-retry')).toBeNull();
   });
 
   it('before the proposals query has the row: reading, with what the handoff knows', () => {
     render(panelFor([]));
     expect(screen.getByTestId('asked-proposal-state').textContent).toContain(
-      'Leyendo la propuesta',
+      'Reading the proposal',
     );
     expect(screen.getByTestId('asked-proposal-facts').textContent).toContain(
       'ALEIRA // AGOSTO - LKL - Mensajes',
@@ -202,9 +231,9 @@ describe('DailyReadList — an asked-for row opens its proposal under itself', (
     );
     expect(screen.queryByTestId('expansion-body')).toBeNull();
     const rowId = rows[0]?.id ?? '';
-    expect(container.textContent).toContain('No se pudo construir');
+    expect(container.textContent).toContain('Failed');
     expect(screen.getByTestId(`read-next-note:${rowId}`).textContent).toBe(
-      'No se pudo construir — Jaina no pudo armar la propuesta.',
+      'Failed — Jaina ran into an error while reading the audience, catalogue and creatives.',
     );
     fireEvent.click(screen.getByRole('button', { name: 'Open the audience proposal' }));
     expect(onCta).toHaveBeenCalledTimes(1);
@@ -220,6 +249,6 @@ describe('DailyReadList — an asked-for row opens its proposal under itself', (
     const expansion = screen.getByTestId(`read-expansion:${rowId}`);
     expect(expansion.closest(`li[data-row-key="read:${rowId}"]`)).not.toBeNull();
     expect(screen.getByTestId('expansion-body').textContent).toBe('la propuesta');
-    expect(screen.getByRole('button', { name: 'Cerrar la propuesta' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Close the proposal' })).toBeTruthy();
   });
 });

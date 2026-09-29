@@ -1,9 +1,26 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { AudienceRecommendationCard } from './AudienceRecommendationCard';
 import { audienceCardView, portfolioSpecsFrom } from './audienceCardModel';
 
-afterEach(cleanup);
+// The plan's posters are signed Meta URLs that expire; the card recovers them through the
+// shared hook. The hook is replaced so a test can see which ad asked and hand back a URL.
+const recovered: string[] = [];
+let freshUrlById: Record<string, string> = {};
+// Stable, like the real hook's useCallback.
+const recover = (adId: string) => {
+  recovered.push(adId);
+};
+mock.module('@/hooks/usePaidCreativeRecovery', () => ({
+  usePaidCreativeRecovery: () => ({ freshUrlById, recover }),
+}));
+
+const { AudienceRecommendationCard } = await import('./AudienceRecommendationCard');
+
+afterEach(() => {
+  cleanup();
+  recovered.length = 0;
+  freshUrlById = {};
+});
 
 const rec = {
   id: 'rec-1',
@@ -29,8 +46,8 @@ const plan = {
   version: 1,
   mode: 'add',
   trigger: 'F3_audience_exhausted',
-  diagnosis: 'Frecuencia 2.1 con CTR cayendo y 0 compras en 4 días.',
-  rationale: 'Los mismos anuncios convierten en otros conjuntos; el problema es la audiencia.',
+  diagnosis: 'Frequency 2.1 with CTR falling and 0 purchases in 4 days.',
+  rationale: 'The same ads convert in other ad sets; the audience is the problem.',
   previous_spec: {
     age_min: 18,
     age_max: 65,
@@ -104,7 +121,7 @@ const plan = {
     ],
     targeting_automation: { advantage_audience: 1 },
   },
-  advantage_audience: { enabled: true, rationale: 'objetivo de compras, pool amplio' },
+  advantage_audience: { enabled: true, rationale: 'purchase objective, wide pool' },
   reach: {
     current: { lower: 3_300_000, upper: 3_500_000, source: 'delivery_estimate' },
     proposed: { lower: 1_100_000, upper: 1_300_000, source: 'delivery_estimate' },
@@ -133,7 +150,7 @@ const plan = {
       rank: 1,
     },
   ],
-  creatives_disclosure: 'Ranking entre los conjuntos inscritos.',
+  creatives_disclosure: 'Ranked across the enrolled ad sets.',
   source: {
     adset_id: 'as-1',
     adset_name: 'ITESO // AGOSTO // 2 - LKL',
@@ -188,7 +205,7 @@ const executedResult = {
   ads: [
     {
       id: 'ad-9',
-      name: 'Tour nocturno · nuevo',
+      name: 'Tour nocturno · new',
       status: 'PAUSED',
       effective_status: 'PAUSED',
       creative_id: 'cr1',
@@ -228,9 +245,12 @@ const baseProps = {
   snapshot: null,
   portfolioSpecs,
   currency: 'MXN',
+  brandId: 'brand-1',
   adAccountId: 'act_1',
   onRequest: noop,
   requesting: false,
+  onRetry: noop,
+  retrying: false,
   onApprove: noop,
   approving: false,
   onCancel: noop,
@@ -240,141 +260,235 @@ const baseProps = {
   onConvertCbo: noop,
   convertingCbo: false,
   cboPreview: null,
-  resultWord: 'compras',
+  resultWord: 'purchases',
 };
 
-const SECTION_LABELS = [
+const chipsIn = (testId: string, tone: string) =>
+  [
+    ...screen
+      .getByTestId(testId)
+      .querySelectorAll(`[data-testid="audience-chip"][data-tone="${tone}"]`),
+  ].map((chip) => chip.textContent);
+
+const failedWith = (error: Record<string, unknown>, over: Record<string, unknown> = {}) =>
+  audienceCardView([row({ status: 'failed', error, ...over })], rec);
+
+/** Strings the card used to print in Spanish. None may come back. */
+const FORMER_SPANISH = [
   'Qué audiencia',
   'Audiencia actual',
   'Qué cambia',
   'Qué es nuevo',
   'Por qué una audiencia nueva',
   'Cómo se implementa',
+  'Crear el conjunto',
+  'Pedírsela a Jaina',
+  'No se pudo construir',
+  'Bloqueada',
+  'Descartar',
+  'Empezar activo',
+  'nadie lo usa hoy',
+  'descartado por regla de marca',
+  'Alcance agotado',
+  'pausado, junto a',
+  'Presupuesto',
+  'Deshacer',
 ];
 
-/** The five labels, in document order, followed by the decision. */
-function frameOrder(container: HTMLElement): string[] {
-  return [...container.querySelectorAll('section')].map(
-    (section) =>
-      section.querySelector('h4')?.textContent ?? section.getAttribute('data-testid') ?? '',
-  );
+function expectEnglish(container: HTMLElement) {
+  const text = container.textContent ?? '';
+  for (const former of FORMER_SPANISH) expect(text).not.toContain(former);
+  expect(text).not.toMatch(/[áéíóúñ¿¡]/);
 }
 
-describe('AudienceRecommendationCard — an open proposal', () => {
-  it('shows the five sections in order and then the create button', () => {
-    const view = audienceCardView([row({})], rec);
-    const { container } = render(<AudienceRecommendationCard {...baseProps} view={view} />);
-    expect(frameOrder(container)).toEqual([...SECTION_LABELS, 'audience-decision']);
-    const create = screen.getByTestId('audience-create') as HTMLButtonElement;
-    expect(create.disabled).toBe(false);
-    expect(create.textContent).toBe('Crear el conjunto nuevo (pausado)');
-    expect(container.textContent).toContain('Descartar');
-  });
-
-  it('qué audiencia: the proposed targeting in words with the estimated reach', () => {
+describe('AudienceRecommendationCard — before → after', () => {
+  it('lays the current audience beside the proposed one, with every change coloured in place', () => {
     render(<AudienceRecommendationCard {...baseProps} view={audienceCardView([row({})], rec)} />);
-    const text = screen.getByTestId('audience-what').textContent ?? '';
-    expect(text).toContain(
-      'Lookalike 1–3% · compradores · MX · 25–45 · intereses: Gimnasios, Entrenamiento funcional',
-    );
-    expect(text).toContain('Alcance estimado 1.1M–1.3M');
-    expect(text).toContain('3.3M–3.5M → 1.1M–1.3M');
+    const current = screen.getByTestId('audience-current');
+    const proposed = screen.getByTestId('audience-proposed');
+    expect(current.textContent).toContain('Current audience');
+    expect(proposed.textContent).toContain('Proposed audience');
+    for (const label of [
+      'Age · gender',
+      'Locations',
+      'Interests',
+      'Custom/saved audiences',
+      'Excludes',
+      'Advantage+',
+    ]) {
+      expect(current.textContent).toContain(label);
+      expect(proposed.textContent).toContain(label);
+    }
+    expect(current.textContent).toContain('18–65 · all');
+    expect(proposed.textContent).toContain('25–45 · all');
+    // The lookalike the proposal drops is red on the current side; what it adds is green.
+    expect(chipsIn('audience-current', 'removed')).toEqual(['−Lookalike 5% · leads de agosto']);
+    expect(chipsIn('audience-proposed', 'added')).toEqual([
+      '+Gimnasios',
+      '+Entrenamiento funcionalNEW',
+      '+Lookalike 1–3% · compradoresNEW',
+    ]);
+    expect(proposed.textContent).toContain('Reach 1.1M–1.3M');
+    expect(proposed.textContent).toContain('−65%');
+    expect(current.textContent).toContain('Reach 3.3M–3.5M');
+    expect(screen.queryByTestId('audience-exclusion-warning')).toBeNull();
   });
 
-  it('audiencia actual / qué cambia: two columns from previous_spec against the proposal', () => {
+  it('marks NEW only what no other ad set of the portfolio uses', () => {
     render(<AudienceRecommendationCard {...baseProps} view={audienceCardView([row({})], rec)} />);
-    const current = screen.getByTestId('audience-current').textContent ?? '';
-    expect(current).toContain('Lookalike 5% · leads de agosto');
-    expect(current).toContain('18–65');
-    expect(current).toContain('Sin intereses');
-    expect(current).toContain('Alcance 3.3M–3.5M');
-    const changes = screen.getByTestId('audience-changes').textContent ?? '';
-    expect(changes).toContain('Se suma una audiencia: Lookalike 1–3% · compradores');
-    expect(changes).toContain('25–45 (antes 18–65)');
-    expect(changes).toContain('Se suman 2 intereses: Gimnasios, Entrenamiento funcional');
-    expect(changes).toContain('Advantage+');
+    const proposed = screen.getByTestId('audience-proposed');
+    const newNames = [...proposed.querySelectorAll('[data-testid="audience-chip-new"]')].map(
+      (marker) => marker.closest('[data-testid="audience-chip"]')?.textContent,
+    );
+    expect(newNames).toEqual(['+Entrenamiento funcionalNEW', '+Lookalike 1–3% · compradoresNEW']);
   });
 
-  it('qué es nuevo: what no ad set of the portfolio uses, what another one already does, what the rules crossed out', () => {
-    render(<AudienceRecommendationCard {...baseProps} view={audienceCardView([row({})], rec)} />);
-    expect(screen.getByTestId('audience-fresh').textContent).toContain('Entrenamiento funcional');
-    expect(screen.getByTestId('audience-fresh').textContent).toContain('nadie lo usa hoy');
-    expect(screen.getByTestId('audience-reused').textContent).toContain(
-      'Gimnasios ya se usa en ALEIRA // AGOSTO',
-    );
-    expect(screen.getByTestId('audience-excluded').textContent).toContain('Cerveza');
-    expect(screen.getByTestId('audience-excluded').textContent).toContain(
-      'Brand DNA: nunca alcohol',
-    );
-    expect(screen.getByTestId('audience-new').textContent).toContain(
-      'Comparado con el otro conjunto del portafolio.',
-    );
-  });
-
-  it('qué es nuevo says when only this ad set could be compared', () => {
+  it('warns when the proposal lifts an exclusion', () => {
+    const lifted = {
+      ...plan,
+      previous_spec: {
+        ...plan.previous_spec,
+        excluded_custom_audiences: [{ id: 'ca-9', name: 'Lookalike 5% · Inscritos 2025' }],
+      },
+    };
     render(
       <AudienceRecommendationCard
         {...baseProps}
-        portfolioSpecs={[]}
+        view={audienceCardView([row({ proposal: lifted })], rec)}
+      />,
+    );
+    expect(chipsIn('audience-current', 'removed')).toContain('−Lookalike 5% · Inscritos 2025');
+    expect(screen.getByTestId('audience-exclusion-warning').textContent).toBe(
+      'People in Lookalike 5% · Inscritos 2025 can see these ads again.',
+    );
+  });
+
+  it('adds the 7-day frequency under the current audience when the snapshot has it', () => {
+    render(
+      <AudienceRecommendationCard
+        {...baseProps}
+        snapshot={{ frequency7d: 1.5, audienceType: 'prospecting' } as never}
         view={audienceCardView([row({})], rec)}
       />,
     );
-    expect(screen.getByTestId('audience-new').textContent).toContain(
-      'Comparado solo con este conjunto',
+    expect(screen.getByTestId('audience-current').textContent).toContain(
+      'Reach 3.3M–3.5M · freq 1.5 / 7 days',
     );
-    expect(screen.queryByTestId('audience-reused')).toBeNull();
   });
+});
 
-  it('por qué: the trigger with its figure and window, the diagnosis and the rationale', () => {
+describe('AudienceRecommendationCard — the rail', () => {
+  it('why: the trigger, the diagnosis, the figure, and the rationale behind Read more', async () => {
     render(<AudienceRecommendationCard {...baseProps} view={audienceCardView([row({})], rec)} />);
-    const why = screen.getByTestId('audience-why').textContent ?? '';
-    expect(why).toContain('Alcance agotado');
-    expect(why).toContain('2.1');
-    expect(why).toContain('7d');
-    expect(why).toContain(plan.diagnosis);
-    expect(why).toContain(plan.rationale);
+    const why = screen.getByTestId('audience-why');
+    expect(why.textContent).toContain('Reach exhausted.');
+    expect(why.textContent).toContain(plan.diagnosis);
+    expect(why.textContent).toContain('2.1');
+    expect(why.textContent).not.toContain(plan.rationale);
+    fireEvent.click(screen.getByRole('button', { name: 'Read more' }));
+    await waitFor(() => expect(why.textContent).toContain(plan.rationale));
   });
 
-  it('cómo se implementa: the paused ad set beside the current one, the budget and the carried creatives', () => {
+  it('new to the portfolio: counts up front, the lists folded away', async () => {
+    render(<AudienceRecommendationCard {...baseProps} view={audienceCardView([row({})], rec)} />);
+    const tile = screen.getByTestId('audience-new');
+    expect(tile.textContent).toContain('2 of 3 new');
+    expect(tile.textContent).toContain('Compared with the other ad set of the portfolio.');
+    expect(tile.textContent).toContain('1 reused in 1 ad set · 1 filtered by brand rules');
+    expect(screen.queryByTestId('audience-novelty-list')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /See the list/ }));
+    await waitFor(() => expect(screen.getByTestId('audience-novelty-list')).toBeTruthy());
+    const list = screen.getByTestId('audience-novelty-list');
+    expect(list.className).toContain('overflow-y-auto');
+    expect(list.className).toContain('max-h-40');
+    expect(screen.getByTestId('audience-fresh').textContent).toContain('Entrenamiento funcional');
+    expect(screen.getByTestId('audience-reused').textContent).toContain(
+      'Gimnasios already runs in ALEIRA // AGOSTO',
+    );
+    expect(screen.getByTestId('audience-excluded').textContent).toContain(
+      'filtered by a brand rule: Brand DNA: nunca alcohol',
+    );
+  });
+
+  it('launch plan: the new ad set paused beside the current one, its campaign and budget', () => {
     render(<AudienceRecommendationCard {...baseProps} view={audienceCardView([row({})], rec)} />);
     const how = screen.getByTestId('audience-how').textContent ?? '';
-    expect(how).toContain(
-      'pausado, junto a "ITESO // AGOSTO // 2 - LKL"; los dos siguen corriendo',
-    );
-    expect(how).toContain('62.00 MXN/día');
-    expect(how).toContain('1 con resultados: Tour nocturno');
-    expect(how).toContain('Ranking entre los conjuntos inscritos.');
+    expect(how).toContain(plan.adset_name);
+    expect(how).toContain('Paused, next to "ITESO // AGOSTO // 2 - LKL"; both keep running');
+    expect(how).toContain('Tours');
+    expect(how).toContain('62.00 MXN/day');
   });
 
+  it('ads: an ad with no poster asks for a fresh one and shows its rank meanwhile', () => {
+    render(<AudienceRecommendationCard {...baseProps} view={audienceCardView([row({})], rec)} />);
+    const ads = screen.getByTestId('audience-ads');
+    expect(ads.textContent).toContain('Ads · 1');
+    expect(ads.textContent).toContain('41.00 MXN');
+    expect(ads.textContent).toContain('12 results');
+    expect(screen.getByTestId('audience-ad-placeholder').textContent).toBe('#1');
+    expect(recovered).toEqual(['a1']);
+  });
+
+  it('ads: an expired poster recovers through the preview endpoint, never showing a broken image', () => {
+    const withPoster = {
+      ...plan,
+      creatives: [{ ...plan.creatives[0], poster_url: 'https://cdn.meta.test/expired.jpg' }],
+    };
+    const view = audienceCardView([row({ proposal: withPoster })], rec);
+    const { container, rerender } = render(
+      <AudienceRecommendationCard {...baseProps} view={view} />,
+    );
+    const img = container.querySelector('[data-testid="audience-ads"] img') as HTMLImageElement;
+    expect(img.getAttribute('alt')).toBe('');
+    fireEvent.error(img);
+    expect(recovered).toEqual(['a1']);
+    expect(screen.getByTestId('audience-ad-placeholder').textContent).toBe('#1');
+    freshUrlById = { a1: 'https://cdn.meta.test/fresh.jpg' };
+    rerender(<AudienceRecommendationCard {...baseProps} view={view} />);
+    expect(
+      (container.querySelector('[data-testid="audience-ads"] img') as HTMLImageElement).src,
+    ).toBe('https://cdn.meta.test/fresh.jpg');
+  });
+});
+
+describe('AudienceRecommendationCard — the decision', () => {
   it('keeps the create flow: the budget seeded from the plan, the activate switch and the confirm dialog', async () => {
     const { container } = render(
       <AudienceRecommendationCard {...baseProps} view={audienceCardView([row({})], rec)} />,
     );
     expect((container.querySelector('#budget-rec-1') as HTMLInputElement).value).toBe('62');
-    expect(container.textContent).toContain('Empezar activo');
-    expect(container.textContent).toContain('se crea pausado; vos lo activás');
-    fireEvent.click(screen.getByTestId('audience-create'));
+    expect(container.textContent).toContain('Start active');
+    expect(container.textContent).toContain('created paused; you switch it on');
+    const create = screen.getByTestId('audience-create') as HTMLButtonElement;
+    expect(create.textContent).toBe('Create the new ad set (paused)');
+    expect(container.textContent).toContain('Discard');
+    fireEvent.click(create);
     await waitFor(() =>
-      expect(document.body.textContent).toContain(`¿Crear "${plan.adset_name}" en Meta?`),
+      expect(document.body.textContent).toContain(`Create "${plan.adset_name}" in Meta?`),
     );
-    expect(document.body.textContent).toContain('62.00 MXN/día');
-    expect(document.body.textContent).toContain('Crear el conjunto');
+    expect(document.body.textContent).toContain('62.00 MXN/day');
+    expect(document.body.textContent).toContain('Create the ad set');
   });
-});
 
-describe('AudienceRecommendationCard — the other faces', () => {
   it('with no proposal yet, keeps the frame and offers to ask Jaina now', () => {
-    const view = audienceCardView([], rec);
-    const { container } = render(<AudienceRecommendationCard {...baseProps} view={view} />);
-    expect(frameOrder(container)).toEqual([...SECTION_LABELS, 'audience-decision']);
-    expect(screen.getByTestId('audience-what').textContent).toContain('ciclo diario');
-    expect(screen.getByTestId('audience-why').textContent).toContain('Alcance agotado');
-    expect(screen.getByTestId('audience-why').textContent).toContain(rec.reason);
-    expect(container.textContent).toContain('Pedírsela a Jaina ahora');
+    const { container } = render(
+      <AudienceRecommendationCard {...baseProps} view={audienceCardView([], rec)} />,
+    );
+    expect(screen.getByTestId('audience-proposed').textContent).toContain('daily cycle');
+    expect(screen.getByTestId('audience-why').textContent).toContain('Reach exhausted');
+    expect(screen.getByTestId('audience-why').textContent).toContain(
+      'Reach flat for 14 days with frequency 2.1',
+    );
+    expect(screen.getByTestId('audience-new').textContent).toContain(
+      'Known once there is a proposal.',
+    );
+    expect(screen.queryByTestId('audience-ads')).toBeNull();
+    expect(container.textContent).toContain('Ask Jaina now');
     expect(screen.queryByTestId('audience-create')).toBeNull();
+    expect(screen.queryByTestId('audience-failure')).toBeNull();
   });
 
-  it('blocked for want of creatives: the same frame, the reason where the audience would be, the create button disabled', () => {
+  it('blocked for want of creatives: the reason in the proposed tile, the create button disabled', () => {
     const blocked = row({
       status: 'blocked',
       proposal: null,
@@ -388,18 +502,17 @@ describe('AudienceRecommendationCard — the other faces', () => {
     const pending = render(
       <AudienceRecommendationCard {...baseProps} view={audienceCardView([blocked], rec)} />,
     );
-    expect(frameOrder(pending.container)).toEqual([...SECTION_LABELS, 'audience-decision']);
-    expect(pending.getByTestId('audience-what').textContent).toContain('Bloqueada');
+    expect(pending.getByTestId('audience-proposed').textContent).toContain('Blocked');
     expect(pending.getByTestId('audience-blocked-reason').textContent).toContain(
       'No delivering creative',
     );
     expect(pending.getByTestId('audience-how').textContent).toContain(
-      'No se crea nada mientras la propuesta esté bloqueada.',
+      'Nothing is created while the proposal is blocked.',
     );
     const create = pending.getByTestId('audience-create-blocked') as HTMLButtonElement;
     expect(create.disabled).toBe(true);
-    expect(create.textContent).toBe('Crear el conjunto nuevo (pausado)');
-    expect(pending.container.textContent).toContain('Pedírsela a Jaina de nuevo');
+    expect(create.textContent).toBe('Create the new ad set (paused)');
+    expect(pending.container.textContent).toContain('Ask Jaina again');
     cleanup();
 
     // Superseded by the next cycle: the reason stays, the ask does not (the rec has expired).
@@ -415,8 +528,8 @@ describe('AudienceRecommendationCard — the other faces', () => {
       true,
     );
     expect(closed.container.textContent).toContain('No delivering creative');
-    expect(closed.container.textContent).not.toContain('Pedírsela a Jaina de nuevo');
-    expect(closed.container.textContent).toContain('ya cerró esta recomendación');
+    expect(closed.container.textContent).not.toContain('Ask Jaina again');
+    expect(closed.container.textContent).toContain('already closed this recommendation');
   });
 
   it('blocked by a campaign budget: says what is needed and offers the conversion preview', () => {
@@ -437,55 +550,190 @@ describe('AudienceRecommendationCard — the other faces', () => {
     );
     const { container } = render(<AudienceRecommendationCard {...baseProps} view={view} />);
     expect(screen.getByTestId('audience-blocked-reason').textContent).toContain('holds the budget');
-    expect(container.textContent).toContain('Esta campaña tiene el presupuesto');
-    expect(container.textContent).toContain('Previsualizar la conversión');
+    expect(container.textContent).toContain('This campaign holds the budget');
+    expect(container.textContent).toContain('Preview the conversion');
     expect(screen.queryByTestId('audience-create')).toBeNull();
     expect(screen.queryByTestId('audience-create-blocked')).toBeNull();
   });
 
-  // MENSAJES // TODOS, 2026-09-29: proposal e2310011 failed in the propose phase and the
-  // worker stored the Zod issue list as `error.message`. The face prints the human line and
-  // offers to ask again; the dump never reaches the screen.
-  it('failed: the same frame, a one-line human reason where the audience would be, and the retry', () => {
-    const zodDump =
-      '[\n  {\n    "origin": "string",\n    "code": "too_big",\n    "maximum": 240,\n    "path": ["blocked_option_ids", 0, "rule"]\n  }\n]';
-    const view = audienceCardView(
-      [
-        row({
-          status: 'failed',
-          proposal: null,
-          error: { code: 'propose_failed', phase: 'propose', message: zodDump },
-        }),
-      ],
-      rec,
-    );
-    const onRequest = mock(() => {});
-    const { container } = render(
-      <AudienceRecommendationCard {...baseProps} onRequest={onRequest} view={view} />,
-    );
-    expect(frameOrder(container)).toEqual([...SECTION_LABELS, 'audience-decision']);
-    expect(screen.getByTestId('audience-what').textContent).toContain('No se pudo construir');
-    expect(screen.getByTestId('audience-failed-reason').textContent).toBe(
-      'Jaina no pudo armar la propuesta.',
-    );
-    expect(container.textContent).not.toContain('too_big');
-    expect(container.textContent).not.toContain('blocked_option_ids');
-    expect(screen.queryByTestId('audience-create')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Pedírsela a Jaina de nuevo' }));
-    expect(onRequest).toHaveBeenCalledTimes(1);
-  });
-
-  it('executed: the identifiers, the Qué se implementó dropdown, Activar and Deshacer', () => {
+  it('executed: the identifiers, the What was implemented dropdown, Activate and Undo', () => {
     const view = audienceCardView([row({ status: 'executed', result: executedResult })], rec);
     const { container } = render(<AudienceRecommendationCard {...baseProps} view={view} />);
     const text = container.textContent ?? '';
-    expect(text).toContain('Creado en Meta');
+    expect(text).toContain('Created in Meta');
     expect(text).toContain('as-9');
     expect(text).toContain('ad-9');
-    expect(text).toContain('Qué se implementó');
-    expect(text).toContain('Activar');
-    expect(text).toContain('Deshacer');
+    expect(text).toContain('What was implemented');
+    expect(text).toContain('Activate');
+    expect(text).toContain('Undo');
     expect(container.querySelector('a[href*="selected_adset_ids=as-9"]')).not.toBeNull();
+  });
+});
+
+describe('AudienceRecommendationCard — a failed row always says what failed', () => {
+  // MENSAJES // TODOS, 2026-09-29: proposal e2310011 failed in the propose phase and the
+  // worker stored the Zod issue list as `error.message`. The block prints the human line
+  // and offers to ask again; the dump never reaches the screen.
+  it('a propose failure: the block on top, the human reason, nothing created, Ask Jaina again', () => {
+    const zodDump =
+      '[\n  {\n    "origin": "string",\n    "code": "too_big",\n    "maximum": 240,\n    "path": ["blocked_option_ids", 0, "rule"]\n  }\n]';
+    const onRequest = mock(() => {});
+    const { container } = render(
+      <AudienceRecommendationCard
+        {...baseProps}
+        onRequest={onRequest}
+        view={failedWith(
+          { code: 'propose_failed', phase: 'propose', message: zodDump },
+          { proposal: null },
+        )}
+      />,
+    );
+    const card = screen.getByTestId('audience-recommendation-card');
+    expect(card.firstElementChild?.getAttribute('data-testid')).toBe('audience-failure');
+    const failure = screen.getByTestId('audience-failure').textContent ?? '';
+    expect(failure).toContain("Jaina couldn't build the proposal.");
+    expect(failure).toContain('Nothing was created in Meta.');
+    expect(container.textContent).not.toContain('too_big');
+    expect(container.textContent).not.toContain('blocked_option_ids');
+    expect(screen.queryByTestId('audience-retry')).toBeNull();
+    expect(screen.queryByTestId('audience-create')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Jaina again' }));
+    expect(onRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('failed WITH a plan: the failure is shown, not hidden behind the plan, and offers Retry in Meta', () => {
+    const onRetry = mock(() => {});
+    render(
+      <AudienceRecommendationCard
+        {...baseProps}
+        onRetry={onRetry}
+        view={failedWith({
+          code: 'execute_failed',
+          phase: 'execute',
+          message: 'Meta rejected the ad set: the daily budget is below the minimum.',
+        })}
+      />,
+    );
+    const failure = screen.getByTestId('audience-failure').textContent ?? '';
+    expect(failure).toContain('Meta refused the new ad set.');
+    expect(failure).toContain('Meta rejected the ad set: the daily budget is below the minimum.');
+    expect(failure).toContain('Nothing was created in Meta.');
+    // The plan still reads beside it.
+    expect(screen.getByTestId('audience-proposed').textContent).toContain('Gimnasios');
+    expect(screen.queryByTestId('audience-check-connection')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ask Jaina again' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry in Meta' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("meta_permission: the account sentence, Meta's own words small, and Check Meta connection", () => {
+    render(
+      <AudienceRecommendationCard
+        {...baseProps}
+        view={failedWith({
+          code: 'meta_permission',
+          phase: 'execute',
+          message: "Continuum's Meta connection only reads ad account …118; it can't write there.",
+          meta_message: 'No tienes permiso para editar esta cuenta publicitaria.',
+        })}
+      />,
+    );
+    const failure = screen.getByTestId('audience-failure').textContent ?? '';
+    expect(failure).toContain('Meta refused the new ad set.');
+    expect(failure).toContain("only reads ad account …118; it can't write there.");
+    expect(screen.getByTestId('audience-meta-said').textContent).toBe(
+      'Meta said: “No tienes permiso para editar esta cuenta publicitaria.”',
+    );
+    expect(screen.getByRole('button', { name: 'Retry in Meta' })).toBeTruthy();
+    const link = screen.getByTestId('audience-check-connection') as HTMLAnchorElement;
+    expect(link.textContent).toBe('Check Meta connection');
+    expect(link.getAttribute('href')).toBe('/settings?section=integrations');
+  });
+
+  it('a partial create says what is left and that a retry picks up from there', () => {
+    render(
+      <AudienceRecommendationCard
+        {...baseProps}
+        view={failedWith({ code: 'execute_failed', phase: 'execute' }, { result: executedResult })}
+      />,
+    );
+    expect(screen.getByTestId('audience-failure').textContent).toContain(
+      'A partial result is left in Meta (ad set as-9); retrying picks up from there.',
+    );
+  });
+
+  it('a throttled re-ask says when Jaina can look again instead of doing nothing', () => {
+    const view = failedWith({ code: 'propose_failed', phase: 'propose' }, { proposal: null });
+    render(
+      <AudienceRecommendationCard
+        {...baseProps}
+        onRequest={(handlers) => handlers?.onDone?.(view.row?.id ?? '')}
+        view={view}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Jaina again' }));
+    expect(screen.getByTestId('audience-action-notice').textContent).toMatch(
+      /^Jaina already re-analysed this in the last hour\. Try again after .+\.$/,
+    );
+  });
+
+  it('a refused retry prints the error inline and the button shows it is working', () => {
+    const view = failedWith(
+      { code: 'activate_failed', phase: 'activate' },
+      { result: executedResult },
+    );
+    const { rerender } = render(
+      <AudienceRecommendationCard
+        {...baseProps}
+        onRetry={(handlers) => handlers?.onError?.('Could not retry in Meta: permission denied')}
+        view={view}
+      />,
+    );
+    expect(screen.getByTestId('audience-failure').textContent).toContain(
+      "Couldn't activate the new ad set.",
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Retry in Meta' }));
+    expect(screen.getByTestId('audience-action-notice').textContent).toBe(
+      'Could not retry in Meta: permission denied',
+    );
+    rerender(<AudienceRecommendationCard {...baseProps} retrying view={view} />);
+    const retry = screen.getByTestId('audience-retry') as HTMLButtonElement;
+    expect(retry.disabled).toBe(true);
+    expect(retry.querySelector('.animate-spin')).not.toBeNull();
+  });
+});
+
+describe('AudienceRecommendationCard — English only', () => {
+  it('no face of the card prints the former Spanish copy', () => {
+    const faces = [
+      audienceCardView([row({})], rec),
+      audienceCardView([], rec),
+      audienceCardView(
+        [
+          row({
+            status: 'blocked',
+            proposal: null,
+            blocked_by: {
+              code: 'no_creatives',
+              message: 'x',
+              campaign_id: 'c1',
+              campaign_name: 'Tours',
+            },
+          }),
+        ],
+        rec,
+      ),
+      failedWith({ code: 'execute_failed', phase: 'execute', message: '{"x":1}' }),
+      failedWith({ code: 'propose_failed' }, { proposal: null }),
+      audienceCardView([row({ status: 'executed', result: executedResult })], rec),
+    ];
+    for (const view of faces) {
+      const { container, unmount } = render(
+        <AudienceRecommendationCard {...baseProps} view={view} />,
+      );
+      expectEnglish(container);
+      unmount();
+    }
   });
 });
 
@@ -500,14 +748,13 @@ describe('AudienceRecommendationCard — the optimizer type scale', () => {
       expect(heading.className).toContain('uppercase');
       expect(heading.className).toContain('text-xs');
     }
-    expect(screen.getByText(plan.diagnosis).className).toContain('text-[15px]');
     for (const button of container.querySelectorAll('button[data-slot="button"]')) {
       expect(button.className).toContain('h-8');
       expect(button.className).toContain('text-sm');
     }
   });
 
-  it('the no-proposal, blocked, CBO-preview and executed faces carry no micro type either', () => {
+  it('the no-proposal, blocked, CBO-preview, failed and executed faces carry no micro type either', () => {
     const faces = [
       audienceCardView([], rec),
       audienceCardView(
@@ -540,6 +787,7 @@ describe('AudienceRecommendationCard — the optimizer type scale', () => {
         ],
         rec,
       ),
+      failedWith({ code: 'meta_permission', phase: 'execute', meta_message: 'x' }),
       audienceCardView([row({ status: 'executed', result: executedResult })], rec),
     ];
     for (const view of faces) {
