@@ -7,7 +7,12 @@ import {
 } from '@continuum/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { fileSha256, matchDroppedFile, uploadRefusal } from '@/components/forge/ForgeProjectDrop';
+import {
+  fileSha256,
+  isForgeDesignFile,
+  matchDroppedFile,
+  uploadRefusal,
+} from '@/components/forge/ForgeProjectDrop';
 import { type ForgeDeepLink, readForgeDeepLink } from '@/components/forge/forgeDeepLink';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
@@ -35,6 +40,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
 import { bulkDeleteAssetsOperation } from '@/lib/library/creativeOperations';
 import {
+  importDesignTemplate,
   discoverWorkspaceTemplates,
   fetchTemplateSources,
   renameTemplateSource,
@@ -177,7 +183,33 @@ export function ForgeWorkbench({
     [brandId, queryClient, sourceKey],
   );
 
-  const uploaded = useCallback(() => void refreshSources(), [refreshSources]);
+  // A Photoshop file is uploaded like any drop, then turned into a template beside it. The card
+  // appears when the import answers — a few seconds for a real file.
+  const importDesign = useCallback(
+    async (file: File, assetId: string) => {
+      toast.info(`Making a template from ${file.name}…`);
+      try {
+        const imported = await importDesignTemplate(brandId, assetId);
+        await refreshSources();
+        toast.success(
+          imported.status === 'exists'
+            ? `${file.name} is already a template`
+            : `Template made from ${file.name}: text and pictures are fields, every other layer is ready to switch on`,
+        );
+      } catch (error) {
+        toast.error(`${file.name}: ${error instanceof Error ? error.message : 'the import failed'}`);
+      }
+    },
+    [brandId, refreshSources],
+  );
+
+  const uploaded = useCallback(
+    ({ file, uploaded: result }: { file: File; uploaded: { assetId: string } }) => {
+      void refreshSources();
+      if (isForgeDesignFile(file.name)) void importDesign(file, result.assetId);
+    },
+    [importDesign, refreshSources],
+  );
 
   const { uploads, uploadFiles, pauseUpload, resumeUpload, cancelUpload } = useMediaUpload(
     brandId,
@@ -438,7 +470,7 @@ export function ForgeWorkbench({
           onFonts={receiveFonts}
           onRejected={(files) =>
             toast.error(
-              `${files.map((file) => file.name).join(', ')}: use .aep, .aepx, .aet or .zip, and .ttf or .otf for fonts.`,
+              `${files.map((file) => file.name).join(', ')}: use .aep, .aepx, .aet, .zip, .psd or .ai, and .ttf or .otf for fonts.`,
             )
           }
         />

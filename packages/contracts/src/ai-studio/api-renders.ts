@@ -187,6 +187,15 @@ export const apiRenderVariableSchema = z
       .strict()
       .nullable()
       .default(null),
+    /**
+     * Whether a form asks for this field. False: the template carries it but it is switched off
+     * (a design import publishes every layer and switches on only text and smart objects), and a
+     * render that does not supply it uses `fallback` — what the file itself says.
+     */
+    exposed: z.boolean().default(true),
+    /** The value a switched-off field renders with: the authored copy, the layer's own picture
+     * URL, the file's own visibility. Null when the field is on, or nothing was authored. */
+    fallback: z.union([z.string(), z.number(), z.boolean()]).nullable().default(null),
   })
   .strict();
 export type ApiRenderVariable = z.infer<typeof apiRenderVariableSchema>;

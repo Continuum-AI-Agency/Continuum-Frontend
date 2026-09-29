@@ -11,6 +11,9 @@ import type {
   WorkspaceTemplate,
 } from '@continuum/contracts';
 import {
+  type DesignImportRequest,
+  type DesignImportResponse,
+  designImportResponseSchema,
   type RenameTemplateSourceRequest,
   readFontNames,
   type TemplateFontAliasRequest,
@@ -221,6 +224,23 @@ export async function sendTemplateToForge(
   return unwrap<TemplateSource>(response, 'Template Forge hand-off');
 }
 
+/**
+ * A Photoshop file already in the Library → an editable template beside it. Takes seconds: the
+ * Backend reads every layer and the forge writes the project. `exists` when this exact version was
+ * imported before — the call is idempotent, so a double drop makes one template.
+ */
+export async function importDesignTemplate(
+  brandId: string,
+  assetId: string,
+): Promise<DesignImportResponse> {
+  const body: DesignImportRequest = { brandId };
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/import-design`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+  return designImportResponseSchema.parse(await unwrap(response, 'Design import'));
+}
+
 export async function uploadBrandFont(input: {
   brandId: string;
   family: string;
@@ -345,6 +365,8 @@ export type TemplateVariable = {
   placement: null;
   /** A video slot's clip seconds — see `apiRenderVariableSchema.clip`. Null for anything else. */
   clip: { fromSec: number; toSec: number; playsSec: number } | null;
+  /** False: in the template but switched off — no form asks for it; renders what the file says. */
+  exposed?: boolean;
 };
 
 export type TemplateSlotEdit = {
@@ -353,6 +375,7 @@ export type TemplateSlotEdit = {
   role?: string | null;
   charBudget?: number | null;
   required?: boolean | null;
+  exposed?: boolean | null;
   defaultValue?: unknown;
   binding?: { source: string; path: string; label?: string } | null;
 };

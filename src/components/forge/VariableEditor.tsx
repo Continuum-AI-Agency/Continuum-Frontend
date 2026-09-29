@@ -281,13 +281,15 @@ function settleDraft(current: Draft, submitted: Draft): Draft {
   return next;
 }
 
-type VariableFilter = 'all' | 'unassigned' | 'media' | 'text';
+type VariableFilter = 'all' | 'unassigned' | 'media' | 'text' | 'off';
 
 const FILTERS: Array<{ value: VariableFilter; label: string }> = [
   { value: 'all', label: 'All' },
   { value: 'unassigned', label: 'Unassigned' },
   { value: 'media', label: 'Media' },
   { value: 'text', label: 'Text' },
+  // A design import brings every layer of the file; most start switched off.
+  { value: 'off', label: 'Off' },
 ];
 
 /** What a closed row shows for its default: the copy in mono, a swatch, or that a picture is set. */
@@ -393,10 +395,13 @@ export function VariableEditor({
     );
   const roleOf = (variable: TemplateVariable) =>
     resolve(draft, variable, 'role', variable.role) as string | null;
+  const exposedOf = (variable: TemplateVariable) =>
+    resolve(draft, variable, 'exposed', variable.exposed ?? true) !== false;
   const shown = variables.filter((variable) => {
     if (filter === 'unassigned') return roleOf(variable) === null;
     if (filter === 'media') return variable.kind === 'image' || variable.kind === 'video';
     if (filter === 'text') return variable.kind === 'text' || variable.kind === 'enum';
+    if (filter === 'off') return !exposedOf(variable);
     return true;
   });
   const openKey = selectedKey === undefined ? variables[0]!.key : (selectedKey ?? '');
@@ -436,7 +441,9 @@ export function VariableEditor({
           const name = nameOf(variable);
           const role = roleOf(variable);
           const clash = role !== null && claimed.has(role);
-          const required = resolve(draft, variable, 'required', variable.required) === true;
+          const exposed = exposedOf(variable);
+          const required =
+            exposed && resolve(draft, variable, 'required', variable.required) === true;
           const budget = resolve(draft, variable, 'charBudget', variable.charBudget) as
             | number
             | null;
@@ -454,7 +461,10 @@ export function VariableEditor({
               <AccordionPrimitive.Header className="flex">
                 <AccordionPrimitive.Trigger className="grid h-8 w-full min-w-0 grid-cols-[1rem_minmax(6rem,12rem)_minmax(5rem,8rem)_minmax(0,24rem)_3.5rem_0.75rem] items-center justify-start gap-2 px-[var(--card-pad)] text-left text-xs outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-panel-open:bg-muted/40">
                   <Icon className="size-3.5 text-muted-foreground" aria-hidden />
-                  <span className="truncate">{name}</span>
+                  <span className={cn('truncate', !exposed && 'text-muted-foreground')}>
+                    {name}
+                    {exposed ? null : <span className="ml-1.5 text-2xs uppercase">Off</span>}
+                  </span>
                   <span className="flex min-w-0">
                     {role ? (
                       <Pill
@@ -584,8 +594,23 @@ export function VariableEditor({
                     ) : null}
                     <Field orientation="horizontal" className="w-auto gap-2 pb-1">
                       <Switch
+                        id={`variable-exposed-${variable.key}`}
+                        checked={exposed}
+                        onCheckedChange={(next) => patch(variable.key, { exposed: next })}
+                      />
+                      <FieldLabel
+                        htmlFor={`variable-exposed-${variable.key}`}
+                        className="text-xs"
+                        title="Off: no form asks for it, and every render uses what the file says"
+                      >
+                        Ask for it
+                      </FieldLabel>
+                    </Field>
+                    <Field orientation="horizontal" className="w-auto gap-2 pb-1">
+                      <Switch
                         id={`variable-required-${variable.key}`}
                         checked={required}
+                        disabled={!exposed}
                         onCheckedChange={(next) => patch(variable.key, { required: next })}
                       />
                       <FieldLabel htmlFor={`variable-required-${variable.key}`} className="text-xs">

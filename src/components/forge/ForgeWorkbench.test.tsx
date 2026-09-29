@@ -35,7 +35,8 @@ const SOURCE: TemplateSource = {
 const toastError = mock((_message: string) => undefined);
 let discovered: unknown[] = [];
 let fetchedSources: TemplateSource[] = [SOURCE];
-let uploadFinished: (() => void) | undefined;
+type UploadFinished = (result: { file: File; uploaded: { assetId: string } }) => void;
+let uploadFinished: UploadFinished | undefined;
 const fetchTemplateSources = mock(async () => fetchedSources);
 const fetchRenderWorkspaces = mock(async () => []);
 const discoverWorkspaceTemplates = mock(async () => ({ items: discovered }));
@@ -68,7 +69,7 @@ mock.module('@/components/library/useMediaUpload', () => ({
   useMediaUpload: (
     _brandId: string,
     options?: {
-      onUploaded?: () => void;
+      onUploaded?: UploadFinished;
     },
   ) => {
     uploadFinished = options?.onUploaded;
@@ -151,7 +152,7 @@ describe('ForgeWorkbench', () => {
     });
     try {
       fetchedSources = [{ ...SOURCE, parseState: 'pending' }];
-      uploadFinished?.();
+      uploadFinished?.({ file: new File(['x'], 'promo.aep'), uploaded: { assetId: 'asset-new' } });
 
       expect(await screen.findByText('Unpacking')).toBeTruthy();
       expect(screen.getByRole('button', { name: 'Open Untitled template' })).toBeTruthy();

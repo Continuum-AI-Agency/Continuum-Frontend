@@ -153,13 +153,16 @@ export const apiRendersApi = {
       schema: apiRenderTemplateListResponseSchema,
     });
   },
-  getContract(brandId: string, templateKey: string, bindingId?: string | null) {
-    return http.request<ApiRenderTemplateContract>({
+  // A switched-off field (a design import's layer nobody turned on) is not the caller's to fill:
+  // the server renders what the file says. Dropped here, so no grid, node or import asks for it.
+  async getContract(brandId: string, templateKey: string, bindingId?: string | null) {
+    const contract = await http.request<ApiRenderTemplateContract>({
       path: `${API_RENDER_TEMPLATES_ROUTE}/${encodeURIComponent(templateKey)}/contract?${query(
         bindingId ? { brandId, bindingId } : { brandId },
       )}`,
       schema: apiRenderTemplateContractSchema,
     });
+    return { ...contract, variables: contract.variables.filter((variable) => variable.exposed !== false) };
   },
   preflight(input: ApiRenderPreflightRequest) {
     return http.request<ApiRenderPreflightResponse>({
