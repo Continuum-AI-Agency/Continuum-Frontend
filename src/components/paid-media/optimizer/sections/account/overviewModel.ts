@@ -25,6 +25,17 @@ export const WINDOW_DAYS = 7;
 /** Over target by more than this reads as `bad`; over by any less reads as `warn`. */
 const WARN_CEILING_PCT = 25;
 
+/** Spend against the daily plan reads as ok inside this band, warn outside it. */
+const PLAN_TOLERANCE_PCT = 10;
+
+/** Spend per day against the plan, as a tile state. Unjudgeable without a plan. Shared by
+ *  the Overview's spend tile and the portfolio hero's. */
+export function spendState(perDay: number, plannedPerDay: number): TileState {
+  if (plannedPerDay <= 0) return 'none';
+  const pct = Math.abs(perDay / plannedPerDay - 1) * 100;
+  return pct <= PLAN_TOLERANCE_PCT ? 'ok' : 'warn';
+}
+
 /** Which result the account buys, in the words the sentence uses. Keyed by the metric's
  *  KPI field so a custom conversion that behaves like a lead is still called a lead. */
 const RESULT_WORDS: Record<string, { one: string; many: string }> = {

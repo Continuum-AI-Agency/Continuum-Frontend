@@ -18,7 +18,6 @@ import {
   NEWS_ROW_BREAKPOINT_REM,
   NEWS_ROW_COLUMNS,
   NEWS_ROW_SIZE,
-  RECAP_BESIDE_SPAN,
 } from './cardShape';
 
 /** `@[36rem]/news:grid-cols-2` → { 36: 2 }, plus the unprefixed `grid-cols-1` under 0. */
@@ -70,20 +69,6 @@ describe('the row decides the column count, by the pane’s width', () => {
 
   it('shows exactly one desktop row before the disclosure', () => {
     expect(NEWS_ROW_SIZE).toBe(NEWS_ROW_COLUMNS.desktop);
-  });
-
-  it('gives the recap every column the cards left empty', () => {
-    // One card: the recap takes the other one on a tablet and the other two on a desktop.
-    expect(RECAP_BESIDE_SPAN[1]).toContain(
-      `@[${NEWS_ROW_BREAKPOINT_REM.tablet}rem]/news:col-span-1`,
-    );
-    expect(RECAP_BESIDE_SPAN[1]).toContain(
-      `@[${NEWS_ROW_BREAKPOINT_REM.desktop}rem]/news:col-span-2`,
-    );
-    // Two cards: the recap takes the last desktop column.
-    expect(RECAP_BESIDE_SPAN[2]).toContain(
-      `@[${NEWS_ROW_BREAKPOINT_REM.desktop}rem]/news:col-span-1`,
-    );
   });
 });
 

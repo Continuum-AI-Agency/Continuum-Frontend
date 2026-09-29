@@ -20,12 +20,12 @@ describe('JainaEntryChips', () => {
     expect(band?.className).toContain('border-primary');
   });
 
-  it('labels the band "Ask Jaina" in primary', () => {
+  it('labels the band "Preguntale a Jaina" in primary', () => {
     const { container, getByText } = mount();
-    const label = getByText(/Ask Jaina/);
+    const label = getByText(/Preguntale a Jaina/);
     expect(label).toBeTruthy();
     expect(label.className).toContain('text-primary');
-    expect(container.textContent).toContain('Ask Jaina');
+    expect(container.textContent).not.toContain('Ask Jaina');
   });
 
   it('offers five readable links, none in the tiny sizes', () => {
@@ -46,6 +46,23 @@ describe('JainaEntryChips', () => {
       const prompt = decodeURIComponent(href.slice('/scale?tab=jaina&prompt='.length));
       expect(prompt).toContain('"Leads MX"');
     }
+  });
+
+  it('puts what a caller hands it inside the band, above the questions', () => {
+    const { container } = render(
+      <JainaEntryChips portfolio={portfolio}>
+        <p data-testid="inside">la lectura</p>
+      </JainaEntryChips>,
+    );
+    const band = container.querySelector('[data-testid="jaina-entry-chips"]');
+    const inside = band?.querySelector('[data-testid="inside"]');
+    const firstLink = band?.querySelector('a');
+    expect(inside).toBeTruthy();
+    expect(
+      inside && firstLink
+        ? inside.compareDocumentPosition(firstLink) & Node.DOCUMENT_POSITION_FOLLOWING
+        : 0,
+    ).toBeTruthy();
   });
 });
 

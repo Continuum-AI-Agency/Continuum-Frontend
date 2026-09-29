@@ -101,7 +101,7 @@ import {
   useOptimizerPerformance,
 } from '../useOptimizerData';
 import { AutopilotScopesField } from './AutopilotScopesField';
-import type { HeroSetting } from './detail/vitalsModel';
+import type { HeroSetting } from './detail/heroHeaderModel';
 import { OBJECTIVES } from './suggestionModel';
 import {
   ANALOG_LABEL,

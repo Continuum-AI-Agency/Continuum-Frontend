@@ -29,11 +29,11 @@ mock.module('../useOptimizerData', () => ({
   useOptimizerPortfolioEfficiency: () => efficiency,
 }));
 
-const { OptimizerOverview, spendState, kindTileSub, autopilotTileSub } = await import(
-  './OptimizerOverview'
-);
+const { OptimizerOverview, kindTileSub, autopilotTileSub } = await import('./OptimizerOverview');
 const { AccountReadEnvelopeSchema } = await import('../useOptimizerData');
-const { autopilotSummary, resultKinds, portfolioWindow } = await import('./account/overviewModel');
+const { autopilotSummary, resultKinds, portfolioWindow, spendState } = await import(
+  './account/overviewModel'
+);
 
 function portfolio(
   overrides: Partial<PortfolioListItem> & { id: string; name: string },

@@ -40,6 +40,11 @@ import { benchBrowserChannel, loadProdSupabaseEnv, PROD_SUPABASE_URL } from './s
 //      with figures, the sub-line, the Jaina band, four to six state-coloured tiles, the
 //      recommendation cards with the lead marked, then the portfolio rows — in that order,
 //      nothing else above the fold, no chart, and none of the old copy.
+//   7. The portfolio hero as ideas 01 + 09 + 14 order it (stage 2) on FORMULARIOS // TODOS:
+//      the name line, the Jaina panel (her read, the field, five questions), two sentences
+//      with a figure, four state-coloured tiles, the before/after strip, then the cards; the
+//      ad-set ranking first in the body; the funnel and the reallocation behind "Ver
+//      detalle"; and no full-width green or red bar anywhere under the hero.
 //
 // ── MONEY SAFETY — this is a READ/BROWSE bench, and it cannot move money ──
 //   * Nothing here clicks Apply, Convert, Revert, "Run now", Create, Enroll, Archive, or
@@ -109,6 +114,9 @@ const EMPTY_PORTFOLIO_NAME = 'Reporte Agosto - Citas y Mensajes';
 //     secondary candidate, so its insight card offers "Open the creative recommendation".
 const TOURS_PORTFOLIO_NAME = 'Septiembre - Tours Programados';
 const PRUEBA_PORTFOLIO_NAME = 'Prueba';
+/** The portfolio every idea on the redesign page is drawn with (portafolio.html): 9 ad sets on
+ *  autopilot, leads against a 35 MXN target, pending decisions. Same ledger brand. */
+const FORMULARIOS_PORTFOLIO_NAME = 'FORMULARIOS // TODOS';
 
 const SHOTS_DIR = resolve(__dirname, '__screenshots__/optimizer-e2e');
 
@@ -303,9 +311,14 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await expect(
         page.getByRole('heading', { level: 2 }).filter({ hasText: ENROLLED_PORTFOLIO_NAME }),
       ).toBeVisible();
-      // Its cycle data, rendered: the portfolio metric strip and the reallocation panel.
-      await expect(page.getByText('Daily budget').first()).toBeVisible();
-      await expect(page.getByText('Reallocation').first()).toBeVisible({ timeout: 120_000 });
+      // Its cycle data, rendered: the headline sentence with its figures, the four tiles,
+      // and the disclosure the reallocation now waits behind.
+      await expect(page.getByTestId('headline-status')).toBeVisible({ timeout: 120_000 });
+      await expect(page.getByTestId('headline-status')).toContainText(/\d/);
+      await expect(
+        page.getByTestId('portfolio-tiles').locator('[data-testid^="tile-"]'),
+      ).toHaveCount(4);
+      await expect(page.getByTestId('portfolio-detail-more')).toContainText('Ver detalle');
       await shoot(page, '02-portfolio-detail');
     } finally {
       await context.close();
@@ -550,8 +563,8 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await expect(page.getByRole('button', { name: 'Back to portfolios' })).toBeVisible({
         timeout: 120_000,
       });
-      // Performance is the default inner section — its Reallocation panel is showing.
-      await expect(page.getByText('Reallocation').first()).toBeVisible({ timeout: 120_000 });
+      // Performance is the default inner section — its headline sentence is showing.
+      await expect(page.getByTestId('headline-status')).toBeVisible({ timeout: 120_000 });
 
       await page.getByRole('tab', { name: 'Manage' }).click();
       await expect(page).toHaveURL(/section=manage/);
@@ -572,9 +585,9 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await expect(page.getByRole('button', { name: /Set up autopilot/ })).toBeVisible();
       await shoot(page, '11-workspace-manage');
 
-      // Performance restores the reallocation instrument (and the section param drops).
+      // Performance restores the headline (and the section param drops).
       await page.getByRole('tab', { name: 'Performance' }).click();
-      await expect(page.getByText('Reallocation').first()).toBeVisible();
+      await expect(page.getByTestId('headline-status')).toBeVisible();
     } finally {
       await context.close();
     }
@@ -727,7 +740,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
     }
   });
 
-  test("portfolio CTAs — a read row's button lands on an expanded queue row, and the Ask-Jaina band sits under the vitals", async ({
+  test("portfolio CTAs — a read row's button lands on an expanded queue row, and the Jaina panel sits under the name line", async ({
     browser,
   }) => {
     await selectBrand(EASYFIT_LEDGER_BRAND_ID);
@@ -763,24 +776,27 @@ test.describe('Paid Media Optimizer — live experience', () => {
         page.getByRole('heading', { level: 2 }).filter({ hasText: TOURS_PORTFOLIO_NAME }),
       ).toBeVisible({ timeout: 120_000 });
 
-      // The Ask-Jaina band: the first row after the portfolio's name and vital signs, before
-      // the news cards, five prepared questions.
+      // The Jaina panel: the first block after the portfolio's name line, before the
+      // sentences and the news cards, five prepared questions.
       const band = page.getByTestId('jaina-entry-chips');
       await expect(band).toBeVisible({ timeout: 120_000 });
       await expect(band.getByRole('link')).toHaveCount(5);
+      // The name line and the band stand before the cycle read lands; the cards only after.
+      // An order is only checkable once all three are on the page.
+      await expect(page.getByTestId('portfolio-news-row')).toBeVisible({ timeout: 120_000 });
       const order = await page.evaluate(() => {
         const hero = document.querySelector('[data-testid="portfolio-hero"]');
         const pick = (id: string) => hero?.querySelector(`[data-testid="${id}"]`) ?? null;
-        const vitals = pick('portfolio-vitals');
+        const header = pick('portfolio-header');
         const chips = pick('jaina-entry-chips');
         const news = pick('portfolio-news-row');
-        if (!vitals || !chips || !news) return { vitals: !!vitals, chips: !!chips, news: !!news };
+        if (!header || !chips || !news) return { header: !!header, chips: !!chips, news: !!news };
         const follows = (a: Element, b: Element) =>
           Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
-        return { vitalsBeforeChips: follows(vitals, chips), chipsBeforeNews: follows(chips, news) };
+        return { headerBeforeChips: follows(header, chips), chipsBeforeNews: follows(chips, news) };
       });
-      console.log(`[optimizer-bench] Ask-Jaina band order: ${JSON.stringify(order)}`);
-      expect(order).toEqual({ vitalsBeforeChips: true, chipsBeforeNews: true });
+      console.log(`[optimizer-bench] Jaina panel order: ${JSON.stringify(order)}`);
+      expect(order).toEqual({ headerBeforeChips: true, chipsBeforeNews: true });
       await shoot(page, '16-tours-ask-jaina-band');
 
       // The asked-for rows and the queue live on the workspace's Activity section. The row
@@ -814,7 +830,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
       // The blocked proposal's face: the reason, and the create button visibly off.
       const card = expandedQueueRow().getByTestId('audience-recommendation-card');
       await expect(card).toBeVisible();
-      await expect(card.getByText('No proposal could be built')).toBeVisible();
+      await expect(card.getByText('Bloqueada', { exact: true })).toBeVisible();
       await expect(card.getByTestId('audience-blocked-reason')).toContainText('creative');
       await expect(card.getByTestId('audience-create-blocked')).toBeDisabled();
       console.log(
@@ -853,6 +869,204 @@ test.describe('Paid Media Optimizer — live experience', () => {
         })
         .toBe(true);
       await shoot(page, '18-prueba-creative-row');
+    } finally {
+      await context.close();
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // The portfolio hero — Performance+ redesign, stage 2 (ideas 01 + 09 + 14), on the
+  // portfolio the redesign page is drawn with. Every assertion reads the RENDERED page.
+  // -------------------------------------------------------------------------
+  test('portfolio hero — FORMULARIOS // TODOS opens on the name line, the Jaina panel, two sentences, four tiles, the before/after strip and the cards, with no full-width bar under it', async ({
+    browser,
+  }) => {
+    await selectBrand(EASYFIT_LEDGER_BRAND_ID);
+    const { context } = await benchContext(browser);
+    const page = await context.newPage();
+
+    try {
+      await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
+      await page
+        .getByRole('button')
+        .filter({ hasText: FORMULARIOS_PORTFOLIO_NAME })
+        .first()
+        .click();
+      await expect(
+        page.getByRole('heading', { level: 2 }).filter({ hasText: FORMULARIOS_PORTFOLIO_NAME }),
+      ).toBeVisible({ timeout: 120_000 });
+      await expect(page.getByTestId('headline-status')).toBeVisible({ timeout: 120_000 });
+      await expect(page.getByTestId('portfolio-news-row')).toBeVisible({ timeout: 120_000 });
+      // The strip reads the daily series, which lands after the cycle read; grade it once
+      // it has data (it says so, rather than printing zeros, until then).
+      await expect(page.getByTestId('portfolio-before-after')).not.toHaveAttribute(
+        'data-source',
+        'none',
+        { timeout: 120_000 },
+      );
+
+      const report = await page.evaluate(() => {
+        const hero = document.querySelector('[data-testid="portfolio-hero"]');
+        const panel = hero?.closest('[role="tabpanel"]') ?? document.body;
+        const pick = (id: string) => hero?.querySelector(`[data-testid="${id}"]`) ?? null;
+        const follows = (a: Element | null, b: Element | null) =>
+          Boolean(a && b && a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+        const blocks = [
+          'portfolio-header',
+          'portfolio-jaina',
+          'portfolio-headline',
+          'portfolio-tiles',
+          'portfolio-before-after',
+          'portfolio-news-row',
+        ];
+        const nodes = blocks.map((id) => pick(id));
+        const present = nodes.map((node) => node !== null);
+        const ordered = nodes.every((node, i) => i === 0 || follows(nodes[i - 1] ?? null, node));
+        const tiles = [
+          ...(pick('portfolio-tiles')?.querySelectorAll('[data-testid^="tile-"]') ?? []),
+        ];
+        const jaina = pick('portfolio-jaina');
+        const read = jaina?.querySelector('[data-testid="jaina-read"]');
+        const heroRect = hero?.getBoundingClientRect() ?? { bottom: 0 };
+        const panelRect = panel.getBoundingClientRect();
+        // Every visible element under the hero painted with the success or destructive
+        // background token, at half the panel's width or more: a full-width bar.
+        const bars = [...panel.querySelectorAll('*')]
+          .filter((el) =>
+            /\bbg-(success|destructive)(\/\d+)?\b/.test(el.getAttribute('class') ?? ''),
+          )
+          .filter((el) => {
+            const rect = el.getBoundingClientRect();
+            return (
+              rect.height > 0 &&
+              rect.top >= heroRect.bottom - 1 &&
+              rect.width >= panelRect.width * 0.5
+            );
+          })
+          .map(
+            (el) => `${Math.round(el.getBoundingClientRect().width)}px ${el.getAttribute('class')}`,
+          );
+        const more = panel.querySelector('[data-testid="portfolio-detail-more"]');
+        const firstBodyBlock = hero?.nextElementSibling?.textContent ?? '';
+        return {
+          present,
+          ordered,
+          headerName: pick('portfolio-header')?.querySelector('h3')?.textContent ?? '',
+          facts: [
+            ...(pick('header-facts')?.querySelectorAll('[data-testid="header-chip"]') ?? []),
+          ].map((chip) => chip.getAttribute('data-setting')),
+          status: pick('headline-status')?.textContent ?? '',
+          statusFigures:
+            pick('headline-status')?.querySelectorAll('[data-testid="figure"]').length ?? 0,
+          opportunity: pick('headline-opportunity')?.textContent ?? '',
+          blocker: pick('headline-blocker')?.getAttribute('data-blocker') ?? null,
+          tiles: tiles.map((tile) => tile.getAttribute('data-testid')),
+          tileStates: tiles.map((tile) => tile.getAttribute('data-state')),
+          tileCharts: tiles.filter((tile) => tile.querySelector('svg, canvas')).length,
+          readSource: read?.getAttribute('data-source') ?? null,
+          readLabel: read?.querySelector('[data-testid="jaina-read-label"]')?.textContent ?? '',
+          readSentence:
+            read?.querySelector('[data-testid="jaina-read-sentence"]')?.textContent ?? '',
+          askField: Boolean(
+            jaina?.querySelector('form[data-testid="jaina-ask"] input[name="question"]'),
+          ),
+          jainaLinks: jaina?.querySelectorAll('[data-testid="jaina-entry-chips"] a').length ?? 0,
+          cycleLine: pick('before-after-cycle')?.textContent ?? '',
+          afterLine: pick('before-after-after')?.textContent ?? '',
+          beforeLine: pick('before-after-before')?.textContent ?? '',
+          projection: pick('before-after-projection')?.textContent ?? null,
+          vitals: Boolean(
+            pick('portfolio-vitals') || panel.querySelector('[data-testid="vital-bullet"]'),
+          ),
+          bars,
+          moreSummary:
+            (more?.querySelector('summary') as HTMLElement | null)?.innerText?.trim() ?? '',
+          moreOpen: more?.hasAttribute('open') ?? null,
+          moreHolds: {
+            funnel: more?.textContent?.includes('Conversion funnel') ?? false,
+            reallocation: more?.textContent?.includes('Reallocation') ?? false,
+          },
+          firstBodyBlock: firstBodyBlock.slice(0, 80),
+        };
+      });
+      console.log(`[optimizer-bench] FORMULARIOS hero: ${JSON.stringify(report)}`);
+
+      // The six blocks, all present, in this order.
+      expect(report.present).toEqual([true, true, true, true, true, true]);
+      expect(report.ordered).toBe(true);
+      expect(report.headerName).toBe(FORMULARIOS_PORTFOLIO_NAME);
+      expect(report.facts).toEqual(['objective', 'budget', 'target', 'window', 'strategy']);
+
+      // Two sentences with a figure; the third only when a blocker exists.
+      expect(report.status).toMatch(/^\d[\d,]* leads en \d+ días/);
+      expect(report.statusFigures).toBeGreaterThanOrEqual(2);
+      expect(report.opportunity).toMatch(/\d/);
+      expect(report.opportunity).toMatch(
+        /^(La oportunidad:|Ninguna oportunidad|Sin oportunidades)/,
+      );
+      if (report.blocker) {
+        expect(['kpi_mismatch', 'zero_delivery', 'no_signal']).toContain(report.blocker);
+      }
+
+      // Four tiles, each coloured by a state on its top border, never by a chart.
+      expect(report.tiles).toEqual(['tile-spend', 'tile-results', 'tile-cost', 'tile-decisions']);
+      for (const state of report.tileStates) expect(['ok', 'warn', 'bad', 'none']).toContain(state);
+      expect(report.tileCharts).toBe(0);
+
+      // The Jaina panel: her read (or the automatic one, labelled), the field, five questions.
+      expect(['jaina', 'auto']).toContain(report.readSource);
+      expect(report.readLabel).toMatch(
+        new RegExp(
+          `^(Jaina|Lectura automática) · sobre ${FORMULARIOS_PORTFOLIO_NAME.replace(/[/]/g, '\\/')}`,
+        ),
+      );
+      expect(report.readSentence).toMatch(/\d/);
+      expect(report.askField).toBe(true);
+      expect(report.jainaLinks).toBe(5);
+
+      // Before and after: the current window always, the cycle line, the projection when a
+      // pause is pending.
+      expect(report.cycleLine).toMatch(/^(Último ciclo, |Sin ciclo)/);
+      expect(report.afterLine).toMatch(/Después · .*\d+ leads/);
+      if (report.projection) expect(report.projection).toMatch(/costo proyectado|no compraron/);
+
+      // The vital signs and their bands are gone, and nothing under the hero is a bar.
+      expect(report.vitals).toBe(false);
+      expect(report.bars, 'full-width success/destructive bars under the hero').toEqual([]);
+
+      // The body: the ad-set ranking first; the funnel and the reallocation behind the
+      // disclosure, closed.
+      expect(report.firstBodyBlock).toContain('per ad set');
+      expect(report.moreSummary).toBe('Ver detalle');
+      expect(report.moreOpen).toBe(false);
+      expect(report.moreHolds).toEqual({ funnel: true, reallocation: true });
+      await shoot(page, '19-formularios-hero');
+
+      // Opening the disclosure reveals the two panels — and still no bar at the width of
+      // the panel: the ramps are per-row.
+      await page.getByTestId('portfolio-detail-more').locator('> summary').click();
+      await expect(page.getByText('Conversion funnel').first()).toBeVisible();
+      await shoot(page, '20-formularios-ver-detalle');
+
+      // The typed question deep-links into Jaina with the portfolio as context. The
+      // navigation is caught before it reaches the app: nothing is asked of Jaina.
+      let asked: string | null = null;
+      await page.route('**/scale?tab=jaina*', async (route) => {
+        asked = route.request().url();
+        await route.fulfill({
+          status: 200,
+          contentType: 'text/html',
+          body: '<html><body>caught</body></html>',
+        });
+      });
+      const field = page.getByTestId('jaina-ask').locator('input[name="question"]');
+      await field.fill('¿Y si pauso el conjunto más caro?');
+      await field.press('Enter');
+      await expect.poll(() => asked, { timeout: 30_000 }).not.toBeNull();
+      const prompt = new URL(asked as unknown as string).searchParams.get('prompt') ?? '';
+      console.log(`[optimizer-bench] FORMULARIOS ask → ${prompt}`);
+      expect(prompt).toContain(`"${FORMULARIOS_PORTFOLIO_NAME}"`);
+      expect(prompt).toContain('¿Y si pauso el conjunto más caro?');
     } finally {
       await context.close();
     }

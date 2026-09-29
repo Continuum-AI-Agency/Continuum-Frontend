@@ -21,7 +21,7 @@ import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { KpiTile, type KpiTileState } from '../components/KpiTile';
+import { KpiTile } from '../components/KpiTile';
 import { figureProps, formatCpa, formatCurrency } from '../format';
 import { pendingWorkCount } from '../reportModel';
 import * as typeScale from '../typeScale';
@@ -47,6 +47,7 @@ import {
   type RowSortKey,
   resultKinds,
   sortPortfolioRows,
+  spendState,
   WINDOW_DAYS,
   windowLabel,
 } from './account/overviewModel';
@@ -57,9 +58,6 @@ import { underManagement } from './portfolioStaleness';
 
 /** Room for six tiles: spend, up to three result kinds, decisions, autopilot. */
 const MAX_KIND_TILES = 3;
-
-/** Spend against the daily plan reads as ok inside this band, warn outside it. */
-const PLAN_TOLERANCE_PCT = 10;
 
 type OptimizerOverviewProps = {
   brandId: string;
@@ -73,13 +71,6 @@ type OptimizerOverviewProps = {
   onCreatePortfolio: () => void;
   onPrefetchPortfolio?: (portfolioId: string) => void;
 };
-
-/** Spend per day against the plan, as a tile state. Unjudgeable without a plan. */
-export function spendState(perDay: number, plannedPerDay: number): KpiTileState {
-  if (plannedPerDay <= 0) return 'none';
-  const pct = Math.abs(perDay / plannedPerDay - 1) * 100;
-  return pct <= PLAN_TOLERANCE_PCT ? 'ok' : 'warn';
-}
 
 /** The tile's second line for one result kind: cost, target, and last week — or why not. */
 export function kindTileSub(kind: ResultKind, currency: string | null | undefined): string {

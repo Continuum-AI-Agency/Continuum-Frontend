@@ -1,50 +1,52 @@
 'use client';
 
-// What a portfolio opens on: its vital signs (./PortfolioVitals — name, mode, settings and six
-// readings against their references), then the "Ask Jaina" band (`askJaina`, the prepared
-// questions for this portfolio) between the vitals and the news, then the day's news as ONE
-// ROW — three cards across the pane, highest impact on the left — and the growth recap as the
-// row's footer. Then the rest of the modules.
+// What a portfolio opens on, in the order the redesign fixed (docs/performance-plus-redesign/
+// portafolio.html, ideas 01 + 09 + 14, decided 28/09):
 //
-// The row is the whole layout decision. Three equal columns on a desktop pane, two on a
-// tablet, one on a phone, measured on the pane and not the window (`NEWS_PANE` /
+//   1. the name and its fixed facts in one line (./PortfolioHeaderLine);
+//   2. the Jaina panel — her latest read on this portfolio as one sentence with a figure, a
+//      field whose submit deep-links into Jaina with the portfolio as context, and the five
+//      prepared questions (./JainaPortfolioPanel, inside the one primary band);
+//   3. the news in two sentences with a figure — how we are doing, where the opportunity is —
+//      a third only when a blocker exists, and four tiles with a state on their top border
+//      (./PortfolioHeadline);
+//   4. before and after the last cycle: the window before beside the window after, what the
+//      cycle proposed and what landed, and the cost the pending pauses would leave
+//      (./BeforeAfterStrip);
+//   5. the recommendation cards, ONE ROW, highest impact on the left (./news), the rest behind
+//      "N more".
+//
+// The six vital-sign rows that used to open the portfolio — each a full-width green/red band
+// with a target mark — are gone; their figures are in the sentences and the tiles now.
+//
+// The card row is the one layout decision left here. Three equal columns on a desktop pane,
+// two on a tablet, one on a phone, measured on the pane and not the window (`NEWS_PANE` /
 // `NEWS_ROW` in ./news/cardShape). Every card fills its column and the cards in a row share
-// a height, so the pane holds no blank beside a card that was given less than it. The order
-// is the brief's own ranking — `buildPortfolioNews` hands the cards back sorted — and the
-// lead is not always first: when Jaina picked a lower candidate the maximum stands to its
-// left, and the lead's "chosen over the biggest number" line explains the pair.
+// a height. The order is the brief's own ranking — `buildPortfolioNews` hands the cards back
+// sorted — and the lead is not always first: when Jaina picked a lower candidate the maximum
+// stands to its left, and the lead's "chosen over the biggest number" line explains the pair.
+// A fourth card sits behind "N more" rather than wrapping into a lone card with blank beside it.
 //
-// The first row is exactly one desktop row. A fourth card (a brief lists up to three
-// secondaries when the hero is not the maximum) does not wrap into a lone card with the
-// blank beside it that this file was rewritten to remove; it sits behind "N more", which
-// says it exists and, being the lowest-impact finding by construction, can wait a click.
-//
-// The recap is the row's FOOTER when the row is full — the owner's order was "the three
-// actions first, then the rest" — and sits BESIDE the cards when it is not, taking every
-// column they left empty, so one card and its recap are still a composed row. Its verdict
-// half is already honest: `heroModel` overlays the run's pacing verdict on the stored brief
-// and strips a pace clause the verdict does not support.
-//
-// Every card in the row draws its own evidence in a band that grows to fill the card
-// (./news/CardBand): the lead AND the insights, from the same status body — the cycle's
-// recommendations and its ad-set rows, joined in ./news/newsModel. Entrance is a short
-// stagger; everything is static under prefers-reduced-motion.
+// Entrance is a short stagger; everything is static under prefers-reduced-motion.
 
 import type { CycleItemRow } from '@continuum/contracts';
 import { IMPACT_TIER_COPY, type ImpactTier, impactTier } from '@continuum/contracts';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
 import * as React from 'react';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { figureProps } from '../../format';
 import { asOfLine } from '../recQueueModel';
+import { BeforeAfterStrip, type BeforeAfterStripProps } from './BeforeAfterStrip';
+import type { PortfolioHeadline as HeadlineModel } from './headlineModel';
+import type { HeroSetting } from './heroHeaderModel';
 import type { HeroCta, HeroView } from './heroModel';
-import { NEWS_CELL, NEWS_PANE, NEWS_ROW, NEWS_ROW_SIZE, RECAP_BESIDE_SPAN } from './news/cardShape';
+import { JainaPortfolioPanel, type JainaPortfolioPanelProps } from './JainaPortfolioPanel';
+import { NEWS_CELL, NEWS_PANE, NEWS_ROW, NEWS_ROW_SIZE } from './news/cardShape';
 import { InsightCard } from './news/InsightCard';
 import type { NewsTier } from './news/NewsCard';
 import { NewsCard } from './news/NewsCard';
 import { buildPortfolioNews, type NewsCardModel } from './news/newsModel';
-import { PortfolioVitals, type PortfolioVitalsProps } from './PortfolioVitals';
+import { PortfolioHeaderLine, type PortfolioHeaderLineProps } from './PortfolioHeaderLine';
+import { PortfolioHeadline } from './PortfolioHeadline';
 
 const TIER_TONE: Record<ImpactTier, 'destructive' | 'warning' | 'muted'> = {
   high: 'destructive',
@@ -89,65 +91,14 @@ export type PortfolioHeroProps = {
   stale?: boolean;
   onCta: (cta: HeroCta) => void;
   explainHref: string;
-  /** The header and vital-sign rows above the news. Absent, the hero is the news alone. */
-  vitals?: PortfolioVitalsProps;
-  /** The "Ask Jaina" band, rendered between the vitals and the news row. */
-  askJaina?: React.ReactNode;
+  /** The blocks above the cards. Absent, the hero is the news alone. */
+  header?: PortfolioHeaderLineProps;
+  jaina?: JainaPortfolioPanelProps;
+  headline?: HeadlineModel;
+  beforeAfter?: BeforeAfterStripProps;
+  /** A chip or a blocker's fix opens its field in Manage. */
+  onEditSetting?: (setting: HeroSetting) => void;
 };
-
-/** The growth read: the flight's pacing pill when there is a flight, and the sentence. */
-function Recap({
-  view,
-  placement,
-  className,
-}: {
-  view: HeroView;
-  placement: 'beside' | 'footer';
-  className?: string;
-}) {
-  return (
-    <motion.p
-      className={cn(
-        'flex flex-wrap items-center gap-2 text-xs text-muted-foreground',
-        placement === 'beside' && 'self-center',
-        className,
-      )}
-      data-placement={placement}
-      data-testid="portfolio-news-recap"
-      variants={tileVariants}
-    >
-      {view.pacingLine ? (
-        <Badge
-          className="text-xs"
-          variant={
-            view.pacingTone === 'success'
-              ? 'success'
-              : view.pacingTone === 'warning'
-                ? 'warning'
-                : 'muted'
-          }
-        >
-          {view.pacingLine}
-        </Badge>
-      ) : null}
-      {/* The sentence carries figures inside prose, so the node declares the one it is
-       *  about (cost per result, else spend) and the bench reads every money token in it
-       *  against the growth figures under the screen's currency rule. */}
-      <span
-        className="max-w-[65ch]"
-        {...figureProps(
-          'recap.sentence',
-          view.brief.growth.cost_per_result ?? view.brief.growth.spend,
-          view.brief.growth.currency,
-          view.brief.growth.window,
-          'sentence',
-        )}
-      >
-        {view.brief.growth_sentence}
-      </span>
-    </motion.p>
-  );
-}
 
 export function PortfolioHero({
   view,
@@ -159,8 +110,11 @@ export function PortfolioHero({
   stale = false,
   onCta,
   explainHref,
-  vitals,
-  askJaina,
+  header,
+  jaina,
+  headline,
+  beforeAfter,
+  onEditSetting = () => undefined,
 }: PortfolioHeroProps) {
   const reduce = useReducedMotion();
   // Play the entrance once per portfolio, not on every refetch.
@@ -185,11 +139,11 @@ export function PortfolioHero({
   if (view.state === 'first_cycle') {
     return (
       <section className="grid gap-3" data-testid="portfolio-hero">
-        {vitals ? <PortfolioVitals {...vitals} /> : null}
-        {askJaina}
+        {header ? <PortfolioHeaderLine {...header} /> : null}
+        {jaina ? <JainaPortfolioPanel {...jaina} read={null} /> : null}
         <div className="h-24 animate-pulse rounded-lg bg-muted/70" />
-        <div className="rounded-lg border border-border/60 border-dashed p-4 text-xs text-muted-foreground">
-          Jaina writes your first read after the first cycle.
+        <div className="rounded-lg border border-border/60 border-dashed p-4 text-muted-foreground text-xs">
+          Jaina escribe su primera lectura después del primer ciclo.
         </div>
       </section>
     );
@@ -229,7 +183,6 @@ export function PortfolioHero({
 
   const row = news.cards.slice(0, NEWS_ROW_SIZE);
   const more = news.cards.slice(NEWS_ROW_SIZE);
-  const recapBeside = row.length < NEWS_ROW_SIZE;
 
   return (
     <motion.section
@@ -239,32 +192,37 @@ export function PortfolioHero({
       initial={play ? 'hidden' : false}
       variants={groupVariants}
     >
-      {vitals ? (
+      {header ? (
         <motion.div variants={tileVariants}>
-          <PortfolioVitals {...vitals} />
+          <PortfolioHeaderLine {...header} />
         </motion.div>
       ) : null}
 
-      {askJaina ? <motion.div variants={tileVariants}>{askJaina}</motion.div> : null}
+      {jaina ? (
+        <motion.div variants={tileVariants}>
+          <JainaPortfolioPanel {...jaina} />
+        </motion.div>
+      ) : null}
+
+      {headline ? (
+        <motion.div variants={tileVariants}>
+          <PortfolioHeadline headline={headline} onEditSetting={onEditSetting} />
+        </motion.div>
+      ) : null}
+
+      {beforeAfter ? (
+        <motion.div variants={tileVariants}>
+          <BeforeAfterStrip {...beforeAfter} />
+        </motion.div>
+      ) : null}
 
       <motion.div className={NEWS_ROW} data-testid="portfolio-news-row" variants={groupVariants}>
         {row.map(cell)}
-        {recapBeside ? (
-          <Recap
-            className={
-              row.length === 1 || row.length === 2 ? RECAP_BESIDE_SPAN[row.length] : 'col-span-full'
-            }
-            placement="beside"
-            view={view}
-          />
-        ) : null}
       </motion.div>
-
-      {recapBeside ? null : <Recap placement="footer" view={view} />}
 
       {more.length > 0 ? (
         <details className="group" data-testid="portfolio-news-more">
-          <summary className="cursor-pointer list-none text-xs text-muted-foreground hover:text-foreground">
+          <summary className="cursor-pointer list-none text-muted-foreground text-xs hover:text-foreground">
             <span className="group-open:hidden">
               {more.length} more finding{more.length === 1 ? '' : 's'}
             </span>

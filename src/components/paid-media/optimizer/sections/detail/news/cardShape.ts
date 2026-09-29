@@ -51,15 +51,6 @@ export const NEWS_ROW =
 /** A cell: a container, so the card inside can floor its height against the cell's width. */
 export const NEWS_CELL = '@container/news-cell min-w-0';
 
-/**
- * How far the recap prose reaches when it sits BESIDE the cards rather than under them: it
- * takes every column the cards left empty, so one card plus its recap is still a full row.
- */
-export const RECAP_BESIDE_SPAN: Record<1 | 2, string> = {
-  1: '@[36rem]/news:col-span-1 @[56rem]/news:col-span-2',
-  2: '@[36rem]/news:col-span-2 @[56rem]/news:col-span-1',
-};
-
 /** The floor the band implies, as a share of the cell's width: 100 ÷ the widest ratio. */
 export function cardMinHeightCqw(): number {
   return Math.round((100 / CARD_ASPECT_BAND.max) * 100) / 100;

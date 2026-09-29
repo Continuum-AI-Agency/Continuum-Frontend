@@ -79,10 +79,14 @@ import {
 import type { OptimizerAdMetric, WorkspaceSection } from '../useOptimizerUrlState';
 import { AdsetCreativeVerdicts } from './AdsetCreativeVerdicts';
 import { ApplyReallocationDialog } from './ApplyReallocationDialog';
+import { resultWords } from './account/overviewModel';
 import { askedRecommendationIds, buildAskedForRows } from './detail/askedForModel';
+import { buildBeforeAfter } from './detail/beforeAfterModel';
 import { DailyReadList } from './detail/DailyReadList';
 import type { DailyReadRow } from './detail/dailyReadModel';
 import { buildDailyRead } from './detail/dailyReadModel';
+import { buildPortfolioHeadline } from './detail/headlineModel';
+import { buildHeroHeader, type HeroSetting } from './detail/heroHeaderModel';
 import { buildHeroView, type HeroCta } from './detail/heroModel';
 import { ObjectiveCostRecap } from './detail/ObjectiveCostRecap';
 import { PortfolioHero } from './detail/PortfolioHero';
@@ -90,8 +94,6 @@ import { type RangeSpec, resolveRange, todayIso } from './detail/rangeModel';
 import { buildRecap } from './detail/recapModel';
 import { SuggestionAsk } from './detail/SuggestionAsk';
 import { useAdhocSuggestionMutations, useAdhocSuggestions } from './detail/useAdhocSuggestions';
-import { buildHeroHeader, buildVitals, type HeroSetting } from './detail/vitalsModel';
-import { JainaEntryChips } from './JainaEntryChips';
 import { OptimizerActionsPortfolioGroup } from './OptimizerActionsPortfolioGroup';
 import { OptimizerPanel } from './OptimizerPanel';
 import { OptimizerReadError } from './OptimizerReadError';
@@ -298,7 +300,7 @@ export function PortfolioDetailWorkspace({
     firstCycle: !latestRun,
   });
   useHeroBriefWatch(portfolio.id, Boolean(latestRun) && heroView.source === 'fallback');
-  const vitalsHeader = buildHeroHeader({
+  const heroHeader = buildHeroHeader({
     report,
     portfolio,
     lastCycleAt: latestRun?.cycle_ts ?? null,
@@ -306,15 +308,26 @@ export function PortfolioDetailWorkspace({
     metric,
     currency: currency ?? null,
   });
-  const vitalsRows = latestRun
-    ? buildVitals({
-        report,
-        growth: heroView.brief.growth,
-        portfolio,
-        metric,
-        currency: currency ?? null,
-      })
-    : null;
+  // The news in sentences and tiles, and the window before beside the window after — every
+  // figure from the same growth read, the same recap and the same cycle rows the cards use.
+  const headline = buildPortfolioHeadline({
+    view: heroView,
+    report,
+    portfolio,
+    metric,
+    currency: currency ?? null,
+    mismatch: heroHeader.mismatch,
+  });
+  const beforeAfter = buildBeforeAfter({
+    report,
+    recap,
+    range: resolvedRange,
+    events: timelineEventsQuery.data,
+    snapshots: snapshotsQuery.data,
+    enrolledIds,
+    metric,
+    target: targetDisplay ?? null,
+  });
   // A header chip opens its own field in Manage; the panel scrolls to it and clears this.
   const [manageFocus, setManageFocus] = useState<HeroSetting | null>(null);
   const clearManageFocus = useCallback(() => setManageFocus(null), []);
@@ -323,11 +336,11 @@ export function PortfolioDetailWorkspace({
     onSectionChange('manage');
   };
   const onSecondary = () => {
-    if (vitalsHeader.secondary?.kind === 'review') {
+    if (heroHeader.secondary?.kind === 'review') {
       onSectionChange('activity');
       return;
     }
-    const stopping = vitalsHeader.secondary?.kind === 'stop';
+    const stopping = heroHeader.secondary?.kind === 'stop';
     setPaused.mutate({
       portfolio_id: portfolio.id,
       paused: stopping,
@@ -505,7 +518,7 @@ export function PortfolioDetailWorkspace({
             onRun={() => run.mutate(portfolio.id)}
           >
             {/* Navigation chrome only: the mode, freshness, settings and Run now live in the
-                portfolio's own header (PortfolioVitals) on the Performance tab. */}
+                portfolio's own name line (PortfolioHeaderLine) on the Performance tab. */}
             <h2 className="min-w-0 truncate font-semibold text-sm tracking-tight">
               {portfolio.name}
             </h2>
@@ -582,28 +595,85 @@ export function PortfolioDetailWorkspace({
           ) : null}
 
           <PortfolioHero
-            askJaina={<JainaEntryChips portfolio={portfolio} />}
+            beforeAfter={{
+              model: beforeAfter,
+              currency: currency ?? null,
+              words: resultWords(metric.kpiField, metric.resultLabel),
+              window: resolvedRange.window,
+              target: targetDisplay ?? null,
+            }}
             currency={currency ?? null}
             dailyTotal={portfolio.daily_total ?? null}
             explainHref={jainaPromptHref(
               `Explain today's top recommendation for the portfolio "${portfolio.name}" and how it is growing.`,
             )}
-            items={items}
-            nextCycleAt={portfolio.next_realloc_at ?? null}
-            onCta={onHeroCta}
-            stale={isStale(portfolio)}
-            portfolioId={portfolio.id}
-            view={heroView}
-            vitals={{
-              header: vitalsHeader,
-              rows: vitalsRows,
+            header={{
+              header: heroHeader,
               onEditSetting,
               onSecondary,
               secondaryPending: setPaused.isPending,
               onRun: () => run.mutate(portfolio.id),
               running: run.isPending,
             }}
+            headline={headline}
+            items={items}
+            jaina={{ portfolio, read: headline.read }}
+            nextCycleAt={portfolio.next_realloc_at ?? null}
+            onCta={onHeroCta}
+            onEditSetting={onEditSetting}
+            stale={isStale(portfolio)}
+            portfolioId={portfolio.id}
+            view={heroView}
           />
+
+          {/* The ad-set ranking is the first block of the body (portafolio.html, idea 04): the
+              distance to the target is read off the bottom half of this table. */}
+          <OptimizerPanel
+            bodyClassName="space-y-2.5"
+            meta={
+              <span className="text-xs text-muted-foreground">
+                {costCiLegend(metric)} · expand a row for its creative verdicts
+              </span>
+            }
+            title={`${metric.costLabel} per ad set`}
+          >
+            <InsightDataTable
+              columns={adsetColumns}
+              defaultSort={{ columnId: 'cost', direction: 'desc' }}
+              emptyState="No scored ad sets in the latest cycle."
+              searchable
+              searchPlaceholder="Search ad sets by name or ID…"
+              searchValue={(row) => `${row.name ?? ''} ${row.adsetId}`}
+              expandedContent={(row) => (
+                <AdsetCreativeVerdicts
+                  accountId={adAccountId}
+                  adsetId={row.adsetId}
+                  brandId={brandId}
+                  currency={currency}
+                />
+              )}
+              getRowId={(row) => row.adsetId}
+              rowActions={(row) => (
+                <Button
+                  aria-label={`Chart the creatives in ${row.name ?? row.adsetId}`}
+                  aria-pressed={selectedAdsetId === row.adsetId}
+                  className={cn(
+                    'size-7',
+                    selectedAdsetId === row.adsetId && 'bg-muted text-primary',
+                  )}
+                  onClick={() =>
+                    onSelectAdset(selectedAdsetId === row.adsetId ? null : row.adsetId)
+                  }
+                  size="icon"
+                  type="button"
+                  variant="ghost"
+                >
+                  <LineChartIcon className="size-3.5" />
+                </Button>
+              )}
+              rows={adsetRows}
+            />
+          </OptimizerPanel>
 
           {/* The one period every panel below reports on, and the objective recap for it. */}
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -706,113 +776,6 @@ export function PortfolioDetailWorkspace({
             <OptimizerPanel
               meta={
                 <span className="text-xs text-muted-foreground">
-                  step conversion · {funnelMeta}
-                </span>
-              }
-              title="Conversion funnel"
-            >
-              <DataState
-                error={
-                  <ChartError
-                    message="The conversion funnel could not load."
-                    onRetry={snapshotsQuery.refetch}
-                  />
-                }
-                loading={<ChartSkeleton className="h-32" />}
-                status={combinedChartStatus(snapshotsQuery, enrolledQuery)}
-              >
-                <StepFunnel objective={portfolio.objective} window={funnelWindow} />
-              </DataState>
-            </OptimizerPanel>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            <OptimizerPanel
-              action={
-                canApplyReallocation ? (
-                  <ApplyReallocationDialog
-                    accountId={adAccountId}
-                    brandId={brandId}
-                    currency={currency ?? null}
-                    portfolioId={portfolio.id}
-                    runId={latestRunId}
-                  />
-                ) : null
-              }
-              bodyClassName="space-y-2"
-              title="Reallocation"
-            >
-              {/* Observe is where a suggestion-created portfolio silently lands. When
-                the engine has actually scored moves and observe is the only reason
-                none of them happened, that fact deserves the promotion control next
-                to it — not a buried explainer and a trip to Manage. */}
-              {isObserveWithMoves ? (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2">
-                  <p className="min-w-0 text-warning text-xs">
-                    Observe mode — the optimizer wants to move budget across{' '}
-                    {movedCount === 1 ? '1 ad set' : `${movedCount} ad sets`}, but it never writes
-                    in this mode.
-                  </p>
-                  <Button
-                    className="h-6 shrink-0 px-2 text-xs"
-                    disabled={update.isPending}
-                    onClick={() =>
-                      update.mutate({
-                        portfolio_id: portfolio.id,
-                        patch: { apply_mode: 'recommend' },
-                      })
-                    }
-                    size="xs"
-                    type="button"
-                    variant="secondary"
-                  >
-                    {update.isPending ? 'Switching…' : 'Switch to Recommend'}
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  {applyModeExplainer(portfolio.apply_mode)}
-                </p>
-              )}
-              {update.isError ? (
-                <p className="text-xs text-destructive" role="status">
-                  Could not change the mode. Nothing on Meta was touched — try again, or set it from
-                  Manage.
-                </p>
-              ) : null}
-              {/* The move as a picture and a sentence first; the sortable table below stays
-                  for anyone who wants the exact numbers per row. */}
-              <ReallocationStory
-                currency={currency}
-                defaultLookback={defaultStoryLookback(portfolio.lookback_window)}
-                items={items}
-                metric={metric}
-                nameById={adsetNameById}
-                snapshotById={snapshotById}
-                target={targetDisplay}
-              />
-              <details className="group">
-                <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                  Exact figures per ad set
-                </summary>
-                <div className="pt-2">
-                  <ReallocationFlow
-                    budgetSource={portfolio.budget_source}
-                    currency={currency}
-                    items={items}
-                    nameById={adsetNameById}
-                    objective={portfolio.objective}
-                    snapshotById={snapshotById}
-                  />
-                </div>
-              </details>
-              {/* Held/approved budget approve+execute now lives in the Activity tab's unified
-                  queue (it owns approval, the drain, and the receipts). This panel stays a
-                  read view of the proposed reallocation. */}
-            </OptimizerPanel>
-            <OptimizerPanel
-              meta={
-                <span className="text-xs text-muted-foreground">
                   within-ad-set creative wins · {resolvedRange.lookback}
                 </span>
               }
@@ -833,52 +796,120 @@ export function PortfolioDetailWorkspace({
             </OptimizerPanel>
           </div>
 
-          <OptimizerPanel
-            bodyClassName="space-y-2.5"
-            meta={
-              <span className="text-xs text-muted-foreground">
-                {costCiLegend(metric)} · expand a row for its creative verdicts
-              </span>
-            }
-            title={`${metric.costLabel} per ad set`}
-          >
-            <InsightDataTable
-              columns={adsetColumns}
-              defaultSort={{ columnId: 'cost', direction: 'desc' }}
-              emptyState="No scored ad sets in the latest cycle."
-              searchable
-              searchPlaceholder="Search ad sets by name or ID…"
-              searchValue={(row) => `${row.name ?? ''} ${row.adsetId}`}
-              expandedContent={(row) => (
-                <AdsetCreativeVerdicts
-                  accountId={adAccountId}
-                  adsetId={row.adsetId}
-                  brandId={brandId}
-                  currency={currency}
-                />
-              )}
-              getRowId={(row) => row.adsetId}
-              rowActions={(row) => (
-                <Button
-                  aria-label={`Chart the creatives in ${row.name ?? row.adsetId}`}
-                  aria-pressed={selectedAdsetId === row.adsetId}
-                  className={cn(
-                    'size-7',
-                    selectedAdsetId === row.adsetId && 'bg-muted text-primary',
-                  )}
-                  onClick={() =>
-                    onSelectAdset(selectedAdsetId === row.adsetId ? null : row.adsetId)
+          {/* The two red-to-green ramps — the step funnel and the reallocation flow — wait
+              behind a disclosure: the news above already says where the cost comes from. */}
+          <details className="group" data-testid="portfolio-detail-more">
+            <summary className="cursor-pointer list-none text-muted-foreground text-xs hover:text-foreground">
+              <span className="group-open:hidden">Ver detalle</span>
+              <span className="hidden group-open:inline">Ocultar detalle</span>
+            </summary>
+            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+              <OptimizerPanel
+                meta={
+                  <span className="text-xs text-muted-foreground">
+                    step conversion · {funnelMeta}
+                  </span>
+                }
+                title="Conversion funnel"
+              >
+                <DataState
+                  error={
+                    <ChartError
+                      message="The conversion funnel could not load."
+                      onRetry={snapshotsQuery.refetch}
+                    />
                   }
-                  size="icon"
-                  type="button"
-                  variant="ghost"
+                  loading={<ChartSkeleton className="h-32" />}
+                  status={combinedChartStatus(snapshotsQuery, enrolledQuery)}
                 >
-                  <LineChartIcon className="size-3.5" />
-                </Button>
-              )}
-              rows={adsetRows}
-            />
-          </OptimizerPanel>
+                  <StepFunnel objective={portfolio.objective} window={funnelWindow} />
+                </DataState>
+              </OptimizerPanel>
+              <OptimizerPanel
+                action={
+                  canApplyReallocation ? (
+                    <ApplyReallocationDialog
+                      accountId={adAccountId}
+                      brandId={brandId}
+                      currency={currency ?? null}
+                      portfolioId={portfolio.id}
+                      runId={latestRunId}
+                    />
+                  ) : null
+                }
+                bodyClassName="space-y-2"
+                title="Reallocation"
+              >
+                {/* Observe is where a suggestion-created portfolio silently lands. When
+                the engine has actually scored moves and observe is the only reason
+                none of them happened, that fact deserves the promotion control next
+                to it — not a buried explainer and a trip to Manage. */}
+                {isObserveWithMoves ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2">
+                    <p className="min-w-0 text-warning text-xs">
+                      Observe mode — the optimizer wants to move budget across{' '}
+                      {movedCount === 1 ? '1 ad set' : `${movedCount} ad sets`}, but it never writes
+                      in this mode.
+                    </p>
+                    <Button
+                      className="h-6 shrink-0 px-2 text-xs"
+                      disabled={update.isPending}
+                      onClick={() =>
+                        update.mutate({
+                          portfolio_id: portfolio.id,
+                          patch: { apply_mode: 'recommend' },
+                        })
+                      }
+                      size="xs"
+                      type="button"
+                      variant="secondary"
+                    >
+                      {update.isPending ? 'Switching…' : 'Switch to Recommend'}
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {applyModeExplainer(portfolio.apply_mode)}
+                  </p>
+                )}
+                {update.isError ? (
+                  <p className="text-xs text-destructive" role="status">
+                    Could not change the mode. Nothing on Meta was touched — try again, or set it
+                    from Manage.
+                  </p>
+                ) : null}
+                {/* The move as a picture and a sentence first; the sortable table below stays
+                  for anyone who wants the exact numbers per row. */}
+                <ReallocationStory
+                  currency={currency}
+                  defaultLookback={defaultStoryLookback(portfolio.lookback_window)}
+                  items={items}
+                  metric={metric}
+                  nameById={adsetNameById}
+                  snapshotById={snapshotById}
+                  target={targetDisplay}
+                />
+                <details className="group">
+                  <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                    Exact figures per ad set
+                  </summary>
+                  <div className="pt-2">
+                    <ReallocationFlow
+                      budgetSource={portfolio.budget_source}
+                      currency={currency}
+                      items={items}
+                      nameById={adsetNameById}
+                      objective={portfolio.objective}
+                      snapshotById={snapshotById}
+                    />
+                  </div>
+                </details>
+                {/* Held/approved budget approve+execute now lives in the Activity tab's unified
+                  queue (it owns approval, the drain, and the receipts). This panel stays a
+                  read view of the proposed reallocation. */}
+              </OptimizerPanel>
+            </div>
+          </details>
 
           {selectedAdsetId ? (
             <>
