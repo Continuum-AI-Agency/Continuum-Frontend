@@ -161,6 +161,28 @@ describe('fetchCampaignPerformanceRows', () => {
     });
   });
 
+  it("surfaces Google's reason from a bare { error } body", async () => {
+    invokeMock.mockResolvedValueOnce({
+      data: null,
+      error: new FunctionsHttpError(
+        new Response(
+          JSON.stringify({ error: 'USER_PERMISSION_DENIED: User does not have permission' }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    });
+
+    const error = await fetchCampaignPerformanceRows({
+      brandId: 'b1',
+      adAccountId: '123-456',
+      platform: 'google-ads',
+      range: { preset: 'last_7d' },
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe('USER_PERMISSION_DENIED: User does not have permission');
+  });
+
   it('invokes the Google Ads campaign function for the google-ads platform', async () => {
     await fetchCampaignPerformanceRows({
       brandId: 'b1',
