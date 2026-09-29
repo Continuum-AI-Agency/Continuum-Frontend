@@ -302,6 +302,7 @@ export function RenderJobDetail({
   }, []);
   const value =
     formats.find((format) => format.id === picked)?.id ??
+    formats.find((format) => filesFor(format.id).some((file) => file.assetId))?.id ??
     formats.find((format) => fileFor(format.id))?.id ??
     formats[0]?.id ??
     '';

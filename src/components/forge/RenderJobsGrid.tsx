@@ -305,10 +305,12 @@ export function RenderJobsGrid({
   // Prefer the first format that actually rendered; older jobs can lack their first format.
   const firstFileOf = (job: ApiRenderJob) => {
     const jobFormats = formats ?? formatsNamedByJob(job);
+    const matched = jobFormats
+      .map((format) => fileForFormat(job.outputs, jobFormats, format.id))
+      .filter((output) => output !== null);
     return (
-      jobFormats
-        .map((format) => fileForFormat(job.outputs, jobFormats, format.id))
-        .find((output) => output !== null) ??
+      matched.find((output) => output.assetId) ??
+      matched[0] ??
       playableFirst(job.outputs)[0] ??
       null
     );

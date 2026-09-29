@@ -243,7 +243,7 @@ async function renderLedger(
   return view;
 }
 
-// happy-dom never fetches an image, so every <img> reads as finished with no pixels — exactly what
+// happy-dom never fetches an image, so every image element reads as finished with no pixels — exactly what
 // a broken image looks like to the ledger's pre-commit check. Here images decode; the broken-file
 // test fires the error itself.
 let imagePrototype: object | null = null;
@@ -772,6 +772,12 @@ describe('RenderJobsGrid', () => {
     expect(thumbnail?.getAttribute('src')).toBe(
       'https://cdn.test/Producto_individual_con_descuento_1_1_1mjxxwb.jpg',
     );
+    fireEvent.click(screen.getByText('Launch'));
+    const preview = screen.getByRole('group', { name: 'Render preview' });
+    expect(preview.querySelector('img')?.getAttribute('src')).toBe(
+      'https://cdn.test/Producto_individual_con_descuento_1_1_1mjxxwb.jpg',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'All renders' }));
 
     // Another template's row changing is not this ledger's business.
     const calls = listJobs.mock.calls.length;
@@ -780,6 +786,71 @@ describe('RenderJobsGrid', () => {
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(listJobs.mock.calls.length).toBe(calls);
     view.unmount();
+  }, 30_000);
+
+  test('an unmatched rendered file remains the ledger and detail preview', async () => {
+    const fileName = 'rendered_asset.jpg';
+    const job: ApiRenderJob = {
+      ...MADRID,
+      label: 'UTEC 4:5',
+      labelPath: ['UTEC 4:5'],
+      outputs: [
+        {
+          ...MADRID.outputs[0]!,
+          fileName,
+          url: `https://cdn.test/${fileName}`,
+        },
+      ],
+    };
+    jobsFixture = [job];
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <RenderJobsGrid
+          brandId={BRAND}
+          formats={[{ id: '4:5', label: '4:5', ratio: '4:5', width: null, height: null }]}
+        />
+      </QueryClientProvider>,
+    );
+    expect((await findBatchRow()).querySelector('img')?.getAttribute('src')).toBe(
+      `https://cdn.test/${fileName}`,
+    );
+    fireEvent.click(await findBatchRow());
+    const row = (await screen.findByText('UTEC 4:5')).closest('tr') as HTMLElement;
+    expect(row.querySelector('img')?.getAttribute('src')).toBe(`https://cdn.test/${fileName}`);
+    fireEvent.click(row);
+    const preview = screen.getByRole('group', { name: 'Render preview' });
+    expect(preview.querySelector('img')?.getAttribute('src')).toBe(`https://cdn.test/${fileName}`);
+    expect(screen.getByRole('link', { name: 'Download JPG' }).getAttribute('href')).toBe(
+      `https://cdn.test/${fileName}`,
+    );
+  }, 30_000);
+  test('previews the Library asset when a 4:5 job lists a non-asset file first', async () => {
+    const job: ApiRenderJob = {
+      ...MADRID,
+      label: 'UTEC 4:5',
+      outputs: [
+        { ...MADRID.outputs[0]!, id: 'preview', fileName: 'preview_4_5.jpg',
+          url: 'https://cdn.test/preview.jpg', assetId: null, versionId: null },
+        { ...MADRID.outputs[0]!, id: 'asset', fileName: 'asset_4_5.jpg',
+          url: 'https://cdn.test/asset.jpg' },
+      ],
+    };
+    jobsFixture = [job];
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <RenderJobsGrid brandId={BRAND} formats={[{
+          id: '4:5', label: '4:5', ratio: '4:5', width: null, height: null,
+        }]} />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await findBatchRow());
+    const row = (await screen.findByText('UTEC 4:5')).closest('tr') as HTMLElement;
+    expect(row.querySelector('img')?.getAttribute('src')).toBe('https://cdn.test/asset.jpg');
+    fireEvent.click(row);
+    expect(screen.getByRole('group', { name: 'Render preview' }).querySelector('img')?.getAttribute('src'))
+      .toBe('https://cdn.test/asset.jpg');
   }, 30_000);
   test('a failed render reads its whole sentence, a broken thumbnail falls back to the tile, and Proof and Final are marked', async () => {
     const sentence =

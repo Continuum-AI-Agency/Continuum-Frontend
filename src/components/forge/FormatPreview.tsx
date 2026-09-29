@@ -132,7 +132,8 @@ const containerRank = (output: ApiRenderOutput) => {
  * contract order — so a preview shows the file a browser can play before ProRes or MXF.
  */
 export const playableFirst = (outputs: readonly ApiRenderOutput[]) =>
-  [...outputs].sort((a, b) => containerRank(a) - containerRank(b));
+  [...outputs].sort((a, b) =>
+    Number(Boolean(b.assetId)) - Number(Boolean(a.assetId)) || containerRank(a) - containerRank(b));
 
 export function fileForFormat(
   outputs: readonly ApiRenderOutput[],
