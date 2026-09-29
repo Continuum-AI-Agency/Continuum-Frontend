@@ -156,7 +156,7 @@ describe('PortfolioHero — the cards', () => {
         view={view({ state: 'first_cycle' })}
       />,
     );
-    expect(first.container.textContent).toContain('primera lectura después del primer ciclo');
+    expect(first.container.textContent).toContain('first read after the first cycle');
   });
 
   it('no longer prints the growth sentence under the row — the headline says it', () => {
@@ -572,13 +572,11 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
   it('FORMULARIOS: the anchor, the two sentences with their figures, and the last cycle in one line', () => {
     const { container } = wholeHero('formularios');
     const status = container.querySelector('[data-testid="headline-status"]');
-    expect(status?.textContent).toBe(
-      '80 leads en 14 días a 45.69, 31% sobre el objetivo de 35.00.',
-    );
+    expect(status?.textContent).toBe('80 leads in 14 days at 45.69, 31% over the target of 35.00.');
     expect(status?.querySelectorAll('[data-testid="figure"]').length).toBe(4);
     const opportunity = container.querySelector('[data-testid="headline-opportunity"]');
     expect(opportunity?.textContent).toBe(
-      'La oportunidad: Ad set A paga 75.65 por lead; pausarlo libera 43.23 al día.',
+      'The opportunity: Ad set A pays 75.65 per lead; pausing it frees 43.23 a day.',
     );
     expect(container.querySelector('[data-testid="headline-blocker"]')).toBeNull();
     // The anchor: the cost per result over the brief's window, amber over the target, and
@@ -589,10 +587,10 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
     expect(figure?.textContent).toBe('45.69');
     expect(figure?.getAttribute('class')).toContain('text-warning');
     expect(anchor?.querySelector('[data-testid="anchor-unit"]')?.textContent).toBe(
-      'por lead·meta 35.00·+31%',
+      'per lead·target 35.00·+31%',
     );
     expect(anchor?.querySelector('[data-testid="anchor-prior"]')?.textContent).toBe(
-      'semana 21–27 sep: 38.59· semana 14–20 sep: 58.78',
+      'week of Sep 21–27: 38.59· week of Sep 14–20: 58.78',
     );
     // The before/after figures keep the keys the parity bench already reads.
     const prior = [
@@ -605,19 +603,19 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
     // The four tiles, and the ad sets in target from the cycle's own rows.
     const text = (id: string) =>
       container.querySelector(`[data-testid="${id}"]`)?.textContent ?? '';
-    expect(text('tile-spend')).toBe('Gasto · 14 días3,655261/día · plan 324');
+    expect(text('tile-spend')).toBe('Spend · 14 days3,655261/day · plan 324');
     expect(text('tile-adsets')).toBe(
-      'Conjuntos en meta3 de 9mejor Ad set E 25.07peor Ad set D 100',
+      'Ad sets on target3 of 9best Ad set E 25.07worst Ad set D 100',
     );
-    expect(text('tile-decisions')).toBe('Decisiones390.72/día en juego4 oportunidades abiertas');
+    expect(text('tile-decisions')).toBe('Decisions390.72/day at stake4 open opportunities');
     const strip = container.querySelector('[data-testid="portfolio-before-after"]');
     expect(strip?.querySelector('[data-testid="before-after-before"]')).toBeNull();
     expect(strip?.querySelector('[data-testid="before-after-after"]')).toBeNull();
     expect(strip?.querySelector('[data-testid="before-after-cycle"]')?.textContent).toContain(
-      'Último ciclo, viernes 13:03: 2 pausas, 1 cambio de creativo y 9 movimientos de presupuesto propuestas; 4 movimientos de presupuesto aplicados.',
+      'Last cycle, Friday 13:03: 2 pauses, 1 creative change and 9 budget moves proposed; 4 budget moves applied.',
     );
     expect(strip?.querySelector('[data-testid="before-after-projection"]')?.textContent).toContain(
-      'Si se aplican las 2 pausas, el costo proyectado con los 7 conjuntos restantes es',
+      'If the 2 pauses land, the projected cost with the 7 remaining ad sets is',
     );
   });
 
@@ -626,7 +624,7 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
     const read = container.querySelector('[data-testid="jaina-read"]');
     expect(read?.getAttribute('data-source')).toBe('jaina');
     expect(read?.querySelector('[data-testid="jaina-read-label"]')?.textContent).toBe(
-      'Jaina · hace 2 h',
+      'Jaina · 2 h ago',
     );
     expect(read?.querySelector('[data-testid="jaina-read-sentence"]')?.textContent).toBe(
       'Pause Ad set A to save 43.23/day',
@@ -645,25 +643,25 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
     const edits: HeroSetting[] = [];
     const { container, getByText } = wholeHero('tours', { edits });
     expect(container.querySelector('[data-testid="jaina-read"]')).toBeNull();
-    expect(container.textContent).not.toContain('Lectura automática');
+    expect(container.textContent).not.toContain('Automatic read');
     // Nothing bought: the anchor says so rather than printing a cost, and stays grey.
     const anchor = container.querySelector('[data-testid="portfolio-anchor"]');
     expect(anchor?.getAttribute('data-state')).toBe('none');
     expect(anchor?.querySelector('[data-figure-role="anchor"]')?.textContent).toBe('—');
     expect(anchor?.querySelector('[data-testid="anchor-empty"]')?.textContent).toBe(
-      'sin conversaciones en 2 días',
+      'no conversations in 2 days',
     );
     const blocker = container.querySelector('[data-testid="headline-blocker"]');
     expect(blocker?.getAttribute('data-blocker')).toBe('kpi_mismatch');
     expect(blocker?.getAttribute('role')).toBe('alert');
-    expect(blocker?.textContent).toContain('los 12 conjuntos pujan por otro resultado');
+    expect(blocker?.textContent).toContain('all 12 ad sets bid for another result');
     // Between the sentences and the tiles.
     const status = container.querySelector('[data-testid="headline-status"]');
     const tiles = container.querySelector('[data-testid="portfolio-tiles"]');
     expect(follows(status, blocker)).toBe(true);
     expect(follows(blocker, tiles)).toBe(true);
-    fireEvent.click(getByText('Cambiar objetivo'));
-    fireEvent.click(getByText('Quitar estos conjuntos'));
+    fireEvent.click(getByText('Change objective'));
+    fireEvent.click(getByText('Remove these ad sets'));
     expect(edits).toEqual(['objective', 'roster']);
   });
 
@@ -676,18 +674,18 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
     expect(button.disabled).toBe(true);
     fireEvent.submit(form);
     expect(asks).toEqual([]);
-    fireEvent.change(input, { target: { value: '¿Y si pauso Ad set A?' } });
+    fireEvent.change(input, { target: { value: 'What if I pause Ad set A?' } });
     expect(button.disabled).toBe(false);
     fireEvent.submit(form);
     expect(asks.length).toBe(1);
     expect(asks[0]?.startsWith('/scale?tab=jaina&prompt=')).toBe(true);
     const prompt = decodeURIComponent(asks[0]?.slice('/scale?tab=jaina&prompt='.length) ?? '');
     expect(prompt).toBe(
-      'Para el portafolio del optimizer "Lead forms portfolio" (objetivo: Lead): ¿Y si pauso Ad set A?',
+      'For the optimizer portfolio "Lead forms portfolio" (objective: Lead): What if I pause Ad set A?',
     );
   });
 
-  it('every setting stays one click from Manage, beside the figure it governs; "Correr ahora" runs', () => {
+  it('every setting stays one click from Manage, beside the figure it governs; "Run now" runs', () => {
     const edits: HeroSetting[] = [];
     const runs: number[] = [];
     const { container, getByText } = wholeHero('prueba', { edits, runs });
@@ -702,10 +700,10 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
       'budget',
     ]);
     expect(chips.map((c) => c.textContent)).toEqual([
-      'objetivo leads',
+      'objective: leads',
       'Balanced',
-      '14 días',
-      'meta 25.00',
+      '14 days',
+      'target 25.00',
       'plan 110',
     ]);
     // Plain grey text, not pills.
@@ -713,13 +711,11 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
     const header = container.querySelector('[data-testid="portfolio-header"]');
     expect(header?.querySelector('[data-setting="budget"], [data-setting="target"]')).toBeNull();
     for (const chip of chips) fireEvent.click(chip);
-    fireEvent.click(getByText('Correr ahora'));
+    fireEvent.click(getByText('Run now'));
     expect(edits).toEqual(['objective', 'strategy', 'window', 'target', 'budget']);
     expect(runs).toEqual([1]);
-    expect(getByText('Revisar movimientos')).toBeTruthy();
-    expect(container.querySelector('[data-testid="header-adsets"]')?.textContent).toBe(
-      '3 conjuntos',
-    );
+    expect(getByText('Review moves')).toBeTruthy();
+    expect(container.querySelector('[data-testid="header-adsets"]')?.textContent).toBe('3 ad sets');
   });
 
   it('before the first cycle the name line and the Jaina field still stand, the read does not', () => {
@@ -737,7 +733,7 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
     expect(hero?.querySelector('[data-testid="portfolio-anchor"]')).toBeNull();
     expect(hero?.querySelector('[data-testid="jaina-read"]')).toBeNull();
     expect(hero?.querySelector('[data-testid="portfolio-headline"]')).toBeNull();
-    expect(hero?.textContent).toContain('primera lectura');
+    expect(hero?.textContent).toContain('first read');
   });
 });
 

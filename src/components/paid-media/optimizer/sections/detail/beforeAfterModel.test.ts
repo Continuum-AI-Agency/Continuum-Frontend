@@ -87,15 +87,15 @@ describe('the two windows', () => {
   it('labels each by its days and carries results, cost and spend', () => {
     const model = build();
     expect(model.before).toEqual({
-      label: 'semana del 14 al 20 de septiembre',
-      short: 'semana 14–20 sep',
+      label: 'week of September 14 to 20',
+      short: 'week of Sep 14–20',
       spend: 1763,
       results: 30,
       cost: 58.78,
     });
     expect(model.after).toEqual({
-      label: 'semana del 21 al 27 de septiembre',
-      short: 'semana 21–27 sep',
+      label: 'week of September 21 to 27',
+      short: 'week of Sep 21–27',
       spend: 2161,
       results: 56,
       cost: 38.59,
@@ -103,9 +103,9 @@ describe('the two windows', () => {
   });
 
   it('shortens a window to sit beside its figure, across a month edge too', () => {
-    expect(shortRangeLabel('2026-09-21', '2026-09-27', 7)).toBe('semana 21–27 sep');
-    expect(shortRangeLabel('2026-09-15', '2026-09-28', 14)).toBe('15–28 sep');
-    expect(shortRangeLabel('2026-09-28', '2026-10-04', 7)).toBe('semana 28 sep–4 oct');
+    expect(shortRangeLabel('2026-09-21', '2026-09-27', 7)).toBe('week of Sep 21–27');
+    expect(shortRangeLabel('2026-09-15', '2026-09-28', 14)).toBe('Sep 15–28');
+    expect(shortRangeLabel('2026-09-28', '2026-10-04', 7)).toBe('week of Sep 28–Oct 4');
   });
 
   it('says nothing when the range has no data yet, instead of printing zeros', () => {
@@ -128,9 +128,9 @@ describe('the two windows', () => {
     expect(build({ range: { ...range, previous: null } }).before).toBeNull();
   });
 
-  it('a range that is not a week says "del"', () => {
+  it('a range that is not a week is named by its dates alone', () => {
     const model = build({ range: { ...range, days: 14, from: '2026-09-14', previous: null } });
-    expect(model.after.label).toBe('del 14 al 27 de septiembre');
+    expect(model.after.label).toBe('September 14 to 27');
   });
 });
 
@@ -138,18 +138,16 @@ describe('the last cycle', () => {
   it('names when it ran, what it proposed and what landed since', () => {
     const { lastCycle } = build();
     expect(lastCycle?.at).toBe('2026-09-25T19:03:03.393+00:00');
-    expect(lastCycle?.when).toBe('viernes 13:03');
-    expect(lastCycle?.proposed).toBe(
-      '2 pausas, 1 cambio de creativo y 9 movimientos de presupuesto propuestas',
-    );
-    expect(lastCycle?.applied).toBe('4 movimientos de presupuesto y 1 cambio de estado aplicados');
+    expect(lastCycle?.when).toBe('Friday 13:03');
+    expect(lastCycle?.proposed).toBe('2 pauses, 1 creative change and 9 budget moves proposed');
+    expect(lastCycle?.applied).toBe('4 budget moves and 1 status change applied');
   });
 
   it('says nothing landed when the rows and the ledger are silent', () => {
     const { report } = readBody('tours');
     const model = build({ report, events: [] });
     expect(model.lastCycle?.proposed).toBeNull();
-    expect(model.lastCycle?.applied).toBe('ninguna aplicada todavía');
+    expect(model.lastCycle?.applied).toBe('none applied yet');
   });
 
   it('is absent before the first cycle', () => {
@@ -165,13 +163,13 @@ describe('the projection', () => {
       pauses: 2,
       remaining: 2,
       cost: 31.365384615384617,
-      vsTarget: 'bajo',
+      vsTarget: 'under',
     });
   });
 
-  it('reads "sobre" against a lower target and "en" when they meet', () => {
-    expect(build({ target: 30 }).projection?.vsTarget).toBe('sobre');
-    expect(build({ target: 31.37 }).projection?.vsTarget).toBe('en');
+  it('reads "over" against a lower target and "on" when they meet', () => {
+    expect(build({ target: 30 }).projection?.vsTarget).toBe('over');
+    expect(build({ target: 31.37 }).projection?.vsTarget).toBe('on');
     expect(build({ target: null }).projection?.vsTarget).toBeNull();
   });
 
@@ -197,11 +195,11 @@ describe('the projection', () => {
 
 describe('the words', () => {
   it('day ranges', () => {
-    expect(dayRangeLabel('2026-09-14', '2026-09-20')).toBe('14 al 20 de septiembre');
-    expect(dayRangeLabel('2026-09-28', '2026-10-04')).toBe('28 de septiembre al 4 de octubre');
+    expect(dayRangeLabel('2026-09-14', '2026-09-20')).toBe('September 14 to 20');
+    expect(dayRangeLabel('2026-09-28', '2026-10-04')).toBe('September 28 to October 4');
   });
 
   it('cycle time in the account’s zone', () => {
-    expect(cycleWhen('2026-09-26T01:05:00Z', MEXICO)).toBe('viernes 19:05');
+    expect(cycleWhen('2026-09-26T01:05:00Z', MEXICO)).toBe('Friday 19:05');
   });
 });

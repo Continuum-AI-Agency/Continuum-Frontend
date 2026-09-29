@@ -11,40 +11,38 @@ export type JainaEntry = { key: string; label: string; prompt: string };
 
 type JainaPortfolio = Pick<PortfolioListItem, 'name' | 'objective' | 'id'>;
 
-/** "el portafolio del optimizer "X" (objetivo: Lead)" — the scope line every prompt opens with. */
+/** The scope line every portfolio prompt opens with. */
 function portfolioScope(portfolio: JainaPortfolio): string {
-  return `el portafolio del optimizer "${portfolio.name}" (objetivo: ${humanize(portfolio.objective)})`;
+  return `the optimizer portfolio "${portfolio.name}" (objective: ${humanize(portfolio.objective)})`;
 }
 
-// The portfolio is read in Spanish (Performance+ redesign, portafolio.html: the Jaina row),
-// like the Overview, so its questions are Spanish too.
 export function jainaEntryPrompts(portfolio: JainaPortfolio): JainaEntry[] {
   const who = portfolioScope(portfolio);
   return [
     {
       key: 'budget',
-      label: '¿Dónde está el presupuesto?',
-      prompt: `Para ${who}: ¿vamos a ritmo y dónde está el presupuesto? Lee el último ciclo del optimizer (ritmo, movimientos, retenidos) y dame la línea de alcance, una tabla por conjunto, el piso de contexto y las acciones.`,
+      label: 'Where is the budget going?',
+      prompt: `For ${who}: are we on pace and where is the budget going? Read the optimizer's last cycle (pace, moves, held ad sets) and give me the scope line, one table per ad set, the context floor and the actions.`,
     },
     {
       key: 'creative',
-      label: '¿Qué creativos ganan?',
-      prompt: `Para ${who}: ¿qué ángulos de comunicación ganan y cuáles se desgastan? Agrupa los anuncios activos por ángulo, muestra gasto, CTR, CVR, CPA y la clase de eficiencia por ángulo, luego las oportunidades de escalar / renovar / apagar y hasta tres briefs.`,
+      label: 'Which creatives are winning?',
+      prompt: `For ${who}: which messaging angles are winning and which are wearing out? Group the active ads by angle, show spend, CTR, CVR, CPA and the efficiency class per angle, then the scale / refresh / switch-off opportunities and up to three briefs.`,
     },
     {
       key: 'funnel',
-      label: '¿Dónde se pierde el embudo?',
-      prompt: `Para ${who}: ¿dónde se pierde el embudo? Impresiones a clics a resultados por conjunto en los últimos 14 días contra los 14 previos y la base de 30 días, con la caída nombrada y medida.`,
+      label: 'Where does the funnel leak?',
+      prompt: `For ${who}: where does the funnel leak? Impressions to clicks to results per ad set over the last 14 days against the 14 before and the 30-day baseline, with the drop named and measured.`,
     },
     {
       key: 'scaling',
-      label: '¿Qué conjunto escalar?',
-      prompt: `Para ${who}: ¿qué conjunto puede tomar más presupuesto sin perder eficiencia? Los conjuntos en o bajo el costo objetivo con margen, el tope de velocidad y los pisos que acotaron el último ciclo, y los ajustes que el optimizer recomienda cambiar.`,
+      label: 'Which ad set can scale?',
+      prompt: `For ${who}: which ad set can take more budget without losing efficiency? The ad sets at or under the target cost with headroom, the velocity cap and the floors that bounded the last cycle, and the settings the optimizer recommends changing.`,
     },
     {
       key: 'risks',
-      label: 'Riesgos esta semana',
-      prompt: `Para ${who}: ¿qué está por salir mal esta semana? Conjuntos bajo el piso de eventos, huecos de tracking, saturación de audiencia, fatiga creativa, problemas de entrega, cada uno con su evidencia y qué hacer.`,
+      label: 'Risks this week',
+      prompt: `For ${who}: what is about to go wrong this week? Ad sets under the event floor, tracking gaps, audience saturation, creative fatigue and delivery problems, each with its evidence and what to do.`,
     },
   ];
 }
@@ -55,7 +53,7 @@ export function jainaEntryPrompts(portfolio: JainaPortfolio): JainaEntry[] {
  * THIS portfolio and not the account.
  */
 export function jainaAskPrompt(portfolio: JainaPortfolio, question: string): string {
-  return `Para ${portfolioScope(portfolio)}: ${question.trim()}`;
+  return `For ${portfolioScope(portfolio)}: ${question.trim()}`;
 }
 
 // The account-level band. The Overview is read in Spanish, so its questions are Spanish

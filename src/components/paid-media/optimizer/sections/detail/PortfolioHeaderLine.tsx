@@ -11,7 +11,7 @@ import { CheckCheckIcon, PauseIcon, PlayIcon, RefreshCwIcon } from 'lucide-react
 import { Fragment } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { resultWords } from '../account/overviewModel';
+import { resultNouns } from './headlineModel';
 import type { HeroHeader, HeroSetting } from './heroHeaderModel';
 
 export type PortfolioHeaderLineProps = {
@@ -77,13 +77,13 @@ export function PortfolioHeaderLine({
           data-setting={chip.setting}
           data-testid="header-chip"
           onClick={() => onEditSetting(chip.setting)}
-          title={`Editar ${chip.label.toLowerCase()} en Manage`}
+          title={`Edit the ${chip.label.toLowerCase()} in Manage`}
           type="button"
         >
           {/* The objective arrives as the metric's own label ("conversations"); the line
            *  names it in the words the sentences use. */}
           {chip.setting === 'objective'
-            ? `objetivo ${resultWords(chip.value, chip.value).many}`
+            ? `objective: ${resultNouns(chip.value, chip.value).many}`
             : chip.value}
         </button>
       ),
@@ -150,7 +150,7 @@ export function PortfolioHeaderLine({
         ) : null}
         <Button disabled={running} onClick={onRun} type="button" variant="cta">
           <RefreshCwIcon className={cn('size-4', running && 'animate-spin')} />
-          Correr ahora
+          Run now
         </Button>
       </div>
     </div>

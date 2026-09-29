@@ -23,9 +23,9 @@ import { deriveEfficiency } from '../../format';
 import type { RecapModel, RecapSnapshot } from './recapModel';
 
 export type WindowTotals = {
-  /** "semana del 14 al 20 de septiembre" */
+  /** "week of September 14 to 20" */
   label: string;
-  /** "semana 14–20 sep" — the same window short enough to sit beside its figure. */
+  /** "week of Sep 14–20" — the same window short enough to sit beside its figure. */
   short: string;
   spend: number;
   results: number;
@@ -35,11 +35,11 @@ export type WindowTotals = {
 
 export type LastCycle = {
   at: string;
-  /** "sábado 19:05" */
+  /** "Saturday 19:05" */
   when: string;
-  /** "2 pausas y 1 restauración propuestas" — null when the cycle proposed nothing. */
+  /** "2 pauses and 1 restore proposed" — null when the cycle proposed nothing. */
   proposed: string | null;
-  /** "ninguna aplicada todavía" / "4 movimientos de presupuesto y 1 pausa aplicados" */
+  /** "none applied yet" / "4 budget moves and 1 status change applied" */
   applied: string;
 };
 
@@ -50,7 +50,7 @@ export type Projection = {
   /** Cost per result over the current window without the paused ad sets; null when the
    *  rest bought nothing. */
   cost: number | null;
-  vsTarget: 'bajo' | 'sobre' | 'en' | null;
+  vsTarget: 'under' | 'over' | 'on' | null;
 };
 
 export type BeforeAfter = {
@@ -70,49 +70,49 @@ function utcDate(iso: string): Date {
   return new Date(`${iso}T00:00:00Z`);
 }
 
-const MONTH = new Intl.DateTimeFormat('es-MX', { month: 'long', timeZone: 'UTC' });
+const MONTH = new Intl.DateTimeFormat('en-US', { month: 'long', timeZone: 'UTC' });
 
-/** "14 al 20 de septiembre", or "28 de septiembre al 4 de octubre" across a month edge. */
+/** "September 14 to 20", or "September 28 to October 4" across a month edge. */
 export function dayRangeLabel(from: string, to: string): string {
   const start = utcDate(from);
   const end = utcDate(to);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return `${from} al ${to}`;
-  const endWords = `${end.getUTCDate()} de ${MONTH.format(end)}`;
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return `${from} to ${to}`;
+  const startWords = `${MONTH.format(start)} ${start.getUTCDate()}`;
   if (
     start.getUTCMonth() === end.getUTCMonth() &&
     start.getUTCFullYear() === end.getUTCFullYear()
   ) {
-    return `${start.getUTCDate()} al ${endWords}`;
+    return `${startWords} to ${end.getUTCDate()}`;
   }
-  return `${start.getUTCDate()} de ${MONTH.format(start)} al ${endWords}`;
+  return `${startWords} to ${MONTH.format(end)} ${end.getUTCDate()}`;
 }
 
-const MONTH_SHORT = new Intl.DateTimeFormat('es-MX', { month: 'short', timeZone: 'UTC' });
-const monthShort = (date: Date): string => MONTH_SHORT.format(date).replace('.', '');
+const MONTH_SHORT = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' });
+const monthShort = (date: Date): string => MONTH_SHORT.format(date);
 
-/** "semana 14–20 sep" for a week, "1–14 sep" otherwise, "28 sep–4 oct" across a month edge. */
+/** "week of Sep 14–20" for a week, "Sep 1–14" otherwise, "Sep 28–Oct 4" across a month edge. */
 export function shortRangeLabel(from: string, to: string, days: number): string {
   const start = utcDate(from);
   const end = utcDate(to);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return `${from}–${to}`;
   const range =
     start.getUTCMonth() === end.getUTCMonth()
-      ? `${start.getUTCDate()}–${end.getUTCDate()} ${monthShort(end)}`
-      : `${start.getUTCDate()} ${monthShort(start)}–${end.getUTCDate()} ${monthShort(end)}`;
-  return days === 7 ? `semana ${range}` : range;
+      ? `${monthShort(start)} ${start.getUTCDate()}–${end.getUTCDate()}`
+      : `${monthShort(start)} ${start.getUTCDate()}–${monthShort(end)} ${end.getUTCDate()}`;
+  return days === 7 ? `week of ${range}` : range;
 }
 
 function windowLabel(from: string, to: string, days: number): string {
   const range = dayRangeLabel(from, to);
-  return days === 7 ? `semana del ${range}` : `del ${range}`;
+  return days === 7 ? `week of ${range}` : range;
 }
 
-/** "sábado 19:05" in the account's zone. */
+/** "Saturday 19:05" in the account's zone. */
 export function cycleWhen(iso: string, timeZone?: string): string {
   const at = Date.parse(iso);
   if (Number.isNaN(at)) return iso;
-  const day = new Intl.DateTimeFormat('es-MX', { weekday: 'long', timeZone }).format(at);
-  const time = new Intl.DateTimeFormat('es-MX', {
+  const day = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone }).format(at);
+  const time = new Intl.DateTimeFormat('en-US', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
@@ -123,21 +123,21 @@ export function cycleWhen(iso: string, timeZone?: string): string {
 
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 
-/** "a, b y c" */
+/** "a, b and c" */
 function joinWords(parts: readonly string[]): string {
   if (parts.length <= 1) return parts[0] ?? '';
-  return `${parts.slice(0, -1).join(', ')} y ${parts[parts.length - 1]}`;
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
 const PROPOSAL_WORDS: Record<string, [string, string]> = {
-  pause: ['pausa', 'pausas'],
-  pause_ad: ['pausa de anuncio', 'pausas de anuncio'],
-  restore_delivery: ['restauración', 'restauraciones'],
-  creative_refresh: ['cambio de creativo', 'cambios de creativo'],
-  variate_creative: ['variación del ganador', 'variaciones del ganador'],
-  seed_experiment: ['experimento', 'experimentos'],
-  audience_expand: ['audiencia nueva', 'audiencias nuevas'],
-  settings: ['ajuste', 'ajustes'],
+  pause: ['pause', 'pauses'],
+  pause_ad: ['ad pause', 'ad pauses'],
+  restore_delivery: ['restore', 'restores'],
+  creative_refresh: ['creative change', 'creative changes'],
+  variate_creative: ['winner variation', 'winner variations'],
+  seed_experiment: ['experiment', 'experiments'],
+  audience_expand: ['new audience', 'new audiences'],
+  settings: ['setting change', 'setting changes'],
 };
 
 /** What the cycle put on the table: pending recommendations by kind, then budget moves. */
@@ -149,15 +149,13 @@ function proposedWords(report: ParsedCycleRunReport): string | null {
   }
   const parts: string[] = [];
   for (const [kind, n] of byKind) {
-    const words = PROPOSAL_WORDS[kind] ?? ['recomendación', 'recomendaciones'];
+    const words = PROPOSAL_WORDS[kind] ?? ['recommendation', 'recommendations'];
     parts.push(plural(n, words[0], words[1]));
   }
   const moves = report.latest_items.filter((item) => (item.change_abs ?? 0) !== 0).length;
-  if (moves > 0)
-    parts.push(plural(moves, 'movimiento de presupuesto', 'movimientos de presupuesto'));
+  if (moves > 0) parts.push(plural(moves, 'budget move', 'budget moves'));
   if (parts.length === 0) return null;
-  const total = [...byKind.values()].reduce((sum, n) => sum + n, 0) + moves;
-  return `${joinWords(parts)} ${total === 1 ? 'propuesta' : 'propuestas'}`;
+  return `${joinWords(parts)} proposed`;
 }
 
 /**
@@ -180,11 +178,10 @@ function appliedWords(report: ParsedCycleRunReport, events: readonly TimelineEve
     .filter((event) => event.kind === 'status' && since(event))
     .reduce((sum, event) => sum + event.count, 0);
   const parts: string[] = [];
-  if (moves > 0)
-    parts.push(plural(moves, 'movimiento de presupuesto', 'movimientos de presupuesto'));
-  if (statuses > 0) parts.push(plural(statuses, 'cambio de estado', 'cambios de estado'));
-  if (parts.length === 0) return 'ninguna aplicada todavía';
-  return `${joinWords(parts)} ${moves + statuses === 1 ? 'aplicado' : 'aplicados'}`;
+  if (moves > 0) parts.push(plural(moves, 'budget move', 'budget moves'));
+  if (statuses > 0) parts.push(plural(statuses, 'status change', 'status changes'));
+  if (parts.length === 0) return 'none applied yet';
+  return `${joinWords(parts)} applied`;
 }
 
 function lastCycleOf(
@@ -272,10 +269,10 @@ function projectionOf(args: {
       cost == null || target == null
         ? null
         : Math.round(cost * 100) === Math.round(target * 100)
-          ? 'en'
+          ? 'on'
           : cost < target
-            ? 'bajo'
-            : 'sobre',
+            ? 'under'
+            : 'over',
   };
 }
 

@@ -60,22 +60,22 @@ export function JainaPortfolioPanel({
           onSubmit={submit}
         >
           <Input
-            aria-label={`Preguntale a Jaina sobre ${portfolio.name}`}
+            aria-label={`Ask Jaina about ${portfolio.name}`}
             className="h-8 min-w-0 bg-background text-sm"
             name="question"
             onChange={(event) => setQuestion(event.target.value)}
-            placeholder="Preguntale algo sobre este portafolio…"
+            placeholder="Ask anything about this portfolio…"
             value={question}
           />
           <Button
-            aria-label="Enviar la pregunta a Jaina"
+            aria-label="Send the question to Jaina"
             disabled={trimmed.length === 0}
             size="sm"
             type="submit"
             variant="outline"
           >
             <SendHorizontalIcon aria-hidden className="size-3.5" />
-            Preguntar
+            Ask
           </Button>
         </form>
       </JainaEntryChips>

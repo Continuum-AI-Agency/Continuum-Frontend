@@ -59,7 +59,7 @@ export function PortfolioAnchor({ anchor, currency, window, onEditSetting }: Por
             data-setting="target"
             data-testid="header-chip"
             onClick={() => onEditSetting('target')}
-            title="Editar la meta en Manage"
+            title="Edit the target in Manage"
             type="button"
           >
             {anchor.target}

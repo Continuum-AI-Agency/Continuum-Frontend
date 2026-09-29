@@ -20,12 +20,12 @@ describe('JainaEntryChips', () => {
     expect(band?.className).toContain('border-primary');
   });
 
-  it('labels the band "Preguntale a Jaina" in primary', () => {
+  it('labels the band "Ask Jaina" in primary', () => {
     const { container, getByText } = mount();
-    const label = getByText(/Preguntale a Jaina/);
+    const label = getByText(/Ask Jaina/);
     expect(label).toBeTruthy();
     expect(label.className).toContain('text-primary');
-    expect(container.textContent).not.toContain('Ask Jaina');
+    expect(container.textContent).not.toContain('Preguntale a Jaina');
   });
 
   it('offers five readable links, none in the tiny sizes', () => {
@@ -59,7 +59,7 @@ describe('JainaEntryChips', () => {
     expect(band?.className).not.toContain('border');
     expect(band?.className).not.toContain('bg-primary/10');
     const [first, second] = [...(band?.children ?? [])];
-    expect(first?.textContent).toContain('Preguntale a Jaina');
+    expect(first?.textContent).toContain('Ask Jaina');
     expect(first?.querySelector('[data-testid="field"]')).toBeTruthy();
     expect(first?.querySelectorAll('a').length).toBe(0);
     expect(second?.querySelectorAll('a').length).toBe(5);

@@ -51,7 +51,7 @@ export function PortfolioTiles({ tiles, onEditSetting }: PortfolioTilesProps) {
                       data-testid="header-chip"
                       key={segment.setting}
                       onClick={() => onEditSetting(segment.setting)}
-                      title="Editar en Manage"
+                      title="Edit in Manage"
                       type="button"
                     >
                       {segment.text}

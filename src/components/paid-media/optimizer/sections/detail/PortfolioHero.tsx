@@ -152,7 +152,7 @@ export function PortfolioHero({
             {header ? <PortfolioHeaderLine {...header} /> : null}
             <div className="h-24 animate-pulse rounded-md bg-muted/70" />
             <p className="text-muted-foreground text-xs">
-              Jaina escribe su primera lectura después del primer ciclo.
+              Jaina writes her first read after the first cycle.
             </p>
           </div>
           {jaina ? <JainaPortfolioPanel {...jaina} /> : null}
@@ -235,7 +235,11 @@ export function PortfolioHero({
             {tiles.length > 0 ? (
               <PortfolioTiles onEditSetting={onEditSetting} tiles={tiles} />
             ) : null}
-            {beforeAfter ? <BeforeAfterStrip {...beforeAfter} /> : null}
+            {beforeAfter ? (
+              // The workspace hands the strip its words in the Overview's vocabulary; the
+              // module speaks the headline's.
+              <BeforeAfterStrip {...beforeAfter} words={headline?.words ?? beforeAfter.words} />
+            ) : null}
           </div>
           {jaina ? <JainaPortfolioPanel {...jaina} /> : null}
         </motion.div>

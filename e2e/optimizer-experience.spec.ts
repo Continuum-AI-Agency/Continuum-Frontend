@@ -1073,11 +1073,11 @@ test.describe('Paid Media Optimizer — live experience', () => {
       if (report.anchorText !== '—') expect(report.anchorPrior).toMatch(/\d+–\d+.*: /);
 
       // Two sentences with a figure; the third only when a blocker exists.
-      expect(report.status).toMatch(/^\d[\d,]* leads en \d+ días/);
+      expect(report.status).toMatch(/^\d[\d,]* leads in \d+ days?/);
       expect(report.statusFigures).toBeGreaterThanOrEqual(2);
       expect(report.opportunity).toMatch(/\d/);
       expect(report.opportunity).toMatch(
-        /^(La oportunidad:|Ninguna oportunidad|Sin oportunidades)/,
+        /^(The opportunity:|No opportunity|No open opportunities)/,
       );
       if (report.blocker) {
         expect(['kpi_mismatch', 'zero_delivery', 'no_signal']).toContain(report.blocker);
@@ -1098,8 +1098,8 @@ test.describe('Paid Media Optimizer — live experience', () => {
       expect(report.jainaLinks).toBe(5);
 
       // The last cycle in one line, the projection when a pause is pending.
-      expect(report.cycleLine).toMatch(/^(Último ciclo, |Sin ciclo)/);
-      if (report.projection) expect(report.projection).toMatch(/costo proyectado|no compraron/);
+      expect(report.cycleLine).toMatch(/^(Last cycle, |No cycle)/);
+      if (report.projection) expect(report.projection).toMatch(/projected cost|bought no/);
 
       // The vital signs and their bands are gone, and nothing under the hero is a bar.
       expect(report.vitals).toBe(false);

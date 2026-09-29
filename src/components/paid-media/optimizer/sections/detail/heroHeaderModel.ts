@@ -66,37 +66,37 @@ export type HeroPortfolio = Pick<
 >;
 
 const count = (n: number): string =>
-  new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 }).format(n);
+  new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(n);
 
 function singular(resultLabel: string): string {
   const word = resultLabel.toLowerCase();
   return word.endsWith('s') ? word.slice(0, -1) : word;
 }
 
-/** "26 sep, 1:03 p.m.". Date and time are formatted apart: ICU joins them with " at " in
+/** "Sep 26, 1:03 PM". Date and time are formatted apart: ICU joins them with " at " in
  *  some runtimes and ", " in others, and the line has to read the same everywhere. */
 export function dateTime(iso: string | null | undefined, timeZone?: string): string | null {
   if (!iso) return null;
   const at = Date.parse(iso);
   if (Number.isNaN(at)) return null;
-  const day = new Intl.DateTimeFormat('es-MX', { month: 'short', day: 'numeric', timeZone });
-  const time = new Intl.DateTimeFormat('es-MX', { hour: 'numeric', minute: '2-digit', timeZone });
+  const day = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone });
+  const time = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone });
   return `${day.format(at)}, ${time.format(at)}`;
 }
 
 export const budgetSourceWords = (source: string | null | undefined): string =>
-  source === 'fixed' ? 'fijo' : 'sigue al gasto';
+  source === 'fixed' ? 'fixed' : 'follows spend';
 
 function modeOf(portfolio: HeroPortfolio): HeroHeader['mode'] {
   switch ((portfolio.apply_mode ?? '').toLowerCase()) {
     case 'autopilot':
       return portfolio.autopilot_paused
-        ? { label: 'Detenido', tone: 'warn' }
+        ? { label: 'Stopped', tone: 'warn' }
         : { label: 'Autopilot', tone: 'good' };
     case 'recommend':
-      return { label: 'Recomienda', tone: 'line' };
+      return { label: 'Recommend', tone: 'line' };
     case 'observe':
-      return { label: 'Observa', tone: 'idle' };
+      return { label: 'Observe', tone: 'idle' };
     default:
       return null;
   }
@@ -105,17 +105,17 @@ function modeOf(portfolio: HeroPortfolio): HeroHeader['mode'] {
 function secondaryOf(portfolio: HeroPortfolio): HeroHeader['secondary'] {
   if (portfolio.apply_mode === 'autopilot') {
     return portfolio.autopilot_paused
-      ? { kind: 'resume', label: 'Reanudar autopilot' }
-      : { kind: 'stop', label: 'Detener autopilot' };
+      ? { kind: 'resume', label: 'Resume autopilot' }
+      : { kind: 'stop', label: 'Stop autopilot' };
   }
-  if (portfolio.apply_mode === 'recommend') return { kind: 'review', label: 'Revisar movimientos' };
+  if (portfolio.apply_mode === 'recommend') return { kind: 'review', label: 'Review moves' };
   return null;
 }
 
 function mismatchOf(report: ParsedCycleRunReport | null, measures: string): HeroHeader['mismatch'] {
   const found = goalMismatchOf({ report, measures });
   if (!found) return null;
-  const remove = { setting: 'roster', label: 'Quitar estos conjuntos' } as const;
+  const remove = { setting: 'roster', label: 'Remove these ad sets' } as const;
   return {
     scope: found.scope,
     mismatched: found.mismatched,
@@ -125,7 +125,7 @@ function mismatchOf(report: ParsedCycleRunReport | null, measures: string): Hero
     actions:
       found.scope === 'all'
         ? [
-            { setting: 'objective', label: 'Cambiar objetivo', primary: true },
+            { setting: 'objective', label: 'Change objective', primary: true },
             { ...remove, primary: false },
           ]
         : [{ ...remove, primary: false }],
@@ -137,11 +137,11 @@ function stalenessWords(portfolio: HeroPortfolio): string | null {
   const line = staleLine(portfolio);
   if (!line) return null;
   const days = portfolio.stale_for_days ?? 0;
-  const dayWord = days === 1 ? 'día' : 'días';
+  const dayWord = days === 1 ? 'day' : 'days';
   if (portfolio.last_actual_cycle_at) {
-    return days === 0 ? 'hoy se perdió un ciclo' : `último ciclo hace ${count(days)} ${dayWord}`;
+    return days === 0 ? 'a cycle was missed today' : `last cycle ${count(days)} ${dayWord} ago`;
   }
-  return days === 0 ? 'sin ciclo todavía' : `sin ciclo en ${count(days)} ${dayWord}`;
+  return days === 0 ? 'no cycle yet' : `no cycle in ${count(days)} ${dayWord}`;
 }
 
 export function buildHeroHeader(args: {
@@ -181,30 +181,30 @@ export function buildHeroHeader(args: {
     freshness: stale
       ? { text: stale, stale: true }
       : updated
-        ? { text: `Actualizado ${updated}`, stale: false }
+        ? { text: `Updated ${updated}`, stale: false }
         : null,
     roster:
       roster && rosterColour
         ? { text: roster, tone: rosterColour === 'danger' ? 'bad' : 'warn' }
         : null,
-    adsets: adsets == null ? null : `${count(adsets)} ${adsets === 1 ? 'conjunto' : 'conjuntos'}`,
+    adsets: adsets == null ? null : `${count(adsets)} ${adsets === 1 ? 'ad set' : 'ad sets'}`,
     chips: [
-      { setting: 'objective', label: 'Objetivo', value: resultLabel },
+      { setting: 'objective', label: 'Objective', value: resultLabel },
       {
         setting: 'budget',
-        label: 'Presupuesto',
+        label: 'Budget',
         value:
           portfolio.daily_total == null
-            ? 'sin fijar'
-            : `${formatCurrency(portfolio.daily_total, currency)}/día · ${budgetSourceWords(portfolio.budget_source)}`,
+            ? 'not set'
+            : `${formatCurrency(portfolio.daily_total, currency)}/day · ${budgetSourceWords(portfolio.budget_source)}`,
       },
       {
         setting: 'target',
-        label: 'Meta',
-        value: target == null ? 'sin fijar' : `${formatCurrency(target, currency)} / ${per}`,
+        label: 'Target',
+        value: target == null ? 'not set' : `${formatCurrency(target, currency)} / ${per}`,
       },
-      { setting: 'window', label: 'Ventana', value: `${lookback.replace(/^d/, '')} días` },
-      { setting: 'strategy', label: 'Estrategia', value: humanize(portfolio.mode) },
+      { setting: 'window', label: 'Window', value: `${lookback.replace(/^d/, '')} days` },
+      { setting: 'strategy', label: 'Strategy', value: humanize(portfolio.mode) },
     ],
     mismatch: mismatchOf(args.report ?? null, resultLabel),
     secondary: secondaryOf(portfolio),

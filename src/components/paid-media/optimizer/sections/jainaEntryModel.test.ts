@@ -8,20 +8,20 @@ describe('jainaEntryPrompts', () => {
     expect(entries.map((e) => e.key)).toEqual(['budget', 'creative', 'funnel', 'scaling', 'risks']);
   });
 
-  it('labels each one as the question a person would ask, in the portfolio’s language', () => {
+  it('labels each one as the question a person would ask', () => {
     expect(entries.map((e) => e.label)).toEqual([
-      '¿Dónde está el presupuesto?',
-      '¿Qué creativos ganan?',
-      '¿Dónde se pierde el embudo?',
-      '¿Qué conjunto escalar?',
-      'Riesgos esta semana',
+      'Where is the budget going?',
+      'Which creatives are winning?',
+      'Where does the funnel leak?',
+      'Which ad set can scale?',
+      'Risks this week',
     ]);
   });
 
   it('names the portfolio and its humanized objective in every prompt', () => {
     for (const entry of entries) {
       expect(entry.prompt).toContain('"Leads MX"');
-      expect(entry.prompt).toContain('objetivo: Lead');
+      expect(entry.prompt).toContain('objective: Lead');
     }
   });
 });
@@ -29,8 +29,8 @@ describe('jainaEntryPrompts', () => {
 describe('jainaAskPrompt', () => {
   it('sends a typed question with the portfolio as its context, trimmed', () => {
     expect(
-      jainaAskPrompt({ id: 'p', name: 'Leads MX', objective: 'lead' }, '  ¿Y si pauso RTG?  '),
-    ).toBe('Para el portafolio del optimizer "Leads MX" (objetivo: Lead): ¿Y si pauso RTG?');
+      jainaAskPrompt({ id: 'p', name: 'Leads MX', objective: 'lead' }, '  What if I pause RTG?  '),
+    ).toBe('For the optimizer portfolio "Leads MX" (objective: Lead): What if I pause RTG?');
   });
 });
 

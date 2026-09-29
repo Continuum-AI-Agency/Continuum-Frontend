@@ -70,7 +70,7 @@ describe('the status sentence — how we are doing', () => {
   it('reads the count, the cost, the distance to target and the week before, with figures', () => {
     const sentence = statusSentence(quoted, LEADS, 'MXN', 7);
     expect(text(sentence)).toBe(
-      '56 leads en 7 días a 38.59 MXN, 10% sobre el objetivo de 35.00 MXN y 34% más barato que la semana anterior.',
+      '56 leads in 7 days at 38.59 MXN, 10% over the target of 35.00 MXN and 34% cheaper than the week before.',
     );
     expect(figures(sentence).map((f) => [f.key, f.raw, f.unit])).toEqual([
       ['headline.results', 56, 'count'],
@@ -89,19 +89,19 @@ describe('the status sentence — how we are doing', () => {
       7,
     );
     expect(text(sentence)).toBe(
-      '56 leads en 7 días a 31.50 MXN, 10% bajo el objetivo de 35.00 MXN y 12% más caro que la semana anterior.',
+      '56 leads in 7 days at 31.50 MXN, 10% under the target of 35.00 MXN and 12% dearer than the week before.',
     );
   });
 
   it('names the window before by its length', () => {
     expect(text(statusSentence({ ...quoted, window: 'd14' }, LEADS, 'MXN', 14))).toContain(
-      'las dos semanas anteriores',
+      'the two weeks before',
     );
   });
 
   it('with no target it says so; with no prior it stops at the target', () => {
     expect(text(statusSentence({ ...quoted, target: null }, LEADS, 'MXN', 7))).toBe(
-      '56 leads en 7 días a 38.59 MXN, sin objetivo fijado y 34% más barato que la semana anterior.',
+      '56 leads in 7 days at 38.59 MXN, no target set and 34% cheaper than the week before.',
     );
     expect(
       text(
@@ -112,22 +112,22 @@ describe('the status sentence — how we are doing', () => {
           7,
         ),
       ),
-    ).toBe('56 leads en 7 días a 38.59 MXN, 10% sobre el objetivo de 35.00 MXN.');
+    ).toBe('56 leads in 7 days at 38.59 MXN, 10% over the target of 35.00 MXN.');
   });
 
   it('with nothing bought it says what was spent for it', () => {
     const none = statusSentence(
       { ...quoted, results: 0, cost_per_result: null, spend: 408 },
-      { one: 'compra', many: 'compras' },
+      { one: 'purchase', many: 'purchases' },
       'MXN',
       4,
     );
-    expect(text(none)).toBe('0 compras en 4 días con 408 MXN gastados.');
+    expect(text(none)).toBe('0 purchases in 4 days with 408 MXN spent.');
     expect(
       text(
         statusSentence({ ...quoted, results: 0, cost_per_result: null, spend: 0 }, LEADS, 'MXN', 4),
       ),
-    ).toBe('0 leads en 4 días, sin gasto.');
+    ).toBe('0 leads in 4 days, no spend.');
   });
 });
 
@@ -136,14 +136,14 @@ describe('FORMULARIOS — the real body', () => {
 
   it('states the status with the body’s own figures and no dollar sign', () => {
     expect(text(headline.status)).toBe(
-      '80 leads en 14 días a 45.69, 31% sobre el objetivo de 35.00.',
+      '80 leads in 14 days at 45.69, 31% over the target of 35.00.',
     );
     expect(JSON.stringify(headline)).not.toContain('$');
   });
 
   it('names the single largest opportunity, the ad set’s own cost and the money it frees', () => {
     expect(text(headline.opportunity)).toBe(
-      'La oportunidad: Ad set A paga 75.65 por lead; pausarlo libera 43.23 al día.',
+      'The opportunity: Ad set A pays 75.65 per lead; pausing it frees 43.23 a day.',
     );
     expect(figures(headline.opportunity).map((f) => f.key)).toEqual([
       'headline.opportunity.cost',
@@ -159,31 +159,31 @@ describe('FORMULARIOS — the real body', () => {
     expect(headline.tiles.map((t) => t.key)).toEqual(['spend', 'results', 'cost', 'decisions']);
     const [spend, results, cost, decisions] = headline.tiles;
     expect(spend).toMatchObject({
-      label: 'Gasto · 14 días',
+      label: 'Spend · 14 days',
       value: '3,655',
-      sub: '261 por día · plan 324',
+      sub: '261 per day · plan 324',
       state: 'warn',
     });
     expect(results).toMatchObject({
       label: 'Leads',
       value: '80',
-      sub: '104 al objetivo con este gasto',
+      sub: '104 at target for this spend',
       state: 'bad',
     });
     expect(cost).toMatchObject({
-      label: 'Costo por lead',
+      label: 'Cost per lead',
       value: '45.69',
-      sub: '+31% sobre objetivo 35.00',
+      sub: '+31% over target 35.00',
       state: 'bad',
     });
-    expect(decisions).toMatchObject({ label: 'Decisiones', value: '3', state: 'warn' });
-    expect(decisions?.sub).toMatch(/^90\.72\/día en juego$/);
+    expect(decisions).toMatchObject({ label: 'Decisions', value: '3', state: 'warn' });
+    expect(decisions?.sub).toMatch(/^90\.72\/day at stake$/);
   });
 
   it('carries Jaina’s own sentence as her read, dated', () => {
     expect(headline.read).toMatchObject({
       source: 'jaina',
-      label: 'Jaina · sobre Lead forms portfolio · hace 2 h',
+      label: 'Jaina · on Lead forms portfolio · 2 h ago',
       sentence: 'Pause Ad set A to save 43.23/day',
     });
     expect(headline.read.figure).toMatchObject({ key: 'jaina.read', raw: 43.23, unit: 'sentence' });
@@ -194,42 +194,46 @@ describe('Tours — nothing bought, every ad set held', () => {
   const headline = headlineOf('tours', Date.parse('2026-09-25T00:47:57Z'));
 
   it('states the spend that bought nothing', () => {
-    expect(text(headline.status)).toBe('0 conversaciones en 2 días con 155 gastados.');
+    expect(text(headline.status)).toBe('0 conversations in 2 days with 155 spent.');
   });
 
   it('says there is no opportunity, with the plan figure', () => {
     expect(text(headline.opportunity)).toBe(
-      'Sin oportunidades abiertas hoy: el optimizador no tiene nada que proponer y el portafolio sigue a 750 al día.',
+      'No open opportunities today: the optimizer has nothing to propose and the portfolio keeps running at 750 a day.',
     );
   });
 
   it('the blocker is the goal mismatch, ahead of the missing signal, with the header’s fixes', () => {
     expect(headline.blocker?.code).toBe('kpi_mismatch');
     expect(text(headline.blocker?.sentence ?? [])).toBe(
-      'Bloqueo: los 12 conjuntos pujan por otro resultado, no por conversaciones como mide este portafolio; el optimizador los retiene y no mueve nada.',
+      'Blocked: all 12 ad sets bid for another result, not for conversations as this portfolio measures; the optimizer holds them and moves nothing.',
     );
     expect(headline.blocker?.actions.map((a) => a.label)).toEqual([
-      'Cambiar objetivo',
-      'Quitar estos conjuntos',
+      'Change objective',
+      'Remove these ad sets',
     ]);
   });
 
   it('labels the deterministic headline as automatic and falls back to the status sentence', () => {
     // "Nothing worth changing today" carries no figure; the read has to.
     expect(headline.read.source).toBe('auto');
-    expect(headline.read.label).toBe('Lectura automática · sobre Tours portfolio · hace 30 min');
-    expect(headline.read.sentence).toBe('0 conversaciones en 2 días con 155 gastados.');
+    expect(headline.read.label).toBe('Automatic read · on Tours portfolio · 30 min ago');
+    expect(headline.read.sentence).toBe('0 conversations in 2 days with 155 spent.');
   });
 
   it('the results tile is bad and the cost tile cannot be judged', () => {
     const [, results, cost, decisions] = headline.tiles;
-    expect(results).toMatchObject({ value: '0', sub: '155 sin resultado', state: 'bad' });
+    expect(results).toMatchObject({ value: '0', sub: '155 with no result', state: 'bad' });
     expect(cost).toMatchObject({
       value: '—',
-      sub: 'sin conversaciones que dividir',
+      sub: 'no conversations to divide by',
       state: 'none',
     });
-    expect(decisions).toMatchObject({ value: '0', sub: 'nada espera tu decisión', state: 'none' });
+    expect(decisions).toMatchObject({
+      value: '0',
+      sub: 'nothing waits for your decision',
+      state: 'none',
+    });
   });
 });
 
@@ -249,7 +253,7 @@ describe('the other two blockers', () => {
     });
     expect(headline.blocker?.code).toBe('zero_delivery');
     expect(text(headline.blocker?.sentence ?? [])).toBe(
-      'Bloqueo: entrega en cero, nada gastado en 14 días.',
+      'Blocked: zero delivery, nothing spent in 14 days.',
     );
   });
 
@@ -266,7 +270,7 @@ describe('the other two blockers', () => {
     });
     expect(headline.blocker?.code).toBe('no_signal');
     expect(text(headline.blocker?.sentence ?? [])).toBe(
-      'Bloqueo: sin señal, 3,655 MXN gastados y 0 leads en 14 días; no hay con qué decidir.',
+      'Blocked: no signal, 3,655 MXN spent and 0 leads in 14 days; nothing to decide on.',
     );
   });
 
@@ -291,9 +295,9 @@ describe('the small rules', () => {
 
   it('ago words', () => {
     const now = Date.parse('2026-09-28T12:00:00Z');
-    expect(agoWords('2026-09-28T11:25:00Z', now)).toBe('hace 35 min');
-    expect(agoWords('2026-09-28T09:58:00Z', now)).toBe('hace 2 h');
-    expect(agoWords('2026-09-25T12:00:00Z', now)).toBe('hace 3 días');
+    expect(agoWords('2026-09-28T11:25:00Z', now)).toBe('35 min ago');
+    expect(agoWords('2026-09-28T09:58:00Z', now)).toBe('2 h ago');
+    expect(agoWords('2026-09-25T12:00:00Z', now)).toBe('3 days ago');
     expect(agoWords('nope', now)).toBeNull();
   });
 });
@@ -319,7 +323,7 @@ const item = (adset_id: string, cpa: number, events: number) => ({
 describe('the attributed read — Jaina’s line under the status sentence', () => {
   it('FORMULARIOS: a model wrote it and it says something else, so it stands, dated', () => {
     const read = attributedRead(moduleOf('formularios').headline);
-    expect(read).toMatchObject({ ago: 'hace 2 h', sentence: 'Pause Ad set A to save 43.23/day' });
+    expect(read).toMatchObject({ ago: '2 h ago', sentence: 'Pause Ad set A to save 43.23/day' });
   });
 
   it('Tours: a deterministic read only repeats the headline, so there is none', () => {
@@ -341,8 +345,8 @@ describe('the anchor — the cost per result, and the two windows by their dates
     lastCycle: null,
     projection: null,
     source: 'daily' as const,
-    after: { label: '', short: 'semana 21–27 sep', spend: 2161, results: 56, cost: 38.59 },
-    before: { label: '', short: 'semana 14–20 sep', spend: 1763, results: 30, cost: 58.78 },
+    after: { label: '', short: 'week of Sep 21–27', spend: 2161, results: 56, cost: 38.59 },
+    before: { label: '', short: 'week of Sep 14–20', spend: 1763, results: 30, cost: 58.78 },
   };
 
   it('over the target: amber, the unit in ISO words, the distance signed', () => {
@@ -356,15 +360,15 @@ describe('the anchor — the cost per result, and the two windows by their dates
     expect(anchor).toMatchObject({
       value: '38.59',
       state: 'warn',
-      unit: 'MXN por lead',
-      target: 'meta 35.00',
+      unit: 'MXN per lead',
+      target: 'target 35.00',
       vsTarget: '+10%',
       empty: null,
     });
     expect(anchor.figure).toMatchObject({ key: 'anchor.cost', raw: 38.59, window: 'd7' });
     expect(anchor.windows.map((w) => `${w.label}: ${w.text}`)).toEqual([
-      'semana 21–27 sep: 38.59',
-      'semana 14–20 sep: 58.78',
+      'week of Sep 21–27: 38.59',
+      'week of Sep 14–20: 58.78',
     ]);
   });
 
@@ -389,9 +393,9 @@ describe('the anchor — the cost per result, and the two windows by their dates
     });
     expect(anchor).toMatchObject({
       state: 'none',
-      target: 'sin meta',
+      target: 'no target',
       vsTarget: null,
-      unit: 'por lead',
+      unit: 'per lead',
     });
   });
 
@@ -403,8 +407,8 @@ describe('the anchor — the cost per result, and the two windows by their dates
       days: 14,
       beforeAfter: { ...beforeAfter, after: { ...beforeAfter.after, cost: null, results: 0 } },
     });
-    expect(anchor).toMatchObject({ value: '—', state: 'none', empty: 'sin leads en 14 días' });
-    expect(anchor.windows[0]?.text).toBe('sin leads');
+    expect(anchor).toMatchObject({ value: '—', state: 'none', empty: 'no leads in 14 days' });
+    expect(anchor.windows[0]?.text).toBe('no leads');
   });
 });
 
@@ -419,14 +423,14 @@ describe('the four tiles, by what the portfolio buys', () => {
       currency: null,
     });
     expect(tiles.map((t) => [t.key, t.label])).toEqual([
-      ['spend', 'Gasto · 14 días'],
+      ['spend', 'Spend · 14 days'],
       ['results', 'Leads'],
-      ['adsets', 'Conjuntos en meta'],
-      ['decisions', 'Decisiones'],
+      ['adsets', 'Ad sets on target'],
+      ['decisions', 'Decisions'],
     ]);
     // The plan is the budget's own setting, one click from Manage.
-    expect(tiles[0]?.sub).toEqual(['261/día · ', { setting: 'budget', text: 'plan 324' }]);
-    expect(tiles[1]?.detail).toBe('104 a la meta con este gasto');
+    expect(tiles[0]?.sub).toEqual(['261/day · ', { setting: 'budget', text: 'plan 324' }]);
+    expect(tiles[1]?.detail).toBe('104 at target for this spend');
   });
 
   it('conversations: the results tile speaks the portfolio’s own word', () => {
@@ -439,17 +443,17 @@ describe('the four tiles, by what the portfolio buys', () => {
       currency: null,
     });
     expect(tiles.map((t) => t.label)).toEqual([
-      'Gasto · 14 días',
-      'Conversaciones',
-      'Conjuntos en meta',
-      'Decisiones',
+      'Spend · 14 days',
+      'Conversations',
+      'Ad sets on target',
+      'Decisions',
     ]);
-    expect(tiles[2]).toMatchObject({ value: '1 de 12', state: 'warn' });
+    expect(tiles[2]).toMatchObject({ value: '1 of 12', state: 'warn' });
     // Nothing waits, so no "open opportunity" line contradicts it.
-    expect(tiles[3]).toMatchObject({ sub: ['nada espera tu decisión'], detail: null });
+    expect(tiles[3]).toMatchObject({ sub: ['nothing waits for your decision'], detail: null });
   });
 
-  it('purchases: the same four, the results tile named compras (the brief carries no value yet)', () => {
+  it('purchases: the same four, the results tile named purchases (the brief carries no value yet)', () => {
     const { view, report, dailyTotal, headline } = moduleOf('formularios', 'purchase');
     const tiles = relevantTiles({
       headline,
@@ -459,7 +463,7 @@ describe('the four tiles, by what the portfolio buys', () => {
       currency: null,
     });
     expect(tiles.map((t) => t.key)).toEqual(['spend', 'results', 'adsets', 'decisions']);
-    expect(tiles[1]?.label).toBe('Compras');
+    expect(tiles[1]?.label).toBe('Purchases');
   });
 
   it('with no target: the ad-set tile says so and its rule is grey', () => {
@@ -471,7 +475,7 @@ describe('the four tiles, by what the portfolio buys', () => {
       dailyTotal,
       currency: null,
     });
-    expect(tiles[2]).toMatchObject({ value: '—', sub: ['sin meta'], state: 'none' });
+    expect(tiles[2]).toMatchObject({ value: '—', sub: ['no target'], state: 'none' });
   });
 });
 
@@ -483,9 +487,9 @@ describe('ad sets in target, from the cycle’s own rows', () => {
       window: 'd14',
     });
     expect(tile).toMatchObject({
-      value: '2 de 4',
-      sub: ['mejor AS a 26.20'],
-      detail: 'peor AS b 58.10',
+      value: '2 of 4',
+      sub: ['best AS a 26.20'],
+      detail: 'worst AS b 58.10',
       state: 'ok',
     });
     expect(tile.figure).toMatchObject({ key: 'tiles.adsets-on-target', raw: 2, unit: 'count' });
@@ -503,7 +507,7 @@ describe('ad sets in target, from the cycle’s own rows', () => {
       target: 35,
       window: 'd14',
     });
-    expect(few).toMatchObject({ value: '1 de 3', state: 'warn' });
+    expect(few).toMatchObject({ value: '1 of 3', state: 'warn' });
   });
 
   it('before a cycle scores anything there is nothing to count', () => {

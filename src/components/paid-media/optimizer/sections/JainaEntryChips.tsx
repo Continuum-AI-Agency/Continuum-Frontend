@@ -1,6 +1,6 @@
 'use client';
 
-// "Preguntale a Jaina": a primary-accented band with a label naming the capability and a row
+// "Ask Jaina": a primary-accented band with a label naming the capability and a row
 // of ghost buttons each carrying a prepared question. No commands to learn; the capability is
 // discovered where it applies. Two callers: a portfolio page hands the portfolio and gets the
 // five portfolio analyses; the account Overview hands its own label and entries. A caller may
@@ -31,7 +31,7 @@ export type JainaEntryChipsProps = (
 };
 
 export function JainaEntryChips(props: JainaEntryChipsProps) {
-  const label = 'portfolio' in props ? 'Preguntale a Jaina' : props.label;
+  const label = 'portfolio' in props ? 'Ask Jaina' : props.label;
   const entries = 'portfolio' in props ? jainaEntryPrompts(props.portfolio) : props.entries;
   const { layout = 'stack', frame = true } = props;
   const title = (

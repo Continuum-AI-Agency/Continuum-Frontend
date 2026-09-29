@@ -30,7 +30,7 @@ import {
   formatCurrency,
   normalizeCurrency,
 } from '../../format';
-import { resultWords, spendState, windowState } from '../account/overviewModel';
+import { spendState, windowState } from '../account/overviewModel';
 import type { BeforeAfter } from './beforeAfterModel';
 import type { HeroMismatch, HeroSetting } from './heroHeaderModel';
 import type { HeroView } from './heroModel';
@@ -69,9 +69,9 @@ export type HeadlineTile = {
 /** Jaina's latest read on the portfolio, or the deterministic headline labelled as such. */
 export type JainaRead = {
   source: 'jaina' | 'auto';
-  /** "Jaina · sobre FORMULARIOS // TODOS · hace 2 h" */
+  /** "Jaina · on FORMULARIOS // TODOS · 2 h ago" */
   label: string;
-  /** "hace 2 h" — null when the brief's stamp does not parse. */
+  /** "2 h ago" — null when the brief's stamp does not parse. */
   ago: string | null;
   sentence: string;
   figure: Omit<HeadlineFigure, 'text'>;
@@ -92,15 +92,40 @@ export type PortfolioHeadline = {
 const DAY_MS = 86_400_000;
 
 const count = (n: number): string =>
-  new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 }).format(n);
+  new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(n);
 
 const windowDays = (window: BriefGrowth['window']): number => Number(window.slice(1));
 
 const PRIOR_WORDS: Record<BriefGrowth['window'], string> = {
-  d3: 'los tres días anteriores',
-  d7: 'la semana anterior',
-  d14: 'las dos semanas anteriores',
+  d3: 'the three days before',
+  d7: 'the week before',
+  d14: 'the two weeks before',
 };
+
+/** The result a portfolio buys, in the words its sentences use. Keyed by the metric's KPI
+ *  field so a custom conversion that behaves like a lead is still called a lead. */
+const RESULT_NOUNS: Record<string, { one: string; many: string }> = {
+  purchases: { one: 'purchase', many: 'purchases' },
+  appInstalls: { one: 'install', many: 'installs' },
+  signups: { one: 'sign-up', many: 'sign-ups' },
+  leads: { one: 'lead', many: 'leads' },
+  landingPageViews: { one: 'landing page view', many: 'landing page views' },
+  impressions: { one: 'thousand impressions', many: 'thousand impressions' },
+  conversations: { one: 'conversation', many: 'conversations' },
+  linkClicks: { one: 'link click', many: 'link clicks' },
+  thruplays: { one: 'ThruPlay', many: 'ThruPlays' },
+  postEngagement: { one: 'engagement', many: 'engagements' },
+  clicks: { one: 'click', many: 'clicks' },
+};
+
+export function resultNouns(kind: string, fallbackLabel: string): { one: string; many: string } {
+  const known = RESULT_NOUNS[kind];
+  if (known) return known;
+  const label = fallbackLabel.toLowerCase();
+  return { one: label, many: label };
+}
+
+const dayWords = (n: number): string => `${n} ${n === 1 ? 'day' : 'days'}`;
 
 /**
  * The days the window actually covers: a portfolio younger than its window has only been
@@ -202,8 +227,8 @@ const percent = (key: string, raw: number, window: FigureWindow): HeadlineFigure
 });
 
 /**
- * How we are doing: "56 leads en 7 días a 38.59 MXN, 10% sobre el objetivo de 35 MXN y 34%
- * más barato que la semana anterior." With nothing bought the sentence says what was spent
+ * How we are doing: "56 leads in 7 days at 38.59 MXN, 10% over the target of 35.00 MXN and
+ * 34% cheaper than the week before." With nothing bought the sentence says what was spent
  * for it; with no target it says there is none.
  */
 export function statusSentence(
@@ -213,7 +238,7 @@ export function statusSentence(
   days: number,
 ): HeadlineSentence {
   const window = growth.window;
-  const period = `en ${days} ${days === 1 ? 'día' : 'días'}`;
+  const period = `in ${dayWords(days)}`;
   const results = Math.round(growth.results);
   const resultsFigure = tally(
     'headline.results',
@@ -222,29 +247,29 @@ export function statusSentence(
     `${count(results)} ${results === 1 ? words.one : words.many}`,
   );
   if (results === 0 || growth.cost_per_result == null) {
-    if (growth.spend <= 0) return [resultsFigure, ` ${period}, sin gasto.`];
+    if (growth.spend <= 0) return [resultsFigure, ` ${period}, no spend.`];
     return [
       resultsFigure,
-      ` ${period} con `,
+      ` ${period} with `,
       money('headline.spend', growth.spend, currency, window),
-      ' gastados.',
+      ' spent.',
     ];
   }
   const out: HeadlineSentence = [
     resultsFigure,
-    ` ${period} a `,
+    ` ${period} at `,
     money('headline.cost', growth.cost_per_result, currency, window),
   ];
   const pct = vsTargetPct(growth.cost_per_result, growth.target);
   if (pct == null || growth.target == null) {
-    out.push(', sin objetivo fijado');
+    out.push(', no target set');
   } else if (pct === 0) {
-    out.push(', en el objetivo de ', money('headline.target', growth.target, currency, 'none'));
+    out.push(', on the target of ', money('headline.target', growth.target, currency, 'none'));
   } else {
     out.push(
       ', ',
       percent('headline.vs-target', pct, window),
-      pct > 0 ? ' sobre el objetivo de ' : ' bajo el objetivo de ',
+      pct > 0 ? ' over the target of ' : ' under the target of ',
       money('headline.target', growth.target, currency, 'none'),
     );
   }
@@ -252,12 +277,12 @@ export function statusSentence(
   if (delta != null && Number.isFinite(delta)) {
     const deltaPct = Math.round(delta * 100);
     if (deltaPct === 0) {
-      out.push(` y al mismo costo que ${PRIOR_WORDS[window]}`);
+      out.push(` and the same cost as ${PRIOR_WORDS[window]}`);
     } else {
       out.push(
-        ' y ',
+        ' and ',
         percent('headline.vs-prior', deltaPct, window),
-        deltaPct < 0 ? ' más barato que ' : ' más caro que ',
+        deltaPct < 0 ? ' cheaper than ' : ' dearer than ',
         PRIOR_WORDS[window],
       );
     }
@@ -275,8 +300,8 @@ function adsetCost(items: readonly CycleItemRow[], adsetId: string | null): numb
 
 /**
  * Where the opportunity is: the largest candidate by money per day, in the module's own
- * verb. "La oportunidad: ITESO // AGOSTO - RTG paga 101 MXN por lead; pausarlo libera 48.8
- * MXN al día." Below the impact floor, or with nothing open, the sentence says so with the
+ * verb. "The opportunity: ITESO // AGOSTO - RTG pays 101 MXN per lead; pausing it frees
+ * 48.80 MXN a day." Below the impact floor, or with nothing open, the sentence says so with the
  * figure it does have.
  */
 export function opportunitySentence(args: {
@@ -291,47 +316,47 @@ export function opportunitySentence(args: {
   const top: BriefCandidate | undefined = ranked[0];
   if (!top) {
     return [
-      'Sin oportunidades abiertas hoy: el optimizador no tiene nada que proponer',
+      'No open opportunities today: the optimizer has nothing to propose',
       ...(args.dailyTotal != null && args.dailyTotal > 0
         ? [
-            ' y el portafolio sigue a ',
+            ' and the portfolio keeps running at ',
             money('headline.plan', args.dailyTotal, currency, 'none'),
-            ' al día.',
+            ' a day.',
           ]
         : ['.']),
     ];
   }
   if (!heroThresholdMet(ranked, args.dailyTotal)) {
     return [
-      'Ninguna oportunidad supera el piso hoy: la mayor vale ',
+      'No opportunity clears the floor today: the largest is worth ',
       money('headline.opportunity', top.impact_per_day, currency, 'none'),
-      ' al día contra un piso de ',
+      ' a day against a floor of ',
       money('headline.floor', heroMinImpact(args.dailyTotal), currency, 'none'),
       '.',
     ];
   }
-  const name = top.adset_name ?? top.adset_id ?? 'un conjunto';
+  const name = top.adset_name ?? top.adset_id ?? 'an ad set';
   const impact = money('headline.opportunity', top.impact_per_day, currency, 'none');
   switch (top.module) {
     case 'pause': {
       const cost = adsetCost(args.items, top.adset_id);
       if (cost != null) {
         return [
-          `La oportunidad: ${name} paga `,
+          `The opportunity: ${name} pays `,
           money('headline.opportunity.cost', cost, currency, 'none'),
-          ` por ${words.one}; pausarlo libera `,
+          ` per ${words.one}; pausing it frees `,
           impact,
-          ' al día.',
+          ' a day.',
         ];
       }
-      return [`La oportunidad: pausar ${name} libera `, impact, ' al día.'];
+      return [`The opportunity: pausing ${name} frees `, impact, ' a day.'];
     }
     case 'budget':
-      return [`La oportunidad: mover presupuesto hacia ${name}, `, impact, ' al día en juego.'];
+      return [`The opportunity: move budget toward ${name}, `, impact, ' a day at stake.'];
     case 'creative':
-      return [`La oportunidad: renovar el creativo de ${name}, `, impact, ' al día en juego.'];
+      return [`The opportunity: refresh the creative on ${name}, `, impact, ' a day at stake.'];
     case 'audience':
-      return [`La oportunidad: abrir una audiencia junto a ${name}, `, impact, ' al día en juego.'];
+      return [`The opportunity: open an audience next to ${name}, `, impact, ' a day at stake.'];
   }
 }
 
@@ -351,29 +376,29 @@ export function blockerSentence(args: {
   const window = growth.window;
   if (mismatch) {
     const bought = mismatch.bought
-      ? resultWords(mismatch.bought, mismatch.bought).many
-      : 'otro resultado';
+      ? resultNouns(mismatch.bought, mismatch.bought).many
+      : 'another result';
     const who =
       mismatch.scope === 'all'
-        ? `los ${mismatch.total} conjuntos pujan`
-        : `${mismatch.mismatched} de ${mismatch.total} conjuntos pujan`;
+        ? `all ${mismatch.total} ad sets bid`
+        : `${mismatch.mismatched} of ${mismatch.total} ad sets bid`;
     const effect =
       mismatch.scope === 'all'
-        ? 'el optimizador los retiene y no mueve nada.'
-        : 'el optimizador los retiene y mueve solo el resto.';
+        ? 'the optimizer holds them and moves nothing.'
+        : 'the optimizer holds them and moves only the rest.';
     return {
       code: 'kpi_mismatch',
       sentence: [
-        `Bloqueo: ${who} por ${bought}, no por ${words.many} como mide este portafolio; ${effect}`,
+        `Blocked: ${who} for ${bought}, not for ${words.many} as this portfolio measures; ${effect}`,
       ],
       actions: mismatch.actions,
     };
   }
-  const period = `${days} ${days === 1 ? 'día' : 'días'}`;
+  const period = dayWords(days);
   if (growth.spend <= 0) {
     return {
       code: 'zero_delivery',
-      sentence: [`Bloqueo: entrega en cero, nada gastado en ${period}.`],
+      sentence: [`Blocked: zero delivery, nothing spent in ${period}.`],
       actions: [],
     };
   }
@@ -381,9 +406,9 @@ export function blockerSentence(args: {
     return {
       code: 'no_signal',
       sentence: [
-        'Bloqueo: sin señal, ',
+        'Blocked: no signal, ',
         money('headline.blocker.spend', growth.spend, currency, window),
-        ` gastados y 0 ${words.many} en ${period}; no hay con qué decidir.`,
+        ` spent and 0 ${words.many} in ${period}; nothing to decide on.`,
       ],
       actions: [],
     };
@@ -391,16 +416,16 @@ export function blockerSentence(args: {
   return null;
 }
 
-/** "hace 2 h", "hace 35 min", "hace 3 días" — from an ISO stamp to now. */
+/** "2 h ago", "35 min ago", "3 days ago" — from an ISO stamp to now. */
 export function agoWords(iso: string, now: number): string | null {
   const at = Date.parse(iso);
   if (Number.isNaN(at)) return null;
   const minutes = Math.max(0, Math.round((now - at) / 60_000));
-  if (minutes < 60) return `hace ${minutes} min`;
+  if (minutes < 60) return `${minutes} min ago`;
   const hours = Math.round(minutes / 60);
-  if (hours < 48) return `hace ${hours} h`;
+  if (hours < 48) return `${hours} h ago`;
   const days = Math.round(hours / 24);
-  return `hace ${days} días`;
+  return `${days} days ago`;
 }
 
 const hasDigit = (text: string): boolean => /\d/.test(text);
@@ -421,8 +446,8 @@ export function jainaRead(args: {
   const { brief } = args.view;
   const written = args.view.source === 'brief' && brief.model !== 'deterministic';
   const ago = agoWords(brief.generated_at, args.now);
-  const who = written ? 'Jaina' : 'Lectura automática';
-  const label = [who, `sobre ${args.name}`, ago].filter(Boolean).join(' · ');
+  const who = written ? 'Jaina' : 'Automatic read';
+  const label = [who, `on ${args.name}`, ago].filter(Boolean).join(' · ');
   const headline = brief.hero.headline;
   const sentence = hasDigit(headline)
     ? headline
@@ -457,12 +482,12 @@ function tilesOf(args: {
   const plan = dailyTotal != null && dailyTotal > 0 ? dailyTotal : null;
   const spend: HeadlineTile = {
     key: 'spend',
-    label: `Gasto · ${days} ${days === 1 ? 'día' : 'días'}`,
+    label: `Spend · ${dayWords(days)}`,
     value: formatCurrency(growth.spend, currency),
     figure: { key: 'tiles.spend', raw: growth.spend, currency, window, unit: 'currency' },
     sub: plan
-      ? `${formatCurrency(perDay, currency)} por día · plan ${formatCurrency(plan, currency)}`
-      : `${formatCurrency(perDay, currency)} por día · sin plan diario`,
+      ? `${formatCurrency(perDay, currency)} per day · plan ${formatCurrency(plan, currency)}`
+      : `${formatCurrency(perDay, currency)} per day · no daily plan`,
     state: plan ? spendState(perDay, plan) : 'none',
   };
 
@@ -479,10 +504,10 @@ function tilesOf(args: {
       resultsDelta != null && Number.isFinite(resultsDelta)
         ? `${resultsDelta >= 0 ? '+' : '−'}${Math.abs(Math.round(resultsDelta * 100))}% vs ${PRIOR_WORDS[window]}`
         : atTarget != null && results > 0
-          ? `${count(atTarget)} al objetivo con este gasto`
+          ? `${count(atTarget)} at target for this spend`
           : results === 0 && growth.spend > 0
-            ? `${formatCurrency(growth.spend, currency)} sin resultado`
-            : 'sin periodo anterior',
+            ? `${formatCurrency(growth.spend, currency)} with no result`
+            : 'no prior period',
     state:
       results === 0
         ? growth.spend > 0
@@ -500,25 +525,25 @@ function tilesOf(args: {
   const pct = vsTargetPct(growth.cost_per_result, target);
   const cost: HeadlineTile = {
     key: 'cost',
-    label: `Costo por ${words.one}`,
+    label: `Cost per ${words.one}`,
     value: growth.cost_per_result == null ? '—' : formatCurrency(growth.cost_per_result, currency),
     figure: { key: 'tiles.cost', raw: growth.cost_per_result, currency, window, unit: 'currency' },
     sub:
       growth.cost_per_result == null
         ? results === 0
-          ? `sin ${words.many} que dividir`
-          : 'sin precio todavía'
+          ? `no ${words.many} to divide by`
+          : 'no price yet'
         : target == null
-          ? 'sin objetivo'
+          ? 'no target'
           : pct === 0
-            ? `en el objetivo de ${formatCurrency(target, currency)}`
-            : `${pct != null && pct > 0 ? '+' : ''}${pct}% ${pct != null && pct > 0 ? 'sobre' : 'bajo'} objetivo ${formatCurrency(target, currency)}`,
+            ? `on the ${formatCurrency(target, currency)} target`
+            : `${pct != null && pct > 0 ? '+' : ''}${pct}% ${pct != null && pct > 0 ? 'over' : 'under'} target ${formatCurrency(target, currency)}`,
     state: windowState(pct),
   };
 
   const decisions: HeadlineTile = {
     key: 'decisions',
-    label: 'Decisiones',
+    label: 'Decisions',
     value: String(args.waiting),
     figure: {
       key: 'tiles.decisions',
@@ -530,9 +555,9 @@ function tilesOf(args: {
     sub:
       args.waiting > 0
         ? args.atStakePerDay > 0
-          ? `${formatCurrency(args.atStakePerDay, currency)}/día en juego`
-          : `${args.waiting === 1 ? 'espera' : 'esperan'} tu decisión`
-        : 'nada espera tu decisión',
+          ? `${formatCurrency(args.atStakePerDay, currency)}/day at stake`
+          : `${args.waiting === 1 ? 'waits' : 'wait'} for your decision`
+        : 'nothing waits for your decision',
     state: args.waiting > 0 ? 'warn' : 'none',
   };
   return [spend, resultsTile, cost, decisions];
@@ -545,12 +570,12 @@ export function buildPortfolioHeadline(args: {
   metric: OptimizationMetricDefinition;
   currency: string | null;
   mismatch: HeroMismatch | null;
-  /** The clock, for "hace 2 h"; injectable so the tests are stable. */
+  /** The clock, for "2 h ago"; injectable so the tests are stable. */
   now?: number;
 }): PortfolioHeadline {
   const { view, report, metric, currency } = args;
   const growth = view.brief.growth;
-  const words = resultWords(metric.kpiField, metric.resultLabel);
+  const words = resultNouns(metric.kpiField, metric.resultLabel);
   const days = coveredDays(growth, createdAtOf(report));
   const status = statusSentence(growth, words, currency, days);
   const items = report?.latest_items ?? [];
@@ -613,7 +638,7 @@ export function attributedRead(headline: PortfolioHeadline): AttributedRead | nu
   return { ago: read.ago, sentence: read.sentence, figure: read.figure };
 }
 
-/** One of the anchor's two windows: "semana 21–27 sep: 45.69". */
+/** One of the anchor's two windows: "week of Sep 21–27: 45.69". */
 export type AnchorWindow = {
   which: 'after' | 'before';
   label: string;
@@ -627,13 +652,13 @@ export type PortfolioAnchor = {
   figure: Omit<HeadlineFigure, 'text'>;
   /** ok under the target, warn over it, none without one or without a cost. */
   state: 'ok' | 'warn' | 'none';
-  /** "MXN por lead" */
+  /** "MXN per lead" */
   unit: string;
-  /** "meta 35.00" / "sin meta" — the target, clickable into Manage. */
+  /** "target 35.00" / "no target" — the target, clickable into Manage. */
   target: string;
   /** "+31%" / "−12%" / "en la meta" — null without a cost or a target. */
   vsTarget: string | null;
-  /** "sin leads en 14 días" when there is no cost to show. */
+  /** "no leads in 14 days" when there is no cost to show. */
   empty: string | null;
   /** The range the date picker selected and the one before it, newest first. */
   windows: AnchorWindow[];
@@ -665,18 +690,18 @@ export function anchorOf(args: {
       which,
       label: totals.short,
       cost: totals.cost,
-      text: totals.cost == null ? `sin ${words.many}` : formatCurrency(totals.cost, null),
+      text: totals.cost == null ? `no ${words.many}` : formatCurrency(totals.cost, null),
     });
   }
   return {
     value: cost == null ? '—' : formatCurrency(cost, null),
     figure: { key: 'anchor.cost', raw: cost, currency, window: growth.window, unit: 'currency' },
     state: pct == null ? 'none' : pct > 0 ? 'warn' : 'ok',
-    unit: code ? `${code} por ${words.one}` : `por ${words.one}`,
-    target: target == null ? 'sin meta' : `meta ${formatCurrency(target, null)}`,
+    unit: code ? `${code} per ${words.one}` : `per ${words.one}`,
+    target: target == null ? 'no target' : `target ${formatCurrency(target, null)}`,
     vsTarget:
-      pct == null ? null : pct === 0 ? 'en la meta' : `${pct > 0 ? '+' : '−'}${Math.abs(pct)}%`,
-    empty: cost == null ? `sin ${words.many} en ${days} ${days === 1 ? 'día' : 'días'}` : null,
+      pct == null ? null : pct === 0 ? 'on target' : `${pct > 0 ? '+' : '−'}${Math.abs(pct)}%`,
+    empty: cost == null ? `no ${words.many} in ${dayWords(days)}` : null,
     windows,
   };
 }
@@ -696,9 +721,9 @@ export type ModuleTile = {
 };
 
 const PRIOR_SHORT: Record<BriefGrowth['window'], string> = {
-  d3: 'los 3 días anteriores',
-  d7: 'la semana anterior',
-  d14: 'las 2 semanas anteriores',
+  d3: 'the 3 days before',
+  d7: 'the week before',
+  d14: 'the 2 weeks before',
 };
 
 const signedPct = (ratio: number): string =>
@@ -733,9 +758,9 @@ export function adsetsOnTargetTile(args: {
     .sort((a, b) => a.cost - b.cost);
   const best = measured[0];
   const worst = measured.length > 1 ? measured[measured.length - 1] : undefined;
-  const bestLine = best ? `mejor ${best.name} ${formatCurrency(best.cost, null)}` : null;
-  const worstLine = worst ? `peor ${worst.name} ${formatCurrency(worst.cost, null)}` : null;
-  const base = { key: 'adsets', label: 'Conjuntos en meta' } as const;
+  const bestLine = best ? `best ${best.name} ${formatCurrency(best.cost, null)}` : null;
+  const worstLine = worst ? `worst ${worst.name} ${formatCurrency(worst.cost, null)}` : null;
+  const base = { key: 'adsets', label: 'Ad sets on target' } as const;
   if (items.length === 0) {
     return {
       ...base,
@@ -747,7 +772,7 @@ export function adsetsOnTargetTile(args: {
         window: args.window,
         unit: 'count',
       },
-      sub: ['sin conjuntos puntuados todavía'],
+      sub: ['no ad sets scored yet'],
       detail: null,
       state: 'none',
     };
@@ -763,7 +788,7 @@ export function adsetsOnTargetTile(args: {
         window: args.window,
         unit: 'count',
       },
-      sub: ['sin meta'],
+      sub: ['no target'],
       detail: bestLine,
       state: 'none',
     };
@@ -771,7 +796,7 @@ export function adsetsOnTargetTile(args: {
   const on = measured.filter((row) => row.cost <= target).length;
   return {
     ...base,
-    value: `${count(on)} de ${count(items.length)}`,
+    value: `${count(on)} of ${count(items.length)}`,
     figure: {
       key: 'tiles.adsets-on-target',
       raw: on,
@@ -779,7 +804,7 @@ export function adsetsOnTargetTile(args: {
       window: args.window,
       unit: 'count',
     },
-    sub: [bestLine ?? `sin ${measured.length === 0 ? 'costo medido' : 'mejor'}`],
+    sub: [bestLine ?? 'no measured cost'],
     detail: worstLine,
     state:
       measured.length === 0 ? 'none' : on === 0 ? 'bad' : on * 2 >= items.length ? 'ok' : 'warn',
@@ -822,10 +847,10 @@ export function relevantTiles(args: {
       value: spend.value,
       figure: spend.figure,
       sub: [
-        `${formatCurrency(growth.spend / days, currency)}/día · `,
+        `${formatCurrency(growth.spend / days, currency)}/day · `,
         {
           setting: 'budget',
-          text: plan ? `plan ${formatCurrency(plan, currency)}` : 'sin plan diario',
+          text: plan ? `plan ${formatCurrency(plan, currency)}` : 'no daily plan',
         },
       ],
       detail: finite(growth.deltas.spend)
@@ -847,10 +872,10 @@ export function relevantTiles(args: {
         finite(growth.deltas.results)
           ? `${signedPct(growth.deltas.results)} vs ${PRIOR_SHORT[growth.window]}`
           : n === 0 && growth.spend > 0
-            ? `${formatCurrency(growth.spend, currency)} sin resultado`
-            : 'sin periodo anterior',
+            ? `${formatCurrency(growth.spend, currency)} with no result`
+            : 'no prior period',
       ],
-      detail: needed != null ? `${count(needed)} a la meta con este gasto` : null,
+      detail: needed != null ? `${count(needed)} at target for this spend` : null,
       state: results.state,
     });
   }
@@ -865,11 +890,11 @@ export function relevantTiles(args: {
       value: decisions.value,
       figure: decisions.figure,
       sub: [decisions.sub],
-      // Only beside a decision: "nada espera tu decisión · 1 oportunidad abierta" contradicts
+      // Only beside a decision: "nothing waits for your decision · 1 open opportunity" contradicts
       // itself when the one candidate sits under the impact floor.
       detail:
         headline.decisions.waiting > 0 && open > 0
-          ? `${open} ${open === 1 ? 'oportunidad abierta' : 'oportunidades abiertas'}`
+          ? `${open} open ${open === 1 ? 'opportunity' : 'opportunities'}`
           : null,
       state: decisions.state,
     });

@@ -43,30 +43,30 @@ describe('FORMULARIOS — the header names the mode, the freshness and every fac
     expect(header.name).toBe('Lead forms portfolio');
     expect(header.mode).toEqual({ label: 'Autopilot', tone: 'good' });
     expect(header.freshness?.stale).toBe(false);
-    expect(header.freshness?.text).toMatch(/^Actualizado 25 sept?\.?, 1:03 p\.?\s?m\.?$/);
-    expect(header.adsets).toBe('9 conjuntos');
+    expect(header.freshness?.text).toBe('Updated Sep 25, 1:03 PM');
+    expect(header.adsets).toBe('9 ad sets');
   });
 
   it('lists the fixed facts as chips, objective first, each opening its Manage field', () => {
     expect(header.chips.map((c) => [c.setting, c.label, c.value])).toEqual([
-      ['objective', 'Objetivo', 'leads'],
-      ['budget', 'Presupuesto', '324 MXN/día · sigue al gasto'],
-      ['target', 'Meta', '35.00 MXN / lead'],
-      ['window', 'Ventana', '14 días'],
-      ['strategy', 'Estrategia', 'Balanced'],
+      ['objective', 'Objective', 'leads'],
+      ['budget', 'Budget', '324 MXN/day · follows spend'],
+      ['target', 'Target', '35.00 MXN / lead'],
+      ['window', 'Window', '14 days'],
+      ['strategy', 'Strategy', 'Balanced'],
     ]);
   });
 
   it('offers the stop while autopilot runs', () => {
-    expect(header.secondary).toEqual({ kind: 'stop', label: 'Detener autopilot' });
+    expect(header.secondary).toEqual({ kind: 'stop', label: 'Stop autopilot' });
   });
 });
 
 describe('Prueba — Recommend mode offers the review instead of the stop', () => {
   const header = read(prueba);
   it('names the mode and the review', () => {
-    expect(header.mode).toEqual({ label: 'Recomienda', tone: 'line' });
-    expect(header.secondary).toEqual({ kind: 'review', label: 'Revisar movimientos' });
+    expect(header.mode).toEqual({ label: 'Recommend', tone: 'line' });
+    expect(header.secondary).toEqual({ kind: 'review', label: 'Review moves' });
   });
 });
 
@@ -79,8 +79,8 @@ describe('the goal mismatch in the header', () => {
       bought: null,
       measures: 'conversations',
       actions: [
-        { setting: 'objective', label: 'Cambiar objetivo', primary: true },
-        { setting: 'roster', label: 'Quitar estos conjuntos', primary: false },
+        { setting: 'objective', label: 'Change objective', primary: true },
+        { setting: 'roster', label: 'Remove these ad sets', primary: false },
       ],
     });
   });
@@ -110,14 +110,14 @@ describe('the edges the four bodies do not reach', () => {
     const body = structuredClone(formularios) as unknown as { portfolio: Record<string, unknown> };
     body.portfolio.stale_for_days = 49;
     body.portfolio.last_actual_cycle_at = '2026-08-07T19:03:03.393+00:00';
-    expect(read(body).freshness).toEqual({ text: 'último ciclo hace 49 días', stale: true });
+    expect(read(body).freshness).toEqual({ text: 'last cycle 49 days ago', stale: true });
   });
 
   it('a portfolio that never had a cycle says so', () => {
     const body = structuredClone(formularios) as unknown as { portfolio: Record<string, unknown> };
     body.portfolio.stale_for_days = 3;
     body.portfolio.last_actual_cycle_at = null;
-    expect(read(body).freshness).toEqual({ text: 'sin ciclo en 3 días', stale: true });
+    expect(read(body).freshness).toEqual({ text: 'no cycle in 3 days', stale: true });
   });
 
   it('an unknown currency prints bare figures, never a dollar sign', () => {
@@ -130,19 +130,21 @@ describe('the edges the four bodies do not reach', () => {
     const body = structuredClone(formularios) as unknown as { portfolio: Record<string, unknown> };
     body.portfolio.autopilot_paused = true;
     const header = read(body);
-    expect(header.mode).toEqual({ label: 'Detenido', tone: 'warn' });
-    expect(header.secondary).toEqual({ kind: 'resume', label: 'Reanudar autopilot' });
+    expect(header.mode).toEqual({ label: 'Stopped', tone: 'warn' });
+    expect(header.secondary).toEqual({ kind: 'resume', label: 'Resume autopilot' });
   });
 
   it('a fixed budget says so, and a missing one says it is unset', () => {
     const fixed = structuredClone(formularios) as unknown as { portfolio: Record<string, unknown> };
     fixed.portfolio.budget_source = 'fixed';
-    expect(read(fixed).chips.find((c) => c.setting === 'budget')?.value).toBe('324 MXN/día · fijo');
+    expect(read(fixed).chips.find((c) => c.setting === 'budget')?.value).toBe(
+      '324 MXN/day · fixed',
+    );
     const none = structuredClone(formularios) as unknown as { portfolio: Record<string, unknown> };
     none.portfolio.daily_total = null;
     none.portfolio.cpa_target = null;
     const chips = read(none).chips;
-    expect(chips.find((c) => c.setting === 'budget')?.value).toBe('sin fijar');
-    expect(chips.find((c) => c.setting === 'target')?.value).toBe('sin fijar');
+    expect(chips.find((c) => c.setting === 'budget')?.value).toBe('not set');
+    expect(chips.find((c) => c.setting === 'target')?.value).toBe('not set');
   });
 });

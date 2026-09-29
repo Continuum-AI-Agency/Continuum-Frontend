@@ -20,7 +20,10 @@ export type BeforeAfterStripProps = {
 };
 
 const count = (n: number): string =>
-  new Intl.NumberFormat('es-MX', { maximumFractionDigits: 0 }).format(n);
+  new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(n);
+
+const ifThePausesLand = (pauses: number): string =>
+  pauses === 1 ? 'If the pause lands' : `If the ${pauses} pauses land`;
 
 export function BeforeAfterStrip({
   model,
@@ -39,12 +42,12 @@ export function BeforeAfterStrip({
       <p>
         <span data-testid="before-after-cycle">
           {lastCycle
-            ? `Último ciclo, ${lastCycle.when}: ${
+            ? `Last cycle, ${lastCycle.when}: ${
                 lastCycle.proposed
                   ? `${lastCycle.proposed}; ${lastCycle.applied}.`
-                  : 'sin propuestas.'
+                  : 'nothing proposed.'
               }`
-            : 'Sin ciclo todavía.'}
+            : 'No cycle yet.'}
         </span>
         {projection ? (
           <>
@@ -52,20 +55,13 @@ export function BeforeAfterStrip({
             <span data-testid="before-after-projection">
               {projection.cost == null ? (
                 <>
-                  Si se{' '}
-                  {projection.pauses === 1
-                    ? 'aplica la pausa'
-                    : `aplican las ${projection.pauses} pausas`}
-                  , los {count(projection.remaining)} conjuntos restantes no compraron {words.many}{' '}
-                  en esta ventana.
+                  {ifThePausesLand(projection.pauses)}, the {count(projection.remaining)} remaining
+                  ad sets bought no {words.many} in this window.
                 </>
               ) : (
                 <>
-                  Si se{' '}
-                  {projection.pauses === 1
-                    ? 'aplica la pausa'
-                    : `aplican las ${projection.pauses} pausas`}
-                  , el costo proyectado con los {count(projection.remaining)} conjuntos restantes es{' '}
+                  {ifThePausesLand(projection.pauses)}, the projected cost with the{' '}
+                  {count(projection.remaining)} remaining ad sets is{' '}
                   <span
                     className="font-mono text-foreground tabular-nums"
                     {...figureProps(
@@ -78,7 +74,7 @@ export function BeforeAfterStrip({
                     {formatCurrency(projection.cost, currency)}
                   </span>
                   {projection.vsTarget && target != null
-                    ? `, ${projection.vsTarget} el objetivo de ${formatCurrency(target, currency)}`
+                    ? `, ${projection.vsTarget} the target of ${formatCurrency(target, currency)}`
                     : ''}
                   .
                 </>
