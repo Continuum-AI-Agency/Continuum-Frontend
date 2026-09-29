@@ -14,12 +14,18 @@ mock.module('@/components/forge/BrandColorField', () => ({
 mock.module('@/components/organic/primitives/MediaSelectPopover', () => ({
   MediaSelectPopover: ({ anchor }: { anchor: React.ReactNode }) => anchor,
 }));
+const uploadMediaAsset = mock(async () => ({ assetId: 'asset-1', versionId: 'version-1' }));
+const mediaUpload = { ...(await import('@/lib/library/uploadMediaAsset')) };
+mock.module('@/lib/library/uploadMediaAsset', () => ({ ...mediaUpload, uploadMediaAsset }));
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { TemplateSlotEdit, TemplateVariable } from '@/lib/library/templateSources';
 import { VariableEditor } from './VariableEditor';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  uploadMediaAsset.mockClear();
+});
 
 function variable(overrides: Partial<TemplateVariable>): TemplateVariable {
   return {
@@ -61,6 +67,37 @@ function renderEditor(onSave: (edits: TemplateSlotEdit[]) => Promise<boolean>) {
 }
 
 describe('VariableEditor', () => {
+  test('a missing image default accepts a file dropped on its own row', async () => {
+    const onSave = mock(async (_edits: TemplateSlotEdit[]) => true);
+    render(
+      <VariableEditor
+        brandId="22222222-2222-4222-8222-222222222222"
+        variables={[variable({ key: 'Hero', label: 'Hero', kind: 'image', charBudget: null })]}
+        savedDefaults={{}}
+        parseState="parsed"
+        saving={false}
+        onSave={onSave}
+      />,
+    );
+    const target = screen.getByRole('group', { name: 'Default image for Hero' });
+    const file = new File(['image'], 'hero.png', { type: 'image/png' });
+    const dataTransfer = { types: ['Files'], files: [file] };
+    fireEvent.dragOver(target, { dataTransfer });
+    fireEvent.drop(target, { dataTransfer });
+    await waitFor(() =>
+      expect(uploadMediaAsset).toHaveBeenCalledWith({
+        file,
+        brandId: '22222222-2222-4222-8222-222222222222',
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith([
+        { slotKey: 'Hero', defaultValue: { assetId: 'asset-1', versionId: 'version-1' } },
+      ]),
+    );
+  });
+
   test('one row per variable, no table, with saved defaults as the Default', () => {
     const { container } = renderEditor(async () => true);
     expect(container.querySelector('table')).toBeNull();
@@ -133,7 +170,15 @@ describe('VariableEditor', () => {
     render(
       <VariableEditor
         brandId="22222222-2222-4222-8222-222222222222"
-        variables={[variable({ key: 'image__rosa', label: 'ROSA', kind: 'image', charBudget: null, exposed: false })]}
+        variables={[
+          variable({
+            key: 'image__rosa',
+            label: 'ROSA',
+            kind: 'image',
+            charBudget: null,
+            exposed: false,
+          }),
+        ]}
         savedDefaults={{}}
         parseState="parsed"
         saving={false}
@@ -144,7 +189,9 @@ describe('VariableEditor', () => {
     const ask = screen.getByRole('switch', { name: 'Ask for it' });
     expect(ask.getAttribute('aria-checked')).toBe('false');
     const required = screen.getByRole('switch', { name: 'Required' });
-    expect(required.getAttribute('aria-disabled') ?? required.getAttribute('data-disabled')).not.toBeNull();
+    expect(
+      required.getAttribute('aria-disabled') ?? required.getAttribute('data-disabled'),
+    ).not.toBeNull();
 
     fireEvent.click(ask);
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));

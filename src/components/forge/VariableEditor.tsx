@@ -84,12 +84,50 @@ function DefaultValueControl({
 }) {
   const [picking, setPicking] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [draggingFile, setDraggingFile] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  const uploadDefaultFile = async (file: File) => {
+    const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
+    if (!format.accepted || format.originalKind !== variable.kind) {
+      toast.error(`Choose an ${variable.kind === 'image' ? 'image' : 'video'} file.`);
+      return;
+    }
+    setUploading(true);
+    try {
+      const uploaded = await uploadMediaAsset({ file, brandId });
+      onChange({ assetId: uploaded.assetId, versionId: uploaded.versionId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not upload this file.');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   if (variable.kind === 'image' || variable.kind === 'video') {
     const pinned = value as { assetId?: string } | null;
     return (
-      <div className="flex flex-wrap items-center gap-2">
+      <fieldset
+        className={cn(
+          'flex flex-wrap items-center gap-2 rounded border border-dashed p-2',
+          draggingFile ? 'border-primary bg-primary/10' : 'border-input',
+        )}
+        aria-label={`Default ${variable.kind} for ${label}`}
+        onDragOver={(event) => {
+          if (!event.dataTransfer.types.includes('Files') || uploading) return;
+          event.preventDefault();
+          setDraggingFile(true);
+        }}
+        onDragLeave={() => setDraggingFile(false)}
+        onDrop={(event) => {
+          setDraggingFile(false);
+          const file = event.dataTransfer.files[0];
+          if (!file || uploading) return;
+          event.preventDefault();
+          void uploadDefaultFile(file);
+        }}
+      >
+        <span className="text-xs text-muted-foreground">Drop {variable.kind} here</span>
         <MediaSelectPopover
           brandProfileId={brandId}
           open={picking}
@@ -121,24 +159,10 @@ function DefaultValueControl({
           accept={variable.kind === 'video' ? 'video/*' : 'image/*'}
           aria-label={`Upload ${label} default`}
           className="sr-only"
-          onChange={async (event) => {
+          onChange={(event) => {
             const file = event.target.files?.[0];
             event.target.value = '';
-            if (!file) return;
-            const format = classifyLibraryFile({ fileName: file.name, mimeType: file.type });
-            if (!format.accepted || format.originalKind !== variable.kind) {
-              toast.error(`Choose an ${variable.kind === 'image' ? 'image' : 'video'} file.`);
-              return;
-            }
-            setUploading(true);
-            try {
-              const uploaded = await uploadMediaAsset({ file, brandId });
-              onChange({ assetId: uploaded.assetId, versionId: uploaded.versionId });
-            } catch (error) {
-              toast.error(error instanceof Error ? error.message : 'Could not upload this file.');
-            } finally {
-              setUploading(false);
-            }
+            if (file) void uploadDefaultFile(file);
           }}
         />
         <Button
@@ -171,7 +195,7 @@ function DefaultValueControl({
             </Button>
           </>
         ) : null}
-      </div>
+      </fieldset>
     );
   }
 

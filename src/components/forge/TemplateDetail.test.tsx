@@ -163,14 +163,17 @@ const healTemplateFonts = mock(async (_brandId: string, _assetId: string) => ({
   stillMissing: [],
 }));
 const repairTemplateText = mock(async (..._args: unknown[]) => ({
-  filename: 'repaired.aep', checksum: 'a'.repeat(64), slotKeys: ['text__headline'],
+  filename: 'repaired.aep',
+  checksum: 'a'.repeat(64),
+  slotKeys: ['text__headline'],
   inlineBase64: 'YWJj',
 }));
 const uploadNewAssetVersion = mock(async (..._args: unknown[]) => ({
   versionId: '99999999-9999-4999-8999-999999999999',
 }));
 const previewTemplateRebind = mock(async (..._args: unknown[]) => ({
-  checksum: 'b'.repeat(64), requiresReview: false,
+  checksum: 'b'.repeat(64),
+  requiresReview: false,
   slots: [{ slotKey: 'text__headline', kind: 'text', status: 'bound' }],
 }));
 const confirmTemplateRebind = mock(async (..._args: unknown[]) => undefined);
@@ -209,10 +212,16 @@ mock.module('@/lib/library/templateSources', () => ({
   }),
   fetchRenderWorkspaces: async () => workspaces,
   fetchTemplateFonts: async () => fontReadiness,
-  editableTemplateFonts: async () => [{
-    id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', brandId: BRAND,
-    family: 'Geneva', style: 'normal', format: 'ttf', postScriptName: 'Geneva',
-  }],
+  editableTemplateFonts: async () => [
+    {
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      brandId: BRAND,
+      family: 'Geneva',
+      style: 'normal',
+      format: 'ttf',
+      postScriptName: 'Geneva',
+    },
+  ],
   pushTemplateFonts,
   saveTemplateVariables: async () => undefined,
   sendTemplateToForge,
@@ -234,10 +243,24 @@ mock.module('@/lib/library/templateSources', () => ({
   repairTemplateText,
   fetchTemplateRun: async () => null,
   fetchTemplateMappingReview: async () => ({
-    state: 'ready', identityAvailable: true, slotCount: 1, matchedSlots: 1,
-    fields: [{ key: 'headline', label: 'Headline', kind: 'text', slotKey: 'Headline',
-      slotName: 'Headline', comps: ['Main 1x1'], sample: 'Hello', match: 'layer_id' }],
-    unmatchedSlots: [], ignoredSlots: [],
+    state: 'ready',
+    identityAvailable: true,
+    slotCount: 1,
+    matchedSlots: 1,
+    fields: [
+      {
+        key: 'headline',
+        label: 'Headline',
+        kind: 'text',
+        slotKey: 'Headline',
+        slotName: 'Headline',
+        comps: ['Main 1x1'],
+        sample: 'Hello',
+        match: 'layer_id',
+      },
+    ],
+    unmatchedSlots: [],
+    ignoredSlots: [],
   }),
   healTemplateFonts,
   fetchTemplateEvents: async () => [
@@ -504,7 +527,7 @@ describe('TemplateDetail', () => {
     );
   });
 
-  test('missing AEP footage names each file and opens its repair row', async () => {
+  test('missing AEP footage has a named drop target beside the preview', async () => {
     renderDetail(undefined, {
       ...SOURCE,
       parse: {
@@ -512,12 +535,14 @@ describe('TemplateDetail', () => {
         missingFootage: [{ name: 'Hero video', file: 'Footage/hero.mov' }],
       },
     });
-    expect(screen.getByText(/This template package is missing 1 media file/)).toBeTruthy();
-    expect(screen.getByText(/Hero video — Footage\/hero.mov/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Repair missing media' }));
-    expect(screen.getByRole('tab', { name: 'Source revision' }).getAttribute('aria-selected')).toBe(
-      'true',
-    );
+    const repair = screen.getByRole('region', { name: 'Missing media repair' });
+    expect(within(repair).getByText(/1 missing media file/)).toBeTruthy();
+    expect(within(repair).getByText('Hero video')).toBeTruthy();
+    expect(within(repair).getByText('Footage/hero.mov')).toBeTruthy();
+    expect(repair.querySelector('input[type="file"]')).toBeTruthy();
+    expect(
+      screen.getByRole('tab', { name: 'Source revision' }).getAttribute('aria-selected'),
+    ).not.toBe('true');
   });
 
   test('reviews a dry plan before installing held faces', async () => {
@@ -609,31 +634,105 @@ describe('TemplateDetail', () => {
   });
 
   test('a moved text box becomes a reviewed AEP revision, not just a preview offset', async () => {
-    const source = { ...SOURCE, parse: { ...SOURCE.parse!, slots: [{
-      key: 'text__headline', name: 'Headline', kind: 'text' as const,
-      origin: 'direct' as const, driver: 'static' as const,
-      comps: ['Main 1x1'], layerIds: [25],
-      instances: [{ compId: 3, comp: 'Main 1x1', layerId: 25,
-        box: [100, 100, 300, 200], compSize: [1080, 1080] }],
-    }] } } as TemplateSource;
+    const source = {
+      ...SOURCE,
+      parse: {
+        ...SOURCE.parse!,
+        slots: [
+          {
+            key: 'text__headline',
+            name: 'Headline',
+            kind: 'text' as const,
+            origin: 'direct' as const,
+            driver: 'static' as const,
+            comps: ['Main 1x1'],
+            layerIds: [25],
+            instances: [
+              {
+                compId: 3,
+                comp: 'Main 1x1',
+                layerId: 25,
+                box: [100, 100, 300, 200],
+                compSize: [1080, 1080],
+              },
+            ],
+          },
+        ],
+      },
+    } as TemplateSource;
     renderDetail(undefined, source);
     fireEvent.click(await screen.findByRole('button', { name: 'Repair text' }));
     const box = screen.getByRole('button', { name: 'Move Headline' });
     fireEvent.keyDown(box, { key: 'ArrowRight' });
-    await screen.findByRole('option', { name: 'Geneva · normal' });
-    fireEvent.change(await screen.findByLabelText('Font for Headline'), {
-      target: { value: 'Geneva' },
-    });
+    const font = await screen.findByRole('button', { name: 'Geneva · normal' });
+    const data: Record<string, string> = {};
+    const dataTransfer = {
+      types: ['application/x-continuum-template-font'],
+      setData: (type: string, value: string) => {
+        data[type] = value;
+      },
+      getData: (type: string) => data[type] ?? '',
+      effectAllowed: 'copy',
+      dropEffect: 'copy',
+    };
+    fireEvent.dragStart(font, { dataTransfer });
+    fireEvent.dragOver(box, { dataTransfer });
+    fireEvent.drop(box, { dataTransfer });
     fireEvent.click(screen.getByRole('button', { name: 'Save text layout' }));
     await waitFor(() => expect(confirmTemplateRebind).toHaveBeenCalledTimes(1));
     expect(repairTemplateText).toHaveBeenCalledWith(ASSET, {
-      brandId: BRAND, expectedVersionId: SOURCE.versionId,
+      brandId: BRAND,
+      expectedVersionId: SOURCE.versionId,
       moves: [{ compId: 3, layerId: 25, dx: 1, dy: 0, dw: 0, dh: 0, font: 'Geneva' }],
     });
     expect(uploadNewAssetVersion.mock.calls[0]?.[0]).toMatchObject({
-      brandId: BRAND, assetId: ASSET, baseVersionId: SOURCE.versionId,
+      brandId: BRAND,
+      assetId: ASSET,
+      baseVersionId: SOURCE.versionId,
     });
     expect(previewTemplateRebind).toHaveBeenCalledTimes(1);
+  });
+
+  test('keeps a saved but unapplied text revision visible after rebind review fails', async () => {
+    const source = {
+      ...SOURCE,
+      parse: {
+        ...SOURCE.parse!,
+        slots: [
+          {
+            key: 'text__headline',
+            name: 'Headline',
+            kind: 'text' as const,
+            origin: 'direct' as const,
+            driver: 'static' as const,
+            comps: ['Main 1x1'],
+            layerIds: [25],
+            instances: [
+              {
+                compId: 3,
+                comp: 'Main 1x1',
+                layerId: 25,
+                box: [100, 100, 300, 200],
+                compSize: [1080, 1080],
+              },
+            ],
+          },
+        ],
+      },
+    } as TemplateSource;
+    previewTemplateRebind.mockRejectedValueOnce(new Error('Review is unavailable'));
+    renderDetail(undefined, source);
+    fireEvent.click(await screen.findByRole('button', { name: 'Repair text' }));
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Move Headline' }), { key: 'ArrowRight' });
+    fireEvent.click(screen.getByRole('button', { name: 'Save text layout' }));
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Text repair saved, not applied yet',
+    );
+    expect(screen.getByRole('alert').textContent).toContain('Review is unavailable');
+    expect(confirmTemplateRebind).not.toHaveBeenCalled();
+    expect(
+      (screen.getByRole('button', { name: 'Preview changes' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
   });
 
   test('switching tabs keeps an unsaved variable edit', async () => {

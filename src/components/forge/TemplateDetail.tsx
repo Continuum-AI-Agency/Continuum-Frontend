@@ -3,12 +3,12 @@
 import {
   type ApiRenderJob,
   type FontInventoryRow,
+  publicationCompsOfParse,
   readableLayerName,
   type TemplateFontCandidatesResponse,
   type TemplateFontPushResponse,
   type TemplateFontReadiness,
   type TemplateSourceSummary,
-  publicationCompsOfParse,
   templateNameProblem,
   UNTITLED_TEMPLATE_NAME,
 } from '@continuum/contracts';
@@ -52,7 +52,12 @@ import { SourceRebindPanel } from '@/components/forge/SourceRebindPanel';
 import { TemplateActivity, templateEventsKey } from '@/components/forge/TemplateActivity';
 import { TemplateMappingReviewPanel } from '@/components/forge/TemplateMappingReview';
 import { TemplateRenders } from '@/components/forge/TemplateRenders';
-import { TemplateTextRepairCanvas, type TextMove, textMoveKey } from '@/components/forge/TemplateTextRepairCanvas';
+import {
+  TEXT_REPAIR_FONT_MIME,
+  TemplateTextRepairCanvas,
+  type TextMove,
+  textMoveKey,
+} from '@/components/forge/TemplateTextRepairCanvas';
 import { useForgeRun } from '@/components/forge/useForgeRun';
 import { VariableEditor } from '@/components/forge/VariableEditor';
 import { VariantsPanel } from '@/components/forge/VariantsPanel';
@@ -75,18 +80,18 @@ import { toast } from '@/components/ui/toast-imperative';
 import {
   advanceTemplateForgeBundle,
   advanceTemplateForgeRun,
+  confirmTemplateRebind,
   editableTemplateFonts,
   type ForgeLadderAction,
   fetchTemplateFontCandidates,
-  fetchTemplateForgeBundle,
   fetchTemplateFonts,
+  fetchTemplateForgeBundle,
   fetchTemplateMappingReview,
   fetchTemplateVariables,
   healTemplateFonts,
-  confirmTemplateRebind,
   previewTemplateRebind,
-  repairTemplateText,
   pushTemplateFonts,
+  repairTemplateText,
   saveTemplateVariables,
   sendTemplateToForge,
   setTemplateFontAlias,
@@ -235,7 +240,8 @@ export function TemplateDetail({
     queryKey: bundleKey,
     queryFn: () => fetchTemplateForgeBundle(brandId, assetId),
     enabled: Boolean(source.forgeRunId && multiDelivery),
-    refetchInterval: (query) => query.state.data?.activation?.state === 'published' ? false : 5000,
+    refetchInterval: (query) =>
+      query.state.data?.activation?.state === 'published' ? false : 5000,
     retry: false,
   });
   const [bundleBusy, setBundleBusy] = useState<string | null>(null);
@@ -247,6 +253,12 @@ export function TemplateDetail({
   const [formatId, setFormatId] = useState<string | undefined>(undefined);
   const [editingText, setEditingText] = useState(false);
   const [textMoves, setTextMoves] = useState<Record<string, TextMove>>({});
+  const [selectedTextKey, setSelectedTextKey] = useState<string | null>(null);
+  const [savedTextRepair, setSavedTextRepair] = useState<{
+    versionId: string;
+    error: string;
+  } | null>(null);
+  const [savedMediaRepair, setSavedMediaRepair] = useState<string | null>(null);
   const [savingText, setSavingText] = useState(false);
   // Read once: the dropped file is handed off moments after mount, and the tab must not follow it.
   const [tab, setTab] = useState(revisionFile ? 'source' : 'variables');
@@ -272,48 +284,103 @@ export function TemplateDetail({
     queryFn: () => editableTemplateFonts(brandId),
     enabled: editingText,
   });
-  const textFrame = wireframeFrames(source.parse).find((frame) => frame.comp === format?.comp?.name) ??
+  const textFrame =
+    wireframeFrames(source.parse).find((frame) => frame.comp === format?.comp?.name) ??
     wireframeFrames(source.parse).find((frame) => frame.ratio === format?.ratio);
+  const editableTextBoxes =
+    textFrame?.boxes.filter((box) => box.kind === 'text' && box.instance) ?? [];
+  const selectedTextBox =
+    editableTextBoxes.find((box) => textMoveKey(box.instance!) === selectedTextKey) ??
+    editableTextBoxes[0];
+  const applyTextFont = (font: string) => {
+    const instance = selectedTextBox?.instance;
+    if (!instance) return;
+    const key = textMoveKey(instance);
+    setSelectedTextKey(key);
+    setTextMoves((previous) => {
+      const current = previous[key];
+      return {
+        ...previous,
+        [key]: {
+          compId: instance.compId,
+          layerId: instance.layerId,
+          dx: current?.dx ?? 0,
+          dy: current?.dy ?? 0,
+          dw: current?.dw ?? 0,
+          dh: current?.dh ?? 0,
+          ...(font ? { font } : {}),
+        },
+      };
+    });
+  };
   const saveTextMoves = async () => {
-    const moves = Object.values(textMoves).filter((move) =>
-      move.dx !== 0 || move.dy !== 0 || move.dw || move.dh || move.font);
+    const moves = Object.values(textMoves).filter(
+      (move) => move.dx !== 0 || move.dy !== 0 || move.dw || move.dh || move.font,
+    );
     if (!moves.length || savingText) return;
     setSavingText(true);
     let uploaded = false;
+    let applied = false;
+    let savedVersionId = '';
     try {
       const repaired = await repairTemplateText(assetId, {
-        brandId, expectedVersionId: source.versionId, moves,
+        brandId,
+        expectedVersionId: source.versionId,
+        moves,
       });
       const bytes = Uint8Array.from(atob(repaired.inlineBase64), (char) => char.charCodeAt(0));
       const file = new File([bytes], repaired.filename, {
         type: repaired.filename.toLowerCase().endsWith('.zip')
-          ? 'application/zip' : 'application/octet-stream',
+          ? 'application/zip'
+          : 'application/octet-stream',
       });
       const registered = await uploadNewAssetVersion({
-        brandId, assetId, baseVersionId: source.versionId, file,
+        brandId,
+        assetId,
+        baseVersionId: source.versionId,
+        file,
         note: `Repaired ${moves.length} text layer${moves.length === 1 ? '' : 's'} in Forge`,
       });
       if (!registered.versionId) throw new Error('The Library did not return the repaired version');
       uploaded = true;
+      savedVersionId = registered.versionId;
       const inspected = await previewTemplateRebind({
-        brandId, assetId, versionId: registered.versionId,
+        brandId,
+        assetId,
+        versionId: registered.versionId,
         expectedVersionId: source.versionId,
       });
       if (inspected.requiresReview || inspected.slots.some((slot) => slot.status === 'missing')) {
         throw new Error('The new AEP needs a source revision review before it can be used.');
       }
       await confirmTemplateRebind({
-        brandId, assetId, versionId: registered.versionId,
+        brandId,
+        assetId,
+        versionId: registered.versionId,
         expectedVersionId: source.versionId,
-        expectedChecksum: inspected.checksum, acceptMissing: false,
+        expectedChecksum: inspected.checksum,
+        acceptMissing: false,
       });
+      applied = true;
       setTextMoves({});
       setEditingText(false);
+      setSavedTextRepair(null);
       await onChanged();
-      toast.success('Text layout saved to a new AEP version. Build and test render it before publishing.');
+      toast.success(
+        'Text layout saved to a new AEP version. Build and test render it before publishing.',
+      );
     } catch (error) {
-      if (uploaded) setTab('source');
-      toast.error(error instanceof Error ? error.message : 'Could not save text layout');
+      const message = error instanceof Error ? error.message : 'Could not save text layout';
+      if (applied) {
+        toast.error(`Text repair is applied, but the view did not refresh: ${message}`);
+      } else if (uploaded) {
+        setSavedTextRepair({ versionId: savedVersionId, error: message });
+        setEditingText(false);
+        setTextMoves({});
+        setTab('source');
+      } else {
+        toast.error(message);
+      }
     } finally {
       setSavingText(false);
     }
@@ -671,6 +738,8 @@ export function TemplateDetail({
         await queryClient.invalidateQueries({ queryKey: ['template-editable-fonts', brandId] });
       }
       await Promise.all([reloadFonts(), onChanged()]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not add font files');
     } finally {
       setFontBusy(false);
     }
@@ -849,7 +918,7 @@ export function TemplateDetail({
 
   const buildDetail = (
     <div className="flex flex-col gap-3">
-      {(!run || run.state === 'failed' || (multiDelivery && !bundle)) ? (
+      {!run || run.state === 'failed' || (multiDelivery && !bundle) ? (
         <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <Input
@@ -896,39 +965,87 @@ export function TemplateDetail({
       {bundle ? (
         <div className="rounded-md border p-3 space-y-3">
           <p className="font-medium">Delivery templates</p>
-          <p className="text-sm text-muted-foreground">Each format has its own fields and render selection.</p>
+          <p className="text-sm text-muted-foreground">
+            Each format has its own fields and render selection.
+          </p>
           {bundle.children.map((child) => (
-            <div key={child.runId} className="flex flex-wrap items-center justify-between gap-2 border-t pt-2 text-sm">
+            <div
+              key={child.runId}
+              className="flex flex-wrap items-center justify-between gap-2 border-t pt-2 text-sm"
+            >
               <span>{child.compName}</span>
-              <span className="text-muted-foreground">{child.state.replaceAll('_', ' ')}{child.smoke && typeof child.smoke === 'object' && 'state' in child.smoke ? ` · test ${String(child.smoke.state)}` : ''}</span>
+              <span className="text-muted-foreground">
+                {child.state.replaceAll('_', ' ')}
+                {child.smoke && typeof child.smoke === 'object' && 'state' in child.smoke
+                  ? ` · test ${String(child.smoke.state)}`
+                  : ''}
+              </span>
               {child.smokeFiles?.map((url, index) => (
-                <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                <a
+                  key={url}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary underline"
+                >
                   View test {index + 1}
                 </a>
               ))}
-              {(child.state === 'needs_input' || child.state === 'failed') ? (
-                <Button type="button" size="xs" variant="outline" disabled={bundleBusy !== null}
-                  onClick={() => void onBundleAdvance('resume', { runId: child.runId })}>Retry build</Button>
+              {child.state === 'needs_input' || child.state === 'failed' ? (
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  disabled={bundleBusy !== null}
+                  onClick={() => void onBundleAdvance('resume', { runId: child.runId })}
+                >
+                  Retry build
+                </Button>
               ) : null}
             </div>
           ))}
           <div className="flex gap-2">
             {bundle.children.some((child) => child.state === 'draft_ready') ? (
-              <Button type="button" size="sm" disabled={bundleBusy !== null}
-                onClick={() => void onBundleAdvance('smoke')}>Test all formats</Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={bundleBusy !== null}
+                onClick={() => void onBundleAdvance('smoke')}
+              >
+                Test all formats
+              </Button>
             ) : null}
-            {bundle.children.every((child) => child.state === 'review_ready') && !bundle.approval ? (
-              <Button type="button" size="sm" disabled={bundleBusy !== null}
-                onClick={() => void onBundleAdvance('promotion-plan')}>Review publication</Button>
+            {bundle.children.every((child) => child.state === 'review_ready') &&
+            !bundle.approval ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={bundleBusy !== null}
+                onClick={() => void onBundleAdvance('promotion-plan')}
+              >
+                Review publication
+              </Button>
             ) : null}
             {bundle.approval && bundle.activation?.state !== 'published' ? (
-              <Button type="button" size="sm" disabled={bundleBusy !== null}
-                onClick={() => void onBundleAdvance('approve', { confirmation: bundle.approval?.confirmation })}>Publish all formats</Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={bundleBusy !== null}
+                onClick={() =>
+                  void onBundleAdvance('approve', { confirmation: bundle.approval?.confirmation })
+                }
+              >
+                Publish all formats
+              </Button>
             ) : null}
-            {bundle.activation?.state === 'published' ? <span className="text-sm text-success">All formats published</span> : null}
+            {bundle.activation?.state === 'published' ? (
+              <span className="text-sm text-success">All formats published</span>
+            ) : null}
           </div>
         </div>
-      ) : !multiDelivery && run ? <ForgeRunProgress run={run} /> : null}
+      ) : !multiDelivery && run ? (
+        <ForgeRunProgress run={run} />
+      ) : null}
       {!multiDelivery && mappingNeeds.length ? (
         <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2">
           <MappingQuestions
@@ -1131,12 +1248,19 @@ export function TemplateDetail({
         </div>
       </header>
 
-      <input ref={fontInput} type="file" multiple accept=".ttf,.otf"
-        className="sr-only" tabIndex={-1} aria-label="Font files"
+      <input
+        ref={fontInput}
+        type="file"
+        multiple
+        accept=".ttf,.otf"
+        className="sr-only"
+        tabIndex={-1}
+        aria-label="Font files"
         onChange={(event) => {
           void addFontFiles(Array.from(event.target.files ?? []));
           event.target.value = '';
-        }} />
+        }}
+      />
       {/* The picture on the left; the facts and then the checks on the right, the way a deployment
           reads. Stacked below lg. */}
       <div className="grid divide-y divide-border lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:divide-x lg:divide-y-0">
@@ -1152,22 +1276,41 @@ export function TemplateDetail({
                 onValueChange={setFormatId}
                 wellClassName="h-[min(60vh,40rem)]"
                 frame={(picked) => {
-                  if (editingText && source.parse) return {
-                    mode: 'estimate' as const,
-                    node: <TemplateTextRepairCanvas
-                      parse={source.parse}
-                      ratio={picked.ratio}
-                      comp={picked.comp?.name ?? null}
-                      backgroundUrl={rendered?.kind === 'image' &&
-                        renderedJob?.templateSource?.versionId === source.versionId
-                        ? rendered.url : undefined}
-                      moves={textMoves}
-                      onMove={(move) => setTextMoves((previous) => ({
-                        ...previous, [textMoveKey(move)]: move,
-                      }))}
-                    />,
-                    caption: 'Drag to move; drag the corner to resize. Arrow keys also work. A matching render supplies the backdrop; Save creates a new AEP version.',
-                  };
+                  if (editingText && source.parse)
+                    return {
+                      mode: 'estimate' as const,
+                      node: (
+                        <TemplateTextRepairCanvas
+                          parse={source.parse}
+                          ratio={picked.ratio}
+                          comp={picked.comp?.name ?? null}
+                          backgroundUrl={
+                            rendered?.kind === 'image' &&
+                            renderedJob?.templateSource?.versionId === source.versionId
+                              ? rendered.url
+                              : undefined
+                          }
+                          moves={textMoves}
+                          selectedKey={
+                            selectedTextBox?.instance
+                              ? textMoveKey(selectedTextBox.instance)
+                              : undefined
+                          }
+                          onSelect={setSelectedTextKey}
+                          availableFonts={editableFonts.flatMap((font) =>
+                            font.postScriptName ? [font.postScriptName] : [],
+                          )}
+                          onMove={(move) =>
+                            setTextMoves((previous) => ({
+                              ...previous,
+                              [textMoveKey(move)]: move,
+                            }))
+                          }
+                        />
+                      ),
+                      caption:
+                        'Drag text to move it, drag a corner to resize, or drop a font onto it. Arrow keys also work. Font appearance needs a test render after Save.',
+                    };
                   const estimate =
                     picked.ratio && drawnRatios.has(picked.ratio) ? (
                       <TemplateWireframe
@@ -1215,69 +1358,180 @@ export function TemplateDetail({
               </div>
             )}
           </TemplateMorph>
+          {missingFootage.length > 0 ? (
+            <section
+              className="rounded-md border border-destructive/50 p-3 text-xs"
+              aria-label="Missing media repair"
+            >
+              <p className="mb-2 font-semibold">
+                {missingFootage.length} missing media file{missingFootage.length === 1 ? '' : 's'} —
+                drop each replacement onto its named row.
+              </p>
+              <SourceRebindPanel
+                repairOnly
+                brandId={brandId}
+                assetId={assetId}
+                expectedVersionId={source.versionId}
+                aepName={source.parse?.filename}
+                missingFootage={missingFootage}
+                onNeedsReview={(versionId) => {
+                  setSavedMediaRepair(versionId);
+                  setTab('source');
+                }}
+                onConfirmed={async () => {
+                  await Promise.all([onChanged(), loadVariables()]);
+                  setSavedMediaRepair(null);
+                }}
+              />
+            </section>
+          ) : null}
           {(source.family === 'after_effects' || source.family === 'after_effects_package') &&
           source.parseState === 'parsed' ? (
             <div className="flex flex-wrap items-center gap-2">
               {editingText ? (
                 <>
-                  <Button type="button" size="sm" disabled={savingText ||
-                    !Object.values(textMoves).some((move) =>
-                      move.dx || move.dy || move.dw || move.dh || move.font)}
-                    onClick={() => void saveTextMoves()}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={
+                      savingText ||
+                      !Object.values(textMoves).some(
+                        (move) => move.dx || move.dy || move.dw || move.dh || move.font,
+                      )
+                    }
+                    onClick={() => void saveTextMoves()}
+                  >
                     {savingText ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
                     Save text layout
                   </Button>
-                  <Button type="button" size="sm" variant="outline" disabled={savingText}
-                    onClick={() => { setEditingText(false); setTextMoves({}); }}>Cancel</Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={savingText}
+                    onClick={() => {
+                      setEditingText(false);
+                      setTextMoves({});
+                    }}
+                  >
+                    Cancel
+                  </Button>
                 </>
               ) : (
-                <Button type="button" size="sm" variant="outline"
-                  disabled={!wireframeFrames(source.parse).some((frame) =>
-                    frame.boxes.some((box) => box.kind === 'text' && box.instance))}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={
+                    Boolean(savedTextRepair) ||
+                    !wireframeFrames(source.parse).some((frame) =>
+                      frame.boxes.some((box) => box.kind === 'text' && box.instance),
+                    )
+                  }
                   title="Move and resize measured text layers in the uploaded AEP"
-                  onClick={() => setEditingText(true)}>Repair text</Button>
+                  onClick={() => setEditingText(true)}
+                >
+                  Repair text
+                </Button>
               )}
             </div>
           ) : null}
-          {editingText ? <div className="flex flex-col gap-2 text-xs">
-            {textFrame?.boxes.filter((box) => box.kind === 'text' && box.instance)
-              .map((box) => {
-                const instance = box.instance!;
-                const key = textMoveKey(instance);
-                return <label key={key} className="flex items-center gap-2">
-                  <span className="min-w-32 truncate">{box.label}</span>
-                  <select className="min-w-0 flex-1 rounded border border-input bg-background p-1"
-                    aria-label={`Font for ${box.label}`}
-                    value={textMoves[key]?.font ?? ''}
-                    onChange={(event) => {
-                      const selectedFont = event.currentTarget.value;
-                      setTextMoves((previous) => {
-                        const current = previous[key];
-                        return { ...previous, [key]: {
-                          compId: instance.compId, layerId: instance.layerId,
-                          dx: current?.dx ?? 0, dy: current?.dy ?? 0,
-                          dw: current?.dw ?? 0, dh: current?.dh ?? 0,
-                          ...(selectedFont ? { font: selectedFont } : {}),
-                        } };
-                      });
-                    }}>
+          {editingText ? (
+            <div className="flex flex-col gap-2 text-xs">
+              <p className="text-muted-foreground">
+                Select text on the preview, then click a font here or drag it onto any text box.
+              </p>
+              {selectedTextBox ? (
+                <label className="flex items-center gap-2">
+                  <span className="min-w-32 truncate">{selectedTextBox.label}</span>
+                  <select
+                    className="min-w-0 flex-1 rounded border border-input bg-background p-1"
+                    aria-label={`Font for ${selectedTextBox.label}`}
+                    value={textMoves[textMoveKey(selectedTextBox.instance!)]?.font ?? ''}
+                    onChange={(event) => applyTextFont(event.currentTarget.value)}
+                  >
                     <option value="">Keep current font</option>
-                    {editableFonts.map((font) => <option key={font.id}
-                      value={font.postScriptName ?? ''}>
-                      {font.family} · {font.style}
-                    </option>)}
+                    {editableFonts.map((font) => (
+                      <option key={font.id} value={font.postScriptName ?? ''}>
+                        {font.family} · {font.style}
+                      </option>
+                    ))}
                   </select>
-                </label>;
-              })}
-            <Button type="button" size="xs" variant="outline" className="w-fit"
-              disabled={fontBusy} onClick={() => fontInput.current?.click()}>
-              Add font files
-            </Button>
-            {fontCandidates && fontCandidates.missing.length > 0 ? <FontSubstitutions
-              candidates={fontCandidates} busy={fontBusy}
-              onUpload={() => fontInput.current?.click()}
-              onApply={applyFontSubstitutions} /> : null}
-          </div> : null}
+                </label>
+              ) : null}
+              <fieldset
+                className="flex max-h-28 flex-wrap gap-1 overflow-y-auto rounded border border-dashed border-input p-2"
+                aria-label="Fonts available to drag onto text; drop font files here to add them"
+                onDragOver={(event) => {
+                  if (event.dataTransfer.types.includes('Files')) event.preventDefault();
+                }}
+                onDrop={(event) => {
+                  if (!event.dataTransfer.files.length) return;
+                  event.preventDefault();
+                  if (!fontBusy) void addFontFiles(Array.from(event.dataTransfer.files));
+                }}
+              >
+                {editableFonts.map((font) => (
+                  <button
+                    key={font.id}
+                    type="button"
+                    draggable
+                    className="cursor-grab rounded border border-input bg-background px-2 py-1 text-left hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:cursor-grabbing"
+                    title={`Drag onto text or click to apply to ${selectedTextBox?.label ?? 'selected text'}`}
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData(TEXT_REPAIR_FONT_MIME, font.postScriptName ?? '');
+                      event.dataTransfer.effectAllowed = 'copy';
+                    }}
+                    onClick={() => applyTextFont(font.postScriptName ?? '')}
+                  >
+                    {font.family} · {font.style}
+                  </button>
+                ))}
+                {editableFonts.length === 0 ? (
+                  <span className="text-muted-foreground">
+                    Drop .ttf or .otf files here, or use Add font files.
+                  </span>
+                ) : null}
+              </fieldset>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                className="w-fit"
+                disabled={fontBusy}
+                onClick={() => fontInput.current?.click()}
+              >
+                Add font files
+              </Button>
+              {fontCandidates && fontCandidates.missing.length > 0 ? (
+                <FontSubstitutions
+                  candidates={fontCandidates}
+                  busy={fontBusy}
+                  onUpload={() => fontInput.current?.click()}
+                  onApply={applyFontSubstitutions}
+                />
+              ) : null}
+            </div>
+          ) : null}
+          {savedTextRepair ? (
+            <div
+              role="alert"
+              className="rounded border border-warning/40 bg-warning/10 p-3 text-xs"
+            >
+              <strong>Text repair saved, not applied yet.</strong> The active template still uses
+              the previous AEP.
+              <p className="mt-1">{savedTextRepair.error}</p>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                className="mt-2"
+                onClick={() => setTab('source')}
+              >
+                Review saved version
+              </Button>
+            </div>
+          ) : null}
           {!rendered && source.parse && drawnRatios.size > 0 ? (
             <p className="text-xs text-muted-foreground">
               Quick layout check is ready from the uploaded template. The full test render verifies
@@ -1361,28 +1615,6 @@ export function TemplateDetail({
         <TemplateRenders brandId={brandId} templateKey={templateKey} formats={formats} />
       ) : null}
 
-      {missingFootage.length > 0 ? (
-        <section
-          className="mx-[var(--card-pad)] my-3 rounded-md border border-destructive/50 p-3 text-xs"
-          role="alert"
-        >
-          <p className="font-semibold">
-            This template package is missing {missingFootage.length} media file
-            {missingFootage.length === 1 ? '' : 's'}.
-          </p>
-          <p>Open Source revision to drop each missing file onto its repair row.</p>
-          <ul className="my-2 max-h-40 list-disc overflow-y-auto pl-4">
-            {missingFootage.map((item) => (
-              <li key={item.file}>
-                {item.name || item.file.split(/[\\/]/).pop()} — {item.file}
-              </li>
-            ))}
-          </ul>
-          <Button type="button" size="sm" variant="outline" onClick={() => setTab('source')}>
-            Repair missing media
-          </Button>
-        </section>
-      ) : null}
       {/* Every panel stays mounted while hidden: switching tabs must never drop an unsaved edit. */}
       <Tabs value={tab} onValueChange={setTab} className="gap-0">
         <TabsList
@@ -1438,12 +1670,15 @@ export function TemplateDetail({
             brandId={brandId}
             assetId={assetId}
             expectedVersionId={source.versionId}
+            suggestedVersionId={savedTextRepair?.versionId ?? savedMediaRepair ?? undefined}
             aepName={source.parse?.filename}
             missingFootage={missingFootage}
             initialFile={revisionFile}
             onInitialFileTaken={onRevisionTaken}
             onConfirmed={async () => {
               await Promise.all([onChanged(), loadVariables()]);
+              setSavedTextRepair(null);
+              setSavedMediaRepair(null);
             }}
           />
         </TabsContent>

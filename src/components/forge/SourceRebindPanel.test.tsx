@@ -64,6 +64,28 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('SourceRebindPanel', () => {
+  test('offers direct review of a saved Library head that is not active in the template', async () => {
+    render(
+      <SourceRebindPanel
+        brandId="44444444-4444-4444-8444-444444444444"
+        assetId="11111111-1111-4111-8111-111111111111"
+        expectedVersionId="22222222-2222-4222-8222-222222222222"
+        onConfirmed={async () => undefined}
+      />,
+    );
+    expect((await screen.findByRole('status')).textContent).toContain(
+      'saved but this template still uses',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Review newer version' }));
+    await waitFor(() =>
+      expect(preview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          versionId: '33333333-3333-4333-8333-333333333333',
+        }),
+      ),
+    );
+  });
+
   test('a media row drop repairs and rebinds the same template source', async () => {
     sourceFileName = 'campaign.zip';
     sourceSignedUrl = 'https://signed.test/campaign.zip';
@@ -83,6 +105,7 @@ describe('SourceRebindPanel', () => {
     try {
       const view = render(
         <SourceRebindPanel
+          repairOnly
           brandId="44444444-4444-4444-8444-444444444444"
           assetId="11111111-1111-4111-8111-111111111111"
           expectedVersionId="22222222-2222-4222-8222-222222222222"
@@ -100,6 +123,36 @@ describe('SourceRebindPanel', () => {
       const repaired = unzipSync(new Uint8Array(await uploaded!.arrayBuffer()));
       expect(repaired['(Footage)/logo.png']).toEqual(new TextEncoder().encode('logo'));
       expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ acceptMissing: false }));
+    } finally {
+      globalThis.fetch = savedFetch;
+    }
+  });
+  test('a preview-side drop opens source review when the saved repair changes slots', async () => {
+    sourceFileName = 'campaign.zip';
+    sourceSignedUrl = 'https://signed.test/campaign.zip';
+    const original = zipSync({ 'campaign.aep': new Uint8Array([1]) });
+    const savedFetch = globalThis.fetch;
+    globalThis.fetch = mock(async () => new Response(original)) as typeof fetch;
+    const onNeedsReview = mock((_versionId: string) => undefined);
+    try {
+      const view = render(
+        <SourceRebindPanel
+          repairOnly
+          brandId="44444444-4444-4444-8444-444444444444"
+          assetId="11111111-1111-4111-8111-111111111111"
+          expectedVersionId="22222222-2222-4222-8222-222222222222"
+          aepName="campaign.aep"
+          missingFootage={[{ name: 'Logo', file: 'C:\\work\\(Footage)\\logo.png' }]}
+          onNeedsReview={onNeedsReview}
+          onConfirmed={async () => undefined}
+        />,
+      );
+      const input = view.container.querySelector<HTMLInputElement>('input[type="file"]');
+      fireEvent.change(input!, { target: { files: [new File(['logo'], 'logo.png')] } });
+      await waitFor(() =>
+        expect(onNeedsReview).toHaveBeenCalledWith('33333333-3333-4333-8333-333333333333'),
+      );
+      expect(confirm).not.toHaveBeenCalled();
     } finally {
       globalThis.fetch = savedFetch;
     }

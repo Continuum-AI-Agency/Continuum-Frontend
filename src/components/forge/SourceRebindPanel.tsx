@@ -39,6 +39,9 @@ type SourceRebindProps = {
   brandId: string;
   assetId: string;
   expectedVersionId: string;
+  suggestedVersionId?: string;
+  repairOnly?: boolean;
+  onNeedsReview?: (versionId: string) => void;
   aepName?: string;
   onConfirmed: () => Promise<void>;
   missingFootage?: Array<{ name: string | null; file: string }>;
@@ -60,6 +63,9 @@ function SourceRebindForm({
   brandId,
   assetId,
   expectedVersionId,
+  suggestedVersionId,
+  repairOnly = false,
+  onNeedsReview,
   aepName,
   onConfirmed,
   initialFile,
@@ -79,7 +85,19 @@ function SourceRebindForm({
   const took = useRef(false);
 
   useEffect(() => {
+    if (suggestedVersionId) {
+      setVersionId(suggestedVersionId);
+      setPreview(null);
+      setReload((value) => value + 1);
+    }
+  }, [suggestedVersionId]);
+
+  useEffect(() => {
     alive.current = true;
+    if (repairOnly)
+      return () => {
+        alive.current = false;
+      };
     let cancelled = false;
     setListError(null);
     void listAssetVersions({ brandId, assetId })
@@ -93,7 +111,7 @@ function SourceRebindForm({
       cancelled = true;
       alive.current = false;
     };
-  }, [assetId, brandId, reload]);
+  }, [assetId, brandId, reload, repairOnly]);
 
   const inspect = async (nextVersionId = versionId) => {
     if (!nextVersionId) return;
@@ -153,6 +171,8 @@ function SourceRebindForm({
     if (busy) return;
     setBusy(true);
     setUploading(file?.name ?? missingFile.split(/[\\/]/).pop() ?? 'media');
+    let savedVersionId: string | null = null;
+    let applied = false;
     try {
       const current = (await listAssetVersions({ brandId, assetId })).find(
         (item) => item.id === expectedVersionId,
@@ -176,6 +196,7 @@ function SourceRebindForm({
         note: `Repaired ${missingFile.split(/[\\/]/).pop()}`,
       });
       if (!result.versionId) throw new Error('Repair upload did not create a Library version.');
+      savedVersionId = result.versionId;
       const inspected = await previewTemplateRebind({
         brandId,
         assetId,
@@ -197,6 +218,7 @@ function SourceRebindForm({
         expectedChecksum: inspected.checksum,
         acceptMissing: false,
       });
+      applied = true;
       if (!alive.current) return;
       await onConfirmed();
       toast.success(
@@ -204,6 +226,7 @@ function SourceRebindForm({
       );
     } catch (error) {
       if (!alive.current) return;
+      if (savedVersionId && !applied) onNeedsReview?.(savedVersionId);
       toast.error(error instanceof Error ? error.message : 'Could not repair media');
     } finally {
       setBusy(false);
@@ -224,6 +247,7 @@ function SourceRebindForm({
 
   const ambiguous = preview?.slots.some((slot) => slot.status === 'ambiguous') ?? false;
   const missing = preview?.slots.some((slot) => slot.status === 'missing') ?? false;
+  const newerHead = versions.find((item) => item.isHead && item.id !== expectedVersionId);
   const confirm = async () => {
     if (!preview || ambiguous || (missing && !acceptMissing)) return;
     setBusy(true);
@@ -248,59 +272,96 @@ function SourceRebindForm({
     }
   };
 
+  const repairRows =
+    missingFootage.length > 0 ? (
+      <fieldset className="flex flex-col gap-2">
+        <legend className="sr-only">Missing media repair</legend>
+        {missingFootage.map((item, index) => (
+          <div key={item.file} className="flex items-center gap-2">
+            <label
+              htmlFor={`repair-media-${repairOnly ? 'preview' : 'source'}-${assetId}-${index}`}
+              className="flex cursor-pointer items-center justify-between gap-3 rounded-md border border-dashed border-destructive/50 p-3 text-xs"
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                const file = event.dataTransfer.files[0];
+                if (file) void repair(item.file, file);
+              }}
+            >
+              <span>
+                <strong>{item.name || item.file.split(/[\\/]/).pop()}</strong>
+                <span className="block text-muted-foreground">
+                  Drop this file here or click to choose
+                </span>
+                <span className="block break-all text-muted-foreground">{item.file}</span>
+              </span>
+              <Input
+                id={`repair-media-${repairOnly ? 'preview' : 'source'}-${assetId}-${index}`}
+                type="file"
+                className="sr-only"
+                disabled={busy}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void repair(item.file, file);
+                  event.target.value = '';
+                }}
+              />
+            </label>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => void repair(item.file, null)}
+            >
+              Find in ZIP
+            </Button>
+          </div>
+        ))}
+      </fieldset>
+    ) : null;
+
+  if (repairOnly)
+    return (
+      <div ref={root} className="flex flex-col gap-2">
+        {repairRows}
+        {uploading ? (
+          <p role="status" className="text-xs text-muted-foreground">
+            Repairing {uploading}…
+          </p>
+        ) : null}
+      </div>
+    );
+
   return (
     <div ref={root} className="flex flex-col gap-3">
-      {missingFootage.length > 0 ? (
-        <fieldset className="flex flex-col gap-2">
-          <legend className="sr-only">Missing media repair</legend>
-          {missingFootage.map((item, index) => (
-            <div key={item.file} className="flex items-center gap-2">
-              <label
-                htmlFor={`repair-media-${assetId}-${index}`}
-                className="flex cursor-pointer items-center justify-between gap-3 rounded-md border border-dashed border-destructive/50 p-3 text-xs"
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  const file = event.dataTransfer.files[0];
-                  if (file) void repair(item.file, file);
-                }}
-              >
-                <span>
-                  <strong>{item.name || item.file.split(/[\\/]/).pop()}</strong>
-                  <span className="block text-muted-foreground">
-                    Drop this file here or click to choose
-                  </span>
-                  <span className="block break-all text-muted-foreground">{item.file}</span>
-                </span>
-                <Input
-                  id={`repair-media-${assetId}-${index}`}
-                  type="file"
-                  className="sr-only"
-                  disabled={busy}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) void repair(item.file, file);
-                    event.target.value = '';
-                  }}
-                />
-              </label>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={busy}
-                onClick={() => void repair(item.file, null)}
-              >
-                Find in ZIP
-              </Button>
-            </div>
-          ))}
-        </fieldset>
-      ) : null}
+      {repairRows}
       <p className="text-xs text-muted-foreground">
         Compare a Library version before changing what this template parses. Building and publishing
         remain separate.
       </p>
+      {newerHead ? (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-2 rounded border border-warning/40 bg-warning/10 p-3 text-xs"
+        >
+          <span>
+            A newer Library version is saved but this template still uses the previous source.
+          </span>
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            disabled={busy}
+            onClick={() => {
+              setVersionId(newerHead.id);
+              void inspect(newerHead.id);
+            }}
+          >
+            Review newer version
+          </Button>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <Select
           disabled={busy}
