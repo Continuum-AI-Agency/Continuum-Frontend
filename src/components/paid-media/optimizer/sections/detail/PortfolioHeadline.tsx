@@ -1,17 +1,20 @@
 'use client';
 
-// The news, as the redesign says it (portafolio.html, "Lo común a todas" and idea 01): two
-// sentences with a figure — how we are doing, where the opportunity is — a third only when a
-// blocker exists, then four tiles that carry the same figures with a state on their top
-// border. Every figure travels with its provenance (`figureProps`), so the parity bench can
-// read what the screen printed against what it was handed. What the sentences say is decided
-// in ./headlineModel; this file only draws it.
+// The news, as the redesign says it (portafolio.html, "Lo común a todas" and idea 01; the
+// module's right-hand column in portafolio-unificado.html, idea D): the status sentence large,
+// Jaina's read as one attributed line under it when she wrote something it does not say, the
+// opportunity, and a blocker only when one exists. Every figure travels with its provenance
+// (`figureProps`), so the parity bench can read what the screen printed against what it was
+// handed. What the sentences say is decided in ./headlineModel; this file only draws it.
 
 import { Button } from '@/components/ui/button';
-import { KpiTile } from '../../components/KpiTile';
 import { figureProps } from '../../format';
 import * as typeScale from '../../typeScale';
-import type { PortfolioHeadline as HeadlineModel, HeadlineSentence } from './headlineModel';
+import {
+  attributedRead,
+  type PortfolioHeadline as HeadlineModel,
+  type HeadlineSentence,
+} from './headlineModel';
 import type { HeroSetting } from './heroHeaderModel';
 
 export type PortfolioHeadlineProps = {
@@ -48,65 +51,69 @@ export function Sentence({ sentence }: { sentence: HeadlineSentence }) {
 }
 
 export function PortfolioHeadline({ headline, onEditSetting }: PortfolioHeadlineProps) {
+  const read = attributedRead(headline);
   return (
-    <div className="flex flex-col gap-3">
-      <section className="space-y-1 px-1" data-testid="portfolio-headline">
+    <section className="flex min-w-0 flex-col gap-2" data-testid="portfolio-headline">
+      <p className={`${typeScale.headline} text-foreground`} data-testid="headline-status">
+        <Sentence sentence={headline.status} />
+      </p>
+      {read ? (
         <p
-          className={`${typeScale.bodyLg} font-semibold text-foreground leading-snug`}
-          data-testid="headline-status"
+          className={`${typeScale.body} text-muted-foreground`}
+          data-source="jaina"
+          data-testid="jaina-read"
         >
-          <Sentence sentence={headline.status} />
+          <span className="font-semibold text-primary" data-testid="jaina-read-label">
+            {read.ago ? `Jaina · ${read.ago}` : 'Jaina'}
+          </span>
+          {' — '}
+          {/* The sentence carries figures inside prose, so the node declares the one it is
+           *  about and the bench reads every money token in it against the growth figures. */}
+          <span data-testid="jaina-read-sentence">
+            <span
+              {...figureProps(
+                read.figure.key,
+                read.figure.raw,
+                read.figure.currency,
+                read.figure.window,
+                read.figure.unit,
+              )}
+            >
+              {read.sentence}
+            </span>
+          </span>
         </p>
-        <p
-          className={`${typeScale.bodyLg} text-foreground leading-snug`}
-          data-testid="headline-opportunity"
+      ) : null}
+      <p
+        className={`${typeScale.bodyLg} text-foreground leading-snug`}
+        data-testid="headline-opportunity"
+      >
+        <Sentence sentence={headline.opportunity} />
+      </p>
+      {headline.blocker ? (
+        <div
+          className="flex flex-wrap items-center gap-x-3 gap-y-2"
+          data-blocker={headline.blocker.code}
+          data-testid="headline-blocker"
+          role={headline.blocker.code === 'kpi_mismatch' ? 'alert' : 'status'}
         >
-          <Sentence sentence={headline.opportunity} />
-        </p>
-        {headline.blocker ? (
-          <div
-            className="flex flex-wrap items-center gap-x-3 gap-y-2"
-            data-blocker={headline.blocker.code}
-            data-testid="headline-blocker"
-            role={headline.blocker.code === 'kpi_mismatch' ? 'alert' : 'status'}
-          >
-            <p className={`${typeScale.bodyLg} text-warning leading-snug`}>
-              <Sentence sentence={headline.blocker.sentence} />
-            </p>
-            {headline.blocker.actions.map((action) => (
-              <Button
-                data-setting={action.setting}
-                key={action.setting}
-                onClick={() => onEditSetting(action.setting)}
-                size="sm"
-                type="button"
-                variant={action.primary ? 'default' : 'outline'}
-              >
-                {action.label}
-              </Button>
-            ))}
-          </div>
-        ) : null}
-      </section>
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4" data-testid="portfolio-tiles">
-        {headline.tiles.map((tile) => (
-          <KpiTile
-            figure={figureProps(
-              tile.figure.key,
-              tile.figure.raw,
-              tile.figure.currency,
-              tile.figure.window,
-              tile.figure.unit,
-            )}
-            key={tile.key}
-            label={tile.label}
-            state={tile.state}
-            sub={tile.sub}
-            testId={`tile-${tile.key}`}
-            value={tile.value}
-          />
-        ))}
-      </div>
-    </div>
+          <p className={`${typeScale.bodyLg} text-warning leading-snug`}>
+            <Sentence sentence={headline.blocker.sentence} />
+          </p>
+          {headline.blocker.actions.map((action) => (
+            <Button
+              data-setting={action.setting}
+              key={action.setting}
+              onClick={() => onEditSetting(action.setting)}
+              size="sm"
+              type="button"
+              variant={action.primary ? 'default' : 'outline'}
+            >
+              {action.label}
+            </Button>
+          ))}
+        </div>
+      ) : null}
+    </section>
   );
 }

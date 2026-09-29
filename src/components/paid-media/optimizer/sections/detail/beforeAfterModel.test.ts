@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import type { ResolvedRange, TimelineEvent } from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
-import { buildBeforeAfter, cycleWhen, dayRangeLabel } from './beforeAfterModel';
+import { buildBeforeAfter, cycleWhen, dayRangeLabel, shortRangeLabel } from './beforeAfterModel';
 import { readBody } from './news/realBodies.fixture';
 import type { RecapModel } from './recapModel';
 
@@ -88,16 +88,24 @@ describe('the two windows', () => {
     const model = build();
     expect(model.before).toEqual({
       label: 'semana del 14 al 20 de septiembre',
+      short: 'semana 14–20 sep',
       spend: 1763,
       results: 30,
       cost: 58.78,
     });
     expect(model.after).toEqual({
       label: 'semana del 21 al 27 de septiembre',
+      short: 'semana 21–27 sep',
       spend: 2161,
       results: 56,
       cost: 38.59,
     });
+  });
+
+  it('shortens a window to sit beside its figure, across a month edge too', () => {
+    expect(shortRangeLabel('2026-09-21', '2026-09-27', 7)).toBe('semana 21–27 sep');
+    expect(shortRangeLabel('2026-09-15', '2026-09-28', 14)).toBe('15–28 sep');
+    expect(shortRangeLabel('2026-09-28', '2026-10-04', 7)).toBe('semana 28 sep–4 oct');
   });
 
   it('says nothing when the range has no data yet, instead of printing zeros', () => {

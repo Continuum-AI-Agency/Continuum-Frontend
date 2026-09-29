@@ -68,7 +68,7 @@ export function currencyFieldSuffix(currency: string | null | undefined): string
 
 /** The account's ISO code, or null when the row does not carry a usable one. Null is the
  *  answer, never a fallback: see the note at the top of this file. */
-function normalizeCurrency(currency: string | null | undefined): string | null {
+export function normalizeCurrency(currency: string | null | undefined): string | null {
   const trimmed = (currency ?? '').trim().toUpperCase();
   return ISO_CURRENCY.test(trimmed) ? trimmed : null;
 }

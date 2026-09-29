@@ -1,23 +1,22 @@
 'use client';
 
-// What a portfolio opens on, in the order the redesign fixed (docs/performance-plus-redesign/
-// portafolio.html, ideas 01 + 09 + 14, decided 28/09):
+// What a portfolio opens on: ONE module, then the cards (docs/performance-plus-redesign/
+// portafolio-unificado.html, idea D "número ancla", decided 29/09 with four tiles). The six
+// framed blocks it replaces — name line, Jaina panel, sentences, tiles, last-cycle line,
+// before/after boxes — read as six things; the module reads as one. One surface, sections
+// separated by space, never by frames inside it:
 //
-//   1. the name and its fixed facts in one line (./PortfolioHeaderLine);
-//   2. the Jaina panel — her latest read on this portfolio as one sentence with a figure, a
-//      field whose submit deep-links into Jaina with the portfolio as context, and the five
-//      prepared questions (./JainaPortfolioPanel, inside the one primary band);
-//   3. the news in two sentences with a figure — how we are doing, where the opportunity is —
-//      a third only when a blocker exists, and four tiles with a state on their top border
-//      (./PortfolioHeadline);
-//   4. before and after the last cycle: the window before beside the window after, what the
-//      cycle proposed and what landed, and the cost the pending pauses would leave
-//      (./BeforeAfterStrip);
-//   5. the recommendation cards, ONE ROW, highest impact on the left (./news), the rest behind
-//      "N more".
+//   1. the name, the mode pill and one grey line of facts, the controls on the right
+//      (./PortfolioHeaderLine);
+//   2. the anchor number — cost per result, 44px, in the colour of the target — beside the
+//      news: the status sentence, Jaina's read when she wrote something it does not say, the
+//      opportunity, a blocker only when one exists (./PortfolioAnchor, ./PortfolioHeadline);
+//   3. four frameless tiles chosen for what the portfolio buys (./PortfolioTiles);
+//   4. the last cycle and its projection in one caption (./BeforeAfterStrip);
+//   5. Jaina's bar across the module's foot (./JainaPortfolioPanel);
 //
-// The six vital-sign rows that used to open the portfolio — each a full-width green/red band
-// with a target mark — are gone; their figures are in the sentences and the tiles now.
+// and below the module the recommendation cards, ONE ROW, highest impact on the left
+// (./news), the rest behind "N more".
 //
 // The card row is the one layout decision left here. Three equal columns on a desktop pane,
 // two on a tablet, one on a phone, measured on the pane and not the window (`NEWS_PANE` /
@@ -36,7 +35,7 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { asOfLine } from '../recQueueModel';
 import { BeforeAfterStrip, type BeforeAfterStripProps } from './BeforeAfterStrip';
-import type { PortfolioHeadline as HeadlineModel } from './headlineModel';
+import { anchorOf, type PortfolioHeadline as HeadlineModel, relevantTiles } from './headlineModel';
 import type { HeroSetting } from './heroHeaderModel';
 import type { HeroCta, HeroView } from './heroModel';
 import { JainaPortfolioPanel, type JainaPortfolioPanelProps } from './JainaPortfolioPanel';
@@ -45,8 +44,10 @@ import { InsightCard } from './news/InsightCard';
 import type { NewsTier } from './news/NewsCard';
 import { NewsCard } from './news/NewsCard';
 import { buildPortfolioNews, type NewsCardModel } from './news/newsModel';
+import { PortfolioAnchor } from './PortfolioAnchor';
 import { PortfolioHeaderLine, type PortfolioHeaderLineProps } from './PortfolioHeaderLine';
 import { PortfolioHeadline } from './PortfolioHeadline';
+import { PortfolioTiles } from './PortfolioTiles';
 
 const TIER_TONE: Record<ImpactTier, 'destructive' | 'warning' | 'muted'> = {
   high: 'destructive',
@@ -55,6 +56,13 @@ const TIER_TONE: Record<ImpactTier, 'destructive' | 'warning' | 'muted'> = {
 };
 
 const EASE = [0.16, 1, 0.3, 1] as const;
+
+/** The module: the portfolio's one framed surface. Its children carry no frame of their own. */
+// No overflow-hidden: it would clip — and hide from the scale sweep — anything pushed past the
+// pane's edge. Jaina's bar rounds its own bottom corners instead.
+const MODULE = 'flex flex-col gap-4 rounded-lg border border-border/70 bg-card';
+/** The module's padding, on everything but Jaina's bar, which runs edge to edge at its foot. */
+const MODULE_BODY = 'flex flex-col gap-4 px-4 pt-4 md:px-5 md:pt-5';
 
 const tileVariants: Variants = {
   hidden: { opacity: 0, y: 12 },
@@ -138,12 +146,16 @@ export function PortfolioHero({
 
   if (view.state === 'first_cycle') {
     return (
-      <section className="grid gap-3" data-testid="portfolio-hero">
-        {header ? <PortfolioHeaderLine {...header} /> : null}
-        {jaina ? <JainaPortfolioPanel {...jaina} read={null} /> : null}
-        <div className="h-24 animate-pulse rounded-lg bg-muted/70" />
-        <div className="rounded-lg border border-border/60 border-dashed p-4 text-muted-foreground text-xs">
-          Jaina escribe su primera lectura después del primer ciclo.
+      <section className={cn(NEWS_PANE, 'flex flex-col gap-3')} data-testid="portfolio-hero">
+        <div className={MODULE} data-testid="portfolio-module">
+          <div className={cn(MODULE_BODY, !jaina && 'pb-4 md:pb-5')}>
+            {header ? <PortfolioHeaderLine {...header} /> : null}
+            <div className="h-24 animate-pulse rounded-md bg-muted/70" />
+            <p className="text-muted-foreground text-xs">
+              Jaina escribe su primera lectura después del primer ciclo.
+            </p>
+          </div>
+          {jaina ? <JainaPortfolioPanel {...jaina} /> : null}
         </div>
       </section>
     );
@@ -183,6 +195,19 @@ export function PortfolioHero({
 
   const row = news.cards.slice(0, NEWS_ROW_SIZE);
   const more = news.cards.slice(NEWS_ROW_SIZE);
+  const anchor = headline
+    ? anchorOf({
+        growth: view.brief.growth,
+        words: headline.words,
+        currency,
+        days: headline.days,
+        beforeAfter: beforeAfter?.model ?? null,
+      })
+    : null;
+  const tiles = headline
+    ? relevantTiles({ headline, brief: view.brief, items, dailyTotal, currency })
+    : [];
+  const hasModule = Boolean(header || headline || beforeAfter || jaina);
 
   return (
     <motion.section
@@ -192,27 +217,27 @@ export function PortfolioHero({
       initial={play ? 'hidden' : false}
       variants={groupVariants}
     >
-      {header ? (
-        <motion.div variants={tileVariants}>
-          <PortfolioHeaderLine {...header} />
-        </motion.div>
-      ) : null}
-
-      {jaina ? (
-        <motion.div variants={tileVariants}>
-          <JainaPortfolioPanel {...jaina} />
-        </motion.div>
-      ) : null}
-
-      {headline ? (
-        <motion.div variants={tileVariants}>
-          <PortfolioHeadline headline={headline} onEditSetting={onEditSetting} />
-        </motion.div>
-      ) : null}
-
-      {beforeAfter ? (
-        <motion.div variants={tileVariants}>
-          <BeforeAfterStrip {...beforeAfter} />
+      {hasModule ? (
+        <motion.div className={MODULE} data-testid="portfolio-module" variants={tileVariants}>
+          <div className={cn(MODULE_BODY, !jaina && 'pb-4 md:pb-5')}>
+            {header ? <PortfolioHeaderLine {...header} /> : null}
+            {headline && anchor ? (
+              <div className="grid grid-cols-1 items-start gap-4 @[40rem]/news:grid-cols-[2fr_3fr] @[40rem]/news:gap-6">
+                <PortfolioAnchor
+                  anchor={anchor}
+                  currency={currency}
+                  onEditSetting={onEditSetting}
+                  window={beforeAfter?.window ?? view.brief.growth.window}
+                />
+                <PortfolioHeadline headline={headline} onEditSetting={onEditSetting} />
+              </div>
+            ) : null}
+            {tiles.length > 0 ? (
+              <PortfolioTiles onEditSetting={onEditSetting} tiles={tiles} />
+            ) : null}
+            {beforeAfter ? <BeforeAfterStrip {...beforeAfter} /> : null}
+          </div>
+          {jaina ? <JainaPortfolioPanel {...jaina} /> : null}
         </motion.div>
       ) : null}
 

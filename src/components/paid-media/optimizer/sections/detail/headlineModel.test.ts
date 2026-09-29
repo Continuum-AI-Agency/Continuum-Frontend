@@ -2,11 +2,15 @@ import { describe, expect, it } from 'bun:test';
 import type { BriefGrowth } from '@continuum/contracts';
 import { getOptimizationMetricDefinition } from '@continuum/contracts';
 import {
+  adsetsOnTargetTile,
   agoWords,
+  anchorOf,
+  attributedRead,
   buildPortfolioHeadline,
   coveredDays,
   decisionsWaiting,
   type HeadlineSentence,
+  relevantTiles,
   statusSentence,
 } from './headlineModel';
 import { buildHeroHeader, type HeroPortfolio } from './heroHeaderModel';
@@ -22,10 +26,10 @@ const text = (sentence: HeadlineSentence): string =>
 const figures = (sentence: HeadlineSentence) =>
   sentence.filter((s): s is Exclude<typeof s, string> => typeof s !== 'string');
 
-function headlineOf(name: RealBodyName, now?: number) {
+function headlineOf(name: RealBodyName, now?: number, objective?: string) {
   const { report, view, dailyTotal } = readBody(name);
   const portfolio = report.portfolio as unknown as HeroPortfolio & { name: string };
-  const metric = getOptimizationMetricDefinition(portfolio.objective);
+  const metric = getOptimizationMetricDefinition(objective ?? portfolio.objective);
   const header = buildHeroHeader({
     report,
     portfolio,
@@ -291,5 +295,221 @@ describe('the small rules', () => {
     expect(agoWords('2026-09-28T09:58:00Z', now)).toBe('hace 2 h');
     expect(agoWords('2026-09-25T12:00:00Z', now)).toBe('hace 3 días');
     expect(agoWords('nope', now)).toBeNull();
+  });
+});
+
+// ── The one-module hero (portafolio-unificado.html, idea D) ──
+
+function moduleOf(name: RealBodyName, objective?: string) {
+  const { report, view, dailyTotal } = readBody(name);
+  const headline = headlineOf(name, Date.parse('2026-09-25T21:04:40Z'), objective);
+  return { report, view, dailyTotal, headline };
+}
+
+const item = (adset_id: string, cpa: number, events: number) => ({
+  adset_id,
+  adset_name: `AS ${adset_id}`,
+  current_budget: 100,
+  final_budget: 100,
+  change_abs: 0,
+  change_pct: 0,
+  diagnostics: { ci: { cpa, lo: cpa * 0.8, hi: cpa * 1.2, events } },
+});
+
+describe('the attributed read — Jaina’s line under the status sentence', () => {
+  it('FORMULARIOS: a model wrote it and it says something else, so it stands, dated', () => {
+    const read = attributedRead(moduleOf('formularios').headline);
+    expect(read).toMatchObject({ ago: 'hace 2 h', sentence: 'Pause Ad set A to save 43.23/day' });
+  });
+
+  it('Tours: a deterministic read only repeats the headline, so there is none', () => {
+    expect(attributedRead(moduleOf('tours').headline)).toBeNull();
+  });
+
+  it('a model read that is the status sentence again is dropped as a repeat', () => {
+    const { headline } = moduleOf('formularios');
+    const repeat = {
+      ...headline,
+      read: { ...headline.read, sentence: `${text(headline.status).slice(0, -1)}` },
+    };
+    expect(attributedRead(repeat)).toBeNull();
+  });
+});
+
+describe('the anchor — the cost per result, and the two windows by their dates', () => {
+  const beforeAfter = {
+    lastCycle: null,
+    projection: null,
+    source: 'daily' as const,
+    after: { label: '', short: 'semana 21–27 sep', spend: 2161, results: 56, cost: 38.59 },
+    before: { label: '', short: 'semana 14–20 sep', spend: 1763, results: 30, cost: 58.78 },
+  };
+
+  it('over the target: amber, the unit in ISO words, the distance signed', () => {
+    const anchor = anchorOf({
+      growth: quoted,
+      words: LEADS,
+      currency: 'MXN',
+      days: 7,
+      beforeAfter,
+    });
+    expect(anchor).toMatchObject({
+      value: '38.59',
+      state: 'warn',
+      unit: 'MXN por lead',
+      target: 'meta 35.00',
+      vsTarget: '+10%',
+      empty: null,
+    });
+    expect(anchor.figure).toMatchObject({ key: 'anchor.cost', raw: 38.59, window: 'd7' });
+    expect(anchor.windows.map((w) => `${w.label}: ${w.text}`)).toEqual([
+      'semana 21–27 sep: 38.59',
+      'semana 14–20 sep: 58.78',
+    ]);
+  });
+
+  it('under the target: green, the distance with a real minus sign', () => {
+    const anchor = anchorOf({
+      growth: { ...quoted, cost_per_result: 28 },
+      words: LEADS,
+      currency: 'MXN',
+      days: 7,
+      beforeAfter: null,
+    });
+    expect(anchor).toMatchObject({ state: 'ok', vsTarget: '−20%', windows: [] });
+  });
+
+  it('without a target: grey, and the target reads as unset', () => {
+    const anchor = anchorOf({
+      growth: { ...quoted, target: null },
+      words: LEADS,
+      currency: null,
+      days: 7,
+      beforeAfter,
+    });
+    expect(anchor).toMatchObject({
+      state: 'none',
+      target: 'sin meta',
+      vsTarget: null,
+      unit: 'por lead',
+    });
+  });
+
+  it('without results: a dash and the days it has been without them', () => {
+    const anchor = anchorOf({
+      growth: { ...quoted, results: 0, cost_per_result: null },
+      words: LEADS,
+      currency: 'MXN',
+      days: 14,
+      beforeAfter: { ...beforeAfter, after: { ...beforeAfter.after, cost: null, results: 0 } },
+    });
+    expect(anchor).toMatchObject({ value: '—', state: 'none', empty: 'sin leads en 14 días' });
+    expect(anchor.windows[0]?.text).toBe('sin leads');
+  });
+});
+
+describe('the four tiles, by what the portfolio buys', () => {
+  it('leads: spend · leads · ad sets in target · decisions — the cost left for the anchor', () => {
+    const { view, report, dailyTotal, headline } = moduleOf('formularios');
+    const tiles = relevantTiles({
+      headline,
+      brief: view.brief,
+      items: report.latest_items,
+      dailyTotal,
+      currency: null,
+    });
+    expect(tiles.map((t) => [t.key, t.label])).toEqual([
+      ['spend', 'Gasto · 14 días'],
+      ['results', 'Leads'],
+      ['adsets', 'Conjuntos en meta'],
+      ['decisions', 'Decisiones'],
+    ]);
+    // The plan is the budget's own setting, one click from Manage.
+    expect(tiles[0]?.sub).toEqual(['261/día · ', { setting: 'budget', text: 'plan 324' }]);
+    expect(tiles[1]?.detail).toBe('104 a la meta con este gasto');
+  });
+
+  it('conversations: the results tile speaks the portfolio’s own word', () => {
+    const { view, report, dailyTotal, headline } = moduleOf('mensajes');
+    const tiles = relevantTiles({
+      headline,
+      brief: view.brief,
+      items: report.latest_items,
+      dailyTotal,
+      currency: null,
+    });
+    expect(tiles.map((t) => t.label)).toEqual([
+      'Gasto · 14 días',
+      'Conversaciones',
+      'Conjuntos en meta',
+      'Decisiones',
+    ]);
+    expect(tiles[2]).toMatchObject({ value: '1 de 12', state: 'warn' });
+    // Nothing waits, so no "open opportunity" line contradicts it.
+    expect(tiles[3]).toMatchObject({ sub: ['nada espera tu decisión'], detail: null });
+  });
+
+  it('purchases: the same four, the results tile named compras (the brief carries no value yet)', () => {
+    const { view, report, dailyTotal, headline } = moduleOf('formularios', 'purchase');
+    const tiles = relevantTiles({
+      headline,
+      brief: view.brief,
+      items: report.latest_items,
+      dailyTotal,
+      currency: null,
+    });
+    expect(tiles.map((t) => t.key)).toEqual(['spend', 'results', 'adsets', 'decisions']);
+    expect(tiles[1]?.label).toBe('Compras');
+  });
+
+  it('with no target: the ad-set tile says so and its rule is grey', () => {
+    const { view, report, dailyTotal, headline } = moduleOf('formularios');
+    const tiles = relevantTiles({
+      headline,
+      brief: { ...view.brief, growth: { ...view.brief.growth, target: null } },
+      items: report.latest_items,
+      dailyTotal,
+      currency: null,
+    });
+    expect(tiles[2]).toMatchObject({ value: '—', sub: ['sin meta'], state: 'none' });
+  });
+});
+
+describe('ad sets in target, from the cycle’s own rows', () => {
+  it('counts every scored ad set in the total and only measured ones as best or worst', () => {
+    const tile = adsetsOnTargetTile({
+      items: [item('a', 26.2, 30), item('b', 58.1, 12), item('c', 31, 20), item('d', 0, 0)],
+      target: 35,
+      window: 'd14',
+    });
+    expect(tile).toMatchObject({
+      value: '2 de 4',
+      sub: ['mejor AS a 26.20'],
+      detail: 'peor AS b 58.10',
+      state: 'ok',
+    });
+    expect(tile.figure).toMatchObject({ key: 'tiles.adsets-on-target', raw: 2, unit: 'count' });
+  });
+
+  it('none in target is bad; fewer than half is a warning', () => {
+    const none = adsetsOnTargetTile({
+      items: [item('a', 50, 3), item('b', 60, 3)],
+      target: 35,
+      window: 'd14',
+    });
+    expect(none.state).toBe('bad');
+    const few = adsetsOnTargetTile({
+      items: [item('a', 20, 3), item('b', 60, 3), item('c', 70, 3)],
+      target: 35,
+      window: 'd14',
+    });
+    expect(few).toMatchObject({ value: '1 de 3', state: 'warn' });
+  });
+
+  it('before a cycle scores anything there is nothing to count', () => {
+    expect(adsetsOnTargetTile({ items: [], target: 35, window: 'd14' })).toMatchObject({
+      value: '—',
+      state: 'none',
+    });
   });
 });

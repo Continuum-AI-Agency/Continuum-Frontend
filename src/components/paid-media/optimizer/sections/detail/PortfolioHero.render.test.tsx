@@ -476,38 +476,62 @@ const follows = (a: Element | null | undefined, b: Element | null | undefined) =
 
 describe('PortfolioHero — the blocks, in the redesign’s order, from each real body', () => {
   for (const name of ['formularios', 'prueba', 'mensajes', 'tours'] as const) {
-    it(`${name}: name line, Jaina panel, sentences, tiles, before/after, then the cards`, () => {
+    it(`${name}: one module — header, anchor, sentences, tiles, last cycle, Jaina — then the cards`, () => {
       const { container } = wholeHero(name);
       const hero = container.querySelector('[data-testid="portfolio-hero"]');
       const ids = [
         'portfolio-header',
-        'portfolio-jaina',
+        'portfolio-anchor',
         'portfolio-headline',
         'portfolio-tiles',
         'portfolio-before-after',
+        'portfolio-jaina',
         'portfolio-news-row',
       ];
       const nodes = ids.map((id) => hero?.querySelector(`[data-testid="${id}"]`) ?? null);
       expect(nodes.map(Boolean)).toEqual(ids.map(() => true));
       for (let i = 1; i < nodes.length; i += 1) expect(follows(nodes[i - 1], nodes[i])).toBe(true);
-      // The Jaina band itself is inside the panel, with its five questions.
+      // One surface: the module carries the frame, the blocks inside it carry none.
+      const module = hero?.querySelector('[data-testid="portfolio-module"]');
+      const moduleClass = module?.getAttribute('class') ?? '';
+      for (const token of ['rounded-lg', 'border', 'bg-card']) {
+        expect(moduleClass.split(/\s+/)).toContain(token);
+      }
+      for (const id of ids.slice(0, -1)) {
+        const node = module?.querySelector(`[data-testid="${id}"]`);
+        expect(node).toBeTruthy();
+        if (id === 'portfolio-tiles') continue;
+        expect((node?.getAttribute('class') ?? '').split(/\s+/)).not.toContain('border');
+      }
+      // The cards sit below the module, not inside it.
+      expect(module?.querySelector('[data-testid="portfolio-news-row"]')).toBeNull();
+      // The anchor figure is the one 44px role.
+      const anchor = hero?.querySelector('[data-testid="portfolio-anchor"]');
+      expect(anchor?.querySelectorAll('[data-figure-role="anchor"]').length).toBe(1);
+      // Jaina's bar is the module's last child, with its five questions and no frame of its own.
+      expect(module?.lastElementChild?.getAttribute('data-testid')).toBe('portfolio-jaina');
       const band = hero?.querySelector(
         '[data-testid="portfolio-jaina"] [data-testid="jaina-entry-chips"]',
       );
       expect(band?.querySelectorAll('a').length).toBe(5);
-      // Four tiles, each with a state on its top border and no chart inside.
+      expect(band?.getAttribute('class') ?? '').not.toContain('border');
+      // Four frameless tiles, each with a state on its top rule and no chart inside.
       const tiles = [
         ...(hero?.querySelectorAll('[data-testid="portfolio-tiles"] [data-testid^="tile-"]') ?? []),
       ];
       expect(tiles.map((t) => t.getAttribute('data-testid'))).toEqual([
         'tile-spend',
         'tile-results',
-        'tile-cost',
+        'tile-adsets',
         'tile-decisions',
       ]);
       for (const tile of tiles) {
         expect(['ok', 'warn', 'bad', 'none']).toContain(tile.getAttribute('data-state'));
         expect(tile.querySelector('svg, canvas')).toBeNull();
+        const classes = (tile.getAttribute('class') ?? '').split(/\s+/);
+        expect(classes).toContain('border-t-2');
+        expect(classes).toContain('border-0');
+        expect(classes).not.toContain('bg-card');
       }
     });
 
@@ -520,10 +544,11 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
       // pictures (./news) and the mode pill is a pill.
       const blocks = [
         'portfolio-header',
-        'portfolio-jaina',
+        'portfolio-anchor',
         'portfolio-headline',
         'portfolio-tiles',
         'portfolio-before-after',
+        'portfolio-jaina',
       ];
       const bars = blocks
         .flatMap((id) => [...(hero?.querySelectorAll(`[data-testid="${id}"] *`) ?? [])])
@@ -532,7 +557,7 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
           /\bbg-(success|destructive)(\/\d+)?\b/.test(node.getAttribute('class') ?? ''),
         );
       expect(bars.map((b) => b.getAttribute('class'))).toEqual([]);
-      const above = hero?.querySelector('[data-testid="portfolio-before-after"]');
+      const above = hero?.querySelector('[data-testid="portfolio-jaina"]');
       const untilStrip = [...(hero?.querySelectorAll('*') ?? [])].filter(
         (node) => !follows(above, node) || node === above,
       );
@@ -544,7 +569,7 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
     });
   }
 
-  it('FORMULARIOS: the two sentences carry their figures, and the strip its two windows', () => {
+  it('FORMULARIOS: the anchor, the two sentences with their figures, and the last cycle in one line', () => {
     const { container } = wholeHero('formularios');
     const status = container.querySelector('[data-testid="headline-status"]');
     expect(status?.textContent).toBe(
@@ -556,16 +581,38 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
       'La oportunidad: Ad set A paga 75.65 por lead; pausarlo libera 43.23 al día.',
     );
     expect(container.querySelector('[data-testid="headline-blocker"]')).toBeNull();
+    // The anchor: the cost per result over the brief's window, amber over the target, and
+    // the picker's range beside the one before it, named by their dates.
+    const anchor = container.querySelector('[data-testid="portfolio-anchor"]');
+    expect(anchor?.getAttribute('data-state')).toBe('warn');
+    const figure = anchor?.querySelector('[data-figure-role="anchor"]');
+    expect(figure?.textContent).toBe('45.69');
+    expect(figure?.getAttribute('class')).toContain('text-warning');
+    expect(anchor?.querySelector('[data-testid="anchor-unit"]')?.textContent).toBe(
+      'por lead·meta 35.00·+31%',
+    );
+    expect(anchor?.querySelector('[data-testid="anchor-prior"]')?.textContent).toBe(
+      'semana 21–27 sep: 38.59· semana 14–20 sep: 58.78',
+    );
+    // The before/after figures keep the keys the parity bench already reads.
+    const prior = [
+      ...(anchor?.querySelectorAll('[data-testid="anchor-prior"] [data-figure]') ?? []),
+    ];
+    expect(prior.map((n) => n.getAttribute('data-figure'))).toEqual([
+      'before-after.after.cost',
+      'before-after.before.cost',
+    ]);
+    // The four tiles, and the ad sets in target from the cycle's own rows.
+    const text = (id: string) =>
+      container.querySelector(`[data-testid="${id}"]`)?.textContent ?? '';
+    expect(text('tile-spend')).toBe('Gasto · 14 días3,655261/día · plan 324');
+    expect(text('tile-adsets')).toBe(
+      'Conjuntos en meta3 de 9mejor Ad set E 25.07peor Ad set D 100',
+    );
+    expect(text('tile-decisions')).toBe('Decisiones390.72/día en juego4 oportunidades abiertas');
     const strip = container.querySelector('[data-testid="portfolio-before-after"]');
-    expect(strip?.querySelector('[data-testid="before-after-before"]')?.textContent).toContain(
-      'Antes · semana del 14 al 20 de septiembre',
-    );
-    expect(strip?.querySelector('[data-testid="before-after-before"]')?.textContent).toContain(
-      '30 leads',
-    );
-    expect(strip?.querySelector('[data-testid="before-after-after"]')?.textContent).toContain(
-      '56 leads',
-    );
+    expect(strip?.querySelector('[data-testid="before-after-before"]')).toBeNull();
+    expect(strip?.querySelector('[data-testid="before-after-after"]')).toBeNull();
     expect(strip?.querySelector('[data-testid="before-after-cycle"]')?.textContent).toContain(
       'Último ciclo, viernes 13:03: 2 pausas, 1 cambio de creativo y 9 movimientos de presupuesto propuestas; 4 movimientos de presupuesto aplicados.',
     );
@@ -574,25 +621,37 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
     );
   });
 
-  it('FORMULARIOS: Jaina’s read is her own sentence, labelled and dated', () => {
+  it('FORMULARIOS: Jaina’s read is one attributed line between the status and the opportunity', () => {
     const { container } = wholeHero('formularios');
     const read = container.querySelector('[data-testid="jaina-read"]');
     expect(read?.getAttribute('data-source')).toBe('jaina');
     expect(read?.querySelector('[data-testid="jaina-read-label"]')?.textContent).toBe(
-      'Jaina · sobre Lead forms portfolio · hace 2 h',
+      'Jaina · hace 2 h',
     );
     expect(read?.querySelector('[data-testid="jaina-read-sentence"]')?.textContent).toBe(
       'Pause Ad set A to save 43.23/day',
     );
+    const status = container.querySelector('[data-testid="headline-status"]');
+    const opportunity = container.querySelector('[data-testid="headline-opportunity"]');
+    expect(follows(status, read)).toBe(true);
+    expect(follows(read, opportunity)).toBe(true);
+    // Not in Jaina's bar any more.
+    expect(
+      container.querySelector('[data-testid="portfolio-jaina"] [data-testid="jaina-read"]'),
+    ).toBeNull();
   });
 
-  it('Tours: the automatic read is labelled as such, and the blocker offers the objective fix', () => {
+  it('Tours: a deterministic read only repeats the headline, so it is gone; the blocker offers the objective fix', () => {
     const edits: HeroSetting[] = [];
     const { container, getByText } = wholeHero('tours', { edits });
-    const read = container.querySelector('[data-testid="jaina-read"]');
-    expect(read?.getAttribute('data-source')).toBe('auto');
-    expect(read?.querySelector('[data-testid="jaina-read-label"]')?.textContent).toContain(
-      'Lectura automática',
+    expect(container.querySelector('[data-testid="jaina-read"]')).toBeNull();
+    expect(container.textContent).not.toContain('Lectura automática');
+    // Nothing bought: the anchor says so rather than printing a cost, and stays grey.
+    const anchor = container.querySelector('[data-testid="portfolio-anchor"]');
+    expect(anchor?.getAttribute('data-state')).toBe('none');
+    expect(anchor?.querySelector('[data-figure-role="anchor"]')?.textContent).toBe('—');
+    expect(anchor?.querySelector('[data-testid="anchor-empty"]')?.textContent).toBe(
+      'sin conversaciones en 2 días',
     );
     const blocker = container.querySelector('[data-testid="headline-blocker"]');
     expect(blocker?.getAttribute('data-blocker')).toBe('kpi_mismatch');
@@ -628,15 +687,34 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
     );
   });
 
-  it('a fact chip opens its setting and "Correr ahora" runs', () => {
+  it('every setting stays one click from Manage, beside the figure it governs; "Correr ahora" runs', () => {
     const edits: HeroSetting[] = [];
     const runs: number[] = [];
     const { container, getByText } = wholeHero('prueba', { edits, runs });
-    const target = container.querySelector('[data-testid="header-chip"][data-setting="target"]');
-    if (!target) throw new Error('no target chip');
-    fireEvent.click(target);
+    const chips = [...container.querySelectorAll('[data-testid="header-chip"]')];
+    // Objective, strategy and window in the grey line; the target under the anchor; the
+    // budget in the spend tile.
+    expect(chips.map((c) => c.getAttribute('data-setting'))).toEqual([
+      'objective',
+      'strategy',
+      'window',
+      'target',
+      'budget',
+    ]);
+    expect(chips.map((c) => c.textContent)).toEqual([
+      'objetivo leads',
+      'Balanced',
+      '14 días',
+      'meta 25.00',
+      'plan 110',
+    ]);
+    // Plain grey text, not pills.
+    for (const chip of chips) expect(chip.getAttribute('class')).not.toContain('rounded-full');
+    const header = container.querySelector('[data-testid="portfolio-header"]');
+    expect(header?.querySelector('[data-setting="budget"], [data-setting="target"]')).toBeNull();
+    for (const chip of chips) fireEvent.click(chip);
     fireEvent.click(getByText('Correr ahora'));
-    expect(edits).toEqual(['target']);
+    expect(edits).toEqual(['objective', 'strategy', 'window', 'target', 'budget']);
     expect(runs).toEqual([1]);
     expect(getByText('Revisar movimientos')).toBeTruthy();
     expect(container.querySelector('[data-testid="header-adsets"]')?.textContent).toBe(
@@ -652,6 +730,11 @@ describe('PortfolioHero — the blocks, in the redesign’s order, from each rea
     const hero = container.querySelector('[data-testid="portfolio-hero"]');
     expect(hero?.querySelector('[data-testid="portfolio-header"]')).toBeTruthy();
     expect(hero?.querySelector('[data-testid="jaina-ask"]')).toBeTruthy();
+    // The same one surface, with Jaina's bar at its foot.
+    const module = hero?.querySelector('[data-testid="portfolio-module"]');
+    expect(module?.getAttribute('class')).toContain('bg-card');
+    expect(module?.lastElementChild?.getAttribute('data-testid')).toBe('portfolio-jaina');
+    expect(hero?.querySelector('[data-testid="portfolio-anchor"]')).toBeNull();
     expect(hero?.querySelector('[data-testid="jaina-read"]')).toBeNull();
     expect(hero?.querySelector('[data-testid="portfolio-headline"]')).toBeNull();
     expect(hero?.textContent).toContain('primera lectura');

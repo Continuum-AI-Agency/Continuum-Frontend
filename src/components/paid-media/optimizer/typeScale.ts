@@ -22,6 +22,9 @@ export const bodyLg = 'text-[15px]';
 /** Secondary line under a figure or a title — 12px, the floor of the scale. */
 export const caption = 'text-xs';
 
+/** The portfolio's status sentence — 21px prose, the loudest words on the module. */
+export const headline = 'text-[21px] font-semibold leading-snug tracking-tight';
+
 /** The number in a tile — 22px mono, one size in every tile. */
 export const figureTile = 'font-mono font-semibold text-[22px] tabular-nums leading-none';
 
@@ -30,3 +33,7 @@ export const figureHeadline = 'font-mono font-semibold text-[21px] tabular-nums 
 
 /** The account lead card's figure — never larger than a headline figure. */
 export const figureLead = 'font-mono font-semibold text-[21px] tabular-nums leading-tight';
+
+/** The one number a portfolio module is anchored on — its cost per result, 44px mono. The
+ *  only figure allowed above a headline's size, and there is one per module. */
+export const figureAnchor = 'font-mono font-semibold text-[44px] tabular-nums leading-none';

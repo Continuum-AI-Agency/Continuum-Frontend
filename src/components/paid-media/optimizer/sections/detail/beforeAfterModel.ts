@@ -25,6 +25,8 @@ import type { RecapModel, RecapSnapshot } from './recapModel';
 export type WindowTotals = {
   /** "semana del 14 al 20 de septiembre" */
   label: string;
+  /** "semana 14–20 sep" — the same window short enough to sit beside its figure. */
+  short: string;
   spend: number;
   results: number;
   /** Cost per result in the metric's display unit; null with no results. */
@@ -83,6 +85,21 @@ export function dayRangeLabel(from: string, to: string): string {
     return `${start.getUTCDate()} al ${endWords}`;
   }
   return `${start.getUTCDate()} de ${MONTH.format(start)} al ${endWords}`;
+}
+
+const MONTH_SHORT = new Intl.DateTimeFormat('es-MX', { month: 'short', timeZone: 'UTC' });
+const monthShort = (date: Date): string => MONTH_SHORT.format(date).replace('.', '');
+
+/** "semana 14–20 sep" for a week, "1–14 sep" otherwise, "28 sep–4 oct" across a month edge. */
+export function shortRangeLabel(from: string, to: string, days: number): string {
+  const start = utcDate(from);
+  const end = utcDate(to);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return `${from}–${to}`;
+  const range =
+    start.getUTCMonth() === end.getUTCMonth()
+      ? `${start.getUTCDate()}–${end.getUTCDate()} ${monthShort(end)}`
+      : `${start.getUTCDate()} ${monthShort(start)}–${end.getUTCDate()} ${monthShort(end)}`;
+  return days === 7 ? `semana ${range}` : range;
 }
 
 function windowLabel(from: string, to: string, days: number): string {
@@ -282,6 +299,7 @@ export function buildBeforeAfter(args: {
       ? null
       : {
           label: windowLabel(range.from, range.to, range.days),
+          short: shortRangeLabel(range.from, range.to, range.days),
           spend: recap.current.spend,
           results: recap.current.results,
           cost: recap.current.costPerResult,
@@ -290,6 +308,7 @@ export function buildBeforeAfter(args: {
     recap.previous && range.previous
       ? {
           label: windowLabel(range.previous.from, range.previous.to, range.days),
+          short: shortRangeLabel(range.previous.from, range.previous.to, range.days),
           spend: recap.previous.spend,
           results: recap.previous.results,
           cost: recap.previous.costPerResult,

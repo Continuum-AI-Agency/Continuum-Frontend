@@ -48,6 +48,23 @@ describe('JainaEntryChips', () => {
     }
   });
 
+  it('in a row without a frame: the label beside the caller’s field, the questions under it', () => {
+    const { container } = render(
+      <JainaEntryChips frame={false} layout="row" portfolio={portfolio}>
+        <form data-testid="field" />
+      </JainaEntryChips>,
+    );
+    const band = container.querySelector('[data-testid="jaina-entry-chips"]');
+    expect(band?.getAttribute('data-layout')).toBe('row');
+    expect(band?.className).not.toContain('border');
+    expect(band?.className).not.toContain('bg-primary/10');
+    const [first, second] = [...(band?.children ?? [])];
+    expect(first?.textContent).toContain('Preguntale a Jaina');
+    expect(first?.querySelector('[data-testid="field"]')).toBeTruthy();
+    expect(first?.querySelectorAll('a').length).toBe(0);
+    expect(second?.querySelectorAll('a').length).toBe(5);
+  });
+
   it('puts what a caller hands it inside the band, above the questions', () => {
     const { container } = render(
       <JainaEntryChips portfolio={portfolio}>

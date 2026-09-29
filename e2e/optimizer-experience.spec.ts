@@ -40,9 +40,9 @@ import { benchBrowserChannel, loadProdSupabaseEnv, PROD_SUPABASE_URL } from './s
 //      with figures, the sub-line, the Jaina band, four to six state-coloured tiles, the
 //      recommendation cards with the lead marked, then the portfolio rows — in that order,
 //      nothing else above the fold, no chart, and none of the old copy.
-//   7. The portfolio hero as ideas 01 + 09 + 14 order it (stage 2) on FORMULARIOS // TODOS:
-//      the name line, the Jaina panel (her read, the field, five questions), two sentences
-//      with a figure, four state-coloured tiles, the before/after strip, then the cards; the
+//   7. The portfolio hero as ONE module (idea D, "número ancla") on FORMULARIOS // TODOS:
+//      the name line, the 44px anchor beside two sentences with a figure, four frameless
+//      state-ruled tiles, the last-cycle line and Jaina's bar at the foot, then the cards; the
 //      ad-set ranking first in the body; the funnel and the reallocation behind "Ver
 //      detalle"; and no full-width green or red bar anywhere under the hero.
 //
@@ -875,10 +875,11 @@ test.describe('Paid Media Optimizer — live experience', () => {
   });
 
   // -------------------------------------------------------------------------
-  // The portfolio hero — Performance+ redesign, stage 2 (ideas 01 + 09 + 14), on the
-  // portfolio the redesign page is drawn with. Every assertion reads the RENDERED page.
+  // The portfolio hero — Performance+ redesign, idea D (portafolio-unificado.html): one
+  // module on the portfolio the redesign page is drawn with. Every assertion reads the
+  // RENDERED page.
   // -------------------------------------------------------------------------
-  test('portfolio hero — FORMULARIOS // TODOS opens on the name line, the Jaina panel, two sentences, four tiles, the before/after strip and the cards, with no full-width bar under it', async ({
+  test('portfolio hero — FORMULARIOS // TODOS opens on one module: name line, anchor number, two sentences, four tiles, the last cycle and Jaina’s bar, then the cards, with no full-width bar under it', async ({
     browser,
   }) => {
     await selectBrand(EASYFIT_LEDGER_BRAND_ID);
@@ -913,7 +914,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
           Boolean(a && b && a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
         const blocks = [
           'portfolio-header',
-          'portfolio-jaina',
+          'portfolio-anchor',
           'portfolio-headline',
           'portfolio-tiles',
           'portfolio-before-after',
@@ -926,7 +927,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
           ...(pick('portfolio-tiles')?.querySelectorAll('[data-testid^="tile-"]') ?? []),
         ];
         const jaina = pick('portfolio-jaina');
-        const read = jaina?.querySelector('[data-testid="jaina-read"]');
+        const read = pick('portfolio-headline')?.querySelector('[data-testid="jaina-read"]');
         const heroRect = hero?.getBoundingClientRect() ?? { bottom: 0 };
         const panelRect = panel.getBoundingClientRect();
         // Every visible element under the hero painted with the success or destructive
@@ -952,14 +953,33 @@ test.describe('Paid Media Optimizer — live experience', () => {
           present,
           ordered,
           headerName: pick('portfolio-header')?.querySelector('h3')?.textContent ?? '',
-          facts: [
-            ...(pick('header-facts')?.querySelectorAll('[data-testid="header-chip"]') ?? []),
-          ].map((chip) => chip.getAttribute('data-setting')),
+          facts: [...(hero?.querySelectorAll('[data-testid="header-chip"]') ?? [])].map((chip) =>
+            chip.getAttribute('data-setting'),
+          ),
+          oneSurface,
+          anchorText: anchorFigure?.textContent ?? '',
+          anchorPx: anchorFigure ? Number.parseFloat(getComputedStyle(anchorFigure).fontSize) : 0,
+          anchorPrior: pick('anchor-prior')?.textContent ?? '',
+          readInJainaBar: Boolean(jaina?.querySelector('[data-testid="jaina-read"]')),
           status: pick('headline-status')?.textContent ?? '',
           statusFigures:
+          'portfolio-jaina',
             pick('headline-status')?.querySelectorAll('[data-testid="figure"]').length ?? 0,
           opportunity: pick('headline-opportunity')?.textContent ?? '',
           blocker: pick('headline-blocker')?.getAttribute('data-blocker') ?? null,
+        // One surface: the module's own children draw no border; only the tiles' state
+        // rule is allowed, and it lives a level down.
+        const module = pick('portfolio-module');
+        const bordered = (el: Element) => {
+          const style = getComputedStyle(el);
+          return ['Top', 'Right', 'Bottom', 'Left'].some(
+            (side) =>
+              Number.parseFloat(style.getPropertyValue(`border-${side.toLowerCase()}-width`)) > 0,
+          );
+        };
+        const oneSurface =
+          Boolean(module) && [...(module?.children ?? [])].every((child) => !bordered(child));
+        const anchorFigure = pick('portfolio-anchor')?.querySelector('[data-figure-role="anchor"]');
           tiles: tiles.map((tile) => tile.getAttribute('data-testid')),
           tileStates: tiles.map((tile) => tile.getAttribute('data-state')),
           tileCharts: tiles.filter((tile) => tile.querySelector('svg, canvas')).length,
@@ -972,8 +992,6 @@ test.describe('Paid Media Optimizer — live experience', () => {
           ),
           jainaLinks: jaina?.querySelectorAll('[data-testid="jaina-entry-chips"] a').length ?? 0,
           cycleLine: pick('before-after-cycle')?.textContent ?? '',
-          afterLine: pick('before-after-after')?.textContent ?? '',
-          beforeLine: pick('before-after-before')?.textContent ?? '',
           projection: pick('before-after-projection')?.textContent ?? null,
           vitals: Boolean(
             pick('portfolio-vitals') || panel.querySelector('[data-testid="vital-bullet"]'),
@@ -991,11 +1009,17 @@ test.describe('Paid Media Optimizer — live experience', () => {
       });
       console.log(`[optimizer-bench] FORMULARIOS hero: ${JSON.stringify(report)}`);
 
-      // The six blocks, all present, in this order.
-      expect(report.present).toEqual([true, true, true, true, true, true]);
+      // The module's blocks and the cards, all present, in this order, on one surface.
+      expect(report.present).toEqual([true, true, true, true, true, true, true]);
       expect(report.ordered).toBe(true);
       expect(report.headerName).toBe(FORMULARIOS_PORTFOLIO_NAME);
-      expect(report.facts).toEqual(['objective', 'budget', 'target', 'window', 'strategy']);
+      // Each setting beside the figure it governs: the grey line, the anchor, the spend tile.
+      expect(report.facts).toEqual(['objective', 'strategy', 'window', 'target', 'budget']);
+
+      // The anchor: the cost per result at 44px, and the two windows by their dates.
+      expect(report.anchorText).toMatch(/^(\d[\d,]*(\.\d+)?|—)$/);
+      expect(Math.round(report.anchorPx)).toBe(44);
+      if (report.anchorText !== '—') expect(report.anchorPrior).toMatch(/\d+–\d+.*: /);
 
       // Two sentences with a figure; the third only when a blocker exists.
       expect(report.status).toMatch(/^\d[\d,]* leads en \d+ días/);
@@ -1009,31 +1033,28 @@ test.describe('Paid Media Optimizer — live experience', () => {
       }
 
       // Four tiles, each coloured by a state on its top border, never by a chart.
-      expect(report.tiles).toEqual(['tile-spend', 'tile-results', 'tile-cost', 'tile-decisions']);
+      expect(report.tiles).toEqual(['tile-spend', 'tile-results', 'tile-adsets', 'tile-decisions']);
       for (const state of report.tileStates) expect(['ok', 'warn', 'bad', 'none']).toContain(state);
       expect(report.tileCharts).toBe(0);
 
-      // The Jaina panel: her read (or the automatic one, labelled), the field, five questions.
-      expect(['jaina', 'auto']).toContain(report.readSource);
-      expect(report.readLabel).toMatch(
-        new RegExp(
-          `^(Jaina|Lectura automática) · sobre ${FORMULARIOS_PORTFOLIO_NAME.replace(/[/]/g, '\\/')}`,
-        ),
-      );
-      expect(report.readSentence).toMatch(/\d/);
+      // Jaina: her read only when a model wrote something the headline does not say, as one
+      // attributed line under it; her bar at the module's foot holds the field and five
+      // questions.
+      expect([null, 'jaina']).toContain(report.readSource);
+      if (report.readSource) expect(report.readLabel).toMatch(/^Jaina/);
+      expect(report.readInJainaBar).toBe(false);
       expect(report.askField).toBe(true);
       expect(report.jainaLinks).toBe(5);
 
-      // Before and after: the current window always, the cycle line, the projection when a
-      // pause is pending.
+      // The last cycle in one line, the projection when a pause is pending.
       expect(report.cycleLine).toMatch(/^(Último ciclo, |Sin ciclo)/);
-      expect(report.afterLine).toMatch(/Después · .*\d+ leads/);
       if (report.projection) expect(report.projection).toMatch(/costo proyectado|no compraron/);
 
       // The vital signs and their bands are gone, and nothing under the hero is a bar.
       expect(report.vitals).toBe(false);
       expect(report.bars, 'full-width success/destructive bars under the hero').toEqual([]);
 
+      expect(report.oneSurface).toBe(true);
       // The body: the ad-set ranking first; the funnel and the reallocation behind the
       // disclosure, closed.
       expect(report.firstBodyBlock).toContain('per ad set');
@@ -1310,7 +1331,12 @@ test.describe('Paid Media Optimizer — live experience', () => {
           .filter((el) => ownText(el) && getComputedStyle(el).textTransform === 'uppercase')
           .filter((el) => Math.abs(rem(el) - FLOOR_REM) > 0.01)
           .map((el) => `${rem(el).toFixed(3)}rem ${describe(el)}`);
-        const expectedFigure: Record<string, number> = { tile: 22, headline: 21, lead: 21 };
+        const expectedFigure: Record<string, number> = {
+          tile: 22,
+          headline: 21,
+          lead: 21,
+          anchor: 44,
+        };
         const figures = [...panel.querySelectorAll('[data-figure-role]')]
           .filter(
             (el) =>
