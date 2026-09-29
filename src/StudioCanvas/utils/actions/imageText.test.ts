@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  breakLines,
   type DesignSystemSnapshot,
   EMPTY_ADHERENCE,
   type MeasureText,
@@ -8,22 +9,31 @@ import {
   type ProbeContrast,
   planPlacement,
   type TreatmentStep,
+  VERNE_TITLE_BOLD_SIZE,
+  VERNE_TITLE_LIGHT_SIZE,
   VERNE_VEIL_FLOORS,
 } from '@continuum/contracts';
 import {
   applyTreatment,
+  createProbe,
   describeHeadlineFaces,
   describeHeadlineInk,
   type HeadlineInk,
   headlineSvg,
   headlineSvgDataUri,
+  type PlateSpec,
   parseHeadline,
   parseHexColour,
+  plateRect,
   readSettings,
   resolveCustomInk,
   resolveHeadlineFaces,
   resolveHeadlineInk,
   scrimReachPx,
+  shippedFaces,
+  snugMeasure,
+  stackParagraphs,
+  wordFitScale,
 } from './imageText';
 
 // COVERAGE GAP, on purpose, and the same one `imageOps.test.ts` declares: bun + happy-dom has
@@ -177,7 +187,47 @@ describe('describeHeadlineInk', () => {
   });
 });
 
+describe('shippedFaces', () => {
+  it('sets a display face in the weights its file holds, never a faux bold', () => {
+    const anton = shippedFaces('Anton');
+    expect(anton.stack.startsWith("'Anton'")).toBe(true);
+    expect([anton.lightWeight, anton.boldWeight]).toEqual([400, 400]);
+    expect(anton.source).toBe('fallback');
+    const montserrat = shippedFaces('Montserrat');
+    expect([montserrat.lightWeight, montserrat.boldWeight]).toEqual([300, 700]);
+  });
+});
+
 describe('readSettings', () => {
+  it('reads the plate colour and the alignment, defaulting to black-or-white and flush right', () => {
+    expect(readSettings({ plateHex: '#c05a2b', align: 'center', plate: 'band' })).toMatchObject({
+      plateHex: '#c05a2b',
+      align: 'center',
+      plate: 'band',
+    });
+    expect(readSettings({})).toMatchObject({ plateHex: null, align: 'right' });
+  });
+
+  it('reads a named face and the column plate, defaulting to the brand face', () => {
+    expect(readSettings({ family: 'Anton', plate: 'column' })).toMatchObject({
+      family: 'Anton',
+      plate: 'column',
+    });
+    expect(readSettings({}).family).toBeNull();
+  });
+
+  it('reads the scale, defaulting to the reference size', () => {
+    expect(readSettings({ scale: 1.4 }).scale).toBe(1.4);
+    expect(readSettings({}).scale).toBe(1);
+  });
+
+  it('reads the plate, and anything it does not know as no plate', () => {
+    expect(readSettings({ plate: 'pill' }).plate).toBe('pill');
+    expect(readSettings({ plate: 'box' }).plate).toBe('box');
+    expect(readSettings({}).plate).toBe('none');
+    expect(readSettings({ plate: 'banner' }).plate).toBe('none');
+  });
+
   it('carries the hand-picked ink, and reads a missing one as null rather than a string', () => {
     expect(readSettings({ inkHex: '#0f1f43' }).inkHex).toBe('#0f1f43');
     expect(readSettings({}).inkHex).toBeNull();
@@ -382,6 +432,7 @@ describe('applyTreatment', () => {
     filter: string;
     clip: { x: number; y: number; width: number; height: number } | null;
     rect: { x: number; y: number; width: number; height: number };
+    radius?: number;
   }
 
   const recordingContext = () => {
@@ -393,6 +444,7 @@ describe('applyTreatment', () => {
       filter: 'none',
     };
     let path: Painted['clip'] = null;
+    let radius: number | undefined;
     let clip: Painted['clip'] = null;
     const ctx = {
       ...state,
@@ -403,9 +455,26 @@ describe('applyTreatment', () => {
       },
       beginPath() {
         path = null;
+        radius = undefined;
       },
       rect(x: number, y: number, width: number, height: number) {
         path = { x, y, width, height };
+      },
+      roundRect(x: number, y: number, width: number, height: number, r: number) {
+        path = { x, y, width, height };
+        radius = r;
+      },
+      fill() {
+        if (!path) return;
+        painted.push({
+          op: ctx.globalCompositeOperation,
+          alpha: ctx.globalAlpha,
+          fill: ctx.fillStyle,
+          filter: ctx.filter,
+          clip,
+          rect: path,
+          radius,
+        });
       },
       clip() {
         clip = path;
@@ -424,9 +493,19 @@ describe('applyTreatment', () => {
     return { ctx, painted };
   };
 
-  const run = (steps: TreatmentStep[]) => {
+  // One body size for the plate's padding: the box's own height, as a one-line block has.
+  const PILL: PlateSpec = { shape: 'pill', emPx: RECT.height };
+  const SQUARE: PlateSpec = { shape: 'box', emPx: RECT.height };
+  const run = (steps: TreatmentStep[], plate: PlateSpec | null = null) => {
     const { ctx, painted } = recordingContext();
-    applyTreatment(ctx as unknown as OffscreenCanvasRenderingContext2D, steps, FRAME, INK, BOX);
+    applyTreatment(
+      ctx as unknown as OffscreenCanvasRenderingContext2D,
+      steps,
+      FRAME,
+      INK,
+      BOX,
+      plate,
+    );
     return painted;
   };
 
@@ -501,5 +580,408 @@ describe('applyTreatment', () => {
 
   it('paints nothing at all when the plan asked for no treatment', () => {
     expect(run([])).toEqual([]);
+  });
+
+  it('paints the plate even when the ladder asked for nothing — it is part of the treatment', () => {
+    const [plate] = run([], PILL);
+    expect(plate).toBeDefined();
+    // Solid and sharp: a blurred or translucent button reads as a smudge over the photo.
+    expect(plate).toMatchObject({ op: 'source-over', alpha: 1, filter: 'none', clip: null });
+    // The ink here is a dark navy, so the plate is the white it reads on — never the ink itself.
+    expect(plate.fill).toBe('#ffffff');
+    expect(plate.rect.x).toBeLessThan(RECT.x);
+    expect(plate.rect.y).toBeLessThan(RECT.y);
+    expect(plate.rect.x + plate.rect.width).toBeGreaterThan(RECT.x + RECT.width);
+    expect(plate.rect.y + plate.rect.height).toBeGreaterThan(RECT.y + RECT.height);
+    expect(plate.radius).toBeCloseTo(plate.rect.height / 2, 5);
+  });
+
+  it('gives a box plate corners, not a pill', () => {
+    const [plate] = run([], SQUARE);
+    expect(plate.radius).toBeLessThan(plate.rect.height / 4);
+    expect(plateRect(FRAME, BOX, SQUARE).width).toBeLessThan(plateRect(FRAME, BOX, PILL).width);
+  });
+
+  it('puts the plate on TOP of any scrim, so the scrim can never tint it', () => {
+    const painted = run([{ kind: 'veil', floor: 0.42 }], SQUARE);
+    expect(painted).toHaveLength(2);
+    expect(painted[1].radius).toBeDefined();
+  });
+
+  it('fills a chosen plate colour instead of black or white', () => {
+    const [plate] = run([], { shape: 'box', emPx: RECT.height, fill: [0xc0, 0x5a, 0x2b] });
+    expect(plate.fill).toBe('#c05a2b');
+  });
+
+  it('runs a band edge to edge and on to the nearer frame edge — the colour block', () => {
+    // BOX sits in the top half of the frame, so its band runs up to the top edge.
+    const top = plateRect(FRAME, BOX, { shape: 'band', emPx: RECT.height });
+    expect(top).toMatchObject({ x: 0, y: 0, width: FRAME.width, radius: 0 });
+    expect(top.height).toBeGreaterThan(RECT.y + RECT.height);
+    const low = plateRect(
+      FRAME,
+      { x0: 0.2, y0: 0.7, x1: 0.8, y1: 0.8 },
+      { shape: 'band', emPx: 10 },
+    );
+    expect(low.x).toBe(0);
+    expect(low.width).toBe(FRAME.width);
+    expect(low.y + low.height).toBe(FRAME.height);
+    expect(low.y).toBeLessThan(0.7 * FRAME.height);
+  });
+
+  it('runs a column top to bottom and on to the nearer SIDE edge — the split that keeps the subject', () => {
+    const right = plateRect(
+      FRAME,
+      { x0: 0.6, y0: 0.2, x1: 0.94, y1: 0.4 },
+      { shape: 'column', emPx: 10 },
+    );
+    expect(right).toMatchObject({ y: 0, height: FRAME.height, radius: 0 });
+    expect(right.x + right.width).toBe(FRAME.width);
+    // Padded off the words toward the photo, never the whole frame.
+    expect(right.x).toBe(0.6 * FRAME.width - 9);
+    const left = plateRect(
+      FRAME,
+      { x0: 0.06, y0: 0.5, x1: 0.4, y1: 0.7 },
+      { shape: 'column', emPx: 10 },
+    );
+    expect(left).toMatchObject({ x: 0, y: 0, height: FRAME.height });
+    expect(left.width).toBe(0.4 * FRAME.width + 9);
+  });
+
+  it('takes a dark plate for a light ink', () => {
+    const { ctx, painted } = recordingContext();
+    applyTreatment(
+      ctx as unknown as OffscreenCanvasRenderingContext2D,
+      [],
+      FRAME,
+      [0xf5, 0xf0, 0xe8],
+      BOX,
+      PILL,
+    );
+    expect(painted[0].fill).toBe('#111111');
+  });
+});
+
+describe('the plate, as the contrast probe sees it', () => {
+  // A 2D context over REAL pixel bytes: drawImage floods the photo colour, fill/fillRect blend
+  // the fill style at globalAlpha. Enough to run the real `createProbe` → `applyTreatment` →
+  // `readBox` → `darkPercentileContrast` chain end to end, which is the thing the plate has to
+  // get right: the probe must MEASURE the plate, or the plan claims a ratio the frame never had.
+  const FRAME = { width: 200, height: 120 };
+  const PHOTO = [0x18, 0x1c, 0x22] as const;
+
+  class PixelCanvas {
+    readonly data: Uint8ClampedArray;
+    constructor(
+      readonly width: number,
+      readonly height: number,
+    ) {
+      this.data = new Uint8ClampedArray(width * height * 4);
+    }
+    getContext() {
+      const canvas = this;
+      let path: { x: number; y: number; width: number; height: number } | null = null;
+      const paint = (
+        x: number,
+        y: number,
+        width: number,
+        height: number,
+        hex: string,
+        a: number,
+      ) => {
+        const rgb = [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
+        for (let row = Math.max(0, Math.floor(y)); row < Math.min(canvas.height, y + height); row++)
+          for (let col = Math.max(0, Math.floor(x)); col < Math.min(canvas.width, x + width); col++)
+            for (let c = 0; c < 3; c++) {
+              const at = (row * canvas.width + col) * 4 + c;
+              canvas.data[at] = canvas.data[at] * (1 - a) + (rgb[c] ?? 0) * a;
+            }
+      };
+      const ctx = {
+        globalCompositeOperation: 'source-over',
+        globalAlpha: 1,
+        fillStyle: '#000000',
+        filter: 'none',
+        save() {},
+        restore() {},
+        clip() {},
+        beginPath() {
+          path = null;
+        },
+        rect(x: number, y: number, width: number, height: number) {
+          path = { x, y, width, height };
+        },
+        roundRect(x: number, y: number, width: number, height: number) {
+          path = { x, y, width, height };
+        },
+        clearRect() {
+          canvas.data.fill(0);
+        },
+        drawImage(image: { rgb: readonly number[] }) {
+          for (let at = 0; at < canvas.data.length; at += 4) {
+            canvas.data.set([image.rgb[0], image.rgb[1], image.rgb[2], 255], at);
+          }
+        },
+        fillRect(x: number, y: number, width: number, height: number) {
+          paint(x, y, width, height, ctx.fillStyle, ctx.globalAlpha);
+        },
+        fill() {
+          if (path) paint(path.x, path.y, path.width, path.height, ctx.fillStyle, ctx.globalAlpha);
+        },
+        getImageData(x: number, y: number, width: number, height: number) {
+          const out = new Uint8ClampedArray(width * height * 4);
+          for (let row = 0; row < height; row++) {
+            const from = ((y + row) * canvas.width + x) * 4;
+            out.set(canvas.data.subarray(from, from + width * 4), row * width * 4);
+          }
+          return { data: out, width, height };
+        },
+      };
+      return ctx;
+    }
+  }
+
+  const withPixelCanvas = <T>(body: () => T): T => {
+    const original = (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas;
+    (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = PixelCanvas;
+    try {
+      return body();
+    } finally {
+      (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = original;
+    }
+  };
+
+  const photo = { width: FRAME.width, height: FRAME.height, rgb: PHOTO } as never;
+  const box = { x0: 0.35, y0: 0.7, x1: 0.65, y1: 0.8 };
+  const state = { framing: { axis: 'horizontal' as const, focal: 0.5 }, treatments: [] };
+
+  it('measures the plate, not the photo under it', () => {
+    const [bare, plated] = withPixelCanvas(() => [
+      createProbe(photo, FRAME, INK, null)(box, state),
+      createProbe(photo, FRAME, INK, { shape: 'pill', emPx: 12 })(box, state),
+    ]);
+    // Navy on a near-black photo is illegible; navy on the white plate is not.
+    expect(bare).toBeLessThan(1.5);
+    expect(plated).toBeGreaterThan(12);
+  });
+
+  it('lets a plated CTA clear at rung 0 — the ladder never veils the photo to rescue it', () => {
+    const plan = withPixelCanvas(() =>
+      planPlacement({
+        tokens: parseHeadline('Shop now'),
+        frame: FRAME,
+        measureText,
+        probeContrast: createProbe(photo, FRAME, INK, { shape: 'pill', emPx: 12 }),
+        options: { ink: INK, minContrast: 4.5, boxTop: 0.7, boxBottom: 0.8 },
+      }),
+    );
+    expect(plan.treatment.rung).toBe(0);
+    expect(plan.treatment.steps).toEqual([]);
+    expect(plan.treatment.cleared).toBe(true);
+    expect(plan.contrastRatio).toBeGreaterThan(12);
+  });
+});
+
+describe('stackParagraphs', () => {
+  const FRAME = { width: 1080, height: 1920 };
+  const settings = {
+    ...readSettings({
+      anchor: 'top-right',
+      offsetX: 0,
+      offsetY: 0.1,
+      marginFrac: 0.06,
+      measure: 0.61,
+      minContrast: 3.2,
+      escalate: true,
+    }),
+  };
+  const HEADLINE = '**The jeans I live in**\nHigh rise, dark wash, zero fuss';
+
+  it('puts the subhead on its OWN lines, below the headline, never sharing one', () => {
+    const [headline, subhead] = stackParagraphs({
+      text: HEADLINE,
+      frame: FRAME,
+      measureText,
+      settings,
+    });
+    expect(headline?.tokens.every((token) => token.weight === 'bold')).toBe(true);
+    expect(subhead?.tokens.every((token) => token.weight === 'light')).toBe(true);
+    expect(subhead!.options.boxTop).toBeGreaterThan(headline!.options.boxBottom);
+    // One right-aligned column: both paragraphs end on the same edge.
+    expect(subhead!.options.rightMarginFraction).toBe(headline!.options.rightMarginFraction);
+  });
+
+  it('reduces to the single-block placement for one paragraph', () => {
+    const [only] = stackParagraphs({
+      text: '**Post-set ritual**',
+      frame: FRAME,
+      measureText,
+      settings,
+    });
+    expect(only!.options).toEqual({
+      measureFraction: 0.61,
+      rightMarginFraction: expect.closeTo(0.06, 9),
+      boxTop: expect.closeTo(0.16, 9),
+      boxBottom: expect.any(Number),
+    });
+  });
+
+  it('keeps stacked PLATES apart, so two plates never merge into one shape', () => {
+    const plated = { ...settings, plate: 'box' as const };
+    const [upper, lower] = stackParagraphs({
+      text: HEADLINE,
+      frame: FRAME,
+      measureText,
+      settings: plated,
+    });
+    const box = (options: typeof upper.options) => ({
+      x0: 1 - options.rightMarginFraction - options.measureFraction,
+      y0: options.boxTop,
+      x1: 1 - options.rightMarginFraction,
+      y1: options.boxBottom,
+    });
+    const top = plateRect(FRAME, box(upper!.options), { shape: 'box', emPx: upper!.emPx });
+    const bottom = plateRect(FRAME, box(lower!.options), { shape: 'box', emPx: lower!.emPx });
+    expect(bottom.y).toBeGreaterThan(top.y + top.height);
+  });
+
+  it('scales the type, and a bigger headline takes more lines rather than a wider column', () => {
+    const [plain] = stackParagraphs({
+      text: '**Post-set ritual for real**',
+      frame: FRAME,
+      measureText,
+      settings,
+    });
+    const [big] = stackParagraphs({
+      text: '**Post-set ritual for real**',
+      frame: FRAME,
+      measureText,
+      settings: { ...settings, scale: 1.4 },
+    });
+    expect(big!.emPx).toBeCloseTo(plain!.emPx * 1.4, 6);
+    expect(big!.options.measureFraction).toBe(plain!.options.measureFraction);
+    expect(big!.options.boxBottom - big!.options.boxTop).toBeGreaterThan(
+      plain!.options.boxBottom - plain!.options.boxTop,
+    );
+  });
+
+  it('centres each paragraph on the column when asked — story text, not a flush-right headline', () => {
+    const centred = {
+      ...settings,
+      anchor: 'center' as const,
+      offsetY: 0,
+      align: 'center' as const,
+      // Snug plates are what give paragraphs different widths to centre.
+      plate: 'box' as const,
+    };
+    const [upper, lower] = stackParagraphs({
+      text: 'Post-set\nritual time',
+      frame: FRAME,
+      measureText,
+      settings: centred,
+    });
+    const middle = (options: typeof upper.options) =>
+      1 - options.rightMarginFraction - options.measureFraction / 2;
+    expect(middle(upper!.options)).toBeCloseTo(0.5, 6);
+    expect(middle(lower!.options)).toBeCloseTo(0.5, 6);
+    expect(upper!.options.rightMarginFraction).not.toBeCloseTo(
+      lower!.options.rightMarginFraction,
+      6,
+    );
+  });
+
+  it('sizes a subhead on its own scale under a big cover line', () => {
+    const [head, sub] = stackParagraphs({
+      text: '**Post-set ritual**\nOrange Gatorade, straight from my gym bag',
+      frame: FRAME,
+      measureText,
+      settings: { ...settings, scale: 1.8, subScale: 1.1 },
+    });
+    expect(head!.scale).toBe(1.8);
+    expect(sub!.scale).toBe(1.1);
+    expect(sub!.emPx).toBeCloseTo(FRAME.width * 0.0443 * 1.1, 6);
+  });
+
+  it('is empty for text with no words', () => {
+    expect(stackParagraphs({ text: ' \n ', frame: FRAME, measureText, settings })).toEqual([]);
+  });
+});
+
+describe('a word never breaks mid-word (the Easy Fit stills: "descuent / o", "anualida / d")', () => {
+  const FRAME = { width: 1080, height: 1350 };
+  // A face wider than the planner's estimate, as Easy Fit's was: bold 0.62 em a character.
+  const wide: MeasureText = (text, style) =>
+    text.length * style.sizePx * (style.weight === 'bold' ? 0.62 : 0.55);
+  // The native-story edge column the run set them in: 0.3 of the width, centred story text.
+  const column = (scale: number) => ({
+    ...readSettings({
+      anchor: 'top-right',
+      offsetX: 0,
+      offsetY: 0,
+      marginFrac: 0.03,
+      measure: 0.3,
+      minContrast: 3.2,
+      escalate: false,
+    }),
+    align: 'center' as const,
+    scale,
+  });
+  // The words as the renderer breaks each paragraph: its own box, at its own scale.
+  const setWords = (text: string, scale: number) =>
+    stackParagraphs({ text, frame: FRAME, measureText: wide, settings: column(scale) }).flatMap(
+      (paragraph) =>
+        breakLines(paragraph.tokens, wide, {
+          measure: FRAME.width * paragraph.options.measureFraction,
+          boldSizePx: FRAME.width * VERNE_TITLE_BOLD_SIZE * paragraph.scale,
+          lightSizePx: FRAME.width * VERNE_TITLE_LIGHT_SIZE * paragraph.scale,
+        }).lines.flatMap((line) => line.words.map((word) => word.text)),
+    );
+  const wordsOf = (text: string) => text.replaceAll('**', '').split(/\s+/).filter(Boolean);
+
+  it.each([
+    ['**50% de descuento**\n**en tu anualidad**', 0.9],
+    ['**50% en tu anualidad**', 1.2],
+    ['**Tu primer mes**\nEmpieza hoy sin complicaciones ni pretextos en Easy Fit.', 1.2],
+  ])('%p at scale %p sets every word whole', (text, scale) => {
+    expect(setWords(text, scale)).toEqual(wordsOf(text));
+  });
+
+  it('shrinks only the paragraph whose longest word overruns, and only as far as it must', () => {
+    const [headline, subhead] = stackParagraphs({
+      text: '**Tu primer mes**\nEmpieza hoy sin complicaciones ni pretextos en Easy Fit.',
+      frame: FRAME,
+      measureText: wide,
+      settings: column(1.2),
+    });
+    expect(headline?.scale).toBe(1.2);
+    const longest = wide('complicaciones', {
+      weight: 'light',
+      sizePx: FRAME.width * VERNE_TITLE_LIGHT_SIZE * subhead!.scale,
+    });
+    expect(subhead!.scale).toBeLessThan(1.2);
+    expect(longest).toBeLessThanOrEqual(FRAME.width * 0.3);
+    expect(longest).toBeGreaterThan(FRAME.width * 0.3 * 0.97);
+  });
+
+  it('leaves a scale alone when every word already fits', () => {
+    expect(wordFitScale([{ text: 'Tu primer mes', weight: 'bold' }], FRAME, wide, 0.7, 1.2)).toBe(
+      1.2,
+    );
+  });
+});
+
+describe('snugMeasure', () => {
+  const FRAME = { width: 1080, height: 1350 };
+
+  it('shrinks a plated block to its widest line, so the plate hugs the words', () => {
+    const measure = snugMeasure('Shop now', FRAME, measureText, 0.61);
+    const words = measureText('Shop now', { weight: 'light', sizePx: FRAME.width * 0.0443 });
+    expect(measure).toBeLessThan(0.61);
+    expect(measure * FRAME.width).toBeCloseTo(words + 1, 5);
+  });
+
+  it('never grows past the configured measure', () => {
+    const long = 'Order the full summer set today and get free shipping on every size';
+    expect(snugMeasure(long, FRAME, measureText, 0.3)).toBeLessThanOrEqual(0.3);
   });
 });

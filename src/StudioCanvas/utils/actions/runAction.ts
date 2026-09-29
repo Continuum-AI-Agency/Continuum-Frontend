@@ -10,6 +10,7 @@ import { runActionInWorker } from '../../workers/spliceWorkerClient';
 import { parseDataUrl } from '../dataUrl';
 import { parseAspectRatio } from '../pixel/cropPad';
 import { parseActionConfig } from './actionConfig';
+import { setImageCta } from './ctaComponent';
 import { buildFrameGrid, extractFrames, extractSceneChangeFrames } from './extractFrames';
 import {
   applyBlur,
@@ -345,6 +346,15 @@ const SYNC_OPS: Partial<Record<ActionId, SyncOp>> = {
         config,
         image: await loadImage(inputFor(args, 'in')),
         headline: inputFor(args, 'text-in').text ?? '',
+      }),
+    ),
+  'image.cta': async (args, config) =>
+    imageOutput(
+      await setImageCta({
+        brand: args.brand,
+        config,
+        image: await loadImage(inputFor(args, 'in')),
+        text: inputFor(args, 'text-in').text ?? '',
       }),
     ),
 
