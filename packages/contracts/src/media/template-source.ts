@@ -250,6 +250,8 @@ export const templateParseSchema = z
     filename: z.string().optional(),
     sizeBytes: z.number().int().nonnegative().optional(),
     checksum: z.string().optional(),
+    /** Number of distinct AEP projects in the uploaded package. */
+    projectCount: z.number().int().positive().optional(),
     comps: z.array(templateCompSchema).default([]),
     ratios: z.array(templateRatioSchema).default([]),
     slots: z.array(templateSlotSchema).default([]),
@@ -292,7 +294,7 @@ export function publicationCompsOfParse<T extends { name: string; isDelivery: bo
 ): T[] {
   const candidates = parse?.comps.filter((comp) => comp.isDelivery) ?? [];
   const explicit = candidates.filter((comp) => /^RENDER\b/i.test(comp.name));
-  const delivery = explicit.length > 1 ? explicit : candidates;
+  const delivery = explicit.length ? explicit : candidates;
   const identity = (name: string) => {
     const label = name.replace(/^RENDER\s*/i, '').trim();
     if (/^(?:\d{1,4}[:x]\d{1,4}|story|square|portrait|landscape|vertical|horizontal|feed)$/i.test(label)) return '';

@@ -70,6 +70,7 @@ describe('templateParseSchema', () => {
     const parsed = templateParseSchema.parse(REAL_PARSE);
     expect(parsed.appVersion).toBe('26.3x87');
     expect(parsed.comps.filter((comp) => comp.isDelivery)).toHaveLength(1);
+    expect(templateParseSchema.parse({ ...REAL_PARSE, projectCount: 2 }).projectCount).toBe(2);
   });
 
   // The rational trap: AEP stores frame rate as a dividend/divisor pair, and reading the
