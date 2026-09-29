@@ -292,7 +292,17 @@ export function publicationCompsOfParse<T extends { name: string; isDelivery: bo
 ): T[] {
   const candidates = parse?.comps.filter((comp) => comp.isDelivery) ?? [];
   const explicit = candidates.filter((comp) => /^RENDER\b/i.test(comp.name));
-  return explicit.length > 1 ? explicit : candidates;
+  const delivery = explicit.length > 1 ? explicit : candidates;
+  const identity = (name: string) => {
+    const label = name.replace(/^RENDER\s*/i, '').trim();
+    if (/^(?:\d{1,4}[:x]\d{1,4}|story|square|portrait|landscape|vertical|horizontal|feed)$/i.test(label)) return '';
+    return label.replace(
+      /(?:[\s_(-]+(?:\d{1,4}[:x]\d{1,4}|story|square|portrait|landscape|vertical|horizontal|feed)\)?)+$/i,
+      '',
+    ).trim().toLowerCase();
+  };
+  return delivery.length > 1 && new Set(delivery.map((comp) => identity(comp.name))).size > 1
+    ? delivery : [];
 }
 
 /** The AEP-to-Forge field review shown before and after publication. */
