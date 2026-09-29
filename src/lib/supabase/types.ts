@@ -20478,6 +20478,8 @@ export type Database = {
           render_workspace: string | null
           run_id: string
           slot_roles: Json
+          source_parse: Json | null
+          source_project: string | null
           template_key: string | null
           version_id: string
         }
@@ -20497,6 +20499,8 @@ export type Database = {
           render_workspace?: string | null
           run_id: string
           slot_roles?: Json
+          source_parse?: Json | null
+          source_project?: string | null
           template_key?: string | null
           version_id: string
         }
@@ -20516,6 +20520,8 @@ export type Database = {
           render_workspace?: string | null
           run_id?: string
           slot_roles?: Json
+          source_parse?: Json | null
+          source_project?: string | null
           template_key?: string | null
           version_id?: string
         }
