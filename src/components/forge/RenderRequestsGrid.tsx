@@ -46,6 +46,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDefaultLayout, usePanelRef } from 'react-resizable-panels';
 import { AiDraftDialog, type AiDraftParent } from '@/components/forge/AiVariationsDialog';
 import { DataGrid, KIND_ICONS, STICKY_LEFT, selectColumn } from '@/components/forge/DataGrid';
+import { previewFormats } from '@/components/forge/FormatPreview';
 import {
   ActionMenuItems,
   type GridActionContext,
@@ -53,6 +54,7 @@ import {
   selectionActions,
   takeFocusAfter,
 } from '@/components/forge/gridActions';
+import { useLiveFit } from '@/components/forge/livePreview';
 import { isStillsOnly } from '@/components/forge/OutputSettingsPanel';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { RenderPreviewPanel } from '@/components/forge/RenderPreviewPanel';
@@ -75,6 +77,7 @@ import {
   draftStorageKey,
   duplicateLabel,
   effectiveEncode,
+  effectiveMedia,
   effectiveOutputIds,
   effectiveValues,
   emptyHistory,
@@ -1644,6 +1647,37 @@ export function RenderRequestsGrid({
   // --- the table --------------------------------------------------------------------------
   const columns = useMemo(() => buildColumns(contract), [contract]);
   const nestedRows = useMemo(() => nestRows(rows), [rows]);
+  // Does each value still fit the design — checked on the keystroke, from the Live kit.
+  const fitFormats = useMemo(
+    () =>
+      contract
+        ? previewFormats({ outputs: contract.outputs, ratios: contract.template.ratios })
+        : [],
+    [contract],
+  );
+  const fitOf = useLiveFit({
+    brandId,
+    environment: contract?.template.environment ?? null,
+    templateKey: templateKey || null,
+    formats: fitFormats,
+    enabled: Boolean(contract),
+  });
+  const liveFit = useMemo(
+    () =>
+      new Map(
+        fitOf
+          ? rows.map((row) => {
+              const media = effectiveMedia(rows, row.id);
+              const sizeOf = (key: string) => {
+                const dims = media[key];
+                return dims?.w && dims.h ? { w: dims.w, h: dims.h } : null;
+              };
+              return [row.id, fitOf(effectiveValues(rows, row.id), sizeOf)] as const;
+            })
+          : [],
+      ),
+    [fitOf, rows],
+  );
   const selectedIds = rows.filter((row) => rowSelection[row.id]).map((row) => row.id);
   const hiddenColumns = columns.filter(
     (column) => columnVisibility[column.id ?? ''] === false,
@@ -1658,6 +1692,7 @@ export function RenderRequestsGrid({
         selectedIds,
         hiddenColumns,
         generating: generating !== null,
+        liveFit,
       }
     : undefined;
   const table = useReactTable({

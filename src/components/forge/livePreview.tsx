@@ -1,12 +1,15 @@
 'use client';
 
 import {
+  type ApiRenderFitVerdict,
   type ApiRenderInputValue,
+  checkLiveFit,
   type ForgeRenderLive,
   livePictureKey,
   livePinOf,
   paintLive,
   type ScenePicture,
+  worstFitByKey,
 } from '@continuum/contracts';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { type JSX, memo, useEffect, useMemo } from 'react';
@@ -77,6 +80,58 @@ export function useLiveKit(
     format: format ?? ({ id: '', ratio: null, comp: null } as unknown as PreviewFormat),
   });
   return useQuery({ ...query, enabled: enabled && Boolean(format) });
+}
+
+/** A row's fit, per variable key: `checkLiveFit` over every format's kit, worst format winning. */
+export type LiveFitOf = (
+  values: Readonly<Record<string, ApiRenderInputValue>>,
+  assetSize?: (variableKey: string) => { w: number; h: number } | null,
+) => ReadonlyMap<string, ApiRenderFitVerdict>;
+
+/**
+ * Does each value still fit the design — asked while it is typed. Every format's kit (the same
+ * query the Live preview paints from, so nothing is fetched twice) through `checkLiveFit`, the
+ * arithmetic preflight repeats on the server. No model, no round trip per keystroke. Null until
+ * a kit has landed; a format whose kit never does is simply not checked here, and preflight
+ * still asks.
+ */
+export function useLiveFit(args: {
+  brandId: string;
+  environment: string | null;
+  templateKey: string | null;
+  formats: readonly PreviewFormat[];
+  enabled: boolean;
+}): LiveFitOf | null {
+  const { brandId, environment, templateKey, formats, enabled } = args;
+  const kits = useQueries({
+    queries: formats.map((format) => ({
+      ...liveKitQuery({
+        brandId,
+        environment: environment ?? '',
+        templateKey: templateKey ?? '',
+        format,
+        atSec: null,
+      }),
+      enabled: enabled && Boolean(environment && templateKey),
+    })),
+  });
+  const stamp = kits.map((query) => query.dataUpdatedAt).join(',');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `stamp` changes exactly when a kit lands.
+  return useMemo(() => {
+    const loaded = kits.flatMap((query, i) =>
+      query.data ? [{ format: formats[i]?.ratio ?? formats[i]?.label ?? '', kit: query.data }] : [],
+    );
+    if (loaded.length === 0) return null;
+    return (values, assetSize) =>
+      new Map(
+        worstFitByKey(
+          loaded.map(({ format, kit }) => ({
+            format,
+            verdicts: checkLiveFit({ kit, values, assetSize }),
+          })),
+        ).map((verdict) => [verdict.key, verdict]),
+      );
+  }, [stamp]);
 }
 
 /**
