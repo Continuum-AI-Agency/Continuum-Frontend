@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import type { LibraryPlayback, MediaAsset } from '@continuum/contracts';
+import {
+  type LibraryPlayback,
+  type MediaAsset,
+  PSD_STATIC_EXPORT_ROUTE,
+} from '@continuum/contracts';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { clearLibraryPlaybackCache } from '@/lib/library/libraryPlayback';
 import { registerStageVideo } from '@/lib/library/videoPoster';
@@ -111,7 +115,7 @@ describe('AssetDownloadButton — labelled menu', () => {
     fireEvent.click(screen.getByTestId('download-original'));
 
     await waitFor(() => expect(clicked).toHaveLength(1));
-    expect(signBodies[0]).toEqual({ brandId: 'brand-1', assetId: 'asset-1' });
+    expect(signBodies[0]).toEqual({ brandId: 'brand-1', assetId: 'asset-1', download: 'hero.jpg' });
     expect(clicked[0]?.href).toBe('https://cdn.test/signed?download=hero.jpg');
   });
 
@@ -127,7 +131,12 @@ describe('AssetDownloadButton — labelled menu', () => {
     fireEvent.click(screen.getByTestId('download-original'));
 
     await waitFor(() => expect(signBodies).toHaveLength(1));
-    expect(signBodies[0]).toEqual({ brandId: 'brand-1', assetId: 'asset-1', versionId: 'ver-2' });
+    expect(signBodies[0]).toEqual({
+      brandId: 'brand-1',
+      assetId: 'asset-1',
+      versionId: 'ver-2',
+      download: 'hero.jpg',
+    });
   });
 
   it('looks playback up only when the menu opens, then offers each proxy by name', async () => {
@@ -176,6 +185,40 @@ describe('AssetDownloadButton — labelled menu', () => {
     expect(screen.queryByTestId('download-still')).toBeNull();
   });
 
+  it('saves and downloads both PSD formats for the exact viewed version', async () => {
+    const brandId = '6a49e1a8-0ee8-4101-bed7-1bdc8fd5e088';
+    const assetId = '4ab235c6-33df-4b63-9380-7e0b1f32f871';
+    const versionId = '1c1bb67e-5c2a-4c0f-9f26-3f9b2f9a9a33';
+    const requests: unknown[] = [];
+    globalThis.fetch = (async (url: unknown, init?: { body?: string }) => {
+      expect(String(url).endsWith(PSD_STATIC_EXPORT_ROUTE)).toBe(true);
+      const body = JSON.parse(init?.body ?? '{}');
+      requests.push(body);
+      return Response.json({
+        assetId,
+        versionId,
+        fileName: `art.${body.format === 'jpeg' ? 'jpg' : 'png'}`,
+        mimeType: `image/${body.format}`,
+        signedUrl: 'https://cdn.test/psd-export',
+      });
+    }) as typeof fetch;
+    const clicked = captureAnchor();
+    render(
+      <AssetDownloadButton
+        brandId={brandId}
+        asset={libraryAsset({ id: assetId, kind: 'file', fileName: 'art.PSD' })}
+        versionId={versionId}
+      />,
+    );
+    for (const format of ['png', 'jpeg']) {
+      await openMenu();
+      fireEvent.click(screen.getByTestId(`download-psd-${format}`));
+      await waitFor(() => expect(clicked).toHaveLength(format === 'png' ? 1 : 2));
+      expect(requests.at(-1)).toEqual({ brandId, assetId, versionId, format });
+      expect(clicked.at(-1)?.download).toBe(`art.${format === 'jpeg' ? 'jpg' : 'png'}`);
+    }
+  });
+
   it('offers a still only while a video is on stage', async () => {
     stubRoutes('https://cdn.test/signed');
     const { unmount } = render(<AssetDownloadButton brandId="brand-1" asset={videoAsset()} />);
@@ -199,7 +242,7 @@ describe('AssetDownloadButton — grid card icon', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Download' }));
 
     await waitFor(() => expect(clicked).toHaveLength(1));
-    expect(signBodies[0]).toEqual({ brandId: 'brand-1', assetId: 'asset-1' });
+    expect(signBodies[0]).toEqual({ brandId: 'brand-1', assetId: 'asset-1', download: 'hero.mov' });
     expect(playbackUrls).toEqual([]);
     expect(screen.queryByTestId('download-menu')).toBeNull();
   });
