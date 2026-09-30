@@ -75,9 +75,6 @@ export function ConsentContent({ authorizationId }: { authorizationId: string | 
     // SDK redirects the browser on success, so no post-redirect JS would run.
     const confirmation = await confirmMcpRegistrationAction({
       authorizationId,
-      clientId: details.client.id,
-      clientName: details.client.name,
-      scope: details.scope,
       brandId: selectedBrandId,
     });
     if (!confirmation.registered) {
@@ -241,6 +238,12 @@ export function ConsentContent({ authorizationId }: { authorizationId: string | 
           </ul>
         </div>
       )}
+
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        Allow this client to use Continuum in ChatGPT and other assistants. It can read and manage
+        brands you can access, including content, workflows, and connected marketing services.
+        Actions remain subject to your permissions and required confirmations.
+      </p>
 
       <div className="space-y-2 pt-1">
         <Button type="button" onClick={approve} disabled={submitting} size="lg" className="w-full">

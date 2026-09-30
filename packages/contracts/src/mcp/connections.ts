@@ -25,3 +25,9 @@ export const mcpConnectionsResponseSchema = z.object({
   connections: z.array(mcpClientRegistrationSchema),
 });
 export type McpConnectionsResponse = z.infer<typeof mcpConnectionsResponseSchema>;
+
+export const mcpConfirmRequestSchema = z.object({
+  authorization_id: z.string().min(1).max(128),
+  brand_id: z.string().uuid().nullable().optional(),
+});
+export type McpConfirmRequest = z.infer<typeof mcpConfirmRequestSchema>;

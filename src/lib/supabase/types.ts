@@ -3470,6 +3470,42 @@ export type Database = {
         }
         Relationships: []
       }
+      app_tokens: {
+        Row: {
+          created_at: string
+          id: string
+          last_used_at: string | null
+          last4: string
+          name: string
+          revoked_at: string | null
+          scopes: string[]
+          token_hash: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_used_at?: string | null
+          last4: string
+          name: string
+          revoked_at?: string | null
+          scopes?: string[]
+          token_hash: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_used_at?: string | null
+          last4?: string
+          name?: string
+          revoked_at?: string | null
+          scopes?: string[]
+          token_hash?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       approvals: {
         Row: {
           batch_id: string | null
@@ -8215,6 +8251,74 @@ export type Database = {
           },
         ]
       }
+      notification_deliveries: {
+        Row: {
+          attempts: number
+          channel: string
+          due_at: string | null
+          frequency: string
+          last_error: string | null
+          notification_id: string
+          provider_ref: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          channel: string
+          due_at?: string | null
+          frequency?: string
+          last_error?: string | null
+          notification_id: string
+          provider_ref?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          channel?: string
+          due_at?: string | null
+          frequency?: string
+          last_error?: string | null
+          notification_id?: string
+          provider_ref?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_deliveries_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "notifications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_preferences: {
+        Row: {
+          channel: string
+          frequency: string
+          kind: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          channel: string
+          frequency: string
+          kind: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          channel?: string
+          frequency?: string
+          kind?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           actor_user_id: string | null
@@ -9933,6 +10037,39 @@ export type Database = {
           },
         ]
       }
+      web_push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          last_seen_at: string
+          p256dh: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          last_seen_at?: string
+          p256dh: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          last_seen_at?: string
+          p256dh?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       workflow_library: {
         Row: {
           brand_profile_id: string | null
@@ -11500,6 +11637,11 @@ export type Database = {
           embedding_text: string
         }[]
       }
+      brand_role: { Args: { p_brand_id: string }; Returns: string }
+      brand_role_of: {
+        Args: { p_brand_id: string; p_user_id: string }
+        Returns: string
+      }
       claim_audience_group_publish: {
         Args: {
           p_approval_token_hash: string
@@ -11799,6 +11941,21 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      claim_notification_deliveries: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          brand_id: string
+          channel: string
+          created_at: string
+          frequency: string
+          kind: string
+          notification_id: string
+          payload: Json
+          recipient_email: string
+          recipient_user_id: string
+        }[]
+      }
       claim_onboarding_creative_run: {
         Args: { p_env: string; p_worker_id: string }
         Returns: {
@@ -11922,6 +12079,7 @@ export type Database = {
         Args: { p_document_ids: string[] }
         Returns: number
       }
+      create_app_token: { Args: { p_name: string }; Returns: Json }
       create_audience_group_draft: {
         Args: {
           p_ad_account_id: string
@@ -12318,6 +12476,10 @@ export type Database = {
         }
         Returns: string
       }
+      notification_frequency: {
+        Args: { p_channel: string; p_kind: string; p_user_id: string }
+        Returns: string
+      }
       open_jaina_tool_gate: {
         Args: {
           p_approval_expires_at: string
@@ -12417,6 +12579,10 @@ export type Database = {
         Returns: undefined
       }
       refresh_virality_brand_stats: { Args: never; Returns: number }
+      release_notification_digests: {
+        Args: { p_frequency: string }
+        Returns: number
+      }
       report_send_recently_sent: {
         Args: { p_brand_id: string; p_within?: string }
         Returns: boolean
@@ -12559,6 +12725,7 @@ export type Database = {
         }
         Returns: Json
       }
+      revoke_app_token: { Args: { p_id: string }; Returns: Json }
       revoke_integration_from_brand: {
         Args: { p_grant_id: string }
         Returns: undefined
@@ -16221,6 +16388,7 @@ export type Database = {
           created_by: string
           delivery_receipts: Json
           delivery_target: Json
+          engine: string
           environment: string | null
           error: string | null
           finished_at: string | null
@@ -16232,6 +16400,7 @@ export type Database = {
           label_path: Json
           outputs: Json
           parent_row_id: string | null
+          progress_pct: number | null
           reconcile_after: string
           reconcile_completed_at: string | null
           reconcile_lease_expires_at: string | null
@@ -16267,6 +16436,7 @@ export type Database = {
           created_by: string
           delivery_receipts?: Json
           delivery_target?: Json
+          engine?: string
           environment?: string | null
           error?: string | null
           finished_at?: string | null
@@ -16278,6 +16448,7 @@ export type Database = {
           label_path?: Json
           outputs?: Json
           parent_row_id?: string | null
+          progress_pct?: number | null
           reconcile_after?: string
           reconcile_completed_at?: string | null
           reconcile_lease_expires_at?: string | null
@@ -16313,6 +16484,7 @@ export type Database = {
           created_by?: string
           delivery_receipts?: Json
           delivery_target?: Json
+          engine?: string
           environment?: string | null
           error?: string | null
           finished_at?: string | null
@@ -16324,6 +16496,7 @@ export type Database = {
           label_path?: Json
           outputs?: Json
           parent_row_id?: string | null
+          progress_pct?: number | null
           reconcile_after?: string
           reconcile_completed_at?: string | null
           reconcile_lease_expires_at?: string | null
@@ -16554,6 +16727,60 @@ export type Database = {
             columns: ["field_id"]
             isOneToOne: false
             referencedRelation: "custom_fields"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asset_frame_embeddings: {
+        Row: {
+          asset_id: string
+          asset_version_id: string
+          brand_id: string
+          created_at: string
+          embedding: string
+          id: string
+          model: string
+          rendition_id: string
+          role: string
+          source_timestamp_ms: number | null
+        }
+        Insert: {
+          asset_id: string
+          asset_version_id: string
+          brand_id: string
+          created_at?: string
+          embedding: string
+          id?: string
+          model: string
+          rendition_id: string
+          role: string
+          source_timestamp_ms?: number | null
+        }
+        Update: {
+          asset_id?: string
+          asset_version_id?: string
+          brand_id?: string
+          created_at?: string
+          embedding?: string
+          id?: string
+          model?: string
+          rendition_id?: string
+          role?: string
+          source_timestamp_ms?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_frame_embeddings_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_frame_embeddings_rendition_id_fkey"
+            columns: ["rendition_id"]
+            isOneToOne: false
+            referencedRelation: "asset_renditions"
             referencedColumns: ["id"]
           },
         ]
@@ -16814,11 +17041,13 @@ export type Database = {
           height: number | null
           id: string
           mime_type: string | null
+          poster_source: string | null
           renderer: string | null
           renderer_version: string | null
           role: string
           size_bytes: number | null
           source_checksum: string | null
+          source_timestamp_ms: number | null
           state: string
           storage_path: string | null
           updated_at: string
@@ -16837,11 +17066,13 @@ export type Database = {
           height?: number | null
           id?: string
           mime_type?: string | null
+          poster_source?: string | null
           renderer?: string | null
           renderer_version?: string | null
           role: string
           size_bytes?: number | null
           source_checksum?: string | null
+          source_timestamp_ms?: number | null
           state?: string
           storage_path?: string | null
           updated_at?: string
@@ -16860,11 +17091,13 @@ export type Database = {
           height?: number | null
           id?: string
           mime_type?: string | null
+          poster_source?: string | null
           renderer?: string | null
           renderer_version?: string | null
           role?: string
           size_bytes?: number | null
           source_checksum?: string | null
+          source_timestamp_ms?: number | null
           state?: string
           storage_path?: string | null
           updated_at?: string
@@ -16896,7 +17129,9 @@ export type Database = {
           from_status: string
           id: string
           note: string | null
+          to_state_id: string | null
           to_status: string
+          version_id: string | null
         }
         Insert: {
           actor?: string | null
@@ -16906,7 +17141,9 @@ export type Database = {
           from_status: string
           id?: string
           note?: string | null
+          to_state_id?: string | null
           to_status: string
+          version_id?: string | null
         }
         Update: {
           actor?: string | null
@@ -16916,7 +17153,9 @@ export type Database = {
           from_status?: string
           id?: string
           note?: string | null
+          to_state_id?: string | null
           to_status?: string
+          version_id?: string | null
         }
         Relationships: [
           {
@@ -16924,6 +17163,20 @@ export type Database = {
             columns: ["asset_id"]
             isOneToOne: false
             referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_review_events_to_state_id_fkey"
+            columns: ["to_state_id"]
+            isOneToOne: false
+            referencedRelation: "review_custom_states"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_review_events_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "asset_versions"
             referencedColumns: ["id"]
           },
         ]
@@ -17035,8 +17288,12 @@ export type Database = {
           height: number | null
           id: string
           integrity_state: string
+          media_info: Json | null
           mime_type: string
           note: string | null
+          review_state_id: string | null
+          review_status: string | null
+          review_status_updated_at: string | null
           size_bytes: number | null
           storage_path: string
           version_number: number
@@ -17056,8 +17313,12 @@ export type Database = {
           height?: number | null
           id?: string
           integrity_state?: string
+          media_info?: Json | null
           mime_type: string
           note?: string | null
+          review_state_id?: string | null
+          review_status?: string | null
+          review_status_updated_at?: string | null
           size_bytes?: number | null
           storage_path: string
           version_number: number
@@ -17077,8 +17338,12 @@ export type Database = {
           height?: number | null
           id?: string
           integrity_state?: string
+          media_info?: Json | null
           mime_type?: string
           note?: string | null
+          review_state_id?: string | null
+          review_status?: string | null
+          review_status_updated_at?: string | null
           size_bytes?: number | null
           storage_path?: string
           version_number?: number
@@ -17106,139 +17371,254 @@ export type Database = {
             referencedRelation: "asset_versions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "asset_versions_review_state_fk"
+            columns: ["brand_id", "review_state_id", "review_status"]
+            isOneToOne: false
+            referencedRelation: "review_custom_states"
+            referencedColumns: ["brand_id", "id", "base_status"]
+          },
+        ]
+      }
+      asset_views: {
+        Row: {
+          asset_id: string
+          brand_id: string
+          first_seen_at: string
+          last_seen_at: string
+          user_id: string
+          view_count: number
+        }
+        Insert: {
+          asset_id: string
+          brand_id: string
+          first_seen_at?: string
+          last_seen_at?: string
+          user_id: string
+          view_count?: number
+        }
+        Update: {
+          asset_id?: string
+          brand_id?: string
+          first_seen_at?: string
+          last_seen_at?: string
+          user_id?: string
+          view_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_views_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
         ]
       }
       assets: {
         Row: {
           ad_creative_analysis: Json | null
           aspect_ratio: string | null
+          audio_bit_depth: number | null
+          audio_bit_rate: number | null
+          audio_channels: number | null
+          audio_codec: string | null
+          audio_sample_rate: number | null
+          bit_depth: number | null
+          bit_rate: number | null
           brand_id: string
           bucket: string
           checksum: string | null
+          color_space: string | null
           created_at: string
           created_by: string | null
           deleted_at: string | null
           description: string | null
           detected_objects: Json
           duration_ms: number | null
+          dynamic_range: string | null
           embedding_image: string | null
           embedding_model: string | null
           embedding_text: string | null
+          end_timecode: string | null
           error_code: string | null
           error_message: string | null
           file_name: string
+          frame_rate: number | null
+          has_alpha: boolean | null
           has_image_embedding: boolean | null
+          has_location: boolean | null
           head_version_id: string | null
           height: number | null
           id: string
           integrity_state: string
           kind: string
+          media_probe_error: string | null
+          media_probed_at: string | null
           mime_type: string
+          notes: string | null
           origin_ref: Json | null
+          page_count: number | null
           progress_step: string | null
+          review_state_id: string | null
           review_status: string
           review_status_updated_at: string | null
           size_bytes: number | null
           source: string
+          start_timecode: string | null
           status: string
           storage_path: string
           tags: string[]
           thumbnail_path: string | null
           title: string | null
           transcript: string | null
+          transcript_language: string | null
           transcript_segments: Json | null
           transcript_source: string | null
           updated_at: string
+          video_bit_rate: number | null
+          video_codec: string | null
           video_insights: Json | null
           width: number | null
         }
         Insert: {
           ad_creative_analysis?: Json | null
           aspect_ratio?: string | null
+          audio_bit_depth?: number | null
+          audio_bit_rate?: number | null
+          audio_channels?: number | null
+          audio_codec?: string | null
+          audio_sample_rate?: number | null
+          bit_depth?: number | null
+          bit_rate?: number | null
           brand_id: string
           bucket?: string
           checksum?: string | null
+          color_space?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
           detected_objects?: Json
           duration_ms?: number | null
+          dynamic_range?: string | null
           embedding_image?: string | null
           embedding_model?: string | null
           embedding_text?: string | null
+          end_timecode?: string | null
           error_code?: string | null
           error_message?: string | null
           file_name: string
+          frame_rate?: number | null
+          has_alpha?: boolean | null
           has_image_embedding?: boolean | null
+          has_location?: boolean | null
           head_version_id?: string | null
           height?: number | null
           id?: string
           integrity_state?: string
           kind: string
+          media_probe_error?: string | null
+          media_probed_at?: string | null
           mime_type: string
+          notes?: string | null
           origin_ref?: Json | null
+          page_count?: number | null
           progress_step?: string | null
+          review_state_id?: string | null
           review_status?: string
           review_status_updated_at?: string | null
           size_bytes?: number | null
           source?: string
+          start_timecode?: string | null
           status?: string
           storage_path: string
           tags?: string[]
           thumbnail_path?: string | null
           title?: string | null
           transcript?: string | null
+          transcript_language?: string | null
           transcript_segments?: Json | null
           transcript_source?: string | null
           updated_at?: string
+          video_bit_rate?: number | null
+          video_codec?: string | null
           video_insights?: Json | null
           width?: number | null
         }
         Update: {
           ad_creative_analysis?: Json | null
           aspect_ratio?: string | null
+          audio_bit_depth?: number | null
+          audio_bit_rate?: number | null
+          audio_channels?: number | null
+          audio_codec?: string | null
+          audio_sample_rate?: number | null
+          bit_depth?: number | null
+          bit_rate?: number | null
           brand_id?: string
           bucket?: string
           checksum?: string | null
+          color_space?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
           detected_objects?: Json
           duration_ms?: number | null
+          dynamic_range?: string | null
           embedding_image?: string | null
           embedding_model?: string | null
           embedding_text?: string | null
+          end_timecode?: string | null
           error_code?: string | null
           error_message?: string | null
           file_name?: string
+          frame_rate?: number | null
+          has_alpha?: boolean | null
           has_image_embedding?: boolean | null
+          has_location?: boolean | null
           head_version_id?: string | null
           height?: number | null
           id?: string
           integrity_state?: string
           kind?: string
+          media_probe_error?: string | null
+          media_probed_at?: string | null
           mime_type?: string
+          notes?: string | null
           origin_ref?: Json | null
+          page_count?: number | null
           progress_step?: string | null
+          review_state_id?: string | null
           review_status?: string
           review_status_updated_at?: string | null
           size_bytes?: number | null
           source?: string
+          start_timecode?: string | null
           status?: string
           storage_path?: string
           tags?: string[]
           thumbnail_path?: string | null
           title?: string | null
           transcript?: string | null
+          transcript_language?: string | null
           transcript_segments?: Json | null
           transcript_source?: string | null
           updated_at?: string
+          video_bit_rate?: number | null
+          video_codec?: string | null
           video_insights?: Json | null
           width?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "assets_review_state_fk"
+            columns: ["brand_id", "review_state_id", "review_status"]
+            isOneToOne: false
+            referencedRelation: "review_custom_states"
+            referencedColumns: ["brand_id", "id", "base_status"]
+          },
           {
             foreignKeyName: "media_assets_head_version_fk"
             columns: ["head_version_id"]
@@ -17377,8 +17757,44 @@ export type Database = {
           },
         ]
       }
+      collection_members: {
+        Row: {
+          added_by: string | null
+          brand_id: string
+          collection_id: string
+          created_at: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          added_by?: string | null
+          brand_id: string
+          collection_id: string
+          created_at?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          added_by?: string | null
+          brand_id?: string
+          collection_id?: string
+          created_at?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collection_members_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collections: {
         Row: {
+          access: string
           brand_id: string
           cover_asset_id: string | null
           created_at: string
@@ -17391,8 +17807,11 @@ export type Database = {
           smart_query: Json | null
           system_key: string | null
           updated_at: string
+          view_config: Json
+          visibility: string
         }
         Insert: {
+          access?: string
           brand_id: string
           cover_asset_id?: string | null
           created_at?: string
@@ -17405,8 +17824,11 @@ export type Database = {
           smart_query?: Json | null
           system_key?: string | null
           updated_at?: string
+          view_config?: Json
+          visibility?: string
         }
         Update: {
+          access?: string
           brand_id?: string
           cover_asset_id?: string | null
           created_at?: string
@@ -17419,6 +17841,8 @@ export type Database = {
           smart_query?: Json | null
           system_key?: string | null
           updated_at?: string
+          view_config?: Json
+          visibility?: string
         }
         Relationships: [
           {
@@ -17437,16 +17861,60 @@ export type Database = {
           },
         ]
       }
+      comment_reactions: {
+        Row: {
+          asset_id: string
+          brand_id: string
+          comment_id: string
+          created_at: string
+          emoji: string
+          user_id: string
+        }
+        Insert: {
+          asset_id: string
+          brand_id: string
+          comment_id: string
+          created_at?: string
+          emoji: string
+          user_id?: string
+        }
+        Update: {
+          asset_id?: string
+          brand_id?: string
+          comment_id?: string
+          created_at?: string
+          emoji?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_reactions_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comment_reactions_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comments: {
         Row: {
           annotation: Json | null
           asset_id: string
+          attachments: Json
           body: string
           brand_id: string
           created_at: string
           created_by: string | null
           deleted_at: string | null
           external_reviewer_session_id: string | null
+          hashtags: string[]
           id: string
           mentions: Json
           parent_comment_id: string | null
@@ -17459,12 +17927,14 @@ export type Database = {
         Insert: {
           annotation?: Json | null
           asset_id: string
+          attachments?: Json
           body: string
           brand_id: string
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
           external_reviewer_session_id?: string | null
+          hashtags?: string[]
           id?: string
           mentions?: Json
           parent_comment_id?: string | null
@@ -17477,12 +17947,14 @@ export type Database = {
         Update: {
           annotation?: Json | null
           asset_id?: string
+          attachments?: Json
           body?: string
           brand_id?: string
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
           external_reviewer_session_id?: string | null
+          hashtags?: string[]
           id?: string
           mentions?: Json
           parent_comment_id?: string | null
@@ -18036,6 +18508,57 @@ export type Database = {
           },
         ]
       }
+      font_aliases: {
+        Row: {
+          brand_id: string
+          created_at: string
+          decided_by: string | null
+          font_id: string
+          id: string
+          requested_family: string
+          requested_family_key: string
+          template_asset_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          decided_by?: string | null
+          font_id: string
+          id?: string
+          requested_family: string
+          requested_family_key: string
+          template_asset_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          decided_by?: string | null
+          font_id?: string
+          id?: string
+          requested_family?: string
+          requested_family_key?: string
+          template_asset_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "font_aliases_font_id_fkey"
+            columns: ["font_id"]
+            isOneToOne: false
+            referencedRelation: "fonts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "font_aliases_template_asset_id_fkey"
+            columns: ["template_asset_id"]
+            isOneToOne: false
+            referencedRelation: "template_sources"
+            referencedColumns: ["asset_id"]
+          },
+        ]
+      }
       fonts: {
         Row: {
           brand_id: string | null
@@ -18101,6 +18624,554 @@ export type Database = {
           win_registry_name?: string | null
         }
         Relationships: []
+      }
+      forge_motion_proofs: {
+        Row: {
+          binding_id: string
+          brand_id: string
+          comp: string
+          content_hash: string
+          contract_hash: string
+          created_at: string
+          created_by: string
+          duration_sec: number | null
+          environment: string
+          error: string | null
+          finished_at: string | null
+          font_hashes: Json
+          frame_rate: number | null
+          has_audio: boolean | null
+          id: string
+          media_versions: Json
+          output_id: string
+          profile: string
+          progress_pct: number | null
+          proxy_path: string | null
+          render_input: Json
+          state: string
+          task_uid: string | null
+          template_commit_sha: string | null
+          template_key: string
+          template_source_sha256: string
+          updated_at: string
+        }
+        Insert: {
+          binding_id: string
+          brand_id: string
+          comp: string
+          content_hash: string
+          contract_hash: string
+          created_at?: string
+          created_by: string
+          duration_sec?: number | null
+          environment: string
+          error?: string | null
+          finished_at?: string | null
+          font_hashes?: Json
+          frame_rate?: number | null
+          has_audio?: boolean | null
+          id?: string
+          media_versions?: Json
+          output_id: string
+          profile?: string
+          progress_pct?: number | null
+          proxy_path?: string | null
+          render_input: Json
+          state?: string
+          task_uid?: string | null
+          template_commit_sha?: string | null
+          template_key: string
+          template_source_sha256: string
+          updated_at?: string
+        }
+        Update: {
+          binding_id?: string
+          brand_id?: string
+          comp?: string
+          content_hash?: string
+          contract_hash?: string
+          created_at?: string
+          created_by?: string
+          duration_sec?: number | null
+          environment?: string
+          error?: string | null
+          finished_at?: string | null
+          font_hashes?: Json
+          frame_rate?: number | null
+          has_audio?: boolean | null
+          id?: string
+          media_versions?: Json
+          output_id?: string
+          profile?: string
+          progress_pct?: number | null
+          proxy_path?: string | null
+          render_input?: Json
+          state?: string
+          task_uid?: string | null
+          template_commit_sha?: string | null
+          template_key?: string
+          template_source_sha256?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forge_motion_proofs_binding_id_brand_id_fkey"
+            columns: ["binding_id", "brand_id"]
+            isOneToOne: false
+            referencedRelation: "render_workspace_bindings"
+            referencedColumns: ["id", "brand_id"]
+          },
+        ]
+      }
+      headless_brand_facts: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          brand_id: string
+          created_at: string
+          created_by: string
+          id: string
+          kind: string
+          revoked_at: string | null
+          sha256: string
+          source_ref: string
+          text: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          brand_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          kind: string
+          revoked_at?: string | null
+          sha256: string
+          source_ref: string
+          text: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          brand_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          kind?: string
+          revoked_at?: string | null
+          sha256?: string
+          source_ref?: string
+          text?: string
+        }
+        Relationships: []
+      }
+      headless_brand_styles: {
+        Row: {
+          approved_by: string | null
+          brand_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          preview_asset_id: string | null
+          slug: string
+          spec: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          approved_by?: string | null
+          brand_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          preview_asset_id?: string | null
+          slug: string
+          spec: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          approved_by?: string | null
+          brand_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          preview_asset_id?: string | null
+          slug?: string
+          spec?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      headless_content_revisions: {
+        Row: {
+          brand_id: string
+          content_id: string
+          created_at: string
+          created_by: string | null
+          revision: number
+          schema_version: number
+          spec: Json
+        }
+        Insert: {
+          brand_id: string
+          content_id: string
+          created_at?: string
+          created_by?: string | null
+          revision: number
+          schema_version: number
+          spec: Json
+        }
+        Update: {
+          brand_id?: string
+          content_id?: string
+          created_at?: string
+          created_by?: string | null
+          revision?: number
+          schema_version?: number
+          spec?: Json
+        }
+        Relationships: []
+      }
+      headless_element_approvals: {
+        Row: {
+          approved_at: string
+          approved_by: string
+          brand_id: string
+          element_id: string
+          revision: number
+          revoked_at: string | null
+        }
+        Insert: {
+          approved_at?: string
+          approved_by: string
+          brand_id: string
+          element_id: string
+          revision: number
+          revoked_at?: string | null
+        }
+        Update: {
+          approved_at?: string
+          approved_by?: string
+          brand_id?: string
+          element_id?: string
+          revision?: number
+          revoked_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "headless_element_approvals_element_id_revision_fkey"
+            columns: ["element_id", "revision"]
+            isOneToOne: true
+            referencedRelation: "headless_element_revisions"
+            referencedColumns: ["element_id", "revision"]
+          },
+        ]
+      }
+      headless_element_revisions: {
+        Row: {
+          brand_id: string
+          created_at: string
+          created_by: string | null
+          element_id: string
+          kind: string
+          payload: Json
+          revision: number
+          rights_ref: string
+          schema_version: number
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          created_by?: string | null
+          element_id: string
+          kind: string
+          payload: Json
+          revision: number
+          rights_ref: string
+          schema_version: number
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          created_by?: string | null
+          element_id?: string
+          kind?: string
+          payload?: Json
+          revision?: number
+          rights_ref?: string
+          schema_version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "headless_element_revisions_element_id_fkey"
+            columns: ["element_id"]
+            isOneToOne: false
+            referencedRelation: "asset_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      headless_executions: {
+        Row: {
+          attempt_count: number
+          brand_id: string
+          created_at: string
+          error_code: string | null
+          id: string
+          input: Json
+          lease_expires_at: string | null
+          lease_token: string | null
+          operation: string
+          provider_interaction_id: string | null
+          result: Json | null
+          signature: string
+          state: string
+          updated_at: string
+          worker_id: string | null
+        }
+        Insert: {
+          attempt_count?: number
+          brand_id: string
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          input: Json
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          operation: string
+          provider_interaction_id?: string | null
+          result?: Json | null
+          signature: string
+          state?: string
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Update: {
+          attempt_count?: number
+          brand_id?: string
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          input?: Json
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          operation?: string
+          provider_interaction_id?: string | null
+          result?: Json | null
+          signature?: string
+          state?: string
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Relationships: []
+      }
+      headless_output_reviews: {
+        Row: {
+          asset_id: string
+          decided_at: string
+          decided_by: string
+          decision: string
+          output_id: string
+          run_id: string
+          version_id: string
+        }
+        Insert: {
+          asset_id: string
+          decided_at?: string
+          decided_by: string
+          decision: string
+          output_id: string
+          run_id: string
+          version_id: string
+        }
+        Update: {
+          asset_id?: string
+          decided_at?: string
+          decided_by?: string
+          decision?: string
+          output_id?: string
+          run_id?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "headless_output_reviews_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "headless_output_reviews_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "headless_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "headless_output_reviews_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "asset_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      headless_prepared_characters: {
+        Row: {
+          approved: boolean
+          brand_id: string
+          created_at: string
+          element_id: string
+          manifest: Json
+          preparation_signature: string
+          revision: number
+        }
+        Insert: {
+          approved?: boolean
+          brand_id: string
+          created_at?: string
+          element_id: string
+          manifest: Json
+          preparation_signature: string
+          revision: number
+        }
+        Update: {
+          approved?: boolean
+          brand_id?: string
+          created_at?: string
+          element_id?: string
+          manifest?: Json
+          preparation_signature?: string
+          revision?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "headless_prepared_characters_element_id_revision_fkey"
+            columns: ["element_id", "revision"]
+            isOneToOne: false
+            referencedRelation: "headless_element_revisions"
+            referencedColumns: ["element_id", "revision"]
+          },
+        ]
+      }
+      headless_run_steps: {
+        Row: {
+          depends_on: string[]
+          execution_id: string | null
+          operation: string
+          result: Json | null
+          run_id: string
+          state: string
+          step_id: string
+          updated_at: string
+        }
+        Insert: {
+          depends_on?: string[]
+          execution_id?: string | null
+          operation: string
+          result?: Json | null
+          run_id: string
+          state?: string
+          step_id: string
+          updated_at?: string
+        }
+        Update: {
+          depends_on?: string[]
+          execution_id?: string | null
+          operation?: string
+          result?: Json | null
+          run_id?: string
+          state?: string
+          step_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "headless_run_steps_execution_id_fkey"
+            columns: ["execution_id"]
+            isOneToOne: false
+            referencedRelation: "headless_executions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "headless_run_steps_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "headless_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      headless_runs: {
+        Row: {
+          brand_id: string
+          budget_cap_usd: number
+          concurrency: number
+          content_id: string
+          content_revision: number
+          created_at: string
+          created_by: string | null
+          id: string
+          idempotency_key: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          plan: Json
+          request_hash: string
+          state: string
+          updated_at: string
+          worker_id: string | null
+        }
+        Insert: {
+          brand_id: string
+          budget_cap_usd: number
+          concurrency?: number
+          content_id: string
+          content_revision: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key: string
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          plan: Json
+          request_hash: string
+          state?: string
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Update: {
+          brand_id?: string
+          budget_cap_usd?: number
+          concurrency?: number
+          content_id?: string
+          content_revision?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key?: string
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          plan?: Json
+          request_hash?: string
+          state?: string
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "headless_runs_content_id_content_revision_fkey"
+            columns: ["content_id", "content_revision"]
+            isOneToOne: false
+            referencedRelation: "headless_content_revisions"
+            referencedColumns: ["content_id", "revision"]
+          },
+        ]
       }
       intake_forms: {
         Row: {
@@ -18199,6 +19270,90 @@ export type Database = {
             columns: ["intake_form_id"]
             isOneToOne: false
             referencedRelation: "intake_forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      library_view_preferences: {
+        Row: {
+          brand_id: string
+          config: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          brand_id: string
+          config?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          brand_id?: string
+          config?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      media_probe_jobs: {
+        Row: {
+          asset_id: string
+          asset_version_id: string
+          attempts: number
+          available_at: string
+          brand_id: string
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          lease_expires_at: string | null
+          leased_by: string | null
+          max_attempts: number
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          asset_id: string
+          asset_version_id: string
+          attempts?: number
+          available_at?: string
+          brand_id: string
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          lease_expires_at?: string | null
+          leased_by?: string | null
+          max_attempts?: number
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          asset_id?: string
+          asset_version_id?: string
+          attempts?: number
+          available_at?: string
+          brand_id?: string
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          lease_expires_at?: string | null
+          leased_by?: string | null
+          max_attempts?: number
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_probe_jobs_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_probe_jobs_asset_version_id_fkey"
+            columns: ["asset_version_id"]
+            isOneToOne: true
+            referencedRelation: "asset_versions"
             referencedColumns: ["id"]
           },
         ]
@@ -18670,6 +19825,7 @@ export type Database = {
         Row: {
           binding_id: string
           brand_id: string
+          collection_id: string | null
           contract_hash: string
           created_at: string
           created_by: string | null
@@ -18684,6 +19840,7 @@ export type Database = {
         Insert: {
           binding_id: string
           brand_id: string
+          collection_id?: string | null
           contract_hash: string
           created_at?: string
           created_by?: string | null
@@ -18698,6 +19855,7 @@ export type Database = {
         Update: {
           binding_id?: string
           brand_id?: string
+          collection_id?: string | null
           contract_hash?: string
           created_at?: string
           created_by?: string | null
@@ -18716,6 +19874,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "render_workspace_bindings"
             referencedColumns: ["id", "brand_id"]
+          },
+          {
+            foreignKeyName: "render_sets_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -18870,6 +20035,39 @@ export type Database = {
           },
         ]
       }
+      review_custom_states: {
+        Row: {
+          base_status: string
+          brand_id: string
+          color: string
+          created_at: string
+          created_by: string | null
+          id: string
+          label: string
+          position: number
+        }
+        Insert: {
+          base_status: string
+          brand_id: string
+          color: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label: string
+          position?: number
+        }
+        Update: {
+          base_status?: string
+          brand_id?: string
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string
+          position?: number
+        }
+        Relationships: []
+      }
       review_requests: {
         Row: {
           asset_id: string
@@ -18926,6 +20124,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      review_state_labels: {
+        Row: {
+          brand_id: string
+          color: string
+          label: string
+          position: number
+          state: string
+        }
+        Insert: {
+          brand_id: string
+          color: string
+          label: string
+          position?: number
+          state: string
+        }
+        Update: {
+          brand_id?: string
+          color?: string
+          label?: string
+          position?: number
+          state?: string
+        }
+        Relationships: []
       }
       saved_views: {
         Row: {
@@ -19006,6 +20228,74 @@ export type Database = {
           },
         ]
       }
+      share_link_events: {
+        Row: {
+          asset_id: string | null
+          brand_id: string
+          created_at: string
+          id: string
+          ip_hash: string | null
+          kind: string
+          reviewer_session_id: string | null
+          share_link_id: string
+          user_agent: string | null
+          version_id: string | null
+        }
+        Insert: {
+          asset_id?: string | null
+          brand_id: string
+          created_at?: string
+          id?: string
+          ip_hash?: string | null
+          kind: string
+          reviewer_session_id?: string | null
+          share_link_id: string
+          user_agent?: string | null
+          version_id?: string | null
+        }
+        Update: {
+          asset_id?: string | null
+          brand_id?: string
+          created_at?: string
+          id?: string
+          ip_hash?: string | null
+          kind?: string
+          reviewer_session_id?: string | null
+          share_link_id?: string
+          user_agent?: string | null
+          version_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "share_link_events_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "share_link_events_reviewer_session_id_fkey"
+            columns: ["reviewer_session_id"]
+            isOneToOne: false
+            referencedRelation: "external_reviewer_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "share_link_events_share_link_id_fkey"
+            columns: ["share_link_id"]
+            isOneToOne: false
+            referencedRelation: "share_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "share_link_events_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "asset_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       share_links: {
         Row: {
           allow_approval: boolean
@@ -19013,11 +20303,14 @@ export type Database = {
           allow_download: boolean
           asset_id: string | null
           brand_id: string
+          branding: Json
           collection_id: string | null
           created_at: string
           created_by: string | null
           expires_at: string | null
+          featured_field_id: string | null
           id: string
+          layout: string
           membership_snapshotted_at: string | null
           passcode_hash: string | null
           permissions: string
@@ -19029,6 +20322,7 @@ export type Database = {
           show_metadata: boolean
           token: string
           version_mode: string
+          watermark: Json | null
         }
         Insert: {
           allow_approval?: boolean
@@ -19036,11 +20330,14 @@ export type Database = {
           allow_download?: boolean
           asset_id?: string | null
           brand_id: string
+          branding?: Json
           collection_id?: string | null
           created_at?: string
           created_by?: string | null
           expires_at?: string | null
+          featured_field_id?: string | null
           id?: string
+          layout?: string
           membership_snapshotted_at?: string | null
           passcode_hash?: string | null
           permissions?: string
@@ -19052,6 +20349,7 @@ export type Database = {
           show_metadata?: boolean
           token: string
           version_mode?: string
+          watermark?: Json | null
         }
         Update: {
           allow_approval?: boolean
@@ -19059,11 +20357,14 @@ export type Database = {
           allow_download?: boolean
           asset_id?: string | null
           brand_id?: string
+          branding?: Json
           collection_id?: string | null
           created_at?: string
           created_by?: string | null
           expires_at?: string | null
+          featured_field_id?: string | null
           id?: string
+          layout?: string
           membership_snapshotted_at?: string | null
           passcode_hash?: string | null
           permissions?: string
@@ -19075,6 +20376,7 @@ export type Database = {
           show_metadata?: boolean
           token?: string
           version_mode?: string
+          watermark?: Json | null
         }
         Relationships: [
           {
@@ -19089,6 +20391,13 @@ export type Database = {
             columns: ["collection_id"]
             isOneToOne: false
             referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "share_links_featured_field_id_fkey"
+            columns: ["featured_field_id"]
+            isOneToOne: false
+            referencedRelation: "custom_fields"
             referencedColumns: ["id"]
           },
           {
@@ -19272,6 +20581,7 @@ export type Database = {
           brand_id: string
           char_budget: number | null
           default_value: Json | null
+          exposed: boolean | null
           kind: string
           public_name: string | null
           required: boolean | null
@@ -19287,6 +20597,7 @@ export type Database = {
           brand_id: string
           char_budget?: number | null
           default_value?: Json | null
+          exposed?: boolean | null
           kind: string
           public_name?: string | null
           required?: boolean | null
@@ -19302,6 +20613,7 @@ export type Database = {
           brand_id?: string
           char_budget?: number | null
           default_value?: Json | null
+          exposed?: boolean | null
           kind?: string
           public_name?: string | null
           required?: boolean | null
@@ -19575,17 +20887,74 @@ export type Database = {
     Functions: {
       _assert_brand: { Args: { p_brand_id: string }; Returns: undefined }
       _window_metrics: { Args: { w: Json }; Returns: Json }
+      any_restricted_collection: { Args: never; Returns: boolean }
       aspect_ratio_bin: {
         Args: { p_height: number; p_width: number }
+        Returns: string
+      }
+      asset_collection_role: { Args: { p_asset: string }; Returns: string }
+      asset_collection_role_as: {
+        Args: { p_asset: string; p_user: string }
         Returns: string
       }
       asset_in_brand: {
         Args: { p_asset_id: string; p_brand_id: string }
         Returns: boolean
       }
+      asset_in_restricted_collection: {
+        Args: { p_asset: string }
+        Returns: boolean
+      }
+      asset_matches_field_filter: {
+        Args: { p_asset_id: string; p_filter: Json; p_viewer: string }
+        Returns: boolean
+      }
+      asset_matches_field_range: {
+        Args: { p_asset_id: string; p_range: Json }
+        Returns: boolean
+      }
+      asset_matches_smart_query: {
+        Args: {
+          p_asset: Database["media"]["Tables"]["assets"]["Row"]
+          p_query: Json
+          p_viewer: string
+        }
+        Returns: boolean
+      }
+      caller_blocked_anywhere: { Args: never; Returns: boolean }
+      caller_limited_anywhere: { Args: never; Returns: boolean }
+      can_edit_asset: {
+        Args: { p_asset: string; p_brand: string }
+        Returns: boolean
+      }
+      can_edit_collection: {
+        Args: { p_collection: string; p_need: number }
+        Returns: boolean
+      }
       can_operate_brand: {
         Args: { p_brand_id: string; p_user_id: string }
         Returns: boolean
+      }
+      can_see_asset: {
+        Args: { p_asset: string; p_brand: string }
+        Returns: boolean
+      }
+      can_see_asset_as: {
+        Args: { p_asset: string; p_brand: string; p_user: string }
+        Returns: boolean
+      }
+      can_see_collection: { Args: { p_collection: string }; Returns: boolean }
+      can_see_collection_as: {
+        Args: { p_collection: string; p_user: string }
+        Returns: boolean
+      }
+      canvas_library_context: {
+        Args: {
+          p_asset_ids: string[]
+          p_brand_id: string
+          p_version_ids?: string[]
+        }
+        Returns: Json
       }
       claim_client_render_job: {
         Args: {
@@ -19663,6 +21032,88 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "editor_generation_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_headless_execution: {
+        Args: {
+          p_brand_id: string
+          p_lease_seconds?: number
+          p_signature: string
+          p_worker_id: string
+        }
+        Returns: {
+          attempt_count: number
+          brand_id: string
+          created_at: string
+          error_code: string | null
+          id: string
+          input: Json
+          lease_expires_at: string | null
+          lease_token: string | null
+          operation: string
+          provider_interaction_id: string | null
+          result: Json | null
+          signature: string
+          state: string
+          updated_at: string
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "headless_executions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_headless_run: {
+        Args: { p_lease_seconds?: number; p_worker_id: string }
+        Returns: {
+          brand_id: string
+          budget_cap_usd: number
+          concurrency: number
+          content_id: string
+          content_revision: number
+          created_at: string
+          created_by: string | null
+          id: string
+          idempotency_key: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          plan: Json
+          request_hash: string
+          state: string
+          updated_at: string
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "headless_runs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_media_probe_jobs: {
+        Args: { p_lease_seconds: number; p_limit: number; p_worker: string }
+        Returns: {
+          asset_id: string
+          asset_version_id: string
+          attempts: number
+          available_at: string
+          brand_id: string
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          lease_expires_at: string | null
+          leased_by: string | null
+          max_attempts: number
+          state: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "media_probe_jobs"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -19758,6 +21209,13 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      collection_role: { Args: { p_collection: string }; Returns: string }
+      collection_role_as: {
+        Args: { p_collection: string; p_user: string }
+        Returns: string
+      }
+      collection_role_rank: { Args: { p_role: string }; Returns: number }
+      comment_hashtags: { Args: { p_body: string }; Returns: string[] }
       commit_editor_project_revision: {
         Args: {
           p_actor_id: string
@@ -19956,6 +21414,43 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      custom_field_options_valid: {
+        Args: { p_options: Json; p_type: string }
+        Returns: boolean
+      }
+      drive_authenticate: { Args: { p_token_hash: string }; Returns: Json }
+      drive_brands: {
+        Args: { p_user_id: string }
+        Returns: {
+          brand_id: string
+          brand_name: string
+          role: string
+        }[]
+      }
+      drive_finish_storage: {
+        Args: { p_reservation_id: string; p_settle: boolean }
+        Returns: Json
+      }
+      drive_rename_asset: {
+        Args: {
+          p_actor: string
+          p_asset_id: string
+          p_brand_id: string
+          p_file_name: string
+          p_idempotency_key: string
+        }
+        Returns: Json
+      }
+      drive_reserve_storage: {
+        Args: {
+          p_brand_id: string
+          p_bytes: number
+          p_reservation_id: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      drive_storage_quota: { Args: { p_brand_id: string }; Returns: Json }
       enqueue_editor_generation_batch: {
         Args: {
           p_input_fingerprint: string
@@ -19987,6 +21482,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      ensure_library_system_views: {
+        Args: { p_brand_id: string }
+        Returns: number
       }
       expire_client_render_targets: { Args: never; Returns: number }
       fail_service_render_job: {
@@ -20126,70 +21625,172 @@ export type Database = {
         }
       }
       is_nonempty_string_array: { Args: { value: Json }; Returns: boolean }
-      library_browse_facets: {
+      library_blocked_collections: {
+        Args: { p_brand: string; p_user: string }
+        Returns: {
+          collection_id: string
+        }[]
+      }
+      library_browse_assets: {
         Args: {
-          p_aspect_ratios?: string[]
           p_brand_id: string
-          p_campaign_ids?: string[]
-          p_collection_id?: string
-          p_destination?: string
-          p_fonts?: string[]
-          p_leading_only?: boolean
-          p_media_type?: string
-          p_owner_ids?: string[]
-          p_performance_window?: string
-          p_placements?: string[]
-          p_project_ids?: string[]
-          p_ratios?: string[]
-          p_review_statuses?: string[]
-          p_search?: string
-          p_shared?: boolean
-          p_sources?: string[]
-          p_tags?: string[]
-          p_template_only?: boolean
-          p_usage_rights?: string[]
-          p_used?: boolean
+          p_cursor?: Json
+          p_limit?: number
+          p_query?: Json
+          p_sorts?: Json
         }
+        Returns: {
+          asset_id: string
+          sort_keys: Json
+        }[]
+      }
+      library_browse_facet_counts: {
+        Args: { p_brand_id: string; p_query?: Json }
         Returns: {
           facet: string
           result_count: number
           value: string
         }[]
       }
-      library_browse_page: {
-        Args: {
-          p_aspect_ratios?: string[]
-          p_brand_id: string
-          p_campaign_ids?: string[]
-          p_collection_id?: string
-          p_cursor?: Json
-          p_destination?: string
-          p_fonts?: string[]
-          p_leading_only?: boolean
-          p_limit?: number
-          p_media_type?: string
-          p_owner_ids?: string[]
-          p_performance_window?: string
-          p_placements?: string[]
-          p_project_ids?: string[]
-          p_ratios?: string[]
-          p_review_statuses?: string[]
-          p_search?: string
-          p_shared?: boolean
-          p_sort?: string
-          p_sources?: string[]
-          p_tags?: string[]
-          p_template_only?: boolean
-          p_usage_rights?: string[]
-          p_used?: boolean
-        }
+      library_browse_facets:
+        | {
+            Args: {
+              p_brand_id: string
+              p_campaign_ids?: string[]
+              p_collection_id?: string
+              p_fonts?: string[]
+              p_leading_only?: boolean
+              p_media_type?: string
+              p_owner_ids?: string[]
+              p_performance_window?: string
+              p_placements?: string[]
+              p_project_ids?: string[]
+              p_ratios?: string[]
+              p_review_statuses?: string[]
+              p_search?: string
+              p_shared?: boolean
+              p_sources?: string[]
+              p_tags?: string[]
+              p_template_only?: boolean
+              p_usage_rights?: string[]
+              p_used?: boolean
+            }
+            Returns: {
+              facet: string
+              result_count: number
+              value: string
+            }[]
+          }
+        | {
+            Args: {
+              p_aspect_ratios?: string[]
+              p_brand_id: string
+              p_campaign_ids?: string[]
+              p_collection_id?: string
+              p_destination?: string
+              p_fonts?: string[]
+              p_leading_only?: boolean
+              p_media_type?: string
+              p_owner_ids?: string[]
+              p_performance_window?: string
+              p_placements?: string[]
+              p_project_ids?: string[]
+              p_ratios?: string[]
+              p_review_statuses?: string[]
+              p_search?: string
+              p_shared?: boolean
+              p_sources?: string[]
+              p_tags?: string[]
+              p_template_only?: boolean
+              p_usage_rights?: string[]
+              p_used?: boolean
+            }
+            Returns: {
+              facet: string
+              result_count: number
+              value: string
+            }[]
+          }
+      library_browse_page:
+        | {
+            Args: {
+              p_brand_id: string
+              p_campaign_ids?: string[]
+              p_collection_id?: string
+              p_cursor?: Json
+              p_fonts?: string[]
+              p_leading_only?: boolean
+              p_limit?: number
+              p_media_type?: string
+              p_owner_ids?: string[]
+              p_performance_window?: string
+              p_placements?: string[]
+              p_project_ids?: string[]
+              p_ratios?: string[]
+              p_review_statuses?: string[]
+              p_search?: string
+              p_shared?: boolean
+              p_sort?: string
+              p_sources?: string[]
+              p_tags?: string[]
+              p_template_only?: boolean
+              p_usage_rights?: string[]
+              p_used?: boolean
+            }
+            Returns: {
+              asset_id: string
+              performance_score: number
+              sort_number: number
+              sort_text: string
+              sort_time: string
+              usage_count: number
+            }[]
+          }
+        | {
+            Args: {
+              p_aspect_ratios?: string[]
+              p_brand_id: string
+              p_campaign_ids?: string[]
+              p_collection_id?: string
+              p_cursor?: Json
+              p_destination?: string
+              p_fonts?: string[]
+              p_leading_only?: boolean
+              p_limit?: number
+              p_media_type?: string
+              p_owner_ids?: string[]
+              p_performance_window?: string
+              p_placements?: string[]
+              p_project_ids?: string[]
+              p_ratios?: string[]
+              p_review_statuses?: string[]
+              p_search?: string
+              p_shared?: boolean
+              p_sort?: string
+              p_sources?: string[]
+              p_tags?: string[]
+              p_template_only?: boolean
+              p_usage_rights?: string[]
+              p_used?: boolean
+            }
+            Returns: {
+              asset_id: string
+              performance_score: number
+              sort_number: number
+              sort_text: string
+              sort_time: string
+              usage_count: number
+            }[]
+          }
+      library_codec_family: {
+        Args: { p_codec: string; p_track: string }
+        Returns: string
+      }
+      library_collection_members: {
+        Args: { p_brand_id: string; p_collection_id: string }
         Returns: {
           asset_id: string
-          performance_score: number
-          sort_number: number
-          sort_text: string
-          sort_time: string
-          usage_count: number
+          position: number
         }[]
       }
       library_create_goal_artifact: { Args: { p_payload: Json }; Returns: Json }
@@ -20201,12 +21802,33 @@ export type Database = {
         Args: { p_action: string; p_payload: Json }
         Returns: Json
       }
+      library_format_group: {
+        Args: {
+          p_file_name: string
+          p_kind: string
+          p_mime_type: string
+          p_zip?: string
+        }
+        Returns: string
+      }
+      library_hidden_assets: {
+        Args: { p_brand: string; p_user: string }
+        Returns: {
+          asset_id: string
+        }[]
+      }
       library_live_version_performance: {
         Args: { p_brand_id: string; p_performance_window?: string }
         Returns: {
           asset_id: string
           score: number
           version_id: string
+        }[]
+      }
+      library_matching_asset_ids: {
+        Args: { p_brand_id: string; p_limit?: number; p_query?: Json }
+        Returns: {
+          asset_id: string
         }[]
       }
       library_register_goal_artifact_version: {
@@ -20216,6 +21838,55 @@ export type Database = {
       library_register_goal_markdown_version: {
         Args: { p_payload: Json }
         Returns: Json
+      }
+      library_reorder_asset_versions: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
+      library_try_timestamptz: { Args: { p_value: string }; Returns: string }
+      library_unstack_asset_version: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
+      mark_asset_seen: {
+        Args: { p_asset_id: string }
+        Returns: {
+          asset_id: string
+          brand_id: string
+          first_seen_at: string
+          last_seen_at: string
+          user_id: string
+          view_count: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "asset_views"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      match_asset_frames: {
+        Args: {
+          exclude_asset_id?: string
+          filter_asset_ids?: string[]
+          filter_brand_id: string
+          filter_collection_id?: string
+          filter_exclude_asset_ids?: string[]
+          filter_exclude_tags?: string[]
+          filter_kind?: string
+          filter_review_status?: string
+          filter_source?: string
+          filter_tags?: string[]
+          match_count: number
+          match_threshold: number
+          query_embedding: string
+        }
+        Returns: {
+          frame_role: string
+          id: string
+          similarity: number
+          source_timestamp_ms: number
+        }[]
       }
       match_assets_by_text: {
         Args: {
@@ -20284,9 +21955,37 @@ export type Database = {
         }
         Returns: boolean
       }
+      nearest_restricted_collection: {
+        Args: { p_collection: string }
+        Returns: string
+      }
       reap_expired_client_render_leases: { Args: never; Returns: number }
+      reap_expired_preview_jobs: { Args: never; Returns: Json }
       reap_expired_service_render_jobs: { Args: never; Returns: number }
       reap_expired_service_url_ingest_jobs: { Args: never; Returns: number }
+      record_asset_assignments: { Args: { p_rows: Json }; Returns: undefined }
+      record_canvas_lineage: {
+        Args: {
+          p_brand_id: string
+          p_derived_version_id: string
+          p_operation: string
+          p_parameters?: Json
+          p_sources: Json
+        }
+        Returns: number
+      }
+      record_media_info: {
+        Args: { p_info: Json; p_version_id: string }
+        Returns: Json
+      }
+      register_psd_static_export: {
+        Args: {
+          p_payload: Json
+          p_source_asset: string
+          p_source_version: string
+        }
+        Returns: Json
+      }
       replace_element: {
         Args: {
           p_brand_id: string
@@ -20297,6 +21996,19 @@ export type Database = {
           p_title: string
         }
         Returns: undefined
+      }
+      review_set_asset_state: {
+        Args: {
+          p_actor: string
+          p_asset_id: string
+          p_brand_id: string
+          p_idempotency_key: string
+          p_note: string
+          p_state_id: string
+          p_to_status: string
+          p_version_id: string
+        }
+        Returns: Json
       }
       search_assets_ranked: {
         Args: {
@@ -20320,6 +22032,28 @@ export type Database = {
           title: string
         }[]
       }
+      set_collection_access: {
+        Args: { p_access: string; p_collection: string }
+        Returns: Json
+      }
+      set_collection_member: {
+        Args: { p_collection: string; p_role: string; p_user: string }
+        Returns: Json
+      }
+      share_link_members: {
+        Args: {
+          p_asset_id?: string
+          p_limit?: number
+          p_offset?: number
+          p_share_link_id: string
+        }
+        Returns: {
+          asset_id: string
+          rank: number
+          total: number
+          version_id: string
+        }[]
+      }
       storage_object_brand_id: { Args: { p_name: string }; Returns: string }
       transition_asset_review_guarded: {
         Args: {
@@ -20332,6 +22066,10 @@ export type Database = {
           p_to_status: string
         }
         Returns: Json
+      }
+      visible_asset_ids_as: {
+        Args: { p_assets: string[]; p_brand: string; p_user: string }
+        Returns: string[]
       }
     }
     Enums: {
@@ -20412,6 +22150,39 @@ export type Database = {
           mp4_path?: string | null
           status?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      instagram_webhook_events: {
+        Row: {
+          event_key: string
+          event_time: string | null
+          field: string
+          id: number
+          ig_account_id: string
+          object: string
+          payload: Json
+          received_at: string
+        }
+        Insert: {
+          event_key: string
+          event_time?: string | null
+          field: string
+          id?: never
+          ig_account_id: string
+          object: string
+          payload: Json
+          received_at?: string
+        }
+        Update: {
+          event_key?: string
+          event_time?: string | null
+          field?: string
+          id?: never
+          ig_account_id?: string
+          object?: string
+          payload?: Json
+          received_at?: string
         }
         Relationships: []
       }
@@ -21046,6 +22817,8 @@ export type Database = {
           platform_post_id: string
           post_type: string
           published_at: string
+          trial_graduation_strategy: string | null
+          trial_verdict: Json | null
         }
         Insert: {
           angle_id?: string | null
@@ -21066,6 +22839,8 @@ export type Database = {
           platform_post_id: string
           post_type: string
           published_at: string
+          trial_graduation_strategy?: string | null
+          trial_verdict?: Json | null
         }
         Update: {
           angle_id?: string | null
@@ -21086,6 +22861,8 @@ export type Database = {
           platform_post_id?: string
           post_type?: string
           published_at?: string
+          trial_graduation_strategy?: string | null
+          trial_verdict?: Json | null
         }
         Relationships: [
           {
@@ -22008,6 +23785,7 @@ export type Database = {
           format: string | null
           id: string
           image_url: string | null
+          instagram_media_id: string | null
           label_source: string | null
           labels: Json | null
           match_status: string
@@ -22045,6 +23823,7 @@ export type Database = {
           format?: string | null
           id?: string
           image_url?: string | null
+          instagram_media_id?: string | null
           label_source?: string | null
           labels?: Json | null
           match_status?: string
@@ -22082,6 +23861,7 @@ export type Database = {
           format?: string | null
           id?: string
           image_url?: string | null
+          instagram_media_id?: string | null
           label_source?: string | null
           labels?: Json | null
           match_status?: string
@@ -23136,6 +24916,30 @@ export type Database = {
           },
         ]
       }
+      oauth_resource_grants: {
+        Row: {
+          authorized_at: string
+          client_id: string
+          resource: string
+          revoked_at: string | null
+          user_id: string
+        }
+        Insert: {
+          authorized_at?: string
+          client_id: string
+          resource: string
+          revoked_at?: string | null
+          user_id: string
+        }
+        Update: {
+          authorized_at?: string
+          client_id?: string
+          resource?: string
+          revoked_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       sessions: {
         Row: {
           brand_id: string | null
@@ -23246,96 +25050,6 @@ export type Database = {
           event_kind?: string
           event_name?: string
           id?: never
-          method?: string | null
-          mount_path?: string | null
-          params_hash?: string | null
-          request_id?: string | null
-          result_status?: string
-          session_id?: string | null
-          status?: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool?: string | null
-          transport?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
-      tool_events_2026_06: {
-        Row: {
-          action: string | null
-          brand_id: string | null
-          bytes_in: number | null
-          bytes_out: number | null
-          cache_hit: boolean | null
-          client_id: string | null
-          client_name: string | null
-          client_profile: string | null
-          created_at: string
-          dimensions: Json
-          duration_ms: number | null
-          email: string | null
-          error_code: string | null
-          event_id: string
-          event_kind: string
-          event_name: string
-          id: number
-          method: string | null
-          mount_path: string | null
-          params_hash: string | null
-          request_id: string | null
-          result_status: string
-          session_id: string | null
-          status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool: string | null
-          transport: string | null
-          user_id: string
-        }
-        Insert: {
-          action?: string | null
-          brand_id?: string | null
-          bytes_in?: number | null
-          bytes_out?: number | null
-          cache_hit?: boolean | null
-          client_id?: string | null
-          client_name?: string | null
-          client_profile?: string | null
-          created_at?: string
-          dimensions?: Json
-          duration_ms?: number | null
-          email?: string | null
-          error_code?: string | null
-          event_id?: string
-          event_kind?: string
-          event_name?: string
-          id: number
-          method?: string | null
-          mount_path?: string | null
-          params_hash?: string | null
-          request_id?: string | null
-          result_status?: string
-          session_id?: string | null
-          status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool?: string | null
-          transport?: string | null
-          user_id: string
-        }
-        Update: {
-          action?: string | null
-          brand_id?: string | null
-          bytes_in?: number | null
-          bytes_out?: number | null
-          cache_hit?: boolean | null
-          client_id?: string | null
-          client_name?: string | null
-          client_profile?: string | null
-          created_at?: string
-          dimensions?: Json
-          duration_ms?: number | null
-          email?: string | null
-          error_code?: string | null
-          event_id?: string
-          event_kind?: string
-          event_name?: string
-          id?: number
           method?: string | null
           mount_path?: string | null
           params_hash?: string | null
@@ -23853,6 +25567,8 @@ export type Database = {
           id: string
           max_files: number
           mcp_session_id: string | null
+          purpose: string
+          source_refs: Json
           status: string
           updated_at: string
           user_id: string
@@ -23865,6 +25581,8 @@ export type Database = {
           id?: string
           max_files?: number
           mcp_session_id?: string | null
+          purpose?: string
+          source_refs?: Json
           status?: string
           updated_at?: string
           user_id: string
@@ -23877,6 +25595,8 @@ export type Database = {
           id?: string
           max_files?: number
           mcp_session_id?: string | null
+          purpose?: string
+          source_refs?: Json
           status?: string
           updated_at?: string
           user_id?: string
@@ -23969,6 +25689,14 @@ export type Database = {
           status: string
         }[]
       }
+      complete_forge_source_intent: {
+        Args: {
+          p_source_refs: Json
+          p_upload_intent_id: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
       complete_idempotency: {
         Args: {
           p_brand_id: string
@@ -24053,6 +25781,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      get_forge_source_intent: {
+        Args: { p_upload_intent_id: string; p_user_id?: string }
+        Returns: Json
+      }
       get_job: { Args: { p_job_id: string; p_user_id?: string }; Returns: Json }
       get_operation: {
         Args: {
@@ -24095,6 +25827,14 @@ export type Database = {
           expires_at: string
           link_id: string
         }[]
+      }
+      issue_forge_source_intent: {
+        Args: {
+          p_brand_id: string
+          p_mcp_session_id?: string
+          p_user_id?: string
+        }
+        Returns: Json
       }
       issue_upload_intent: {
         Args: {
@@ -24387,6 +26127,16 @@ export type Database = {
           p_client_name?: string
           p_scope?: string
           p_user_id?: string
+        }
+        Returns: Json
+      }
+      register_verified_client: {
+        Args: {
+          p_brand_id: string
+          p_client_id: string
+          p_client_name: string
+          p_scope: string
+          p_user_id: string
         }
         Returns: Json
       }
@@ -25613,6 +27363,48 @@ export type Database = {
           created_at?: string
           data?: Json
           id?: string
+        }
+        Relationships: []
+      }
+      news_renders: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          receipt: Json | null
+          render_id: string
+          script: Json
+          script_hash: string
+          status: string
+          storage_path: string | null
+          style: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          receipt?: Json | null
+          render_id: string
+          script: Json
+          script_hash: string
+          status?: string
+          storage_path?: string | null
+          style: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          receipt?: Json | null
+          render_id?: string
+          script?: Json
+          script_hash?: string
+          status?: string
+          storage_path?: string | null
+          style?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -27693,6 +29485,10 @@ export type Database = {
       }
       organic_best_times: {
         Args: { p_brand_id: string; p_platform: string; p_window_days?: number }
+        Returns: Json
+      }
+      organic_get_winners: {
+        Args: { p_brand_id: string; p_limit?: number; p_window_days?: number }
         Returns: Json
       }
       paid_media_get_ad_angles: {
