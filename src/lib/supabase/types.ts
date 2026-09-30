@@ -18762,6 +18762,48 @@ export type Database = {
         }
         Relationships: []
       }
+      headless_brand_styles: {
+        Row: {
+          approved_by: string | null
+          brand_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          preview_asset_id: string | null
+          slug: string
+          spec: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          approved_by?: string | null
+          brand_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          preview_asset_id?: string | null
+          slug: string
+          spec: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          approved_by?: string | null
+          brand_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          preview_asset_id?: string | null
+          slug?: string
+          spec?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       headless_content_revisions: {
         Row: {
           brand_id: string
@@ -22035,6 +22077,14 @@ export type Database = {
         Args: { p_info: Json; p_version_id: string }
         Returns: Json
       }
+      register_psd_static_export: {
+        Args: {
+          p_payload: Json
+          p_source_asset: string
+          p_source_version: string
+        }
+        Returns: Json
+      }
       replace_element: {
         Args: {
           p_brand_id: string
@@ -22866,6 +22916,8 @@ export type Database = {
           platform_post_id: string
           post_type: string
           published_at: string
+          trial_graduation_strategy: string | null
+          trial_verdict: Json | null
         }
         Insert: {
           angle_id?: string | null
@@ -22886,6 +22938,8 @@ export type Database = {
           platform_post_id: string
           post_type: string
           published_at: string
+          trial_graduation_strategy?: string | null
+          trial_verdict?: Json | null
         }
         Update: {
           angle_id?: string | null
@@ -22906,6 +22960,8 @@ export type Database = {
           platform_post_id?: string
           post_type?: string
           published_at?: string
+          trial_graduation_strategy?: string | null
+          trial_verdict?: Json | null
         }
         Relationships: [
           {
@@ -23828,6 +23884,7 @@ export type Database = {
           format: string | null
           id: string
           image_url: string | null
+          instagram_media_id: string | null
           label_source: string | null
           labels: Json | null
           match_status: string
@@ -23865,6 +23922,7 @@ export type Database = {
           format?: string | null
           id?: string
           image_url?: string | null
+          instagram_media_id?: string | null
           label_source?: string | null
           labels?: Json | null
           match_status?: string
@@ -23902,6 +23960,7 @@ export type Database = {
           format?: string | null
           id?: string
           image_url?: string | null
+          instagram_media_id?: string | null
           label_source?: string | null
           labels?: Json | null
           match_status?: string
@@ -25066,96 +25125,6 @@ export type Database = {
           event_kind?: string
           event_name?: string
           id?: never
-          method?: string | null
-          mount_path?: string | null
-          params_hash?: string | null
-          request_id?: string | null
-          result_status?: string
-          session_id?: string | null
-          status?: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool?: string | null
-          transport?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
-      tool_events_2026_06: {
-        Row: {
-          action: string | null
-          brand_id: string | null
-          bytes_in: number | null
-          bytes_out: number | null
-          cache_hit: boolean | null
-          client_id: string | null
-          client_name: string | null
-          client_profile: string | null
-          created_at: string
-          dimensions: Json
-          duration_ms: number | null
-          email: string | null
-          error_code: string | null
-          event_id: string
-          event_kind: string
-          event_name: string
-          id: number
-          method: string | null
-          mount_path: string | null
-          params_hash: string | null
-          request_id: string | null
-          result_status: string
-          session_id: string | null
-          status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool: string | null
-          transport: string | null
-          user_id: string
-        }
-        Insert: {
-          action?: string | null
-          brand_id?: string | null
-          bytes_in?: number | null
-          bytes_out?: number | null
-          cache_hit?: boolean | null
-          client_id?: string | null
-          client_name?: string | null
-          client_profile?: string | null
-          created_at?: string
-          dimensions?: Json
-          duration_ms?: number | null
-          email?: string | null
-          error_code?: string | null
-          event_id?: string
-          event_kind?: string
-          event_name?: string
-          id: number
-          method?: string | null
-          mount_path?: string | null
-          params_hash?: string | null
-          request_id?: string | null
-          result_status?: string
-          session_id?: string | null
-          status: Database["plugin_mcp"]["Enums"]["tool_event_status"]
-          tool?: string | null
-          transport?: string | null
-          user_id: string
-        }
-        Update: {
-          action?: string | null
-          brand_id?: string | null
-          bytes_in?: number | null
-          bytes_out?: number | null
-          cache_hit?: boolean | null
-          client_id?: string | null
-          client_name?: string | null
-          client_profile?: string | null
-          created_at?: string
-          dimensions?: Json
-          duration_ms?: number | null
-          email?: string | null
-          error_code?: string | null
-          event_id?: string
-          event_kind?: string
-          event_name?: string
-          id?: number
           method?: string | null
           mount_path?: string | null
           params_hash?: string | null
@@ -29581,6 +29550,10 @@ export type Database = {
       }
       organic_best_times: {
         Args: { p_brand_id: string; p_platform: string; p_window_days?: number }
+        Returns: Json
+      }
+      organic_get_winners: {
+        Args: { p_brand_id: string; p_limit?: number; p_window_days?: number }
         Returns: Json
       }
       paid_media_get_ad_angles: {

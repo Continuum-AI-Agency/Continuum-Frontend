@@ -10,8 +10,9 @@
 
 import { normalizeCurrencyCode } from '../../optimization/money';
 import { type AnswerTemplatePayload, answerTemplatePayloadSchema } from './core';
-import { figureRefsIn } from './figure';
+import { figureRefsIn, stripFigureRefs } from './figure';
 import { TEMPLATE_SPECS } from './registry';
+import { weeklyReportProseOf, weeklyReportRefsOf } from './weekly_report_shape';
 
 export const TEMPLATE_VIOLATION_RULES = [
   'payload_invalid',
@@ -21,6 +22,7 @@ export const TEMPLATE_VIOLATION_RULES = [
   'figure_window_missing',
   'currency_inconsistent',
   'sentence_figure_missing_value',
+  'prose_number_without_figure',
 ] as const;
 export type TemplateViolationRule = (typeof TEMPLATE_VIOLATION_RULES)[number];
 
@@ -44,6 +46,7 @@ const structuralRefsOf = (block: AnswerTemplatePayload): string[] => {
         ...item.detail_figure_ids,
       ]),
     ]),
+    ...(block.weekly_report ? weeklyReportRefsOf(block.weekly_report) : []),
   ];
 };
 
@@ -58,7 +61,30 @@ const proseOf = (block: AnswerTemplatePayload): string[] => [
     section.text,
     ...section.items.map((item) => item.text),
   ]),
+  ...(block.weekly_report ? weeklyReportProseOf(block.weekly_report) : []),
 ];
+
+/**
+ * A digit left in the weekly report's prose once refs and the names of the entities it talks
+ * about are taken out — a number typed instead of placed. Names are taken out first because a
+ * campaign may be called "SEDE 2"; that digit is a name, not a figure.
+ */
+const typedNumbersOfWeeklyProse = (block: AnswerTemplatePayload): string[] => {
+  const body = block.weekly_report;
+  if (!body) return [];
+  const names = [
+    ...body.recommendations.map((card) => card.where.entity_name),
+    ...body.objectives.map((section) => section.label),
+    body.header.brand_name,
+  ]
+    .filter((name) => /\d/.test(name))
+    .sort((a, b) => b.length - a.length);
+  return weeklyReportProseOf(body).filter((text) => {
+    let words = stripFigureRefs(text, ' ');
+    for (const name of names) words = words.split(name).join(' ');
+    return /\d/.test(words);
+  });
+};
 
 const nonEmpty = (value: string | null | undefined): boolean =>
   typeof value === 'string' && value.trim().length > 0;
@@ -137,6 +163,13 @@ export function validateTemplateBlock(block: AnswerTemplatePayload): TemplateVio
         message: `the executive sentence prints "{${ref}}", which has no value`,
       });
     }
+  }
+
+  for (const text of typedNumbersOfWeeklyProse(block)) {
+    out.push({
+      rule: 'prose_number_without_figure',
+      message: `weekly_report prose types a number instead of a figure ref: "${text}"`,
+    });
   }
 
   return out;

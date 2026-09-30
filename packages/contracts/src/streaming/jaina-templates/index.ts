@@ -6,3 +6,5 @@ export * from './explained_ranking';
 export * from './spend_results_balance';
 export * from './three_numbers';
 export * from './weekly_bridge';
+export * from './weekly_report';
+export * from './weekly_report_shape';

@@ -30,6 +30,7 @@ import {
   MoreHorizontal,
   Plus,
   RotateCcw,
+  TriangleAlert,
   Upload,
   Video,
   X,
@@ -144,6 +145,8 @@ export type RequestGridMeta = {
   hiddenColumns: number;
   /** A draft already running: the row menu's AI items say so rather than starting a second. */
   generating: boolean;
+  /** Per row, per variable: does the value fit the design, from the Live kit (`useLiveFit`). */
+  liveFit: ReadonlyMap<string, ReadonlyMap<string, ApiRenderFitVerdict>>;
 };
 
 export type VariableColumnMeta = { variable: ApiRenderVariable };
@@ -486,9 +489,10 @@ export function VariableCell({
   table,
 }: CellContext<RequestRow, unknown>) {
   const { variable } = column.columnDef.meta as VariableColumnMeta;
-  const { brandId, contract, rows, clientErrors, actions } = gridMeta(table);
+  const { brandId, contract, rows, clientErrors, actions, liveFit } = gridMeta(table);
   const error = clientErrors.get(row.id)?.[variable.key];
   const value = effectiveValues(rows, row.id)[variable.key];
+  const fit = liveFit.get(row.id)?.get(variable.key);
   // A required blank is "Needs input" on the row, not a red cell: only a wrong value is marked.
   const invalid = error !== undefined && !(variable.required && isEmptyInput(variable, value));
   const inheritance = <InheritanceAction row={row} variable={variable} actions={actions} />;
@@ -504,12 +508,16 @@ export function VariableCell({
 
   if (isMedia(variable)) {
     const dims = effectiveMedia(rows, row.id)[variable.key];
-    const verdict = checkAssetSwap({
-      key: variable.key,
-      placement: variable.placement,
-      asset: dims?.w && dims.h ? { w: dims.w, h: dims.h } : null,
-      neighbours: (contract.layout?.boxes ?? []).filter((box) => box.key !== variable.key),
-    });
+    // A rig-placed slot is answered by the kit's rig arithmetic; every other by the closed form.
+    const verdict =
+      fit?.subject === 'media'
+        ? fit
+        : checkAssetSwap({
+            key: variable.key,
+            placement: variable.placement,
+            asset: dims?.w && dims.h ? { w: dims.w, h: dims.h } : null,
+            neighbours: (contract.layout?.boxes ?? []).filter((box) => box.key !== variable.key),
+          });
     return (
       <div
         title={error}
@@ -622,6 +630,7 @@ export function VariableCell({
   const used = typeof value === 'string' ? value.length : 0;
   const budget = variable.charBudget;
   const over = budget !== null && used > budget;
+  const misfit = fit?.subject === 'text' && fit.state === 'clipped' ? fit.why : null;
   return (
     <div className="flex min-w-32 items-center gap-1.5">
       {/* The count sits inside the field, shown while typing or once over: width is for the text. */}
@@ -631,6 +640,7 @@ export function VariableCell({
           className={cn(
             'h-7 text-xs',
             budget !== null && (over ? 'pr-11' : 'focus-visible:pr-11'),
+            misfit && 'border-warning',
             invalid && 'border-destructive',
           )}
           aria-label={variable.label}
@@ -657,6 +667,11 @@ export function VariableCell({
           </span>
         ) : null}
       </div>
+      {misfit ? (
+        <Explained why={`Doesn’t fit the design: ${misfit}`}>
+          <TriangleAlert className="size-3.5 text-warning" aria-label="Doesn’t fit the design" />
+        </Explained>
+      ) : null}
       {inheritance}
     </div>
   );

@@ -16,11 +16,13 @@
 
 import type { PortfolioListItem } from '@continuum/contracts';
 import { applyApprovals } from '@continuum/contracts';
-import { ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, PlusIcon } from 'lucide-react';
+import { ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, FileTextIcon, PlusIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { jainaPromptHref } from '@/lib/jaina/deepLink';
+import { cn } from '@/lib/utils';
 import { KpiTile } from '../components/KpiTile';
 import { figureProps, formatCpa, formatCurrency } from '../format';
 import { pendingWorkCount } from '../reportModel';
@@ -52,7 +54,7 @@ import {
   windowLabel,
 } from './account/overviewModel';
 import { JainaEntryChips } from './JainaEntryChips';
-import { jainaAccountEntryPrompts } from './jainaEntryModel';
+import { jainaAccountEntryPrompts, jainaWeeklyReportPrompt } from './jainaEntryModel';
 import { PortfolioRowCard } from './PortfolioRowCard';
 import { underManagement } from './portfolioStaleness';
 
@@ -75,29 +77,28 @@ type OptimizerOverviewProps = {
 /** The tile's second line for one result kind: cost, target, and last week — or why not. */
 export function kindTileSub(kind: ResultKind, currency: string | null | undefined): string {
   if (kind.costPerResult == null) {
-    return kind.spend > 0 ? `${formatCurrency(kind.spend, currency)} sin resultado` : 'sin gasto';
+    return kind.spend > 0 ? `${formatCurrency(kind.spend, currency)} no results` : 'no spend';
   }
   const parts = [formatCpa(kind.costPerResult, currency)];
-  if (kind.targetRange == null) parts.push('sin objetivo');
+  if (kind.targetRange == null) parts.push('no target');
   else if (kind.targetRange.min === kind.targetRange.max)
-    parts.push(`objetivo ${formatCpa(kind.targetRange.min, currency)}`);
+    parts.push(`target ${formatCpa(kind.targetRange.min, currency)}`);
   else
     parts.push(
-      `objetivo ${formatCpa(kind.targetRange.min, currency)}–${formatCpa(kind.targetRange.max, currency)}`,
+      `target ${formatCpa(kind.targetRange.min, currency)}–${formatCpa(kind.targetRange.max, currency)}`,
     );
   if (kind.priorCostPerResult != null)
-    parts.push(`sem. ant. ${formatCpa(kind.priorCostPerResult, currency)}`);
+    parts.push(`prev. week ${formatCpa(kind.priorCostPerResult, currency)}`);
   return parts.join(' · ');
 }
 
 /** The tile's second line for autopilot: who only recommends, or what is stopped. */
 export function autopilotTileSub(summary: ReturnType<typeof autopilotSummary>): string {
-  if (summary.paused > 0)
-    return `${summary.paused} ${summary.paused === 1 ? 'detenido' : 'detenidos'}`;
-  if (summary.recommending.length === 0) return 'todos aplican solos';
+  if (summary.paused > 0) return `${summary.paused} paused`;
+  if (summary.recommending.length === 0) return 'all apply on their own';
   if (summary.recommending.length <= 2)
-    return `${summary.recommending.join(' y ')} ${summary.recommending.length === 1 ? 'recomienda, no aplica' : 'recomiendan, no aplican'}`;
-  return `${summary.recommending.length} recomiendan, no aplican`;
+    return `${summary.recommending.join(' and ')} ${summary.recommending.length === 1 ? 'recommends, does not apply' : 'recommend, do not apply'}`;
+  return `${summary.recommending.length} recommend, do not apply`;
 }
 
 function capitalise(word: string): string {
@@ -188,19 +189,16 @@ export function OptimizerOverview({
     });
   }, [portfolios, windows, adAccountId]);
 
-  const portfolioNoun = portfolios.length === 1 ? 'portafolio' : 'portafolios';
+  const portfolioNoun = portfolios.length === 1 ? 'portfolio' : 'portfolios';
 
   return (
     <div className="space-y-3" data-testid="optimizer-overview">
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <p className="text-xs font-semibold text-foreground" data-testid="book-line">
           {portfolios.length} {portfolioNoun} · {book.managed}{' '}
-          {book.managed === 1 ? 'conjunto' : 'conjuntos'}
+          {book.managed === 1 ? 'ad set' : 'ad sets'}
           {book.gone > 0 ? (
-            <span className="font-normal text-muted-foreground">
-              {' '}
-              · {book.gone} {book.gone === 1 ? 'perdido' : 'perdidos'}
-            </span>
+            <span className="font-normal text-muted-foreground"> · {book.gone} lost</span>
           ) : null}
         </p>
         <div className="flex items-center gap-2">
@@ -212,9 +210,24 @@ export function OptimizerOverview({
               type="button"
               variant="secondary"
             >
-              Revisar {pendingCount} {pendingCount === 1 ? 'pendiente' : 'pendientes'}
+              Review {pendingCount} pending
               <ArrowRightIcon aria-hidden="true" className="size-3.5" />
             </Button>
+          ) : null}
+          {/* The weekly report is a Jaina answer, not a page: the link opens Jaina with the
+           *  prepared ask for this account, the way the band's questions do. */}
+          {adAccountId ? (
+            <a
+              className={cn(
+                buttonVariants({ size: 'sm', variant: 'outline' }),
+                'h-7 gap-1.5 px-2 text-xs',
+              )}
+              data-testid="overview-weekly-report"
+              href={jainaPromptHref(jainaWeeklyReportPrompt(adAccountId))}
+            >
+              <FileTextIcon aria-hidden="true" className="size-3.5" />
+              Weekly report
+            </a>
           ) : null}
           <Button
             className="h-7 gap-1.5 px-2 text-xs"
@@ -223,7 +236,7 @@ export function OptimizerOverview({
             type="button"
           >
             <PlusIcon aria-hidden="true" className="size-3.5" />
-            Nuevo portafolio
+            New portfolio
           </Button>
         </div>
       </div>
@@ -236,16 +249,16 @@ export function OptimizerOverview({
             data-incomplete="true"
             data-testid="overview-headline"
           >
-            No se pudo leer el ciclo de {efficiency.failed}{' '}
-            {efficiency.failed === 1 ? 'portafolio' : 'portafolios'}, así que la cifra de la cuenta
-            no está completa.{' '}
+            Could not read the cycle of {efficiency.failed}{' '}
+            {efficiency.failed === 1 ? 'portfolio' : 'portfolios'}, so the account figure is
+            incomplete.{' '}
             <button
               className="text-primary underline-offset-2 hover:underline"
               data-testid="overview-retry"
               onClick={efficiency.retryFailed}
               type="button"
             >
-              Reintentar
+              Retry
             </button>
           </p>
         ) : spend ? (
@@ -253,21 +266,21 @@ export function OptimizerOverview({
             className={`${typeScale.bodyLg} font-semibold leading-snug text-foreground`}
             data-testid="overview-headline"
           >
-            La cuenta gastó{' '}
+            The account spent{' '}
             <span
               className="tabular-nums"
               {...figureProps('overview.spend', spend.spend, currency, 'd7')}
             >
               {formatCurrency(spend.spend, currency)}
             </span>{' '}
-            en {WINDOW_DAYS} días
+            in {WINDOW_DAYS} days
             {clauses.length > 0 ? ': ' : '.'}
             {clauses.map((clause, index) => (
               <span key={clause.kind.kind}>
-                {index > 0 ? (index === clauses.length - 1 ? ' y ' : ', ') : ''}
+                {index > 0 ? (index === clauses.length - 1 ? ' and ' : ', ') : ''}
                 {clause.shape === 'cost' ? (
                   <>
-                    {clause.kind.words.many} a{' '}
+                    {clause.kind.words.many} at{' '}
                     <span
                       className="tabular-nums"
                       {...figureProps(
@@ -295,7 +308,7 @@ export function OptimizerOverview({
                     >
                       {clause.count}
                     </span>
-                    {clause.where ? ` en ${clause.where}` : ''}
+                    {clause.where ? ` in ${clause.where}` : ''}
                   </>
                 )}
               </span>
@@ -312,8 +325,8 @@ export function OptimizerOverview({
             data-testid="overview-headline"
           >
             {efficiency.pending
-              ? 'Leyendo los ciclos de la cuenta…'
-              : `Ningún portafolio tiene un ciclo medido todavía. ${capitalise(decisionsLabel(pendingCount))}.`}
+              ? "Reading the account's cycles…"
+              : `No portfolio has a measured cycle yet. ${capitalise(decisionsLabel(pendingCount))}.`}
           </p>
         )}
         {/* 2 — the sub-line: the window the figures cover, and when the read was taken. */}
@@ -337,7 +350,7 @@ export function OptimizerOverview({
       </section>
 
       {/* 3 — the band that asks Jaina, with the account's own questions. */}
-      <JainaEntryChips entries={jainaEntries} label="Preguntale a Jaina" />
+      <JainaEntryChips entries={jainaEntries} label="Ask Jaina" />
 
       {/* 4 — the radiography: four to six tiles, each with a state on its top border. */}
       <div
@@ -346,14 +359,14 @@ export function OptimizerOverview({
       >
         <KpiTile
           figure={figureProps('tiles.spend', spend?.spend ?? null, currency, 'd7')}
-          label={`Gasto · ${WINDOW_DAYS} días`}
+          label={`Spend · ${WINDOW_DAYS} days`}
           state={complete && spend ? spendState(spend.spend / WINDOW_DAYS, dailyTotal) : 'none'}
           sub={
             !complete
-              ? `lectura incompleta · plan ${formatCurrency(dailyTotal, currency)} por día`
+              ? `incomplete read · plan ${formatCurrency(dailyTotal, currency)} per day`
               : spend
-                ? `${formatCurrency(spend.spend / WINDOW_DAYS, currency)} por día · plan ${formatCurrency(dailyTotal, currency)}`
-                : `plan ${formatCurrency(dailyTotal, currency)} por día`
+                ? `${formatCurrency(spend.spend / WINDOW_DAYS, currency)} per day · plan ${formatCurrency(dailyTotal, currency)}`
+                : `plan ${formatCurrency(dailyTotal, currency)} per day`
           }
           testId="tile-spend"
           value={complete && spend ? formatCurrency(spend.spend, currency) : '—'}
@@ -366,7 +379,7 @@ export function OptimizerOverview({
             state={kind.state}
             sub={kindTileSub(kind, currency)}
             testId={`tile-kind-${kind.kind}`}
-            value={kind.results.toLocaleString('es-MX')}
+            value={kind.results.toLocaleString('en-US')}
           />
         ))}
         <KpiTile
@@ -377,16 +390,16 @@ export function OptimizerOverview({
                 onClick={onOpenActions}
                 type="button"
               >
-                Revisar
+                Review
               </button>
             ) : null
           }
           figure={figureProps('tiles.decisions-waiting', pendingCount, null, 'none', 'count')}
-          label="Decisiones"
+          label="Decisions"
           sub={
             pendingCount > 0
-              ? `en ${portfoliosWithDecisions} ${portfoliosWithDecisions === 1 ? 'portafolio' : 'portafolios'}`
-              : 'nada espera tu decisión'
+              ? `in ${portfoliosWithDecisions} ${portfoliosWithDecisions === 1 ? 'portfolio' : 'portfolios'}`
+              : 'nothing waits for your decision'
           }
           testId="tile-decisions"
           value={String(pendingCount)}
@@ -397,7 +410,7 @@ export function OptimizerOverview({
           state={autopilot.paused > 0 ? 'warn' : 'none'}
           sub={autopilotTileSub(autopilot)}
           testId="tile-autopilot"
-          value={`${autopilot.autopilot} de ${autopilot.total}`}
+          value={`${autopilot.autopilot} of ${autopilot.total}`}
         />
       </div>
 
@@ -405,7 +418,7 @@ export function OptimizerOverview({
       {shown ? (
         <section className="space-y-2" data-testid="overview-recommendations">
           <p className={`${typeScale.label} px-1 font-semibold text-muted-foreground`}>
-            Recomendaciones de Jaina
+            Jaina&apos;s recommendations
           </p>
           <AccountRead
             candidates={[...shown.candidates, ...shown.guards]}
@@ -420,10 +433,10 @@ export function OptimizerOverview({
       {/* 6 — the portfolios, one line each, sortable by distance to target. */}
       <section className="space-y-2" data-testid="portfolio-rows">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-          <p className={`${typeScale.label} font-semibold text-muted-foreground`}>Portafolios</p>
+          <p className={`${typeScale.label} font-semibold text-muted-foreground`}>Portfolios</p>
           <div className="flex items-center gap-1.5">
             <ToggleGroup
-              aria-label="Ordenar portafolios por"
+              aria-label="Sort portfolios by"
               onValueChange={(value) => {
                 if (value) setSortKey(value as RowSortKey);
               }}
@@ -433,20 +446,20 @@ export function OptimizerOverview({
               variant="outline"
             >
               <ToggleGroupItem className="h-7 px-2 text-xs" value="distance">
-                Distancia al objetivo
+                Distance to target
               </ToggleGroupItem>
               <ToggleGroupItem className="h-7 px-2 text-xs" value="name">
-                Nombre
+                Name
               </ToggleGroupItem>
               <ToggleGroupItem className="h-7 px-2 text-xs" value="daily">
-                Presupuesto
+                Budget
               </ToggleGroupItem>
               <ToggleGroupItem className="h-7 px-2 text-xs" value="pending">
-                Pendientes
+                Pending
               </ToggleGroupItem>
             </ToggleGroup>
             <Button
-              aria-label={sortDir === 'asc' ? 'Orden ascendente' : 'Orden descendente'}
+              aria-label={sortDir === 'asc' ? 'Ascending' : 'Descending'}
               className="size-7 p-0"
               onClick={() => setSortDir((current) => (current === 'asc' ? 'desc' : 'asc'))}
               size="sm"
@@ -473,7 +486,7 @@ export function OptimizerOverview({
             />
           ))}
           {sorted.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Todavía no hay portafolios.</p>
+            <p className="text-xs text-muted-foreground">No portfolios yet.</p>
           ) : null}
         </div>
       </section>

@@ -46,6 +46,7 @@
     "jaina:approval:card:e2e:bench": "playwright test --config playwright.jaina-approval-card.config.ts --workers=1",
     "jaina:transcript:scroll:e2e:bench": "playwright test --config playwright.jaina-transcript-scroll.config.ts --workers=1",
     "jaina:report:export:e2e:bench": "playwright test --config playwright.jaina-report-export.config.ts --workers=1",
+    "jaina:weekly-report:render:bench": "playwright test --config playwright.jaina-weekly-report.config.ts --workers=1",
     "forge:studio:e2e:bench": "playwright test --config playwright.forge-studio.config.ts --workers=1",
     "forge:publish-status:e2e:bench": "bun --no-env-file --env-file=../Continuum-Backend/.env e2e/forge-publish-status.bench.ts",
     "forge:meta:live:bench": "playwright test --config playwright.forge-live.config.ts --workers=1",

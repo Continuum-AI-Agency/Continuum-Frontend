@@ -116,7 +116,7 @@ describe('AccountRead — the cards in rank order', () => {
     expect(cards[0]?.getAttribute('data-detector')).toBe('dead_tail');
     expect(cards[0]?.getAttribute('data-lead')).toBe('true');
     expect(cards[1]?.getAttribute('data-lead')).toBe('false');
-    expect(getAllByText('Principal')).toHaveLength(1);
+    expect(getAllByText('Lead')).toHaveLength(1);
     // Only the principal card breathes.
     const rules = getAllByTestId('account-card-rule');
     expect(rules.map((rule) => rule.getAttribute('data-anim'))).toEqual(['calm', 'still']);
@@ -171,16 +171,16 @@ describe('AccountRead — the title is entity + figure + comparison', () => {
 });
 
 describe('AccountRead — the tier, in words', () => {
-  it('says Alto, Medio and Bajo against the daily spend', () => {
+  it('says High, Medium and Low against the daily spend', () => {
     // dailySpend 1200 → floor 24: high at 120 and above, medium at 24, low below.
     const { getByText } = view([
       candidate({ id: 'dead_tail:hi', impact_per_day: 400 }),
       candidate({ id: 'dead_tail:mid', impact_per_day: 102 }),
       candidate({ id: 'dead_tail:lo', impact_per_day: 10 }),
     ]);
-    expect(getByText('Alto')).toBeTruthy();
-    expect(getByText('Medio')).toBeTruthy();
-    expect(getByText('Bajo')).toBeTruthy();
+    expect(getByText('High')).toBeTruthy();
+    expect(getByText('Medium')).toBeTruthy();
+    expect(getByText('Low')).toBeTruthy();
   });
 });
 
@@ -217,7 +217,7 @@ describe('AccountRead — the way into Jaina', () => {
     const prompt = decodeURIComponent(href.slice('/scale?tab=jaina&prompt='.length));
     expect(prompt).toContain('ITESO // AGOSTO - RTG: 101 MXN por lead');
     expect(prompt).toContain('FORMULARIOS // TODOS');
-    expect(getByTestId('account-card-jaina').textContent).toContain('Preguntarle a Jaina');
+    expect(getByTestId('account-card-jaina').textContent).toContain('Ask Jaina');
   });
 
   it('names every portfolio the card is about, and none when none resolve', () => {
@@ -229,7 +229,7 @@ describe('AccountRead — the way into Jaina', () => {
     const unnamed = view([candidate({ portfolio_ids: ['unknown'] })]);
     expect(unnamed.queryByTestId('account-card-portfolios')).toBeNull();
     const href = unnamed.getByTestId('account-card-jaina').getAttribute('href') ?? '';
-    expect(decodeURIComponent(href)).toContain('en la cuenta');
+    expect(decodeURIComponent(href)).toContain('in the account');
   });
 });
 
@@ -256,7 +256,7 @@ describe('AccountRead — a guard names what it poisons', () => {
       ),
     ).toBe(true);
     // dead_tail prices itself off a conversion count, so the guard casts doubt on it.
-    expect(first.textContent).toContain('afectada por la guarda');
+    expect(first.textContent).toContain('affected by the guard');
   });
 
   it('does not mark a card the guard has no bearing on', () => {
@@ -266,7 +266,7 @@ describe('AccountRead — a guard names what it poisons', () => {
       impact_class: 'deferred',
     });
     const { container } = view([guard, untouched]);
-    expect(container.textContent).not.toContain('afectada por la guarda');
+    expect(container.textContent).not.toContain('affected by the guard');
   });
 });
 
@@ -274,38 +274,38 @@ describe('AccountRead — four, then the rest behind one control', () => {
   it('shows four and prices what skipping the rest costs', () => {
     const { getAllByTestId, getByRole } = view(many(6));
     expect(getAllByTestId('account-card')).toHaveLength(4);
-    const toggle = getByRole('button', { name: /2 más/ });
+    const toggle = getByRole('button', { name: /2 more/ });
     // 960 + 950 = 1910 a day sits behind the control, and it says so.
     expect(toggle.textContent).toContain('1,910');
-    expect(toggle.textContent).toContain('entre ellas');
+    expect(toggle.textContent).toContain('between them');
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('reveals the rest as more cards in the same grid', () => {
     const { getAllByTestId, getByRole } = view(many(6));
-    fireEvent.click(getByRole('button', { name: /2 más/ }));
+    fireEvent.click(getByRole('button', { name: /2 more/ }));
     expect(getAllByTestId('account-card')).toHaveLength(6);
-    expect(getByRole('button', { name: /Ocultar el resto/ }).getAttribute('aria-expanded')).toBe(
+    expect(getByRole('button', { name: /Hide the rest/ }).getAttribute('aria-expanded')).toBe(
       'true',
     );
   });
 
   it('offers no control when four or fewer fired', () => {
     const { queryByText } = view(many(4));
-    expect(queryByText(/más ·/)).toBeNull();
+    expect(queryByText(/more ·/)).toBeNull();
   });
 });
 
 describe('AccountRead — the card says what it will actually do', () => {
   it('says so when a card acts unattended', () => {
     const { container } = view([candidate({ state: 'autopilot' })]);
-    expect(container.textContent).toContain('Actúa por su cuenta, dentro de tus límites.');
+    expect(container.textContent).toContain('Acts on its own, within your limits.');
   });
 
   it('names the family standing in the way when a choice was lowered', () => {
     const { getByTestId } = view([candidate({ state: 'recommend', state_lowered: true })]);
     const note = getByTestId('state-lowered').textContent ?? '';
-    expect(note).toContain('aún no lo permite — recomendará.');
+    expect(note).toContain('does not allow it yet — it will recommend.');
     expect(note).toContain(ACTION_FAMILY_COPY[DETECTOR_ACTION_FAMILY.dead_tail].label);
   });
 
@@ -314,13 +314,13 @@ describe('AccountRead — the card says what it will actually do', () => {
       candidate({ state: 'recommend' }),
       candidate({ id: 'dead_tail:b' }),
     ]);
-    expect(container.textContent).not.toContain('Actúa por su cuenta');
-    expect(container.textContent).not.toContain('aún no lo permite');
+    expect(container.textContent).not.toContain('Acts on its own');
+    expect(container.textContent).not.toContain('does not allow it yet');
   });
 
   it('says when a velocity cap, not the gap, set the number', () => {
     const { container } = view([candidate({ capped_by: 'velocity' })]);
-    expect(container.textContent).toContain('tope por ciclo');
+    expect(container.textContent).toContain('per-cycle ceiling');
   });
 });
 
@@ -340,7 +340,7 @@ describe('AccountRead — nothing of the old surface survives', () => {
       cta: { kind: 'none', target_id: null },
     });
     const { container, getByRole } = view([guard, ...many(6)], { onOpenPortfolio: mock(() => {}) });
-    fireEvent.click(getByRole('button', { name: /más ·/ }));
+    fireEvent.click(getByRole('button', { name: /more ·/ }));
     const text = container.textContent ?? '';
     expect(text).not.toContain('Across the account');
     expect(text).not.toContain('checks could not run');

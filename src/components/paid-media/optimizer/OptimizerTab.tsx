@@ -282,8 +282,11 @@ export function OptimizerTab({
     ? portfolios.find((portfolio) => portfolio.id === portfolioId)
     : undefined;
   if (detailPortfolio) {
+    // One shrinkable column: a grid item's min-width is its content's by default, so without
+    // `minmax(0,1fr)` the widest table in the workspace sized the whole tab past a phone's
+    // viewport and this section's overflow-hidden clipped the right edge off every block.
     return (
-      <section className="fade-in-0 grid h-full min-h-0 animate-in overflow-hidden rounded-lg border border-border/70 bg-background duration-200 motion-reduce:animate-none">
+      <section className="fade-in-0 grid h-full min-h-0 animate-in grid-cols-[minmax(0,1fr)] overflow-hidden rounded-lg border border-border/70 bg-background duration-200 motion-reduce:animate-none">
         <PortfolioDetailWorkspace
           adAccountId={adAccountId}
           brandId={brandId}
@@ -304,14 +307,18 @@ export function OptimizerTab({
   }
 
   return (
-    <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border/70 bg-background">
+    // Both grids get one shrinkable column (a grid item is otherwise as wide as its widest
+    // content), and on a phone the header wraps and the five tabs scroll inside it: the tab
+    // list alone is wider than a 390px screen, and it used to widen the whole card past the
+    // viewport, where this section's overflow-hidden clipped the right edge of every block.
+    <section className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border/70 bg-background">
       <Tabs
         value={view}
         onValueChange={(value) => setView(value as typeof view)}
-        className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
+        className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
       >
         <SectionHeader
-          className="bg-muted/10"
+          className="flex-wrap bg-muted/10 [&>*:last-child]:min-w-0 [&>*:last-child]:max-w-full [&>*:last-child]:shrink"
           title={
             <span className="inline-flex items-center gap-2">
               <GaugeCircleIcon className="size-4" aria-hidden="true" />
@@ -319,38 +326,40 @@ export function OptimizerTab({
             </span>
           }
           action={
-            <TabsList className="h-8">
-              <TabsTrigger value="automations" className="gap-1.5 px-3 text-xs">
-                <SlidersHorizontalIcon className="size-3.5" />
-                Automations
-              </TabsTrigger>
-              <TabsTrigger value="overview" className="gap-1.5 px-3 text-xs">
-                <LayersIcon className="size-3.5" />
-                Overview
-              </TabsTrigger>
-              <TabsTrigger value="portfolios" className="gap-1.5 px-3 text-xs">
-                <RefreshCwIcon className="size-3.5" />
-                Portfolios
-              </TabsTrigger>
-              <TabsTrigger
-                value="actions"
-                className="gap-1.5 px-3 text-xs"
-                onMouseEnter={() => warmActionsQueue(portfolios)}
-                onFocus={() => warmActionsQueue(portfolios)}
-              >
-                <ListChecksIcon className="size-3.5" />
-                Actions
-                {pendingCount + renewalCount > 0 ? (
-                  <span className="ml-0.5 grid min-w-4 place-items-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground">
-                    {pendingCount + renewalCount}
-                  </span>
-                ) : null}
-              </TabsTrigger>
-              <TabsTrigger value="logs" className="gap-1.5 px-3 text-xs">
-                <ScrollTextIcon className="size-3.5" />
-                Activity
-              </TabsTrigger>
-            </TabsList>
+            <div className="min-w-0 max-w-full overflow-x-auto">
+              <TabsList className="h-8">
+                <TabsTrigger value="automations" className="gap-1.5 px-3 text-xs">
+                  <SlidersHorizontalIcon className="size-3.5" />
+                  Automations
+                </TabsTrigger>
+                <TabsTrigger value="overview" className="gap-1.5 px-3 text-xs">
+                  <LayersIcon className="size-3.5" />
+                  Overview
+                </TabsTrigger>
+                <TabsTrigger value="portfolios" className="gap-1.5 px-3 text-xs">
+                  <RefreshCwIcon className="size-3.5" />
+                  Portfolios
+                </TabsTrigger>
+                <TabsTrigger
+                  value="actions"
+                  className="gap-1.5 px-3 text-xs"
+                  onMouseEnter={() => warmActionsQueue(portfolios)}
+                  onFocus={() => warmActionsQueue(portfolios)}
+                >
+                  <ListChecksIcon className="size-3.5" />
+                  Actions
+                  {pendingCount + renewalCount > 0 ? (
+                    <span className="ml-0.5 grid min-w-4 place-items-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground">
+                      {pendingCount + renewalCount}
+                    </span>
+                  ) : null}
+                </TabsTrigger>
+                <TabsTrigger value="logs" className="gap-1.5 px-3 text-xs">
+                  <ScrollTextIcon className="size-3.5" />
+                  Activity
+                </TabsTrigger>
+              </TabsList>
+            </div>
           }
         />
 

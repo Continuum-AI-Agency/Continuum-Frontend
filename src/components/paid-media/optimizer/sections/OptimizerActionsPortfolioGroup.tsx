@@ -96,6 +96,7 @@ import {
 } from '../useOptimizerData';
 import { AudienceRecommendationCard } from './AudienceRecommendationCard';
 import {
+  type AudienceActionHandlers,
   audienceCardView,
   carriedRecommendation,
   isAudienceRecommendation,
@@ -189,7 +190,11 @@ type EvidenceContext = {
   /** Audience proposals for the brand and the actions the audience card takes on them. */
   audienceProposals: readonly AudienceProposalRow[];
   audienceActions: {
-    request: (recId: string) => void;
+    /** Ask Jaina for a proposal. `onDone` receives the id the RPC returned — the SAME row
+     *  when a re-ask inside the hour was throttled — so the card can say so. */
+    request: (recId: string, handlers?: AudienceActionHandlers) => void;
+    /** Re-run the Meta write a failed row stopped at (optimizer_retry_audience_proposal). */
+    retry: (proposalId: string, handlers?: AudienceActionHandlers) => void;
     approve: (input: {
       proposalId: string;
       budgetMinorUnits: number;
@@ -203,6 +208,7 @@ type EvidenceContext = {
   };
   audienceBusy: {
     requestingRecId: string | null;
+    retryingId: string | null;
     approvingId: string | null;
     busyId: string | null;
     convertingCbo: boolean;
@@ -470,15 +476,31 @@ export function useAudienceCardActions(
     ReadonlyMap<string, ConvertCboResponse>
   >(new Map());
   const [requestingRecId, setRequestingRecId] = React.useState<string | null>(null);
+  const [retryingId, setRetryingId] = React.useState<string | null>(null);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const actions = React.useMemo<AudienceCardActions>(
     () => ({
-      request: (recId) => {
+      request: (recId, handlers) => {
         setRequestingRecId(recId);
         audienceMutations.request.mutate(recId, {
-          onError: (error) =>
-            noteFor(recId, error instanceof Error ? error.message : 'Could not ask Jaina.'),
+          onSuccess: (proposalId) => handlers?.onDone?.(proposalId),
+          onError: (error) => {
+            const message = error instanceof Error ? error.message : 'Could not ask Jaina.';
+            noteFor(recId, message);
+            handlers?.onError?.(message);
+          },
           onSettled: () => setRequestingRecId(null),
+        });
+      },
+      retry: (proposalId, handlers) => {
+        setRetryingId(proposalId);
+        audienceMutations.retry.mutate(proposalId, {
+          onSuccess: () => handlers?.onDone?.(proposalId),
+          onError: (error) =>
+            handlers?.onError?.(
+              error instanceof Error ? error.message : 'Could not retry in Meta.',
+            ),
+          onSettled: () => setRetryingId(null),
         });
       },
       approve: (input) => {
@@ -517,13 +539,14 @@ export function useAudienceCardActions(
       actions,
       busy: {
         requestingRecId,
+        retryingId,
         approvingId: approving ? busyId : null,
         busyId,
         convertingCbo,
       },
       cboPreviewByCampaign,
     }),
-    [actions, requestingRecId, approving, busyId, convertingCbo, cboPreviewByCampaign],
+    [actions, requestingRecId, retryingId, approving, busyId, convertingCbo, cboPreviewByCampaign],
   );
 }
 
@@ -1180,8 +1203,8 @@ export function OptimizerActionsPortfolioGroup({
           data-testid="queue-focus-missing"
           role="status"
         >
-          La fila a la que apunta ese botón todavía no está en la cola. Si se acaba de crear,
-          aparece con la próxima lectura del ciclo.
+          The row that button points at isn't in the queue yet. If it was just created, it shows up
+          with the cycle's next read.
         </p>
       ) : null}
       <ul className="space-y-2">
@@ -1997,6 +2020,7 @@ function AudienceCardHost({
     <AudienceRecommendationCard
       adAccountId={evidence.adAccountId}
       adsetName={name}
+      brandId={evidence.brandId}
       approving={proposalId !== null && evidence.audienceBusy.approvingId === proposalId}
       busy={proposalId !== null && evidence.audienceBusy.busyId === proposalId}
       cboPreview={campaignId ? (evidence.cboPreviewByCampaign.get(campaignId) ?? null) : null}
@@ -2015,12 +2039,14 @@ function AudienceCardHost({
       }
       onCancel={() => proposalId && evidence.audienceActions.cancel(proposalId)}
       onConvertCbo={evidence.audienceActions.convertCbo}
-      onRequest={() => evidence.audienceActions.request(rec.id)}
+      onRequest={(handlers) => evidence.audienceActions.request(rec.id, handlers)}
+      onRetry={(handlers) => proposalId && evidence.audienceActions.retry(proposalId, handlers)}
       onUndo={() => proposalId && evidence.audienceActions.undo(proposalId)}
       portfolioSpecs={evidence.portfolioSpecs}
       rec={rec}
       requesting={evidence.audienceBusy.requestingRecId === rec.id}
       resultWord={evidence.resultWord}
+      retrying={proposalId !== null && evidence.audienceBusy.retryingId === proposalId}
       snapshot={evidence.snapshotById.get(rec.adset_id) ?? null}
       view={view}
     />

@@ -27,7 +27,7 @@ export function formatFreshness(fetchedAt: string | null, now: number = Date.now
     const minutes = Math.floor(ageMs / 60_000);
     return minutes < 1 ? 'Data as of just now' : `Data as of ${minutes}m ago`;
   }
-  const clock = new Date(readAt).toLocaleTimeString([], {
+  const clock = new Date(readAt).toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,

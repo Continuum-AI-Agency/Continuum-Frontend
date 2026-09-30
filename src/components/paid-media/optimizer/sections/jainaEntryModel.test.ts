@@ -55,17 +55,17 @@ describe('jainaAccountEntryPrompts', () => {
   it('offers five questions when a portfolio is over target and one is silent', () => {
     expect(full.map((e) => e.key)).toEqual(['expensive', 'pause', 'silent', 'budget', 'summary']);
     expect(full.map((e) => e.label)).toEqual([
-      '¿Por qué Leads MX está caro?',
-      '¿Qué pausar esta semana?',
-      '¿Cómo va Ventas CDMX?',
-      '¿Dónde está el presupuesto?',
-      'Resumen para el cliente',
+      'Why is Leads MX expensive?',
+      'What to pause this week?',
+      'How is Ventas CDMX doing?',
+      "Where's the budget?",
+      'Summary for the client',
     ]);
   });
 
   it('offers four when nothing is over target, asking about risks instead of a silent portfolio', () => {
     expect(quiet.map((e) => e.key)).toEqual(['pause', 'risks', 'budget', 'summary']);
-    expect(quiet[1].label).toBe('¿Qué está por salir mal?');
+    expect(quiet[1].label).toBe("What's about to go wrong?");
   });
 
   it('keeps the expensive question without a silent one, and vice versa', () => {
@@ -93,17 +93,17 @@ describe('jainaAccountEntryPrompts', () => {
 
   it('names the account and every portfolio with its humanized objective in every prompt', () => {
     for (const entry of [...full, ...quiet]) {
-      expect(entry.prompt).toContain('la cuenta "Acme MX"');
-      expect(entry.prompt).toContain('"Leads MX" (objetivo: Lead)');
-      expect(entry.prompt).toContain('"Ventas CDMX" (objetivo: Purchase)');
+      expect(entry.prompt).toContain('the account "Acme MX"');
+      expect(entry.prompt).toContain('"Leads MX" (objective: Lead)');
+      expect(entry.prompt).toContain('"Ventas CDMX" (objective: Purchase)');
     }
   });
 
   it('opens each prompt with the question its label asks', () => {
-    expect(full[0].prompt).toContain('¿por qué "Leads MX" está caro?');
-    expect(full[2].prompt).toContain('¿cómo va "Ventas CDMX"?');
-    expect(quiet[1].prompt).toContain('¿qué está por salir mal?');
-    expect(quiet[3].prompt).toContain('escribe un resumen para el cliente');
+    expect(full[0].prompt).toContain('why is "Leads MX" expensive?');
+    expect(full[2].prompt).toContain('how is "Ventas CDMX" doing?');
+    expect(quiet[1].prompt).toContain("what's about to go wrong?");
+    expect(quiet[3].prompt).toContain('write a summary for the client');
   });
 
   it('falls back to the active account when no label is known', () => {
@@ -113,7 +113,7 @@ describe('jainaAccountEntryPrompts', () => {
       worstOverTarget: null,
       noResults: null,
     });
-    expect(anonymous[0].prompt).toContain('la cuenta activa');
-    expect(anonymous[0].prompt).toContain('ninguno activo');
+    expect(anonymous[0].prompt).toContain('the active account');
+    expect(anonymous[0].prompt).toContain('none active');
   });
 });
