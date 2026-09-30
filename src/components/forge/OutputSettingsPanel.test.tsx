@@ -1,10 +1,20 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  cleanup,
+  fireEvent,
+  render as renderView,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+import type { ReactNode } from 'react';
 import {
   chooseOption,
   installPickerDomGlobals,
   openSelect,
 } from '@/components/automations/workspace/pickers/pickerTestHarness';
+import { forgeQueryKeys } from './queryKeys';
 
 const contract = () => ({
   template: {
@@ -63,6 +73,13 @@ const { OutputSettingsPanel } = await import('./OutputSettingsPanel');
 
 installPickerDomGlobals();
 
+function render(
+  ui: ReactNode,
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
+  return renderView(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
+
 /** What a Select shows closed: its chosen value, or what it inherits. */
 const shown = (label: string) =>
   screen.getByRole('combobox', { name: label }).querySelector('[data-slot="select-value"]')
@@ -88,9 +105,19 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('OutputSettingsPanel', () => {
+  test('reuses the contract already loaded by the template detail', async () => {
+    const client = new QueryClient();
+    client.setQueryData(forgeQueryKeys.contract('brand-1', null, '133'), contract());
+    render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />, client);
+    await waitFor(() => expect(shown('Frame rate')).toBe('25 fps'));
+    expect(getContract).not.toHaveBeenCalled();
+    client.clear();
+  });
   test('a contract without output settings renders nothing', async () => {
     getContract.mockImplementationOnce(async () => ({ ...contract(), encode: undefined }) as never);
-    const { container } = render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
+    const { container } = render(
+      <OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />,
+    );
     await waitFor(() => expect(getContract).toHaveBeenCalledTimes(1));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(container.textContent).toBe('');
@@ -102,7 +129,9 @@ describe('OutputSettingsPanel', () => {
     });
     const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
-      const { container } = render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
+      const { container } = render(
+        <OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />,
+      );
       await waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
       expect(container.textContent).toBe('');
     } finally {
@@ -329,7 +358,9 @@ describe('OutputSettingsPanel', () => {
       ...contract(),
       outputs: [contract().outputs[2]!],
     }));
-    const { container } = render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
+    const { container } = render(
+      <OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />,
+    );
     await waitFor(() =>
       expect(container.textContent).toBe(
         'Stills take no output settings. Frame rate and files apply to animated formats.',
@@ -345,7 +376,9 @@ describe('OutputSettingsPanel', () => {
       outputs: [],
       encode: undefined,
     }));
-    const { container } = render(<OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />);
+    const { container } = render(
+      <OutputSettingsPanel brandId="brand-1" templateKey="133" bindingId={null} />,
+    );
     await waitFor(() =>
       expect(container.textContent).toBe(
         'Stills take no output settings. Frame rate and files apply to animated formats.',

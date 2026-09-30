@@ -241,6 +241,20 @@ function roomToneGroups(shots: ReelTemplateShot[]): ReelPresentation['roomTone']
   return [...groups.values()].map((sceneIds) => ({ sceneIds, levelDb: ROOM_TONE_DB }));
 }
 
+/**
+ * The CTA a template ends a reel on: its look's, except a plate when the reel is one take (a
+ * full-screen end card cut a 6 s take into 4.8 + 1.2 s) or the product hero closes it.
+ */
+function templateCtaStyle(
+  id: ReelTemplateId,
+  reel: { shotCount: number; heroShotId: string | null; lastShotId: string },
+): ReelPresentation['ctaStyle'] {
+  const look = LOOKS[id];
+  return (reel.shotCount === 1 || reel.heroShotId === reel.lastShotId) && look.ctaStyle === 'card'
+    ? 'plate'
+    : look.ctaStyle;
+}
+
 export function presentationFromTemplate<Asset extends { assetId: string }>(
   id: ReelTemplateId,
   input: ReelTemplateInput<Asset>,
@@ -275,11 +289,21 @@ export function presentationFromTemplate<Asset extends { assetId: string }>(
         },
       ]
     : look.display
-      ? input.shots.flatMap((shot) => {
+      ? input.shots.flatMap((shot, index) => {
           if (!shot.displayWord || shown.has(wordKey(shot.displayWord))) return [];
           shown.add(wordKey(shot.displayWord));
+          // Over its OWN picture: a shot starts where its incoming join does, and a J-cut, whip
+          // or fade still shows the previous speaker then (TRANQUILA over the interviewer, formats
+          // run 08-30-55-933Z). The word waits for the join to end.
+          const previous = input.shots[index - 1];
+          const join = previous ? fitJoin(previous, look.join) : null;
+          const lead = join && join.kind !== 'cut' ? join.durationSec : 0;
           return [
-            { anchor: shotStart(shot.id), durationSec: shot.durationSec, text: shot.displayWord },
+            {
+              anchor: { ...shotStart(shot.id), offsetSec: lead },
+              durationSec: shot.durationSec - lead,
+              text: shot.displayWord,
+            },
           ];
         })
       : [];
@@ -408,7 +432,11 @@ export function presentationFromTemplate<Asset extends { assetId: string }>(
     loudnessTargetLufs: SPEECH_LOUDNESS_LUFS,
     roomTone: roomToneGroups(input.shots),
     ctaEntrance: look.ctaEntrance,
-    ctaStyle: heroCloses && look.ctaStyle === 'card' ? 'plate' : look.ctaStyle,
+    ctaStyle: templateCtaStyle(id, {
+      shotCount: input.shots.length,
+      heroShotId: hero?.shotId ?? null,
+      lastShotId: input.shots.at(-1)!.id,
+    }),
     displayStyle: { fontFamily: look.display ?? look.style.fontFamily, behindSubject: true },
     displayWords,
     cards,

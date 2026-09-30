@@ -46,7 +46,7 @@ type DailyReadListProps = {
 };
 
 /** The control's label while its row is open: the same button closes what it opened. */
-const CLOSE_LABEL = 'Cerrar la propuesta';
+const CLOSE_LABEL = 'Close the proposal';
 
 function formatFigure(figure: AdhocSuggestionFigure, currency: string | null): string {
   switch (figure.unit) {

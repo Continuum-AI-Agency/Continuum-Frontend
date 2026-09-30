@@ -31,25 +31,25 @@ export function agoLabel(from: string, now: Date): string | null {
   const taken = Date.parse(from);
   if (Number.isNaN(taken)) return null;
   const elapsed = now.getTime() - taken;
-  if (elapsed < 0) return 'recién';
-  if (elapsed < MINUTE) return 'recién';
+  if (elapsed < 0) return 'just now';
+  if (elapsed < MINUTE) return 'just now';
   if (elapsed < HOUR) {
     const minutes = Math.floor(elapsed / MINUTE);
-    return `hace ${minutes} min`;
+    return `${minutes} min ago`;
   }
   if (elapsed < DAY) {
     const hours = Math.floor(elapsed / HOUR);
-    return `hace ${hours} ${hours === 1 ? 'hora' : 'horas'}`;
+    return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
   }
   const days = Math.floor(elapsed / DAY);
-  return `hace ${days} ${days === 1 ? 'día' : 'días'}`;
+  return `${days} ${days === 1 ? 'day' : 'days'} ago`;
 }
 
-/** The clock time the cooldown lifts, in the reader's own zone. */
+/** The clock time the cooldown lifts, in the reader's own zone, written en-US. */
 export function clockLabel(at: string): string | null {
   const when = Date.parse(at);
   if (Number.isNaN(when)) return null;
-  return new Date(when).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return new Date(when).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
 /**
@@ -61,7 +61,7 @@ export function clockLabel(at: string): string | null {
 export function takenLine(readyAt: string | null, now: Date): string | null {
   if (!readyAt) return null;
   const ago = agoLabel(readyAt, now);
-  return ago ? `Leído ${ago}` : null;
+  return ago ? `Read ${ago}` : null;
 }
 
 /** What the control should say, given what the server decided. */
@@ -74,23 +74,23 @@ export function refreshCopy(refresh: AccountReadRefresh): {
   if (!refresh) return { note: null, running: false };
   if (refresh.state === 'queued' || refresh.state === 'generating') {
     return {
-      note: 'Releyendo la cuenta — una lectura nueva llega en unos minutos.',
+      note: 'Re-reading the account — a fresh read lands in a few minutes.',
       running: true,
     };
   }
   if (refresh.state === 'stalled') {
-    return { note: 'La última lectura se detuvo a medias.', running: false };
+    return { note: 'The last read stopped halfway.', running: false };
   }
   if (refresh.reason === 'too_soon') {
     const at = refresh.retry_after ? clockLabel(refresh.retry_after) : null;
     return {
-      note: at ? `Se puede releer a las ${at}.` : 'Se puede releer en un rato.',
+      note: at ? `Can re-read at ${at}.` : 'Can re-read in a while.',
       running: false,
     };
   }
   if (refresh.reason === 'daily_limit') {
     return {
-      note: 'Ya se releyó tres veces hoy — la próxima es mañana por la mañana.',
+      note: 'Already re-read three times today — the next one is tomorrow morning.',
       running: false,
     };
   }
@@ -157,7 +157,7 @@ export function AccountReadFreshness({
             {utcDay ? <span className="text-muted-foreground/70"> · {utcDay} UTC</span> : null}
           </span>
         ) : (
-          <span data-testid="account-read-taken">Sin lectura todavía</span>
+          <span data-testid="account-read-taken">No read yet</span>
         )}
         {note ? (
           <span
@@ -184,7 +184,7 @@ export function AccountReadFreshness({
             type="button"
             variant="outline"
           >
-            {requesting || running ? 'Releyendo…' : 'Releer'}
+            {requesting || running ? 'Re-reading…' : 'Re-read'}
           </Button>
         ) : null}
       </span>

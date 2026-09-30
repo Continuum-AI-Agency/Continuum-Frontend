@@ -153,11 +153,11 @@ describe('reel templates', () => {
       }),
     );
     expect(systems).toEqual({
-      'ugc-native': '-/Inter/#FFD100/pill',
+      'ugc-native': '-/Inter/#FFD100/plate',
       'bold-punch': 'Anton/Caveat/#FFD100/card',
-      'karaoke-clean': 'Montserrat/Montserrat/#34D399/pill',
+      'karaoke-clean': 'Montserrat/Montserrat/#34D399/plate',
       'product-proof': 'Anton/Montserrat/#FFD100/plate',
-      editorial: 'Cormorant Garamond/Cormorant Garamond/#E8412C/pill',
+      editorial: 'Cormorant Garamond/Cormorant Garamond/#E8412C/plate',
       'cinematic-occlusion': 'Anton/Inter/#FFFFFF/card',
     });
     const bold = presentationFromTemplate('bold-punch', input).presentation;
@@ -209,41 +209,49 @@ describe('reel templates', () => {
     ).toThrow('template_needs_inset');
   });
 
-  test('a single carries one cutaway: a hero of at most 1.2 s and a plate CTA, or the CTA card alone', () => {
-    // One take split at a pause of its line, the hero covering the join (Backend compose).
+  test('a single never cuts away from her: its packshot is a picture-in-picture with its word, the CTA after her line', () => {
+    // One take; compose places the packshot in a pause of her line (the owner: "let her speak").
     const single: ReelTemplateShot[] = [
       {
         id: 'take',
         role: 'hook',
-        durationSec: 2.1,
-        lastWordEndSec: 2,
+        durationSec: 6,
+        lastWordEndSec: 4.9,
         location: 'vanity',
-        displayWord: null,
-      },
-      {
-        id: 'take-after',
-        role: 'cta',
-        durationSec: 3.9,
-        lastWordEndSec: 2.6,
-        location: 'vanity',
-        displayWord: 'buttery',
+        displayWord: 'pink',
       },
     ];
-    const heroed = {
+    const inset = { shotId: 'take', atSec: 1.6, durationSec: 2, displayWord: 'buttery' };
+    for (const id of reelTemplateIdSchema.options) {
+      const { presentation, insetAsset } = presentationFromTemplate(id, {
+        ...input,
+        shots: single,
+        productHero: inset,
+      });
+      expect(presentation.cards).toEqual([]);
+      expect(presentation.events.filter((event) => event.kind === 'inset')).toEqual([
+        {
+          kind: 'inset',
+          anchor: { kind: 'shot', shotId: 'take', edge: 'start', offsetSec: 1.6 },
+          durationSec: 2,
+        },
+      ]);
+      expect(insetAsset).toEqual(inset && input.insetAsset);
+      // The inset's word is the single's one display word, landing with the packshot.
+      expect(presentation.displayWords.map((word) => [word.text, word.anchor])).toEqual(
+        id === 'ugc-native'
+          ? []
+          : [['buttery', { kind: 'shot', shotId: 'take', edge: 'start', offsetSec: 1.6 }]],
+      );
+      expect(presentation.ctaStyle).toBe('plate');
+    }
+    // A headline gives way when the inset's word lands.
+    const punch = presentationFromTemplate('bold-punch', {
       ...input,
       shots: single,
-      productHero: { shotId: 'take-after', durationSec: 2.2, displayWord: 'buttery' },
-    };
-    for (const id of reelTemplateIdSchema.options) {
-      const { presentation } = presentationFromTemplate(id, heroed);
-      expect(presentation.cards.map((card) => [card.kind, card.durationSec])).toEqual([
-        ['product-hero', 1.2],
-      ]);
-      expect(presentation.ctaStyle).not.toBe('card');
-    }
-    expect(
-      presentationFromTemplate('bold-punch', { ...input, shots: single }).presentation.ctaStyle,
-    ).toBe('card');
+      productHero: inset,
+    }).presentation;
+    expect(punch.events.find((event) => event.kind === 'headline')?.durationSec).toBe(1.6);
     // A concept keeps its hero on the proof beat, its type card, and its CTA card.
     const concept = presentationFromTemplate('bold-punch', {
       ...input,
@@ -282,5 +290,50 @@ describe('reel templates', () => {
     });
     expect(presentation.displayWords).toEqual([]);
     expect(presentation.cards).toEqual([]);
+  });
+});
+
+describe('a display word lands on its own picture', () => {
+  test('it waits out its incoming join, so it never shows over the previous speaker', () => {
+    // Formats run 08-30-55-933Z: TRANQUILA over the interviewer while the answer's join led in.
+    const interview: ReelTemplateShot[] = [
+      {
+        id: 'ask',
+        role: 'hook',
+        durationSec: 3,
+        lastWordEndSec: 2.1,
+        location: 'street',
+        displayWord: null,
+      },
+      {
+        id: 'answer',
+        role: 'proof',
+        durationSec: 3,
+        lastWordEndSec: 2.4,
+        location: 'street',
+        displayWord: 'tranquila',
+      },
+    ];
+    let overlapped = 0;
+    for (const id of reelTemplateIdSchema.options) {
+      const { presentation } = presentationFromTemplate(id, {
+        ...input,
+        shots: interview,
+        insetAsset: id === 'product-proof' ? inset : null,
+      });
+      const word = presentation.displayWords.find((item) => item.text === 'tranquila');
+      if (!word) continue;
+      const join = presentation.transitions[0]!;
+      const lead = join.kind === 'cut' ? 0 : join.durationSec;
+      if (lead) overlapped += 1;
+      expect({ id, offsetSec: word.anchor.kind === 'shot' ? word.anchor.offsetSec : null }).toEqual(
+        {
+          id,
+          offsetSec: lead,
+        },
+      );
+    }
+    // At least one template joins with an overlap, so the rule is exercised, not vacuous.
+    expect(overlapped).toBeGreaterThan(0);
   });
 });

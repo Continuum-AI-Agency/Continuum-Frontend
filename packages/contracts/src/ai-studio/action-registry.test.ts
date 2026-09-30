@@ -9,6 +9,7 @@ import {
 } from '../design-system/placement';
 import {
   ACTION_DEFS,
+  ctaLines,
   ACTION_IDS,
   actionDef,
   actionInputPort,
@@ -24,8 +25,8 @@ describe('ACTION_DEFS', () => {
   // A count, not a floor: silently trimming the catalog is exactly the drift this
   // registry exists to stop, and a shrinking list should have to be edited on purpose.
   it('declares the whole catalog up front', () => {
-    expect(ACTION_IDS).toHaveLength(40);
-    expect(ACTION_IDS.filter((id) => id.startsWith('image.'))).toHaveLength(14);
+    expect(ACTION_IDS).toHaveLength(41);
+    expect(ACTION_IDS.filter((id) => id.startsWith('image.'))).toHaveLength(15);
     expect(ACTION_IDS.filter((id) => id.startsWith('video.'))).toHaveLength(23);
     expect(ACTION_IDS.filter((id) => id.startsWith('text.'))).toHaveLength(3);
   });
@@ -131,6 +132,8 @@ describe('image.text', () => {
       subScale: null,
       // The brand's face unless a step names one Continuum ships (a display word in Anton).
       family: null,
+      // The canvas draws what it breaks; only a headless still refuses a broken word.
+      refuseSplit: false,
     });
   });
 
@@ -193,6 +196,8 @@ describe('image.text', () => {
       // caller contrast-checked against the ink, never a second palette source.
       'plate',
       'plateHex',
+      // A refusal, not a source: a headless still fails a broken word instead of drawing it.
+      'refuseSplit',
       // Sizes, not sources: the faces and the ink still come from the brand.
       'scale',
       'subScale',
@@ -213,6 +218,29 @@ describe('image.text', () => {
     expect(ACTION_DEFS['image.text'].config.safeParse({ offsetX: 1.4 }).success).toBe(false);
     expect(ACTION_DEFS['image.text'].config.safeParse({ offsetY: -1.4 }).success).toBe(false);
     expect(ACTION_DEFS['image.text'].config.safeParse({ offsetX: -0.2 }).success).toBe(true);
+  });
+});
+
+describe('image.cta', () => {
+  it('takes the picture and the words on separate ports, like image.text', () => {
+    expect(ACTION_DEFS['image.cta'].inputs.map((port) => port.handle)).toEqual(['in', 'text-in']);
+  });
+
+  it('draws a button unless asked for another component, and never carries copy of its own', () => {
+    const parsed = ACTION_DEFS['image.cta'].config.parse({}) as Record<string, unknown>;
+    expect(parsed.component).toBe('button');
+    expect(Object.values(parsed).filter((value) => typeof value === 'string')).toEqual([
+      'button',
+      'bottom-center',
+    ]);
+    expect(() => ACTION_DEFS['image.cta'].config.parse({ component: 'banner' })).toThrow();
+  });
+
+  it('breaks two lines at the word that leaves the longer line shortest; one word stays one line', () => {
+    expect(ctaLines('¡Pídela ya, está fría!', 2)).toEqual(['¡Pídela ya,', 'está fría!']);
+    expect(ctaLines('Colección otoño: pídelos', 2)).toEqual(['Colección', 'otoño: pídelos']);
+    expect(ctaLines('DayPass', 2)).toEqual(['DayPass']);
+    expect(ctaLines('Solicita tu DayPass', 1)).toEqual(['Solicita tu DayPass']);
   });
 });
 

@@ -19,6 +19,7 @@ import {
   type PortfolioWindow,
   resultWords,
   type TileState,
+  targetSide,
   vsTargetLabel,
 } from './account/overviewModel';
 import { StalenessChips } from './StalenessChips';
@@ -31,7 +32,7 @@ type PortfolioRowCardProps = {
   /** Warm the portfolio's detail reads on hover/focus so opening it paints from cache. */
   onPrefetch?: () => void;
   /** This portfolio's 7-day window from `portfolioWindow()` in sections/account/overviewModel.ts.
-   *  Null/absent = no cycle yet: the three figures render as '—' and the chip says 'sin ciclo aún'. */
+   *  Null/absent = no cycle yet: the three figures render as '—' and the chip says 'no cycle yet'. */
   window?: PortfolioWindow | null;
 };
 
@@ -74,20 +75,25 @@ const COST_TONE: Record<TileState, string> = {
 };
 
 /**
- * "33% sobre" / "12% bajo" / "en objetivo" — `vsTargetLabel` with the word the chip's
- * column already says. "0 resultados" outranks the target: a cost cannot be read from
- * nothing. `null` window is a portfolio no cycle has measured yet.
+ * "33% over" / "12% under" / "on target" — the distance to target without the word the chip's
+ * column already says. "0 results" outranks the target: a cost cannot be read from nothing.
+ * `null` window is a portfolio no cycle has measured yet. Built from the side as a value, never
+ * by parsing the label's words.
  */
 export function stateChipLabel(window: PortfolioWindow | null | undefined): string {
-  if (!window) return 'sin ciclo aún';
-  if (window.results === 0) return '0 resultados';
-  if (window.target == null) return 'sin objetivo';
-  return vsTargetLabel(window.vsTargetPct).replace(/ (sobre|bajo) objetivo$/, ' $1');
+  if (!window) return 'no cycle yet';
+  if (window.results === 0) return '0 results';
+  if (window.target == null) return 'no target';
+  const side = targetSide(window.vsTargetPct);
+  if (side === 'over' || side === 'under') {
+    return `${Math.abs(window.vsTargetPct ?? 0)}% ${side}`;
+  }
+  return vsTargetLabel(window.vsTargetPct);
 }
 
 function decisionsSuffix(pending: number): string {
   if (pending === 0) return '';
-  return ` · ${pending} ${pending === 1 ? 'decisión' : 'decisiones'}`;
+  return ` · ${pending} ${pending === 1 ? 'decision' : 'decisions'}`;
 }
 
 type FigureProps = {
@@ -131,10 +137,10 @@ export function PortfolioRowCard({
 
   const costCaption =
     window == null
-      ? `por ${words.one}`
+      ? `per ${words.one}`
       : window.target != null
-        ? `por ${words.one} · obj. ${formatCpa(window.target, currency)}`
-        : `por ${words.one} · sin objetivo`;
+        ? `per ${words.one} · target ${formatCpa(window.target, currency)}`
+        : `per ${words.one} · no target`;
 
   return (
     <button
@@ -166,10 +172,10 @@ export function PortfolioRowCard({
           <span>{humanize(portfolio.objective)}</span>
           <span aria-hidden>·</span>
           <span>
-            {portfolio.adset_count} {portfolio.adset_count === 1 ? 'conjunto' : 'conjuntos'}
+            {portfolio.adset_count} {portfolio.adset_count === 1 ? 'ad set' : 'ad sets'}
           </span>
           <span aria-hidden>·</span>
-          <span>{formatCurrency(portfolio.daily_total, currency)}/día</span>
+          <span>{formatCurrency(portfolio.daily_total, currency)}/day</span>
           <span aria-hidden>·</span>
           <ApplyModePill
             applyMode={portfolio.apply_mode}
@@ -196,7 +202,7 @@ export function PortfolioRowCard({
           figureKey={figureKey('results')}
           raw={window?.results ?? null}
           testId="portfolio-row-results"
-          text={window ? window.results.toLocaleString('es-MX') : '—'}
+          text={window ? window.results.toLocaleString('en-US') : '—'}
           unit="count"
         />
         <Figure
