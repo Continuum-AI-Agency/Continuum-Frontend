@@ -796,7 +796,9 @@ test(BENCH, async ({ browser }) => {
       const mine = strays.filter(
         (name) =>
           createdProjects.some((id) => name.includes(id)) ||
-          createdAssets.some((asset) => name.includes(asset.id)),
+          createdAssets.some((asset) => name.includes(asset.id)) ||
+          // The transcript the agent turn kept for the dropped footage, named by its version.
+          name.includes('/video-editor/transcripts/'),
       );
       for (const bucket of new Set(mine.map((name) => name.split('/')[0] ?? ''))) {
         await admin.storage
