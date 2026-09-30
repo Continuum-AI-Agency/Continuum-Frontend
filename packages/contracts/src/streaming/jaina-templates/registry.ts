@@ -9,10 +9,12 @@ import { explainedRankingSpec } from './explained_ranking';
 import { spendResultsBalanceSpec } from './spend_results_balance';
 import { threeNumbersSpec } from './three_numbers';
 import { weeklyBridgeSpec } from './weekly_bridge';
+import { weeklyReportSpec } from './weekly_report';
 
 export const TEMPLATE_SPECS: Readonly<Record<AnswerTemplateId, TemplateSpec>> = {
   explained_ranking: explainedRankingSpec,
   spend_results_balance: spendResultsBalanceSpec,
   weekly_bridge: weeklyBridgeSpec,
   three_numbers: threeNumbersSpec,
+  weekly_report: weeklyReportSpec,
 };

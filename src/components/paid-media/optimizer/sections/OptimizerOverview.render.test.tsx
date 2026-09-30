@@ -458,6 +458,35 @@ describe('OptimizerOverview — the Jaina band', () => {
   });
 });
 
+describe('OptimizerOverview — the weekly report', () => {
+  it('opens Jaina with the weekly-report ask for the selected ad account', () => {
+    const { getByRole } = mount();
+    const link = getByRole('link', { name: /weekly report/i });
+    const href = link.getAttribute('href') ?? '';
+    expect(href.startsWith('/scale?tab=jaina&prompt=')).toBe(true);
+    const prompt = decodeURIComponent(href.split('prompt=')[1] ?? '');
+    expect(prompt).toStartWith('Weekly report for the ad account "act_easyfit"');
+    expect(prompt).toContain('Period A');
+    expect(prompt).toContain('Period B');
+  });
+
+  it('offers no weekly report while no ad account is selected', () => {
+    const { queryByRole } = render(
+      <OptimizerOverview
+        adAccountId={null}
+        brandId="b1"
+        currency="MXN"
+        onCreatePortfolio={() => {}}
+        onOpenActions={() => {}}
+        onSelectPortfolio={() => {}}
+        pendingCount={0}
+        portfolios={EASY_FIT}
+      />,
+    );
+    expect(queryByRole('link', { name: /weekly report/i })).toBeNull();
+  });
+});
+
 describe('OptimizerOverview — the cards', () => {
   it('renders the read as cards, the lead marked, and nothing when no read has landed', () => {
     const { queryByTestId } = mount();

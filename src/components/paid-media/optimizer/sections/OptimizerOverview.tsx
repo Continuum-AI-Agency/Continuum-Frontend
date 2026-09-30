@@ -16,11 +16,13 @@
 
 import type { PortfolioListItem } from '@continuum/contracts';
 import { applyApprovals } from '@continuum/contracts';
-import { ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, PlusIcon } from 'lucide-react';
+import { ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, FileTextIcon, PlusIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { jainaPromptHref } from '@/lib/jaina/deepLink';
+import { cn } from '@/lib/utils';
 import { KpiTile } from '../components/KpiTile';
 import { figureProps, formatCpa, formatCurrency } from '../format';
 import { pendingWorkCount } from '../reportModel';
@@ -52,7 +54,7 @@ import {
   windowLabel,
 } from './account/overviewModel';
 import { JainaEntryChips } from './JainaEntryChips';
-import { jainaAccountEntryPrompts } from './jainaEntryModel';
+import { jainaAccountEntryPrompts, jainaWeeklyReportPrompt } from './jainaEntryModel';
 import { PortfolioRowCard } from './PortfolioRowCard';
 import { underManagement } from './portfolioStaleness';
 
@@ -211,6 +213,21 @@ export function OptimizerOverview({
               Review {pendingCount} pending
               <ArrowRightIcon aria-hidden="true" className="size-3.5" />
             </Button>
+          ) : null}
+          {/* The weekly report is a Jaina answer, not a page: the link opens Jaina with the
+           *  prepared ask for this account, the way the band's questions do. */}
+          {adAccountId ? (
+            <a
+              className={cn(
+                buttonVariants({ size: 'sm', variant: 'outline' }),
+                'h-7 gap-1.5 px-2 text-xs',
+              )}
+              data-testid="overview-weekly-report"
+              href={jainaPromptHref(jainaWeeklyReportPrompt(adAccountId))}
+            >
+              <FileTextIcon aria-hidden="true" className="size-3.5" />
+              Weekly report
+            </a>
           ) : null}
           <Button
             className="h-7 gap-1.5 px-2 text-xs"

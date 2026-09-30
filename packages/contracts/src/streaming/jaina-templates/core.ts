@@ -13,6 +13,7 @@
 
 import { z } from 'zod';
 import { figureIdSchema, templateFigureSchema } from './figure';
+import { weeklyReportBodySchema } from './weekly_report_shape';
 
 /**
  * The templates the MVP registers. An id only enters this list together with its file
@@ -24,6 +25,7 @@ export const ANSWER_TEMPLATE_IDS = [
   'spend_results_balance',
   'weekly_bridge',
   'three_numbers',
+  'weekly_report',
 ] as const;
 export const answerTemplateIdSchema = z.enum(ANSWER_TEMPLATE_IDS);
 export type AnswerTemplateId = z.infer<typeof answerTemplateIdSchema>;
@@ -124,6 +126,8 @@ export const answerTemplatePayloadShape = {
   figures: z.array(templateFigureSchema).min(1),
   /** The template that was selected first and was not eligible, when this one is its fallback. */
   fallback_from: answerTemplateIdSchema.nullable().default(null),
+  /** The weekly report's own structure (`weekly_report_shape.ts`). Null on every other template. */
+  weekly_report: weeklyReportBodySchema.nullable().default(null),
 };
 
 export const answerTemplatePayloadSchema = z.object(answerTemplatePayloadShape);

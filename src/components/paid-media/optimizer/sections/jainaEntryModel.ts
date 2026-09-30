@@ -127,3 +127,13 @@ export function jainaAccountEntryPrompts(account: JainaAccountContext): JainaEnt
     },
   ];
 }
+
+/**
+ * The weekly report for one ad account: the last complete Monday–Sunday week (Period A)
+ * against the month to date (Period B), a section per Optimizer objective and this week's
+ * recommendations. The Backend routes this ask to the `weekly_report` template; the phrase
+ * "Weekly report" is what it matches, so keep it at the head of the prompt.
+ */
+export function jainaWeeklyReportPrompt(adAccountId: string): string {
+  return `Weekly report for the ad account "${adAccountId}": last complete Monday–Sunday week (Period A) against month to date (Period B), one section per Optimizer objective, and the recommendations for this week.`;
+}

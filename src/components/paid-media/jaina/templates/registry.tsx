@@ -8,10 +8,12 @@ import { spendResultsBalanceRenderer } from './SpendResultsBalance';
 import { threeNumbersRenderer } from './ThreeNumbers';
 import type { TemplateRenderer } from './types';
 import { weeklyBridgeRenderer } from './WeeklyBridge';
+import { weeklyReportRenderer } from './WeeklyReport';
 
 export const TEMPLATE_RENDERERS: Readonly<Record<AnswerTemplateId, TemplateRenderer>> = {
   explained_ranking: explainedRankingRenderer,
   spend_results_balance: spendResultsBalanceRenderer,
   weekly_bridge: weeklyBridgeRenderer,
   three_numbers: threeNumbersRenderer,
+  weekly_report: weeklyReportRenderer,
 };
