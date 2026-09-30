@@ -231,8 +231,10 @@ function pointLines(raw: string, kit: SceneTextKit, face: SceneGlyphKit): Line[]
 
 /**
  * Every glyph of every line, in font units, and where it is planted (`_runs` + `outline_runs`): one
- * run per line — a set text has one style — at the line's AE-exact x, the pen walking UNKERNED
- * advances plus tracking, the way the server draws it.
+ * run per line — a set text has one style — at the line's AE-exact x, the pen walking each advance
+ * plus the pair kerning into the next character plus tracking. After Effects draws the pair kerning
+ * (measured on the UTEC speaker renders: every `To`/`Te`/`Va` name sat its kern wider without it);
+ * `outline_runs` walks unkerned advances, so the server's own drawing is the one that is off.
  */
 function planted(lines: readonly Line[], kit: SceneTextKit, face: SceneGlyphKit) {
   const scale = kit.size / face.upem;
@@ -240,11 +242,13 @@ function planted(lines: readonly Line[], kit: SceneTextKit, face: SceneGlyphKit)
   const glyphs: { d: string; at: number[] }[] = [];
   for (const line of lines) {
     let pen = line.x;
-    for (const ch of line.text) {
+    const chars = [...line.text];
+    chars.forEach((ch, i) => {
       const glyph = face.chars[ch];
       if (glyph?.[2]) glyphs.push({ d: glyph[2], at: [scale, 0, 0, -scale, pen, line.y] });
-      pen += (glyph?.[1] ?? 0) * scale + spacing;
-    }
+      const kern = i + 1 < chars.length ? (face.kern[ch + chars[i + 1]] ?? 0) : 0;
+      pen += ((glyph?.[1] ?? 0) + kern) * scale + spacing;
+    });
   }
   return glyphs;
 }

@@ -142,12 +142,14 @@ describe('point text', () => {
     ]);
   });
 
-  test('measures with pair kerning but plants glyphs at unkerned advances, as the server draws', () => {
+  test('measures and plants with pair kerning, as After Effects draws', () => {
+    // The UTEC speaker renders: every `To`/`Te`/`Va` name sat its kern wider when glyphs were
+    // planted at unkerned advances, the way py_aep's `outline_runs` still draws.
     const layer = laid('AV', { box: null });
     expect(lines(layer)[0]?.width).toBe(11);
     expect(starts(layer)).toEqual([
       [0, 0],
-      [6, 0],
+      [5, 0],
     ]);
   });
 
