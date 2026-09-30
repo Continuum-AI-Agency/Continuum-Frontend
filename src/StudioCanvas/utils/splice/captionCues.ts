@@ -1,4 +1,5 @@
 import type { CaptionStyleOverride } from '@/lib/clips/clipCaptionStyle';
+import type { ClipEffectSpec } from '../render/effectSpec';
 
 // Word-synced caption cues for the browser splice engine. The cut concatenates N
 // source keep-ranges into one clip with dead space removed, so a word's source
@@ -24,6 +25,12 @@ export type CaptionCue = {
   endSec: number;
   words: CaptionWord[];
   style?: CaptionStyleOverride;
+  /**
+   * A text clip's own transform and keyframes (position, scale, rotation, opacity), which
+   * drawCaptions samples over [startSec, endSec] and applies to the whole cue — the same
+   * spec, and the same sampler, a video or overlay clip moves by.
+   */
+  motion?: Pick<ClipEffectSpec, 'opacity' | 'transform' | 'motionChannels'>;
 };
 type SourceRange = { startSec: number; endSec: number };
 

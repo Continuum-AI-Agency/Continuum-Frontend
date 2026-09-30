@@ -245,29 +245,35 @@ export const clipEffectSpecFromEditorClip = (clip: {
     : {}),
   ...(clip.blendMode ? { blendMode: clip.blendMode } : {}),
   ...(() => {
-    const effect = clip.effects?.find(
-      (candidate) =>
-        candidate.enabled &&
-        (candidate.effectType === 'color_adjustment' ||
-          candidate.effectType === 'video_filter' ||
-          candidate.effectType === 'blur'),
-    );
-    if (!effect) return {};
-    const parameters = effect.parameters;
-    const filterPreset = stringParameter(parameters.filterPreset ?? effect.effectId);
+    // Every enabled look counts, not just the first: a clip with a VHS look (itself a
+    // video_filter) and then a black-and-white filter plays both, and a blur look sits
+    // beside a filter preset. The first instance to name a preset or an adjustment wins it.
+    const looks =
+      clip.effects?.filter(
+        (candidate) =>
+          candidate.enabled &&
+          (candidate.effectType === 'color_adjustment' ||
+            candidate.effectType === 'video_filter' ||
+            candidate.effectType === 'blur'),
+      ) ?? [];
+    if (looks.length === 0) return {};
+    const filterPreset = looks
+      .map((look) => stringParameter(look.parameters.filterPreset ?? look.effectId))
+      .find((preset) => preset !== undefined && FILTER_PRESET_IDS.includes(preset));
+    const first = (name: string) =>
+      looks.map((look) => numberParameter(look.parameters[name])).find((value) => value !== undefined);
     const adjustments = {
-      brightness: numberParameter(parameters.brightness),
-      contrast: numberParameter(parameters.contrast),
-      saturation: numberParameter(parameters.saturation),
-      grayscale: numberParameter(parameters.grayscale),
-      sepia: numberParameter(parameters.sepia),
-      hueRotate: numberParameter(parameters.hueRotate),
-      blur: numberParameter(parameters.blur),
-      invert: numberParameter(parameters.invert),
+      brightness: first('brightness'),
+      contrast: first('contrast'),
+      saturation: first('saturation'),
+      grayscale: first('grayscale'),
+      sepia: first('sepia'),
+      hueRotate: first('hueRotate'),
+      blur: first('blur'),
+      invert: first('invert'),
     };
     return {
-      ...(filterPreset &&
-      ['none', 'bw', 'vintage', 'vivid', 'cool', 'warm', 'noir', 'dream'].includes(filterPreset)
+      ...(filterPreset
         ? { filterPreset: filterPreset as NonNullable<ClipEffectSpec['filterPreset']> }
         : {}),
       ...(Object.values(adjustments).some((value) => value !== undefined) ? { adjustments } : {}),
@@ -339,6 +345,8 @@ export const clipEffectSpecFromEditorClip = (clip: {
   ...(motionChannelsFor(clip) ? { motionChannels: motionChannelsFor(clip) } : {}),
 });
 
+const FILTER_PRESET_IDS = ['none', 'bw', 'vintage', 'vivid', 'cool', 'warm', 'noir', 'dream'];
+
 const effectsFor = clipEffectSpecFromEditorClip;
 
 const transitionFor = (transition: EditorTransition | undefined): ClipTransition | undefined => {
@@ -370,6 +378,16 @@ const transitionFor = (transition: EditorTransition | undefined): ClipTransition
   return { type, durationSec: transition.durationSec };
 };
 
+/** The part of a clip's render spec that moves a text clip: transform, opacity, keyframes. */
+const textMotionFor = (clip: Parameters<typeof clipEffectSpecFromEditorClip>[0]) => {
+  const { transform, opacity, motionChannels } = clipEffectSpecFromEditorClip(clip);
+  return {
+    ...(transform ? { transform } : {}),
+    ...(opacity !== undefined ? { opacity } : {}),
+    ...(motionChannels ? { motionChannels } : {}),
+  };
+};
+
 const captionStyleFor = (
   clip: {
     style: {
@@ -380,6 +398,8 @@ const captionStyleFor = (
       outlineColor?: string;
       outlineWidthPx: number;
       fontWeight: number;
+      shadowColor?: string;
+      shadowBlurPx: number;
     };
     transform: { position: { x: number; y: number } };
   },
@@ -403,7 +423,19 @@ const captionStyleFor = (
   ...(clip.style.backgroundColor
     ? { backgroundColor: clip.style.backgroundColor, backgroundOpacity: 1 }
     : {}),
+  ...(clip.style.shadowColor && clip.style.shadowBlurPx > 0 && clip.style.fontSizePx > 0
+    ? {
+        shadow: {
+          color: clip.style.shadowColor,
+          blurFrac: clip.style.shadowBlurPx / clip.style.fontSizePx,
+          offsetYFrac: TEXT_SHADOW_OFFSET_FRAC,
+        },
+      }
+    : {}),
 });
+
+/** A drop shadow falls a little below the glyphs, as a fraction of the font size. */
+const TEXT_SHADOW_OFFSET_FRAC = 0.06;
 
 async function signedUrlsFor(
   brandId: string,
@@ -693,6 +725,8 @@ export async function buildTimelineEditorRenderPlan(input: {
           animation: captionAnimationFromEditorId(clip.animationIn),
           exitAnimation: captionAnimationFromEditorId(clip.animationOut),
         },
+        // Its transform and keyframes move the whole line, as they move a video clip.
+        motion: textMotionFor(clip),
       });
     }
   }

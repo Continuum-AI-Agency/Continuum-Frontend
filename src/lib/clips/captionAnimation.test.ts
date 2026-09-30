@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { TEXT_ANIMATION_IDS } from '@continuum/contracts';
 import {
   captionAnchorSec,
   captionAnimationFromEditorId,
@@ -202,5 +203,90 @@ describe('editor text motion', () => {
     expect(nearEnd.alpha).toBeLessThan(1);
     expect(nearEnd.dy).toBeGreaterThan(0);
     expect(captionMotionTransform({ ...base, outputTimeSec: 4 }).alpha).toBe(0);
+  });
+});
+
+describe('the motion vocabulary (TEXT_ANIMATION_IDS)', () => {
+  const settled = (id: string) =>
+    captionWordTransform(captionAnimationFromEditorId(id), 10, FONT_PX, { index: 2, count: 3 });
+
+  it('maps every contract id but none to a kind, and nothing else', () => {
+    for (const id of TEXT_ANIMATION_IDS) {
+      const resolved = captionAnimationFromEditorId(id);
+      if (id === 'none') expect(resolved).toBeUndefined();
+      else expect(resolved).toMatchObject({ anchor: 'cue', reveal: 'cue' });
+    }
+    expect(captionAnimationFromEditorId('constructor')).toBeUndefined();
+    expect(captionAnimationFromEditorId('slide_up')?.kind).toBe('slideUp');
+  });
+
+  it('lands every entrance exactly at rest once it is over', () => {
+    for (const id of TEXT_ANIMATION_IDS) {
+      const at = settled(id);
+      expect([at.scale, at.dx, at.dy, at.alpha, at.visible]).toEqual([1, 0, 0, 1, true]);
+      expect(at.blurPx ?? 0).toBe(0);
+      expect(at.typed ?? 1).toBe(1);
+      expect(at.wiped ?? 1).toBe(1);
+    }
+  });
+
+  it('moves each slide toward its name on the way in and on the way out', () => {
+    const at = (id: string, outputTimeSec: number) =>
+      captionMotionTransform({
+        entry: captionAnimationFromEditorId(id),
+        exit: captionAnimationFromEditorId(id),
+        cueStartSec: 0,
+        cueEndSec: 3,
+        wordStartSec: 0,
+        wordEndSec: 3,
+        outputTimeSec,
+        fontPx: FONT_PX,
+      });
+    // slideUp: below at the start, rising; above near the end, still rising.
+    expect(at('slide-up', 0).dy).toBeGreaterThan(0);
+    expect(at('slide-up', 0.1).dy).toBeLessThan(at('slide-up', 0).dy);
+    expect(at('slide-up', 2.9).dy).toBeLessThan(0);
+    expect(at('slide-up', 2.95).dy).toBeLessThan(at('slide-up', 2.9).dy);
+    expect(at('slide-right', 0).dx).toBeLessThan(0);
+    expect(at('slide-right', 2.95).dx).toBeGreaterThan(0);
+    expect(at('slide-left', 0).dx).toBeGreaterThan(0);
+    expect(at('slide-down', 0).dy).toBeLessThan(0);
+  });
+
+  it('types characters on linearly and un-types them at the exit', () => {
+    const typewriter = captionAnimationFromEditorId('typewriter');
+    expect(captionWordTransform(typewriter, 0, FONT_PX).typed).toBe(0);
+    // 0.8 s by default: a quarter of the line is typed at 0.2 s.
+    expect(captionWordTransform(typewriter, 0.2, FONT_PX).typed).toBeCloseTo(0.25, 10);
+    const exit = captionMotionTransform({
+      exit: typewriter,
+      cueStartSec: 0,
+      cueEndSec: 2,
+      wordStartSec: 0,
+      wordEndSec: 2,
+      outputTimeSec: 1.8,
+      fontPx: FONT_PX,
+    });
+    expect(exit.typed).toBeCloseTo(0.25, 10);
+  });
+
+  it('pops words in one after another across the build', () => {
+    const wordPop = captionAnimationFromEditorId('word-pop');
+    const word = (index: number, age: number) =>
+      captionWordTransform(wordPop, age, FONT_PX, { index, count: 3 });
+    expect(word(0, 0.05).visible).toBe(true);
+    expect(word(1, 0.05).visible).toBe(false);
+    expect(word(1, 0.25).visible).toBe(true);
+    expect(word(2, 0.25).visible).toBe(false);
+    expect(word(2, 0.6).alpha).toBe(1);
+  });
+
+  it('wipes, blurs, zooms and bounces from their own starting points', () => {
+    const start = (id: string) => captionWordTransform(captionAnimationFromEditorId(id), 0, FONT_PX);
+    expect(start('wipe').wiped).toBe(0);
+    expect(start('blur-in').blurPx).toBeCloseTo(30, 10);
+    expect(start('zoom-out').scale).toBeCloseTo(1.4, 10);
+    expect(start('bounce').dy).toBeLessThan(0);
+    expect(start('fade').alpha).toBe(0);
   });
 });
