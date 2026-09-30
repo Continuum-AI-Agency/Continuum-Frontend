@@ -140,6 +140,7 @@ import { Button } from '@/components/ui/button';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { toast } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
+import { saveTemplateVariables } from '@/lib/library/templateSources';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { pickedPins, pinFromAsset } from '@/StudioCanvas/nodes/api-render/RenderVariableFields';
@@ -406,6 +407,7 @@ export function RenderRequestsGrid({
     templates.find((template) => template.key === templateKey)?.bindingId ??
     null;
   const [contract, setContract] = useState<ApiRenderTemplateContract | null>(null);
+  const [layerSwitches, setLayerSwitches] = useState<ApiRenderVariable[]>([]);
   const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
   const [renderSets, setRenderSets] = useState<ForgeRenderSet[]>([]);
   const [activeSet, setActiveSet] = useState<ForgeRenderSet | null>(null);
@@ -647,6 +649,7 @@ export function RenderRequestsGrid({
   useEffect(() => {
     if (!templateKey) {
       setContract(null);
+      setLayerSwitches([]);
       setRows([]);
       return;
     }
@@ -675,6 +678,7 @@ export function RenderRequestsGrid({
       .then(([next, sets, savedSets]) => {
         if (cancelled) return;
         setContract(next);
+        setLayerSwitches(next.layerSwitchesNotAsked);
         setInputSets(sets.items);
         // A set belongs to the environment it was saved in; one from another would refuse to render.
         const binding = bindingRef.current;
@@ -1082,6 +1086,31 @@ export function RenderRequestsGrid({
     if (!appendRows([added])) return;
     setPreviewRowId(added.id);
     focusRowId.current = added.id;
+  };
+
+  // One click from Render: a layer's Show switch becomes a column for every set of this
+  // template — the same edit as "Ask per row" in the template's Variables. Rows that never set
+  // it keep rendering what the file has.
+  const askSwitch = async (variable: ApiRenderVariable) => {
+    const assetId = contract?.template.sourceAssetId;
+    if (!assetId || !variable.sourceSlotKey || !templateKey) return;
+    try {
+      await saveTemplateVariables(brandId, assetId, [
+        { slotKey: variable.sourceSlotKey, exposed: true },
+      ]);
+      const next = await queryClient.fetchQuery({
+        queryKey: forgeQueryKeys.contract(brandId, contractBindingId, templateKey),
+        queryFn: () => apiRendersApi.getContract(brandId, templateKey, contractBindingId),
+        staleTime: 0,
+      });
+      setContract(next);
+      setLayerSwitches(next.layerSwitchesNotAsked);
+      toast.success(
+        `${readableLayerName(variable.label)} is now a column — each row can show or hide it`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not add that switch');
+    }
   };
 
   const saveAsInputs = (id: string) => {
@@ -1986,6 +2015,8 @@ export function RenderRequestsGrid({
         onAddFromInputs={(set) =>
           appendRows([{ ...seedRow([], set.name), values: { ...set.variables } }])
         }
+        layerSwitches={layerSwitches}
+        onAskSwitch={(variable) => void askSwitch(variable)}
         onUpload={() => setImportOpen(true)}
         onDownloadTemplate={() =>
           contract &&

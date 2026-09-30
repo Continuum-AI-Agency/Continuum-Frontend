@@ -165,7 +165,7 @@ describe('VariableEditor', () => {
     expect(onSave).toHaveBeenCalledTimes(2);
   });
 
-  test('a switched-off field reads Off, cannot be required, and switching it on is a saved edit', async () => {
+  test('a field not asked reads Not asked, cannot be required, and asking for it is a saved edit', async () => {
     const onSave = mock(async (_edits: TemplateSlotEdit[]) => true);
     render(
       <VariableEditor
@@ -185,8 +185,11 @@ describe('VariableEditor', () => {
         onSave={onSave}
       />,
     );
-    expect(within(screen.getByRole('list', { name: 'Variables' })).getByText('Off')).toBeTruthy();
-    const ask = screen.getByRole('switch', { name: 'Ask for it' });
+    expect(
+      within(screen.getByRole('list', { name: 'Variables' })).getByText('Not asked'),
+    ).toBeTruthy();
+    expect(screen.getByText('Every row renders what the file has')).toBeTruthy();
+    const ask = screen.getByRole('switch', { name: 'Ask per row' });
     expect(ask.getAttribute('aria-checked')).toBe('false');
     const required = screen.getByRole('switch', { name: 'Required' });
     expect(
@@ -197,6 +200,42 @@ describe('VariableEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave.mock.calls[0]?.[0]).toEqual([{ slotKey: 'image__rosa', exposed: true }]);
+  });
+
+  // Two on/off ideas share one control shape: whether a row is ASKED (above) and whether a layer
+  // is SHOWN. A layer switch says Shown/Hidden and what hiding does; any other checkbox On/Off.
+  test('a layer switch default reads Shown or Hidden and says what hiding does', async () => {
+    render(
+      <VariableEditor
+        brandId="22222222-2222-4222-8222-222222222222"
+        variables={[
+          variable({
+            key: 'boolean__show-carrera',
+            label: 'Show Carrera',
+            kind: 'boolean',
+            charBudget: null,
+          }),
+          variable({
+            key: 'boolean__dark-mode',
+            label: 'Dark mode',
+            kind: 'boolean',
+            charBudget: null,
+          }),
+        ]}
+        savedDefaults={{ 'boolean__show-carrera': true, 'boolean__dark-mode': false }}
+        parseState="parsed"
+        saving={false}
+        onSave={mock(async () => true)}
+      />,
+    );
+    const list = within(screen.getByRole('list', { name: 'Variables' }));
+    expect(list.getAllByText('Shown').length).toBeGreaterThan(0);
+    expect(list.getAllByText('Off').length).toBeGreaterThan(0);
+    expect(list.queryAllByText('Hidden')).toHaveLength(0);
+    // The first variable opens by default.
+    expect(await screen.findByText(/Hidden makes this layer invisible in the render/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('switch', { name: 'Show Carrera default' }));
+    await waitFor(() => expect(screen.getAllByText('Hidden').length).toBeGreaterThan(0));
   });
 
   test('what a save sent is settled; an edit typed while it was in flight stays a draft', async () => {

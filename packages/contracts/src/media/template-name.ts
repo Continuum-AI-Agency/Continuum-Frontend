@@ -112,7 +112,10 @@ const CLIENT_KEY_NAME_MAX = 12;
 export const SHARED_RENDER_WORKSPACE = 'Continuum_app';
 
 export function renderClientKeyFor(brandName: string | null | undefined, brandId: string): string {
-  const uniq = String(brandId).replace(/[^0-9a-f]/gi, '').slice(0, 6).toLowerCase();
+  const uniq = String(brandId)
+    .replace(/[^0-9a-f]/gi, '')
+    .slice(0, 6)
+    .toLowerCase();
   let stem = templateKeySlug(brandName ?? '').slice(0, CLIENT_KEY_NAME_MAX);
   // A cut that landed mid-word reads as a typo; fall back to the last whole word it kept.
   if (templateKeySlug(brandName ?? '').length > CLIENT_KEY_NAME_MAX && stem.includes('_')) {
@@ -146,6 +149,37 @@ export function templateDisplayName(input: string | null | undefined): string {
     .replace(/[_\-\s…]+/g, ' ')
     .trim();
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : UNTITLED_TEMPLATE_NAME;
+}
+
+const LAYER_SWITCH = /^boolean__show-(.+)$/;
+
+/**
+ * Is this slot a layer's Show switch — the per-layer toggle a design import adds, or an After
+ * Effects checkbox named "show …" — rather than some other checkbox? Only a Show switch can be
+ * described as a layer being shown or hidden.
+ */
+export function isLayerSwitch(slotKey: string | null | undefined): boolean {
+  return LAYER_SWITCH.test(slotKey ?? '');
+}
+
+/**
+ * What a layer's Show switch is called, as a person reads it: "Show Carrera de Administración y
+ * Negocios Digitales". A design import keys the switch `boolean__show-<slug>` and names it the
+ * slug too, which drops accents ("administraci-n") — 310 of 320 prod switches reached people that
+ * way on 2026-09-29. The layer's own slot shares the slug and keeps the name the designer typed,
+ * so the switch borrows it; with no such sibling the slug is read back as words. Null for
+ * anything that is not a Show switch.
+ */
+export function layerSwitchName(
+  slotKey: string,
+  slots: ReadonlyArray<{ key: string; name?: string | null }>,
+): string | null {
+  const slug = LAYER_SWITCH.exec(slotKey)?.[1];
+  if (!slug) return null;
+  const layer = slots.find(
+    (slot) => slot.key !== slotKey && slot.key.endsWith(`__${slug}`) && slot.name?.trim(),
+  );
+  return `Show ${layer?.name?.trim() || slug.replace(/-+/g, ' ')}`;
 }
 
 const LAYER_PREFIX = /^(?:ref|txt|img|var)[_\s]+/i;

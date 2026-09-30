@@ -6,6 +6,7 @@ import {
   apiRenderVariableLabel,
   classifyLibraryFile,
   clipRequirement,
+  isLayerSwitch,
   readableLayerName,
   SLOT_ROLE_KIND,
   SLOT_ROLES,
@@ -211,12 +212,18 @@ function DefaultValueControl({
   }
 
   if (variable.kind === 'boolean') {
+    const [on, off] = switchWords(variable);
     return (
-      <Switch
-        checked={value === true}
-        onCheckedChange={(next) => onChange(next)}
-        aria-label={`${label} default`}
-      />
+      <span className="flex items-center gap-2">
+        <Switch
+          checked={value === true}
+          onCheckedChange={(next) => onChange(next)}
+          aria-label={`${label} default`}
+        />
+        <span className="text-xs text-muted-foreground">
+          {value === true ? on : value === false ? off : 'As designed'}
+        </span>
+      </span>
     );
   }
 
@@ -307,13 +314,21 @@ function settleDraft(current: Draft, submitted: Draft): Draft {
 
 type VariableFilter = 'all' | 'unassigned' | 'media' | 'text' | 'off';
 
+/**
+ * What a switch's two states are called. A layer's Show switch hides or shows that layer; any
+ * other After Effects checkbox is only on or off — calling it "Hidden" would claim a layer.
+ */
+const switchWords = (variable: TemplateVariable): [string, string] =>
+  isLayerSwitch(variable.key) ? ['Shown', 'Hidden'] : ['On', 'Off'];
+
 const FILTERS: Array<{ value: VariableFilter; label: string }> = [
   { value: 'all', label: 'All' },
   { value: 'unassigned', label: 'Unassigned' },
   { value: 'media', label: 'Media' },
   { value: 'text', label: 'Text' },
-  // A design import brings every layer of the file; most start switched off.
-  { value: 'off', label: 'Off' },
+  // A design import brings every layer of the file; most start not asked. "Not asked", never
+  // "Off": a hidden layer is a switch's VALUE, and this filter is about the row form.
+  { value: 'off', label: 'Not asked' },
 ];
 
 /** What a closed row shows for its default: the copy in mono, a swatch, or that a picture is set. */
@@ -335,7 +350,10 @@ function DefaultPreview({ variable, value }: { variable: TemplateVariable; value
       </span>
     );
   }
-  if (typeof value === 'boolean') return <span>{value ? 'On' : 'Off'}</span>;
+  if (typeof value === 'boolean') {
+    const [on, off] = switchWords(variable);
+    return <span>{value ? on : off}</span>;
+  }
   return <span className="truncate font-mono">{String(value)}</span>;
 }
 
@@ -487,7 +505,7 @@ export function VariableEditor({
                   <Icon className="size-3.5 text-muted-foreground" aria-hidden />
                   <span className={cn('truncate', !exposed && 'text-muted-foreground')}>
                     {name}
-                    {exposed ? null : <span className="ml-1.5 text-2xs uppercase">Off</span>}
+                    {exposed ? null : <span className="ml-1.5 text-2xs uppercase">Not asked</span>}
                   </span>
                   <span className="flex min-w-0">
                     {role ? (
@@ -585,6 +603,12 @@ export function VariableEditor({
                       value={defaultValue}
                       onChange={(next) => patch(variable.key, { defaultValue: next })}
                     />
+                    {isLayerSwitch(variable.key) ? (
+                      <FieldDescription className="text-xs">
+                        Hidden makes this layer invisible in the render. Nothing moves into its
+                        place — the rest of the design stays where it was put.
+                      </FieldDescription>
+                    ) : null}
                   </Field>
 
                   <div className="flex items-end gap-6">
@@ -622,13 +646,14 @@ export function VariableEditor({
                         checked={exposed}
                         onCheckedChange={(next) => patch(variable.key, { exposed: next })}
                       />
-                      <FieldLabel
-                        htmlFor={`variable-exposed-${variable.key}`}
-                        className="text-xs"
-                        title="Off: no form asks for it, and every render uses what the file says"
-                      >
-                        Ask for it
+                      <FieldLabel htmlFor={`variable-exposed-${variable.key}`} className="text-xs">
+                        Ask per row
                       </FieldLabel>
+                      {exposed ? null : (
+                        <span className="text-xs text-muted-foreground">
+                          Every row renders what the file has
+                        </span>
+                      )}
                     </Field>
                     <Field orientation="horizontal" className="w-auto gap-2 pb-1">
                       <Switch

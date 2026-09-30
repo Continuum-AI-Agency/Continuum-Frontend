@@ -11,6 +11,7 @@ import {
   classifyLibraryFile,
   clipRequirement,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
+  isLayerSwitch,
   type MediaAsset,
   readableLayerName,
 } from '@continuum/contracts';
@@ -50,8 +51,8 @@ import { RatioGlyph } from '@/components/forge/RatioGlyph';
 import { lookupLibraryAsset } from '@/components/forge/RenderRowsImport';
 import {
   clipShortBy,
-  effectiveMedia,
   effectiveEvidence,
+  effectiveMedia,
   effectiveOutputIds,
   effectiveValues,
   isEmptyInput,
@@ -532,18 +533,28 @@ export function VariableCell({
     );
   }
 
-  if (variable.kind === 'boolean')
+  if (variable.kind === 'boolean') {
+    // A row that has not set the switch renders what the file authored, so that is what it
+    // shows — reading it as Off hid 253/254's career logo from anyone checking the grid.
+    const authored = variable.sample === 'true' ? true : variable.sample === 'false' ? false : null;
+    const shown = typeof value === 'boolean' ? value : authored;
+    const [on, off] = isLayerSwitch(variable.sourceSlotKey) ? ['Shown', 'Hidden'] : ['On', 'Off'];
     return (
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1.5">
         <Switch
           size="sm"
-          aria-label={variable.label}
-          checked={value === true}
+          aria-label={readableLayerName(variable.label)}
+          checked={shown === true}
           onCheckedChange={(next) => actions.setValue(row.id, variable.key, next)}
         />
+        <span className="text-2xs text-muted-foreground">
+          {shown === null ? 'As designed' : shown ? on : off}
+          {typeof value !== 'boolean' && shown !== null ? ' · as designed' : ''}
+        </span>
         {inheritance}
       </div>
     );
+  }
 
   if (variable.kind === 'enum' && variable.options.length > 0)
     return (

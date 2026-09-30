@@ -88,6 +88,7 @@ import {
   forgeRenderSetSchema,
   forgeRenderSetShareResponseSchema,
   forgeRenderSetShareRoute,
+  isLayerSwitch,
   type UpdateForgeRenderSetRequest,
 } from '@continuum/contracts';
 import { http } from '@/lib/api/http';
@@ -149,6 +150,11 @@ export const apiRendersApi = {
     return {
       ...contract,
       variables: contract.variables.filter((variable) => variable.exposed !== false),
+      // Kept aside rather than dropped: a layer's Show switch nobody asked for yet, which the
+      // Render tab offers as a column (UTEC's career logo was one of these, found by SQL).
+      layerSwitchesNotAsked: contract.variables.filter(
+        (variable) => variable.exposed === false && isLayerSwitch(variable.sourceSlotKey),
+      ),
     };
   },
   preflight(input: ApiRenderPreflightRequest) {

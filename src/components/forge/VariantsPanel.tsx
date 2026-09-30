@@ -119,14 +119,18 @@ export function VariantsPanel({
   if (!variants.length) {
     return (
       <p className="text-xs text-muted-foreground">
-        No named variants yet. A variant appears here once a fork is given a name — a ratio, a
-        language, a legal wrap or a motion preset.
+        No variants yet. A variant is this template made for another use case — another size, a
+        language, a legal wrap or a look — and it renders from the same rows. Template Forge makes
+        them today; each one appears here once it has a name.
       </p>
     );
   }
 
   return (
     <ul className="flex flex-col gap-1.5">
+      <li className="text-xs text-muted-foreground">
+        Each variant is this template made for a use case. Render this sends your rows to it.
+      </li>
       {view.cachedAt ? (
         <li className="text-xs text-muted-foreground" title={view.cachedAt}>
           Showing the last variants Template Forge reported, from{' '}
