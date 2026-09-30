@@ -39,6 +39,8 @@ test.describe.configure({ timeout: 1_800_000 });
 
 const BENCH = 'videoeditor:first-cut:e2e:bench';
 const BRAND = process.env.CONTINUUM_TEST_BRAND_ID ?? 'b411bba9-d09c-4892-9b86-5ff340ce64e5';
+/** Where the Backend keeps transcripts per version (its AI_STUDIO_BUCKET default). */
+const KEPT_BUCKET = process.env.AI_STUDIO_BUCKET ?? 'brand-profile-assets';
 const OWNER_EMAIL = readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai';
 /** Six first-person Vivo 47 gym testimonials (Spanish), ~20 s each, each with its own lines. */
 const SOURCE_ASSET_IDS = (
@@ -695,6 +697,22 @@ test(BENCH, async ({ browser }) => {
           : await prodSql(
               `delete from plugin_mcp.jobs where brand_id = '${BRAND}' and job_id in (${jobIds.map((id) => `'${id}'`).join(',')}) returning 1`,
             );
+      // Opening the Brief warms each footage version's transcript, and the draft keeps it beside
+      // the brand's media (Backend sourceMedia keptTranscriptPath) — this run's versions own them.
+      const { data: versionRows } = await admin
+        .schema('media')
+        .from('asset_versions')
+        .select('id')
+        .in(
+          'asset_id',
+          createdAssets.length > 0
+            ? createdAssets.map((asset) => asset.id)
+            : ['00000000-0000-0000-0000-000000000000'],
+        );
+      const keptPaths = (versionRows ?? []).map(
+        (row) => `${BRAND}/video-editor/transcripts/${row.id}.json`,
+      );
+      if (keptPaths.length > 0) await admin.storage.from(KEPT_BUCKET).remove(keptPaths);
       const removed = await removeAssets(admin, BRAND, createdAssets);
       note(
         `cleanup: ${removedProjects} project(s), ${removed.rows} asset row(s), ${removed.objects} storage object(s), ${removedJobs?.length ?? 0} draft job row(s)`,
@@ -720,10 +738,20 @@ test(BENCH, async ({ browser }) => {
             : ['00000000-0000-0000-0000-000000000000'],
         );
       const leftJobs = await draftJobsLeft(jobIds);
+      const { data: keptLeft } = await admin.storage
+        .from(KEPT_BUCKET)
+        .list(`${BRAND}/video-editor/transcripts`, { limit: 1000 });
+      const leftKept = (keptLeft ?? []).filter((object) =>
+        keptPaths.some((path) => path.endsWith(`/${object.name}`)),
+      ).length;
       check(
-        'net zero: no media.assets rows, storage objects, projects or draft job rows left from this run',
-        (leftRows ?? 0) === 0 && leftObjects === 0 && (leftProjects ?? 0) === 0 && leftJobs === 0,
-        `rows ${leftRows ?? 0}, objects ${leftObjects}, projects ${leftProjects ?? 0}, jobs ${leftJobs} of ${jobIds.length} seen`,
+        'net zero: no media.assets rows, storage objects, kept transcripts, projects or draft job rows left from this run',
+        (leftRows ?? 0) === 0 &&
+          leftObjects === 0 &&
+          leftKept === 0 &&
+          (leftProjects ?? 0) === 0 &&
+          leftJobs === 0,
+        `rows ${leftRows ?? 0}, objects ${leftObjects}, kept transcripts ${leftKept} of ${keptPaths.length}, projects ${leftProjects ?? 0}, jobs ${leftJobs} of ${jobIds.length} seen`,
       );
       note(
         `STT transient WAVs under ${BRAND}/creative-ops/audio/caption-*: ${wavsBefore} → ${await transientWavCount()} (removed per call by the draft; unattributable by name, so reported, not asserted)`,
