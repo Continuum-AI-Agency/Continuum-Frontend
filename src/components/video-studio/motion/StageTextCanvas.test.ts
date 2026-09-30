@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { editorTextClipSchema } from '@continuum/contracts';
-import { textCueFor } from './StageTextCanvas';
+import { textCueFor } from '@/lib/client-render/executors/timelineEditor';
 
 const clip = editorTextClipSchema.parse({
   id: 'text-1',

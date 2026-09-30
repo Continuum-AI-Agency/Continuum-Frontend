@@ -3,6 +3,7 @@ import {
   CANVAS_MEDIA_SIGN_ROUTE,
   type CanvasMediaSignResponse,
   type EditorProjectV2,
+  type EditorTextClip,
   type EditorTransition,
 } from '@continuum/contracts';
 import { request } from '@/lib/api/http';
@@ -261,7 +262,9 @@ export const clipEffectSpecFromEditorClip = (clip: {
       .map((look) => stringParameter(look.parameters.filterPreset ?? look.effectId))
       .find((preset) => preset !== undefined && FILTER_PRESET_IDS.includes(preset));
     const first = (name: string) =>
-      looks.map((look) => numberParameter(look.parameters[name])).find((value) => value !== undefined);
+      looks
+        .map((look) => numberParameter(look.parameters[name]))
+        .find((value) => value !== undefined);
     const adjustments = {
       brightness: first('brightness'),
       contrast: first('contrast'),
@@ -436,6 +439,27 @@ const captionStyleFor = (
 
 /** A drop shadow falls a little below the glyphs, as a fraction of the font size. */
 const TEXT_SHADOW_OFFSET_FRAC = 0.06;
+
+/**
+ * A text clip as the caption cue the compositor draws: its look, its entrance and exit, and
+ * its transform and keyframes, which move the whole line as they move a video clip. The one
+ * mapping — the export plan and the workspace stage both draw text through it.
+ */
+export function textCueFor(clip: EditorTextClip, canvasHeight: number): CaptionCue {
+  const endSec = clip.timelineStartSec + clip.durationSec;
+  return {
+    id: clip.id,
+    startSec: clip.timelineStartSec,
+    endSec,
+    words: wordsForCaptionText(clip.text, clip.timelineStartSec, endSec),
+    style: {
+      ...captionStyleFor(clip, canvasHeight),
+      animation: captionAnimationFromEditorId(clip.animationIn),
+      exitAnimation: captionAnimationFromEditorId(clip.animationOut),
+    },
+    motion: textMotionFor(clip),
+  };
+}
 
 async function signedUrlsFor(
   brandId: string,
@@ -711,23 +735,7 @@ export async function buildTimelineEditorRenderPlan(input: {
   for (const track of input.project.tracks.filter(isTextTrack)) {
     if (!track.enabled || track.muted) continue;
     for (const clip of track.clips.filter((candidate) => candidate.enabled)) {
-      captionCues.push({
-        id: clip.id,
-        startSec: clip.timelineStartSec,
-        endSec: clip.timelineStartSec + clip.durationSec,
-        words: wordsForCaptionText(
-          clip.text,
-          clip.timelineStartSec,
-          clip.timelineStartSec + clip.durationSec,
-        ),
-        style: {
-          ...captionStyleFor(clip, input.project.canvas.height),
-          animation: captionAnimationFromEditorId(clip.animationIn),
-          exitAnimation: captionAnimationFromEditorId(clip.animationOut),
-        },
-        // Its transform and keyframes move the whole line, as they move a video clip.
-        motion: textMotionFor(clip),
-      });
+      captionCues.push(textCueFor(clip, input.project.canvas.height));
     }
   }
   captionCues.sort((left, right) => left.startSec - right.startSec);

@@ -34,6 +34,8 @@ export function VariantSwitcher({
   const router = useRouter();
   const { brief, projectId, durationSec } = studio.project;
   const [variants, setVariants] = useState<Variant[]>([]);
+  // Redraft counts the tabs: before list_variants answers, the only tab is this project.
+  const [answeredFor, setAnsweredFor] = useState<string | null>(null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is the re-read trigger
   useEffect(() => {
@@ -44,7 +46,10 @@ export function VariantSwitcher({
       .then((result) => {
         if (!cancelled) setVariants(result.variants);
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setAnsweredFor(projectId);
+      });
     return () => {
       cancelled = true;
     };
@@ -105,6 +110,7 @@ export function VariantSwitcher({
         size="sm"
         variant="ghost"
         className="h-8 gap-1 text-xs"
+        disabled={answeredFor !== projectId}
         onClick={() => onRedraft(Math.max(tabs.length, 1))}
       >
         <RotateCcw className="size-3.5" /> Redraft all variants
