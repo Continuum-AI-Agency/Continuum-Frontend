@@ -82,3 +82,26 @@ describe('ducking a music bed under speech', () => {
     ).toThrow();
   });
 });
+
+describe('first-cut finishing is opt-in', () => {
+  test('draft_cut finishing flags default off; a variant may carry its headline', () => {
+    const parsed = VIDEO_EDITOR_OPS.draft_cut.input.parse({
+      projectId: '00000000-0000-4000-8000-000000000000',
+      brief: '3 hooks from this interview',
+    });
+    expect(parsed).toMatchObject({
+      music: false,
+      hookTitle: false,
+      broll: false,
+      brandCaptions: false,
+    });
+    expect(
+      VIDEO_EDITOR_OPS.draft_cut.input.parse({
+        projectId: '00000000-0000-4000-8000-000000000000',
+        brief: 'x',
+        music: true,
+        musicPrompt: 'warm acoustic guitar, 90 bpm',
+      }),
+    ).toMatchObject({ music: true, musicPrompt: 'warm acoustic guitar, 90 bpm' });
+  });
+});

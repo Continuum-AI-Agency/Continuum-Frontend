@@ -234,6 +234,8 @@ export const videoEditorDraftVariantSchema = z
     projectId: projectIdSchema,
     label: z.string(),
     angle: z.string(),
+    /** The hook title's words, when the cut was finished with one. */
+    headline: z.string().max(120).optional(),
     durationSec: secSchema,
     editorPath: z.string(),
     segments: z.array(videoEditorCutSegmentSchema),
@@ -639,7 +641,7 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      "Turn the project's footage and a goal into first cuts: reads every spoken line, picks and orders the strongest ones for the goal (a hook, a testimonial, a highlight, a story, a demo) at the target length, then captions and formats each cut. Variant A replaces this timeline (undoable); B, C… open as sibling projects. Returns a jobId — poll draft_cut_status.",
+      "Turn the project's footage and a goal into first cuts: reads every spoken line, picks and orders the strongest ones for the goal (a hook, a testimonial, a highlight, a story, a demo) at the target length, then captions and formats each cut. Finishing, each opt-in: music (a bed ducked under speech; musicPrompt sets its mood), hookTitle (a short headline over the opening), broll (cutaways from the pool's footage without speech over body lines) and brandCaptions (captions in the brand's type and colours) — turn them on unless the person asked for a bare cut. Variant A replaces this timeline (undoable); B, C… open as sibling projects. Returns a jobId — poll draft_cut_status.",
     input: z
       .object({
         ...projectRef,
@@ -650,6 +652,16 @@ export const VIDEO_EDITOR_OPS = {
         preset: platformExportPresetIdSchema.optional(),
         captions: z.boolean().default(true),
         sourceAssetIds: z.array(z.string()).max(20).optional(),
+        /** Finishing: a music bed under each cut, ducked under its speech. */
+        music: z.boolean().default(false),
+        /** The bed's mood; drawn from the brief when absent. */
+        musicPrompt: z.string().max(300).optional(),
+        /** Finishing: a short headline from each cut's hook as a hook title over its opening. */
+        hookTitle: z.boolean().default(false),
+        /** Finishing: cutaways from the pool's footage without speech over body and proof lines. */
+        broll: z.boolean().default(false),
+        /** Finishing: captions in the brand's type and colours. */
+        brandCaptions: z.boolean().default(false),
       })
       .strict(),
     output: z.object({ jobId: z.string(), state: jobStateSchema }).strict(),
