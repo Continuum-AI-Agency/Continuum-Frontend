@@ -260,37 +260,27 @@ export function RenderJobDetail({
 }) {
   const { formats: templateFormats, labelByKey } = useJobFormats(job, givenFormats);
   const files = playableFirst(job.outputs);
-  const unmatched = templateFormats.length
-    ? files.filter((output) => !matchOutputFormat(output.fileName, templateFormats))
-    : [];
-  // ponytail: with no contract, parse or judged ratio to name them, each file is its own format
-  // drawn from its stored size (square when the fleet stored none). Goes once contracts always load.
-  const formats: PreviewFormat[] = templateFormats.length
-    ? [
-        ...templateFormats,
-        ...unmatched.map((output) => ({
-          id: `file:${output.id}`,
-          label: output.fileName,
-          ratio: null,
-          width: output.width,
-          height: output.height,
-        })),
-      ]
-    : files.map((output) => ({
-        id: output.id,
-        label: output.fileName,
+  const matched = files.map((file) => ({
+    file,
+    format: matchOutputFormat(file.fileName, templateFormats),
+  }));
+  // A real file remains available even when the template cannot name its format.
+  const formats: PreviewFormat[] = [
+    ...templateFormats,
+    ...matched
+      .filter(({ format }) => format === null)
+      .map(({ file }) => ({
+        id: `file:${file.id}`,
+        label: file.fileName,
         ratio: null,
-        width: output.width,
-        height: output.height,
-      }));
+        width: file.width,
+        height: file.height,
+      })),
+  ];
   const filesFor = (formatId: string) =>
-    files.filter((output) =>
-      formatId.startsWith('file:')
-        ? `file:${output.id}` === formatId
-        : templateFormats.length
-          ? matchOutputFormat(output.fileName, templateFormats)?.id === formatId
-          : output.id === formatId,
-    );
+    matched
+      .filter(({ file, format }) => (format?.id ?? `file:${file.id}`) === formatId)
+      .map(({ file }) => file);
   const fileFor = (formatId: string) => filesFor(formatId)[0] ?? null;
   const [picked, setPicked] = useState<string | null>(null);
   const [preparing, setPreparing] = useState<'mov' | 'mxf' | null>(null);
@@ -298,7 +288,9 @@ export function RenderJobDetail({
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
-    return () => { mounted.current = false; };
+    return () => {
+      mounted.current = false;
+    };
   }, []);
   const value =
     formats.find((format) => format.id === picked)?.id ??
@@ -336,9 +328,13 @@ export function RenderJobDetail({
           throw new Error(`${format.toUpperCase()} conversion failed. Try again.`);
         await new Promise((resolve) => setTimeout(resolve, 2_000));
       }
-      if (mounted.current) throw new Error(`${format.toUpperCase()} is taking too long. Try again.`);
+      if (mounted.current)
+        throw new Error(`${format.toUpperCase()} is taking too long. Try again.`);
     } catch (error) {
-      if (mounted.current) setDownloadError(error instanceof Error ? error.message : 'Could not prepare this download.');
+      if (mounted.current)
+        setDownloadError(
+          error instanceof Error ? error.message : 'Could not prepare this download.',
+        );
     } finally {
       if (mounted.current) setPreparing(null);
     }
@@ -399,7 +395,9 @@ export function RenderJobDetail({
                           job.status === 'failed'
                             ? 'This render failed.'
                             : job.status === 'finished'
-                              ? 'No file for this format'
+                              ? matched.some(({ format }) => format === null)
+                                ? 'No file matched this format. Select the rendered file tab above.'
+                                : 'This job did not render this format.'
                               : 'No file yet.',
                       };
                 }}

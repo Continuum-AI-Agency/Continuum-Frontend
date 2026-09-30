@@ -1,5 +1,6 @@
 import type {
   AgentDelegatedFrameData,
+  JainaHyperframeSet,
   JainaOptimizerCard,
   JainaPaidCreativeRenderPayload,
   JainaToolApprovalRequiredPayload,
@@ -8,19 +9,18 @@ import type {
 } from '@continuum/contracts';
 import type { PlanStatus } from '@/components/ai-elements/plan';
 import type { AgentMentionMetadata } from '@/lib/agent-references';
+import type { JainaScaffoldState } from '@/lib/jaina/scaffoldTypes';
 import type {
   ArtifactDeltaEventData,
   CheckpointReportV2,
   JainaObjective,
   PlanStep,
   ProgressEventData,
-  ReportAssembly,
   ReportPayload,
   ResponseReportArtifactJobStartedEventData,
   ToolCallEventData,
   ToolResultEventData,
 } from '@/lib/jaina/schemas';
-import type { JainaScaffoldState } from '@/lib/jaina/scaffoldTypes';
 
 export type JainaProgressEntry = {
   stage: string;
@@ -53,8 +53,6 @@ export type JainaChatMessage = {
   toolResults?: ToolResultEventData[];
   report?: ReportPayload;
   reportV2?: CheckpointReportV2;
-  reportAssembly?: ReportAssembly;
-  reportAssemblyHtml?: string;
   plan?: JainaPlan;
   artifacts?: ArtifactDeltaEventData;
   paidCreativeRenders?: JainaPaidCreativeRenderPayload[];
@@ -64,6 +62,8 @@ export type JainaChatMessage = {
    * quietly become a snapshot of numbers nobody can trace.
    */
   optimizerCitations?: JainaOptimizerCard[];
+  /** Compiled cards filed for this turn — the whole document, not a reference into a read. */
+  optimizerHyperframes?: JainaHyperframeSet[];
   pendingClarification?: {
     id?: string;
     question: string;

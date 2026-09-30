@@ -99,13 +99,13 @@ export function EvidenceTooltip({ provenance, datasetId, evidenceRefs }: Evidenc
             </dl>
           ) : null}
           {visibleEvidenceRefs.length > 0 ? (
-            <ul className="mt-1.5 space-y-0.5 font-mono text-2xs text-muted-foreground/70">
+            <ul className="mt-1.5 space-y-0.5 font-mono text-xs text-muted-foreground/70">
               {visibleEvidenceRefs.map((ref) => (
                 <li key={ref}>{ref}</li>
               ))}
             </ul>
           ) : null}
-          {id ? <p className="mt-1.5 font-mono text-2xs text-muted-foreground/70">{id}</p> : null}
+          {id ? <p className="mt-1.5 font-mono text-xs text-muted-foreground/70">{id}</p> : null}
         </TooltipContent>
       </Tooltip>
       <span id={descriptionId} className="sr-only">

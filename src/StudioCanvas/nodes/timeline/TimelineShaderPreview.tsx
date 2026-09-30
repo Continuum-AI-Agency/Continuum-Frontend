@@ -70,7 +70,9 @@ export function TimelineShaderPreview({
       if (!source || width <= 0 || height <= 0) return;
       let rendered: ImageBitmap | undefined;
       try {
-        const { renderShaderStackFrame } = await import('@/lib/vgpu/renderShaderStack');
+        const { renderShaderStackFrame } = await import(
+          '@continuum/contracts/ai-studio/hyperframes-runtime/renderShaderStack'
+        );
         rendered = await renderShaderStackFrame({
           source,
           width,

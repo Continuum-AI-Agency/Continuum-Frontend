@@ -11,7 +11,7 @@ export function ClarificationBanner({ question, onFocusInput }: ClarificationBan
   return (
     <div className="rounded-xl border-l-2 border-amber-400/60 border border-amber-300/30 bg-amber-50/8 px-4 py-3 space-y-2.5">
       <div className="flex items-center gap-2">
-        <Pill variant="warning" className="uppercase text-2xs tracking-wide shrink-0">
+        <Pill variant="warning" className="uppercase text-xs tracking-wide shrink-0">
           Clarification needed
         </Pill>
       </div>

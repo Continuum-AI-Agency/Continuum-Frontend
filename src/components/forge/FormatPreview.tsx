@@ -38,6 +38,9 @@ export type PreviewRepaint = {
   /** Whose render is underneath, as the caption names it: "Based on '{basedOn}' render". */
   basedOn: string | null;
   node: ReactNode;
+  /** A rendered full-timeline proof can name itself without inheriting still-frame wording. */
+  badge?: string;
+  caption?: string;
   /** What the picture could not match, each said once: "Headline: resize rig approximated". */
   notes?: string[];
   /** A newer composition is on its way; this one shows the last settled edit. */
@@ -52,6 +55,7 @@ export type PreviewFrame =
       /** The file predates the edits now on screen. */
       stale?: boolean;
       node: ReactNode;
+      badge?: string;
       /** The same render with the edits since painted over it; shown first when present. */
       preview?: PreviewRepaint;
       /** The drawing too, so a person can compare the render with what was measured. */
@@ -201,15 +205,15 @@ export function FormatPreview({
 
   const badge =
     shown.mode === 'rendered'
-      ? shown.stale
+      ? shown.badge ?? (shown.stale
         ? 'Rendered · before latest edits'
-        : `Rendered · ${formatRelativeTime(shown.at)}`
+        : `Rendered · ${formatRelativeTime(shown.at)}`)
       : shown.mode === 'preview'
-        ? shown.pending
+        ? shown.badge ?? (shown.pending
           ? 'Preview · updating…'
           : shown.basedOn === null
             ? 'Composed from template'
-            : 'Preview'
+            : 'Preview')
         : shown.mode === 'estimate'
           ? 'Estimate · wireframe'
           : 'No preview';
@@ -219,8 +223,8 @@ export function FormatPreview({
       ? (shown.caption ?? ESTIMATE_CAPTION)
       : shown.mode === 'rendered'
         ? shown.caption
-        : shown.mode === 'preview'
-          ? [
+      : shown.mode === 'preview'
+          ? shown.caption ?? [
               shown.basedOn === null
                 ? 'Drawn from the template'
                 : `Based on '${shown.basedOn}' render${shown.at ? ` · ${formatRelativeTime(shown.at)}` : ''}`,

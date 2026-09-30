@@ -71,6 +71,12 @@ type PromptInputProps = {
   queuedText?: string | null;
   onQueuedTextConsumed?: () => void;
   /**
+   * 'insert' (default) drops the text at the caret, as a saved prompt should. 'replace'
+   * makes it the whole draft — for a host's prefill ("Propose via Jaina"), where a second
+   * click must not leave the same request in the composer twice.
+   */
+  queuedTextMode?: 'insert' | 'replace';
+  /**
    * When the user selects a multi-ref pack (e.g. KPIs › Packs › Grow followers),
    * expand it into concrete metric chips instead of inserting a single pack atom.
    * Return null/empty to fall through to normal single-chip insert.
@@ -426,6 +432,7 @@ export function PromptInput({
   onQueuedMentionSuggestionsConsumed,
   queuedText,
   onQueuedTextConsumed,
+  queuedTextMode = 'insert',
   expandPackSuggestion,
   mentionAnalytics,
   mentionPlatforms,
@@ -633,10 +640,11 @@ export function PromptInput({
     }
     if (!editorRef.current || insertedQueuedTextRef.current === queuedText) return;
     insertedQueuedTextRef.current = queuedText;
+    if (queuedTextMode === 'replace') editorRef.current.replaceChildren();
     insertTextAtSelection(editorRef.current, queuedText);
     syncFromEditor();
     onQueuedTextConsumed?.();
-  }, [queuedText, onQueuedTextConsumed, syncFromEditor]);
+  }, [queuedText, queuedTextMode, onQueuedTextConsumed, syncFromEditor]);
 
   const selectMentionSuggestion = useCallback(
     (suggestion: AgentMentionSuggestion) => {

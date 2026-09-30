@@ -57,7 +57,7 @@ export function JainaGoalsSidebarPanel({ brandId }: { brandId: string }) {
               <span className="mt-1 line-clamp-2 block text-xs leading-5 text-muted-foreground">
                 {goal.outcome}
               </span>
-              <span className="mt-1 block font-mono text-2xs text-muted-foreground">
+              <span className="mt-1 block font-mono text-xs text-muted-foreground">
                 Updated {formatRelativeTime(goal.updatedAt)}
               </span>
             </span>

@@ -15,7 +15,8 @@ import type {
   OptimizationMetricDefinition,
 } from '@continuum/contracts';
 import { resolveAdsetName } from '../adsetName';
-import { deriveEfficiency } from '../format';
+import { deriveEfficiency, formatCurrency } from '../format';
+import { measuredCpa } from '../reportModel';
 
 export type StoryLookback = 3 | 7 | 14;
 export const STORY_LOOKBACKS: readonly StoryLookback[] = [3, 7, 14];
@@ -85,18 +86,6 @@ export function blendedCost(rows: Array<{ budget: number; cost: number | null }>
   return results > 0 ? spend / results : null;
 }
 
-function currencyLabel(value: number, currency: string | null | undefined): string {
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: (currency ?? 'USD').toUpperCase(),
-      maximumFractionDigits: 0,
-    }).format(value);
-  } catch {
-    return `${Math.round(value)}`;
-  }
-}
-
 export function buildReallocationStory(args: {
   items: CycleItemRow[];
   metric: OptimizationMetricDefinition;
@@ -120,7 +109,8 @@ export function buildReallocationStory(args: {
     const ciRaw = item.diagnostics?.ci ?? null;
     const costFromWindow = w ? deriveEfficiency(spend, results, mult) : null;
     // Without a snapshot window the engine's 14-day CI point is the only cost we have.
-    const costFromCi = num(ciRaw?.cpa) != null ? (ciRaw?.cpa as number) * mult : null;
+    const measured = measuredCpa(ciRaw);
+    const costFromCi = measured != null ? measured * mult : null;
     const cost = costFromWindow ?? (lookback === 14 ? costFromCi : null);
     const ci =
       lookback === 14 && num(ciRaw?.lo) != null && num(ciRaw?.hi) != null
@@ -189,9 +179,9 @@ export function buildReallocationStory(args: {
         : 'back to the pool';
     const blend =
       blendedBefore != null && blendedAfter != null && Math.abs(blendedBefore - blendedAfter) >= 0.5
-        ? ` Blended ${metric.costLabel} ${blendedAfter < blendedBefore ? 'improves' : 'moves'} from ${currencyLabel(blendedBefore, currency)} to ${currencyLabel(blendedAfter, currency)} if each ad set keeps its ${lookback}-day cost.`
+        ? ` Blended ${metric.costLabel} ${blendedAfter < blendedBefore ? 'improves' : 'moves'} from ${formatCurrency(blendedBefore, currency)} to ${formatCurrency(blendedAfter, currency)} if each ad set keeps its ${lookback}-day cost.`
         : '';
-    summary = `Moving ${currencyLabel(moved, currency)}/day ${fromPart} ${toPart}.${blend}`;
+    summary = `Moving ${formatCurrency(moved, currency)}/day ${fromPart} ${toPart}.${blend}`;
   }
 
   return {

@@ -82,7 +82,7 @@ export function SignalReadinessCard({
       action={action}
       className={className}
       meta={
-        <Badge className="text-3xs" variant={tone}>
+        <Badge className="text-xs" variant={tone}>
           {VERDICT_LABEL[readiness.verdict]}
         </Badge>
       }
@@ -91,7 +91,7 @@ export function SignalReadinessCard({
       <p className={cn('text-xs', tone === 'success' ? 'text-foreground' : 'text-warning')}>
         {verdictMessage(readiness, kpiLabel)}
       </p>
-      <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-2xs text-muted-foreground tabular-nums">
+      <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground tabular-nums">
         <span>
           {readiness.declaredMatching + readiness.undeclared}/
           {readiness.declaredMatching + readiness.declaredMismatched + readiness.undeclared} on

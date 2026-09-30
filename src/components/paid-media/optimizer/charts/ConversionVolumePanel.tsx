@@ -4,6 +4,7 @@
 // the engine says would raise the count it can score on. Replaces the confidence radar.
 
 import type { RunConfidence } from '@continuum/contracts';
+import { HeroFigure } from '../components/HeroFigure';
 import { conversionVolume } from '../reportModel';
 
 export function ConversionVolumePanel({
@@ -18,7 +19,7 @@ export function ConversionVolumePanel({
   const volume = conversionVolume(confidence);
   if (!volume) {
     return (
-      <p className="text-2xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         The volume read appears after the first scored cycle.
       </p>
     );
@@ -27,7 +28,9 @@ export function ConversionVolumePanel({
   return (
     <div className="space-y-2 text-xs" data-testid="volume-panel">
       <p>
-        <span className="font-semibold text-2xl text-foreground tabular-nums">{volume.events}</span>{' '}
+        <HeroFigure className="text-foreground" kind="headline">
+          {volume.events}
+        </HeroFigure>{' '}
         <span className="text-muted-foreground">{resultLabel} in the last 14 days</span>
       </p>
       <p className="text-muted-foreground">
@@ -42,7 +45,7 @@ export function ConversionVolumePanel({
           <ul className="mt-1 flex flex-wrap gap-1.5">
             {volume.underFloorIds.map((id) => (
               <li
-                className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-2xs"
+                className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-xs"
                 key={id}
                 title={id}
               >
@@ -58,7 +61,10 @@ export function ConversionVolumePanel({
         <ul className="space-y-1 border-border/60 border-t pt-2">
           {volume.actionables.map((action) => (
             <li className="text-foreground" key={action.code}>
-              <span className="font-medium">To raise it:</span> {action.message}
+              {action.code === 'kpi_mismatch' ? null : (
+                <span className="font-medium">To raise it: </span>
+              )}
+              {action.message}
             </li>
           ))}
         </ul>

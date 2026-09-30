@@ -211,7 +211,7 @@ window.__editorV2UiBench = { project: initialProject() };
 createRoot(document.getElementById('root') as HTMLElement).render(
   <QueryClientProvider client={new QueryClient()}>
     <ToastProvider>
-    <Bench />
+      <Bench />
     </ToastProvider>
   </QueryClientProvider>,
 );

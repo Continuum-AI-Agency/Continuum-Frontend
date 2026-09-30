@@ -37,7 +37,12 @@ export async function downloadLibraryAsset({
   const response = await fetch('/api/library/sign', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ brandId, assetId, ...(versionId ? { versionId } : {}) }),
+    body: JSON.stringify({
+      brandId,
+      assetId,
+      download: fileName,
+      ...(versionId ? { versionId } : {}),
+    }),
   });
   if (!response.ok) throw new Error(`Could not mint a download link (${response.status})`);
 

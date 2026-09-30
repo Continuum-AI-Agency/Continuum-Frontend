@@ -167,7 +167,6 @@ export type JainaResponseType =
   | 'response.checkpoint_report'
   | 'response.checkpoint_report.delta'
   | 'response.checkpoint_report.error'
-  | 'response.report_assembly'
   | 'response.report_artifact_job.started'
   | 'response.objectives'
   | 'response.objective.updated'
@@ -224,9 +223,7 @@ export const jainaPaidCreativeRenderPayloadSchema = z
     state: z.literal('awaiting_client_render'),
   })
   .strict();
-export type JainaPaidCreativeRenderPayload = z.infer<
-  typeof jainaPaidCreativeRenderPayloadSchema
->;
+export type JainaPaidCreativeRenderPayload = z.infer<typeof jainaPaidCreativeRenderPayloadSchema>;
 
 /**
  * The AI-SDK tool call this frame was emitted underneath, when it was emitted from

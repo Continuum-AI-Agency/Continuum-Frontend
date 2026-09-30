@@ -52,6 +52,57 @@ export type DesignTextSpec = z.infer<typeof designTextSpecSchema>;
 
 export const designLeafKindSchema = z.enum(['text', 'smart', 'pixel', 'shape']);
 
+const hexSchema = z.string().regex(/^#[0-9a-f]{6}$/);
+const designKeysSchema = z.partialRecord(
+  hyperframesAepChannelSchema,
+  z.array(hyperframesAepKeySchema).min(2),
+);
+
+/** The Photoshop layer styles After Effects draws natively (its own Layer Styles, 1:1). */
+export const designLayerStyleKindSchema = z.enum([
+  'dropShadow',
+  'innerShadow',
+  'outerGlow',
+  'innerGlow',
+  'satin',
+  'colorOverlay',
+  'stroke',
+]);
+export const designLayerStyleChannelSchema = z.enum([
+  'opacity',
+  'size',
+  'distance',
+  'angle',
+  'spread',
+]);
+
+/**
+ * One layer style as the file sets it, in document pixels and degrees. `keys` animate it (a
+ * Photoshop style track or Frame Animation): absolute values — `opacity` 0..1, `spread` 0..1 —
+ * never relative, because a layer's pixels never carry its styles.
+ */
+export const designLayerStyleSchema = z
+  .object({
+    kind: designLayerStyleKindSchema,
+    color: hexSchema.nullable(),
+    opacity: z.number().min(0).max(1),
+    /** Blur / glow size, stroke width. */
+    size: z.number().nonnegative().nullable(),
+    /** Shadow / satin offset. */
+    distance: z.number().nullable(),
+    /** The light's direction. */
+    angle: z.number().nullable(),
+    /** Photoshop's choke (shadows) or spread, 0..1. */
+    spread: z.number().min(0).max(1).nullable(),
+    /** A stroke's side of the edge. */
+    position: z.enum(['outside', 'inside', 'center']).nullable(),
+    keys: z
+      .partialRecord(designLayerStyleChannelSchema, z.array(hyperframesAepKeySchema).min(2))
+      .optional(),
+  })
+  .strict();
+export type DesignLayerStyle = z.infer<typeof designLayerStyleSchema>;
+
 /**
  * One drawable layer, in paint order, with everything its groups did to it already resolved:
  * visibility and opacity multiplied down from every enclosing group, and group masks and a
@@ -81,15 +132,50 @@ export const designLeafSchema = z
      * state at the file's current time): `x`/`y` px offsets, `scaleX`/`scaleY` multipliers,
      * `rotation` degrees added, `opacity` 0..1 multiplied by `opacity` above. Absent = a still.
      */
-    keys: z
-      .partialRecord(hyperframesAepChannelSchema, z.array(hyperframesAepKeySchema).min(2))
-      .optional(),
+    keys: designKeysSchema.optional(),
     /** When the layer is on the timeline; absent = the whole comp. */
     inSec: z.number().nonnegative().optional(),
     outSec: z.number().positive().optional(),
+    /** The moving group it belongs to (a `groups[].id`): After Effects parents it to that group. */
+    parentId: z.number().int().optional(),
+    styles: z.array(designLayerStyleSchema).optional(),
   })
   .strict();
 export type DesignLeaf = z.infer<typeof designLeafSchema>;
+
+/**
+ * A Photoshop group that moves: its layers are parented to it, so its motion carries them.
+ * `x`/`y` offsets and `scaleX`/`scaleY`/`rotation` relative to the group as the file shows it;
+ * `opacity` absolute, multiplied onto every layer inside.
+ */
+export const designGroupSchema = z
+  .object({
+    id: z.number().int(),
+    name: z.string(),
+    artboardId: z.number().int().nullable(),
+    /** The moving group it sits in, if any. */
+    parentId: z.number().int().nullable(),
+    keys: designKeysSchema,
+  })
+  .strict();
+export type DesignGroup = z.infer<typeof designGroupSchema>;
+
+/**
+ * A Photoshop timeline audio clip. Photoshop links the sound (it is not inside the .psd): the
+ * import finds a Library file of the same name. The clip's source starts at `startSec` on the
+ * timeline and plays `inSec`..`outSec` of timeline time.
+ */
+export const designAudioClipSchema = z
+  .object({
+    fileName: z.string().min(1),
+    startSec: z.number(),
+    inSec: z.number().nonnegative(),
+    outSec: z.number().positive(),
+    /** 0..1 of full level. */
+    volume: z.number().min(0),
+  })
+  .strict();
+export type DesignAudioClip = z.infer<typeof designAudioClipSchema>;
 
 export const designArtboardSchema = boxSchema
   .extend({ id: z.number().int(), name: z.string().min(1) })
@@ -102,6 +188,9 @@ export const designPlanSchema = z
     height: z.number().int().positive(),
     /** A Photoshop timeline's length. Absent = a still, written as a one-frame comp. */
     durationSec: z.number().positive().optional(),
+    /** Groups that move; their layers name them as `parentId`. */
+    groups: z.array(designGroupSchema).optional(),
+    audio: z.array(designAudioClipSchema).optional(),
     /** Bottom of the stack first. */
     leaves: z.array(designLeafSchema),
     artboards: z.array(designArtboardSchema),
@@ -138,6 +227,8 @@ export const forgeDesignImportRequestSchema = z
      * default, so a field left alone renders exactly what the designer drew.
      */
     design: z.object({ plan: designPlanSchema, pixelsUrl: z.url() }).strict().nullable(),
+    /** The plan's audio clips the Library holds, each with a URL the forge fetches once. */
+    audio: z.array(designAudioClipSchema.extend({ url: z.url() }).strict()).optional(),
     /** A signed PUT target for the zip: a PSD package reaches 250 MB, too big to carry as base64. */
     upload: z
       .object({ url: z.url(), headers: z.record(z.string(), z.string()).optional() })

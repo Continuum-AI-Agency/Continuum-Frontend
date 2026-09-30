@@ -17,6 +17,7 @@ import {
   type PortfolioListItem,
   type RunConfidence,
 } from '@continuum/contracts';
+import type { z } from 'zod';
 
 /** What the Performance tab should say about a portfolio with no cycle on screen.
  *
@@ -51,21 +52,98 @@ export function firstCycleState(input: {
   return input.pollExpired ? 'stalled' : 'waiting';
 }
 
-export function parseReport(
-  report: CycleRunReport | null | undefined,
-): ParsedCycleRunReport | null {
+/** A parsed report, plus how many rows failed their schema and were left out. */
+export type ParsedReport = ParsedCycleRunReport & { droppedRows: number };
+
+/** Narrow the loose report ROW BY ROW.
+ *
+ *  It used to be one safeParse over the whole report, with an all-empty fallback. That made
+ *  one bad row cost everything: when the engine started writing `ci.hi: null` for
+ *  zero-conversion ad sets, a single such item emptied latest_items, nulled latest_run and
+ *  dropped the stored brief — and the page rendered portfolios with a ready brief and pending
+ *  recommendations as "Scoring your first cycle" / "Nothing worth changing today".
+ *
+ *  Now a row that fails is left out ALONE, counted in `droppedRows`, and logged with its path
+ *  and the portfolio, so the drift is loud without being a blank page. */
+export function parseReport(report: CycleRunReport | null | undefined): ParsedReport | null {
   if (!report) return null;
-  const parsed = ParsedCycleRunReportSchema.safeParse(report);
-  if (parsed.success) return parsed.data;
-  // A single malformed row must not blank the whole surface: fall back to an
-  // empty-but-valid shape so the tab still renders its portfolio header.
-  return {
-    portfolio: null,
-    latest_run: null,
-    latest_items: [],
-    recommendations: [],
-    history: [],
+  const whole = ParsedCycleRunReportSchema.safeParse(report);
+  if (whole.success) return { ...whole.data, droppedRows: 0 };
+
+  const shape = ParsedCycleRunReportSchema.shape;
+  const portfolioRef = portfolioLabel(report.portfolio);
+  let droppedRows = 0;
+  const drop = (path: string, issues: unknown): void => {
+    droppedRows += 1;
+    console.warn('optimizer report: dropped a row that failed its schema', {
+      portfolio: portfolioRef,
+      path,
+      issues,
+    });
   };
+  function one<T>(path: string, raw: unknown, schema: z.ZodType<T>): T | null {
+    const parsed = schema.safeParse(raw ?? null);
+    if (parsed.success) return parsed.data;
+    drop(path, parsed.error.issues);
+    return null;
+  }
+  function many<T>(path: string, raw: unknown, schema: z.ZodType<T>): T[] {
+    if (!Array.isArray(raw)) {
+      if (raw != null) drop(path, 'not an array');
+      return [];
+    }
+    const kept: T[] = [];
+    raw.forEach((row: unknown, index) => {
+      const parsed = schema.safeParse(row);
+      if (parsed.success) kept.push(parsed.data);
+      else drop(`${path}[${index}]`, parsed.error.issues);
+    });
+    return kept;
+  }
+
+  return {
+    portfolio: one('portfolio', report.portfolio, shape.portfolio),
+    latest_run: one('latest_run', report.latest_run, shape.latest_run),
+    latest_items: many('latest_items', report.latest_items, shape.latest_items.element),
+    recommendations: many('recommendations', report.recommendations, shape.recommendations.element),
+    history: many('history', report.history, shape.history.element),
+    hero_brief: one('hero_brief', report.hero_brief, shape.hero_brief),
+    droppedRows,
+  };
+}
+
+// ── The engine's cost interval, read honestly ────────────────────────────────
+// costInterval (packages/optimization-engine/src/significance.ts) returns
+// { cpa: 0, lo: 0, hi: null, events: 0 } for an ad set with no conversions in the window:
+// spend ÷ 0 has no upper bound, and the 0s beside it are placeholders, not a measured cost.
+// Every surface that reads `diagnostics.ci` goes through these two, so none of them prints
+// that row as "$0.00" or draws a bar to nowhere.
+
+type LooseCostInterval =
+  | { cpa?: number | null; lo?: number | null; hi?: number | null; events?: number | null }
+  | null
+  | undefined;
+
+/** The interval's point estimate, or null when it measured nothing (zero events). */
+export function measuredCpa(ci: LooseCostInterval): number | null {
+  if (!ci || typeof ci.cpa !== 'number' || !Number.isFinite(ci.cpa)) return null;
+  if (ci.events === 0 || ci.hi === null) return null;
+  return ci.cpa;
+}
+
+/** What to print where the upper bound would go, or null when there is one. The wording
+ *  carries the same reason as the engine's upperBoundMissingBecause. */
+export function upperBoundNote(ci: LooseCostInterval): string | null {
+  if (!ci || ci.hi !== null) return null;
+  const events = typeof ci.events === 'number' && ci.events > 0 ? ci.events : 0;
+  return `no upper bound yet (${events} conversion${events === 1 ? '' : 's'})`;
+}
+
+function portfolioLabel(portfolio: Record<string, unknown> | null | undefined): string | null {
+  if (!portfolio) return null;
+  const id = typeof portfolio.id === 'string' ? portfolio.id : null;
+  const name = typeof portfolio.name === 'string' ? portfolio.name : null;
+  return [name, id].filter(Boolean).join(' · ') || null;
 }
 
 // ── Conversion volume: the one confidence read that survives ──────────────────
@@ -90,6 +168,13 @@ export type ConversionVolume = {
 
 const asPct = (value: number | undefined): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? Math.round(value * 100) : null;
+
+/** The confidence actionables the volume panel says, in the order it says them. */
+const SURFACED_ACTIONABLES: readonly string[] = [
+  'kpi_mismatch',
+  'under_event_floor',
+  'tracking_gap',
+];
 
 export function conversionVolume(
   confidence: RunConfidence | null | undefined,
@@ -116,9 +201,11 @@ export function conversionVolume(
     under > 0
       ? `${events} conversion${events === 1 ? '' : 's'} in 14 days · ${under} ad set${under === 1 ? '' : 's'} under the ${floorEvents}-event floor`
       : `${events} conversion${events === 1 ? '' : 's'} in 14 days · every ad set clears the ${floorEvents}-event floor`;
-  const actionables = (confidence.actionables ?? []).filter(
-    (action) => action.code === 'under_event_floor' || action.code === 'tracking_gap',
-  );
+  // kpi_mismatch leads: ad sets that bid for another result are held whatever their volume,
+  // so "clear the event floor" is advice they can never take until that is fixed.
+  const actionables = (confidence.actionables ?? [])
+    .filter((action) => SURFACED_ACTIONABLES.includes(action.code))
+    .sort((a, b) => SURFACED_ACTIONABLES.indexOf(a.code) - SURFACED_ACTIONABLES.indexOf(b.code));
   return { events, floorEvents, underFloorIds, band, note, actionables };
 }
 

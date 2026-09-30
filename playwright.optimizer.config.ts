@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-import { loadProdSupabaseEnv } from './e2e/support/prodEnv';
+import { benchBrowserChannel, loadProdSupabaseEnv } from './e2e/support/prodEnv';
 
 // Dedicated harness for `optimizer:e2e:bench` — the Paid Media Optimizer live UI bench.
 //
@@ -38,12 +38,15 @@ export default defineConfig({
     trace: 'retain-on-failure',
     video: 'off',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], channel: 'chrome' } }],
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], ...benchBrowserChannel() } }],
   webServer: {
     command: 'bun run dev',
     env: {
       NEXT_DIST_DIR: '.next/optimizer-e2e',
-      NEXT_TSCONFIG_PATH: 'tsconfig.e2e.json',
+      // The tracked e2e tsconfig maps @continuum/contracts to the monorepo copy; a checkout
+      // whose vendored copy has moved ahead of it points the dev server at its own local
+      // tsconfig through the environment. Per-environment configuration, not a code path.
+      NEXT_TSCONFIG_PATH: process.env.NEXT_TSCONFIG_PATH ?? 'tsconfig.e2e.json',
       PORT,
       // Explicit, even though webServer inherits process.env — the prod pinning is the
       // whole point of this file and should not depend on inheritance staying true.

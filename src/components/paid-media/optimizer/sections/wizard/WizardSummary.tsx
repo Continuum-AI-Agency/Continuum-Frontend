@@ -9,6 +9,7 @@ import { getOptimizationMetricDefinition } from '@continuum/contracts';
 import { SetupAdvisor } from '../../advisor/SetupAdvisor';
 import { formatCpa, formatCurrency, humanize } from '../../format';
 import { applyModePill } from '../../reportModel';
+import * as typeScale from '../../typeScale';
 import { TIER_COPY } from '../fields/TierCards';
 import { effectiveTargetMetric, MODE_COPY, planReadout, type WizardDraft } from './wizardModel';
 
@@ -27,7 +28,7 @@ type WizardSummaryProps = {
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-0.5">
-      <p className="text-3xs text-muted-foreground uppercase tracking-wide">{label}</p>
+      <p className={`${typeScale.label} text-muted-foreground`}>{label}</p>
       <p className="text-xs text-foreground">{children}</p>
     </div>
   );

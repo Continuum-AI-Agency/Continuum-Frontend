@@ -1,6 +1,6 @@
 'use client';
 
-import type { JainaToolApprovalRequiredPayload } from '@continuum/contracts';
+import type { JainaOperatorAction, JainaToolApprovalRequiredPayload } from '@continuum/contracts';
 import { motion } from 'motion/react';
 import * as React from 'react';
 import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
@@ -9,14 +9,16 @@ import { ChatMediaGrid } from '@/components/chat/media/ChatMedia';
 import { mediaFromPersistedAttachments } from '@/components/chat/media/media';
 import { MentionifiedText } from '@/components/chat/mentionified-text';
 import { JainaOptimizerCitations } from '@/components/paid-media/jaina/blocks/JainaOptimizerCitations';
+import { JainaOptimizerHyperframes } from '@/components/paid-media/jaina/blocks/JainaOptimizerHyperframes';
 import { PaidScaffoldCard } from '@/components/paid-media/jaina/scaffold/PaidScaffoldCard';
-import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
+import type { OperatorActionOutcome } from '@/lib/jaina/operatorOutcome';
 import {
   type CreativeArtifact,
   frontendCheckpointReportSchema,
   hasReportContent,
   type ToolResultEventData,
 } from '@/lib/jaina/schemas';
+import { JainaProse } from '../blocks/prose';
 import {
   extractRenderableFallbackFromReport,
   extractRenderableFallbackFromStructuredContent,
@@ -126,6 +128,15 @@ type JainaMessageItemProps = {
   /** Decisions submitted but not yet echoed back by a tool.approval_resolved frame. */
   optimisticApprovalDecisions?: Record<string, ToolApprovalDecision>;
   /**
+   * Opens a gate from a button with no model turn — the scaffold card's "Deploy paused". Must be
+   * referentially stable, like every handler here: this item is memoized.
+   */
+  onOperatorAction?: (
+    action: JainaOperatorAction,
+    displayText: string,
+    onSettled?: (outcome: OperatorActionOutcome) => void,
+  ) => void;
+  /**
    * Opens the optimizer's account read — what a cited optimizer figure points at.
    *
    * Only the shell that owns the paid-media tabs can honour it, so it arrives from there rather
@@ -144,6 +155,7 @@ function JainaMessageItemImpl({
   onFocusInput,
   onApprovalDecision,
   optimisticApprovalDecisions,
+  onOperatorAction,
   onOpenAccountRead,
 }: JainaMessageItemProps) {
   const isStreaming = message.status === 'streaming';
@@ -219,6 +231,7 @@ function JainaMessageItemImpl({
 
   const artifacts = message.artifacts;
   const optimizerCitations = message.optimizerCitations ?? [];
+  const optimizerHyperframes = message.optimizerHyperframes ?? [];
   const paidCreativeRenders = message.paidCreativeRenders ?? [];
   const toolCreatives = React.useMemo(() => {
     if (!toolResults) return [];
@@ -256,7 +269,7 @@ function JainaMessageItemImpl({
           <>
             {hasRenderableContent ? (
               <div className="relative">
-                <SafeMarkdown
+                <JainaProse
                   content={normalizeJainaMarkdownTables(message.content)}
                   className="text-base leading-7 text-foreground"
                   mode={isStreaming ? 'streaming' : 'static'}
@@ -282,7 +295,7 @@ function JainaMessageItemImpl({
             ) : null}
 
             {structuredFallbackContent ? (
-              <SafeMarkdown
+              <JainaProse
                 content={normalizeJainaMarkdownTables(structuredFallbackContent)}
                 className="text-base leading-7 text-foreground"
                 mode="static"
@@ -298,6 +311,12 @@ function JainaMessageItemImpl({
                 citations={optimizerCitations}
                 onOpenRead={onOpenAccountRead}
               />
+            ) : null}
+
+            {/* A compiled card is evidence for the same sentence, so it sits with the cited
+             *  ones rather than at the end of the turn. */}
+            {optimizerHyperframes.length > 0 ? (
+              <JainaOptimizerHyperframes sets={optimizerHyperframes} />
             ) : null}
 
             {message.pendingClarification ? (
@@ -336,6 +355,7 @@ function JainaMessageItemImpl({
                 }
                 isStreaming={isStreaming}
                 {...(onApprovalDecision ? { onDecide: onApprovalDecision } : {})}
+                {...(onOperatorAction ? { onDeploy: onOperatorAction } : {})}
               />
             ) : null}
 
@@ -381,6 +401,7 @@ function JainaMessageItemImpl({
                   isStreaming={isStreaming}
                   runId={message.runId}
                   deliverySource={message.deliverySource}
+                  sourcePrompt={regeneratePrompt}
                   onSuggestionClick={onSuggestionClick}
                 />
               </motion.div>
@@ -409,7 +430,6 @@ function JainaMessageItemImpl({
             ) : (
               <CreativesSection creatives={allCreatives} />
             )}
-
 
             {paidCreativeRenders.map((render) => (
               <PaidCreativeRenderStatus key={render.render_job_id} render={render} />

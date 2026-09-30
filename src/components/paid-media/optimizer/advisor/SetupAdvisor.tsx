@@ -79,7 +79,7 @@ function Hint({
   disabled?: boolean;
 }) {
   return (
-    <p className="flex items-center gap-1.5 text-2xs text-muted-foreground">
+    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
       <span className="truncate">
         Suggested <span className="font-medium text-foreground tabular-nums">{value}</span> —{' '}
         {label}
@@ -90,12 +90,12 @@ function Hint({
         size="sm"
         disabled={disabled}
         onClick={onUse}
-        className="h-5 shrink-0 gap-1 px-1.5 text-2xs"
+        className="h-5 shrink-0 gap-1 px-1.5 text-xs"
       >
         Use
         <span
           aria-hidden="true"
-          className="rounded border border-border/70 bg-background px-1 text-3xs"
+          className="rounded border border-border/70 bg-background px-1 text-xs"
         >
           ⇥
         </span>
@@ -230,10 +230,10 @@ export function SetupAdvisor({
       {advice.issues.map((issue) => {
         const action = repair(issue);
         return (
-          <li key={issue.code} className="flex items-start gap-1.5 text-2xs leading-relaxed">
+          <li key={issue.code} className="flex items-start gap-1.5 text-xs leading-relaxed">
             <Pill
               variant={issue.severity === 'warn' ? 'warning' : 'secondary'}
-              className="mt-px shrink-0 text-3xs"
+              className="mt-px shrink-0 text-xs"
             >
               {issue.severity === 'warn' ? 'Check' : 'FYI'}
             </Pill>
@@ -246,7 +246,7 @@ export function SetupAdvisor({
                   size="sm"
                   disabled={disabled}
                   onClick={action.run}
-                  className="ml-1 h-5 px-1.5 text-2xs"
+                  className="ml-1 h-5 px-1.5 text-xs"
                 >
                   {action.label}
                 </Button>

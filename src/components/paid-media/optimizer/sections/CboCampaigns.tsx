@@ -205,7 +205,7 @@ function CboCampaignRow({
               Bound to the button by aria-describedby rather than a `title`: a
               native tooltip on a disabled button is unreliable and unreachable by
               keyboard. */}
-          <p className="text-2xs text-muted-foreground" id={applyNoteId}>
+          <p className="text-xs text-muted-foreground" id={applyNoteId}>
             One-click convert is still being validated against a Meta test campaign, so Apply is
             off. You can make this change yourself in Meta Ads Manager now — remove the campaign
             budget, set a daily budget per ad set, and the optimizer picks them up on its next
@@ -360,7 +360,7 @@ function ConvertedPreviewBody({
   return (
     <div className="space-y-2">
       <ReallocationFlow items={flowItems} currency={currency} />
-      <p className="text-2xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         {recCount === 0
           ? 'No action recommendations raised on the converted ad sets.'
           : `${recCount} action recommendation${recCount === 1 ? '' : 's'} raised on the converted ad sets.`}
@@ -429,7 +429,7 @@ function ConvertPreviewBody({
           <li key={row.adsetId} className="flex items-center justify-between gap-3 px-3 py-2">
             <span className="min-w-0">
               <span className="block truncate text-sm">{row.name}</span>
-              <span className="block text-2xs text-muted-foreground tabular-nums">
+              <span className="block text-xs text-muted-foreground tabular-nums">
                 {row.spend14 == null
                   ? 'no trailing-14d read'
                   : `${formatCurrency(row.spend14, currency)} spend · ${

@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { BudgetHint } from '../../advisor/SetupAdvisor';
-import { currencySymbol, formatCurrency } from '../../format';
+import { currencyFieldSuffix, formatCurrency } from '../../format';
 import { acceptSuggestionOnTab, suggestionPlaceholder } from '../../suggestInput';
 import { TierCards } from '../fields/TierCards';
 import { planReadout, suggestedGuardrails, type WizardDraft } from './wizardModel';
@@ -47,7 +47,9 @@ export function StepPlan({
   advice,
   disabled,
 }: StepPlanProps) {
-  const symbol = currencySymbol(currency);
+  // Empty on an account with no currency code, and a label reading "Daily budget ()" is
+  // its own kind of wrong — the hint disappears with the unit.
+  const unit = currencyFieldSuffix(currency);
   const readout = planReadout(draft);
   const typedDaily = Number.parseFloat(draft.dailyTotal);
   const effectiveDaily =
@@ -83,7 +85,7 @@ export function StepPlan({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="wizard-daily">Daily budget ({symbol})</Label>
+          <Label htmlFor="wizard-daily">Daily budget{unit}</Label>
           <Input
             disabled={disabled}
             id="wizard-daily"
@@ -106,7 +108,7 @@ export function StepPlan({
             onUse={(value) => onChange({ dailyTotal: value })}
           />
           {draft.dailyTotal.trim() === '' && selectedBudgetSum > 0 ? (
-            <p className="text-2xs text-muted-foreground tabular-nums">
+            <p className="text-xs text-muted-foreground tabular-nums">
               Blank matches the selection: {formatCurrency(selectedBudgetSum, currency)}/day today.
             </p>
           ) : null}
@@ -116,7 +118,7 @@ export function StepPlan({
       <div className="space-y-2 rounded-lg border border-border/60 bg-muted/10 p-3">
         <div>
           <h3 className="font-semibold text-sm tracking-tight">Flight (optional)</h3>
-          <p className="text-2xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             A start date, an end date and a budget. The optimizer paces spend to land on it.
           </p>
         </div>
@@ -132,7 +134,7 @@ export function StepPlan({
             />
             {!hasFlight ? (
               <button
-                className="text-2xs text-primary hover:underline"
+                className="text-xs text-primary hover:underline"
                 disabled={disabled}
                 onClick={() => {
                   const range = nextDays(30);
@@ -143,12 +145,12 @@ export function StepPlan({
                 Next 30 days
               </button>
             ) : (
-              <p className="text-2xs text-muted-foreground">{readout.days} days</p>
+              <p className="text-xs text-muted-foreground">{readout.days} days</p>
             )}
           </div>
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <Label htmlFor="wizard-budget">Budget ({symbol})</Label>
+              <Label htmlFor="wizard-budget">Budget{unit}</Label>
               <ToggleGroup
                 aria-label="Budget granularity"
                 onValueChange={(next) => {
@@ -160,7 +162,7 @@ export function StepPlan({
                 variant="outline"
               >
                 {(Object.keys(GRANULARITY_LABEL) as BudgetGranularity[]).map((value) => (
-                  <ToggleGroupItem className="h-6 px-2 text-2xs" key={value} value={value}>
+                  <ToggleGroupItem className="h-6 px-2 text-xs" key={value} value={value}>
                     {GRANULARITY_LABEL[value]}
                   </ToggleGroupItem>
                 ))}
@@ -174,7 +176,7 @@ export function StepPlan({
               placeholder={GRANULARITY_LABEL[draft.budgetGranularity]}
               value={draft.budgetAmount}
             />
-            <p className="text-2xs text-muted-foreground tabular-nums">
+            <p className="text-xs text-muted-foreground tabular-nums">
               {readout.total != null && readout.perDay != null
                 ? `= ${formatCurrency(readout.total, currency)} for the flight · ≈ ${formatCurrency(readout.perDay, currency)}/day`
                 : draft.budgetAmount && !hasFlight
@@ -191,7 +193,7 @@ export function StepPlan({
         {draft.applyMode === 'autopilot' ? (
           <div className="grid gap-3 rounded-md border border-border/60 bg-muted/10 p-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="wizard-max-daily">Max autopilot spend/day ({symbol})</Label>
+              <Label htmlFor="wizard-max-daily">Max autopilot spend/day{unit}</Label>
               <Input
                 disabled={disabled}
                 id="wizard-max-daily"
@@ -199,7 +201,7 @@ export function StepPlan({
                 onChange={(event) => onChange({ maxDailyApply: event.target.value })}
                 value={draft.maxDailyApply}
               />
-              <p className="text-2xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Above this daily pool, autopilot writes nothing and asks you instead.
               </p>
             </div>
@@ -212,7 +214,7 @@ export function StepPlan({
                 onChange={(event) => onChange({ maxChangePct: event.target.value })}
                 value={draft.maxChangePct}
               />
-              <p className="text-2xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 A single move bigger than this is held for your approval.
               </p>
             </div>

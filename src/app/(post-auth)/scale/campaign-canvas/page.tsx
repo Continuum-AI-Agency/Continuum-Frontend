@@ -10,13 +10,19 @@ export const metadata = {
 };
 
 type CampaignCanvasPageProps = {
-  /** `?scaffold=<paid_scaffolds.id>` — set by a Jaina scaffold card's "Open on canvas". */
-  searchParams: Promise<{ scaffold?: string | string[] }>;
+  /**
+   * `?scaffold=<paid_scaffolds.id>` — set by a Jaina scaffold card's "Open on canvas" — and
+   * `?session=`, the thread that card sits in, so the canvas can lead back to it.
+   */
+  searchParams: Promise<{ scaffold?: string | string[]; session?: string | string[] }>;
 };
 
 export default async function Page({ searchParams }: CampaignCanvasPageProps) {
-  const { scaffold } = await searchParams;
+  const { scaffold, session } = await searchParams;
   return (
-    <CampaignFlowCanvasPage requestedScaffoldId={typeof scaffold === 'string' ? scaffold : null} />
+    <CampaignFlowCanvasPage
+      requestedScaffoldId={typeof scaffold === 'string' ? scaffold : null}
+      requestedSessionId={typeof session === 'string' ? session : null}
+    />
   );
 }

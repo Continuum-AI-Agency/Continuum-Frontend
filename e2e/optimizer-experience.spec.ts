@@ -7,7 +7,7 @@ import {
   mintSessionForEmail,
   type PlaywrightStorageState,
 } from './support/auth';
-import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
+import { benchBrowserChannel, loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 
 // ---------------------------------------------------------------------------
 // optimizer:e2e:bench — the Paid Media Optimizer experience, end to end.
@@ -32,6 +32,21 @@ import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 //      through the deployed optimizer-cycle-preview edge → the reallocation flow and the
 //      recommendation count. The UI degrades quietly when that route is missing; this
 //      bench does NOT. An `unavailable` outcome FAILS the run and says so.
+//   5. Portfolio CTAs — an asked-for row whose handoff opened an audience proposal shows
+//      the proposal's STATE on itself (en cola / Jaina está leyendo / lista / bloqueada /
+//      no se pudo construir, with a one-line human reason and never a raw error dump), and
+//      "Open the audience proposal" opens the proposal INLINE on that row; "Open the
+//      creative recommendation" on a news card lands on ONE expanded, on-screen queue row;
+//      and the Ask-Jaina band sits between the name line and the news cards.
+//   6. The Overview as proposal O1 orders it (Performance+ redesign, stage 1b): the sentence
+//      with figures, the sub-line, the Jaina band, four to six state-coloured tiles, the
+//      recommendation cards with the lead marked, then the portfolio rows — in that order,
+//      nothing else above the fold, no chart, and none of the old copy.
+//   7. The portfolio hero as ONE module (idea D, "número ancla") on FORMULARIOS // TODOS:
+//      the name line, the 44px anchor beside two sentences with a figure, four frameless
+//      state-ruled tiles, the last-cycle line and Jaina's bar at the foot, then the cards; the
+//      ad-set ranking first in the body; the funnel and the reallocation behind "Ver
+//      detalle"; and no full-width green or red bar anywhere under the hero.
 //
 // ── MONEY SAFETY — this is a READ/BROWSE bench, and it cannot move money ──
 //   * Nothing here clicks Apply, Convert, Revert, "Run now", Create, Enroll, Archive, or
@@ -53,7 +68,7 @@ import { loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 // Usage: cd Continuum-Frontend && bun run optimizer:e2e:bench
 // ---------------------------------------------------------------------------
 
-test.use({ channel: 'chrome' });
+test.use(benchBrowserChannel());
 
 const { serviceRoleKey, publishableKey } = loadProdSupabaseEnv();
 
@@ -88,6 +103,31 @@ const CBO_ACCOUNT_ID = '1164707387246066';
 // regression: ENROLLED must be the one with active portfolio_adsets, EMPTY the one without.
 const ENROLLED_PORTFOLIO_NAME = 'Citas Agosto - check leads';
 const EMPTY_PORTFOLIO_NAME = 'Reporte Agosto - Citas y Mensajes';
+
+// Two portfolios on the LEDGER brand whose read rows carry a CTA, read from production on
+// 2026-09-29. Both premises are checked against optimizer.adhoc_suggestions /
+// optimizer.audience_proposals / optimizer.recommendations before assuming a failure here
+// is a regression:
+//   MENSAJES — an asked-for audience row (ad-hoc suggestion 1f2426b1, adopted 19:08 UTC)
+//     handed off to recommendation 2b89167f (pending) and proposal e2310011; the worker
+//     FAILED the proposal (error.code propose_failed, a Zod issue list for a message). The
+//     row must wear the proposal's state — whichever state the proposal is in when the
+//     bench runs, since a person may ask again — with a human reason and no raw dump, and
+//     "Open the audience proposal" must open the proposal on the row itself.
+//   PRUEBA — a pending C2 variate_creative recommendation (e4093df7) the brief lists as a
+//     secondary candidate, so its insight card offers "Open the creative recommendation".
+const MENSAJES_PORTFOLIO_NAME = 'MENSAJES // TODOS';
+const PRUEBA_PORTFOLIO_NAME = 'Prueba';
+/** The state badge an asked-for row wears once its proposal exists, in the card's words. */
+const PROPOSAL_STATE =
+  /^(En cola|Jaina está leyendo|Lista|Bloqueada|No se pudo construir|Cerrada|Aprobada|Creando el conjunto|Creada en Meta|Activando|Deshaciendo|Deshecha)$/;
+/** The note under the row for the same states — always a sentence, never a dump. A proposal
+ *  the cycle closed ("Cerrada") leads with its reason and ends on the closing sentence. */
+const PROPOSAL_NOTE =
+  /^(En cola|Jaina está leyendo|Lista|Bloqueada —|No se pudo construir —|Aprobada|Creando|Creada en Meta|Activando|Deshaciendo|Deshecha)|El ciclo cerró la recomendación que abrió\.$/;
+/** The portfolio every idea on the redesign page is drawn with (portafolio.html): 9 ad sets on
+ *  autopilot, leads against a 35 MXN target, pending decisions. Same ledger brand. */
+const FORMULARIOS_PORTFOLIO_NAME = 'FORMULARIOS // TODOS';
 
 const SHOTS_DIR = resolve(__dirname, '__screenshots__/optimizer-e2e');
 
@@ -216,7 +256,7 @@ async function benchContext(
  *  one now, where it owned none), so resolve it at run time instead of pinning it. */
 async function openSetupSurface(page: Page): Promise<void> {
   const onboarding = page.getByRole('heading', { name: 'Set up the Optimizer' });
-  const newPortfolio = page.getByRole('button', { name: 'New portfolio' });
+  const newPortfolio = page.getByRole('button', { name: 'Nuevo portafolio' });
   await expect(onboarding.or(newPortfolio).first()).toBeVisible({ timeout: 120_000 });
   if ((await onboarding.count()) > 0) return;
   await newPortfolio.click();
@@ -282,9 +322,14 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await expect(
         page.getByRole('heading', { level: 2 }).filter({ hasText: ENROLLED_PORTFOLIO_NAME }),
       ).toBeVisible();
-      // Its cycle data, rendered: the portfolio metric strip and the reallocation panel.
-      await expect(page.getByText('Daily budget').first()).toBeVisible();
-      await expect(page.getByText('Reallocation').first()).toBeVisible({ timeout: 120_000 });
+      // Its cycle data, rendered: the headline sentence with its figures, the four tiles,
+      // and the disclosure the reallocation now waits behind.
+      await expect(page.getByTestId('headline-status')).toBeVisible({ timeout: 120_000 });
+      await expect(page.getByTestId('headline-status')).toContainText(/\d/);
+      await expect(
+        page.getByTestId('portfolio-tiles').locator('[data-testid^="tile-"]'),
+      ).toHaveCount(4);
+      await expect(page.getByTestId('portfolio-detail-more')).toContainText('Ver detalle');
       await shoot(page, '02-portfolio-detail');
     } finally {
       await context.close();
@@ -481,7 +526,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
     }
   });
 
-  test('create view — the New portfolio action opens the create page state, and Back returns to Portfolios', async ({
+  test('create view — the Nuevo portafolio action opens the create page state, and Back returns to Portfolios', async ({
     browser,
   }) => {
     await selectBrand(AGENCY_BRAND_ID);
@@ -491,9 +536,9 @@ test.describe('Paid Media Optimizer — live experience', () => {
     try {
       await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
 
-      // The Overview carries the primary "New portfolio" action → the dedicated create page
+      // The Overview carries the primary "Nuevo portafolio" action → the dedicated create page
       // state (NOT a sheet overlay). Render-only: the Create/Preview controls are never clicked.
-      await page.getByRole('button', { name: 'New portfolio' }).click();
+      await page.getByRole('button', { name: 'Nuevo portafolio' }).click();
       await expect(page).toHaveURL(/optimizerView=create/);
       await expect(page.getByRole('heading', { name: 'Start from a suggestion' })).toBeVisible({
         timeout: 120_000,
@@ -529,13 +574,14 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await expect(page.getByRole('button', { name: 'Back to portfolios' })).toBeVisible({
         timeout: 120_000,
       });
-      // Performance is the default inner section — its Reallocation panel is showing.
-      await expect(page.getByText('Reallocation').first()).toBeVisible({ timeout: 120_000 });
+      // Performance is the default inner section — its headline sentence is showing.
+      await expect(page.getByTestId('headline-status')).toBeVisible({ timeout: 120_000 });
 
       await page.getByRole('tab', { name: 'Manage' }).click();
       await expect(page).toHaveURL(/section=manage/);
       // Manage controls render. Save/Archive are NEVER clicked.
-      await expect(page.getByText('Autonomy tier')).toBeVisible();
+      // The field carries a visible label and a screen-reader legend of the same text.
+      await expect(page.getByText('Autonomy tier').first()).toBeVisible();
       await expect(page.getByText(/Enrolled (ad sets|campaigns)/)).toBeVisible();
 
       // Every config field carries the portfolio's CURRENT value — the whole point of the
@@ -545,14 +591,17 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await expect(page.getByLabel(/^Daily budget/)).toHaveValue('3500');
 
       // And the autopilot guardrails stay off screen until they matter: this portfolio runs
-      // on Recommend, so its opt-in entry point stands in for the section.
+      // on Recommend, so the Autonomy tier's Autopilot button — the opt-in entry point — is
+      // on screen and not pressed.
       await expect(page.getByText('Autopilot guardrails')).toHaveCount(0);
-      await expect(page.getByRole('button', { name: /Set up autopilot/ })).toBeVisible();
+      const autopilotTier = page.getByRole('button', { name: /^Autopilot/ }).first();
+      await expect(autopilotTier).toBeVisible();
+      await expect(autopilotTier).toHaveAttribute('aria-pressed', 'false');
       await shoot(page, '11-workspace-manage');
 
-      // Performance restores the reallocation instrument (and the section param drops).
+      // Performance restores the headline (and the section param drops).
       await page.getByRole('tab', { name: 'Performance' }).click();
-      await expect(page.getByText('Reallocation').first()).toBeVisible();
+      await expect(page.getByTestId('headline-status')).toBeVisible();
     } finally {
       await context.close();
     }
@@ -603,7 +652,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
         timeout: 120_000,
       });
       await expect(page).toHaveURL(/section=manage/);
-      await expect(page.getByText('Autonomy tier')).toBeVisible({ timeout: 120_000 });
+      await expect(page.getByText('Autonomy tier').first()).toBeVisible({ timeout: 120_000 });
       await shoot(page, '13-deeplink-manage');
     } finally {
       await context.close();
@@ -700,6 +749,761 @@ test.describe('Paid Media Optimizer — live experience', () => {
       // ...and undo lives with the action, never with the lifecycle row.
       await expect(page.getByRole('button', { name: /^(Revert|Unpause)$/ })).toHaveCount(0);
       await shoot(page, '15-activity-server-log');
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("portfolio CTAs — an asked-for row wears its proposal's state and opens the proposal inline, a news card's button lands on an expanded queue row, and the Jaina panel sits under the name line", async ({
+    browser,
+  }) => {
+    await selectBrand(EASYFIT_LEDGER_BRAND_ID);
+    const { context } = await benchContext(browser);
+    const page = await context.newPage();
+
+    /** The one queue row whose expander is open, once the CTA has switched to Activity. */
+    const expandedQueueRow = () =>
+      page
+        .locator('li[data-row-key^="rec:"], li[data-row-key^="budget:"]')
+        .filter({ has: page.locator('button[aria-expanded="true"]') });
+    /** Runs in the page: is the node's top edge inside the panel that scrolls it? */
+    const inScrollView = (node: Element) => {
+      const box = node.getBoundingClientRect();
+      const panel = node.closest('[role="tabpanel"]');
+      const frame = panel ? panel.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+      return box.top >= frame.top - 1 && box.top < frame.bottom;
+    };
+    /** The workspace's own Activity tab — the optimizer bar above it has a tab of the same
+     *  name, so the tablist is picked by its sibling "Manage" first. */
+    const workspaceActivityTab = () =>
+      page
+        .getByRole('tablist')
+        .filter({ has: page.getByRole('tab', { name: 'Manage' }) })
+        .getByRole('tab', { name: 'Activity' });
+
+    try {
+      await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
+
+      // ── MENSAJES: the asked-for row wears its proposal's state and opens it inline ──
+      await page.getByRole('button').filter({ hasText: MENSAJES_PORTFOLIO_NAME }).first().click();
+      await expect(
+        page.getByRole('heading', { level: 2 }).filter({ hasText: MENSAJES_PORTFOLIO_NAME }),
+      ).toBeVisible({ timeout: 120_000 });
+
+      // The Jaina panel: the first block after the portfolio's name line, before the
+      // sentences and the news cards, five prepared questions.
+      const band = page.getByTestId('jaina-entry-chips');
+      await expect(band).toBeVisible({ timeout: 120_000 });
+      await expect(band.getByRole('link')).toHaveCount(5);
+      // The name line and the band stand before the cycle read lands; the cards only after.
+      // An order is only checkable once all three are on the page.
+      await expect(page.getByTestId('portfolio-news-row')).toBeVisible({ timeout: 120_000 });
+      const order = await page.evaluate(() => {
+        const hero = document.querySelector('[data-testid="portfolio-hero"]');
+        const pick = (id: string) => hero?.querySelector(`[data-testid="${id}"]`) ?? null;
+        const header = pick('portfolio-header');
+        const chips = pick('jaina-entry-chips');
+        const news = pick('portfolio-news-row');
+        if (!header || !chips || !news) return { header: !!header, chips: !!chips, news: !!news };
+        const follows = (a: Element, b: Element) =>
+          Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+        return { headerBeforeChips: follows(header, chips), chipsBeforeNews: follows(chips, news) };
+      });
+      console.log(`[optimizer-bench] Jaina panel order: ${JSON.stringify(order)}`);
+      expect(order).toEqual({ headerBeforeChips: true, chipsBeforeNews: true });
+      await shoot(page, '16-mensajes-ask-jaina-band');
+
+      // The asked-for rows live on the workspace's Activity section. The row that opened a
+      // proposal says what the proposal IS right now — read off the proposals query, never
+      // "being built" — and its button is the one this bench presses.
+      await workspaceActivityTab().click();
+      await expect(page).toHaveURL(/section=activity/);
+      const askedRow = page
+        .locator('[data-row-key^="read:asked:"]')
+        .filter({ hasText: 'Open the audience proposal' })
+        .first();
+      await expect(askedRow).toBeVisible({ timeout: 120_000 });
+      const askedKey = (await askedRow.getAttribute('data-row-key')) ?? '';
+      // The same row, pinned by its key: the press below relabels its button to "Cerrar la
+      // propuesta", so a locator that filters on the open label would lose it.
+      const openedRow = page.locator(`[data-row-key="${askedKey}"]`);
+      const stateBadge = askedRow.getByText(PROPOSAL_STATE).first();
+      await expect(stateBadge).toBeVisible({ timeout: 60_000 });
+      await expect(askedRow.getByText('Handed off', { exact: true })).toHaveCount(0);
+      const note = askedRow.locator('[data-testid^="read-next-note:"]');
+      await expect(note).toBeVisible();
+      const noteText = (await note.innerText()).trim();
+      console.log(
+        `[optimizer-bench] MENSAJES asked row ${askedKey}: state "${await stateBadge.innerText()}", note "${noteText}"`,
+      );
+      expect(noteText).toMatch(PROPOSAL_NOTE);
+      // A one-line human reason, never the worker's error dump (production carries a Zod
+      // issue list in error.message for this very proposal).
+      expect(noteText).not.toMatch(/[{}[\]]/);
+      expect(noteText).not.toContain('too_big');
+      expect(noteText.split('\n')).toHaveLength(1);
+
+      await askedRow.getByRole('button', { name: 'Open the audience proposal' }).click();
+
+      // The proposal opens ON THE ROW: the expansion is a child of the asked row, not a queue
+      // row somewhere below. With a plan it is the five sections and the create flow; without
+      // one it is the state, what is known, and — failed or blocked — asking again.
+      const expansion = openedRow.getByTestId(`read-expansion:${askedKey.replace(/^read:/, '')}`);
+      await expect(expansion).toBeVisible({ timeout: 60_000 });
+      const card = expansion.getByTestId('audience-recommendation-card');
+      const panel = expansion.getByTestId('asked-proposal-panel');
+      await expect(card.or(panel).first()).toBeVisible({ timeout: 60_000 });
+      const face = (await card.count()) > 0 ? 'five sections' : 'state panel';
+      console.log(`[optimizer-bench] MENSAJES proposal opened inline as: ${face}`);
+      if (face === 'five sections') {
+        for (const section of [
+          'audience-what',
+          'audience-changes',
+          'audience-new',
+          'audience-why',
+          'audience-how',
+        ]) {
+          await expect(card.getByTestId(section)).toBeVisible();
+        }
+      } else {
+        await expect(
+          panel.getByTestId('asked-proposal-state').getByText(PROPOSAL_STATE),
+        ).toBeVisible();
+        const facts = panel.getByTestId('asked-proposal-facts');
+        await expect(facts).toContainText('Conjunto');
+        await expect(facts).toContainText('Pedida');
+        const retry = panel.getByTestId('asked-proposal-retry');
+        const retryable = (await retry.count()) > 0;
+        console.log(`[optimizer-bench] MENSAJES proposal offers "Pedirla de nuevo": ${retryable}`);
+        // Offered, and deliberately NOT pressed: it writes a proposal request to production.
+        if (retryable) await expect(retry).toBeEnabled();
+      }
+      const expansionText = await expansion.innerText();
+      expect(expansionText).not.toContain('too_big');
+      expect(expansionText).not.toContain('"code"');
+      await shoot(page, '17-mensajes-proposal-inline');
+
+      // The same button closes what it opened.
+      await openedRow.getByRole('button', { name: 'Cerrar la propuesta' }).click();
+      await expect(expansion).toHaveCount(0);
+      await expect(
+        openedRow.getByRole('button', { name: 'Open the audience proposal' }),
+      ).toBeVisible();
+
+      // ── PRUEBA: the creative candidate's card → its pending recommendation row ──
+      await page.getByRole('button', { name: 'Back to portfolios' }).click();
+      await page.getByRole('button').filter({ hasText: PRUEBA_PORTFOLIO_NAME }).first().click();
+      await expect(
+        page.getByRole('heading', { level: 2 }).filter({ hasText: PRUEBA_PORTFOLIO_NAME }),
+      ).toBeVisible({ timeout: 120_000 });
+      const creativeCta = page
+        .getByRole('button', { name: 'Open the creative recommendation' })
+        .first();
+      await expect(creativeCta).toBeVisible({ timeout: 120_000 });
+      await creativeCta.click();
+
+      await expect(page).toHaveURL(/section=activity/);
+      await expect(expandedQueueRow()).toHaveCount(1, { timeout: 120_000 });
+      const creativeKey = await expandedQueueRow().getAttribute('data-row-key');
+      console.log(
+        `[optimizer-bench] Prueba "Open the creative recommendation" landed on ${creativeKey}`,
+      );
+      expect(creativeKey).toMatch(/^rec:[0-9a-f-]{36}$/);
+      await expect(expandedQueueRow().getByRole('button', { name: 'Hide detail' })).toBeVisible();
+      // This section mounts fresh on the press, so the lists above the queue land AFTER the
+      // first scroll; the row has to end up in view all the same.
+      await expect
+        .poll(() => expandedQueueRow().evaluate(inScrollView), {
+          message: 'the focused creative row must be scrolled into view',
+          timeout: 15_000,
+        })
+        .toBe(true);
+      await shoot(page, '18-prueba-creative-row');
+    } finally {
+      await context.close();
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // The portfolio hero — Performance+ redesign, idea D (portafolio-unificado.html): one
+  // module on the portfolio the redesign page is drawn with. Every assertion reads the
+  // RENDERED page.
+  // -------------------------------------------------------------------------
+  test('portfolio hero — FORMULARIOS // TODOS opens on one module: name line, anchor number, two sentences, four tiles, the last cycle and Jaina’s bar, then the cards, with no full-width bar under it', async ({
+    browser,
+  }) => {
+    await selectBrand(EASYFIT_LEDGER_BRAND_ID);
+    const { context } = await benchContext(browser);
+    const page = await context.newPage();
+
+    try {
+      await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
+      await page
+        .getByRole('button')
+        .filter({ hasText: FORMULARIOS_PORTFOLIO_NAME })
+        .first()
+        .click();
+      await expect(
+        page.getByRole('heading', { level: 2 }).filter({ hasText: FORMULARIOS_PORTFOLIO_NAME }),
+      ).toBeVisible({ timeout: 120_000 });
+      await expect(page.getByTestId('headline-status')).toBeVisible({ timeout: 120_000 });
+      await expect(page.getByTestId('portfolio-news-row')).toBeVisible({ timeout: 120_000 });
+      // The strip reads the daily series, which lands after the cycle read; grade it once
+      // it has data (it says so, rather than printing zeros, until then).
+      await expect(page.getByTestId('portfolio-before-after')).not.toHaveAttribute(
+        'data-source',
+        'none',
+        { timeout: 120_000 },
+      );
+
+      const report = await page.evaluate(() => {
+        const hero = document.querySelector('[data-testid="portfolio-hero"]');
+        const panel = hero?.closest('[role="tabpanel"]') ?? document.body;
+        const pick = (id: string) => hero?.querySelector(`[data-testid="${id}"]`) ?? null;
+        const follows = (a: Element | null, b: Element | null) =>
+          Boolean(a && b && a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+        const blocks = [
+          'portfolio-header',
+          'portfolio-anchor',
+          'portfolio-headline',
+          'portfolio-tiles',
+          'portfolio-before-after',
+          'portfolio-jaina',
+          'portfolio-news-row',
+        ];
+        const nodes = blocks.map((id) => pick(id));
+        // One surface: the module's own children draw no border; only the tiles' state
+        // rule is allowed, and it lives a level down.
+        const module = pick('portfolio-module');
+        const bordered = (el: Element) => {
+          const style = getComputedStyle(el);
+          return ['Top', 'Right', 'Bottom', 'Left'].some(
+            (side) =>
+              Number.parseFloat(style.getPropertyValue(`border-${side.toLowerCase()}-width`)) > 0,
+          );
+        };
+        const oneSurface =
+          Boolean(module) && [...(module?.children ?? [])].every((child) => !bordered(child));
+        const anchorFigure = pick('portfolio-anchor')?.querySelector('[data-figure-role="anchor"]');
+        const present = nodes.map((node) => node !== null);
+        const ordered = nodes.every((node, i) => i === 0 || follows(nodes[i - 1] ?? null, node));
+        const tiles = [
+          ...(pick('portfolio-tiles')?.querySelectorAll('[data-testid^="tile-"]') ?? []),
+        ];
+        const jaina = pick('portfolio-jaina');
+        const read = pick('portfolio-headline')?.querySelector('[data-testid="jaina-read"]');
+        const heroRect = hero?.getBoundingClientRect() ?? { bottom: 0 };
+        const panelRect = panel.getBoundingClientRect();
+        // Every visible element under the hero painted with the success or destructive
+        // background token, at half the panel's width or more: a full-width bar.
+        const bars = [...panel.querySelectorAll('*')]
+          .filter((el) =>
+            /\bbg-(success|destructive)(\/\d+)?\b/.test(el.getAttribute('class') ?? ''),
+          )
+          .filter((el) => {
+            const rect = el.getBoundingClientRect();
+            return (
+              rect.height > 0 &&
+              rect.top >= heroRect.bottom - 1 &&
+              rect.width >= panelRect.width * 0.5
+            );
+          })
+          .map(
+            (el) => `${Math.round(el.getBoundingClientRect().width)}px ${el.getAttribute('class')}`,
+          );
+        const more = panel.querySelector('[data-testid="portfolio-detail-more"]');
+        const firstBodyBlock = hero?.nextElementSibling?.textContent ?? '';
+        return {
+          present,
+          ordered,
+          headerName: pick('portfolio-header')?.querySelector('h3')?.textContent ?? '',
+          facts: [...(hero?.querySelectorAll('[data-testid="header-chip"]') ?? [])].map((chip) =>
+            chip.getAttribute('data-setting'),
+          ),
+          oneSurface,
+          anchorText: anchorFigure?.textContent ?? '',
+          anchorPx: anchorFigure ? Number.parseFloat(getComputedStyle(anchorFigure).fontSize) : 0,
+          anchorPrior: pick('anchor-prior')?.textContent ?? '',
+          readInJainaBar: Boolean(jaina?.querySelector('[data-testid="jaina-read"]')),
+          status: pick('headline-status')?.textContent ?? '',
+          statusFigures:
+            pick('headline-status')?.querySelectorAll('[data-testid="figure"]').length ?? 0,
+          opportunity: pick('headline-opportunity')?.textContent ?? '',
+          blocker: pick('headline-blocker')?.getAttribute('data-blocker') ?? null,
+          tiles: tiles.map((tile) => tile.getAttribute('data-testid')),
+          tileStates: tiles.map((tile) => tile.getAttribute('data-state')),
+          tileCharts: tiles.filter((tile) => tile.querySelector('svg, canvas')).length,
+          readSource: read?.getAttribute('data-source') ?? null,
+          readLabel: read?.querySelector('[data-testid="jaina-read-label"]')?.textContent ?? '',
+          readSentence:
+            read?.querySelector('[data-testid="jaina-read-sentence"]')?.textContent ?? '',
+          askField: Boolean(
+            jaina?.querySelector('form[data-testid="jaina-ask"] input[name="question"]'),
+          ),
+          jainaLinks: jaina?.querySelectorAll('[data-testid="jaina-entry-chips"] a').length ?? 0,
+          cycleLine: pick('before-after-cycle')?.textContent ?? '',
+          projection: pick('before-after-projection')?.textContent ?? null,
+          vitals: Boolean(
+            pick('portfolio-vitals') || panel.querySelector('[data-testid="vital-bullet"]'),
+          ),
+          bars,
+          moreSummary:
+            (more?.querySelector('summary') as HTMLElement | null)?.innerText?.trim() ?? '',
+          moreOpen: more?.hasAttribute('open') ?? null,
+          moreHolds: {
+            funnel: more?.textContent?.includes('Conversion funnel') ?? false,
+            reallocation: more?.textContent?.includes('Reallocation') ?? false,
+          },
+          firstBodyBlock: firstBodyBlock.slice(0, 80),
+        };
+      });
+      console.log(`[optimizer-bench] FORMULARIOS hero: ${JSON.stringify(report)}`);
+
+      // The module's blocks and the cards, all present, in this order, on one surface.
+      expect(report.present).toEqual([true, true, true, true, true, true, true]);
+      expect(report.ordered).toBe(true);
+      expect(report.oneSurface).toBe(true);
+      expect(report.headerName).toBe(FORMULARIOS_PORTFOLIO_NAME);
+      // Each setting beside the figure it governs: the grey line, the anchor, the spend tile.
+      expect(report.facts).toEqual(['objective', 'strategy', 'window', 'target', 'budget']);
+
+      // The anchor: the cost per result at 44px, and the two windows by their dates.
+      expect(report.anchorText).toMatch(/^(\d[\d,]*(\.\d+)?|—)$/);
+      expect(Math.round(report.anchorPx)).toBe(44);
+      if (report.anchorText !== '—') expect(report.anchorPrior).toMatch(/\d+–\d+.*: /);
+
+      // Two sentences with a figure; the third only when a blocker exists.
+      expect(report.status).toMatch(/^\d[\d,]* leads in \d+ days?/);
+      expect(report.statusFigures).toBeGreaterThanOrEqual(2);
+      expect(report.opportunity).toMatch(/\d/);
+      expect(report.opportunity).toMatch(
+        /^(The opportunity:|No opportunity|No open opportunities)/,
+      );
+      if (report.blocker) {
+        expect(['kpi_mismatch', 'zero_delivery', 'no_signal']).toContain(report.blocker);
+      }
+
+      // Four tiles, each coloured by a state on its top border, never by a chart.
+      expect(report.tiles).toEqual(['tile-spend', 'tile-results', 'tile-adsets', 'tile-decisions']);
+      for (const state of report.tileStates) expect(['ok', 'warn', 'bad', 'none']).toContain(state);
+      expect(report.tileCharts).toBe(0);
+
+      // Jaina: her read only when a model wrote something the headline does not say, as one
+      // attributed line under it; her bar at the module's foot holds the field and five
+      // questions.
+      expect([null, 'jaina']).toContain(report.readSource);
+      if (report.readSource) expect(report.readLabel).toMatch(/^Jaina/);
+      expect(report.readInJainaBar).toBe(false);
+      expect(report.askField).toBe(true);
+      expect(report.jainaLinks).toBe(5);
+
+      // The last cycle in one line, the projection when a pause is pending.
+      expect(report.cycleLine).toMatch(/^(Last cycle, |No cycle)/);
+      if (report.projection) expect(report.projection).toMatch(/projected cost|bought no/);
+
+      // The vital signs and their bands are gone, and nothing under the hero is a bar.
+      expect(report.vitals).toBe(false);
+      expect(report.bars, 'full-width success/destructive bars under the hero').toEqual([]);
+
+      // The body: the ad-set ranking first; the funnel and the reallocation behind the
+      // disclosure, closed.
+      expect(report.firstBodyBlock).toContain('per ad set');
+      expect(report.moreSummary).toBe('Ver detalle');
+      expect(report.moreOpen).toBe(false);
+      expect(report.moreHolds).toEqual({ funnel: true, reallocation: true });
+      await shoot(page, '19-formularios-hero');
+
+      // Opening the disclosure reveals the two panels — and still no bar at the width of
+      // the panel: the ramps are per-row.
+      await page.getByTestId('portfolio-detail-more').locator('> summary').click();
+      await expect(page.getByText('Conversion funnel').first()).toBeVisible();
+      await shoot(page, '20-formularios-ver-detalle');
+
+      // The typed question deep-links into Jaina with the portfolio as context. The
+      // navigation is caught before it reaches the app: nothing is asked of Jaina.
+      let asked: string | null = null;
+      await page.route('**/scale?tab=jaina*', async (route) => {
+        asked = route.request().url();
+        await route.fulfill({
+          status: 200,
+          contentType: 'text/html',
+          body: '<html><body>caught</body></html>',
+        });
+      });
+      const field = page.getByTestId('jaina-ask').locator('input[name="question"]');
+      await field.fill('¿Y si pauso el conjunto más caro?');
+      await field.press('Enter');
+      await expect.poll(() => asked, { timeout: 30_000 }).not.toBeNull();
+      const prompt = new URL(asked as unknown as string).searchParams.get('prompt') ?? '';
+      console.log(`[optimizer-bench] FORMULARIOS ask → ${prompt}`);
+      expect(prompt).toContain(`"${FORMULARIOS_PORTFOLIO_NAME}"`);
+      expect(prompt).toContain('¿Y si pauso el conjunto más caro?');
+    } finally {
+      await context.close();
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Type scale — Performance+ redesign, stage 1a (optimizer/typeScale.ts).
+  //
+  // Five screens at two widths, and the assertions read the RENDERED page, not the source:
+  // no micro class (text-3xs / text-2xs) anywhere on the surface, no HTML text below 12px,
+  // every uppercase label at 12px, every HeroFigure at its role's size, and nothing inside
+  // the optimizer panel pushed past its right edge unless a scroller owns it.
+  // Screenshots: 16-type-scale-<screen>-<width>.png — look at them.
+  // -------------------------------------------------------------------------
+  test('overview — O1: the sentence, the sub-line, the Jaina band, the tiles, the cards and the rows, in that order and nothing else above the fold', async ({
+    browser,
+  }) => {
+    await selectBrand(EASYFIT_LEDGER_BRAND_ID);
+    const { context } = await benchContext(browser);
+    const page = await context.newPage();
+
+    // A read that fails at load is what turns a whole-account figure into a partial one, so
+    // every non-2xx answer from the optimizer RPCs is printed with the run.
+    page.on('response', (response) => {
+      const url = response.url();
+      if (url.includes('/rest/v1/rpc/optimizer_') && response.status() >= 400) {
+        console.log(`[optimizer-bench] RPC ${response.status()} ${new URL(url).pathname}`);
+      }
+    });
+
+    try {
+      await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
+
+      // The sentence is composed once every portfolio's efficiency series has landed; until
+      // then it says it is still reading, and that state must clear on a live account. A
+      // read that failed says the figure is incomplete instead of printing a partial sum;
+      // one retry is allowed here, because the failure it guards against is transient.
+      const headline = page.getByTestId('overview-headline');
+      await expect(headline).toBeVisible({ timeout: 120_000 });
+      await expect(headline).not.toHaveAttribute('data-pending', 'true', { timeout: 120_000 });
+      if ((await headline.getAttribute('data-incomplete')) === 'true') {
+        console.log(`[optimizer-bench] incomplete read: ${await headline.textContent()}`);
+        await page.getByTestId('overview-retry').click();
+        await expect(headline).not.toHaveAttribute('data-incomplete', 'true', {
+          timeout: 60_000,
+        });
+      }
+      const sentence = (await headline.textContent()) ?? '';
+      console.log(`[optimizer-bench] Overview sentence: ${sentence}`);
+      expect(sentence).toMatch(/^La cuenta gastó .+ en 7 días/);
+      expect(sentence).toMatch(/decisi(ón espera|ones esperan)\.$/);
+      expect(sentence).toMatch(/\d/);
+
+      const report = await page.evaluate(() => {
+        const root = document.querySelector('[data-testid="optimizer-overview"]');
+        const ids = [...(root?.children ?? [])].map(
+          (child) => child.getAttribute('data-testid') ?? `(${child.tagName.toLowerCase()})`,
+        );
+        const inner = (id: string) => root?.querySelector(`[data-testid="${id}"]`) ?? null;
+        const follows = (a: Element | null, b: Element | null) =>
+          Boolean(a && b && a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+        const sequence = [
+          'overview-headline',
+          'overview-subline',
+          'jaina-entry-chips',
+          'account-tiles',
+          'account-cards',
+          'portfolio-rows',
+        ]
+          .map((id) => inner(id))
+          .filter((node): node is Element => node !== null);
+        const ordered = sequence.every(
+          (node, i) => i === 0 || follows(sequence[i - 1] ?? null, node),
+        );
+        const tiles = [
+          ...(inner('account-tiles')?.querySelectorAll('[data-testid^="tile-"]') ?? []),
+        ];
+        const tileStates = tiles.map((tile) => tile.getAttribute('data-state'));
+        const tileBorders = tiles.map((tile) =>
+          (tile.getAttribute('class') ?? '')
+            .split(/\s+/)
+            .filter((c) => /^border-t-[a-z]/.test(c))
+            .join(' '),
+        );
+        const tileCharts = tiles.filter((tile) => tile.querySelector('svg, canvas')).length;
+        const noTarget = tiles
+          .filter((tile) => tile.getAttribute('data-testid')?.startsWith('tile-kind-'))
+          .filter((tile) => !/objetivo \d/.test(tile.textContent ?? ''))
+          .map((tile) => ({
+            state: tile.getAttribute('data-state'),
+            saysSinObjetivo: (tile.textContent ?? '').includes('sin objetivo'),
+            saysSinResultado: (tile.textContent ?? '').includes('sin resultado'),
+          }));
+        const cards = [
+          ...(inner('account-cards')?.querySelectorAll('[data-testid="account-card"]') ?? []),
+        ];
+        const rows = [
+          ...(inner('portfolio-rows')?.querySelectorAll('[data-testid="portfolio-row"]') ?? []),
+        ];
+        const heroCharts = root?.querySelectorAll(
+          '[data-testid="overview-hero"] svg, [data-testid="overview-hero"] canvas, [data-testid="account-cards"] svg.recharts-surface, [data-testid="account-cards"] canvas',
+        ).length;
+        const sortPressed = inner('portfolio-rows')
+          ?.querySelector('[aria-pressed="true"], [data-pressed], [data-state="on"]')
+          ?.textContent?.trim();
+        return {
+          ids,
+          ordered,
+          jainaLabel: inner('jaina-entry-chips')?.textContent?.includes('Preguntale a Jaina'),
+          jainaLinks: inner('jaina-entry-chips')?.querySelectorAll('a').length ?? 0,
+          tiles: tiles.length,
+          tileStates,
+          tileBorders,
+          tileCharts,
+          noTarget,
+          cards: cards.length,
+          leadFlags: cards.map((card) => card.getAttribute('data-lead')),
+          rows: rows.length,
+          rowStates: rows.map((row) => row.getAttribute('data-state')),
+          heroCharts: heroCharts ?? 0,
+          sortPressed,
+          bookLine: inner('book-line')?.textContent ?? '',
+        };
+      });
+      console.log(`[optimizer-bench] Overview O1: ${JSON.stringify(report)}`);
+
+      // In this order and nothing else: the header line, the sentence block, the band, the
+      // tiles, the cards (when a read has landed), the rows.
+      const expectedIds = ['(div)', 'overview-hero', 'jaina-entry-chips', 'account-tiles'];
+      if (report.ids.includes('overview-recommendations'))
+        expectedIds.push('overview-recommendations');
+      expectedIds.push('portfolio-rows');
+      expect(report.ids).toEqual(expectedIds);
+      expect(report.ordered).toBe(true);
+      expect(report.jainaLabel).toBe(true);
+      expect(report.jainaLinks).toBeGreaterThanOrEqual(4);
+
+      // Four to six tiles, each coloured by a state on its top border and never by a chart.
+      expect(report.tiles).toBeGreaterThanOrEqual(4);
+      expect(report.tiles).toBeLessThanOrEqual(6);
+      for (const state of report.tileStates) expect(['ok', 'warn', 'bad', 'none']).toContain(state);
+      for (const border of report.tileBorders) {
+        expect(border).toMatch(/^border-t-(success|warning|destructive|border)$/);
+      }
+      expect(report.tileCharts).toBe(0);
+      expect(report.heroCharts).toBe(0);
+      // A result kind with no target reads neutral and says so; one with no results says that.
+      for (const tile of report.noTarget) {
+        expect(tile.state).toBe('none');
+        expect(tile.saysSinObjetivo || tile.saysSinResultado).toBe(true);
+      }
+
+      // The cards, when today's read carries any, lead with exactly one marked card.
+      if (report.cards > 0) {
+        expect(report.leadFlags[0]).toBe('true');
+        expect(report.leadFlags.filter((flag) => flag === 'true')).toHaveLength(1);
+      } else {
+        console.log(
+          '[optimizer-bench] UN-EXERCISED: no account read row today — no cards to grade',
+        );
+      }
+
+      // Every portfolio in the book is one row, sorted by distance to target by default.
+      const bookCount = Number.parseInt(/^(\d+)/.exec(report.bookLine)?.[1] ?? '0', 10);
+      expect(report.rows).toBe(bookCount);
+      expect(report.rows).toBeGreaterThan(0);
+      for (const state of report.rowStates) expect(['ok', 'warn', 'bad', 'none']).toContain(state);
+      expect(report.sortPressed).toBe('Distancia al objetivo');
+
+      // The old surface is gone: none of its copy anywhere on the tab.
+      const panelText = await page.evaluate(
+        () =>
+          (
+            document.querySelector('[role="tabpanel"][data-state="active"]') ??
+            document.querySelector('main') ??
+            document.body
+          ).textContent ?? '',
+      );
+      for (const gone of [
+        'The auction moved',
+        'Across the account',
+        'checks could not run',
+        'Spend by objective',
+        'How sure',
+        'Daily budget',
+        'Spent yesterday',
+      ]) {
+        expect(panelText, `old copy still on screen: ${gone}`).not.toContain(gone);
+      }
+      await shoot(page, '17-overview-o1');
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('type scale — Overview, portfolio detail, Automations, Actions and Activity read at one scale with no overflow at 1280 and 390', async ({
+    browser,
+  }) => {
+    test.setTimeout(900_000);
+    await selectBrand(AGENCY_BRAND_ID);
+    const { context } = await benchContext(browser);
+    const page = await context.newPage();
+
+    type ScreenReport = {
+      micro: string[];
+      small: string[];
+      labels: string[];
+      figures: string[];
+      overflow: string[];
+      panelWidth: number;
+      panelScrollWidth: number;
+    };
+
+    const inspect = (): Promise<ScreenReport> =>
+      page.evaluate(() => {
+        const panel =
+          document.querySelector('[role="tabpanel"][data-state="active"]') ??
+          document.querySelector('main') ??
+          document.body;
+        const describe = (el: Element) =>
+          `${el.tagName.toLowerCase()}.${(el.getAttribute('class') ?? '').split(/\s+/).slice(0, 6).join('.')} "${(el.textContent ?? '').trim().slice(0, 40)}"`;
+        const inSvg = (el: Element) => el.closest('svg') !== null;
+        const ownText = (el: Element) =>
+          [...el.childNodes].some((n) => n.nodeType === 3 && (n.textContent ?? '').trim());
+        const px = (el: Element) => Number.parseFloat(getComputedStyle(el).fontSize);
+        // The app runs a root font-size ladder (15px, 14.5px under 1536 wide, 13.5px and
+        // 13px below), so the scale is measured in rem: `text-xs` is the 0.75rem floor at
+        // every tier, and a label is on scale when it sits exactly on that step. The
+        // figure roles are absolute pixel classes and stay measured in px.
+        const root = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+        const rem = (el: Element) => px(el) / root;
+        const FLOOR_REM = 0.75;
+        const all = [...panel.querySelectorAll('*')].filter((el) => !inSvg(el));
+        const micro = all
+          .filter((el) => /\btext-[23]xs\b/.test(el.getAttribute('class') ?? ''))
+          .map(describe);
+        const small = all
+          .filter((el) => ownText(el) && rem(el) < FLOOR_REM - 0.005)
+          .map((el) => `${rem(el).toFixed(3)}rem ${describe(el)}`);
+        const labels = all
+          .filter((el) => ownText(el) && getComputedStyle(el).textTransform === 'uppercase')
+          .filter((el) => Math.abs(rem(el) - FLOOR_REM) > 0.01)
+          .map((el) => `${rem(el).toFixed(3)}rem ${describe(el)}`);
+        const expectedFigure: Record<string, number> = {
+          tile: 22,
+          headline: 21,
+          lead: 21,
+          anchor: 44,
+        };
+        const figures = [...panel.querySelectorAll('[data-figure-role]')]
+          .filter(
+            (el) =>
+              Math.round(px(el)) !== expectedFigure[el.getAttribute('data-figure-role') ?? ''],
+          )
+          .map((el) => `${px(el)}px ${el.getAttribute('data-figure-role')} ${describe(el)}`);
+        const panelRect = panel.getBoundingClientRect();
+        const scrolls = (el: Element | null): boolean => {
+          for (let node = el; node && node !== panel; node = node.parentElement) {
+            const { overflowX } = getComputedStyle(node);
+            if (overflowX === 'auto' || overflowX === 'scroll' || overflowX === 'hidden')
+              return true;
+          }
+          return false;
+        };
+        const overflow = all
+          .filter((el) => {
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.right > panelRect.right + 2 && !scrolls(el.parentElement);
+          })
+          .map(
+            (el) =>
+              `${Math.round(el.getBoundingClientRect().right - panelRect.right)}px past ${describe(el)}`,
+          );
+        return {
+          micro,
+          small,
+          labels,
+          figures,
+          overflow,
+          panelWidth: Math.round(panel.clientWidth),
+          panelScrollWidth: Math.round(panel.scrollWidth),
+        };
+      });
+
+    const settle = async () => {
+      await expect(page.getByRole('status').filter({ hasText: 'Loading optimizer' })).toHaveCount(
+        0,
+        {
+          timeout: 120_000,
+        },
+      );
+      await page.waitForTimeout(1_500);
+    };
+
+    const check = async (screen: string, width: number) => {
+      await settle();
+      const report = await inspect();
+      await shoot(page, `16-type-scale-${screen}-${width}`);
+      console.log(
+        `[optimizer-bench] type scale ${screen}@${width}: panel ${report.panelWidth}px, scrollWidth ${report.panelScrollWidth}px, micro ${report.micro.length}, under-floor ${report.small.length}, off-scale labels ${report.labels.length}, off-scale figures ${report.figures.length}, overflow ${report.overflow.length}`,
+      );
+      // Name what is off before failing on it: a count alone sends the next person back to
+      // the browser to find out which node.
+      if (
+        report.micro.length +
+          report.small.length +
+          report.labels.length +
+          report.figures.length +
+          report.overflow.length >
+        0
+      ) {
+        console.log(
+          `[optimizer-bench] type scale ${screen}@${width} offenders: ${JSON.stringify({
+            micro: report.micro,
+            small: report.small.slice(0, 60),
+            labels: report.labels,
+            figures: report.figures,
+            overflow: report.overflow.slice(0, 20),
+          })}`,
+        );
+      }
+      expect(report.micro, `${screen}@${width}: micro classes`).toEqual([]);
+      expect(report.small, `${screen}@${width}: text below the 0.75rem floor`).toEqual([]);
+      expect(report.labels, `${screen}@${width}: uppercase labels off the 0.75rem step`).toEqual(
+        [],
+      );
+      expect(report.figures, `${screen}@${width}: HeroFigure off its role size`).toEqual([]);
+      expect(report.overflow, `${screen}@${width}: pushed past the panel edge`).toEqual([]);
+      expect(
+        report.panelScrollWidth,
+        `${screen}@${width}: the optimizer panel scrolls sideways`,
+      ).toBeLessThanOrEqual(report.panelWidth + 1);
+    };
+
+    try {
+      // Resolve the enrolled portfolio's id once, through the UI, at desktop width.
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
+      await page.getByRole('button').filter({ hasText: ENROLLED_PORTFOLIO_NAME }).first().click();
+      await expect(page.getByRole('button', { name: 'Back to portfolios' })).toBeVisible({
+        timeout: 120_000,
+      });
+      const enrolledId = new URL(page.url()).searchParams.get('portfolio');
+      expect(enrolledId, 'the enrolled portfolio must write its id into the URL').toBeTruthy();
+
+      const screens: Array<[string, string]> = [
+        ['overview', '/scale?tab=performance&optimizerView=overview'],
+        ['portfolio', `/scale?tab=performance&portfolio=${enrolledId}`],
+        ['automations', '/scale?tab=performance&optimizerView=automations'],
+        ['actions', '/scale?tab=performance&optimizerView=actions'],
+        ['activity', '/scale?tab=performance&optimizerView=logs'],
+      ];
+
+      for (const width of [1280, 390]) {
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+        for (const [screen, url] of screens) {
+          await page.goto(url, { waitUntil: 'domcontentloaded' });
+          await pinAdAccount(page, PORTFOLIO_ACCOUNT_ID);
+          if (screen === 'portfolio') {
+            await expect(page.getByRole('button', { name: 'Back to portfolios' })).toBeVisible({
+              timeout: 120_000,
+            });
+          }
+          await check(screen, width);
+        }
+      }
     } finally {
       await context.close();
     }

@@ -44,7 +44,8 @@ export type HyperframesAepKey = z.infer<typeof hyperframesAepKeySchema>;
 /**
  * Keyable channels, all relative to the layer's resting state: `x`/`y` are px offsets from the
  * box, `scaleX`/`scaleY` multipliers, `rotation` degrees, `opacity` 0..1, the filter channels in
- * CSS filter units (blur px, brightness/contrast/saturate multipliers, hueRotate degrees).
+ * CSS filter units (blur px, brightness/contrast/saturate multipliers, hueRotate degrees), and
+ * `skewX`/`skewY` shear angles in degrees (horizontal / vertical, a Photoshop smart object's skew).
  */
 export const hyperframesAepChannelSchema = z.enum([
   'x',
@@ -58,6 +59,8 @@ export const hyperframesAepChannelSchema = z.enum([
   'contrast',
   'saturate',
   'hueRotate',
+  'skewX',
+  'skewY',
 ]);
 export type HyperframesAepChannel = z.infer<typeof hyperframesAepChannelSchema>;
 
@@ -301,7 +304,11 @@ export const hyperframesAepMapSchema = z
     compName: z.string().min(1),
     /** Every delivery comp, when a design import wrote one per artboard. */
     comps: z
-      .array(z.object({ name: z.string().min(1), width: z.number().int(), height: z.number().int() }).strict())
+      .array(
+        z
+          .object({ name: z.string().min(1), width: z.number().int(), height: z.number().int() })
+          .strict(),
+      )
       .optional(),
     variables: z.array(
       z

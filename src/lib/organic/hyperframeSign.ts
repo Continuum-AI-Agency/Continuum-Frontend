@@ -4,7 +4,6 @@ type HyperframeSignResponse = { signedUrl: string; expiresAt: string };
 
 const SIGN_BUCKETS = {
   composition: 'hyperframes-compositions',
-  mp4: 'hyperframes-mp4',
 } as const;
 
 // Every planner surface that renders a draft (month chip, week card, list row, preview
@@ -129,6 +128,3 @@ export async function signMediaAsset(params: {
 
 export const signHyperframeComposition = (brandId: string, path: string): Promise<string | null> =>
   signHyperframeAsset({ brandId, bucket: SIGN_BUCKETS.composition, path });
-
-export const signHyperframeMp4 = (brandId: string, path: string): Promise<string | null> =>
-  signHyperframeAsset({ brandId, bucket: SIGN_BUCKETS.mp4, path });

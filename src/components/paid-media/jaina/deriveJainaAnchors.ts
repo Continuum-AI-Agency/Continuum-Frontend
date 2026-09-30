@@ -20,7 +20,7 @@ export function milestonesForJainaMessage(message: JainaChatMessage): JainaMiles
     milestones.push({ id: `${message.id}::clarification`, label: 'Needs your input' });
   }
 
-  const hasReport = Boolean(message.reportV2 ?? message.report ?? message.reportAssembly);
+  const hasReport = Boolean(message.reportV2 ?? message.report);
   if (hasReport && message.status === 'done') {
     milestones.push({ id: `${message.id}::analysis`, label: 'Analysis complete' });
   }

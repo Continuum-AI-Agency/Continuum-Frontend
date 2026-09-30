@@ -230,4 +230,3 @@ describe('a custom conversion, named at creation', () => {
     expect(config.conversion_descriptor).toBeUndefined();
   });
 });
-

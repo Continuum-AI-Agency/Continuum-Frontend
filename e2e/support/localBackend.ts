@@ -172,6 +172,12 @@ async function spawnLocalBackend(options: StartOptions): Promise<LocalBackend> {
         // Replaces the default allowlist entirely — which is what we want for a
         // bench-owned process that only ever serves this one origin.
         ALLOWED_ORIGINS: [browserOrigin, browserOrigin.replace('127.0.0.1', 'localhost')].join(','),
+        // Against production, a bench Backend serves only its own requests: every loop that
+        // claims other brands' work (queues, automations, scheduled posts) would race the
+        // deployed Backend for real clients' work.
+        ...(supabase === 'hosted'
+          ? { BACKGROUND_WORKERS_ENABLED: 'false', JAINA_REPORT_ARTIFACT_WORKER_ENABLED: 'false' }
+          : {}),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     },

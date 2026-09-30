@@ -32,8 +32,9 @@ import { ReferenceArea } from '@/components/charts/reference-area';
 import { ChartTooltip } from '@/components/charts/tooltip';
 import { XAxis } from '@/components/charts/x-axis';
 import { YAxis } from '@/components/charts/y-axis';
-import { formatCpa, formatCurrency } from '../format';
+import { figureProps, formatCpa, formatCurrency } from '../format';
 import { confidenceBand as bandMeta } from '../reportModel';
+import * as typeScale from '../typeScale';
 import { ChartEmpty } from './ChartStates';
 import {
   buildCpaHeroPoints,
@@ -92,11 +93,17 @@ export function CpaHeroTimeline({
           <span className="text-xs text-muted-foreground">
             Projected {metric.costLabel} next cycle:{' '}
             <span className="font-data font-medium text-foreground tabular-nums">
-              {formatCpa(last, currency)} → {formatCpa(projectedEnd, currency)}
+              <span {...figureProps('timeline.projected.last', last, currency, 'd7')}>
+                {formatCpa(last, currency)}
+              </span>{' '}
+              →{' '}
+              <span {...figureProps('timeline.projected.next', projectedEnd, currency)}>
+                {formatCpa(projectedEnd, currency)}
+              </span>
             </span>
           </span>
           <span
-            className="text-3xs uppercase tracking-wide"
+            className={typeScale.label}
             style={{ color: projectedEnd <= last ? 'var(--success)' : 'var(--warning)' }}
           >
             {band.label.toLowerCase()} confidence
@@ -109,7 +116,7 @@ export function CpaHeroTimeline({
             to infer whether $28 is CPL or CPM. */}
         <span
           aria-hidden="true"
-          className="-translate-y-1/2 -rotate-90 pointer-events-none absolute top-1/2 left-0 origin-left whitespace-nowrap text-3xs text-muted-foreground uppercase tracking-wide"
+          className={`${typeScale.label} -translate-y-1/2 -rotate-90 pointer-events-none absolute top-1/2 left-0 origin-left whitespace-nowrap text-muted-foreground`}
         >
           {metric.costLabel}
         </span>
@@ -273,7 +280,7 @@ function HeroTooltip({
   const delta = point.deltaCpa;
   return (
     <div className="min-w-[196px] max-w-[260px] space-y-2 p-1">
-      <div className="text-3xs text-chart-tooltip-muted uppercase tracking-wide">
+      <div className={`${typeScale.label} text-chart-tooltip-muted`}>
         {point.date instanceof Date ? dayFmt.format(point.date) : ''}
       </div>
       <div className="flex items-baseline justify-between gap-4">
@@ -284,7 +291,7 @@ function HeroTooltip({
           </span>
           {delta != null && delta !== 0 ? (
             <span
-              className="font-data text-2xs tabular-nums"
+              className="font-data text-xs tabular-nums"
               style={{ color: delta < 0 ? 'var(--success)' : 'var(--warning)' }}
             >
               {delta < 0 ? '↓' : '↑'}
@@ -315,7 +322,7 @@ function HeroTooltip({
                 <span className="min-w-0 flex-1">
                   <span className="text-chart-tooltip-foreground">{group.label}</span>
                   {group.count > 1 ? (
-                    <span className="ml-1 rounded-sm bg-chart-tooltip-border px-1 text-3xs text-chart-tooltip-foreground tabular-nums">
+                    <span className="ml-1 rounded-sm bg-chart-tooltip-border px-1 text-xs text-chart-tooltip-foreground tabular-nums">
                       ×{group.count}
                     </span>
                   ) : null}
@@ -324,7 +331,7 @@ function HeroTooltip({
                   ) : null}
                 </span>
                 {Number.isNaN(at) ? null : (
-                  <span className="shrink-0 text-3xs text-chart-tooltip-muted tabular-nums">
+                  <span className="shrink-0 text-xs text-chart-tooltip-muted tabular-nums">
                     {timeFmt.format(new Date(at))}
                   </span>
                 )}
@@ -347,7 +354,7 @@ function HeroLegend({
   costLabel: string;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-3xs text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
       <span className="inline-flex items-center gap-1.5">
         <span className="h-0.5 w-4 rounded-full" style={{ background: 'var(--chart-2)' }} />
         {costLabel} (actual)

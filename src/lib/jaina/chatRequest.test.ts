@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { buildJainaChatStreamRequest } from './chatRequest';
+import { jainaChatRequestSchema as frontendMirrorSchema } from './schemas';
 
 describe('buildJainaChatStreamRequest', () => {
   it('keeps legacy single-account requests unchanged when no paid entity is mentioned', () => {
@@ -82,5 +83,49 @@ describe('buildJainaChatStreamRequest', () => {
     expect(request.context.dataScope?.campaigns?.ids).toEqual(['campaign-1']);
     expect(request.context.dataScope?.groups?.ids).toEqual([]);
     expect(request.context.dataScope?.ads?.ids).toEqual([]);
+  });
+
+  it('carries an operator action through BOTH request schemas — the stripping one included', () => {
+    const operatorAction = {
+      tool: 'pause_meta_entity',
+      input: {
+        entity_id: '120000000000000001',
+        level: 'campaign',
+        reason: 'Paused from Scale › Campaigns',
+        dry_run: false,
+        expected_status: 'ACTIVE',
+      },
+    } as const;
+    const request = buildJainaChatStreamRequest(
+      { query: 'Pause campaign Summer', adAccountId: 'act_1', brandId: 'brand-1', operatorAction },
+      'America/Denver',
+    );
+
+    expect(request.operator_action).toEqual(operatorAction);
+    // The Frontend mirror is a stripping z.object: an undeclared field would vanish silently.
+    expect(frontendMirrorSchema.parse(request).operator_action).toEqual(operatorAction);
+  });
+
+  it('refuses an operator action whose prior status cannot be what it changes', () => {
+    expect(() =>
+      buildJainaChatStreamRequest(
+        {
+          query: 'Pause it',
+          adAccountId: 'act_1',
+          brandId: 'brand-1',
+          operatorAction: {
+            tool: 'pause_meta_entity',
+            input: {
+              entity_id: '1',
+              level: 'ad',
+              reason: 'r',
+              dry_run: false,
+              expected_status: 'PAUSED' as 'ACTIVE',
+            },
+          },
+        },
+        'America/Denver',
+      ),
+    ).toThrow();
   });
 });

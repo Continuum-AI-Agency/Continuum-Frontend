@@ -6,11 +6,6 @@ import {
 } from '@continuum/contracts';
 import { z } from 'zod';
 import { agentMentionMetadataSchema } from '@/lib/agent-references';
-import {
-  type FrontendCheckpointReport,
-  type ReportAssembly,
-  reportAssemblySchema,
-} from './schemas';
 
 export const jainaConversationRoleSchema = z.enum(['user', 'assistant']);
 export type JainaConversationRole = z.infer<typeof jainaConversationRoleSchema>;
@@ -39,8 +34,6 @@ export const jainaConversationMessageSchema = z.object({
   role: jainaConversationRoleSchema,
   content: z.string(),
   report: z.unknown().optional(),
-  reportAssembly: z.unknown().optional(),
-  reportAssemblyHtml: z.string().nullable().optional(),
   finalThought: z.string().nullable().optional(),
   renderAsReport: z.boolean().optional(),
   reasoning: z.array(z.unknown()).optional(),
@@ -168,8 +161,6 @@ export const backendConversationMessageSchema = z.object({
   role: jainaConversationRoleSchema,
   content: z.string(),
   report: z.unknown().optional(),
-  report_assembly: z.unknown().optional(),
-  report_assembly_html: z.string().nullable().optional(),
   final_thought: z.string().nullable().optional(),
   render_as_report: z.boolean().optional(),
   reasoning: z.array(z.unknown()).optional(),
@@ -244,79 +235,6 @@ export type JainaConversationRunsHydrationResponse = z.infer<
   typeof jainaConversationRunsHydrationResponseSchema
 >;
 
-function normalizeReportAssemblyForConversationLoad(
-  reportAssembly: ReportAssembly,
-): FrontendCheckpointReport {
-  const snapshot = reportAssembly.metrics.map((metric) => ({
-    metric: metric.label,
-    value: metric.actual,
-    change: metric.index_percent,
-    suffix: metric.unit === '%' ? '%' : undefined,
-    context: `Planned: ${metric.planned}`,
-    status:
-      metric.deviation_type === 'positive'
-        ? 'positive'
-        : metric.deviation_type === 'negative'
-          ? 'risk'
-          : 'neutral',
-  }));
-
-  const recommendations = reportAssembly.recommendations.map((entry) => {
-    if (typeof entry === 'string') {
-      return {
-        title: entry,
-        rationale: entry,
-        expected_impact: null,
-        priority: 'MEDIUM',
-      };
-    }
-
-    return {
-      title: entry.title,
-      rationale: entry.rationale,
-      expected_impact: entry.expected_impact,
-      priority: entry.priority,
-    };
-  });
-
-  return {
-    language: 'en',
-    report_title: reportAssembly.header.title,
-    executive_summary: reportAssembly.summary.narrative,
-    budget: null,
-    performance_snapshot: snapshot,
-    blocks: [],
-    sections: [
-      {
-        heading: reportAssembly.header.title,
-        scope: reportAssembly.header.period,
-        summary: reportAssembly.summary.principal_deviation || '',
-        highlights: reportAssembly.insights,
-        tables: [],
-        actions: recommendations,
-        confidence: null,
-        cached_sources: [],
-        graphs: reportAssembly.charts,
-      },
-    ],
-    strategic_recommendations: recommendations,
-    follow_up_questions: [],
-    handoff_trace: [],
-    execution_objectives: [],
-    cached_sources: [],
-    graphs: reportAssembly.charts,
-  };
-}
-
-function deriveReportFromConversationMetadata(row: BackendConversationMessage): unknown {
-  if (row.report !== undefined) return row.report;
-
-  const parsedAssembly = reportAssemblySchema.safeParse(row.report_assembly);
-  if (!parsedAssembly.success) return undefined;
-
-  return normalizeReportAssemblyForConversationLoad(parsedAssembly.data);
-}
-
 export function mapConversationSessionRow(
   row: BackendConversationSession,
 ): JainaConversationSession {
@@ -343,7 +261,7 @@ export function mapConversationSessionRow(
 export function mapConversationMessageRow(
   row: BackendConversationMessage,
 ): JainaConversationMessage {
-  const report = deriveReportFromConversationMetadata(row);
+  const report = row.report;
   const paidCreativeRenders = Array.isArray(row.metadata?.paid_creative_renders)
     ? row.metadata.paid_creative_renders.flatMap((value) => {
         const parsed = jainaPaidCreativeRenderPayloadSchema.safeParse(value);
@@ -359,10 +277,6 @@ export function mapConversationMessageRow(
     role: row.role,
     content: row.content,
     ...(report !== undefined ? { report } : {}),
-    ...(row.report_assembly !== undefined ? { reportAssembly: row.report_assembly } : {}),
-    ...(typeof row.report_assembly_html === 'string'
-      ? { reportAssemblyHtml: row.report_assembly_html }
-      : {}),
     ...(typeof row.final_thought === 'string' ? { finalThought: row.final_thought } : {}),
     ...(typeof row.render_as_report === 'boolean' ? { renderAsReport: row.render_as_report } : {}),
     ...(Array.isArray(row.reasoning) ? { reasoning: row.reasoning } : {}),

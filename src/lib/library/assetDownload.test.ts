@@ -58,7 +58,8 @@ describe('downloadLibraryAsset', () => {
 
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe('/api/library/sign');
-    expect(calls[0]?.body).toEqual({ brandId: 'brand-1', assetId: 'asset-1' });
+    // The name travels to the signer: a GCS URL carries it inside its signature.
+    expect(calls[0]?.body).toEqual({ brandId: 'brand-1', assetId: 'asset-1', download: 'hero shot.jpg' });
     expect(clicked).toHaveLength(1);
     // The forced param is the whole reason a cross-origin signed URL saves at all.
     expect(clicked[0]?.href).toBe('https://cdn.test/o/abc?token=t&download=hero%20shot.jpg');
@@ -78,6 +79,7 @@ describe('downloadLibraryAsset', () => {
 
     expect(calls[0]?.body).toEqual({
       brandId: 'brand-1',
+      download: 'v2.jpg',
       assetId: 'asset-1',
       versionId: 'ver-2',
     });

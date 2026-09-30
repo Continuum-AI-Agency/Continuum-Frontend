@@ -41,20 +41,20 @@ export function DateRangeControl({ value, onChange, hasFlight, className }: Date
         variant="outline"
       >
         {presets.map((preset) => (
-          <ToggleGroupItem className="h-7 px-2 text-2xs" key={preset} value={preset}>
+          <ToggleGroupItem className="h-7 px-2 text-xs" key={preset} value={preset}>
             {RANGE_PRESET_LABEL[preset]}
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
       <div
         className={cn(
-          'flex items-center gap-1 rounded-md border border-border/70 px-1.5 text-2xs',
+          'flex items-center gap-1 rounded-md border border-border/70 px-1.5 text-xs',
           custom ? 'border-primary/50 text-foreground' : 'text-muted-foreground',
         )}
       >
         <CalendarRangeIcon aria-hidden className="size-3.5" />
         <DateRangeField
-          className="h-6 border-0 px-1 text-2xs shadow-none"
+          className="h-6 border-0 px-1 text-xs shadow-none"
           clearable={false}
           id="optimizer-range-custom"
           onChange={(next) => {

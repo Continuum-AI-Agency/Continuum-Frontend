@@ -24,7 +24,7 @@ describe('AdSetIdLabel', () => {
   it('uses the token type size, never a px literal', () => {
     const { getByText } = renderLabel(<AdSetIdLabel id="a1" />);
     const el = getByText('a1');
-    expect(el.className).toContain('text-2xs');
+    expect(el.className).toContain('text-xs');
     expect(el.className).not.toMatch(/text-\[\d/);
   });
 

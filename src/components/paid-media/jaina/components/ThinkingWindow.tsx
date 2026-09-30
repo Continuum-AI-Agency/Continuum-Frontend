@@ -262,7 +262,7 @@ export function ThinkingWindow({
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.2 }}
-                  className="rounded-full bg-muted px-2 py-0.5 text-2xs text-muted-foreground"
+                  className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
                 >
                   {currentStage}
                 </motion.span>
@@ -270,12 +270,12 @@ export function ThinkingWindow({
             </AnimatePresence>
             <div className="flex items-center gap-1.5">
               {toolCount > 0 && (
-                <Badge variant="secondary" className="text-2xs px-1.5">
+                <Badge variant="secondary" className="text-xs px-1.5">
                   {toolCount} tool{toolCount !== 1 ? 's' : ''}
                 </Badge>
               )}
               {thoughtCount > 0 && (
-                <Badge variant="outline" className="text-2xs px-1.5">
+                <Badge variant="outline" className="text-xs px-1.5">
                   {thoughtCount} thought{thoughtCount !== 1 ? 's' : ''}
                 </Badge>
               )}
@@ -408,22 +408,22 @@ export function ThinkingWindow({
                       <p className="text-xs text-foreground/70">{segment.taskDescription}</p>
                     )}
                     {isActive && workerStatusLine && (
-                      <p className="text-2xs text-muted-foreground/70 mt-0.5 truncate">
+                      <p className="text-xs text-muted-foreground/70 mt-0.5 truncate">
                         {workerStatusLine}
                       </p>
                     )}
                     {segment.durationMs !== undefined && (
-                      <p className={cn('text-2xs mt-1', statusColor)}>
+                      <p className={cn('text-xs mt-1', statusColor)}>
                         {segment.completeStatus ?? 'running'} ·{' '}
                         {(segment.durationMs / 1000).toFixed(1)}s
                       </p>
                     )}
                     {segment.error && (
-                      <p className="text-2xs text-destructive mt-1">{segment.error}</p>
+                      <p className="text-xs text-destructive mt-1">{segment.error}</p>
                     )}
                     {workerResolved.length > 0 && (
                       <div className="mt-2 space-y-1.5">
-                        <p className="text-2xs text-muted-foreground/50">
+                        <p className="text-xs text-muted-foreground/50">
                           {workerResolved.filter((e) => e.state !== 'running').length}/
                           {workerResolved.length} tools done
                         </p>
@@ -470,22 +470,22 @@ export function ThinkingWindow({
                     <details key={cluster.key} className="rounded-md border border-border/40">
                       <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm">
                         <span className="font-medium">{formatToolLabel(cluster.name)}</span>
-                        <Badge variant="secondary" className="text-2xs">
+                        <Badge variant="secondary" className="text-xs">
                           {cluster.entries.length} calls
                         </Badge>
                         <div className="ml-auto flex items-center gap-1">
                           {cluster.errorCount > 0 && (
-                            <Badge variant="destructive" className="text-2xs">
+                            <Badge variant="destructive" className="text-xs">
                               {cluster.errorCount} failed
                             </Badge>
                           )}
                           {cluster.runningCount > 0 && (
-                            <Badge variant="secondary" className="text-2xs text-amber-500">
+                            <Badge variant="secondary" className="text-xs text-amber-500">
                               {cluster.runningCount} running
                             </Badge>
                           )}
                           {cluster.completedCount > 0 && (
-                            <Badge variant="secondary" className="text-2xs text-emerald-500">
+                            <Badge variant="secondary" className="text-xs text-emerald-500">
                               {cluster.completedCount} done
                             </Badge>
                           )}

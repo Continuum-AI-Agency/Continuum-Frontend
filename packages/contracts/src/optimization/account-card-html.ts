@@ -32,7 +32,14 @@
 // head, which across twenty-five frames appears twice and therefore still interrupts.
 
 import type { AccountChart } from './account-chart';
-import type { AccountCandidate, AccountDetector, ImpactClass } from './account-strategy';
+import { headlineAgreesWithChart } from './account-chart';
+import type {
+  AccountCandidate,
+  AccountDetector,
+  CandidateHeadline,
+  ImpactClass,
+} from './account-strategy';
+import { perPeriod } from './account-strategy';
 
 /** Colour is the KIND OF MONEY, never decoration and never tone of voice. */
 const CLASS_INK: Record<
@@ -102,7 +109,7 @@ export const CARD_COMPOSITIONS = [
 ] as const;
 export type CardComposition = (typeof CARD_COMPOSITIONS)[number];
 
-/** Which layout each detector gets. Exhaustive by construction — the type demands all 25. */
+/** Which layout each detector gets. Exhaustive by construction — the type demands all 26. */
 export const COMPOSITION_BY_DETECTOR: Record<AccountDetector, CardComposition> = {
   portfolio_reallocation: 'figure-top',
   placement_mix: 'two-halves',
@@ -128,6 +135,8 @@ export const COMPOSITION_BY_DETECTOR: Record<AccountDetector, CardComposition> =
   audience_overlap: 'figure-top',
 
   dead_tail: 'figure-top',
+  // One figure and nothing on the other side of it: the empty half IS the finding.
+  delivery_collapse: 'centre',
   measurement_integrity: 'banner',
 
   scale_readiness: 'figure-foot',
@@ -145,6 +154,15 @@ export const COMPOSITION_BY_DETECTOR: Record<AccountDetector, CardComposition> =
  * push the layout around — the full sentence lives on the screen, not on a shareable frame.
  */
 export const LINE_BUDGET = 60;
+
+/**
+ * The budget on the words BESIDE the figure, which is a different budget entirely.
+ *
+ * The line sits on its own and may take two rows; the headline label sits on the baseline of a
+ * 38px figure and has one. Twenty-four characters is what fits there before it wraps under the
+ * figure and pulls the declared band out of shape.
+ */
+export const HEADLINE_LABEL_BUDGET = 24;
 
 export function clipLine(text: string, budget = LINE_BUDGET): string {
   const clean = text.trim().replace(/\s+/g, ' ');
@@ -176,14 +194,55 @@ function money(value: number, currency: string | null): string {
 }
 
 /**
+ * Money's support line: the same figure per day and per month.
+ *
+ * The one place `/day` is written on a frame. It used to be a literal in the figure row, which
+ * is why a card could only ever say the small number — a person reading "2/day" has to do the
+ * month in their head, and a person reading "2/day · 60/mo" does not.
+ */
+function moneyLine(perDay: number, currency: string | null): string {
+  const { day, month } = perPeriod(perDay);
+  return `${money(day, currency)}/day · ${money(month, currency)}/mo`;
+}
+
+/**
+ * The headline's figure, printed.
+ *
+ * `unit` decides this and nothing else: the words are the detector's `label`, which carries its
+ * own period and its own direction ("a day undelivered", "under plan") so nothing is glued on
+ * here. A renderer that appends "/day" to a label that already ends in one is how "12% cheaper
+ * /day" gets shipped.
+ */
+function headlineFigure(headline: CandidateHeadline, currency: string | null): string {
+  switch (headline.unit) {
+    case 'percent':
+      return `${headline.value}%`;
+    case 'currency_per_day':
+      return money(headline.value, currency);
+    case 'count':
+      return String(headline.value);
+  }
+}
+
+/**
  * Every number this card is allowed to print.
  *
  * The model-side digit gate, turned on the generator itself. A compiler cannot hallucinate but
  * it can absolutely carry a stale constant, and that is what this catches.
  */
 export function cardFigures(candidate: AccountCandidate): number[] {
-  const out: number[] = [candidate.impact_per_day];
-  const chart = candidate.chart;
+  // The month is on the frame now, so it is a figure the card prints and the gate must know.
+  // Computed through `perPeriod`, the same call the renderer makes, so the two cannot drift.
+  const out: number[] = [candidate.impact_per_day, perPeriod(candidate.impact_per_day).month];
+  const headline = candidate.headline;
+  if (headline) {
+    out.push(headline.value);
+    if (headline.from != null) out.push(headline.from);
+    if (headline.to != null) out.push(headline.to);
+  }
+  // `cardChart`, not `candidate.chart`: a chart the frame refuses to draw prints no figures,
+  // and an allowlist that still names them is an allowlist that has stopped describing the card.
+  const chart = cardChart(candidate);
   if (!chart) return out;
   switch (chart.shape) {
     case 'transfer':
@@ -376,6 +435,7 @@ const FRAME_CSS = `
   .figrow{display:flex;align-items:baseline;gap:5px;flex-wrap:wrap}
   .fig{font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;font-size:38px;font-weight:500;line-height:.94;letter-spacing:-.035em;font-variant-numeric:tabular-nums;color:var(--ink)}
   .unit{font-family:"SFMono-Regular",Consolas,monospace;font-size:15px;opacity:.5;color:var(--ink)}
+  .money{font-family:"SFMono-Regular",Consolas,monospace;font-size:11px;font-variant-numeric:tabular-nums;opacity:.58;color:var(--ink);white-space:nowrap}
   .say{font-size:15px;line-height:1.2;font-weight:600;letter-spacing:-.012em}
   .note{font-size:11px;line-height:1.35;opacity:.68}
   .ft{font-size:9px;letter-spacing:.13em;text-transform:uppercase;font-weight:600;color:var(--ink);opacity:.62;display:flex;align-items:center;gap:6px}
@@ -459,6 +519,56 @@ export type AccountCardHtmlOptions = {
 };
 
 /**
+ * The figure row, in one of two arrangements.
+ *
+ * WITH a headline the detector's own metric leads and money follows as the support line every
+ * card shares, which is the whole point of the vocabulary: two cards no longer say the same
+ * small sentence, but they still share one line that means the same thing.
+ *
+ * WITHOUT one the money still leads, so a candidate written before this existed renders as it
+ * always did — except that it now says the month as well as the day, because "2/day" is the
+ * figure a person has to finish in their head.
+ */
+function figureRow(candidate: AccountCandidate, currency: string | null): string {
+  if (!(candidate.impact_per_day > 0) && !candidate.headline) return '';
+  const support = candidate.impact_per_day > 0 ? moneyLine(candidate.impact_per_day, currency) : '';
+  const headline = candidate.headline;
+  if (headline) {
+    return (
+      `<span class="fig">${esc(headlineFigure(headline, currency))}</span>` +
+      `<span class="unit">${esc(clipLine(headline.label, HEADLINE_LABEL_BUDGET))}</span>` +
+      (support ? `<span class="money">${esc(support)}</span>` : '')
+    );
+  }
+  const month = money(perPeriod(candidate.impact_per_day).month, currency);
+  return (
+    `<span class="fig">${esc(money(candidate.impact_per_day, currency))}</span>` +
+    `<span class="unit">/day</span>` +
+    `<span class="money">${esc(`· ${month}/mo`)}</span>`
+  );
+}
+
+/**
+ * The chart this frame is allowed to draw — the candidate's, or none.
+ *
+ * A frame carries one figure and one drawing, and a reader takes them as one argument because
+ * they are inside one border. So the drawing has to be about the figure. When
+ * `headlineAgreesWithChart` cannot find the headline's own sides anywhere on the chart, the two
+ * are about different quantities, and printing both is worse than printing one: the reader is
+ * handed a number and a picture and left to discover they do not meet.
+ *
+ * Dropping the chart rather than the headline is deliberate. The headline is the detector's own
+ * finding and the whole point of the vocabulary; the chart is the part that wandered. The frame
+ * keeps its composition — the band falls back to the sentence, which is what `layout` already
+ * does for a chartless card — so nothing downstream has to know this happened, and the day the
+ * detector's chart draws its own headline again the picture comes straight back.
+ */
+export function cardChart(candidate: AccountCandidate): AccountChart | null {
+  if (!candidate.chart) return null;
+  return headlineAgreesWithChart(candidate.headline, candidate.chart) ? candidate.chart : null;
+}
+
+/**
  * One card, as a complete HTML document with no network dependency of any kind.
  *
  * Self-containment is asserted by its own test: no http:, no https:, no url(), no script,
@@ -471,16 +581,14 @@ export function accountCardHtml(
   const palette = options.isGuard ? GUARD_INK : CLASS_INK[candidate.impact_class];
   const composition = COMPOSITION_BY_DETECTOR[candidate.detector];
   const narrow = composition === 'flank' || composition === 'stamp';
-  const figureValue =
-    candidate.impact_per_day > 0 ? money(candidate.impact_per_day, options.currency) : null;
+  const figure = figureRow(candidate, options.currency);
+  const chart = cardChart(candidate);
 
   const html = layout(composition, {
     kicker: esc(options.title),
-    figure: figureValue
-      ? `<span class="fig">${esc(figureValue)}</span><span class="unit">/day</span>`
-      : '',
+    figure,
     line: esc(clipLine(options.line ?? '')),
-    chart: candidate.chart ? drawChart(candidate.chart, options.currency, narrow) : '',
+    chart: chart ? drawChart(chart, options.currency, narrow) : '',
     foot: `${options.isGuard ? 'Guard' : 'Trigger'} · ${esc(candidate.detector)}${options.readDate ? ` · ${esc(options.readDate)}` : ''}`,
   });
 

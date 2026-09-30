@@ -3,6 +3,7 @@ import {
   accountCardHtml,
   CARD_COMPOSITIONS,
   COMPOSITION_BY_DETECTOR,
+  cardChart,
   cardFigures,
   clipLine,
   LINE_BUDGET,
@@ -80,7 +81,93 @@ describe('accountCardHtml — a compiler cannot hallucinate, but it can carry a 
   it('collects every figure each shape can print', () => {
     expect(cardFigures(candidate())).toContain(90);
     expect(cardFigures(candidate())).toContain(60);
-    expect(cardFigures(candidate({ chart: null }))).toEqual([66.67]);
+    // The day AND the month, because both are now printed on the frame.
+    expect(cardFigures(candidate({ chart: null }))).toEqual([66.67, 2000.1]);
+  });
+
+  it('admits the headline, so the gate cannot call a declared figure an invention', () => {
+    const figures = cardFigures(
+      candidate({
+        headline: {
+          kind: 'efficiency',
+          value: 33,
+          unit: 'percent',
+          label: 'cheaper per result',
+          from: 90,
+          to: 60,
+        },
+      }),
+    );
+    expect(figures).toContain(33);
+    expect(figures).toContain(90);
+    expect(figures).toContain(60);
+  });
+});
+
+describe('the headline — each detector leads with its own metric, money supports it', () => {
+  const withHeadline = (over = {}) =>
+    candidate({
+      headline: {
+        kind: 'efficiency',
+        value: 33,
+        unit: 'percent',
+        label: 'cheaper per result',
+        from: 90,
+        to: 60,
+        ...over,
+      },
+    });
+
+  it('prints the detector’s figure, not the money, in the figure slot', () => {
+    const html = accountCardHtml(withHeadline(), opts);
+    expect(html).toContain('<span class="fig">33%</span>');
+    expect(html).toContain('cheaper per result');
+  });
+
+  it('still carries the money every card shares, as day · month', () => {
+    const html = accountCardHtml(withHeadline(), opts);
+    // Whole units above 100, per `money()` — the month is a figure to grasp, not audit.
+    expect(html).toContain('$66.67/day · $2000/mo');
+  });
+
+  it('says the month even when the money is the headline it fell back to', () => {
+    // No detector declared one: the money leads, exactly as before, plus the month.
+    const html = accountCardHtml(candidate(), opts);
+    expect(html).toContain('<span class="fig">$66.67</span><span class="unit">/day</span>');
+    expect(html).toContain('· $2000/mo');
+  });
+
+  it('prints a count as a count and money per day as money', () => {
+    expect(
+      accountCardHtml(withHeadline({ kind: 'count', value: 62, unit: 'count' }), opts),
+    ).toContain('<span class="fig">62</span>');
+    expect(
+      accountCardHtml(
+        withHeadline({ kind: 'avoided', value: 96.4, unit: 'currency_per_day' }),
+        opts,
+      ),
+    ).toContain('<span class="fig">$96.40</span>');
+  });
+
+  it('clips a label that would push the figure row out of its band', () => {
+    const html = accountCardHtml(withHeadline({ label: 'cheaper per result than source' }), opts);
+    expect(html).not.toContain('cheaper per result than source');
+    expect(html).toContain('…');
+  });
+
+  it('prints no figure the headline did not declare', () => {
+    const c = withHeadline();
+    const html = accountCardHtml(c, opts);
+    const allowed = new Set<string>();
+    for (const figure of cardFigures(c)) {
+      for (const form of [String(figure), figure.toFixed(0), figure.toFixed(1), figure.toFixed(2)])
+        for (const piece of form.split('.')) allowed.add(piece);
+    }
+    const body = html.slice(html.indexOf('<body'));
+    const unexplained = (body.match(/\d+/g) ?? []).filter(
+      (d) => !allowed.has(d) && !/^\d{1,3}$/.test(d),
+    );
+    expect(unexplained).toEqual([]);
   });
 });
 
@@ -234,13 +321,13 @@ describe('accountCardHtml — hostile input cannot break out', () => {
   });
 });
 
-describe('twenty-five detectors, twenty-five compositions', () => {
+describe('twenty-six detectors, twenty-six compositions', () => {
   it('assigns every detector a layout, with none left out', () => {
     for (const detector of accountDetectorSchema.options) {
       expect(COMPOSITION_BY_DETECTOR[detector]).toBeDefined();
       expect(CARD_COMPOSITIONS).toContain(COMPOSITION_BY_DETECTOR[detector]);
     }
-    expect(Object.keys(COMPOSITION_BY_DETECTOR)).toHaveLength(25);
+    expect(Object.keys(COMPOSITION_BY_DETECTOR)).toHaveLength(26);
   });
 
   it('uses every layout it defines — an unused composition is dead code', () => {
@@ -309,5 +396,75 @@ describe('every shape moves — a still frame in an animated set reads as broken
     for (const marker of markers) {
       expect(accountCardHtml(candidate(), opts)).toContain(`.${marker}{animation`);
     }
+  });
+});
+
+describe('a frame will not print a figure and a picture that are about different things', () => {
+  // The live `dead_tail` card: it leads with the money the pause stops and draws a band of the
+  // worst ad set's seven-day spend against a cost-per-result target. Three quantities, one
+  // border, and a reader who takes them as one argument.
+  const mismatched = () =>
+    candidate({
+      id: 'dead_tail:a-1',
+      detector: 'dead_tail',
+      impact_per_day: 69.75,
+      impact_class: 'recoverable',
+      impact_basis: '3 ad sets with 0 results in 7 days, together spending 69.75/day',
+      headline: {
+        kind: 'avoided',
+        value: 69.75,
+        unit: 'currency_per_day',
+        label: 'a day buying nothing',
+        from: null,
+        to: null,
+      },
+      chart: {
+        shape: 'interval',
+        estimate: null,
+        low: 188.19,
+        high: 376.38,
+        reference: 35,
+        reference_label: 'target',
+        at_stake_per_day: 69.75,
+        no_results: true,
+      },
+    });
+
+  const agreeing = () =>
+    candidate({
+      headline: {
+        kind: 'efficiency',
+        value: 33,
+        unit: 'percent',
+        label: 'cheaper per result',
+        from: 90,
+        to: 60,
+      },
+    });
+
+  it('keeps the chart when the headline is drawn on it', () => {
+    expect(cardChart(agreeing())).not.toBeNull();
+    expect(accountCardHtml(agreeing(), opts)).toContain('class="bar"');
+  });
+
+  it('withholds the chart when it is not', () => {
+    expect(cardChart(mismatched())).toBeNull();
+    const html = accountCardHtml(mismatched(), { ...opts, line: 'Three ad sets bought nothing' });
+    expect(html).not.toContain('class="iv"');
+    // The band carries the sentence instead. The card is still a whole card.
+    expect(html).toContain('Three ad sets bought nothing');
+    expect(html).toContain('69.75');
+  });
+
+  it('drops the withheld chart out of the digit allowlist too', () => {
+    // An allowlist naming numbers the card no longer prints has stopped describing the card.
+    expect(cardFigures(mismatched())).not.toContain(188.19);
+    expect(cardFigures(mismatched())).toContain(69.75);
+    expect(cardFigures(agreeing())).toContain(90);
+  });
+
+  it('leaves the composition alone, so nothing downstream has to know', () => {
+    expect(COMPOSITION_BY_DETECTOR.dead_tail).toBe('figure-top');
+    expect(accountCardHtml(mismatched(), opts)).toContain('c-figtop');
   });
 });

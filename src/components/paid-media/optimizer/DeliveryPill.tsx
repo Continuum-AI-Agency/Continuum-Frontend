@@ -23,7 +23,7 @@ export function DeliveryPill({ state }: { state: string | null | undefined }) {
             type="button"
             className="inline-flex rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <Pill variant="secondary" className="cursor-default">
+            <Pill variant="secondary" className="cursor-default text-xs">
               <PillIndicator variant={delivery.tone} />
               {delivery.label}
             </Pill>

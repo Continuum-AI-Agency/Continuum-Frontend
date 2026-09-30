@@ -35,15 +35,25 @@
  *   · any live render or Meta publication. Nothing here fires one.
  *   · the poll's three-per-tick window. Five in-flight renders advance head-first by
  *     design (`useApiRenderJobs` caps the fan-out so a batch confirm cannot turn the poll
- *     into one); proving the tail drains needs real timers and several 5s ticks.
+ *     into one); proving the tail drains needs several ticks of the 30s poll, which this
+ *     bench compresses for one tick at a time and never drains.
+ *   · the node's pre-render preview (`CanvasRenderPreview`, its own test). The node is mounted
+ *     unselected; its inspector section is mounted beside it, as `NodeInspectorPanel` would.
  *
  * Runs under `bun test` for the happy-dom preload in bunfig.toml.
  */
 
-import { afterEach, describe, expect, mock, test } from 'bun:test';
-import type { ApiRenderInputSet, ApiRenderJob, ApiRenderVariable } from '@continuum/contracts';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import {
+  type ApiRenderInputSet,
+  type ApiRenderJob,
+  type ApiRenderVariable,
+  apiRenderTemplateContractSchema,
+  apiRenderTemplateSummarySchema,
+  apiRenderVariableSchema,
+} from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ReactFlowProvider, useStoreApi } from '@xyflow/react';
 import React from 'react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
@@ -82,18 +92,39 @@ const output = (id: string, assetId: string | null, url?: string) => ({
   versionId: assetId ? VERSION_ID : null,
 });
 
-const variable = (overrides: Partial<ApiRenderVariable> = {}): ApiRenderVariable => ({
-  key: 'headline',
-  label: 'Headline',
-  kind: 'text',
-  required: false,
-  multiple: false,
-  accept: [],
-  options: [],
-  description: null,
-  reserved: false,
-  ...overrides,
-});
+// Fixtures go through the contract schemas, the same parse `apiRendersApi` applies to every
+// response, so a field the contract later defaults (`ratios`, `role`, `placement`…) arrives here
+// exactly as it reaches the node in the app — never absent.
+const variable = (overrides: Partial<ApiRenderVariable> = {}): ApiRenderVariable =>
+  apiRenderVariableSchema.parse({
+    key: 'headline',
+    label: 'Headline',
+    kind: 'text',
+    required: false,
+    multiple: false,
+    accept: [],
+    options: [],
+    description: null,
+    reserved: false,
+    ...overrides,
+  });
+
+const BINDING_ID = '12121212-1212-4212-8212-121212121212';
+/** One row of `GET /templates`: a legacy-reflection template, which ships no ratios. */
+const template = () =>
+  apiRenderTemplateSummarySchema.parse({
+    key: '166',
+    name: 'Demo template',
+    bindingId: BINDING_ID,
+    environment: 'brand_app',
+    contractVersion: '1',
+    contractHash: 'hash',
+    contractSource: 'legacy_reflection',
+    outputKinds: ['image'],
+    variableCount: 1,
+    previewUrl: null,
+    updatedAt: null,
+  });
 
 const inputSet = (id: string, name: string): ApiRenderInputSet => ({
   id,
@@ -196,7 +227,7 @@ const reset = () => {
   watermarkPin = null;
   createInputSetError = null;
   currentTemplates = {
-    items: [{ key: '166', name: 'Demo template' }],
+    items: [template()],
     // The server's verdict. `renderEligible` is what says these templates are actually
     // this brand's bound workspace and not the shared catalogue.
     workspace: { workspace: 'brand_app', renderEligible: true, state: 'eligible', detail: 'ok' },
@@ -218,10 +249,8 @@ mock.module('./apiRendersApi', () => ({
         nextCursor: null,
       };
     },
-    getContract: async () => ({
-      template: { name: 'Demo template', contractHash: 'hash' },
-      variables: currentVariables,
-    }),
+    getContract: async () =>
+      apiRenderTemplateContractSchema.parse({ template: template(), variables: currentVariables }),
     preflight: async (input: Record<string, unknown>) => {
       calls.preflight.push(input);
       return {
@@ -311,6 +340,7 @@ mock.module('../publish/publishingApi', () => ({
 }));
 
 const { ApiRenderBlock } = await import('../ApiRenderBlock');
+const { ApiRenderSection } = await import('../../components/inspector/ApiRenderSection');
 const { useStudioStore } = await import('../../stores/useStudioStore');
 
 // The node writes through the store's `updateNode` and reads its own `data` prop back.
@@ -319,8 +349,21 @@ const { useStudioStore } = await import('../../stores/useStudioStore');
 // app. `nodeData` is the mirror the assertions read: what would survive a reload.
 let nodeData: Record<string, unknown> = {};
 
+// The node keeps only what fits in 320px. Presets, Meta delivery and the render history
+// (every job card, output preview and "Use as reference") live in the selection inspector's
+// `ApiRenderSection`, which the harness mounts beside the node on `selectNode()` exactly as
+// `NodeInspectorPanel` does: same `data`, writes through the same store `updateNode`.
+let openInspector: ((open: boolean) => void) | null = null;
+const patchThroughStore = (patch: Record<string, unknown>) =>
+  useStudioStore.getState().updateNode('render1', (node) => ({
+    ...node,
+    data: { ...(node.data as Record<string, unknown>), ...patch },
+  }));
+
 function Harness({ initial }: { initial: Record<string, unknown> }) {
   const [data, setData] = React.useState(initial);
+  const [inspecting, setInspecting] = React.useState(false);
+  openInspector = setInspecting;
   React.useEffect(() => {
     useStudioStore.setState({
       updateNode: ((_id: string, updater: (node: unknown) => { data: Record<string, unknown> }) => {
@@ -333,20 +376,25 @@ function Harness({ initial }: { initial: Record<string, unknown> }) {
     } as never);
   }, []);
   return (
-    <ApiRenderBlock
-      id="render1"
-      type="apiRender"
-      data={data as never}
-      selected={false}
-      zIndex={0}
-      isConnectable
-      positionAbsoluteX={0}
-      positionAbsoluteY={0}
-      dragging={false}
-      draggable
-      selectable
-      deletable
-    />
+    <>
+      <ApiRenderBlock
+        id="render1"
+        type="apiRender"
+        data={data as never}
+        selected={false}
+        zIndex={0}
+        isConnectable
+        positionAbsoluteX={0}
+        positionAbsoluteY={0}
+        dragging={false}
+        draggable
+        selectable
+        deletable
+      />
+      {inspecting ? (
+        <ApiRenderSection nodeId="render1" data={data as never} onPatch={patchThroughStore} />
+      ) : null}
+    </>
   );
 }
 
@@ -361,15 +409,26 @@ function StoreProbe() {
   return null;
 }
 
+/**
+ * Render history lives in the inspector, which configures a render only once the node has a
+ * template — as every node that has launched a render does.
+ */
+const WITH_TEMPLATE = { templateKey: '166', contractHash: 'hash' };
+
+const RENDER_NODE = { id: 'render1', type: 'apiRender', position: { x: 120, y: 40 }, data: {} };
+
 function renderNode(
   data: Record<string, unknown> = {},
   brandId = BRAND_ID,
   graph: { nodes?: unknown[]; edges?: unknown[] } = {},
 ) {
   nodeData = { variables: {}, status: 'idle', ...data };
+  const nodes = (graph.nodes ?? []) as { id: string }[];
   useStudioStore.setState({
     brandId,
-    nodes: graph.nodes ?? [],
+    // The node under test is on the canvas: the inspector reads it back from the store (to save
+    // a preset, or to place a reference beside it) the way it does in the app.
+    nodes: nodes.some((node) => node.id === 'render1') ? nodes : [RENDER_NODE, ...nodes],
     edges: graph.edges ?? [],
     updateNode: (() => undefined) as never,
     triggerSave: (() => undefined) as never,
@@ -389,6 +448,48 @@ function renderNode(
   );
 }
 
+/**
+ * Select the node, which opens its inspector section. Only after the node's own first load, as
+ * in the app: a person selects a node already on screen, and the section starts from the render
+ * list the node has already fetched into the shared query cache.
+ */
+async function selectNode() {
+  await waitFor(() => expect(calls.listJobs).toBeGreaterThan(0));
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  act(() => openInspector?.(true));
+}
+
+/** The template picker: a searchable popover (hundreds of templates), no longer a <select>. */
+const templatePicker = () => screen.findByRole('button', { name: /Choose template/ });
+
+async function chooseTemplate(name: string) {
+  const picker = (await templatePicker()) as HTMLButtonElement;
+  await waitFor(() => expect(picker.disabled).toBe(false));
+  fireEvent.click(picker);
+  fireEvent.click(await within(await screen.findByRole('listbox')).findByRole('option', { name }));
+}
+
+/** Opens a Base UI select and returns its options. The list is only in the DOM while open. */
+async function openSelect(name: string) {
+  fireEvent.click(await screen.findByRole('combobox', { name }));
+  return within(await screen.findByRole('listbox')).findAllByRole('option');
+}
+
+/**
+ * A preset's batch checkbox in the inspector. By role: its name is also on a hidden native
+ * input, so a label query matches twice.
+ */
+const setCheckbox = (name: string) => screen.findByRole('checkbox', { name });
+
+/** Base UI commits a pick on pointerup, the gesture a real pointer makes, not on a bare click. */
+function pick(option: HTMLElement) {
+  fireEvent.pointerDown(option);
+  fireEvent.pointerUp(option);
+  fireEvent.click(option);
+}
+
 afterEach(() => {
   cleanup();
   reset();
@@ -400,7 +501,7 @@ describe('ApiRenderBlock — workspace gate and active brand', () => {
     // catalogue, which looks like success. Offering those templates would render a
     // template that is not this brand's bound sub-app's.
     currentTemplates = {
-      items: [{ key: '166', name: 'Demo template' }],
+      items: [template()],
       workspace: {
         workspace: 'brand_app',
         renderEligible: false,
@@ -409,18 +510,23 @@ describe('ApiRenderBlock — workspace gate and active brand', () => {
       },
     };
     renderNode();
-    const picker = await screen.findByLabelText('Render template');
-    await waitFor(() => expect((picker as HTMLSelectElement).disabled).toBe(true));
+    // The reason first: it is only on screen once the verdict has landed, so the disabled
+    // check below is about the verdict and not about a picker that has not loaded yet.
     expect(await screen.findByText(/shared workspace/)).toBeTruthy();
+    const picker = (await templatePicker()) as HTMLButtonElement;
+    expect(picker.disabled).toBe(true);
   });
 
   test('an eligible workspace offers exactly the server’s list, nothing added or removed', async () => {
     renderNode();
-    const picker = await screen.findByLabelText('Render template');
-    await waitFor(() => expect((picker as HTMLSelectElement).disabled).toBe(false));
-    expect(await screen.findByRole('option', { name: 'Demo template' })).toBeTruthy();
-    // One placeholder + one server template. A third option would mean the node invented one.
-    expect((picker as HTMLSelectElement).options.length).toBe(2);
+    const picker = (await templatePicker()) as HTMLButtonElement;
+    await waitFor(() => expect(picker.disabled).toBe(false));
+    fireEvent.click(picker);
+    const list = await screen.findByRole('listbox');
+    expect(await within(list).findByRole('option', { name: 'Demo template' })).toBeTruthy();
+    // No placeholder row in a searchable list: one server template, one option. A second
+    // option would mean the node invented one.
+    expect(within(list).getAllByRole('option').length).toBe(1);
   });
 
   test('a brand switch clears the template, its contract and any signed confirmation', async () => {
@@ -448,6 +554,7 @@ describe('ApiRenderBlock — library-only by default, Meta opt-in', () => {
   test('renders with NO delivery block and never searches Meta', async () => {
     currentVariables = [variable()];
     renderNode({ templateKey: '166', contractHash: 'hash', variableDefinitions: [variable()] });
+    await selectNode();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Render 1' }));
     await waitFor(() => expect(calls.preflight.length).toBe(1));
@@ -465,9 +572,11 @@ describe('ApiRenderBlock — library-only by default, Meta opt-in', () => {
 
   test('switching Meta delivery on reveals the pickers and demands a target', async () => {
     renderNode({ templateKey: '166', contractHash: 'hash', variableDefinitions: [] });
-    fireEvent.click(await screen.findByLabelText('Also create a PAUSED Meta ad'));
+    await selectNode();
+    // The switch moved into the inspector's "Meta delivery" section.
+    fireEvent.click(await screen.findByRole('switch', { name: 'Also create a paused ad' }));
 
-    expect(await screen.findByLabelText('Meta campaign')).toBeTruthy();
+    expect(await screen.findByRole('combobox', { name: 'Meta campaign' })).toBeTruthy();
     await waitFor(() => expect(calls.searchPaid).toBeGreaterThan(0));
 
     fireEvent.click(screen.getByRole('button', { name: 'Render 1' }));
@@ -480,7 +589,12 @@ describe('ApiRenderBlock — library-only by default, Meta opt-in', () => {
   test('the campaign list survives choosing a campaign, and the ad-set list loads beside it', async () => {
     // The old single shared targets array refetched at ad-set level on first choice,
     // which emptied the campaign list — re-picking meant blindly clearing the value.
+    // The inspector configures a render only once a template is chosen, as it always is on a
+    // node that has a campaign picked.
     renderNode({
+      templateKey: '166',
+      contractHash: 'hash',
+      variableDefinitions: [],
       deliveryEnabled: true,
       delivery: {
         action: 'create',
@@ -490,9 +604,18 @@ describe('ApiRenderBlock — library-only by default, Meta opt-in', () => {
         campaignName: 'Campaign One',
       },
     });
+    await selectNode();
 
-    expect(await screen.findByRole('option', { name: 'Campaign Two' })).toBeTruthy();
-    expect(await screen.findByRole('option', { name: 'Adset One' })).toBeTruthy();
+    // Base UI selects hold their options only while open, so each list is opened in turn.
+    fireEvent.click(await screen.findByRole('combobox', { name: 'Meta campaign' }));
+    const campaigns = await screen.findByRole('listbox');
+    expect(await within(campaigns).findByRole('option', { name: 'Campaign Two' })).toBeTruthy();
+    fireEvent.keyDown(campaigns, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('listbox') === null).toBe(true));
+
+    fireEvent.click(await screen.findByRole('combobox', { name: 'Meta ad set' }));
+    const adsets = await screen.findByRole('listbox');
+    expect(await within(adsets).findByRole('option', { name: 'Adset One' })).toBeTruthy();
   });
 });
 
@@ -551,6 +674,8 @@ describe('ApiRenderBlock — the reserved Design Kit variable', () => {
     const field = await screen.findByText('Watermark Position');
     expect(field.parentElement?.querySelector('input')).toBeTruthy();
     expect(field.parentElement?.querySelector('select')).toBeNull();
+    // The picker the node draws today is a Base UI select, which is a combobox, not a <select>.
+    expect(screen.queryByRole('combobox', { name: 'Watermark Position' })).toBeNull();
     expect(screen.queryByRole('radiogroup')).toBeNull();
   });
 
@@ -572,10 +697,10 @@ describe('ApiRenderBlock — the reserved Design Kit variable', () => {
       ],
     });
 
-    const field = await screen.findByText('Watermark Position');
-    const picker = field.parentElement?.querySelector('select') as HTMLSelectElement;
-    expect(picker).toBeTruthy();
-    expect([...picker.options].map((option) => option.value)).toEqual(['', ...positions]);
+    const options = await openSelect('Watermark Position');
+    // The reflected set, verbatim, behind the one way back to unset an optional enum offers —
+    // the placeholder is trigger text now, not a selectable row.
+    expect(options.map((option) => option.textContent)).toEqual(['Not set…', ...positions]);
   });
 
   // A required picker with no empty option paints option one as selected while the node
@@ -597,11 +722,11 @@ describe('ApiRenderBlock — the reserved Design Kit variable', () => {
       ],
     });
 
-    const field = await screen.findByText('Watermark Position *');
-    const picker = field.parentElement?.querySelector('select') as HTMLSelectElement;
-    expect(picker.value).toBe('');
-    expect(picker.options[0]?.disabled).toBe(true);
-    expect(picker.options[0]?.text).toBe('Choose…');
+    expect(await screen.findByText('Watermark Position *')).toBeTruthy();
+    const picker = await screen.findByRole('combobox', { name: 'Watermark Position' });
+    // The control shows the empty state it holds: the placeholder, not option one.
+    expect(picker.textContent).toContain('Choose…');
+    expect(picker.textContent).not.toContain('top_left');
 
     fireEvent.click(await screen.findByRole('button', { name: 'Render 1' }));
 
@@ -610,6 +735,11 @@ describe('ApiRenderBlock — the reserved Design Kit variable', () => {
     expect(calls.preflight.length).toBe(0);
     expect(calls.createJob).toBe(0);
     expect(calls.createBatch).toBe(0);
+
+    // And the placeholder is not a choice: the list is the two real values, neither selected.
+    const options = await openSelect('Watermark Position');
+    expect(options.map((option) => option.textContent)).toEqual(['top_left', 'bottom_right']);
+    expect(options.map((option) => option.getAttribute('aria-selected'))).not.toContain('true');
   });
 
   test('the chosen option is exactly what Render sends', async () => {
@@ -627,9 +757,8 @@ describe('ApiRenderBlock — the reserved Design Kit variable', () => {
       ],
     });
 
-    const field = await screen.findByText('Watermark Position *');
-    const picker = field.parentElement?.querySelector('select') as HTMLSelectElement;
-    fireEvent.change(picker, { target: { value: 'bottom_right' } });
+    const options = await openSelect('Watermark Position');
+    pick(options.find((option) => option.textContent === 'bottom_right') as HTMLElement);
     await waitFor(() =>
       expect((nodeData.variables as Record<string, unknown>).watermark_position).toBe(
         'bottom_right',
@@ -668,7 +797,12 @@ describe('ApiRenderBlock — a contract discovered after the node mounted', () =
     currentVariables = [headline()];
     renderNode({}, BRAND_ID, { nodes: [textNode], edges: [textEdge] });
 
-    const picker = await screen.findByLabelText('Render template');
+    const picker = (await templatePicker()) as HTMLButtonElement;
+    await waitFor(() => expect(picker.disabled).toBe(false));
+    fireEvent.click(picker);
+    const option = await within(await screen.findByRole('listbox')).findByRole('option', {
+      name: 'Demo template',
+    });
     expect(document.querySelector('[data-handleid="variable-headline"]')).toBeNull();
 
     const frames: FrameRequestCallback[] = [];
@@ -682,9 +816,9 @@ describe('ApiRenderBlock — a contract discovered after the node mounted', () =
       flowStore?.setState({
         updateNodeInternals: (() => remeasured.push(1)) as never,
       } as never);
-      fireEvent.change(picker, { target: { value: '166' } });
+      fireEvent.click(option);
       await waitFor(() =>
-        expect(document.querySelector('[data-handleid="variable-headline"]')).toBeTruthy(),
+        expect(document.querySelector('[data-handleid="variable-headline"]') !== null).toBe(true),
       );
       act(() => {
         for (const frame of frames.splice(0)) frame(0);
@@ -701,14 +835,16 @@ describe('ApiRenderBlock — a contract discovered after the node mounted', () =
     currentVariables = [headline()];
     renderNode({}, BRAND_ID, { nodes: [textNode], edges: [textEdge] });
 
-    fireEvent.change(await screen.findByLabelText('Render template'), { target: { value: '166' } });
+    await chooseTemplate('Demo template');
     const label = await screen.findByText('Headline *');
     const inline = label.parentElement?.querySelector('input') as HTMLInputElement;
     // The field stays as the fallback — it just loses to the edge the canvas is drawing.
     expect(inline).toBeTruthy();
     fireEvent.change(inline, { target: { value: 'Typed on the node' } });
     await waitFor(() =>
-      expect(screen.queryByText(/the wired text is used instead of this field/)).toBeTruthy(),
+      expect(screen.queryByText(/the wired text is used instead of this field/) !== null).toBe(
+        true,
+      ),
     );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Render 1' }));
@@ -835,7 +971,8 @@ describe('ApiRenderBlock — a multiple media variable', () => {
       ],
     });
 
-    expect((await screen.findAllByText('Images')).length).toBe(2);
+    // The kind label is singular now ("Image"), one per media slot.
+    expect((await screen.findAllByText('Image')).length).toBe(2);
     expect((await screen.findAllByText('Connect media or choose')).length).toBe(2);
   });
 });
@@ -849,6 +986,7 @@ describe('ApiRenderBlock — saved input sets and batches', () => {
       variableDefinitions: [variable()],
       variables: { headline: 'launch day' },
     });
+    await selectNode();
 
     fireEvent.change(await screen.findByLabelText('New preset name'), {
       target: { value: 'Set A' },
@@ -863,6 +1001,7 @@ describe('ApiRenderBlock — saved input sets and batches', () => {
   test('a duplicate name reads as language, not as a server code', async () => {
     createInputSetError = new Error('409 render_input_set_name_taken');
     renderNode({ templateKey: '166', contractHash: 'hash', variableDefinitions: [] });
+    await selectNode();
 
     fireEvent.change(await screen.findByLabelText('New preset name'), {
       target: { value: 'Set A' },
@@ -915,8 +1054,9 @@ describe('ApiRenderBlock — saved input sets and batches', () => {
   test('checks exactly one of five saved sets and preflights only that record', async () => {
     currentSets = FIVE_SETS;
     renderNode({ templateKey: '166', contractHash: 'hash', variableDefinitions: [] });
+    await selectNode();
 
-    fireEvent.click(await screen.findByLabelText('Set C'));
+    fireEvent.click(await setCheckbox('Set C'));
     await waitFor(() => expect(nodeData.batchInputSetIds).toEqual([SET_C]));
 
     fireEvent.click(await screen.findByRole('button', { name: 'Render 1' }));
@@ -931,8 +1071,8 @@ describe('ApiRenderBlock — saved input sets and batches', () => {
     await waitFor(() => expect(calls.createBatch).toBe(1));
 
     // The other half of "exactly one": the selection must swap, not accumulate.
-    fireEvent.click(screen.getByLabelText('Set D'));
-    fireEvent.click(screen.getByLabelText('Set C'));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Set D' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Set C' }));
     await waitFor(() => expect(nodeData.batchInputSetIds).toEqual([SET_D]));
   });
 
@@ -957,9 +1097,10 @@ describe('ApiRenderBlock — saved input sets and batches', () => {
       // A render this node already tracked. Confirming five must ADD to it, not replace it.
       jobIds: ['job-old'],
     });
+    await selectNode();
 
     for (const { label } of clicks) {
-      fireEvent.click(await screen.findByLabelText(label));
+      fireEvent.click(await setCheckbox(label));
     }
     await waitFor(() =>
       expect(nodeData.batchInputSetIds).toEqual(clicks.map((click) => click.inputSetId)),
@@ -985,6 +1126,26 @@ describe('ApiRenderBlock — saved input sets and batches', () => {
 });
 
 describe('ApiRenderBlock — durable tracking, progress and outputs', () => {
+  /**
+   * The in-flight poll is 30s (`useApiRenderJobs`; push consumers took over the fast path). A
+   * bench cannot sit through several, so this block compresses THAT one interval and leaves
+   * every other timer alone: each tick is still the component's own, unprompted, on a real clock.
+   */
+  const POLL_MS = 30_000;
+  const COMPRESSED_POLL_MS = 250;
+  const realSetInterval = globalThis.setInterval;
+  beforeEach(() => {
+    globalThis.setInterval = ((handler: TimerHandler, timeout?: number, ...rest: unknown[]) =>
+      realSetInterval(
+        handler,
+        timeout === POLL_MS ? COMPRESSED_POLL_MS : timeout,
+        ...rest,
+      )) as unknown as typeof setInterval;
+  });
+  afterEach(() => {
+    globalThis.setInterval = realSetInterval;
+  });
+
   test('recovers tracked jobs the recent-jobs list does not return', async () => {
     // A batch of older renders falls off `GET /jobs` immediately; without this they are
     // simply gone after a reload.
@@ -1001,7 +1162,8 @@ describe('ApiRenderBlock — durable tracking, progress and outputs', () => {
     // tracked ids plus the per-job relay are the entire handle.
     currentJobs = [0, 1, 2, 3, 4].map(variation);
     listedJobIds = [];
-    renderNode({ jobIds: VARIATION_IDS, latestJobId: VARIATION_IDS[0] });
+    renderNode({ ...WITH_TEMPLATE, jobIds: VARIATION_IDS, latestJobId: VARIATION_IDS[0] });
+    await selectNode();
 
     await waitFor(() => expect(calls.getJob.length).toBeGreaterThanOrEqual(5));
     for (const id of VARIATION_IDS) expect(calls.getJob).toContain(id);
@@ -1052,7 +1214,8 @@ describe('ApiRenderBlock — durable tracking, progress and outputs', () => {
 
   test('advances the real five-value status with no interaction, and claims no percentage', async () => {
     currentJobs = [job({ status: 'queued' })];
-    renderNode();
+    renderNode(WITH_TEMPLATE);
+    await selectNode();
 
     const steps = await screen.findByTestId('render-steps');
     await waitFor(() =>
@@ -1077,7 +1240,8 @@ describe('ApiRenderBlock — durable tracking, progress and outputs', () => {
         outputs: [output('out1', ASSET_ID), output('out2', ASSET_ID), output('out3', null)],
       }),
     ];
-    renderNode();
+    renderNode(WITH_TEMPLATE);
+    await selectNode();
 
     const images = await screen.findAllByRole('img');
     expect(images.length).toBe(3);
@@ -1090,7 +1254,8 @@ describe('ApiRenderBlock — durable tracking, progress and outputs', () => {
   test('renders the live DTO url and persists no url at all', async () => {
     const fleetUrl = 'https://fleet.example.com/out/out1.png';
     currentJobs = [job({ status: 'finished', outputs: [output('out1', null, fleetUrl)] })];
-    renderNode({ latestJobId: '11111111-1111-4111-8111-111111111111' });
+    renderNode({ ...WITH_TEMPLATE, latestJobId: '11111111-1111-4111-8111-111111111111' });
+    await selectNode();
 
     const first = await screen.findByRole('img');
     expect(first.getAttribute('src')).toBe(fleetUrl);
@@ -1101,11 +1266,9 @@ describe('ApiRenderBlock — durable tracking, progress and outputs', () => {
     // client-side signing — re-reading the relay is the whole mechanism.
     const libraryUrl = 'https://supabase.example.com/signed/out1.png?token=abc';
     currentJobs = [job({ status: 'finished', outputs: [output('out1', ASSET_ID, libraryUrl)] })];
-    // The template name also appears as a picker <option>, so target the card's own
-    // button rather than the first node that happens to carry the text.
-    const card = screen
-      .getAllByRole('button')
-      .find((element) => element.textContent?.includes('Demo template'));
+    // The template name is also the picker's label once the list loads, so target the job
+    // card's own button — the one that carries the card's status steps.
+    const card = screen.getByTestId('render-steps').closest('button');
     fireEvent.click(card as HTMLElement);
 
     await waitFor(() => expect(screen.getByRole('img').getAttribute('src')).toBe(libraryUrl));
@@ -1118,7 +1281,8 @@ describe('ApiRenderBlock — durable tracking, progress and outputs', () => {
 
   test('badges a job as a watermarked test render, from the contract not an assumption', async () => {
     currentJobs = [job({ status: 'finished', outputs: [output('out1', ASSET_ID)] })];
-    renderNode();
+    renderNode(WITH_TEMPLATE);
+    await selectNode();
 
     expect(await screen.findByText('Test · watermarked')).toBeTruthy();
   });
@@ -1139,7 +1303,8 @@ describe('ApiRenderBlock — a finished output as a canvas reference', () => {
 
   test('each output adds its own node, pinned to its own exact version', async () => {
     currentJobs = [job({ status: 'finished', outputs: [finishedOutput(0), finishedOutput(1)] })];
-    renderNode({}, BRAND_ID, { nodes: [canvasNode] });
+    renderNode(WITH_TEMPLATE, BRAND_ID, { nodes: [canvasNode] });
+    await selectNode();
 
     const buttons = await screen.findAllByRole('button', { name: 'Use as reference' });
     expect(buttons.length).toBe(2);
@@ -1165,7 +1330,8 @@ describe('ApiRenderBlock — a finished output as a canvas reference', () => {
 
   test('the node it adds is a plain image node, so the reference handle is already there', async () => {
     currentJobs = [job({ status: 'finished', outputs: [finishedOutput(0)] })];
-    renderNode({}, BRAND_ID, { nodes: [canvasNode] });
+    renderNode(WITH_TEMPLATE, BRAND_ID, { nodes: [canvasNode] });
+    await selectNode();
 
     const button = await screen.findByRole('button', { name: 'Use as reference' });
     act(() => fireEvent.click(button));
@@ -1178,14 +1344,15 @@ describe('ApiRenderBlock — a finished output as a canvas reference', () => {
 
   test('clicking the same output twice does not add a second copy', async () => {
     currentJobs = [job({ status: 'finished', outputs: [finishedOutput(0)] })];
-    renderNode({}, BRAND_ID, { nodes: [canvasNode] });
+    renderNode(WITH_TEMPLATE, BRAND_ID, { nodes: [canvasNode] });
+    await selectNode();
 
     const button = await screen.findByRole('button', { name: 'Use as reference' });
     act(() => fireEvent.click(button));
     await waitFor(() => expect(referenceNodes().length).toBe(1));
 
     act(() => fireEvent.click(button));
-    await waitFor(() => expect(screen.getByText('Already on the canvas')).toBeTruthy());
+    await waitFor(() => expect(screen.queryByText('Already on the canvas') !== null).toBe(true));
     expect(referenceNodes().length).toBe(1);
   });
 
@@ -1193,7 +1360,8 @@ describe('ApiRenderBlock — a finished output as a canvas reference', () => {
     // Ingest has not landed, so there is no version to pin to. A button here would add a
     // node whose only handle on its bytes is a link that expires.
     currentJobs = [job({ status: 'finished', outputs: [output('out1', null)] })];
-    renderNode({}, BRAND_ID, { nodes: [canvasNode] });
+    renderNode(WITH_TEMPLATE, BRAND_ID, { nodes: [canvasNode] });
+    await selectNode();
 
     expect(await screen.findByText('Saving to Library…')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Use as reference' })).toBeNull();
@@ -1206,7 +1374,8 @@ describe('ApiRenderBlock — a finished output as a canvas reference', () => {
         outputs: [{ ...finishedOutput(0), kind: 'video' as const, fileName: 'out-0.mp4' }],
       }),
     ];
-    renderNode({}, BRAND_ID, { nodes: [canvasNode] });
+    renderNode(WITH_TEMPLATE, BRAND_ID, { nodes: [canvasNode] });
+    await selectNode();
 
     expect(await screen.findByText('Saved to Library')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Use as reference' })).toBeNull();

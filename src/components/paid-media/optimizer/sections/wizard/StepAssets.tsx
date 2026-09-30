@@ -90,7 +90,7 @@ export function StepAssets({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="font-semibold text-sm tracking-tight">What should it manage?</h3>
-          <p className="text-2xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {assetMode === 'adset'
               ? 'Pick ad sets one by one, by name or ID. Their budgets move as one pool.'
               : 'Pick whole campaigns. Every eligible ad set in each one joins the pool.'}
@@ -106,10 +106,10 @@ export function StepAssets({
           value={assetMode}
           variant="outline"
         >
-          <ToggleGroupItem className="h-7 px-2.5 text-2xs" value="adset">
+          <ToggleGroupItem className="h-7 px-2.5 text-xs" value="adset">
             By ad set
           </ToggleGroupItem>
-          <ToggleGroupItem className="h-7 px-2.5 text-2xs" value="campaign">
+          <ToggleGroupItem className="h-7 px-2.5 text-xs" value="campaign">
             By campaign
           </ToggleGroupItem>
         </ToggleGroup>
@@ -139,7 +139,7 @@ export function StepAssets({
       ) : (
         <ul className="divide-y divide-border/60 rounded-lg border border-border/70 bg-card">
           {sections.length === 0 ? (
-            <li className="px-3 py-3 text-2xs text-muted-foreground">
+            <li className="px-3 py-3 text-xs text-muted-foreground">
               {isLoading ? 'Loading campaigns…' : 'No campaigns with eligible ad sets here yet.'}
             </li>
           ) : null}
@@ -158,7 +158,7 @@ export function StepAssets({
                 />
                 <Label className="min-w-0 flex-1 cursor-pointer font-normal" htmlFor={id}>
                   <span className="block truncate font-medium text-xs">{section.campaignName}</span>
-                  <span className="block text-2xs text-muted-foreground tabular-nums">
+                  <span className="block text-xs text-muted-foreground tabular-nums">
                     {section.eligibleCount} of {section.totalCount} ad sets eligible ·{' '}
                     {formatCurrency(section.totalBudget, currency)}/day
                     {section.cpa != null ? ` · ${formatCpa(section.cpa, currency)}` : ''}
@@ -174,7 +174,7 @@ export function StepAssets({
       )}
 
       {warnings.inactiveCount > 0 ? (
-        <p className="text-2xs text-warning">
+        <p className="text-xs text-warning">
           {warnings.inactiveCount} selected inactive{' '}
           {warnings.inactiveCount === 1 ? 'ad set is' : 'ad sets are'} held until Meta reports them
           active.
@@ -182,7 +182,7 @@ export function StepAssets({
       ) : null}
       {warnings.blockedCount > 0 ? (
         <p
-          className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-2xs text-destructive"
+          className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
           role="alert"
         >
           {warnings.blockedCount} selected{' '}
@@ -192,7 +192,7 @@ export function StepAssets({
         </p>
       ) : null}
       {warnings.moves.length > 0 ? (
-        <p className="text-2xs text-muted-foreground" role="status">
+        <p className="text-xs text-muted-foreground" role="status">
           {warnings.moves
             .map((move) => `${move.adsetIds.length} from ${move.portfolioName}`)
             .join(' · ')}{' '}

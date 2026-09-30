@@ -1,6 +1,7 @@
 'use client';
 
 import type {
+  JainaOperatorAction,
   JainaToolApprovalRequiredPayload,
   JainaToolApprovalResolvedPayload,
   JainaToolOutputDeniedPayload,
@@ -8,50 +9,71 @@ import type {
 import { ExternalLink, Maximize2, Network, Table2 } from 'lucide-react';
 import Link from 'next/link';
 import * as React from 'react';
+import { ApprovalChangeTable } from '@/components/paid-media/jaina/components/ApprovalChangeTable';
 import { useAdAccountCurrency } from '@/components/paid-media/optimizer/useOptimizerData';
 import {
+  AgentActions,
+  AgentButton,
   AgentCardBody,
   AgentCardEyebrow,
   AgentCardSummary,
+  AgentCardTitle,
   AgentDecisionCard,
-  ApproveRejectActions,
   StatusLabel,
 } from '@/components/shared/agent-cards/agentCardKit';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
+import type { OperatorActionOutcome } from '@/lib/jaina/operatorOutcome';
 import type { JainaScaffoldState } from '@/lib/jaina/scaffoldTypes';
-import {
-  openingDailyBudgetOf,
-  type ScaffoldTree,
-  scaffoldBlockersOf,
-} from '@/lib/paid-media/scaffoldTree';
+import type { ScaffoldTree } from '@/lib/paid-media/scaffoldTree';
 import { ScaffoldAdSetTable } from './ScaffoldAdSetTable';
+import {
+  ScaffoldAudiences,
+  ScaffoldCreatives,
+  ScaffoldEvidence,
+  ScaffoldSummaryStrip,
+} from './ScaffoldPlanSections';
 import { ScaffoldStatusPill } from './ScaffoldStatusPill';
 import { ScaffoldTreeCanvas } from './ScaffoldTreeCanvas';
 import { formatDailyBudget } from './scaffoldBudget';
+import {
+  audienceLinesOf,
+  creativeTilesOf,
+  type DeployBlocker,
+  deployBlockersOf,
+  scaffoldSummaryOf,
+} from './scaffoldPlanView';
+import { scaffoldCanvasHref, useScaffoldThread } from './scaffoldThreadContext';
+import { useLiveCanvasTree } from './useLiveCanvasTree';
 import { usePaidScaffoldTree } from './usePaidScaffoldTree';
 
 /**
- * One proposed campaign scaffold, with its approval gate.
+ * One proposed campaign scaffold: what it is, why each decision was made, and the ONE action
+ * that takes it to Meta — "Deploy paused".
  *
- * Read + approve/deny only. There is no edit path here by design: a name, a
- * targeting spec and a billing event are all DERIVED from the version a human
- * approved, so changing an ad set means changing its angle or audience and letting
- * the name recompute — not typing over the name. Revising is "ask Jaina to propose
- * again", which bumps the version and re-hashes the manifest.
+ * Deploy is a single approval that builds every entity, attaches the creatives and enrolls the
+ * ad sets in the optimizer, all PAUSED. Nothing here activates anything: going live is a separate
+ * unpause, approved on its own card. When the proposing turn already opened the deploy gate, the
+ * button answers it; otherwise it opens one with an operator action (no model turn) and the gate
+ * lands as a card of its own.
+ *
+ * There is no edit path here by design. Editing is the Campaign Canvas, which saves a NEW version
+ * with a new content hash — so what a person approves here is always the version on screen.
  */
 
 export type ScaffoldDecision = 'approve' | 'deny';
 
-/** The three gates read back from the tool name, so the label is never hardcoded. */
-const GATE_BY_TOOL_NAME: Record<
-  string,
-  { gate: 'build' | 'populate' | 'activate'; label: string }
-> = {
-  paid_scaffold_build: { gate: 'build', label: 'Approve & create (paused)' },
-  paid_scaffold_populate: { gate: 'populate', label: 'Approve & add creatives' },
-  paid_scaffold_activate: { gate: 'activate', label: 'Approve & activate' },
+/**
+ * The gates a scaffold approval can be. `paid_scaffold_deploy` is the one this card opens; the
+ * three older gates survive only in transcripts written before it, and are answered with the
+ * label that says what approving them actually does.
+ */
+const GATE_BY_TOOL_NAME: Record<string, { label: string }> = {
+  paid_scaffold_deploy: { label: 'Deploy paused' },
+  paid_scaffold_build: { label: 'Approve & create (paused)' },
+  paid_scaffold_populate: { label: 'Approve & add creatives' },
+  paid_scaffold_activate: { label: 'Approve & activate' },
 };
 
 /**
@@ -144,7 +166,13 @@ function ViewSwitch({
       </div>
       <div className="flex items-center gap-1">
         {view === 'graph' ? (
-          <Button type="button" variant="ghost" size="sm" className="h-7 gap-1.5" onClick={onExpand}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1.5"
+            onClick={onExpand}
+          >
             <Maximize2 className="size-3.5" />
             Expand
           </Button>
@@ -197,68 +225,31 @@ function ScaffoldOutline({ tree, currency }: { tree: ScaffoldTree; currency: str
   );
 }
 
-/**
- * The one number the Backend works hardest on — an opening budget sized from the
- * account's measured CPA — stated where a reviewer decides, not three hovers deep.
- */
-function OpeningBudget({ tree, currency }: { tree: ScaffoldTree; currency: string | null }) {
-  if (tree.adSets.length === 0) return null;
-  const { totalMinorUnits, placeholders } = openingDailyBudgetOf(tree);
-  const derived = tree.adSets.length - placeholders;
-  return (
-    <p className="text-sm" data-testid="scaffold-opening-budget">
-      {derived > 0 ? (
-        <>
-          Opening budget{' '}
-          <span className="font-medium tabular-nums" data-testid="scaffold-opening-budget-total">
-            {formatDailyBudget(totalMinorUnits, currency)}
-          </span>{' '}
-          across {derived} ad set{derived === 1 ? '' : 's'}, sized from the account&rsquo;s
-          measured CPA.
-        </>
-      ) : null}
-      {placeholders > 0
-        ? `${derived > 0 ? ' ' : ''}${placeholders} ad set${placeholders === 1 ? ' has' : 's have'} no measured CPA and will build on the placeholder budget.`
-        : null}
-    </p>
-  );
-}
-
-/**
- * What stops this scaffold short on Meta, read from the rows. Shown until a gate
- * settles, because it is exactly what a person approving the build needs to know.
- */
-function BuildBlockers({ tree }: { tree: ScaffoldTree }) {
-  const { adSetsWithoutAudience, adsWithoutCreative } = scaffoldBlockersOf(tree);
-  if (adSetsWithoutAudience.length === 0 && adsWithoutCreative === 0) return null;
-  const named = adSetsWithoutAudience.slice(0, 3).join(', ');
-  const more = adSetsWithoutAudience.length - 3;
+/** What keeps "Deploy paused" disabled, each named in words a person can act on. */
+function DeployBlockers({ blockers }: { blockers: DeployBlocker[] }) {
+  if (blockers.length === 0) return null;
   return (
     <div
-      className="rounded-md border border-warning/40 bg-warning/10 p-2.5 text-sm"
-      data-testid="scaffold-blockers"
+      className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5 text-sm"
+      data-testid="scaffold-deploy-blockers"
     >
-      <p className="font-medium">Before this can reach Meta</p>
+      <p className="font-medium">Before this can deploy</p>
       <ul className="mt-1 flex list-disc flex-col gap-1 pl-4 text-muted-foreground">
-        {adSetsWithoutAudience.length > 0 ? (
-          <li data-testid="scaffold-blocker-audience">
-            {adSetsWithoutAudience.length} ad set
-            {adSetsWithoutAudience.length === 1 ? ' has' : 's have'} no audience ({named}
-            {more > 0 ? ` +${more} more` : ''}). Build would create the campaign and stop there.
-            Ask Jaina to target {adSetsWithoutAudience.length === 1 ? 'it' : 'them'} from a
-            published audience group.
+        {blockers.map((blocker) => (
+          <li
+            key={`${blocker.code}:${blocker.message}`}
+            data-testid="scaffold-deploy-blocker"
+            data-code={blocker.code}
+          >
+            {blocker.message}
           </li>
-        ) : null}
-        {adsWithoutCreative > 0 ? (
-          <li data-testid="scaffold-blocker-creative">
-            {adsWithoutCreative} ad{adsWithoutCreative === 1 ? ' has' : 's have'} no creative
-            attached. Populate needs one Library asset per ad.
-          </li>
-        ) : null}
+        ))}
       </ul>
     </div>
   );
 }
+
+type DeployMode = 'approve' | 'open' | 'none';
 
 export function PaidScaffoldCard({
   scaffold,
@@ -268,6 +259,7 @@ export function PaidScaffoldCard({
   optimisticDecision,
   isStreaming,
   onDecide,
+  onDeploy,
 }: {
   scaffold: JainaScaffoldState;
   approval: JainaToolApprovalRequiredPayload | null;
@@ -276,58 +268,172 @@ export function PaidScaffoldCard({
   optimisticDecision: ScaffoldDecision | null;
   isStreaming: boolean;
   onDecide?: (approval: JainaToolApprovalRequiredPayload, decision: ScaffoldDecision) => void;
+  /** Opens the deploy gate with no model turn. Absent where no chat can carry the action. */
+  onDeploy?: (
+    action: JainaOperatorAction,
+    displayText: string,
+    onSettled?: (outcome: OperatorActionOutcome) => void,
+  ) => void;
 }) {
   const [canvasOpen, setCanvasOpen] = React.useState(false);
   const [selectedPathKey, setSelectedPathKey] = React.useState<string | null>(null);
   const [view, setView] = React.useState<ScaffoldView>('graph');
+  // Set on click and cleared when a gate arrives: the gate lands on a NEW card, so this one
+  // says so instead of looking like the click did nothing.
+  const [deployRequested, setDeployRequested] = React.useState(false);
+  // Why the last Deploy paused did not open a gate, in the Backend's own words.
+  const [deployError, setDeployError] = React.useState<string | null>(null);
+  const [deployOpenedBelow, setDeployOpenedBelow] = React.useState(false);
   const measureRef = React.useRef<HTMLDivElement | null>(null);
   const width = useCardWidth(measureRef);
 
-  const { tree, header, isLoading, isError, error } = usePaidScaffoldTree({
+  const {
+    tree: savedTree,
+    header,
+    isLoading,
+    isError,
+    error,
+  } = usePaidScaffoldTree({
     scaffoldVersionId: scaffold.scaffoldId,
     overlay: scaffold.progressByNode,
     settledAt: scaffold.receipt?.completedAt ?? null,
   });
+  // A canvas holding this scaffold draws it live — its edits show here as they are made.
+  const liveTree = useLiveCanvasTree(scaffold.parentScaffoldId ?? header?.scaffoldId ?? null);
+  const tree = liveTree ?? savedTree;
 
-  const currency = useAdAccountCurrency(
+  const accountCurrency = useAdAccountCurrency(
     scaffold.brandId ?? header?.brandId ?? '',
     scaffold.adAccountId ?? header?.adAccountId ?? null,
   );
+  const plan = scaffold.scaffoldPlan ?? header?.plan ?? null;
+  const currency = plan?.currency ?? accountCurrency;
+  const contentHash = scaffold.contentHash ?? header?.contentHash ?? null;
+  const name =
+    scaffold.name ??
+    header?.name ??
+    tree?.campaign?.name ??
+    firstCampaignNameOf(scaffold.plan) ??
+    'Scaffold';
+  const version = scaffold.version ?? header?.version ?? null;
   const parentScaffoldId = scaffold.parentScaffoldId ?? header?.scaffoldId ?? null;
-  const canvasHref = parentScaffoldId
-    ? `/scale/campaign-canvas?scaffold=${encodeURIComponent(parentScaffoldId)}`
-    : null;
+  const { sessionId, onScaffoldFocus } = useScaffoldThread();
+  const canvasHref = parentScaffoldId ? scaffoldCanvasHref(parentScaffoldId, sessionId) : null;
+  // Beside a companion canvas, Expand edits the scaffold there; elsewhere it opens the dialog.
+  const handleExpand =
+    onScaffoldFocus && parentScaffoldId
+      ? () => onScaffoldFocus(parentScaffoldId)
+      : () => setCanvasOpen(true);
+
+  const summary = React.useMemo(
+    () => scaffoldSummaryOf(plan, tree, currency),
+    [plan, tree, currency],
+  );
+  const audiences = React.useMemo(() => (plan ? audienceLinesOf(plan) : []), [plan]);
+  const creatives = React.useMemo(() => creativeTilesOf(tree, plan), [tree, plan]);
+  const blockers = React.useMemo(
+    () =>
+      deployBlockersOf({
+        plan,
+        planLoaded: Boolean(scaffold.scaffoldPlan) || header !== null,
+        tree,
+        contentHash,
+      }),
+    [plan, scaffold.scaffoldPlan, header, tree, contentHash],
+  );
 
   const gate = approval ? GATE_BY_TOOL_NAME[approval.toolName] : undefined;
-  const expired = approval ? Date.parse(approval.expiresAt) < Date.now() : false;
+  const expired = approval?.expiresAt ? Date.parse(approval.expiresAt) < Date.now() : false;
   const decided = optimisticDecision ?? (resolution ? resolution.decision : null);
-  const showActions = Boolean(approval && gate && !decided && !expired && onDecide);
+  const approvedOrRunning = decided === 'approve' || decided === 'approved';
+  const liveApproval = Boolean(approval && gate && !decided && !expired);
+
+  React.useEffect(() => {
+    if (approval) setDeployRequested(false);
+  }, [approval]);
+
+  const deployMode: DeployMode =
+    scaffold.receipt || approvedOrRunning
+      ? 'none'
+      : liveApproval && onDecide
+        ? 'approve'
+        : onDeploy
+          ? 'open'
+          : 'none';
+
+  const handleDeploy = () => {
+    if (deployMode === 'approve' && approval) {
+      onDecide?.(approval, 'approve');
+      return;
+    }
+    if (deployMode !== 'open' || !contentHash || deployRequested) return;
+    setDeployRequested(true);
+    setDeployError(null);
+    setDeployOpenedBelow(false);
+    onDeploy?.(
+      {
+        tool: 'paid_scaffold_deploy',
+        input: { scaffold_version_id: scaffold.scaffoldId, content_hash: contentHash },
+      },
+      `Deploy paused: ${name ?? 'this scaffold'}${version ? ` v${version}` : ''}`,
+      (outcome) => {
+        setDeployRequested(false);
+        if (outcome.ok) setDeployOpenedBelow(true);
+        else setDeployError(outcome.reason);
+      },
+    );
+  };
 
   const progressTotal = scaffold.lastProgress?.total ?? 0;
   const progressDone = Object.values(scaffold.progressByNode).filter(
     (entry) => entry.status === 'succeeded' || entry.status === 'skipped',
   ).length;
+  const preview = approval?.preview?.rows.length ? approval.preview : null;
 
   return (
     <>
-      <AgentDecisionCard data-testid="paid-scaffold-card" data-scaffold-version={scaffold.scaffoldId}>
-        <AgentCardEyebrow
-          label="Paid campaign scaffold"
-          right={
-            <ScaffoldStatus
-              awaiting={Boolean(approval)}
-              decided={decided}
-              receipt={scaffold.receipt}
-              expired={expired}
-              tree={tree}
-            />
-          }
-        />
-        <AgentCardBody>
-          <AgentCardSummary>{summaryLine(scaffold, tree)}</AgentCardSummary>
+      <AgentDecisionCard
+        data-testid="paid-scaffold-card"
+        data-scaffold-version={scaffold.scaffoldId}
+      >
+        <div className="px-4 pt-3">
+          <AgentCardEyebrow
+            label="Paid campaign scaffold"
+            right={
+              <ScaffoldStatus
+                awaiting={Boolean(approval)}
+                decided={decided}
+                receipt={scaffold.receipt}
+                expired={expired}
+                tree={tree}
+              />
+            }
+          />
+        </div>
+        <AgentCardBody className="flex flex-col gap-4 pt-1 pb-4">
+          <div>
+            {name ? (
+              <AgentCardTitle>
+                {name}
+                {version ? (
+                  <span className="ml-1.5 font-normal text-muted-foreground text-sm">
+                    v{version}
+                  </span>
+                ) : null}
+                {liveTree ? (
+                  <span
+                    className="ml-1.5 font-normal text-primary text-xs"
+                    data-testid="scaffold-live-canvas"
+                  >
+                    Live on canvas
+                  </span>
+                ) : null}
+              </AgentCardTitle>
+            ) : null}
+            <AgentCardSummary>{summaryLine(scaffold, tree)}</AgentCardSummary>
+          </div>
 
-          {tree ? <OpeningBudget tree={tree} currency={currency} /> : null}
-          {tree && !scaffold.receipt ? <BuildBlockers tree={tree} /> : null}
+          <ScaffoldSummaryStrip summary={summary} />
 
           {progressTotal > 0 && !scaffold.receipt ? (
             <div className="flex flex-col gap-1">
@@ -340,6 +446,19 @@ export function PaidScaffoldCard({
 
           <ScaffoldReceiptNotice scaffold={scaffold} />
 
+          {preview && !decided ? (
+            <section className="flex flex-col gap-1.5" data-testid="scaffold-gate-preview">
+              <h4 className="font-medium text-foreground text-sm">What deploying creates</h4>
+              <div className="rounded-lg border bg-muted/20 px-1 py-1.5">
+                <ApprovalChangeTable preview={preview} />
+              </div>
+            </section>
+          ) : null}
+
+          <ScaffoldEvidence plan={plan} />
+          <ScaffoldAudiences audiences={audiences} />
+          <ScaffoldCreatives tiles={creatives} brandId={scaffold.brandId ?? header?.brandId} />
+
           {isError ? (
             <p className="text-destructive text-sm">
               {error?.message ?? 'Could not load the scaffold.'}
@@ -349,7 +468,7 @@ export function PaidScaffoldCard({
               <ViewSwitch
                 view={view}
                 onChange={setView}
-                onExpand={() => setCanvasOpen(true)}
+                onExpand={handleExpand}
                 canvasHref={canvasHref}
               />
               {view === 'graph' && width !== null && width < NARROW_CARD_PX ? (
@@ -386,19 +505,61 @@ export function PaidScaffoldCard({
 
           {expired && !decided ? (
             <p className="text-muted-foreground text-sm">
-              This approval expired, so nothing was created. Ask Jaina to propose the scaffold
-              again.
+              That approval expired, so nothing was created. Deploy again to open a fresh one.
+            </p>
+          ) : null}
+
+          {deployMode !== 'none' && !scaffold.receipt ? (
+            <DeployBlockers blockers={blockers} />
+          ) : null}
+
+          {deployError ? (
+            <p
+              className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-destructive text-sm"
+              data-testid="scaffold-deploy-error"
+              role="alert"
+            >
+              {deployError}
             </p>
           ) : null}
         </AgentCardBody>
 
-        {showActions && approval && gate ? (
-          <ApproveRejectActions
-            locked={isStreaming}
-            approveLabel={gate.label}
-            onApprove={() => onDecide?.(approval, 'approve')}
-            onReject={() => onDecide?.(approval, 'deny')}
-          />
+        {deployMode !== 'none' ? (
+          <AgentActions className="mt-0 flex-wrap justify-between gap-2 border-t px-4 py-3">
+            <p className="min-w-0 max-w-[40ch] text-muted-foreground text-xs leading-snug">
+              {deployRequested
+                ? 'Opening the approval below…'
+                : deployOpenedBelow
+                  ? 'The approval opened below — answer it there.'
+                  : 'Everything lands paused. Going live is a separate unpause you approve.'}
+            </p>
+            <div className="flex items-center gap-1">
+              {deployMode === 'approve' && approval ? (
+                <AgentButton
+                  variant="ghost"
+                  disabled={isStreaming}
+                  onClick={() => onDecide?.(approval, 'deny')}
+                >
+                  Dismiss
+                </AgentButton>
+              ) : null}
+              <AgentButton
+                variant="primary"
+                disabled={
+                  isStreaming ||
+                  deployRequested ||
+                  blockers.length > 0 ||
+                  (deployMode === 'open' && !contentHash)
+                }
+                onClick={handleDeploy}
+                data-testid="scaffold-deploy"
+                data-action={deployMode}
+                title={blockers[0]?.message}
+              >
+                {deployMode === 'approve' && gate ? gate.label : 'Deploy paused'}
+              </AgentButton>
+            </div>
+          </AgentActions>
         ) : null}
       </AgentDecisionCard>
 
@@ -421,6 +582,13 @@ export function PaidScaffoldCard({
       </Dialog>
     </>
   );
+}
+
+/** A pre-wave frame's campaign skeleton, `plan.campaigns[0].name`, when nothing else names it. */
+function firstCampaignNameOf(plan: unknown): string | null {
+  const campaigns = (plan as { campaigns?: unknown } | null)?.campaigns;
+  const first = Array.isArray(campaigns) ? (campaigns[0] as { name?: unknown } | undefined) : null;
+  return typeof first?.name === 'string' && first.name ? first.name : null;
 }
 
 function ScaffoldStatus({

@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { AdSetIdLabel } from '../charts/AdSetIdLabel';
 import { formatCpa, formatCurrency } from '../format';
 import type { OptimizerAdsetRow } from '../kpiColumns';
+import * as typeScale from '../typeScale';
 
 type AdsetExplorerListProps = {
   rows: OptimizerAdsetRow[];
@@ -63,7 +64,9 @@ export function AdsetExplorerList({
         />
       </div>
 
-      <div className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-3 px-2 text-3xs font-medium text-muted-foreground uppercase tracking-wide">
+      <div
+        className={`${typeScale.label} grid shrink-0 grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-3 px-2 font-medium text-muted-foreground`}
+      >
         <span>Ad set</span>
         <span className="text-right">Budget</span>
         <span className="text-right">Spend 14d</span>
@@ -72,7 +75,7 @@ export function AdsetExplorerList({
 
       <ScrollArea className="min-h-0 flex-1 rounded-md border border-border/60">
         {filtered.length === 0 ? (
-          <p className="px-3 py-6 text-center text-2xs text-muted-foreground">
+          <p className="px-3 py-6 text-center text-xs text-muted-foreground">
             No ad sets match &ldquo;{query.trim()}&rdquo;.
           </p>
         ) : (
@@ -95,13 +98,13 @@ export function AdsetExplorerList({
                       id={row.adsetId}
                       name={row.name ?? undefined}
                     />
-                    <span className="text-right text-2xs tabular-nums text-foreground">
+                    <span className="text-right text-xs tabular-nums text-foreground">
                       {formatCurrency(row.currentBudget, currency)}
                     </span>
-                    <span className="text-right text-2xs tabular-nums text-foreground">
+                    <span className="text-right text-xs tabular-nums text-foreground">
                       {formatCurrency(row.spend, currency)}
                     </span>
-                    <span className="text-right text-2xs tabular-nums text-muted-foreground">
+                    <span className="text-right text-xs tabular-nums text-muted-foreground">
                       {row.cost != null ? formatCpa(row.cost, currency) : '—'}
                     </span>
                   </button>

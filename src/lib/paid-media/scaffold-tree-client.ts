@@ -18,6 +18,7 @@
  * gate, which is why the tree is never carried on the wire.
  */
 
+import { type PaidScaffoldPlan, paidScaffoldPlanSchema } from '@continuum/contracts';
 import type { PaidScaffoldNodeRow, ScaffoldNodeStatus } from '@/lib/paid-media/scaffoldTree';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -114,12 +115,22 @@ export type PaidScaffoldHeader = {
   scaffoldId: string;
   brandId: string;
   adAccountId: string | null;
+  name: string | null;
+  version: number | null;
+  /** What an operator-action deploy of this version must carry. */
+  contentHash: string | null;
+  /**
+   * `manifest.plan` — the same typed plan the proposal frame carries, so a card seeded from a
+   * gate or a reload renders the evidence too. Null on a version proposed before it existed.
+   */
+  plan: PaidScaffoldPlan | null;
 };
 
 /**
- * Who a version belongs to. A card seeded from an approval or a replayed receipt knows
- * only the version id, and the account (currency) and the canvas link both hang off
- * the parent scaffold — one embedded read rather than trusting a frame to carry them.
+ * Who a version belongs to, and what it was proposed on. A card seeded from an approval or a
+ * replayed receipt knows only the version id, and the account (currency), the canvas link, the
+ * deploy hash and the evidence all hang off the version row — one embedded read rather than
+ * trusting a frame to carry them.
  */
 export async function fetchPaidScaffoldHeader(params: {
   scaffoldVersionId: string;
@@ -129,17 +140,26 @@ export async function fetchPaidScaffoldHeader(params: {
     .schema('brand_profiles')
     .from('paid_scaffold_versions')
     // `!scaffold_id` names the FK: `paid_scaffolds.current_version_id` points back the other
-    // way, and PostgREST refuses an embed it cannot disambiguate.
-    .select('scaffold_id,brand_id,paid_scaffolds!scaffold_id(ad_account_id)')
+    // way, and PostgREST refuses an embed it cannot disambiguate. `manifest->plan` reads the
+    // plan alone rather than the whole manifest.
+    .select(
+      'scaffold_id,brand_id,version,content_hash,plan:manifest->plan,paid_scaffolds!scaffold_id(ad_account_id,name)',
+    )
     .eq('id', params.scaffoldVersionId)
     .maybeSingle();
 
   if (error) throw new Error(`Could not load the campaign scaffold: ${error.message}`);
   if (!data) return null;
   const raw = data as unknown as Record<string, unknown>;
+  const parent = asRecord(raw.paid_scaffolds);
+  const plan = paidScaffoldPlanSchema.safeParse(raw.plan);
   return {
     scaffoldId: String(raw.scaffold_id ?? ''),
     brandId: String(raw.brand_id ?? ''),
-    adAccountId: asNullableString(asRecord(raw.paid_scaffolds).ad_account_id),
+    adAccountId: asNullableString(parent.ad_account_id),
+    name: asNullableString(parent.name),
+    version: typeof raw.version === 'number' ? raw.version : null,
+    contentHash: asNullableString(raw.content_hash),
+    plan: plan.success ? plan.data : null,
   };
 }

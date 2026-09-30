@@ -7,13 +7,15 @@ import {
   type ApiRenderTemplateLayout,
   type ApiRenderVariable,
   changedKeys,
+  type ForgeMotionProof,
   type ForgeRenderPreview,
   isMotion,
   motionLabel,
+  paintLive,
   readableLayerName,
 } from '@continuum/contracts';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { type JSX, useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type JSX, useEffect, useMemo, useState } from 'react';
 import {
   FormatPreview,
   fileForFormat,
@@ -24,25 +26,41 @@ import {
 } from '@/components/forge/FormatPreview';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import { templateFrameQuery } from '@/components/forge/TemplateWireframe';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useDebounce } from '@/hooks/useDebounce';
 import { subscribeToPostgresChanges } from '@/lib/supabase/realtime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
-import { type Backdrop, pickBackdrop } from './previewBackdrop';
+import {
+  LiveImage,
+  liveKitQuery,
+  useLiveKit,
+  useLivePictures,
+  VariationStrip,
+} from './livePreview';
+import { type Backdrop, currentTemplateJob, pickBackdrop } from './previewBackdrop';
 import {
   effectiveMedia,
   effectiveOutputIds,
   effectiveValues,
   type RequestRow,
   type RequestRowMedia,
+  validateRow,
 } from './renderRequestRows';
 
-// One row, before a render is spent on it. The picture is composed on the server — brand faces
-// never reach a browser, and the render bucket sends no CORS headers — from the closest real
-// render of the format (this row's, the nearest row's in the set, else the template's newest):
-// every layer the row did not change stays that render's own pixels, and each changed layer is
-// set by the template's parser in the template's faces, in its colours, where After Effects will
-// put it. With no render anywhere the template is drawn whole. The slot-box wireframe below is
-// only what shows while the first composition is on its way, or when none can be made.
+// One row, before a render is spent on it, two ways.
+//
+// LIVE (the default) is drawn here, from the template's own scene, on every keystroke, colour drag
+// and picture swap — the row on screen and every row in the strip beneath it. Text is laid out in
+// the browser exactly as the template parser lays it out; see `livePreview.tsx`.
+//
+// EXACT is composed on the server — the render bucket sends no CORS headers — from the closest
+// real render of the format (this row's, the nearest row's in the set, else the template's
+// newest): every layer the row did not change stays that render's own pixels, and each changed
+// layer is set by the template's parser where After Effects will put it. With no render anywhere
+// the template is drawn whole. Live falls back to it for a row it cannot lay out, and says why.
+//
+// The slot-box wireframe below is only what shows while the first picture is on its way, or when
+// none can be made.
 
 // ponytail: no text measurement — a flat 0.55em glyph and 1.2em line stand in for the real face,
 // kerning and AE's paragraph box. The wireframe is the fallback; the composed preview measures.
@@ -53,6 +71,7 @@ const SAMPLE_FLOOR_RATIO = 0.4;
 const FLOOR_PX = 12;
 /** A keystroke waits this long before it costs a composition. */
 const COMPOSE_DEBOUNCE_MS = 400;
+const PROOF_DEBOUNCE_MS = 1500;
 
 type Box = ApiRenderTemplateLayout['boxes'][number];
 
@@ -405,15 +424,20 @@ const COMPOSE_FAILED = 'Composed preview unavailable — showing the measured bo
 export function RenderPreviewPanel({
   brandId,
   contract,
+  templateRef,
   rows,
   rowId,
   renderSetId,
+  onRowChange,
 }: {
   brandId: string;
   contract: ApiRenderTemplateContract;
+  templateRef?: string;
   rows: RequestRow[];
   rowId: string | null;
   renderSetId: string | null;
+  /** Previews another row: what a thumbnail in the strip does. No strip without it. */
+  onRowChange?: (rowId: string) => void;
 }): JSX.Element {
   const queryClient = useQueryClient();
   const templateKey = contract.template.key;
@@ -424,6 +448,7 @@ export function RenderPreviewPanel({
   // The format picked per template, so moving between rows keeps looking at the same format.
   const [picked, setPicked] = useState<Record<string, string>>({});
   const [atSec, setAtSec] = useState<number | null>(null);
+  const [view, setView] = useState<'live' | 'exact'>('live');
   const lastKey =
     rowId && renderSetId ? forgeQueryKeys.renderJobRowLatest(brandId, renderSetId, rowId) : null;
   // One row-scoped read per row, cached: the newest finished render of the row on screen.
@@ -469,7 +494,22 @@ export function RenderPreviewPanel({
   const values = row ? effectiveValues(rows, row.id) : {};
   const media = row ? effectiveMedia(rows, row.id) : {};
   const scopedIds = row ? effectiveOutputIds(rows, row.id) : [];
-  const formats = previewFormats({ outputs: contract.outputs, ratios: contract.template.ratios });
+  const { data: parsedProofFormats } = useQuery({
+    queryKey: ['forge-motion-proof-formats', brandId, contract.template.bindingId, templateKey],
+    queryFn: () =>
+      apiRendersApi.listMotionProofFormats(brandId, contract.template.bindingId, templateKey),
+    enabled:
+      contract.outputs.length === 0 &&
+      Boolean(
+        contract.template.motion &&
+          isMotion(contract.template.motion.durationSec, contract.template.motion.frameRate),
+      ),
+    staleTime: FORGE_STALE_MS.contract,
+  });
+  const formats = previewFormats({
+    outputs: contract.outputs.length ? contract.outputs : parsedProofFormats,
+    ratios: contract.template.ratios,
+  });
   // A row scoped to some outputs previews only those; ratio-only formats have no ids to scope by.
   const rowFormats = contract.outputs.length
     ? formats.filter((format) => scopedIds.length === 0 || scopedIds.includes(format.id))
@@ -491,6 +531,7 @@ export function RenderPreviewPanel({
           rowJob: lastJob,
           setJobs: setJobs ?? [],
           templateJobs: templateJobs ?? [],
+          templateUpdatedAt: contract.template.updatedAt,
           formats,
           formatId: entry.id,
         })
@@ -507,6 +548,55 @@ export function RenderPreviewPanel({
   // The picked format is composed once the row stops changing. The subject is part of what is
   // debounced, so switching rows never composes one row's values over another's render.
   const current = row && format ? planOf(format) : null;
+
+  // LIVE: one kit per format, every row painted from it, on every edit — no debounce.
+  const liveKit = useLiveKit({
+    brandId,
+    environment: contract.template.environment,
+    templateKey,
+    format,
+    atSec,
+    enabled: rowId !== null && view === 'live',
+  });
+  const kit = view === 'live' ? liveKit.data : undefined;
+  // The row's other formats, once this one's kit is in: a format chip then switches at once.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when a kit lands; the formats are read then.
+  useEffect(() => {
+    if (!liveKit.data) return;
+    for (const other of rowFormats) {
+      if (other.id === format?.id) continue;
+      void queryClient.prefetchQuery(
+        liveKitQuery({
+          brandId,
+          environment: contract.template.environment,
+          templateKey,
+          format: other,
+          atSec,
+        }),
+      );
+    }
+  }, [liveKit.data]);
+  const rowValues = useMemo(
+    () => (kit ? rows.map((entry) => ({ ...entry, values: effectiveValues(rows, entry.id) })) : []),
+    [kit, rows],
+  );
+  const pictures = useLivePictures(
+    brandId,
+    kit,
+    rowValues.length ? rowValues.map((entry) => entry.values) : [values],
+  );
+  const valuesKey = JSON.stringify(values);
+  const livePaint = useMemo(() => {
+    if (!kit || !row) return null;
+    const since = performance.now();
+    const paint = paintLive(kit, JSON.parse(valuesKey), pictures);
+    performance.measure('forge-live-paint', { start: since, end: performance.now() });
+    return { ...paint, since };
+  }, [kit, row, valuesKey, pictures]);
+  // Live cannot draw this row (a value it cannot lay out) or could not load: Exact stands in.
+  const liveFails =
+    view === 'live' && (liveKit.isError || (livePaint !== null && livePaint.unlaid.length > 0));
+  const exactShown = view === 'exact' || liveFails;
   const subject = [
     brandId,
     contract.template.environment,
@@ -519,6 +609,74 @@ export function RenderPreviewPanel({
   ];
   const live = JSON.stringify([subject, values]);
   const settled = useDebounce(live, COMPOSE_DEBOUNCE_MS);
+  const proofLive = JSON.stringify([
+    brandId,
+    contract.template.bindingId,
+    templateKey,
+    contract.template.contractHash,
+    templateRef ?? null,
+    row?.id ?? null,
+    format?.id ?? null,
+    format?.comp?.name ?? null,
+    values,
+  ]);
+  const proofSettled = useDebounce(proofLive, PROOF_DEBOUNCE_MS);
+  const proofReady =
+    proofSettled === proofLive &&
+    Boolean(row && format?.comp?.name && format.mediaType?.startsWith('video')) &&
+    Boolean(
+      contract.template.motion &&
+        isMotion(contract.template.motion.durationSec, contract.template.motion.frameRate),
+    ) &&
+    Object.keys(validateRow(contract.variables, values)).length === 0 &&
+    (renderSetId === null || row?.check.state === 'ready') &&
+    !row?.proposed;
+  const proofStart = useQuery({
+    queryKey: ['forge-motion-proof', proofSettled],
+    queryFn: (): Promise<ForgeMotionProof> =>
+      apiRendersApi.startMotionProof({
+        brandId,
+        bindingId: contract.template.bindingId,
+        templateKey,
+        contractHash: contract.template.contractHash,
+        ...(templateRef ? { templateRef } : {}),
+        outputId: format!.id,
+        comp: format!.comp!.name,
+        values,
+      }),
+    enabled: proofReady,
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  });
+  const proof = useQuery({
+    queryKey: ['forge-motion-proof-status', brandId, proofStart.data?.id],
+    queryFn: () => apiRendersApi.getMotionProof(brandId, proofStart.data!.id),
+    enabled: proofReady && Boolean(proofStart.data?.id),
+    refetchInterval: (query) =>
+      query.state.data?.state === 'ready'
+        ? 30 * 60_000
+        : query.state.data?.state === 'failed'
+          ? false
+          : 2000,
+    retry: false,
+  });
+  const currentProof = proofReady ? proof.data : null;
+  // The animation sketch: asked for, never automatic. It is drawn from the template in seconds —
+  // no render, no queue — and it pictures THESE values only: an edit hides it until asked again.
+  const sketchLive = JSON.stringify([brandId, templateKey, format?.id ?? null, values]);
+  const [sketchFor, setSketchFor] = useState<string | null>(null);
+  const sketch = useMutation({
+    mutationFn: (picked: PreviewFormat) =>
+      apiRendersApi.sketchPreview({
+        brandId,
+        environment: contract.template.environment,
+        templateKey,
+        format: { id: picked.id, ratio: picked.ratio, comp: picked.comp?.name ?? null },
+        values,
+        fps: 8,
+      }),
+  });
+  const currentSketch = sketch.data && sketchFor === sketchLive ? sketch.data : null;
   const settledValues = (() => {
     const [settledSubject, settledRow] = JSON.parse(settled) as [unknown[], unknown];
     return sameSubject([...settledSubject, null], [...subject, null])
@@ -536,23 +694,26 @@ export function RenderPreviewPanel({
   const composeKey = composeKeyOf(subject, settled);
   const composed = useQuery({
     queryKey: composeKey,
-    queryFn: (): Promise<ForgeRenderPreview> =>
-      apiRendersApi.composePreview({
-        brandId,
-        environment: contract.template.environment,
-        templateKey,
-        format: {
-          id: (format as PreviewFormat).id,
-          ratio: (format as PreviewFormat).ratio,
-          comp: (format as PreviewFormat).comp?.name ?? null,
+    queryFn: ({ signal }): Promise<ForgeRenderPreview> =>
+      apiRendersApi.composePreview(
+        {
+          brandId,
+          environment: contract.template.environment,
+          templateKey,
+          format: {
+            id: (format as PreviewFormat).id,
+            ratio: (format as PreviewFormat).ratio,
+            comp: (format as PreviewFormat).comp?.name ?? null,
+          },
+          values: settledValues ?? {},
+          ...(atSec !== null ? { atSec } : {}),
+          backdrop: current?.backdrop
+            ? { jobId: current.backdrop.job.id, fileName: current.backdrop.file.fileName }
+            : null,
         },
-        values: settledValues ?? {},
-        ...(atSec !== null ? { atSec } : {}),
-        backdrop: current?.backdrop
-          ? { jobId: current.backdrop.job.id, fileName: current.backdrop.file.fileName }
-          : null,
-      }),
-    enabled: needsCompose && settledValues !== null,
+        signal,
+      ),
+    enabled: exactShown && needsCompose && settledValues !== null,
     staleTime: Number.POSITIVE_INFINITY,
     retry: false,
     // Typing keeps the last settled picture on screen; another row or format never borrows it.
@@ -601,6 +762,7 @@ export function RenderPreviewPanel({
     if (!data) return null;
     return {
       mode: 'preview',
+      badge: 'Layout frame',
       at: data.source === 'render' ? (backdrop?.job.finishedAt ?? null) : null,
       basedOn:
         data.source === 'render'
@@ -618,6 +780,7 @@ export function RenderPreviewPanel({
   /** A render made with exactly these values is the preview as it stands. */
   const unchangedFrame = (backdrop: Backdrop): PreviewRepaint => ({
     mode: 'preview',
+    badge: backdrop.job.test === false ? 'Final render' : 'Previous render',
     at: backdrop.job.finishedAt ?? backdrop.job.updatedAt,
     basedOn: backdrop.job.label ?? backdrop.job.templateName,
     notes: ['same values'],
@@ -641,8 +804,85 @@ export function RenderPreviewPanel({
       plan.backdrop && plan.known && plan.changed.length === 0 && atSec === null
         ? unchangedFrame(plan.backdrop)
         : composedPreview;
-    const own = lastJob ? fileForFormat(lastJob.outputs, formats, entry.id) : null;
+    const own =
+      lastJob && currentTemplateJob(lastJob, contract.template.updatedAt)
+        ? fileForFormat(lastJob.outputs, formats, entry.id)
+        : null;
     let frame: PreviewFrame;
+    if (entry.id === format?.id && currentProof?.state === 'ready' && currentProof.signedUrl) {
+      frame = {
+        mode: 'preview',
+        at: null,
+        basedOn: null,
+        badge: 'Full animation proof',
+        caption: `After Effects · ${currentProof.durationSec?.toFixed(1)}s · ${currentProof.frameRate?.toFixed(1)} fps · ${currentProof.hasAudio ? 'audio' : 'no audio'}`,
+        node: (
+          <video
+            controls
+            preload="metadata"
+            src={currentProof.signedUrl}
+            className="size-full object-contain"
+          >
+            <track kind="captions" />
+          </video>
+        ),
+      };
+      return { frame, warning: null };
+    }
+    if (entry.id === format?.id && currentSketch) {
+      frame = {
+        mode: 'preview',
+        at: null,
+        basedOn: null,
+        badge: 'Animation sketch',
+        caption: [
+          `Drawn from the template · ${currentSketch.window[0].toFixed(1)}–${currentSketch.window[1].toFixed(1)}s · ${currentSketch.frames} frames`,
+          ...currentSketch.notes,
+        ].join(' · '),
+        node: (
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            controls
+            src={currentSketch.video}
+            className="size-full object-contain"
+          >
+            <track kind="captions" />
+          </video>
+        ),
+      };
+      return { frame, warning: null };
+    }
+    if (entry.id === format?.id && view === 'live' && !liveFails) {
+      if (livePaint) {
+        frame = {
+          mode: 'preview',
+          at: null,
+          basedOn: null,
+          badge: 'Live',
+          caption: ['Drawn live from the template', ...livePaint.notes].join(' · '),
+          node: (
+            <LiveImage
+              svg={livePaint.svg}
+              alt="Live preview"
+              since={livePaint.since}
+              className="size-full object-contain"
+            />
+          ),
+        };
+        return {
+          frame,
+          warning:
+            livePaint.overflows.map((label) => `${label} overflows its box`).join(' · ') || null,
+        };
+      }
+      frame = drawing
+        ? { mode: 'estimate', node: drawing.node, caption: 'Loading the live preview…' }
+        : { mode: 'none', message: 'Loading the live preview…' };
+      return { frame, warning: drawing?.overflows.join(' · ') || null };
+    }
     if (lastJob && own && atSec === null) {
       const ownBackdrop = plan.backdrop?.job.id === lastJob.id;
       const revisionStale =
@@ -653,6 +893,7 @@ export function RenderPreviewPanel({
       const stale = ownBackdrop && plan.known ? plan.changed.length > 0 : revisionStale;
       frame = {
         mode: 'rendered',
+        badge: `${lastJob.test === false ? 'Final render' : 'Previous render'}${stale ? ' · before latest edits' : ''}`,
         at: lastJob.finishedAt ?? lastJob.updatedAt,
         stale,
         node:
@@ -706,15 +947,47 @@ export function RenderPreviewPanel({
           ]
         : (drawing?.overflows ?? [])),
     ];
-    return { frame, warning: problems.join(' · ') || null };
+    // Live stood down for this row: say why, once, beside what stands in for it.
+    const liveProblem =
+      entry.id === format?.id && liveFails
+        ? `Live preview unavailable — ${liveKit.isError ? 'the template scene could not be read' : livePaint?.unlaid.join('; ')}`
+        : null;
+    return { frame, warning: [liveProblem, ...problems].filter(Boolean).join(' · ') || null };
   };
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 p-2 text-xs">
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex items-center justify-between gap-2">
         <span className="truncate font-medium">{row.label.trim() || 'Untitled'}</span>
-        {/* What this template DELIVERS. A one-frame comp and a 15s one draw the same boxes. */}
-        {motion ? <span className="shrink-0 text-2xs text-muted-foreground">{motion}</span> : null}
+        <div className="flex shrink-0 items-center gap-2">
+          {/* What this template DELIVERS. A one-frame comp and a 15s one draw the same boxes. */}
+          {motion ? <span className="text-2xs text-muted-foreground">{motion}</span> : null}
+          <ToggleGroup
+            aria-label="Preview"
+            size="sm"
+            variant="outline"
+            value={view}
+            // A pressed item pressed again reports no value; the view stays where it was.
+            onValueChange={(next: string) => {
+              if (next === 'live' || next === 'exact') setView(next);
+            }}
+          >
+            <ToggleGroupItem
+              value="live"
+              title="Drawn in the browser from the template, as you type"
+              className="px-2 text-2xs"
+            >
+              Live
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="exact"
+              title="Composed on the server over the closest real render"
+              className="px-2 text-2xs"
+            >
+              Exact
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
       </div>
       {contract.publishCheck && contract.publishCheck.state !== 'pass' ? (
         <details className="rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-2xs">
@@ -760,7 +1033,95 @@ export function RenderPreviewPanel({
       ) : (
         <p className="m-0 text-muted-foreground">This template has no measured layout to draw.</p>
       )}
-      {contract.template.motion &&
+      {kit && onRowChange && rowValues.length > 1 ? (
+        <VariationStrip
+          kit={kit}
+          rows={rowValues}
+          pictures={pictures}
+          selectedId={row.id}
+          onSelect={onRowChange}
+        />
+      ) : null}
+      {format?.comp &&
+      format.mediaType?.startsWith('video') &&
+      contract.template.motion &&
+      isMotion(contract.template.motion.durationSec, contract.template.motion.frameRate) ? (
+        <div aria-live="polite" className="shrink-0 text-2xs text-muted-foreground">
+          <span>
+            Full animation proof · {format.label} · source{' '}
+            {currentProof?.templateCommitSha?.slice(0, 8) ??
+              currentProof?.templateSourceSha256.slice(0, 8) ??
+              'checking'}{' '}
+            ·{' '}
+            {currentProof?.state === 'ready'
+              ? 'matches current values'
+              : proofReady
+                ? 'current values submitted'
+                : 'updating for current values'}
+          </span>
+          {proofStart.isError ? (
+            <button
+              type="button"
+              className="ml-2 underline"
+              onClick={() => void proofStart.refetch()}
+            >
+              Retry proof: {String(proofStart.error)}
+            </button>
+          ) : null}
+          {proof.isError ? (
+            <button type="button" className="ml-2 underline" onClick={() => void proof.refetch()}>
+              Retry status: {String(proof.error)}
+            </button>
+          ) : null}
+          {currentProof?.state === 'failed' ? (
+            <button
+              type="button"
+              className="ml-2 underline"
+              onClick={async () => {
+                await proofStart.refetch();
+                await proof.refetch();
+              }}
+            >
+              Retry proof: {currentProof.error}
+            </button>
+          ) : null}
+          {currentProof && currentProof.state !== 'ready' && currentProof.state !== 'failed' ? (
+            <span className="ml-2">
+              {currentProof.state} {currentProof.progressPct ?? 0}%
+            </span>
+          ) : null}
+          {!currentProof && proofReady && !proofStart.isError ? (
+            <span className="ml-2">Preparing proof…</span>
+          ) : null}
+        </div>
+      ) : null}
+      {format &&
+      contract.template.motion &&
+      isMotion(contract.template.motion.durationSec, contract.template.motion.frameRate) ? (
+        <div className="flex shrink-0 items-center gap-2 text-2xs text-muted-foreground">
+          <button
+            type="button"
+            className="underline disabled:no-underline disabled:opacity-60"
+            disabled={sketch.isPending}
+            onClick={() => {
+              setSketchFor(sketchLive);
+              sketch.mutate(format);
+            }}
+          >
+            {sketch.isPending
+              ? 'Sketching the animation…'
+              : currentSketch
+                ? 'Sketch again'
+                : 'Sketch the animation'}
+          </button>
+          <span>drawn from the template in seconds · no render</span>
+          {sketch.isError && sketchFor === sketchLive ? (
+            <span>· Sketch unavailable: {String(sketch.error)}</span>
+          ) : null}
+        </div>
+      ) : null}
+      {currentProof?.state !== 'ready' &&
+      contract.template.motion &&
       isMotion(contract.template.motion.durationSec, contract.template.motion.frameRate) ? (
         <label className="flex shrink-0 items-center gap-2 text-2xs text-muted-foreground">
           <span>Frame</span>

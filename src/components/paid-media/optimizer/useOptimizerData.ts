@@ -18,6 +18,7 @@ import {
   type AdsetAd,
   AdsetAdsResponseSchema,
   type AdsetCreativeWinRateRow,
+  type AdsetTargeting,
   type ApplyAdsetStatusRequest,
   type ApplyAdsetStatusResponse,
   ApplyAdsetStatusResponseSchema,
@@ -46,6 +47,7 @@ import {
   type CycleRunReport,
   CycleRunReportSchema,
   type CycleSkipReason,
+  type EfficiencySeriesPoint,
   type EnrollRequest,
   type EnrollResult,
   EnrollResultSchema,
@@ -81,7 +83,14 @@ import {
   TimelineEventSchema,
   type UpdatePortfolioPatch,
 } from '@continuum/contracts';
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  type QueryClient,
+  useInfiniteQuery,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
@@ -681,7 +690,15 @@ export type RunUnavailableKind =
  *  indistinguishable from an unreachable service, so all three outcomes collapsed into one
  *  message: "Optimizer service not live yet". It was true in none of them. */
 export type RunCycleOutcome =
-  | { status: 'ran'; run: RunCycleResponse }
+  | {
+      status: 'ran';
+      run: RunCycleResponse;
+      /** The service handed back the run that was ALREADY on screen. optimizer_record_cycle
+       *  keeps one run per portfolio per UTC day (`on conflict (portfolio_id, utc_day) do
+       *  nothing` returns the existing id), so a second Run now the same day scores nothing
+       *  new. Present only when true. */
+      alreadyScoredToday?: true;
+    }
   | { status: 'skipped'; reason: CycleSkipReason; run: RunCycleResponse }
   | { status: 'unavailable'; kind: RunUnavailableKind };
 
@@ -706,6 +723,8 @@ async function runCycle(
   portfolioId: string,
   brandId?: string,
   accountId?: string | null,
+  /** latest_run.id on screen when Run now was pressed. */
+  runIdOnScreen?: string | null,
 ): Promise<RunCycleOutcome> {
   // brandId + accountId scope the run to a brand/account the caller can access —
   // the optimizer-run edge verifies them (mirrors optimizer-suggest). Omitted keys
@@ -725,6 +744,7 @@ async function runCycle(
     // LOUDLY: swallowing it into a silent null is what hid this exact bug for weeks.
     console.error('optimizer-run returned a body that does not match RunCycleResponseSchema', {
       issues: parsed.error.issues,
+      body: data,
     });
     return { status: 'unavailable', kind: 'malformed' };
   }
@@ -737,7 +757,19 @@ async function runCycle(
     console.error('optimizer-run returned runId:null with no skip reason', { run });
     return { status: 'unavailable', kind: 'malformed' };
   }
+  if (runIdOnScreen && run.runId === runIdOnScreen) {
+    return { status: 'ran', run, alreadyScoredToday: true };
+  }
   return { status: 'ran', run };
+}
+
+/** The latest_run.id of the performance report currently cached for a portfolio. */
+function cachedLatestRunId(queryClient: QueryClient, portfolioId: string): string | null {
+  const report = queryClient.getQueryData<CycleRunReport | null>(
+    optimizerQueryKeys.performance(portfolioId),
+  );
+  const id = report?.latest_run?.id;
+  return typeof id === 'string' ? id : null;
 }
 
 /** Convert a CBO ("Advantage Campaign Budget") campaign to ad-set (ABO) budgets via
@@ -1034,6 +1066,7 @@ const EMPTY_RENEWALS: RenewalTask[] = [];
 const EMPTY_LOGS: OptimizerLogRow[] = [];
 const EMPTY_ACTIONS: OptimizerActionFeedRow[] = [];
 const EMPTY_SNAPSHOTS: AdSetSnapshot[] = [];
+const EMPTY_TARGETING: AdsetTargeting[] = [];
 const EMPTY_ENROLLED: PortfolioAdset[] = [];
 const EMPTY_ACCOUNT_ENROLLMENTS: AccountEnrollment[] = [];
 const EMPTY_TIMELINE_EVENTS: TimelineEvent[] = [];
@@ -1139,8 +1172,8 @@ export function useOptimizerAdAccounts(brandId: string) {
   });
 }
 
-/** Resolve the display currency for a specific ad account (falls back to USD in
- *  the formatter when the account row has no currency yet). */
+/** Resolve the display currency for a specific ad account. Null when the account row carries
+ *  none — the formatters print bare figures for it rather than claiming dollars. */
 export function useAdAccountCurrency(brandId: string, adAccountId: string | null): string | null {
   const { data } = useOptimizerAdAccounts(brandId);
   if (!adAccountId) return null;
@@ -1202,6 +1235,37 @@ function tolerantRows<T>(schema: z.ZodType<T>) {
     );
 }
 
+/**
+ * Whether today's read can be asked for again, and what it is doing right now.
+ *
+ * `state` describes TODAY's row, which is not necessarily the composition being shown: a
+ * re-read that is queued leaves yesterday's words on screen, dated, rather than blanking the
+ * section. `stalled` is a row a dead worker left behind that nothing will ever re-claim.
+ *
+ * The whole block defaults to null, and that is the deploy-ordering case, not a bug: the
+ * Frontend promotes before the migration is applied, `optimizer_get_account_read` answers
+ * without a `refresh` key, and a screen that cannot ask must offer nothing rather than a
+ * control that silently fails.
+ */
+export const AccountReadRefreshSchema = z
+  .object({
+    state: z.enum(['none', 'queued', 'generating', 'stalled', 'ready', 'failed']).catch('none'),
+    requested_at: z.string().nullable().catch(null),
+    requests_used: z.number().catch(0),
+    requests_left: z.number().catch(0),
+    can_request: z.boolean().catch(false),
+    /** When the cooldown lifts. Null unless `reason` is `too_soon`. */
+    retry_after: z.string().nullable().catch(null),
+    reason: z
+      .enum(['already_running', 'too_soon', 'daily_limit', 'no_active_portfolio'])
+      .nullable()
+      .catch(null),
+  })
+  .nullable()
+  .catch(null);
+
+export type AccountReadRefresh = z.infer<typeof AccountReadRefreshSchema>;
+
 export const AccountReadEnvelopeSchema = z
   .object({
     utc_day: z.string().nullable().default(null),
@@ -1239,10 +1303,14 @@ export const AccountReadEnvelopeSchema = z
       .nullable()
       .catch(null),
     ready_at: z.string().nullable().default(null),
+    refresh: AccountReadRefreshSchema.default(null),
   })
   .nullable();
 
 export type AccountReadEnvelope = z.infer<typeof AccountReadEnvelopeSchema>;
+
+/** A queued or running re-read is worth checking on; anything settled is not. */
+const REFRESH_IN_FLIGHT: ReadonlySet<string> = new Set(['queued', 'generating']);
 
 async function fetchAccountRead(
   brandId: string,
@@ -1256,13 +1324,74 @@ async function fetchAccountRead(
   return AccountReadEnvelopeSchema.catch(null).parse(data ?? null);
 }
 
+/** The worker sweeps every ACCOUNT_READ_SWEEP_MS (5 min), so a queued re-read is minutes
+ *  away, not seconds. Polling stops on its own: 45 ticks is a quarter of an hour, after which
+ *  a row that is still `queued` is a worker problem and no amount of asking will fix it. */
+const ACCOUNT_READ_POLL_MS = 20_000;
+const ACCOUNT_READ_POLL_MAX_TICKS = 45;
+
 export function useOptimizerAccountRead(brandId: string, adAccountId: string | null) {
-  return useOptimizerRead({
+  const queryClient = useQueryClient();
+  const query = useOptimizerRead({
     queryKey: optimizerQueryKeys.accountRead(brandId, adAccountId ?? 'none'),
     queryFn: () => fetchAccountRead(brandId, adAccountId as string),
     empty: null as AccountReadEnvelope,
     enabled: Boolean(brandId && adAccountId),
     staleTime: FIVE_MINUTES,
+  });
+
+  // A re-read someone asked for lands minutes later, in another process. Without this the
+  // screen would keep saying "re-reading" until the person reloaded the page — which reads
+  // exactly like a request that was swallowed.
+  const inFlight = REFRESH_IN_FLIGHT.has(query.data?.refresh?.state ?? 'none');
+  useEffect(() => {
+    if (!inFlight) return;
+    const key = optimizerQueryKeys.accountRead(brandId, adAccountId ?? 'none');
+    let ticks = 0;
+    const timer = globalThis.setInterval(() => {
+      ticks += 1;
+      if (ticks > ACCOUNT_READ_POLL_MAX_TICKS) {
+        globalThis.clearInterval(timer);
+        return;
+      }
+      // `exact` because the approvals query hangs off this key as a prefix, and it has not
+      // changed just because a read is being recomposed.
+      void queryClient.invalidateQueries({ queryKey: key, exact: true });
+    }, ACCOUNT_READ_POLL_MS);
+    return () => globalThis.clearInterval(timer);
+  }, [inFlight, brandId, adAccountId, queryClient]);
+
+  return query;
+}
+
+/**
+ * Asking for today's read to be composed again.
+ *
+ * The read is a daily snapshot written by a worker at ~00:03 UTC and then served frozen, so a
+ * fix deployed at any hour was invisible until the next nightly run. This is the door.
+ *
+ * It costs a model call, so the server keeps the floor — a 30-minute cooldown and three
+ * re-reads per account per UTC day — and answers with what it decided. The button reads
+ * `can_request` off the envelope rather than guessing, so it never offers a re-read the
+ * server will refuse.
+ */
+export function useRequestAccountRead(brandId: string, adAccountId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<AccountReadRefresh> => {
+      const { data, error } = await getClient().rpc('optimizer_request_account_read', {
+        p_brand_id: brandId,
+        p_ad_account_id: adAccountId,
+      } as never);
+      if (error) throw new Error(`Could not ask for a fresh read: ${rpcErrorText(error)}`);
+      return AccountReadRefreshSchema.parse(data ?? null);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: optimizerQueryKeys.accountRead(brandId, adAccountId ?? 'none'),
+        exact: true,
+      });
+    },
   });
 }
 
@@ -1367,6 +1496,60 @@ export function useOptimizerCpaSeries(
     empty: EMPTY_CPA,
     enabled: Boolean(portfolioId),
     staleTime: FIVE_MINUTES,
+  });
+}
+
+/** One efficiency series per portfolio, in the order the ids were given. */
+export type PortfolioEfficiencySeries = {
+  series: EfficiencySeriesPoint[][];
+  /** True while any portfolio's series is still on its way. */
+  pending: boolean;
+  /** How many portfolios' series could not be read. A sum over the rest is not the account. */
+  failed: number;
+  /** Ask again for the ones that failed. */
+  retryFailed: () => void;
+};
+
+function combineEfficiencySeries(
+  results: Array<{
+    data: EfficiencySeriesPoint[] | undefined;
+    isPending: boolean;
+    isError: boolean;
+    refetch: () => unknown;
+  }>,
+): PortfolioEfficiencySeries {
+  const failed = results.filter((result) => result.isError);
+  return {
+    series: results.map((result) => result.data ?? EMPTY_CPA),
+    pending: results.some((result) => result.isPending),
+    failed: failed.length,
+    retryFailed: () => {
+      for (const result of failed) void result.refetch();
+    },
+  };
+}
+
+/**
+ * The efficiency series of every listed portfolio at once — the Overview's source for spend,
+ * results and cost per result over the window, per portfolio and summed across the account.
+ *
+ * Same key and same limit as the detail's own read and the hover prefetch, so the three share
+ * one cache entry per portfolio and opening a portfolio paints from what the Overview fetched.
+ */
+export function useOptimizerPortfolioEfficiency(
+  portfolioIds: readonly string[],
+): PortfolioEfficiencySeries {
+  return useQueries({
+    queries: portfolioIds.map((portfolioId) => ({
+      queryKey: optimizerQueryKeys.cpaSeries(portfolioId),
+      queryFn: () => withReadTimeout(fetchCpaSeries(portfolioId, DEFAULT_CPA_SERIES_LIMIT)),
+      staleTime: FIVE_MINUTES,
+      gcTime: THIRTY_MINUTES,
+      // The Overview fires one of these per portfolio the moment the page mounts, which is
+      // also when the session is still settling; two retries ride that out where one did not.
+      retry: 2,
+    })),
+    combine: combineEfficiencySeries,
   });
 }
 
@@ -1797,6 +1980,7 @@ export function useOptimizerAccountSnapshots(
   return {
     ...query,
     data: query.data?.snapshots ?? EMPTY_SNAPSHOTS,
+    targeting: query.data?.targeting ?? EMPTY_TARGETING,
     fetchedAt: query.data?.fetchedAt ?? null,
     budgetSummary: query.data?.budgetSummary ?? null,
     refresh,
@@ -2211,7 +2395,8 @@ export function useOptimizerMutations(brandId: string, adAccountId: string | nul
   });
 
   const run = useMutation({
-    mutationFn: (portfolioId: string) => runCycle(portfolioId, brandId, adAccountId),
+    mutationFn: (portfolioId: string) =>
+      runCycle(portfolioId, brandId, adAccountId, cachedLatestRunId(queryClient, portfolioId)),
     // Only a cycle that actually persisted a run changed anything worth re-reading. A skip
     // wrote nothing, and an unreachable service wrote nothing either.
     onSuccess: (outcome) => {

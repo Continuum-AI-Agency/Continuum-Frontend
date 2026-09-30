@@ -59,18 +59,18 @@ export function AutopilotScopesField({
                     <Loader2Icon className="size-3 animate-spin text-muted-foreground" />
                   ) : null}
                 </Label>
-                <p className="text-2xs text-muted-foreground">{copy.body}</p>
+                <p className="text-xs text-muted-foreground">{copy.body}</p>
               </div>
             </li>
           );
         })}
       </ul>
-      <p className="text-2xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         Everything is still recommended in the queue. Nothing a scope creates spends until you
         activate it. Stop halts all of these.
       </p>
       {noActor ? (
-        <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-2xs text-amber-600 dark:text-amber-400">
+        <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-600 dark:text-amber-400">
           Autopilot needs a person to act as. Toggle any scope once so your account is recorded as
           the approver.
         </p>

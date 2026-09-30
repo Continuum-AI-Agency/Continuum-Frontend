@@ -8,19 +8,12 @@ Object.assign(global.window, {
   TypeError: globalThis.TypeError,
 });
 
-const createClientRenderJobMock = mock(() => Promise.resolve({}));
-const signHyperframeCompositionMock = mock(() =>
+const signHyperframeAssetMock = mock(() =>
   Promise.resolve<string | null>('https://signed.example.com/composition.html'),
 );
 
-mock.module('@/lib/api/clientRenderJobs.client', () => ({
-  createClientRenderJob: createClientRenderJobMock,
-}));
-mock.module('@/lib/client-render/ClientRenderProvider', () => ({
-  openClientRenderInbox: mock(() => undefined),
-}));
 mock.module('@/lib/organic/hyperframeSign', () => ({
-  signHyperframeComposition: signHyperframeCompositionMock,
+  signHyperframeAsset: signHyperframeAssetMock,
 }));
 
 const { HyperFramePlayer } = await import('./HyperFramePlayer');
@@ -48,8 +41,7 @@ function hyperframeDraft(
 
 afterEach(() => {
   cleanup();
-  createClientRenderJobMock.mockClear();
-  signHyperframeCompositionMock.mockClear();
+  signHyperframeAssetMock.mockClear();
 });
 
 afterAll(() => mock.restore());
@@ -88,7 +80,65 @@ describe('HyperFramePlayer shader preview', () => {
     expect(video.tagName).toBe('VIDEO');
     expect(video.getAttribute('src')).toBe(mp4Url);
     expect(document.querySelector('iframe')).toBeNull();
-    expect(signHyperframeCompositionMock).not.toHaveBeenCalled();
+    expect(signHyperframeAssetMock).not.toHaveBeenCalled();
+  });
+
+  it('plays a server-rendered film from its GCS pointer', async () => {
+    signHyperframeAssetMock.mockImplementationOnce(() =>
+      Promise.resolve('https://storage.googleapis.com/hf/film.mp4?sig'),
+    );
+    render(
+      <HyperFramePlayer
+        brandId="brand-1"
+        draft={hyperframeDraft({
+          generated: true,
+          compositionId: 'composition-1',
+          bucket: 'gs://hf',
+          htmlPath: 'brand-1/organic/composition-1/composition.html',
+          mp4Bucket: 'gs://hf',
+          mp4Path: 'brand-1/organic/composition-1/film.mp4',
+          mp4Status: 'ready',
+          shaderStack: {
+            version: 1,
+            effects: [
+              { effectId: 'vignette', enabled: true, parameters: { amount: 0.65 }, keyframes: [] },
+            ],
+          },
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play HyperFrame: Shader preview' }));
+
+    await waitFor(() => expect(screen.getByLabelText('Shader preview')).toBeTruthy());
+    expect(screen.getByLabelText('Shader preview').getAttribute('src')).toBe(
+      'https://storage.googleapis.com/hf/film.mp4?sig',
+    );
+    expect(signHyperframeAssetMock).toHaveBeenCalledWith({
+      brandId: 'brand-1',
+      bucket: 'gs://hf',
+      path: 'brand-1/organic/composition-1/film.mp4',
+    });
+  });
+
+  it('shows the render error the server filed on the draft', () => {
+    render(
+      <HyperFramePlayer
+        brandId="brand-1"
+        draft={hyperframeDraft({
+          generated: true,
+          compositionId: 'composition-1',
+          bucket: 'gs://hf',
+          htmlPath: 'brand-1/organic/composition-1/composition.html',
+          mp4Status: 'failed',
+          error: 'The film shows nothing: all 4 sampled frames are blank.',
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByText('The film shows nothing: all 4 sampled frames are blank.'),
+    ).toBeTruthy();
   });
 
   it('does not expose an unshaded iframe while the shader render is pending', async () => {
@@ -121,6 +171,6 @@ describe('HyperFramePlayer shader preview', () => {
       expect(screen.getByText('Shader preview is still rendering.')).toBeTruthy(),
     );
     expect(document.querySelector('iframe')).toBeNull();
-    expect(signHyperframeCompositionMock).not.toHaveBeenCalled();
+    expect(signHyperframeAssetMock).not.toHaveBeenCalled();
   });
 });

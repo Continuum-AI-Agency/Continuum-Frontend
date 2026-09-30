@@ -1,5 +1,7 @@
 import {
   type ClientRenderJob,
+  type EditorAgentTurnRequest,
+  type EditorAgentTurnResponse,
   clientRenderMutationResponseSchema,
   type EditorCommandBatch,
   type EditorGenerationBatch,
@@ -8,6 +10,7 @@ import {
   type EditorProjectBinding,
   type EditorProjectV2,
   editorGenerationBatchResponseSchema,
+  editorAgentTurnResponseSchema,
   editorProductionSummarySchema,
   editorProjectResponseSchema,
   listEditorGenerationJobsResponseSchema,
@@ -62,6 +65,19 @@ export async function getVideoProject(projectId: string): Promise<EditorProjectV
     cache: 'no-store',
   });
   return response.project;
+}
+
+export function sendVideoProjectAgentTurn(
+  projectId: string,
+  request: EditorAgentTurnRequest,
+): Promise<EditorAgentTurnResponse> {
+  return http.request<EditorAgentTurnResponse>({
+    path: `${base(projectId)}/agent/turn`,
+    method: 'POST',
+    body: request,
+    schema: editorAgentTurnResponseSchema,
+    cache: 'no-store',
+  });
 }
 
 export function getVideoProjectSummary(projectId: string): Promise<EditorProductionSummary> {

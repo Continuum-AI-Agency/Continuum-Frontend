@@ -359,6 +359,23 @@ export const apiRenderTemplateFontSchema = z
     held: z.boolean(),
     /** Whose licence the held face is under — the brand's own upload, or a house/vendor face. */
     scope: fontLicenceScopeSchema.optional(),
+    /**
+     * Present only when a person accepted a face we hold in place of one we do not.
+     *
+     * This schema is `.strict()` and it validates the render contract, so it has to admit the
+     * same two fields `templateFontStatusSchema` can now produce: the moment anything hands
+     * `templateFontStatuses` its substitution map, a strict schema without them refuses the
+     * whole contract and the template stops rendering rather than reporting a swap.
+     */
+    via: z.enum(['direct', 'substitute']).optional(),
+    substitutedBy: z
+      .object({
+        fontId: z.string().uuid(),
+        family: z.string().min(1),
+        weight: z.number().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type ApiRenderTemplateFont = z.infer<typeof apiRenderTemplateFontSchema>;

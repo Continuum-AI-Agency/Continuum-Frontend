@@ -128,11 +128,11 @@ export function PickerToolbar({
                       >
                         <span className="truncate">{item.name}</span>
                         {!item.eligible ? (
-                          <span className="ml-auto shrink-0 text-2xs text-warning">
+                          <span className="ml-auto shrink-0 text-xs text-warning">
                             {item.providerStatus?.replaceAll('_', ' ').toLowerCase() ?? 'held'}
                           </span>
                         ) : item.mismatch ? (
-                          <span className="ml-auto shrink-0 text-2xs text-warning">wrong KPI</span>
+                          <span className="ml-auto shrink-0 text-xs text-warning">wrong KPI</span>
                         ) : null}
                       </CommandItem>
                     ))}
@@ -174,7 +174,7 @@ export function PickerToolbar({
                 value={chip.value}
                 title={chip.hint}
                 aria-label={chip.hint}
-                className="h-6 rounded-full border px-2 text-2xs data-[state=on]:bg-muted"
+                className="h-6 rounded-full border px-2 text-xs data-[state=on]:bg-muted"
               >
                 {chip.label}
               </ToggleGroupItem>
@@ -184,7 +184,7 @@ export function PickerToolbar({
 
         {/* The real fleet totals, always. A filter that hides rows without saying how many is
             how an operator concludes an account is empty. */}
-        <p className="text-2xs text-muted-foreground tabular-nums">
+        <p className="text-xs text-muted-foreground tabular-nums">
           {counts.total} ad sets · {counts.eligible} eligible · {counts.held} held
           {hasMismatch ? (
             <span className={cn('text-warning')}> · {counts.mismatch} wrong KPI</span>

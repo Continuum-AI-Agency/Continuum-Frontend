@@ -8,14 +8,8 @@ export function registerDefaultClientRenderExecutors(): void {
   registerLazyClientRenderExecutor('creative_ops', () =>
     import('./executors/creativeOps').then((m) => m.executeCreativeOpsClientRender),
   );
-  registerLazyClientRenderExecutor('hyperframes_agent', () =>
-    import('./executors/hyperframes').then((m) => m.executeHyperframesClientRender),
-  );
   registerLazyClientRenderExecutor('mcp_clip_batch', () =>
     import('./executors/mcpClipBatch').then((m) => m.executeMcpClipBatchClientRender),
-  );
-  registerLazyClientRenderExecutor('organic_hyperframe', () =>
-    import('./executors/organicHyperframe').then((m) => m.executeOrganicHyperframeClientRender),
   );
   registerLazyClientRenderExecutor('planner_reel', () =>
     import('./executors/plannerReel').then((m) => m.executePlannerReelClientRender),

@@ -148,7 +148,9 @@ const environment = (bindingId: string, workspace: string, isDefault: boolean) =
 });
 
 let jobsFixture: ApiRenderJob[] = [];
-const prepareMasterDownload = mock(async () => ({ path: '/api/ai-studio/renders/master-downloads/test' }));
+const prepareMasterDownload = mock(async () => ({
+  path: '/api/ai-studio/renders/master-downloads/test',
+}));
 const masterDownloadStatus = mock(async () => ({ status: 'failed' as const }));
 let templatesFixture: Partial<ApiRenderTemplateSummary>[] = [];
 let clientTemplatesFixture: Partial<ApiRenderTemplateSummary>[] = [];
@@ -212,7 +214,8 @@ const rowOrder = () => {
 /** The brand's ledger opens on batches; its "Pieces" cell is what makes a row read as one. */
 const findBatchRow = async () =>
   waitFor(() => {
-    const row = screen.getAllByText(/^\d+ renders? · \d+ files?$/)
+    const row = screen
+      .getAllByText(/^\d+ renders? · \d+ files?$/)
       .map((element) => element.closest('tr'))
       .find((element): element is HTMLTableRowElement => element !== null);
     if (!row) throw new Error('Batch row is not in the table yet');
@@ -985,14 +988,25 @@ describe('RenderJobsGrid', () => {
 
   test('an MP4-only render offers on-demand MOV and MXF downloads for that exact output', async () => {
     const output = {
-      id: 'mp4-output', kind: 'video' as const, fileName: 'Story_9_16_ab12cd.mp4',
-      mimeType: 'video/mp4', url: 'https://cdn.test/Story_9_16_ab12cd.mp4',
-      width: null, height: null, assetId: null, versionId: null,
+      id: 'mp4-output',
+      kind: 'video' as const,
+      fileName: 'Story_9_16_ab12cd.mp4',
+      mimeType: 'video/mp4',
+      url: 'https://cdn.test/Story_9_16_ab12cd.mp4',
+      width: null,
+      height: null,
+      assetId: null,
+      versionId: null,
     };
     jobsFixture = [{ ...BASE, outputs: [output], label: 'Card 1', labelPath: ['Card 1'] }];
     render(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <RenderJobsGrid brandId={BRAND} formats={[{ id: 'story', label: 'Story', ratio: '9:16', width: 1080, height: 1920 }]} />
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <RenderJobsGrid
+          brandId={BRAND}
+          formats={[{ id: 'story', label: 'Story', ratio: '9:16', width: 1080, height: 1920 }]}
+        />
       </QueryClientProvider>,
     );
     fireEvent.click(await findBatchRow());
@@ -1002,9 +1016,88 @@ describe('RenderJobsGrid', () => {
     expect(screen.getByRole('button', { name: 'Generate MOV download' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Generate MXF download' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Generate MOV download' }));
-    await waitFor(() => expect(prepareMasterDownload).toHaveBeenCalledWith(BASE.id, {
-      brandId: BRAND, outputId: output.id, format: 'mov',
-    }));
-    expect((await screen.findByRole('alert')).textContent).toBe('MOV conversion failed. Try again.');
+    await waitFor(() =>
+      expect(prepareMasterDownload).toHaveBeenCalledWith(BASE.id, {
+        brandId: BRAND,
+        outputId: output.id,
+        format: 'mov',
+      }),
+    );
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'MOV conversion failed. Try again.',
+    );
+  }, 30_000);
+
+  test('the finished Base render shows its labeled Card A MP4 and master download actions', async () => {
+    const fileName = 'RENDER_Card_A_(Pre-Match)_qxlkb1c.mp4';
+    const output = {
+      id: 'card-a',
+      kind: 'video' as const,
+      fileName,
+      mimeType: 'video/mp4',
+      url: `https://cdn.test/${fileName}`,
+      width: null,
+      height: null,
+      assetId: null,
+      versionId: null,
+    };
+    jobsFixture = [{ ...BASE, outputs: [output], label: 'Base', labelPath: ['Base'] }];
+    const formats = [
+      { id: 'format-a', label: 'RENDER Card A (Pre-Match)', ratio: null, mediaType: 'MP4 Video (RGB)', width: null, height: null },
+      { id: 'format-b', label: 'RENDER Card B (Halftime)', ratio: null, mediaType: 'MP4 Video (RGB)', width: null, height: null },
+    ];
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <RenderJobsGrid brandId={BRAND} formats={formats} />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await findBatchRow());
+    fireEvent.click(await screen.findByText('Base'));
+    await screen.findByRole('heading', { name: 'Base' });
+    const preview = screen.getByRole('group', { name: 'Render preview' });
+    expect(preview.querySelector('video')?.getAttribute('src')).toBe(output.url);
+    expect(screen.getByRole('link', { name: 'Download MP4' }).getAttribute('href')).toBe(output.url);
+    expect(screen.getByRole('button', { name: 'Generate MOV download' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generate MXF download' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'RENDER Card B (Halftime)' }));
+    expect(preview.textContent).toContain('This job did not render this format.');
+  }, 30_000);
+
+  test('a finished file remains previewable and downloadable when no template format matches', async () => {
+    const fileName = 'Unexpected_Card_A_qxlkb1c.mp4';
+    const output = {
+      id: 'unmatched-video',
+      kind: 'video' as const,
+      fileName,
+      mimeType: 'video/mp4',
+      url: `https://cdn.test/${fileName}`,
+      width: null,
+      height: null,
+      assetId: null,
+      versionId: null,
+    };
+    jobsFixture = [{ ...BASE, outputs: [output], label: 'Base', labelPath: ['Base'] }];
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <RenderJobsGrid
+          brandId={BRAND}
+          formats={[
+            { id: 'card-a', label: 'RENDER Card A (Pre-Match)', ratio: null, width: null, height: null },
+            { id: 'card-b', label: 'RENDER Card B (Halftime)', ratio: null, width: null, height: null },
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await findBatchRow());
+    fireEvent.click(await screen.findByText('Base'));
+    const preview = screen.getByRole('group', { name: 'Render preview' });
+    expect(preview.querySelector('video')?.getAttribute('src')).toBe(output.url);
+    expect(screen.getByRole('link', { name: 'Download MP4' }).getAttribute('href')).toBe(output.url);
+    expect(screen.getByRole('button', { name: 'Generate MOV download' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generate MXF download' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'RENDER Card A (Pre-Match)' }));
+    expect(preview.textContent).toContain('Select the rendered file tab above.');
+    fireEvent.click(screen.getByRole('button', { name: fileName }));
+    expect(preview.querySelector('video')?.getAttribute('src')).toBe(output.url);
   }, 30_000);
 });

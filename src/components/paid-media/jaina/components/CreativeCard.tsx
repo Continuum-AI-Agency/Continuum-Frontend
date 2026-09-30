@@ -122,12 +122,12 @@ export function CreativeCard({ creative, index }: CreativeCardProps) {
             </p>
             <div className="flex shrink-0 flex-wrap justify-end gap-1">
               {creative.platform && (
-                <Badge variant="secondary" className="text-2xs capitalize">
+                <Badge variant="secondary" className="text-xs capitalize">
                   {creative.platform}
                 </Badge>
               )}
               {creative.format && (
-                <Badge variant="outline" className="text-2xs capitalize">
+                <Badge variant="outline" className="text-xs capitalize">
                   {creative.format}
                 </Badge>
               )}
@@ -145,7 +145,7 @@ export function CreativeCard({ creative, index }: CreativeCardProps) {
           )}
 
           {creative.call_to_action && (
-            <Badge variant="secondary" className="w-fit text-2xs">
+            <Badge variant="secondary" className="w-fit text-xs">
               {creative.call_to_action}
             </Badge>
           )}

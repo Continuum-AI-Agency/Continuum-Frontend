@@ -8,21 +8,41 @@
 // A scope toggle switches between this account's portfolios (the default — the card
 // stack below) and the brand-wide browser grouped by owning ad account. The toggle only
 // appears when the account filter is actually hiding something.
+//
+// Each card in the "This account" stack carries the same foot band the Overview's cards do:
+// today's best finding INSIDE that portfolio, in the vocabulary the account read speaks —
+// detector sentence, the detector's own figure, the shared money line. It is the same read,
+// under the same React Query key the Overview already warms, so arriving here from the
+// Overview costs nothing and arriving here first costs one read of a stored document.
+//
+// The brand-wide scope deliberately has NO band. Its rows span every ad account the brand
+// owns, and an account read is per ACCOUNT — a band there would mean one read per account
+// group to decorate a list whose entire job is to get you into a portfolio. That is a real
+// cost for a decoration, on the one view where the reader has already decided where to go.
 
-import type { PortfolioListItem } from '@continuum/contracts';
+import type { AccountCandidate, PortfolioListItem } from '@continuum/contracts';
+import { ACCOUNT_DETECTOR_META, clipLine } from '@continuum/contracts';
 import { ChevronDown, ChevronRight, Plus, RotateCcw } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import { ApplyModePill } from '../ApplyModePill';
-import { formatCurrency, humanize, portfolioLevelLabel } from '../format';
+import { figureProps, formatCurrency, humanize, portfolioLevelLabel } from '../format';
 import { pendingWorkCount } from '../reportModel';
-import { useOptimizerArchivedPortfolios, useOptimizerMutations } from '../useOptimizerData';
+import {
+  useOptimizerAccountRead,
+  useOptimizerArchivedPortfolios,
+  useOptimizerMutations,
+} from '../useOptimizerData';
+import { CalmRule, HeadlineFigure, MoneyLine } from './account/candidateHeadline';
 import { OptimizerPortfolioBrowser } from './OptimizerPortfolioBrowser';
+import { portfolioLeads } from './PortfolioRowCard';
 import type { PortfolioAccountGroup, PortfolioOpenPlan } from './portfolioAccounts';
+import { rosterLine, staleLine } from './portfolioStaleness';
+import { StalenessChips } from './StalenessChips';
 
 /** Which portfolios the sub-view is showing: only the selected ad account's (default), or
  *  every portfolio the brand owns, grouped by account. */
@@ -50,11 +70,18 @@ function PortfolioCard({
   currency,
   onOpenDetail,
   onPrefetch,
+  lead = null,
+  emphasis = false,
 }: {
   portfolio: PortfolioListItem;
   currency?: string | null;
   onOpenDetail: (portfolioId: string) => void;
   onPrefetch?: () => void;
+  /** Today's best finding inside this portfolio. Absent renders no band at all — a portfolio
+   *  with nothing to say says nothing, rather than an empty frame where a figure belongs. */
+  lead?: AccountCandidate | null;
+  /** True on the one card holding the account's top finding: the only rule that breathes. */
+  emphasis?: boolean;
 }) {
   return (
     <button
@@ -64,37 +91,73 @@ function PortfolioCard({
       onMouseEnter={onPrefetch}
       onFocus={onPrefetch}
       className={cn(
-        'flex w-full items-center justify-between gap-3 rounded-lg border border-border/70 bg-card px-4 py-3 text-left transition-colors',
+        'flex w-full flex-col gap-2 rounded-lg border border-border/70 bg-card px-4 py-3 text-left transition-colors',
         'hover:border-primary/50 hover:bg-accent/40',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
       )}
     >
-      <div className="min-w-0">
-        <p className="flex flex-wrap items-center gap-2 font-semibold text-sm tracking-tight">
-          <span className="truncate">{portfolio.name}</span>
-          <Badge variant="muted" className="text-3xs">
-            {portfolioLevelLabel(portfolio.level)}
-          </Badge>
-          <Badge variant="teal" className="text-3xs">
-            {humanize(portfolio.mode)}
-          </Badge>
-          <ApplyModePill
-            applyMode={portfolio.apply_mode}
-            autopilotPaused={portfolio.autopilot_paused}
-          />
-          {pendingWorkCount(portfolio) > 0 ? (
-            <Badge variant="secondary" className="text-3xs">
-              {pendingWorkCount(portfolio)} pending
+      <div className="flex w-full items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="flex flex-wrap items-center gap-2 font-semibold text-sm tracking-tight">
+            <span className="truncate">{portfolio.name}</span>
+            <Badge variant="muted" className="text-xs">
+              {portfolioLevelLabel(portfolio.level)}
             </Badge>
+            <Badge variant="teal" className="text-xs">
+              {humanize(portfolio.mode)}
+            </Badge>
+            <ApplyModePill
+              applyMode={portfolio.apply_mode}
+              autopilotPaused={portfolio.autopilot_paused}
+            />
+            {pendingWorkCount(portfolio) > 0 ? (
+              <Badge variant="secondary" className="text-xs">
+                {pendingWorkCount(portfolio)} pending
+              </Badge>
+            ) : null}
+          </p>
+          <p className="mt-1 text-muted-foreground text-xs tabular-nums">
+            {humanize(portfolio.objective)} · {portfolio.adset_count} ad{' '}
+            {portfolio.adset_count === 1 ? 'set' : 'sets'} ·{' '}
+            <span
+              {...figureProps(`portfolios.${portfolio.id}.daily`, portfolio.daily_total, currency)}
+            >
+              {formatCurrency(portfolio.daily_total, currency)}
+            </span>
+            /d
+          </p>
+          {staleLine(portfolio) || rosterLine(portfolio) ? (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <StalenessChips portfolio={portfolio} />
+            </div>
           ) : null}
-        </p>
-        <p className="mt-1 text-muted-foreground text-xs tabular-nums">
-          {humanize(portfolio.objective)} · {portfolio.adset_count} ad{' '}
-          {portfolio.adset_count === 1 ? 'set' : 'sets'} ·{' '}
-          {formatCurrency(portfolio.daily_total, currency)}/d
-        </p>
+        </div>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       </div>
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+
+      {lead ? (
+        <div
+          className="w-full space-y-1 border-border/60 border-t pt-2"
+          data-detector={lead.detector}
+          data-testid="portfolio-lead"
+        >
+          <p className="truncate text-xs text-muted-foreground">
+            {clipLine(ACCOUNT_DETECTOR_META[lead.detector]?.label ?? lead.detector)}
+          </p>
+          <HeadlineFigure
+            candidate={lead}
+            currency={currency ?? null}
+            figureKey={`portfolios.${portfolio.id}.lead`}
+            size="row"
+          />
+          <CalmRule play={emphasis} testId="portfolio-lead-rule" />
+          <MoneyLine
+            candidate={lead}
+            currency={currency ?? null}
+            figureKey={`portfolios.${portfolio.id}.lead`}
+          />
+        </div>
+      ) : null}
     </button>
   );
 }
@@ -135,7 +198,16 @@ function ArchivedPortfolios({
               <p className="text-muted-foreground text-xs">
                 {humanize(portfolio.objective)} · {portfolio.adset_count} ad{' '}
                 {portfolio.adset_count === 1 ? 'set' : 'sets'} ·{' '}
-                {formatCurrency(portfolio.daily_total, currency)}/d
+                <span
+                  {...figureProps(
+                    `portfolios.archived.${portfolio.id}.daily`,
+                    portfolio.daily_total,
+                    currency,
+                  )}
+                >
+                  {formatCurrency(portfolio.daily_total, currency)}
+                </span>
+                /d
               </p>
             </div>
             <Button
@@ -175,6 +247,14 @@ export function OptimizerPortfolios({
   onOpenAcrossAccounts,
 }: OptimizerPortfoliosProps) {
   const [scope, setScope] = useState<PortfolioBrowseScope>('account');
+  // The SAME query key the Overview warms, so arriving from there is a cache hit and this
+  // view never asks twice. No approvals read beside it: the band prints figures, and only a
+  // candidate's STATE moves under an approval.
+  const accountRead = useOptimizerAccountRead(brandId, adAccountId);
+  const { leads, emphasised } = useMemo(
+    () => portfolioLeads(accountRead.data?.read?.candidates ?? []),
+    [accountRead.data?.read?.candidates],
+  );
   // Offering "All accounts" when it shows exactly the same rows is noise, so the toggle
   // appears only once the account filter is genuinely holding portfolios back.
   const hasOtherAccountPortfolios = brandPortfolioCount > portfolios.length;
@@ -227,6 +307,8 @@ export function OptimizerPortfolios({
                 key={portfolio.id}
                 portfolio={portfolio}
                 currency={currency}
+                emphasis={portfolio.id === emphasised}
+                lead={leads.get(portfolio.id) ?? null}
                 onOpenDetail={onOpenDetail}
                 onPrefetch={
                   onPrefetchPortfolio ? () => onPrefetchPortfolio(portfolio.id) : undefined
