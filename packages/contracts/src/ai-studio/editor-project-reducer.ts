@@ -1270,6 +1270,10 @@ const applyTimelineCommand = (
         ...project,
         markers: [...command.markers].sort((left, right) => left.timeSec - right.timeSec),
       };
+    case 'set_brief': {
+      const { brief: _previous, ...rest } = project;
+      return command.brief ? { ...rest, brief: command.brief } : rest;
+    }
     default:
       return project;
   }

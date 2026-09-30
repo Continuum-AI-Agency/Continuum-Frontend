@@ -250,3 +250,60 @@ describe('whole-state undo', () => {
     expect(restored.markers).toEqual(before.markers);
   });
 });
+
+describe('first cuts from a brief', () => {
+  test('draft_cut defaults to one 30 s highlight with captions', () => {
+    const parsed = VIDEO_EDITOR_OPS.draft_cut.input.parse({
+      projectId: '00000000-0000-4000-8000-000000000000',
+      brief: 'A 30 s hook for the new membership',
+    });
+    expect(parsed).toMatchObject({
+      kind: 'highlight',
+      targetDurationSec: 30,
+      variants: 1,
+      captions: true,
+    });
+    expect(VIDEO_EDITOR_OPS.draft_cut.input.safeParse({ ...parsed, variants: 6 }).success).toBe(
+      false,
+    );
+  });
+
+  test('set_brief tags a project with its brief and clears it again', () => {
+    const user = { actorId: 'user-1', actorType: 'user' as const };
+    const project = withFootage(blank());
+    const brief = {
+      briefId: 'brief-1',
+      text: 'Three testimonial cuts',
+      kind: 'testimonial' as const,
+      targetDurationSec: 30,
+      variantLabel: 'B',
+      variantIndex: 1,
+    };
+    const command = (value: typeof brief | null, revision: number) =>
+      ({
+        commandId: `c-${revision}`,
+        commandType: 'set_brief',
+        brief: value,
+        idempotencyKey: `set-brief-${revision}`,
+        expectedRevision: revision,
+        issuedAt: '2026-09-30T00:00:00.000Z',
+        actor: user,
+      }) as const;
+    const batch = (current: EditorProjectV2, value: typeof brief | null) =>
+      applyEditorCommandBatch(current, {
+        batchId: `b-${current.revision}`,
+        projectId: current.projectId,
+        sequenceId: current.sequenceId,
+        idempotencyKey: `batch-${current.revision}-brief`,
+        expectedRevision: current.revision,
+        expectedFingerprint: current.fingerprint,
+        atomic: true,
+        issuedAt: '2026-09-30T00:00:00.000Z',
+        actor: user,
+        commands: [command(value, current.revision)],
+      } as EditorCommandBatch);
+    const tagged = batch(project, brief);
+    expect(tagged.brief).toEqual(brief);
+    expect(batch(tagged, null).brief).toBeUndefined();
+  });
+});

@@ -922,6 +922,28 @@ export const editorProductionSchema = z
   });
 export type EditorProduction = z.infer<typeof editorProductionSchema>;
 
+/** The editorial structure a first cut follows — what the footage is asked to become. */
+export const EDITOR_CUT_KINDS = ['highlight', 'hook', 'testimonial', 'story', 'demo'] as const;
+export const editorCutKindSchema = z.enum(EDITOR_CUT_KINDS);
+export type EditorCutKind = z.infer<typeof editorCutKindSchema>;
+
+/**
+ * The goal a first cut was drafted from. Every variant drafted from one brief shares its
+ * `briefId`, which is how an edit finds its sibling variants; `variantLabel` is the
+ * short name the workspace shows ("A", "B", "C").
+ */
+export const editorBriefSchema = z
+  .object({
+    briefId: editorIdSchema,
+    text: z.string().min(1).max(2_000),
+    kind: editorCutKindSchema,
+    targetDurationSec: z.number().finite().min(5).max(180),
+    variantLabel: z.string().min(1).max(8),
+    variantIndex: z.number().int().nonnegative().max(9),
+    angle: z.string().max(500).optional(),
+  })
+  .strict();
+export type EditorBrief = z.infer<typeof editorBriefSchema>;
 
 export const editorProjectV2Schema = z
   .object({
@@ -942,6 +964,7 @@ export const editorProjectV2Schema = z
     markers: z.array(editorMarkerSchema).max(2_000).default([]),
     exportSettings: editorExportSettingsSchema,
     legacyTimelineFingerprint: z.string().min(1).max(500).optional(),
+    brief: editorBriefSchema.optional(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })
@@ -1274,6 +1297,13 @@ export const editorCommandSchema = z.discriminatedUnion('commandType', [
       // batch of upsert_marker commands can carry atomically.
       commandType: z.literal('set_markers'),
       markers: z.array(editorMarkerSchema).max(2_000),
+    })
+    .strict(),
+  z
+    .object({
+      ...editorCommandMetadataShape,
+      commandType: z.literal('set_brief'),
+      brief: editorBriefSchema.nullable(),
     })
     .strict(),
   z

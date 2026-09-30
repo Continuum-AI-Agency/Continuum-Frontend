@@ -10,6 +10,8 @@ import { z } from 'zod';
 import {
   type EditorExportSettings,
   type EditorProjectV2,
+  editorBriefSchema,
+  editorCutKindSchema,
   editorMarkerSchema,
   editorProjectV2Schema,
 } from './editor-project-v2';
@@ -203,9 +205,34 @@ export const videoEditorPoolAssetSchema = z
   .strict();
 export type VideoEditorPoolAsset = z.infer<typeof videoEditorPoolAssetSchema>;
 
+/** One line of a paper edit: a span of a source, and the job it does in the cut. */
+export const videoEditorCutSegmentSchema = z
+  .object({
+    assetId: z.string(),
+    startSec: secSchema,
+    endSec: secSchema,
+    role: z.enum(['hook', 'body', 'proof', 'cta']),
+    text: z.string().max(2_000),
+  })
+  .strict();
+export type VideoEditorCutSegment = z.infer<typeof videoEditorCutSegmentSchema>;
+
+export const videoEditorDraftVariantSchema = z
+  .object({
+    projectId: projectIdSchema,
+    label: z.string(),
+    angle: z.string(),
+    durationSec: secSchema,
+    editorPath: z.string(),
+    segments: z.array(videoEditorCutSegmentSchema),
+    commit: videoEditorCommitSchema,
+  })
+  .strict();
+export type VideoEditorDraftVariant = z.infer<typeof videoEditorDraftVariantSchema>;
+
 // ── The ops ────────────────────────────────────────────────────────────────────────────
 
-export type VideoEditorOpGroup = 'see' | 'edit' | 'quick' | 'ship' | 'sources';
+export type VideoEditorOpGroup = 'see' | 'edit' | 'quick' | 'draft' | 'ship' | 'sources';
 
 type OpSpec = {
   group: VideoEditorOpGroup;
@@ -268,6 +295,7 @@ export const VIDEO_EDITOR_OPS = {
         tracks: z.array(videoEditorCompactTrackSchema),
         markers: z.array(editorMarkerSchema),
         editorPath: z.string(),
+        brief: editorBriefSchema.optional(),
         project: editorProjectV2Schema.optional(),
       })
       .strict(),
@@ -491,6 +519,74 @@ export const VIDEO_EDITOR_OPS = {
       })
       .strict(),
     output: committed({ clipId: z.string() }),
+  },
+  draft_cut: {
+    group: 'draft',
+    commits: true,
+    scope: 'project',
+    access: 'operate',
+    description:
+      "Turn the project's footage and a goal into first cuts: reads every spoken line, picks and orders the strongest ones for the goal (a hook, a testimonial, a highlight, a story, a demo) at the target length, then captions and formats each cut. Variant A replaces this timeline (undoable); B, C… open as sibling projects. Returns a jobId — poll draft_cut_status.",
+    input: z
+      .object({
+        ...projectRef,
+        brief: z.string().min(1).max(2_000),
+        kind: editorCutKindSchema.default('highlight'),
+        targetDurationSec: z.number().min(5).max(180).default(30),
+        variants: z.number().int().min(1).max(5).default(1),
+        preset: platformExportPresetIdSchema.optional(),
+        captions: z.boolean().default(true),
+        sourceAssetIds: z.array(z.string()).max(20).optional(),
+      })
+      .strict(),
+    output: z.object({ jobId: z.string(), state: jobStateSchema }).strict(),
+  },
+  draft_cut_status: {
+    group: 'draft',
+    commits: false,
+    scope: 'project',
+    access: 'read',
+    description:
+      'Progress of a draft_cut; when completed, each variant with its project, length, angle and the lines it used.',
+    input: z.object({ ...projectRef, jobId: z.string() }).strict(),
+    output: z
+      .object({
+        jobId: z.string(),
+        state: jobStateSchema,
+        progress: z.number().min(0).max(1).optional(),
+        phase: z.string().optional(),
+        variants: z.array(videoEditorDraftVariantSchema).optional(),
+        warnings: z.array(z.string()).optional(),
+        error: z.string().optional(),
+      })
+      .strict(),
+  },
+  list_variants: {
+    group: 'draft',
+    commits: false,
+    scope: 'project',
+    access: 'read',
+    description:
+      'The sibling cuts drafted from the same brief as this project (A, B, C…), for switching between variants.',
+    input: z.object({ ...projectRef }).strict(),
+    output: z
+      .object({
+        brief: editorBriefSchema.optional(),
+        variants: z.array(
+          z
+            .object({
+              projectId: projectIdSchema,
+              label: z.string(),
+              title: z.string(),
+              angle: z.string().optional(),
+              durationSec: secSchema,
+              editorPath: z.string(),
+              current: z.boolean(),
+            })
+            .strict(),
+        ),
+      })
+      .strict(),
   },
   export: {
     group: 'ship',
