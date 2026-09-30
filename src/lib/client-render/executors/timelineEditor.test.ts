@@ -184,6 +184,55 @@ describe('timeline editor client render executor', () => {
     ).rejects.toThrow('does not match its pinned version');
   });
 
+  it('downloads one source once for twelve clips cut from it, and every clip shares that Blob', async () => {
+    const fetched: string[] = [];
+    globalThis.fetch = (async (url: string | URL | Request) => {
+      fetched.push(String(url));
+      return new Response(new Blob(['video-bytes'], { type: 'video/mp4' }), { status: 200 });
+    }) as typeof fetch;
+    const created = createEditorProjectV2({
+      projectId: '00000000-0000-4000-8000-000000000112',
+      title: 'Twelve segments of one interview',
+      width: 1080,
+      height: 1920,
+      now: '2026-09-30T12:00:00.000Z',
+    });
+    const clips = Array.from({ length: 12 }, (_, index) => ({
+      id: `seg-${index + 1}`,
+      timelineStartSec: index * 5,
+      durationSec: 5,
+      kind: 'video' as const,
+      source: {
+        sourceType: 'library_asset' as const,
+        assetId: 'asset-1',
+        renditionId: 'version-1',
+      },
+      sourceInSec: index * 30,
+      playbackRate: 1,
+    }));
+    const project = editorProjectV2Schema.parse({
+      ...created,
+      durationSec: 60,
+      tracks: [{ id: 'video-main', name: 'Main video', order: 0, kind: 'video', clips }],
+    });
+    const plan = await buildTimelineEditorRenderPlan({
+      project,
+      jobInputs: clips.map((clip) => ({
+        sourceId: clip.id,
+        sourceAssetId: 'asset-1',
+        sourceRevision: 'version-1',
+        storage: { bucket: 'media-library', path: 'brand/interview.mp4' },
+      })),
+      signedUrls: new Map([
+        ['media-library\nbrand/interview.mp4', 'https://signed.example/interview.mp4'],
+      ]),
+      signal: new AbortController().signal,
+    });
+    expect(plan.items).toHaveLength(12);
+    expect(fetched).toEqual(['https://signed.example/interview.mp4']);
+    expect(new Set(plan.items.map((item) => item.blob)).size).toBe(1);
+  });
+
   it('draws caption words at clip start + word time and keeps a muted track in picture', async () => {
     globalThis.fetch = (async () =>
       new Response(new Blob(['media-bytes'], { type: 'video/mp4' }), {
