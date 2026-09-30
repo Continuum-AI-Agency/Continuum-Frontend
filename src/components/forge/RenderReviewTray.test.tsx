@@ -561,6 +561,30 @@ describe('RenderReviewTray · Deliver + Confirm', () => {
     expect(toasts).toContain('2 renders queued');
   }, 30_000);
 
+  // UTEC 2026-09-29: the render API refused row 18 of 24 with a 503, and an operator found and
+  // resent the missing rows by SQL. The refused row stays on screen and one click resends it.
+  test('a row the render service refuses stays listed, and Retry resends only that row', async () => {
+    const [root, spain] = JOBS as [ApiRenderJob, ApiRenderJob];
+    createBatchMock
+      .mockImplementationOnce(async () => ({
+        batchId: '99999999-9999-4999-8999-999999999999',
+        jobs: [root, { ...spain, status: 'failed', error: 'Render API returned HTTP 503.' }],
+      }))
+      .mockImplementationOnce(async () => ({
+        batchId: '99999999-9999-4999-8999-999999999998',
+        jobs: [spain],
+      }));
+    renderTray(null);
+    await press('Next: delivery');
+    await press('Render 3 files');
+    const strip = (await screen.findByText(/1 row not sent/)).closest('p') as HTMLElement;
+    expect(toasts).toContain('1 queued · 1 not sent');
+    fireEvent.click(within(strip).getByRole('button', { name: 'Retry 1' }));
+    await waitFor(() => expect(createBatchMock).toHaveBeenCalledTimes(2));
+    expect(batchPreflightMock.mock.calls.at(-1)?.[0]).toMatchObject({ records: [RECORDS[1]] });
+    await waitFor(() => expect(screen.queryByText(/not sent/)).toBeNull());
+  }, 30_000);
+
   test('Final is signed into the render’s preflight; the review never asks for one', async () => {
     const { onFired } = renderTray();
     await press('Next: delivery');

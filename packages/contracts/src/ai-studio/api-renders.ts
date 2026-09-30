@@ -40,6 +40,13 @@ export const apiRenderDestinationRoute = (destinationId: string) =>
 export const apiRenderBatchShareRoute = (batchId: string) =>
   `${API_RENDER_BATCHES_ROUTE}/${batchId}/share`;
 
+/**
+ * Mints a zip link for a whole render set: each row's newest finished render plus a manifest, so
+ * a batch that retried failed rows folds into the one it retried. Signed-in brand members only.
+ */
+export const apiRenderSetZipShareRoute = (renderSetId: string) =>
+  `/api/ai-studio/renders/sets/${renderSetId}/zip-share`;
+
 export const API_RENDER_SHARED_ROUTE = '/api/ai-studio/renders/shared';
 
 /**
