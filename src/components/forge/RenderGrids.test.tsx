@@ -203,6 +203,7 @@ mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
       fonts: [],
       layout: null,
       divergence: [],
+      layerSwitchesNotAsked: [],
       ...contractOverrides,
     }),
     listInputSets: async () => ({ items: [], nextCursor: null }),
@@ -260,6 +261,20 @@ mock.module('@/components/organic/primitives/MediaSelectPopover', () => ({
     }, [open]);
     return <>{anchor}</>;
   },
+}));
+
+// Spread over the real module for the same reason: only the save the Render tab makes is faked.
+const templateSources = await import('@/lib/library/templateSources');
+const saveTemplateVariablesMock = mock(
+  async (
+    _brandId: string,
+    _assetId: string,
+    _slots: Array<{ slotKey: string; exposed?: boolean | null }>,
+  ) => {},
+);
+mock.module('@/lib/library/templateSources', () => ({
+  ...templateSources,
+  saveTemplateVariables: saveTemplateVariablesMock,
 }));
 
 // The grid reads the person's brand role from the brand provider; outside one, this file is an
@@ -423,6 +438,86 @@ describe('RenderRequestsGrid', () => {
     // The blank cell is not painted as an error; the row says what it waits for.
     expect(headline.classList.contains('border-destructive')).toBe(false);
     expect(screen.getByText('0 of 1 row ready to render · 1 needs input')).toBeTruthy();
+  });
+
+  // UTEC 2026-09-29: a switch read Off whether the file had the layer on or not, and said
+  // nothing about what Off meant. A layer switch says Shown/Hidden; any other checkbox On/Off.
+  test('a layer switch says Shown or Hidden; another checkbox On or Off; unknown says As designed', async () => {
+    contractOverrides = {
+      variables: [
+        ...VARIABLES,
+        variable({
+          key: 'show_carrera',
+          label: 'Show Carrera',
+          kind: 'boolean',
+          sample: 'false',
+          sourceSlotKey: 'boolean__show-carrera',
+        }),
+        variable({
+          key: 'dark_mode',
+          label: 'Dark mode',
+          kind: 'boolean',
+          sample: 'true',
+          sourceSlotKey: 'boolean__dark-mode',
+        }),
+        variable({
+          key: 'show_badge',
+          label: 'Show Badge',
+          kind: 'boolean',
+          sample: null,
+          sourceSlotKey: 'boolean__show-badge',
+        }),
+      ],
+    };
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    const carrera = await screen.findByRole('switch', { name: 'Show Carrera' });
+    const cell = carrera.parentElement as HTMLElement;
+    expect(within(cell).getByText('Hidden')).toBeTruthy();
+    fireEvent.click(carrera);
+    await waitFor(() => expect(within(cell).getByText('Shown')).toBeTruthy());
+    const dark = screen.getByRole('switch', { name: 'Dark mode' }).parentElement as HTMLElement;
+    expect(within(dark).getByText('On')).toBeTruthy();
+    const badge = screen.getByRole('switch', { name: 'Show Badge' }).parentElement as HTMLElement;
+    expect(within(badge).getByText('As designed')).toBeTruthy();
+  });
+
+  // UTEC 2026-09-29: the career switch was hidden from Render and found by SQL. A layer switch
+  // no row can change is offered from Add, and one click makes it a column that starts as designed.
+  test('a hidden layer switch is offered from Add and, once picked, is a column rows start as designed', async () => {
+    const carrera = variable({
+      key: 'show_carrera',
+      label: 'Show Carrera',
+      kind: 'boolean',
+      sample: 'true',
+      sourceSlotKey: 'boolean__show-carrera',
+      exposed: false,
+    });
+    const withSource = { ...TEMPLATE, sourceAssetId: '55555555-5555-4555-8555-555555555555' };
+    contractOverrides = { template: withSource, layerSwitchesNotAsked: [carrera] };
+    saveTemplateVariablesMock.mockImplementationOnce(async () => {
+      contractOverrides = {
+        template: withSource,
+        variables: [...VARIABLES, { ...carrera, exposed: true }],
+        layerSwitchesNotAsked: [],
+      };
+    });
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByLabelText('Headline');
+    expect(screen.queryByRole('switch', { name: 'Show Carrera' })).toBeNull();
+
+    const toolbar = screen.getByRole('toolbar', { name: 'Render' });
+    fireEvent.click(within(toolbar).getByRole('button', { name: 'Add' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Switch a layer per row/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Show Carrera' }));
+
+    await waitFor(() =>
+      expect(saveTemplateVariablesMock).toHaveBeenCalledWith(BRAND, withSource.sourceAssetId, [
+        { slotKey: 'boolean__show-carrera', exposed: true },
+      ]),
+    );
+    const cell = (await screen.findByRole('switch', { name: 'Show Carrera' })).parentElement as HTMLElement;
+    // Existing rows never set it, so they render what the file has — and say so.
+    expect(within(cell).getByText('Shown · as designed')).toBeTruthy();
   });
 
   test('a frame placement cannot settle reads "AI check after render", and says why', async () => {
@@ -872,11 +967,11 @@ describe('RenderRequestsGrid', () => {
   test('an intent naming a row brings it into view, and with rerender selects it alone for Render', async () => {
     withSavedSets();
     const scrolled: string[] = [];
-    const scrollIntoView = spyOn(Element.prototype, 'scrollIntoView').mockImplementation(
-      function (this: Element) {
-        scrolled.push((this as HTMLElement).dataset.rowId ?? '');
-      },
-    );
+    const scrollIntoView = spyOn(Element.prototype, 'scrollIntoView').mockImplementation(function (
+      this: Element,
+    ) {
+      scrolled.push((this as HTMLElement).dataset.rowId ?? '');
+    });
     try {
       const { rerender } = render(<RenderRequestsGrid brandId={BRAND} />);
       expect(await screen.findByDisplayValue('Newest row')).toBeTruthy();

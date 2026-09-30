@@ -9,7 +9,7 @@
  * and RenderGrids.test.tsx covers them.
  */
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import type { ApiRenderJob, ApiRenderJobListResponse, ForgeRenderSet } from '@continuum/contracts';
 
 const listJobsMock = mock(async () => {
@@ -20,8 +20,16 @@ const shareRenderSetMock = mock(async (_brandId: string, _setId: string) => ({
   path: '/share/tok123',
   assetCount: 4,
 }));
+const shareRenderSetZipMock = mock(async (_brandId: string, _setId: string) => ({
+  path: '/api/ai-studio/renders/shared/teaser.zip?token=tok',
+  expiresAt: '2026-10-29T00:00:00.000Z',
+}));
 mock.module('@/StudioCanvas/nodes/api-render/apiRendersApi', () => ({
-  apiRendersApi: { listJobs: listJobsMock, shareRenderSet: shareRenderSetMock },
+  apiRendersApi: {
+    listJobs: listJobsMock,
+    shareRenderSet: shareRenderSetMock,
+    shareRenderSetZip: shareRenderSetZipMock,
+  },
 }));
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -284,6 +292,51 @@ describe('RenderSetRail', () => {
         'Nothing from “Teaser” is in the Library yet. Render it first, then share.',
       );
       expect(writeText).not.toHaveBeenCalled();
+    });
+  });
+
+  // UTEC 2026-09-29: 48 finished renders across a batch and its retry were packaged by a custom
+  // script. The set's own menu hands over the one zip, manifest included.
+  describe('Download set', () => {
+    const toasts: string[] = [];
+    let unregister = () => {};
+    const assign = spyOn(window.location, 'assign').mockImplementation(() => {});
+    beforeEach(() => {
+      toasts.length = 0;
+      unregister = registerToastSink(({ title }) => toasts.push(String(title)));
+    });
+    afterEach(() => {
+      unregister();
+      assign.mockClear();
+      shareRenderSetZipMock.mockClear();
+    });
+    const download = async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Actions for Teaser' }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: /Download set/ }));
+    };
+
+    test('mints the set’s zip link and opens it', async () => {
+      setup();
+      await download();
+      await waitFor(() => expect(assign).toHaveBeenCalledTimes(1));
+      expect(shareRenderSetZipMock.mock.calls[0]).toEqual([BRAND, TEASER.id]);
+      expect(String(assign.mock.calls[0]?.[0])).toEndWith(
+        '/api/ai-studio/renders/shared/teaser.zip?token=tok',
+      );
+    });
+
+    test('a set with nothing finished says so and downloads nothing', async () => {
+      shareRenderSetZipMock.mockImplementationOnce(async () => {
+        throw new ApiError('render_batch_not_ready', 409, undefined, {
+          error: 'render_batch_not_ready',
+        });
+      });
+      setup();
+      await download();
+      await waitFor(() =>
+        expect(toasts).toEqual(['Nothing from “Teaser” has finished rendering yet.']),
+      );
+      expect(assign).not.toHaveBeenCalled();
     });
   });
 

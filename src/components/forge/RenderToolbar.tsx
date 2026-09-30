@@ -3,6 +3,8 @@
 import {
   type ApiRenderInputSet,
   type ApiRenderTemplateSummary,
+  type ApiRenderVariable,
+  readableLayerName,
   templateDisplayName,
   templateRefOf,
 } from '@continuum/contracts';
@@ -10,6 +12,7 @@ import {
   ChevronDown,
   ClipboardPaste,
   Download,
+  Eye,
   FolderOpen,
   Loader2,
   Play,
@@ -69,6 +72,8 @@ export function RenderToolbar({
   onDraftWithAi,
   draftAnchorRef,
   onAddFromInputs,
+  layerSwitches,
+  onAskSwitch,
   onUpload,
   onDownloadTemplate,
   dirty,
@@ -98,6 +103,9 @@ export function RenderToolbar({
   onDraftWithAi: () => void;
   draftAnchorRef?: Ref<HTMLButtonElement>;
   onAddFromInputs: (set: ApiRenderInputSet) => void;
+  /** Layer Show switches no row can change yet; picking one asks for it per row. */
+  layerSwitches: ApiRenderVariable[];
+  onAskSwitch: (variable: ApiRenderVariable) => void;
   onUpload: () => void;
   onDownloadTemplate: () => void;
   dirty: boolean;
@@ -207,6 +215,29 @@ export function RenderToolbar({
                     ))}
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
+                {layerSwitches.length > 0 ? (
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      <Eye aria-hidden /> Switch a layer per row
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-64">
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel className="text-2xs font-normal text-muted-foreground">
+                          Adds a Shown / Hidden column to this template. Every row starts as
+                          designed.
+                        </DropdownMenuLabel>
+                        {layerSwitches.map((variable) => (
+                          <DropdownMenuItem
+                            key={variable.key}
+                            onClick={() => onAskSwitch(variable)}
+                          >
+                            <span className="truncate">{readableLayerName(variable.label)}</span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuGroup>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
           </Control>

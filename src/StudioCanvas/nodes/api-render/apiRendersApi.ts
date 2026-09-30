@@ -23,6 +23,7 @@ import {
   type ApiRenderBatch,
   type ApiRenderBatchPreflightRequest,
   type ApiRenderBatchPreflightResponse,
+  type ApiRenderBatchShareResponse,
   type ApiRenderCreateDeliveryDestinationRequest,
   type ApiRenderCreateInputSetRequest,
   type ApiRenderCreateJobRequest,
@@ -47,6 +48,7 @@ import {
   type ApiRenderUpdateInputSetRequest,
   apiRenderBatchPreflightResponseSchema,
   apiRenderBatchSchema,
+  apiRenderBatchShareResponseSchema,
   apiRenderDeliveryDestinationSchema,
   apiRenderDeliveryDestinationsResponseSchema,
   apiRenderDestinationRoute,
@@ -59,6 +61,7 @@ import {
   apiRenderMasterDownloadResponseSchema,
   apiRenderMasterDownloadStatusSchema,
   apiRenderPreflightResponseSchema,
+  apiRenderSetZipShareRoute,
   apiRenderSlackChannelListResponseSchema,
   apiRenderSuggestRowsResponseSchema,
   apiRenderTemplateContractSchema,
@@ -104,6 +107,7 @@ import {
   forgeRenderSketchSchema,
   forgeRenderSetShareResponseSchema,
   forgeRenderSetShareRoute,
+  isLayerSwitch,
   type UpdateForgeRenderSetRequest,
 } from '@continuum/contracts';
 import { http } from '@/lib/api/http';
@@ -162,7 +166,15 @@ export const apiRendersApi = {
       )}`,
       schema: apiRenderTemplateContractSchema,
     });
-    return { ...contract, variables: contract.variables.filter((variable) => variable.exposed !== false) };
+    return {
+      ...contract,
+      variables: contract.variables.filter((variable) => variable.exposed !== false),
+      // Kept aside rather than dropped: a layer's Show switch nobody asked for yet, which the
+      // Render tab offers as a column (UTEC's career logo was one of these, found by SQL).
+      layerSwitchesNotAsked: contract.variables.filter(
+        (variable) => variable.exposed === false && isLayerSwitch(variable.sourceSlotKey),
+      ),
+    };
   },
   preflight(input: ApiRenderPreflightRequest) {
     return http.request<ApiRenderPreflightResponse>({
@@ -374,6 +386,18 @@ export const apiRendersApi = {
     return http.request<ForgeProvenanceResponse>({
       path: `${FORGE_PROVENANCE_ROUTE}?${query({ brandId, assetId })}`,
       schema: forgeProvenanceResponseSchema,
+    });
+  },
+  /**
+   * A link to the whole set as one zip: each row's newest finished render plus manifest.csv, so
+   * a batch that retried failed rows is folded into the one it retried.
+   */
+  shareRenderSetZip(brandId: string, setId: string) {
+    return http.request<ApiRenderBatchShareResponse>({
+      path: apiRenderSetZipShareRoute(setId),
+      method: 'POST',
+      body: { brandId },
+      schema: apiRenderBatchShareResponseSchema,
     });
   },
   /**

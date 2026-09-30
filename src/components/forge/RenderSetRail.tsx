@@ -8,6 +8,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import {
   Copy,
+  Download,
   FolderOpen,
   History,
   MoreHorizontal,
@@ -46,6 +47,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/toast-imperative';
+import { getApiBaseUrl } from '@/lib/api/config';
 import { ApiError } from '@/lib/api/errors';
 import { pluralize } from '@/lib/format/pluralize';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
@@ -192,6 +194,23 @@ function SetDescription({
 }
 
 /**
+ * Downloads the set as one zip: each row's newest finished render, retries folded in, with a
+ * manifest that also lists the rows that did not finish.
+ */
+async function downloadRenderSet(brandId: string, set: ForgeRenderSet) {
+  try {
+    const share = await apiRendersApi.shareRenderSetZip(brandId, set.id);
+    window.location.assign(`${getApiBaseUrl()}${share.path}`);
+  } catch (error) {
+    toast.error(
+      error instanceof ApiError && error.payload?.error === 'render_batch_not_ready'
+        ? `Nothing from “${set.name}” has finished rendering yet.`
+        : 'Could not prepare the download. Try again.',
+    );
+  }
+}
+
+/**
  * Shares the set as its Library collection: a link that anyone can open and anyone on the brand can
  * revoke from the Library. Minted per click — the link is the credential, so it is never cached.
  */
@@ -302,6 +321,13 @@ export function RenderSetRail({
             setDescribing((current) => ({ id: set.id, request: (current?.request ?? 0) + 1 })),
         },
         { id: 'duplicate', label: 'Duplicate', icon: Copy, run: () => onDuplicate(set) },
+        {
+          id: 'download',
+          label: 'Download set',
+          icon: Download,
+          hint: 'One zip of every row’s newest render, with a manifest',
+          run: () => void downloadRenderSet(brandId, set),
+        },
         {
           id: 'share',
           label: 'Share render set',
