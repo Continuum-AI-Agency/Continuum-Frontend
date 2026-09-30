@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { connection } from 'next/server';
 import { Suspense } from 'react';
 import { MixpanelInit } from '@/components/analytics/MixpanelInit';
 import { GalaxyBackgroundLazy } from '@/components/ui/GalaxyBackgroundLazy';
@@ -22,8 +21,6 @@ export const metadata: Metadata = {
 };
 
 async function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
-  await connection();
-  const changelogPromise = getServerChangelog();
   const { activeBrandId, brandSummaries, user, permissions, brandAccess } =
     await getActiveBrandContext();
 
@@ -36,7 +33,7 @@ async function DashboardLayoutContent({ children }: { children: React.ReactNode 
     redirect(`/onboarding?brand=${activeBrandId}`);
   }
 
-  const changelogEntries = await changelogPromise;
+  const changelogEntries = await getServerChangelog();
   const automationEnvironment = resolveAutomationDeploymentEnvironment({
     nodeEnv: process.env.NODE_ENV,
     vercelEnv: process.env.VERCEL_ENV,
