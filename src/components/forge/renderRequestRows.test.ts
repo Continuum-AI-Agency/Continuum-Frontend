@@ -115,6 +115,12 @@ describe('seedRow', () => {
     const row = seedRow(all);
     expect(row.values).toEqual({ headline: 'Hola', price: 9.99, on_sale: true });
   });
+  test('leaves a field with a saved default empty, so the default is what it renders', () => {
+    const row = seedRow(
+      all.map((item) => (item.key === 'headline' ? { ...item, defaultValue: 'GO FAST' } : item)),
+    );
+    expect(row.values).toEqual({ price: 9.99, on_sale: true });
+  });
 });
 
 describe('validateRow', () => {
@@ -967,15 +973,34 @@ describe('merging two saves of one set', () => {
 describe('a draft from the AI', () => {
   test('retains field evidence after Keep and save, and clears it with the value', () => {
     const id = '00000000-0000-4000-8000-000000000099';
-    const evidence = { kind: 'document' as const,
+    const evidence = {
+      kind: 'document' as const,
       documentId: '33333333-3333-4333-8333-333333333333',
-      name: 'offers.xlsx', excerpt: '$279', sheet: 'Offers' };
-    const proposed = rowsFromSuggestion({ rows: [{ id, parentId: null, label: 'Offer',
-      overrides: { headline: '$279' }, evidence: { headline: evidence } }], assets: [] }, ['square']);
+      name: 'offers.xlsx',
+      excerpt: '$279',
+      sheet: 'Offers',
+    };
+    const proposed = rowsFromSuggestion(
+      {
+        rows: [
+          {
+            id,
+            parentId: null,
+            label: 'Offer',
+            overrides: { headline: '$279' },
+            evidence: { headline: evidence },
+          },
+        ],
+        assets: [],
+      },
+      ['square'],
+    );
     const saved = toRenderSetRows(keepProposed(proposed, [id]), ['square']);
     expect(saved[0]?.evidence?.headline).toEqual(evidence);
     expect(fromRenderSetRows(saved)[0]?.evidence?.headline).toEqual(evidence);
-    expect(clearKey(fromRenderSetRows(saved), 'headline', [id])[0]?.evidence?.headline).toBeUndefined();
+    expect(
+      clearKey(fromRenderSetRows(saved), 'headline', [id])[0]?.evidence?.headline,
+    ).toBeUndefined();
   });
 
   test('arrives proposed, roots in every format, with the picked picture’s thumbnail', () => {

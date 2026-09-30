@@ -10,7 +10,7 @@ import {
   type ApiRenderTemplateSummary,
   type ApiRenderVariable,
   apiRenderPreflightResponseSchema,
-  expandLinkedValues,
+  effectiveRenderValues,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   type ForgeRenderSet,
   type ForgeRenderSetRevision,
@@ -841,12 +841,14 @@ export function RenderRequestsGrid({
     () =>
       new Map(
         rows.map((row) => {
-          const values = effectiveValues(rows, row.id);
-          const errors = validateRow(variables ?? [], values);
-          // A headline split across layers needs exactly its lines — the render refuses otherwise.
-          for (const problem of expandLinkedValues([...(variables ?? []), ...linkedFields], values)
-            .problems)
-            errors[problem.key] ??= problem.message;
+          // What the render will fill: a saved default satisfies a required field, and a headline
+          // split across layers needs exactly its lines — the render refuses otherwise.
+          const rendered = effectiveRenderValues(
+            [...(variables ?? []), ...linkedFields],
+            effectiveValues(rows, row.id),
+          );
+          const errors = validateRow(variables ?? [], rendered.values);
+          for (const problem of rendered.problems) errors[problem.key] ??= problem.message;
           if (row.check.state === 'ready' || row.check.state === 'error')
             for (const finding of row.check.guardrails ?? []) {
               if (finding.severity === 'block')

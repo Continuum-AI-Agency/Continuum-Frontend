@@ -158,6 +158,12 @@ export type VariableColumnMeta = { variable: ApiRenderVariable };
 // other table in the app, so the one cast lives here.
 const gridMeta = (table: Table<RequestRow>) => table.options.meta as RequestGridMeta;
 
+/** What an empty cell renders: the brand's saved default, else the designer's own copy. */
+const placeholderOf = (variable: ApiRenderVariable) =>
+  typeof variable.defaultValue === 'string' || typeof variable.defaultValue === 'number'
+    ? String(variable.defaultValue)
+    : (variable.sample ?? undefined);
+
 const isMedia = (variable: ApiRenderVariable) =>
   variable.kind === 'image' || variable.kind === 'video';
 
@@ -623,7 +629,7 @@ export function VariableCell({
           value={value}
           error={error}
           invalid={invalid}
-          placeholder={variable.sample ?? undefined}
+          placeholder={placeholderOf(variable)}
           onCommit={(next) => actions.setValue(row.id, variable.key, next)}
         />
         {inheritance}
@@ -676,7 +682,7 @@ export function VariableCell({
             )}
             aria-label={variable.label}
             title={error}
-            placeholder={variable.sample ?? undefined}
+            placeholder={placeholderOf(variable)}
             value={text}
             onChange={(event) => onText(event.target.value)}
           />

@@ -221,6 +221,9 @@ export function seedRow(
   const values: Record<string, ApiRenderInputValue> = {};
   for (const variable of variables) {
     if (!isEditableScalar(variable) || variable.sample === null) continue;
+    // A saved default is what an empty field renders; copying the file's own copy over it would
+    // render the design's text instead of the brand's default.
+    if (variable.defaultValue !== null && variable.defaultValue !== undefined) continue;
     const value = coerce(variable, variable.sample);
     if (value !== undefined) values[variable.key] = value;
   }
@@ -328,7 +331,10 @@ export function effectiveMedia(rows: RequestRow[], id: string): Record<string, R
   return media;
 }
 
-export function effectiveEvidence(rows: RequestRow[], id: string): Record<string, ForgeRowEvidence> {
+export function effectiveEvidence(
+  rows: RequestRow[],
+  id: string,
+): Record<string, ForgeRowEvidence> {
   const byId = new Map(rows.map((row) => [row.id, row]));
   const chain: RequestRow[] = [];
   for (let row = byId.get(id); row; row = row.parentId ? byId.get(row.parentId) : undefined)
@@ -1041,7 +1047,13 @@ export function resetKey(rows: RequestRow[], key: string, ids: string[]): Reques
     const { [key]: _value, ...values } = row.values;
     const { [key]: _media, ...media } = row.media;
     const { [key]: _evidence, ...evidence } = row.evidence ?? {};
-    return { ...row, values, media, evidence, clearedKeys: row.clearedKeys.filter((item) => item !== key) };
+    return {
+      ...row,
+      values,
+      media,
+      evidence,
+      clearedKeys: row.clearedKeys.filter((item) => item !== key),
+    };
   });
   return idleFrom(next, changed);
 }

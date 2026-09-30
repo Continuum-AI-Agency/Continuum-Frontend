@@ -689,7 +689,11 @@ export function VariableEditor({
                         Hidden makes this layer invisible in the render. Nothing moves into its
                         place — the rest of the design stays where it was put.
                       </FieldDescription>
-                    ) : null}
+                    ) : (
+                      <FieldDescription className="text-xs">
+                        A row that leaves this empty renders the default.
+                      </FieldDescription>
+                    )}
                   </Field>
 
                   <div className="flex items-end gap-6">
