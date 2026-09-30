@@ -8,6 +8,7 @@ import {
   type DecodedPreviewAudioAsset,
   fadeInGainAt,
   fadeOutGainAt,
+  volumeAutomation,
 } from './webAudioPreviewEngine';
 
 const buffer = {} as AudioBuffer;
@@ -75,5 +76,38 @@ describe('Web Audio preview schedule', () => {
     expect(fadeOutGainAt(event, 8)).toBe(1);
     expect(fadeOutGainAt(event, 9)).toBe(0.5);
     expect(fadeOutGainAt(event, 10)).toBe(0);
+  });
+});
+
+describe('keyed volume in the preview', () => {
+  const ducked: TimelinePreviewAudioEvent = {
+    ...event,
+    volumeKeyframes: [
+      { timeSec: 1, value: 0.8, interpolation: 'linear' },
+      { timeSec: 1.2, value: 0.2, interpolation: 'linear' },
+      { timeSec: 3, value: 0.2, interpolation: 'linear' },
+      { timeSec: 3.4, value: 0.8, interpolation: 'linear' },
+    ],
+  };
+  const valueAt = (points: { timelineSec: number; value: number }[], sec: number) =>
+    points.find((point) => Math.abs(point.timelineSec - sec) < 1e-9)?.value;
+
+  it('ramps through every key inside the window, valued like the export', () => {
+    const points = volumeAutomation(ducked, 0);
+    expect(points[0]).toEqual({ timelineSec: 4, value: 0.8 });
+    expect(points.at(-1)?.timelineSec).toBe(10);
+    expect(valueAt(points, 5.2)).toBeCloseTo(0.2, 6);
+    expect(valueAt(points, 7)).toBeCloseTo(0.2, 6);
+    expect(valueAt(points, 7.4)).toBeCloseTo(0.8, 6);
+    expect(
+      points.every(
+        (point, index) => index === 0 || point.timelineSec > (points[index - 1]?.timelineSec ?? 0),
+      ),
+    ).toBe(true);
+  });
+
+  it('starts a seek mid-duck at the ducked level; an unkeyed event has no automation', () => {
+    expect(volumeAutomation(ducked, 6)[0]).toEqual({ timelineSec: 6, value: 0.2 });
+    expect(volumeAutomation(event, 0)).toEqual([]);
   });
 });

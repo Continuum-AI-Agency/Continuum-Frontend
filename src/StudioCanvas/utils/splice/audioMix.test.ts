@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { DUCKING, duckingKeyframes } from '@continuum/contracts';
 import {
   AUDIO_SAMPLE_RATE,
   applyEnvelope,
@@ -65,6 +66,67 @@ describe('applyEnvelope', () => {
     expect(pcm.left[0]).toBe(0); // fade-in starts at silence
     expect(pcm.left[Math.floor(n / 2)]).toBeCloseTo(1, 5); // middle unaffected
     expect(pcm.left[n - 1]).toBeLessThan(0.05); // fade-out ends near silence
+  });
+});
+
+describe('applyEnvelope with audio.volume keyframes', () => {
+  const ones = (sec: number) => {
+    const n = Math.round(sec * AUDIO_SAMPLE_RATE);
+    return { left: new Float32Array(n).fill(1), right: new Float32Array(n).fill(1) };
+  };
+  const at = (pcm: { left: Float32Array }, sec: number) =>
+    pcm.left[Math.round(sec * AUDIO_SAMPLE_RATE)] ?? Number.NaN;
+
+  it('ducks a bed to duckTo × volume under speech and recovers after it', () => {
+    const volume = 0.8;
+    const keys = duckingKeyframes({
+      clipStartSec: 1,
+      clipDurationSec: 6,
+      volume,
+      speech: [{ startSec: 3, endSec: 4 }],
+      idPrefix: 'duck',
+    });
+    const pcm = ones(6);
+    applyEnvelope(pcm, { gain: volume, volumeKeyframes: keys });
+    expect(at(pcm, 0.5)).toBeCloseTo(volume, 4); // before the first key: the clip volume
+    expect(at(pcm, 2.5)).toBeCloseTo(volume * DUCKING.duckTo, 4); // under speech (clip-local)
+    expect(at(pcm, 2 - DUCKING.attackSec / 2)).toBeCloseTo(
+      (volume + volume * DUCKING.duckTo) / 2,
+      2,
+    ); // halfway down the attack ramp
+    expect(at(pcm, 3 + DUCKING.releaseSec + 0.1)).toBeCloseTo(volume, 4);
+  });
+
+  it('keeps fades on top of the keyed gain, and clamps negative keys to silence', () => {
+    const pcm = ones(1);
+    applyEnvelope(pcm, {
+      gain: 1,
+      fadeOutSec: 0.5,
+      volumeKeyframes: [
+        { timeSec: 0, value: 0.5, interpolation: 'linear' },
+        { timeSec: 1, value: 0.5, interpolation: 'linear' },
+      ],
+    });
+    expect(at(pcm, 0.25)).toBeCloseTo(0.5, 4);
+    expect(at(pcm, 0.75)).toBeLessThan(0.3);
+    const negative = ones(0.1);
+    applyEnvelope(negative, {
+      volumeKeyframes: [{ timeSec: 0, value: -1, interpolation: 'linear' }],
+    });
+    expect(Math.max(...negative.left)).toBe(0);
+  });
+
+  it('without keyframes the constant-gain path is sample-identical to before', () => {
+    const keyed = ones(0.2);
+    const plain = ones(0.2);
+    applyEnvelope(plain, { gain: 0.7, fadeInSec: 0.05 });
+    applyEnvelope(keyed, { gain: 0.7, fadeInSec: 0.05, volumeKeyframes: [] });
+    expect(Array.from(keyed.left)).toEqual(Array.from(plain.left));
+    const n = plain.left.length;
+    const fade = Math.round(0.05 * AUDIO_SAMPLE_RATE);
+    for (const i of [0, 100, fade - 1, fade, n - 1]) {
+      expect(plain.left[i]).toBeCloseTo(0.7 * (i < fade ? i / fade : 1), 6);
+    }
   });
 });
 

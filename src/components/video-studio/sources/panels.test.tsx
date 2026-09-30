@@ -8,6 +8,7 @@ import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { VIDEO_STUDIO_ASSET_DRAG_TYPE, type VideoStudioContext } from '../types';
 import { GraphPoolPanel } from './GraphPoolPanel';
 import { QuickStartPanel } from './QuickStartPanel';
+import { MUSIC_MOODS } from './quickStarts';
 
 afterEach(cleanup);
 
@@ -97,7 +98,7 @@ describe('QuickStartPanel', () => {
         }),
       });
       const view = render(<QuickStartPanel studio={studio} />);
-      expect(view.container.querySelectorAll('[data-quick-start]').length).toBe(6);
+      expect(view.container.querySelectorAll('[data-quick-start]').length).toBe(9);
 
       fireEvent.click(
         view.container.querySelector('[data-quick-start="create_image"]') as HTMLElement,
@@ -122,6 +123,92 @@ describe('QuickStartPanel', () => {
         view.container.querySelector('[data-generation-job="job_1"]')?.getAttribute('data-state'),
       ).toBe('completed');
       expect(refresh).toHaveBeenCalled();
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
+    'a music bed takes a mood chip, follows the timeline and ducks by default, from 0:00',
+    async () => {
+      const { studio, calls } = fakeStudio({
+        get_pool: () => ({ assets: pool }),
+        generate: () => ({ jobId: `job_bed_${calls.length}`, state: 'queued' }),
+        generate_status: (input) => ({
+          jobId: (input as { jobId: string }).jobId,
+          state: 'running',
+        }),
+      });
+      studio.project = { ...studio.project, durationSec: 14.25 };
+      const view = render(<QuickStartPanel studio={studio} />);
+      fireEvent.click(
+        view.container.querySelector('[data-quick-start="music_bed"]') as HTMLElement,
+      );
+      const chip = (await waitFor(() => {
+        const found = document.querySelector('[data-music-mood="lofi"]');
+        if (!found) throw new Error('no chip');
+        return found;
+      })) as HTMLElement;
+      expect((view.getByLabelText('Length (s)') as HTMLInputElement).value).toBe('14.3');
+      expect(view.queryByLabelText('Format')).toBeNull();
+      fireEvent.click(chip);
+      expect(chip.getAttribute('aria-pressed')).toBe('true');
+      fireEvent.click(view.getByRole('button', { name: 'Generate' }));
+      await waitFor(() => expect(calls.some((call) => call.op === 'generate')).toBe(true));
+      expect(calls.find((call) => call.op === 'generate')?.input).toEqual({
+        quickStart: 'music_bed',
+        prompt: MUSIC_MOODS[0].prompt,
+        refs: [],
+        place: { atSec: 0 },
+        duck: true,
+      });
+      // An edited length rides along; the one shown follows the timeline.
+      fireEvent.click(
+        view.container.querySelector('[data-quick-start="music_bed"]') as HTMLElement,
+      );
+      const length = (await view.findByLabelText('Length (s)')) as HTMLInputElement;
+      fireEvent.change(length, { target: { value: '20' } });
+      fireEvent.click(document.querySelector('[data-music-mood="cinematic"]') as HTMLElement);
+      fireEvent.click(view.getByRole('button', { name: 'Generate' }));
+      await waitFor(() => expect(calls.filter((call) => call.op === 'generate').length).toBe(2));
+      expect(calls.filter((call) => call.op === 'generate')[1]?.input).toMatchObject({
+        quickStart: 'music_bed',
+        durationSec: 20,
+      });
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
+    'a concept reel shows the catalog and its cost, and spends only on a second click',
+    async () => {
+      const { studio, calls } = fakeStudio({
+        get_pool: () => ({ assets: pool }),
+        generate: () => ({ jobId: 'job_reel', state: 'queued' }),
+        generate_status: () => ({ jobId: 'job_reel', state: 'running' }),
+      });
+      const view = render(<QuickStartPanel studio={studio} />);
+      fireEvent.click(
+        view.container.querySelector('[data-quick-start="headless_concept"]') as HTMLElement,
+      );
+      await waitFor(() => expect(document.querySelectorAll('[data-concept]').length).toBe(10));
+      const generate = view.getByRole('button', { name: 'Generate reel' });
+      expect(generate.hasAttribute('disabled')).toBe(true);
+      const offer = document.querySelector(
+        '[data-concept="offer-direct"] [role="radio"]',
+      ) as HTMLElement;
+      fireEvent.click(offer);
+      await waitFor(() =>
+        expect(view.getByTestId('concept-cost').textContent).toContain('Up to $8'),
+      );
+      fireEvent.click(view.getByRole('button', { name: 'Generate reel' }));
+      expect(calls.some((call) => call.op === 'generate')).toBe(false);
+      fireEvent.click(view.getByRole('button', { name: 'Confirm, spend up to $8' }));
+      await waitFor(() => expect(calls.some((call) => call.op === 'generate')).toBe(true));
+      expect(calls.find((call) => call.op === 'generate')?.input).toMatchObject({
+        quickStart: 'headless_concept',
+        concept: 'offer-direct',
+        place: { atSec: 2.5 },
+      });
     },
     TIMEOUT_MS,
   );

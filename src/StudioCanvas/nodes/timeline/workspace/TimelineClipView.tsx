@@ -16,6 +16,7 @@ import {
   type MotionMenuActions,
 } from '@/components/video-studio/motion/ClipMotionMenus';
 import { cn } from '@/lib/utils';
+import { volumeKeyframesOf } from '../../../utils/splice/timelineAudioEnvelope';
 import { ClipWaveform } from '../ClipWaveform';
 import { useClipMediaPreview } from '../useClipMediaPreview';
 import { TIMELINE_SHORTCUT_KEYS as KEYS } from '../useTimelineKeymap';
@@ -68,6 +69,46 @@ function ClipPreview({ clip, url }: { clip: EditorClip; url?: string }) {
       preload="metadata"
       className="max-h-40 w-full rounded bg-black object-contain"
     />
+  );
+}
+
+/** An audio clip's keyed volume (a ducked bed) as a line over its waveform: the top of the
+ *  block is its loudest point, the bottom silence. Nothing when the volume is not keyed. */
+function VolumeLine({ clip }: { clip: Extract<EditorClip, { kind: 'audio' }> }) {
+  const keys = volumeKeyframesOf(clip.keyframes).sort(
+    (left, right) => left.timeSec - right.timeSec,
+  );
+  const first = keys[0];
+  const last = keys.at(-1);
+  if (!first || !last) return null;
+  const end = clip.durationSec;
+  // Before the first key the clip plays at its own volume; after the last, at the last key.
+  const stops = [
+    { timeSec: 0, value: first.timeSec > 0 ? clip.volume : first.value },
+    ...keys.filter((key) => key.timeSec > 0 && key.timeSec < end),
+    { timeSec: end, value: last.value },
+  ];
+  const peak = Math.max(1e-6, ...stops.map((stop) => stop.value));
+  const points = stops
+    .map((stop) => `${stop.timeSec.toFixed(4)},${(1 - (0.9 * stop.value) / peak).toFixed(4)}`)
+    .join(' ');
+  return (
+    <svg
+      aria-hidden="true"
+      data-volume-line={keys.length}
+      viewBox={`0 0 ${end} 1`}
+      preserveAspectRatio="none"
+      className="pointer-events-none absolute inset-x-0 top-3 bottom-0 h-auto w-full"
+    >
+      <polyline
+        points={points}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        vectorEffect="non-scaling-stroke"
+        className="text-amber-300"
+      />
+    </svg>
   );
 }
 
@@ -160,6 +201,7 @@ export function TimelineClipView({
             className="pointer-events-none absolute inset-x-0 top-3 bottom-0 h-auto w-full text-white/55"
           />
         ) : null}
+        {clip.kind === 'audio' ? <VolumeLine clip={clip} /> : null}
         <HoverCard openDelay={600}>
           <HoverCardTrigger
             render={

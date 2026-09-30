@@ -1,8 +1,8 @@
 'use client';
 
-// Opens the Video Editor on a Library video. The editor's Dialog stacks over the
-// asset detail modal; Radix hands Escape to the topmost dismissable layer, so the
-// editor closes first and the detail view stays put.
+// Opens the Video Studio on a Library video, image or audio asset: the project bound to
+// the asset, seeded with that asset on its first open. A video seeds the main track; an
+// image (as an overlay) or audio (on an audio track) is placed by the add_clip op.
 
 import { editorCommandBatchSchema, type MediaAsset } from '@continuum/contracts';
 import { Loader2, Plus, Scissors } from 'lucide-react';
@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { studioVideoHref } from '@/lib/ai-studio/studioVideoHref';
+import { runVideoEditorOp } from '@/lib/api/videoEditorOps.client';
 import {
   applyVideoProjectCommands,
   createVideoProject,
@@ -30,12 +31,12 @@ export function EditTimelineButton({ brandId, asset, onAssetChanged }: EditTimel
   const { show } = useToast();
   const [opening, setOpening] = useState(false);
 
-  if (asset.kind !== 'video') return null;
+  if (asset.kind === 'file') return null;
 
   const openStudio = async () => {
     if (!asset.headVersionId) {
       show({
-        title: 'Video version unavailable',
+        title: 'Stored version unavailable',
         description: 'Create a stored version before editing.',
         variant: 'warning',
       });
@@ -56,7 +57,9 @@ export function EditTimelineButton({ brandId, asset, onAssetChanged }: EditTimel
         });
         projectId = project.projectId;
       }
-      if (project.tracks.length === 0) {
+      if (project.tracks.length === 0 && asset.kind !== 'video') {
+        await runVideoEditorOp(project.projectId, 'add_clip', { assetId: asset.id, atSec: 0 });
+      } else if (project.tracks.length === 0) {
         const durationSec = Math.max(0.1, (asset.durationMs ?? 5_000) / 1_000);
         const issuedAt = new Date().toISOString();
         const batchId = crypto.randomUUID();
@@ -166,7 +169,7 @@ export function EditTimelineButton({ brandId, asset, onAssetChanged }: EditTimel
         ) : (
           <Scissors className="size-3.5" aria-hidden />
         )}
-        Edit video
+        {asset.kind === 'video' ? 'Edit video' : 'Edit in timeline'}
       </Button>
       <Link href="/studio/video/new" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
         <Plus className="size-3.5" aria-hidden /> New edit

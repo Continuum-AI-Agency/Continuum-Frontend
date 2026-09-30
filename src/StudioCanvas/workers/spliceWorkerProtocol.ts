@@ -1,4 +1,4 @@
-import type { ActionId } from '@continuum/contracts';
+import type { ActionId, NumericKeyframe } from '@continuum/contracts';
 import type { CaptionFontPayload } from '@/lib/clips/captionFonts';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { ClipEffectSpec } from '../utils/render/effectSpec';
@@ -71,6 +71,8 @@ export type TimelineAudioWorkerItem = {
   volume?: number;
   fadeInSec?: number;
   fadeOutSec?: number;
+  /** `audio.volume` keyframes, clip-local seconds (a ducked music bed). */
+  volumeKeyframes?: NumericKeyframe[];
 };
 
 // WOFF2 bytes ride WITH the job rather than being fetched worker-side: a worker has no

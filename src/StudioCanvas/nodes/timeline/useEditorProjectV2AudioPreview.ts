@@ -4,7 +4,10 @@ import type { EditorProjectV2, EditorTrack } from '@continuum/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/components/ui/ToastProvider';
 import { headFadeFor, tailFadeFor } from '../../utils/render/transitions';
-import { resolveTimelineAudioEnvelope } from '../../utils/splice/timelineAudioEnvelope';
+import {
+  resolveTimelineAudioEnvelope,
+  volumeKeyframesOf,
+} from '../../utils/splice/timelineAudioEnvelope';
 import type {
   TimelinePreviewAudioEvent,
   TimelinePreviewAudioPlan,
@@ -107,6 +110,7 @@ export function buildEditorProjectV2AudioPreviewPlan(input: {
   for (const clip of audioTracks.flatMap((track) => track.clips)) {
     const blob = input.blobsByClipId.get(clip.id);
     if (!clip.enabled || clip.muted || !blob) continue;
+    const volumeKeyframes = volumeKeyframesOf(clip.keyframes);
     events.push({
       id: clip.id,
       sourceKey: exactSourceKey(clip),
@@ -123,6 +127,7 @@ export function buildEditorProjectV2AudioPreviewPlan(input: {
         manualFadeInSec: clip.fadeInSec,
         manualFadeOutSec: clip.fadeOutSec,
       }),
+      ...(volumeKeyframes.length > 0 ? { volumeKeyframes } : {}),
     });
   }
 
