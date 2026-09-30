@@ -39,17 +39,17 @@ export function spendState(perDay: number, plannedPerDay: number): TileState {
 /** Which result the account buys, in the words the sentence uses. Keyed by the metric's
  *  KPI field so a custom conversion that behaves like a lead is still called a lead. */
 const RESULT_WORDS: Record<string, { one: string; many: string }> = {
-  purchases: { one: 'compra', many: 'compras' },
-  appInstalls: { one: 'instalación', many: 'instalaciones' },
-  signups: { one: 'registro', many: 'registros' },
+  purchases: { one: 'purchase', many: 'purchases' },
+  appInstalls: { one: 'install', many: 'installs' },
+  signups: { one: 'sign-up', many: 'sign-ups' },
   leads: { one: 'lead', many: 'leads' },
-  landingPageViews: { one: 'visita', many: 'visitas' },
-  impressions: { one: 'mil impresiones', many: 'mil impresiones' },
-  conversations: { one: 'conversación', many: 'conversaciones' },
-  linkClicks: { one: 'clic', many: 'clics' },
-  thruplays: { one: 'reproducción', many: 'reproducciones' },
-  postEngagement: { one: 'interacción', many: 'interacciones' },
-  clicks: { one: 'clic', many: 'clics' },
+  landingPageViews: { one: 'visit', many: 'visits' },
+  impressions: { one: 'thousand impressions', many: 'thousand impressions' },
+  conversations: { one: 'conversation', many: 'conversations' },
+  linkClicks: { one: 'click', many: 'clicks' },
+  thruplays: { one: 'play', many: 'plays' },
+  postEngagement: { one: 'engagement', many: 'engagements' },
+  clicks: { one: 'click', many: 'clicks' },
 };
 
 export type PortfolioWindow = {
@@ -167,7 +167,7 @@ export function resultWords(kind: string, fallbackLabel: string): { one: string;
 /**
  * The account's results, one row per kind it buys, largest spend first.
  *
- * A window of zero results still counts: "0 compras en Tours" is a fact the sentence has
+ * A window of zero results still counts: "0 purchases in Tours" is a fact the sentence has
  * to state, and folding it into silence would hide the one portfolio spending with nothing
  * to show. Portfolios without a window (no cycle yet) are not counted anywhere.
  */
@@ -288,13 +288,13 @@ export function latestCycle(windows: ReadonlyMap<string, PortfolioWindow>): stri
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** `d` de `mes`, in the sentence's language, from a UTC date. */
-function dayOfMonth(date: Date): string {
-  return date.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+/** `Mon d`, en-US, from a UTC date: "Sep 27". */
+function monthDay(date: Date): string {
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
 /**
- * The calendar days the window covers — "21 al 27 de septiembre".
+ * The calendar days the window covers — "Sep 21–27", or "Sep 26 – Oct 2" across a month.
  *
  * A cycle measures the seven full days before the day it runs, so the window ends the day
  * before the cycle's UTC date. Null when no cycle has run.
@@ -306,36 +306,45 @@ export function windowLabel(cycleTs: string | null, days: number = WINDOW_DAYS):
   const end = new Date(Math.floor(cycle / DAY_MS) * DAY_MS - DAY_MS);
   const start = new Date(end.getTime() - (days - 1) * DAY_MS);
   const sameMonth = start.getUTCMonth() === end.getUTCMonth();
-  if (sameMonth) return `${start.getUTCDate()} al ${dayOfMonth(end)}`;
-  return `${dayOfMonth(start)} al ${dayOfMonth(end)}`;
+  if (sameMonth) return `${monthDay(start)}–${end.getUTCDate()}`;
+  return `${monthDay(start)} – ${monthDay(end)}`;
 }
 
-/** Whole-percent distance to target as words: "33% sobre objetivo", "12% bajo objetivo". */
+/** Which side of its target a cost sits on. `none` is "no cost or no target to judge by". */
+export type TargetSide = 'over' | 'under' | 'on' | 'none';
+
+/** The side of the target, as a value — callers branch on this, never on the label's words. */
+export function targetSide(vsTargetPct: number | null): TargetSide {
+  if (vsTargetPct == null) return 'none';
+  if (vsTargetPct === 0) return 'on';
+  return vsTargetPct > 0 ? 'over' : 'under';
+}
+
+/** Whole-percent distance to target as words: "33% over target", "12% under target". */
 export function vsTargetLabel(vsTargetPct: number | null): string {
-  if (vsTargetPct == null) return 'sin objetivo';
-  if (vsTargetPct === 0) return 'en objetivo';
-  return vsTargetPct > 0
-    ? `${vsTargetPct}% sobre objetivo`
-    : `${Math.abs(vsTargetPct)}% bajo objetivo`;
+  const side = targetSide(vsTargetPct);
+  if (side === 'none') return 'no target';
+  if (side === 'on') return 'on target';
+  return `${Math.abs(vsTargetPct ?? 0)}% ${side} target`;
 }
 
-/** Whole-percent move against the window before: "+12% vs sem. ant." */
+/** Whole-percent move against the window before: "+12% vs prev. week" */
 export function vsPriorLabel(vsPriorPct: number | null): string | null {
   if (vsPriorPct == null) return null;
   const sign = vsPriorPct > 0 ? '+' : vsPriorPct < 0 ? '−' : '';
-  return `${sign}${Math.abs(vsPriorPct)}% vs sem. ant.`;
+  return `${sign}${Math.abs(vsPriorPct)}% vs prev. week`;
 }
 
-/** Pluralised count of a result: "516 conversaciones", "1 lead", "0 compras". */
+/** Pluralised count of a result: "516 conversations", "1 lead", "0 purchases". */
 export function resultCount(count: number, words: { one: string; many: string }): string {
-  return `${count.toLocaleString('es-MX')} ${count === 1 ? words.one : words.many}`;
+  return `${count.toLocaleString('en-US')} ${count === 1 ? words.one : words.many}`;
 }
 
 /**
  * One clause of the sentence per result kind, in the tile's own terms.
  *
- * With a cost: "conversaciones a 39.95 MXN (33% sobre objetivo)". Without one — zero results
- * — the clause states the count and who is spending: "0 compras en Tours". `names` resolves
+ * With a cost: "conversations at 39.95 MXN (33% over target)". Without one — zero results
+ * — the clause states the count and who is spending: "0 purchases in Tours". `names` resolves
  * the portfolios so that second shape can say where.
  */
 export type HeadlineClause =
@@ -367,21 +376,21 @@ export function headlineClauses(
       shape: 'count',
       kind,
       count: resultCount(kind.results, kind.words),
-      where: owners.length > 0 && owners.length <= 2 ? owners.join(' y ') : null,
+      where: owners.length > 0 && owners.length <= 2 ? owners.join(' and ') : null,
     };
   });
 }
 
-/** "a, b y c" — the sentence's own list separator. */
+/** "a, b and c" — the sentence's own list separator. */
 export function joinClauses(parts: readonly string[]): string {
   if (parts.length <= 1) return parts[0] ?? '';
-  return `${parts.slice(0, -1).join(', ')} y ${parts[parts.length - 1]}`;
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
-/** "4 decisiones esperan" / "1 decisión espera" / "ninguna decisión espera". */
+/** "4 decisions waiting" / "1 decision waiting" / "no decisions waiting". */
 export function decisionsLabel(count: number): string {
-  if (count === 0) return 'ninguna decisión espera';
-  return count === 1 ? '1 decisión espera' : `${count} decisiones esperan`;
+  if (count === 0) return 'no decisions waiting';
+  return count === 1 ? '1 decision waiting' : `${count} decisions waiting`;
 }
 
 export type RowSortKey = 'distance' | 'name' | 'daily' | 'pending';

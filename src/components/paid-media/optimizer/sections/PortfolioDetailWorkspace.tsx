@@ -527,6 +527,7 @@ export function PortfolioDetailWorkspace({
       <AskedProposalPanel
         actions={audienceCard.actions}
         adAccountId={adAccountId}
+        brandId={brandId}
         busy={audienceCard.busy}
         cboPreviewByCampaign={audienceCard.cboPreviewByCampaign}
         currency={currency ?? null}

@@ -314,9 +314,9 @@ describe('buildAskedForRows — where the CTA lands', () => {
     const [row] = buildAskedForRows([audienceRow({}, { status: 'adopted', handoff })], 500, {
       proposals: [proposal],
     });
-    expect(row?.tierLabel).toBe('Bloqueada');
+    expect(row?.tierLabel).toBe('Blocked');
     expect(row?.nextNote).toBe(
-      'Bloqueada — No delivering creative in this portfolio has enough results to carry into a new ad set yet. The trigger did not fire again. El ciclo cerró la recomendación que abrió.',
+      'Blocked — No delivering creative in this portfolio has enough results to carry into a new ad set yet. The trigger did not fire again. The cycle closed the recommendation it opened.',
     );
     expect(row?.proposal?.state).toBe('blocked');
     expect(row?.proposal?.closed).toBe(true);
@@ -396,8 +396,8 @@ describe('buildAskedForRows — the state of the proposal a handoff opened', () 
 
   it('queued: the row waits with the proposal, and the proposal opens on the row', () => {
     const row = rowFor({ status: 'queued' });
-    expect(row?.tierLabel).toBe('En cola');
-    expect(row?.nextNote).toBe('En cola: Jaina la toma en menos de un minuto.');
+    expect(row?.tierLabel).toBe('Queued');
+    expect(row?.nextNote).toBe('Queued: Jaina picks it up in under a minute.');
     expect(row?.proposal?.state).toBe('queued');
     expect(row?.proposal?.retryable).toBe(false);
     expect(row?.cta).toEqual({
@@ -409,15 +409,15 @@ describe('buildAskedForRows — the state of the proposal a handoff opened', () 
 
   it('proposing: Jaina is reading', () => {
     const row = rowFor({ status: 'proposing' });
-    expect(row?.tierLabel).toBe('Jaina está leyendo');
-    expect(row?.nextNote).toContain('Jaina está leyendo');
+    expect(row?.tierLabel).toBe('Jaina is reading');
+    expect(row?.nextNote).toContain('Jaina is reading');
     expect(row?.proposal?.retryable).toBe(false);
   });
 
   it('ready: the row says so and points at the create flow', () => {
     const row = rowFor({ status: 'ready', proposal: { version: 1 } });
-    expect(row?.tierLabel).toBe('Lista');
-    expect(row?.nextNote).toContain('crear el conjunto nuevo (pausado)');
+    expect(row?.tierLabel).toBe('Ready');
+    expect(row?.nextNote).toContain('create the new ad set (paused)');
     expect(row?.proposal?.state).toBe('ready');
     expect(row?.proposal?.retryable).toBe(false);
   });
@@ -427,18 +427,14 @@ describe('buildAskedForRows — the state of the proposal a handoff opened', () 
       status: 'blocked',
       blocked_by: {
         code: 'no_creatives',
-        message: 'Ningún creativo del portafolio tiene resultados suficientes.',
+        message: 'No creative in the portfolio has enough results.',
         campaign_id: 'c1',
         campaign_name: 'MENSAJES',
       },
     });
-    expect(row?.tierLabel).toBe('Bloqueada');
-    expect(row?.nextNote).toBe(
-      'Bloqueada — Ningún creativo del portafolio tiene resultados suficientes.',
-    );
-    expect(row?.proposal?.reason).toBe(
-      'Ningún creativo del portafolio tiene resultados suficientes.',
-    );
+    expect(row?.tierLabel).toBe('Blocked');
+    expect(row?.nextNote).toBe('Blocked — No creative in the portfolio has enough results.');
+    expect(row?.proposal?.reason).toBe('No creative in the portfolio has enough results.');
     expect(row?.proposal?.closed).toBe(false);
     expect(row?.proposal?.retryable).toBe(true);
   });
@@ -450,8 +446,10 @@ describe('buildAskedForRows — the state of the proposal a handoff opened', () 
       status: 'failed',
       error: { code: 'propose_failed', phase: 'propose', message: zodDump },
     });
-    expect(row?.tierLabel).toBe('No se pudo construir');
-    expect(row?.nextNote).toBe('No se pudo construir — Jaina no pudo armar la propuesta.');
+    expect(row?.tierLabel).toBe('Failed');
+    expect(row?.nextNote).toBe(
+      'Failed — Jaina ran into an error while reading the audience, catalogue and creatives.',
+    );
     expect(row?.nextNote).not.toContain('too_big');
     expect(row?.nextNote).not.toContain('{');
     expect(row?.proposal?.state).toBe('failed');
@@ -461,11 +459,9 @@ describe('buildAskedForRows — the state of the proposal a handoff opened', () 
   it('failed with a sentence for a message keeps that sentence', () => {
     const row = rowFor({
       status: 'failed',
-      error: { code: 'execute_failed', message: 'Meta rechazó el conjunto: presupuesto mínimo.' },
+      error: { code: 'execute_failed', message: 'Meta rejected the ad set: minimum budget.' },
     });
-    expect(row?.nextNote).toBe(
-      'No se pudo construir — Meta rechazó el conjunto: presupuesto mínimo.',
-    );
+    expect(row?.nextNote).toBe('Failed — Meta rejected the ad set: minimum budget.');
   });
 
   it('superseded without a body: closed by the cycle, nothing to ask again for', () => {
@@ -473,16 +469,16 @@ describe('buildAskedForRows — the state of the proposal a handoff opened', () 
       status: 'superseded',
       error: { code: 'signal_stopped', message: 'The trigger did not fire again.' },
     });
-    expect(row?.tierLabel).toBe('Cerrada');
+    expect(row?.tierLabel).toBe('Closed');
     expect(row?.nextNote).toBe(
-      'The trigger did not fire again. El ciclo cerró la recomendación que abrió.',
+      'The trigger did not fire again. The cycle closed the recommendation it opened.',
     );
     expect(row?.proposal?.closed).toBe(true);
     expect(row?.proposal?.retryable).toBe(false);
   });
 
   it('asked again: the row follows the proposal that replaced the one the handoff opened', () => {
-    // Production, 2026-09-29 21:11: "Pedirla de nuevo" superseded e2310011 ("refreshed") and
+    // Production, 2026-09-29 21:11: "Ask Jaina again" superseded e2310011 ("refreshed") and
     // opened 1e89d5e7 on the same recommendation. The row must read 1e89d5e7, as the card
     // does, not report the refreshed row as closed by the cycle.
     const [row] = buildAskedForRows([suggestion()], 500, {
@@ -495,7 +491,7 @@ describe('buildAskedForRows — the state of the proposal a handoff opened', () 
         proposal({
           id: '1e89d5e7-0000-4000-8000-000000000000',
           status: 'failed',
-          error: { code: 'execute_failed', message: 'Meta rechazó el conjunto: sin permiso.' },
+          error: { code: 'execute_failed', message: 'Meta rejected the ad set: no permission.' },
           created_at: '2026-09-29T21:11:24Z',
           updated_at: '2026-09-29T21:13:56Z',
         }),
@@ -503,15 +499,15 @@ describe('buildAskedForRows — the state of the proposal a handoff opened', () 
     });
     expect(row?.proposal?.row.id).toBe('1e89d5e7-0000-4000-8000-000000000000');
     expect(row?.proposal?.closed).toBe(false);
-    expect(row?.tierLabel).toBe('No se pudo construir');
-    expect(row?.nextNote).toBe('No se pudo construir — Meta rechazó el conjunto: sin permiso.');
+    expect(row?.tierLabel).toBe('Failed');
+    expect(row?.nextNote).toBe('Failed — Meta rejected the ad set: no permission.');
     expect(row?.proposal?.retryable).toBe(true);
   });
 
   it('executed: created on Meta', () => {
     const row = rowFor({ status: 'executed', proposal: { version: 1 }, result: {} });
-    expect(row?.tierLabel).toBe('Creada en Meta');
-    expect(row?.nextNote).toContain('Creada en Meta');
+    expect(row?.tierLabel).toBe('Created in Meta');
+    expect(row?.nextNote).toContain('Created in Meta');
   });
 
   it('a proposal the query does not have yet leaves the handoff note in place', () => {

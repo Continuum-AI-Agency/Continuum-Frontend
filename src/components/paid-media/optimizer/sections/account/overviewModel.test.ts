@@ -197,7 +197,7 @@ describe('resultKinds', () => {
     expect(leads?.state).toBe('warn');
   });
 
-  it('keeps a kind with zero results, so the sentence can say 0 compras', () => {
+  it('keeps a kind with zero results, so the sentence can say 0 purchases', () => {
     const purchases = kinds[2];
     expect(purchases?.results).toBe(0);
     expect(purchases?.spend).toBe(408);
@@ -206,7 +206,7 @@ describe('resultKinds', () => {
   });
 
   it('names the kind in the sentence’s own words, from the KPI field', () => {
-    expect(kinds[0]?.words).toEqual({ one: 'conversación', many: 'conversaciones' });
+    expect(kinds[0]?.words).toEqual({ one: 'conversation', many: 'conversations' });
     expect(resultWords('unknown_kpi', 'Widget events')).toEqual({
       one: 'widget events',
       many: 'widget events',
@@ -246,11 +246,11 @@ describe('accountSpend and latestCycle', () => {
 
 describe('windowLabel', () => {
   it('covers the seven full days before the cycle ran', () => {
-    expect(windowLabel('2026-09-28T06:00:00Z')).toBe('21 al 27 de septiembre');
+    expect(windowLabel('2026-09-28T06:00:00Z')).toBe('Sep 21–27');
   });
 
   it('names both months when the window straddles one', () => {
-    expect(windowLabel('2026-10-03T06:00:00Z')).toBe('26 de septiembre al 2 de octubre');
+    expect(windowLabel('2026-10-03T06:00:00Z')).toBe('Sep 26 – Oct 2');
   });
 
   it('is null without a cycle or with a date it cannot read', () => {
@@ -261,35 +261,35 @@ describe('windowLabel', () => {
 
 describe('the sentence’s words', () => {
   it('says the distance to target as over, under, on, or none', () => {
-    expect(vsTargetLabel(33)).toBe('33% sobre objetivo');
-    expect(vsTargetLabel(-12)).toBe('12% bajo objetivo');
-    expect(vsTargetLabel(0)).toBe('en objetivo');
-    expect(vsTargetLabel(null)).toBe('sin objetivo');
+    expect(vsTargetLabel(33)).toBe('33% over target');
+    expect(vsTargetLabel(-12)).toBe('12% under target');
+    expect(vsTargetLabel(0)).toBe('on target');
+    expect(vsTargetLabel(null)).toBe('no target');
   });
 
   it('signs the move against last week', () => {
-    expect(vsPriorLabel(12)).toBe('+12% vs sem. ant.');
-    expect(vsPriorLabel(-3)).toBe('−3% vs sem. ant.');
-    expect(vsPriorLabel(0)).toBe('0% vs sem. ant.');
+    expect(vsPriorLabel(12)).toBe('+12% vs prev. week');
+    expect(vsPriorLabel(-3)).toBe('−3% vs prev. week');
+    expect(vsPriorLabel(0)).toBe('0% vs prev. week');
     expect(vsPriorLabel(null)).toBeNull();
   });
 
   it('pluralises a count', () => {
     expect(resultCount(1, { one: 'lead', many: 'leads' })).toBe('1 lead');
-    expect(resultCount(0, { one: 'compra', many: 'compras' })).toBe('0 compras');
+    expect(resultCount(0, { one: 'purchase', many: 'purchases' })).toBe('0 purchases');
   });
 
   it('counts the decisions waiting', () => {
-    expect(decisionsLabel(0)).toBe('ninguna decisión espera');
-    expect(decisionsLabel(1)).toBe('1 decisión espera');
-    expect(decisionsLabel(4)).toBe('4 decisiones esperan');
+    expect(decisionsLabel(0)).toBe('no decisions waiting');
+    expect(decisionsLabel(1)).toBe('1 decision waiting');
+    expect(decisionsLabel(4)).toBe('4 decisions waiting');
   });
 
   it('joins clauses the way the sentence reads', () => {
     expect(joinClauses([])).toBe('');
     expect(joinClauses(['a'])).toBe('a');
-    expect(joinClauses(['a', 'b'])).toBe('a y b');
-    expect(joinClauses(['a', 'b', 'c'])).toBe('a, b y c');
+    expect(joinClauses(['a', 'b'])).toBe('a and b');
+    expect(joinClauses(['a', 'b', 'c'])).toBe('a, b and c');
   });
 
   it('composes one clause per kind: a cost with its distance, or a count with its owner', () => {
@@ -302,9 +302,9 @@ describe('the sentence’s words', () => {
     expect(clauses[0]).toMatchObject({
       shape: 'cost',
       cost: '39.95 MXN',
-      distance: '33% sobre objetivo',
+      distance: '33% over target',
     });
-    expect(clauses[2]).toMatchObject({ shape: 'count', count: '0 compras', where: 'Tours' });
+    expect(clauses[2]).toMatchObject({ shape: 'count', count: '0 purchases', where: 'Tours' });
   });
 
   it('names no owner when three or more portfolios share the silent kind', () => {

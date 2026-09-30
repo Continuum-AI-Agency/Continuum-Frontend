@@ -73,24 +73,24 @@ export type JainaAccountContext = {
 
 export function jainaAccountEntryPrompts(account: JainaAccountContext): JainaEntry[] {
   const accountName = account.accountLabel
-    ? `la cuenta "${account.accountLabel}"`
-    : 'la cuenta activa';
+    ? `the account "${account.accountLabel}"`
+    : 'the active account';
   const portfolioList =
     account.portfolios.length > 0
       ? account.portfolios
-          .map((portfolio) => `"${portfolio.name}" (objetivo: ${humanize(portfolio.objective)})`)
+          .map((portfolio) => `"${portfolio.name}" (objective: ${humanize(portfolio.objective)})`)
           .join(', ')
-      : 'ninguno activo';
-  const who = `${accountName}, con los portafolios del optimizer: ${portfolioList}`;
+      : 'none active';
+  const who = `${accountName}, with the optimizer's portfolios: ${portfolioList}`;
   const scopeAndActions =
-    'Dame la línea de alcance, una tabla por portafolio y las acciones para esta semana.';
+    "Give me the reach line, one table per portfolio and this week's actions.";
 
   const expensive: JainaEntry[] = account.worstOverTarget
     ? [
         {
           key: 'expensive',
-          label: `¿Por qué ${account.worstOverTarget} está caro?`,
-          prompt: `Para ${who}: ¿por qué "${account.worstOverTarget}" está caro? Es el portafolio más lejos por encima de su costo objetivo. Compara su costo por resultado de los últimos 7 días contra el objetivo y contra los 14 días previos, nombra los ad sets que empujan el costo con su evidencia, y dime qué cambiar. ${scopeAndActions}`,
+          label: `Why is ${account.worstOverTarget} expensive?`,
+          prompt: `For ${who}: why is "${account.worstOverTarget}" expensive? It is the portfolio furthest above its target cost. Compare its cost per result over the last 7 days against the target and against the 14 days before, name the ad sets pushing the cost up with their evidence, and tell me what to change. ${scopeAndActions}`,
         },
       ]
     : [];
@@ -98,32 +98,42 @@ export function jainaAccountEntryPrompts(account: JainaAccountContext): JainaEnt
   const silentOrRisks: JainaEntry = account.noResults
     ? {
         key: 'silent',
-        label: `¿Cómo va ${account.noResults}?`,
-        prompt: `Para ${who}: ¿cómo va "${account.noResults}"? Está gastando sin resultados. Revisa la entrega, el tracking, la audiencia y los creativos de sus ad sets, di si el problema es de medición o de desempeño, y qué hacer hoy. ${scopeAndActions}`,
+        label: `How is ${account.noResults} doing?`,
+        prompt: `For ${who}: how is "${account.noResults}" doing? It is spending with no results. Check the delivery, the tracking, the audience and the creatives of its ad sets, say whether the problem is measurement or performance, and what to do today. ${scopeAndActions}`,
       }
     : {
         key: 'risks',
-        label: '¿Qué está por salir mal?',
-        prompt: `Para ${who}: ¿qué está por salir mal? En cada portafolio: ad sets bajo el piso de eventos, huecos de tracking, saturación de audiencia, fatiga creativa y problemas de entrega, cada uno con su evidencia. ${scopeAndActions}`,
+        label: "What's about to go wrong?",
+        prompt: `For ${who}: what's about to go wrong? In each portfolio: ad sets under the event floor, tracking gaps, audience saturation, creative fatigue and delivery problems, each with its evidence. ${scopeAndActions}`,
       };
 
   return [
     ...expensive,
     {
       key: 'pause',
-      label: '¿Qué pausar esta semana?',
-      prompt: `Para ${who}: ¿qué pausar esta semana? Señala en cada portafolio los ad sets y anuncios que gastan sin resultados, con un costo muy por encima del objetivo o con fatiga creativa, con el gasto que libera cada pausa y el riesgo de hacerla. ${scopeAndActions}`,
+      label: 'What to pause this week?',
+      prompt: `For ${who}: what to pause this week? In each portfolio, point out the ad sets and ads spending with no results, with a cost far above target or with creative fatigue, with the spend each pause frees and the risk of making it. ${scopeAndActions}`,
     },
     silentOrRisks,
     {
       key: 'budget',
-      label: '¿Dónde está el presupuesto?',
-      prompt: `Para ${who}: ¿dónde está el presupuesto? Presupuesto diario y gasto real de cada portafolio, si vamos a ritmo, qué movió el optimizer en su último ciclo y qué quedó retenido. ${scopeAndActions}`,
+      label: "Where's the budget?",
+      prompt: `For ${who}: where's the budget? Each portfolio's daily budget and actual spend, whether we are on pace, what the optimizer moved in its last cycle and what it held back. ${scopeAndActions}`,
     },
     {
       key: 'summary',
-      label: 'Resumen para el cliente',
-      prompt: `Para ${who}: escribe un resumen para el cliente. Qué pasó esta semana en cada portafolio (gasto, resultados y costo por resultado contra el objetivo), qué se cambió y por qué, y qué sigue. Tono claro y sin jerga, con una tabla por portafolio y tres puntos de acción al final.`,
+      label: 'Summary for the client',
+      prompt: `For ${who}: write a summary for the client. What happened this week in each portfolio (spend, results and cost per result against the target), what was changed and why, and what comes next. Clear tone and no jargon, with one table per portfolio and three action points at the end.`,
     },
   ];
+}
+
+/**
+ * The weekly report for one ad account: the last complete Monday–Sunday week (Period A)
+ * against the month to date (Period B), a section per Optimizer objective and this week's
+ * recommendations. The Backend routes this ask to the `weekly_report` template; the phrase
+ * "Weekly report" is what it matches, so keep it at the head of the prompt.
+ */
+export function jainaWeeklyReportPrompt(adAccountId: string): string {
+  return `Weekly report for the ad account "${adAccountId}": last complete Monday–Sunday week (Period A) against month to date (Period B), one section per Optimizer objective, and the recommendations for this week.`;
 }

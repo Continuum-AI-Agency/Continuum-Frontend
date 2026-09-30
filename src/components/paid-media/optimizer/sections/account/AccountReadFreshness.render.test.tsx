@@ -21,11 +21,11 @@ const refresh = (over: Partial<NonNullable<AccountReadRefresh>> = {}): AccountRe
 
 describe('dating the read', () => {
   it('says how long ago in the coarsest unit that is still true', () => {
-    expect(agoLabel('2026-09-21T11:59:30.000Z', NOW)).toBe('recién');
-    expect(agoLabel('2026-09-21T11:40:00.000Z', NOW)).toBe('hace 20 min');
-    expect(agoLabel('2026-09-21T11:00:00.000Z', NOW)).toBe('hace 1 hora');
-    expect(agoLabel('2026-09-21T00:03:30.000Z', NOW)).toBe('hace 11 horas');
-    expect(agoLabel('2026-09-19T00:03:30.000Z', NOW)).toBe('hace 2 días');
+    expect(agoLabel('2026-09-21T11:59:30.000Z', NOW)).toBe('just now');
+    expect(agoLabel('2026-09-21T11:40:00.000Z', NOW)).toBe('20 min ago');
+    expect(agoLabel('2026-09-21T11:00:00.000Z', NOW)).toBe('1 hour ago');
+    expect(agoLabel('2026-09-21T00:03:30.000Z', NOW)).toBe('11 hours ago');
+    expect(agoLabel('2026-09-19T00:03:30.000Z', NOW)).toBe('2 days ago');
   });
 
   it('refuses to date a timestamp it cannot read, rather than printing NaN', () => {
@@ -44,7 +44,7 @@ describe('dating the read', () => {
       />,
     );
     // The defect, verbatim: composed at 00:03, deploy at ~06:00, read at noon.
-    expect(getByTestId('account-read-taken').textContent).toContain('hace 11 horas');
+    expect(getByTestId('account-read-taken').textContent).toContain('11 hours ago');
     expect(getByTestId('account-read-taken').textContent).toContain('2026-09-21');
   });
 
@@ -57,7 +57,7 @@ describe('dating the read', () => {
         utcDay={null}
       />,
     );
-    expect(getByTestId('account-read-taken').textContent).toBe('Sin lectura todavía');
+    expect(getByTestId('account-read-taken').textContent).toBe('No read yet');
   });
 });
 
@@ -93,7 +93,7 @@ describe('asking again', () => {
     );
     expect(tooSoon.getByTestId('account-read-refresh').hasAttribute('disabled')).toBe(true);
     expect(tooSoon.getByTestId('account-read-refresh-note').textContent).toContain(
-      'Se puede releer a las',
+      'Can re-read at',
     );
     cleanup();
 
@@ -112,7 +112,9 @@ describe('asking again', () => {
       />,
     );
     expect(spent.getByTestId('account-read-refresh').hasAttribute('disabled')).toBe(true);
-    expect(spent.getByTestId('account-read-refresh-note').textContent).toContain('tres veces hoy');
+    expect(spent.getByTestId('account-read-refresh-note').textContent).toContain(
+      'three times today',
+    );
   });
 
   it('offers nothing at all when the RPC is not deployed yet', () => {
@@ -130,7 +132,7 @@ describe('asking again', () => {
     expect(queryByTestId('account-read-refresh')).toBeNull();
     expect(queryByTestId('account-read-refresh-note')).toBeNull();
     // The date is the half that does not need the new RPC, and it still shows.
-    expect(getByTestId('account-read-taken').textContent).toContain('hace 11 horas');
+    expect(getByTestId('account-read-taken').textContent).toContain('11 hours ago');
   });
 });
 
@@ -147,17 +149,17 @@ describe('while a re-read is queued', () => {
     );
     const note = getByTestId('account-read-refresh-note');
     expect(note.getAttribute('data-running')).toBe('true');
-    expect(note.textContent).toContain('Releyendo la cuenta');
+    expect(note.textContent).toContain('Re-reading the account');
     // The words already on screen are still dated — they are not wiped while the new read runs.
-    expect(getByTestId('account-read-taken').textContent).toContain('hace 11 horas');
+    expect(getByTestId('account-read-taken').textContent).toContain('11 hours ago');
     expect(queryByTestId('account-read-refresh-error')).toBeNull();
-    expect(getByTestId('account-read-refresh').textContent).toContain('Releyendo');
+    expect(getByTestId('account-read-refresh').textContent).toContain('Re-reading');
   });
 
   it('calls a stalled row what it is, and lets it be rescued', () => {
     const copy = refreshCopy(refresh({ can_request: true, state: 'stalled' }));
     expect(copy.running).toBe(false);
-    expect(copy.note).toContain('se detuvo a medias');
+    expect(copy.note).toContain('stopped halfway');
     const { getByTestId } = render(
       <AccountReadFreshness
         now={NOW}

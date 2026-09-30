@@ -3,10 +3,11 @@ import { resolve } from 'node:path';
 import { type Browser, type BrowserContext, expect, type Page, test } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
-  mintAccessTokenForEmail,
-  mintSessionForEmail,
-  type PlaywrightStorageState,
-} from './support/auth';
+  readActionChange,
+  revertState,
+} from '../src/components/paid-media/optimizer/sections/actionRows';
+import type { OptimizerActionFeedRow } from '../src/components/paid-media/optimizer/useOptimizerData';
+import { mintSessionBundleForEmail, type PlaywrightStorageState } from './support/auth';
 import { benchBrowserChannel, loadProdSupabaseEnv, PROD_SUPABASE_URL } from './support/prodEnv';
 
 // ---------------------------------------------------------------------------
@@ -58,7 +59,9 @@ import { benchBrowserChannel, loadProdSupabaseEnv, PROD_SUPABASE_URL } from './s
 //   * No portfolio is created, enrolled, archived or mutated. Browsing only.
 //   * The one write this bench makes is the ACTIVE-BRAND PREFERENCE row for the bench
 //     user (brand_profiles.user_brand_preferences) — the same row the in-app brand
-//     switcher writes. It is captured before the run and restored after.
+//     switcher writes, written the same way: as the bench's own browser session, so the
+//     table's trigger also pins that session (brand_profiles.user_session_brands) to the
+//     brand. It is captured before the run and restored after.
 //   * Money-family ACTIONS are counted for BOTH brands before and after, through the
 //     `optimizer_list_actions` RPC — the ad-account write ledger itself. NOT through
 //     `.schema('optimizer').from(...)`: the `optimizer` schema is not in PostgREST's
@@ -81,7 +84,12 @@ const { serviceRoleKey, publishableKey } = loadProdSupabaseEnv();
 // ad account). Both are pinned below, and both are inside the money-safety net.
 const OWNER_EMAIL = 'mercadotecniavivo@gmail.com';
 const AGENCY_BRAND_ID = '148583e0-5538-462b-8d3a-acd25b80344e';
-const VIVO47_BRAND_ID = '61b80f51-709a-4408-9f11-04142a286baa';
+/** The "VIVO 47 Center" brand row: it offers the CBO account below in the picker and owns NO
+ *  portfolios, so the account lands on onboarding — the surface that carries Signal readiness
+ *  and the CBO projection cards. The other two VIVO47 rows now own portfolios (61b80f51 on
+ *  1164707387246066, 6a49e1a8 three on the CBO account itself), and an empty account on a
+ *  brand with portfolios elsewhere shows only the "No portfolios on this ad account" notice. */
+const CBO_BRAND_ID = 'd666c706-8ffd-4ade-a1b1-cb9f71b25831';
 /** The OTHER "Easy Fit" row (the bench user is an admin on it). It is where every ad-account
  *  write in production actually lives — 38 budget writes in optimizer.apply_audits, all of
  *  them reversible, against 8 active portfolios on the SAME ad account as the agency row,
@@ -94,8 +102,13 @@ const PORTFOLIO_ACCOUNT_ID = '521903353286118';
 const PORTFOLIO_ACCOUNT_LABEL = 'Easyfit';
 /** Assigned to the same brand, owns NO portfolios — the cross-account notice's trigger. */
 const EMPTY_ACCOUNT_ID = '1296885445611472';
-/** All CBO: 4 campaigns, every ad set held `unsupported_budget`, nothing optimizable. */
-const CBO_ACCOUNT_ID = '1164707387246066';
+/** The CBO premise on VIVO 47 Center: most of its ad sets are held `unsupported_budget` (their budget
+ *  lives on the campaign), which is the threshold that turns Signal readiness to `nothing
+ *  movable`. Read from production on 2026-09-29: 24 of 45 ad sets held across 16 CBO campaigns.
+ *  No account the bench user can pick is ALL-CBO any more — the previous one, 1164707387246066,
+ *  moved its 4 ad sets to ad-set budgets — so the premise is re-read live at run start by
+ *  `readCboPremise` and a drift fails loudly with the counts, never as a picker timeout. */
+const CBO_ACCOUNT_ID = '941792232690867';
 
 // Pinned by NAME, so they go stale when the account's portfolios are renamed or replaced —
 // which is what happened to the previous pair ('Mensajes Julio 2026' / 'Leads test'). Verify
@@ -120,11 +133,11 @@ const MENSAJES_PORTFOLIO_NAME = 'MENSAJES // TODOS';
 const PRUEBA_PORTFOLIO_NAME = 'Prueba';
 /** The state badge an asked-for row wears once its proposal exists, in the card's words. */
 const PROPOSAL_STATE =
-  /^(En cola|Jaina está leyendo|Lista|Bloqueada|No se pudo construir|Cerrada|Aprobada|Creando el conjunto|Creada en Meta|Activando|Deshaciendo|Deshecha)$/;
+  /^(Queued|Jaina is reading|Ready|Blocked|Failed|Closed|Approved|Creating the ad set|Created in Meta|Activating|Undoing|Undone)$/;
 /** The note under the row for the same states — always a sentence, never a dump. A proposal
- *  the cycle closed ("Cerrada") leads with its reason and ends on the closing sentence. */
+ *  the cycle closed ("Closed") leads with its reason and ends on the closing sentence. */
 const PROPOSAL_NOTE =
-  /^(En cola|Jaina está leyendo|Lista|Bloqueada —|No se pudo construir —|Aprobada|Creando|Creada en Meta|Activando|Deshaciendo|Deshecha)|El ciclo cerró la recomendación que abrió\.$/;
+  /^(Queued|Jaina is reading|Ready|Blocked —|Failed —|Approved|Creating|Created in Meta|Activating|Undoing|Undone)|The cycle closed the recommendation it opened\.$/;
 /** The portfolio every idea on the redesign page is drawn with (portafolio.html): 9 ad sets on
  *  autopilot, leads against a 35 MXN target, pending decisions. Same ledger brand. */
 const FORMULARIOS_PORTFOLIO_NAME = 'FORMULARIOS // TODOS';
@@ -137,6 +150,7 @@ const admin: SupabaseClient = createClient(PROD_SUPABASE_URL, serviceRoleKey, {
 
 let storageState: PlaywrightStorageState;
 let benchUserId: string;
+let memberAccessToken: string;
 let originalActiveBrandId: string | null = null;
 let moneyEventsBefore = 0;
 
@@ -175,7 +189,14 @@ async function moneyEventCount(brandId: string): Promise<number> {
 
 /** Every brand this bench selects has to be inside the money-safety net, or a write made
  *  while it was active would go uncounted. */
-const WATCHED_BRAND_IDS = [AGENCY_BRAND_ID, VIVO47_BRAND_ID, EASYFIT_LEDGER_BRAND_ID];
+const WATCHED_BRAND_IDS = [
+  AGENCY_BRAND_ID,
+  CBO_BRAND_ID,
+  EASYFIT_LEDGER_BRAND_ID,
+  // The VIVO47 row the CBO tests used to select. No test selects it now; it stays watched so
+  // moving the CBO tests could only ever widen the money net, never narrow it.
+  '61b80f51-709a-4408-9f11-04142a286baa',
+];
 
 async function totalMoneyEvents(): Promise<number> {
   const counts = await Promise.all(WATCHED_BRAND_IDS.map((brandId) => moneyEventCount(brandId)));
@@ -193,10 +214,19 @@ async function readActiveBrandPreference(): Promise<string | null> {
   return (data as { active_brand_id?: string } | null)?.active_brand_id ?? null;
 }
 
-/** Selects the brand the page will render, through the same row the in-app brand switcher
- *  writes (brand_profiles.get_active_brand_id reads it). Restored in afterAll. */
+/** Selects the brand the page will render, the way the in-app brand switcher does: the
+ *  preference row written AS the bench's browser session.
+ *
+ *  The page resolves its brand per session (brand_profiles.resolve_active_brand_for_session):
+ *  a session is pinned to a brand on its first read, and only a preference write carrying THAT
+ *  session's JWT re-pins it (trigger user_brand_preferences_pin_session). A service-role write
+ *  moves the account-level pointer and leaves the pin alone, so every test after the first page
+ *  load rendered whatever brand the session first saw — the CBO account "missing" from the
+ *  picker and the portfolio "missing" after the brand switch were both that. The switch is read
+ *  back through the page's own resolver, so a switch that did not take fails here, by name. */
 async function selectBrand(brandId: string): Promise<void> {
-  const { error } = await admin
+  const client = memberClient();
+  const { error } = await client
     .schema('brand_profiles')
     .from('user_brand_preferences')
     .upsert(
@@ -204,6 +234,11 @@ async function selectBrand(brandId: string): Promise<void> {
       { onConflict: 'user_id' },
     );
   if (error) throw new Error(`[optimizer-bench] brand switch failed: ${error.message}`);
+  const { data: resolved, error: readError } = await client
+    .schema('brand_profiles')
+    .rpc('resolve_active_brand_for_session');
+  if (readError) throw new Error(`[optimizer-bench] brand read-back failed: ${readError.message}`);
+  expect(resolved, `the bench session must now render brand ${brandId}`).toBe(brandId);
 }
 
 /** Pins the ad account through the real account picker and waits for the optimizer surface
@@ -249,14 +284,102 @@ async function benchContext(
   return { context, hosts };
 }
 
+/** A client that reads AS the bench user, with the member token the auth server issued — the
+ *  identity the page itself reads with, so an expectation derived here is the page's own read. */
+function memberClient(): SupabaseClient {
+  return createClient(PROD_SUPABASE_URL, publishableKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${memberAccessToken}` } },
+  });
+}
+
+/** The ad-set snapshot read PortfolioSetup makes (paid-media-metrics, adset_snapshots, cached),
+ *  reduced to what the CBO tests stand on: how many ad sets are held at the campaign, how many
+ *  can move, and how many CBO campaigns the projection cards are built from. */
+async function readCboPremise(
+  brandId: string,
+  accountId: string,
+): Promise<{ adsets: number; held: number; movable: number; cboCampaigns: number }> {
+  const { data, error } = await memberClient().functions.invoke('paid-media-metrics', {
+    body: { platform: 'meta', scope: 'adset_snapshots', brandId, accountId, forceRefresh: false },
+  });
+  if (error) throw new Error(`[optimizer-bench] adset_snapshots unreachable: ${error.message}`);
+  const snapshots = ((data as { snapshots?: unknown[] } | null)?.snapshots ?? []) as Array<{
+    freezeReason?: string;
+    campaignId?: string;
+  }>;
+  const held = snapshots.filter(
+    (row) => row.freezeReason === 'unsupported_budget' || row.freezeReason === 'lifetime_budget',
+  ).length;
+  const cboCampaigns = new Set(
+    snapshots
+      .filter((row) => row.freezeReason === 'unsupported_budget' && row.campaignId?.trim())
+      .map((row) => row.campaignId),
+  ).size;
+  return { adsets: snapshots.length, held, movable: snapshots.length - held, cboCampaigns };
+}
+
+/** Fails with the live counts when the CBO account no longer carries the premise. */
+async function expectCboPremise(): Promise<void> {
+  const premise = await readCboPremise(CBO_BRAND_ID, CBO_ACCOUNT_ID);
+  console.log(`[optimizer-bench] CBO premise on ${CBO_ACCOUNT_ID}: ${JSON.stringify(premise)}`);
+  expect(
+    premise.held,
+    `PREMISE DRIFT: ${CBO_ACCOUNT_ID} must hold most of its ad sets at the campaign for the ` +
+      `verdict to be \`nothing movable\` — read ${JSON.stringify(premise)}. Find a new CBO account ` +
+      'the bench user can pick (plugin_mcp.list_brand_ad_accounts ∩ the picker) before calling this a regression.',
+  ).toBeGreaterThan(premise.movable);
+  expect(
+    premise.cboCampaigns,
+    'the CBO account must carry at least one CBO campaign',
+  ).toBeGreaterThan(0);
+}
+
+/** The Activity sub-view's page size (OPTIMIZER_FEED_PAGE_SIZE in useOptimizerData) and its
+ *  default window (the 7-day chip OptimizerActivity opens on). */
+const FEED_PAGE_SIZE = 50;
+const FEED_WINDOW_DAYS = 7;
+
+/** The action feed exactly as the Activity sub-view reads it — optimizer-status view=actions,
+ *  as the bench user, page by page on the server's own cursor — so the test's expectations are
+ *  the feed's rows at run start rather than a count pinned on some earlier day. */
+async function readActionFeed(brandId: string): Promise<OptimizerActionFeedRow[][]> {
+  const client = memberClient();
+  const pages: OptimizerActionFeedRow[][] = [];
+  let before: string | null = null;
+  do {
+    const { data, error } = await client.functions.invoke('optimizer-status', {
+      body: {
+        view: 'actions',
+        brand_id: brandId,
+        limit: FEED_PAGE_SIZE,
+        before,
+        window_days: FEED_WINDOW_DAYS,
+      },
+    });
+    if (error)
+      throw new Error(`[optimizer-bench] optimizer-status actions unreachable: ${error.message}`);
+    const page = data as { actions?: OptimizerActionFeedRow[]; next_before?: string | null };
+    pages.push(page.actions ?? []);
+    before = page.next_before ?? null;
+  } while (before && pages.length < 20);
+  return pages;
+}
+
+/** The onboarding surface's heading (OptimizerOnboarding). It used to read "Set up the
+ *  Optimizer"; the checks that onboarding is NOT shown kept asserting the old words after the
+ *  copy moved, and could no longer fail. One constant so the positive and negative checks
+ *  cannot drift apart again. */
+const ONBOARDING_HEADING = 'Put ad sets under the Optimizer';
+
 /** Reach the SETUP surface (PortfolioSetup) for the pinned ad account — the one screen that
  *  carries Signal readiness and the CBO projection cards. It backs BOTH the empty-state
  *  onboarding and the create view, so which one an account lands on depends on whether its
  *  brand already owns portfolios. That premise drifts with production (the VIVO47 brand owns
  *  one now, where it owned none), so resolve it at run time instead of pinning it. */
 async function openSetupSurface(page: Page): Promise<void> {
-  const onboarding = page.getByRole('heading', { name: 'Set up the Optimizer' });
-  const newPortfolio = page.getByRole('button', { name: 'Nuevo portafolio' });
+  const onboarding = page.getByRole('heading', { name: ONBOARDING_HEADING });
+  const newPortfolio = page.getByRole('button', { name: 'New portfolio' });
   await expect(onboarding.or(newPortfolio).first()).toBeVisible({ timeout: 120_000 });
   if ((await onboarding.count()) > 0) return;
   await newPortfolio.click();
@@ -272,9 +395,12 @@ test.describe('Paid Media Optimizer — live experience', () => {
       'a production Supabase publishable key must be resolved before this bench runs',
     ).toBeGreaterThan(20);
 
-    const memberToken = await mintAccessTokenForEmail(OWNER_EMAIL);
-    benchUserId = subjectOf(memberToken);
-    storageState = await mintSessionForEmail(OWNER_EMAIL);
+    // One session for the whole run: the browser's cookies and the member reads below carry
+    // the same session id, so a brand switch written with this token re-pins what the page shows.
+    const session = await mintSessionBundleForEmail(OWNER_EMAIL);
+    memberAccessToken = session.accessToken;
+    benchUserId = subjectOf(memberAccessToken);
+    storageState = session.state;
 
     originalActiveBrandId = await readActiveBrandPreference();
     moneyEventsBefore = await totalMoneyEvents();
@@ -300,7 +426,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
 
       // The tabbed optimizer surface — NOT onboarding, NOT the offline state.
       await expect(page.getByRole('tab', { name: 'Portfolios' })).toBeVisible();
-      await expect(page.getByText('Set up the Optimizer')).toHaveCount(0);
+      await expect(page.getByText(ONBOARDING_HEADING)).toHaveCount(0);
       await expect(page.getByText(ENROLLED_PORTFOLIO_NAME).first()).toBeVisible({
         timeout: 120_000,
       });
@@ -351,7 +477,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await expect(
         page.getByRole('heading', { name: 'No portfolios on this ad account' }),
       ).toBeVisible({ timeout: 120_000 });
-      await expect(page.getByText('Set up the Optimizer')).toHaveCount(0);
+      await expect(page.getByText(ONBOARDING_HEADING)).toHaveCount(0);
       // The count is live (brandPortfolioCount) and grows as portfolios are created — the
       // regression this guards is the *wording* (a brand that DOES own portfolios must not be
       // told to "set up the optimizer"), not any one number, so match the count flexibly.
@@ -389,14 +515,15 @@ test.describe('Paid Media Optimizer — live experience', () => {
     }
   });
 
-  test('signal readiness on an all-CBO account reads `nothing movable`, never `ready`', async ({
+  test('signal readiness on a majority-CBO account reads `nothing movable`, never `ready`', async ({
     browser,
   }) => {
-    await selectBrand(VIVO47_BRAND_ID);
+    await selectBrand(CBO_BRAND_ID);
     const { context } = await benchContext(browser);
     const page = await context.newPage();
 
     try {
+      await expectCboPremise();
       await openOptimizationTab(page, CBO_ACCOUNT_ID);
       await openSetupSurface(page);
 
@@ -406,7 +533,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
         .first();
       await expect(page.getByText('Signal readiness')).toBeVisible({ timeout: 120_000 });
 
-      // The regression this assertion exists for: every ad set on this account is held at
+      // The regression this assertion exists for: most ad sets on this account are held at
       // the campaign level, so the verdict badge must say `nothing movable`. `ready` here
       // would claim a balanced allocation over budget the optimizer cannot even move.
       await expect(page.getByText('nothing movable', { exact: true })).toBeVisible();
@@ -422,11 +549,12 @@ test.describe('Paid Media Optimizer — live experience', () => {
   test('projected CBO→ABO — cards render held-vs-projected budgets and the real engine runs', async ({
     browser,
   }) => {
-    await selectBrand(VIVO47_BRAND_ID);
+    await selectBrand(CBO_BRAND_ID);
     const { context } = await benchContext(browser);
     const page = await context.newPage();
 
     try {
+      await expectCboPremise();
       await openOptimizationTab(page, CBO_ACCOUNT_ID);
       await openSetupSurface(page);
 
@@ -526,7 +654,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
     }
   });
 
-  test('create view — the Nuevo portafolio action opens the create page state, and Back returns to Portfolios', async ({
+  test('create view — the New portfolio action opens the create page state, and Back returns to Portfolios', async ({
     browser,
   }) => {
     await selectBrand(AGENCY_BRAND_ID);
@@ -536,9 +664,9 @@ test.describe('Paid Media Optimizer — live experience', () => {
     try {
       await openOptimizationTab(page, PORTFOLIO_ACCOUNT_ID);
 
-      // The Overview carries the primary "Nuevo portafolio" action → the dedicated create page
+      // The Overview carries the primary "New portfolio" action → the dedicated create page
       // state (NOT a sheet overlay). Render-only: the Create/Preview controls are never clicked.
-      await page.getByRole('button', { name: 'Nuevo portafolio' }).click();
+      await page.getByRole('button', { name: 'New portfolio' }).click();
       await expect(page).toHaveURL(/optimizerView=create/);
       await expect(page.getByRole('heading', { name: 'Start from a suggestion' })).toBeVisible({
         timeout: 120_000,
@@ -662,20 +790,51 @@ test.describe('Paid Media Optimizer — live experience', () => {
   // -------------------------------------------------------------------------
   // Activity — the two feeds that used to be one.
   //
-  // Runs on EASYFIT_LEDGER_BRAND_ID because that is the brand production actually wrote to:
-  // 38 budget writes in optimizer.apply_audits, 57 portfolio-setting edits, 11 recommendation
-  // decisions. On the agency brand the action feed is legitimately EMPTY, and a green run
-  // against an empty feed would prove nothing about it.
+  // Runs on EASYFIT_LEDGER_BRAND_ID because that is the brand production actually wrote to; on
+  // the agency brand the action feed is legitimately EMPTY, and a green run against an empty
+  // feed would prove nothing about it.
+  //
+  // Every expectation — how many rows, which kinds, how many offer undo, whether there are
+  // older pages — is read at run start from the SAME edge view the feed reads, as the same
+  // user, on the same window. The counts drift daily (autopilot writes budgets every cycle), so
+  // a pinned count is a regression record, never a fact.
   //
   // READ-ONLY, consistent with the money-safety contract at the top of this file: it opens
   // the Activity sub-view, switches between its two feeds, and pages the action feed. It
-  // never clicks Revert or Unpause — their triggers are asserted to EXIST, never pressed —
-  // and the money-safety test at the end proves the ledger did not move.
+  // never clicks Revert or Unpause — their triggers are counted, never pressed — and the
+  // money-safety test at the end proves the ledger did not move.
   // -------------------------------------------------------------------------
   test('activity — Actions and the Server log are two separate feeds, not one merged stream', async ({
     browser,
   }) => {
     await selectBrand(EASYFIT_LEDGER_BRAND_ID);
+    const pages = await readActionFeed(EASYFIT_LEDGER_BRAND_ID);
+    const firstPage = pages[0] ?? [];
+    const total = pages.reduce((sum, rows) => sum + rows.length, 0);
+    const labels = [...new Set(firstPage.map((row) => readActionChange(row).label))];
+    // An ad-account write is a money-family row; its label is what must never reach the log.
+    const writeLabels = [
+      ...new Set(
+        firstPage.filter((row) => row.family === 'money').map((row) => readActionChange(row).label),
+      ),
+    ];
+    // Undo is offered on the FEATURED card only — the newest row by `ts`, the rule
+    // splitFeaturedAction in OptimizerActionFeed applies — and only when the server marks that
+    // row reversible and not yet reverted. The grid cards below it carry no revert control.
+    const featured = firstPage.reduce<OptimizerActionFeedRow | null>(
+      (newest, row) => (!newest || Date.parse(row.ts) > Date.parse(newest.ts) ? row : newest),
+      null,
+    );
+    const revertible = featured && revertState(featured).kind === 'available' ? 1 : 0;
+    console.log(
+      `[optimizer-bench] action feed at run start (${FEED_WINDOW_DAYS}d): ${total} rows over ${pages.length} page(s); page 1 ${firstPage.length} rows, labels ${JSON.stringify(labels)}, featured row revertible: ${revertible === 1}`,
+    );
+    expect(
+      total,
+      'PREMISE: the ledger brand must have written to the ad account inside the feed window — ' +
+        'an empty feed proves nothing about the action rows',
+    ).toBeGreaterThan(0);
+
     const { context } = await benchContext(browser);
     const page = await context.newPage();
 
@@ -690,40 +849,46 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await expect(actionsToggle).toHaveAttribute('aria-pressed', 'true', { timeout: 120_000 });
       await expect(page.getByText('Nothing has changed yet')).toHaveCount(0, { timeout: 120_000 });
 
-      // Every action row states WHAT changed, before → after. A budget row is labelled by the
-      // field it moved, not by an event name.
-      await expect(page.getByText('Daily budget').first()).toBeVisible({ timeout: 120_000 });
+      // Every action row states WHAT changed, before → after, labelled by the field it moved —
+      // each kind the feed's first page carries is on screen under its own label.
+      for (const label of labels) {
+        await expect(page.getByText(label, { exact: true }).first()).toBeVisible({
+          timeout: 120_000,
+        });
+      }
 
       // WHO: the RPC's actor_kind, rendered rather than left implicit.
       const actorLine = page.getByText(/· (Autopilot|Human|System)$/);
       await expect(actorLine.first()).toBeVisible();
       console.log(`[optimizer-bench] first action actor: "${await actorLine.first().innerText()}"`);
 
-      // UNDO: this brand's 38 budget writes are all `reversible` in the RPC, so the feed MUST
-      // offer at least one revert. The trigger is asserted, never clicked.
+      // UNDO: the featured row offers it exactly when the server marks it reversible and not yet
+      // reverted. The trigger is counted, never clicked.
       const revertTriggers = page.getByRole('button', { name: /^(Revert|Unpause)$/ });
-      const revertCount = await revertTriggers.count();
-      console.log(`[optimizer-bench] revertible action rows on page 1: ${revertCount}`);
-      expect(
-        revertCount,
-        'every production budget write on this brand is reversible — the feed must offer undo',
-      ).toBeGreaterThan(0);
+      await expect(revertTriggers).toHaveCount(revertible);
+      console.log(`[optimizer-bench] revert triggers on the action feed: ${revertible}`);
 
-      // PAGINATION: 106 actions exist and one page is 50, so the footer must say there are
-      // older ones — not present the loaded window as the whole world.
-      const moreFooter = page.getByText(/\d+ actions loaded — there are older ones\./);
-      await expect(moreFooter).toBeVisible({ timeout: 60_000 });
-      const beforeText = await moreFooter.innerText();
-      await page.getByRole('button', { name: 'Load more' }).click();
-      await expect(
-        page.getByText(/\d+ actions (loaded — there are older ones\.|— that is all of them\.)/),
-      ).not.toHaveText(beforeText, { timeout: 60_000 });
-      console.log(
-        `[optimizer-bench] action feed footer after Load more: "${await page
-          .getByText(/\d+ actions /)
-          .first()
-          .innerText()}"`,
-      );
+      // PAGINATION: the footer says whether older rows exist, from the server's own cursor —
+      // never presenting the loaded window as the whole world.
+      if (pages.length > 1) {
+        const moreFooter = page.getByText(
+          `${firstPage.length} actions loaded — there are older ones.`,
+          { exact: true },
+        );
+        await expect(moreFooter).toBeVisible({ timeout: 60_000 });
+        await page.getByRole('button', { name: 'Load more' }).click();
+        const loaded = firstPage.length + (pages[1]?.length ?? 0);
+        const after =
+          pages.length > 2
+            ? `${loaded} actions loaded — there are older ones.`
+            : `${loaded} actions — that is all of them.`;
+        await expect(page.getByText(after, { exact: true })).toBeVisible({ timeout: 60_000 });
+        console.log(`[optimizer-bench] action feed footer after Load more: "${after}"`);
+      } else {
+        await expect(
+          page.getByText(`${firstPage.length} actions — that is all of them.`, { exact: true }),
+        ).toBeVisible({ timeout: 60_000 });
+      }
 
       await shoot(page, '14-activity-actions');
 
@@ -742,10 +907,11 @@ test.describe('Paid Media Optimizer — live experience', () => {
         .or(page.getByText('The optimizer has not run yet'));
       await expect(lifecycle.first()).toBeVisible({ timeout: 120_000 });
 
-      // The split is load-bearing: an ad-account write must NOT appear in the server log.
-      // 'Daily budget' is the action feed's own label for a budget move, and it was visible
-      // on the other feed moments ago.
-      await expect(page.getByText('Daily budget')).toHaveCount(0);
+      // The split is load-bearing: an ad-account write must NOT appear in the server log. Its
+      // labels were on the other feed moments ago.
+      for (const label of writeLabels) {
+        await expect(page.getByText(label, { exact: true })).toHaveCount(0);
+      }
       // ...and undo lives with the action, never with the lifecycle row.
       await expect(page.getByRole('button', { name: /^(Revert|Unpause)$/ })).toHaveCount(0);
       await shoot(page, '15-activity-server-log');
@@ -824,8 +990,8 @@ test.describe('Paid Media Optimizer — live experience', () => {
         .first();
       await expect(askedRow).toBeVisible({ timeout: 120_000 });
       const askedKey = (await askedRow.getAttribute('data-row-key')) ?? '';
-      // The same row, pinned by its key: the press below relabels its button to "Cerrar la
-      // propuesta", so a locator that filters on the open label would lose it.
+      // The same row, pinned by its key: the press below relabels its button to "Close the
+      // proposal", so a locator that filters on the open label would lose it.
       const openedRow = page.locator(`[data-row-key="${askedKey}"]`);
       const stateBadge = askedRow.getByText(PROPOSAL_STATE).first();
       await expect(stateBadge).toBeVisible({ timeout: 60_000 });
@@ -846,35 +1012,77 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await askedRow.getByRole('button', { name: 'Open the audience proposal' }).click();
 
       // The proposal opens ON THE ROW: the expansion is a child of the asked row, not a queue
-      // row somewhere below. With a plan it is the five sections and the create flow; without
-      // one it is the state, what is known, and — failed or blocked — asking again.
+      // row somewhere below. With a plan it is the before → after, the rail and the create flow;
+      // without one it is the state, what is known, and — failed or blocked — asking again.
       const expansion = openedRow.getByTestId(`read-expansion:${askedKey.replace(/^read:/, '')}`);
       await expect(expansion).toBeVisible({ timeout: 60_000 });
       const card = expansion.getByTestId('audience-recommendation-card');
       const panel = expansion.getByTestId('asked-proposal-panel');
       await expect(card.or(panel).first()).toBeVisible({ timeout: 60_000 });
-      const face = (await card.count()) > 0 ? 'five sections' : 'state panel';
+      const face = (await card.count()) > 0 ? 'proposal card' : 'state panel';
       console.log(`[optimizer-bench] MENSAJES proposal opened inline as: ${face}`);
-      if (face === 'five sections') {
+      if (face === 'proposal card') {
         for (const section of [
-          'audience-what',
-          'audience-changes',
-          'audience-new',
+          'audience-current',
+          'audience-proposed',
           'audience-why',
+          'audience-new',
           'audience-how',
         ]) {
           await expect(card.getByTestId(section)).toBeVisible();
         }
+        // A proposal whose Meta write failed says so at the top, even with a plan beside it,
+        // and offers the retry of the write, never a re-analysis. On 2026-09-29 this row
+        // (1e89d5e7) showed the plan and only "ask again", with the reason hidden.
+        const failure = card.getByTestId('audience-failure');
+        if ((await failure.count()) > 0) {
+          const failureText = (await failure.innerText()).trim();
+          console.log(`[optimizer-bench] MENSAJES failure block: ${failureText.split('\n')[0]}`);
+          // The reason is ours, in English; Meta's own words (the connected user's language)
+          // only ever ride on the small "Meta said" line.
+          const reason = (await card.getByTestId('audience-failed-reason').innerText()).trim();
+          expect(reason).not.toMatch(/^Meta rejected/);
+          expect(reason).not.toMatch(/[áéíóúñ¿]|\b(tienes|permiso|cuenta)\b/i);
+          // Offered, and deliberately NOT pressed: it re-queues a Meta write in production.
+          await expect(card.getByTestId('audience-retry')).toBeEnabled();
+        }
+        // The plan's ad posters are signed Meta URLs that expire; the card recovers them
+        // through the creative-preview path. Report what actually rendered.
+        const ads = card.getByTestId('audience-ads');
+        await expect
+          .poll(
+            async () =>
+              ads.evaluate(
+                (tile) =>
+                  [...tile.querySelectorAll('img')].filter(
+                    (img) => img.complete && img.naturalWidth > 0,
+                  ).length,
+              ),
+            { timeout: 30_000 },
+          )
+          .toBeGreaterThan(0)
+          .catch(() => undefined);
+        const posters = await ads.evaluate((tile) => ({
+          loaded: [...tile.querySelectorAll('img')].filter(
+            (img) => img.complete && img.naturalWidth > 0,
+          ).length,
+          placeholders: tile.querySelectorAll('[data-testid="audience-ad-placeholder"]').length,
+        }));
+        console.log(`[optimizer-bench] MENSAJES ad posters: ${JSON.stringify(posters)}`);
+        await page.setViewportSize({ width: 1280, height: 2400 });
+        await card.scrollIntoViewIfNeeded();
+        await card.screenshot({ path: resolve(SHOTS_DIR, '17b-mensajes-audience-card.png') });
+        await page.setViewportSize({ width: 1280, height: 720 });
       } else {
         await expect(
           panel.getByTestId('asked-proposal-state').getByText(PROPOSAL_STATE),
         ).toBeVisible();
         const facts = panel.getByTestId('asked-proposal-facts');
-        await expect(facts).toContainText('Conjunto');
-        await expect(facts).toContainText('Pedida');
+        await expect(facts).toContainText('Ad set');
+        await expect(facts).toContainText('Asked for');
         const retry = panel.getByTestId('asked-proposal-retry');
         const retryable = (await retry.count()) > 0;
-        console.log(`[optimizer-bench] MENSAJES proposal offers "Pedirla de nuevo": ${retryable}`);
+        console.log(`[optimizer-bench] MENSAJES proposal offers "Ask Jaina again": ${retryable}`);
         // Offered, and deliberately NOT pressed: it writes a proposal request to production.
         if (retryable) await expect(retry).toBeEnabled();
       }
@@ -884,7 +1092,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
       await shoot(page, '17-mensajes-proposal-inline');
 
       // The same button closes what it opened.
-      await openedRow.getByRole('button', { name: 'Cerrar la propuesta' }).click();
+      await openedRow.getByRole('button', { name: 'Close the proposal' }).click();
       await expect(expansion).toHaveCount(0);
       await expect(
         openedRow.getByRole('button', { name: 'Open the audience proposal' }),
@@ -1187,8 +1395,8 @@ test.describe('Paid Media Optimizer — live experience', () => {
       }
       const sentence = (await headline.textContent()) ?? '';
       console.log(`[optimizer-bench] Overview sentence: ${sentence}`);
-      expect(sentence).toMatch(/^La cuenta gastó .+ en 7 días/);
-      expect(sentence).toMatch(/decisi(ón espera|ones esperan)\.$/);
+      expect(sentence).toMatch(/^The account spent .+ in 7 days/);
+      expect(sentence).toMatch(/(No decisions|\d+ decisions?) waiting\.$/);
       expect(sentence).toMatch(/\d/);
 
       const report = await page.evaluate(() => {
@@ -1225,11 +1433,11 @@ test.describe('Paid Media Optimizer — live experience', () => {
         const tileCharts = tiles.filter((tile) => tile.querySelector('svg, canvas')).length;
         const noTarget = tiles
           .filter((tile) => tile.getAttribute('data-testid')?.startsWith('tile-kind-'))
-          .filter((tile) => !/objetivo \d/.test(tile.textContent ?? ''))
+          .filter((tile) => !/target \d/.test(tile.textContent ?? ''))
           .map((tile) => ({
             state: tile.getAttribute('data-state'),
-            saysSinObjetivo: (tile.textContent ?? '').includes('sin objetivo'),
-            saysSinResultado: (tile.textContent ?? '').includes('sin resultado'),
+            saysNoTarget: (tile.textContent ?? '').includes('no target'),
+            saysNoResults: (tile.textContent ?? '').includes('no results'),
           }));
         const cards = [
           ...(inner('account-cards')?.querySelectorAll('[data-testid="account-card"]') ?? []),
@@ -1246,7 +1454,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
         return {
           ids,
           ordered,
-          jainaLabel: inner('jaina-entry-chips')?.textContent?.includes('Preguntale a Jaina'),
+          jainaLabel: inner('jaina-entry-chips')?.textContent?.includes('Ask Jaina'),
           jainaLinks: inner('jaina-entry-chips')?.querySelectorAll('a').length ?? 0,
           tiles: tiles.length,
           tileStates,
@@ -1287,7 +1495,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
       // A result kind with no target reads neutral and says so; one with no results says that.
       for (const tile of report.noTarget) {
         expect(tile.state).toBe('none');
-        expect(tile.saysSinObjetivo || tile.saysSinResultado).toBe(true);
+        expect(tile.saysNoTarget || tile.saysNoResults).toBe(true);
       }
 
       // The cards, when today's read carries any, lead with exactly one marked card.
@@ -1305,7 +1513,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
       expect(report.rows).toBe(bookCount);
       expect(report.rows).toBeGreaterThan(0);
       for (const state of report.rowStates) expect(['ok', 'warn', 'bad', 'none']).toContain(state);
-      expect(report.sortPressed).toBe('Distancia al objetivo');
+      expect(report.sortPressed).toBe('Distance to target');
 
       // The old surface is gone: none of its copy anywhere on the tab.
       const panelText = await page.evaluate(
@@ -1349,6 +1557,8 @@ test.describe('Paid Media Optimizer — live experience', () => {
       overflow: string[];
       panelWidth: number;
       panelScrollWidth: number;
+      viewportWidth: number;
+      pageScrollWidth: number;
     };
 
     const inspect = (): Promise<ScreenReport> =>
@@ -1394,10 +1604,18 @@ test.describe('Paid Media Optimizer — live experience', () => {
           )
           .map((el) => `${px(el)}px ${el.getAttribute('data-figure-role')} ${describe(el)}`);
         const panelRect = panel.getBoundingClientRect();
+        // A scroller owns what overflows it only when it DECLARES a scrolling horizontal axis
+        // and fits inside the panel itself. The computed style cannot say that: CSS computes a
+        // visible overflow-x to `auto` whenever overflow-y is not visible, so an
+        // `overflow-y-auto` tab body counted as a sideways scroller. And a clip is not a
+        // scroller: an `overflow-hidden` frame around a tab laid out wider than the phone hides
+        // the right edge of every block rather than letting anyone reach it.
+        const declaresX = (node: Element) =>
+          /(^|\s)overflow(-x)?-(auto|scroll)(\s|$)/.test(node.getAttribute('class') ?? '') ||
+          /overflow(-x)?\s*:\s*(auto|scroll)/.test(node.getAttribute('style') ?? '');
         const scrolls = (el: Element | null): boolean => {
           for (let node = el; node && node !== panel; node = node.parentElement) {
-            const { overflowX } = getComputedStyle(node);
-            if (overflowX === 'auto' || overflowX === 'scroll' || overflowX === 'hidden')
+            if (declaresX(node) && node.getBoundingClientRect().right <= panelRect.right + 2)
               return true;
           }
           return false;
@@ -1419,6 +1637,8 @@ test.describe('Paid Media Optimizer — live experience', () => {
           overflow,
           panelWidth: Math.round(panel.clientWidth),
           panelScrollWidth: Math.round(panel.scrollWidth),
+          viewportWidth: window.innerWidth,
+          pageScrollWidth: document.documentElement.scrollWidth,
         };
       });
 
@@ -1437,7 +1657,7 @@ test.describe('Paid Media Optimizer — live experience', () => {
       const report = await inspect();
       await shoot(page, `16-type-scale-${screen}-${width}`);
       console.log(
-        `[optimizer-bench] type scale ${screen}@${width}: panel ${report.panelWidth}px, scrollWidth ${report.panelScrollWidth}px, micro ${report.micro.length}, under-floor ${report.small.length}, off-scale labels ${report.labels.length}, off-scale figures ${report.figures.length}, overflow ${report.overflow.length}`,
+        `[optimizer-bench] type scale ${screen}@${width}: panel ${report.panelWidth}px, scrollWidth ${report.panelScrollWidth}px, page ${report.pageScrollWidth}/${report.viewportWidth}px, micro ${report.micro.length}, under-floor ${report.small.length}, off-scale labels ${report.labels.length}, off-scale figures ${report.figures.length}, overflow ${report.overflow.length}`,
       );
       // Name what is off before failing on it: a count alone sends the next person back to
       // the browser to find out which node.
@@ -1470,6 +1690,12 @@ test.describe('Paid Media Optimizer — live experience', () => {
         report.panelScrollWidth,
         `${screen}@${width}: the optimizer panel scrolls sideways`,
       ).toBeLessThanOrEqual(report.panelWidth + 1);
+      // The tab itself is never wider than the screen: a page that scrolls sideways at 390 is
+      // the failure a phone reader sees first.
+      expect(
+        report.pageScrollWidth,
+        `${screen}@${width}: the page scrolls sideways (${report.pageScrollWidth}px in a ${report.viewportWidth}px viewport)`,
+      ).toBeLessThanOrEqual(report.viewportWidth + 1);
     };
 
     try {
