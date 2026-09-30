@@ -178,7 +178,7 @@ const stringField = (error: Record<string, unknown>, key: string): string =>
 /** The Backend's gateway wraps a Graph refusal as "Meta rejected <what> with HTTP <n>: <Meta's
  *  own text>". That text is in the connected user's Meta language, so it is Meta's words to
  *  quote, never the reason this card states. */
-const META_REJECTED = /^Meta rejected .+? with HTTP \d+(?::\s*(.*))?$/s;
+const META_REJECTED = /^Meta rejected [\s\S]+? with HTTP \d+(?::\s*([\s\S]*))?$/;
 
 function metaRejection(message: string): { metaText: string | null } | null {
   const match = META_REJECTED.exec(message.trim());
