@@ -217,6 +217,10 @@ export function BriefDialog({
     runVideoEditorOp(projectId, 'get_pool', {})
       .then((result) => setPool(result.assets))
       .catch(() => setPool([]));
+    // The timeline's words are heard (and kept per version) while the brief is written, so
+    // the draft reads them instead of waiting on speech-to-text. Nothing shows; a failure
+    // only leaves the draft to hear them itself.
+    runVideoEditorOp(projectId, 'get_transcript', {}).catch(() => undefined);
   }, [open]);
 
   useEffect(() => {
