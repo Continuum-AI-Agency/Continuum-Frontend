@@ -180,6 +180,18 @@ describe('what production templates carry', () => {
     expect(verdict.state).toBe('clipped');
   });
 
+  test('a cutout photo above the text does not cover it — a raster’s box is not its pixels', () => {
+    // Production 2026-09-29, UTEC Official Typography: the speaker cutout's box ran over the name
+    // while its pixels there were transparent; the judge passed it and so must this.
+    const kit = card();
+    const layers = [
+      row(9, 'speaker', { kind: 'file', corners: rect(0, 0, 60, 18) }),
+      ...kit.scene.layers,
+    ];
+    const verdict = verdictOf({ ...kit, scene: { ...kit.scene, layers } }, { nombre: 'anaana' });
+    expect(verdict.state).toBe('ok');
+  });
+
   test('a field blanked with a zero-width space is laid out as empty, not refused', () => {
     const verdict = verdictOf(card(), { nombre: '\u200b' });
     expect(verdict.state).toBe('ok');
