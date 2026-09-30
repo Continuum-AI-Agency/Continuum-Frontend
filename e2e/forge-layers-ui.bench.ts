@@ -121,6 +121,7 @@ async function target(): Promise<Target | null> {
     .not('origin_ref->arrangements', 'is', null)
     .order('created_at', { ascending: false })
     .limit(20);
+  if (assets.error) throw new Error(`design imports unreadable: ${assets.error.message}`);
   const wanted = process.env.FORGE_LAYERS_ASSET_ID;
   let fallback: Target | null = null;
   for (const asset of (assets.data ?? []) as Array<{
