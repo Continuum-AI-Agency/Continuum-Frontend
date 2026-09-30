@@ -1,6 +1,10 @@
 'use client';
 
-import type { PublishEvent } from '@continuum/contracts';
+import {
+  type OrganicCanvasPublishIntent,
+  organicCanvasPublishIntentSchema,
+  type PublishEvent,
+} from '@continuum/contracts';
 import * as React from 'react';
 import { useDestructiveConfirmation } from '@/components/organic/primitives/DestructiveConfirmation';
 import { PublishIntentSummary } from '@/components/organic/primitives/PublishIntentSummary';
@@ -30,18 +34,7 @@ type FailedEvent = Extract<PublishEvent, { type: 'failed' }>;
  * the backend binds a confirmation to. `intent_hash` is null when the post is not publishable —
  * there is nothing legitimate to confirm.
  */
-type PublishIntent = {
-  publishable: boolean;
-  blockers: { reason: string; message: string }[];
-  /** Non-blocking gaps the confirmation dialog shows alongside the blockers. */
-  warnings: { reason: string; message: string }[];
-  platform: string;
-  format: string;
-  account: { id: string | null; source: string };
-  caption: { present: boolean; length: number; preview: string | null };
-  media: { count: number; required: number; source: string };
-  intent_hash: string | null;
-};
+type PublishIntent = OrganicCanvasPublishIntent;
 
 async function fetchPublishIntent(backendDraftId: string): Promise<PublishIntent | null> {
   try {
@@ -53,7 +46,7 @@ async function fetchPublishIntent(backendDraftId: string): Promise<PublishIntent
       { method: 'POST', headers, body: JSON.stringify({}) },
     );
     if (!response.ok) return null;
-    return (await response.json()) as PublishIntent;
+    return organicCanvasPublishIntentSchema.parse(await response.json());
   } catch {
     return null;
   }
@@ -162,7 +155,14 @@ export function usePublishDraft(): UsePublishDraftResult {
         // row at publish time and refuses a mismatch, so a draft edited between the dialog and
         // this request cannot be published on the strength of the old approval.
         const body = {
-          ...buildPublishBody(draft, platform, accountId, accountContext.brandId),
+          ...(draft.backendDraftId && intent?.intent_hash
+            ? {
+                postType: intent.format,
+                platform,
+                ...(accountId ? { accountId } : {}),
+                ...(accountContext.brandId ? { brandId: accountContext.brandId } : {}),
+              }
+            : buildPublishBody(draft, platform, accountId, accountContext.brandId)),
           ...(intent?.intent_hash ? { confirmationHash: intent.intent_hash } : {}),
         };
 

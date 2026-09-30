@@ -7,6 +7,7 @@ import {
   designRefEmission,
   imageResolutionFor,
   isVideoGeneratorModel,
+  pinFromNode,
   resolveAmbientDesignSections,
   suppressedDesignSections,
   variationIndexFromHandle,
@@ -34,6 +35,7 @@ import type {
 import { DEFAULT_BRAND_BOOK_PIECES, effectiveBrandBookPieces } from './brandEnforcement';
 import { compositeImages } from './compositeImages';
 import { parseDataUrl } from './dataUrl';
+import { selectNodeOutput } from './selectNodeOutput';
 import {
   getVideoGeneratorBackendModel,
   isVideoGeneratorNodeType,
@@ -67,6 +69,7 @@ const imageRefFromOutput = (
   output: NodeOutput | undefined,
   sourceHandle?: string | null,
 ): ImageRef | undefined => {
+  output = selectNodeOutput(output, sourceHandle);
   const item =
     output?.type === 'image'
       ? output
@@ -92,11 +95,18 @@ const imageRefFromOutput = (
 // history, and is simply omitted rather than guessed at.
 export const collectReferenceAssetIds = (
   edges: Edge[],
-  allNodes: { id: string; data?: unknown }[],
+  allNodes: { id: string; type?: string; data?: unknown }[],
 ): string[] => {
   const ids = edges
-    .map((edge) => allNodes.find((n) => n.id === edge.source))
-    .map((node) => (node?.data as ImageNodeData | undefined)?.assetId)
+    .map((edge) => {
+      const node = allNodes.find((n) => n.id === edge.source);
+      return node
+        ? pinFromNode(
+            { id: node.id, type: node.type ?? '', data: node.data as Record<string, unknown> },
+            edge.sourceHandle,
+          )?.assetId
+        : undefined;
+    })
     .filter((id): id is string => typeof id === 'string' && id.length > 0);
   return [...new Set(ids)];
 };
@@ -166,7 +176,10 @@ function resolveInputValue(
 
   if (!incomingEdge) return undefined;
 
-  const sourceOutput = resolvedData.get(incomingEdge.source);
+  const sourceOutput = selectNodeOutput(
+    resolvedData.get(incomingEdge.source),
+    incomingEdge.sourceHandle,
+  );
   if (sourceOutput) {
     if (sourceOutput.type === 'text') {
       return { text: sourceOutput.value };
@@ -228,7 +241,10 @@ function resolveVideoInput(
 
   if (!incomingEdge) return undefined;
 
-  const sourceOutput = resolvedData.get(incomingEdge.source);
+  const sourceOutput = selectNodeOutput(
+    resolvedData.get(incomingEdge.source),
+    incomingEdge.sourceHandle,
+  );
   if (sourceOutput?.type === 'video') {
     const parsed = parseDataUrl(sourceOutput.url);
     if (parsed?.base64) {
@@ -284,7 +300,10 @@ function resolveExtendVideoInput(
 
   if (!incomingEdge) return undefined;
 
-  const sourceOutput = resolvedData.get(incomingEdge.source);
+  const sourceOutput = selectNodeOutput(
+    resolvedData.get(incomingEdge.source),
+    incomingEdge.sourceHandle,
+  );
   if (sourceOutput?.type === 'video') {
     const parsed = parseDataUrl(sourceOutput.url);
     if (parsed?.base64) {

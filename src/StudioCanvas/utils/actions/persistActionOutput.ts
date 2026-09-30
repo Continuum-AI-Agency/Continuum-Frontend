@@ -33,6 +33,8 @@ export async function persistActionOutput(
   },
   deps: PersistActionOutputDeps = {},
 ): Promise<NodeOutput> {
+  if (params.output.type === 'render' || params.output.type === 'draft')
+    throw new Error('Select one media output before applying an action.');
   if (params.output.type === 'text') return params.output;
   if (params.output.type === 'images') {
     return {

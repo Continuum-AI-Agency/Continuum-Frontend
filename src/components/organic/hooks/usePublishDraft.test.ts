@@ -80,6 +80,7 @@ function intentResponse(overrides: Record<string, unknown> = {}) {
     json: async () => ({
       publishable: true,
       blockers: [],
+      warnings: [],
       platform: 'instagram',
       format: 'POST',
       account: { id: 'acct-1', source: 'slot_data' },

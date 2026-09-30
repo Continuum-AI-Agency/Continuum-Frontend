@@ -358,9 +358,8 @@ export const STUDIO_NODE_REGISTRY = {
     provider: 'continuum',
     purpose:
       'organic Planner draft — finds an existing draft or creates a new one, and attaches image, carousel, or video creative plus a caption and a schedule to it. Outputs the saved draft on `draft` for a downstream organicPublish',
-    runnable: false,
+    runnable: true,
     producesMedia: false,
-    sink: 'organic',
   },
   organicPublish: {
     label: 'Post to Platform',
@@ -384,7 +383,7 @@ export const STUDIO_NODE_REGISTRY = {
     sink: 'paid',
   },
   apiRender: {
-    label: 'API Render',
+    label: 'Forge Render',
     description:
       'Discover a template, prepare variables, and render into the brand library — Meta delivery optional',
     category: 'action',
@@ -394,10 +393,9 @@ export const STUDIO_NODE_REGISTRY = {
     // read as though a live campaign and ad set were required, and this string is
     // rendered VERBATIM into the Studio agent prompt.
     purpose:
-      'terminal sink — prepares a version-pinned API template render into the brand media library; an OPTIONAL Meta delivery block hands off a PAUSED ad for explicit confirmation',
-    runnable: false,
-    producesMedia: false,
-    sink: 'render',
+      'renders a ready Forge template with connected or entered fields into version-pinned Library outputs; workflow runs render only, optional Meta delivery needs separate review',
+    runnable: true,
+    producesMedia: true,
   },
 } satisfies Record<StudioNodeType, StudioNodeDefinition>;
 

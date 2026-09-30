@@ -285,6 +285,13 @@ export type PaidCanvasCreativeReplacementResponse = z.infer<
  * re-uploads assets — so the receipt names the row it read (`replacementId`) and
  * the creative that is now live again (`restoredCreativeId`).
  */
+export const paidCanvasCreativeRestoreRequestSchema = z
+  .object({ brandId: z.string().uuid(), replacementId: z.string().uuid() })
+  .strict();
+export type PaidCanvasCreativeRestoreRequest = z.infer<
+  typeof paidCanvasCreativeRestoreRequestSchema
+>;
+
 export const paidCanvasCreativeRestoreResultSchema = z
   .object({
     replacementId: z.string().uuid(),
@@ -390,3 +397,26 @@ export const studioDeliverReceiptSchema = z
   })
   .strict();
 export type StudioDeliverReceipt = z.infer<typeof studioDeliverReceiptSchema>;
+
+export const organicCanvasPublishIntentSchema = z.object({
+  publishable: z.boolean(),
+  blockers: z.array(z.object({ reason: z.string(), message: z.string() })),
+  warnings: z.array(z.object({ reason: z.string(), message: z.string() })),
+  platform: z.string(),
+  format: z.string(),
+  account: z.object({ id: z.string().nullable(), source: z.string() }),
+  caption: z.object({
+    present: z.boolean(),
+    length: z.number().int().nonnegative(),
+    preview: z.string().nullable(),
+  }),
+  media: z.object({
+    count: z.number().int().nonnegative(),
+    required: z.number().int().nonnegative(),
+    source: z.string(),
+  }),
+  intent_hash: z.string().nullable(),
+  expected_updated_at: z.string().nullable(),
+  scheduled_at: z.string().nullable().optional(),
+});
+export type OrganicCanvasPublishIntent = z.infer<typeof organicCanvasPublishIntentSchema>;

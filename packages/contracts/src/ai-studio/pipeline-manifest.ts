@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { elementCategorySchema } from '../media/element';
 import { pinnedLibraryAssetRefSchema } from '../media/library-reference';
+import { canvasReviewHandoffSchema, savedImplementationDraftSchema } from './implementation-nodes';
 import { studioPortDataTypeSchema } from './workflow-graph';
 
 /**
@@ -174,6 +175,15 @@ export const pipelineSemanticInputSchema = z.discriminatedUnion('kind', [
 export type PipelineSemanticInput = z.infer<typeof pipelineSemanticInputSchema>;
 
 export const pipelineCapabilityOutputSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      output_id: capabilityKeySchema,
+      kind: z.literal('planner_draft'),
+      label: z.string().min(1).max(120),
+      description: z.string().min(1).max(500).optional(),
+      count: z.number().int().positive().max(24),
+    })
+    .strict(),
   z
     .object({
       output_id: capabilityKeySchema,
@@ -498,6 +508,13 @@ export const pipelineRunArtifactSchema = z.discriminatedUnion('kind', [
   z
     .object({
       ...pipelineArtifactBase,
+      kind: z.literal('planner_draft'),
+      draft: savedImplementationDraftSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...pipelineArtifactBase,
       kind: z.literal('asset'),
       media: pipelineMediaSchema,
       asset: pinnedLibraryAssetRefSchema,
@@ -572,6 +589,7 @@ export const pipelineRunReceiptSchema = z
     status: pipelineRunStatusSchema,
     resolved_inputs: z.record(capabilityKeySchema, pipelineResolvedInputSchema).nullable(),
     artifacts: z.array(pipelineRunArtifactSchema).max(24),
+    pending_reviews: z.array(canvasReviewHandoffSchema).max(24).default([]),
     cost: pipelineRunCostSchema.nullable(),
     quality: pipelineQualityEvidenceSchema.nullable(),
     error: pipelineRunErrorSchema.nullable(),

@@ -669,6 +669,8 @@ const isVideoGeneratorNode = (node: GraphNodeLike): boolean => isVideoGeneratorN
 // `sourceModality` (below, hoisted) answers for those; the `sourceHandle` argument is
 // OPTIONAL so every existing caller and every existing type behaves exactly as before.
 const isVideoProducingSource = (node: GraphNodeLike, sourceHandle?: string | null): boolean =>
+  (node.type === 'apiRender' &&
+    (sourceHandle === 'video' || /^render-video-\d+$/.test(sourceHandle ?? ''))) ||
   node.type === 'video' ||
   node.type === 'extendVideo' ||
   node.type === 'timelineEditor' ||
@@ -678,6 +680,8 @@ const isVideoProducingSource = (node: GraphNodeLike, sourceHandle?: string | nul
   sourceModality(node, sourceHandle) === 'video';
 
 const isImageProducingSource = (node: GraphNodeLike, sourceHandle?: string | null): boolean =>
+  (node.type === 'apiRender' &&
+    (sourceHandle === 'image' || /^render-image-\d+$/.test(sourceHandle ?? ''))) ||
   node.type === 'image' ||
   node.type === 'nanoGen' ||
   node.type === 'frameExtract' ||
@@ -823,6 +827,20 @@ function sourceModality(
   sourceHandle?: string | null,
 ): StudioEmittedModality | undefined {
   switch (node.type) {
+    case 'apiRender': {
+      if (sourceHandle === 'image' || /^render-image-\d+$/.test(sourceHandle ?? '')) return 'image';
+      if (sourceHandle === 'video' || /^render-video-\d+$/.test(sourceHandle ?? '')) return 'video';
+      if (sourceHandle === 'collection' && Array.isArray(node.data?.renderOutputs)) {
+        const kinds = new Set(
+          node.data.renderOutputs.map((value: unknown) => (value as { kind?: unknown })?.kind),
+        );
+        if (kinds.size === 1) {
+          const kind = [...kinds][0];
+          return kind === 'image' || kind === 'video' ? kind : undefined;
+        }
+      }
+      return undefined;
+    }
     case 'action':
       return actionOutputModality(node.data?.actionId);
     case 'router':
@@ -1100,6 +1118,22 @@ export const getAllowedSourceHandles = (node: GraphNodeLike): string[] => {
       return ['video'];
     case 'omniGen':
       return ['video'];
+    case 'apiRender': {
+      const outputs = Array.isArray(node.data?.renderOutputs)
+        ? (node.data.renderOutputs as { kind: string }[])
+        : [];
+      const counts = { image: 0, video: 0 };
+      return [
+        'image',
+        'video',
+        'collection',
+        ...outputs.flatMap((output) =>
+          output.kind === 'image' || output.kind === 'video'
+            ? [`render-${output.kind}-${++counts[output.kind]}`]
+            : [],
+        ),
+      ];
+    }
     case 'plannerDraft':
       return [DRAFT_OUTPUT_HANDLE];
     case 'action':
@@ -1848,7 +1882,7 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
           delivery: null,
           status: 'idle',
         },
-        style: { width: 380, height: 520 },
+        style: { width: 320, height: 220 },
       };
     case 'videoGen':
     case 'veoDirector':
@@ -1910,7 +1944,7 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
             { id: newSlotId(2), order: 1 },
           ],
         },
-        style: { width: 340, height: 420 },
+        style: { width: 320, height: 220 },
       };
     case 'paidPublisher':
       return {
@@ -1921,10 +1955,10 @@ function baseNodeData(type: StudioNodeType): NodeCreationResult {
             { id: newSlotId(2), order: 1 },
           ],
         },
-        style: { width: 320, height: 300 },
+        style: { width: 320, height: 220 },
       };
     case 'organicPublish':
-      return { data: { schedule: 'now' }, style: { width: 300, height: 260 } };
+      return { data: { schedule: 'now' }, style: { width: 320, height: 220 } };
     case 'omniGen':
       // Style is derived from the aspect ratio by createNodeData (nodeStyleFor);
       // 16:9 lands on the historical 512x360.

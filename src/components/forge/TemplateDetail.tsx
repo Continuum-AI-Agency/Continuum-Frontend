@@ -31,6 +31,7 @@ import {
   Variable,
   Wrench,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DraftWithAiButton } from '@/components/forge/AiVariationsDialog';
 import { type CheckRow, CheckTable, type CheckTick, TickBar } from '@/components/forge/CheckTable';
@@ -1234,6 +1235,15 @@ export function TemplateDetail({
             </Button>
           ) : null}
           <DraftWithAiButton templateKey={templateKey} onOpenRender={onOpenRender} />
+          {templateKey && publishedContract ? (
+            <Button
+              variant="outline"
+              size="sm"
+              render={<Link href={`/ai-studio?forgeTemplate=${encodeURIComponent(templateKey)}`} />}
+            >
+              Use in Canvas
+            </Button>
+          ) : null}
           {templateKey ? (
             <Button
               type="button"

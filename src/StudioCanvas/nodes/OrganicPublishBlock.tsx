@@ -1,17 +1,9 @@
 'use client';
 
-import { DRAFT_INPUT_HANDLE, type PublishEvent } from '@continuum/contracts';
-import {
-  Handle,
-  type NodeProps,
-  NodeResizer,
-  Position,
-  type Node as ReactFlowNode,
-} from '@xyflow/react';
-import { CalendarClock, Copy, Send, Share2, Trash2 } from 'lucide-react';
-import type React from 'react';
+import { DRAFT_INPUT_HANDLE, type PublishEvent, publishEventSchema } from '@continuum/contracts';
+import type { NodeProps, Node as ReactFlowNode } from '@xyflow/react';
+import { CalendarClock, Send, Share2 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
-import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import {
   PublishIntentSummary,
   type PublishIntentSummaryData,
@@ -29,11 +21,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { describePublishError, parseSSE, publishPlatformLabel } from '@/lib/organic/publish-utils';
-import { cn } from '@/lib/utils';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { useStudioStore } from '../stores/useStudioStore';
 import type { OrganicPublishNodeData, PlannerDraftNodeData, StudioNode } from '../types';
-import { NodeBadge, NodeTitleBar } from './NodeChrome';
+import { ImplementationNode } from './ImplementationNode';
 import {
   fetchOrganicPublishIntent,
   type OrganicPublishIntent,
@@ -59,7 +50,7 @@ export function upstreamDraft(args: {
   );
   if (!edge) return null;
   const source = args.nodes.find((node) => node.id === edge.source);
-  if (!source || source.type !== 'plannerDraft') return null;
+  if (source?.type !== 'plannerDraft') return null;
   const data = source.data as PlannerDraftNodeData;
   if (!data.targetDraftId) return null;
   return {
@@ -90,8 +81,6 @@ export function OrganicPublishBlock({
   selected,
 }: NodeProps<ReactFlowNode<OrganicPublishNodeData>>) {
   const updateNode = useStudioStore((state) => state.updateNode);
-  const duplicateNode = useStudioStore((state) => state.duplicateNode);
-  const deleteNode = useStudioStore((state) => state.deleteNode);
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
   const { show } = useToast();
   const nodes = useStudioStore((state) => state.nodes) as StudioNode[];
@@ -102,6 +91,10 @@ export function OrganicPublishBlock({
   const [stage, setStage] = useState<string | null>(null);
   // The intent hash lives in component state, never on node data: canvas persistence
   // strips long opaque strings, and a confirmation must not outlive the session anyway.
+  const [pendingMode, setPendingMode] = useState<'now' | 'scheduled'>('now');
+  const activeRoomId = useStudioStore((state) => state.activeRoomId);
+  const [pendingScope, setPendingScope] = useState<string | null>(null);
+  const [pendingDraftId, setPendingDraftId] = useState<string | null>(null);
   const [pending, setPending] = useState<OrganicPublishIntent | null>(null);
 
   const draft = useMemo(() => upstreamDraft({ nodeId: id, nodes, edges }), [edges, id, nodes]);
@@ -109,13 +102,18 @@ export function OrganicPublishBlock({
 
   const patchData = useCallback(
     (patch: Partial<OrganicPublishNodeData>) => {
+      if (
+        useStudioStore.getState().brandId !== brandId ||
+        useStudioStore.getState().activeRoomId !== activeRoomId
+      )
+        return;
       updateNode(id, (node) => ({
         ...node,
         data: { ...(node.data as OrganicPublishNodeData), ...patch },
       }));
       useStudioStore.getState().triggerSave();
     },
-    [id, updateNode],
+    [id, updateNode, brandId, activeRoomId],
   );
 
   const askToPublish = useCallback(async () => {
@@ -129,20 +127,48 @@ export function OrganicPublishBlock({
         show({ title: 'Publish failed', description: message, variant: 'error' });
         return;
       }
+      if (
+        useStudioStore.getState().brandId !== brandId ||
+        useStudioStore.getState().activeRoomId !== activeRoomId
+      )
+        return;
+      setPendingScope(`${brandId}:${activeRoomId}`);
+      setPendingMode(schedule);
+      setPendingDraftId(draft.draftId);
       setPending(intent);
     } finally {
       setBusy(false);
     }
-  }, [draft, patchData, show]);
+  }, [draft, patchData, show, schedule, brandId, activeRoomId]);
 
   const confirmPublish = useCallback(async () => {
     const intent = pending;
     setPending(null);
-    if (!draft || !intent?.intent_hash) return;
+    if (
+      !draft ||
+      !intent?.intent_hash ||
+      draft.draftId !== pendingDraftId ||
+      pendingScope !== `${brandId}:${activeRoomId}`
+    )
+      return;
     setBusy(true);
     setStage('started');
     patchData({ error: undefined });
     try {
+      if (pendingMode === 'scheduled') {
+        await scheduleOrganicDraft(draft.draftId, intent.intent_hash);
+        patchData({
+          scheduledAt: new Date().toISOString(),
+          publishedAt: undefined,
+          error: undefined,
+        });
+        show({
+          title: 'Scheduled',
+          description: 'The Planner will publish at the saved time.',
+          variant: 'success',
+        });
+        return;
+      }
       const body: Record<string, unknown> = {
         postType: intent.format,
         confirmationHash: intent.intent_hash,
@@ -153,17 +179,19 @@ export function OrganicPublishBlock({
       const stream = await publishOrganicDraft({ draftId: draft.draftId, body });
       if (!stream) throw new Error('Empty response from the publisher.');
 
-      for await (const { event, data: raw } of parseSSE(stream)) {
+      let terminal = false;
+      for await (const { data: raw } of parseSSE(stream)) {
         let parsed: PublishEvent;
         try {
-          parsed = JSON.parse(raw) as PublishEvent;
+          parsed = publishEventSchema.parse(JSON.parse(raw));
         } catch {
           continue;
         }
-        if (event === 'processing') {
-          setStage((parsed as { stage?: string }).stage ?? 'processing');
-        } else if (event === 'published') {
-          const published = parsed as Extract<PublishEvent, { type: 'published' }>;
+        if (parsed.type === 'processing') {
+          setStage(parsed.stage ?? 'processing');
+        } else if (parsed.type === 'published') {
+          terminal = true;
+          const published = parsed;
           patchData({
             publishedAt: new Date().toISOString(),
             platformPostId: published.postId ?? undefined,
@@ -174,13 +202,18 @@ export function OrganicPublishBlock({
             description: `Live on ${publishPlatformLabel(published.platform)}.`,
             variant: 'success',
           });
-        } else if (event === 'failed') {
-          const failed = parsed as Extract<PublishEvent, { type: 'failed' }>;
+        } else if (parsed.type === 'failed') {
+          terminal = true;
+          const failed = parsed;
           const message = describePublishError(failed.code, failed.error);
           patchData({ error: message });
           show({ title: 'Publish failed', description: message, variant: 'error' });
         }
       }
+      if (!terminal)
+        throw new Error(
+          'The publisher disconnected before returning a receipt. Check Planner and the platform before retrying.',
+        );
     } catch (cause) {
       // NEVER auto-retry: a network error says nothing about whether the post went out.
       const message =
@@ -193,27 +226,17 @@ export function OrganicPublishBlock({
       setBusy(false);
       setStage(null);
     }
-  }, [brandId, draft, patchData, pending, show]);
-
-  const armSchedule = useCallback(async () => {
-    if (!draft) return;
-    setBusy(true);
-    try {
-      await scheduleOrganicDraft(draft.draftId);
-      patchData({ publishedAt: undefined, error: undefined });
-      show({
-        title: 'Scheduled',
-        description: 'The planner will publish this at its scheduled time.',
-        variant: 'success',
-      });
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Could not schedule this draft.';
-      patchData({ error: message });
-      show({ title: 'Could not schedule', description: message, variant: 'warning' });
-    } finally {
-      setBusy(false);
-    }
-  }, [draft, patchData, show]);
+  }, [
+    brandId,
+    draft,
+    patchData,
+    pending,
+    show,
+    pendingMode,
+    pendingDraftId,
+    pendingScope,
+    activeRoomId,
+  ]);
 
   const blockedReason = !draft
     ? 'Wire a Planner Draft into this node.'
@@ -222,127 +245,85 @@ export function OrganicPublishBlock({
       : null;
 
   return (
-    <div
-      className={cn(
-        'relative group h-full w-full min-w-[280px] min-h-[240px] rounded-xl transition-shadow',
-        isSelectedByOther && 'selected-by-other',
-      )}
-      style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
-    >
-      <NodeResizer
-        minWidth={280}
-        minHeight={240}
-        isVisible={selected}
-        lineClassName="border-brand-primary/60"
-      />
-      <CanvasNode
+    <>
+      <ImplementationNode
+        id={id}
         selected={selected}
-        handles={{ target: false, source: false }}
-        className="h-full w-full overflow-hidden p-0"
+        title="Post to Platform"
+        icon={Share2}
+        summary={
+          draft?.title ??
+          (draft?.platform ? `Post to ${draft.platform}` : 'Connect a Planner Draft')
+        }
+        status={
+          stage ??
+          (data.publishedAt
+            ? `Published · ${data.platformPostId ?? 'receipt saved'}`
+            : data.scheduledAt
+              ? 'Scheduled in Planner'
+              : blockedReason
+                ? `${blockedReason} Workflow pauses for publishing review.`
+                : schedule === 'scheduled'
+                  ? 'Review before activating the Planner schedule'
+                  : 'Review before publishing publicly')
+        }
+        error={data.error}
+        inputs={[{ id: DRAFT_INPUT_HANDLE, label: 'Saved draft' }]}
       >
-        <NodeTitleBar icon={Share2} label="Post to Platform">
-          <NodeBadge>Organic</NodeBadge>
-        </NodeTitleBar>
-        <NodeContent className="flex min-h-0 flex-1 flex-col gap-1.5 p-1.5 text-xs">
-          <p
-            data-testid="publisher-handoff-state"
-            className="-mx-1.5 -mt-1.5 border-b border-border/60 bg-muted/50 px-2 py-1 text-2xs text-muted-foreground"
-          >
-            {data.publishedAt
-              ? `Published${data.platformPostId ? ` · ${data.platformPostId}` : ''}`
-              : 'A canvas run never publishes. This posts only when you confirm below.'}
-          </p>
-
-          <p className="truncate text-2xs text-muted-foreground">
-            {draft ? (draft.title ?? draft.draftId) : 'No draft wired in'}
-          </p>
-
-          <select
-            className="nodrag h-8 rounded-md border border-border bg-background px-2"
-            value={schedule}
-            onChange={(event) =>
-              patchData({ schedule: event.target.value as OrganicPublishNodeData['schedule'] })
-            }
-            aria-label="When to post"
-          >
-            <option value="now">Post now</option>
-            <option value="scheduled">Schedule for its planner time</option>
-          </select>
-
-          {blockedReason ? (
-            <p className="rounded bg-amber-500/10 p-2 text-2xs text-amber-700">{blockedReason}</p>
-          ) : null}
-          {data.error ? (
-            <p className="rounded bg-destructive/10 p-2 text-2xs text-destructive">{data.error}</p>
-          ) : null}
-          {stage ? <p className="text-2xs text-muted-foreground">{stage}…</p> : null}
-
-          <Button
-            className="nodrag mt-auto h-8 w-full text-xs"
-            disabled={busy || Boolean(blockedReason)}
-            onClick={schedule === 'now' ? askToPublish : armSchedule}
-          >
-            {schedule === 'now' ? (
-              <Send className="mr-1.5" />
-            ) : (
-              <CalendarClock className="mr-1.5" />
-            )}
-            {busy ? 'Working…' : schedule === 'now' ? 'Post now' : 'Schedule'}
-          </Button>
-          <div className="flex justify-end gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="nodrag h-7 w-7"
-              onClick={() => duplicateNode(id)}
-            >
-              <Copy />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="nodrag h-7 w-7 text-destructive"
-              onClick={() => deleteNode(id)}
-            >
-              <Trash2 />
-            </Button>
-          </div>
-        </NodeContent>
-      </CanvasNode>
-
-      <div className="absolute -left-2 top-1/2" title="Planner draft">
-        <Handle
-          type="target"
-          position={Position.Left}
-          id={DRAFT_INPUT_HANDLE}
-          className="studio-handle !h-4 !w-4 !border-2"
-        />
-      </div>
-
+        <Button
+          size="sm"
+          className="ml-auto"
+          disabled={busy || Boolean(blockedReason) || Boolean(data.publishedAt || data.scheduledAt)}
+          onClick={askToPublish}
+        >
+          {schedule === 'now' ? (
+            <Send className="size-3.5" aria-hidden />
+          ) : (
+            <CalendarClock className="size-3.5" aria-hidden />
+          )}
+          {busy ? 'Checking…' : schedule === 'now' ? 'Review post' : 'Review schedule'}
+        </Button>
+      </ImplementationNode>
       <AlertDialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
         <AlertDialogContent className="nodrag">
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Publish to {publishPlatformLabel(pending?.platform as never)}?
+              {pendingMode === 'scheduled' ? 'Schedule' : 'Publish'} to{' '}
+              {publishPlatformLabel(pending?.platform as never)}?
             </AlertDialogTitle>
             <AlertDialogDescription>
               {pending?.publishable === false
                 ? 'This post is not ready to publish yet.'
-                : 'This posts publicly right away and cannot be undone from Continuum. Review the caption and account below.'}
+                : pendingMode === 'scheduled'
+                  ? 'This activates the saved Planner schedule. Review the caption and account before it becomes public.'
+                  : 'This posts publicly right away. Review the caption and account below.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {pendingMode === 'scheduled' ? (
+            <p className="text-sm">
+              Planner time:{' '}
+              {pending?.scheduled_at
+                ? new Date(pending.scheduled_at).toLocaleString()
+                : 'Save a future time in Planner first.'}
+            </p>
+          ) : null}
           {pending ? <PublishIntentSummary intent={pending as PublishIntentSummaryData} /> : null}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={!pending?.publishable || !pending?.intent_hash}
+              disabled={
+                !pending?.publishable ||
+                !pending?.intent_hash ||
+                (pendingMode === 'scheduled' &&
+                  (!pending.scheduled_at || Date.parse(pending.scheduled_at) <= Date.now()))
+              }
               onClick={confirmPublish}
             >
-              Publish
+              {pendingMode === 'scheduled' ? 'Confirm schedule' : 'Publish'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }

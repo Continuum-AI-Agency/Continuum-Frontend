@@ -161,6 +161,7 @@ function BudgetLine({ variable, value }: { variable: ApiRenderVariable; value: u
 }
 
 function MediaVariableField({
+  showHandles,
   variable,
   brandId,
   picked,
@@ -170,6 +171,7 @@ function MediaVariableField({
   onClear,
 }: {
   variable: ApiRenderVariable;
+  showHandles?: boolean;
   brandId: string | null;
   picked: PinnedRenderAsset[];
   status: { connected: number; ready: number; picked: number };
@@ -200,7 +202,7 @@ function MediaVariableField({
 
   return (
     <>
-      <VariableHandle variable={variable} />
+      {showHandles !== false ? <VariableHandle variable={variable} /> : null}
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-1 text-2xs text-muted-foreground">
           {variable.kind === 'image' ? (
@@ -302,6 +304,7 @@ function VariableHandle({ variable }: { variable: ApiRenderVariable }) {
 }
 
 function VariableField({
+  showHandles,
   variable,
   values,
   brandId,
@@ -314,6 +317,7 @@ function VariableField({
   onPickMedia,
 }: {
   variable: ApiRenderVariable;
+  showHandles?: boolean;
   values: Record<string, ApiRenderInputValue> | undefined;
   brandId: string | null;
   connectedKeys?: ReadonlySet<string>;
@@ -338,6 +342,7 @@ function VariableField({
         <>
           <MediaVariableField
             variable={variable}
+            showHandles={showHandles}
             brandId={brandId}
             picked={pickedPins(value)}
             status={mediaStatus?.get(variable.key) ?? { connected: 0, ready: 0, picked: 0 }}
@@ -350,6 +355,7 @@ function VariableField({
       ) : variable.kind === 'boolean' ? (
         <Switch
           className="nodrag"
+          aria-label={apiRenderVariableLabel(variable)}
           checked={value === true}
           onCheckedChange={(next) => onChange(variable.key, next)}
         />
@@ -390,18 +396,26 @@ function VariableField({
         // `resolveApiRenderVariables` prefers the wire when there is one. Number does NOT: a
         // handle would replace the field it must keep.
         <>
-          {isConnectableApiRenderVariable(variable) ? <VariableHandle variable={variable} /> : null}
+          {showHandles !== false && isConnectableApiRenderVariable(variable) ? (
+            <VariableHandle variable={variable} />
+          ) : null}
           <Input
             className="nodrag h-7 text-xs"
+            disabled={connectedKeys?.has(variable.key)}
+            aria-label={apiRenderVariableLabel(variable)}
             type={variable.kind === 'number' ? 'number' : 'text'}
             placeholder={variable.sample ?? undefined}
             value={String(value ?? '')}
-            onChange={(event) =>
+            onChange={(event) => {
+              if (event.target.value === '') {
+                onClear(variable.key);
+                return;
+              }
               onChange(
                 variable.key,
                 variable.kind === 'number' ? Number(event.target.value) : event.target.value,
-              )
-            }
+              );
+            }}
           />
           <BudgetLine variable={variable} value={value} />
           {connectedKeys?.has(variable.key) ? (
@@ -417,6 +431,7 @@ function VariableField({
 
 export function RenderVariableFields(props: {
   definitions: ApiRenderVariable[];
+  showHandles?: boolean;
   values: Record<string, ApiRenderInputValue> | undefined;
   /** Whose Library the picker browses. Without it the slot is wire-only. */
   brandId?: string | null;

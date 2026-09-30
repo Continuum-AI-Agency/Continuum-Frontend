@@ -91,6 +91,8 @@ import { extractVideoFrame } from './extractVideoFrame';
 import { computeGenerationSignature, isSignatureTracked, nodeIsStale } from './generationSignature';
 import { readNodeAssetRef } from './nodeAssetRef';
 import { hasHydratableMediaReference, rehydrateWorkflowMediaNodes } from './rehydrateWorkflowMedia';
+import { runImplementationNode } from './runImplementationNode';
+import { selectNodeOutput } from './selectNodeOutput';
 import { startHyperframesAgentNode } from './startHyperframesAgent';
 import { isVideoGeneratorNodeType, resolveVideoGeneratorModel } from './videoModel';
 
@@ -226,7 +228,7 @@ const resolveTextInput = (
   nodeById: Map<string, StudioNode>,
   allEdges: Edge[],
 ): string | undefined => {
-  const output = resolvedOutputs.get(edge.source);
+  const output = selectNodeOutput(resolvedOutputs.get(edge.source), edge.sourceHandle);
   if (output?.type === 'text') {
     return normalizeText(output.value);
   }
@@ -272,7 +274,7 @@ const resolveImageInput = (
   resolvedOutputs: Map<string, NodeOutput>,
   nodeById: Map<string, StudioNode>,
 ): { base64: string; mimeType: string } | undefined => {
-  const output = resolvedOutputs.get(edge.source);
+  const output = selectNodeOutput(resolvedOutputs.get(edge.source), edge.sourceHandle);
   if (output?.type === 'image' && (output.base64 || isHttpUrl(output.url))) {
     return { base64: output.base64 ?? '', mimeType: output.mimeType };
   }
@@ -315,7 +317,7 @@ const resolveVideoInput = (
   options?: { allowUri?: boolean },
 ): { base64: string; mimeType: string } | { uri: string } | undefined => {
   const allowUri = Boolean(options?.allowUri);
-  const output = resolvedOutputs.get(edge.source);
+  const output = selectNodeOutput(resolvedOutputs.get(edge.source), edge.sourceHandle);
   if (output?.type === 'video' && output.url) {
     const parsed = parseDataUrl(output.url);
     if (parsed?.base64) {
@@ -567,7 +569,7 @@ const unresolvedInputReason = (
  * a GENERATOR hit the identical trap one function over.
  */
 const feedsCollection = (edge: Edge, resolvedOutputs: Map<string, NodeOutput>): boolean =>
-  resolvedOutputs.get(edge.source)?.type === 'collection';
+  selectNodeOutput(resolvedOutputs.get(edge.source), edge.sourceHandle)?.type === 'collection';
 
 /**
  * A `designRef` contributes; it never demands (Airtable #289).
@@ -728,7 +730,9 @@ const collectionInputFor = (
     // expands the collection onto the port instead.
     if (port.max > 1) continue;
     const edge = getIncomingEdges(edges, nodeId).find((e) => e.targetHandle === port.handle);
-    const output = edge ? resolvedOutputs.get(edge.source) : undefined;
+    const output = edge
+      ? selectNodeOutput(resolvedOutputs.get(edge.source), edge.sourceHandle)
+      : undefined;
     if (output?.type === 'collection') {
       return { handle: port.handle, modality: port.modality, items: output.items };
     }
@@ -774,7 +778,7 @@ const resolveActionInputsFor = async (
       throw new Error(`Nothing is connected to this action's "${port.handle}" input`);
 
     for (const edge of wired.slice(0, port.max)) {
-      const collection = resolvedOutputs.get(edge.source);
+      const collection = selectNodeOutput(resolvedOutputs.get(edge.source), edge.sourceHandle);
       if (collection?.type === 'collection') {
         // A collection on a many-input port IS the port's inputs — a batch of two
         // clips wired into Stitch is two clips to stitch. Ports that take one are
@@ -797,7 +801,7 @@ const resolveActionInputsFor = async (
         continue;
       }
 
-      const output = resolvedOutputs.get(edge.source);
+      const output = selectNodeOutput(resolvedOutputs.get(edge.source), edge.sourceHandle);
       if (output) {
         const resolved = {
           ...actionInputFromOutput(output, port.handle),
@@ -991,6 +995,33 @@ const getNodeReadiness = (
     return { ready: false, awaiting: true, reason: 'Waiting on an upstream Video Editor' };
   }
 
+  if (node.type === 'apiRender' || node.type === 'plannerDraft') {
+    for (const edge of incomingEdges) {
+      const source = nodeById.get(edge.source);
+      if (
+        source &&
+        STUDIO_RUNNABLE_NODE_TYPES.has(source.type as StudioNodeType) &&
+        !resolvedOutputs.has(source.id)
+      ) {
+        return {
+          ready: false,
+          blockedNodeId: source.id,
+          reason: 'Waiting for the connected input',
+        };
+      }
+    }
+    const data = node.data as Record<string, unknown>;
+    if (node.type === 'apiRender' && (!data.templateKey || !data.contractHash))
+      return { ready: false, reason: 'Choose a ready Forge template' };
+    if (
+      node.type === 'plannerDraft' &&
+      !data.targetDraftId &&
+      (!data.platform || !data.platformAccountId)
+    )
+      return { ready: false, reason: 'Choose a Planner destination' };
+    return { ready: true };
+  }
+
   if (node.type === 'videoDecode') {
     const videoEdges = incomingEdges.filter((edge) => edge.targetHandle === 'video');
     if (videoEdges.length === 0) {
@@ -1152,7 +1183,8 @@ const getNodeReadiness = (
         // text op read as permanently not-ready, and the run bailed in preflight
         // without saying why.
         const available =
-          resolvedOutputs.get(edge.source)?.type === 'collection' ||
+          selectNodeOutput(resolvedOutputs.get(edge.source), edge.sourceHandle)?.type ===
+            'collection' ||
           (port.modality === 'text'
             ? resolveTextInput(edge, resolvedOutputs, nodeById, edges) !== undefined
             : port.modality === 'image'
@@ -1382,7 +1414,36 @@ const buildOptimisticPreflightOutputs = (
     const actionModality =
       node.type === 'action' ? actionOutputModality(node.data?.actionId) : undefined;
 
-    if (node.type === 'string' || node.type === 'videoDecode' || actionModality === 'text') {
+    if (node.type === 'apiRender') {
+      outputs.set(node.id, {
+        type: 'render',
+        outputs: (
+          (Array.isArray(node.data.templateOutputKinds) && node.data.templateOutputKinds.length
+            ? node.data.templateOutputKinds
+            : ['image', 'video']) as ('image' | 'video')[]
+        ).flatMap((kind) => {
+          const numbered = edges
+            .filter(
+              (edge) => edge.source === node.id && edge.sourceHandle?.startsWith(`render-${kind}-`),
+            )
+            .map((edge) => Number(edge.sourceHandle?.split('-').at(-1)));
+          const count = Math.max(1, ...numbered);
+          return Array.from({ length: count }, (_, index) => ({
+            id: `${kind}-${index}`,
+            kind,
+            fileName: kind,
+            mimeType: `${kind}/png`,
+            url: 'https://preflight.invalid/media',
+            width: null,
+            height: null,
+            assetId: '00000000-0000-4000-8000-000000000001',
+            versionId: '00000000-0000-4000-8000-000000000002',
+          }));
+        }),
+      });
+    } else if (node.type === 'plannerDraft') {
+      outputs.set(node.id, { type: 'draft', draftId: 'preflight', updatedAt: 'preflight' });
+    } else if (node.type === 'string' || node.type === 'videoDecode' || actionModality === 'text') {
       outputs.set(node.id, { type: 'text', value: 'preflight-ready' });
     } else if (
       node.type === 'nanoGen' ||
@@ -2142,6 +2203,11 @@ export async function executeWorkflow(
       asset.kind === 'video' ? { videoSource: asset.url } : undefined,
     ).then((registered) => {
       if (!registered?.assetId) return registered;
+      if (
+        useStudioStore.getState().brandId !== workflowBrandId ||
+        useStudioStore.getState().activeRoomId !== workflowRoomId
+      )
+        return registered;
       const state = useStudioStore.getState();
       const current = state.getNodeById(nodeId)?.data as Record<string, unknown> | undefined;
       const generatedImages = Array.isArray(current?.generatedImages)
@@ -2166,7 +2232,11 @@ export async function executeWorkflow(
       useStudioStore.getState().triggerSave();
       return registered;
     });
-    registrationPromises.set(nodeId, pending);
+    const previous = registrationPromises.get(nodeId);
+    registrationPromises.set(
+      nodeId,
+      previous ? Promise.all([previous, pending]).then((results) => results[1]) : pending,
+    );
     return pending;
   };
 
@@ -2393,6 +2463,19 @@ export async function executeWorkflow(
         updateNodeStatus(nodeId, 'failed', 'No brand selected — reload AI Studio');
         return false;
       }
+      if (node.type === 'apiRender' || node.type === 'plannerDraft') {
+        await Promise.all(
+          getIncomingEdges(edges, nodeId).map((edge) => registrationPromises.get(edge.source)),
+        );
+        const controller = controls.registerController(nodeId);
+        try {
+          const output = await runImplementationNode(nodeId, controller.signal);
+          setNodeOutput(nodeId, output, { registerLibrary: false });
+          return true;
+        } finally {
+          controls.releaseController(nodeId, controller);
+        }
+      }
       if (node.type === 'string') {
         // A run scoped to THIS node is the node's own "Enrich Prompt" button, the
         // one explicit request to enrich; a whole-graph run merely passes through.
@@ -2581,7 +2664,9 @@ export async function executeWorkflow(
       if (node.type === 'frameExtract') {
         const incoming = getIncomingEdges(edges, nodeId);
         const videoEdge = incoming.find((edge) => edge.targetHandle === 'video');
-        const sourceOutput = videoEdge ? resolvedOutputs.get(videoEdge.source) : undefined;
+        const sourceOutput = videoEdge
+          ? selectNodeOutput(resolvedOutputs.get(videoEdge.source), videoEdge.sourceHandle)
+          : undefined;
         const sourceNode = videoEdge ? nodeById.get(videoEdge.source) : undefined;
         const sourceData = (sourceNode?.data ?? {}) as Record<string, unknown>;
         const source =
@@ -2915,7 +3000,9 @@ export async function executeWorkflow(
         // so an expensive upstream node runs ONCE and feeds every edge leaving the
         // router. Nothing about the payload changes on the way through.
         const incoming = getIncomingEdges(edges, nodeId)[0];
-        const upstream = incoming ? resolvedOutputs.get(incoming.source) : undefined;
+        const upstream = incoming
+          ? selectNodeOutput(resolvedOutputs.get(incoming.source), incoming.sourceHandle)
+          : undefined;
         if (!upstream) {
           updateNodeStatus(nodeId, 'failed', 'Nothing is connected to this router');
           return false;

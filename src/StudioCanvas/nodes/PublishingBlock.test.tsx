@@ -38,45 +38,45 @@ describe('PublisherBlock delivery-handoff state', () => {
   });
 
   // bun:test does not register testing-library's auto-cleanup, so without this
-  // each render stacked in the same document and getByTestId found two nodes.
+  // each render stacked in the same document and getByRole found two nodes.
   afterEach(cleanup);
 
   it('declares the organic publish node never posts from a run', () => {
-    const { getByTestId } = renderNode(
+    const { getByRole } = renderNode(
       <OrganicPublishBlock {...baseProps} type="organicPublish" data={{}} />,
     );
-    expect(getByTestId('publisher-handoff-state').textContent).toContain(
-      'A canvas run never publishes',
-    );
+    expect(getByRole('status').textContent).toContain('Workflow pauses for publishing review');
   });
 
   it('refuses to publish until a saved draft is wired in', () => {
-    const { getByRole, getByText } = renderNode(
+    const { getByRole } = renderNode(
       <OrganicPublishBlock {...baseProps} type="organicPublish" data={{}} />,
     );
-    expect(getByText('Wire a Planner Draft into this node.')).toBeTruthy();
-    expect((getByRole('button', { name: /Post now/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      getByRole('status').textContent?.includes('Wire a Planner Draft into this node.'),
+    ).toBeTruthy();
+    expect((getByRole('button', { name: /Review post/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('reports the live post once it is published', () => {
-    const { getByTestId } = renderNode(
+    const { getByRole } = renderNode(
       <OrganicPublishBlock
         {...baseProps}
         type="organicPublish"
         data={{ publishedAt: '2026-08-17T00:00:00.000Z', platformPostId: 'ig-42' }}
       />,
     );
-    expect(getByTestId('publisher-handoff-state').textContent).toContain('Published');
-    expect(getByTestId('publisher-handoff-state').textContent).toContain('ig-42');
+    expect(getByRole('status').textContent).toContain('Published');
+    expect(getByRole('status').textContent).toContain('ig-42');
   });
 
   it('flips the paid node to a delivered state after a creative replacement', () => {
-    const { getByTestId } = renderNode(
+    const { getByRole } = renderNode(
       <PaidPublisherBlock
         {...baseProps}
         data={{ format: 'image', assetSlots: [], publishedAt: '2026-07-24T00:00:00.000Z' }}
       />,
     );
-    expect(getByTestId('publisher-handoff-state').textContent).toContain('ad creative replaced');
+    expect(getByRole('status').textContent).toContain('Creative replaced');
   });
 });

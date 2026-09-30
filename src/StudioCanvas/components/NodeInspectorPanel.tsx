@@ -28,6 +28,9 @@ import {
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useNodeConfigPatch } from '../hooks/useNodeConfigPatch';
+import { ForgeRenderSettings } from '../nodes/ForgeRenderSettings';
+import { PaidPublisherSettings } from '../nodes/PaidPublisherSettings';
+import { PlannerDraftSettings } from '../nodes/PlannerDraftSettings';
 import { useModuleFoldStore } from '../stores/useModuleFoldStore';
 import { useStudioStore } from '../stores/useStudioStore';
 import type {
@@ -42,17 +45,21 @@ import type {
 import { moduleIdForNode } from '../utils/moduleFold';
 import { CanvasFloatingPanel } from './CanvasFloatingPanel';
 import { ActionSection } from './inspector/ActionSection';
-import { ApiRenderSection } from './inspector/ApiRenderSection';
 import { ExtendVideoSection } from './inspector/ExtendVideoSection';
 import { GenericSection } from './inspector/GenericSection';
 import { GroundingSection } from './inspector/GroundingSection';
 import { ImageGenSection } from './inspector/ImageGenSection';
 import { OmniGenSection } from './inspector/OmniGenSection';
+import { OrganicPublishSettings } from './inspector/OrganicPublishSettings';
 import { VideoGenSection } from './inspector/VideoGenSection';
 import { SaveTechniqueDialog } from './SaveTechniqueDialog';
 
 /** Only the types with a hand-written section; everything else is humanized. */
 const TYPE_TITLES: Record<string, string> = {
+  apiRender: 'Forge Render',
+  plannerDraft: 'Planner Draft',
+  organicPublish: 'Post to Platform',
+  paidPublisher: 'Paid Ad',
   nanoGen: 'Image Generator',
   videoGen: 'Video Generator',
   veoDirector: 'Video Generator',
@@ -90,13 +97,23 @@ function ConfigSection({
     case 'action':
       return <ActionSection nodeId={node.id} data={node.data as ActionNodeData} />;
     case 'apiRender':
+      return <ForgeRenderSettings id={node.id} data={node.data as ApiRenderNodeData} />;
+    case 'plannerDraft':
       return (
-        <ApiRenderSection
-          nodeId={node.id}
-          data={node.data as ApiRenderNodeData}
-          onPatch={onPatch}
+        <PlannerDraftSettings
+          id={node.id}
+          data={node.data as import('../types').PlannerDraftNodeData}
         />
       );
+    case 'paidPublisher':
+      return (
+        <PaidPublisherSettings
+          id={node.id}
+          data={node.data as import('../types').PublisherNodeData}
+        />
+      );
+    case 'organicPublish':
+      return <OrganicPublishSettings node={node} onPatch={onPatch} />;
     case 'nanoGen':
       return <ImageGenSection data={node.data as NanoGenNodeData} onPatch={onPatch} />;
     case 'videoGen':
@@ -196,7 +213,7 @@ export function NodeInspectorPanel({
       // CanvasFloatingPanel's own `mt-14` is what clears the validation-issues button
       // that already owns this corner.
       position="top-right"
-      className="mr-1 w-[320px]"
+      className="mr-1 w-[380px] max-w-[calc(100%-1rem)]"
     >
       <div className="flex flex-col gap-4 p-3" data-testid="node-inspector">
         {/* First, not last: the panel body scrolls, and an action at its bottom

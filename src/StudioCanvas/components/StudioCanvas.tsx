@@ -47,6 +47,7 @@ import { useCanvasDnD } from '../hooks/useCanvasDnD';
 import { useCanvasKeyboardShortcuts } from '../hooks/useCanvasKeyboardShortcuts';
 import { useEdgeDropNode } from '../hooks/useEdgeDropNode';
 import { CANVAS_NODE_TYPES_WITH_FOLD, useFoldedGraph } from '../hooks/useFoldedGraph';
+import { useImplementationSeedHydration } from '../hooks/useImplementationSeedHydration';
 import { usePlannerSeedHydration } from '../hooks/usePlannerSeedHydration';
 import { useTimelineRenderContinuations } from '../hooks/useTimelineRenderContinuations';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
@@ -464,6 +465,7 @@ function Flow({
   }, [setEdges, setNodes, takeSnapshot, triggerSave]);
 
   usePlannerSeedHydration({ organicPlannerSeed, activeRoomId, isLoading });
+  useImplementationSeedHydration({ brandId: brandProfileId, activeRoomId, isLoading });
 
   useCanvasKeyboardShortcuts();
 

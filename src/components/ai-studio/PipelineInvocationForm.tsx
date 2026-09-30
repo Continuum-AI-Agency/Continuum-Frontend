@@ -204,6 +204,8 @@ function ElementInput({
 }
 
 function artifactIdentity(artifact: PipelineRunArtifact): string {
+  if (artifact.kind === 'planner_draft')
+    return `Planner draft ${artifact.draft.draftId.slice(0, 8)} · saved ${artifact.draft.updatedAt}`;
   if (artifact.kind === 'asset') {
     return `asset ${artifact.asset.asset_id.slice(0, 8)} · version ${artifact.asset.version_id.slice(0, 8)}`;
   }
@@ -270,13 +272,24 @@ function PipelineReceipt({
           </section>
         );
       })}
+      {receipt.pending_reviews?.length ? (
+        <a
+          className="text-xs underline underline-offset-4"
+          href={`/ai-studio?pipelineRun=${encodeURIComponent(receipt.run_id)}`}
+        >
+          Review {receipt.pending_reviews.length} delivery action
+          {receipt.pending_reviews.length === 1 ? '' : 's'} in Canvas
+        </a>
+      ) : null}
       {cost ? (
         <p className="text-3xs text-muted-foreground">
           {cost.amount_minor === null
             ? 'Cost not recorded'
             : `${(cost.amount_minor / 100).toFixed(2)} ${cost.currency}`}{' '}
-          · {cost.generation_count} generations · quality{' '}
-          {Math.round((receipt.quality?.score ?? 0) * 100)}%
+          · {cost.generation_count} generations ·{' '}
+          {receipt.artifacts.every((artifact) => artifact.kind === 'planner_draft')
+            ? 'saved draft checks passed'
+            : `quality ${Math.round((receipt.quality?.score ?? 0) * 100)}%`}
         </p>
       ) : null}
     </section>

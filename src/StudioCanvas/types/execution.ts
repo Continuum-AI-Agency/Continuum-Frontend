@@ -1,4 +1,4 @@
-import type { ShaderStackV1 } from '@continuum/contracts';
+import type { ApiRenderOutput, ShaderStackV1 } from '@continuum/contracts';
 import type {
   BrandBookPieceKind,
   BrandDirectionPiece,
@@ -37,6 +37,8 @@ export type ImageOutputItem = {
 };
 
 export type NodeOutput =
+  | { type: 'render'; outputs: ApiRenderOutput[] }
+  | { type: 'draft'; draftId: string; updatedAt: string }
   | { type: 'text'; value: string }
   | ({ type: 'image' } & ImageOutputItem)
   // A `num_images` run: one item per variation, in variation_index order. The

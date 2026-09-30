@@ -3,15 +3,18 @@ import {
   attachOrganicCanvasCreativeResponseSchema,
   type OrganicCanvasDraftWriteRequest,
   type OrganicCanvasDraftWriteResponse,
+  type OrganicCanvasPublishIntent,
   type OrganicCanvasTargetSearchRequest,
   type OrganicCanvasTargetSearchResponse,
   organicCanvasDraftWriteResponseSchema,
+  organicCanvasPublishIntentSchema,
   organicCanvasTargetSearchResponseSchema,
   type PaidCanvasCreativeReplacementRequest,
   type PaidCanvasCreativeReplacementResponse,
   type PaidCanvasTargetSearchRequest,
   type PaidCanvasTargetSearchResponse,
   paidCanvasCreativeReplacementResponseSchema,
+  paidCanvasCreativeRestoreResultSchema,
   paidCanvasTargetSearchResponseSchema,
 } from '@continuum/contracts';
 import { getApiBaseUrl } from '@/lib/api/config';
@@ -32,18 +35,7 @@ const queryString = (input: Record<string, unknown>): string => {
  * the hash the backend binds a confirmation to. `intent_hash` is null when the draft is
  * not publishable — there is nothing legitimate to confirm.
  */
-export type OrganicPublishIntent = {
-  publishable: boolean;
-  blockers: { reason: string; message: string }[];
-  /** Non-blocking gaps the confirmation dialog shows alongside the blockers. */
-  warnings: { reason: string; message: string }[];
-  platform: string;
-  format: string;
-  account: { id: string | null; source: string };
-  caption: { present: boolean; length: number; preview: string | null };
-  media: { count: number; required: number; source: string };
-  intent_hash: string | null;
-};
+export type OrganicPublishIntent = OrganicCanvasPublishIntent;
 
 async function authHeaders(): Promise<Record<string, string>> {
   const token = await getBrowserAccessToken();
@@ -83,6 +75,14 @@ export const publishingApi = {
       schema: paidCanvasTargetSearchResponseSchema,
     });
   },
+  restorePaid(input: import('@continuum/contracts').PaidCanvasCreativeRestoreRequest) {
+    return http.request<import('@continuum/contracts').PaidCanvasCreativeRestoreResult>({
+      path: '/api/ai-studio/publishing/paid/restores',
+      method: 'POST',
+      body: input,
+      schema: paidCanvasCreativeRestoreResultSchema,
+    });
+  },
   replacePaid(input: PaidCanvasCreativeReplacementRequest) {
     return http.request<PaidCanvasCreativeReplacementResponse>({
       path: '/api/ai-studio/publishing/paid/replacements',
@@ -117,7 +117,7 @@ export async function fetchOrganicPublishIntent(
       },
     );
     if (!response.ok) return null;
-    return (await response.json()) as OrganicPublishIntent;
+    return organicCanvasPublishIntentSchema.parse(await response.json());
   } catch {
     return null;
   }
@@ -140,14 +140,25 @@ export async function publishOrganicDraft(args: {
     { method: 'POST', headers: await authHeaders(), body: JSON.stringify(args.body) },
   );
   if (response.status === 401) throw new Error('Your session expired. Sign in and try again.');
+  if (!response.ok)
+    throw new Error(
+      `The publisher refused this request (${response.status}). Refresh the draft and review it again.`,
+    );
   return response.body;
 }
 
 /** Approve, then arm the poller. The exact pair the planner's own schedule action uses. */
-export async function scheduleOrganicDraft(draftId: string): Promise<void> {
+export async function scheduleOrganicDraft(
+  draftId: string,
+  confirmationHash: string,
+): Promise<void> {
   const headers = await authHeaders();
   const base = `${getApiBaseUrl()}/api/organic/calendar/drafts/${encodeURIComponent(draftId)}`;
-  const approve = await fetch(`${base}/approve`, { method: 'POST', headers, body: '{}' });
+  const approve = await fetch(`${base}/approve`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ confirmationHash }),
+  });
   if (!approve.ok) {
     const detail = (await approve.json().catch(() => null)) as { error?: string } | null;
     // Already approved is not a failure — it is the state we were trying to reach.
@@ -158,7 +169,7 @@ export async function scheduleOrganicDraft(draftId: string): Promise<void> {
   const scheduled = await fetch(base, {
     method: 'PATCH',
     headers,
-    body: JSON.stringify({ status: 'scheduled' }),
+    body: JSON.stringify({ status: 'scheduled', confirmationHash }),
   });
   if (!scheduled.ok) throw new Error('Could not schedule this draft.');
 }

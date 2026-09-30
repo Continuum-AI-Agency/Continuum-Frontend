@@ -283,11 +283,15 @@ export const signedAssetUrlQueryKey = (brandId: string | undefined, assetId: str
   assetId,
 ];
 
-export async function signLibraryAsset(brandId: string, assetId: string): Promise<string> {
+export async function signLibraryAsset(
+  brandId: string,
+  assetId: string,
+  versionId?: string,
+): Promise<string> {
   const response = await fetch('/api/library/sign', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ brandId, assetId }),
+    body: JSON.stringify({ brandId, assetId, ...(versionId ? { versionId } : {}) }),
   });
   if (!response.ok) throw new Error(`Failed to sign asset: ${response.status}`);
   const data = (await response.json()) as { signedUrl?: string };

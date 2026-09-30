@@ -513,6 +513,7 @@ export interface PlannerDraftNodeData extends BaseNodeData {
 
 /** Post the upstream draft — now, or on the schedule the draft already carries. */
 export interface OrganicPublishNodeData extends BaseNodeData {
+  scheduledAt?: string;
   schedule?: 'now' | 'scheduled';
   publishedAt?: string;
   platformPostId?: string;
@@ -542,6 +543,14 @@ export interface PublisherNodeData extends BaseNodeData {
 }
 
 export interface ApiRenderNodeData extends BaseNodeData {
+  outputIds?: string[];
+  templateOutputs?: ApiRenderTemplateContract['outputs'];
+  templateOutputKinds?: ('image' | 'video')[];
+  renderOutputs?: import('@continuum/contracts').ImplementationRenderOutput[];
+  renderRequestIds?: string[];
+  renderEpoch?: string;
+  renderInputSignature?: string;
+  activeJobIds?: string[];
   templateKey?: string | null;
   templateName?: string | null;
   contractHash?: string | null;

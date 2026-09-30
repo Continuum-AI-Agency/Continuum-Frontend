@@ -40,6 +40,13 @@ export const apiRenderDestinationRoute = (destinationId: string) =>
 export const apiRenderBatchShareRoute = (batchId: string) =>
   `${API_RENDER_BATCHES_ROUTE}/${batchId}/share`;
 
+/**
+ * Mints a zip link for a whole render set: each row's newest finished render plus a manifest, so
+ * a batch that retried failed rows folds into the one it retried. Signed-in brand members only.
+ */
+export const apiRenderSetZipShareRoute = (renderSetId: string) =>
+  `/api/ai-studio/renders/sets/${renderSetId}/zip-share`;
+
 export const API_RENDER_SHARED_ROUTE = '/api/ai-studio/renders/shared';
 
 /**
@@ -359,6 +366,23 @@ export const apiRenderTemplateFontSchema = z
     held: z.boolean(),
     /** Whose licence the held face is under — the brand's own upload, or a house/vendor face. */
     scope: fontLicenceScopeSchema.optional(),
+    /**
+     * Present only when a person accepted a face we hold in place of one we do not.
+     *
+     * This schema is `.strict()` and it validates the render contract, so it has to admit the
+     * same two fields `templateFontStatusSchema` can now produce: the moment anything hands
+     * `templateFontStatuses` its substitution map, a strict schema without them refuses the
+     * whole contract and the template stops rendering rather than reporting a swap.
+     */
+    via: z.enum(['direct', 'substitute']).optional(),
+    substitutedBy: z
+      .object({
+        fontId: z.string().uuid(),
+        family: z.string().min(1),
+        weight: z.number().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type ApiRenderTemplateFont = z.infer<typeof apiRenderTemplateFontSchema>;
@@ -989,6 +1013,7 @@ const finalField = z.boolean().optional();
 export const apiRenderPreflightRequestSchema = z
   .object({
     brandId: z.string().uuid(),
+    requestId: z.string().uuid().optional(),
     bindingId: bindingIdField,
     templateKey: z.string().min(1),
     contractHash: z.string().min(1),
@@ -1374,6 +1399,7 @@ export const apiRenderPreflightResponseSchema = z
     template: apiRenderTemplateSummarySchema,
     target: resolvedRenderTargetSchema.nullable(),
     inputKeys: z.array(z.string()),
+    renderInput: apiRenderVariableMapSchema.optional(),
     effects: z.literal('none'),
     // Mirrors the `test` flag frozen into the signed trigger — see apiRenderJobSchema.
     test: z.boolean().default(true),

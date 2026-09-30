@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, test } from 'bun:test';
 
 import { migrateStudioWorkflowGraph } from './workflow-migration';
 
@@ -162,4 +162,19 @@ describe('video reference mode reconciliation', () => {
 
     expect(result.migrated).toBe(false);
   });
+});
+
+test('compacts former implementation defaults and preserves user sizing', () => {
+  const make = (id: string, width: number, height: number) => ({
+    id,
+    type: 'apiRender',
+    data: {},
+    position: { x: 0, y: 0 },
+    style: { width, height },
+  });
+  const migrated = migrateStudioWorkflowGraph({
+    nodes: [make('old', 380, 520), make('custom', 400, 450)],
+  });
+  expect(migrated.graph.nodes[0]?.style).toEqual({ width: 320, height: 220 });
+  expect(migrated.graph.nodes[1]?.style).toEqual({ width: 400, height: 450 });
 });

@@ -101,7 +101,7 @@ function migratePlannerPublisher(node: WorkflowNode): WorkflowNode {
       ...(typeof draftId === 'string' && draftId ? { targetDraftId: draftId } : {}),
       assetSlots: [],
     },
-    style: { width: 320, height: 300 },
+    style: { width: 320, height: 220 },
   };
 }
 
@@ -167,6 +167,18 @@ export function migrateStudioWorkflowGraph(input: {
     if (node.type === 'organicPublisher') {
       migrated = true;
       return { ...node, type: 'plannerDraft' };
+    }
+    const legacySize = (
+      {
+        apiRender: [380, 520],
+        plannerDraft: [340, 420],
+        paidPublisher: [320, 300],
+        organicPublish: [300, 260],
+      } as Record<string, number[]>
+    )[node.type];
+    if (legacySize && node.style?.width === legacySize[0] && node.style?.height === legacySize[1]) {
+      migrated = true;
+      return { ...node, style: { ...node.style, width: 320, height: 220 } };
     }
     const reconciled = reconcileVideoReferenceMode(node, originalEdges);
     if (reconciled) {

@@ -15,10 +15,10 @@
 
 import { type BatchCombine, type BatchItemKind, MAX_BATCH_ITEMS } from '@continuum/contracts';
 import type { Edge } from '@xyflow/react';
-
 import type { BackendChatImageRequestPayload } from '@/lib/types/chatImage';
 import type { StudioNode } from '../../types';
 import type { NodeOutput } from '../../types/execution';
+import { selectNodeOutput } from '../selectNodeOutput';
 import { fanOut } from './fanout';
 
 type CollectionOutput = Extract<NodeOutput, { type: 'collection' }>;
@@ -91,7 +91,7 @@ export function collectionSourcesFor(
   for (const edge of edges) {
     if (edge.target !== nodeId) continue;
     if (seen.has(edge.source)) continue;
-    const output = resolvedOutputs.get(edge.source);
+    const output = selectNodeOutput(resolvedOutputs.get(edge.source), edge.sourceHandle);
     if (!isCollection(output)) continue;
     seen.add(edge.source);
     sources.push({ nodeId: edge.source, output });

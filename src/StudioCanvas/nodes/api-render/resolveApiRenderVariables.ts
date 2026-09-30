@@ -54,66 +54,6 @@ export function inspectApiRenderMediaInputs(args: {
       }),
   );
 }
-export function resolveApiRenderVariations(args: {
-  nodeId: string;
-  data: ApiRenderNodeData;
-  nodes: StudioNode[];
-  edges: Edge[];
-}): {
-  count: number;
-  records: Array<{ label: string; variables: Record<string, ApiRenderInputValue> }>;
-  errors: string[];
-} {
-  const scalarMediaHandles = new Set(
-    (args.data.variableDefinitions ?? [])
-      .filter(
-        (variable) =>
-          !variable.reserved &&
-          !variable.multiple &&
-          (variable.kind === 'image' || variable.kind === 'video'),
-      )
-      .map((variable) => apiRenderVariableHandleId(variable.key)),
-  );
-  const counts = new Map<string, number>();
-  for (const edge of args.edges) {
-    if (edge.target !== args.nodeId || !scalarMediaHandles.has(edge.targetHandle ?? '')) continue;
-    counts.set(edge.targetHandle as string, (counts.get(edge.targetHandle as string) ?? 0) + 1);
-  }
-  const count = Math.max(1, ...counts.values());
-  const mismatched = [...counts.entries()].find(([, value]) => value > 1 && value !== count);
-  if (mismatched) {
-    const definition = (args.data.variableDefinitions ?? []).find(
-      (variable) => apiRenderVariableHandleId(variable.key) === mismatched[0],
-    );
-    return {
-      count,
-      records: [],
-      errors: [
-        `${definition ? apiRenderVariableLabel(definition) : 'Media'} needs either 1 or ${count} inputs`,
-      ],
-    };
-  }
-
-  const records = Array.from({ length: count }, (_, index) => {
-    const edges = args.edges.filter((edge) => {
-      if (edge.target !== args.nodeId || !scalarMediaHandles.has(edge.targetHandle ?? '')) {
-        return true;
-      }
-      const siblings = args.edges.filter(
-        (candidate) =>
-          candidate.target === args.nodeId && candidate.targetHandle === edge.targetHandle,
-      );
-      return siblings.length === 1 || siblings[index] === edge;
-    });
-    const resolved = resolveApiRenderVariables({ ...args, edges });
-    return { label: `Variation ${index + 1}`, ...resolved };
-  });
-  const errors = [...new Set(records.flatMap((record) => record.errors))];
-  return {
-    count,
-    records: errors.length ? [] : records.map(({ label, variables }) => ({ label, variables })),
-    errors,
-  };
-}
+export { resolveApiRenderVariations } from '@continuum/contracts';
 
 export const __test__ = { pinFromNode };
