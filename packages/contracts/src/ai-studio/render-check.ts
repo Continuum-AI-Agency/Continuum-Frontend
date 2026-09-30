@@ -5,7 +5,9 @@ import { type ApiRenderJudge, apiRenderJudgeSchema } from './api-render-judge';
  * What measured a finished frame, in the words Slack and the UI both say.
  *
  * `unknown` is the judge failing to RUN and `unchecked` is a template with nothing to place —
- * neither is a pass, and only a pass may reach a client's room.
+ * neither is a pass, and only a pass may reach a client's room. A text the Live kit laid out
+ * exactly and found not to fit is a `fail` before any judge: that answer is arithmetic, not an
+ * estimate, so no opinion about the pixels can overrule it.
  */
 export type RenderCheck = 'pass' | 'fail' | 'unknown' | 'pending' | 'unchecked';
 
@@ -14,6 +16,7 @@ export const RENDER_CHECK_WORDS = {
   judgePassed: 'Checked: the judge passed',
   judgeFlagged: 'Checked: the judge flagged',
   judgeCouldNotRun: 'Not checked: the judge could not run',
+  textDoesNotFit: 'Checked: text does not fit —',
   pending: 'Waiting on the judge',
   unchecked: 'Not checked: no media placement to measure',
 } as const;
@@ -21,25 +24,31 @@ export const RENDER_CHECK_WORDS = {
 function read(row: { fit: unknown; judge: unknown }): {
   check: RenderCheck;
   judge: ApiRenderJudge | null;
+  misfits: string[];
 } {
-  const judge = apiRenderJudgeSchema
-    .nullable()
-    .catch(null)
-    .parse(row.judge ?? null);
-  if (judge) return { check: judge.state, judge };
   const fit = apiRenderFitReportSchema
     .nullable()
     .catch(null)
     .parse(row.fit ?? null);
-  if (!fit) return { check: 'unchecked', judge: null };
-  return { check: fit.escalate ? 'pending' : 'pass', judge: null };
+  const misfits = (fit?.slots ?? [])
+    .filter((slot) => slot.subject === 'text' && slot.state === 'clipped')
+    .map((slot) => slot.key);
+  if (misfits.length) return { check: 'fail', judge: null, misfits };
+  const judge = apiRenderJudgeSchema
+    .nullable()
+    .catch(null)
+    .parse(row.judge ?? null);
+  if (judge) return { check: judge.state, judge, misfits };
+  if (!fit) return { check: 'unchecked', judge: null, misfits };
+  return { check: fit.escalate ? 'pending' : 'pass', judge: null, misfits };
 }
 
 export const renderCheckOf = (row: { fit: unknown; judge: unknown }): RenderCheck =>
   read(row).check;
 
 export function renderCheckWords(row: { fit: unknown; judge: unknown }): string {
-  const { check, judge } = read(row);
+  const { check, judge, misfits } = read(row);
+  if (misfits.length) return `${RENDER_CHECK_WORDS.textDoesNotFit} ${misfits.join(', ')}`;
   if (!judge) {
     if (check === 'pass') return RENDER_CHECK_WORDS.placementPassed;
     return check === 'pending' ? RENDER_CHECK_WORDS.pending : RENDER_CHECK_WORDS.unchecked;

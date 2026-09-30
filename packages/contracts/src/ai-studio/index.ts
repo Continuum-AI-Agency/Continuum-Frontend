@@ -18,6 +18,7 @@ export * from './design-grounding';
 export * from './editor-project-reducer';
 export * from './editor-project-v2';
 export * from './export-formats';
+export * from './forge-live-fit';
 export * from './forge-live-text';
 export * from './forge-motion-proof';
 export * from './forge-render-imports';
