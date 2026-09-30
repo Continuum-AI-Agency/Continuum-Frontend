@@ -142,8 +142,13 @@ function textProblems(
       if (plate && area(box) < 0.9 * area(canvas)) panels.push({ layer: other, box });
       return;
     }
-    // AE stacks the first row on top: an earlier row covers this one.
-    if (j < index && noticeable && opacityOf(row, j) >= 0.5)
+    // AE stacks the first row on top: an earlier row covers this one — when it is opaque where
+    // its box says. A raster's box is not its pixels (a speaker cutout's corners run over the name
+    // while the picture there is transparent), so only a shape or solid counts as a cover.
+    // ponytail: a panel a PSD import made as a raster is not a cover; upgrade by sampling the
+    // kit's embedded footage alpha over the overlap.
+    const opaque = other.kind === 'shape' || other.kind === 'solid';
+    if (j < index && opaque && noticeable && opacityOf(row, j) >= 0.5)
       problems.push(`is covered by ${labelOf(other)}`);
   });
 
