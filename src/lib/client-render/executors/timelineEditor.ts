@@ -554,10 +554,10 @@ export async function buildTimelineEditorRenderPlan(input: {
       ),
     ),
   );
-  const blobByClip = new Map<string, Promise<Blob>>();
+  // Keyed by stored file, not clip: a first cut of one interview is a dozen clips over the
+  // same file, and one Blob per clip was a dozen downloads and a dozen copies in memory.
+  const blobByFile = new Map<string, Promise<Blob>>();
   const blobFor = (clipId: string): Promise<Blob> => {
-    const cached = blobByClip.get(clipId);
-    if (cached) return cached;
     const source = inputByClip.get(clipId);
     if (!source?.storage) throw new Error(`Render source for clip "${clipId}" is missing.`);
     const pin = pinByClip.get(clipId);
@@ -569,14 +569,17 @@ export async function buildTimelineEditorRenderPlan(input: {
     ) {
       throw new Error(`Render source for clip "${clipId}" does not match its pinned version.`);
     }
-    const url = input.signedUrls.get(signKey(source.storage.bucket, source.storage.path));
+    const file = signKey(source.storage.bucket, source.storage.path);
+    const cached = blobByFile.get(file);
+    if (cached) return cached;
+    const url = input.signedUrls.get(file);
     if (!url) throw new Error(`Render source for clip "${clipId}" could not be signed.`);
     const result = fetch(url, { signal: input.signal }).then((response) => {
       if (!response.ok)
         throw new Error(`Could not download clip "${clipId}" (${response.status}).`);
       return response.blob();
     });
-    blobByClip.set(clipId, result);
+    blobByFile.set(file, result);
     return result;
   };
 
