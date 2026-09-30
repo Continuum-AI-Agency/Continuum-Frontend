@@ -46,6 +46,7 @@ export * from './slot-roles';
 export * from './timeline-authoring';
 export * from './ugc-pipeline-template';
 export * from './ugc-workflow';
+export * from './motion-presets';
 export * from './video-editor';
 export * from './video-production';
 export * from './visual-evidence';

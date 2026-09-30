@@ -15,6 +15,12 @@ import {
   editorMarkerSchema,
   editorProjectV2Schema,
 } from './editor-project-v2';
+import {
+  clipMotionPresetIdSchema,
+  lookEffectIdSchema,
+  textAnimationIdSchema,
+  textTemplateIdSchema,
+} from './motion-presets';
 
 // ── Platform export presets ────────────────────────────────────────────────────────────
 
@@ -232,7 +238,14 @@ export type VideoEditorDraftVariant = z.infer<typeof videoEditorDraftVariantSche
 
 // ── The ops ────────────────────────────────────────────────────────────────────────────
 
-export type VideoEditorOpGroup = 'see' | 'edit' | 'quick' | 'draft' | 'ship' | 'sources';
+export type VideoEditorOpGroup =
+  | 'see'
+  | 'edit'
+  | 'quick'
+  | 'motion'
+  | 'draft'
+  | 'ship'
+  | 'sources';
 
 type OpSpec = {
   group: VideoEditorOpGroup;
@@ -500,25 +513,120 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      'Add an animated text layer: a title, a lower third, kinetic type, or a call to action.',
+      'Add animated text: a template (hook_title, lower_third, kinetic_words, cta_end_card, listicle_number, quote, stat_callout, subtitle_bar — two-layer templates take secondaryText) or a plain title, lower third, kinetic line or call to action. animationIn/animationOut override the entrance and exit.',
     input: z
       .object({
         ...projectRef,
-        kind: z.enum(['title', 'lower_third', 'kinetic', 'cta']),
+        kind: z.enum(['title', 'lower_third', 'kinetic', 'cta']).default('title'),
+        template: textTemplateIdSchema.optional(),
         text: z.string().min(1).max(500),
+        secondaryText: z.string().min(1).max(300).optional(),
         startSec: secSchema,
         durationSec: z.number().min(0.1).max(60).default(3),
+        animationIn: textAnimationIdSchema.optional(),
+        animationOut: textAnimationIdSchema.optional(),
         style: z
           .object({
             fontFamily: z.string().max(200).optional(),
             color: z.string().max(32).optional(),
             fontSizePx: z.number().min(8).max(400).optional(),
+            backgroundColor: z.string().max(32).optional(),
+            shadow: z.boolean().optional(),
           })
           .strict()
           .optional(),
       })
       .strict(),
-    output: committed({ clipId: z.string() }),
+    output: committed({
+      /** The primary layer. */
+      clipId: z.string(),
+      /** Every layer a template placed, primary first. */
+      clipIds: z.array(z.string()).optional(),
+    }),
+  },
+  add_clip: {
+    group: 'edit',
+    commits: true,
+    scope: 'project',
+    access: 'operate',
+    description:
+      'Place a Library or pool asset on the timeline at a time: video on a video track, an image as an overlay, audio on an audio track. sourceInSec/durationSec trim it; newTrack puts it on a track of its own.',
+    input: z
+      .object({
+        ...projectRef,
+        assetId: z.string().min(1),
+        atSec: secSchema.default(0),
+        trackId: z.string().optional(),
+        newTrack: z.boolean().default(false),
+        sourceInSec: secSchema.optional(),
+        durationSec: z.number().positive().max(86_400).optional(),
+      })
+      .strict(),
+    output: committed({ clipId: z.string(), trackId: z.string() }),
+  },
+  animate_clip: {
+    group: 'motion',
+    commits: true,
+    scope: 'project',
+    access: 'operate',
+    description:
+      "Animate any visual clip (video, overlay, text) with a motion preset: fade/slide/pop/spring/zoom in at its start, fade/slide out at its end, punch_in or shake at atSec (timeline seconds), or ken_burns across the whole clip. Replaces the clip's keyframes of the same properties in that window.",
+    input: z
+      .object({
+        ...projectRef,
+        clipId: z.string().min(1),
+        preset: clipMotionPresetIdSchema,
+        durationSec: z.number().min(0.1).max(10).optional(),
+        atSec: secSchema.optional(),
+      })
+      .strict(),
+    output: committed({ keyframes: z.number().int().nonnegative() }),
+  },
+  add_transition: {
+    group: 'motion',
+    commits: true,
+    scope: 'project',
+    access: 'operate',
+    description:
+      'Put a transition between a clip and the next clip on its track (crossfade, dip to black or white, wipe, slide, zoom, blur); type cut removes it. Transitions render on the main video track.',
+    input: z
+      .object({
+        ...projectRef,
+        fromClipId: z.string().min(1),
+        toClipId: z.string().min(1).optional(),
+        type: z.enum([
+          'cut',
+          'crossfade',
+          'dip_to_black',
+          'dip_to_white',
+          'wipe',
+          'slide',
+          'zoom',
+          'blur',
+        ]),
+        durationSec: z.number().min(0.05).max(3).default(0.5),
+      })
+      .strict(),
+    output: committed({ transitionId: z.string().nullable() }),
+  },
+  apply_effect: {
+    group: 'motion',
+    commits: true,
+    scope: 'project',
+    access: 'operate',
+    description:
+      'Give a video or overlay clip a look: a filter (bw, vintage, vivid, cool, warm, noir, dream) or an effect (blur, tint, vignette, film_grain, chromatic_aberration, vhs, pixelate, corner_radius, chroma_key) at a strength 0–1; remove takes it off.',
+    input: z
+      .object({
+        ...projectRef,
+        clipId: z.string().min(1),
+        effect: lookEffectIdSchema,
+        strength: z.number().min(0).max(1).default(0.6),
+        color: z.string().max(32).optional(),
+        remove: z.boolean().default(false),
+      })
+      .strict(),
+    output: committed({ effects: z.array(z.string()) }),
   },
   draft_cut: {
     group: 'draft',
