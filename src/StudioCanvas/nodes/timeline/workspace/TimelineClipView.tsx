@@ -11,13 +11,17 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import {
+  ClipMotionMenus,
+  type MotionMenuActions,
+} from '@/components/video-studio/motion/ClipMotionMenus';
 import { cn } from '@/lib/utils';
 import { ClipWaveform } from '../ClipWaveform';
 import { useClipMediaPreview } from '../useClipMediaPreview';
 import { TIMELINE_SHORTCUT_KEYS as KEYS } from '../useTimelineKeymap';
 
 /** Each action names the clip it was opened on; the workspace widens it to the selection. */
-export type ClipMenuActions = {
+export type ClipMenuActions = MotionMenuActions & {
   split: (clipId: string) => void;
   rippleDelete: (clipId: string) => void;
   deleteLeaveGap: (clipId: string) => void;
@@ -80,6 +84,7 @@ export function TimelineClipView({
   selected,
   ghost,
   previewUrl,
+  transitionsToNext = false,
   actions,
   onPointerDown,
   onContextMenu,
@@ -91,6 +96,8 @@ export function TimelineClipView({
   selected: boolean;
   ghost?: boolean;
   previewUrl?: string;
+  /** A main-track clip with a clip after it takes a transition into that one. */
+  transitionsToNext?: boolean;
   actions: ClipMenuActions;
   onPointerDown: (event: React.PointerEvent, mode: 'move' | 'trim-start' | 'trim-end') => void;
   onContextMenu: () => void;
@@ -231,6 +238,7 @@ export function TimelineClipView({
             </ContextMenuItem>
           </>
         ) : null}
+        <ClipMotionMenus clip={clip} transitionsToNext={transitionsToNext} actions={actions} />
         <ContextMenuSeparator />
         <ContextMenuItem variant="destructive" onClick={() => actions.rippleDelete(clip.id)}>
           <Trash2 /> Ripple delete

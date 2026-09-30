@@ -41,8 +41,18 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Slider } from '@/components/ui/slider';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  readTemplateDrag,
+  TEXT_TEMPLATE_DRAG_TYPE,
+  type TemplatePlacement,
+} from '@/components/video-studio/motion/TextTemplateShelf';
+import {
+  type TransitionInput,
+  TransitionSeam,
+} from '@/components/video-studio/motion/TransitionSeam';
 import { VIDEO_STUDIO_ASSET_DRAG_TYPE } from '@/components/video-studio/types';
 import { cn } from '@/lib/utils';
+import { orderedVideoClips } from '../editorProjectV2AssemblyModel';
 import { snapSec } from '../snapping';
 import { TIMELINE_SHORTCUT_KEYS as KEYS, type TimelineShortcut } from '../useTimelineKeymap';
 import { type PlayheadStore, useLivePlayhead } from './playheadStore';
@@ -73,7 +83,10 @@ const DRAG_THRESHOLD_PX = 3;
 
 export type TimelineDrop =
   | { kind: 'files'; files: File[] }
-  | { kind: 'asset'; asset: VideoEditorPoolAsset };
+  | { kind: 'asset'; asset: VideoEditorPoolAsset }
+  | { kind: 'template'; placement: TemplatePlacement };
+
+const DROP_TYPES = ['Files', VIDEO_STUDIO_ASSET_DRAG_TYPE, TEXT_TEMPLATE_DRAG_TYPE];
 
 type Drag =
   | {
@@ -190,6 +203,7 @@ export const EditTimeline = memo(function EditTimeline({
   onRemoveTrack,
   onDetectBeats,
   onAddMarker,
+  onTransition,
   toolbarExtra,
 }: {
   project: EditorProjectV2;
@@ -210,6 +224,7 @@ export const EditTimeline = memo(function EditTimeline({
   onRemoveTrack: (track: EditorTrack) => void;
   onDetectBeats: () => void;
   onAddMarker: () => void;
+  onTransition: (input: TransitionInput) => void;
   toolbarExtra?: React.ReactNode;
 }) {
   const [pxPerSec, setPxPerSec] = useState(60);
@@ -221,6 +236,10 @@ export const EditTimeline = memo(function EditTimeline({
 
   const lanes = laneTracks(project);
   const main = mainVideoTrack(project);
+  const mainOrder = orderedVideoClips(main);
+  const nextOnMain = new Map(
+    mainOrder.slice(0, -1).map((clip, index) => [clip.id, mainOrder[index + 1]] as const),
+  );
   const contentSec = project.durationSec + 12;
   const onSeek = store.seek;
   const setDragState = (next: Drag | null) => {
@@ -391,6 +410,8 @@ export const EditTimeline = memo(function EditTimeline({
   };
 
   const readDrop = (event: React.DragEvent): TimelineDrop | null => {
+    const placement = readTemplateDrag(event.dataTransfer);
+    if (placement) return { kind: 'template', placement };
     const payload = event.dataTransfer.getData(VIDEO_STUDIO_ASSET_DRAG_TYPE);
     if (payload) {
       const parsed = videoEditorPoolAssetSchema.safeParse(JSON.parse(payload));
@@ -400,8 +421,7 @@ export const EditTimeline = memo(function EditTimeline({
     return files.length > 0 ? { kind: 'files', files } : null;
   };
   const acceptsDrag = (event: React.DragEvent) =>
-    event.dataTransfer.types.includes('Files') ||
-    event.dataTransfer.types.includes(VIDEO_STUDIO_ASSET_DRAG_TYPE);
+    DROP_TYPES.some((type) => event.dataTransfer.types.includes(type));
 
   const marquee = drag?.mode === 'marquee' ? drag : null;
 
@@ -635,7 +655,7 @@ export const EditTimeline = memo(function EditTimeline({
                 if (
                   event.button !== 0 ||
                   !event.currentTarget.contains(event.target as Node) ||
-                  (event.target as HTMLElement).closest('[data-clip-id]')
+                  (event.target as HTMLElement).closest('[data-clip-id], [data-seam]')
                 )
                   return;
                 const lanesBox = event.currentTarget.getBoundingClientRect();
@@ -701,6 +721,7 @@ export const EditTimeline = memo(function EditTimeline({
                           widthPx={(end - start) * pxPerSec}
                           selected={selection.includes(clip.id)}
                           previewUrl={previewUrlFor(clip.id)}
+                          transitionsToNext={track.id === main?.id && nextOnMain.has(clip.id)}
                           actions={clipActions}
                           onPointerDown={(event, mode) => beginClip(event, clip.id, mode)}
                           onContextMenu={() => {
@@ -727,6 +748,35 @@ export const EditTimeline = memo(function EditTimeline({
                           />
                         ) : null;
                       })()
+                    : null}
+                  {track.id === main?.id && !drag
+                    ? mainOrder.slice(0, -1).map((clip, index) => {
+                        const next = mainOrder[index + 1];
+                        if (!next) return null;
+                        return (
+                          <TransitionSeam
+                            key={`${clip.id}:${next.id}`}
+                            fromClip={{
+                              id: clip.id,
+                              label: clip.name ?? 'clip',
+                              durationSec: clip.durationSec,
+                            }}
+                            toClip={{
+                              id: next.id,
+                              label: next.name ?? 'clip',
+                              durationSec: next.durationSec,
+                            }}
+                            existing={project.transitions.find(
+                              (transition) =>
+                                transition.fromClipId === clip.id &&
+                                transition.toClipId === next.id,
+                            )}
+                            // A transition overlaps the two clips; its seam sits mid-overlap.
+                            leftPx={((clipEnd(clip) + next.timelineStartSec) / 2) * pxPerSec}
+                            onApply={onTransition}
+                          />
+                        );
+                      })
                     : null}
                   {dropHint && dropHint.trackId === track.id ? (
                     <div
