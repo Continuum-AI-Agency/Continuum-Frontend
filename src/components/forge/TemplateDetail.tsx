@@ -387,6 +387,9 @@ export function TemplateDetail({
   };
   const [variables, setVariables] = useState<TemplateVariable[]>([]);
   const [savedDefaults, setSavedDefaults] = useState<Record<string, unknown>>({});
+  const [savedBindings, setSavedBindings] = useState<Record<string, TemplateSlotEdit['binding']>>(
+    {},
+  );
   const [parseState, setParseState] = useState<string>(source.parseState);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState<ForgeLadderAction | 'submit' | null>(null);
@@ -424,6 +427,9 @@ export function TemplateDetail({
       // Saved defaults live on the edits, not on the variables — without this they never reappear.
       setSavedDefaults(
         Object.fromEntries(result.edits.map((edit) => [edit.slotKey, edit.defaultValue ?? null])),
+      );
+      setSavedBindings(
+        Object.fromEntries(result.edits.map((edit) => [edit.slotKey, edit.binding ?? null])),
       );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not read the variables');
@@ -1650,6 +1656,7 @@ export function TemplateDetail({
             brandId={brandId}
             variables={variables}
             savedDefaults={savedDefaults}
+            savedBindings={savedBindings}
             parseState={parseState}
             saving={saving}
             onSave={onSave}

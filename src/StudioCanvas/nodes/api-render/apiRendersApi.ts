@@ -155,6 +155,9 @@ export const apiRendersApi = {
       layerSwitchesNotAsked: contract.variables.filter(
         (variable) => variable.exposed === false && isLayerSwitch(variable.sourceSlotKey),
       ),
+      // Filled by the server from another field (a fill's outline copy, a headline's second line):
+      // the grid needs them only to take the source's lines and name a split that does not fit.
+      linkedFields: contract.variables.filter((variable) => variable.derivedFrom !== null),
     };
   },
   preflight(input: ApiRenderPreflightRequest) {

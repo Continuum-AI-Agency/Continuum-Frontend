@@ -284,6 +284,80 @@ function DefaultValueControl({
  * Module-level and pure: everything it reads is an argument. Inside the component it would be a
  * new function every render, which a memo depending on it could never skip.
  */
+const OWN_VALUE = '__own__';
+const WHOLE_TEXT = 'whole';
+type SlotLink = { source: string; path: string; line?: number };
+
+/**
+ * Where a field's value comes from: typed per row, or another field's — whole (a fill and its
+ * outline copy) or one line of it (a two-line headline set on two layers). A link also stops the
+ * form asking for the field: the server fills it on every render and preview.
+ */
+function FillFromControl({
+  variable,
+  sources,
+  link,
+  onChange,
+}: {
+  variable: TemplateVariable;
+  /** Fields of the same kind that are not themselves filled from another. */
+  sources: TemplateVariable[];
+  link: SlotLink | null;
+  onChange: (change: Partial<TemplateSlotEdit>) => void;
+}) {
+  if (!sources.length) return null;
+  const source = sources.find((other) => other.key === link?.path);
+  const bind = (path: string, line?: number) =>
+    onChange({ binding: { source: 'slot', path, ...(line ? { line } : {}) }, exposed: false });
+  return (
+    <Field orientation="horizontal" className="w-auto gap-2 pb-1">
+      <span className="text-xs">Fill from</span>
+      <Select
+        value={link?.path ?? OWN_VALUE}
+        onValueChange={(next) => {
+          if (next === OWN_VALUE) onChange({ binding: null, exposed: true });
+          else if (typeof next === 'string') bind(next, link?.line);
+        }}
+      >
+        <SelectTrigger size="sm" aria-label={`${variable.label} fills from`}>
+          <SelectValue>{source?.label ?? 'Its own value'}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={OWN_VALUE}>Its own value</SelectItem>
+          {sources.map((other) => (
+            <SelectItem key={other.key} value={other.key}>
+              {other.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {link && variable.kind === 'text' ? (
+        <Select
+          value={link.line ? String(link.line) : WHOLE_TEXT}
+          onValueChange={(next) =>
+            bind(
+              link.path,
+              next === WHOLE_TEXT || typeof next !== 'string' ? undefined : Number(next),
+            )
+          }
+        >
+          <SelectTrigger size="sm" aria-label={`Which part of ${source?.label ?? 'it'}`}>
+            <SelectValue>{link.line ? `Line ${link.line}` : 'Whole text'}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={WHOLE_TEXT}>Whole text</SelectItem>
+            {[2, 3, 4, 5].map((line) => (
+              <SelectItem key={line} value={String(line)}>
+                Line {line}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : null}
+    </Field>
+  );
+}
+
 function resolve<K extends keyof TemplateSlotEdit>(
   edits: Draft,
   variable: TemplateVariable,
@@ -361,6 +435,7 @@ export function VariableEditor({
   brandId,
   variables,
   savedDefaults,
+  savedBindings = {},
   parseState,
   saving,
   onSave,
@@ -369,6 +444,8 @@ export function VariableEditor({
   variables: TemplateVariable[];
   /** Saved defaults by slot key — the variables response's `edits`, which is where they persist. */
   savedDefaults: Record<string, unknown>;
+  /** Saved bindings by slot key, from the same `edits`. */
+  savedBindings?: Record<string, TemplateSlotEdit['binding']>;
   parseState: string;
   saving: boolean;
   /** Resolves true once the server has the edits; the draft is kept on anything else. */
@@ -439,6 +516,10 @@ export function VariableEditor({
     resolve(draft, variable, 'role', variable.role) as string | null;
   const exposedOf = (variable: TemplateVariable) =>
     resolve(draft, variable, 'exposed', variable.exposed ?? true) !== false;
+  const linkOf = (variable: TemplateVariable): SlotLink | null => {
+    const binding = resolve(draft, variable, 'binding', savedBindings[variable.key] ?? null);
+    return binding?.source === 'slot' ? binding : null;
+  };
   const shown = variables.filter((variable) => {
     if (filter === 'unassigned') return roleOf(variable) === null;
     if (filter === 'media') return variable.kind === 'image' || variable.kind === 'video';
@@ -640,10 +721,22 @@ export function VariableEditor({
                         </InputGroup>
                       </Field>
                     ) : null}
+                    <FillFromControl
+                      variable={variable}
+                      sources={variables.filter(
+                        (other) =>
+                          other.key !== variable.key &&
+                          other.kind === variable.kind &&
+                          !linkOf(other),
+                      )}
+                      link={linkOf(variable)}
+                      onChange={(change) => patch(variable.key, change)}
+                    />
                     <Field orientation="horizontal" className="w-auto gap-2 pb-1">
                       <Switch
                         id={`variable-exposed-${variable.key}`}
                         checked={exposed}
+                        disabled={linkOf(variable) !== null}
                         onCheckedChange={(next) => patch(variable.key, { exposed: next })}
                       />
                       <FieldLabel htmlFor={`variable-exposed-${variable.key}`} className="text-xs">

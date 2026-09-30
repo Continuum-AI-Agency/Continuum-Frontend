@@ -27,9 +27,22 @@ export const templateSlotBindingSchema = z
     source: z.string().min(1),
     path: z.string().min(1),
     label: z.string().optional(),
+    /**
+     * `source: 'slot'` only: which line of that slot's text this one shows (the source keeps line
+     * 1). Absent: this slot shows the source's whole value — a fill and its outline, one input.
+     */
+    line: z.number().int().min(2).max(20).optional(),
   })
   .strict();
 export type TemplateSlotBinding = z.infer<typeof templateSlotBindingSchema>;
+
+/** The slot a linked slot takes its value from, and which line of it. Null when not linked. */
+export function slotLinkOf(binding: unknown): { key: string; line: number | null } | null {
+  const parsed = templateSlotBindingSchema.safeParse(binding);
+  return parsed.success && parsed.data.source === 'slot'
+    ? { key: parsed.data.path, line: parsed.data.line ?? null }
+    : null;
+}
 
 /**
  * A pinned Library asset, for a media slot's default.
