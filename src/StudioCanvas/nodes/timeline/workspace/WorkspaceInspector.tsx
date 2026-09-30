@@ -26,6 +26,12 @@ import { NumberScrubField } from '@/components/ui/number-field';
 import { SliderField } from '@/components/ui/slider-field';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  LookSection,
+  MotionPresetsSection,
+} from '@/components/video-studio/motion/ClipMotionSections';
+import { KeyframeLane } from '@/components/video-studio/motion/KeyframeLane';
+import { TextAnimationPicker } from '@/components/video-studio/motion/TextAnimationPicker';
 import type { RunVideoEditorOp } from '@/components/video-studio/types';
 import { clipEffectSpecFromEditorClip } from '@/lib/client-render/executors/timelineEditor';
 import {
@@ -62,6 +68,7 @@ import {
   videoTimelineItems,
 } from '../editorProjectV2AssemblyModel';
 import { editorClipFieldsFromEffectSpec, transitionKind } from '../editorProjectV2Projection';
+import type { PlayheadStore } from './playheadStore';
 import {
   type EditBuild,
   findClip,
@@ -81,6 +88,8 @@ type SectionProps<T extends EditorClip> = {
   onEdit: (build: EditBuild) => void;
   onDeselect: () => void;
 };
+/** What the motion sections need beyond the clip: ops, and the playhead to key at. */
+type MotionProps = { runOp: RunVideoEditorOp; store: PlayheadStore };
 
 const SECTION_LABEL = 'text-2xs font-semibold uppercase tracking-wide text-muted-foreground';
 const SELECT_CLASS =
@@ -88,12 +97,6 @@ const SELECT_CLASS =
 /** Long enough to outlast one slider drag's stream of ticks, short enough to feel live. */
 const SETTLE_MS = 300;
 const TEXT_WEIGHTS = [400, 600, 700, 800, 900];
-const TEXT_ANIMATIONS = [
-  { id: 'none', label: 'None' },
-  { id: 'pop', label: 'Pop' },
-  { id: 'scaleIn', label: 'Scale' },
-  { id: 'floatIn', label: 'Float' },
-];
 const ALIGNMENTS = [
   { id: 'left', label: 'Align left', Icon: AlignLeft },
   { id: 'center', label: 'Align center', Icon: AlignCenter },
@@ -377,7 +380,9 @@ function VisualClipInspector({
   onEdit,
   onDeselect,
   sourceDurationSec,
-}: SectionProps<VisualClip> & { sourceDurationSec?: number }) {
+  runOp,
+  store,
+}: SectionProps<VisualClip> & MotionProps & { sourceDurationSec?: number }) {
   const { view, patch, edits } = useClipDraft(project, clip, onEdit);
   const { pending, schedule, now } = edits;
   const main = mainVideoTrack(project);
@@ -494,6 +499,9 @@ function VisualClipInspector({
           />
         ))}
       </div>
+      <MotionPresetsSection clip={clip} getPlayheadSec={store.getSec} runOp={runOp} />
+      <KeyframeLane clip={clip} store={store} onEdit={now} onSettle={schedule} />
+      <LookSection clip={clip} runOp={runOp} />
     </div>
   );
 }
@@ -591,7 +599,14 @@ function AudioClipInspector({ project, clip, onEdit, onDeselect }: SectionProps<
   );
 }
 
-function TextClipInspector({ project, clip, onEdit, onDeselect }: SectionProps<EditorTextClip>) {
+function TextClipInspector({
+  project,
+  clip,
+  onEdit,
+  onDeselect,
+  runOp,
+  store,
+}: SectionProps<EditorTextClip> & MotionProps) {
   const { view, patch, edits } = useClipDraft(project, clip, onEdit);
   const ids = useId();
   const [text, setText] = useState(clip.text);
@@ -628,176 +643,165 @@ function TextClipInspector({ project, clip, onEdit, onDeselect }: SectionProps<E
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto rounded-lg border border-border/60 p-3">
-      <InspectorHeader
-        icon={<Type className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
-        label={clip.name ?? 'Text'}
-        onDeselect={onDeselect}
-      />
-      <span className={SECTION_LABEL}>Text</span>
-      <Textarea
-        aria-label="Text content"
-        value={text}
-        className="min-h-16 text-xs"
-        onChange={(event) => setText(event.target.value)}
-        onBlur={commitText}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault();
-            commitText();
-          }
-        }}
-      />
-      <div className="flex flex-col gap-1">
-        <Label htmlFor={`${ids}-font`} className="text-2xs">
-          Font
-        </Label>
-        <Input
-          id={`${ids}-font`}
-          value={font}
-          className="h-8 text-xs"
-          onChange={(event) => setFont(event.target.value)}
-          onBlur={commitFont}
+    <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto">
+      <div className="flex shrink-0 flex-col gap-3 rounded-lg border border-border/60 p-3">
+        <InspectorHeader
+          icon={<Type className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+          label={clip.name ?? 'Text'}
+          onDeselect={onDeselect}
+        />
+        <span className={SECTION_LABEL}>Text</span>
+        <Textarea
+          aria-label="Text content"
+          value={text}
+          className="min-h-16 text-xs"
+          onChange={(event) => setText(event.target.value)}
+          onBlur={commitText}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') commitFont();
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              commitText();
+            }
           }}
         />
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <NumberScrubField
-          label="Size"
-          value={view.style.fontSizePx}
-          min={1}
-          max={2000}
-          step={1}
-          suffix="px"
-          onChange={(fontSizePx) => setStyle({ fontSizePx })}
-        />
         <div className="flex flex-col gap-1">
-          <Label htmlFor={`${ids}-weight`} className="text-2xs">
-            Weight
+          <Label htmlFor={`${ids}-font`} className="text-2xs">
+            Font
           </Label>
-          <select
-            id={`${ids}-weight`}
-            className={SELECT_CLASS}
-            value={view.style.fontWeight}
-            onChange={(event) => setStyle({ fontWeight: Number(event.target.value) })}
-          >
-            {TEXT_WEIGHTS.map((weight) => (
-              <option key={weight} value={weight}>
-                {weight}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-2 text-2xs">
-        <div className="flex flex-col gap-1">
-          Color
-          <ColorField
-            label="Text"
-            value={view.style.color}
-            onChange={(color) => setStyle({ color })}
+          <Input
+            id={`${ids}-font`}
+            value={font}
+            className="h-8 text-xs"
+            onChange={(event) => setFont(event.target.value)}
+            onBlur={commitFont}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') commitFont();
+            }}
           />
         </div>
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center justify-between">
-            Background
-            {view.style.backgroundColor ? (
-              <button
-                type="button"
-                className="text-3xs text-muted-foreground hover:text-foreground"
-                onClick={() => setStyle({ backgroundColor: undefined })}
-              >
-                Clear
-              </button>
-            ) : null}
-          </div>
-          <ColorField
-            label="Text background"
-            value={view.style.backgroundColor ?? null}
-            onChange={(backgroundColor) => setStyle({ backgroundColor })}
+        <div className="grid grid-cols-2 gap-2">
+          <NumberScrubField
+            label="Size"
+            value={view.style.fontSizePx}
+            min={1}
+            max={2000}
+            step={1}
+            suffix="px"
+            onChange={(fontSizePx) => setStyle({ fontSizePx })}
           />
-        </div>
-        <div className="flex flex-col gap-1">
-          Outline
-          <ColorField
-            label="Text outline"
-            value={view.style.outlineColor ?? null}
-            onChange={(outlineColor) => setStyle({ outlineColor })}
-          />
-        </div>
-        <SliderField
-          label="Outline width"
-          value={view.style.outlineWidthPx}
-          min={0}
-          max={20}
-          step={0.5}
-          suffix="px"
-          onChange={(outlineWidthPx) => setStyle({ outlineWidthPx })}
-        />
-      </div>
-      <div className="flex gap-1">
-        {ALIGNMENTS.map(({ id, label, Icon }) => (
-          <Button
-            key={id}
-            variant={view.style.alignment === id ? 'secondary' : 'ghost'}
-            size="icon"
-            className="h-7 w-7"
-            aria-label={label}
-            aria-pressed={view.style.alignment === id}
-            onClick={() => setStyle({ alignment: id })}
-          >
-            <Icon className="h-3.5 w-3.5" />
-          </Button>
-        ))}
-      </div>
-      <SliderField
-        label="Position X"
-        value={view.transform.position.x}
-        min={0}
-        max={1}
-        step={0.01}
-        format={{ style: 'percent', maximumFractionDigits: 0 }}
-        onChange={(value) => setPosition('x', value)}
-      />
-      <SliderField
-        label="Position Y"
-        value={view.transform.position.y}
-        min={0}
-        max={1}
-        step={0.01}
-        format={{ style: 'percent', maximumFractionDigits: 0 }}
-        onChange={(value) => setPosition('y', value)}
-      />
-      <span className={SECTION_LABEL}>Animation</span>
-      <div className="grid grid-cols-2 gap-2">
-        {(['animationIn', 'animationOut'] as const).map((field) => (
-          <div key={field} className="flex flex-col gap-1">
-            <Label htmlFor={`${ids}-${field}`} className="text-2xs">
-              {field === 'animationIn' ? 'In' : 'Out'}
+          <div className="flex flex-col gap-1">
+            <Label htmlFor={`${ids}-weight`} className="text-2xs">
+              Weight
             </Label>
             <select
-              id={`${ids}-${field}`}
+              id={`${ids}-weight`}
               className={SELECT_CLASS}
-              value={view[field] ?? 'none'}
-              onChange={(event) => {
-                const value = event.target.value === 'none' ? undefined : event.target.value;
-                patch(
-                  field === 'animationIn' ? { animationIn: value } : { animationOut: value },
-                  'Animate text',
-                );
-              }}
+              value={view.style.fontWeight}
+              onChange={(event) => setStyle({ fontWeight: Number(event.target.value) })}
             >
-              {TEXT_ANIMATIONS.map((animation) => (
-                <option key={animation.id} value={animation.id}>
-                  {animation.label}
+              {TEXT_WEIGHTS.map((weight) => (
+                <option key={weight} value={weight}>
+                  {weight}
                 </option>
               ))}
             </select>
           </div>
-        ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-2xs">
+          <div className="flex flex-col gap-1">
+            Color
+            <ColorField
+              label="Text"
+              value={view.style.color}
+              onChange={(color) => setStyle({ color })}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              Background
+              {view.style.backgroundColor ? (
+                <button
+                  type="button"
+                  className="text-3xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setStyle({ backgroundColor: undefined })}
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+            <ColorField
+              label="Text background"
+              value={view.style.backgroundColor ?? null}
+              onChange={(backgroundColor) => setStyle({ backgroundColor })}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            Outline
+            <ColorField
+              label="Text outline"
+              value={view.style.outlineColor ?? null}
+              onChange={(outlineColor) => setStyle({ outlineColor })}
+            />
+          </div>
+          <SliderField
+            label="Outline width"
+            value={view.style.outlineWidthPx}
+            min={0}
+            max={20}
+            step={0.5}
+            suffix="px"
+            onChange={(outlineWidthPx) => setStyle({ outlineWidthPx })}
+          />
+        </div>
+        <div className="flex gap-1">
+          {ALIGNMENTS.map(({ id, label, Icon }) => (
+            <Button
+              key={id}
+              variant={view.style.alignment === id ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-7 w-7"
+              aria-label={label}
+              aria-pressed={view.style.alignment === id}
+              onClick={() => setStyle({ alignment: id })}
+            >
+              <Icon className="h-3.5 w-3.5" />
+            </Button>
+          ))}
+        </div>
+        <SliderField
+          label="Position X"
+          value={view.transform.position.x}
+          min={0}
+          max={1}
+          step={0.01}
+          format={{ style: 'percent', maximumFractionDigits: 0 }}
+          onChange={(value) => setPosition('x', value)}
+        />
+        <SliderField
+          label="Position Y"
+          value={view.transform.position.y}
+          min={0}
+          max={1}
+          step={0.01}
+          format={{ style: 'percent', maximumFractionDigits: 0 }}
+          onChange={(value) => setPosition('y', value)}
+        />
+        <span className={SECTION_LABEL}>Animation</span>
+        <TextAnimationPicker
+          animationIn={view.animationIn}
+          animationOut={view.animationOut}
+          onPick={(field, id) => {
+            const value = id === 'none' ? undefined : id;
+            patch(
+              field === 'animationIn' ? { animationIn: value } : { animationOut: value },
+              'Animate text',
+            );
+            edits.flush();
+          }}
+        />
       </div>
+      <MotionPresetsSection clip={clip} getPlayheadSec={store.getSec} runOp={runOp} />
+      <KeyframeLane clip={clip} store={store} onEdit={edits.now} onSettle={edits.schedule} />
     </div>
   );
 }
@@ -1078,6 +1082,7 @@ export function WorkspaceInspector({
   sourceDurationSec,
   onEdit,
   runOp,
+  store,
   onDeselect,
 }: {
   project: EditorProjectV2;
@@ -1086,6 +1091,7 @@ export function WorkspaceInspector({
   sourceDurationSec?: number;
   onEdit: (build: EditBuild) => void;
   runOp: RunVideoEditorOp;
+  store: PlayheadStore;
   onDeselect: () => void;
 }): ReactNode {
   const found = clipId ? findClip(project, clipId) : undefined;
@@ -1093,6 +1099,7 @@ export function WorkspaceInspector({
   const { clip, track } = found;
   if (track.locked) return <InspectorNote>Unlock {track.name} to edit this clip.</InspectorNote>;
   const section = { project, onEdit, onDeselect };
+  const motion = { runOp, store };
   switch (clip.kind) {
     case 'video':
     case 'overlay':
@@ -1100,6 +1107,7 @@ export function WorkspaceInspector({
         <VisualClipInspector
           key={clip.id}
           {...section}
+          {...motion}
           clip={clip}
           sourceDurationSec={sourceDurationSec}
         />
@@ -1107,7 +1115,7 @@ export function WorkspaceInspector({
     case 'audio':
       return <AudioClipInspector key={clip.id} {...section} clip={clip} />;
     case 'text':
-      return <TextClipInspector key={clip.id} {...section} clip={clip} />;
+      return <TextClipInspector key={clip.id} {...section} {...motion} clip={clip} />;
     case 'caption':
       return track.kind === 'caption' ? (
         <CaptionTrackInspector

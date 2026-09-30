@@ -284,11 +284,32 @@ export function useEditorProject(projectId: string) {
         ? (projectRef.current?.revision ?? -1) + 1
         : null;
       if (claimed !== null) ownRevisions.current.add(claimed);
+      const beforeRevision = projectRef.current?.revision;
       try {
         const output = await runVideoEditorOp(projectId, op, input);
-        const committed = (output as { commit?: { revision?: number } }).commit?.revision;
-        if (typeof committed === 'number') ownRevisions.current.add(committed);
+        const commit = (output as { commit?: { revision?: number; fingerprint?: string } }).commit;
+        if (typeof commit?.revision === 'number') ownRevisions.current.add(commit.revision);
         if (VIDEO_EDITOR_OPS[op as VideoEditorOpName].access === 'operate') await refresh();
+        // An op this page ran is undoable like any other edit made here — except `undo`
+        // itself, whose own caller (the first-cut toast) owns what it restored.
+        if (
+          op !== 'undo' &&
+          typeof commit?.revision === 'number' &&
+          commit.fingerprint &&
+          beforeRevision !== undefined
+        ) {
+          const { revision: afterRevision, fingerprint } = commit;
+          setUndoStack((stack) => [
+            ...stack,
+            {
+              label: op.replaceAll('_', ' '),
+              beforeRevision,
+              afterRevision,
+              appliedFingerprint: fingerprint,
+            },
+          ]);
+          setRedoStack([]);
+        }
         return output;
       } catch (error) {
         if (claimed !== null) ownRevisions.current.delete(claimed);

@@ -5,16 +5,15 @@ import {
   type EditorClip,
   type EditorOverlayClip,
   type EditorProjectV2,
-  type EditorTextClip,
   type EditorVideoClip,
   parentPositionDelta,
 } from '@continuum/contracts';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { StageTextCanvas } from '@/components/video-studio/motion/StageTextCanvas';
 import { clipEffectSpecFromEditorClip } from '@/lib/client-render/executors/timelineEditor';
-import { captionAnimationFromEditorId, captionMotionTransform } from '@/lib/clips/captionAnimation';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { TimelineItem } from '../../../types';
-import { clipEffectsToCss, type ResolvedTextOverlay } from '../../../utils/render/effectSpec';
+import { clipEffectsToCss } from '../../../utils/render/effectSpec';
 import type { CaptionCue } from '../../../utils/splice/captionCues';
 import { orderedVideoClips } from '../editorProjectV2AssemblyModel';
 import type { OverlayPreviewLayer } from '../overlayPreview';
@@ -92,36 +91,6 @@ function layerFor(
       transformOrigin: `${clip.transform.anchorX * 100}% ${clip.transform.anchorY * 100}%`,
     },
     textOverlays: [],
-  };
-}
-
-function textOverlayFor(
-  clip: EditorTextClip,
-  sec: number,
-  canvasHeight: number,
-): ResolvedTextOverlay {
-  const motion = captionMotionTransform({
-    entry: captionAnimationFromEditorId(clip.animationIn),
-    exit: captionAnimationFromEditorId(clip.animationOut),
-    cueStartSec: clip.timelineStartSec,
-    cueEndSec: clipEnd(clip),
-    wordStartSec: clip.timelineStartSec,
-    wordEndSec: clipEnd(clip),
-    outputTimeSec: sec,
-    fontPx: clip.style.fontSizePx,
-  });
-  return {
-    id: clip.id,
-    text: clip.text,
-    xFrac: clip.transform.position.x,
-    yFrac: clip.transform.position.y,
-    sizeFrac: clip.style.fontSizePx / canvasHeight,
-    color: clip.style.color,
-    background: clip.style.backgroundColor,
-    fontWeight: clip.style.fontWeight,
-    opacity: motion.alpha * clip.transform.opacity,
-    scale: motion.scale,
-    translateYEm: motion.dy / clip.style.fontSizePx,
   };
 }
 
@@ -243,10 +212,9 @@ export const EditStage = memo(function EditStage({
     const layer = layerFor(project, clip, urls.get(clip.id), sec);
     return layer ? [layer] : [];
   });
-  const textOverlays = visible
-    .flatMap((track) => (track.kind === 'text' ? track.clips : []))
-    .filter((clip) => activeAt(clip, sec))
-    .map((clip) => textOverlayFor(clip, sec, canvasHeight));
+  const textClips = visible.flatMap((track) =>
+    track.kind === 'text' ? track.clips.filter((clip) => clip.enabled) : [],
+  );
   const captionClip = visible
     .flatMap((track) => (track.kind === 'caption' ? track.clips : []))
     .find((clip) => activeAt(clip, sec));
@@ -289,36 +257,43 @@ export const EditStage = memo(function EditStage({
           mediaStyle={clipEffectsToCss(activeEffects, activeT)}
           shaderEffects={activeEffects}
           shaderTimeSec={active ? sec - active.timelineStartSec : 0}
-          textOverlays={textOverlays}
           overlayLayers={overlayLayers}
           caption={caption?.cue}
           captionStyle={caption?.style}
           mediaMuted={audioPreview.active || !active?.audioEnabled || Boolean(main?.muted)}
           motionPath={
-            handlesFor ? (
-              <StageTransformHandles
-                key={handlesFor.id}
-                transform={handlesFor.transform}
-                baseSize={baseSize}
-                onCommit={(transform) =>
-                  // Built on the project at apply time, and only the geometry the handles
-                  // own: an opacity or crop change still in flight is not undone.
-                  onEdit((current) => {
-                    const clip = findClip(current, handlesFor.id)?.clip;
-                    if (!clip || !('transform' in clip)) return null;
-                    const { position, scaleX, scaleY, rotationDeg } = transform;
-                    return replaceClipEdit(
-                      current,
-                      {
-                        ...clip,
-                        transform: { ...clip.transform, position, scaleX, scaleY, rotationDeg },
-                      } as EditorClip,
-                      'Transform clip',
-                    );
-                  })
-                }
+            <>
+              <StageTextCanvas
+                clips={textClips}
+                sec={sec}
+                width={canvasWidth}
+                height={canvasHeight}
               />
-            ) : null
+              {handlesFor ? (
+                <StageTransformHandles
+                  key={handlesFor.id}
+                  transform={handlesFor.transform}
+                  baseSize={baseSize}
+                  onCommit={(transform) =>
+                    // Built on the project at apply time, and only the geometry the handles
+                    // own: an opacity or crop change still in flight is not undone.
+                    onEdit((current) => {
+                      const clip = findClip(current, handlesFor.id)?.clip;
+                      if (!clip || !('transform' in clip)) return null;
+                      const { position, scaleX, scaleY, rotationDeg } = transform;
+                      return replaceClipEdit(
+                        current,
+                        {
+                          ...clip,
+                          transform: { ...clip.transform, position, scaleX, scaleY, rotationDeg },
+                        } as EditorClip,
+                        'Transform clip',
+                      );
+                    })
+                  }
+                />
+              ) : null}
+            </>
           }
         />
       </div>

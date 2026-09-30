@@ -7,6 +7,7 @@ import {
   editorRenderBlockers,
   PLATFORM_EXPORT_PRESETS,
   type PlatformExportPresetId,
+  TEXT_TEMPLATES,
   type VideoEditorPoolAsset,
 } from '@continuum/contracts';
 import {
@@ -25,6 +26,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -47,14 +49,28 @@ import {
 } from '@/components/video-studio/brief/briefGoals';
 import { VariantSwitcher } from '@/components/video-studio/brief/VariantSwitcher';
 import { ExportDialog } from '@/components/video-studio/export/ExportDialog';
+import {
+  motionClipActions,
+  motionPaletteGroups,
+} from '@/components/video-studio/motion/motionActions';
+import {
+  type TemplatePlacement,
+  TextTemplateShelf,
+} from '@/components/video-studio/motion/TextTemplateShelf';
+import {
+  TRANSITION_LABELS,
+  type TransitionInput,
+} from '@/components/video-studio/motion/TransitionSeam';
 import { GraphPoolPanel } from '@/components/video-studio/sources/GraphPoolPanel';
 import { QuickStartPanel } from '@/components/video-studio/sources/QuickStartPanel';
 import {
   VIDEO_STUDIO_ASSET_DRAG_TYPE,
   type VideoStudioContext,
 } from '@/components/video-studio/types';
+import { runVideoEditorOp } from '@/lib/api/videoEditorOps.client';
 import { cn } from '@/lib/utils';
 import type { TimelineInputSource } from '../../../types';
+import { orderedVideoClips } from '../editorProjectV2AssemblyModel';
 import { probeAudioDuration, probeVideoDuration } from '../mediaProbe';
 import { useExactPreviewUrls } from '../useClipPreviewUrls';
 import {
@@ -78,6 +94,7 @@ import {
   findClip,
   type LaneKind,
   laneKindForAsset,
+  mainVideoTrack,
   pasteClipsEdit,
   placeAssetEdit,
   removeTrackEdit,
@@ -99,6 +116,7 @@ const Palette = memo(CommandPalette);
 const AgentPanel = memo(EditorAgentPanel);
 const GraphPanel = memo(GraphPoolPanel);
 const GeneratePanel = memo(QuickStartPanel);
+const TextShelf = memo(TextTemplateShelf);
 
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : 'The request failed.';
@@ -231,7 +249,8 @@ export function EditWorkspace({
   );
   const previewUrlFor = useCallback((clipId: string) => urls.get(clipId), [urls]);
 
-  const addAsset = useCallback(
+  // A file that had to upload first is placed here, on the project as it stands then.
+  const placeImported = useCallback(
     (asset: VideoEditorPoolAsset, at?: { atSec?: number; trackId?: string; newTrack?: boolean }) =>
       apply((current) => {
         if (placesFirstFootage(current, asset)) offerFor.current = asset.assetId;
@@ -249,6 +268,42 @@ export function EditWorkspace({
     [apply, store],
   );
 
+  // An asset already in the Library (the Media tab, the Graph pool, a drag) is placed by
+  // the same `add_clip` op the agent and MCP use. One at a time: a multi-pick lands in order.
+  const placements = useRef<Promise<void>>(Promise.resolve());
+  const addAsset = useCallback(
+    (
+      asset: VideoEditorPoolAsset,
+      at?: { atSec?: number; trackId?: string; newTrack?: boolean },
+    ) => {
+      const place = async () => {
+        const current = projectRef.current;
+        const lane = current.tracks.find((track) => track.id === at?.trackId);
+        if (placesFirstFootage(current, asset)) offerFor.current = asset.assetId;
+        try {
+          const output = await runOp('add_clip', {
+            assetId: asset.assetId,
+            atSec: Math.max(0, at?.atSec ?? store.getSec()),
+            ...(lane && lane.kind === laneKindForAsset(asset) ? { trackId: lane.id } : {}),
+            ...(at?.newTrack ? { newTrack: true } : {}),
+          });
+          setSelection([output.clipId]);
+        } catch (error) {
+          if (offerFor.current === asset.assetId) offerFor.current = null;
+          show({
+            title: `Could not add ${asset.title}`,
+            description: errorText(error),
+            variant: 'error',
+          });
+        }
+      };
+      const next = placements.current.then(place);
+      placements.current = next;
+      return next;
+    },
+    [runOp, show, store],
+  );
+
   const importFiles = useCallback(
     (files: readonly File[], at?: { atSec: number; trackId?: string }) => {
       let offset = 0;
@@ -260,7 +315,7 @@ export function EditWorkspace({
         void importMediaFile(brandId, file)
           .then(async (asset) => {
             setImported((current) => [...current, asset]);
-            await addAsset(asset, placeAt);
+            await placeImported(asset, placeAt);
           })
           .catch((error) =>
             show({
@@ -272,15 +327,58 @@ export function EditWorkspace({
           .finally(() => setImporting((current) => current.filter((item) => item.id !== id)));
       }
     },
-    [addAsset, brandId, show],
+    [placeImported, brandId, show],
+  );
+
+  /** Motion ops report only failure; success is on the stage and the timeline already. */
+  const runQuiet = useCallback(
+    async <T,>(label: string, run: () => Promise<T>): Promise<T | undefined> => {
+      try {
+        return await run();
+      } catch (error) {
+        show({ title: `${label} failed`, description: errorText(error), variant: 'error' });
+        return undefined;
+      }
+    },
+    [show],
+  );
+
+  const placeTemplate = useCallback(
+    async (placement: TemplatePlacement, atSec?: number) => {
+      const template = TEXT_TEMPLATES[placement.template];
+      const output = await runQuiet(`Add ${template.label}`, () =>
+        runOp('add_text', {
+          template: placement.template,
+          text: placement.text,
+          ...(placement.secondaryText ? { secondaryText: placement.secondaryText } : {}),
+          startSec: Math.max(0, atSec ?? store.getSec()),
+          durationSec: template.defaultDurationSec,
+        }),
+      );
+      if (!output) return;
+      setSelection([output.clipId]);
+      setRightTab('inspector');
+    },
+    [runOp, runQuiet, store],
+  );
+  const onPlaceTemplate = useCallback(
+    (placement: TemplatePlacement) => void placeTemplate(placement),
+    [placeTemplate],
   );
 
   const onDrop = useCallback(
     (drop: TimelineDrop, at: { atSec: number; trackId?: string }) => {
       if (drop.kind === 'asset') void addAsset(drop.asset, at);
+      else if (drop.kind === 'template') void placeTemplate(drop.placement, at.atSec);
       else importFiles(drop.files, at);
     },
-    [addAsset, importFiles],
+    [addAsset, importFiles, placeTemplate],
+  );
+
+  const addTransition = useCallback(
+    (input: TransitionInput) =>
+      void runQuiet(TRANSITION_LABELS[input.type], () => runOp('add_transition', input)),
+    [runOp, runQuiet],
   );
 
   const quickOp = useCallback(
@@ -414,8 +512,15 @@ export function EditWorkspace({
         }),
       cutPauses: (clipId: string) => void cutPauses(clipId),
       detectBeats: (clipId: string) => void detectBeats(clipId),
+      ...motionClipActions({
+        targetsFor,
+        clipOf: (id) => findClip(projectRef.current, id)?.clip,
+        getPlayheadSec: store.getSec,
+        runOp,
+        runQuiet,
+      }),
     };
-  }, [apply, cutPauses, deleteClips, detectBeats, store]);
+  }, [apply, cutPauses, deleteClips, detectBeats, runOp, runQuiet, store]);
 
   const onAddTrack = useCallback(
     (kind: LaneKind) => void apply((current) => addTrackEdit(current, kind)),
@@ -480,10 +585,19 @@ export function EditWorkspace({
     [urls],
   );
   const onDrafted = useCallback(() => setVariantsRead((count) => count + 1), []);
+  // A variant opened a moment ago may not have read its siblings yet, and its switcher then
+  // counts only itself: redrafting "all" would quietly redraft one. Count them here.
   const redraft = useCallback(
     (variants: number) => {
-      const brief = projectRef.current.brief;
-      if (brief) openBrief({ ...brief, variants });
+      const { brief, projectId } = projectRef.current;
+      if (!brief) return;
+      void runVideoEditorOp(projectId, 'list_variants', {})
+        .then((listed) => listed.variants.length)
+        .catch(() => 0)
+        .then((siblings) =>
+          // Synchronous, like the click it answers: the dialog seeds itself as it opens.
+          flushSync(() => openBrief({ ...brief, variants: Math.max(variants, siblings) })),
+        );
     },
     [openBrief],
   );
@@ -496,6 +610,11 @@ export function EditWorkspace({
 
   const canExport = blockers.length === 0;
   const hasSelection = selection.length > 0;
+  const selectedId = selection.length === 1 ? selection[0] : undefined;
+  const selectedClip = selectedId ? findClip(project, selectedId)?.clip : undefined;
+  const transitionsFromSelected = orderedVideoClips(mainVideoTrack(project))
+    .slice(0, -1)
+    .some((clip) => clip.id === selectedId);
   const paletteGroups = useMemo((): Array<{ heading: string; actions: PaletteAction[] }> => {
     const key = TIMELINE_SHORTCUT_KEYS;
     const run = (shortcut: TimelineShortcut) => () => void shortcuts[shortcut]?.();
@@ -563,6 +682,13 @@ export function EditWorkspace({
           { id: 'beats', label: 'Detect beats', run: () => void detectBeats() },
         ],
       },
+      ...motionPaletteGroups({
+        selectedClip,
+        transitionsToNext: transitionsFromSelected,
+        actions: clipActions,
+        placeTemplate: onPlaceTemplate,
+        openTextTab: () => setLeftTab('text'),
+      }),
       {
         heading: 'Format',
         actions: Object.values(PLATFORM_EXPORT_PRESETS).map((preset) => ({
@@ -589,16 +715,20 @@ export function EditWorkspace({
     canExport,
     canRedo,
     canUndo,
+    clipActions,
     cutOnBeat,
     cutPauses,
     detectBeats,
     hasSelection,
     onAddTrack,
     onOpenProduction,
+    onPlaceTemplate,
     openBrief,
     productionAvailable,
+    selectedClip,
     setFormat,
     shortcuts,
+    transitionsFromSelected,
   ]);
 
   const toolbarExtra = useMemo(
@@ -641,7 +771,6 @@ export function EditWorkspace({
     [autoCaptions, cutOnBeat, cutPauses, detectBeats],
   );
 
-  const selectedId = selection.length === 1 ? selection[0] : undefined;
   const key = TIMELINE_SHORTCUT_KEYS;
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: drop anywhere to import; the Media tab's Import button is the keyboard path.
@@ -825,6 +954,7 @@ export function EditWorkspace({
               >
                 <TabsList className="mx-2 mt-2 shrink-0">
                   <TabsTrigger value="media">Media</TabsTrigger>
+                  <TabsTrigger value="text">Text</TabsTrigger>
                   <TabsTrigger value="graph">Graph</TabsTrigger>
                   <TabsTrigger value="generate">Generate</TabsTrigger>
                 </TabsList>
@@ -837,6 +967,12 @@ export function EditWorkspace({
                     importing={importing}
                     onImportFiles={onImportFiles}
                     onAddAsset={onAddAsset}
+                  />
+                </TabsContent>
+                <TabsContent value="text" className="min-h-0 flex-1">
+                  <TextShelf
+                    aspect={project.canvas.width / project.canvas.height}
+                    onPlace={onPlaceTemplate}
                   />
                 </TabsContent>
                 <TabsContent value="graph" className="min-h-0 flex-1 overflow-y-auto">
@@ -876,6 +1012,7 @@ export function EditWorkspace({
                     sourceDurationSec={selectedId ? sourceDurationFor(selectedId) : undefined}
                     onEdit={onEdit}
                     runOp={runOp}
+                    store={store}
                     onDeselect={onDeselect}
                   />
                 </TabsContent>
@@ -904,6 +1041,7 @@ export function EditWorkspace({
             onRemoveTrack={onRemoveTrack}
             onDetectBeats={onDetectBeats}
             onAddMarker={onAddMarker}
+            onTransition={addTransition}
             toolbarExtra={toolbarExtra}
           />
         </ResizablePanel>
