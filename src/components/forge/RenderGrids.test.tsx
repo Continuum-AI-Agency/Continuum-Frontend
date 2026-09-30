@@ -1764,6 +1764,50 @@ describe('RenderRequestsGrid', () => {
     expect(screen.getByRole('button', { name: 'Render 2 rows · 4 files' })).toBeTruthy();
   });
 
+  // EasyFit 2026-09-30: one PSD, two artboards of one size stacked differently ("model in front" /
+  // "headline in front"). A ratio chip alone would read "4:5 4:5"; each row picks its arrangement.
+  test('arrangements of one size are told apart by name, and a row can pick one', async () => {
+    contractOverrides = {
+      template: { ...TEMPLATE, ratios: ['4:5'] },
+      outputs: [
+        { id: 'Model in front', label: 'Model in front', ratio: '4:5' },
+        { id: 'Headline in front', label: 'Headline in front', ratio: '4:5' },
+      ],
+    };
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Formats Model in front, Headline in front' }),
+    );
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: /Headline in front/ }));
+    expect(await screen.findByRole('button', { name: 'Formats Model in front' })).toBeTruthy();
+  });
+
+  // A two-line headline set on two layers: one box takes both lines, and a count that does not
+  // fit is named on the field before any render is spent.
+  test('a field split across layers takes its lines in one box and names a count that does not fit', async () => {
+    contractOverrides = {
+      linkedFields: [
+        variable({
+          key: 'front_line',
+          label: 'Front line',
+          kind: 'text',
+          exposed: false,
+          derivedFrom: { key: 'headline', line: 2 },
+        }),
+      ],
+    };
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    const headline = await screen.findByLabelText(
+      'Headline — one line each for Headline, Front line',
+    );
+    expect(headline.tagName).toBe('TEXTAREA');
+    // The seeded sample is one line: the split cannot fill Front line.
+    await waitFor(() => expect(headline.getAttribute('title')).toContain('Headline needs 2 lines'));
+    fireEvent.change(headline, { target: { value: 'TRAIN HARD\nFEEL STRONG' } });
+    await waitFor(() => expect(headline.getAttribute('title')).toBeNull());
+  });
+
   test('an edit after review sends the tray back to Review; Re-check saves it and reviews again', async () => {
     const renderable = {
       ...NEWEST,

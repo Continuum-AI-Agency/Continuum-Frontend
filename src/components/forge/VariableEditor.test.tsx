@@ -19,8 +19,15 @@ const mediaUpload = { ...(await import('@/lib/library/uploadMediaAsset')) };
 mock.module('@/lib/library/uploadMediaAsset', () => ({ ...mediaUpload, uploadMediaAsset }));
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  chooseOption,
+  installPickerDomGlobals,
+  openSelect,
+} from '@/components/automations/workspace/pickers/pickerTestHarness';
 import type { TemplateSlotEdit, TemplateVariable } from '@/lib/library/templateSources';
 import { VariableEditor } from './VariableEditor';
+
+installPickerDomGlobals();
 
 afterEach(() => {
   cleanup();
@@ -94,6 +101,43 @@ describe('VariableEditor', () => {
     await waitFor(() =>
       expect(onSave).toHaveBeenCalledWith([
         { slotKey: 'Hero', defaultValue: { assetId: 'asset-1', versionId: 'version-1' } },
+      ]),
+    );
+  });
+
+  test('a field can fill from another: whole, or one line of it, and is then never asked for', async () => {
+    const onSave = mock(async (_edits: TemplateSlotEdit[]) => true);
+    render(
+      <VariableEditor
+        brandId="22222222-2222-4222-8222-222222222222"
+        variables={[
+          variable({}),
+          variable({ key: 'Outline', label: 'Outline' }),
+          variable({ key: 'Brand colour', label: 'Brand colour', kind: 'color', charBudget: null }),
+        ]}
+        savedDefaults={{}}
+        savedBindings={{}}
+        parseState="parsed"
+        saving={false}
+        onSave={onSave}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Outline/ }));
+    openSelect('Outline fills from');
+    // Only a field of the same kind can fill it: never the colour.
+    expect(screen.queryByRole('option', { name: 'Brand colour' })).toBeNull();
+    chooseOption('Headline');
+    openSelect('Which part of Headline');
+    chooseOption('Line 2');
+    expect(
+      (screen.getByRole('switch', { name: 'Ask per row' }) as HTMLButtonElement).getAttribute(
+        'data-disabled',
+      ),
+    ).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith([
+        { slotKey: 'Outline', binding: { source: 'slot', path: 'Headline', line: 2 }, exposed: false },
       ]),
     );
   });

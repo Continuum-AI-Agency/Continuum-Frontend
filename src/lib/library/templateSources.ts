@@ -4,8 +4,8 @@ import type {
   ForgeLineageView,
   RenderWorkspace,
   TemplateFontPushResponse,
-  TemplateForgeNeed,
   TemplateForgeBundle,
+  TemplateForgeNeed,
   TemplateMappingReview,
   TemplateRebindPreview,
   TemplateSource,
@@ -57,11 +57,16 @@ export async function repairTemplateText(
 }
 
 export async function editableTemplateFonts(brandId: string): Promise<FontInventoryRow[]> {
-  const response = await authorizedFetch(`/api/ai-studio/fonts?brandId=${encodeURIComponent(brandId)}`);
+  const response = await authorizedFetch(
+    `/api/ai-studio/fonts?brandId=${encodeURIComponent(brandId)}`,
+  );
   const inventory = fontInventoryResponseSchema.parse(await unwrap(response, 'Available fonts'));
-  return inventory.fonts.filter((font) =>
-    (font.brandId === brandId || font.brandId === null) &&
-    !!font.postScriptName && (font.format === 'ttf' || font.format === 'otf'));
+  return inventory.fonts.filter(
+    (font) =>
+      (font.brandId === brandId || font.brandId === null) &&
+      !!font.postScriptName &&
+      (font.format === 'ttf' || font.format === 'otf'),
+  );
 }
 
 // Client for the template-source routes on the Fastify backend. They live there rather than
@@ -99,7 +104,10 @@ export async function fetchTemplateSources(brandId: string): Promise<TemplateSou
   return (body.items ?? []).map((item) => templateSourceSummarySchema.parse(item));
 }
 
-export async function fetchTemplateForgeBundle(brandId: string, assetId: string): Promise<TemplateForgeBundle | null> {
+export async function fetchTemplateForgeBundle(
+  brandId: string,
+  assetId: string,
+): Promise<TemplateForgeBundle | null> {
   const response = await authorizedFetch(
     `/api/ai-studio/templates/${encodeURIComponent(assetId)}/bundle?brandId=${encodeURIComponent(brandId)}`,
   );
@@ -108,15 +116,18 @@ export async function fetchTemplateForgeBundle(brandId: string, assetId: string)
 }
 
 export async function advanceTemplateForgeBundle(
-  brandId: string, assetId: string,
+  brandId: string,
+  assetId: string,
   action: 'smoke' | 'promotion-plan' | 'approve' | 'resume',
   options: { confirmation?: string; runId?: string } = {},
 ): Promise<TemplateForgeBundle> {
-  const path = action === 'resume'
-    ? `/api/ai-studio/templates/${encodeURIComponent(assetId)}/bundle/children/${encodeURIComponent(options.runId ?? '')}/resume`
-    : `/api/ai-studio/templates/${encodeURIComponent(assetId)}/bundle/${action}`;
+  const path =
+    action === 'resume'
+      ? `/api/ai-studio/templates/${encodeURIComponent(assetId)}/bundle/children/${encodeURIComponent(options.runId ?? '')}/resume`
+      : `/api/ai-studio/templates/${encodeURIComponent(assetId)}/bundle/${action}`;
   const response = await authorizedFetch(path, {
-    method: 'POST', body: JSON.stringify({ brandId, confirmation: options.confirmation }),
+    method: 'POST',
+    body: JSON.stringify({ brandId, confirmation: options.confirmation }),
   });
   const body = await unwrap<{ bundle: unknown }>(response, 'Template bundle action');
   return templateForgeBundleSchema.parse(body.bundle);
@@ -428,7 +439,7 @@ export type TemplateSlotEdit = {
   required?: boolean | null;
   exposed?: boolean | null;
   defaultValue?: unknown;
-  binding?: { source: string; path: string; label?: string } | null;
+  binding?: { source: string; path: string; label?: string; line?: number } | null;
 };
 
 export type TemplateVariablesResponse = {

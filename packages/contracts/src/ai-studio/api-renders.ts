@@ -207,9 +207,82 @@ export const apiRenderVariableSchema = z
     /** The value a switched-off field renders with: the authored copy, the layer's own picture
      * URL, the file's own visibility. Null when the field is on, or nothing was authored. */
     fallback: z.union([z.string(), z.number(), z.boolean()]).nullable().default(null),
+    /**
+     * A linked field: its value is another field's — whole (`line` null: a fill and its outline
+     * copy), or one line of it (a two-line headline set on two layers). Never asked for
+     * (`exposed` is false); the server fills it from `key` on every render and preview.
+     */
+    derivedFrom: z
+      .object({ key: apiRenderVariableKeySchema, line: z.number().int().min(2).nullable() })
+      .strict()
+      .nullable()
+      .default(null),
   })
   .strict();
 export type ApiRenderVariable = z.infer<typeof apiRenderVariableSchema>;
+
+/**
+ * Fill every linked field from its source, exactly as the render will: a line split first (the
+ * source keeps line 1, each linked line field its own), then whole-value copies of what each
+ * source now shows. A source that must split into N lines and does not is a problem naming the
+ * fields — never a guessed split, a dropped word, or a line silently left empty.
+ */
+export function expandLinkedValues<V>(
+  variables: ReadonlyArray<Pick<ApiRenderVariable, 'key' | 'label' | 'derivedFrom'>>,
+  values: Readonly<Record<string, V>>,
+): { values: Record<string, V | string>; problems: Array<{ key: string; message: string }> } {
+  const expanded: Record<string, V | string> = { ...values };
+  const problems: Array<{ key: string; message: string }> = [];
+  const byKey = new Map(variables.map((variable) => [variable.key, variable]));
+  const linesBySource = new Map<string, Array<{ key: string; label: string; line: number }>>();
+  const copies: Array<{ key: string; from: string }> = [];
+  for (const variable of variables) {
+    const from = variable.derivedFrom;
+    if (!from) continue;
+    const source = byKey.get(from.key);
+    if (!source || source.derivedFrom || from.key === variable.key) {
+      problems.push({
+        key: variable.key,
+        message: `${variable.label} is linked to a field that cannot fill it.`,
+      });
+    } else if (from.line === null) {
+      copies.push({ key: variable.key, from: from.key });
+    } else {
+      const lines = linesBySource.get(from.key) ?? [];
+      lines.push({ key: variable.key, label: variable.label, line: from.line });
+      linesBySource.set(from.key, lines);
+    }
+  }
+  for (const [sourceKey, fields] of linesBySource) {
+    const sourceLabel = byKey.get(sourceKey)?.label ?? sourceKey;
+    const ordered = [...fields].sort((a, b) => a.line - b.line);
+    if (ordered.some((field, index) => field.line !== index + 2)) {
+      problems.push({
+        key: sourceKey,
+        message: `${sourceLabel}'s linked lines must run 2, 3, … with none repeated or skipped.`,
+      });
+      continue;
+    }
+    const text = values[sourceKey];
+    if (typeof text !== 'string') continue;
+    const lines = text.replace(/\r\n?/g, '\n').replace(/\n+$/, '').split('\n');
+    if (lines.length !== ordered.length + 1) {
+      problems.push({
+        key: sourceKey,
+        message:
+          `${sourceLabel} needs ${ordered.length + 1} lines — one for itself and one each for ` +
+          `${ordered.map((field) => field.label).join(', ')} — and has ${lines.length}.`,
+      });
+      continue;
+    }
+    expanded[sourceKey] = lines[0];
+    for (const field of ordered) expanded[field.key] = lines[field.line - 1];
+  }
+  for (const copy of copies) {
+    if (expanded[copy.from] !== undefined) expanded[copy.key] = expanded[copy.from];
+  }
+  return { values: expanded, problems };
+}
 
 /**
  * How a video slot's clip requirement reads — the one wording every surface uses.

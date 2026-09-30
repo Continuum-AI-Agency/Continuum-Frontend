@@ -85,6 +85,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { TableRow } from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/toast-imperative';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
@@ -139,6 +140,8 @@ export type RequestGridMeta = {
   contract: ApiRenderTemplateContract;
   rows: RequestRow[];
   clientErrors: Map<string, Record<string, string>>;
+  /** Fields the server fills from another (see `derivedFrom`); a source of lines takes several. */
+  linkedFields?: ApiRenderVariable[];
   actions: RequestRowActions;
   /** Rows ticked for Render, in grid order — what "Apply to selected" writes to. */
   selectedIds: string[];
@@ -627,7 +630,17 @@ export function VariableCell({
       </div>
     );
 
-  const used = typeof value === 'string' ? value.length : 0;
+  // A headline set on several layers: one line per layer, the first on this one.
+  const lineFields = (gridMeta(table).linkedFields ?? []).filter(
+    (field) => field.derivedFrom?.key === variable.key && field.derivedFrom.line !== null,
+  );
+  const text = value === undefined ? '' : String(value);
+  const onText = (next: string) =>
+    actions.setValue(row.id, variable.key, next === '' ? undefined : next);
+  const used =
+    typeof value === 'string'
+      ? (lineFields.length ? (value.split(/\r?\n/)[0] ?? '') : value).length
+      : 0;
   const budget = variable.charBudget;
   const over = budget !== null && used > budget;
   const misfit = fit?.subject === 'text' && fit.state === 'clipped' ? fit.why : null;
@@ -635,26 +648,39 @@ export function VariableCell({
     <div className="flex min-w-32 items-center gap-1.5">
       {/* The count sits inside the field, shown while typing or once over: width is for the text. */}
       <div className="group/count relative min-w-0 flex-1">
-        <Input
-          size={1}
-          className={cn(
-            'h-7 text-xs',
-            budget !== null && (over ? 'pr-11' : 'focus-visible:pr-11'),
-            misfit && 'border-warning',
-            invalid && 'border-destructive',
-          )}
-          aria-label={variable.label}
-          title={error}
-          placeholder={variable.sample ?? undefined}
-          value={value === undefined ? '' : String(value)}
-          onChange={(event) =>
-            actions.setValue(
-              row.id,
-              variable.key,
-              event.target.value === '' ? undefined : event.target.value,
-            )
-          }
-        />
+        {lineFields.length ? (
+          <Textarea
+            rows={lineFields.length + 1}
+            className={cn(
+              'min-h-0 resize-none py-1 text-xs',
+              budget !== null && (over ? 'pr-11' : 'focus-visible:pr-11'),
+              misfit && 'border-warning',
+              invalid && 'border-destructive',
+            )}
+            aria-label={`${variable.label} — one line each for ${[variable, ...lineFields].map((field) => field.label).join(', ')}`}
+            title={error}
+            placeholder={[variable, ...lineFields]
+              .map((field) => field.sample ?? field.label)
+              .join('\n')}
+            value={text}
+            onChange={(event) => onText(event.target.value)}
+          />
+        ) : (
+          <Input
+            size={1}
+            className={cn(
+              'h-7 text-xs',
+              budget !== null && (over ? 'pr-11' : 'focus-visible:pr-11'),
+              misfit && 'border-warning',
+              invalid && 'border-destructive',
+            )}
+            aria-label={variable.label}
+            title={error}
+            placeholder={variable.sample ?? undefined}
+            value={text}
+            onChange={(event) => onText(event.target.value)}
+          />
+        )}
         {budget !== null ? (
           <span
             className={cn(
@@ -920,9 +946,15 @@ export function FormatsCell({ row: { original: row }, table }: CellContext<Reque
   }
   const effective = effectiveOutputIds(rows, row.id);
   const selectedIds = effective.length ? effective : outputs.map((output) => output.id);
+  // Two outputs at one ratio are arrangements of the design ("Model in front" / "Headline in
+  // front"), which the ratio alone cannot tell apart — those chips carry their name.
   const ratios = outputs
     .filter((output) => selectedIds.includes(output.id))
-    .map((output) => output.ratio ?? output.label);
+    .map((output) =>
+      output.ratio && outputs.filter((other) => other.ratio === output.ratio).length === 1
+        ? output.ratio
+        : output.label,
+    );
   const inheritedFrom =
     row.parentId && row.outputIds.length === 0
       ? formatsSource(rows, row)?.label.trim() || 'Untitled'

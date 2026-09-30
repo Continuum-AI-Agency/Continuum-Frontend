@@ -10,6 +10,7 @@ import {
   type ApiRenderTemplateSummary,
   type ApiRenderVariable,
   apiRenderPreflightResponseSchema,
+  expandLinkedValues,
   FORGE_RENDER_SET_MAX_DESCENDANT_DEPTH,
   type ForgeRenderSet,
   type ForgeRenderSetRevision,
@@ -411,6 +412,7 @@ export function RenderRequestsGrid({
     null;
   const [contract, setContract] = useState<ApiRenderTemplateContract | null>(null);
   const [layerSwitches, setLayerSwitches] = useState<ApiRenderVariable[]>([]);
+  const [linkedFields, setLinkedFields] = useState<ApiRenderVariable[]>([]);
   const [inputSets, setInputSets] = useState<ApiRenderInputSet[]>([]);
   const [renderSets, setRenderSets] = useState<ForgeRenderSet[]>([]);
   const [activeSet, setActiveSet] = useState<ForgeRenderSet | null>(null);
@@ -653,6 +655,7 @@ export function RenderRequestsGrid({
     if (!templateKey) {
       setContract(null);
       setLayerSwitches([]);
+      setLinkedFields([]);
       setRows([]);
       return;
     }
@@ -682,6 +685,7 @@ export function RenderRequestsGrid({
         if (cancelled) return;
         setContract(next);
         setLayerSwitches(next.layerSwitchesNotAsked);
+        setLinkedFields(next.linkedFields ?? []);
         setInputSets(sets.items);
         // A set belongs to the environment it was saved in; one from another would refuse to render.
         const binding = bindingRef.current;
@@ -837,7 +841,12 @@ export function RenderRequestsGrid({
     () =>
       new Map(
         rows.map((row) => {
-          const errors = validateRow(variables ?? [], effectiveValues(rows, row.id));
+          const values = effectiveValues(rows, row.id);
+          const errors = validateRow(variables ?? [], values);
+          // A headline split across layers needs exactly its lines — the render refuses otherwise.
+          for (const problem of expandLinkedValues([...(variables ?? []), ...linkedFields], values)
+            .problems)
+            errors[problem.key] ??= problem.message;
           if (row.check.state === 'ready' || row.check.state === 'error')
             for (const finding of row.check.guardrails ?? []) {
               if (finding.severity === 'block')
@@ -846,7 +855,7 @@ export function RenderRequestsGrid({
           return [row.id, errors] as const;
         }),
       ),
-    [rows, variables],
+    [rows, variables, linkedFields],
   );
   const readiness = useMemo(() => {
     const findings = new Map<string, { message: string; rows: string[] }>();
@@ -1108,6 +1117,7 @@ export function RenderRequestsGrid({
       });
       setContract(next);
       setLayerSwitches(next.layerSwitchesNotAsked);
+      setLinkedFields(next.linkedFields ?? []);
       toast.success(
         `${readableLayerName(variable.label)} is now a column — each row can show or hide it`,
       );
@@ -1717,6 +1727,7 @@ export function RenderRequestsGrid({
         contract,
         rows,
         clientErrors,
+        linkedFields,
         actions,
         selectedIds,
         hiddenColumns,
