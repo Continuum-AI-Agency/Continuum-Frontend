@@ -8,11 +8,17 @@ import type { VideoStudioContext } from '../types';
 // busy-setting runOp), so the client, the router and the toasts are the seams faked here.
 let pollAnswers: Array<() => unknown> = [];
 const polled: string[] = [];
+/** Projects whose transcript the dialog asked for on open (the warm-up, not a poll). */
+const warmed: string[] = [];
 const toasts: Array<{ title: string; action?: { label: string; onClick: () => void } }> = [];
 
 mock.module('@/lib/api/videoEditorOps.client', () => ({
-  runVideoEditorOp: async (_projectId: string, op: string) => {
+  runVideoEditorOp: async (projectId: string, op: string) => {
     if (op === 'get_pool') return { assets: [] };
+    if (op === 'get_transcript') {
+      warmed.push(projectId);
+      return { words: [], granularity: 'word' };
+    }
     polled.push(op);
     const answer = pollAnswers.shift();
     if (!answer) throw new Error(`unexpected ${op}`);
@@ -30,16 +36,22 @@ afterEach(() => {
   cleanup();
   pollAnswers = [];
   polled.length = 0;
+  warmed.length = 0;
   toasts.length = 0;
 });
 
 const TIMEOUT_MS = 10_000;
 const PROJECT_ID = '22222222-2222-4222-8222-222222222222';
-const footage = [{ assetId: 'reel', kind: 'video' as const, title: 'Reel', origin: 'project' as const }];
+const footage = [
+  { assetId: 'reel', kind: 'video' as const, title: 'Reel', origin: 'project' as const },
+];
 
 function renderDialog(runOp: (op: VideoEditorOpName, input: unknown) => unknown) {
   const calls: Array<{ op: string; input: unknown }> = [];
-  const project = { ...createEditorProjectV2({ projectId: PROJECT_ID, title: 'Edit', width: 1080, height: 1920 }), revision: 7 };
+  const project = {
+    ...createEditorProjectV2({ projectId: PROJECT_ID, title: 'Edit', width: 1080, height: 1920 }),
+    revision: 7,
+  };
   const studio = {
     projectId: PROJECT_ID,
     brandId: '11111111-1111-4111-8111-111111111111',
@@ -72,6 +84,14 @@ function renderDialog(runOp: (op: VideoEditorOpName, input: unknown) => unknown)
 const submit = () => fireEvent.click(screen.getByTestId('brief-submit'));
 
 describe('BriefDialog', () => {
+  it('opening it asks for the timeline transcript once, so the draft finds the words heard', async () => {
+    renderDialog(() => {
+      throw new Error('no draft in this test');
+    });
+    await waitFor(() => expect(warmed).toEqual([PROJECT_ID]), { timeout: TIMEOUT_MS });
+    expect(polled).toEqual([]);
+  });
+
   it(
     'a failed draft, then a draft whose request errors, leaves no progress stuck on screen',
     async () => {
@@ -84,9 +104,12 @@ describe('BriefDialog', () => {
       });
       pollAnswers.push(() => ({ jobId: 'job_1', state: 'failed', error: 'No speech found.' }));
       submit();
-      await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('No speech found.'), {
-        timeout: TIMEOUT_MS,
-      });
+      await waitFor(
+        () => expect(screen.getByRole('alert').textContent).toContain('No speech found.'),
+        {
+          timeout: TIMEOUT_MS,
+        },
+      );
       submit();
       await waitFor(
         () => expect(screen.getByRole('alert').textContent).toContain('The draft could not start.'),
@@ -141,10 +164,7 @@ describe('BriefDialog', () => {
         state: 'completed',
         progress: 1,
         phase: 'Done',
-        variants: [
-          variant('A', PROJECT_ID),
-          variant('B', '33333333-3333-4333-8333-333333333333'),
-        ],
+        variants: [variant('A', PROJECT_ID), variant('B', '33333333-3333-4333-8333-333333333333')],
         warnings: ['B is 2 s short of the target.'],
       }));
       submit();
