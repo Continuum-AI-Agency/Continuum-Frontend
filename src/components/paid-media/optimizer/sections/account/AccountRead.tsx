@@ -56,9 +56,9 @@ const TIER_VARIANT = {
 } as const;
 
 const TIER_LABEL = {
-  high: 'Alto',
-  medium: 'Medio',
-  low: 'Bajo',
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
 } as const;
 
 export type AccountReadProps = {
@@ -78,14 +78,12 @@ function StateNote({ candidate }: { candidate: AccountCandidate }) {
   if (candidate.state_lowered) {
     return (
       <p className="text-warning text-xs" data-testid="state-lowered">
-        Marcada para actuar sola, pero “{family}” aún no lo permite — recomendará.
+        Marked to act on its own, but “{family}” does not allow it yet — it will recommend.
       </p>
     );
   }
   if (candidate.state === 'autopilot') {
-    return (
-      <p className="text-muted-foreground text-xs">Actúa por su cuenta, dentro de tus límites.</p>
-    );
+    return <p className="text-muted-foreground text-xs">Acts on its own, within your limits.</p>;
   }
   return null;
 }
@@ -95,8 +93,8 @@ function CapNote({ candidate }: { candidate: AccountCandidate }) {
   return (
     <p className="text-muted-foreground text-xs">
       {candidate.capped_by === 'velocity'
-        ? 'Limitada por el tope por ciclo de este objetivo, no por la brecha.'
-        : 'Limitada por tu guardrail, no por la brecha.'}
+        ? "Capped by this objective's per-cycle ceiling, not by the gap."
+        : 'Capped by your guardrail, not by the gap.'}
     </p>
   );
 }
@@ -111,8 +109,8 @@ function portfolioNamesOf(
 }
 
 function jainaPrompt(titleLine: string, names: string[]): string {
-  const where = names.length > 0 ? names.join(' · ') : 'la cuenta';
-  return `Sobre la recomendación "${titleLine}" en ${where}: explicame la evidencia y qué pasa si la aplico.`;
+  const where = names.length > 0 ? names.join(' · ') : 'the account';
+  return `About the recommendation "${titleLine}" in ${where}: walk me through the evidence and what happens if I apply it.`;
 }
 
 function RecommendationCard({
@@ -155,7 +153,7 @@ function RecommendationCard({
       <div className="flex flex-wrap items-center gap-1.5">
         {lead ? (
           <Badge className="text-xs" variant="violet">
-            Principal
+            Lead
           </Badge>
         ) : null}
         <Badge className="text-xs" variant={TIER_VARIANT[tier]}>
@@ -164,7 +162,7 @@ function RecommendationCard({
         <Badge className="text-xs" variant="muted">
           {ACTION_VERB_LABEL[action.verb]}
         </Badge>
-        {doubted ? <span className="text-warning text-xs">afectada por la guarda</span> : null}
+        {doubted ? <span className="text-warning text-xs">affected by the guard</span> : null}
       </div>
       <h3 className={cn(typeScale.bodyLg, 'font-semibold text-foreground')}>{titleLine}</h3>
       {title ? null : (
@@ -202,7 +200,7 @@ function RecommendationCard({
           href={jainaPromptHref(jainaPrompt(titleLine, names))}
         >
           <SparklesIcon aria-hidden className="size-3.5" />
-          Preguntarle a Jaina
+          Ask Jaina
         </a>
       </footer>
     </article>
@@ -242,7 +240,8 @@ export function AccountRead({
             </h3>
             <p className="text-muted-foreground text-xs">{guard.impact_basis}</p>
             <p className="text-muted-foreground text-xs">
-              Leelo antes que las tarjetas: decide si el resto de estas cifras significa algo.
+              Read this before the cards: it decides whether the rest of these figures mean
+              anything.
             </p>
           </div>
         </div>
@@ -278,8 +277,8 @@ export function AccountRead({
             className={cn('size-3.5 transition-transform', showRest && 'rotate-180')}
           />
           {showRest
-            ? 'Ocultar el resto'
-            : `${rest.length} más · ${formatPerPeriod(restWorth, currency)} entre ellas`}
+            ? 'Hide the rest'
+            : `${rest.length} more · ${formatPerPeriod(restWorth, currency)} between them`}
         </Button>
       ) : null}
     </section>

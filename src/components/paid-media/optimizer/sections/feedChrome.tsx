@@ -41,7 +41,7 @@ export function formatWhen(ts: string): string {
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
-  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 /** `lg` is the roomier scale the portfolio Activity tab's "Recently applied" rows use; the

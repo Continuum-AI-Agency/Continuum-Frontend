@@ -116,14 +116,14 @@ const candidate = (overrides: Record<string, unknown> = {}) => ({
   portfolio_ids: ['formularios'],
   impact_per_day: 48.8,
   impact_class: 'recoverable',
-  impact_basis: '405 MXN en 7 días por 4 leads.',
+  impact_basis: '405 MXN in 7 days for 4 leads.',
   result_label: 'leads',
   chart: null,
   headline: {
     kind: 'efficiency',
     value: 101,
     unit: 'currency_per_day',
-    label: 'por lead',
+    label: 'per lead',
     from: 35,
     to: 101,
   },
@@ -228,11 +228,11 @@ describe('OptimizerOverview — the sentence, from typed fields', () => {
   it('states the spend, one clause per result kind with its distance, and the decisions', () => {
     const { getByTestId } = mount();
     const headline = getByTestId('overview-headline').textContent ?? '';
-    expect(headline).toContain('La cuenta gastó 23,911 MXN en 7 días: ');
-    expect(headline).toContain('conversaciones a 39.95 MXN (33% sobre objetivo)');
-    expect(headline).toContain('leads a 37.06 MXN (15% sobre objetivo)');
-    expect(headline).toContain('y 0 compras en Septiembre - Tours Programados.');
-    expect(headline).toContain('4 decisiones esperan.');
+    expect(headline).toContain('The account spent 23,911 MXN in 7 days: ');
+    expect(headline).toContain('conversations at 39.95 MXN (33% over target)');
+    expect(headline).toContain('leads at 37.06 MXN (15% over target)');
+    expect(headline).toContain('and 0 purchases in Septiembre - Tours Programados.');
+    expect(headline).toContain('4 decisions waiting.');
   });
 
   it('carries every figure with its provenance, on the node that prints it', () => {
@@ -252,14 +252,14 @@ describe('OptimizerOverview — the sentence, from typed fields', () => {
   it('says the window it covers and when the read was taken', () => {
     accountReadData = envelope({ candidates: [], guards: [], model: 'deterministic' });
     const { getByTestId } = mount();
-    expect(getByTestId('overview-window').textContent).toBe('21 al 27 de septiembre');
-    expect(getByTestId('overview-subline').textContent).toContain('Leído hace 20 min');
+    expect(getByTestId('overview-window').textContent).toBe('Sep 21–27');
+    expect(getByTestId('overview-subline').textContent).toContain('Read 20 min ago');
   });
 
   it('says it is still reading while no series has landed', () => {
     efficiency = { series: [], pending: true, failed: 0, retryFailed };
     const { getByTestId } = mount();
-    expect(getByTestId('overview-headline').textContent).toBe('Leyendo los ciclos de la cuenta…');
+    expect(getByTestId('overview-headline').textContent).toBe("Reading the account's cycles…");
     expect(getByTestId('overview-headline').getAttribute('data-pending')).toBe('true');
   });
 
@@ -267,7 +267,7 @@ describe('OptimizerOverview — the sentence, from typed fields', () => {
     efficiency = { series: [[], [], [], []], pending: false, failed: 0, retryFailed };
     const { getByTestId, queryByTestId } = mount();
     expect(getByTestId('overview-headline').textContent).toContain(
-      'Ningún portafolio tiene un ciclo medido todavía. 4 decisiones esperan.',
+      'No portfolio has a measured cycle yet. 4 decisions waiting.',
     );
     expect(queryByTestId('overview-window')).toBeNull();
   });
@@ -282,22 +282,22 @@ describe('OptimizerOverview — the sentence, from typed fields', () => {
     const { getByTestId } = mount();
     const headline = getByTestId('overview-headline');
     expect(headline.getAttribute('data-incomplete')).toBe('true');
-    expect(headline.textContent).toContain('No se pudo leer el ciclo de 1 portafolio');
-    expect(headline.textContent).not.toContain('La cuenta gastó');
+    expect(headline.textContent).toContain('Could not read the cycle of 1 portfolio');
+    expect(headline.textContent).not.toContain('The account spent');
     fireEvent.click(getByTestId('overview-retry'));
     expect(retryFailed).toHaveBeenCalledTimes(1);
     expect(getByTestId('tile-spend').textContent).toContain('—');
-    expect(getByTestId('tile-spend').textContent).toContain('lectura incompleta');
+    expect(getByTestId('tile-spend').textContent).toContain('incomplete read');
     expect(getByTestId('tile-spend').getAttribute('data-state')).toBe('none');
   });
 
   it('counts a single decision and none at all in their own words', () => {
     expect(mount(EASY_FIT, 1).getByTestId('overview-decisions').textContent).toBe(
-      '1 decisión espera.',
+      '1 decision waiting.',
     );
     cleanup();
     expect(mount(EASY_FIT, 0).getByTestId('overview-decisions').textContent).toBe(
-      'Ninguna decisión espera.',
+      'No decisions waiting.',
     );
   });
 });
@@ -370,13 +370,13 @@ describe('OptimizerOverview — the tiles', () => {
     const { getByTestId } = mount();
     expect(getByTestId('tile-kind-conversations').textContent).toContain('516');
     expect(getByTestId('tile-kind-conversations').textContent).toContain(
-      '39.95 MXN · objetivo 30.00 MXN · sem. ant. 41.37 MXN',
+      '39.95 MXN · target 30.00 MXN · prev. week 41.37 MXN',
     );
-    expect(getByTestId('tile-kind-leads').textContent).toContain('objetivo 25.00 MXN–35.00 MXN');
-    expect(getByTestId('tile-kind-purchases').textContent).toContain('408 MXN sin resultado');
+    expect(getByTestId('tile-kind-leads').textContent).toContain('target 25.00 MXN–35.00 MXN');
+    expect(getByTestId('tile-kind-purchases').textContent).toContain('408 MXN no results');
   });
 
-  it("shows 'sin objetivo' in the neutral state when the portfolio has no target", () => {
+  it("shows 'no target' in the neutral state when the portfolio has no target", () => {
     efficiency = {
       series: [EASY_FIT_SERIES[2] as EfficiencySeriesPoint[]],
       pending: false,
@@ -386,9 +386,9 @@ describe('OptimizerOverview — the tiles', () => {
     const { getByTestId } = mount([{ ...PRUEBA, cpa_target: null }], 1);
     const tile = getByTestId('tile-kind-leads');
     expect(tile.getAttribute('data-state')).toBe('none');
-    expect(tile.textContent).toContain('sin objetivo');
+    expect(tile.textContent).toContain('no target');
     expect(getByTestId('overview-headline').textContent).toContain(
-      'leads a 33.18 MXN (sin objetivo)',
+      'leads at 33.18 MXN (no target)',
     );
   });
 
@@ -396,11 +396,13 @@ describe('OptimizerOverview — the tiles', () => {
     const { getByTestId, onOpenActions } = mount();
     const spend = getByTestId('tile-spend');
     expect(spend.textContent).toContain('23,911 MXN');
-    expect(spend.textContent).toContain('3,416 MXN por día · plan 4,184 MXN');
+    expect(spend.textContent).toContain('3,416 MXN per day · plan 4,184 MXN');
     expect(spend.getAttribute('data-state')).toBe('warn');
-    expect(getByTestId('tile-autopilot').textContent).toContain('3 de 4');
-    expect(getByTestId('tile-autopilot').textContent).toContain('Prueba recomienda, no aplica');
-    expect(getByTestId('tile-decisions').textContent).toContain('en 2 portafolios');
+    expect(getByTestId('tile-autopilot').textContent).toContain('3 of 4');
+    expect(getByTestId('tile-autopilot').textContent).toContain(
+      'Prueba recommends, does not apply',
+    );
+    expect(getByTestId('tile-decisions').textContent).toContain('in 2 portfolios');
     fireEvent.click(getByTestId('tile-decisions').querySelector('button') as HTMLButtonElement);
     expect(onOpenActions).toHaveBeenCalledTimes(1);
   });
@@ -419,23 +421,25 @@ describe('the tile words', () => {
     );
     const [conversations, leads, purchases] = resultKinds(EASY_FIT, windows as never);
     expect(kindTileSub(conversations as never, 'MXN')).toBe(
-      '39.95 MXN · objetivo 30.00 MXN · sem. ant. 41.37 MXN',
+      '39.95 MXN · target 30.00 MXN · prev. week 41.37 MXN',
     );
-    expect(kindTileSub(leads as never, 'MXN')).toContain('objetivo 25.00 MXN–35.00 MXN');
-    expect(kindTileSub(purchases as never, 'MXN')).toBe('408 MXN sin resultado');
+    expect(kindTileSub(leads as never, 'MXN')).toContain('target 25.00 MXN–35.00 MXN');
+    expect(kindTileSub(purchases as never, 'MXN')).toBe('408 MXN no results');
   });
 
   it('writes the second line of the autopilot tile', () => {
-    expect(autopilotTileSub(autopilotSummary(EASY_FIT))).toBe('Prueba recomienda, no aplica');
-    expect(autopilotTileSub(autopilotSummary([MENSAJES, FORMULARIOS]))).toBe('todos aplican solos');
+    expect(autopilotTileSub(autopilotSummary(EASY_FIT))).toBe('Prueba recommends, does not apply');
+    expect(autopilotTileSub(autopilotSummary([MENSAJES, FORMULARIOS]))).toBe(
+      'all apply on their own',
+    );
     expect(autopilotTileSub(autopilotSummary([{ ...MENSAJES, autopilot_paused: true }]))).toBe(
-      '1 detenido',
+      '1 paused',
     );
     expect(
       autopilotTileSub(
         autopilotSummary([PRUEBA, { ...PRUEBA, id: 'p2' }, { ...PRUEBA, id: 'p3' }]),
       ),
-    ).toBe('3 recomiendan, no aplican');
+    ).toBe('3 recommend, do not apply');
   });
 });
 
@@ -443,7 +447,7 @@ describe('OptimizerOverview — the Jaina band', () => {
   it('asks about the account with the worst portfolio and the silent one named', () => {
     const { getByTestId } = mount();
     const band = getByTestId('jaina-entry-chips');
-    expect(band.textContent).toContain('Preguntale a Jaina');
+    expect(band.textContent).toContain('Ask Jaina');
     const links = [...band.querySelectorAll('a')];
     expect(links.length).toBeGreaterThanOrEqual(4);
     const prompts = links.map((link) =>
@@ -489,7 +493,7 @@ describe('OptimizerOverview — the cards', () => {
     });
     approvalMaps = { families: {}, insights: { dead_tail: 'autopilot' } };
     const { container } = mount();
-    expect(container.textContent).toContain('Actúa por su cuenta');
+    expect(container.textContent).toContain('Acts on its own');
   });
 });
 
@@ -521,9 +525,9 @@ describe('OptimizerOverview — the rows', () => {
 
   it('reorders by name and flips direction', () => {
     const { getByTestId, getByRole } = mount();
-    fireEvent.click(getByRole('button', { name: 'Nombre' }));
+    fireEvent.click(getByRole('button', { name: 'Name' }));
     expect(rowNames(getByTestId('portfolio-rows'))[0]).toBe('FORMULARIOS // TODOS');
-    fireEvent.click(getByRole('button', { name: 'Orden ascendente' }));
+    fireEvent.click(getByRole('button', { name: 'Ascending' }));
     expect(rowNames(getByTestId('portfolio-rows'))[0]).toBe('Septiembre - Tours Programados');
   });
 
@@ -540,10 +544,10 @@ describe('OptimizerOverview — the rows', () => {
 describe('OptimizerOverview — the header', () => {
   it('counts the book and offers the two actions', () => {
     const { getByTestId, getByRole, onCreate, onOpenActions } = mount();
-    expect(getByTestId('book-line').textContent).toBe('4 portafolios · 36 conjuntos');
-    fireEvent.click(getByRole('button', { name: 'Nuevo portafolio' }));
+    expect(getByTestId('book-line').textContent).toBe('4 portfolios · 36 ad sets');
+    fireEvent.click(getByRole('button', { name: 'New portfolio' }));
     expect(onCreate).toHaveBeenCalledTimes(1);
-    fireEvent.click(getByRole('button', { name: /Revisar 4 pendientes/ }));
+    fireEvent.click(getByRole('button', { name: /Review 4 pending/ }));
     expect(onOpenActions).toHaveBeenCalledTimes(1);
   });
 
@@ -552,6 +556,6 @@ describe('OptimizerOverview — the header', () => {
       { ...MENSAJES, roster_state: 'partial', roster_missing_count: 4 },
       FORMULARIOS,
     ]);
-    expect(getByTestId('book-line').textContent).toBe('2 portafolios · 17 conjuntos · 4 perdidos');
+    expect(getByTestId('book-line').textContent).toBe('2 portfolios · 17 ad sets · 4 lost');
   });
 });

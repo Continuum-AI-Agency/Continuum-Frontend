@@ -98,16 +98,16 @@ describe('PortfolioRowCard — one line per portfolio', () => {
   it('says what it buys, how many ad sets, and the daily budget, in Spanish', () => {
     const { container } = render(<PortfolioRowCard currency="USD" portfolio={portfolio()} />);
     expect(container.textContent).toContain('Lead');
-    expect(container.textContent).toContain('2 conjuntos');
-    expect(container.textContent).toContain('$500/día');
+    expect(container.textContent).toContain('2 ad sets');
+    expect(container.textContent).toContain('$500/day');
   });
 
   it('counts a single ad set in the singular', () => {
     const { container } = render(
       <PortfolioRowCard currency="USD" portfolio={portfolio({ adset_count: 1 })} />,
     );
-    expect(container.textContent).toContain('1 conjunto');
-    expect(container.textContent).not.toContain('1 conjuntos');
+    expect(container.textContent).toContain('1 ad set');
+    expect(container.textContent).not.toContain('1 ad sets');
   });
 
   it('quotes cost per result against its target, results, and spend over the window', () => {
@@ -116,7 +116,7 @@ describe('PortfolioRowCard — one line per portfolio', () => {
       <PortfolioRowCard currency="USD" portfolio={pf} window={windowFor(pf)} />,
     );
     expect(figure(container, 'cost').textContent).toBe('$40.00');
-    expect(getByTestId('portfolio-row-cost').textContent).toContain('por lead · obj. $30.00');
+    expect(getByTestId('portfolio-row-cost').textContent).toContain('per lead · target $30.00');
     expect(figure(container, 'results').textContent).toBe('50');
     expect(getByTestId('portfolio-row-results').textContent).toContain('leads 7d');
     expect(figure(container, 'spend').textContent).toBe('$2,000');
@@ -141,12 +141,12 @@ describe('PortfolioRowCard — one line per portfolio', () => {
     expect(spend.getAttribute('data-figure-unit')).toBe('currency');
   });
 
-  it('says "sin objetivo" under the cost when the portfolio set none', () => {
+  it('says "no target" under the cost when the portfolio set none', () => {
     const pf = portfolio();
     const { getByTestId } = render(
       <PortfolioRowCard currency="USD" portfolio={pf} window={windowFor(pf)} />,
     );
-    expect(getByTestId('portfolio-row-cost').textContent).toContain('por lead · sin objetivo');
+    expect(getByTestId('portfolio-row-cost').textContent).toContain('per lead · no target');
   });
 
   it('spells the window in the account currency, or leaves it bare without one', () => {
@@ -185,7 +185,7 @@ describe('PortfolioRowCard — before the first cycle', () => {
     expect(figure(container, 'cost').textContent).toBe('—');
     expect(figure(container, 'results').textContent).toBe('—');
     expect(figure(container, 'spend').textContent).toBe('—');
-    expect(getByTestId('portfolio-state-chip').textContent).toBe('sin ciclo aún');
+    expect(getByTestId('portfolio-state-chip').textContent).toBe('no cycle yet');
     expect(getByTestId('portfolio-row').getAttribute('data-state')).toBe('none');
   });
 
@@ -199,7 +199,7 @@ describe('PortfolioRowCard — before the first cycle', () => {
     const { getByTestId } = render(
       <PortfolioRowCard currency="USD" portfolio={portfolio()} window={null} />,
     );
-    expect(getByTestId('portfolio-state-chip').textContent).toBe('sin ciclo aún');
+    expect(getByTestId('portfolio-state-chip').textContent).toBe('no cycle yet');
   });
 });
 
@@ -218,50 +218,50 @@ describe('PortfolioRowCard — the state chip', () => {
     };
   };
 
-  it('reads "33% sobre" and goes red past the warning ceiling', () => {
-    expect(chipFor(portfolio({ cpa_target: 30 }))).toEqual({ text: '33% sobre', state: 'bad' });
+  it('reads "33% over" and goes red past the warning ceiling', () => {
+    expect(chipFor(portfolio({ cpa_target: 30 }))).toEqual({ text: '33% over', state: 'bad' });
   });
 
-  it('reads "11% sobre" and goes amber inside the warning ceiling', () => {
-    expect(chipFor(portfolio({ cpa_target: 36 }))).toEqual({ text: '11% sobre', state: 'warn' });
+  it('reads "11% over" and goes amber inside the warning ceiling', () => {
+    expect(chipFor(portfolio({ cpa_target: 36 }))).toEqual({ text: '11% over', state: 'warn' });
   });
 
-  it('reads "20% bajo" and goes green under the target', () => {
-    expect(chipFor(portfolio({ cpa_target: 50 }))).toEqual({ text: '20% bajo', state: 'ok' });
+  it('reads "20% under" and goes green under the target', () => {
+    expect(chipFor(portfolio({ cpa_target: 50 }))).toEqual({ text: '20% under', state: 'ok' });
   });
 
-  it('reads "en objetivo" exactly on the target', () => {
-    expect(chipFor(portfolio({ cpa_target: 40 }))).toEqual({ text: 'en objetivo', state: 'ok' });
+  it('reads "on target" exactly on the target', () => {
+    expect(chipFor(portfolio({ cpa_target: 40 }))).toEqual({ text: 'on target', state: 'ok' });
   });
 
   it('reads "0 resultados" when the window bought nothing, target or not', () => {
     const zero = point({ conv_d7: 0, conv_d14: 0 });
     expect(chipFor(portfolio({ cpa_target: 30 }), zero)).toEqual({
-      text: '0 resultados',
+      text: '0 results',
       state: 'none',
     });
     cleanup();
-    expect(chipFor(portfolio(), zero).text).toBe('0 resultados');
+    expect(chipFor(portfolio(), zero).text).toBe('0 results');
   });
 
-  it('reads "sin objetivo" with a cost but nothing to measure it against', () => {
-    expect(chipFor(portfolio())).toEqual({ text: 'sin objetivo', state: 'none' });
+  it('reads "no target" with a cost but nothing to measure it against', () => {
+    expect(chipFor(portfolio())).toEqual({ text: 'no target', state: 'none' });
   });
 
   it('appends the decisions waiting, singular and plural', () => {
     expect(chipFor(portfolio({ cpa_target: 30, pending_recommendations: 3 })).text).toBe(
-      '33% sobre · 3 decisiones',
+      '33% over · 3 decisions',
     );
     cleanup();
     expect(
       chipFor(portfolio({ cpa_target: 30, pending_recommendations: 0, pending_budget_moves: 1 }))
         .text,
-    ).toBe('33% sobre · 1 decisión');
+    ).toBe('33% over · 1 decision');
     cleanup();
     const { getByTestId } = render(
       <PortfolioRowCard currency="USD" portfolio={portfolio({ pending_recommendations: 2 })} />,
     );
-    expect(getByTestId('portfolio-state-chip').textContent).toBe('sin ciclo aún · 2 decisiones');
+    expect(getByTestId('portfolio-state-chip').textContent).toBe('no cycle yet · 2 decisions');
   });
 
   it('maps every tile state to its own tone', () => {
@@ -287,13 +287,13 @@ describe('PortfolioRowCard — the state chip', () => {
 describe('stateChipLabel', () => {
   it('shortens the target distance to the word the column already implies', () => {
     const pf = portfolio({ cpa_target: 30 });
-    expect(stateChipLabel(windowFor(pf))).toBe('33% sobre');
-    expect(stateChipLabel(windowFor(portfolio({ cpa_target: 50 })))).toBe('20% bajo');
-    expect(stateChipLabel(windowFor(portfolio({ cpa_target: 40 })))).toBe('en objetivo');
-    expect(stateChipLabel(windowFor(portfolio()))).toBe('sin objetivo');
-    expect(stateChipLabel(windowFor(pf, point({ conv_d7: 0 })))).toBe('0 resultados');
-    expect(stateChipLabel(null)).toBe('sin ciclo aún');
-    expect(stateChipLabel(undefined)).toBe('sin ciclo aún');
+    expect(stateChipLabel(windowFor(pf))).toBe('33% over');
+    expect(stateChipLabel(windowFor(portfolio({ cpa_target: 50 })))).toBe('20% under');
+    expect(stateChipLabel(windowFor(portfolio({ cpa_target: 40 })))).toBe('on target');
+    expect(stateChipLabel(windowFor(portfolio()))).toBe('no target');
+    expect(stateChipLabel(windowFor(pf, point({ conv_d7: 0 })))).toBe('0 results');
+    expect(stateChipLabel(null)).toBe('no cycle yet');
+    expect(stateChipLabel(undefined)).toBe('no cycle yet');
   });
 });
 
@@ -398,7 +398,7 @@ describe('PortfolioRowCard — a portfolio dead on Meta wears its staleness besi
       'roster gone since Aug 6 · 12 of 12 ad sets',
     );
     // The count it still carries is the enrolled one — the roster chip says what is left.
-    expect(container.textContent).toContain('12 conjuntos');
+    expect(container.textContent).toContain('12 ad sets');
   });
 
   it('reads the 61-day and the 0-enrolled shapes each by their own facts', () => {
@@ -411,7 +411,7 @@ describe('PortfolioRowCard — a portfolio dead on Meta wears its staleness besi
     const reporte = render(<PortfolioRowCard currency="USD" portfolio={portfolio(REPORTE_OVER)} />);
     expect(reporte.getByTestId('stale-chip').textContent).toBe('last cycle 48 days ago');
     expect(reporte.queryByTestId('roster-chip')).toBeNull();
-    expect(reporte.container.textContent).toContain('0 conjuntos');
+    expect(reporte.container.textContent).toContain('0 ad sets');
   });
 
   it('still says what waits on a decision beside the staleness', () => {
@@ -419,7 +419,7 @@ describe('PortfolioRowCard — a portfolio dead on Meta wears its staleness besi
     const { getByTestId } = render(
       <PortfolioRowCard currency="USD" portfolio={pf} window={windowFor(pf)} />,
     );
-    expect(getByTestId('portfolio-state-chip').textContent).toBe('33% sobre · 2 decisiones');
+    expect(getByTestId('portfolio-state-chip').textContent).toBe('33% over · 2 decisions');
     expect(getByTestId('stale-chip')).toBeTruthy();
   });
 });
