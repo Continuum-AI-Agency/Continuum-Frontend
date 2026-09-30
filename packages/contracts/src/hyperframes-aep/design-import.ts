@@ -159,3 +159,70 @@ export const designImportResponseSchema = z
   })
   .strict();
 export type DesignImportResponse = z.infer<typeof designImportResponseSchema>;
+
+/**
+ * An approved front-to-back arrangement of one artboard: the same layers, stacked in `order`. It
+ * becomes its own delivery comp named `name`, sharing every field by layer name, so a render row
+ * picks it like a format. Groups, masks and clipping are baked into each layer's pixels at import,
+ * so ANY order of an artboard's layers is a valid 2D stack — nothing can be un-clipped by a move.
+ */
+export const designArrangementSchema = z
+  .object({
+    name: z.string().trim().min(1).max(60),
+    /** The artboard it re-stacks; null for a document without artboards (the canvas). */
+    artboardId: z.number().int().nullable(),
+    /** Every layer of that artboard exactly once, by Photoshop layer id, bottom of the stack first. */
+    order: z.array(z.number().int()).min(1),
+  })
+  .strict();
+export type DesignArrangement = z.infer<typeof designArrangementSchema>;
+
+/** `GET /api/ai-studio/templates/:assetId/design-layers` — what a design-import template stacks. */
+export const designLayersResponseSchema = z
+  .object({
+    source: designImportSourceSchema,
+    /** The source file's artboards; a document without artboards is one canvas with id null. */
+    artboards: z.array(
+      z
+        .object({
+          id: z.number().int().nullable(),
+          name: z.string().min(1),
+          w: z.number().positive(),
+          h: z.number().positive(),
+        })
+        .strict(),
+    ),
+    /** Every layer, bottom of the stack first, as the file stacks it. */
+    layers: z.array(
+      z
+        .object({
+          id: z.number().int(),
+          name: z.string(),
+          kind: designLeafKindSchema,
+          artboardId: z.number().int().nullable(),
+          hidden: z.boolean(),
+        })
+        .strict(),
+    ),
+    arrangements: z.array(designArrangementSchema),
+  })
+  .strict();
+export type DesignLayersResponse = z.infer<typeof designLayersResponseSchema>;
+
+/** `PUT /api/ai-studio/templates/:assetId/design-arrangements` — the whole approved set. */
+export const designArrangementsRequestSchema = z
+  .object({ brandId: z.uuid(), arrangements: z.array(designArrangementSchema).max(12) })
+  .strict();
+export type DesignArrangementsRequest = z.infer<typeof designArrangementsRequestSchema>;
+
+export const designArrangementsResponseSchema = z
+  .object({
+    /** The template's new source revision: the file re-authored with one comp per arrangement. */
+    versionId: z.string().min(1),
+    parseState: z.string().min(1),
+    /** Every delivery comp the revision carries — the file's own, then each arrangement. */
+    comps: z.array(z.string()),
+    arrangements: z.array(designArrangementSchema),
+  })
+  .strict();
+export type DesignArrangementsResponse = z.infer<typeof designArrangementsResponseSchema>;

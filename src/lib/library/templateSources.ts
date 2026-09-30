@@ -13,9 +13,14 @@ import type {
   WorkspaceTemplate,
 } from '@continuum/contracts';
 import {
+  type DesignArrangement,
+  type DesignArrangementsResponse,
   type DesignImportRequest,
   type DesignImportResponse,
+  type DesignLayersResponse,
+  designArrangementsResponseSchema,
   designImportResponseSchema,
+  designLayersResponseSchema,
   type FontInventoryRow,
   fontInventoryResponseSchema,
   type RenameTemplateSourceRequest,
@@ -472,6 +477,30 @@ export async function saveTemplateVariables(
     body: JSON.stringify({ brandId, slots }),
   });
   await unwrap(response, 'Saving variables');
+}
+
+/** Every layer a design-import template's source file stacks, and the arrangements saved on it. */
+export async function fetchDesignLayers(
+  brandId: string,
+  assetId: string,
+): Promise<DesignLayersResponse> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${assetId}/design-layers?brandId=${encodeURIComponent(brandId)}`,
+  );
+  return designLayersResponseSchema.parse(await unwrap(response, 'Layers'));
+}
+
+/** The whole approved set; the server re-authors the template as its next revision. */
+export async function saveDesignArrangements(
+  brandId: string,
+  assetId: string,
+  arrangements: DesignArrangement[],
+): Promise<DesignArrangementsResponse> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${assetId}/design-arrangements`,
+    { method: 'PUT', body: JSON.stringify({ brandId, arrangements }) },
+  );
+  return designArrangementsResponseSchema.parse(await unwrap(response, 'Saving arrangements'));
 }
 
 /** The mirrored run row. The LIVE channel is Realtime; this is the mount backfill beside it. */

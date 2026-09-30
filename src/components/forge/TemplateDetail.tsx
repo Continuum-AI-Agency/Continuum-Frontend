@@ -34,6 +34,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DraftWithAiButton } from '@/components/forge/AiVariationsDialog';
 import { type CheckRow, CheckTable, type CheckTick, TickBar } from '@/components/forge/CheckTable';
+import { DesignLayersPanel } from '@/components/forge/DesignLayersPanel';
 import { FactList } from '@/components/forge/FactList';
 import {
   type FontSubstitutionChoice,
@@ -1630,6 +1631,9 @@ export function TemplateDetail({
           <TabsTrigger value="variables" className="flex-none px-0 text-xs">
             Variables
           </TabsTrigger>
+          <TabsTrigger value="layers" className="flex-none px-0 text-xs">
+            Layers
+          </TabsTrigger>
           <TabsTrigger value="mapping" className="flex-none px-0 text-xs">
             Mapping
           </TabsTrigger>
@@ -1660,6 +1664,14 @@ export function TemplateDetail({
             parseState={parseState}
             saving={saving}
             onSave={onSave}
+          />
+        </TabsContent>
+        <TabsContent value="layers" keepMounted className="p-[var(--card-pad)]">
+          <DesignLayersPanel
+            brandId={brandId}
+            assetId={assetId}
+            active={tab === 'layers'}
+            onSaved={() => Promise.all([onChanged(), loadVariables()])}
           />
         </TabsContent>
         <TabsContent value="mapping" keepMounted className="p-[var(--card-pad)]">

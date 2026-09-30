@@ -140,6 +140,28 @@ export const apiRenderVariableKindSchema = z.enum([
 ]);
 export type ApiRenderVariableKind = z.infer<typeof apiRenderVariableKindSchema>;
 
+/**
+ * A durable Library coordinate for a media variable.
+ *
+ * `versionId` is OPTIONAL because a caller frequently holds an asset id without the
+ * exact version: a node stamped by a producer that only carried the asset id, a
+ * Library asset whose `head_version_id` was never materialized, or a slot filled
+ * straight from the Library picker. Refusing those made the canvas say "needs a
+ * Library asset" about an asset that was already in the Library.
+ *
+ * Omitting it is not a loosening of the version pin. Preflight resolves the head
+ * version server-side and freezes the exact `{assetId, versionId}` into the signed
+ * confirmation, so a render is still reproducible against one immutable version —
+ * the same way the reserved `watermark_logo` pin has always been resolved.
+ */
+export const pinnedRenderAssetSchema = z
+  .object({
+    assetId: z.string().uuid(),
+    versionId: z.string().uuid().optional(),
+  })
+  .strict();
+export type PinnedRenderAsset = z.infer<typeof pinnedRenderAssetSchema>;
+
 export const apiRenderVariableSchema = z
   .object({
     key: apiRenderVariableKeySchema,
@@ -207,6 +229,14 @@ export const apiRenderVariableSchema = z
     /** The value a switched-off field renders with: the authored copy, the layer's own picture
      * URL, the file's own visibility. Null when the field is on, or nothing was authored. */
     fallback: z.union([z.string(), z.number(), z.boolean()]).nullable().default(null),
+    /**
+     * The brand's own default (Template → Variables → Default): what a render uses when a row
+     * leaves the field empty. Null when none was saved.
+     */
+    defaultValue: z
+      .union([z.string(), z.number(), z.boolean(), pinnedRenderAssetSchema])
+      .nullable()
+      .default(null),
     /**
      * A linked field: its value is another field's — whole (`line` null: a fill and its outline
      * copy), or one line of it (a two-line headline set on two layers). Never asked for
@@ -282,6 +312,36 @@ export function expandLinkedValues<V>(
     if (expanded[copy.from] !== undefined) expanded[copy.key] = expanded[copy.from];
   }
   return { values: expanded, problems };
+}
+
+/**
+ * What a render fills each field with, in order: the row's own value; else the brand's saved
+ * default; else — `fallback` on, for a field no form asks for — what the file itself says; then
+ * every linked field from its source. The one resolution render, preview and the grid share, so a
+ * default or a link can never show one thing and render another.
+ */
+export function effectiveRenderValues(
+  variables: ReadonlyArray<
+    Pick<
+      ApiRenderVariable,
+      'key' | 'label' | 'derivedFrom' | 'defaultValue' | 'exposed' | 'fallback'
+    >
+  >,
+  values: Readonly<Record<string, ApiRenderInputValue>>,
+  options: { fallback: boolean } = { fallback: false },
+): {
+  values: Record<string, ApiRenderInputValue>;
+  problems: Array<{ key: string; message: string }>;
+} {
+  const filled: Record<string, ApiRenderInputValue> = { ...values };
+  for (const variable of variables) {
+    if (filled[variable.key] !== undefined) continue;
+    if (variable.defaultValue !== null && variable.defaultValue !== undefined)
+      filled[variable.key] = variable.defaultValue;
+    else if (options.fallback && variable.exposed === false && variable.fallback !== null)
+      filled[variable.key] = variable.fallback;
+  }
+  return expandLinkedValues(variables, filled);
 }
 
 /**
@@ -926,28 +986,6 @@ export const apiRenderTemplateListResponseSchema = z
   })
   .strict();
 export type ApiRenderTemplateListResponse = z.infer<typeof apiRenderTemplateListResponseSchema>;
-
-/**
- * A durable Library coordinate for a media variable.
- *
- * `versionId` is OPTIONAL because a caller frequently holds an asset id without the
- * exact version: a node stamped by a producer that only carried the asset id, a
- * Library asset whose `head_version_id` was never materialized, or a slot filled
- * straight from the Library picker. Refusing those made the canvas say "needs a
- * Library asset" about an asset that was already in the Library.
- *
- * Omitting it is not a loosening of the version pin. Preflight resolves the head
- * version server-side and freezes the exact `{assetId, versionId}` into the signed
- * confirmation, so a render is still reproducible against one immutable version —
- * the same way the reserved `watermark_logo` pin has always been resolved.
- */
-export const pinnedRenderAssetSchema = z
-  .object({
-    assetId: z.string().uuid(),
-    versionId: z.string().uuid().optional(),
-  })
-  .strict();
-export type PinnedRenderAsset = z.infer<typeof pinnedRenderAssetSchema>;
 
 /**
  * How many pins one `multiple` media variable may carry. Named rather than inlined
