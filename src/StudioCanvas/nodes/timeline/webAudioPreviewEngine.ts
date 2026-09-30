@@ -1,3 +1,4 @@
+import { sampleNumericTrack } from '@continuum/contracts';
 import type {
   TimelinePreviewAudioEvent,
   TimelinePreviewAudioPlan,
@@ -5,6 +6,8 @@ import type {
 
 const SCHEDULE_LEAD_SEC = 0.03;
 const EPSILON_SEC = 0.000_001;
+/** Spacing of the gain points a keyed volume is ramped through (linear between them). */
+const VOLUME_STEP_SEC = 0.02;
 
 export interface DecodedPreviewAudioChunk {
   buffer: AudioBuffer;
@@ -36,6 +39,34 @@ export function fadeInGainAt(event: TimelinePreviewAudioEvent, timelineSec: numb
 export function fadeOutGainAt(event: TimelinePreviewAudioEvent, timelineSec: number): number {
   if (event.fadeOutSec <= 0) return 1;
   return clamp01((event.outputEndSec - timelineSec) / event.fadeOutSec);
+}
+
+/**
+ * The gain points (timeline seconds) that play an event's `audio.volume` keyframes from
+ * `fromTimelineSec`: every key inside the window plus a 20 ms grid, each valued by the
+ * same sampler the export mixer uses, so ramping linearly through them follows the curve.
+ */
+export function volumeAutomation(
+  event: TimelinePreviewAudioEvent,
+  fromTimelineSec: number,
+): { timelineSec: number; value: number }[] {
+  const keys = event.volumeKeyframes;
+  if (!keys?.length) return [];
+  const start = Math.max(fromTimelineSec, event.outputStartSec);
+  const end = event.outputEndSec;
+  if (end <= start) return [];
+  const times = new Set<number>([start, end]);
+  for (let at = start + VOLUME_STEP_SEC; at < end; at += VOLUME_STEP_SEC) times.add(at);
+  for (const key of keys) {
+    const at = event.outputStartSec + key.timeSec;
+    if (at > start && at < end) times.add(at);
+  }
+  return [...times]
+    .sort((left, right) => left - right)
+    .map((timelineSec) => ({
+      timelineSec,
+      value: Math.max(0, sampleNumericTrack(keys, timelineSec - event.outputStartSec, event.gain)),
+    }));
 }
 
 export function buildPreviewAudioSchedule(input: {
@@ -233,7 +264,13 @@ export class TimelineWebAudioPreviewEngine {
         const constant = context.createGain();
         const fadeIn = context.createGain();
         const fadeOut = context.createGain();
-        constant.gain.value = scheduled.event.gain;
+        const automation = volumeAutomation(scheduled.event, safeFrom);
+        if (automation.length === 0) constant.gain.value = scheduled.event.gain;
+        for (const [index, point] of automation.entries()) {
+          const at = contextStartSec + Math.max(0, point.timelineSec - safeFrom);
+          if (index === 0) constant.gain.setValueAtTime(point.value, at);
+          else constant.gain.linearRampToValueAtTime(point.value, at);
+        }
         constant.connect(fadeIn);
         fadeIn.connect(fadeOut);
         fadeOut.connect(this.masterGain!);

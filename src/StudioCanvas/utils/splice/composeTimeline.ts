@@ -1,3 +1,4 @@
+import type { NumericKeyframe } from '@continuum/contracts';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import {
   type ClipEffectSpec,
@@ -84,6 +85,8 @@ export type TimelineAudioRenderItem = {
   volume?: number;
   fadeInSec?: number;
   fadeOutSec?: number;
+  /** `audio.volume` keyframes, clip-local seconds (a ducked music bed). */
+  volumeKeyframes?: NumericKeyframe[];
 };
 
 export type ComposeTimelineOptions = {
@@ -144,6 +147,7 @@ export type PreparedTimelineAudio = {
   gain: number;
   fadeInSec: number;
   fadeOutSec: number;
+  volumeKeyframes?: NumericKeyframe[];
 };
 
 export function buildAudioBedPlanItems(items: PreparedTimelineAudio[]): AudioPlanItem[] {
@@ -156,6 +160,7 @@ export function buildAudioBedPlanItems(items: PreparedTimelineAudio[]): AudioPla
     gain: item.gain,
     fadeInSec: item.fadeInSec,
     fadeOutSec: item.fadeOutSec,
+    ...(item.volumeKeyframes?.length ? { volumeKeyframes: item.volumeKeyframes } : {}),
   }));
 }
 
@@ -427,6 +432,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
         gain: typeof bed.volume === 'number' && bed.volume >= 0 ? bed.volume : 1,
         fadeInSec: Math.max(0, bed.fadeInSec ?? 0),
         fadeOutSec: Math.max(0, bed.fadeOutSec ?? 0),
+        ...(bed.volumeKeyframes?.length ? { volumeKeyframes: bed.volumeKeyframes } : {}),
       });
     }
     const compositeOverlays: CompositeOverlays | undefined =

@@ -494,6 +494,29 @@ describe('timeline editor client render executor', () => {
               volume: 0.6,
               fadeInSec: 0.25,
               fadeOutSec: 0.5,
+              keyframes: [
+                {
+                  id: 'duck-0',
+                  property: 'audio.volume',
+                  timeSec: 1,
+                  value: 0.6,
+                  interpolation: 'linear',
+                },
+                {
+                  id: 'duck-1',
+                  property: 'audio.volume',
+                  timeSec: 1.15,
+                  value: 0.15,
+                  interpolation: 'linear',
+                },
+                {
+                  id: 'pan',
+                  property: 'audio.pan',
+                  timeSec: 0,
+                  value: 0.5,
+                  interpolation: 'linear',
+                },
+              ],
             },
           ],
         },
@@ -602,6 +625,11 @@ describe('timeline editor client render executor', () => {
       volume: 0.6,
       fadeInSec: 0.25,
       fadeOutSec: 0.5,
+      // Ducking rides as the clip's audio.volume keys, clip-local; other audio keys do not.
+      volumeKeyframes: [
+        { timeSec: 1, value: 0.6, interpolation: 'linear' },
+        { timeSec: 1.15, value: 0.15, interpolation: 'linear' },
+      ],
     });
     expect(plan.captionCues.map((cue) => cue.id)).toEqual(['caption:hook', 'text:cta']);
     expect(plan.captionCues[1]?.style).toMatchObject({

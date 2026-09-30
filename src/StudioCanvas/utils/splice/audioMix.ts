@@ -1,3 +1,4 @@
+import { type NumericKeyframe, sampleNumericTrack } from '@continuum/contracts';
 import { throwIfAborted } from './appendRange';
 
 // PCM mixdown for the Video Editor (timelineEditor) render. The old audio path
@@ -65,19 +66,38 @@ export interface EnvelopeOptions {
   gain?: number;
   fadeInSec?: number;
   fadeOutSec?: number;
+  /** `audio.volume` keyframes, clip-local seconds; when present they ARE the gain
+   *  (the clip's volume outside them), sampled like every other keyed property. */
+  volumeKeyframes?: readonly NumericKeyframe[];
 }
 
-// Apply constant gain plus linear fade-in/out envelopes in place. Overlapping
-// clips fade complementarily over a cross-dissolve window, so summation produces a
-// constant-power-ish crossfade.
+/** Frames between two samples of a keyed gain curve; the gain is linear in between. */
+const GAIN_CONTROL_FRAMES = 128;
+
+// Apply the gain (constant, or its keyframed curve) plus linear fade-in/out envelopes in
+// place. Overlapping clips fade complementarily over a cross-dissolve window, so
+// summation produces a constant-power-ish crossfade.
 export function applyEnvelope(pcm: StereoPcm, opts: EnvelopeOptions): void {
   const gain = opts.gain ?? 1;
   const n = pcm.left.length;
   if (n === 0) return;
   const fadeIn = Math.min(n, Math.round(Math.max(0, opts.fadeInSec ?? 0) * AUDIO_SAMPLE_RATE));
   const fadeOut = Math.min(n, Math.round(Math.max(0, opts.fadeOutSec ?? 0) * AUDIO_SAMPLE_RATE));
+  const keys = opts.volumeKeyframes?.length ? opts.volumeKeyframes : null;
+  const keyedGain = (frame: number) =>
+    keys ? Math.max(0, sampleNumericTrack(keys, frame / AUDIO_SAMPLE_RATE, gain)) : gain;
+  let fromGain = gain;
+  let toGain = gain;
   for (let i = 0; i < n; i += 1) {
     let g = gain;
+    if (keys) {
+      const step = i % GAIN_CONTROL_FRAMES;
+      if (step === 0) {
+        fromGain = keyedGain(i);
+        toGain = keyedGain(i + GAIN_CONTROL_FRAMES);
+      }
+      g = fromGain + ((toGain - fromGain) * step) / GAIN_CONTROL_FRAMES;
+    }
     if (fadeIn > 0 && i < fadeIn) g *= i / fadeIn;
     if (fadeOut > 0 && i >= n - fadeOut) g *= Math.max(0, n - 1 - i) / fadeOut;
     pcm.left[i] *= g;
@@ -139,6 +159,7 @@ export interface AudioPlanItem {
   gain: number;
   fadeInSec: number;
   fadeOutSec: number;
+  volumeKeyframes?: readonly NumericKeyframe[];
 }
 
 export async function decodeClipPcm(
@@ -203,7 +224,12 @@ export async function mixdownTimelineAudio(
     );
     if (!decoded) continue;
     const pcm = resampleToStereo48k(decoded.channels, decoded.sampleRate, item.speed);
-    applyEnvelope(pcm, { gain: item.gain, fadeInSec: item.fadeInSec, fadeOutSec: item.fadeOutSec });
+    applyEnvelope(pcm, {
+      gain: item.gain,
+      fadeInSec: item.fadeInSec,
+      fadeOutSec: item.fadeOutSec,
+      ...(item.volumeKeyframes ? { volumeKeyframes: item.volumeKeyframes } : {}),
+    });
     mixInto(master, pcm, item.outputStartSec * AUDIO_SAMPLE_RATE);
   }
   clampStereo(master);

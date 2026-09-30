@@ -1,3 +1,5 @@
+import type { EditorKeyframe, NumericKeyframe } from '@continuum/contracts';
+
 export interface TimelineAudioEnvelopeInput {
   gain?: number;
   manualFadeInSec?: number;
@@ -26,4 +28,22 @@ export function resolveTimelineAudioEnvelope(
     fadeInSec: Math.max(0, input.manualFadeInSec ?? 0, input.transitionFadeInSec ?? 0),
     fadeOutSec: Math.max(0, input.manualFadeOutSec ?? 0, input.transitionFadeOutSec ?? 0),
   };
+}
+
+/** A clip's `audio.volume` keyframes as the numeric track the mixers sample (clip-local
+ *  seconds; the value is the clip's gain at that time). */
+export function volumeKeyframesOf(keyframes: readonly EditorKeyframe[]): NumericKeyframe[] {
+  return keyframes.flatMap((keyframe) =>
+    keyframe.property === 'audio.volume' && typeof keyframe.value === 'number'
+      ? [
+          {
+            timeSec: keyframe.timeSec,
+            value: keyframe.value,
+            interpolation: keyframe.interpolation,
+            ...(keyframe.easing ? { easing: keyframe.easing } : {}),
+            ...(keyframe.spring ? { spring: { bounce: keyframe.spring.bounce } } : {}),
+          },
+        ]
+      : [],
+  );
 }

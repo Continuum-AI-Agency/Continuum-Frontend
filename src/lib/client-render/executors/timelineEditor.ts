@@ -22,6 +22,7 @@ import type {
 import type { ClipTransition } from '@/StudioCanvas/utils/render/transitions';
 import { overlapInSecFor } from '@/StudioCanvas/utils/render/transitions';
 import { type CaptionCue, wordsForCaptionText } from '@/StudioCanvas/utils/splice/captionCues';
+import { volumeKeyframesOf } from '@/StudioCanvas/utils/splice/timelineAudioEnvelope';
 import { runTimelineInWorker } from '@/StudioCanvas/workers/spliceWorkerClient';
 import type {
   TimelineAudioWorkerItem,
@@ -695,17 +696,21 @@ export async function buildTimelineEditorRenderPlan(input: {
       .filter((track) => track.enabled && !track.muted)
       .flatMap((track) => track.clips)
       .filter((clip) => clip.enabled && !clip.muted)
-      .map(async (clip) => ({
-        itemId: clip.id,
-        blob: await blobFor(clip.id),
-        startSec: clip.timelineStartSec,
-        trimStartSec: clip.sourceInSec,
-        trimEndSec: clip.sourceInSec + clip.durationSec * clip.playbackRate,
-        speed: clip.playbackRate,
-        volume: clip.volume,
-        fadeInSec: clip.fadeInSec,
-        fadeOutSec: clip.fadeOutSec,
-      })),
+      .map(async (clip) => {
+        const volumeKeyframes = volumeKeyframesOf(clip.keyframes);
+        return {
+          itemId: clip.id,
+          blob: await blobFor(clip.id),
+          startSec: clip.timelineStartSec,
+          trimStartSec: clip.sourceInSec,
+          trimEndSec: clip.sourceInSec + clip.durationSec * clip.playbackRate,
+          speed: clip.playbackRate,
+          volume: clip.volume,
+          fadeInSec: clip.fadeInSec,
+          fadeOutSec: clip.fadeOutSec,
+          ...(volumeKeyframes.length > 0 ? { volumeKeyframes } : {}),
+        };
+      }),
   );
 
   const captionCues: CaptionCue[] = [];

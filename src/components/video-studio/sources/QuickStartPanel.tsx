@@ -1,6 +1,9 @@
 'use client';
 
 import {
+  conceptLengthRule,
+  HEADLESS_CONCEPTS,
+  type HeadlessGrammar,
   PLATFORM_EXPORT_PRESETS,
   type PlatformExportPresetId,
   type VideoEditorOpOutput,
@@ -8,6 +11,7 @@ import {
   type VideoEditorQuickStart,
 } from '@continuum/contracts';
 import {
+  CircleDollarSign,
   Clapperboard,
   Film,
   ImagePlus,
@@ -31,7 +35,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Select,
   SelectContent,
@@ -46,12 +52,16 @@ import type { VideoStudioContext } from '../types';
 import { useEditorPool } from './GraphPoolPanel';
 import { formatDuration, POOL_CHANGED_EVENT, PoolAssetCard } from './PoolAssetCard';
 import {
+  conceptById,
+  conceptUpperUsd,
   generateRequest,
+  MUSIC_MOODS,
   QUICK_START_CARDS,
   type QuickStartCard,
   type QuickStartForm,
   referenceImages,
   refsFromSelection,
+  VOICE_PRESETS,
 } from './quickStarts';
 
 const CARD_ICON: Record<VideoEditorQuickStart, typeof ImagePlus> = {
@@ -264,6 +274,7 @@ function QuickStartDialog({
 }): React.ReactNode {
   const stills = referenceImages(pool);
   const projectPreset = studio.project.exportSettings.presetId;
+  const timelineSec = studio.project.durationSec;
   const [refs, setRefs] = useState<QuickStartForm['refs']>(() =>
     refsFromSelection(card, studio.project, studio.selection, pool),
   );
@@ -272,8 +283,20 @@ function QuickStartDialog({
     projectPreset && projectPreset in PLATFORM_EXPORT_PRESETS ? projectPreset : PROJECT_FORMAT,
   );
   const [place, setPlace] = useState(true);
+  const [voice, setVoice] = useState('');
+  // The field shows the timeline's length; left as shown, the bed follows the timeline.
+  const [timelineLength] = useState(() =>
+    timelineSec >= 1 ? String(Math.round(timelineSec * 10) / 10) : '',
+  );
+  const [length, setLength] = useState(timelineLength);
+  const [duck, setDuck] = useState(true);
+  const [concept, setConcept] = useState<HeadlessGrammar | undefined>();
+  const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const chosenConcept = conceptById(concept);
+  const upperUsd = chosenConcept ? conceptUpperUsd(chosenConcept) : null;
+  const placeAtSec = place ? (card.placeFrom === 'start' ? 0 : studio.playheadSec) : null;
 
   const request = useMemo(
     () =>
@@ -281,9 +304,13 @@ function QuickStartDialog({
         refs,
         prompt,
         ...(format === PROJECT_FORMAT ? {} : { preset: format as PlatformExportPresetId }),
-        placeAtSec: place ? studio.playheadSec : null,
+        placeAtSec,
+        voice,
+        ...(length.trim() && length !== timelineLength ? { durationSec: Number(length) } : {}),
+        duck,
+        ...(concept ? { concept } : {}),
       }),
-    [card, refs, prompt, format, place, studio.playheadSec],
+    [card, refs, prompt, format, placeAtSec, voice, length, timelineLength, duck, concept],
   );
   const titles: Record<string, string> = Object.fromEntries([
     [NONE, 'None'],
@@ -296,16 +323,33 @@ function QuickStartDialog({
       `${preset.label} (${preset.width}×${preset.height})`,
     ]),
   ]);
+  const paid = card.id === 'headless_concept';
+  const start = () => {
+    if (!request.ok) return;
+    if (paid && !confirming) {
+      setConfirming(true);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    onStart(request.input, placeAtSec).catch((cause: unknown) => {
+      setError(cause instanceof Error ? cause.message : 'Could not start the generation.');
+      setBusy(false);
+    });
+  };
 
   return (
     <Dialog open onOpenChange={(open) => (open ? undefined : onClose())}>
-      <DialogContent className="max-w-md" data-testid="quick-start-dialog">
+      <DialogContent
+        className="max-h-[90vh] max-w-md overflow-y-auto"
+        data-testid="quick-start-dialog"
+      >
         <DialogHeader>
           <DialogTitle>{card.label}</DialogTitle>
           <DialogDescription>{card.description}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          {stills.length === 0 ? (
+          {card.slots.length > 0 && stills.length === 0 ? (
             <p className="rounded-md border border-dashed p-2 text-2xs text-muted-foreground">
               No stills in this edit's pool yet. Wire images into the Video Editor node on the
               canvas, or make one with Create Image.
@@ -344,40 +388,131 @@ function QuickStartDialog({
               </Select>
             </div>
           ))}
+          {card.id === 'headless_concept' ? (
+            <ConceptPicker
+              value={concept}
+              onChange={(next) => {
+                setConcept(next);
+                setConfirming(false);
+              }}
+            />
+          ) : null}
+          {card.id === 'music_bed' ? (
+            <PresetChips
+              label="Moods"
+              presets={MUSIC_MOODS.map((mood) => ({
+                key: mood.id,
+                label: mood.label,
+                value: mood.prompt,
+              }))}
+              current={prompt}
+              onPick={setPrompt}
+              dataAttribute="data-music-mood"
+            />
+          ) : null}
           <div className="space-y-1">
             <Label htmlFor="quick-start-prompt" className="text-xs">
-              Prompt{card.promptRequired ? <span className="text-destructive"> *</span> : null}
+              {card.promptLabel ?? 'Prompt'}
+              {card.promptRequired ? <span className="text-destructive"> *</span> : null}
             </Label>
             <Textarea
               id="quick-start-prompt"
               value={prompt}
-              rows={3}
+              rows={card.id === 'voiceover' ? 4 : 3}
               placeholder={card.promptPlaceholder}
               className="text-xs"
               onChange={(event) => setPrompt(event.target.value)}
             />
           </div>
-          <div className="grid grid-cols-[7rem_1fr] items-center gap-2">
-            <Label className="text-xs">Format</Label>
-            <Select value={format} onValueChange={setFormat}>
-              <SelectTrigger size="sm" className="w-full text-xs" aria-label="Format">
-                <SelectValue items={formats} />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(formats).map(([id, label]) => (
-                  <SelectItem key={id} value={id} className="text-xs">
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {card.id === 'voiceover' ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="quick-start-voice" className="text-xs">
+                Voice and delivery
+              </Label>
+              <Input
+                id="quick-start-voice"
+                inputSize="sm"
+                value={voice}
+                placeholder="Warm, confident, Mexican Spanish"
+                className="text-xs"
+                onChange={(event) => setVoice(event.target.value)}
+              />
+              <PresetChips
+                label="Voices"
+                presets={VOICE_PRESETS.map((preset) => ({
+                  key: preset,
+                  label: preset,
+                  value: preset,
+                }))}
+                current={voice}
+                onPick={setVoice}
+                dataAttribute="data-voice-preset"
+              />
+            </div>
+          ) : null}
+          {card.id === 'music_bed' ? (
+            <>
+              <div className="grid grid-cols-[7rem_1fr] items-center gap-2">
+                <Label htmlFor="quick-start-length" className="text-xs">
+                  Length (s)
+                </Label>
+                <Input
+                  id="quick-start-length"
+                  type="number"
+                  inputSize="sm"
+                  min={1}
+                  max={600}
+                  step={0.5}
+                  value={length}
+                  placeholder="Timeline length"
+                  className="text-xs"
+                  onChange={(event) => setLength(event.target.value)}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="quick-start-duck" className="text-xs">
+                  Duck under speech
+                </Label>
+                <Switch id="quick-start-duck" size="sm" checked={duck} onCheckedChange={setDuck} />
+              </div>
+            </>
+          ) : null}
+          {card.output === 'audio' ? null : (
+            <div className="grid grid-cols-[7rem_1fr] items-center gap-2">
+              <Label className="text-xs">Format</Label>
+              <Select value={format} onValueChange={setFormat}>
+                <SelectTrigger size="sm" className="w-full text-xs" aria-label="Format">
+                  <SelectValue items={formats} />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(formats).map(([id, label]) => (
+                    <SelectItem key={id} value={id} className="text-xs">
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="flex items-center justify-between gap-2">
             <Label htmlFor="quick-start-place" className="text-xs">
-              Place at playhead ({formatDuration(studio.playheadSec)})
+              {card.placeFrom === 'start'
+                ? 'Lay it under the edit from 0:00'
+                : `Place at playhead (${formatDuration(studio.playheadSec)})`}
             </Label>
             <Switch id="quick-start-place" size="sm" checked={place} onCheckedChange={setPlace} />
           </div>
+          {paid ? (
+            <p
+              className="flex gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-2xs"
+              data-testid="concept-cost"
+            >
+              <CircleDollarSign className="size-3.5 shrink-0 text-amber-600" />
+              {chosenConcept && upperUsd !== null
+                ? `Up to $${upperUsd}: ${chosenConcept.beats.length} generated shots at up to $${upperUsd / chosenConcept.beats.length} each. A music bed or a voiceover costs cents.`
+                : 'A concept reel generates several video shots: dollars, where a music bed or a voiceover costs cents.'}
+            </p>
+          ) : null}
           {error ? <p className="text-2xs text-destructive">{error}</p> : null}
         </div>
         <DialogFooter>
@@ -387,26 +522,96 @@ function QuickStartDialog({
           <Button variant="ghost" size="sm" onClick={onClose}>
             Cancel
           </Button>
-          <Button
-            size="sm"
-            disabled={!request.ok || busy}
-            onClick={() => {
-              if (!request.ok) return;
-              setBusy(true);
-              setError(null);
-              onStart(request.input, place ? studio.playheadSec : null).catch((cause: unknown) => {
-                setError(
-                  cause instanceof Error ? cause.message : 'Could not start the generation.',
-                );
-                setBusy(false);
-              });
-            }}
-          >
+          <Button size="sm" disabled={!request.ok || busy} onClick={start}>
             {busy ? <Spinner className="mr-1 size-3" /> : null}
-            Generate
+            {paid
+              ? confirming
+                ? `Confirm, spend up to $${upperUsd}`
+                : 'Generate reel'
+              : 'Generate'}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function PresetChips({
+  label,
+  presets,
+  current,
+  onPick,
+  dataAttribute,
+}: {
+  label: string;
+  presets: { key: string; label: string; value: string }[];
+  current: string;
+  onPick: (value: string) => void;
+  dataAttribute: 'data-music-mood' | 'data-voice-preset';
+}): React.ReactNode {
+  return (
+    <fieldset className="flex flex-wrap gap-1" aria-label={label}>
+      {presets.map((preset) => (
+        <Button
+          key={preset.key}
+          type="button"
+          size="xs"
+          variant={current === preset.value ? 'secondary' : 'outline'}
+          aria-pressed={current === preset.value}
+          className="text-2xs"
+          {...{ [dataAttribute]: preset.key }}
+          onClick={() => onPick(preset.value)}
+        >
+          {preset.label}
+        </Button>
+      ))}
+    </fieldset>
+  );
+}
+
+/** The headless concept catalog: what each reel is, and when it is the right one. */
+function ConceptPicker({
+  value,
+  onChange,
+}: {
+  value: HeadlessGrammar | undefined;
+  onChange: (value: HeadlessGrammar) => void;
+}): React.ReactNode {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs">
+        Concept<span className="text-destructive"> *</span>
+      </Label>
+      <RadioGroup
+        aria-label="Concept"
+        value={value ?? null}
+        onValueChange={(next) => onChange(next as HeadlessGrammar)}
+        className="max-h-72 gap-1.5 overflow-y-auto pr-1"
+        data-testid="concept-catalog"
+      >
+        {HEADLESS_CONCEPTS.map((concept) => (
+          <Label
+            key={concept.id}
+            data-concept={concept.id}
+            className="flex cursor-pointer items-start gap-2 rounded-md border border-border/60 p-2 font-normal has-data-checked:border-primary/60 has-data-checked:bg-primary/5"
+          >
+            <RadioGroupItem value={concept.id} className="mt-0.5" />
+            <span className="min-w-0 space-y-0.5">
+              <span className="flex items-baseline justify-between gap-2 text-xs font-medium">
+                {concept.label}
+                <span className="text-3xs font-normal text-muted-foreground">
+                  {conceptLengthRule(concept)}
+                </span>
+              </span>
+              <span className="block text-2xs text-muted-foreground">{concept.summary}</span>
+              <span className="block text-2xs">
+                <span className="font-medium">When: </span>
+                {concept.whenToUse}
+              </span>
+            </span>
+          </Label>
+        ))}
+      </RadioGroup>
+    </div>
   );
 }
