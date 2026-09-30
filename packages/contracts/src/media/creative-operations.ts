@@ -47,7 +47,7 @@ export const registerGeneratedAssetOperationSchema = z
   .object({
     action: z.literal('register_generated_asset'),
     brandId: z.string().uuid(),
-    kind: z.enum(['image', 'video', 'file']),
+    kind: z.enum(['image', 'video', 'file', 'audio']),
     bucket: z.string().min(1).max(100),
     storagePath: z.string().min(1).max(1024),
     fileName: z.string().min(1).max(255),
