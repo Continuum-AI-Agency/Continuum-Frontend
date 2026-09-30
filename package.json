@@ -96,6 +96,7 @@
     "videoeditor:e2e:bench": "playwright test e2e/video-editor-playback.spec.ts --workers=1",
     "videoeditor:render:e2e:bench": "playwright test --config=playwright.browser-render.config.ts e2e/video-editor-v2-render.spec.ts --workers=1",
     "videoeditor:ui:e2e:bench": "playwright test --config=playwright.browser-render.config.ts e2e/video-editor-v2-ui.spec.ts --workers=1",
+    "video-editor:e2e:bench": "BENCH_SINK=library playwright test --config=playwright.browser-render.config.ts e2e/video-editor-journey.spec.ts --workers=1",
     "videoeditor:workspace:e2e:bench": "BENCH_SINK=library playwright test --config=playwright.browser-render.config.ts e2e/video-editor-workspace.spec.ts --workers=1",
     "videoeditor:v2:e2e:bench": "playwright test --config=playwright.browser-render.config.ts e2e/video-editor-v2-ui.spec.ts e2e/video-editor-v2-render.spec.ts --workers=1",
     "flow:components:e2e:bench": "playwright test --config=playwright.browser-render.config.ts e2e/flow-components.bench.spec.ts --workers=1",
