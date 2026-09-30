@@ -238,14 +238,7 @@ export type VideoEditorDraftVariant = z.infer<typeof videoEditorDraftVariantSche
 
 // ── The ops ────────────────────────────────────────────────────────────────────────────
 
-export type VideoEditorOpGroup =
-  | 'see'
-  | 'edit'
-  | 'quick'
-  | 'motion'
-  | 'draft'
-  | 'ship'
-  | 'sources';
+export type VideoEditorOpGroup = 'see' | 'edit' | 'quick' | 'motion' | 'draft' | 'ship' | 'sources';
 
 type OpSpec = {
   group: VideoEditorOpGroup;
@@ -522,7 +515,7 @@ export const VIDEO_EDITOR_OPS = {
         text: z.string().min(1).max(500),
         secondaryText: z.string().min(1).max(300).optional(),
         startSec: secSchema,
-        durationSec: z.number().min(0.1).max(60).default(3),
+        durationSec: z.number().min(0.1).max(60).optional(),
         animationIn: textAnimationIdSchema.optional(),
         animationOut: textAnimationIdSchema.optional(),
         style: z
@@ -588,12 +581,13 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      'Put a transition between a clip and the next clip on its track (crossfade, dip to black or white, wipe, slide, zoom, blur); type cut removes it. Transitions render on the main video track.',
+      'Put a transition between fromClipId and the next clip on the main video track (crossfade, dip to black or white, wipe, slide, zoom); type cut removes it. blur is not available yet. all=true instead joins EVERY neighbouring pair of the main track with that type and length, leaving pairs too short for it as cuts — "crossfade between the clips" is one call with all=true.',
     input: z
       .object({
         ...projectRef,
-        fromClipId: z.string().min(1),
+        fromClipId: z.string().min(1).optional(),
         toClipId: z.string().min(1).optional(),
+        all: z.boolean().default(false),
         type: z.enum([
           'cut',
           'crossfade',
@@ -607,7 +601,12 @@ export const VIDEO_EDITOR_OPS = {
         durationSec: z.number().min(0.05).max(3).default(0.5),
       })
       .strict(),
-    output: committed({ transitionId: z.string().nullable() }),
+    output: committed({
+      /** The transition placed (with all=true, the first one), or null for a cut. */
+      transitionId: z.string().nullable(),
+      /** With all=true: how many boundaries were joined. */
+      transitions: z.number().int().nonnegative().optional(),
+    }),
   },
   apply_effect: {
     group: 'motion',

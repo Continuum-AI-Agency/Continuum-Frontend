@@ -114,7 +114,11 @@ describe('looks and templates', () => {
         secondaryText: 'Coach',
         startSec: 1,
       }),
-    ).toMatchObject({ kind: 'title', durationSec: 3 });
+    ).toMatchObject({ kind: 'title' });
+    // No default length: the op takes the template's own (lower_third holds 4 s).
+    expect(
+      VIDEO_EDITOR_OPS.add_text.input.parse({ projectId, text: 'Hi', startSec: 0 }).durationSec,
+    ).toBeUndefined();
     expect(
       VIDEO_EDITOR_OPS.animate_clip.input.parse({ projectId, clipId: 'c', preset: 'pop' }),
     ).toMatchObject({ preset: 'pop' });
@@ -124,7 +128,10 @@ describe('looks and templates', () => {
         fromClipId: 'a',
         type: 'crossfade',
       }),
-    ).toMatchObject({ durationSec: 0.5 });
+    ).toMatchObject({ durationSec: 0.5, all: false });
+    expect(
+      VIDEO_EDITOR_OPS.add_transition.input.parse({ projectId, all: true, type: 'crossfade' }),
+    ).toMatchObject({ all: true, durationSec: 0.5 });
     expect(
       VIDEO_EDITOR_OPS.apply_effect.input.parse({ projectId, clipId: 'c', effect: 'vhs' }),
     ).toMatchObject({ strength: 0.6, remove: false });
