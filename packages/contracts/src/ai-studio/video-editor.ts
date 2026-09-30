@@ -15,6 +15,7 @@ import {
   editorMarkerSchema,
   editorProjectV2Schema,
 } from './editor-project-v2';
+import { headlessGrammarSchema } from '../headless-content/grammar';
 import {
   clipMotionPresetIdSchema,
   lookEffectIdSchema,
@@ -131,7 +132,9 @@ export const VIDEO_EDITOR_CAPTION_STYLES = [
 export const videoEditorCaptionStyleSchema = z.enum(VIDEO_EDITOR_CAPTION_STYLES);
 export type VideoEditorCaptionStyle = z.infer<typeof videoEditorCaptionStyleSchema>;
 
-/** StyleFrame-style quick starts, each served by a generator the canvas already has. */
+/** StyleFrame-style quick starts, each served by a generator the product already has: images
+ * and clips (canvas generators), a music bed (Lyria), a voiceover (Gemini TTS), and a reel
+ * made from a headless content concept. */
 export const VIDEO_EDITOR_QUICK_STARTS = [
   'create_image',
   'restyle_image',
@@ -139,6 +142,9 @@ export const VIDEO_EDITOR_QUICK_STARTS = [
   'storyboard_to_video',
   'keyframes_to_video',
   'rotate_360',
+  'music_bed',
+  'voiceover',
+  'headless_concept',
 ] as const;
 export const videoEditorQuickStartSchema = z.enum(VIDEO_EDITOR_QUICK_STARTS);
 export type VideoEditorQuickStart = z.infer<typeof videoEditorQuickStartSchema>;
@@ -747,7 +753,7 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      'Generate an image or clip from a quick start (create/restyle/edit image, storyboard or keyframes to video, 360 rotation) using reference assets, optionally placing the result on the timeline. Poll generate_status.',
+      'Generate media from a quick start and optionally place it on the timeline; poll generate_status. Pictures and clips: create/restyle/edit image, storyboard or keyframes to video, 360 rotation (reference assets in refs). music_bed: an instrumental bed from prompt (mood, genre, tempo) on an audio track, as long as the timeline unless durationSec, ducked under speech unless duck=false. voiceover: prompt is the exact script to speak, voice the delivery (e.g. "warm, confident, Mexican Spanish"), placed on an audio track at place.atSec. headless_concept: a finished reel of the brand\'s approved cast made from concept (street-interview, pov, unpopular-opinion, problem-solution…) with prompt as the angle, placed as video.',
     input: z
       .object({
         ...projectRef,
@@ -768,6 +774,14 @@ export const VIDEO_EDITOR_OPS = {
           .default([]),
         preset: platformExportPresetIdSchema.optional(),
         place: z.object({ atSec: secSchema, trackId: z.string().optional() }).strict().optional(),
+        /** voiceover: how it is spoken — voice, accent, pace, mood. */
+        voice: z.string().max(300).optional(),
+        /** music_bed: length in seconds; the timeline's length when absent. */
+        durationSec: z.number().min(1).max(600).optional(),
+        /** headless_concept: which concept makes the reel. */
+        concept: headlessGrammarSchema.optional(),
+        /** music_bed: dip under speech on the timeline. */
+        duck: z.boolean().default(true),
       })
       .strict(),
     output: z.object({ jobId: z.string(), state: jobStateSchema }).strict(),

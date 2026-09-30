@@ -9,8 +9,11 @@ import {
 } from '@continuum/contracts';
 import {
   Clapperboard,
+  Film,
   ImagePlus,
   Images,
+  Mic,
+  Music,
   Palette,
   Rotate3d,
   TriangleAlert,
@@ -58,6 +61,9 @@ const CARD_ICON: Record<VideoEditorQuickStart, typeof ImagePlus> = {
   storyboard_to_video: Clapperboard,
   keyframes_to_video: Images,
   rotate_360: Rotate3d,
+  music_bed: Music,
+  voiceover: Mic,
+  headless_concept: Film,
 };
 
 const POLL_MS = 3_000;
