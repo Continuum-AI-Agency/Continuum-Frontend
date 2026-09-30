@@ -58,3 +58,32 @@ describe('the words Slack and the UI both say', () => {
     );
   });
 });
+
+describe('a text the Live kit found not to fit', () => {
+  const misfit = {
+    comp: null,
+    slots: [
+      {
+        key: 'cargo_empresa',
+        state: 'clipped',
+        subject: 'text',
+        why: 'runs 38 px past Panel',
+      },
+    ],
+    escalate: false,
+    why: '1 text does not fit (cargo_empresa)',
+  };
+
+  test('is a fail before any judge, and a judge pass cannot overrule it', () => {
+    expect(renderCheckOf({ fit: misfit, judge: null })).toBe('fail');
+    expect(renderCheckOf({ fit: misfit, judge: { state: 'pass' } })).toBe('fail');
+    expect(renderCheckWords({ fit: misfit, judge: null })).toBe(
+      'Checked: text does not fit — cargo_empresa',
+    );
+  });
+
+  test('a predicted media clip is still an estimate, never a fail on its own', () => {
+    const media = { ...misfit, slots: [{ ...misfit.slots[0], subject: 'media' }] };
+    expect(renderCheckOf({ fit: media, judge: null })).toBe('pass');
+  });
+});

@@ -144,7 +144,7 @@ describe('coverage of neighbouring rows', () => {
   });
 });
 
-describe('the escalation rule is what makes the judge automatic', () => {
+describe('only what the pixels alone can answer goes to the judge', () => {
   const ok = swap(1089, 980);
   const clipped = swap(500, 1400);
   const unknown = checkAssetSwap({ key: 'x', placement: null, asset: { w: 1, h: 1 } });
@@ -156,18 +156,25 @@ describe('the escalation rule is what makes the judge automatic', () => {
     expect(report.why).toContain('does not need a judge');
   });
 
-  test('a predicted clip is escalated so the pixels can confirm it', () => {
+  test('a predicted clip is answered — shown at pick time, never judged', () => {
+    // Production 2026-09-29: the judge confirmed none of 61 predicted media clips.
     const report = planFitCheck({ comp, slots: [ok, clipped] });
-    expect(report.escalate).toBe(true);
+    expect(report.escalate).toBe(false);
     expect(report.why).toContain('1 slot would clip');
   });
 
-  test('anything unmeasurable is escalated — that is the whole point of unknown', () => {
+  test('a repairable gap is named for a re-parse, not sent to a judge', () => {
     const report = planFitCheck({ comp, slots: [ok, unknown] });
-    expect(report.escalate).toBe(true);
+    expect(report.escalate).toBe(false);
     // Assert the machine-readable fact, not the sentence: a message reworded later must not
-    // silently green this test while the escalation itself breaks.
+    // silently green this test while the gap itself goes unsaid.
     expect(report.repairable).toEqual(['x']);
+  });
+
+  test('a slot with no asset pinned renders the template’s own and is not judged', () => {
+    const unpinned = checkAssetSwap({ key: 'y', placement: null, asset: null });
+    expect(unpinned.unknownReason).toBe('unpinned');
+    expect(planFitCheck({ comp, slots: [ok, unpinned] }).escalate).toBe(false);
   });
 
   test('a rig-placed slot escalates but is NEVER offered as repairable', () => {
@@ -221,10 +228,10 @@ describe('the escalation rule is what makes the judge automatic', () => {
     expect(report.repairable).toEqual([]);
   });
 
-  test('a template with no media slots needs nothing', () => {
+  test('a template with nothing to place needs nothing', () => {
     const report = planFitCheck({ comp: null, slots: [] });
     expect(report.escalate).toBe(false);
-    expect(report.why).toContain('no media slots');
+    expect(report.why).toContain('nothing to place');
   });
 });
 
