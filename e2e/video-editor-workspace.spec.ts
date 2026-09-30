@@ -120,6 +120,22 @@ async function dropFile(page: Page, target: Locator, bytes: Buffer, name: string
   await target.dispatchEvent('drop', { dataTransfer: transfer });
 }
 
+/**
+ * The first footage a page places offers the First-cut Brief (a modal). This journey is
+ * not about first cuts, so it closes the offer — and reports whether it came.
+ */
+async function dismissBriefOffer(page: Page): Promise<boolean> {
+  const brief = page.getByRole('dialog', { name: 'First cut' });
+  try {
+    await brief.waitFor({ state: 'visible', timeout: 30_000 });
+  } catch {
+    return false;
+  }
+  await page.keyboard.press('Escape');
+  await brief.waitFor({ state: 'hidden', timeout: 10_000 });
+  return true;
+}
+
 test(BENCH, async ({ browser }) => {
   const sinkLibrary = process.env.BENCH_SINK === 'library';
   if (!check('Library sink enabled for the upload hop', sinkLibrary, 'BENCH_SINK=library')) {
@@ -257,6 +273,10 @@ test(BENCH, async ({ browser }) => {
       'the clip is as long as the probed source',
       Boolean(dropped && Math.abs(dropped.durationSec - sourceSec) < 0.15),
       `clip ${dropped?.durationSec.toFixed(3)} s vs source ${sourceSec.toFixed(3)} s`,
+    );
+    check(
+      'the first drop offers the First-cut Brief, and it closes (this bench is not about first cuts)',
+      await dismissBriefOffer(page),
     );
 
     // ── trim by dragging the end handle ───────────────────────────────────────────────
