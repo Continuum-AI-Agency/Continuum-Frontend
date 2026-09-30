@@ -95,6 +95,7 @@
     "videoeditor:ui:e2e:bench": "playwright test --config=playwright.browser-render.config.ts e2e/video-editor-v2-ui.spec.ts --workers=1",
     "video-editor:e2e:bench": "BENCH_SINK=library node e2e/video-editor-journey/run.mjs",
     "videoeditor:workspace:e2e:bench": "BENCH_SINK=library playwright test --config=playwright.browser-render.config.ts e2e/video-editor-workspace.spec.ts --workers=1",
+    "videoeditor:first-cut:e2e:bench": "BENCH_SINK=library playwright test --config=playwright.browser-render.config.ts e2e/video-editor-first-cut.spec.ts --workers=1",
     "videoeditor:v2:e2e:bench": "playwright test --config=playwright.browser-render.config.ts e2e/video-editor-v2-ui.spec.ts e2e/video-editor-v2-render.spec.ts --workers=1",
     "flow:components:e2e:bench": "playwright test --config=playwright.browser-render.config.ts e2e/flow-components.bench.spec.ts --workers=1",
     "planner:status:e2e:bench": "set -a; . ./.env.local; set +a; PLANNER_STATUS_BENCH_BACKEND_PORT=4409 NEXT_PUBLIC_API_URL=http://127.0.0.1:4409 API_URL=http://127.0.0.1:4409 PORT=3109 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3109 NEXT_DIST_DIR=.next/planner-status-e2e NEXT_TSCONFIG_PATH=tsconfig.e2e.json playwright test e2e/organic-planner-status.spec.ts --workers=1",

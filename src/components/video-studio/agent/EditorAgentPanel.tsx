@@ -35,6 +35,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { streamVideoEditorAgent } from '@/lib/api/videoEditorAgent.client';
 import { cn } from '@/lib/utils';
+import { hasFootage } from '../brief/briefGoals';
 import type { VideoStudioContext } from '../types';
 import {
   applyFrame,
@@ -52,6 +53,12 @@ const SUGGESTIONS = [
   { label: 'Cut on beat', prompt: 'Cut the picture to the beat of the music.' },
   { label: 'Make it TikTok', prompt: 'Make it TikTok.' },
 ] as const;
+
+/** Offered while the timeline has footage and no brief — the fastest way to a first cut. */
+const FIRST_CUT_SUGGESTION = {
+  label: 'First cut: 3 variants',
+  prompt: 'Draft a first cut from this footage: 3 variants, 30 s each, with captions.',
+} as const;
 
 const HISTORY_TURNS = 10;
 const humanize = (op: string) => op.replaceAll('_', ' ');
@@ -86,7 +93,14 @@ function ToolChips({ tools }: { tools: ToolChip[] }) {
 
 // The in-editor agent chat (right dock): a streaming turn per prompt whose edits are
 // committed revisions — the timeline refetches on every `project_revision` frame.
-export function EditorAgentPanel({ studio }: { studio: VideoStudioContext }): React.ReactNode {
+export function EditorAgentPanel({
+  studio,
+  onRunningChange,
+}: {
+  studio: VideoStudioContext;
+  /** Told when a turn starts and ends (and false on unmount, which aborts the turn). */
+  onRunningChange?: (running: boolean) => void;
+}): React.ReactNode {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState('');
   const [mentions, setMentions] = useState<Mention[]>([]);
@@ -95,6 +109,10 @@ export function EditorAgentPanel({ studio }: { studio: VideoStudioContext }): Re
   const abortRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const running = turns.at(-1)?.status === 'running';
+  useEffect(() => {
+    onRunningChange?.(running);
+    return () => onRunningChange?.(false);
+  }, [onRunningChange, running]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -267,7 +285,10 @@ export function EditorAgentPanel({ studio }: { studio: VideoStudioContext }): Re
 
       <div className="flex flex-col gap-2 border-t p-3">
         <Suggestions>
-          {SUGGESTIONS.map((suggestion) => (
+          {(!studio.project.brief && hasFootage(studio.project)
+            ? [FIRST_CUT_SUGGESTION, ...SUGGESTIONS]
+            : SUGGESTIONS
+          ).map((suggestion) => (
             <Suggestion
               key={suggestion.label}
               suggestion={suggestion.prompt}

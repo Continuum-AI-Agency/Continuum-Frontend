@@ -19,6 +19,7 @@ import {
   Download,
   Music,
   Redo2,
+  Sparkles,
   Undo2,
   Waves,
 } from 'lucide-react';
@@ -32,10 +33,19 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import { Spinner } from '@/components/ui/spinner';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { EditorAgentPanel } from '@/components/video-studio/agent/EditorAgentPanel';
+import { BriefDialog, type BriefSeed } from '@/components/video-studio/brief/BriefDialog';
+import {
+  briefOffered,
+  placesAsset,
+  placesFirstFootage,
+  rememberBriefOffered,
+} from '@/components/video-studio/brief/briefGoals';
+import { VariantSwitcher } from '@/components/video-studio/brief/VariantSwitcher';
 import { ExportDialog } from '@/components/video-studio/export/ExportDialog';
 import { GraphPoolPanel } from '@/components/video-studio/sources/GraphPoolPanel';
 import { QuickStartPanel } from '@/components/video-studio/sources/QuickStartPanel';
@@ -100,6 +110,12 @@ const acceptsDrag = (event: React.DragEvent) =>
 /** ⌘C copies clips only when clips are selected and no text is — text copy stays native. */
 const hasTextSelection = () => (window.getSelection()?.toString() ?? '').length > 0;
 
+/** Any open dialog — ⌘K, Export, a Library picker — outranks the Brief offering itself. */
+const aDialogIsOpen = () =>
+  document.querySelector(
+    '[data-slot="dialog-content"], [data-slot="alert-dialog-content"], [data-slot="sheet-content"]',
+  ) !== null;
+
 /**
  * Edit mode: CapCut's layout over the durable project. Media | Graph | Generate on the
  * left, the stage in the middle, Inspector | Agent on the right, the timeline below.
@@ -133,6 +149,10 @@ export function EditWorkspace({
   const [rightTab, setRightTab] = useState('inspector');
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [briefOpen, setBriefOpen] = useState(false);
+  const [briefSeed, setBriefSeed] = useState<BriefSeed | null>(null);
+  const [variantsRead, setVariantsRead] = useState(0);
+  const [draftRunning, setDraftRunning] = useState(false);
   const [importing, setImporting] = useState<ImportInFlight[]>([]);
   const [imported, setImported] = useState<VideoEditorPoolAsset[]>([]);
   const [sourceDurations, setSourceDurations] = useState<ReadonlyMap<string, number>>(new Map());
@@ -152,6 +172,28 @@ export function EditWorkspace({
       return kept.length === current.length ? current : kept;
     });
   }, [project]);
+
+  const openBrief = useCallback((seed: BriefSeed | null = null) => {
+    setBriefSeed(seed);
+    setBriefOpen(true);
+  }, []);
+  // The first footage THIS page places (drop, recording, Library import) offers the Brief,
+  // once per project, as soon as the placed clip is on screen — but never over another
+  // dialog or a running agent turn. Clips that arrive over realtime never set `offerFor`.
+  const offerFor = useRef<string | null>(null);
+  const agentRunning = useRef(false);
+  const onAgentRunning = useCallback((running: boolean) => {
+    agentRunning.current = running;
+  }, []);
+  useEffect(() => {
+    const assetId = offerFor.current;
+    if (!assetId || !placesAsset(project, assetId)) return;
+    offerFor.current = null;
+    if (project.brief || briefOffered(project.projectId)) return;
+    if (agentRunning.current || aDialogIsOpen()) return;
+    rememberBriefOffered(project.projectId);
+    openBrief();
+  }, [openBrief, project]);
 
   // Source lengths bound trim handles; probe each asset once off its preview URL.
   useEffect(() => {
@@ -192,6 +234,7 @@ export function EditWorkspace({
   const addAsset = useCallback(
     (asset: VideoEditorPoolAsset, at?: { atSec?: number; trackId?: string; newTrack?: boolean }) =>
       apply((current) => {
+        if (placesFirstFootage(current, asset)) offerFor.current = asset.assetId;
         const atSec = at?.atSec ?? store.getSec();
         if (!at?.newTrack) return placeAssetEdit(current, asset, { atSec, trackId: at?.trackId });
         const add = addTrackDraft(current, laneKindForAsset(asset));
@@ -331,7 +374,7 @@ export function EditWorkspace({
     [apply, deleteClips, redo, store, undo],
   );
   useTimelineKeymap({
-    enabled: !paletteOpen && !exportOpen,
+    enabled: !paletteOpen && !exportOpen && !briefOpen,
     getPlayheadSec: store.getSec,
     totalSec: project.durationSec,
     onSeek: store.seek,
@@ -436,6 +479,14 @@ export function EditWorkspace({
     },
     [urls],
   );
+  const onDrafted = useCallback(() => setVariantsRead((count) => count + 1), []);
+  const redraft = useCallback(
+    (variants: number) => {
+      const brief = projectRef.current.brief;
+      if (brief) openBrief({ ...brief, variants });
+    },
+    [openBrief],
+  );
   const onImportFiles = useCallback((files: File[]) => importFiles(files), [importFiles]);
   const onAddAsset = useCallback(
     (asset: VideoEditorPoolAsset, options?: { newTrack?: boolean }) =>
@@ -523,6 +574,7 @@ export function EditWorkspace({
       {
         heading: 'Project',
         actions: [
+          { id: 'first-cut', label: 'First cut from a brief…', run: () => openBrief() },
           { id: 'export', label: 'Export…', disabled: !canExport, run: () => setExportOpen(true) },
           { id: 'agent', label: 'Ask the agent', run: () => setRightTab('agent') },
           { id: 'generate', label: 'Generate media', run: () => setLeftTab('generate') },
@@ -543,6 +595,7 @@ export function EditWorkspace({
     hasSelection,
     onAddTrack,
     onOpenProduction,
+    openBrief,
     productionAvailable,
     setFormat,
     shortcuts,
@@ -687,7 +740,32 @@ export function EditWorkspace({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+        <VariantSwitcher
+          studio={studio}
+          origin={origin}
+          reloadKey={variantsRead}
+          onRedraft={redraft}
+        />
         <div className="ml-auto flex items-center gap-2">
+          {draftRunning ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 gap-1.5 text-xs"
+              data-testid="draft-running"
+              onClick={() => setBriefOpen(true)}
+            >
+              <Spinner className="size-3.5" /> Drafting…
+            </Button>
+          ) : null}
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1 text-xs"
+            onClick={() => openBrief()}
+          >
+            <Sparkles className="size-3.5" /> First cut
+          </Button>
           {productionAvailable ? (
             <Button
               size="sm"
@@ -802,7 +880,7 @@ export function EditWorkspace({
                   />
                 </TabsContent>
                 <TabsContent value="agent" className="min-h-0 flex-1">
-                  <AgentPanel studio={studio} />
+                  <AgentPanel studio={studio} onRunningChange={onAgentRunning} />
                 </TabsContent>
               </Tabs>
             </ResizablePanel>
@@ -832,6 +910,16 @@ export function EditWorkspace({
       </ResizablePanelGroup>
 
       <ExportDialog studio={studio} open={exportOpen} onOpenChange={setExportOpen} />
+      <BriefDialog
+        studio={studio}
+        open={briefOpen}
+        onOpenChange={setBriefOpen}
+        sources={sources}
+        seed={briefSeed}
+        origin={origin}
+        onDrafted={onDrafted}
+        onRunningChange={setDraftRunning}
+      />
       <Palette open={paletteOpen} onOpenChange={setPaletteOpen} groups={paletteGroups} />
     </div>
   );
