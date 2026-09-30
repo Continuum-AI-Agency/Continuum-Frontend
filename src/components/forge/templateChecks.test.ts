@@ -247,10 +247,10 @@ describe('templateChecks', () => {
     }
   });
 
-  test('PUBLISH: a key alone waits for live worker and contract verification', () => {
+  test('PUBLISH: a key shows publication while live worker verification is pending', () => {
     expect(row({ templateKey: '133' }, 'publish')).toMatchObject({
-      state: 'running',
-      result: 'Checking the worker graph and layout…',
+      state: 'pass',
+      result: 'Published · checking the worker graph and layout…',
     });
     expect(row({ templateKey: '133', publishCheckFailed: true }, 'publish')).toMatchObject({
       state: 'warn',

@@ -200,7 +200,7 @@ function publishCheck(input: TemplateChecksInput, state: string | null): Templat
   const base = {
     id: 'publish' as const,
     name: 'Publish',
-    what: 'Checks the worker AEP pointer, displayed contract, and measured media boxes.',
+    what: 'Publishes the template, then checks its worker graph and media boxes.',
   };
   if (input.templateKey) {
     const check = input.publishVerification;
@@ -218,7 +218,7 @@ function publishCheck(input: TemplateChecksInput, state: string | null): Templat
           state: 'warn',
           result: 'Published, but the worker graph and layout could not be checked',
         }
-      : { ...base, state: 'running', result: 'Checking the worker graph and layout…' };
+      : { ...base, state: 'pass', result: 'Published · checking the worker graph and layout…' };
   }
   if (state === 'promoting') return { ...base, state: 'running', result: 'Publishing…' };
   return {
