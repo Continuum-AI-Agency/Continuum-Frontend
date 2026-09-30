@@ -70,7 +70,10 @@ async function waitFor(
   throw new Error(`${what} did not come up within ${timeoutMs / 1000}s; see ${log}`);
 }
 
-export async function bootBackend(allowedOrigin: string): Promise<Server> {
+export async function bootBackend(
+  allowedOrigin: string,
+  env: Record<string, string> = {},
+): Promise<Server> {
   const port = await freePort();
   const nonce = `video-workspace-${randomUUID().slice(0, 8)}`;
   const { child, log, stop } = launch(
@@ -90,6 +93,7 @@ export async function bootBackend(allowedOrigin: string): Promise<Server> {
       BRAND_REPORT_JOB_WORKER_ENABLED: 'false',
       PREVIEW_RECONCILER_DISABLED: 'true',
       CHAT_REPORT_DELIVERER_ENABLED: 'false',
+      ...env,
     },
     'backend',
   );
@@ -107,7 +111,11 @@ export async function bootBackend(allowedOrigin: string): Promise<Server> {
   return { url, log, stop };
 }
 
-export async function bootFrontend(port: number, backendUrl: string): Promise<Server> {
+export async function bootFrontend(
+  port: number,
+  backendUrl: string,
+  distDir = '.next/video-workspace-e2e',
+): Promise<Server> {
   const { child, log, stop } = launch(
     'bun',
     ['run', 'dev'],
@@ -115,7 +123,7 @@ export async function bootFrontend(port: number, backendUrl: string): Promise<Se
     {
       ...process.env,
       PORT: String(port),
-      NEXT_DIST_DIR: '.next/video-workspace-e2e',
+      NEXT_DIST_DIR: distDir,
       NEXT_TSCONFIG_PATH: 'tsconfig.e2e.json',
       NEXT_PUBLIC_API_URL: backendUrl,
       API_URL: backendUrl,
