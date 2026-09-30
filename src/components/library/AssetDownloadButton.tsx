@@ -7,10 +7,17 @@
 //
 // It downloads STORED bytes through signed reads — the original via
 // `downloadLibraryAsset`, a playback proxy by its own signed URL. Nothing here
-// re-renders, re-encodes or re-generates. The one exception is "Download still",
-// which encodes the frame already decoded on the detail stage.
+// re-renders or re-generates. Video stills encode the frame on stage; PSD PNG/JPEG
+// exports save the exact source version's composite as a new Library image.
 
-import type { MediaAsset } from '@continuum/contracts';
+import {
+  type MediaAsset,
+  PSD_STATIC_EXPORT_ROUTE,
+  type PsdStaticExportResponse,
+  type PsdStaticFormat,
+  psdStaticExportRequestSchema,
+  psdStaticExportResponseSchema,
+} from '@continuum/contracts';
 import { Download, Loader2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -22,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useToastContext } from '@/components/ui/ToastProvider';
+import { http } from '@/lib/api/http';
 import { downloadLibraryAsset } from '@/lib/library/assetDownload';
 import { useLibraryPlayback } from '@/lib/library/libraryPlayback';
 import { activeStageVideo, downloadVideoStill } from '@/lib/library/videoPoster';
@@ -98,6 +106,21 @@ export function AssetDownloadButton({
   const downloadOriginal = () =>
     run(() => downloadLibraryAsset({ brandId, assetId: asset.id, fileName, versionId }));
 
+  const downloadPsd = (format: PsdStaticFormat) =>
+    run(async () => {
+      const exported = await http.request<PsdStaticExportResponse>({
+        path: PSD_STATIC_EXPORT_ROUTE,
+        method: 'POST',
+        schema: psdStaticExportResponseSchema,
+        body: psdStaticExportRequestSchema.parse({ brandId, assetId: asset.id, versionId, format }),
+      });
+      saveSignedUrl(exported.signedUrl, exported.fileName);
+      toast?.show({
+        title: 'Saved to Library',
+        description: exported.fileName,
+        variant: 'success',
+      });
+    });
   const icon = busy ? (
     <Loader2 className="size-3.5 animate-spin" />
   ) : (
@@ -159,6 +182,25 @@ export function AssetDownloadButton({
         <DropdownMenuItem data-testid="download-original" onClick={() => void downloadOriginal()}>
           Original
         </DropdownMenuItem>
+        {/\.psd$/i.test(fileName) ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              data-testid="download-psd-png"
+              disabled={busy}
+              onClick={() => void downloadPsd('png')}
+            >
+              PNG · preserves transparency
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              data-testid="download-psd-jpeg"
+              disabled={busy}
+              onClick={() => void downloadPsd('jpeg')}
+            >
+              JPEG · white background
+            </DropdownMenuItem>
+          </>
+        ) : null}
         {rungs.length > 0 || audioProxy ? (
           <>
             <DropdownMenuSeparator />
