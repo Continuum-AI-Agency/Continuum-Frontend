@@ -25,7 +25,7 @@ export const formatDuration = (sec: number): string =>
     : `${sec.toFixed(1)}s`;
 
 /** Playable bytes for the hover preview, signed only when someone actually hovers. */
-async function signAsset(brandId: string, assetId: string): Promise<string | null> {
+export async function signAsset(brandId: string, assetId: string): Promise<string | null> {
   const response = await fetch('/api/library/sign', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
