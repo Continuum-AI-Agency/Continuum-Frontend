@@ -5,16 +5,17 @@
 // the projection's writer); caption tracks reuse CaptionEditor through CaptionCue. Audio and
 // text clips are edited natively. Every change leaves as a TimelineEdit via timelineEdits.
 
-import type {
-  EditorAudioClip,
-  EditorCaptionClip,
-  EditorClip,
-  EditorOverlayClip,
-  EditorProjectV2,
-  EditorTextClip,
-  EditorTextStyle,
-  EditorTrack,
-  EditorVideoClip,
+import {
+  type EditorAudioClip,
+  type EditorCaptionClip,
+  type EditorClip,
+  type EditorOverlayClip,
+  type EditorProjectV2,
+  type EditorTextClip,
+  type EditorTextStyle,
+  type EditorTrack,
+  type EditorVideoClip,
+  editorClipAtSpeed,
 } from '@continuum/contracts';
 import { AlignCenter, AlignLeft, AlignRight, Loader2, Music, Type, Wand2, X } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -265,7 +266,9 @@ export function clipWithEffectSpec<T extends VisualClip>(
 ): T {
   const rate = clip.kind === 'video' ? clip.playbackRate : 1;
   const nextRate = clip.kind === 'video' ? speedFor(spec) : 1;
-  const durationSec = (clip.durationSec * rate) / nextRate;
+  const retimed =
+    clip.kind === 'video' && rate !== nextRate ? editorClipAtSpeed(clip, nextRate) : clip;
+  const durationSec = retimed.durationSec;
   const stretch = durationSec / clip.durationSec;
   const mapped = editorClipFieldsFromEffectSpec(clip.id, spec, durationSec);
   const base = spec.transform ?? {};
@@ -540,16 +543,7 @@ function AudioClipInspector({ project, clip, onEdit, onDeselect }: SectionProps<
   const { view, patch } = useClipDraft(project, clip, onEdit);
   const fadeMax = Math.min(5, view.durationSec);
   const setSpeed = (playbackRate: number) => {
-    const durationSec = (view.durationSec * view.playbackRate) / playbackRate;
-    patch(
-      {
-        playbackRate,
-        durationSec,
-        fadeInSec: Math.min(view.fadeInSec, durationSec),
-        fadeOutSec: Math.min(view.fadeOutSec, durationSec),
-      },
-      'Change speed',
-    );
+    patch(editorClipAtSpeed(view, playbackRate), 'Change speed');
   };
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto rounded-lg border border-border/60 p-3">
@@ -846,7 +840,7 @@ function captionStyleFromClip(
   return {
     presetId,
     textColor: style.color,
-    highlightColor: DEFAULT_CAPTION_STYLE.highlightColor,
+    highlightColor: clip.highlightColor ?? DEFAULT_CAPTION_STYLE.highlightColor,
     outlineColor: style.outlineColor ?? '#000000',
     fontFamily: style.fontFamily,
     fontWeight: style.fontWeight,
@@ -883,6 +877,7 @@ export function captionClipWithStyle(
       position: { x: resolved.position.xFrac, y: resolved.position.yFrac, unit: 'normalized' },
     },
     highlightMode: resolved.activeWordMode === 'none' ? 'none' : 'word',
+    highlightColor: resolved.highlightColor,
   };
 }
 

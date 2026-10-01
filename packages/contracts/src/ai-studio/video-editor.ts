@@ -7,6 +7,7 @@
 // or promises. Every time is in seconds on the OUTPUT timeline.
 
 import { z } from 'zod';
+import { headlessGrammarSchema } from '../headless-content/grammar';
 import {
   type EditorExportSettings,
   type EditorProjectV2,
@@ -15,7 +16,6 @@ import {
   editorMarkerSchema,
   editorProjectV2Schema,
 } from './editor-project-v2';
-import { headlessGrammarSchema } from '../headless-content/grammar';
 import {
   clipMotionPresetIdSchema,
   lookEffectIdSchema,
@@ -481,12 +481,79 @@ export const VIDEO_EDITOR_OPS = {
         highlight: z.enum(['none', 'word', 'karaoke']).default('word'),
         maxWordsPerLine: z.number().int().min(1).max(12).default(4),
         position: z.enum(['bottom', 'middle', 'top']).default('bottom'),
+        highlightColor: z
+          .string()
+          .regex(/^#[0-9a-fA-F]{6}$/)
+          .optional(),
       })
       .strict(),
     output: committed({
       words: z.number().int().nonnegative(),
       lines: z.number().int().nonnegative(),
     }),
+  },
+  set_speed: {
+    group: 'quick',
+    commits: true,
+    scope: 'project',
+    access: 'operate',
+    description:
+      'Change a video or audio clip to a constant playback rate, keeping its source span and scaling automation. Repack the main sequence and carry its captions and overlays with it. Reverse and speed ramps are not supported. One undo restores the edit.',
+    input: z
+      .object({
+        ...projectRef,
+        clipId: z.string().min(1),
+        rate: z.number().finite().min(0.05).max(20),
+        expectedRevision: z.number().int().nonnegative().optional(),
+      })
+      .strict(),
+    output: committed({ clipId: z.string(), playbackRate: z.number(), durationSec: secSchema }),
+  },
+  edit_caption_cues: {
+    group: 'quick',
+    commits: true,
+    scope: 'project',
+    access: 'operate',
+    description:
+      'Correct spelling in existing timed caption cues without regenerating captions or changing word timing, confidence or emphasis. Each replacement must have the same number of words. Get full project data for cue IDs first. All corrections commit together and undo together.',
+    input: z
+      .object({
+        ...projectRef,
+        expectedRevision: z.number().int().nonnegative().optional(),
+        cues: z
+          .array(
+            z
+              .object({ clipId: z.string().min(1), text: z.string().trim().min(1).max(5000) })
+              .strict(),
+          )
+          .min(1)
+          .max(200),
+      })
+      .strict(),
+    output: committed({ cues: z.number().int().positive() }),
+  },
+  get_composed_frame: {
+    group: 'see',
+    commits: false,
+    scope: 'project',
+    access: 'read',
+    description:
+      'See the actual composed timeline frame, including text, captions, overlays, transitions and looks. Use after visual edits to verify the result; get_frame reads source footage only.',
+    input: z
+      .object({
+        ...projectRef,
+        timeSec: secSchema,
+        maxWidth: z.number().int().min(64).max(1920).default(768),
+      })
+      .strict(),
+    output: z
+      .object({
+        mimeType: z.literal('image/png'),
+        base64: z.string().min(1),
+        timeSec: secSchema,
+        revision: z.number().int().nonnegative(),
+      })
+      .strict(),
   },
   set_format: {
     group: 'quick',

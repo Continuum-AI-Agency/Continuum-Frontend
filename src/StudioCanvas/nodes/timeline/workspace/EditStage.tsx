@@ -113,7 +113,8 @@ function captionFor(
     cue: { id: clip.id, startSec: clip.timelineStartSec, endSec: clipEnd(clip), words },
     style: {
       textColor: clip.style.color,
-      highlightColor: clip.highlightMode === 'none' ? clip.style.color : '#ffd400',
+      highlightColor:
+        clip.highlightMode === 'none' ? clip.style.color : (clip.highlightColor ?? '#ffd400'),
       outlineColor: clip.style.outlineColor ?? '#000000',
       fontFamily: clip.style.fontFamily,
       fontWeight: clip.style.fontWeight,

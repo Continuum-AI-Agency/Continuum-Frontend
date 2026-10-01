@@ -22,6 +22,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
+import { createBenchRecorder } from './support/benchRecorder';
 import type {
   EntranceSample,
   MotionRenderRun,
@@ -72,9 +73,23 @@ const describe = (boxes: readonly TextBox[]) =>
 test('the motion vocabulary renders in the real compositor, judged per frame', async ({
   browser,
 }) => {
+  const rec = createBenchRecorder('videoeditor:motion:render:bench', []);
   const bundle = buildBrowserBundle();
   const context = await browser.newContext();
   const page = await context.newPage();
+  await page.route('**/fonts/*', (route) =>
+    route.fulfill({
+      contentType: 'font/woff2',
+      body: readFileSync(
+        join(
+          process.cwd(),
+          'public',
+          'fonts',
+          new URL(route.request().url()).pathname.split('/').pop() ?? '',
+        ),
+      ),
+    }),
+  );
   await page.route('**/video-editor-motion-render-bench', (route) =>
     route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><body></body></html>' }),
   );
@@ -92,13 +107,33 @@ test('the motion vocabulary renders in the real compositor, judged per frame', a
   const entrances = (await page.evaluate(() =>
     window.__motionRenderBench.entrances(),
   )) as EntranceSample[];
+  const highlights = await page.evaluate(() => window.__motionRenderBench.highlights());
   await context.close();
 
   const lines: string[] = [];
   const check = (name: string, ok: boolean, detail: string) => {
+    rec.record(name, ok ? 'PASS' : 'FAIL', detail);
     lines.push(`${ok ? 'PASS' : 'FAIL'}  ${name} — ${detail}`);
     expect.soft(ok, `${name}: ${detail}`).toBe(true);
   };
+
+  check(
+    'persisted caption highlight colour renders for word and karaoke, and none disables it',
+    highlights.every(
+      (sample) =>
+        sample.yellow === 0 &&
+        (sample.highlightMode === 'none' ? sample.branded === 0 : sample.branded > 100),
+    ),
+    JSON.stringify(highlights),
+  );
+
+  check(
+    'composed snapshots match exported frames through text, transition and VHS',
+    [...control.snapshots, ...styled.snapshots].every(
+      (frame) => frame.meanRgbError <= 6 && frame.durationMs <= 10_000,
+    ),
+    JSON.stringify({ control: control.snapshots, styled: styled.snapshots }),
+  );
 
   check(
     'plan: 2 main clips, 5 text cues, a 7 s master',
@@ -277,6 +312,12 @@ test('the motion vocabulary renders in the real compositor, judged per frame', a
   lines.push(
     'NOT EXERCISED  server export of the new animations — Render /v1/timeline serves the compositor bundled into the Render image, which the owner must rebuild',
   );
+  rec.record(
+    'server export parity',
+    'SKIP',
+    'Run the server-export comparison separately; this run renders in the browser.',
+  );
+  rec.print();
   const passed = lines.filter((line) => line.startsWith('PASS')).length;
   const failed = lines.filter((line) => line.startsWith('FAIL')).length;
   console.log(

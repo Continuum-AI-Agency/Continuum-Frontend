@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import type { EditorCaptionClip, EditorTrack, EditorVideoClip } from '@continuum/contracts';
-import { captionCueDrafts, clipWithEffectSpec, inspectorSpecFor } from './WorkspaceInspector';
+import {
+  captionClipWithStyle,
+  captionCueDrafts,
+  clipWithEffectSpec,
+  inspectorSpecFor,
+} from './WorkspaceInspector';
 
 const clip: EditorVideoClip = {
   id: 'v1',
@@ -180,4 +185,37 @@ describe('caption cues → track drafts', () => {
     ]);
     expect(remove).toEqual({ commandType: 'remove_clip', trackId: 'captions', clipId: 'c3' });
   });
+});
+
+test('caption style edits persist their requested highlight colour', () => {
+  const caption = {
+    id: 'cue',
+    kind: 'caption',
+    highlightMode: 'word',
+    text: 'Hello',
+    timelineStartSec: 0,
+    durationSec: 1,
+    words: [],
+    style: {
+      fontFamily: 'Inter',
+      fontSizePx: 60,
+      color: '#ffffff',
+      fontWeight: 700,
+      outlineWidthPx: 0,
+    },
+    transform: { position: { x: 0.5, y: 0.8, unit: 'normalized' } },
+  } as unknown as EditorCaptionClip;
+  expect(
+    captionClipWithStyle(
+      caption,
+      {
+        textColor: '#ffffff',
+        highlightColor: '#20ff60',
+        outlineColor: '#000000',
+        fontSizeFrac: 0.055,
+        outlineWidthFrac: 0.18,
+      },
+      1920,
+    ).highlightColor,
+  ).toBe('#20ff60');
 });

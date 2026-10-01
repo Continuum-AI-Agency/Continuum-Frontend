@@ -517,6 +517,54 @@ test(BENCH, async ({ browser }) => {
         .join(' | ')}`,
     );
 
+    // The menus must issue a new edit; an existing Pop/VHS/crossfade is not proof.
+    for (const door of ['palette', 'context menu'] as const) {
+      for (const action of [
+        { group: 'Animate', label: 'Pop', palette: 'Animate: Pop', op: 'animate_clip' },
+        { group: 'Look', label: 'VHS', palette: 'Look: VHS', op: 'apply_effect' },
+        {
+          group: 'Transition',
+          label: 'Crossfade into next',
+          palette: 'Transition: Crossfade into next clip',
+          op: 'add_transition',
+        },
+      ]) {
+        await selectClip(page, clipA.id);
+        const beforeMenu = await getProject(api, projectId);
+        const response = page.waitForResponse(
+          (value) =>
+            value.request().method() === 'POST' && value.url().endsWith(`/ops/${action.op}`),
+        );
+        if (door === 'palette') {
+          await page.getByRole('button', { name: 'Command palette', exact: true }).click();
+          await page.getByPlaceholder('Search actions…').fill(action.palette);
+          await page.getByRole('option', { name: action.palette, exact: true }).click();
+        } else {
+          await page.locator(`[data-clip-id="${clipA.id}"]:visible`).click({ button: 'right' });
+          await page.getByRole('menuitem', { name: action.group, exact: true }).hover();
+          await page.getByRole('menuitem', { name: action.label, exact: true }).click();
+        }
+        const saved = await response;
+        project = await getProject(api, projectId);
+        const updated = clipById(project, clipA.id);
+        const matches =
+          action.op === 'animate_clip'
+            ? keyframesOf(updated).some((key) => key.property === 'transform.scaleX')
+            : action.op === 'apply_effect'
+              ? updated &&
+                'effects' in updated &&
+                updated.effects.some((effect) => effect.effectId === 'vhs')
+              : project.transitions.some(
+                  (value) => value.fromClipId === clipA.id && value.transitionType === 'crossfade',
+                );
+        check(
+          `${door}: ${action.group} commits its requested edit`,
+          saved.ok() && project.revision === beforeMenu.revision + 1 && Boolean(matches),
+          `${saved.status()} · revision ${beforeMenu.revision} → ${project.revision}`,
+        );
+      }
+    }
+
     // ── an edit from OUTSIDE the page, live ───────────────────────────────────────────
     const outside = await postOp(api, projectId, 'add_text', {
       text: OUTSIDE_LINE,
@@ -554,7 +602,7 @@ test(BENCH, async ({ browser }) => {
       pageErrors.slice(0, 3).join(' | ') || 'none',
     );
     note(
-      'NOT EXERCISED here: export of the new animations (videoeditor:motion:render:bench and the Render hop), the ⌘K motion entries and context-menu Animate/Look/Transition submenus (same clipActions the seam and Inspector call; unit-tested), template drag onto the timeline (the click path is benched; the drag payload is unit-tested), spring easing.',
+      'NOT EXERCISED here: export of the new animations (videoeditor:motion:render:bench and the Render hop), template drag onto the timeline (the click path is benched; the drag payload is unit-tested), spring easing. Menu checks exercise Animate, Look and Transition through both doors; they do not cover every palette action.',
     );
     await context.close();
   } catch (error) {
