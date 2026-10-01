@@ -9,6 +9,8 @@ import type {
   RecommendationRow,
 } from '@continuum/contracts';
 import { GLOBAL_ANGLE_LABELS, type GlobalAngleId } from '@continuum/contracts';
+import { z } from 'zod';
+import type { EvidenceSeries } from './recQueueModel';
 
 export const CREATIVE_KINDS = new Set([
   'creative_refresh',
@@ -93,9 +95,20 @@ export function audienceWords(
 export type CreativeCardCopy = {
   /** What the card asks for, in one line. */
   headline: string;
+  /** The headline's first half: what is wrong (or right) with the creative today. */
+  problem: string;
+  /** The headline's second half: what to make. Null when the kind names no action. */
+  instruction: string | null;
   /** Why: winner or fatigue, in the engine's own terms. */
   because: 'winner' | 'fatigue' | 'variance' | 'drag' | 'other';
 };
+
+const copyOf = (
+  problem: string,
+  instruction: string | null,
+  because: CreativeCardCopy['because'],
+  headline = instruction ? `${problem} — ${instruction.toLowerCase()}` : problem,
+): CreativeCardCopy => ({ headline, problem, instruction, because });
 
 export function creativeCardCopy(
   rec: Pick<RecommendationRow, 'kind' | 'trigger' | 'seed'>,
@@ -103,31 +116,33 @@ export function creativeCardCopy(
   const rebuild = Boolean(seedOf(rec).rebuildCraft);
   switch (rec.kind) {
     case 'variate_creative':
-      return {
-        headline: rebuild
-          ? 'Keep the angle, rebuild the execution — the idea wins, the craft is losing ground'
-          : 'Make variations of this winner — hold what wins, vary the visual and the CTA',
-        because: 'winner',
-      };
+      return rebuild
+        ? copyOf(
+            'The idea wins, the craft is losing ground',
+            'Keep the angle, rebuild the execution',
+            'winner',
+            'Keep the angle, rebuild the execution — the idea wins, the craft is losing ground',
+          )
+        : copyOf(
+            'This creative is the ad set’s winner',
+            'Make variations of this winner — hold what wins, vary the visual and the CTA',
+            'winner',
+            'Make variations of this winner — hold what wins, vary the visual and the CTA',
+          );
     case 'seed_experiment':
-      return {
-        headline: 'Nothing to compare yet — add a second creative so this ad set can teach',
-        because: 'variance',
-      };
+      return copyOf(
+        'Nothing to compare yet',
+        'Add a second creative so this ad set can teach',
+        'variance',
+      );
     case 'creative_refresh':
-      return {
-        headline: rec.trigger.startsWith('C4')
-          ? 'This creative is wearing out against its own history — refresh it'
-          : 'Engagement is decaying while cost rises — refresh the creative',
-        because: 'fatigue',
-      };
+      return rec.trigger.startsWith('C4')
+        ? copyOf('This creative is wearing out against its own history', 'Refresh it', 'fatigue')
+        : copyOf('Engagement is decaying while cost rises', 'Refresh the creative', 'fatigue');
     case 'pause_ad':
-      return {
-        headline: 'This creative is burning the ad set — pause it',
-        because: 'drag',
-      };
+      return copyOf('This creative is burning the ad set', 'Pause it', 'drag');
     default:
-      return { headline: 'Creative recommendation', because: 'other' };
+      return copyOf('Creative recommendation', null, 'other');
   }
 }
 
@@ -227,4 +242,255 @@ export function standingChart(
     eligibleAds: standing.eligibleAds,
     totalAds: standing.totalAds,
   };
+}
+
+// ── The communication angle ─────────────────────────────────────────────────
+// `paid_media_get_ad_angles` returns each labelled ad's coarse hookArchetype as `angle`;
+// the closed-vocabulary keys (angle_id, angle_leaning, angle_leaning_share) arrive with a
+// later migration, so they are optional here and the card works with or without them.
+
+export const cardAdAngleSchema = z.object({
+  ad_id: z.string(),
+  adset_id: z.string(),
+  angle: z.string().nullable().optional(),
+  hook: z.string().nullable().optional(),
+  rationale: z.string().nullable().optional(),
+  themes: z.array(z.string()).nullable().optional(),
+  analyzed_at: z.string().nullable().optional(),
+  angle_id: z.string().nullable().optional(),
+  angle_leaning: z.string().nullable().optional(),
+  angle_leaning_share: z.number().min(0).max(1).nullable().optional(),
+});
+export type CardAdAngle = z.infer<typeof cardAdAngleSchema>;
+
+/** Row-wise: a malformed row is dropped, the rest still render. */
+export function parseCardAdAngles(data: unknown): CardAdAngle[] {
+  if (!Array.isArray(data)) return [];
+  const rows: CardAdAngle[] = [];
+  for (const raw of data) {
+    const parsed = cardAdAngleSchema.safeParse(raw);
+    if (parsed.success) rows.push(parsed.data);
+  }
+  return rows;
+}
+
+export type ResolvedAngle =
+  | { status: 'confirmed'; label: string }
+  | { status: 'leaning'; label: string; share: number | null }
+  | { status: 'none' };
+
+const NO_ANGLE: ResolvedAngle = { status: 'none' };
+
+const vocabularyLabel = (id: string | null | undefined): string | null =>
+  typeof id === 'string' && Object.hasOwn(GLOBAL_ANGLE_LABELS, id)
+    ? GLOBAL_ANGLE_LABELS[id as GlobalAngleId]
+    : null;
+
+function seedAngle(rec: Pick<RecommendationRow, 'seed'>): ResolvedAngle {
+  const confirmed = vocabularyLabel(seedOf(rec).angleId);
+  if (confirmed) return { status: 'confirmed', label: confirmed };
+  const words = angleWords(rec);
+  return words ? { status: 'leaning', label: words, share: null } : NO_ANGLE;
+}
+
+/** One ad's angle: confirmed id, then the classifier's leaning, then the coarse archetype
+ *  when it is a vocabulary key, then (with a rec) the legacy seed. */
+export function resolveAdAngle(
+  row: CardAdAngle | null,
+  rec: Pick<RecommendationRow, 'seed'> | null,
+): ResolvedAngle {
+  if (row) {
+    const confirmed = vocabularyLabel(row.angle_id);
+    if (confirmed) return { status: 'confirmed', label: confirmed };
+    const leaning = vocabularyLabel(row.angle_leaning);
+    if (leaning)
+      return { status: 'leaning', label: leaning, share: row.angle_leaning_share ?? null };
+    const coarse = vocabularyLabel(row.angle);
+    if (coarse) return { status: 'leaning', label: coarse, share: null };
+  }
+  return rec ? seedAngle(rec) : NO_ANGLE;
+}
+
+export function angleChipText(angle: ResolvedAngle): string {
+  switch (angle.status) {
+    case 'confirmed':
+      return angle.label;
+    case 'leaning':
+      return angle.share != null
+        ? `Leaning: ${angle.label} · ${Math.round(angle.share * 100)}%`
+        : `Leaning: ${angle.label}`;
+    default:
+      return 'Not classified yet';
+  }
+}
+
+export const angleAriaLabel = (angle: ResolvedAngle): string =>
+  `Communication angle: ${angleChipText(angle)}`;
+
+export type CardAngles = {
+  /** Each shown ad's own angle, in the order the card shows the ads. */
+  perAd: Map<string, ResolvedAngle>;
+  /** The angle most of the shown ads share; confirmed beats leaning on a tie. */
+  dominant: ResolvedAngle;
+  /** True when the shown ads do not share one angle. */
+  mixed: boolean;
+  /** The first shown ad's hook, quoted on the card. */
+  hook: string | null;
+};
+
+export function cardAngles(
+  rec: Pick<RecommendationRow, 'ad_id' | 'adset_id' | 'seed'>,
+  shownAds: readonly Pick<AdsetAd, 'id'>[],
+  rows: readonly CardAdAngle[],
+): CardAngles {
+  const subject = subjectAdId(rec);
+  const ids =
+    shownAds.length > 0
+      ? shownAds.map((ad) => ad.id)
+      : subject
+        ? [subject]
+        : rows.filter((row) => row.adset_id === rec.adset_id).map((row) => row.ad_id);
+  const byId = new Map(rows.map((row) => [row.ad_id, row]));
+  const perAd = new Map<string, ResolvedAngle>();
+  let hook: string | null = null;
+  for (const id of ids) {
+    const row = byId.get(id) ?? null;
+    perAd.set(id, resolveAdAngle(row, null));
+    if (hook === null) hook = str(row?.hook);
+  }
+  const tally = new Map<string, { angle: ResolvedAngle; count: number }>();
+  for (const angle of perAd.values()) {
+    if (angle.status === 'none') continue;
+    const entry = tally.get(angle.label);
+    if (!entry) tally.set(angle.label, { angle, count: 1 });
+    else {
+      entry.count += 1;
+      if (angle.status === 'confirmed') entry.angle = angle;
+    }
+  }
+  const ranked = [...tally.values()].sort(
+    (a, b) =>
+      b.count - a.count ||
+      Number(b.angle.status === 'confirmed') - Number(a.angle.status === 'confirmed'),
+  );
+  const seedHook = str(seedOf(rec).labels?.hook);
+  return {
+    perAd,
+    dominant: ranked[0]?.angle ?? seedAngle(rec),
+    mixed: ranked.length > 1,
+    hook: hook ?? seedHook,
+  };
+}
+
+// ── What's wearing out ──────────────────────────────────────────────────────
+// The evidence metric across 14, 7 and 3 days, drawn to scale (every bar against the largest
+// of the three) so a 29% drop looks like one. The worst recent window is flagged when it is
+// worse than the 14-day level, in the direction the metric goes bad.
+
+const LOWER_IS_WORSE = new Set(['ctr']);
+const HIGHER_IS_WORSE = new Set(['cpa', 'cpp', 'frequency']);
+
+const WINDOW_ORDER = [
+  ['14d', '14 days'],
+  ['7d', '7 days'],
+  ['3d', '3 days'],
+] as const;
+
+export type WearOutRow = {
+  label: (typeof WINDOW_ORDER)[number][1];
+  value: number;
+  /** 0–1 of the largest of the three windows. */
+  share: number;
+  /** The worst recent window, when it is worse than 14 days. */
+  flagged: boolean;
+  /** Percent change against the 14-day level; null for the 14-day row itself. */
+  changePct: number | null;
+};
+
+export type WearOut = {
+  metric: string;
+  unit: EvidenceSeries['unit'];
+  rows: WearOutRow[];
+  /** 0–1 position of the 14-day level on the same scale. */
+  baselineShare: number;
+  /** Cost per result, 3 days against 14 days, in percent; null when it is the metric drawn
+   *  or either window has no results. */
+  costChangePct: number | null;
+};
+
+type SnapshotWindows = { windows: Record<'d3' | 'd7' | 'd14', unknown> };
+
+const numberField = (window: unknown, field: string): number => {
+  const value =
+    window && typeof window === 'object' ? (window as Record<string, unknown>)[field] : null;
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+};
+
+function costPerResult(window: unknown, kpiField: string): number | null {
+  const events = numberField(window, kpiField);
+  return events > 0 ? numberField(window, 'spend') / events : null;
+}
+
+function costChange(snapshot: SnapshotWindows | null | undefined, kpiField: string): number | null {
+  if (!snapshot) return null;
+  const recent = costPerResult(snapshot.windows.d3, kpiField);
+  const baseline = costPerResult(snapshot.windows.d14, kpiField);
+  if (recent == null || baseline == null || baseline <= 0) return null;
+  return ((recent - baseline) / baseline) * 100;
+}
+
+export function wearOutComparison(
+  series: EvidenceSeries | null,
+  snapshot: SnapshotWindows | null | undefined,
+  kpiField: string,
+): WearOut | null {
+  if (!series) return null;
+  const valueOf = new Map(series.points.map((point) => [point.label, point.value]));
+  if (!WINDOW_ORDER.every(([key]) => valueOf.has(key))) return null;
+  const values = WINDOW_ORDER.map(([key]) => valueOf.get(key) ?? 0);
+  const max = Math.max(...values);
+  if (max <= 0) return null;
+  const baseline = values[0] ?? 0;
+  const badness = (value: number): number =>
+    LOWER_IS_WORSE.has(series.metric)
+      ? baseline - value
+      : HIGHER_IS_WORSE.has(series.metric)
+        ? value - baseline
+        : 0;
+  let worst: number | null = null;
+  for (let index = 1; index < values.length; index += 1) {
+    const amount = badness(values[index] ?? 0);
+    if (amount > 0 && (worst == null || amount > badness(values[worst] ?? 0))) worst = index;
+  }
+  const isCost = series.metric === 'cpa' || series.metric === 'cpp';
+  return {
+    metric: series.metric,
+    unit: series.unit,
+    rows: WINDOW_ORDER.map(([, label], index) => {
+      const value = values[index] ?? 0;
+      return {
+        label,
+        value,
+        share: value / max,
+        flagged: index === worst,
+        changePct: index === 0 || baseline <= 0 ? null : ((value - baseline) / baseline) * 100,
+      };
+    }),
+    baselineShare: baseline / max,
+    costChangePct: isCost ? null : costChange(snapshot, kpiField),
+  };
+}
+
+const METRIC_TITLE: Record<string, string> = {
+  ctr: 'CTR',
+  cpa: 'Cost per result',
+  cpp: 'Cost per result',
+};
+
+export const wearOutMetricTitle = (metric: string): string => METRIC_TITLE[metric] ?? metric;
+
+/** "+31%" / "−29%", rounded to whole percent. */
+export function signedPercent(pct: number): string {
+  const rounded = Math.round(pct);
+  return rounded > 0 ? `+${rounded}%` : rounded < 0 ? `−${Math.abs(rounded)}%` : '0%';
 }

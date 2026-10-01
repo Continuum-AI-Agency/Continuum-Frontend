@@ -1,18 +1,25 @@
 'use client';
 
-// A creative recommendation, as a creative decision reads: the creative on the left, the
-// argument in the middle (angle, audience, the numbers that raised it), and on the right
-// the flash creatives Creative+ makes from it — or the empty slots where they will land.
-// The image is resolved live from the ad set's ads (the stored poster URL is a signed Meta
-// CDN link that expires), so the card shows the creative as it is today.
+// A creative recommendation, read left to right: what is wearing out (the argument, drawn to
+// scale, with the creative and its communication angle) and what to make instead (the
+// instruction, the angle to keep, and the flash creatives Creative+ makes from it — or the
+// empty slots where they will land). Every line is data or fixed copy. The image is resolved
+// live from the ad set's ads (the stored poster URL is a signed Meta CDN link that expires),
+// so the card shows the creative as it is today.
 
-import type { AdsetAd, CreativeSwapJobRow, RecommendationRow } from '@continuum/contracts';
+import type {
+  AdSetSnapshot,
+  AdsetAd,
+  CreativeSwapJobRow,
+  RecommendationRow,
+} from '@continuum/contracts';
 import { readFlashJobResult } from '@continuum/contracts';
 import { ImageOffIcon, Loader2Icon, PencilIcon, SparklesIcon, UploadIcon } from 'lucide-react';
 import * as React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { usePaidCreativeRecovery } from '@/hooks/usePaidCreativeRecovery';
 import { useSignedAssetUrls } from '@/lib/ai-studio/elements';
 import { cn } from '@/lib/utils';
 import { formatCpa } from '../format';
@@ -20,16 +27,30 @@ import * as typeScale from '../typeScale';
 import { CreativeStandingBars } from './CreativeStandingBars';
 import {
   adImageUrl,
-  angleWords,
+  angleAriaLabel,
+  angleChipText,
   audienceWords,
+  cardAngles,
   creativeCardCopy,
   flashCreativesFor,
+  type ResolvedAngle,
   type StandingChart,
   SWAP_STATUS_LABEL,
+  signedPercent,
   subjectAds,
+  type WearOut,
+  wearOutComparison,
+  wearOutMetricTitle,
 } from './creativeCardModel';
 import type { ImplementTarget } from './flashCreativesModel';
-import { evidenceLine, impactLabel, queueHeadlineLine } from './recQueueModel';
+import {
+  evidenceLine,
+  evidenceSeries,
+  formatEvidenceValue,
+  impactLabel,
+  queueHeadlineLine,
+} from './recQueueModel';
+import { useAdAngles } from './useAdAngles';
 
 type CreativeRecommendationCardProps = {
   rec: RecommendationRow;
@@ -40,8 +61,14 @@ type CreativeRecommendationCardProps = {
   jobs: readonly CreativeSwapJobRow[];
   currency: string | null;
   brandId: string;
+  /** The ad account the subject ads live on — lets an expired thumbnail re-resolve. */
+  adAccountId?: string | null;
   /** The ad set's creative ranking, when the snapshot carries one. */
   standing: StandingChart | null;
+  /** The ad set's latest snapshot: the 3/7/14 day windows the wear-out comparison draws. */
+  snapshot?: AdSetSnapshot | null;
+  /** The portfolio's result field on a window ("leads", "purchases"). */
+  kpiField?: string;
   /** The objective's result, lower-cased: "purchases", "conversations". */
   resultWord: string;
   /** Ask Creative+ for variants of this recommendation. Null when the row cannot seed one. */
@@ -161,6 +188,159 @@ function ImplementMenu({
   );
 }
 
+/** A subject ad's thumbnail. The URL is a signed Meta CDN link that expires, so a failed (or
+ *  missing) image asks the creative-preview endpoint for a fresh one — the same recovery the
+ *  audience card takes — and shows a placeholder tile meanwhile, never alt text. */
+function SubjectAdThumb({
+  ad,
+  freshUrl,
+  onRecover,
+}: {
+  ad: AdsetAd;
+  freshUrl: string | null;
+  onRecover: (adId: string) => void;
+}) {
+  const stale = adImageUrl(ad);
+  const src = freshUrl ?? stale;
+  const [failedSrc, setFailedSrc] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!stale) onRecover(ad.id);
+  }, [ad.id, stale, onRecover]);
+  if (!src || failedSrc === src) {
+    return (
+      <div
+        className="flex aspect-square w-full items-center justify-center rounded-md border border-border/60 border-dashed"
+        data-testid="subject-ad-placeholder"
+      >
+        <ImageOffIcon className="size-4 text-muted-foreground" />
+      </div>
+    );
+  }
+  return (
+    // biome-ignore lint/performance/noImgElement: signed, expiring Meta CDN URL; next/image cannot proxy it.
+    <img
+      alt=""
+      className="aspect-square w-full rounded-md border border-border/60 object-cover"
+      loading="lazy"
+      onError={() => {
+        setFailedSrc(src);
+        onRecover(ad.id);
+      }}
+      referrerPolicy="no-referrer"
+      src={src}
+    />
+  );
+}
+
+const LEANING_NOTE =
+  'Below the classifier’s confidence bar, so this angle is a leaning and not confirmed.';
+
+function AngleChip({ angle }: { angle: ResolvedAngle }) {
+  const aria = angleAriaLabel(angle);
+  if (angle.status === 'none') {
+    return (
+      <span
+        aria-label={aria}
+        className="text-muted-foreground text-xs"
+        data-angle-status="none"
+        data-testid="angle-chip"
+        role="note"
+        title={aria}
+      >
+        {angleChipText(angle)}
+      </span>
+    );
+  }
+  return (
+    <span
+      aria-label={aria}
+      className={cn(
+        'inline-flex max-w-full items-center truncate rounded-full border px-2 py-0.5 text-xs',
+        angle.status === 'confirmed'
+          ? 'border-primary font-medium text-foreground'
+          : 'border-muted-foreground/50 border-dashed text-muted-foreground',
+      )}
+      data-angle-status={angle.status}
+      data-testid="angle-chip"
+      role="note"
+      title={angle.status === 'leaning' ? `${aria}. ${LEANING_NOTE}` : aria}
+    >
+      {angleChipText(angle)}
+    </span>
+  );
+}
+
+function WearOutBars({ chart, currency }: { chart: WearOut; currency: string | null }) {
+  const flagged = chart.rows.find((row) => row.flagged) ?? null;
+  return (
+    <figure className="space-y-1.5" data-testid="wear-out-bars">
+      <figcaption
+        className={`${typeScale.label} flex flex-wrap items-baseline justify-between gap-2 text-muted-foreground`}
+      >
+        <span>{wearOutMetricTitle(chart.metric)}</span>
+        {flagged?.changePct != null ? (
+          <span className="text-destructive normal-case tracking-normal">
+            {flagged.label} {signedPercent(flagged.changePct)} vs 14 days
+          </span>
+        ) : null}
+      </figcaption>
+      <ol className="space-y-1 tabular-nums">
+        {chart.rows.map((row) => (
+          <li
+            className="grid grid-cols-[4rem_minmax(0,1fr)_4.5rem] items-center gap-2 text-xs"
+            data-flagged={row.flagged ? 'true' : undefined}
+            key={row.label}
+          >
+            <span className="text-muted-foreground">{row.label}</span>
+            <span className="relative h-2.5 rounded-sm bg-muted/50">
+              <span
+                className={cn(
+                  'absolute inset-y-0 left-0 rounded-sm',
+                  row.flagged ? 'bg-destructive/70' : 'bg-primary/60',
+                )}
+                data-testid="wear-out-fill"
+                style={{ width: `${Math.max(1, row.share * 100)}%` }}
+              />
+              {row.flagged ? (
+                <span
+                  aria-hidden
+                  className="absolute -inset-y-0.5 w-0.5 -translate-x-1/2 bg-foreground"
+                  data-testid="wear-out-baseline"
+                  style={{ left: `${chart.baselineShare * 100}%` }}
+                  title="14-day level"
+                />
+              ) : null}
+            </span>
+            <span
+              className={cn(
+                'text-right font-semibold',
+                row.flagged ? 'text-destructive' : 'text-foreground',
+              )}
+            >
+              {formatEvidenceValue(chart.unit, row.value, currency)}
+            </span>
+          </li>
+        ))}
+      </ol>
+      {chart.costChangePct != null ? (
+        <p className="tabular-nums">
+          <span
+            className={cn(
+              'inline-flex rounded-full border px-2 py-0.5 text-xs',
+              chart.costChangePct > 0
+                ? 'border-destructive/50 text-destructive'
+                : 'border-border text-muted-foreground',
+            )}
+            data-testid="cost-change-chip"
+          >
+            cost per result {signedPercent(chart.costChangePct)}
+          </span>
+        </p>
+      ) : null}
+    </figure>
+  );
+}
+
 export function CreativeRecommendationCard({
   rec,
   adsetName,
@@ -170,7 +350,10 @@ export function CreativeRecommendationCard({
   jobs,
   currency,
   brandId,
+  adAccountId = null,
   standing,
+  snapshot = null,
+  kpiField = '',
   resultWord,
   onGenerate,
   generating,
@@ -181,214 +364,230 @@ export function CreativeRecommendationCard({
 }: CreativeRecommendationCardProps) {
   const copy = creativeCardCopy(rec);
   const subjects = subjectAds(rec, ads);
-  const angle = angleWords(rec);
+  const anglesQuery = useAdAngles(brandId, rec.adset_id);
+  const { freshUrlById, recover } = usePaidCreativeRecovery({ brandId, adAccountId });
+  const angles = cardAngles(rec, subjects, anglesQuery.data);
   const audience = audienceWords(rec, audienceType);
-  const evidence = queueHeadlineLine(rec, currency) ?? evidenceLine(rec.evidence, currency);
+  const reason =
+    queueHeadlineLine(rec, currency) ?? evidenceLine(rec.evidence, currency) ?? rec.reason;
   const money = impactLabel(rec, currency);
+  const wearOut = wearOutComparison(
+    evidenceSeries(rec.evidence, snapshot, kpiField),
+    snapshot,
+    kpiField,
+  );
   const slots = flashSlots(flashCreativesFor(rec, jobs));
   const signed = useSignedAssetUrls(
     brandId,
     slots.flatMap((slot) => (slot.assetId ? [slot.assetId] : [])),
   );
   const emptySlots = Math.max(0, FLASH_SLOTS - slots.length);
-
   const subjectBar = standing?.bars.find((bar) => bar.subject) ?? null;
+  const keepAngle =
+    angles.dominant.status !== 'none' && rec.kind !== 'pause_ad' ? angles.dominant : null;
 
   return (
-    <div
-      className="grid gap-6 md:grid-cols-[12rem_minmax(0,1fr)_minmax(18rem,24rem)]"
-      data-testid="creative-recommendation-card"
-    >
-      {/* Left — the creative in question */}
-      <section className="space-y-3">
-        <p className={`${typeScale.label} text-muted-foreground`}>
-          {copy.because === 'winner' ? 'The winner' : 'Creative to renew'}
-        </p>
-        {adsLoading && subjects.length === 0 ? (
-          <div className="aspect-square w-full max-w-44 animate-pulse rounded-lg bg-muted/40" />
-        ) : subjects.length === 0 ? (
-          <div className="flex aspect-square w-full max-w-44 flex-col items-center justify-center gap-2 rounded-lg border border-border/60 border-dashed p-4 text-center text-muted-foreground text-xs">
-            <ImageOffIcon className="size-4" /> No creative could be loaded for this ad set.
-          </div>
-        ) : (
-          <ul className="space-y-2">
-            {subjects.map((ad) => {
-              const src = adImageUrl(ad);
+    <div className="@container">
+      <div className="grid gap-4 @2xl:grid-cols-2" data-testid="creative-recommendation-card">
+        {/* Left — what is wearing out */}
+        <section
+          className="min-w-0 space-y-3 rounded-lg border border-border/60 bg-background p-4 text-xs"
+          data-testid="creative-card-problem"
+        >
+          <p className={`${typeScale.label} text-muted-foreground`}>
+            {copy.because === 'winner' ? 'What’s working' : 'What’s wearing out'}
+          </p>
+          <p className="text-foreground text-sm">
+            <span className="font-semibold">{copy.problem}.</span>
+            {reason ? <span className="text-muted-foreground"> {reason}</span> : null}
+            {money ? <span className="text-muted-foreground"> · {money}</span> : null}
+          </p>
+          {wearOut ? <WearOutBars chart={wearOut} currency={currency} /> : null}
+          {adsLoading && subjects.length === 0 ? (
+            <div className="size-20 animate-pulse rounded-lg bg-muted/40" />
+          ) : subjects.length === 0 ? (
+            <p className="flex items-center gap-2 text-muted-foreground text-xs">
+              <ImageOffIcon className="size-4" /> No creative could be loaded for this ad set.
+            </p>
+          ) : (
+            <ul className="flex flex-wrap gap-3">
+              {subjects.map((ad) => {
+                const own = angles.mixed ? (angles.perAd.get(ad.id) ?? null) : null;
+                return (
+                  <li className="w-20 space-y-1" key={ad.id}>
+                    <SubjectAdThumb
+                      ad={ad}
+                      freshUrl={freshUrlById[ad.id] ?? null}
+                      onRecover={recover}
+                    />
+                    <p className="truncate text-foreground text-xs" title={ad.name ?? ad.id}>
+                      {ad.name ?? ad.id}
+                    </p>
+                    {own ? <AngleChip angle={own} /> : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {subjectBar?.costPerEvent != null ? (
+            <p className="text-muted-foreground text-xs">
+              <span className="font-semibold text-base text-foreground tabular-nums">
+                {formatCpa(subjectBar.costPerEvent, currency)}
+              </span>{' '}
+              per {resultWord.replace(/s$/, '')} · {subjectBar.events} {resultWord}
+            </p>
+          ) : null}
+          <dl className="space-y-1.5">
+            <div className="flex items-center gap-2" data-testid="angle-row">
+              <dt className="w-20 shrink-0 text-muted-foreground text-xs">Angle</dt>
+              <dd className="min-w-0">
+                <AngleChip angle={angles.dominant} />
+              </dd>
+            </div>
+            {angles.hook ? (
+              <div className="flex items-baseline gap-2">
+                <dt className="w-20 shrink-0 text-muted-foreground text-xs">Hook</dt>
+                <dd className="min-w-0 text-foreground italic" data-testid="angle-hook">
+                  “{angles.hook}”
+                </dd>
+              </div>
+            ) : null}
+            <div className="flex items-baseline gap-2">
+              <dt className="w-20 shrink-0 text-muted-foreground text-xs">Audience</dt>
+              <dd className="min-w-0 text-foreground">
+                {audience ?? adsetName ?? (
+                  <span className="text-muted-foreground">this ad set</span>
+                )}
+              </dd>
+            </div>
+          </dl>
+          {standing ? (
+            <CreativeStandingBars chart={standing} currency={currency} resultWord={resultWord} />
+          ) : null}
+        </section>
+
+        {/* Right — what to make */}
+        <section
+          className="min-w-0 space-y-3 rounded-lg border border-border/60 bg-background p-4 text-xs"
+          data-testid="creative-card-prescription"
+        >
+          <p className={`${typeScale.label} text-muted-foreground`}>What to make</p>
+          <p className="font-semibold text-foreground text-sm">
+            {copy.instruction ?? copy.headline}
+          </p>
+          {keepAngle ? (
+            <p className="flex flex-wrap items-center gap-1.5 text-foreground">
+              Keep the angle: <AngleChip angle={keepAngle} />
+            </p>
+          ) : null}
+          <p className={`${typeScale.label} flex items-center gap-1.5 text-muted-foreground`}>
+            <SparklesIcon className="size-3.5" /> Flash creatives
+          </p>
+          <ul className="grid grid-cols-3 gap-2">
+            {slots.map((slot) => {
+              const src = slot.assetId ? signed[slot.assetId] : undefined;
+              const status = slot.job.status;
+              const ready = status === 'generated' && slot.assetId !== null;
+              const busy = implementingKey === slot.key;
               return (
-                <li className="w-full max-w-44" key={ad.id}>
+                <li
+                  className="flex flex-col gap-1.5 rounded-lg border border-border/70 bg-muted/20 p-2 text-xs"
+                  data-testid="flash-slot"
+                  key={slot.key}
+                  title={slot.job.id}
+                >
                   {src ? (
-                    // biome-ignore lint/performance/noImgElement: signed, expiring Meta CDN URL; next/image cannot proxy it.
+                    // biome-ignore lint/performance/noImgElement: signed, expiring storage URL; next/image cannot proxy it.
                     <img
-                      alt={ad.name ?? ad.id}
-                      className="aspect-square w-full rounded-lg border border-border/60 object-cover"
+                      alt="Flash creative"
+                      className="aspect-square w-full rounded object-cover"
                       loading="lazy"
-                      referrerPolicy="no-referrer"
                       src={src}
                     />
                   ) : (
-                    <div className="flex aspect-square w-full items-center justify-center rounded-lg border border-border/60 border-dashed">
-                      <ImageOffIcon className="size-4 text-muted-foreground" />
+                    <div className="flex aspect-square w-full items-center justify-center rounded border border-border/60 border-dashed">
+                      {status === 'queued' || status === 'generating' || status === 'publishing' ? (
+                        <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
+                      ) : (
+                        <ImageOffIcon className="size-4 text-muted-foreground" />
+                      )}
                     </div>
                   )}
-                  <p className="mt-2 truncate text-foreground text-xs" title={ad.name ?? ad.id}>
-                    {ad.name ?? ad.id}
-                  </p>
+                  <Badge
+                    className="w-fit text-xs"
+                    variant={
+                      status === 'published'
+                        ? 'success'
+                        : status === 'failed'
+                          ? 'destructive'
+                          : 'secondary'
+                    }
+                  >
+                    {SWAP_STATUS_LABEL[status] ?? status}
+                  </Badge>
+                  {slot.job.enqueued_via === 'autopilot' ? (
+                    <span className="text-muted-foreground text-xs">by autopilot</span>
+                  ) : null}
+                  {status === 'failed' && failureText(slot.job) ? (
+                    <p
+                      className="line-clamp-2 text-destructive"
+                      title={failureText(slot.job) ?? ''}
+                    >
+                      {failureText(slot.job)}
+                    </p>
+                  ) : null}
+                  <div className="flex flex-wrap items-center gap-1">
+                    {slot.roomId ? (
+                      <a
+                        className={cn(
+                          buttonVariants({ variant: 'secondary', size: 'sm' }),
+                          SLOT_BUTTON,
+                        )}
+                        href={`/ai-studio?roomId=${encodeURIComponent(slot.roomId)}`}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        <PencilIcon className="size-3.5" /> Edit
+                      </a>
+                    ) : null}
+                    {ready ? (
+                      <ImplementMenu
+                        busy={busy}
+                        onImplement={onImplement}
+                        slot={slot as FlashSlot & { assetId: string }}
+                        targets={targets}
+                      />
+                    ) : null}
+                  </div>
                 </li>
               );
             })}
-          </ul>
-        )}
-        {subjectBar?.costPerEvent != null ? (
-          <p className="text-muted-foreground text-xs">
-            <span className="font-semibold text-foreground text-base tabular-nums">
-              {formatCpa(subjectBar.costPerEvent, currency)}
-            </span>{' '}
-            per {resultWord.replace(/s$/, '')} · {subjectBar.events} {resultWord}
-          </p>
-        ) : null}
-      </section>
-
-      {/* Middle — the argument */}
-      <section className="space-y-4 text-xs md:border-border/50 md:border-l md:pl-6">
-        <p className="font-medium text-sm text-foreground">{copy.headline}</p>
-        <dl className="space-y-1.5">
-          <div className="flex items-baseline gap-2">
-            <dt className="w-24 shrink-0 text-muted-foreground text-xs">Angle</dt>
-            <dd className="min-w-0 text-foreground">
-              {angle ?? <span className="text-muted-foreground">not labelled yet</span>}
-            </dd>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <dt className="w-24 shrink-0 text-muted-foreground text-xs">Audience</dt>
-            <dd className="min-w-0 text-foreground">
-              {audience ?? adsetName ?? <span className="text-muted-foreground">this ad set</span>}
-            </dd>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <dt className="w-24 shrink-0 text-muted-foreground text-xs">
-              {copy.because === 'winner' ? 'Why it wins' : 'Why now'}
-            </dt>
-            <dd className="min-w-0 text-foreground tabular-nums">
-              {evidence ?? rec.reason ?? '—'}
-              {money ? <span className="text-muted-foreground"> · {money}</span> : null}
-            </dd>
-          </div>
-        </dl>
-        {standing ? (
-          <CreativeStandingBars chart={standing} currency={currency} resultWord={resultWord} />
-        ) : (
-          <p className="text-muted-foreground text-xs">
-            No creative comparison in the latest snapshot for this ad set.
-          </p>
-        )}
-      </section>
-
-      {/* Right — flash creatives */}
-      <section className="space-y-3 md:border-border/50 md:border-l md:pl-6">
-        <p className={`${typeScale.label} flex items-center gap-1.5 text-muted-foreground`}>
-          <SparklesIcon className="size-3.5" /> Flash creatives
-        </p>
-        <ul className="grid grid-cols-3 gap-2">
-          {slots.map((slot) => {
-            const src = slot.assetId ? signed[slot.assetId] : undefined;
-            const status = slot.job.status;
-            const ready = status === 'generated' && slot.assetId !== null;
-            const busy = implementingKey === slot.key;
-            return (
-              <li
-                className="flex flex-col gap-1.5 rounded-lg border border-border/70 bg-muted/20 p-2 text-xs"
-                data-testid="flash-slot"
-                key={slot.key}
-                title={slot.job.id}
-              >
-                {src ? (
-                  // biome-ignore lint/performance/noImgElement: signed, expiring storage URL; next/image cannot proxy it.
-                  <img
-                    alt="Flash creative"
-                    className="aspect-square w-full rounded object-cover"
-                    loading="lazy"
-                    src={src}
-                  />
-                ) : (
-                  <div className="flex aspect-square w-full items-center justify-center rounded border border-border/60 border-dashed">
-                    {status === 'queued' || status === 'generating' || status === 'publishing' ? (
-                      <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
-                    ) : (
-                      <ImageOffIcon className="size-4 text-muted-foreground" />
-                    )}
-                  </div>
-                )}
-                <Badge
-                  className="w-fit text-xs"
-                  variant={
-                    status === 'published'
-                      ? 'success'
-                      : status === 'failed'
-                        ? 'destructive'
-                        : 'secondary'
-                  }
+            {Array.from({ length: emptySlots }, (_, index) => slots.length + index + 1).map(
+              (slotNumber) => (
+                <li
+                  className="flex aspect-square items-center justify-center rounded-lg border border-border/60 border-dashed text-muted-foreground text-xs"
+                  key={`slot-${slotNumber}`}
                 >
-                  {SWAP_STATUS_LABEL[status] ?? status}
-                </Badge>
-                {slot.job.enqueued_via === 'autopilot' ? (
-                  <span className="text-muted-foreground text-xs">by autopilot</span>
-                ) : null}
-                {status === 'failed' && failureText(slot.job) ? (
-                  <p className="line-clamp-2 text-destructive" title={failureText(slot.job) ?? ''}>
-                    {failureText(slot.job)}
-                  </p>
-                ) : null}
-                <div className="flex flex-wrap items-center gap-1">
-                  {slot.roomId ? (
-                    <a
-                      className={cn(
-                        buttonVariants({ variant: 'secondary', size: 'sm' }),
-                        SLOT_BUTTON,
-                      )}
-                      href={`/ai-studio?roomId=${encodeURIComponent(slot.roomId)}`}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      <PencilIcon className="size-3.5" /> Edit
-                    </a>
-                  ) : null}
-                  {ready ? (
-                    <ImplementMenu
-                      busy={busy}
-                      onImplement={onImplement}
-                      slot={slot as FlashSlot & { assetId: string }}
-                      targets={targets}
-                    />
-                  ) : null}
-                </div>
-              </li>
-            );
-          })}
-          {Array.from({ length: emptySlots }, (_, index) => slots.length + index + 1).map(
-            (slotNumber) => (
-              <li
-                className="flex aspect-square items-center justify-center rounded-lg border border-border/60 border-dashed text-muted-foreground text-xs"
-                key={`slot-${slotNumber}`}
-              >
-                slot {slotNumber}
-              </li>
-            ),
-          )}
-        </ul>
-        {onGenerate ? (
-          <Button
-            className="h-8 px-3 text-sm"
-            disabled={generating}
-            onClick={onGenerate}
-            size="sm"
-            type="button"
-            variant="secondary"
-          >
-            {generating ? 'Requesting…' : 'Generate with Creative+'}
-          </Button>
-        ) : null}
-        {generateNote ? <p className="text-muted-foreground text-xs">{generateNote}</p> : null}
-      </section>
+                  slot {slotNumber}
+                </li>
+              ),
+            )}
+          </ul>
+          {onGenerate ? (
+            <Button
+              className="h-8 px-3 text-sm"
+              disabled={generating}
+              onClick={onGenerate}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
+              {generating ? 'Requesting…' : 'Generate with Creative+'}
+            </Button>
+          ) : null}
+          {generateNote ? <p className="text-muted-foreground text-xs">{generateNote}</p> : null}
+        </section>
+      </div>
     </div>
   );
 }
