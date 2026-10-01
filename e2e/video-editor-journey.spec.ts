@@ -680,12 +680,9 @@ test(BENCH, async ({ browser }) => {
       );
     } else {
       const rgb = decodeBandRgb(burnedPath, burned.width, band);
+      const bareRgb = decodeBandRgb(barePath, bareProbe.width, band);
       const masks = spoken.map((_, index) =>
-        highlightMask(
-          rgb[index] ?? new Uint8Array(),
-          withCaptions[index] ?? new Uint8Array(),
-          without[index] ?? new Uint8Array(),
-        ),
+        highlightMask(rgb[index] ?? new Uint8Array(), bareRgb[index] ?? new Uint8Array()),
       );
       const timing = judgeWordTiming(spoken, masks);
       const worstOffset = timing.offsets.reduce(

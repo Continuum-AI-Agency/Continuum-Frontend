@@ -221,14 +221,24 @@ export function spokenWordPerFrame(
  * burned export and that the captions changed (the bare export differs there), so a yellow
  * wall behind the text is never mistaken for a spoken word.
  */
-export function highlightMask(rgb: Uint8Array, burnedGray: Uint8Array, bareGray: Uint8Array) {
-  const mask = new Uint8Array(burnedGray.length);
+/**
+ * Pixels the burned captions turned highlight-yellow. "Added by the captions" is judged by
+ * colour, not grey: yellow over a pale ground differs from it by little in grey (#ffd400 over
+ * 224,209,207 is ~13 grey apart) but by far in colour.
+ */
+const COLOUR_DELTA = 120;
+export function highlightMask(rgb: Uint8Array, bareRgb: Uint8Array) {
+  const mask = new Uint8Array(rgb.length / 3);
   for (let index = 0; index < mask.length; index++) {
     const r = rgb[index * 3] ?? 0;
     const g = rgb[index * 3 + 1] ?? 0;
     const b = rgb[index * 3 + 2] ?? 0;
     const yellow = r >= 170 && g >= 130 && b <= 110 && r - b >= 110 && g <= r + 20;
-    const added = Math.abs((burnedGray[index] ?? 0) - (bareGray[index] ?? 0)) > STRONG_DELTA;
+    const added =
+      Math.abs(r - (bareRgb[index * 3] ?? 0)) +
+        Math.abs(g - (bareRgb[index * 3 + 1] ?? 0)) +
+        Math.abs(b - (bareRgb[index * 3 + 2] ?? 0)) >
+      COLOUR_DELTA;
     mask[index] = yellow && added ? 1 : 0;
   }
   return mask;
