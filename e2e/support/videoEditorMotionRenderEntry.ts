@@ -44,6 +44,7 @@ export type MotionRenderRun = {
   plan: { items: number; overlays: number; captionCues: number };
   durationSec: number;
   mp4Base64: string;
+  snapshots: Array<{ timeSec: number; meanRgbError: number; durationMs: number }>;
   slideUp: TextBox[];
   slideUpHold: TextBox[];
   typewriter: TextBox[];
@@ -359,8 +360,44 @@ export async function runMotionRender(variant: 'control' | 'styled'): Promise<Mo
       for (let index = 0; index < bytes.length; index += 0x8000) {
         binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
       }
+      const snapshots = [];
+      for (const timeSec of [0.8, 98 / 30, 5]) {
+        const started = performance.now();
+        const snapshot = await composeTimeline({
+          ...plan,
+          targetWidth: WIDTH,
+          targetHeight: HEIGHT,
+          frameTimeSec: timeSec,
+        });
+        try {
+          const bitmap = await createImageBitmap(snapshot.blob);
+          const canvas = new OffscreenCanvas(WIDTH, HEIGHT);
+          const ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error('No snapshot comparison canvas.');
+          try {
+            ctx.drawImage(bitmap, 0, 0);
+          } finally {
+            bitmap.close();
+          }
+          const actual = ctx.getImageData(0, 0, WIDTH, HEIGHT).data;
+          const expected = await at(timeSec);
+          let error = 0;
+          for (let pixel = 0; pixel < actual.length; pixel += 4) {
+            for (let channel = 0; channel < 3; channel += 1)
+              error += Math.abs(actual[pixel + channel] - expected[pixel + channel]);
+          }
+          snapshots.push({
+            timeSec,
+            meanRgbError: error / (WIDTH * HEIGHT * 3),
+            durationMs: performance.now() - started,
+          });
+        } finally {
+          URL.revokeObjectURL(snapshot.objectUrl);
+        }
+      }
       return {
         variant,
+        snapshots,
         plan: {
           items: plan.items.length,
           overlays: plan.overlays.length,
@@ -697,12 +734,102 @@ export async function runServerCompare(input: ServerCompareInput): Promise<Serve
 
 export const MOTION_RENDER = { WIDTH, HEIGHT, FONT_PX, DURATION_SEC };
 
+/** Persisted caption colours must survive the real plan and composed-frame path. */
+async function runCaptionHighlights() {
+  const video = URL.createObjectURL(await encodeSolidVideo(BLUE, 1));
+  try {
+    const base = motionProject(false);
+    const results = [];
+    for (const highlightMode of ['word', 'karaoke', 'none'] as const) {
+      const project = editorProjectV2Schema.parse({
+        ...base,
+        durationSec: 1,
+        transitions: [],
+        tracks: [
+          { ...base.tracks[0], clips: [{ ...base.tracks[0]?.clips[0], durationSec: 1 }] },
+          {
+            id: 'captions',
+            name: 'Captions',
+            kind: 'caption',
+            order: 1,
+            clips: [
+              {
+                id: 'caption',
+                kind: 'caption',
+                timelineStartSec: 0,
+                durationSec: 1,
+              text: 'BRAND',
+              language: 'en',
+                words: [{ text: 'BRAND', startSec: 0, endSec: 1 }],
+                highlightMode,
+                highlightColor: '#ff3366',
+                style: {
+                  fontFamily: 'Inter',
+                  fontSizePx: 52,
+                  fontWeight: 800,
+                  color: '#ffffff',
+                  outlineColor: '#000000',
+                  outlineWidthPx: 4,
+                },
+              },
+            ],
+          },
+        ],
+      });
+      const plan = await buildTimelineEditorRenderPlan({
+        project,
+        jobInputs: [
+          {
+            sourceId: 'first',
+            sourceAssetId: 'asset-first',
+            sourceRevision: 'version-first',
+            storage: { bucket: 'bench', path: 'first' },
+          },
+        ],
+        signedUrls: new Map([['bench\nfirst', video]]),
+        signal: new AbortController().signal,
+      });
+      await registerCaptionFonts(plan.captionFonts);
+      const rendered = await composeTimeline({
+        ...plan,
+        targetWidth: WIDTH,
+        targetHeight: HEIGHT,
+        frameRate: 30,
+        frameTimeSec: 0.5,
+      });
+      const bitmap = await createImageBitmap(rendered.blob);
+      try {
+        const canvas = new OffscreenCanvas(WIDTH, HEIGHT);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('No highlight verification canvas.');
+        ctx.drawImage(bitmap, 0, 0);
+        const pixels = ctx.getImageData(0, 0, WIDTH, HEIGHT).data;
+        let branded = 0;
+        let yellow = 0;
+        for (let index = 0; index < pixels.length; index += 4) {
+          const [r, g, b] = [pixels[index] ?? 0, pixels[index + 1] ?? 0, pixels[index + 2] ?? 0];
+          if (r > 220 && g < 100 && b > 70 && b < 150) branded++;
+          if (r > 200 && g > 160 && b < 90) yellow++;
+        }
+        results.push({ highlightMode, branded, yellow });
+      } finally {
+        bitmap.close();
+        URL.revokeObjectURL(rendered.objectUrl);
+      }
+    }
+    return results;
+  } finally {
+    URL.revokeObjectURL(video);
+  }
+}
+
 declare global {
   interface Window {
     __motionRenderBench: {
       run: typeof runMotionRender;
       entrances: typeof runEntrances;
       compare: typeof runServerCompare;
+      highlights: typeof runCaptionHighlights;
     };
   }
 }
@@ -711,4 +838,5 @@ window.__motionRenderBench = {
   run: runMotionRender,
   entrances: runEntrances,
   compare: runServerCompare,
+  highlights: runCaptionHighlights,
 };

@@ -1,3 +1,4 @@
+import { editorCaptionWordsWithText } from '@continuum/contracts';
 import type { CaptionStyleOverride } from '@/lib/clips/clipCaptionStyle';
 import type { ClipEffectSpec } from '../render/effectSpec';
 
@@ -188,10 +189,21 @@ export function updateCaptionCue(
   if (patch.text === undefined) {
     words = rescaleWords(cue.words, cue.startSec, cue.endSec, startSec, endSec);
   } else {
-    const rebuilt = wordsForCaptionText(patch.text, startSec, endSec);
+    const tokens = patch.text.trim().split(/\s+/).filter(Boolean);
+    const rebuilt =
+      tokens.length === cue.words.length && tokens.length > 0
+        ? rescaleWords(
+            editorCaptionWordsWithText(cue.words, patch.text),
+            cue.startSec,
+            cue.endSec,
+            startSec,
+            endSec,
+          )
+        : wordsForCaptionText(patch.text, startSec, endSec);
     words = rebuilt.map((word, index) => {
       const previous = cue.words[index];
-      return previous?.emphasis && previous.text === word.text ? { ...word, emphasis: true } : word;
+      const { emphasis: _emphasis, ...rest } = word;
+      return previous?.emphasis && previous.text === word.text ? { ...rest, emphasis: true } : rest;
     });
   }
 

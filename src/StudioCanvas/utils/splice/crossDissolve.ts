@@ -130,6 +130,7 @@ export async function appendOverlapTransition(params: {
   incoming: CrossDissolveClip;
   overlapOutputSec: number;
   outputStart: number;
+  frameTimeSec?: number;
   compositeOverlays?: (
     ctx: OffscreenCanvasRenderingContext2D,
     outputTimestampSec: number,
@@ -156,6 +157,9 @@ export async function appendOverlapTransition(params: {
     signal,
   } = params;
 
+  const snapshotLocal =
+    params.frameTimeSec === undefined ? undefined : params.frameTimeSec - outputStart;
+  if (snapshotLocal !== undefined && (snapshotLocal < 0 || snapshotLocal >= overlap)) return;
   const outProvider = await makeFrameProvider(mb, outgoing);
   const inProvider = await makeFrameProvider(mb, incoming);
 
@@ -167,7 +171,7 @@ export async function appendOverlapTransition(params: {
 
   for (let frame = 0; frame < frameCount; frame += 1) {
     throwIfAborted(signal);
-    const u = frame * frameDuration;
+    const u = snapshotLocal ?? frame * frameDuration;
     const t = overlap > 0 ? Math.min(1, u / overlap) : 1;
 
     // Source time within each clip: the outgoing clip's tail, the incoming's head.
@@ -235,6 +239,7 @@ export async function appendOverlapTransition(params: {
           }
         : {}),
     });
+    if (snapshotLocal !== undefined) return;
     await videoSource.add(outputStart + u, frameDuration);
     params.onFrameProgress?.(u);
   }

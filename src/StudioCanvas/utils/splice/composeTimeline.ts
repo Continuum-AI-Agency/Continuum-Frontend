@@ -103,6 +103,8 @@ export type ComposeTimelineOptions = {
   // Nominal encoded packet cadence. Mediabunny uses this to resample source
   // cadence (including VFR inputs) into the requested constant-rate track.
   frameRate?: number;
+  /** Render one composed PNG instead of encoding the timeline. */
+  frameTimeSec?: number;
   // Export-preset frame size. When both are set the timeline is letterboxed into
   // these dimensions (aspect conversion); otherwise the first clip's size is used.
   targetWidth?: number;
@@ -406,7 +408,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
     if (options.overlays && options.overlays.length > 0) {
       preparedOverlays.push(...(await prepareOverlays(mb, options.overlays)));
     }
-    for (const bed of options.audioTracks ?? []) {
+    for (const bed of options.frameTimeSec === undefined ? (options.audioTracks ?? []) : []) {
       const input = new mb.Input({
         source: new mb.BlobSource(bed.blob),
         formats: mb.ALL_FORMATS,
@@ -493,6 +495,14 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
             effects: item.effects,
           };
 
+    if (
+      options.frameTimeSec !== undefined &&
+      (!Number.isFinite(options.frameTimeSec) ||
+        options.frameTimeSec < 0 ||
+        options.frameTimeSec >= totalDuration)
+    ) {
+      throw new Error('Snapshot time must be within the composed timeline.');
+    }
     let processedDuration = 0;
 
     for (let i = 0; i < prepared.length; i += 1) {
@@ -522,6 +532,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
             targetWidth,
             targetHeight,
             cumulativeOffset: place.soloStartSec,
+            frameTimeSec: options.frameTimeSec,
             effects: item.effects,
             headFade: item.headFade,
             tailFade: item.tailFade,
@@ -546,6 +557,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
             targetWidth,
             targetHeight,
             cumulativeOffset: place.soloStartSec,
+            frameTimeSec: options.frameTimeSec,
             muteAudio: item.muteAudio,
             frameRate: options.frameRate,
             effects: item.effects,
@@ -576,6 +588,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
           incoming: toCrossClip(prepared[i + 1]),
           overlapOutputSec: place.outOverlapSec,
           outputStart: place.soloEndSec,
+          frameTimeSec: options.frameTimeSec,
           compositeOverlays,
           cues: captionCues,
           captionStyle,
@@ -589,6 +602,17 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
         processedClips: i + 1,
         totalClips: prepared.length,
       });
+    }
+
+    if (options.frameTimeSec !== undefined) {
+      const blob = await offscreen.convertToBlob({ type: 'image/png' });
+      return {
+        blob,
+        objectUrl: URL.createObjectURL(blob),
+        durationSec: totalDuration,
+        width: targetWidth,
+        height: targetHeight,
+      };
     }
 
     // Audio: one PCM mixdown for the whole timeline. Base video clips build the

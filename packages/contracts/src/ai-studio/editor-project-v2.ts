@@ -462,6 +462,10 @@ export const editorCaptionClipSchema = z
     style: editorTextStyleSchema,
     transform: editorTransformSchema.default(defaultEditorTransform),
     highlightMode: z.enum(['none', 'word', 'karaoke']).default('none'),
+    highlightColor: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/)
+      .optional(),
   })
   .strict();
 export type EditorCaptionClip = z.infer<typeof editorCaptionClipSchema>;

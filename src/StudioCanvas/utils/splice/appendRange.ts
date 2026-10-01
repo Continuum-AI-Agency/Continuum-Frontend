@@ -49,6 +49,7 @@ export type AppendRangeParams = {
   // source iterator remains sequential; low-rate frames are repeated and
   // high/VFR frames are dropped onto the next cadence tick.
   frameRate?: number;
+  frameTimeSec?: number;
   // Word-synced caption cues on the OUTPUT timeline (already re-mapped past removed
   // dead space). Omitted/null disables caption burn-in entirely (zero cost).
   cues?: CaptionCue[] | null;
@@ -114,13 +115,23 @@ export async function appendRange(params: AppendRangeParams): Promise<void> {
   let nextCadenceFrame = 0;
 
   const canvasSink = new mb.CanvasSink(videoTrack);
-  for await (const wrapped of canvasSink.canvases(range.startSec, range.endSec)) {
+  const snapshotLocal =
+    params.frameTimeSec === undefined ? undefined : params.frameTimeSec - cumulativeOffset;
+  if (snapshotLocal !== undefined && (snapshotLocal < 0 || snapshotLocal >= outputDurationSec))
+    return;
+  const frames =
+    snapshotLocal === undefined
+      ? canvasSink.canvases(range.startSec, range.endSec)
+      : canvasSink.canvasesAtTimestamps([range.startSec + snapshotLocal * speed]);
+  for await (const wrapped of frames) {
+    if (!wrapped) throw new Error('No decoded frame at the requested timeline time.');
     throwIfAborted(signal);
-    const localTimestamp = wrapped.timestamp - range.startSec;
+    const localTimestamp =
+      snapshotLocal === undefined ? wrapped.timestamp - range.startSec : snapshotLocal * speed;
     if (localTimestamp < 0) continue;
     const sourceFrameEnd = Math.min(sourceSpan, localTimestamp + wrapped.duration);
     const outputFrameEnd = sourceFrameEnd / speed;
-    const cadenceDuration = frameRate ? 1 / frameRate : undefined;
+    const cadenceDuration = snapshotLocal === undefined && frameRate ? 1 / frameRate : undefined;
     const nativeLocalOut = localTimestamp / speed;
     if (cadenceDuration && nextCadenceFrame * cadenceDuration < nativeLocalOut - 1e-9) {
       nextCadenceFrame = Math.ceil((nativeLocalOut - 1e-9) / cadenceDuration);
@@ -177,6 +188,7 @@ export async function appendRange(params: AppendRangeParams): Promise<void> {
             }
           : {}),
       });
+      if (snapshotLocal !== undefined) return;
       await videoSource.add(outputTimestamp, outputDuration);
       params.onRangeProgress?.(localOut + outputDuration);
       if (!cadenceDuration) break;
@@ -235,6 +247,7 @@ export type AppendStillParams = {
   mb: MediabunnyModule;
   bitmap: ImageBitmap;
   durationSec: number;
+  frameTimeSec?: number;
   ctx: OffscreenCanvasRenderingContext2D;
   videoSource: MbCanvasSource;
   audioSource: MbAudioSampleSource;
@@ -282,6 +295,9 @@ export async function appendStill(params: AppendStillParams): Promise<void> {
     signal,
   } = params;
 
+  const snapshotLocal =
+    params.frameTimeSec === undefined ? undefined : params.frameTimeSec - cumulativeOffset;
+  if (snapshotLocal !== undefined && (snapshotLocal < 0 || snapshotLocal >= durationSec)) return;
   const hasCaptions = Boolean(cues && cues.length > 0);
   const overlays = resolveTextOverlays(effects);
   // A Ken Burns effect, fade ramp, or overlay layer changes the frame over time,
@@ -312,7 +328,7 @@ export async function appendStill(params: AppendStillParams): Promise<void> {
   if (!perFrame) await drawBase(0, 0);
 
   const frameDuration = 1 / STILL_FPS;
-  let elapsed = 0;
+  let elapsed = snapshotLocal ?? 0;
   while (elapsed < durationSec) {
     throwIfAborted(signal);
     const duration = Math.min(frameDuration, durationSec - elapsed);
@@ -347,6 +363,7 @@ export async function appendStill(params: AppendStillParams): Promise<void> {
           }
         : {}),
     });
+    if (snapshotLocal !== undefined) return;
     await videoSource.add(outputTimestamp, duration);
     elapsed += duration;
     params.onRangeProgress?.(elapsed);

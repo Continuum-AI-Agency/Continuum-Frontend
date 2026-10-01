@@ -476,6 +476,47 @@ test(BENCH, async ({ browser }) => {
       Number.isFinite(liveMs) && liveMs <= LIVE_EDIT_BUDGET_MS,
       Number.isFinite(liveMs) ? `${liveMs} ms` : 'not seen',
     );
+    const syncSamples = [liveMs];
+    for (const sample of [2, 3]) {
+      const beforeSync = await getProject(api, projectId);
+      const cue = beforeSync.tracks
+        .flatMap((track) => track.clips)
+        .find((clip) => clip.id === `outside-${RUN}`);
+      if (!cue || cue.kind !== 'caption') throw new Error('Outside caption disappeared.');
+      const text = `${captionText} sample ${sample}`;
+      const response = await fetch(
+        `${api.base}/api/ai-studio/video-projects/${projectId}/ops/apply_commands`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${api.token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            expectedRevision: beforeSync.revision,
+            commands: [
+              { commandType: 'upsert_clip', trackId: `captions-${RUN}`, clip: { ...cue, text } },
+            ],
+          }),
+        },
+      );
+      const saved = (await response.json()) as { commit?: { revision: number } };
+      const started = performance.now();
+      await expect(
+        page.locator('[data-clip-kind="caption"]:visible', { hasText: text }),
+      ).toHaveCount(1, { timeout: LIVE_EDIT_BUDGET_MS });
+      const elapsed = performance.now() - started;
+      syncSamples.push(elapsed);
+      await expect(page.locator('[data-testid="project-revision"]:visible')).toHaveText(
+        `Revision ${saved.commit?.revision}`,
+      );
+      check(
+        `live sync sample ${sample}: committed caption is visible`,
+        response.ok,
+        `${elapsed.toFixed(1)}ms after response`,
+      );
+    }
+    note(`speed samples: ${JSON.stringify({ live_sync: syncSamples })}`);
+    note(
+      'live_sync measures successful commit-response to visible caption; save time is measured separately.',
+    );
 
     // ── ripple delete A: V1 closes up and the caption after the cut follows ───────────
     await page

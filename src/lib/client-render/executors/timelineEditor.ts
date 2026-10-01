@@ -413,13 +413,14 @@ const captionStyleFor = (
       shadowBlurPx: number;
     };
     transform: { position: { x: number; y: number } };
+    highlightColor?: string;
   },
   canvasHeight: number,
 ): CaptionStyleOverride => ({
   textColor: clip.style.color,
   highlightColor:
-    'highlightMode' in clip && clip.highlightMode === 'word'
-      ? DEFAULT_CAPTION_STYLE.highlightColor
+    'highlightMode' in clip && clip.highlightMode !== 'none'
+      ? (clip.highlightColor ?? DEFAULT_CAPTION_STYLE.highlightColor)
       : clip.style.color,
   outlineColor: clip.style.outlineColor ?? '#000000',
   fontFamily: clip.style.fontFamily,
