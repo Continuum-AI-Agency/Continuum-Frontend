@@ -55,6 +55,7 @@ import {
 } from '@/lib/api/integrations';
 import { isHigherPrivilegeRole, isReadOnlyMetaRole } from '@/lib/integrations/metaRole';
 import { mapIntegrationTypeToPlatformKey } from '@/lib/integrations/platform';
+import { hasMissingMetaAdAccounts } from '@/lib/integrations/selectableAssets';
 import { openCenteredPopup, waitForOAuthCompletion } from '@/lib/popup';
 import { cn } from '@/lib/utils';
 
@@ -454,20 +455,10 @@ export function BrandAssetAssigner({
     return { tabs, data, childrenByParent };
   }, [userAssets, assignedIds]);
 
-  // #154 fingerprint: Meta is connected (pages/IG synced) but no ad account came
-  // through. Precise so a never-connected user never triggers a no-op resync.
-  const metaConnectedButNoAdAccounts = useMemo(() => {
-    let hasMetaAsset = false;
-    let hasMetaAdAccount = false;
-    for (const asset of userAssets) {
-      const platform = mapIntegrationTypeToPlatformKey(asset.type);
-      if (platform && META_PLATFORMS.has(platform)) {
-        hasMetaAsset = true;
-        if ((asset.type ?? '').toLowerCase().includes('ad_account')) hasMetaAdAccount = true;
-      }
-    }
-    return hasMetaAsset && !hasMetaAdAccount;
-  }, [userAssets]);
+  const metaConnectedButNoAdAccounts = useMemo(
+    () => hasMissingMetaAdAccounts(userAssets),
+    [userAssets],
+  );
 
   const { isResyncing, resyncError, triggerResync } = useMetaAutoResync({
     enabled: !assetsLoading,

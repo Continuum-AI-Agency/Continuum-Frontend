@@ -348,6 +348,14 @@ export function getSelectableAssetLabel(
   return resolveAssetLabel(asset);
 }
 
+export function hasMissingMetaAdAccounts(assets: { type: string | null }[]): boolean {
+  // Instagram Login has no Facebook Page or ad accounts to discover.
+  return (
+    assets.some((asset) => asset.type === 'meta_page' || asset.type === 'meta_threads_account') &&
+    !assets.some((asset) => asset.type === 'meta_ad_account')
+  );
+}
+
 export function getSelectableAssetsFlatList(response: SelectableAssetsResponse): SelectableAsset[] {
   const assets: SelectableAsset[] = [...(response.assets ?? [])];
 

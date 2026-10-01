@@ -107,6 +107,7 @@ describe('AssignmentsDialog', () => {
     // section carries the IG row and its explanatory subtitle.
     expect(screen.getByText('Continuum Instagram')).toBeTruthy();
     expect(screen.getByText('Not attached to a Meta ad account')).toBeTruthy();
+    expect(screen.queryByText(/Meta is connected but no ad accounts were found/)).toBeNull();
 
     fireEvent.click(rowLabel('Continuum Instagram'));
     await act(async () => {

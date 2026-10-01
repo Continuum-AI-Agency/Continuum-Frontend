@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { Plus, RefreshCw, TriangleAlert, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
@@ -55,6 +56,7 @@ export function ConnectProviderPopover({
 }: ConnectProviderPopoverProps) {
   const { show } = useToast();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const { activeBrandId } = useActiveBrandContext();
   const [openAiDialogOpen, setOpenAiDialogOpen] = useState(false);
@@ -207,6 +209,7 @@ export function ConnectProviderPopover({
           /* ignore */
         }
         cleanup();
+        void queryClient.invalidateQueries({ queryKey: ['user-integration-assets'] });
         router.refresh();
         if (result.warning === 'no_ads_accounts' || result.warning === 'ads_enrichment_failed') {
           // Distinct from a hard failure: the token connected fine, but no
@@ -250,7 +253,9 @@ export function ConnectProviderPopover({
               ? options?.linkedinMode === 'organic'
                 ? 'LinkedIn Organic'
                 : 'LinkedIn Ads'
-              : labelFor(provider);
+              : provider === 'facebook' && options?.metaMode === 'instagram'
+                ? 'Instagram'
+                : labelFor(provider);
           show({
             title: 'Connected',
             description: `${linkedInLabel} accounts synced.`,

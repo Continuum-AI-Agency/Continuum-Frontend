@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { SelectableAsset, SelectableAssetsResponse } from '@/lib/schemas/integrations';
-import { getMetaSelectableAdAccountBundles } from './selectableAssets';
+import { getMetaSelectableAdAccountBundles, hasMissingMetaAdAccounts } from './selectableAssets';
 
 function metaAdAccount(overrides: Partial<SelectableAsset>): SelectableAsset {
   return {
@@ -20,6 +20,17 @@ function metaAdAccount(overrides: Partial<SelectableAsset>): SelectableAsset {
 function responseWith(assets: SelectableAsset[]): SelectableAssetsResponse {
   return { synced_at: null, stale: false, assets, providers: {} };
 }
+
+it('does not treat Instagram-only connections as missing Facebook ad accounts', () => {
+  const instagram = { type: 'meta_instagram_account' };
+  const page = { type: 'meta_page' };
+  const adAccount = { type: 'meta_ad_account' };
+  expect(hasMissingMetaAdAccounts([])).toBe(false);
+  expect(hasMissingMetaAdAccounts([instagram])).toBe(false);
+  expect(hasMissingMetaAdAccounts([instagram, { type: 'youtube_channel' }])).toBe(false);
+  expect(hasMissingMetaAdAccounts([instagram, page])).toBe(true);
+  expect(hasMissingMetaAdAccounts([instagram, page, adAccount])).toBe(false);
+});
 
 describe('getMetaSelectableAdAccountBundles cross-login dedup (#155)', () => {
   it('collapses one ad account reached via two logins into a single bundle, keeping the highest-privilege row', () => {

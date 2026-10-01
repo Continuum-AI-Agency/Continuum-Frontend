@@ -19,6 +19,7 @@ import {
   getSelectableAssetLabel,
   getSelectableAssetsFlatList,
   getSelectableAssetsFlatListForProvider,
+  hasMissingMetaAdAccounts,
 } from '@/lib/integrations/selectableAssets';
 import type { SelectableAsset, SelectableAssetsResponse } from '@/lib/schemas/integrations';
 
@@ -196,18 +197,10 @@ export function BrandAssetsForm({
     return getSelectableAssetsFlatList(selectableAssetsResponse);
   }, [selectableAssetsResponse]);
 
-  // #154 fingerprint: Meta connected (some Meta asset present) but no ad account.
-  const metaConnectedButNoAdAccounts = useMemo(() => {
-    let hasMetaAsset = false;
-    let hasMetaAdAccount = false;
-    for (const asset of selectableAssets) {
-      if (asset.type.startsWith('meta_')) {
-        hasMetaAsset = true;
-        if (asset.type === 'meta_ad_account') hasMetaAdAccount = true;
-      }
-    }
-    return hasMetaAsset && !hasMetaAdAccount;
-  }, [selectableAssets]);
+  const metaConnectedButNoAdAccounts = useMemo(
+    () => hasMissingMetaAdAccounts(selectableAssets),
+    [selectableAssets],
+  );
 
   const { isResyncing, resyncError, triggerResync } = useMetaAutoResync({
     enabled: mounted,

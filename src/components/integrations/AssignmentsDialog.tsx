@@ -21,6 +21,7 @@ import type { BrandIntegrationSummary } from '@/lib/integrations/brandProfile';
 import {
   getMetaSelectableAdAccountBundles,
   getSelectableAssetsFlatList,
+  hasMissingMetaAdAccounts,
   mergeSelectableAssetsWithBrandSummary,
 } from '@/lib/integrations/selectableAssets';
 import type { BrandMember } from '@/lib/onboarding/state';
@@ -137,19 +138,10 @@ export function AssignmentsDialog({
     [assignedIds, ownerByAccountId, currentUserId],
   );
 
-  // #154 fingerprint: Meta connected (some Meta asset synced) but no ad account.
-  const metaConnectedButNoAdAccounts = useMemo(() => {
-    const rows = userAssetsQuery.data ?? [];
-    let hasMetaAsset = false;
-    let hasMetaAdAccount = false;
-    for (const row of rows) {
-      if ((row.type ?? '').startsWith('meta_')) {
-        hasMetaAsset = true;
-        if ((row.type ?? '').includes('ad_account')) hasMetaAdAccount = true;
-      }
-    }
-    return hasMetaAsset && !hasMetaAdAccount;
-  }, [userAssetsQuery.data]);
+  const metaConnectedButNoAdAccounts = useMemo(
+    () => hasMissingMetaAdAccounts(userAssetsQuery.data ?? []),
+    [userAssetsQuery.data],
+  );
 
   const { isResyncing, resyncError, triggerResync } = useMetaAutoResync({
     enabled: open && !userAssetsQuery.isLoading,
