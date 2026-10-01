@@ -181,4 +181,17 @@ describe('LOOK_EFFECTS on the export draw', () => {
       amount: 0.3,
     });
   });
+  it('reports unavailable WebGPU instead of flattening an ordered stack', async () => {
+    await expect(
+      exported({
+        shaderStack: {
+          version: 1,
+          effects: [
+            { effectId: 'tint', enabled: true, parameters: { color: '#ff7a00', amount: 0.2 } },
+            { effectId: 'vignette', enabled: true, parameters: { amount: 0.4 } },
+          ],
+        },
+      }),
+    ).rejects.toThrow('Shader rendering requires WebGPU');
+  });
 });

@@ -290,9 +290,9 @@ async function prepareSource(
   timeSec: number,
 ): Promise<CanvasImageSource> {
   if (sourceWidth <= 0 || sourceHeight <= 0 || !effects) return source;
-  // An explicit stack keeps its authored order and clip overrides. A GPU failure
-  // must surface; flattening that stack would silently change the image.
-  if (effects.shaderStack?.effects.some((effect) => effect.enabled)) {
+  // Multiple effects in an explicit stack must keep their authored order.
+  const stack = effects.shaderStack ? shaderStackFromClipEffects(effects) : undefined;
+  if (stack && stack.effects.filter((effect) => effect.enabled).length > 1) {
     const { renderShaderStackFrame } = await import(
       '@continuum/contracts/ai-studio/hyperframes-runtime/renderShaderStack'
     );
@@ -300,7 +300,7 @@ async function prepareSource(
       source,
       width: sourceWidth,
       height: sourceHeight,
-      stack: shaderStackFromClipEffects(effects),
+      stack,
       timeSec,
     });
   }
