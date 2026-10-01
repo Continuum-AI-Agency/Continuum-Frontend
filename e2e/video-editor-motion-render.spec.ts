@@ -25,6 +25,8 @@ import { expect, test } from '@playwright/test';
 import type {
   EntranceSample,
   MotionRenderRun,
+  ServerCompareInput,
+  ServerCompareRun,
   TextBox,
 } from './support/videoEditorMotionRenderEntry';
 
@@ -282,5 +284,228 @@ test('the motion vocabulary renders in the real compositor, judged per frame', a
       ...lines,
       `videoeditor:motion:render:bench — ${passed} passed, ${failed} failed, 1 not exercised`,
     ].join('\n'),
+  );
+});
+
+// ── Server export vs the client render ─────────────────────────────────────────────────
+//
+// Driven by `video-editor:motion:e2e:bench -- --server-export=<render url>`: the Backend
+// bench builds a motion timeline with the real ops, has Render export it, and hands this
+// test a manifest (the project, its source files, the server master). The same project is
+// rendered here from the same files, and both masters are judged per frame.
+//
+// The motion judges compare each frame's box against its own settled box, alpha as green
+// mass over the settled mass, the share of a typed line revealed, and the keyed centre; the
+// font judge then holds the two sides' settled text to the same coverage, within 3%, now
+// that the export registers the faces its text names.
+
+type CompareManifest = {
+  project: unknown;
+  files: Record<string, string>;
+  sources: Record<string, { file: string; assetId: string; versionId: string }>;
+  serverFile: string;
+  samples: ServerCompareInput['samples'];
+  resultPath: string;
+  clientMp4Path: string;
+};
+
+const COMPARE = process.env.MOTION_SERVER_COMPARE;
+
+test('server export matches the client render, frame for frame', async ({ browser }) => {
+  test.skip(!COMPARE, 'run by video-editor:motion:e2e:bench -- --server-export=<render url>');
+  const manifest = JSON.parse(readFileSync(COMPARE ?? '', 'utf8')) as CompareManifest;
+  const bundle = buildBrowserBundle();
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.route('**/video-editor-motion-compare', (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><body></body></html>' }),
+  );
+  // The export loads the faces its text names from /fonts, as Render serves them.
+  await page.route('**/fonts/*', (route) =>
+    route.fulfill({
+      contentType: 'font/woff2',
+      body: readFileSync(
+        join(
+          process.cwd(),
+          'public',
+          'fonts',
+          new URL(route.request().url()).pathname.split('/').pop() ?? '',
+        ),
+      ),
+    }),
+  );
+  await page.route('**/motion-compare-files/*', (route) => {
+    const name = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop() ?? '');
+    const path = manifest.files[name];
+    return path
+      ? route.fulfill({ contentType: 'video/mp4', body: readFileSync(path) })
+      : route.fulfill({ status: 404, body: name });
+  });
+  await page.goto('http://127.0.0.1:4173/video-editor-motion-compare', {
+    waitUntil: 'domcontentloaded',
+  });
+  await page.addScriptTag({ content: bundle, type: 'module' });
+  await page.waitForFunction(() => Boolean(window.__motionRenderBench));
+  const fileUrl = (name: string) =>
+    `http://127.0.0.1:4173/motion-compare-files/${encodeURIComponent(name)}`;
+  const input: ServerCompareInput = {
+    project: manifest.project,
+    sources: Object.fromEntries(
+      Object.entries(manifest.sources).map(([clipId, source]) => [
+        clipId,
+        { url: fileUrl(source.file), assetId: source.assetId, versionId: source.versionId },
+      ]),
+    ),
+    serverUrl: fileUrl(manifest.serverFile),
+    samples: manifest.samples,
+  };
+  const run = (await page.evaluate(
+    (payload) => window.__motionRenderBench.compare(payload),
+    input,
+  )) as ServerCompareRun;
+  await context.close();
+  writeFileSync(manifest.clientMp4Path, Buffer.from(run.clientMp4Base64, 'base64'));
+
+  const checks: Array<{ name: string; ok: boolean; detail: string }> = [];
+  const check = (name: string, ok: boolean, detail: string) => {
+    checks.push({ name, ok, detail });
+    expect.soft(ok, `${name}: ${detail}`).toBe(true);
+  };
+  const seenBox = (box: TextBox) => box.count >= 40;
+  const ratio = (value: number, of: number) => (of > 0 ? value / of : 0);
+
+  check(
+    'server master: the project size and length',
+    run.serverSize.width === 360 &&
+      run.serverSize.height === 640 &&
+      Math.abs(run.serverSize.durationSec - 7) <= 0.1,
+    `${run.serverSize.width}×${run.serverSize.height} ${run.serverSize.durationSec.toFixed(3)}s`,
+  );
+
+  for (const [index, client] of run.client.texts.entries()) {
+    const server = run.server.texts[index];
+    if (!server) continue;
+    const pairs = client.frames
+      .map((frame, at) => [frame, server.frames[at]] as const)
+      .filter(
+        (pair): pair is readonly [TextBox, TextBox] =>
+          pair[1] !== undefined && seenBox(pair[0]) && seenBox(pair[1]),
+      );
+    const visibility = client.frames.filter(seenBox).length - server.frames.filter(seenBox).length;
+    if (client.name === 'typewriter') {
+      const revealed = (frame: TextBox, settled: TextBox) =>
+        ratio(frame.right - settled.left, settled.right - settled.left);
+      const worst = Math.max(
+        0,
+        ...pairs.map(([c, s]) =>
+          Math.abs(revealed(c, client.settled) - revealed(s, server.settled)),
+        ),
+      );
+      const leftDrift = Math.max(
+        0,
+        ...pairs.map(([c, s]) =>
+          Math.abs(c.left - client.settled.left - (s.left - server.settled.left)),
+        ),
+      );
+      check(
+        "typewriter: the server reveals the line at the client's pace",
+        pairs.length >= 4 && Math.abs(visibility) <= 1 && worst <= 0.12 && leftDrift <= 2,
+        `${pairs.length} frames · worst reveal gap ${worst.toFixed(3)} of the line · left drift ${leftDrift}px · client ${describe([client.settled])} vs server ${describe([server.settled])}`,
+      );
+      continue;
+    }
+    const motionGap = Math.max(
+      0,
+      ...pairs.flatMap(([c, s]) =>
+        (['top', 'bottom'] as const).map((edge) =>
+          Math.abs(c[edge] - client.settled[edge] - (s[edge] - server.settled[edge])),
+        ),
+      ),
+    );
+    const scaleGap = Math.max(
+      0,
+      ...pairs.map(([c, s]) =>
+        Math.abs(
+          ratio(c.right - c.left, client.settled.right - client.settled.left) -
+            ratio(s.right - s.left, server.settled.right - server.settled.left),
+        ),
+      ),
+    );
+    const alphaGap = Math.max(
+      0,
+      ...pairs.map(([c, s]) =>
+        Math.abs(ratio(c.mass, client.settled.mass) - ratio(s.mass, server.settled.mass)),
+      ),
+    );
+    check(
+      `${client.name}: the server's entrance follows the client's — box motion, scale and alpha per frame`,
+      pairs.length >= 4 &&
+        Math.abs(visibility) <= 1 &&
+        motionGap <= 3 &&
+        scaleGap <= 0.06 &&
+        alphaGap <= 0.12,
+      `${pairs.length} frames · worst Δbox ${motionGap}px · worst scale gap ${scaleGap.toFixed(3)} · worst alpha gap ${alphaGap.toFixed(3)} · settled client ${describe([client.settled])} vs server ${describe([server.settled])}`,
+    );
+  }
+
+  // Same faces on both sides: the settled text covers the same pixels, within ~3%.
+  const coverage = run.client.texts.map((client, index) => {
+    const server = run.server.texts[index];
+    return {
+      name: client.name,
+      count: ratio(
+        Math.abs((server?.settled.count ?? 0) - client.settled.count),
+        client.settled.count,
+      ),
+      mass: ratio(Math.abs((server?.settled.mass ?? 0) - client.settled.mass), client.settled.mass),
+    };
+  });
+  check(
+    'fonts: the server draws the text in the same faces — settled coverage within 3% of the client',
+    coverage.every((entry) => entry.count <= 0.03 && entry.mass <= 0.03),
+    coverage
+      .map(
+        (entry) =>
+          `${entry.name} pixels ${(entry.count * 100).toFixed(1)}% · mass ${(entry.mass * 100).toFixed(1)}%`,
+      )
+      .join(' · '),
+  );
+
+  const keyedGap = run.client.keyed.map((box, index) => {
+    const server = run.server.keyed[index];
+    return server ? Math.abs(center(box) - center(server)) : Number.POSITIVE_INFINITY;
+  });
+  check(
+    'keyframes: the server moves the keyed text to the same centre as the client',
+    keyedGap.every((gap) => gap <= 4),
+    `centres client ${run.client.keyed.map(center).join(', ')} · server ${run.server.keyed.map(center).join(', ')}`,
+  );
+  const blendGap = Math.max(
+    ...run.client.crossfade.map((channel, index) =>
+      Math.abs(channel - (run.server.crossfade[index] ?? 0)),
+    ),
+  );
+  check(
+    'crossfade: the server blends the two clips as the client does, mid-transition',
+    blendGap <= 12,
+    `client ${run.client.crossfade.join(',')} · server ${run.server.crossfade.join(',')}`,
+  );
+  const lookGap = Math.max(
+    ...run.client.look.mean.map((channel, index) =>
+      Math.abs(channel - (run.server.look.mean[index] ?? 0)),
+    ),
+  );
+  check(
+    "look: the server master carries clip 2's look as the client does (band colour and spread)",
+    lookGap <= 8 &&
+      Math.abs(run.client.look.spread - run.server.look.spread) <=
+        Math.max(2, run.client.look.spread),
+    `band mean client ${run.client.look.mean.join(',')} · server ${run.server.look.mean.join(',')} · spread ${run.client.look.spread.toFixed(2)} vs ${run.server.look.spread.toFixed(2)}`,
+  );
+  writeFileSync(manifest.resultPath, JSON.stringify({ checks }, null, 2));
+  console.log(
+    checks
+      .map((entry) => `${entry.ok ? 'PASS' : 'FAIL'}  ${entry.name} — ${entry.detail}`)
+      .join('\n'),
   );
 });
