@@ -9,6 +9,11 @@ import {
 import { request } from '@/lib/api/http';
 import { captionAnimationFromEditorId } from '@/lib/clips/captionAnimation';
 import {
+  type CaptionFontPayload,
+  isRegistrableCaptionFont,
+  loadCaptionFonts,
+} from '@/lib/clips/captionFonts';
+import {
   type CaptionStyle,
   type CaptionStyleOverride,
   DEFAULT_CAPTION_STYLE,
@@ -37,6 +42,8 @@ type RenderPlan = {
   audioTracks: TimelineAudioWorkerItem[];
   captionCues: CaptionCue[];
   captionStyle: CaptionStyle;
+  /** The faces the text and captions name, registered before the first draw. */
+  captionFonts: CaptionFontPayload[];
 };
 type ProjectTrack = EditorProjectV2['tracks'][number];
 const isVideoTrack = (track: ProjectTrack): track is Extract<ProjectTrack, { kind: 'video' }> =>
@@ -747,12 +754,22 @@ export async function buildTimelineEditorRenderPlan(input: {
     }
   }
   captionCues.sort((left, right) => left.startSec - right.startSec);
+  // The export draws text in the faces the preview does. Without their bytes the worker
+  // (or Render's headless Chrome) falls back to whatever the platform has, and the type
+  // metrics change between the browser and the server. A face that will not load fails
+  // the export rather than silently burning in a substitute.
+  const captionFonts = await loadCaptionFonts(
+    captionCues.flatMap((cue) =>
+      isRegistrableCaptionFont(cue.style?.fontFamily) ? [cue.style?.fontFamily ?? ''] : [],
+    ),
+  );
   return {
     items,
     overlays,
     audioTracks,
     captionCues,
     captionStyle: DEFAULT_CAPTION_STYLE,
+    captionFonts,
   };
 }
 

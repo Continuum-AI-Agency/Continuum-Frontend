@@ -1,3 +1,5 @@
+import type { ShaderEffectV1 } from '@continuum/contracts';
+import { resolveShaderParameter } from '@/lib/vgpu/renderShaderStack';
 import { chromaKeyImageData } from '../pixel/chromaKey';
 import {
   applyCanvasFilter,
@@ -8,7 +10,7 @@ import {
   opacityFor,
   resolveTransformAt,
 } from '../render/effectSpec';
-import { hasShaderStack, shaderStackFromClipEffects } from '../render/shaderStack';
+import { shaderStackFromClipEffects } from '../render/shaderStack';
 import { computeLetterboxRect, drawLetterboxed } from './letterbox';
 
 // Shared frame-drawing primitives for the timeline renderer. `drawClipFrame`
@@ -48,10 +50,12 @@ function scratchContext(width: number, height: number): Ctx | null {
 
 // ---- The pixel-effect primitives -------------------------------------------
 //
-// `vignette`, `filmGrain`, `pixelate`, `chromaticAberration` and `vhs` are the five
-// effect presets with no CSS `filter` equivalent, so they cannot ride `filterString`
-// and cannot appear in the DOM preview (`unpreviewableEffects` names them). Each is a
-// draw-time step here instead.
+// `vignette`, `filmGrain`, `pixelate`, `chromaticAberration`, `vhs`, `tint` and the
+// chroma key have no CSS `filter` equivalent, so they cannot ride `filterString`. Each
+// is a draw-time step here instead — and ONLY here. This is the one path a look takes in
+// an export, in the browser and on Render alike: no WebGPU (Render's headless Chrome has
+// no adapter), and no second pass over the same look (the shader stack used to re-apply
+// every one of these on a frame this pass had already drawn).
 //
 // They all share ONE `getImageData`/`putImageData` round trip with the chroma key,
 // because that round trip — not the arithmetic inside it — is the expensive part of
@@ -116,6 +120,8 @@ export function applyPixelEffects(
   const vhs = effects.vhs?.amount ?? 0;
   const grain = effects.filmGrain?.amount ?? 0;
   const vignette = effects.vignette?.amount ?? 0;
+  const tintAmount = clamp01(effects.tint?.amount ?? 0);
+  const tint = tintAmount > 0 ? hexRgb(effects.tint?.color) : undefined;
 
   if (effects.chromaKey) chromaKeyImageData(image, effects.chromaKey);
 
@@ -159,6 +165,13 @@ export function applyPixelEffects(
         data[i + 2] = b;
       }
 
+      if (tint) {
+        // A colour grade over the picture: mix toward the tint, as the shader stack did.
+        data[i] += (tint[0] - data[i]) * tintAmount;
+        data[i + 1] += (tint[1] - data[i + 1]) * tintAmount;
+        data[i + 2] += (tint[2] - data[i + 2]) * tintAmount;
+      }
+
       let delta = rowNoise;
       if (grain > 0) delta += hashNoise(x, y, frameSeed) * clamp01(grain) * 32;
 
@@ -179,6 +192,58 @@ export function applyPixelEffects(
       }
     }
   }
+}
+
+/** `#rrggbb` → 0..255 channels; anything else is black, as the shader stack read it. */
+function hexRgb(hex: string | undefined): [number, number, number] {
+  const valid = /^#[\da-f]{6}$/i.test(hex ?? '') ? (hex as string) : '#000000';
+  return [1, 3, 5].map((offset) => Number.parseInt(valid.slice(offset, offset + 2), 16)) as [
+    number,
+    number,
+    number,
+  ];
+}
+
+/**
+ * The looks to draw at `timeSec`, all as pixel-pass fields. A clip's own fields win; an
+ * explicit shader stack (a canvas shader node's deferred preset) is sampled at the frame's
+ * time — keyframes included — into the same fields, so it draws through the same pass.
+ */
+export function pixelLooks(effects: ClipEffectSpec, timeSec: number): ClipEffectSpec {
+  const stack = effects.shaderStack?.effects.filter((effect) => effect.enabled) ?? [];
+  if (stack.length === 0) return effects;
+  const looks: ClipEffectSpec = { ...effects };
+  for (const effect of stack) {
+    const at = (name: ShaderEffectV1['keyframes'][number]['parameterName']): number => {
+      const value = resolveShaderParameter(effect, name, timeSec);
+      return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+    };
+    const color = effect.parameters.color ?? '#000000';
+    switch (effect.effectId) {
+      case 'chroma_key':
+        looks.chromaKey ??= { color, tolerance: at('tolerance'), softness: at('softness') };
+        break;
+      case 'tint':
+        looks.tint ??= { color, amount: at('amount') };
+        break;
+      case 'vignette':
+        looks.vignette ??= { amount: at('amount') };
+        break;
+      case 'film_grain':
+        looks.filmGrain ??= { amount: at('amount') };
+        break;
+      case 'pixelate':
+        looks.pixelate ??= { blockPx: at('blockPx') };
+        break;
+      case 'chromatic_aberration':
+        looks.chromaticAberration ??= { amount: at('amount') };
+        break;
+      case 'vhs':
+        looks.vhs ??= { amount: at('amount') };
+        break;
+    }
+  }
+  return looks;
 }
 
 /** Mosaic the scratch in place: downscale with smoothing off, then blow it back up. */
@@ -224,43 +289,37 @@ async function prepareSource(
   effects: ClipEffectSpec | undefined,
   timeSec: number,
 ): Promise<CanvasImageSource> {
-  if (sourceWidth <= 0 || sourceHeight <= 0) return source;
-  const hasPixels = Boolean(
-    effects?.chromaKey ||
-      effects?.chromaticAberration?.amount ||
-      effects?.vhs?.amount ||
-      effects?.filmGrain?.amount ||
-      effects?.vignette?.amount ||
-      effects?.pixelate?.blockPx,
-  );
-  if (!hasPixels && !hasShaderStack(effects)) return source;
-
-  let prepared = source;
-  if (hasPixels && effects) {
-    const buffer = scratchContext(sourceWidth, sourceHeight);
-    if (buffer) {
-      buffer.drawImage(source, 0, 0, sourceWidth, sourceHeight);
-      if (effects.pixelate?.blockPx) {
-        pixelateScratch(buffer, sourceWidth, sourceHeight, effects.pixelate.blockPx);
-      }
-      const image = buffer.getImageData(0, 0, sourceWidth, sourceHeight);
-      applyPixelEffects(image, effects, sourceWidth, sourceHeight, timeSec);
-      buffer.putImageData(image, 0, 0);
-      prepared = scratch as OffscreenCanvas;
-    }
+  if (sourceWidth <= 0 || sourceHeight <= 0 || !effects) return source;
+  // An explicit stack keeps its authored order and clip overrides. A GPU failure
+  // must surface; flattening that stack would silently change the image.
+  if (effects.shaderStack?.effects.some((effect) => effect.enabled)) {
+    const { renderShaderStackFrame } = await import(
+      '@continuum/contracts/ai-studio/hyperframes-runtime/renderShaderStack'
+    );
+    return renderShaderStackFrame({ source, width: sourceWidth, height: sourceHeight,
+      stack: shaderStackFromClipEffects(effects), timeSec });
   }
-
-  if (!hasShaderStack(effects)) return prepared;
-  const { renderShaderStackFrame } = await import(
-    '@continuum/contracts/ai-studio/hyperframes-runtime/renderShaderStack'
+  const looks = pixelLooks(effects, timeSec);
+  const hasPixels = Boolean(
+    looks.chromaKey ||
+      looks.chromaticAberration?.amount ||
+      looks.vhs?.amount ||
+      looks.filmGrain?.amount ||
+      looks.vignette?.amount ||
+      (looks.tint?.amount ?? 0) > 0 ||
+      (looks.pixelate?.blockPx ?? 0) >= 2,
   );
-  return renderShaderStackFrame({
-    source: prepared,
-    width: sourceWidth,
-    height: sourceHeight,
-    stack: shaderStackFromClipEffects(effects),
-    timeSec,
-  });
+  if (!hasPixels) return source;
+  const buffer = scratchContext(sourceWidth, sourceHeight);
+  if (!buffer) return source;
+  buffer.drawImage(source, 0, 0, sourceWidth, sourceHeight);
+  if ((looks.pixelate?.blockPx ?? 0) >= 2) {
+    pixelateScratch(buffer, sourceWidth, sourceHeight, looks.pixelate?.blockPx ?? 0);
+  }
+  const image = buffer.getImageData(0, 0, sourceWidth, sourceHeight);
+  applyPixelEffects(image, looks, sourceWidth, sourceHeight, timeSec);
+  buffer.putImageData(image, 0, 0);
+  return scratch as OffscreenCanvas;
 }
 
 /**
@@ -281,7 +340,6 @@ export async function drawEffectFrame(
   timeSec = t,
 ): Promise<void> {
   ctx.save();
-  let prepared: CanvasImageSource = source;
   try {
     ctx.globalAlpha = (effects ? opacityFor(effects, t) : 1) * alphaMul;
     if (effects?.blendMode && effects.blendMode !== 'normal') {
@@ -303,10 +361,9 @@ export async function drawEffectFrame(
       ]);
       ctx.clip();
     }
-    prepared = await prepareSource(source, sourceWidth, sourceHeight, effects, timeSec);
+    const prepared = await prepareSource(source, sourceWidth, sourceHeight, effects, timeSec);
     ctx.drawImage(prepared, rect.x, rect.y, rect.width, rect.height);
   } finally {
-    if (prepared !== source && prepared instanceof ImageBitmap) prepared.close();
     ctx.restore();
     ctx.filter = 'none';
     ctx.globalAlpha = 1;

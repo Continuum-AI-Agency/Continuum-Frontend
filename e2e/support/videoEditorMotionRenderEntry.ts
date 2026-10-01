@@ -6,6 +6,7 @@
 
 import { createEditorProjectV2, editorProjectV2Schema } from '@continuum/contracts';
 import { buildTimelineEditorRenderPlan } from '../../src/lib/client-render/executors/timelineEditor';
+import { registerCaptionFonts } from '../../src/lib/clips/captionFonts';
 import { composeTimeline } from '../../src/StudioCanvas/utils/splice/composeTimeline';
 
 const WIDTH = 360;
@@ -322,6 +323,8 @@ export async function runMotionRender(variant: 'control' | 'styled'): Promise<Mo
       signedUrls: new Map(ids.map((id) => [`bench\n${id}`, urls.get(id) ?? ''])),
       signal: new AbortController().signal,
     });
+    // What the worker does before its first draw: the plan's faces, registered.
+    await registerCaptionFonts(plan.captionFonts);
     const rendered = await composeTimeline({
       ...plan,
       videoBitrate: 2_000_000,
@@ -475,6 +478,8 @@ export async function runEntrances(): Promise<EntranceSample[]> {
       signedUrls: new Map([['bench\nground', url]]),
       signal: new AbortController().signal,
     });
+    // What the worker does before its first draw: the plan's faces, registered.
+    await registerCaptionFonts(plan.captionFonts);
     const rendered = await composeTimeline({
       ...plan,
       videoBitrate: 2_000_000,
@@ -506,12 +511,156 @@ export async function runEntrances(): Promise<EntranceSample[]> {
   }
 }
 
+/**
+ * The server-export comparison: the Backend bench built a project with the real ops and had
+ * Render export it. This renders the SAME project from the SAME source files in the browser
+ * and measures both masters with the same judges, frame for frame.
+ */
+export type ServerCompareInput = {
+  project: unknown;
+  /** By clip id: where the page fetches the file, and the Library pin it plays. */
+  sources: Record<string, { url: string; assetId: string; versionId: string }>;
+  serverUrl: string;
+  samples: {
+    texts: Array<{ name: string; times: number[]; settledAt: number }>;
+    keyed: number[];
+    crossfadeAt: number;
+    lookAt: number;
+  };
+};
+
+type Measured = { name: string; frames: TextBox[]; settled: TextBox };
+type Master = {
+  texts: Measured[];
+  keyed: TextBox[];
+  crossfade: number[];
+  /** Clip 2's look in a clear band: its mean colour and its luma spread (VHS noise). */
+  look: { mean: number[]; spread: number };
+};
+
+export type ServerCompareRun = {
+  client: Master;
+  server: Master;
+  serverSize: { width: number; height: number; durationSec: number };
+  clientMp4Base64: string;
+};
+
+/** A band's mean colour and luma spread — a solid picture spreads ~0, VHS noise does not. */
+function bandLook(pixels: Uint8ClampedArray, band: Band): Master['look'] {
+  const total = [0, 0, 0];
+  let lumaSum = 0;
+  let squares = 0;
+  let count = 0;
+  for (let y = band.top; y < band.bottom; y += 1) {
+    for (let x = 0; x < WIDTH; x += 1) {
+      const offset = (y * WIDTH + x) * 4;
+      const red = pixels[offset] ?? 0;
+      const green = pixels[offset + 1] ?? 0;
+      const blue = pixels[offset + 2] ?? 0;
+      total[0] = (total[0] ?? 0) + red;
+      total[1] = (total[1] ?? 0) + green;
+      total[2] = (total[2] ?? 0) + blue;
+      const luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+      lumaSum += luma;
+      squares += luma * luma;
+      count += 1;
+    }
+  }
+  const mean = lumaSum / count;
+  return {
+    mean: total.map((channel) => Math.round(channel / count)),
+    spread: Math.sqrt(Math.max(0, squares / count - mean * mean)),
+  };
+}
+
+async function measureMaster(
+  input: InstanceType<typeof import('mediabunny')['Input']>,
+  samples: ServerCompareInput['samples'],
+): Promise<Master> {
+  const at = async (t: number, band: Band) => textBox(await framePixels(input, t), band, t);
+  const texts: Measured[] = [];
+  for (const text of samples.texts) {
+    const frames: TextBox[] = [];
+    for (const t of text.times) frames.push(await at(t, TOP_BAND));
+    texts.push({ name: text.name, frames, settled: await at(text.settledAt, TOP_BAND) });
+  }
+  const keyed: TextBox[] = [];
+  for (const t of samples.keyed) keyed.push(await at(t, TOP_BAND));
+  const blend = await framePixels(input, samples.crossfadeAt);
+  const look = await framePixels(input, samples.lookAt);
+  return {
+    texts,
+    keyed,
+    crossfade: pixelAt(blend, 20, 20),
+    look: bandLook(look, CLEAR_BAND),
+  };
+}
+
+export async function runServerCompare(input: ServerCompareInput): Promise<ServerCompareRun> {
+  const project = editorProjectV2Schema.parse(input.project);
+  const ids = Object.keys(input.sources);
+  const plan = await buildTimelineEditorRenderPlan({
+    project,
+    jobInputs: ids.map((sourceId) => ({
+      sourceId,
+      sourceAssetId: input.sources[sourceId]?.assetId,
+      sourceRevision: input.sources[sourceId]?.versionId,
+      storage: { bucket: 'bench', path: sourceId },
+    })),
+    signedUrls: new Map(ids.map((id) => [`bench\n${id}`, input.sources[id]?.url ?? ''])),
+    signal: new AbortController().signal,
+  });
+  await registerCaptionFonts(plan.captionFonts);
+  const rendered = await composeTimeline({
+    ...plan,
+    videoBitrate: project.exportSettings.videoBitrateKbps * 1_000,
+    audioBitrate: project.exportSettings.audioBitrateKbps * 1_000,
+    targetWidth: project.exportSettings.width,
+    targetHeight: project.exportSettings.height,
+    frameRate: 30,
+  });
+  const { Input, BlobSource, ALL_FORMATS } = await import('mediabunny');
+  const client = new Input({ source: new BlobSource(rendered.blob), formats: ALL_FORMATS });
+  const serverBlob = await (await fetch(input.serverUrl)).blob();
+  const server = new Input({ source: new BlobSource(serverBlob), formats: ALL_FORMATS });
+  try {
+    const track = await server.getPrimaryVideoTrack();
+    const bytes = new Uint8Array(await rendered.blob.arrayBuffer());
+    let binary = '';
+    for (let index = 0; index < bytes.length; index += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+    }
+    return {
+      client: await measureMaster(client, input.samples),
+      server: await measureMaster(server, input.samples),
+      serverSize: {
+        width: (await track?.getDisplayWidth()) ?? 0,
+        height: (await track?.getDisplayHeight()) ?? 0,
+        durationSec: await server.computeDuration(),
+      },
+      clientMp4Base64: btoa(binary),
+    };
+  } finally {
+    client.dispose();
+    server.dispose();
+    URL.revokeObjectURL(rendered.objectUrl);
+  }
+}
+
 export const MOTION_RENDER = { WIDTH, HEIGHT, FONT_PX, DURATION_SEC };
 
 declare global {
   interface Window {
-    __motionRenderBench: { run: typeof runMotionRender; entrances: typeof runEntrances };
+    __motionRenderBench: {
+      run: typeof runMotionRender;
+      entrances: typeof runEntrances;
+      compare: typeof runServerCompare;
+    };
   }
 }
 
-window.__motionRenderBench = { run: runMotionRender, entrances: runEntrances };
+window.__motionRenderBench = {
+  run: runMotionRender,
+  entrances: runEntrances,
+  compare: runServerCompare,
+};
