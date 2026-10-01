@@ -121,7 +121,12 @@
     "paste:e2e:bench": "playwright test --config playwright.paste-context.config.ts --workers=1",
     "design-system:upload:e2e:bench": "playwright test --config playwright.design-system-upload.config.ts --workers=1",
     "organic:ship:fe:e2e:bench": "set -a; . ./.env.local; set +a; BENCH_BACKEND_PORT=4423 NEXT_PUBLIC_API_URL=http://127.0.0.1:4423 PORT=3123 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3123 NEXT_DIST_DIR=.next/organic-ship-e2e playwright test e2e/organic-ship.bench.spec.ts --workers=1",
-    "plugin:web:bench": "bun --no-env-file e2e/plugin-public.bench.ts"
+    "plugin:web:bench": "bun --no-env-file e2e/plugin-public.bench.ts",
+    "videoeditor:motion:e2e:bench": "BENCH_SINK=library playwright test --config=playwright.browser-render.config.ts e2e/video-editor-motion-ui.spec.ts --workers=1",
+    "videoeditor:motion:render:bench": "playwright test --config=playwright.browser-render.config.ts e2e/video-editor-motion-render.spec.ts --workers=1",
+    "videoeditor:generate:e2e:bench": "BENCH_SINK=library playwright test --config=playwright.browser-render.config.ts e2e/video-editor-generate-ui.spec.ts --workers=1",
+    "videoeditor:audio:render:bench": "playwright test --config=playwright.browser-render.config.ts e2e/video-editor-audio-render.spec.ts --workers=1",
+    "videoeditor:first-cut:finish:e2e:bench": "BENCH_SINK=library playwright test --config=playwright.browser-render.config.ts e2e/video-editor-first-cut-finish.spec.ts --workers=1"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.109",
