@@ -35,6 +35,41 @@ export function describeBrief(fields: BriefFields): string {
     : `A ${cut} from this footage`;
 }
 
+/** What a first cut is finished with. People get all of it unless they switch a piece off. */
+export type FinishFields = {
+  music: boolean;
+  /** The bed's mood; blank lets the draft take it from the brief. */
+  mood: string;
+  hookTitle: boolean;
+  broll: boolean;
+  brandCaptions: boolean;
+};
+
+export const DEFAULT_FINISH: FinishFields = {
+  music: true,
+  mood: '',
+  hookTitle: true,
+  broll: true,
+  brandCaptions: true,
+};
+
+export const MOOD_CHIPS = [
+  'Upbeat pop',
+  'Warm acoustic',
+  'Cinematic build',
+  'Lo-fi chill',
+  'Driving electronic',
+] as const;
+
+/** draft_cut's finishing flags. Brand captions style captions, so they need captions on. */
+export const finishInput = (finish: FinishFields, captions: boolean) => ({
+  music: finish.music,
+  ...(finish.music && finish.mood.trim() ? { musicPrompt: finish.mood.trim() } : {}),
+  hookTitle: finish.hookTitle,
+  broll: finish.broll,
+  brandCaptions: captions && finish.brandCaptions,
+});
+
 /** Footage: a video or audio clip cut from a Library asset — what a first cut is made of. */
 export const hasFootage = (project: EditorProjectV2): boolean =>
   project.tracks.some(

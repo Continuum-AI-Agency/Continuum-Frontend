@@ -21,7 +21,7 @@ const PROJECT_ID = '22222222-2222-4222-8222-222222222222';
 const SIBLING_ID = '33333333-3333-4333-8333-333333333333';
 
 describe('VariantSwitcher', () => {
-  it('holds "Redraft all variants" until list_variants has answered, then redrafts every sibling', async () => {
+  it('holds "Redraft all variants" and "Export all variants" until list_variants has answered, then redrafts every sibling', async () => {
     const redrafts: number[] = [];
     const project = {
       ...createEditorProjectV2({ projectId: PROJECT_ID, title: 'A', width: 1080, height: 1920 }),
@@ -54,8 +54,10 @@ describe('VariantSwitcher', () => {
       />,
     );
     const button = screen.getByRole('button', { name: 'Redraft all variants' });
+    const exportAll = screen.getByRole('button', { name: 'Export all variants' });
     // Before the answer the only tab is this project: a redraft now would redraft one.
     expect(button.hasAttribute('disabled')).toBe(true);
+    expect(exportAll.hasAttribute('disabled')).toBe(true);
     const variant = (projectId: string, label: string, current: boolean) => ({
       projectId,
       label,
@@ -68,5 +70,12 @@ describe('VariantSwitcher', () => {
     await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false));
     fireEvent.click(button);
     expect(redrafts).toEqual([2]);
+    // Export all opens the export dialog on the whole family.
+    fireEvent.click(exportAll);
+    const dialog = await screen.findByTestId('video-studio-export-dialog');
+    expect(
+      dialog.querySelector('[aria-label="What to export"] [aria-pressed="true"]')?.textContent,
+    ).toBe('All variants');
+    expect(screen.getByTestId('export-all-start')).toBeTruthy();
   });
 });
