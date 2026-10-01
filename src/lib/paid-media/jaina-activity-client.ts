@@ -339,16 +339,32 @@ export async function fetchCanvasScaffoldRead(params: {
   brandId: string;
   scaffold: ScaffoldSummary;
 }): Promise<CanvasScaffoldRead> {
-  const [versions, nameOf] = await Promise.all([
+  const readParent = async (): Promise<ScaffoldSummary> => {
+    const { data, error } = await createSupabaseBrowserClient()
+      .schema('brand_profiles').from('paid_scaffolds')
+      .select('id,name,ad_account_id,current_version_id,created_at')
+      .eq('brand_id', params.brandId).eq('id', params.scaffold.id).is('archived_at', null).maybeSingle();
+    if (error) throw new Error(`Could not refresh the scaffold: ${error.message}`);
+    if (!data) throw new Error('That scaffold is unavailable for this brand.');
+    const raw = data as unknown as Record<string, unknown>;
+    return { id: String(raw.id), name: String(raw.name ?? 'Untitled scaffold'),
+      adAccountId: String(raw.ad_account_id ?? ''), currentVersionId: asNullableString(raw.current_version_id),
+      createdAt: String(raw.created_at ?? '') };
+  };
+  const [scaffold, initialVersions, nameOf] = await Promise.all([
+    readParent(),
     fetchScaffoldVersions({ scaffoldId: params.scaffold.id }),
     fetchBrandMemberNames({ brandId: params.brandId }),
   ]);
-
-  const version =
-    versions.find((entry) => entry.id === params.scaffold.currentVersionId) ?? versions[0];
-  if (!version) {
-    throw new Error(`"${params.scaffold.name}" has no versions to load.`);
+  let versions = initialVersions;
+  if (scaffold.currentVersionId && !versions.some((entry) => entry.id === scaffold.currentVersionId)) {
+    // A proposal can advance the parent while its version list is being read.
+    versions = await fetchScaffoldVersions({ scaffoldId: scaffold.id });
   }
+  const version = scaffold.currentVersionId
+    ? versions.find((entry) => entry.id === scaffold.currentVersionId)
+    : versions[0];
+  if (!version) throw new Error(`"${scaffold.name}" has no current version to load. Retry after the proposal finishes.`);
 
   const [tree, gates, audiences] = await Promise.all([
     fetchPaidScaffoldTreeRows({ scaffoldVersionId: version.id }),
@@ -356,5 +372,9 @@ export async function fetchCanvasScaffoldRead(params: {
     fetchBrandAudienceGroups({ brandId: params.brandId, nameOf }),
   ]);
 
-  return { scaffold: params.scaffold, version, versions, tree, gates, audiences };
+  const refreshed = await readParent();
+  if (refreshed.currentVersionId !== scaffold.currentVersionId || refreshed.adAccountId !== scaffold.adAccountId) {
+    throw new Error('The proposal changed while loading. Select it again to load the current version.');
+  }
+  return { scaffold: refreshed, version, versions, tree, gates, audiences };
 }

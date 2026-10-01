@@ -64,21 +64,32 @@ export function ScaffoldRecordBar({
   const [selectedId, setSelectedId] = React.useState<string>('');
   const [isLoadingGraph, setIsLoadingGraph] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const readGeneration = React.useRef(0);
+
+  React.useLayoutEffect(() => {
+    // Invalidate before late promises can write into a different brand or selection.
+    readGeneration.current++;
+    return () => { readGeneration.current++; };
+  }, [brandId, requestedScaffoldId]);
 
   const loadScaffold = React.useCallback(
     (scaffold: ScaffoldSummary) => {
+      const generation = ++readGeneration.current;
+      const isCurrent = () => generation === readGeneration.current;
       setSelectedId(scaffold.id);
       setIsLoadingGraph(true);
       setError(null);
       fetchCanvasScaffoldRead({ brandId, scaffold })
         .then((read) => {
+          if (!isCurrent()) return;
           loadHydratedGraph(buildHydratedCanvasGraph(read));
           onAdAccountChange(read.scaffold.adAccountId);
         })
         .catch((cause: unknown) => {
+          if (!isCurrent()) return;
           setError(cause instanceof Error ? cause.message : 'Could not load that proposal.');
         })
-        .finally(() => setIsLoadingGraph(false));
+        .finally(() => { if (isCurrent()) setIsLoadingGraph(false); });
     },
     [brandId, loadHydratedGraph, onAdAccountChange],
   );
@@ -87,6 +98,8 @@ export function ScaffoldRecordBar({
     let cancelled = false;
     setScaffolds(null);
     setSelectedId('');
+    setIsLoadingGraph(false);
+    setError(null);
     fetchBrandScaffolds({ brandId })
       .then((rows) => {
         if (cancelled) return;
@@ -108,6 +121,7 @@ export function ScaffoldRecordBar({
       });
     return () => {
       cancelled = true;
+      readGeneration.current++;
     };
   }, [brandId, onAdAccountChange, requestedScaffoldId, loadScaffold]);
 
@@ -120,7 +134,7 @@ export function ScaffoldRecordBar({
   );
 
   const proposeBlockedBecause =
-    nodeCount === 0 ? 'Load a proposal or add a node — there is nothing to propose yet.' : null;
+    isLoadingGraph ? 'Wait for the selected proposal to finish loading.' : nodeCount === 0 ? 'Load a proposal or add a node — there is nothing to propose yet.' : null;
 
   return (
     <div
