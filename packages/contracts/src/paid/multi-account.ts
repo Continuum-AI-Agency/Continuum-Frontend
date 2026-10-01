@@ -26,6 +26,8 @@ export const normalizeAdAccountId = (value: string): string => {
  */
 export const adAccountRefSchema = z.object({
   id: z.string().min(1),
+  /** Absent on legacy Meta-only callers. */
+  platform: z.enum(['meta', 'google_ads']).optional(),
   name: z.string().nullable(),
   currency: z.string().nullable(),
 });

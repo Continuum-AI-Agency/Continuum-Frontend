@@ -191,6 +191,17 @@ mock.module('@/hooks/useJainaRunStatusRealtime', () => ({
 mock.module('@/hooks/useBrandIntegrations', () => ({
   useBrandIntegrations: () => ({
     integrations: {
+      googleAds: {
+        accounts: [
+          {
+            integrationAccountId: 'google-1',
+            externalAccountId: '6619636193',
+            alias: null,
+            name: '6619636193',
+            type: 'ads_customer',
+          },
+        ],
+      },
       facebook: {
         accounts: [
           {
@@ -568,7 +579,7 @@ describe('JainaChatSurface integration', () => {
     await waitFor(() => {
       expect((screen.getByTestId('prompt-submit') as HTMLButtonElement).disabled).toBe(false);
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Meta accounts: 1 of 2 included' }));
+    fireEvent.click(screen.getByRole('button', { name: /accounts: 1 of \d included/ }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Second Meta' }));
     fireEvent.click(screen.getByTestId('prompt-submit'));
 
@@ -576,6 +587,42 @@ describe('JainaChatSurface integration', () => {
     expect(sendTurnMock.mock.calls[0]?.[0]).toMatchObject({
       adAccountId: 'act-1',
       adAccountIds: ['act-1', 'act-2'],
+    });
+  });
+
+  it('includes the assigned Google Ads customer alongside Meta accounts in the turn', async () => {
+    global.fetch = emptyHistoryFetch();
+    render(surface, { wrapper: withQueryClient });
+    await waitFor(() =>
+      expect((screen.getByTestId('prompt-submit') as HTMLButtonElement).disabled).toBe(false),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /accounts: 1 of \d included/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /661.*963.*6193/ }));
+    fireEvent.click(screen.getByTestId('prompt-submit'));
+    await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
+    expect(sendTurnMock.mock.calls[0]?.[0]).toMatchObject({
+      adAccountId: 'act-1',
+      adAccountIds: ['act-1', '6619636193'],
+      accounts: [
+        { platform: 'meta', accountId: 'act-1' },
+        { platform: 'google_ads', accountId: '6619636193' },
+      ],
+    });
+  });
+
+  it('sends a Google-only primary selection as Google Ads', async () => {
+    global.fetch = emptyHistoryFetch();
+    render(React.cloneElement(surface, { adAccountId: '6619636193' }), {
+      wrapper: withQueryClient,
+    });
+    await waitFor(() =>
+      expect((screen.getByTestId('prompt-submit') as HTMLButtonElement).disabled).toBe(false),
+    );
+    fireEvent.click(screen.getByTestId('prompt-submit'));
+    await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
+    expect(sendTurnMock.mock.calls[0]?.[0]).toMatchObject({
+      adAccountId: '6619636193',
+      accounts: [{ platform: 'google_ads', accountId: '6619636193' }],
     });
   });
 
