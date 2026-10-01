@@ -52,8 +52,12 @@ import {
   useState,
   useTransition,
 } from 'react';
-import { isForgeDesignFile } from '@/components/forge/ForgeProjectDrop';
 import { CompetitorInspirationPanel } from '@/components/competitor-spy/CompetitorInspirationPanel';
+import {
+  DesignTemplateImports,
+  useDesignTemplateImports,
+} from '@/components/forge/DesignTemplateImports';
+import { isForgeDesignFile } from '@/components/forge/ForgeProjectDrop';
 import { FigmaIcon } from '@/components/shared/icons';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -79,7 +83,7 @@ import {
   folderPaths,
 } from '@/lib/library/folderUpload';
 import { librarySearchPath, withReviewStates } from '@/lib/library/libraryHref';
-import { fetchTemplateSources, importDesignTemplate } from '@/lib/library/templateSources';
+import { fetchTemplateSources } from '@/lib/library/templateSources';
 import {
   buildLibraryBrowseParams,
   KIND_FILTERS,
@@ -789,23 +793,16 @@ export function LibraryViewer({
     [pushFilters, router],
   );
 
+  const { imports: designImports, start: importDesign } = useDesignTemplateImports(brandId, () => {
+    setAssetRevision((revision) => revision + 1);
+    router.refresh();
+  });
+
   // A Photoshop/Illustrator file dropped on Templates becomes one (anywhere else it is just a file).
   const templateDesigns = useRef(new Set<File>());
   const onUploaded = useCallback(
     ({ file, uploaded }: { file: File; uploaded: { assetId: string } }) => {
-      if (templateDesigns.current.delete(file)) {
-        toast.info(`Making a template from ${file.name}…`);
-        void importDesignTemplate(brandId, uploaded.assetId)
-          .then((imported) => {
-            toast.success(
-              imported.status === 'exists' ? `${file.name} is already a template` : `Template made from ${file.name}`,
-            );
-            router.refresh();
-          })
-          .catch((error: unknown) =>
-            toast.error(`${file.name}: ${error instanceof Error ? error.message : 'the import failed'}`),
-          );
-      }
+      if (templateDesigns.current.delete(file)) void importDesign(file.name, uploaded.assetId);
       const collectionId = folderTargets.current.get(file);
       if (collectionId) {
         folderTargets.current.delete(file);
@@ -825,7 +822,7 @@ export function LibraryViewer({
         onSelectDestination('templates');
       }
     },
-    [brandId, onSelectDestination, router],
+    [brandId, importDesign, onSelectDestination, router],
   );
   const { uploads, uploadFiles, pauseUpload, resumeUpload, retryUpload, cancelUpload, moveUpload } =
     useMediaUpload(brandId, { onUploaded });
@@ -847,7 +844,8 @@ export function LibraryViewer({
       const { fonts, media } = partitionLibraryUploadFiles(fileList);
       if (fonts.length > 0) setFontReviewFiles(fonts);
       if (showTemplates) {
-        for (const file of media) if (isForgeDesignFile(file.name)) templateDesigns.current.add(file);
+        for (const file of media)
+          if (isForgeDesignFile(file.name)) templateDesigns.current.add(file);
       }
       if (media.length > 0) void uploadFiles(media);
     },
@@ -1268,6 +1266,12 @@ export function LibraryViewer({
                 />
               )}
             </AnimatePresence>
+            <DesignTemplateImports
+              imports={designImports}
+              onRetry={importDesign}
+              sourceIds={templateSources.map((source) => source.assetId)}
+              onOpen={(assetId) => router.push(`/forge?template=${encodeURIComponent(assetId)}`)}
+            />
 
             {selectedAssetIds.size > 0 ? (
               <LibraryBulkToolbar

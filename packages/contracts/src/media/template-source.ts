@@ -284,7 +284,18 @@ export const templateParseSchema = z
       .default([]),
     warnings: z.array(z.string()).default([]),
     /** Footage referenced by the AEP but absent from its uploaded package. */
-    missingFootage: z.array(z.object({ name: z.string().nullable(), file: z.string() })).optional(),
+    missingFootage: z
+      .array(
+        z.object({
+          name: z.string().nullable(),
+          file: z.string(),
+          projectPath: z.string().optional(),
+          ascend: z
+            .object({ base: z.number().int().nonnegative(), target: z.number().int().positive() })
+            .optional(),
+        }),
+      )
+      .optional(),
   })
   .strip();
 export type TemplateParse = z.infer<typeof templateParseSchema>;
