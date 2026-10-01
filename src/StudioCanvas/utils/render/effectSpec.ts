@@ -5,7 +5,7 @@
 // (plain JSON, no React) so it serializes into the canvas node blob + the
 // splice worker message, and so it is unit-testable.
 
-import { type ShaderStackV1, sampleNumericTrack } from '@continuum/contracts';
+import { type EditorCrop, type ShaderStackV1, sampleNumericTrack } from '@continuum/contracts';
 
 export interface ClipAdjustments {
   /** 1 = unchanged. Maps to CSS/canvas `brightness()`. */
@@ -102,6 +102,8 @@ export interface ClipEffectSpec {
   adjustments?: ClipAdjustments;
   /** A named look, applied under the manual adjustments. */
   filterPreset?: FilterPreset;
+  filterStrength?: number;
+  crop?: EditorCrop;
   /**
    * Colour temperature, −1 (cold) … +1 (warm).
    *
@@ -266,7 +268,16 @@ export function resolveAdjustments(spec: ClipEffectSpec | undefined): ClipAdjust
     spec.filterPreset && spec.filterPreset !== 'none'
       ? FILTER_PRESETS[spec.filterPreset]
       : undefined;
-  const base = preset ? { ...warmth, ...preset } : warmth;
+  const strength = Math.max(0, Math.min(1, spec.filterStrength ?? 1));
+  const blended =
+    preset &&
+    Object.fromEntries(
+      Object.entries(preset).map(([key, value]) => {
+        const neutral = ['brightness', 'contrast', 'saturation'].includes(key) ? 1 : 0;
+        return [key, neutral + (value - neutral) * strength];
+      }),
+    );
+  const base = blended ? { ...warmth, ...blended } : warmth;
   // An untouched clip must still resolve to `undefined`, not `{}` — `hasVisualEffects`
   // and the preview both read "no adjustments" off that.
   if (Object.keys(base).length === 0) return spec.adjustments;
@@ -592,6 +603,7 @@ export function hasVisualEffects(spec: ClipEffectSpec | undefined): boolean {
   return Boolean(
     (spec.opacity !== undefined && spec.opacity !== 1) ||
       filterString(resolveAdjustments(spec)) ||
+      spec.crop ||
       spec.transform ||
       spec.flipH ||
       spec.flipV ||

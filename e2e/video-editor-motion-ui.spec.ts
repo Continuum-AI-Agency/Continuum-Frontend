@@ -484,6 +484,31 @@ test(BENCH, async ({ browser }) => {
       JSON.stringify(vhsOf(project)?.parameters),
     );
 
+    await visible(page.locator('[data-look="vintage"]')).click();
+    const vintageOf = (value: EditorProjectV2) => {
+      const clip = clipById(value, clipB.id);
+      return clip && 'effects' in clip
+        ? clip.effects.find((effect) => effect.effectId === 'vintage')
+        : undefined;
+    };
+    await until(
+      () => getProject(api, projectId),
+      (value) => Boolean(vintageOf(value)),
+    );
+    const vintageStrength = visible(
+      page.getByRole('group', { name: 'Vintage strength', exact: true }).getByRole('slider'),
+    );
+    await vintageStrength.focus();
+    await page.keyboard.press('Home');
+    project = await until(
+      () => getProject(api, projectId),
+      (value) => vintageOf(value)?.mix === 0,
+    );
+    check(
+      'Vintage intensity is adjustable to zero through the real Inspector',
+      vintageOf(project)?.mix === 0,
+    );
+
     // ── a Media card dragged onto V1 lands through add_clip ───────────────────────────
     await visible(page.getByRole('tab', { name: 'Media', exact: true })).click();
     const card = visible(page.locator(`[data-bin-asset="${SOURCE_ASSET_ID}"]`)).first();
@@ -566,6 +591,33 @@ test(BENCH, async ({ browser }) => {
     }
 
     // ── an edit from OUTSIDE the page, live ───────────────────────────────────────────
+    await seek(page, pxPerSec, 0);
+    await selectClip(page, clipA.id);
+    await page.keyboard.down('Shift');
+    await selectClip(page, clipB.id);
+    await page.keyboard.up('Shift');
+    await visible(page.getByRole('button', { name: 'Collage', exact: false })).click();
+    const collageRequest = page.waitForResponse((response) =>
+      response.url().includes('/ops/collage'),
+    );
+    await page.getByRole('menuitem', { name: 'Film strips', exact: true }).click();
+    const collageResponse = await collageRequest;
+    project = await until(
+      () => getProject(api, projectId),
+      (value) => value.tracks.some((track) => track.kind === 'overlay' && track.name === 'Collage'),
+    );
+    const panels =
+      project.tracks.find((track) => track.kind === 'overlay' && track.name === 'Collage')?.clips ??
+      [];
+    check(
+      'Collage menu places the two selected real sources in film strips',
+      collageResponse.ok() &&
+        panels.length === 2 &&
+        panels.every(
+          (clip) => clip.kind === 'overlay' && clip.crop.top > 0 && clip.crop.bottom > 0,
+        ),
+    );
+
     const outside = await postOp(api, projectId, 'add_text', {
       text: OUTSIDE_LINE,
       startSec: 4,

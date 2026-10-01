@@ -395,3 +395,19 @@ describe('the five preset primitives', () => {
     expect(css.filter).toBeUndefined();
   });
 });
+
+it('filter intensity interpolates from neutral and keeps manual adjustments', () => {
+  expect(resolveAdjustments({ filterPreset: 'vintage', filterStrength: 0 })).toMatchObject({
+    sepia: 0,
+    saturation: 1,
+    contrast: 1,
+    brightness: 1,
+  });
+  expect(
+    resolveAdjustments({
+      filterPreset: 'vintage',
+      filterStrength: 0.5,
+      adjustments: { brightness: 2 },
+    }),
+  ).toMatchObject({ sepia: 0.225, saturation: 0.925, contrast: 1.05, brightness: 2 });
+});

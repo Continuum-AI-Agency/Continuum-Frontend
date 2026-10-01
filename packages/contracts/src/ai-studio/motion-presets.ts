@@ -416,7 +416,7 @@ export function lookEffectInstance(
     effectType: look.effectType,
     effectId,
     enabled: true,
-    mix: 1,
+    mix: look.parameter ? 1 : strength,
     parameters,
   };
 }

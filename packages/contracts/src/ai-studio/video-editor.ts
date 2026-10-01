@@ -454,18 +454,49 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      'Cut to the music. cut_on_beat splits the picture on every Nth beat; switch_shots alternates the given source clips every N beats. Detects beats first if the timeline has none.',
+      'Make a rhythmic montage: switch_shots alternates at least two distinct source spans while keeping the original audio continuous. everyNBeats 0.5 or 0.25 makes rapid half/quarter-beat cuts. cut_on_beat only splits continuous footage for edit preparation. An explicit audioClipId redetects beats from that audio.',
     input: z
       .object({
         ...projectRef,
-        mode: z.enum(['cut_on_beat', 'switch_shots']).default('cut_on_beat'),
-        everyNBeats: z.number().int().min(1).max(16).default(1),
+        mode: z.enum(['cut_on_beat', 'switch_shots']).default('switch_shots'),
+        everyNBeats: z
+          .number()
+          .finite()
+          .min(0.25)
+          .max(16)
+          .refine(
+            (value) => value === 0.25 || value === 0.5 || Number.isInteger(value),
+            'Use quarter, half, or whole beats',
+          )
+          .default(1),
         clipIds: z.array(z.string()).max(50).optional(),
         audioClipId: z.string().optional(),
         range: timelineRangeSchema.optional(),
       })
       .strict(),
     output: committed({ cuts: z.array(secSchema) }),
+  },
+  collage: {
+    group: 'motion',
+    commits: true,
+    scope: 'project',
+    access: 'operate',
+    description:
+      'Show two to four existing picture clips together in filled collage panels, without replacing the main sequence or its audio. stack makes horizontal strips, side_by_side makes columns, grid needs four clips. Each panel uses a centered crop. One undo removes the collage.',
+    input: z
+      .object({
+        ...projectRef,
+        clipIds: z
+          .array(z.string())
+          .min(2)
+          .max(4)
+          .refine((ids) => new Set(ids).size === ids.length, 'Select different clips'),
+        layout: z.enum(['stack', 'side_by_side', 'grid']).default('stack'),
+        atSec: secSchema.default(0),
+        durationSec: z.number().finite().min(0.1).max(120).optional(),
+      })
+      .strict(),
+    output: committed({ clipIds: z.array(z.string()), trackId: z.string() }),
   },
   set_captions: {
     group: 'quick',

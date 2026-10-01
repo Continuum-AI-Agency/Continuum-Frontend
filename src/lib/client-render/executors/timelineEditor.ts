@@ -224,11 +224,13 @@ export const clipEffectSpecFromEditorClip = (clip: {
     perspective?: number;
     opacity: number;
   };
+  crop?: ClipEffectSpec['crop'];
   blendMode?: ClipEffectSpec['blendMode'];
   effects?: Array<{
     enabled: boolean;
     effectType: string;
     effectId: string;
+    mix?: number;
     parameters: Record<string, unknown>;
   }>;
   keyframes?: EditorClipKeyframe[];
@@ -251,6 +253,9 @@ export const clipEffectSpecFromEditorClip = (clip: {
         flipH: clip.transform.scaleX < 0,
         flipV: clip.transform.scaleY < 0,
       }
+    : {}),
+  ...(clip.crop && Object.values(clip.crop).some((value) => value !== 0)
+    ? { crop: clip.crop }
     : {}),
   ...(clip.blendMode ? { blendMode: clip.blendMode } : {}),
   ...(() => {
@@ -285,7 +290,12 @@ export const clipEffectSpecFromEditorClip = (clip: {
     };
     return {
       ...(filterPreset
-        ? { filterPreset: filterPreset as NonNullable<ClipEffectSpec['filterPreset']> }
+        ? {
+            filterPreset: filterPreset as NonNullable<ClipEffectSpec['filterPreset']>,
+            filterStrength:
+              looks.find((look) => (look.parameters.filterPreset ?? look.effectId) === filterPreset)
+                ?.mix ?? 1,
+          }
         : {}),
       ...(Object.values(adjustments).some((value) => value !== undefined) ? { adjustments } : {}),
     };

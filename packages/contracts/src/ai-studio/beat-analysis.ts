@@ -58,8 +58,8 @@ export function analyzePcmBeats(
   const minBpm = options.minBpm ?? 60;
   const maxBpm = options.maxBpm ?? 200;
   const framesPerSecond = sampleRate / hop;
-  const minLag = Math.max(1, Math.floor((60 * framesPerSecond) / maxBpm));
-  const maxLag = Math.min(envelope.length - 1, Math.ceil((60 * framesPerSecond) / minBpm));
+  const minLag = Math.max(1, Math.ceil((60 * framesPerSecond) / maxBpm));
+  const maxLag = Math.min(envelope.length - 1, Math.floor((60 * framesPerSecond) / minBpm));
   let bestLag = minLag;
   let best = 0;
   let total = 0;
@@ -74,7 +74,10 @@ export function analyzePcmBeats(
       bestLag = lag;
     }
   }
-  const detectedBpm = Math.round((60 * framesPerSecond) / bestLag);
+  const detectedBpm = Math.max(
+    minBpm,
+    Math.min(maxBpm, Math.round((60 * framesPerSecond) / bestLag)),
+  );
   const bpm = detectedBpm < 90 && detectedBpm * 2 <= maxBpm ? detectedBpm * 2 : detectedBpm;
   let onsetIndex = 0;
   for (let index = 1; index < Math.min(envelope.length, bestLag); index += 1) {
@@ -84,10 +87,7 @@ export function analyzePcmBeats(
   const confidence =
     best <= 0
       ? 0
-      : Math.max(
-          0,
-          Math.min(1, best / Math.max(best, total / Math.max(1, maxLag - minLag + 1)) - 0.5),
-        );
+      : Math.max(0, Math.min(1, (best - total / Math.max(1, maxLag - minLag + 1)) / best));
   const durationSec = samples.length / sampleRate;
   return { bpm, offsetSec, confidence, markers: buildBeatMarkers({ durationSec, bpm, offsetSec }) };
 }

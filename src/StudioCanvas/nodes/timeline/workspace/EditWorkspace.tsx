@@ -412,7 +412,8 @@ export function EditWorkspace({
     [quickOp, runOp],
   );
   const cutOnBeat = useCallback(
-    () => quickOp('Cut on beat', () => runOp('beat_cut', { mode: 'cut_on_beat' })),
+    () =>
+      quickOp('Quick cuts', () => runOp('beat_cut', { mode: 'switch_shots', everyNBeats: 0.5 })),
     [quickOp, runOp],
   );
   const setFormat = useCallback(
@@ -678,7 +679,7 @@ export function EditWorkspace({
         actions: [
           { id: 'cut-pauses', label: 'Cut pauses', run: () => void cutPauses() },
           { id: 'captions', label: 'Auto-captions', run: () => void autoCaptions() },
-          { id: 'beat-cut', label: 'Cut on beat', run: () => void cutOnBeat() },
+          { id: 'beat-cut', label: 'Quick cuts on the beat', run: () => void cutOnBeat() },
           { id: 'beats', label: 'Detect beats', run: () => void detectBeats() },
         ],
       },
@@ -756,8 +757,37 @@ export function EditWorkspace({
           className="h-7 gap-1 text-xs"
           onClick={() => void cutOnBeat()}
         >
-          <Music className="size-3.5" /> Cut on beat
+          <Music className="size-3.5" /> Quick cuts
         </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={<Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" />}
+          >
+            <Clapperboard className="size-3.5" /> Collage <ChevronDown className="size-3" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            {(['stack', 'side_by_side', 'grid'] as const).map((layout) => (
+              <DropdownMenuItem
+                key={layout}
+                onSelect={() => {
+                  const ids = selectionRef.current;
+                  void quickOp('Collage', () =>
+                    runOp('collage', { clipIds: ids, layout, atSec: store.getSec() }),
+                  );
+                }}
+              >
+                {layout === 'stack'
+                  ? 'Film strips'
+                  : layout === 'side_by_side'
+                    ? 'Side by side'
+                    : 'Four-panel grid'}
+              </DropdownMenuItem>
+            ))}
+            <div className="px-2 py-1 text-xs text-muted-foreground">
+              Select 2–4 picture clips first.
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button
           size="sm"
           variant="ghost"
@@ -768,7 +798,7 @@ export function EditWorkspace({
         </Button>
       </div>
     ),
-    [autoCaptions, cutOnBeat, cutPauses, detectBeats],
+    [autoCaptions, cutOnBeat, cutPauses, detectBeats, quickOp, runOp, store],
   );
 
   const key = TIMELINE_SHORTCUT_KEYS;

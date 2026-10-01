@@ -357,7 +357,12 @@ export async function drawEffectFrame(
         v: effects.flipV,
       });
     }
-    const rect = computeLetterboxRect(sourceWidth, sourceHeight, targetWidth, targetHeight);
+    const crop = effects?.crop;
+    const sx = sourceWidth * (crop?.left ?? 0);
+    const sy = sourceHeight * (crop?.top ?? 0);
+    const sw = sourceWidth * (1 - (crop?.left ?? 0) - (crop?.right ?? 0));
+    const sh = sourceHeight * (1 - (crop?.top ?? 0) - (crop?.bottom ?? 0));
+    const rect = computeLetterboxRect(sw, sh, targetWidth, targetHeight);
     const radiusFrac = cornerRadiusFracFor(effects);
     if (radiusFrac > 0 && typeof ctx.roundRect === 'function') {
       ctx.beginPath();
@@ -367,7 +372,8 @@ export async function drawEffectFrame(
       ctx.clip();
     }
     const prepared = await prepareSource(source, sourceWidth, sourceHeight, effects, timeSec);
-    ctx.drawImage(prepared, rect.x, rect.y, rect.width, rect.height);
+    if (crop) ctx.drawImage(prepared, sx, sy, sw, sh, rect.x, rect.y, rect.width, rect.height);
+    else ctx.drawImage(prepared, rect.x, rect.y, rect.width, rect.height);
   } finally {
     ctx.restore();
     ctx.filter = 'none';

@@ -123,7 +123,7 @@ export function lookStrength(effect: EditorEffectInstance): number {
   if (!Object.hasOwn(LOOK_EFFECTS, effect.effectId)) return 1;
   const id = effect.effectId as LookEffectId;
   const parameter = LOOK_EFFECTS[id].parameter;
-  if (!parameter) return 1;
+  if (!parameter) return effect.mix;
   const full = lookEffectInstance(id, { id: 'full', strength: 1 }).parameters[parameter];
   const now = effect.parameters[parameter];
   return typeof full === 'number' && typeof now === 'number' && full > 0
@@ -154,9 +154,7 @@ export function LookSection({
       runOp('apply_effect', { clipId: clip.id, effect, strength: value }),
     );
   // Requests race on the wire, so a burst of commits would land in any order.
-  const pendingStrength = useRef<{ timer: ReturnType<typeof setTimeout>; flush: () => void }>(
-    null,
-  );
+  const pendingStrength = useRef<{ timer: ReturnType<typeof setTimeout>; flush: () => void }>(null);
   const commitStrength = (effect: LookEffectId, value: number) => {
     if (pendingStrength.current) clearTimeout(pendingStrength.current.timer);
     const flush = () => {
@@ -212,24 +210,18 @@ export function LookSection({
       </div>
       {focused && focus ? (
         <div className="flex items-end gap-2">
-          {LOOK_EFFECTS[focus].parameter ? (
-            <SliderField
-              className="flex-1"
-              label={`${LOOK_EFFECTS[focus].label} strength`}
-              value={strength}
-              min={0}
-              max={1}
-              step={0.05}
-              format={{ style: 'percent', maximumFractionDigits: 0 }}
-              // Never disabled mid-run: each arrow key commits, and the edit queue keeps order.
-              onChange={setStrength}
-              onCommit={(value) => commitStrength(focus, value)}
-            />
-          ) : (
-            <span className="flex-1 text-2xs text-muted-foreground">
-              {LOOK_EFFECTS[focus].label} is a fixed look.
-            </span>
-          )}
+          <SliderField
+            className="flex-1"
+            label={`${LOOK_EFFECTS[focus].label} strength`}
+            value={strength}
+            min={0}
+            max={1}
+            step={0.05}
+            format={{ style: 'percent', maximumFractionDigits: 0 }}
+            // Never disabled mid-run: each arrow key commits, and the edit queue keeps order.
+            onChange={setStrength}
+            onCommit={(value) => commitStrength(focus, value)}
+          />
           <Button
             size="icon"
             variant="ghost"
