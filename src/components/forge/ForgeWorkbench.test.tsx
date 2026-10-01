@@ -40,6 +40,11 @@ let uploadFinished: UploadFinished | undefined;
 const fetchTemplateSources = mock(async () => fetchedSources);
 const fetchRenderWorkspaces = mock(async () => []);
 const discoverWorkspaceTemplates = mock(async () => ({ items: discovered }));
+const importDesignTemplate = mock(async (_brandId: string, _assetId: string) => ({
+  status: 'created' as const,
+  assetId: ASSET,
+  parseState: 'parsed' as const,
+}));
 const renameTemplateSource = mock(async (_brandId: string, _assetId: string, title: string) => ({
   ...SOURCE,
   displayName: title,
@@ -47,6 +52,7 @@ const renameTemplateSource = mock(async (_brandId: string, _assetId: string, tit
 
 mock.module('@/lib/library/templateSources', () => ({
   fetchTemplateSources,
+  importDesignTemplate,
   renameTemplateSource,
   fetchRenderWorkspaces,
   discoverWorkspaceTemplates,
@@ -103,6 +109,7 @@ beforeEach(() => {
   discoverWorkspaceTemplates.mockClear();
   renameTemplateSource.mockClear();
   toastError.mockClear();
+  importDesignTemplate.mockClear();
 });
 afterEach(() => {
   cleanup();
@@ -227,8 +234,18 @@ describe('ForgeWorkbench', () => {
   test('published delivery compositions appear as separate template choices', async () => {
     fetchedSources = [{ ...SOURCE, templateKey: '99' }];
     discovered = [
-      workspaceTemplate({ templateKey: '101', name: 'Inyogo · Card A', sourceAssetId: ASSET, granted: true }),
-      workspaceTemplate({ templateKey: '102', name: 'Inyogo · Card B', sourceAssetId: ASSET, granted: true }),
+      workspaceTemplate({
+        templateKey: '101',
+        name: 'Inyogo · Card A',
+        sourceAssetId: ASSET,
+        granted: true,
+      }),
+      workspaceTemplate({
+        templateKey: '102',
+        name: 'Inyogo · Card B',
+        sourceAssetId: ASSET,
+        granted: true,
+      }),
     ];
     renderWorkbench();
     expect(await screen.findByRole('button', { name: 'Open Inyogo · Card A' })).toBeTruthy();
@@ -304,3 +321,16 @@ describe('ForgeWorkbench', () => {
     });
   });
 });
+
+for (const extension of ['ai', 'psd']) {
+  test(`a direct ${extension.toUpperCase()} upload converts its saved asset and refreshes the gallery`, async () => {
+    renderWorkbench();
+    await waitFor(() => expect(uploadFinished).toBeDefined());
+    uploadFinished?.({
+      file: new File(['real upload handled elsewhere'], `design.${extension}`),
+      uploaded: { assetId: 'design-source' },
+    });
+    await waitFor(() => expect(importDesignTemplate).toHaveBeenCalledWith(BRAND, 'design-source'));
+    await waitFor(() => expect(fetchTemplateSources.mock.calls.length).toBeGreaterThan(1));
+  });
+}

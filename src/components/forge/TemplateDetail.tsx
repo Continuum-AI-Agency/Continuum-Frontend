@@ -263,6 +263,7 @@ export function TemplateDetail({
   const [savingText, setSavingText] = useState(false);
   // Read once: the dropped file is handed off moments after mount, and the tab must not follow it.
   const [tab, setTab] = useState(revisionFile ? 'source' : 'variables');
+  const [inspectorTab, setInspectorTab] = useState('checks');
   const missingFootage = source.parse?.missingFootage ?? [];
   // Open on a format that has something to show. A parse can list a precomp as a format (KAMAY's
   // "Gradient Background 1" came first), and landing on its empty frame reads as a broken preview.
@@ -1547,75 +1548,92 @@ export function TemplateDetail({
           ) : null}
         </div>
 
-        <div className="flex min-w-0 flex-col divide-y divide-border">
-          <FactList
-            className="p-[var(--card-pad)]"
-            facts={[
-              { icon: CircleDot, label: 'Status', value: <TemplateStatusPill status={status} /> },
-              {
-                icon: RectangleHorizontal,
-                label: 'Formats',
-                value: ratios.length ? (
-                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    {ratios.map((ratio) => (
-                      <span
-                        key={ratio}
-                        className="inline-flex items-center gap-1 font-mono tabular-nums"
-                      >
-                        <RatioGlyph ratio={ratio} className="text-muted-foreground" />
-                        {ratio}
-                      </span>
-                    ))}
-                  </span>
-                ) : (
-                  '—'
-                ),
-              },
-              {
-                icon: Variable,
-                label: 'Variables',
-                numeric: true,
-                value: unassigned ? `${variableCount} · ${unassigned} unassigned` : variableCount,
-              },
-              { icon: Type, label: 'Fonts', numeric: true, value: fontsFact, ruleBefore: true },
-              {
-                icon: History,
-                label: 'Last render',
-                value: jobs.length ? (
-                  <span className="flex items-center gap-2">
-                    <span className="font-mono tabular-nums">
-                      {lastFinished
-                        ? formatRelativeTime(lastFinished.finishedAt ?? lastFinished.updatedAt)
-                        : 'None finished'}
+        <Tabs value={inspectorTab} onValueChange={setInspectorTab} className="min-w-0 gap-0">
+          <TabsList
+            variant="line"
+            className="h-9 w-full justify-start border-b px-[var(--card-pad)]"
+          >
+            <TabsTrigger value="checks">Checks</TabsTrigger>
+            <TabsTrigger value="layers">Edit layers</TabsTrigger>
+          </TabsList>
+          <TabsContent value="checks" keepMounted>
+            <FactList
+              className="p-[var(--card-pad)]"
+              facts={[
+                { icon: CircleDot, label: 'Status', value: <TemplateStatusPill status={status} /> },
+                {
+                  icon: RectangleHorizontal,
+                  label: 'Formats',
+                  value: ratios.length ? (
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      {ratios.map((ratio) => (
+                        <span
+                          key={ratio}
+                          className="inline-flex items-center gap-1 font-mono tabular-nums"
+                        >
+                          <RatioGlyph ratio={ratio} className="text-muted-foreground" />
+                          {ratio}
+                        </span>
+                      ))}
                     </span>
-                    <TickBar ticks={jobs.map((job) => JOB_TICK[job.status]).reverse()} />
-                  </span>
-                ) : (
-                  'Never'
-                ),
-              },
-              { icon: Layers, label: 'Sets', numeric: true, value: setCount ?? '—' },
-              {
-                icon: CalendarClock,
-                label: 'Updated',
-                value: formatDate(source.updatedAt ?? source.createdAt),
-              },
-            ]}
-          />
+                  ) : (
+                    '—'
+                  ),
+                },
+                {
+                  icon: Variable,
+                  label: 'Variables',
+                  numeric: true,
+                  value: unassigned ? `${variableCount} · ${unassigned} unassigned` : variableCount,
+                },
+                { icon: Type, label: 'Fonts', numeric: true, value: fontsFact, ruleBefore: true },
+                {
+                  icon: History,
+                  label: 'Last render',
+                  value: jobs.length ? (
+                    <span className="flex items-center gap-2">
+                      <span className="font-mono tabular-nums">
+                        {lastFinished
+                          ? formatRelativeTime(lastFinished.finishedAt ?? lastFinished.updatedAt)
+                          : 'None finished'}
+                      </span>
+                      <TickBar ticks={jobs.map((job) => JOB_TICK[job.status]).reverse()} />
+                    </span>
+                  ) : (
+                    'Never'
+                  ),
+                },
+                { icon: Layers, label: 'Sets', numeric: true, value: setCount ?? '—' },
+                {
+                  icon: CalendarClock,
+                  label: 'Updated',
+                  value: formatDate(source.updatedAt ?? source.createdAt),
+                },
+              ]}
+            />
 
-          <Panel title="Checks" bodyClassName="p-0">
-            <CheckTable rows={checks} action={footerAction} />
-            <div className="border-t border-border">
-              <TemplateActivity
-                ref={activityTrigger}
-                brandId={brandId}
-                assetId={assetId}
-                open={activityOpen}
-                onOpenChange={setActivityOpen}
-              />
-            </div>
-          </Panel>
-        </div>
+            <Panel title="Checks" bodyClassName="p-0">
+              <CheckTable rows={checks} action={footerAction} />
+              <div className="border-t border-border">
+                <TemplateActivity
+                  ref={activityTrigger}
+                  brandId={brandId}
+                  assetId={assetId}
+                  open={activityOpen}
+                  onOpenChange={setActivityOpen}
+                />
+              </div>
+            </Panel>
+          </TabsContent>
+          <TabsContent value="layers" keepMounted className="p-[var(--card-pad)]">
+            <DesignLayersPanel
+              brandId={brandId}
+              assetId={assetId}
+              active={inspectorTab === 'layers'}
+              onSaved={() => Promise.all([onChanged(), loadVariables()])}
+            />
+          </TabsContent>
+        </Tabs>
       </div>
 
       {templateKey ? (
@@ -1630,9 +1648,6 @@ export function TemplateDetail({
         >
           <TabsTrigger value="variables" className="flex-none px-0 text-xs">
             Variables
-          </TabsTrigger>
-          <TabsTrigger value="layers" className="flex-none px-0 text-xs">
-            Layers
           </TabsTrigger>
           <TabsTrigger value="mapping" className="flex-none px-0 text-xs">
             Mapping
@@ -1664,14 +1679,6 @@ export function TemplateDetail({
             parseState={parseState}
             saving={saving}
             onSave={onSave}
-          />
-        </TabsContent>
-        <TabsContent value="layers" keepMounted className="p-[var(--card-pad)]">
-          <DesignLayersPanel
-            brandId={brandId}
-            assetId={assetId}
-            active={tab === 'layers'}
-            onSaved={() => Promise.all([onChanged(), loadVariables()])}
           />
         </TabsContent>
         <TabsContent value="mapping" keepMounted className="p-[var(--card-pad)]">

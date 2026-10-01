@@ -147,7 +147,7 @@ describe('SourceRebindPanel', () => {
           onConfirmed={async () => undefined}
         />,
       );
-      const input = view.container.querySelector<HTMLInputElement>('input[type="file"]');
+      const input = view.container.querySelector<HTMLInputElement>('input[id^="repair-media-"]');
       fireEvent.change(input!, { target: { files: [new File(['logo'], 'logo.png')] } });
       await waitFor(() =>
         expect(onNeedsReview).toHaveBeenCalledWith('33333333-3333-4333-8333-333333333333'),
@@ -286,4 +286,59 @@ describe('SourceRebindPanel', () => {
       `inyogo.zip is 210 MB, over the ${FORGE_PROJECT_FILE_MAX_MB} MB upload limit, so it was not uploaded. Ask an admin to raise the limit.`,
     );
   });
+});
+
+test('a batch of AI and PSD files repairs a raw AEP in one reviewed source version', async () => {
+  sourceFileName = 'campaign.aep';
+  sourceSignedUrl = 'https://signed.test/campaign.aep';
+  const savedFetch = globalThis.fetch;
+  globalThis.fetch = mock(async () => new Response(new Uint8Array([1, 2]))) as typeof fetch;
+  preview.mockImplementationOnce(async () => ({
+    assetId: '11111111-1111-4111-8111-111111111111',
+    expectedVersionId: '22222222-2222-4222-8222-222222222222',
+    versionId: '33333333-3333-4333-8333-333333333333',
+    checksum: 'a'.repeat(64),
+    requiresReview: false,
+    slots: [],
+    missingFootage: [],
+  }));
+  const refreshed = mock(async () => undefined);
+  try {
+    render(
+      <SourceRebindPanel
+        repairOnly
+        brandId="44444444-4444-4444-8444-444444444444"
+        assetId="11111111-1111-4111-8111-111111111111"
+        expectedVersionId="22222222-2222-4222-8222-222222222222"
+        aepName="campaign.aep"
+        missingFootage={[
+          { name: 'Logo', file: '/old/logo.ai' },
+          { name: 'Photo', file: '/old/photo.psd' },
+        ]}
+        onConfirmed={refreshed}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Choose missing files'), {
+      target: {
+        files: [
+          new File(['ai'], 'logo.ai'),
+          new File(['psd'], 'photo.psd'),
+          new File(['other'], 'unused.ai'),
+        ],
+      },
+    });
+    expect(screen.getByText(/Unmatched files/).textContent).toContain('unused.ai');
+    fireEvent.click(screen.getByRole('button', { name: 'Repair 2 matched files' }));
+    await waitFor(() => expect(refreshed).toHaveBeenCalledTimes(1));
+    expect(uploadNewAssetVersion).toHaveBeenCalledTimes(1);
+    expect(confirm).toHaveBeenCalledTimes(1);
+    const file = uploadNewAssetVersion.mock.calls[0]![0].file;
+    expect(file.name).toBe('campaign.zip');
+    const content = unzipSync(new Uint8Array(await file.arrayBuffer()));
+    expect(content['campaign.aep']).toEqual(new Uint8Array([1, 2]));
+    expect(new TextDecoder().decode(content['logo.ai'])).toBe('ai');
+    expect(new TextDecoder().decode(content['photo.psd'])).toBe('psd');
+  } finally {
+    globalThis.fetch = savedFetch;
+  }
 });

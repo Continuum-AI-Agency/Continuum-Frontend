@@ -62,6 +62,9 @@ function Control({ children, className }: { children: ReactNode; className?: str
 export function RenderToolbar({
   templates,
   templateKey,
+  variants = [],
+  variant = '',
+  onVariantChange,
   templatesLoading,
   onTemplateChange,
   bindingId,
@@ -89,6 +92,9 @@ export function RenderToolbar({
 }: {
   templates: ApiRenderTemplateSummary[];
   templateKey: string;
+  variants?: Array<{ id: string; label: string }>;
+  variant?: string | null;
+  onVariantChange?: (id: string) => void;
   templatesLoading: boolean;
   /** Called with the template REF (`bindingId:key`), never a bare key. */
   onTemplateChange: (ref: string) => void;
@@ -128,9 +134,15 @@ export function RenderToolbar({
     (template) => template.key === templateKey && (!bindingId || template.bindingId === bindingId),
   );
   const currentRef = current ? templateRefOf(current) : '';
+  const siblings = current?.sourceAssetId
+    ? templates.filter(
+        (item) =>
+          item.sourceAssetId === current.sourceAssetId && item.bindingId === current.bindingId,
+      )
+    : [];
   return (
     <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Render">
-      <Control>
+      <Control className="max-w-full min-w-0 flex-wrap">
         <DropdownMenu>
           <DropdownMenuTrigger
             disabled={templates.length === 0}
@@ -176,6 +188,53 @@ export function RenderToolbar({
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+        {ready && (variants.length > 1 || siblings.length > 1) && onVariantChange ? (
+          <label className="flex items-center gap-1.5 text-xs">
+            Variant
+            <select
+              aria-label="Template variant"
+              value={
+                variants.length > 1
+                  ? variant === null
+                    ? 'mixed:'
+                    : `output:${variant}`
+                  : `template:${currentRef}`
+              }
+              onChange={(event) => {
+                const choice = event.target.value;
+                if (choice.startsWith('template:')) onTemplateChange(choice.slice(9));
+                else onVariantChange(choice.slice(7));
+              }}
+              className="h-8 max-w-56 rounded-md border border-input bg-background px-2 text-xs"
+              disabled={busy !== null}
+            >
+              {siblings.length > 1 ? (
+                <optgroup label="Published variants">
+                  {siblings.map((item) => (
+                    <option key={templateRefOf(item)} value={`template:${templateRefOf(item)}`}>
+                      {templateLabel(item)}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+              {variants.length > 1 ? (
+                <optgroup label="Layer variants">
+                  <option value="output:">All variants</option>
+                  {variant === null ? (
+                    <option value="mixed:" disabled>
+                      Mixed variants
+                    </option>
+                  ) : null}
+                  {variants.map((item) => (
+                    <option key={item.id} value={`output:${item.id}`}>
+                      {item.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+            </select>
+          </label>
+        ) : null}
       </Control>
 
       {ready ? (

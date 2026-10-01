@@ -515,7 +515,8 @@ describe('RenderRequestsGrid', () => {
         { slotKey: 'boolean__show-carrera', exposed: true },
       ]),
     );
-    const cell = (await screen.findByRole('switch', { name: 'Show Carrera' })).parentElement as HTMLElement;
+    const cell = (await screen.findByRole('switch', { name: 'Show Carrera' }))
+      .parentElement as HTMLElement;
     // Existing rows never set it, so they render what the file has — and say so.
     expect(within(cell).getByText('Shown · as designed')).toBeTruthy();
   });
@@ -1781,6 +1782,70 @@ describe('RenderRequestsGrid', () => {
     );
     fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: /Headline in front/ }));
     expect(await screen.findByRole('button', { name: 'Formats Model in front' })).toBeTruthy();
+  });
+
+  test('the template variant picker applies to the set and newly added rows', async () => {
+    contractOverrides = {
+      template: { ...TEMPLATE, ratios: ['4:5'] },
+      outputs: [
+        { id: 'Model', label: 'Model', ratio: '4:5' },
+        { id: 'Headline', label: 'Headline', ratio: '4:5' },
+      ],
+    };
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Hola mundo');
+    fireEvent.change(screen.getByLabelText('Template variant'), {
+      target: { value: 'output:Headline' },
+    });
+    expect(await screen.findByRole('button', { name: 'Formats Headline' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Add', exact: true }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Blank row' }));
+    expect(screen.getAllByRole('button', { name: 'Formats Headline' })).toHaveLength(2);
+  });
+
+  test('published sub-variants are selected within the same source and workspace', async () => {
+    const sourceAssetId = '55555555-5555-4555-8555-555555555555';
+    extraTemplates = [
+      { ...TEMPLATE, key: '134', sourceAssetId, displayName: 'Child A' },
+      { ...TEMPLATE, key: '135', sourceAssetId, displayName: 'Child B' },
+      {
+        ...TEMPLATE,
+        key: '136',
+        sourceAssetId,
+        bindingId: '44444444-4444-4444-8444-444444444449',
+        displayName: 'Other workspace',
+      },
+    ];
+    render(
+      <RenderRequestsGrid
+        brandId={BRAND}
+        intent={{ templateKey: '134', bindingId: TEMPLATE.bindingId }}
+      />,
+    );
+    await screen.findByDisplayValue('Hola mundo');
+    const picker = await screen.findByLabelText('Template variant');
+    expect(within(picker).getByRole('option', { name: 'Child B' })).toBeTruthy();
+    expect(within(picker).queryByRole('option', { name: 'Other workspace' })).toBeNull();
+    fireEvent.change(picker, { target: { value: `template:${TEMPLATE.bindingId}:135` } });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Template', exact: true }).textContent).toContain(
+        'Child B',
+      ),
+    );
+  });
+
+  test('a removed variant requires review even when the contract hash stays the same', async () => {
+    listRenderSetsMock.mockImplementation(async () => ({
+      items: [{ ...NEWEST, rows: [{ ...NEWEST.rows[0]!, outputIds: ['Removed variant'] }] }],
+      nextCursor: null,
+    }));
+    contractOverrides = { outputs: [{ id: 'Current', label: 'Current', ratio: '4:5' }] };
+    render(<RenderRequestsGrid brandId={BRAND} />);
+    await screen.findByDisplayValue('Newest row');
+    expect(screen.getByRole('region', { name: 'Older template' }).textContent).toContain(
+      'Removed variant format',
+    );
+    expect(screen.getByRole('button', { name: 'Update set' })).toBeTruthy();
   });
 
   // A two-line headline set on two layers: one box takes both lines, and a count that does not

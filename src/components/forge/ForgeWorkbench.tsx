@@ -40,7 +40,6 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast-imperative';
 import { bulkDeleteAssetsOperation } from '@/lib/library/creativeOperations';
 import {
-  importDesignTemplate,
   discoverWorkspaceTemplates,
   fetchTemplateSources,
   renameTemplateSource,
@@ -48,6 +47,7 @@ import {
   uploadTemplateFontFiles,
 } from '@/lib/library/templateSources';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { DesignTemplateImports, useDesignTemplateImports } from './DesignTemplateImports';
 
 // Forge — bring your own After Effects project.
 //
@@ -85,7 +85,11 @@ function splitWorkspaceTemplates(
   const sourceById = new Map(ownSources.map((source) => [source.assetId, source]));
   for (const item of items) {
     const ownSource = item.sourceAssetId ? sourceById.get(item.sourceAssetId) : null;
-    if (item.sourceAssetId && ownSource && (ownSource.templateKey === item.templateKey || (!ownSource.templateKey && !item.granted))) {
+    if (
+      item.sourceAssetId &&
+      ownSource &&
+      (ownSource.templateKey === item.templateKey || (!ownSource.templateKey && !item.granted))
+    ) {
       buildNames.set(item.sourceAssetId, templateDisplayName(item.name));
       continue;
     }
@@ -144,11 +148,7 @@ export function ForgeWorkbench({
   });
   const rawSources = sourceQuery.data ?? [];
   const { shared, buildNames } = useMemo(
-    () =>
-      splitWorkspaceTemplates(
-        workspaceQuery.data ?? [],
-        rawSources,
-      ),
+    () => splitWorkspaceTemplates(workspaceQuery.data ?? [], rawSources),
     [rawSources, workspaceQuery.data],
   );
   // A title wins; the build name stands in only where nobody has typed one.
@@ -161,7 +161,9 @@ export function ForgeWorkbench({
       ),
     [buildNames, rawSources],
   );
-  const bundledAssetIds = new Set(shared.flatMap((template) => template.sourceAssetId ? [template.sourceAssetId] : []));
+  const bundledAssetIds = new Set(
+    shared.flatMap((template) => (template.sourceAssetId ? [template.sourceAssetId] : [])),
+  );
 
   useEffect(() => {
     if (sourceQuery.error)
@@ -187,30 +189,12 @@ export function ForgeWorkbench({
     [brandId, queryClient, sourceKey],
   );
 
-  // A Photoshop file is uploaded like any drop, then turned into a template beside it. The card
-  // appears when the import answers — a few seconds for a real file.
-  const importDesign = useCallback(
-    async (file: File, assetId: string) => {
-      toast.info(`Making a template from ${file.name}…`);
-      try {
-        const imported = await importDesignTemplate(brandId, assetId);
-        await refreshSources();
-        toast.success(
-          imported.status === 'exists'
-            ? `${file.name} is already a template`
-            : `Template made from ${file.name}: text and pictures are fields, every other layer is ready to switch on`,
-        );
-      } catch (error) {
-        toast.error(`${file.name}: ${error instanceof Error ? error.message : 'the import failed'}`);
-      }
-    },
-    [brandId, refreshSources],
-  );
+  const { imports, start: importDesign } = useDesignTemplateImports(brandId, refreshTemplate);
 
   const uploaded = useCallback(
     ({ file, uploaded: result }: { file: File; uploaded: { assetId: string } }) => {
       void refreshSources();
-      if (isForgeDesignFile(file.name)) void importDesign(file, result.assetId);
+      if (isForgeDesignFile(file.name)) void importDesign(file.name, result.assetId);
     },
     [importDesign, refreshSources],
   );
@@ -311,7 +295,8 @@ export function ForgeWorkbench({
           enabled: false,
           workspaceId,
         });
-        if (!disabled.granted) throw new Error('Could not turn off render access for this template.');
+        if (!disabled.granted)
+          throw new Error('Could not turn off render access for this template.');
         accessDisabled = true;
       }
       const removed = await bulkDeleteAssetsOperation(createSupabaseBrowserClient(), {
@@ -434,6 +419,13 @@ export function ForgeWorkbench({
         </div>
       ) : null}
 
+      <DesignTemplateImports
+        imports={imports}
+        onRetry={importDesign}
+        sourceIds={sources.map((source) => source.assetId)}
+        onOpen={open}
+      />
+
       {current ? (
         <TemplateDetail
           key={current.assetId}
@@ -456,10 +448,14 @@ export function ForgeWorkbench({
           busy={adopting === sharedTemplateId(currentShared)}
           onBack={() => openShared(null)}
           onToggle={() => void toggleShared(currentShared)}
-          onOpenSource={currentShared.sourceAssetId ? () => {
-            openShared(null);
-            open(currentShared.sourceAssetId!);
-          } : undefined}
+          onOpenSource={
+            currentShared.sourceAssetId
+              ? () => {
+                  openShared(null);
+                  open(currentShared.sourceAssetId!);
+                }
+              : undefined
+          }
           onOpenRender={onOpenRender}
         />
       ) : (

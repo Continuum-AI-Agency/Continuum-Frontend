@@ -70,11 +70,11 @@ describe('DesignLayersPanel', () => {
     // Front first, the way a layers panel reads.
     expect(names(file!)).toEqual(['DE DESCUENTO', 'LOGO VIVO', '<Rectángulo>']);
 
-    fireEvent.click(screen.getByRole('button', { name: /New arrangement/ }));
-    fireEvent.change(screen.getByLabelText('Arrangement name'), {
+    fireEvent.click(screen.getByRole('button', { name: /New variant/ }));
+    fireEvent.change(screen.getByLabelText('Variant name'), {
       target: { value: 'Oferta detrás' },
     });
-    const arrangement = screen.getByRole('region', { name: 'Arrangement Oferta detrás' });
+    const arrangement = screen.getByRole('region', { name: 'Variant Oferta detrás' });
     // Send the offer back twice: behind the logo, then behind the photo.
     fireEvent.click(
       within(arrangement).getByRole('button', { name: 'Send DE DESCUENTO backward' }),
@@ -90,7 +90,7 @@ describe('DesignLayersPanel', () => {
     // The file's own stack is untouched.
     expect(names(file!)).toEqual(['DE DESCUENTO', 'LOGO VIVO', '<Rectángulo>']);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save arrangements' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save variants' }));
     await waitFor(() =>
       expect(saved).toHaveBeenCalledWith('b', 'a', [
         { name: 'Oferta detrás', artboardId: null, order: [17, 22, 5] },
@@ -105,13 +105,29 @@ describe('DesignLayersPanel', () => {
       arrangements: [{ name: 'Alt', artboardId: null, order: [17, 22, 5] }],
     });
     render(<DesignLayersPanel brandId="b" assetId="a" active onSaved={() => {}} />);
-    const arrangement = await screen.findByRole('region', { name: 'Arrangement Alt' });
+    const arrangement = await screen.findByRole('region', { name: 'Variant Alt' });
     fireEvent.click(within(arrangement).getByRole('button', { name: /Reset to the file’s order/ }));
     expect(names(within(arrangement).getByRole('list'))).toEqual([
       'DE DESCUENTO',
       'LOGO VIVO',
       '<Rectángulo>',
     ]);
+  });
+
+  test('removing and adding variants keeps unique names and shows errors beside the editor', async () => {
+    render(<DesignLayersPanel brandId="b" assetId="a" active onSaved={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'New variant' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New variant' }));
+    fireEvent.change(screen.getByLabelText('Edit variant'), { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Remove PAUTAS-15 · 2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New variant' }));
+    expect(screen.getByLabelText('Variant name').getAttribute('value')).toBe('PAUTAS-15 · 2');
+    fireEvent.change(screen.getByLabelText('Variant name'), {
+      target: { value: ' PAUTAS-15 · 3 ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save variants' }));
+    expect(screen.getByRole('alert').textContent).toContain('different name');
+    expect(saved).not.toHaveBeenCalled();
   });
 
   test('a template not imported from a design file says why there is nothing to order', async () => {
