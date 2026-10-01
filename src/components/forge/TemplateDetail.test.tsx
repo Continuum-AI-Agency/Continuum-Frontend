@@ -387,6 +387,15 @@ function renderDetail(
 }
 
 describe('TemplateDetail', () => {
+  test('layer editing is beside Checks in the preview inspector', async () => {
+    renderDetail();
+    const edit = await screen.findByRole('tab', { name: 'Edit layers', exact: true });
+    const tabs = edit.closest('[role="tablist"]');
+    expect(tabs).toBeTruthy();
+    expect(
+      within(tabs as HTMLElement).getByRole('tab', { name: 'Checks', exact: true }),
+    ).toBeTruthy();
+  });
   test('identifiers stay inside the Details tab; the default view names things', async () => {
     renderDetail();
     // The saved default comes from `edits` — it is on screen once the variables have loaded.

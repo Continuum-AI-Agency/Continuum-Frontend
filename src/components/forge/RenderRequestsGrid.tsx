@@ -435,6 +435,7 @@ export function RenderRequestsGrid({
   /** A template whose Render tab was opened to draft with AI, until its contract has loaded. */
   const [draftFor, setDraftFor] = useState<string | null>(null);
   const [rows, setRows] = useState<RequestRow[]>([]);
+  const [emptyVariant, setEmptyVariant] = useState('');
   const [savedSignature, setSavedSignature] = useState('');
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [expanded, setExpanded] = useState<ExpandedState>(true);
@@ -615,6 +616,7 @@ export function RenderRequestsGrid({
     (next: RequestRow[], saved: RequestRow[] | null, forContract: ApiRenderTemplateContract) => {
       history.current = emptyHistory();
       setRows(next);
+      setEmptyVariant('');
       // A browser draft was never saved anywhere, so it starts out as unsaved edits.
       setSavedSignature(saved ? signatureOf(saved, forContract) : '');
       setRowSelection({});
@@ -638,10 +640,8 @@ export function RenderRequestsGrid({
       setActiveSet(set);
       setConflict(null);
       const loaded = fromRenderSetRows(set.rows);
-      const { rows: rebased, dropped } =
-        set.contractHash === forContract.template.contractHash
-          ? { rows: loaded, dropped: [] }
-          : rebaseRows(loaded, forContract);
+      // Published arrangement names can change without changing the reflected contract hash.
+      const { rows: rebased, dropped } = rebaseRows(loaded, forContract);
       setRebaseDrops(dropped);
       showRows(rebased, rebased, forContract);
     },
@@ -985,6 +985,21 @@ export function RenderRequestsGrid({
   }, []);
 
   // --- row operations ---------------------------------------------------------------------
+  // ponytail: reuse the inheritance walk per row; cache it if large sets make this slow.
+  const rowVariants = new Set(
+    rows.map((row) => {
+      const chosen = effectiveOutputIds(rows, row.id);
+      const ids = chosen.length ? chosen : allOutputIdsOf(contract);
+      return ids.length === allOutputIdsOf(contract).length &&
+        ids.every((id) => allOutputIdsOf(contract).includes(id))
+        ? ''
+        : ids.length === 1
+          ? ids[0]!
+          : null;
+    }),
+  );
+  const variant =
+    rowVariants.size > 1 ? null : rowVariants.size ? [...rowVariants][0] : emptyVariant;
   const appendRows = (added: RequestRow[]): boolean => {
     const current = latestRows.current;
     if (current.length + added.length > MAX_BATCH_ROWS) {
@@ -994,7 +1009,10 @@ export function RenderRequestsGrid({
       return false;
     }
     record();
-    latestRows.current = [...current, ...added];
+    latestRows.current = [
+      ...current,
+      ...added.map((row) => (variant && !row.parentId ? { ...row, outputIds: [variant] } : row)),
+    ];
     setRows(latestRows.current);
     return true;
   };
@@ -1320,8 +1338,8 @@ export function RenderRequestsGrid({
     activeSet !== null &&
     activeSet.contractHash !== contract.template.contractHash;
   // Saving would make what the rebase dropped final, so that is the person's call.
-  const updateRequired = olderTemplate && rebaseDrops.length > 0;
-  const needsSave = dirty || olderTemplate;
+  const updateRequired = rebaseDrops.length > 0;
+  const needsSave = dirty || olderTemplate || updateRequired;
   const proposed = proposedIds(rows);
   // Autosave waits while a review signs the set's revision, while a conflict is unresolved, and
   // while the set waits on "Update set".
@@ -1377,7 +1395,11 @@ export function RenderRequestsGrid({
     );
     if (!alreadyOpen)
       confirmDiscard(() =>
-        setSelection({ templateKey: intent.templateKey, renderSetId: intent.renderSetId }),
+        setSelection({
+          templateKey: intent.templateKey,
+          bindingId: intent.bindingId,
+          renderSetId: intent.renderSetId,
+        }),
       );
   }, [intent]);
 
@@ -2055,6 +2077,18 @@ export function RenderRequestsGrid({
           );
         }}
         ready={contract !== null}
+        variants={contract?.outputs}
+        variant={variant}
+        onVariantChange={(id) => {
+          setEmptyVariant(id);
+          editRows((current) =>
+            current.map((row) => ({
+              ...row,
+              outputIds: id ? [id] : allOutputIdsOf(contract),
+              check: { state: 'idle' },
+            })),
+          );
+        }}
         inputSets={inputSets}
         canAddRows={rows.length < MAX_BATCH_ROWS}
         onAddRow={addRow}

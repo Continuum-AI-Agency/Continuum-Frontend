@@ -1,6 +1,6 @@
 'use client';
 
-// The Layers tab of a template imported from a Photoshop or Illustrator file: the file's own stack,
+// The preview inspector’s layer editor for a Photoshop or Illustrator template: the file's own stack,
 // and the approved arrangements — the same layers in another front-to-back order. The server
 // re-authors each arrangement as its own comp of this template, so a render row picks it like a
 // format. Every layer carries its masks and clipping in its own pixels, so any order is safe.
@@ -8,6 +8,7 @@
 import {
   type DesignArrangement,
   type DesignLayersResponse,
+  designArrangementsRequestSchema,
   readableLayerName,
 } from '@continuum/contracts';
 import {
@@ -55,10 +56,12 @@ function StackList({
   layers,
   order,
   onMove,
+  disabled,
 }: {
   layers: Layers;
   order: readonly number[];
   onMove?: (id: number, step: 1 | -1) => void;
+  disabled?: boolean;
 }) {
   const byId = new Map(layers.layers.map((layer) => [layer.id, layer]));
   // Shown front first, the way a layers panel reads.
@@ -85,7 +88,7 @@ function StackList({
                   size="icon-xs"
                   variant="ghost"
                   aria-label={`Bring ${name} forward`}
-                  disabled={index === 0}
+                  disabled={disabled || index === 0}
                   onClick={() => onMove(id, 1)}
                 >
                   <ArrowUp aria-hidden />
@@ -95,7 +98,7 @@ function StackList({
                   size="icon-xs"
                   variant="ghost"
                   aria-label={`Send ${name} backward`}
-                  disabled={index === front.length - 1}
+                  disabled={disabled || index === front.length - 1}
                   onClick={() => onMove(id, -1)}
                 >
                   <ArrowDown aria-hidden />
@@ -125,6 +128,8 @@ export function DesignLayersPanel({
   const [refusal, setRefusal] = useState<string | null>(null);
   const [draft, setDraft] = useState<DesignArrangement[]>([]);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [selected, setSelected] = useState(0);
 
   useEffect(() => {
     if (!active || layers || refusal) return;
@@ -161,28 +166,37 @@ export function DesignLayersPanel({
   const addArrangement = () => {
     const board = layers.artboards[0];
     if (!board) return;
-    setDraft((current) => [
-      ...current,
-      {
-        name: `${board.name} · ${current.length + 2}`.slice(0, 60),
-        artboardId: board.id,
-        order: fileOrder(layers, board),
-      },
-    ]);
+    let suffix = 2;
+    const name = () => `${board.name.slice(0, 52)} · ${suffix}`;
+    while (draft.some((item) => item.name === name())) suffix++;
+    setSelected(draft.length);
+    setDraft([...draft, { name: name(), artboardId: board.id, order: fileOrder(layers, board) }]);
   };
 
   const save = async () => {
+    const valid = designArrangementsRequestSchema.shape.arrangements.safeParse(draft);
+    if (!valid.success) {
+      setSaveError('Give each variant a name and keep at most 12 variants.');
+      return;
+    }
+    if (new Set(valid.data.map((item) => item.name)).size !== draft.length) {
+      setSaveError('Give each variant a different name.');
+      return;
+    }
+    setSaveError(null);
     setSaving(true);
     try {
-      const saved = await saveDesignArrangements(brandId, assetId, draft);
+      const saved = await saveDesignArrangements(brandId, assetId, valid.data);
       setLayers({ ...layers, arrangements: saved.arrangements });
       setDraft(saved.arrangements);
       toast.success(
-        `Saved as the template’s next revision (${saved.comps.length} comps). Publish it to render the arrangements.`,
+        `Saved as the template’s next revision (${saved.comps.length} comps). Build and publish it to select these variants in render sets.`,
       );
       await onSaved();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not save the arrangements');
+      const message = error instanceof Error ? error.message : 'Could not save the variants';
+      setSaveError(message);
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -191,41 +205,77 @@ export function DesignLayersPanel({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs text-muted-foreground">
-        An arrangement is the same layers in another front-to-back order. Each one becomes a format
-        a render row can pick. Masks and clipping travel with each layer, so any order is safe.
+        Create a named variant, then move layers forward or backward. Build and publish the saved
+        revision to choose its variants when making a render set.
       </p>
 
-      {layers.artboards.map((board) => (
-        <section key={board.id ?? 'canvas'} className="flex flex-col gap-1.5">
-          <h3 className="text-xs font-medium">
-            {board.name} · as the file stacks it{' '}
-            <span className="font-normal text-muted-foreground">
-              {board.w}×{board.h}
-            </span>
-          </h3>
-          <StackList layers={layers} order={fileOrder(layers, board)} />
-        </section>
-      ))}
-
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={saving || draft.length >= 12}
+          onClick={addArrangement}
+        >
+          <Plus data-icon="inline-start" aria-hidden /> New variant
+        </Button>
+        <Button type="button" size="sm" disabled={!changed || saving} onClick={save}>
+          {saving ? (
+            <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden />
+          ) : null}
+          Save variants
+        </Button>
+        {changed ? (
+          <span className="text-xs text-muted-foreground">
+            Saving re-authors the template as its next revision.
+          </span>
+        ) : null}
+      </div>
+      {saveError ? (
+        <p role="alert" className="text-xs text-destructive">
+          {saveError}
+        </p>
+      ) : null}
+      {draft.length > 0 ? (
+        <label className="flex items-center gap-2 text-xs">
+          Variant
+          <select
+            aria-label="Edit variant"
+            disabled={saving}
+            value={Math.min(selected, draft.length - 1)}
+            onChange={(event) => setSelected(Number(event.target.value))}
+            className="min-w-0 rounded-md border bg-background p-1"
+          >
+            {draft.map((item, index) => (
+              <option key={index} value={index}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       {draft.map((arrangement, index) => {
+        if (index !== Math.min(selected, draft.length - 1)) return null;
         const board = boardOf(arrangement);
         return (
           <section
             // biome-ignore lint/suspicious/noArrayIndexKey: an arrangement's name is what is being edited.
             key={index}
-            aria-label={`Arrangement ${arrangement.name}`}
+            aria-label={`Variant ${arrangement.name}`}
             className="flex flex-col gap-1.5 rounded-md border border-border p-2"
           >
             <div className="flex flex-wrap items-center gap-2">
               <Input
-                aria-label="Arrangement name"
+                aria-label="Variant name"
                 className="h-7 w-56 text-xs"
+                disabled={saving}
                 value={arrangement.name}
                 maxLength={60}
                 onChange={(event) => update(index, { name: event.target.value })}
               />
               {layers.artboards.length > 1 && board ? (
                 <Select
+                  disabled={saving}
                   value={String(board.id)}
                   onValueChange={(next) => {
                     const picked = layers.artboards.find((item) => String(item.id) === next);
@@ -249,6 +299,7 @@ export function DesignLayersPanel({
                 type="button"
                 size="xs"
                 variant="ghost"
+                disabled={saving}
                 onClick={() => board && update(index, { order: fileOrder(layers, board) })}
               >
                 <RotateCcw data-icon="inline-start" aria-hidden /> Reset to the file’s order
@@ -257,6 +308,7 @@ export function DesignLayersPanel({
                 type="button"
                 size="xs"
                 variant="ghost"
+                disabled={saving}
                 aria-label={`Remove ${arrangement.name}`}
                 onClick={() => setDraft((current) => current.filter((_, at) => at !== index))}
               >
@@ -265,6 +317,7 @@ export function DesignLayersPanel({
             </div>
             <StackList
               layers={layers}
+              disabled={saving}
               order={arrangement.order}
               onMove={(id, step) =>
                 update(index, { order: moveLayer(arrangement.order, id, step) })
@@ -274,22 +327,22 @@ export function DesignLayersPanel({
         );
       })}
 
-      <div className="flex items-center gap-2">
-        <Button type="button" size="sm" variant="outline" onClick={addArrangement}>
-          <Plus data-icon="inline-start" aria-hidden /> New arrangement
-        </Button>
-        <Button type="button" size="sm" disabled={!changed || saving} onClick={save}>
-          {saving ? (
-            <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden />
-          ) : null}
-          Save arrangements
-        </Button>
-        {changed ? (
-          <span className="text-xs text-muted-foreground">
-            Saving re-authors the template as its next revision.
-          </span>
-        ) : null}
-      </div>
+      <details>
+        <summary className="cursor-pointer text-xs text-muted-foreground">
+          Original file layers
+        </summary>
+        {layers.artboards.map((board) => (
+          <section key={board.id ?? 'canvas'} className="flex flex-col gap-1.5">
+            <h3 className="text-xs font-medium">
+              {board.name} · as the file stacks it{' '}
+              <span className="font-normal text-muted-foreground">
+                {board.w}×{board.h}
+              </span>
+            </h3>
+            <StackList layers={layers} order={fileOrder(layers, board)} />
+          </section>
+        ))}
+      </details>
     </div>
   );
 }
