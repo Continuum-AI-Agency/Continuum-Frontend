@@ -21067,6 +21067,38 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      claim_headless_run_by_id: {
+        Args: {
+          p_brand_id: string
+          p_lease_seconds?: number
+          p_run_id: string
+          p_worker_id: string
+        }
+        Returns: {
+          brand_id: string
+          budget_cap_usd: number
+          concurrency: number
+          content_id: string
+          content_revision: number
+          created_at: string
+          created_by: string | null
+          id: string
+          idempotency_key: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          plan: Json
+          request_hash: string
+          state: string
+          updated_at: string
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "headless_runs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       claim_headless_run: {
         Args: { p_lease_seconds?: number; p_worker_id: string }
         Returns: {
