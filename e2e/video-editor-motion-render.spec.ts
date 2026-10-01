@@ -295,9 +295,9 @@ test('the motion vocabulary renders in the real compositor, judged per frame', a
 // rendered here from the same files, and both masters are judged per frame.
 //
 // The motion judges compare each frame's box against its own settled box, alpha as green
-// mass over the settled mass, the share of a typed line revealed, and the keyed centre; the
-// font judge then holds the two sides' settled text to the same coverage, within 3%, now
-// that the export registers the faces its text names.
+// mass over the settled mass, the share of a typed line revealed, and the keyed centre. The
+// font judge holds each settled line to the width the loaded face gives it — pixel coverage
+// cannot match across operating systems (edge antialiasing, encoder chroma), widths can.
 
 type CompareManifest = {
   project: unknown;
@@ -448,25 +448,39 @@ test('server export matches the client render, frame for frame', async ({ browse
     );
   }
 
-  // Same faces on both sides: the settled text covers the same pixels, within ~3%.
-  const coverage = run.client.texts.map((client, index) => {
-    const server = run.server.texts[index];
+  // Which face drew the text: a settled line's width is the face's advance widths, which no
+  // rasteriser or encoder moves (their edge pixels differ across OSes; widths do not). Each
+  // line is held to the width the real draw path gives in the loaded face, and the judge
+  // only counts where the fallback stack would draw it measurably wider or narrower.
+  const width = (box: TextBox) => box.right - box.left;
+  const faces = run.faces.map((probe) => {
+    const index = run.client.texts.findIndex((text) => text.name === probe.name);
+    const server = run.server.texts[index]?.settled;
+    const client = run.client.texts[index]?.settled;
+    const tolerance = Math.max(2, 0.01 * width(probe.face));
     return {
-      name: client.name,
-      count: ratio(
-        Math.abs((server?.settled.count ?? 0) - client.settled.count),
-        client.settled.count,
-      ),
-      mass: ratio(Math.abs((server?.settled.mass ?? 0) - client.settled.mass), client.settled.mass),
+      name: probe.name,
+      face: width(probe.face),
+      fallback: width(probe.fallback),
+      server: server ? width(server) : -1,
+      client: client ? width(client) : -1,
+      tolerance,
+      discriminates: Math.abs(width(probe.fallback) - width(probe.face)) > 2 * tolerance,
     };
   });
+  const judged = faces.filter((entry) => entry.discriminates);
   check(
-    'fonts: the server draws the text in the same faces — settled coverage within 3% of the client',
-    coverage.every((entry) => entry.count <= 0.03 && entry.mass <= 0.03),
-    coverage
+    'fonts: the server draws each text in the face the export loaded — line widths within 1% of that face, not the fallback',
+    judged.length >= 1 &&
+      faces.every(
+        (entry) =>
+          Math.abs(entry.server - entry.face) <= entry.tolerance &&
+          Math.abs(entry.client - entry.face) <= entry.tolerance,
+      ),
+    faces
       .map(
         (entry) =>
-          `${entry.name} pixels ${(entry.count * 100).toFixed(1)}% · mass ${(entry.mass * 100).toFixed(1)}%`,
+          `${entry.name}: face ${entry.face}px · fallback ${entry.fallback}px${entry.discriminates ? '' : ' (indistinct)'} · client ${entry.client}px · server ${entry.server}px`,
       )
       .join(' · '),
   );

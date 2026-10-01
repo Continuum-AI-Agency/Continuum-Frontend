@@ -5,9 +5,13 @@
 // Playwright spec asserts on the numbers.
 
 import { createEditorProjectV2, editorProjectV2Schema } from '@continuum/contracts';
-import { buildTimelineEditorRenderPlan } from '../../src/lib/client-render/executors/timelineEditor';
+import {
+  buildTimelineEditorRenderPlan,
+  textCueFor,
+} from '../../src/lib/client-render/executors/timelineEditor';
 import { registerCaptionFonts } from '../../src/lib/clips/captionFonts';
 import { composeTimeline } from '../../src/StudioCanvas/utils/splice/composeTimeline';
+import { drawActiveCaption } from '../../src/StudioCanvas/utils/splice/drawCaptions';
 
 const WIDTH = 360;
 const HEIGHT = 640;
@@ -522,7 +526,7 @@ export type ServerCompareInput = {
   sources: Record<string, { url: string; assetId: string; versionId: string }>;
   serverUrl: string;
   samples: {
-    texts: Array<{ name: string; times: number[]; settledAt: number }>;
+    texts: Array<{ name: string; clipId?: string; times: number[]; settledAt: number }>;
     keyed: number[];
     crossfadeAt: number;
     lookAt: number;
@@ -542,8 +546,41 @@ export type ServerCompareRun = {
   client: Master;
   server: Master;
   serverSize: { width: number; height: number; durationSec: number };
+  /**
+   * Each text's settled cue drawn by the real draw path twice — in the face the export
+   * loaded, and in the fallback stack a missing face would leave — so a frame's line width
+   * says which face drew it.
+   */
+  faces: Array<{ name: string; face: TextBox; fallback: TextBox }>;
   clientMp4Base64: string;
 };
+
+/** A cue's settled line, drawn in its own face or in the fallback stack, measured. */
+function probeFace(
+  project: { canvas: { width: number; height: number }; tracks: unknown[] },
+  clipId: string,
+  atSec: number,
+  fallback: boolean,
+): TextBox {
+  const clip = (project.tracks as Array<{ clips: Array<{ id: string; kind: string }> }>)
+    .flatMap((track) => track.clips)
+    .find((entry) => entry.id === clipId);
+  if (!clip || clip.kind !== 'text') throw new Error(`no text clip ${clipId}`);
+  const cue = textCueFor(clip as Parameters<typeof textCueFor>[0], project.canvas.height);
+  const canvas = new OffscreenCanvas(WIDTH, HEIGHT);
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('No 2D canvas for the face probe');
+  context.fillStyle = '#1e1e1e';
+  context.fillRect(0, 0, WIDTH, HEIGHT);
+  drawActiveCaption(
+    context,
+    fallback ? { ...cue, style: { ...cue.style, fontFamily: 'Continuum Missing Face' } } : cue,
+    atSec,
+    WIDTH,
+    HEIGHT,
+  );
+  return textBox(context.getImageData(0, 0, WIDTH, HEIGHT).data, TOP_BAND, atSec);
+}
 
 /** A band's mean colour and luma spread — a solid picture spreads ~0, VHS noise does not. */
 function bandLook(pixels: Uint8ClampedArray, band: Band): Master['look'] {
@@ -633,6 +670,17 @@ export async function runServerCompare(input: ServerCompareInput): Promise<Serve
     return {
       client: await measureMaster(client, input.samples),
       server: await measureMaster(server, input.samples),
+      faces: input.samples.texts.flatMap((text) =>
+        text.clipId
+          ? [
+              {
+                name: text.name,
+                face: probeFace(project, text.clipId, text.settledAt, false),
+                fallback: probeFace(project, text.clipId, text.settledAt, true),
+              },
+            ]
+          : [],
+      ),
       serverSize: {
         width: (await track?.getDisplayWidth()) ?? 0,
         height: (await track?.getDisplayHeight()) ?? 0,
