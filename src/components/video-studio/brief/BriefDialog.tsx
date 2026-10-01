@@ -10,7 +10,7 @@ import {
   type VideoEditorOpOutput,
   type VideoEditorPoolAsset,
 } from '@continuum/contracts';
-import { Film, Music, Sparkles, TriangleAlert } from 'lucide-react';
+import { Film, Sparkles, TriangleAlert } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -40,9 +41,9 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { type StudioVideoOrigin, studioVideoHref } from '@/lib/ai-studio/studioVideoHref';
-import { ApiError } from '@/lib/api/errors';
 import { runVideoEditorOp } from '@/lib/api/videoEditorOps.client';
 import { cn } from '@/lib/utils';
+import { isPermanentError } from '../export/variantExports';
 import { formatDuration, signAsset } from '../sources/PoolAssetCard';
 import type { VideoStudioContext } from '../types';
 import {
@@ -50,8 +51,12 @@ import {
   CUT_KIND_LABELS,
   chipActive,
   DEFAULT_BRIEF_FIELDS,
+  DEFAULT_FINISH,
   describeBrief,
+  type FinishFields,
+  finishInput,
   GOAL_CHIPS,
+  MOOD_CHIPS,
 } from './briefGoals';
 
 type DraftStatus = VideoEditorOpOutput<'draft_cut_status'>;
@@ -74,13 +79,6 @@ const KIND_ITEMS = Object.fromEntries(
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const terminal = (status: DraftStatus | null) =>
   status?.state === 'completed' || status?.state === 'failed';
-/** A 4xx other than a timeout or rate limit will not get better by asking again. */
-const permanent = (error: unknown) =>
-  error instanceof ApiError &&
-  error.status >= 400 &&
-  error.status < 500 &&
-  error.status !== 408 &&
-  error.status !== 429;
 
 function FootageRow({
   asset,
@@ -96,7 +94,6 @@ function FootageRow({
   onToggle: () => void;
 }) {
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
-  const Icon = asset.kind === 'audio' ? Music : Film;
   const id = `brief-footage-${asset.assetId}`;
   return (
     <li className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent/50">
@@ -110,7 +107,7 @@ function FootageRow({
         <HoverCardTrigger
           render={<Label htmlFor={id} className="flex min-w-0 flex-1 items-center gap-2 text-xs" />}
         >
-          <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          <Film className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
           <span className="min-w-0 flex-1 truncate">{asset.title}</span>
           {asset.origin !== 'project' ? (
             <span className="shrink-0 text-2xs text-muted-foreground">from {asset.origin}</span>
@@ -123,7 +120,7 @@ function FootageRow({
         </HoverCardTrigger>
         <HoverCardContent className="w-72 space-y-2 p-3">
           <div className="flex aspect-video items-center justify-center overflow-hidden rounded-md bg-muted">
-            {asset.kind === 'video' && mediaUrl ? (
+            {mediaUrl ? (
               <video
                 src={mediaUrl}
                 poster={asset.thumbnailUrl}
@@ -133,17 +130,51 @@ function FootageRow({
                 playsInline
                 className="h-full w-full object-contain"
               />
-            ) : asset.kind === 'audio' && mediaUrl ? (
-              // biome-ignore lint/a11y/useMediaCaption: a voice or music bed previewed before cutting
-              <audio src={mediaUrl} controls className="w-full" />
             ) : (
-              <Icon className="size-8 text-muted-foreground" />
+              <Film className="size-8 text-muted-foreground" />
             )}
           </div>
           <p className="truncate text-xs font-medium">{asset.title}</p>
         </HoverCardContent>
       </HoverCard>
     </li>
+  );
+}
+
+function FinishSwitch({
+  id,
+  label,
+  hint,
+  checked,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  hint: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex min-w-0 flex-col gap-1">
+        <Label htmlFor={id} className="text-xs">
+          {label}
+        </Label>
+        <span id={`${id}-hint`} className="truncate text-2xs text-muted-foreground">
+          {hint}
+        </span>
+      </div>
+      <Switch
+        id={id}
+        size="sm"
+        aria-describedby={`${id}-hint`}
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onChange}
+      />
+    </div>
   );
 }
 
@@ -182,6 +213,7 @@ export function BriefDialog({
   const [typed, setTyped] = useState<string | null>(null);
   const [format, setFormat] = useState<FormatChoice>(KEEP_FORMAT);
   const [captions, setCaptions] = useState(true);
+  const [finish, setFinish] = useState<FinishFields>(DEFAULT_FINISH);
   const [pool, setPool] = useState<VideoEditorPoolAsset[]>([]);
   // Project footage is in unless unticked; pool footage is out unless ticked.
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
@@ -210,6 +242,7 @@ export function BriefDialog({
     setTyped(seed?.text ?? null);
     setFormat(KEEP_FORMAT);
     setCaptions(true);
+    setFinish(DEFAULT_FINISH);
     setToggled(new Set());
     setError(null);
     setStatus(null);
@@ -281,7 +314,7 @@ export function BriefDialog({
         if (next.state === 'completed') return await completed(next);
       } catch (pollError) {
         if (cancelled) return;
-        if (permanent(pollError)) {
+        if (isPermanentError(pollError)) {
           setStatus({ jobId, state: 'failed', error: errorText(pollError) });
           return failed(errorText(pollError));
         }
@@ -297,10 +330,11 @@ export function BriefDialog({
     };
   }, [jobId, projectId]);
 
+  // draft_cut cuts video only: a finished cut's music bed is on the timeline but is not footage.
   const footage = useMemo(() => {
-    const own = sources.filter((asset) => asset.kind !== 'image');
+    const own = sources.filter((asset) => asset.kind === 'video');
     const ownIds = new Set(own.map((asset) => asset.assetId));
-    const extra = pool.filter((asset) => asset.kind !== 'image' && !ownIds.has(asset.assetId));
+    const extra = pool.filter((asset) => asset.kind === 'video' && !ownIds.has(asset.assetId));
     return [
       ...own.map((asset) => ({ asset, own: true })),
       ...extra.map((asset) => ({ asset, own: false })),
@@ -312,6 +346,8 @@ export function BriefDialog({
   const tooMany = chosen.length > MAX_SOURCES;
   const text = typed ?? describeBrief(fields);
   const patch = (next: Partial<BriefFields>) => setFields((current) => ({ ...current, ...next }));
+  const finishWith = (next: Partial<FinishFields>) =>
+    setFinish((current) => ({ ...current, ...next }));
 
   const projectPreset = platformExportPresetIdSchema.safeParse(
     studio.project.exportSettings.presetId,
@@ -339,6 +375,7 @@ export function BriefDialog({
         ...fields,
         ...(format === KEEP_FORMAT ? {} : { preset: format }),
         captions,
+        ...finishInput(finish, captions),
         sourceAssetIds: chosen,
       });
       setStatus({ jobId: started.jobId, state: started.state });
@@ -367,8 +404,8 @@ export function BriefDialog({
         <DialogHeader>
           <DialogTitle>First cut</DialogTitle>
           <DialogDescription>
-            Say what you want. Every spoken line is read, the strongest are cut to your goal,
-            captioned and formatted — variant A here, the rest as sibling edits.
+            Say what you want. Every spoken line is read, the strongest are cut to your goal, then
+            finished and formatted — variant A here, the rest as sibling edits.
           </DialogDescription>
         </DialogHeader>
 
@@ -490,6 +527,84 @@ export function BriefDialog({
           </div>
         </div>
 
+        <fieldset
+          className="flex flex-col gap-2 rounded-md border p-3"
+          aria-label="Finish"
+          data-testid="brief-finish"
+        >
+          <legend className="px-1 text-xs font-medium">Finish</legend>
+          <div className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+            <FinishSwitch
+              id="brief-music"
+              label="Music"
+              hint="A bed that dips under the speech"
+              checked={finish.music}
+              disabled={drafting}
+              onChange={(music) => finishWith({ music })}
+            />
+            <FinishSwitch
+              id="brief-hook-title"
+              label="Hook title"
+              hint="A headline over the opening"
+              checked={finish.hookTitle}
+              disabled={drafting}
+              onChange={(hookTitle) => finishWith({ hookTitle })}
+            />
+            <FinishSwitch
+              id="brief-broll"
+              label="B-roll"
+              hint="From your Graph and project media"
+              checked={finish.broll}
+              disabled={drafting}
+              onChange={(broll) => finishWith({ broll })}
+            />
+            <FinishSwitch
+              id="brief-brand-captions"
+              label="Brand captions"
+              hint={captions ? "In your brand's type and colours" : 'Needs word-timed captions'}
+              checked={captions && finish.brandCaptions}
+              disabled={drafting || !captions}
+              onChange={(brandCaptions) => finishWith({ brandCaptions })}
+            />
+          </div>
+          {finish.music ? (
+            <div className="flex flex-col gap-1.5">
+              <Input
+                inputSize="sm"
+                aria-label="Music mood"
+                placeholder="Mood — or leave it to the brief"
+                value={finish.mood}
+                maxLength={300}
+                disabled={drafting}
+                className="text-xs"
+                onChange={(event) => finishWith({ mood: event.target.value })}
+              />
+              <fieldset className="flex flex-wrap gap-1.5" aria-label="Moods">
+                {MOOD_CHIPS.map((mood) => {
+                  const active = finish.mood === mood;
+                  return (
+                    <Button
+                      key={mood}
+                      type="button"
+                      size="sm"
+                      variant={active ? 'secondary' : 'outline'}
+                      aria-pressed={active}
+                      disabled={drafting}
+                      className={cn(
+                        'h-6 rounded-full px-2.5 text-2xs',
+                        active && 'ring-1 ring-primary',
+                      )}
+                      onClick={() => finishWith({ mood: active ? '' : mood })}
+                    >
+                      {mood}
+                    </Button>
+                  );
+                })}
+              </fieldset>
+            </div>
+          ) : null}
+        </fieldset>
+
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium">Footage it will use</span>
           {footage.length === 0 ? (
@@ -553,7 +668,14 @@ export function BriefDialog({
                   <span className="w-10 shrink-0 tabular-nums text-muted-foreground">
                     {formatDuration(variant.durationSec)}
                   </span>
-                  <span className="min-w-0 flex-1">{variant.angle}</span>
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    {variant.headline ? (
+                      <span className="font-semibold" data-testid="brief-headline">
+                        “{variant.headline}”
+                      </span>
+                    ) : null}
+                    <span>{variant.angle}</span>
+                  </span>
                   <Button
                     size="sm"
                     variant="outline"

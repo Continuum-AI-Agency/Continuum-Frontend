@@ -52,6 +52,7 @@ const SOURCE_ASSET_IDS = (
     '88e1654c-c537-4cfa-bc1f-3c342d556709',
   ].join(',')
 ).split(',');
+const KEPT_BUCKET = process.env.AI_STUDIO_BUCKET ?? 'brand-profile-assets';
 const TARGET_SEC = 30;
 const TOLERANCE = 0.15;
 const DRAFT_BUDGET_MS = 15 * 60_000;
@@ -687,6 +688,22 @@ test(BENCH, async ({ browser }) => {
         if (!createdAssets.some((asset) => asset.id === row.id))
           createdAssets.push({ id: row.id, storagePath: row.storage_path });
       }
+      // The Brief finishes cuts by default: a music bed it had to make is a Library asset
+      // filed under the drafted project (a bed reused from before the run is left alone).
+      const beds: string[] = [];
+      for (const projectId of createdProjects) {
+        const { data } = await admin
+          .schema('media')
+          .from('assets')
+          .select('id, storage_path')
+          .eq('brand_id', BRAND)
+          .contains('origin_ref', { nodeId: `video-project:${projectId}` });
+        for (const row of data ?? []) {
+          beds.push(row.id);
+          if (!createdAssets.some((asset) => asset.id === row.id))
+            createdAssets.push({ id: row.id, storagePath: row.storage_path });
+        }
+      }
       const removedProjects = await removeProjects(admin, BRAND, [...createdProjects]);
       const jobIds = [...draftJobs];
       const removedJobs =
@@ -695,6 +712,22 @@ test(BENCH, async ({ browser }) => {
           : await prodSql(
               `delete from plugin_mcp.jobs where brand_id = '${BRAND}' and job_id in (${jobIds.map((id) => `'${id}'`).join(',')}) returning 1`,
             );
+      // Opening the Brief warms each footage version's transcript, and the draft keeps it beside
+      // the brand's media (Backend sourceMedia keptTranscriptPath) — this run's versions own them.
+      const { data: versionRows } = await admin
+        .schema('media')
+        .from('asset_versions')
+        .select('id')
+        .in(
+          'asset_id',
+          createdAssets.length > 0
+            ? createdAssets.map((asset) => asset.id)
+            : ['00000000-0000-0000-0000-000000000000'],
+        );
+      const keptPaths = (versionRows ?? []).map(
+        (row) => `${BRAND}/video-editor/transcripts/${row.id}.json`,
+      );
+      if (keptPaths.length > 0) await admin.storage.from(KEPT_BUCKET).remove(keptPaths);
       const removed = await removeAssets(admin, BRAND, createdAssets);
       note(
         `cleanup: ${removedProjects} project(s), ${removed.rows} asset row(s), ${removed.objects} storage object(s), ${removedJobs?.length ?? 0} draft job row(s)`,
@@ -708,6 +741,11 @@ test(BENCH, async ({ browser }) => {
         .select('id', { count: 'exact', head: true })
         .eq('brand_id', BRAND)
         .like('file_name', `${DROP_PREFIX}%`);
+      const { count: leftBeds } = await admin
+        .schema('media')
+        .from('assets')
+        .select('id', { count: 'exact', head: true })
+        .in('id', beds.length > 0 ? beds : ['00000000-0000-0000-0000-000000000000']);
       const leftObjects = (await objectsFor(BRAND, createdAssets)).length;
       const { count: leftProjects } = await admin
         .schema('media')
@@ -720,10 +758,22 @@ test(BENCH, async ({ browser }) => {
             : ['00000000-0000-0000-0000-000000000000'],
         );
       const leftJobs = await draftJobsLeft(jobIds);
+      const { data: keptLeft } = await admin.storage
+        .from(KEPT_BUCKET)
+        .list(`${BRAND}/video-editor/transcripts`, { limit: 1000 });
+      const leftKept = (keptLeft ?? []).filter((object) =>
+        keptPaths.some((path) => path.endsWith(`/${object.name}`)),
+      ).length;
+
       check(
-        'net zero: no media.assets rows, storage objects, projects or draft job rows left from this run',
-        (leftRows ?? 0) === 0 && leftObjects === 0 && (leftProjects ?? 0) === 0 && leftJobs === 0,
-        `rows ${leftRows ?? 0}, objects ${leftObjects}, projects ${leftProjects ?? 0}, jobs ${leftJobs} of ${jobIds.length} seen`,
+        'net zero: no media.assets rows (drops, music beds), storage objects, kept transcripts, projects or draft job rows left from this run',
+        (leftRows ?? 0) === 0 &&
+          (leftBeds ?? 0) === 0 &&
+          leftObjects === 0 &&
+          leftKept === 0 &&
+          (leftProjects ?? 0) === 0 &&
+          leftJobs === 0,
+        `rows ${leftRows ?? 0}, music beds ${leftBeds ?? 0} of ${beds.length} made, objects ${leftObjects}, kept transcripts ${leftKept} of ${keptPaths.length}, projects ${leftProjects ?? 0}, jobs ${leftJobs} of ${jobIds.length} seen`,
       );
       note(
         `STT transient WAVs under ${BRAND}/creative-ops/audio/caption-*: ${wavsBefore} → ${await transientWavCount()} (removed per call by the draft; unattributable by name, so reported, not asserted)`,

@@ -10,7 +10,7 @@ import {
   platformExportPresetIdSchema,
   type VideoEditorOpOutput,
 } from '@continuum/contracts';
-import { Download, ExternalLink, TriangleAlert } from 'lucide-react';
+import { Download, ExternalLink, RotateCcw, TriangleAlert } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -27,26 +27,95 @@ import { Spinner } from '@/components/ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import type { VideoStudioContext } from '../types';
+import { exportRunning, useVariantExports, type VariantExport } from './variantExports';
 
 type ExportStatus = VideoEditorOpOutput<'export_status'>;
 type Fit = 'cover' | 'contain';
+type Scope = 'one' | 'all';
 
 const POLL_START_MS = 1_000;
 const POLL_MAX_MS = 8_000;
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
+function VariantExportRow({ row, onRetry }: { row: VariantExport; onRetry: () => void }) {
+  const progress = row.progress !== undefined ? Math.round(row.progress * 100) : null;
+  return (
+    <li
+      className="flex flex-col gap-1.5 rounded-md border p-2"
+      data-variant={row.label}
+      data-state={row.state}
+    >
+      <div className="flex items-center gap-2 text-xs">
+        <span className="w-4 shrink-0 font-semibold">{row.label}</span>
+        <span className="min-w-0 flex-1 truncate text-muted-foreground">{row.title}</span>
+        {row.state === 'completed' ? (
+          <>
+            {row.downloadUrl ? (
+              <a
+                href={row.downloadUrl}
+                download
+                className={buttonVariants({ size: 'sm', className: 'h-7 text-xs' })}
+              >
+                <Download data-icon="inline-start" />
+                Download {row.label}
+              </a>
+            ) : null}
+            {row.assetId ? (
+              <Link
+                href={buildLibraryAssetHref({ assetId: row.assetId })}
+                aria-label={`Open ${row.label} in Library`}
+                className={buttonVariants({ size: 'sm', variant: 'outline', className: 'h-7' })}
+              >
+                <ExternalLink className="size-3.5" />
+              </Link>
+            ) : null}
+          </>
+        ) : row.state === 'failed' ? (
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onRetry}>
+            <RotateCcw data-icon="inline-start" />
+            Retry {row.label}
+          </Button>
+        ) : null}
+      </div>
+      {exportRunning(row) ? (
+        <div className="flex items-center gap-2">
+          <Progress value={progress} className="flex-1" />
+          <span className="w-24 shrink-0 text-right text-2xs text-muted-foreground">
+            {row.state === 'running' ? 'Rendering' : row.state === 'queued' ? 'Queued' : 'Starting'}
+            {progress !== null ? ` · ${progress}%` : '…'}
+          </span>
+        </div>
+      ) : null}
+      {row.state === 'failed' && row.error ? (
+        <p className="flex items-start gap-1.5 text-2xs text-destructive">
+          <TriangleAlert className="mt-px size-3 shrink-0" aria-hidden />
+          {row.error}
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
 // Platform-preset export (top bar): set_format reframes to the preset, export renders it
-// on the render service into the Library, export_status reports until it lands.
+// on the render service into the Library, export_status reports until it lands. A project
+// drafted from a brief can export every variant at once (see variantExports).
 export function ExportDialog({
   studio,
   open,
   onOpenChange,
+  allVariants = false,
 }: {
   studio: VideoStudioContext;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Opens on every variant of the brief family instead of this cut alone. */
+  allVariants?: boolean;
 }): React.ReactNode {
+  const family = Boolean(studio.project.brief);
+  const [scope, setScope] = useState<Scope>(allVariants ? 'all' : 'one');
+  const all = family && scope === 'all';
+  const variants = useVariantExports(studio, open && all);
   const current = platformExportPresetIdSchema.safeParse(studio.project.exportSettings.presetId);
   const [preset, setPreset] = useState<PlatformExportPresetId>(
     current.success ? current.data : 'tiktok',
@@ -89,8 +158,11 @@ export function ExportDialog({
 
   const blockers = editorRenderBlockers(studio.project);
   const warnings = exportPresetWarnings(preset, studio.project.durationSec);
+  const variantsBusy = variants.rows.some(exportRunning);
   const busy =
-    starting || (jobId !== null && status?.state !== 'completed' && status?.state !== 'failed');
+    starting ||
+    variantsBusy ||
+    (jobId !== null && status?.state !== 'completed' && status?.state !== 'failed');
 
   const startExport = async () => {
     setStarting(true);
@@ -120,6 +192,28 @@ export function ExportDialog({
             H.264 MP4 and saved to the Library.
           </DialogDescription>
         </DialogHeader>
+
+        {family ? (
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            size="sm"
+            spacing={0}
+            aria-label="What to export"
+            value={scope}
+            onValueChange={(value) => {
+              const next: string = value;
+              if (next === 'one' || next === 'all') setScope(next);
+            }}
+          >
+            <ToggleGroupItem value="one" disabled={busy}>
+              This cut
+            </ToggleGroupItem>
+            <ToggleGroupItem value="all" disabled={busy}>
+              All variants
+            </ToggleGroupItem>
+          </ToggleGroup>
+        ) : null}
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {PLATFORM_EXPORT_PRESET_IDS.map((id) => {
@@ -193,7 +287,22 @@ export function ExportDialog({
           </ul>
         ) : null}
 
-        {jobId && status?.state !== 'completed' && status?.state !== 'failed' ? (
+        {all ? (
+          <ul className="flex flex-col gap-1.5" data-testid="export-variants">
+            {variants.rows.map((row) => (
+              <VariantExportRow
+                key={row.projectId}
+                row={row}
+                onRetry={() => void variants.exportOne(row.projectId, preset, fit)}
+              />
+            ))}
+            {variants.listError ? (
+              <li className="text-xs text-destructive">{variants.listError}</li>
+            ) : null}
+          </ul>
+        ) : null}
+
+        {!all && jobId && status?.state !== 'completed' && status?.state !== 'failed' ? (
           <div className="flex flex-col gap-1.5">
             <Progress value={progress} />
             <span className="text-xs text-muted-foreground">
@@ -203,7 +312,7 @@ export function ExportDialog({
           </div>
         ) : null}
 
-        {status?.state === 'completed' ? (
+        {!all && status?.state === 'completed' ? (
           <div className="flex flex-wrap items-center gap-2" data-testid="export-complete">
             {status.downloadUrl ? (
               <a href={status.downloadUrl} download className={buttonVariants()}>
@@ -223,7 +332,7 @@ export function ExportDialog({
           </div>
         ) : null}
 
-        {status?.state === 'failed' || error ? (
+        {!all && (status?.state === 'failed' || error) ? (
           <p className="flex items-start gap-2 text-sm text-destructive">
             <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
             {status?.error ?? error}
@@ -231,16 +340,27 @@ export function ExportDialog({
         ) : null}
 
         <DialogFooter>
-          <Button
-            onClick={() => void startExport()}
-            disabled={busy || blockers.length > 0}
-            data-testid="export-start"
-          >
-            {busy ? <Spinner data-icon="inline-start" /> : null}
-            {status?.state === 'completed'
-              ? 'Export again'
-              : `Export for ${PLATFORM_EXPORT_PRESETS[preset].label}`}
-          </Button>
+          {all ? (
+            <Button
+              onClick={() => variants.exportAll(preset, fit)}
+              disabled={busy || variants.rows.length === 0}
+              data-testid="export-all-start"
+            >
+              {busy ? <Spinner data-icon="inline-start" /> : null}
+              {`Export ${variants.rows.length} variants for ${PLATFORM_EXPORT_PRESETS[preset].label}`}
+            </Button>
+          ) : (
+            <Button
+              onClick={() => void startExport()}
+              disabled={busy || blockers.length > 0}
+              data-testid="export-start"
+            >
+              {busy ? <Spinner data-icon="inline-start" /> : null}
+              {status?.state === 'completed'
+                ? 'Export again'
+                : `Export for ${PLATFORM_EXPORT_PRESETS[preset].label}`}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

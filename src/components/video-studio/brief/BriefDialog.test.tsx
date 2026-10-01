@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { createEditorProjectV2, type VideoEditorOpName } from '@continuum/contracts';
+import {
+  createEditorProjectV2,
+  type VideoEditorOpName,
+  type VideoEditorPoolAsset,
+} from '@continuum/contracts';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ApiError } from '@/lib/api/errors';
 import type { VideoStudioContext } from '../types';
@@ -46,7 +50,10 @@ const footage = [
   { assetId: 'reel', kind: 'video' as const, title: 'Reel', origin: 'project' as const },
 ];
 
-function renderDialog(runOp: (op: VideoEditorOpName, input: unknown) => unknown) {
+function renderDialog(
+  runOp: (op: VideoEditorOpName, input: unknown) => unknown,
+  sources: ReadonlyArray<VideoEditorPoolAsset> = footage,
+) {
   const calls: Array<{ op: string; input: unknown }> = [];
   const project = {
     ...createEditorProjectV2({ projectId: PROJECT_ID, title: 'Edit', width: 1080, height: 1920 }),
@@ -72,7 +79,7 @@ function renderDialog(runOp: (op: VideoEditorOpName, input: unknown) => unknown)
       origin="library"
       open
       onOpenChange={() => undefined}
-      sources={footage}
+      sources={sources}
       seed={null}
       onDrafted={() => undefined}
       onRunningChange={() => undefined}
@@ -90,6 +97,60 @@ describe('BriefDialog', () => {
     });
     await waitFor(() => expect(warmed).toEqual([PROJECT_ID]), { timeout: TIMEOUT_MS });
     expect(polled).toEqual([]);
+  });
+
+  it(
+    'the Finish switches start on and go out as draft_cut flags, with the mood a chip picks',
+    async () => {
+      const calls = renderDialog(() => ({ jobId: 'job_f', state: 'running' }));
+      const switchNamed = (name: string) => screen.getByRole('switch', { name });
+      for (const name of ['Music', 'Hook title', 'B-roll', 'Brand captions']) {
+        expect(switchNamed(name).getAttribute('aria-checked')).toBe('true');
+      }
+      fireEvent.click(screen.getByRole('button', { name: 'Lo-fi chill' }));
+      expect((screen.getByLabelText('Music mood') as HTMLInputElement).value).toBe('Lo-fi chill');
+      fireEvent.click(switchNamed('B-roll'));
+      pollAnswers.push(() => ({ jobId: 'job_f', state: 'running' }));
+      submit();
+      await waitFor(() => expect(calls[0]?.op).toBe('draft_cut'), { timeout: TIMEOUT_MS });
+      expect(calls[0]?.input).toMatchObject({
+        captions: true,
+        music: true,
+        musicPrompt: 'Lo-fi chill',
+        hookTitle: true,
+        broll: false,
+        brandCaptions: true,
+      });
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
+    "a finished cut's music bed is on the timeline but is not footage: only video is drafted from",
+    async () => {
+      const calls = renderDialog(
+        () => ({ jobId: 'job_m', state: 'running' }),
+        [...footage, { assetId: 'bed', kind: 'audio', title: 'Music bed', origin: 'project' }],
+      );
+      expect(
+        screen.getByTestId('brief-footage').querySelectorAll('[role="checkbox"]'),
+      ).toHaveLength(1);
+      pollAnswers.push(() => ({ jobId: 'job_m', state: 'running' }));
+      submit();
+      await waitFor(() => expect(calls[0]?.op).toBe('draft_cut'), { timeout: TIMEOUT_MS });
+      expect(calls[0]?.input).toMatchObject({ sourceAssetIds: ['reel'] });
+    },
+    TIMEOUT_MS,
+  );
+
+  it('without word-timed captions, brand captions are off and cannot be turned on', () => {
+    renderDialog(() => {
+      throw new Error('no draft in this test');
+    });
+    fireEvent.click(screen.getByRole('switch', { name: 'Word-timed captions' }));
+    const brand = screen.getByRole('switch', { name: 'Brand captions' });
+    expect(brand.getAttribute('aria-checked')).toBe('false');
+    expect(brand.hasAttribute('data-disabled')).toBe(true);
   });
 
   it(
@@ -154,6 +215,7 @@ describe('BriefDialog', () => {
         projectId,
         label,
         angle: `Angle ${label}`,
+        headline: `Headline ${label}`,
         durationSec: 29.5,
         editorPath: `/studio/video/${projectId}?origin=library`,
         segments: [],
@@ -173,6 +235,10 @@ describe('BriefDialog', () => {
       });
       const rows = screen.getByTestId('brief-summary').querySelectorAll('li[data-variant]');
       expect([...rows].map((row) => row.getAttribute('data-variant'))).toEqual(['A', 'B']);
+      expect(screen.getAllByTestId('brief-headline').map((node) => node.textContent)).toEqual([
+        '“Headline A”',
+        '“Headline B”',
+      ]);
       expect(screen.getByText('B is 2 s short of the target.')).toBeTruthy();
       const undo = toasts.at(-1)?.action;
       expect(undo?.label).toBe('Undo');

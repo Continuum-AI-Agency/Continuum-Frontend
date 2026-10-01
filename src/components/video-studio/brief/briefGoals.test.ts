@@ -7,7 +7,9 @@ import {
 import {
   chipActive,
   DEFAULT_BRIEF_FIELDS,
+  DEFAULT_FINISH,
   describeBrief,
+  finishInput,
   GOAL_CHIPS,
   hasFootage,
   placesAsset,
@@ -102,5 +104,26 @@ describe('the Brief opens by itself', () => {
     expect(placesFirstFootage(blank(), { kind: 'image' })).toBe(false);
     expect(placesFirstFootage(withVideo(blank()), { kind: 'video' })).toBe(false);
     expect(placesFirstFootage(briefed(blank()), { kind: 'video' })).toBe(false);
+  });
+});
+
+describe('finishing', () => {
+  test('sends every finish by default, a mood only with music, brand captions only with captions', () => {
+    expect(finishInput(DEFAULT_FINISH, true)).toEqual({
+      music: true,
+      hookTitle: true,
+      broll: true,
+      brandCaptions: true,
+    });
+    expect(finishInput({ ...DEFAULT_FINISH, mood: '  Lo-fi chill ' }, true).musicPrompt).toBe(
+      'Lo-fi chill',
+    );
+    expect(finishInput({ ...DEFAULT_FINISH, music: false, mood: 'Lo-fi chill' }, true)).toEqual({
+      music: false,
+      hookTitle: true,
+      broll: true,
+      brandCaptions: true,
+    });
+    expect(finishInput(DEFAULT_FINISH, false).brandCaptions).toBe(false);
   });
 });

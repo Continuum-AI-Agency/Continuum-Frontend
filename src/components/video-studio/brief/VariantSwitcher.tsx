@@ -1,7 +1,7 @@
 'use client';
 
 import type { VideoEditorOpOutput } from '@continuum/contracts';
-import { RotateCcw } from 'lucide-react';
+import { Download, RotateCcw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { type StudioVideoOrigin, studioVideoHref } from '@/lib/ai-studio/studioVideoHref';
 import { runVideoEditorOp } from '@/lib/api/videoEditorOps.client';
+import { ExportDialog } from '../export/ExportDialog';
 import { formatDuration } from '../sources/PoolAssetCard';
 import type { VideoStudioContext } from '../types';
 
@@ -17,7 +18,8 @@ type Variant = VideoEditorOpOutput<'list_variants'>['variants'][number];
 /**
  * A/B/C for a project drafted from a brief: each tab is a sibling project, its angle in the
  * tooltip. Switching opens that sibling on this same route (same `origin`); "Redraft all
- * variants" reopens the brief, and the redraft rewrites these same siblings in place.
+ * variants" reopens the brief, and the redraft rewrites these same siblings in place;
+ * "Export all variants" renders every sibling with one platform preset.
  */
 export function VariantSwitcher({
   studio,
@@ -36,6 +38,7 @@ export function VariantSwitcher({
   const [variants, setVariants] = useState<Variant[]>([]);
   // Redraft counts the tabs: before list_variants answers, the only tab is this project.
   const [answeredFor, setAnsweredFor] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is the re-read trigger
   useEffect(() => {
@@ -115,6 +118,16 @@ export function VariantSwitcher({
       >
         <RotateCcw className="size-3.5" /> Redraft all variants
       </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-8 gap-1 text-xs"
+        disabled={answeredFor !== projectId}
+        onClick={() => setExportOpen(true)}
+      >
+        <Download className="size-3.5" /> Export all variants
+      </Button>
+      <ExportDialog studio={studio} open={exportOpen} onOpenChange={setExportOpen} allVariants />
     </div>
   );
 }
