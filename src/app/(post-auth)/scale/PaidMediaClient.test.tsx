@@ -22,6 +22,14 @@ let optimizerAdAccounts: { data: Array<{ account_id: string }>; isSuccess: boole
 };
 let dynamicComponentIndex = 0;
 
+const canvasState = { nodes: [], edges: [], platform: 'meta' };
+mock.module('@/CampaignCanvas/stores/useCampaignStore', () => ({
+  useCampaignStore: Object.assign(
+    (select: (state: typeof canvasState) => unknown) => select(canvasState),
+    { getState: () => canvasState },
+  ),
+}));
+
 mock.module('next/dynamic', () => ({
   default: () => {
     const componentIndex = dynamicComponentIndex;

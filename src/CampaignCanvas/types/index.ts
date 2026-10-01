@@ -105,6 +105,7 @@ export interface CampaignData extends BaseCampaignNodeData {
 }
 
 export interface AdSetData extends BaseCampaignNodeData {
+  funnelStage?: 'prospecting' | 'retargeting' | 'retention';
   optimizationGoal: string;
   billingEvent: string;
   bidStrategy?: string;

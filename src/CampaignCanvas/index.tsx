@@ -15,10 +15,16 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { JainaChatSurface } from '@/components/paid-media/jaina/JainaChatSurface';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Button, buttonVariants } from '@/components/ui/button';
+import {
+  buildCampaignCreativeRequest,
+  type CampaignCreativeRequest,
+} from '@/lib/campaign-canvas/creativeGeneration';
 import { CanvasJainaContext } from './canvasJaina';
 import { CampaignCanvas } from './components/CampaignCanvas';
+import { CampaignCreativeActionsProvider } from './components/CampaignCreativeActions';
 import { ScaffoldRecordBar } from './components/ScaffoldRecordBar';
 import { useCanvasChatBridge } from './hooks/useCanvasChatBridge';
+import { useCampaignStore } from './stores/useCampaignStore';
 
 /** Where "Back to chat" leads: the thread that opened this canvas, else the Jaina tab. */
 export const jainaThreadHref = (sessionId: string | null): string =>
@@ -35,6 +41,7 @@ const CampaignFlowCanvasPage = ({
 }) => {
   const [isJainaOpen, setIsJainaOpen] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [creativeRequest, setCreativeRequest] = useState<CampaignCreativeRequest | null>(null);
   const [adAccountId, setAdAccountId] = useState<string | null>(null);
   const dragControls = useDragControls();
   const canvasContainerRef = useRef<HTMLDivElement>(null);
@@ -65,6 +72,22 @@ const CampaignFlowCanvasPage = ({
     }
   }, [cancelDeploy, deployInFlight, isJainaOpen]);
 
+  const handleGenerateCreative = useCallback(
+    async (nodeId: string) => {
+      if (!activeBrandId || !adAccountId) throw new Error('Select a brand and ad account first.');
+      const request = await buildCampaignCreativeRequest({
+        ...useCampaignStore.getState(),
+        nodeId,
+        brandId: activeBrandId,
+        adAccountId,
+      });
+      setCreativeRequest(request);
+      setIsJainaOpen(true);
+      setIsMaximized(true);
+    },
+    [activeBrandId, adAccountId],
+  );
+
   const chatDimensions = useMemo(
     () => ({
       width: isMaximized ? 'min(94vw, 980px)' : 'min(92vw, 420px)',
@@ -79,7 +102,9 @@ const CampaignFlowCanvasPage = ({
         {/* Main Canvas Area */}
         <div ref={canvasContainerRef} className="relative flex-1 h-full w-full">
           <CanvasJainaContext.Provider value={bridge.canvasJaina}>
-            <CampaignCanvas />
+            <CampaignCreativeActionsProvider value={handleGenerateCreative}>
+              <CampaignCanvas />
+            </CampaignCreativeActionsProvider>
           </CanvasJainaContext.Provider>
 
           {/* The record this canvas is showing, and the one way forward from it. */}
@@ -181,6 +206,8 @@ const CampaignFlowCanvasPage = ({
                     initialSessionId={requestedSessionId}
                     campaignCanvasPayload={bridge.campaignCanvasPayload}
                     {...bridge.chatProps}
+                    requestedCreative={creativeRequest}
+                    onCreativeRequestConsumed={() => setCreativeRequest(null)}
                   />
                 </div>
               </motion.div>

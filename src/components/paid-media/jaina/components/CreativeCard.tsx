@@ -1,22 +1,30 @@
 'use client';
 
-import { ImageIcon } from 'lucide-react';
+import { ImageIcon, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCallback, useState } from 'react';
+import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
 import { ChatMediaCarousel } from '@/components/chat/media/ChatMedia';
 import { type ChatMedia, mediaListFromCreative } from '@/components/chat/media/media';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import {
+  buildCampaignCreativeRequest,
+  scaffoldCreativeQuery,
+} from '@/lib/campaign-canvas/creativeGeneration';
 import type { CreativeArtifact } from '@/lib/jaina/schemas';
 
 interface CreativeCardProps {
   creative: CreativeArtifact;
   index: number;
+  onRequestCreative?: (query: string) => void;
+  disabled?: boolean;
 }
 
-export function CreativeCard({ creative, index }: CreativeCardProps) {
+export function CreativeCard({ creative, index, onRequestCreative, disabled }: CreativeCardProps) {
   const { activeBrandId } = useActiveBrandContext();
   // A video ad used to render its video URL into an <img>. The shared primitive reads
   // `format: 'video'` and renders a real poster frame with a play glyph.
@@ -66,6 +74,49 @@ export function CreativeCard({ creative, index }: CreativeCardProps) {
     [recovered, activeBrandId],
   );
 
+  const [requesting, setRequesting] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const generate = async () => {
+    setRequesting(true);
+    setRequestError(null);
+    try {
+      const graph = useCampaignStore.getState();
+      const node = creative.asset_id
+        ? graph.nodes.find(
+            (item) => item.type === 'creative' && item.data.mediaId === creative.asset_id,
+          )
+        : undefined;
+      const account = creative.canvas_target?.ad_account_id ?? graph.hydration?.adAccountId;
+      let query: string;
+      if (node && activeBrandId && account)
+        query = (
+          await buildCampaignCreativeRequest({
+            ...graph,
+            nodeId: node.id,
+            brandId: activeBrandId,
+            adAccountId: account,
+          })
+        ).query;
+      else if (creative.scaffold_target)
+        query = scaffoldCreativeQuery(
+          {
+            ...creative.scaffold_target,
+            expected_asset_id:
+              creative.attachment_status === 'attached'
+                ? (creative.asset_id ?? null)
+                : creative.scaffold_target.expected_asset_id,
+          },
+          creative.format === 'video' ? 'video' : 'image',
+        );
+      else
+        query = `Generate / Enrich a new ${creative.format === 'video' ? 'video' : 'image'} variation of Library creative ${creative.asset_id ?? creative.id}. Ground it in this brand's campaign data, audience and measured winning angles; retain its offer and use the source as an approved reference where available. Use paid_creative_generate, show its generation permission gate, save and preview the result in chat. Do not publish or enroll.`;
+      onRequestCreative?.(query);
+    } catch (cause) {
+      setRequestError(cause instanceof Error ? cause.message : 'Creative request failed');
+    } finally {
+      setRequesting(false);
+    }
+  };
   const hasMedia = media.length > 0 && Boolean(media[0]?.url);
 
   return (
@@ -144,6 +195,27 @@ export function CreativeCard({ creative, index }: CreativeCardProps) {
             </p>
           )}
 
+          {onRequestCreative ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={disabled || requesting}
+              onClick={() => void generate()}
+            >
+              <Sparkles className="size-3.5" />
+              Generate / Enrich
+            </Button>
+          ) : null}
+          {requestError ? (
+            <p role="alert" className="text-xs text-destructive">
+              {requestError}
+            </p>
+          ) : null}
+          {creative.scaffold_target && creative.attachment_status !== 'attached' ? (
+            <p className="text-xs text-muted-foreground">
+              Saved in Library; attachment needs review ({creative.attachment_status ?? 'unknown'}).
+            </p>
+          ) : null}
           {creative.call_to_action && (
             <Badge variant="secondary" className="w-fit text-xs">
               {creative.call_to_action}

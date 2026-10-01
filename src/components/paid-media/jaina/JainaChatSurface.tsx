@@ -14,8 +14,14 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import React from 'react';
+import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  type CampaignCreativeRequest,
+  creativeCanvasUpdate,
+} from '@/lib/campaign-canvas/creativeGeneration';
+import type { CreativeArtifact } from '@/lib/jaina/schemas';
 
 const AnimatedShaderBackground = dynamic(
   () =>
@@ -27,6 +33,7 @@ const AnimatedShaderBackground = dynamic(
 
 import type {
   AgentSessionListFilters,
+  JainaPublicationMode,
   JainaToolApprovalRequiredPayload,
   JainaUIMessage,
   PaidScaffoldGate,
@@ -38,7 +45,6 @@ import {
 } from '@continuum/contracts';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { useCampaignAI } from '@/CampaignCanvas/hooks/useCampaignAI';
-import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
 import {
   Queue,
   QueueItem,
@@ -214,6 +220,8 @@ type JainaChatSurfaceProps = {
   campaignCanvasPayload?: CampaignCanvasPayload | null;
   userId?: string | null;
   initialSessionId?: string | null;
+  requestedCreative?: CampaignCreativeRequest | null;
+  onCreativeRequestConsumed?: () => void;
   initialPrompt?: string | null;
   onInitialPromptConsumed?: () => void;
   /**
@@ -711,6 +719,8 @@ export function JainaChatSurface({
   campaignCanvasPayload,
   userId,
   initialSessionId,
+  requestedCreative,
+  onCreativeRequestConsumed,
   initialPrompt,
   onInitialPromptConsumed,
   operatorActionRequest = null,
@@ -2417,7 +2427,11 @@ export function JainaChatSurface({
    * prevent.
    */
   const handleApprovalDecision = React.useCallback(
-    (approval: JainaToolApprovalRequiredPayload, decision: ToolApprovalDecision) => {
+    (
+      approval: JainaToolApprovalRequiredPayload,
+      decision: ToolApprovalDecision,
+      publicationMode?: JainaPublicationMode,
+    ) => {
       const gate = SCAFFOLD_GATE_BY_TOOL_NAME[approval.toolName];
       const input = approval.input as { scaffold_version_id?: unknown } | null;
       const scaffoldVersionId =
@@ -2442,6 +2456,9 @@ export function JainaChatSurface({
             decision,
             approval_id: approval.approvalId,
             tool_call_id: approval.toolCallId,
+            ...(approval.toolName === 'paid_scaffold_publish' && publicationMode
+              ? { publication_mode: publicationMode }
+              : {}),
           },
         };
       }
@@ -2649,6 +2666,70 @@ export function JainaChatSurface({
   // `handleSubmit` reads the transcript (new on every chunk) and the other two follow
   // `dispatchMessage`, which moves mid-turn. Items get forwarders that never change instead.
   const submitFromTranscript = useStableHandler((query: string) => handleSubmit(query));
+  const consumedCreativeRequest = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (
+      !requestedCreative ||
+      requestedCreative.id === consumedCreativeRequest.current ||
+      !adAccountId ||
+      requestedCreative.brandId !== brandProfileId ||
+      requestedCreative.adAccountId.replace(/^act_/, '') !== adAccountId.replace(/^act_/, '')
+    )
+      return;
+    consumedCreativeRequest.current = requestedCreative.id;
+    onCreativeRequestConsumed?.();
+    void submitFromTranscript(requestedCreative.query);
+  }, [
+    requestedCreative,
+    brandProfileId,
+    adAccountId,
+    onCreativeRequestConsumed,
+    submitFromTranscript,
+  ]);
+
+  const processedCreativeBindings = React.useRef(new Set<string>());
+  const applyCreativeFromTranscript = useStableHandler(async (creative: CreativeArtifact) => {
+    if (!adAccountId) return;
+    const key = JSON.stringify([
+      brandProfileId,
+      adAccountId,
+      creative.asset_id,
+      creative.canvas_target,
+      creative.scaffold_target,
+      creative.attachment_status,
+    ]);
+    if (processedCreativeBindings.current.has(key)) return;
+    processedCreativeBindings.current.add(key);
+    if (creative.scaffold_target)
+      void queryClient.invalidateQueries({ queryKey: [PAID_SCAFFOLD_TREE_QUERY_ROOT] });
+    const snapshot = useCampaignStore.getState();
+    try {
+      const update = await creativeCanvasUpdate(
+        creative,
+        { brandId: brandProfileId, adAccountId },
+        snapshot,
+      );
+      const current = useCampaignStore.getState();
+      if (
+        !update ||
+        current.nodes !== snapshot.nodes ||
+        current.edges !== snapshot.edges ||
+        current.hydration !== snapshot.hydration ||
+        current.isDirty !== snapshot.isDirty
+      )
+        return;
+      current.updateNodeData(update.nodeId, update.data);
+      if (creative.scaffold_target && !snapshot.isDirty)
+        useCampaignStore.setState({ isDirty: false });
+    } catch (error) {
+      console.warn('Generated creative is available in chat; canvas attachment skipped', error);
+    }
+  });
+  React.useEffect(() => {
+    for (const creative of liveChatMessage?.artifacts?.creatives ?? [])
+      void applyCreativeFromTranscript(creative);
+  }, [liveChatMessage?.artifacts?.creatives, applyCreativeFromTranscript]);
+
   const planFeedbackFromTranscript = useStableHandler(handlePlanFeedback);
   const approvalDecisionFromTranscript = useStableHandler(handleApprovalDecision);
   const operatorActionFromTranscript = useStableHandler(handleOperatorAction);
@@ -2818,6 +2899,7 @@ export function JainaChatSurface({
                     <React.Fragment key={message.id}>
                       <JainaMessageItem
                         message={message}
+                        onCreativeReady={applyCreativeFromTranscript}
                         onSuggestionClick={submitFromTranscript}
                         onPlanFeedback={planFeedbackFromTranscript}
                         onFocusInput={handleFocusInput}

@@ -11606,6 +11606,17 @@ export type Database = {
         }
         Returns: boolean
       }
+      attach_paid_scaffold_generated_creative: {
+        Args: {
+          p_asset_id: string
+          p_content_hash: string
+          p_expected_asset_id: string
+          p_path_key: string
+          p_user_id: string
+          p_version_id: string
+        }
+        Returns: Json
+      }
       attach_paid_scaffold_node_creative: {
         Args: {
           p_asset_id: string
@@ -28944,6 +28955,10 @@ export type Database = {
         Returns: number
       }
       optimizer_enroll_adset: {
+        Args: { p_adsets: Json; p_portfolio_id: string }
+        Returns: Json
+      }
+      optimizer_enroll_scaffold_adsets: {
         Args: { p_adsets: Json; p_portfolio_id: string }
         Returns: Json
       }

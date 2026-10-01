@@ -83,10 +83,31 @@ describe('PaidCreativeRenderStatus', () => {
       } as Response),
     ) as typeof fetch;
 
-    render(<PaidCreativeRenderStatus render={renderHandle} />);
+    const finished = mock(() => {});
+    const canvasTarget = {
+      brand_id: renderHandle.brand_id,
+      ad_account_id: 'act_1',
+      node_id: 'slot',
+      revision: 'a'.repeat(64),
+    };
+    render(
+      <PaidCreativeRenderStatus
+        render={{ ...renderHandle, canvas_target: canvasTarget }}
+        onCreativeReady={finished}
+      />,
+    );
 
     await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Completed'));
     await screen.findByText('https://signed.test/reel.mp4');
+    await waitFor(() =>
+      expect(finished).toHaveBeenCalledWith(
+        expect.objectContaining({
+          asset_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          canvas_target: canvasTarget,
+          format: 'video',
+        }),
+      ),
+    );
     expect(global.fetch).toHaveBeenCalledWith(
       '/api/library/sign',
       expect.objectContaining({

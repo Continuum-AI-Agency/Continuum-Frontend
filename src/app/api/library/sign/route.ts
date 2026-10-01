@@ -50,7 +50,7 @@ export async function POST(request: Request) {
   // the caller's brand, so no service-role bypass is needed.
   const { data, error } = await mediaSchema(supabase)
     .from('assets')
-    .select('storage_path, bucket, thumbnail_path')
+    .select('storage_path, bucket, thumbnail_path, mime_type')
     .eq('id', assetId)
     .eq('brand_id', brandId)
     .is('deleted_at', null)
@@ -60,7 +60,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
   }
 
-  const row = data as { storage_path: string; bucket: string; thumbnail_path: string | null };
+  const row = data as {
+    storage_path: string;
+    bucket: string;
+    thumbnail_path: string | null;
+    mime_type: string | null;
+  };
 
   // The head read above stays the authorization AND the soft-delete gate even when an
   // exact version is asked for: `media.asset_versions` has no `deleted_at`, so signing
@@ -101,5 +106,5 @@ export async function POST(request: Request) {
     ? await mintSignedUrl(row.thumbnail_path, row.bucket)
     : null;
 
-  return NextResponse.json({ signedUrl, thumbnailUrl });
+  return NextResponse.json({ signedUrl, thumbnailUrl, mimeType: row.mime_type });
 }

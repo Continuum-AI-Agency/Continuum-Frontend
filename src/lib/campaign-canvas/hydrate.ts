@@ -21,6 +21,7 @@ import type {
   PaidScaffoldCreative,
   PaidScaffoldPlan,
 } from '@continuum/contracts';
+import { metaCurrencyOffset } from '@continuum/contracts';
 import {
   type AdData,
   type AdSetData,
@@ -424,8 +425,7 @@ export function creativeFromRow(
     const [card] = planCreative.cards;
     if (!card) return null;
     const seen = known.get(card.asset_id);
-    const assetUrl =
-      card.asset_id === adRow.creativeAssetId ? readString(media, 'url') : undefined;
+    const assetUrl = card.asset_id === adRow.creativeAssetId ? readString(media, 'url') : undefined;
     return {
       label,
       assetType: planCreative.format,
@@ -460,7 +460,7 @@ export function buildHydratedCanvasGraph(read: CanvasScaffoldRead): HydratedCanv
   const planCreativeByPath = new Map<string, PaidScaffoldCreative | null>(
     (plan?.ads ?? []).map((entry) => [entry.path_key, entry.creative]),
   );
-  const currency = plan?.currency ?? 'USD';
+  const currency = plan?.currency ?? read.version.budgetCurrency ?? 'USD';
 
   const nodes: CampaignCanvasNode[] = [];
   const edges: CampaignCanvasEdge[] = [];
@@ -481,16 +481,20 @@ export function buildHydratedCanvasGraph(read: CanvasScaffoldRead): HydratedCanv
       label: adSet.name,
       status: adSet.status === 'active' ? 'active' : 'draft',
       validationStatus: 'valid',
+      ...(adSet.choices.funnelStage === 'prospecting' ||
+      adSet.choices.funnelStage === 'retargeting' ||
+      adSet.choices.funnelStage === 'retention'
+        ? { funnelStage: adSet.choices.funnelStage }
+        : {}),
       optimizationGoal:
-        planAdSet?.optimization_goal ??
-        adSet.choices.optimizationGoal ??
-        DEFAULT_OPTIMIZATION_GOAL,
+        planAdSet?.optimization_goal ?? adSet.choices.optimizationGoal ?? DEFAULT_OPTIMIZATION_GOAL,
       billingEvent: planAdSet?.billing_event ?? adSet.derived.billingEvent ?? 'IMPRESSIONS',
       // Jaina's opening budget: the plan's figure (already clamped to Meta's floor), else
       // the typed `daily_budget_minor_units` column. Null means no measured CPA: build uses
       // the Backend placeholder, shown as 0 rather than as a figure nobody derived.
       budgetType: 'DAILY',
-      budgetAmount: typeof budgetMinorUnits === 'number' ? budgetMinorUnits / 100 : 0,
+      budgetAmount:
+        typeof budgetMinorUnits === 'number' ? budgetMinorUnits / metaCurrencyOffset(currency) : 0,
       budgetCurrency: currency,
       pacingType: adSet.choices.placement ?? [],
       ...placementOf(payload),
@@ -557,16 +561,14 @@ export function buildHydratedCanvasGraph(read: CanvasScaffoldRead): HydratedCanv
       nodes.push(node(ad.id, 'ad', { x: adX, y: ROW * 2 }, adData));
       edges.push(edge(adSet.id, ad.id));
 
-      // A creative node exists only once an asset was actually attached. Rendering an
-      // empty one for every ad would show a graph the database does not have.
-      if (!creative) return;
+      // Every ad has a creative slot, including one that still needs generation.
       const creativeNodeId = `${ad.id}:creative`;
       const creativeData: CreativeData = {
-        ...creative,
+        ...(creative ?? { label: ad.name, assetType: 'image' as const }),
         status: 'draft',
         validationStatus: 'valid',
         provenance: provenanceOf(
-          creative.mediaId ?? creative.cards?.[0]?.mediaId ?? ad.id,
+          creative?.mediaId ?? creative?.cards?.[0]?.mediaId ?? ad.id,
           `${ad.pathKey}/creative`,
           gateForLevel('creative', read.gates),
           null,
@@ -608,8 +610,7 @@ export function buildHydratedCanvasGraph(read: CanvasScaffoldRead): HydratedCanv
       ),
     };
     // Centred over its ad sets; first in the list, so it paints beneath nothing.
-    const campaignX =
-      adSetXs.length > 0 ? (adSetXs[0]! + adSetXs[adSetXs.length - 1]!) / 2 : SLOT;
+    const campaignX = adSetXs.length > 0 ? (adSetXs[0]! + adSetXs[adSetXs.length - 1]!) / 2 : SLOT;
     nodes.unshift(node(tree.campaign.id, 'campaign', { x: campaignX, y: 0 }, campaign));
   }
 
