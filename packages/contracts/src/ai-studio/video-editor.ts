@@ -132,7 +132,9 @@ export const VIDEO_EDITOR_CAPTION_STYLES = [
 export const videoEditorCaptionStyleSchema = z.enum(VIDEO_EDITOR_CAPTION_STYLES);
 export type VideoEditorCaptionStyle = z.infer<typeof videoEditorCaptionStyleSchema>;
 
-/** StyleFrame-style quick starts, each served by a generator the canvas already has. */
+/** StyleFrame-style quick starts, each served by a generator the product already has: images
+ * and clips (canvas generators), a music bed (Lyria), a voiceover (Gemini TTS), and a reel
+ * made from a headless content concept. */
 export const VIDEO_EDITOR_QUICK_STARTS = [
   'create_image',
   'restyle_image',
@@ -140,6 +142,9 @@ export const VIDEO_EDITOR_QUICK_STARTS = [
   'storyboard_to_video',
   'keyframes_to_video',
   'rotate_360',
+  'music_bed',
+  'voiceover',
+  'headless_concept',
 ] as const;
 export const videoEditorQuickStartSchema = z.enum(VIDEO_EDITOR_QUICK_STARTS);
 export type VideoEditorQuickStart = z.infer<typeof videoEditorQuickStartSchema>;
@@ -229,6 +234,8 @@ export const videoEditorDraftVariantSchema = z
     projectId: projectIdSchema,
     label: z.string(),
     angle: z.string(),
+    /** The hook title's words, when the cut was finished with one. */
+    headline: z.string().max(120).optional(),
     durationSec: secSchema,
     editorPath: z.string(),
     segments: z.array(videoEditorCutSegmentSchema),
@@ -239,7 +246,7 @@ export type VideoEditorDraftVariant = z.infer<typeof videoEditorDraftVariantSche
 
 // ── The ops ────────────────────────────────────────────────────────────────────────────
 
-export type VideoEditorOpGroup = 'see' | 'edit' | 'quick' | 'draft' | 'ship' | 'sources';
+export type VideoEditorOpGroup = 'see' | 'edit' | 'quick' | 'motion' | 'draft' | 'ship' | 'sources';
 
 type OpSpec = {
   group: VideoEditorOpGroup;
@@ -574,25 +581,126 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      'Add an animated text layer: a title, a lower third, kinetic type, or a call to action.',
+      'Add animated text: a template (hook_title, lower_third, kinetic_words, cta_end_card, listicle_number, quote, stat_callout, subtitle_bar — two-layer templates take secondaryText) or a plain title, lower third, kinetic line or call to action. animationIn/animationOut override the entrance and exit.',
     input: z
       .object({
         ...projectRef,
-        kind: z.enum(['title', 'lower_third', 'kinetic', 'cta']),
+        kind: z.enum(['title', 'lower_third', 'kinetic', 'cta']).default('title'),
+        template: textTemplateIdSchema.optional(),
         text: z.string().min(1).max(500),
+        secondaryText: z.string().min(1).max(300).optional(),
         startSec: secSchema,
-        durationSec: z.number().min(0.1).max(60).default(3),
+        durationSec: z.number().min(0.1).max(60).optional(),
+        animationIn: textAnimationIdSchema.optional(),
+        animationOut: textAnimationIdSchema.optional(),
         style: z
           .object({
             fontFamily: z.string().max(200).optional(),
             color: z.string().max(32).optional(),
             fontSizePx: z.number().min(8).max(400).optional(),
+            backgroundColor: z.string().max(32).optional(),
+            shadow: z.boolean().optional(),
           })
           .strict()
           .optional(),
       })
       .strict(),
-    output: committed({ clipId: z.string() }),
+    output: committed({
+      /** The primary layer. */
+      clipId: z.string(),
+      /** Every layer a template placed, primary first. */
+      clipIds: z.array(z.string()).optional(),
+    }),
+  },
+  add_clip: {
+    group: 'edit',
+    commits: true,
+    scope: 'project',
+    access: 'operate',
+    description:
+      'Place a Library or pool asset on the timeline at a time: video on a video track, an image as an overlay, audio on an audio track. sourceInSec/durationSec trim it; newTrack puts it on a track of its own.',
+    input: z
+      .object({
+        ...projectRef,
+        assetId: z.string().min(1),
+        atSec: secSchema.default(0),
+        trackId: z.string().optional(),
+        newTrack: z.boolean().default(false),
+        sourceInSec: secSchema.optional(),
+        durationSec: z.number().positive().max(86_400).optional(),
+      })
+      .strict(),
+    output: committed({ clipId: z.string(), trackId: z.string() }),
+  },
+  animate_clip: {
+    group: 'motion',
+    commits: true,
+    scope: 'project',
+    access: 'operate',
+    description:
+      "Animate any visual clip (video, overlay, text) with a motion preset: fade/slide/pop/spring/zoom in at its start, fade/slide out at its end, punch_in or shake at atSec (timeline seconds), or ken_burns across the whole clip. Replaces the clip's keyframes of the same properties in that window.",
+    input: z
+      .object({
+        ...projectRef,
+        clipId: z.string().min(1),
+        preset: clipMotionPresetIdSchema,
+        durationSec: z.number().min(0.1).max(10).optional(),
+        atSec: secSchema.optional(),
+      })
+      .strict(),
+    output: committed({ keyframes: z.number().int().nonnegative() }),
+  },
+  add_transition: {
+    group: 'motion',
+    commits: true,
+    scope: 'project',
+    access: 'operate',
+    description:
+      'Put a transition between fromClipId and the next clip on the main video track (crossfade, dip to black or white, wipe, slide, zoom); type cut removes it. blur is not available yet. all=true instead joins EVERY neighbouring pair of the main track with that type and length, leaving pairs too short for it as cuts — "crossfade between the clips" is one call with all=true.',
+    input: z
+      .object({
+        ...projectRef,
+        fromClipId: z.string().min(1).optional(),
+        toClipId: z.string().min(1).optional(),
+        all: z.boolean().default(false),
+        type: z.enum([
+          'cut',
+          'crossfade',
+          'dip_to_black',
+          'dip_to_white',
+          'wipe',
+          'slide',
+          'zoom',
+          'blur',
+        ]),
+        durationSec: z.number().min(0.05).max(3).default(0.5),
+      })
+      .strict(),
+    output: committed({
+      /** The transition placed (with all=true, the first one), or null for a cut. */
+      transitionId: z.string().nullable(),
+      /** With all=true: how many boundaries were joined. */
+      transitions: z.number().int().nonnegative().optional(),
+    }),
+  },
+  apply_effect: {
+    group: 'motion',
+    commits: true,
+    scope: 'project',
+    access: 'operate',
+    description:
+      'Give a video or overlay clip a look: a filter (bw, vintage, vivid, cool, warm, noir, dream) or an effect (blur, tint, vignette, film_grain, chromatic_aberration, vhs, pixelate, corner_radius, chroma_key) at a strength 0–1; remove takes it off.',
+    input: z
+      .object({
+        ...projectRef,
+        clipId: z.string().min(1),
+        effect: lookEffectIdSchema,
+        strength: z.number().min(0).max(1).default(0.6),
+        color: z.string().max(32).optional(),
+        remove: z.boolean().default(false),
+      })
+      .strict(),
+    output: committed({ effects: z.array(z.string()) }),
   },
   draft_cut: {
     group: 'draft',
@@ -600,7 +708,7 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      "Turn the project's footage and a goal into first cuts: reads every spoken line, picks and orders the strongest ones for the goal (a hook, a testimonial, a highlight, a story, a demo) at the target length, then captions and formats each cut. Variant A replaces this timeline (undoable); B, C… open as sibling projects. Returns a jobId — poll draft_cut_status.",
+      "Turn the project's footage and a goal into first cuts: reads every spoken line, picks and orders the strongest ones for the goal (a hook, a testimonial, a highlight, a story, a demo) at the target length, then captions and formats each cut. Finishing, each opt-in: music (a bed ducked under speech; musicPrompt sets its mood), hookTitle (a short headline over the opening), broll (cutaways from the pool's footage without speech over body lines) and brandCaptions (captions in the brand's type and colours) — turn them on unless the person asked for a bare cut. Variant A replaces this timeline (undoable); B, C… open as sibling projects. Returns a jobId — poll draft_cut_status.",
     input: z
       .object({
         ...projectRef,
@@ -611,6 +719,16 @@ export const VIDEO_EDITOR_OPS = {
         preset: platformExportPresetIdSchema.optional(),
         captions: z.boolean().default(true),
         sourceAssetIds: z.array(z.string()).max(20).optional(),
+        /** Finishing: a music bed under each cut, ducked under its speech. */
+        music: z.boolean().default(false),
+        /** The bed's mood; drawn from the brief when absent. */
+        musicPrompt: z.string().max(300).optional(),
+        /** Finishing: a short headline from each cut's hook as a hook title over its opening. */
+        hookTitle: z.boolean().default(false),
+        /** Finishing: cutaways from the pool's footage without speech over body and proof lines. */
+        broll: z.boolean().default(false),
+        /** Finishing: captions in the brand's type and colours. */
+        brandCaptions: z.boolean().default(false),
       })
       .strict(),
     output: z.object({ jobId: z.string(), state: jobStateSchema }).strict(),
@@ -714,7 +832,7 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      'Generate an image or clip from a quick start (create/restyle/edit image, storyboard or keyframes to video, 360 rotation) using reference assets, optionally placing the result on the timeline. Poll generate_status.',
+      'Generate media from a quick start and optionally place it on the timeline; poll generate_status. Pictures and clips: create/restyle/edit image, storyboard or keyframes to video, 360 rotation (reference assets in refs). music_bed: an instrumental bed from prompt (mood, genre, tempo) on an audio track, as long as the timeline unless durationSec, ducked under speech unless duck=false. voiceover: prompt is the exact script to speak, voice the delivery (e.g. "warm, confident, Mexican Spanish"), placed on an audio track at place.atSec. headless_concept: a finished reel of the brand\'s approved cast made from concept (street-interview, pov, unpopular-opinion, problem-solution…) with prompt as the angle, placed as video.',
     input: z
       .object({
         ...projectRef,
@@ -735,6 +853,14 @@ export const VIDEO_EDITOR_OPS = {
           .default([]),
         preset: platformExportPresetIdSchema.optional(),
         place: z.object({ atSec: secSchema, trackId: z.string().optional() }).strict().optional(),
+        /** voiceover: how it is spoken — voice, accent, pace, mood. */
+        voice: z.string().max(300).optional(),
+        /** music_bed: length in seconds; the timeline's length when absent. */
+        durationSec: z.number().min(1).max(600).optional(),
+        /** headless_concept: which concept makes the reel. */
+        concept: headlessGrammarSchema.optional(),
+        /** music_bed: dip under speech on the timeline. */
+        duck: z.boolean().default(true),
       })
       .strict(),
     output: z.object({ jobId: z.string(), state: jobStateSchema }).strict(),

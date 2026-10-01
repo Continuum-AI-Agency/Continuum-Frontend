@@ -1,5 +1,5 @@
 import type { ShaderEffectV1 } from '@continuum/contracts';
-import { resolveShaderParameter } from '@/lib/vgpu/renderShaderStack';
+import { resolveShaderParameter } from '@continuum/contracts/ai-studio/hyperframes-runtime/renderShaderStack';
 import { chromaKeyImageData } from '../pixel/chromaKey';
 import {
   applyCanvasFilter,
@@ -296,8 +296,13 @@ async function prepareSource(
     const { renderShaderStackFrame } = await import(
       '@continuum/contracts/ai-studio/hyperframes-runtime/renderShaderStack'
     );
-    return renderShaderStackFrame({ source, width: sourceWidth, height: sourceHeight,
-      stack: shaderStackFromClipEffects(effects), timeSec });
+    return renderShaderStackFrame({
+      source,
+      width: sourceWidth,
+      height: sourceHeight,
+      stack: shaderStackFromClipEffects(effects),
+      timeSec,
+    });
   }
   const looks = pixelLooks(effects, timeSec);
   const hasPixels = Boolean(

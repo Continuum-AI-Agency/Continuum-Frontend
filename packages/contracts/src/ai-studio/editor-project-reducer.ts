@@ -1036,9 +1036,9 @@ const applyTimelineCommand = (
         transitions: project.transitions.filter((value) => value.id !== command.transitionId),
       };
     }
-    case 'restore_timeline_snapshot':
+    case 'restore_timeline_snapshot': {
       requireUser(command.actor);
-      return {
+      const restored = {
         ...project,
         durationSec: command.snapshot.durationSec,
         tracks: command.snapshot.tracks,
@@ -1048,6 +1048,12 @@ const applyTimelineCommand = (
         exportSettings: command.snapshot.exportSettings ?? project.exportSettings,
         markers: command.snapshot.markers ?? project.markers,
       };
+      if (command.snapshot.brief === undefined) return restored;
+      const { brief: _current, ...withoutBrief } = restored;
+      return command.snapshot.brief
+        ? { ...withoutBrief, brief: command.snapshot.brief }
+        : withoutBrief;
+    }
     case 'set_nested_sequence': {
       if (command.sequence.tracks.some((track) => track.kind === 'nested_sequence')) {
         throw new EditorProjectConflictError(

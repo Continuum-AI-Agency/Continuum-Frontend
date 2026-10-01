@@ -656,6 +656,29 @@ export const editorMarkerSchema = z
   .strict();
 export type EditorMarker = z.infer<typeof editorMarkerSchema>;
 
+/** The editorial structure a first cut follows — what the footage is asked to become. */
+export const EDITOR_CUT_KINDS = ['highlight', 'hook', 'testimonial', 'story', 'demo'] as const;
+export const editorCutKindSchema = z.enum(EDITOR_CUT_KINDS);
+export type EditorCutKind = z.infer<typeof editorCutKindSchema>;
+
+/**
+ * The goal a first cut was drafted from. Every variant drafted from one brief shares its
+ * `briefId`, which is how an edit finds its sibling variants; `variantLabel` is the
+ * short name the workspace shows ("A", "B", "C").
+ */
+export const editorBriefSchema = z
+  .object({
+    briefId: editorIdSchema,
+    text: z.string().min(1).max(2_000),
+    kind: editorCutKindSchema,
+    targetDurationSec: z.number().finite().min(5).max(180),
+    variantLabel: z.string().min(1).max(8),
+    variantIndex: z.number().int().nonnegative().max(9),
+    angle: z.string().max(500).optional(),
+  })
+  .strict();
+export type EditorBrief = z.infer<typeof editorBriefSchema>;
+
 export const editorTimelineSnapshotSchema = z
   .object({
     sourceRevision: revisionNumberSchema,
@@ -670,6 +693,8 @@ export const editorTimelineSnapshotSchema = z
     canvas: editorCanvasSchema.optional(),
     exportSettings: editorExportSettingsSchema.optional(),
     markers: z.array(editorMarkerSchema).max(2_000).optional(),
+    // null = the restored revision had no brief, so undoing a first cut drops it again.
+    brief: editorBriefSchema.nullable().optional(),
   })
   .strict();
 export type EditorTimelineSnapshot = z.infer<typeof editorTimelineSnapshotSchema>;
@@ -925,29 +950,6 @@ export const editorProductionSchema = z
     soundPlan: null,
   });
 export type EditorProduction = z.infer<typeof editorProductionSchema>;
-
-/** The editorial structure a first cut follows — what the footage is asked to become. */
-export const EDITOR_CUT_KINDS = ['highlight', 'hook', 'testimonial', 'story', 'demo'] as const;
-export const editorCutKindSchema = z.enum(EDITOR_CUT_KINDS);
-export type EditorCutKind = z.infer<typeof editorCutKindSchema>;
-
-/**
- * The goal a first cut was drafted from. Every variant drafted from one brief shares its
- * `briefId`, which is how an edit finds its sibling variants; `variantLabel` is the
- * short name the workspace shows ("A", "B", "C").
- */
-export const editorBriefSchema = z
-  .object({
-    briefId: editorIdSchema,
-    text: z.string().min(1).max(2_000),
-    kind: editorCutKindSchema,
-    targetDurationSec: z.number().finite().min(5).max(180),
-    variantLabel: z.string().min(1).max(8),
-    variantIndex: z.number().int().nonnegative().max(9),
-    angle: z.string().max(500).optional(),
-  })
-  .strict();
-export type EditorBrief = z.infer<typeof editorBriefSchema>;
 
 export const editorProjectV2Schema = z
   .object({
