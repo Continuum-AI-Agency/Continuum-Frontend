@@ -4,6 +4,7 @@ import Image from 'next/image';
 import type React from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Node } from '@/components/ai-elements/node';
+import { ChatMediaCarousel } from '@/components/chat/media/ChatMedia';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
 import {
   ContextMenu,
@@ -20,6 +21,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
+import { CampaignCreativeGenerateButton } from '../components/CampaignCreativeActions';
 import { NodeProvenance } from '../components/NodeProvenance';
 import { useCampaignStore } from '../stores/useCampaignStore';
 import type {
@@ -129,7 +131,20 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
             className="overflow-hidden border-border/60 p-0 transition-shadow hover:shadow-sm cursor-grab active:cursor-grabbing"
           >
             <AspectRatio ratio={previewRatio} className="w-full overflow-hidden bg-muted">
-              {data.thumbnailUrl ? (
+              {selectedAssetType === 'video' && data.assetUrl ? (
+                <ChatMediaCarousel
+                  items={[
+                    {
+                      id: data.mediaId ?? id,
+                      url: data.assetUrl,
+                      thumbnailUrl: data.thumbnailUrl,
+                      kind: 'video',
+                      name: data.label,
+                    },
+                  ]}
+                  className="h-full w-full rounded-none"
+                />
+              ) : data.thumbnailUrl ? (
                 <Image
                   src={data.thumbnailUrl}
                   alt="Creative Preview"
@@ -147,6 +162,7 @@ export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'cre
                 </div>
               )}
             </AspectRatio>
+            <CampaignCreativeGenerateButton nodeId={id} />
             {data.provenance ? (
               <div className="px-3 pb-2">
                 <NodeProvenance data={data} />

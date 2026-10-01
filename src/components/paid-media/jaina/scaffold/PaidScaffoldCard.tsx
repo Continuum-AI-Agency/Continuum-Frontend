@@ -1,6 +1,7 @@
 'use client';
 
 import type {
+  JainaPublicationMode,
   JainaToolApprovalRequiredPayload,
   JainaToolApprovalResolvedPayload,
   JainaToolOutputDeniedPayload,
@@ -8,8 +9,11 @@ import type {
 import { ExternalLink, Maximize2, Network, Table2 } from 'lucide-react';
 import Link from 'next/link';
 import * as React from 'react';
+import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
 import { useAdAccountCurrency } from '@/components/paid-media/optimizer/useOptimizerData';
 import {
+  AgentActions,
+  AgentButton,
   AgentCardBody,
   AgentCardEyebrow,
   AgentCardSummary,
@@ -20,6 +24,10 @@ import {
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
+import {
+  buildCampaignCreativeRequest,
+  scaffoldCreativeQuery,
+} from '@/lib/campaign-canvas/creativeGeneration';
 import type { JainaScaffoldState } from '@/lib/jaina/scaffoldTypes';
 import {
   openingDailyBudgetOf,
@@ -27,6 +35,7 @@ import {
   scaffoldBlockersOf,
 } from '@/lib/paid-media/scaffoldTree';
 import { ScaffoldAdSetTable } from './ScaffoldAdSetTable';
+import { ScaffoldCreativePreview } from './ScaffoldCreativePreview';
 import { ScaffoldStatusPill } from './ScaffoldStatusPill';
 import { ScaffoldTreeCanvas } from './ScaffoldTreeCanvas';
 import { formatDailyBudget } from './scaffoldBudget';
@@ -47,11 +56,12 @@ export type ScaffoldDecision = 'approve' | 'deny';
 /** The three gates read back from the tool name, so the label is never hardcoded. */
 const GATE_BY_TOOL_NAME: Record<
   string,
-  { gate: 'build' | 'populate' | 'activate'; label: string }
+  { gate: 'build' | 'populate' | 'activate' | 'publish'; label: string }
 > = {
+  paid_scaffold_publish: { gate: 'publish', label: 'Publish & auto-enroll' },
   paid_scaffold_build: { gate: 'build', label: 'Approve & create (paused)' },
   paid_scaffold_populate: { gate: 'populate', label: 'Approve & add creatives' },
-  paid_scaffold_activate: { gate: 'activate', label: 'Approve & activate' },
+  paid_scaffold_activate: { gate: 'activate', label: 'Publish only' },
 };
 
 /**
@@ -68,7 +78,7 @@ const summaryLine = (scaffold: JainaScaffoldState, tree: ScaffoldTree | null): s
     `${adSets} ad set${adSets === 1 ? '' : 's'}`,
     `${ads} ad${ads === 1 ? '' : 's'}`,
   ];
-  return `${parts.join(' · ')} — everything is created paused.`;
+  return `${parts.join(' · ')} — ${scaffold.receipt?.publicationMode && scaffold.receipt.status === 'completed' ? 'live on Meta' : 'everything is created paused'}.`;
 };
 
 /**
@@ -144,7 +154,13 @@ function ViewSwitch({
       </div>
       <div className="flex items-center gap-1">
         {view === 'graph' ? (
-          <Button type="button" variant="ghost" size="sm" className="h-7 gap-1.5" onClick={onExpand}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1.5"
+            onClick={onExpand}
+          >
             <Maximize2 className="size-3.5" />
             Expand
           </Button>
@@ -213,8 +229,8 @@ function OpeningBudget({ tree, currency }: { tree: ScaffoldTree; currency: strin
           <span className="font-medium tabular-nums" data-testid="scaffold-opening-budget-total">
             {formatDailyBudget(totalMinorUnits, currency)}
           </span>{' '}
-          across {derived} ad set{derived === 1 ? '' : 's'}, sized from the account&rsquo;s
-          measured CPA.
+          across {derived} ad set{derived === 1 ? '' : 's'}, sized from the account&rsquo;s measured
+          CPA.
         </>
       ) : null}
       {placeholders > 0
@@ -244,9 +260,9 @@ function BuildBlockers({ tree }: { tree: ScaffoldTree }) {
           <li data-testid="scaffold-blocker-audience">
             {adSetsWithoutAudience.length} ad set
             {adSetsWithoutAudience.length === 1 ? ' has' : 's have'} no audience ({named}
-            {more > 0 ? ` +${more} more` : ''}). Build would create the campaign and stop there.
-            Ask Jaina to target {adSetsWithoutAudience.length === 1 ? 'it' : 'them'} from a
-            published audience group.
+            {more > 0 ? ` +${more} more` : ''}). Build would create the campaign and stop there. Ask
+            Jaina to target {adSetsWithoutAudience.length === 1 ? 'it' : 'them'} from a published
+            audience group.
           </li>
         ) : null}
         {adsWithoutCreative > 0 ? (
@@ -268,6 +284,7 @@ export function PaidScaffoldCard({
   optimisticDecision,
   isStreaming,
   onDecide,
+  onRequestCreative,
 }: {
   scaffold: JainaScaffoldState;
   approval: JainaToolApprovalRequiredPayload | null;
@@ -275,7 +292,12 @@ export function PaidScaffoldCard({
   denial: JainaToolOutputDeniedPayload | null;
   optimisticDecision: ScaffoldDecision | null;
   isStreaming: boolean;
-  onDecide?: (approval: JainaToolApprovalRequiredPayload, decision: ScaffoldDecision) => void;
+  onRequestCreative?: (query: string) => void;
+  onDecide?: (
+    approval: JainaToolApprovalRequiredPayload,
+    decision: ScaffoldDecision,
+    publicationMode?: JainaPublicationMode,
+  ) => void;
 }) {
   const [canvasOpen, setCanvasOpen] = React.useState(false);
   const [selectedPathKey, setSelectedPathKey] = React.useState<string | null>(null);
@@ -298,6 +320,44 @@ export function PaidScaffoldCard({
     ? `/scale/campaign-canvas?scaffold=${encodeURIComponent(parentScaffoldId)}`
     : null;
 
+  const ads = tree?.adSets.flatMap((adSet) => adSet.ads) ?? [];
+  const selectedAd =
+    ads.find((ad) => ad.pathKey === selectedPathKey) ??
+    ads.find((ad) => !ad.creativeAssetId) ??
+    ads[0];
+  const requestCreative =
+    selectedAd && onRequestCreative && header?.contentHash && header.adAccountId
+      ? async (format: 'image' | 'video') => {
+          const graph = useCampaignStore.getState();
+          const node = graph.nodes.find(
+            (item) =>
+              item.type === 'creative' &&
+              item.data.provenance?.pathKey === `${selectedAd.pathKey}/creative`,
+          );
+          const query =
+            node && graph.hydration?.versionId === scaffold.scaffoldId
+              ? (
+                  await buildCampaignCreativeRequest({
+                    ...graph,
+                    nodeId: node.id,
+                    format,
+                    brandId: header.brandId,
+                    adAccountId: header.adAccountId!,
+                  })
+                ).query
+              : scaffoldCreativeQuery(
+                  {
+                    scaffold_version_id: scaffold.scaffoldId,
+                    content_hash: header.contentHash!,
+                    path_key: selectedAd.pathKey,
+                    expected_asset_id: selectedAd.creativeAssetId,
+                  },
+                  format,
+                );
+          onRequestCreative(query);
+        }
+      : undefined;
+
   const gate = approval ? GATE_BY_TOOL_NAME[approval.toolName] : undefined;
   const expired = approval ? Date.parse(approval.expiresAt) < Date.now() : false;
   const decided = optimisticDecision ?? (resolution ? resolution.decision : null);
@@ -310,7 +370,10 @@ export function PaidScaffoldCard({
 
   return (
     <>
-      <AgentDecisionCard data-testid="paid-scaffold-card" data-scaffold-version={scaffold.scaffoldId}>
+      <AgentDecisionCard
+        data-testid="paid-scaffold-card"
+        data-scaffold-version={scaffold.scaffoldId}
+      >
         <AgentCardEyebrow
           label="Paid campaign scaffold"
           right={
@@ -327,6 +390,13 @@ export function PaidScaffoldCard({
           <AgentCardSummary>{summaryLine(scaffold, tree)}</AgentCardSummary>
 
           {tree ? <OpeningBudget tree={tree} currency={currency} /> : null}
+          {gate?.gate === 'publish' ? (
+            <p className="mt-2 text-muted-foreground text-sm">
+              Your approval creates the scaffold, adds its reviewed creatives, enrolls its ad sets,
+              and makes it live. The optimizer uses the reviewed daily budget and goal-specific
+              costs; future optimizer changes require approval. Publish only skips enrollment.
+            </p>
+          ) : null}
           {tree && !scaffold.receipt ? <BuildBlockers tree={tree} /> : null}
 
           {progressTotal > 0 && !scaffold.receipt ? (
@@ -380,6 +450,37 @@ export function PaidScaffoldCard({
             </div>
           )}
 
+          {selectedAd && header ? (
+            <>
+              <label className="mt-2 flex items-center gap-2 text-xs">
+                Creative slot
+                <select
+                  aria-label="Creative slot"
+                  className="min-w-0 rounded border bg-background p-1"
+                  value={selectedAd.pathKey}
+                  onChange={(event) => setSelectedPathKey(event.target.value)}
+                >
+                  {ads.map((ad) => (
+                    <option key={ad.pathKey} value={ad.pathKey}>
+                      {ad.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <ScaffoldCreativePreview
+                brandId={header.brandId}
+                assetId={selectedAd.creativeAssetId}
+                name={selectedAd.name}
+                onGenerate={requestCreative}
+                disabled={
+                  isStreaming ||
+                  !['proposed', 'built'].includes(header.lifecycle ?? 'proposed') ||
+                  Boolean(approval)
+                }
+              />
+            </>
+          ) : null}
+
           {denial?.reason ? (
             <p className="text-muted-foreground text-sm">Reason: {denial.reason}</p>
           ) : null}
@@ -392,7 +493,31 @@ export function PaidScaffoldCard({
           ) : null}
         </AgentCardBody>
 
-        {showActions && approval && gate ? (
+        {showActions && approval && gate?.gate === 'publish' ? (
+          <AgentActions className="flex-wrap">
+            <AgentButton
+              variant="ghost"
+              disabled={isStreaming}
+              onClick={() => onDecide?.(approval, 'deny')}
+            >
+              Deny
+            </AgentButton>
+            <AgentButton
+              variant="ghost"
+              disabled={isStreaming}
+              onClick={() => onDecide?.(approval, 'approve', 'publish_only')}
+            >
+              Publish only
+            </AgentButton>
+            <AgentButton
+              variant="primary"
+              disabled={isStreaming}
+              onClick={() => onDecide?.(approval, 'approve', 'publish_and_enroll')}
+            >
+              Publish &amp; auto-enroll
+            </AgentButton>
+          </AgentActions>
+        ) : showActions && approval && gate ? (
           <ApproveRejectActions
             locked={isStreaming}
             approveLabel={gate.label}
@@ -438,6 +563,15 @@ function ScaffoldStatus({
   tree: ScaffoldTree | null;
 }) {
   if (receipt) {
+    if (receipt.publicationMode) {
+      return receipt.status === 'completed' ? (
+        <StatusLabel tone="done">
+          {receipt.publicationMode === 'publish_and_enroll' ? 'Published & enrolled' : 'Published'}
+        </StatusLabel>
+      ) : (
+        <StatusLabel tone="failed">Publication stopped</StatusLabel>
+      );
+    }
     const tone =
       receipt.status === 'completed' ? 'done' : receipt.status === 'partial' ? 'running' : 'failed';
     return <StatusLabel tone={tone}>{receipt.status}</StatusLabel>;

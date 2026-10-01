@@ -40,6 +40,7 @@ describe('jainaToolActionSchema', () => {
     expect(Object.keys(jainaToolActionSchema.shape).sort()).toEqual([
       'approval_id',
       'decision',
+      'publication_mode',
       'reason',
       'tool_call_id',
     ]);

@@ -1,6 +1,6 @@
 'use client';
 
-import type { JainaToolApprovalRequiredPayload } from '@continuum/contracts';
+import type { JainaPublicationMode, JainaToolApprovalRequiredPayload } from '@continuum/contracts';
 import { motion } from 'motion/react';
 import * as React from 'react';
 import { AgentDelegatedCard } from '@/components/agents/AgentDelegatedCard';
@@ -109,6 +109,7 @@ type JainaMessageItemProps = {
    * `message.parts` into this shape, so a streaming turn and a reloaded one are the same object.
    */
   message: JainaChatMessage;
+  onCreativeReady?: (creative: CreativeArtifact) => void;
   onSuggestionClick?: (query: string) => void;
   onPlanFeedback?: (payload: PlanFeedbackPayload) => void;
   /**
@@ -122,6 +123,7 @@ type JainaMessageItemProps = {
   onApprovalDecision?: (
     approval: JainaToolApprovalRequiredPayload,
     decision: ToolApprovalDecision,
+    publicationMode?: JainaPublicationMode,
   ) => void;
   /** Decisions submitted but not yet echoed back by a tool.approval_resolved frame. */
   optimisticApprovalDecisions?: Record<string, ToolApprovalDecision>;
@@ -138,6 +140,7 @@ type JainaMessageItemProps = {
 function JainaMessageItemImpl({
   message,
   onSuggestionClick,
+  onCreativeReady,
   onPlanFeedback,
   onRegenerate,
   regeneratePrompt,
@@ -335,6 +338,7 @@ function JainaMessageItemImpl({
                     : null
                 }
                 isStreaming={isStreaming}
+                onRequestCreative={onSuggestionClick}
                 {...(onApprovalDecision ? { onDecide: onApprovalDecision } : {})}
               />
             ) : null}
@@ -404,15 +408,26 @@ function JainaMessageItemImpl({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
               >
-                <CreativesSection creatives={allCreatives} />
+                <CreativesSection
+                  creatives={allCreatives}
+                  onRequestCreative={onSuggestionClick}
+                  disabled={isStreaming}
+                />
               </motion.div>
             ) : (
-              <CreativesSection creatives={allCreatives} />
+              <CreativesSection
+                creatives={allCreatives}
+                onRequestCreative={onSuggestionClick}
+                disabled={isStreaming}
+              />
             )}
 
-
             {paidCreativeRenders.map((render) => (
-              <PaidCreativeRenderStatus key={render.render_job_id} render={render} />
+              <PaidCreativeRenderStatus
+                key={render.render_job_id}
+                render={render}
+                onCreativeReady={onCreativeReady}
+              />
             ))}
 
             {spawnWorkerResults.length > 0 ? (

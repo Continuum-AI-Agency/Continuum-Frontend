@@ -9,7 +9,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { JainaToolApprovalRequiredPayload } from '@continuum/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { seededScaffoldState } from '@/lib/jaina/uiMessageProjection';
 import type { PaidScaffoldNodeRow } from '@/lib/paid-media/scaffoldTree';
@@ -72,13 +72,16 @@ const BUILD_APPROVAL: JainaToolApprovalRequiredPayload = {
   expiresAt: '2099-01-01T00:00:00.000Z',
 };
 
-const renderCard = (props: Partial<ComponentProps<typeof PaidScaffoldCard>> = {}) => {
+const renderCard = (
+  props: Partial<ComponentProps<typeof PaidScaffoldCard>> = {},
+  header: Record<string, unknown> = { scaffoldId: 'scaffold-1', brandId: '', adAccountId: null },
+) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   // brandId '' keeps the currency read disabled, so nothing reaches for Supabase.
   client.setQueryData(['paid-scaffold-tree', VERSION], {
     versionId: VERSION,
     rows: ROWS,
-    header: { scaffoldId: 'scaffold-1', brandId: '', adAccountId: null },
+    header,
   });
   return render(
     <QueryClientProvider client={client}>
@@ -96,6 +99,40 @@ const renderCard = (props: Partial<ComponentProps<typeof PaidScaffoldCard>> = {}
 };
 
 describe('PaidScaffoldCard', () => {
+  it('requests the selected immutable creative slot from its preview button', async () => {
+    const requests: string[] = [];
+    renderCard(
+      { onRequestCreative: (query) => requests.push(query) },
+      {
+        scaffoldId: 'scaffold-1',
+        brandId: '',
+        adAccountId: 'act_1',
+        contentHash: 'a'.repeat(64),
+        lifecycle: 'proposed',
+      },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Generate / Enrich' }));
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0]).toContain('paid_creative_generate');
+    expect(requests[0]).toContain(VERSION);
+    expect(requests[0]).toContain('c0/a0/ad0');
+    expect(requests[0]).toContain('expected_asset_id":null');
+    expect(requests[0]).toContain('generation permission gate');
+  });
+
+  it('highlights combined publication and sends either human-selected mode', () => {
+    const decisions: unknown[] = [];
+    const approval = { ...BUILD_APPROVAL, toolName: 'paid_scaffold_publish' };
+    renderCard({ approval, onDecide: (...args) => decisions.push(args) });
+    const primary = screen.getByRole('button', { name: 'Publish & auto-enroll' });
+    expect(primary.className).toContain('bg-primary');
+    fireEvent.click(primary);
+    fireEvent.click(screen.getByRole('button', { name: 'Publish only' }));
+    expect(decisions).toEqual([
+      [approval, 'approve', 'publish_and_enroll'],
+      [approval, 'approve', 'publish_only'],
+    ]);
+  });
   it('calls a bare proposal a proposal, not a gate nobody can answer', () => {
     renderCard();
     expect(screen.getByText('Proposed — nothing on Meta yet')).toBeTruthy();

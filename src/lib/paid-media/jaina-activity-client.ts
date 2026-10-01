@@ -91,6 +91,8 @@ export type ScaffoldSummary = {
 };
 
 export type ScaffoldVersionSummary = {
+  contentHash?: string;
+  budgetCurrency?: string;
   id: string;
   version: number;
   /** `proposed` | `building` | `built` | `populating` | `populated` | … */
@@ -131,7 +133,9 @@ export async function fetchScaffoldVersions(params: {
   const { data, error } = await supabase
     .schema('brand_profiles')
     .from('paid_scaffold_versions')
-    .select('id,version,lifecycle,created_at')
+    .select(
+      'id,version,lifecycle,created_at,content_hash,budget_currency:manifest->budget_evidence->>currency',
+    )
     .eq('scaffold_id', params.scaffoldId)
     .order('version', { ascending: false });
 
@@ -143,6 +147,8 @@ export async function fetchScaffoldVersions(params: {
       id: String(raw.id ?? ''),
       version: typeof raw.version === 'number' ? raw.version : 0,
       lifecycle: String(raw.lifecycle ?? 'proposed'),
+      contentHash: String(raw.content_hash ?? ''),
+      budgetCurrency: typeof raw.budget_currency === 'string' ? raw.budget_currency : undefined,
       createdAt: String(raw.created_at ?? ''),
     };
   });
@@ -341,15 +347,23 @@ export async function fetchCanvasScaffoldRead(params: {
 }): Promise<CanvasScaffoldRead> {
   const readParent = async (): Promise<ScaffoldSummary> => {
     const { data, error } = await createSupabaseBrowserClient()
-      .schema('brand_profiles').from('paid_scaffolds')
+      .schema('brand_profiles')
+      .from('paid_scaffolds')
       .select('id,name,ad_account_id,current_version_id,created_at')
-      .eq('brand_id', params.brandId).eq('id', params.scaffold.id).is('archived_at', null).maybeSingle();
+      .eq('brand_id', params.brandId)
+      .eq('id', params.scaffold.id)
+      .is('archived_at', null)
+      .maybeSingle();
     if (error) throw new Error(`Could not refresh the scaffold: ${error.message}`);
     if (!data) throw new Error('That scaffold is unavailable for this brand.');
     const raw = data as unknown as Record<string, unknown>;
-    return { id: String(raw.id), name: String(raw.name ?? 'Untitled scaffold'),
-      adAccountId: String(raw.ad_account_id ?? ''), currentVersionId: asNullableString(raw.current_version_id),
-      createdAt: String(raw.created_at ?? '') };
+    return {
+      id: String(raw.id),
+      name: String(raw.name ?? 'Untitled scaffold'),
+      adAccountId: String(raw.ad_account_id ?? ''),
+      currentVersionId: asNullableString(raw.current_version_id),
+      createdAt: String(raw.created_at ?? ''),
+    };
   };
   const [scaffold, initialVersions, nameOf] = await Promise.all([
     readParent(),
@@ -357,14 +371,20 @@ export async function fetchCanvasScaffoldRead(params: {
     fetchBrandMemberNames({ brandId: params.brandId }),
   ]);
   let versions = initialVersions;
-  if (scaffold.currentVersionId && !versions.some((entry) => entry.id === scaffold.currentVersionId)) {
+  if (
+    scaffold.currentVersionId &&
+    !versions.some((entry) => entry.id === scaffold.currentVersionId)
+  ) {
     // A proposal can advance the parent while its version list is being read.
     versions = await fetchScaffoldVersions({ scaffoldId: scaffold.id });
   }
   const version = scaffold.currentVersionId
     ? versions.find((entry) => entry.id === scaffold.currentVersionId)
     : versions[0];
-  if (!version) throw new Error(`"${scaffold.name}" has no current version to load. Retry after the proposal finishes.`);
+  if (!version)
+    throw new Error(
+      `"${scaffold.name}" has no current version to load. Retry after the proposal finishes.`,
+    );
 
   const [tree, gates, audiences] = await Promise.all([
     fetchPaidScaffoldTreeRows({ scaffoldVersionId: version.id }),
@@ -373,8 +393,13 @@ export async function fetchCanvasScaffoldRead(params: {
   ]);
 
   const refreshed = await readParent();
-  if (refreshed.currentVersionId !== scaffold.currentVersionId || refreshed.adAccountId !== scaffold.adAccountId) {
-    throw new Error('The proposal changed while loading. Select it again to load the current version.');
+  if (
+    refreshed.currentVersionId !== scaffold.currentVersionId ||
+    refreshed.adAccountId !== scaffold.adAccountId
+  ) {
+    throw new Error(
+      'The proposal changed while loading. Select it again to load the current version.',
+    );
   }
   return { scaffold: refreshed, version, versions, tree, gates, audiences };
 }

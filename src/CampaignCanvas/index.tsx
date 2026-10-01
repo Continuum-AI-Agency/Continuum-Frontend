@@ -6,8 +6,13 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { JainaChatSurface } from '@/components/paid-media/jaina/JainaChatSurface';
 import { useActiveBrandContext } from '@/components/providers/ActiveBrandProvider';
 import { Button } from '@/components/ui/button';
+import {
+  buildCampaignCreativeRequest,
+  type CampaignCreativeRequest,
+} from '@/lib/campaign-canvas/creativeGeneration';
 import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 import { CampaignCanvas } from './components/CampaignCanvas';
+import { CampaignCreativeActionsProvider } from './components/CampaignCreativeActions';
 import { ScaffoldRecordBar } from './components/ScaffoldRecordBar';
 import { useCampaignStore } from './stores/useCampaignStore';
 
@@ -29,6 +34,7 @@ const CampaignFlowCanvasPage = ({
 }) => {
   const [isJainaOpen, setIsJainaOpen] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [creativeRequest, setCreativeRequest] = useState<CampaignCreativeRequest | null>(null);
   const [initialPrompt, setInitialPrompt] = useState<string | null>(null);
   const [adAccountId, setAdAccountId] = useState<string | null>(null);
   const dragControls = useDragControls();
@@ -76,6 +82,22 @@ const CampaignFlowCanvasPage = ({
     );
   }, [hydration]);
 
+  const handleGenerateCreative = useCallback(
+    async (nodeId: string) => {
+      if (!activeBrandId || !adAccountId) throw new Error('Select a brand and ad account first.');
+      const request = await buildCampaignCreativeRequest({
+        ...useCampaignStore.getState(),
+        nodeId,
+        brandId: activeBrandId,
+        adAccountId,
+      });
+      setCreativeRequest(request);
+      setIsJainaOpen(true);
+      setIsMaximized(true);
+    },
+    [activeBrandId, adAccountId],
+  );
+
   const chatDimensions = useMemo(
     () => ({
       width: isMaximized ? 'min(94vw, 980px)' : 'min(92vw, 420px)',
@@ -89,7 +111,9 @@ const CampaignFlowCanvasPage = ({
       <ReactFlowProvider>
         {/* Main Canvas Area */}
         <div ref={canvasContainerRef} className="relative flex-1 h-full w-full">
-          <CampaignCanvas />
+          <CampaignCreativeActionsProvider value={handleGenerateCreative}>
+            <CampaignCanvas />
+          </CampaignCreativeActionsProvider>
 
           {/* The record this canvas is showing, and the one way forward from it. */}
           <div className="pointer-events-none absolute top-3 left-1/2 z-40 -translate-x-1/2">
@@ -171,6 +195,8 @@ const CampaignFlowCanvasPage = ({
                     adAccountId={adAccountId}
                     userId={user?.id ?? null}
                     campaignCanvasPayload={campaignCanvasPayload}
+                    requestedCreative={creativeRequest}
+                    onCreativeRequestConsumed={() => setCreativeRequest(null)}
                     initialPrompt={initialPrompt}
                     onInitialPromptConsumed={() => setInitialPrompt(null)}
                   />

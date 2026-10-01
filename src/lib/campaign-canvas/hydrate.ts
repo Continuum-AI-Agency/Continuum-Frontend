@@ -15,6 +15,7 @@
  * why an edit to it marks the canvas dirty instead of persisting.
  */
 
+import { metaCurrencyOffset } from '@continuum/contracts';
 import type {
   AdData,
   AdSetData,
@@ -43,6 +44,7 @@ export type CanvasHydration = {
   scaffoldId: string;
   scaffoldName: string;
   versionId: string;
+  contentHash?: string;
   version: number;
   lifecycle: string;
   adAccountId: string;
@@ -238,6 +240,11 @@ export function buildHydratedCanvasGraph(read: CanvasScaffoldRead): HydratedCanv
       label: adSet.name,
       status: adSet.status === 'active' ? 'active' : 'draft',
       validationStatus: 'valid',
+      ...(adSet.choices?.funnelStage === 'prospecting' ||
+      adSet.choices?.funnelStage === 'retargeting' ||
+      adSet.choices?.funnelStage === 'retention'
+        ? { funnelStage: adSet.choices.funnelStage }
+        : {}),
       optimizationGoal: adSet.choices.optimizationGoal ?? 'CONVERSIONS',
       billingEvent: adSet.derived.billingEvent ?? 'IMPRESSIONS',
       // Jaina's opening budget, from the typed `daily_budget_minor_units` column (never a
@@ -245,8 +252,10 @@ export function buildHydratedCanvasGraph(read: CanvasScaffoldRead): HydratedCanv
       // Backend placeholder, which is shown as 0 rather than as a figure nobody derived.
       budgetType: 'DAILY',
       budgetAmount:
-        typeof adSet.dailyBudgetMinorUnits === 'number' ? adSet.dailyBudgetMinorUnits / 100 : 0,
-      budgetCurrency: 'USD',
+        typeof adSet.dailyBudgetMinorUnits === 'number'
+          ? adSet.dailyBudgetMinorUnits / metaCurrencyOffset(read.version.budgetCurrency)
+          : 0,
+      budgetCurrency: read.version.budgetCurrency ?? '',
       pacingType: adSet.choices.placement ?? [],
       ...(adSet.metaObjectId ? { metaId: adSet.metaObjectId } : {}),
       provenance: provenanceOf(
@@ -292,9 +301,7 @@ export function buildHydratedCanvasGraph(read: CanvasScaffoldRead): HydratedCanv
       nodes.push(node(ad.id, 'ad', { x: x + adIndex * 240, y: ROW * 2 }, adData));
       edges.push(edge(adSet.id, ad.id));
 
-      // A creative node exists only once an asset was actually attached. Rendering an
-      // empty one for every ad would show a graph the database does not have.
-      if (!ad.creativeAssetId) return;
+      // Every ad has a creative slot, including one that still needs generation.
       const media = ad.creativeMedia ?? {};
       const creativeNodeId = `${ad.id}:creative`;
       const creativeData: CreativeData = {
@@ -306,9 +313,9 @@ export function buildHydratedCanvasGraph(read: CanvasScaffoldRead): HydratedCanv
         ...(readString(media, 'thumbnail_url')
           ? { thumbnailUrl: readString(media, 'thumbnail_url') }
           : {}),
-        mediaId: ad.creativeAssetId,
+        ...(ad.creativeAssetId ? { mediaId: ad.creativeAssetId } : {}),
         provenance: provenanceOf(
-          ad.creativeAssetId,
+          ad.creativeAssetId ?? ad.id,
           `${ad.pathKey}/creative`,
           gateForLevel('creative', read.gates),
           null,
@@ -350,6 +357,7 @@ export function buildHydratedCanvasGraph(read: CanvasScaffoldRead): HydratedCanv
       scaffoldId: read.scaffold.id,
       scaffoldName: read.scaffold.name,
       versionId: read.version.id,
+      contentHash: read.version.contentHash,
       version: read.version.version,
       lifecycle: read.version.lifecycle,
       adAccountId: read.scaffold.adAccountId,

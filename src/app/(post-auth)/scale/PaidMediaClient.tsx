@@ -6,8 +6,8 @@ import { AnimatePresence, motion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
+import { CampaignCreativeActionsProvider } from '@/CampaignCanvas/components/CampaignCreativeActions';
 import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
-import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 import { type AdAccount, AdAccountSelector } from '@/components/paid-media/AdAccountSelector';
 import { SavedDashboardsPanel } from '@/components/paid-media/jaina/components/SavedDashboardsPanel';
 import {
@@ -23,6 +23,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSession } from '@/hooks/useSession';
 import type { AutomationDeploymentEnvironment } from '@/lib/automations/access';
 import { isAdminUser } from '@/lib/brands/brand-switcher-utils';
+import {
+  buildCampaignCreativeRequest,
+  type CampaignCreativeRequest,
+} from '@/lib/campaign-canvas/creativeGeneration';
+import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 import { canAccessGoals } from '@/lib/goals/access';
 import { JainaBrandScopeProvider } from '@/lib/jaina/brandScope';
 import type { PaidMediaPlatform } from '@/lib/paid-media/performance-types';
@@ -224,6 +229,9 @@ export default function PaidMediaClientPage({
   const [activeTab, setActiveTab] = React.useState<PaidMediaTab>(
     normalizedTabParam ?? (jainaSessionIdParam || jainaInitialPrompt ? 'jaina' : 'dashboard'),
   );
+  const [creativeRequest, setCreativeRequest] = React.useState<CampaignCreativeRequest | null>(
+    null,
+  );
   const [isCanvasOpen, setIsCanvasOpen] = React.useState(false);
   const canvasNodes = useCampaignStore((store) => store.nodes);
   const canvasEdges = useCampaignStore((store) => store.edges);
@@ -241,6 +249,22 @@ export default function PaidMediaClientPage({
       return null;
     }
   }, [isCanvasOpen, canvasPlatform, canvasNodes, canvasEdges, brandProfileId, selectedAdAccount]);
+  const handleGenerateCreative = React.useCallback(
+    async (nodeId: string) => {
+      if (!brandProfileId || !selectedAdAccount)
+        throw new Error('Select a brand and ad account first.');
+      const request = await buildCampaignCreativeRequest({
+        ...useCampaignStore.getState(),
+        nodeId,
+        brandId: brandProfileId,
+        adAccountId: selectedAdAccount,
+      });
+      setCreativeRequest(request);
+      setActiveTab('jaina');
+      setIsCanvasOpen(true);
+    },
+    [brandProfileId, selectedAdAccount],
+  );
   // The ads-manager panel on the Dashboard tab. Separate from `isCanvasOpen`, which is
   // Jaina's canvas: the two tabs open the same canvas for different reasons and closing
   // one must not close the other.
@@ -649,7 +673,9 @@ export default function PaidMediaClientPage({
                       </div>
                       <div className="relative min-h-0 flex-1">
                         <ReactFlowProvider>
-                          <CampaignCanvas />
+                          <CampaignCreativeActionsProvider value={handleGenerateCreative}>
+                            <CampaignCanvas />
+                          </CampaignCreativeActionsProvider>
                         </ReactFlowProvider>
                       </div>
                     </div>
@@ -691,6 +717,8 @@ export default function PaidMediaClientPage({
                   campaignCanvasPayload={campaignCanvasPayload}
                   userId={user?.id ?? null}
                   initialSessionId={jainaSessionIdParam}
+                  requestedCreative={creativeRequest}
+                  onCreativeRequestConsumed={() => setCreativeRequest(null)}
                   initialPrompt={jainaInitialPrompt}
                   onInitialPromptConsumed={clearJainaPrompt}
                   onCanvasActionApplied={handleCanvasActionApplied}
@@ -736,7 +764,9 @@ export default function PaidMediaClientPage({
                         transition={{ duration: 0.2 }}
                       >
                         <ReactFlowProvider>
-                          <CampaignCanvas />
+                          <CampaignCreativeActionsProvider value={handleGenerateCreative}>
+                            <CampaignCanvas />
+                          </CampaignCreativeActionsProvider>
                         </ReactFlowProvider>
                       </motion.div>
                     </motion.aside>

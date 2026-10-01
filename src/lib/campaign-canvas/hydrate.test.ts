@@ -105,15 +105,36 @@ const read = (overrides: Partial<CanvasScaffoldRead> = {}): CanvasScaffoldRead =
 });
 
 describe('buildHydratedCanvasGraph', () => {
+  it('preserves measured account currency and its minor-unit scale', () => {
+    const base = read();
+    const adSet = base.tree.rows.find((row) => row.level === 'adset')!;
+    adSet.dailyBudgetMinorUnits = 6199;
+    const graph = buildHydratedCanvasGraph({
+      ...base,
+      version: { ...base.version, budgetCurrency: 'JPY' },
+    });
+    expect(graph.nodes.find((node) => node.type === 'ad-set')?.data).toMatchObject({
+      budgetAmount: 6199,
+      budgetCurrency: 'JPY',
+    });
+  });
   it('maps a scaffold to a campaign -> ad set -> ad graph with its audience group', () => {
     const graph = buildHydratedCanvasGraph(read());
 
-    expect(graph.nodes.map((node) => node.type)).toEqual(['campaign', 'ad-set', 'ad', 'audience']);
+    expect(graph.nodes.map((node) => node.type)).toEqual([
+      'campaign',
+      'ad-set',
+      'ad',
+      'creative',
+      'audience',
+    ]);
     expect(graph.edges.map((edge) => `${edge.source}->${edge.target}`)).toEqual([
       'campaign->adset',
       'adset->ad',
+      'ad->ad:creative',
       'adset->audience:audience-1',
     ]);
+    expect(graph.nodes.find((node) => node.type === 'creative')?.data.mediaId).toBeUndefined();
     expect(graph.hydration).toMatchObject({ version: 2, lifecycle: 'built', adAccountId: 'act_1' });
   });
 
