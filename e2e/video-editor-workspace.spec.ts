@@ -34,6 +34,8 @@ test.describe.configure({ timeout: 900_000 });
 
 const BENCH = 'videoeditor:workspace:e2e:bench';
 const BRAND = process.env.CONTINUUM_TEST_BRAND_ID ?? 'b411bba9-d09c-4892-9b86-5ff340ce64e5';
+/** Where the Backend keeps transcripts per version (its AI_STUDIO_BUCKET default). */
+const KEPT_BUCKET = process.env.AI_STUDIO_BUCKET ?? 'brand-profile-assets';
 const OWNER_EMAIL = readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai';
 /** "Solicita tu Day Pass en Vivo 4047" — a 6.6 s Vivo 47 clip with its own speech. */
 const SOURCE_ASSET_ID =
@@ -629,6 +631,22 @@ test(BENCH, async ({ browser }) => {
           createdAssets.push({ id: row.id, storagePath: row.storage_path });
       }
       const removedProjects = await removeProjects(admin, BRAND, createdProjects);
+      // The auto-offered Brief warms the drop's transcript, which the Backend keeps per version
+      // (sourceMedia keptTranscriptPath) — named by version, so the asset deletes never reach it.
+      const { data: versionRows } = await admin
+        .schema('media')
+        .from('asset_versions')
+        .select('id')
+        .in(
+          'asset_id',
+          createdAssets.length > 0
+            ? createdAssets.map((asset) => asset.id)
+            : ['00000000-0000-0000-0000-000000000000'],
+        );
+      const keptPaths = (versionRows ?? []).map(
+        (row) => `${BRAND}/video-editor/transcripts/${row.id}.json`,
+      );
+      if (keptPaths.length > 0) await admin.storage.from(KEPT_BUCKET).remove(keptPaths);
       const removed = await removeAssets(admin, BRAND, createdAssets);
       note(
         `cleanup: ${removedProjects} project(s), ${removed.rows} asset row(s), ${removed.objects} storage object(s)`,
