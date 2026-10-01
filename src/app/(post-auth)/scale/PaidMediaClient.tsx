@@ -6,6 +6,8 @@ import { AnimatePresence, motion } from 'motion/react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
+import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
+import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 import { type AdAccount, AdAccountSelector } from '@/components/paid-media/AdAccountSelector';
 import { SavedDashboardsPanel } from '@/components/paid-media/jaina/components/SavedDashboardsPanel';
 import {
@@ -223,6 +225,22 @@ export default function PaidMediaClientPage({
     normalizedTabParam ?? (jainaSessionIdParam || jainaInitialPrompt ? 'jaina' : 'dashboard'),
   );
   const [isCanvasOpen, setIsCanvasOpen] = React.useState(false);
+  const canvasNodes = useCampaignStore((store) => store.nodes);
+  const canvasEdges = useCampaignStore((store) => store.edges);
+  const canvasPlatform = useCampaignStore((store) => store.platform);
+  const campaignCanvasPayload = React.useMemo(() => {
+    if (!isCanvasOpen || canvasPlatform !== 'meta') return null;
+    try {
+      return buildCampaignCanvasPayload(canvasNodes, canvasEdges, {
+        source: 'propose',
+        brandProfileId,
+        adAccountId: selectedAdAccount,
+      });
+    } catch {
+      // Match the full Canvas page: an invalid graph still permits ordinary chat.
+      return null;
+    }
+  }, [isCanvasOpen, canvasPlatform, canvasNodes, canvasEdges, brandProfileId, selectedAdAccount]);
   // The ads-manager panel on the Dashboard tab. Separate from `isCanvasOpen`, which is
   // Jaina's canvas: the two tabs open the same canvas for different reasons and closing
   // one must not close the other.
@@ -670,6 +688,7 @@ export default function PaidMediaClientPage({
                   brandName={brandName}
                   adAccountId={selectedAdAccount}
                   campaignId={selectedCampaign}
+                  campaignCanvasPayload={campaignCanvasPayload}
                   userId={user?.id ?? null}
                   initialSessionId={jainaSessionIdParam}
                   initialPrompt={jainaInitialPrompt}

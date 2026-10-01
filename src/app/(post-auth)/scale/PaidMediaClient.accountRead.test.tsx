@@ -12,8 +12,10 @@
  */
 
 import { afterEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
+import type { CampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 
 const navigation = {
   pathname: '/scale',
@@ -21,6 +23,7 @@ const navigation = {
 };
 
 const pushedHrefs: string[] = [];
+let latestCanvasPayload: CampaignCanvasPayload | null | undefined;
 
 mock.module('next/navigation', () => ({
   usePathname: () => navigation.pathname,
@@ -71,23 +74,34 @@ mock.module('@/components/paid-media/optimizer/OptimizerTab', () => ({
 
 /** Stands in for the transcript: the chip's click, with nothing else of Jaina loaded. */
 mock.module('@/components/paid-media/jaina/JainaChatSurface', () => ({
-  JainaChatSurface: ({ onOpenAccountRead }: { onOpenAccountRead?: (readId: string) => void }) => (
-    <button
+  JainaChatSurface: ({ onOpenAccountRead, campaignCanvasPayload }: { onOpenAccountRead?: (readId: string) => void; campaignCanvasPayload?: CampaignCanvasPayload | null }) => {
+    latestCanvasPayload = campaignCanvasPayload;
+    return <button
       type="button"
       data-testid="cited-chip"
       onClick={() => onOpenAccountRead?.('read-abc')}
       disabled={!onOpenAccountRead}
     >
       open the read
-    </button>
-  ),
+    </button>;
+  },
 }));
 
+mock.module('@/CampaignCanvas/components/CampaignCanvas', () => ({ CampaignCanvas: () => <div data-testid="campaign-canvas" /> }));
+
+mock.module('@/components/providers/ActiveBrandProvider', () => ({
+  useActiveBrandContext: () => ({ activeBrandId: 'brand-1', brandSummaries: [{ id: 'brand-1', name: 'Test Brand' }], user: { id: 'user-1' } }),
+}));
+mock.module('@/CampaignCanvas/components/ScaffoldRecordBar', () => ({ ScaffoldRecordBar: () => null }));
+
 const PaidMediaClientPage = (await import('./PaidMediaClient')).default;
+const CampaignFlowCanvasPage = (await import('@/CampaignCanvas')).default;
 
 afterEach(() => {
   cleanup();
   pushedHrefs.length = 0;
+  useCampaignStore.getState().resetForBrandSwitch();
+  latestCanvasPayload = undefined;
   navigation.params = new URLSearchParams(
     'tab=jaina&optimizerView=portfolios&portfolio=portfolio-1',
   );
@@ -119,5 +133,51 @@ describe('a cited optimizer figure opens the account read from the Jaina tab', (
     } finally {
       window.history.pushState = realPushState;
     }
+  });
+});
+
+
+describe('side Canvas edits reach the associated Jaina chat', () => {
+  it('passes current labels and copy after edits, and omits the graph when closed', async () => {
+    useCampaignStore.getState().resetForBrandSwitch();
+    const campaignId = useCampaignStore.getState().addNode('campaign', { label: 'Original campaign' });
+    const adId = useCampaignStore.getState().addNode('ad', { label: 'Original ad', primaryText: 'Original copy' });
+    render(page());
+    await screen.findByTestId('cited-chip');
+    expect(latestCanvasPayload).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Canvas', exact: true }));
+    await waitFor(() => expect(JSON.stringify(latestCanvasPayload)).toContain('Original campaign'));
+    act(() => {
+      useCampaignStore.getState().updateNodeData(campaignId, { label: 'Edited campaign' });
+      useCampaignStore.getState().updateNodeData(adId, { primaryText: 'Edited copy' });
+    });
+    await waitFor(() => {
+      const graph = JSON.stringify(latestCanvasPayload);
+      expect(graph).toContain('Edited campaign');
+      expect(graph).toContain('Edited copy');
+      expect(graph).not.toContain('Original campaign');
+      expect(graph).not.toContain('Original copy');
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Hide canvas', exact: true }));
+    await waitFor(() => expect(latestCanvasPayload).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Canvas', exact: true }));
+    await waitFor(() => expect(JSON.stringify(latestCanvasPayload)).toContain('Edited copy'));
+  });
+});
+
+
+describe('full Canvas edits reach its floating Jaina chat', () => {
+  it('rebuilds the payload from current store data', async () => {
+    useCampaignStore.getState().resetForBrandSwitch();
+    const campaignId = useCampaignStore.getState().addNode('campaign', { label: 'Original full-page campaign' });
+    render(<CampaignFlowCanvasPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Jaina', exact: true }));
+    await screen.findByTestId('cited-chip');
+    expect(JSON.stringify(latestCanvasPayload)).toContain('Original full-page campaign');
+    act(() => useCampaignStore.getState().updateNodeData(campaignId, { label: 'Edited full-page campaign' }));
+    await waitFor(() => {
+      expect(JSON.stringify(latestCanvasPayload)).toContain('Edited full-page campaign');
+      expect(JSON.stringify(latestCanvasPayload)).not.toContain('Original full-page campaign');
+    });
   });
 });

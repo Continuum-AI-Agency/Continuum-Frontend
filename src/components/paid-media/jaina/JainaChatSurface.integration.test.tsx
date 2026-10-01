@@ -20,6 +20,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import * as React from 'react';
+import { useCampaignStore } from '@/CampaignCanvas/stores/useCampaignStore';
+import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 import { useJainaConversationSidebarStore } from '@/lib/jaina/conversation-sidebar-store';
 
 Object.assign(global.window, {
@@ -510,6 +512,39 @@ describe('JainaChatSurface integration', () => {
     global.fetch = originalFetch;
     useJainaConversationSidebarStore.getState().clear();
     cleanup();
+  });
+
+  it('submits the latest Canvas edits in the agent query and keeps the visible ask concise', async () => {
+    global.fetch = emptyHistoryFetch();
+    const store = useCampaignStore.getState();
+    store.resetForBrandSwitch();
+    const campaignId = store.addNode('campaign', { label: 'Before editing' });
+    store.addConnectedNode(campaignId, 'ad-set');
+    const adSetId = useCampaignStore.getState().nodes.find((n) => n.type === 'ad-set')!.id;
+    store.addConnectedNode(adSetId, 'ad', { primaryText: 'Before copy' });
+    const adId = useCampaignStore.getState().nodes.find((n) => n.type === 'ad')!.id;
+    const payload = () => {
+      const current = useCampaignStore.getState();
+      return buildCampaignCanvasPayload(current.nodes, current.edges, { source: 'propose', brandProfileId: 'brand-1', adAccountId: 'act-1' });
+    };
+    const view = render(React.cloneElement(surface, { campaignCanvasPayload: payload() }), { wrapper: withQueryClient });
+    act(() => {
+      store.updateNodeData(campaignId, { label: 'After editing' });
+      store.updateNodeData(adId, { primaryText: 'After copy' });
+    });
+    view.rerender(React.cloneElement(surface, { campaignCanvasPayload: payload() }));
+    await waitFor(() => expect((screen.getByTestId('prompt-submit') as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByTestId('prompt-submit'));
+    await waitFor(() => expect(sendTurnMock).toHaveBeenCalledTimes(1));
+    const request = sendTurnMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(request.query).toContain('```campaign-canvas');
+    expect(request.query).toContain('After editing');
+    expect(request.query).toContain('After copy');
+    expect(request.query).not.toContain('Before editing');
+    expect(request.query).not.toContain('Before copy');
+    expect(request.displayText).toBe('Recommend budget reallocations for this week by campaign');
+    expect(request.canvas).toBe(true);
+    store.resetForBrandSwitch();
   });
 
   it('sends forceReportArtifact when Jaina Pro is selected', async () => {
