@@ -6,7 +6,7 @@ import { LOGIN_GLOW_GRADIENT } from '@/lib/ui/backgrounds';
 // This was `new Date()`, which claimed the policy had been updated today, every
 // day — wrong for a legal document, and unprerenderable. Bump it when the policy
 // text below actually changes.
-const LAST_UPDATED = 'July 22, 2026';
+const LAST_UPDATED = 'September 30, 2026';
 
 export default function PrivacyPage() {
   return (
@@ -164,10 +164,10 @@ export default function PrivacyPage() {
               8. Children&apos;s Privacy
             </h2>
             <p className="text-secondary leading-relaxed mb-6">
-              Our Service does not address anyone under the age of 18 (&quot;Children&quot;). We do
-              not knowingly collect personally identifiable information from anyone under the age of
-              18. If you are a parent or guardian and you are aware that your Children has provided
-              us with Personal Data, please contact us.
+              Our Service is not intended for children under 13. Users aged 13–17 may use the
+              Service only with permission from a parent or legal guardian, who must agree to our
+              Terms. We do not knowingly collect personal data from children under 13. If you
+              believe a child under 13 has provided personal data, contact privacy@continuum.ai.
             </p>
 
             <h2 className="text-2xl font-bold text-primary mt-8 mb-4">

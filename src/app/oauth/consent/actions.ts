@@ -1,5 +1,6 @@
 'use server';
 
+import type { McpConfirmRequest } from '@continuum/contracts';
 import { getApiUrl } from '@/lib/api/config';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { getServerSession } from '@/lib/supabase/server';
@@ -7,9 +8,6 @@ import { resolveConfirmBrandId } from './brandSelection';
 
 export type ConfirmMcpRegistrationInput = {
   authorizationId: string;
-  clientId: string;
-  clientName?: string | null;
-  scope?: string | null;
   /** User-selected brand to bind the connector to; validated server-side. */
   brandId?: string | null;
 };
@@ -60,8 +58,8 @@ export async function confirmMcpRegistrationAction(
   if (!accessToken) {
     return { registered: false, brandId: null, error: 'not_authenticated' };
   }
-  if (!input.clientId || input.clientId.trim().length === 0) {
-    return { registered: false, brandId: null, error: 'missing_client_id' };
+  if (!input.authorizationId || input.authorizationId.trim().length === 0) {
+    return { registered: false, brandId: null, error: 'missing_authorization_id' };
   }
 
   let brandId: string | null = null;
@@ -87,11 +85,8 @@ export async function confirmMcpRegistrationAction(
       },
       body: JSON.stringify({
         authorization_id: input.authorizationId,
-        client_id: input.clientId,
-        client_name: input.clientName ?? null,
-        scope: input.scope ?? null,
         brand_id: brandId,
-      }),
+      } satisfies McpConfirmRequest),
       cache: 'no-store',
     });
     if (!response.ok) {

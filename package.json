@@ -119,7 +119,8 @@
     "organic:session-content:e2e:bench": "playwright test --config playwright.session-content.config.ts --workers=1",
     "paste:e2e:bench": "playwright test --config playwright.paste-context.config.ts --workers=1",
     "design-system:upload:e2e:bench": "playwright test --config playwright.design-system-upload.config.ts --workers=1",
-    "organic:ship:fe:e2e:bench": "set -a; . ./.env.local; set +a; BENCH_BACKEND_PORT=4423 NEXT_PUBLIC_API_URL=http://127.0.0.1:4423 PORT=3123 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3123 NEXT_DIST_DIR=.next/organic-ship-e2e playwright test e2e/organic-ship.bench.spec.ts --workers=1"
+    "organic:ship:fe:e2e:bench": "set -a; . ./.env.local; set +a; BENCH_BACKEND_PORT=4423 NEXT_PUBLIC_API_URL=http://127.0.0.1:4423 PORT=3123 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3123 NEXT_DIST_DIR=.next/organic-ship-e2e playwright test e2e/organic-ship.bench.spec.ts --workers=1",
+    "plugin:web:bench": "bun --no-env-file e2e/plugin-public.bench.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.109",

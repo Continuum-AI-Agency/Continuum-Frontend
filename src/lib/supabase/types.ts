@@ -24916,6 +24916,30 @@ export type Database = {
           },
         ]
       }
+      oauth_resource_grants: {
+        Row: {
+          authorized_at: string
+          client_id: string
+          resource: string
+          revoked_at: string | null
+          user_id: string
+        }
+        Insert: {
+          authorized_at?: string
+          client_id: string
+          resource: string
+          revoked_at?: string | null
+          user_id: string
+        }
+        Update: {
+          authorized_at?: string
+          client_id?: string
+          resource?: string
+          revoked_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       sessions: {
         Row: {
           brand_id: string | null
@@ -26103,6 +26127,16 @@ export type Database = {
           p_client_name?: string
           p_scope?: string
           p_user_id?: string
+        }
+        Returns: Json
+      }
+      register_verified_client: {
+        Args: {
+          p_brand_id: string
+          p_client_id: string
+          p_client_name: string
+          p_scope: string
+          p_user_id: string
         }
         Returns: Json
       }

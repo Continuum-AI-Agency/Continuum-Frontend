@@ -6,7 +6,7 @@ import { LOGIN_GLOW_GRADIENT } from '@/lib/ui/backgrounds';
 // This was `new Date()`, which claimed the terms had been updated today, every
 // day — wrong for a legal document, and unprerenderable. Bump it when the terms
 // text below actually changes.
-const LAST_UPDATED = 'July 22, 2026';
+const LAST_UPDATED = 'September 30, 2026';
 
 export default function TermsPage() {
   return (
@@ -53,6 +53,12 @@ export default function TermsPage() {
               access to and use of the Service is conditioned on your acceptance of and compliance
               with these Terms. These Terms apply to all visitors, users and others who access or
               use the Service.
+            </p>
+
+            <p className="leading-relaxed mb-6">
+              Our Service is not intended for children under 13. Users aged 13–17 may use the
+              Service only with permission from a parent or legal guardian, who must agree to these
+              Terms.
             </p>
 
             <h2 className="text-2xl font-bold text-primary mt-8 mb-4">1. Accounts</h2>

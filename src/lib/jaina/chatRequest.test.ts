@@ -3,6 +3,27 @@ import { buildJainaChatStreamRequest } from './chatRequest';
 import { jainaChatRequestSchema as frontendMirrorSchema } from './schemas';
 
 describe('buildJainaChatStreamRequest', () => {
+  it('preserves Google platform identity for a single or mixed selection', () => {
+    for (const accounts of [
+      [{ platform: 'google_ads' as const, accountId: '6619636193' }],
+      [
+        { platform: 'meta' as const, accountId: 'act_1' },
+        { platform: 'google_ads' as const, accountId: '6619636193' },
+      ],
+    ]) {
+      const request = buildJainaChatStreamRequest(
+        {
+          query: 'Compare performance',
+          brandId: 'brand-1',
+          adAccountId: accounts[0].accountId,
+          accounts,
+        },
+        'UTC',
+      );
+      expect(request.context.dataScope?.accounts).toEqual(accounts);
+      expect(request.context.adAccountIds).toEqual(accounts.map((account) => account.accountId));
+    }
+  });
   it('keeps legacy single-account requests unchanged when no paid entity is mentioned', () => {
     const request = buildJainaChatStreamRequest(
       { query: 'Summarize performance', adAccountId: 'act_1', brandId: 'brand-1' },

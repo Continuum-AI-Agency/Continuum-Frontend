@@ -13,6 +13,7 @@
 import {
   type AgentAttachment,
   type AgentDocumentAttachment,
+  type ConversationDataAccount,
   type ConversationDataScopeV1,
   type JainaChatRequest as JainaChatStreamRequest,
   jainaChatRequestSchema,
@@ -33,6 +34,7 @@ export type JainaChatInput = {
   canvas?: boolean;
   adAccountId: string;
   adAccountIds?: string[];
+  accounts?: ConversationDataAccount[];
   brandId: string;
   /**
    * The optional sub-brand project scope, from ActiveProjectProvider. Absent means brand
@@ -83,7 +85,7 @@ function unique(values: Array<string | null>): string[] {
 }
 
 function buildJainaDataScope(
-  accountIds: string[],
+  accounts: ConversationDataAccount[],
   references: AgentMentionReference[],
 ): { dataScope: ConversationDataScopeV1; hasEntityScope: boolean } {
   const campaigns = unique(
@@ -105,7 +107,7 @@ function buildJainaDataScope(
     hasEntityScope,
     dataScope: {
       schemaVersion: 1,
-      accounts: accountIds.map((accountId) => ({ platform: 'meta', accountId })),
+      accounts,
       ...(hasEntityScope
         ? {
             campaigns: { ids: campaigns },
@@ -121,10 +123,15 @@ export function buildJainaChatStreamRequest(
   input: JainaChatInput,
   timezone = browserTimezone(),
 ): JainaChatStreamRequest {
-  const accountIds = input.adAccountIds ?? [input.adAccountId];
+  const accountIds = input.accounts?.map((account) => account.accountId) ??
+    input.adAccountIds ?? [input.adAccountId];
   const references = input.references ?? [];
-  const { dataScope, hasEntityScope } = buildJainaDataScope(accountIds, references);
-  const includeScope = input.adAccountIds !== undefined || hasEntityScope;
+  const { dataScope, hasEntityScope } = buildJainaDataScope(
+    input.accounts ?? accountIds.map((accountId) => ({ platform: 'meta', accountId })),
+    references,
+  );
+  const includeScope =
+    input.accounts !== undefined || input.adAccountIds !== undefined || hasEntityScope;
 
   return jainaChatRequestSchema.parse({
     query: input.query,

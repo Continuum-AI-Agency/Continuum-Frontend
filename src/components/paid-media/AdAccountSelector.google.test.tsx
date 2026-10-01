@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 
 import { AdAccountSelector } from './AdAccountSelector';
 
@@ -58,5 +58,22 @@ describe('AdAccountSelector (google-ads)', () => {
     });
 
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('lets Jaina select Google Ads from the combined primary-account selector', async () => {
+    const rendered = render(
+      <AdAccountSelector
+        brandId="brand_123"
+        platform="all"
+        selectedAccountId={null}
+        onSelect={mockSelect}
+        assignedAccountIds={['123-456-7890']}
+      />,
+    );
+    await waitFor(() => expect(mockSelect).toHaveBeenCalledWith('123-456-7890'));
+    expect(global.fetch).not.toHaveBeenCalled();
+    fireEvent.click(rendered.getByRole('combobox'));
+    fireEvent.click(rendered.getByRole('option', { name: /Brand Google Ads/ }));
+    expect(mockSelect).toHaveBeenCalledWith('123-456-7890');
   });
 });

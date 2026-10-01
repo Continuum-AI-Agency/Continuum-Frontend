@@ -51,8 +51,9 @@ mock.module('next/dynamic', () => ({
 }));
 
 mock.module('next/navigation', () => ({
-  usePathname: () => '/scale',
   useRouter: () => ({ replace: routerReplaceMock }),
+  usePathname: () => '/scale',
+  redirect: () => {},
   useSearchParams: () => new URLSearchParams(searchParamsValue),
 }));
 
@@ -210,7 +211,7 @@ describe('PaidMediaClientPage brand context', () => {
     act(() => latestPlatformChange?.('linkedin'));
 
     await waitFor(() => {
-      expect(latestSelectorPlatform).toBe('linkedin');
+      expect(latestSelectorPlatform).toBe('all');
     });
     expect(renderedContextPairs).not.toContainEqual({
       brandId: 'brand-b',
@@ -227,6 +228,7 @@ describe('PaidMediaClientPage brand context', () => {
   });
 
   it('scopes the selector to brand-ASSIGNED accounts for meta, and unfilters for linkedin', async () => {
+    searchParamsValue = 'tab=dashboard';
     optimizerAdAccounts = {
       data: [{ account_id: 'act_assigned_1' }, { account_id: 'act_assigned_2' }],
       isSuccess: true,
@@ -269,7 +271,7 @@ describe('PaidMediaClientPage brand context', () => {
     );
 
     await waitFor(() => {
-      expect(latestSelectorPlatform).toBe('meta');
+      expect(latestSelectorPlatform).toBe('all');
     });
     expect(latestAssignedAccountIds).toBeUndefined();
   });
