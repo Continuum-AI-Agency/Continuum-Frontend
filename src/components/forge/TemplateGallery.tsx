@@ -70,7 +70,7 @@ const SOURCE_TYPES = {
 } as const;
 type SourceType = keyof typeof SOURCE_TYPES;
 const typeOf = (item: Item): Exclude<SourceType, 'all'> =>
-  item.kind === 'source' && item.sourceKind
+  item.sourceKind
     ? item.sourceKind
     : item.kind === 'source' && item.source.family.startsWith('after_effects')
       ? 'after_effects'
@@ -141,6 +141,7 @@ type Item =
       updatedAt: string;
       motion: Motion | null;
       shared: SharedTemplate;
+      sourceKind?: Exclude<SourceType, 'all'>;
     };
 
 export function TemplateGallery({
@@ -230,12 +231,16 @@ export function TemplateGallery({
           source,
         })),
       ...shared.map((template) => ({
+        sourceKind: catalog?.find((item) => item.assetId === template.sourceAssetId)?.sourceKind,
         kind: 'shared' as const,
         key: `shared:${sharedTemplateId(template)}`,
         name: template.displayName ?? templateDisplayName(template.name),
         group: template.draft ? 'drafts' : 'ready',
         updatedAt: template.updatedAt ?? '',
-        motion: templateMotion(null, rendersByTemplate.get(template.templateKey) ?? NO_RENDERS),
+        motion: templateMotion(
+          catalog?.find((item) => item.assetId === template.sourceAssetId)?.source.parse ?? null,
+          rendersByTemplate.get(template.templateKey) ?? NO_RENDERS,
+        ),
         shared: template,
       })),
     ],
@@ -409,146 +414,152 @@ export function TemplateGallery({
                     </TableCell>
                   </TableRow>
                   {!closed &&
-                    rows.map((item) => (
-                      <TableRow key={item.key}>
-                        <TableCell className="py-2">
-                          <HoverCard openDelay={300}>
-                            <HoverCardTrigger
-                              render={
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="max-w-full justify-start px-0 font-medium"
-                                  aria-label={`Open ${item.name}`}
-                                  onClick={() =>
-                                    item.kind === 'source'
-                                      ? onOpen(item.source.assetId)
-                                      : onOpenShared(item.shared)
-                                  }
-                                />
-                              }
-                            >
-                              {item.name}
-                            </HoverCardTrigger>
-                            <HoverCardContent
-                              align="start"
-                              className="w-96 max-w-[calc(100vw-2rem)]"
-                            >
-                              {item.kind === 'source' ? (
-                                <div className="flex flex-col gap-3">
-                                  <TemplateFacts
-                                    brandId={brandId}
-                                    source={item.source}
-                                    lastRender={rendersOf(item.source.templateKey)[0]}
-                                    emptyLabel={emptyLabel}
-                                  />
-                                  <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-                                    <dt className="text-muted-foreground">Source file</dt>
-                                    <dd className="break-all">
-                                      {metadata.get(item.source.assetId)?.originalFileName ??
-                                        item.source.parse?.filename ??
-                                        'Not parsed yet'}
-                                    </dd>
-                                    <dt className="text-muted-foreground">Uploaded</dt>
-                                    <dd>{new Date(item.source.createdAt).toLocaleString()}</dd>
-                                    <dt className="text-muted-foreground">Parsing</dt>
-                                    <dd>{item.source.parseState}</dd>
-                                    <dt className="text-muted-foreground">Build</dt>
-                                    <dd>{item.source.forgeState ?? 'Not built'}</dd>
-                                    <dt className="text-muted-foreground">Missing media</dt>
-                                    <dd>{item.source.parse?.missingFootage?.length ?? '—'}</dd>
-                                  </dl>
-                                  {item.source.parseError ? (
-                                    <p className="text-destructive">{item.source.parseError}</p>
-                                  ) : null}
+                    rows.map((item) => {
+                      const source =
+                        item.kind === 'source'
+                          ? item.source
+                          : metadata.get(item.shared.sourceAssetId ?? '')?.source;
+                      return (
+                        <TableRow key={item.key}>
+                          <TableCell className="py-2">
+                            <HoverCard openDelay={300}>
+                              <HoverCardTrigger
+                                render={
                                   <Button
+                                    variant="ghost"
                                     size="sm"
-                                    variant="outline"
-                                    onClick={() => onOpen(item.source.assetId)}
-                                  >
-                                    Inspect checks and original files
-                                  </Button>
-                                </div>
-                              ) : (
-                                <SharedTemplateCard
-                                  brandId={brandId}
-                                  template={item.shared}
-                                  brandName={brandName}
-                                  renders={rendersOf(item.shared.templateKey)}
-                                  emptyLabel={emptyLabel}
-                                  busy={adopting === sharedTemplateId(item.shared)}
-                                  onOpen={() => onOpenShared(item.shared)}
-                                  onToggle={() => onToggleShared(item.shared)}
-                                />
-                              )}
-                            </HoverCardContent>
-                          </HoverCard>
-                        </TableCell>
-                        <TableCell>
-                          <span className="whitespace-nowrap">{SOURCE_TYPES[typeOf(item)]}</span>
-                          <span className="mt-0.5 block text-2xs text-muted-foreground">
-                            {item.motion === 'animated'
-                              ? 'Motion'
-                              : item.motion === 'static'
-                                ? 'Static'
-                                : 'Not rendered'}
-                          </span>
-                        </TableCell>
-                        <TableCell className="font-mono">
-                          {item.kind === 'source'
-                            ? (item.source.ratios.join(' · ') || '—') +
-                              ` / ${1 + (catalog?.filter((variant) => variant.rootAssetId === item.source.assetId && variant.assetId !== item.source.assetId).length ?? 0)}`
-                            : '—'}
-                        </TableCell>
-                        <TableCell>
-                          {item.kind === 'source' ? (
-                            <TemplateStatusPill status={templateStatus(item.source)} />
-                          ) : item.shared.draft ? (
-                            'Draft · Shared'
-                          ) : (
-                            'Ready · Shared'
-                          )}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-muted-foreground">
-                          <time dateTime={item.updatedAt} title={item.updatedAt}>
-                            {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : '—'}
-                          </time>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {item.kind === 'source' ? (
-                            <InlineRename
-                              iconOnly
-                              value={item.name}
-                              onRename={(title) => onRename(item.source.assetId, title)}
-                            />
-                          ) : (
-                            <div className="flex justify-end gap-1">
-                              <Button
-                                size="xs"
-                                variant="outline"
-                                disabled={adopting === sharedTemplateId(item.shared)}
-                                onClick={() => onToggleShared(item.shared)}
+                                    className="max-w-full justify-start px-0 font-medium"
+                                    aria-label={`Open ${item.name}`}
+                                    onClick={() =>
+                                      item.kind === 'source'
+                                        ? onOpen(item.source.assetId)
+                                        : onOpenShared(item.shared)
+                                    }
+                                  />
+                                }
                               >
-                                {item.shared.granted
-                                  ? `Remove ${item.name} from ${brandName ?? 'this brand'}`
-                                  : `Use in ${brandName ?? 'this brand'}`}
-                              </Button>
-                              {item.shared.granted && onOpenRender ? (
+                                {item.name}
+                              </HoverCardTrigger>
+                              <HoverCardContent
+                                align="start"
+                                className="w-96 max-w-[calc(100vw-2rem)]"
+                              >
+                                {source ? (
+                                  <div className="flex flex-col gap-3">
+                                    <TemplateFacts
+                                      brandId={brandId}
+                                      source={source}
+                                      lastRender={rendersOf(source.templateKey)[0]}
+                                      emptyLabel={emptyLabel}
+                                    />
+                                    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+                                      <dt className="text-muted-foreground">Source file</dt>
+                                      <dd className="break-all">
+                                        {metadata.get(source.assetId)?.originalFileName ??
+                                          source.parse?.filename ??
+                                          'Not parsed yet'}
+                                      </dd>
+                                      <dt className="text-muted-foreground">Uploaded</dt>
+                                      <dd>{new Date(source.createdAt).toLocaleString()}</dd>
+                                      <dt className="text-muted-foreground">Parsing</dt>
+                                      <dd>{source.parseState}</dd>
+                                      <dt className="text-muted-foreground">Build</dt>
+                                      <dd>{source.forgeState ?? 'Not built'}</dd>
+                                      <dt className="text-muted-foreground">Missing media</dt>
+                                      <dd>{source.parse?.missingFootage?.length ?? '—'}</dd>
+                                    </dl>
+                                    {source.parseError ? (
+                                      <p className="text-destructive">{source.parseError}</p>
+                                    ) : null}
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => onOpen(source.assetId)}
+                                    >
+                                      Inspect checks and original files
+                                    </Button>
+                                  </div>
+                                ) : item.kind === 'shared' ? (
+                                  <SharedTemplateCard
+                                    brandId={brandId}
+                                    template={item.shared}
+                                    brandName={brandName}
+                                    renders={rendersOf(item.shared.templateKey)}
+                                    emptyLabel={emptyLabel}
+                                    busy={adopting === sharedTemplateId(item.shared)}
+                                    onOpen={() => onOpenShared(item.shared)}
+                                    onToggle={() => onToggleShared(item.shared)}
+                                  />
+                                ) : null}
+                              </HoverCardContent>
+                            </HoverCard>
+                          </TableCell>
+                          <TableCell>
+                            <span className="whitespace-nowrap">{SOURCE_TYPES[typeOf(item)]}</span>
+                            <span className="mt-0.5 block text-2xs text-muted-foreground">
+                              {item.motion === 'animated'
+                                ? 'Motion'
+                                : item.motion === 'static'
+                                  ? 'Static'
+                                  : 'Not rendered'}
+                            </span>
+                          </TableCell>
+                          <TableCell className="font-mono">
+                            {source
+                              ? (source.ratios.join(' · ') || '—') +
+                                ` / ${1 + (catalog?.filter((variant) => variant.rootAssetId === (metadata.get(source.assetId)?.rootAssetId ?? source.assetId) && variant.assetId !== (metadata.get(source.assetId)?.rootAssetId ?? source.assetId)).length ?? 0)}`
+                              : '—'}
+                          </TableCell>
+                          <TableCell>
+                            {item.kind === 'source' ? (
+                              <TemplateStatusPill status={templateStatus(item.source)} />
+                            ) : item.shared.draft ? (
+                              'Draft · Shared'
+                            ) : (
+                              'Ready · Shared'
+                            )}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-muted-foreground">
+                            <time dateTime={item.updatedAt} title={item.updatedAt}>
+                              {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : '—'}
+                            </time>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {item.kind === 'source' ? (
+                              <InlineRename
+                                iconOnly
+                                value={item.name}
+                                onRename={(title) => onRename(item.source.assetId, title)}
+                              />
+                            ) : (
+                              <div className="flex justify-end gap-1">
                                 <Button
                                   size="xs"
                                   variant="outline"
-                                  onClick={() =>
-                                    onOpenRender({ templateKey: item.shared.templateKey })
-                                  }
+                                  disabled={adopting === sharedTemplateId(item.shared)}
+                                  onClick={() => onToggleShared(item.shared)}
                                 >
-                                  Render
+                                  {item.shared.granted
+                                    ? `Remove ${item.name} from ${brandName ?? 'this brand'}`
+                                    : `Use in ${brandName ?? 'this brand'}`}
                                 </Button>
-                              ) : null}
-                            </div>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                                {item.shared.granted && onOpenRender ? (
+                                  <Button
+                                    size="xs"
+                                    variant="outline"
+                                    onClick={() =>
+                                      onOpenRender({ templateKey: item.shared.templateKey })
+                                    }
+                                  >
+                                    Render
+                                  </Button>
+                                ) : null}
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                 </Fragment>
               );
             })}

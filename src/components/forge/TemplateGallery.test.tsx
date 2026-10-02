@@ -383,4 +383,16 @@ test('the grouped table filters original design type and keeps child variants un
     }),
   );
   expect(cardNames()).toEqual([]);
+  cleanup();
+  renderGallery(undefined, {
+    sources: [],
+    shared: [{ ...SHARED[0]!, name: 'Published artboard', sourceAssetId: original.assetId }],
+    catalog: [meta(original, null), meta(child, original.assetId)],
+  });
+  fireEvent.click(screen.getByRole('combobox', { name: 'Filter by source type' }));
+  const publishedOption = await screen.findByRole('option', { name: 'Illustrator', exact: true });
+  fireEvent.pointerDown(publishedOption, { pointerType: 'mouse', button: 0 });
+  fireEvent.click(publishedOption);
+  await waitFor(() => expect(cardNames()).toEqual(['Published artboard']));
+  expect(screen.getByText('1:1 · 9:16 / 2')).toBeTruthy();
 });
