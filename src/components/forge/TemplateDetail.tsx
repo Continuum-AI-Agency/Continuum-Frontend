@@ -35,6 +35,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DraftWithAiButton } from '@/components/forge/AiVariationsDialog';
 import { type CheckRow, CheckTable, type CheckTick, TickBar } from '@/components/forge/CheckTable';
 import { DesignLayersPanel } from '@/components/forge/DesignLayersPanel';
+import { TemplateLayerEditor } from '@/components/forge/TemplateLayerEditor';
 import { FactList } from '@/components/forge/FactList';
 import {
   type FontSubstitutionChoice,
@@ -208,6 +209,7 @@ export function TemplateDetail({
   onRemove,
   onOpenRender,
   onChanged,
+  onOpenVariant,
   revisionFile,
   onRevisionTaken,
 }: {
@@ -219,6 +221,7 @@ export function TemplateDetail({
   onOpenRender?: (intent: ForgeRenderIntent) => void;
   /** Re-read the template list after something here changed what a card shows. */
   onChanged: () => Promise<void>;
+  onOpenVariant?: (assetId: string) => void;
   /** A dropped file to upload as this template's next source revision: opens on that tab. */
   revisionFile?: File;
   onRevisionTaken?: () => void;
@@ -1666,7 +1669,17 @@ export function TemplateDetail({
             onSave={onSave}
           />
         </TabsContent>
-        <TabsContent value="layers" keepMounted className="p-[var(--card-pad)]">
+        <TabsContent value="layers" keepMounted className="space-y-6 p-[var(--card-pad)]">
+          <TemplateLayerEditor
+            key={`${assetId}:${source.versionId}`}
+            brandId={brandId}
+            assetId={assetId}
+            versionId={source.versionId}
+            name={source.displayName ?? 'Template'}
+            active={tab === 'layers'}
+            onSaved={onChanged}
+            onOpenVariant={onOpenVariant}
+          />
           <DesignLayersPanel
             brandId={brandId}
             assetId={assetId}

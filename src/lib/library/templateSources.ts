@@ -25,9 +25,11 @@ import {
   fontInventoryResponseSchema,
   type RenameTemplateSourceRequest,
   readFontNames,
+  type SaveTemplateLayerVariantRequest,
   type TemplateFontAliasRequest,
   type TemplateFontCandidatesResponse,
   type TemplateFontHealResult,
+  type TemplateLayerPreviewRequest,
   type TemplateSourceEvent,
   type TemplateTextMoveRequest,
   type TemplateTextMoveResponse,
@@ -38,6 +40,9 @@ import {
   templateFontPushResponseSchema,
   templateFontReadinessSchema,
   templateForgeBundleSchema,
+  templateLayerPreviewResponseSchema,
+  templateLayerVariantResponseSchema,
+  templateLayerVariantsResponseSchema,
   templateMappingReviewSchema,
   templateRebindPreviewSchema,
   templateSourceEventsResponseSchema,
@@ -577,4 +582,42 @@ export async function advanceTemplateForgeRun(
     body: JSON.stringify({ brandId, ...(extra ?? {}) }),
   });
   await unwrap(response, `Forge ${action}`);
+}
+
+export async function previewTemplateLayers(assetId: string, request: TemplateLayerPreviewRequest) {
+  return templateLayerPreviewResponseSchema.parse(
+    await unwrap(
+      await authorizedFetch(`/api/ai-studio/templates/${assetId}/layer-preview`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }),
+      'Layer preview',
+    ),
+  );
+}
+
+export async function saveTemplateLayerVariant(
+  assetId: string,
+  request: SaveTemplateLayerVariantRequest,
+) {
+  return templateLayerVariantResponseSchema.parse(
+    await unwrap(
+      await authorizedFetch(`/api/ai-studio/templates/${assetId}/layer-variants`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }),
+      'Save variant',
+    ),
+  );
+}
+
+export async function fetchTemplateLayerVariants(brandId: string, assetId: string) {
+  return templateLayerVariantsResponseSchema.parse(
+    await unwrap(
+      await authorizedFetch(
+        `/api/ai-studio/templates/${assetId}/layer-variants?brandId=${encodeURIComponent(brandId)}`,
+      ),
+      'Saved variants',
+    ),
+  );
 }

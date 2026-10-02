@@ -444,6 +444,7 @@ export function ForgeWorkbench({
           onRemove={() => setRemoving(current)}
           onOpenRender={onOpenRender}
           onChanged={refreshTemplate}
+          onOpenVariant={(assetId) => open(assetId)}
           revisionFile={revision?.assetId === current.assetId ? revision.file : undefined}
           onRevisionTaken={() => setRevision(null)}
         />
