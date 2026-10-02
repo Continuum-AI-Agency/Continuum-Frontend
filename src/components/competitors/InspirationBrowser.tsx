@@ -153,7 +153,7 @@ function AllFeed({
   const posts = useInstagramPosts({ brandId, competitorId, limit: feedLimit });
   const timeline = useAdTimeline({ brandId, competitorId, status, q, limit: feedLimit });
   const items = useMemo(
-    () => buildInspirationFeed(posts.data ?? [], timeline.data ?? []),
+    () => buildInspirationFeed(posts.data?.items ?? [], timeline.data ?? []),
     [posts.data, timeline.data],
   );
   return (

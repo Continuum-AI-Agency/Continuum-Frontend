@@ -9,7 +9,7 @@ const postsMock = mock((_params: { sort?: string; platform?: string }) => ({
   isLoading: false,
   isError: false,
   error: null,
-  data: [],
+  data: { items: [], syncFaults: [] },
 }));
 
 mock.module('next/navigation', () => ({

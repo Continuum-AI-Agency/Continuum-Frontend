@@ -109,17 +109,16 @@ export async function fetchInstagramPosts(params: {
   limit?: number;
   sort?: InspirationSort;
   platform?: OrganicPostPlatform;
-}): Promise<CompetitorInspirationPost[]> {
+}): Promise<InspirationPostsResponse> {
   const qs = new URLSearchParams({ brandId: params.brandId });
   if (params.competitorId) qs.set('competitorId', params.competitorId);
   qs.set('limit', String(clampInstagramPostsLimit(params.limit)));
   if (params.sort && params.sort !== 'recent') qs.set('sort', params.sort);
   if (params.platform && params.platform !== 'instagram') qs.set('platform', params.platform);
-  const res = await request<InspirationPostsResponse>({
+  return request<InspirationPostsResponse>({
     path: `${BASE}/instagram/posts?${qs.toString()}`,
     schema: inspirationPostsResponseSchema,
   });
-  return res.items;
 }
 
 export async function fetchTiktokTrends(brandId: string): Promise<TiktokTrendsResponse> {
@@ -761,9 +760,10 @@ function replaceCachedPost(
         ? { ...item, analysis: next.analysis, format: next.format, whyItWorked: next.whyItWorked }
         : item,
     );
-  qc.setQueriesData<CompetitorInspirationPost[]>(
+  qc.setQueriesData<InspirationPostsResponse>(
     { queryKey: ['competitor-spy', 'instagram-posts', brandId] },
-    swap,
+    (response) =>
+      response ? { ...response, items: swap(response.items) ?? response.items } : response,
   );
   qc.setQueryData<SavedInspirationPost[]>(keys.savedInspiration(brandId), swap);
 }
