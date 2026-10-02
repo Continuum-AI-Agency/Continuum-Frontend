@@ -20574,6 +20574,65 @@ export type Database = {
           },
         ]
       }
+      template_source_media: {
+        Row: {
+          asset_id: string
+          brand_id: string
+          comp: string
+          media_asset_id: string
+          media_version_id: string
+          slot_key: string
+          version_id: string
+        }
+        Insert: {
+          asset_id: string
+          brand_id: string
+          comp: string
+          media_asset_id: string
+          media_version_id: string
+          slot_key: string
+          version_id: string
+        }
+        Update: {
+          asset_id?: string
+          brand_id?: string
+          comp?: string
+          media_asset_id?: string
+          media_version_id?: string
+          slot_key?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_source_media_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_source_media_media_asset_id_fkey"
+            columns: ["media_asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_source_media_media_version_id_fkey"
+            columns: ["media_version_id"]
+            isOneToOne: false
+            referencedRelation: "asset_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_source_media_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "asset_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       template_source_slots: {
         Row: {
           asset_id: string
@@ -22015,6 +22074,15 @@ export type Database = {
           p_payload: Json
           p_source_asset: string
           p_source_version: string
+        }
+        Returns: Json
+      }
+      register_template_media_defaults: {
+        Args: {
+          p_asset_id: string
+          p_brand_id: string
+          p_media: Json
+          p_version_id: string
         }
         Returns: Json
       }
