@@ -348,3 +348,19 @@ describe('AccountRead — nothing of the old surface survives', () => {
     expect(text).not.toContain('Nothing to move');
   });
 });
+
+describe('AccountRead — the platform chip', () => {
+  it('puts the platform chip on every card', () => {
+    const { getAllByTestId } = view([reallocation, candidate({})], { platform: 'meta' });
+    const cards = getAllByTestId('account-card');
+    expect(cards).toHaveLength(2);
+    for (const card of cards) {
+      expect(card.querySelector('[data-testid="platform-chip"]')?.textContent).toBe('Meta');
+    }
+  });
+
+  it('shows no chip when the caller does not say the platform', () => {
+    const { queryByTestId } = view([reallocation]);
+    expect(queryByTestId('platform-chip')).toBeNull();
+  });
+});

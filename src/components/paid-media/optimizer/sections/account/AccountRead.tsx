@@ -42,6 +42,8 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { jainaPromptHref } from '@/lib/jaina/deepLink';
 import { cn } from '@/lib/utils';
 import { formatPerPeriod } from '../../format';
+import { PlatformChip } from '../platforms/PlatformChip';
+import type { AdPlatform } from '../platforms/platformTabsModel';
 import * as typeScale from '../../typeScale';
 import { CalmRule, HeadlineFigure, MoneyLine } from './candidateHeadline';
 import { doubtedBy } from './guardScope';
@@ -70,6 +72,8 @@ export type AccountReadProps = {
   /** Portfolio id → name, so a card can say which portfolio it is about. */
   portfolioNames: ReadonlyMap<string, string>;
   onOpenPortfolio?: (portfolioId: string) => void;
+  /** The platform the cards are about; each card names it in a chip. */
+  platform?: AdPlatform;
 };
 
 function StateNote({ candidate }: { candidate: AccountCandidate }) {
@@ -121,6 +125,7 @@ function RecommendationCard({
   lead,
   portfolioNames,
   onOpenPortfolio,
+  platform,
 }: {
   candidate: AccountCandidate;
   currency: string | null;
@@ -129,6 +134,7 @@ function RecommendationCard({
   lead: boolean;
   portfolioNames: ReadonlyMap<string, string>;
   onOpenPortfolio?: (portfolioId: string) => void;
+  platform?: AdPlatform;
 }) {
   const meta = ACCOUNT_DETECTOR_META[candidate.detector];
   const tier = impactTier(candidate.impact_per_day, dailySpend);
@@ -151,6 +157,7 @@ function RecommendationCard({
     >
       <CalmRule play={lead} testId="account-card-rule" />
       <div className="flex flex-wrap items-center gap-1.5">
+        {platform ? <PlatformChip platform={platform} /> : null}
         {lead ? (
           <Badge className="text-xs" variant="violet">
             Lead
@@ -213,6 +220,7 @@ export function AccountRead({
   dailySpend,
   portfolioNames,
   onOpenPortfolio,
+  platform,
 }: AccountReadProps) {
   const [showRest, setShowRest] = useState(false);
   const guards = accountGuards(candidates);
@@ -258,6 +266,7 @@ export function AccountRead({
               key={candidate.id}
               lead={index === 0}
               onOpenPortfolio={onOpenPortfolio}
+              platform={platform}
               portfolioNames={portfolioNames}
             />
           ))}

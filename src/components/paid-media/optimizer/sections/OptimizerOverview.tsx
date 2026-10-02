@@ -13,6 +13,10 @@
 // efficiency series per portfolio — in ./account/overviewModel.ts, so a figure in the sentence
 // is always one the reader can find again in a tile or a row. The cards come from today's
 // account read; the read's own narrative, its footnotes and its charts are not shown.
+//
+// Above all of it sits the platform tab row (All · Meta · Google · TikTok, kept in ?platform=,
+// docs/optimizer-multiplatform/frontend.html §2). "All" and "Meta" are the O1 above, with a
+// platform chip on every card and row; Google and TikTok are their own screens in ./platforms.
 
 import type { PortfolioListItem } from '@continuum/contracts';
 import { applyApprovals } from '@continuum/contracts';
@@ -30,9 +34,11 @@ import * as typeScale from '../typeScale';
 import {
   useAccountApprovals,
   useOptimizerAccountRead,
+  useOptimizerAdAccounts,
   useOptimizerPortfolioEfficiency,
   useRequestAccountRead,
 } from '../useOptimizerData';
+import { useOptimizerUrlState } from '../useOptimizerUrlState';
 import { AccountRead } from './account/AccountRead';
 import { AccountReadFreshness } from './account/AccountReadFreshness';
 import {
@@ -57,6 +63,14 @@ import { JainaEntryChips } from './JainaEntryChips';
 import { jainaAccountEntryPrompts, jainaWeeklyReportPrompt } from './jainaEntryModel';
 import { PortfolioRowCard } from './PortfolioRowCard';
 import { underManagement } from './portfolioStaleness';
+import { GoogleAdsTab } from './platforms/GoogleAdsTab';
+import { PlatformTabs } from './platforms/PlatformTabs';
+import {
+  connectedPlatforms,
+  OPTIMIZER_MANAGED_PLATFORM,
+  rendersManagedOverview,
+} from './platforms/platformTabsModel';
+import { TikTokAdsTab } from './platforms/TikTokAdsTab';
 
 /** Room for six tiles: spend, up to three result kinds, decisions, autopilot. */
 const MAX_KIND_TILES = 3;
@@ -125,6 +139,14 @@ export function OptimizerOverview({
   const accountRead = useOptimizerAccountRead(brandId, adAccountId);
   const approvalMaps = useAccountApprovals(brandId, adAccountId);
   const requestRead = useRequestAccountRead(brandId, adAccountId);
+  const { platform: platformTab, setPlatform } = useOptimizerUrlState();
+  const adAccounts = useOptimizerAdAccounts(brandId);
+  const connected = useMemo(() => {
+    const granted = connectedPlatforms(adAccounts.data);
+    // The selected account is a Meta account the brand already reads: Meta is connected even
+    // while the account list is still loading or failed.
+    return { ...granted, meta: granted.meta || adAccountId != null };
+  }, [adAccounts.data, adAccountId]);
 
   const windows = useMemo(() => {
     const byId = new Map<string, PortfolioWindow>();
@@ -191,8 +213,19 @@ export function OptimizerOverview({
 
   const portfolioNoun = portfolios.length === 1 ? 'portfolio' : 'portfolios';
 
+  const tabs = <PlatformTabs connected={connected} onChange={setPlatform} value={platformTab} />;
+  if (!rendersManagedOverview(platformTab)) {
+    return (
+      <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
+        {tabs}
+        {platformTab === 'google_ads' ? <GoogleAdsTab brandId={brandId} /> : <TikTokAdsTab />}
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-3" data-testid="optimizer-overview">
+    <div className="space-y-3" data-platform-tab={platformTab} data-testid="optimizer-overview">
+      {tabs}
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <p className="text-xs font-semibold text-foreground" data-testid="book-line">
           {portfolios.length} {portfolioNoun} · {book.managed}{' '}
@@ -425,6 +458,7 @@ export function OptimizerOverview({
             currency={shown.currency ?? currency ?? null}
             dailySpend={shown.scale_per_day ?? dailyTotal}
             onOpenPortfolio={onSelectPortfolio}
+            platform={OPTIMIZER_MANAGED_PLATFORM}
             portfolioNames={names}
           />
         </section>
@@ -481,6 +515,7 @@ export function OptimizerOverview({
               key={portfolio.id}
               onPrefetch={onPrefetchPortfolio ? () => onPrefetchPortfolio(portfolio.id) : undefined}
               onSelect={() => onSelectPortfolio(portfolio.id)}
+              platform={OPTIMIZER_MANAGED_PLATFORM}
               portfolio={portfolio}
               window={windows.get(portfolio.id) ?? null}
             />
