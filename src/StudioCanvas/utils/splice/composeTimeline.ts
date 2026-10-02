@@ -14,6 +14,7 @@ import {
   overlapInSecFor,
   tailFadeFor,
 } from '../render/transitions';
+import { calibratedAacConfig } from './aacTiming';
 import { appendRange, appendStill, loadMediabunny, throwIfAborted } from './appendRange';
 import { type AudioPlanItem, feedMixdown, mixdownTimelineAudio } from './audioMix';
 import { type CaptionCue, type CaptionWord, groupWordsIntoCues } from './captionCues';
@@ -393,11 +394,17 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
     output.addVideoTrack(videoSource, {
       ...(options.frameRate !== undefined ? { frameRate: options.frameRate } : {}),
     });
-    const audioSource = new mb.AudioSampleSource({
-      codec: options.container === 'webm' ? 'opus' : 'aac',
-      bitrate: options.audioBitrate ?? DEFAULT_AUDIO_BITRATE,
-      transform: { numberOfChannels: TARGET_CHANNEL_COUNT, sampleRate: TARGET_SAMPLE_RATE },
-    });
+    const audioBitrate = options.audioBitrate ?? DEFAULT_AUDIO_BITRATE;
+    const audioConfig =
+      options.container === 'webm'
+        ? {
+            codec: 'opus' as const,
+            bitrate: audioBitrate,
+            transform: { numberOfChannels: TARGET_CHANNEL_COUNT, sampleRate: TARGET_SAMPLE_RATE },
+          }
+        : await calibratedAacConfig(mb, audioBitrate);
+    throwIfAborted(signal);
+    const audioSource = new mb.AudioSampleSource(audioConfig);
     output.addAudioTrack(audioSource);
 
     await output.start();

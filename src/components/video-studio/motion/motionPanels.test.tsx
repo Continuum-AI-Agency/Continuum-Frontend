@@ -23,7 +23,7 @@ import { readTemplateDrag, TEXT_TEMPLATE_DRAG_TYPE, TextTemplateShelf } from './
 
 afterEach(cleanup);
 
-function withClip(): { project: EditorProjectV2; clip: KeyedClip } {
+function withClip(): { project: EditorProjectV2; clip: Exclude<KeyedClip, { kind: 'audio' }> } {
   const blank = createEditorProjectV2({
     projectId: 'p1',
     title: 'Edit',
@@ -37,7 +37,7 @@ function withClip(): { project: EditorProjectV2; clip: KeyedClip } {
   );
   const project = simulate(blank, placed.forward);
   const clip = project.tracks[0]?.clips[0];
-  if (!clip || !isKeyedClip(clip)) throw new Error('no clip');
+  if (!clip || !isKeyedClip(clip) || clip.kind === 'audio') throw new Error('no clip');
   return { project, clip };
 }
 
@@ -115,6 +115,55 @@ describe('TextAnimationPicker', () => {
 });
 
 describe('KeyframeLane', () => {
+  it('audio offers Volume keys and the shared easing/value controls without transform lanes', () => {
+    const blank = createEditorProjectV2({
+      projectId: 'p1',
+      title: 'Audio',
+      width: 1080,
+      height: 1920,
+    });
+    const placed = placeAssetEdit(
+      blank,
+      { assetId: 'bed', kind: 'audio', title: 'Bed', durationSec: 4, origin: 'project' },
+      { atSec: 1 },
+    );
+    let project = simulate(blank, placed.forward);
+    const clip = project.tracks.flatMap((track) => track.clips)[0];
+    if (!clip || clip.kind !== 'audio') throw new Error('no audio');
+    const store = createPlayheadStore();
+    store.publish(2, false);
+    const onEdit = (build: (latest: EditorProjectV2) => TimelineEdit | null) => {
+      const edit = build(project);
+      if (edit) project = simulate(project, edit.forward);
+    };
+    const view = render(
+      <KeyframeLane
+        clip={clip}
+        store={store}
+        onEdit={onEdit}
+        onSettle={(_, build) => onEdit(build)}
+      />,
+    );
+    expect(view.queryByRole('button', { name: 'Add Position keyframe' })).toBeNull();
+    fireEvent.click(view.getByRole('button', { name: 'Add Volume keyframe' }));
+    const keyed = project.tracks.flatMap((track) => track.clips)[0];
+    if (!keyed || keyed.kind !== 'audio') throw new Error('no audio');
+    expect(keyed.keyframes[0]).toMatchObject({ property: 'audio.volume', timeSec: 1, value: 1 });
+    view.rerender(
+      <KeyframeLane
+        clip={keyed}
+        store={store}
+        onEdit={onEdit}
+        onSettle={(_, build) => onEdit(build)}
+      />,
+    );
+    expect(view.getByRole('button', { name: 'Volume keyframe at 1.00 s' })).toBeTruthy();
+    expect(view.getByLabelText('Volume')).toBeTruthy();
+    fireEvent.click(view.getByRole('button', { name: 'Ease out' }));
+    expect(project.tracks.flatMap((track) => track.clips)[0]?.keyframes[0]?.interpolation).toBe(
+      'bezier',
+    );
+  });
   it('keys at the playhead, and ⌫ on a key deletes it without reaching the timeline', () => {
     const { project, clip } = withClip();
     const store = createPlayheadStore();
@@ -194,10 +243,7 @@ describe('KeyButton drag', () => {
   it('a drag along the row moves the key to the time under the pointer', () => {
     const { project, clip } = withClip();
     const store = createPlayheadStore();
-    const keyed = simulate(
-      project,
-      addKeyEditForTest(project, clip.id).forward,
-    );
+    const keyed = simulate(project, addKeyEditForTest(project, clip.id).forward);
     const keyedClip = keyed.tracks[0]?.clips[0];
     if (!keyedClip || !isKeyedClip(keyedClip)) throw new Error('no clip');
     const edits: Array<TimelineEdit | null> = [];

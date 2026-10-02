@@ -17,6 +17,7 @@ import {
   AT_PLAYHEAD_SEC,
   addKeyEdit,
   channelKeys,
+  channelsFor,
   easeKeyEdit,
   type KeyedClip,
   keyNear,
@@ -169,10 +170,20 @@ function KeyValueFields({
       ? { min: -720, max: 720, step: 1, suffix: '°' }
       : channelId === 'opacity'
         ? { min: 0, max: 1, step: 0.01 }
-        : { min: 0, max: 10, step: 0.01, suffix: '×' };
+        : channelId === 'volume'
+          ? { min: 0, max: 2, step: 0.01, suffix: '×' }
+          : { min: 0, max: 10, step: 0.01, suffix: '×' };
   return (
     <NumberScrubField
-      label={channelId === 'scale' ? 'Scale' : channelId === 'rotation' ? 'Rotation' : 'Opacity'}
+      label={
+        channelId === 'scale'
+          ? 'Scale'
+          : channelId === 'rotation'
+            ? 'Rotation'
+            : channelId === 'volume'
+              ? 'Volume'
+              : 'Opacity'
+      }
       value={numeric}
       {...range}
       onChange={set}
@@ -237,7 +248,7 @@ export function KeyframeLane({
           {inside ? `${localSec.toFixed(2)} s` : 'playhead off clip'}
         </span>
       </div>
-      {LANE_CHANNELS.map((channel) => {
+      {channelsFor(clip).map((channel) => {
         const keys = channelKeys(clip, channel.id);
         const atPlayhead = inside ? keyNear(keys, localSec, AT_PLAYHEAD_SEC) : undefined;
         return (

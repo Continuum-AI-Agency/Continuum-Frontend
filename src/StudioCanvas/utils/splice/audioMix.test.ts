@@ -4,11 +4,52 @@ import {
   AUDIO_SAMPLE_RATE,
   applyEnvelope,
   clampStereo,
+  decodeClipPcm,
   mixInto,
   resampleToStereo48k,
   silentStereo,
   stereoToPlanar,
 } from './audioMix';
+
+it('decodes the exact source span, retains timestamp gaps, and closes trimmed samples', async () => {
+  const samples = [0, 72].map((at) => ({
+    timestamp: at / AUDIO_SAMPLE_RATE,
+    sampleRate: AUDIO_SAMPLE_RATE,
+    numberOfChannels: 2,
+    numberOfFrames: 48,
+    closed: false,
+    copyTo(
+      dest: Float32Array,
+      options: { frameOffset?: number; frameCount?: number; planeIndex: number },
+    ) {
+      for (let i = 0; i < (options.frameCount ?? 48); i++)
+        dest[i] = at + (options.frameOffset ?? 0) + i + options.planeIndex * 1_000;
+    },
+    close() {
+      this.closed = true;
+    },
+  }));
+  const mb = {
+    AudioSampleSink: class {
+      async *samples() {
+        yield* samples;
+      }
+    },
+  } as unknown as typeof import('mediabunny');
+  const input = {
+    getPrimaryAudioTrack: async () => ({}),
+  } as unknown as InstanceType<typeof import('mediabunny')['Input']>;
+  const decoded = await decodeClipPcm(mb, input, 12 / AUDIO_SAMPLE_RATE, 108 / AUDIO_SAMPLE_RATE);
+  expect(decoded?.channels[0].length).toBe(96);
+  expect(decoded?.channels[0][0]).toBe(12);
+  expect(Array.from(decoded?.channels[0].slice(36, 60) ?? [])).toEqual(Array(24).fill(0));
+  expect(decoded?.channels[0][60]).toBe(72);
+  expect(decoded?.channels[0][95]).toBe(107);
+  expect(decoded?.channels[1][0]).toBe(1_012);
+  expect(decoded?.channels[1][60]).toBe(1_072);
+  expect(decoded?.channels[1][95]).toBe(1_107);
+  expect(samples.every((sample) => sample.closed)).toBe(true);
+});
 
 describe('silentStereo', () => {
   it('allocates zeroed channels of the requested length', () => {

@@ -62,7 +62,7 @@ export function MotionPresetsSection({
   getPlayheadSec,
   runOp,
 }: {
-  clip: KeyedClip;
+  clip: Exclude<KeyedClip, { kind: 'audio' }>;
   getPlayheadSec: () => number;
   runOp: RunVideoEditorOp;
 }) {

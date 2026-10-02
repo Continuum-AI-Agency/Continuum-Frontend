@@ -45,6 +45,39 @@ const clipOf = (project: EditorProjectV2, clipId: string): KeyedClip => {
 };
 
 describe('keyframe lane edits', () => {
+  test('audio volume keys sample absolute gain, move, ease and delete without visual channels', () => {
+    const placed = placeAssetEdit(
+      blank(),
+      { assetId: 'bed', kind: 'audio', title: 'Bed', durationSec: 4, origin: 'project' },
+      { atSec: 1 },
+    );
+    let project = simulate(blank(), placed.forward);
+    const clipId = project.tracks.flatMap((track) => track.clips)[0]!.id;
+    project = commit(project, addKeyEdit(project, clipId, 'volume', 0));
+    project = commit(project, valueKeyEdit(project, clipId, 'volume', 0, 0.2));
+    project = commit(project, addKeyEdit(project, clipId, 'volume', 2));
+    project = commit(project, valueKeyEdit(project, clipId, 'volume', 2, 0.8));
+    project = commit(project, addKeyEdit(project, clipId, 'volume', 1));
+    expect(valueAt(clipOf(project, clipId), 'audio.volume', 1)).toBe(0.5);
+    project = commit(
+      project,
+      easeKeyEdit(project, clipId, 'volume', 1, { interpolation: 'bezier', easing: EASE_OUT }),
+    );
+    project = commit(project, moveKeyEdit(project, clipId, 'volume', 1, 1.5));
+    expect(channelKeys(clipOf(project, clipId), 'volume')[1]?.keyframes[0]).toMatchObject({
+      timeSec: 1.5,
+      value: 0.5,
+      interpolation: 'bezier',
+      easing: EASE_OUT,
+    });
+    project = commit(project, removeKeyEdit(project, clipId, 'volume', 1.5));
+    expect(channelKeys(clipOf(project, clipId), 'volume').map((key) => key.timeSec)).toEqual([
+      0, 2,
+    ]);
+    expect(addKeyEdit(project, clipId, 'position', 1)).toBeNull();
+    const visual = withClip();
+    expect(addKeyEdit(visual.project, visual.clipId, 'volume', 1)).toBeNull();
+  });
   test('add keys the resting value at the playhead; scale keys X and Y together', () => {
     const { project, clipId } = withClip();
     let next = commit(project, addKeyEdit(project, clipId, 'position', 1.25));

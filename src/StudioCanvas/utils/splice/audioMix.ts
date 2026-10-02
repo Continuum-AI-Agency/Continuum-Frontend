@@ -172,35 +172,53 @@ export async function decodeClipPcm(
   const track = await input.getPrimaryAudioTrack();
   if (!track) return null;
   const sink = new mb.AudioSampleSink(track);
-  const chunks: Float32Array[][] = [];
+  const chunks: { offset: number; channels: Float32Array[] }[] = [];
   let sampleRate = AUDIO_SAMPLE_RATE;
   let channelCount = AUDIO_CHANNELS;
-  for await (const sample of sink.samples(startSec, endSec)) {
-    throwIfAborted(signal);
-    sampleRate = sample.sampleRate;
-    channelCount = Math.max(1, sample.numberOfChannels);
-    const frames = sample.numberOfFrames;
-    const perChannel: Float32Array[] = [];
-    for (let c = 0; c < channelCount; c += 1) {
-      const dest = new Float32Array(frames);
-      sample.copyTo(dest, { planeIndex: c, format: 'f32-planar' });
-      perChannel.push(dest);
+  // Decode history before a seek so AAC/Opus initialization does not silence the selected start.
+  // ponytail: 250ms pre-roll covers current codecs; extend for codecs needing longer history.
+  for await (const sample of sink.samples(startSec - 0.25, endSec)) {
+    try {
+      throwIfAborted(signal);
+      if (
+        chunks.length &&
+        (sample.sampleRate !== sampleRate || sample.numberOfChannels !== channelCount)
+      )
+        throw new Error('Audio format changed within the selected source span.');
+      sampleRate = sample.sampleRate;
+      channelCount = Math.max(1, sample.numberOfChannels);
+      const offset = Math.round((sample.timestamp - startSec) * sampleRate);
+      const first = Math.max(0, -offset);
+      const last = Math.min(
+        sample.numberOfFrames,
+        Math.round((endSec - startSec) * sampleRate) - offset,
+      );
+      const frames = last - first;
+      if (frames <= 0) continue;
+      const perChannel: Float32Array[] = [];
+      for (let c = 0; c < channelCount; c += 1) {
+        const dest = new Float32Array(frames);
+        sample.copyTo(dest, {
+          planeIndex: c,
+          format: 'f32-planar',
+          frameOffset: first,
+          frameCount: frames,
+        });
+        perChannel.push(dest);
+      }
+      chunks.push({ offset: offset + first, channels: perChannel });
+    } finally {
+      sample.close();
     }
-    chunks.push(perChannel);
-    sample.close();
   }
   if (chunks.length === 0) return null;
-  const total = chunks.reduce((sum, chunk) => sum + (chunk[0]?.length ?? 0), 0);
+  const total = Math.max(0, Math.round((endSec - startSec) * sampleRate));
   const channels: Float32Array[] = Array.from(
     { length: channelCount },
     () => new Float32Array(total),
   );
-  let offset = 0;
   for (const chunk of chunks) {
-    const frames = chunk[0]?.length ?? 0;
-    for (let c = 0; c < channelCount; c += 1)
-      channels[c].set(chunk[c] ?? new Float32Array(frames), offset);
-    offset += frames;
+    for (let c = 0; c < channelCount; c += 1) channels[c].set(chunk.channels[c], chunk.offset);
   }
   return { channels, sampleRate };
 }

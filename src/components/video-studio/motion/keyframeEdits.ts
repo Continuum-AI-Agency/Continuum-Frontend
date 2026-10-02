@@ -16,22 +16,24 @@ import type { EditorCommandDraft } from '@/StudioCanvas/nodes/timeline/editorPro
 import { currentPropertyValue } from '@/StudioCanvas/nodes/timeline/motion/motionLayers';
 import { findClip, type TimelineEdit } from '@/StudioCanvas/nodes/timeline/workspace/timelineEdits';
 
-export type KeyedClip = Extract<EditorClip, { kind: 'video' | 'overlay' | 'text' }>;
+export type KeyedClip = Extract<EditorClip, { kind: 'video' | 'overlay' | 'text' | 'audio' }>;
 export const isKeyedClip = (clip: EditorClip): clip is KeyedClip =>
-  clip.kind === 'video' || clip.kind === 'overlay' || clip.kind === 'text';
+  clip.kind === 'video' || clip.kind === 'overlay' || clip.kind === 'text' || clip.kind === 'audio';
 
 type LaneProperty =
   | 'transform.position'
   | 'transform.scaleX'
   | 'transform.scaleY'
   | 'transform.rotationDeg'
-  | 'transform.opacity';
+  | 'transform.opacity'
+  | 'audio.volume';
 
 export const LANE_CHANNELS = [
   { id: 'position', label: 'Position', properties: ['transform.position'] },
   { id: 'scale', label: 'Scale', properties: ['transform.scaleX', 'transform.scaleY'] },
   { id: 'rotation', label: 'Rotation', properties: ['transform.rotationDeg'] },
   { id: 'opacity', label: 'Opacity', properties: ['transform.opacity'] },
+  { id: 'volume', label: 'Volume', properties: ['audio.volume'] },
 ] as const satisfies ReadonlyArray<{
   id: string;
   label: string;
@@ -39,6 +41,9 @@ export const LANE_CHANNELS = [
 }>;
 export type LaneChannel = (typeof LANE_CHANNELS)[number];
 export type LaneChannelId = LaneChannel['id'];
+
+export const channelsFor = (clip: KeyedClip): readonly LaneChannel[] =>
+  LANE_CHANNELS.filter((channel) => (clip.kind === 'audio') === (channel.id === 'volume'));
 
 /** Stops closer than this are one key: the reducer merges same-property stops at 1 ms. */
 const SAME_KEY_SEC = 0.001;
@@ -80,7 +85,14 @@ export function valueAt(
   property: LaneProperty,
   localSec: number,
 ): EditorKeyframe['value'] {
-  const base = currentPropertyValue(clip.transform, property);
+  let base: EditorKeyframe['value'];
+  if (property === 'audio.volume') {
+    if (clip.kind !== 'audio') throw new Error('Volume lane requires an audio clip.');
+    base = clip.volume;
+  } else {
+    if (clip.kind === 'audio') throw new Error('Audio clips only expose volume keyframes.');
+    base = currentPropertyValue(clip.transform, property);
+  }
   if (property === 'transform.position' && typeof base === 'object' && 'x' in base) {
     const at = samplePositionTrack(
       positionKeysForProperty(clip.keyframes, property),
@@ -126,7 +138,7 @@ export function addKeyEdit(
   localSec: number,
 ): TimelineEdit | null {
   const at = locate(project, clipId);
-  if (!at) return null;
+  if (!at || !channelsFor(at.clip).some((channel) => channel.id === channelId)) return null;
   const channel = channelFor(channelId);
   const timeSec = roundSec(Math.min(at.clip.durationSec, Math.max(0, localSec)));
   const existing = keyNear(channelKeys(at.clip, channelId), timeSec);

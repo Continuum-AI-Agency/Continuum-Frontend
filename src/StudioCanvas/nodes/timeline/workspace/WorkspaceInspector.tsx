@@ -539,8 +539,14 @@ function InspectorHeader({
   );
 }
 
-function AudioClipInspector({ project, clip, onEdit, onDeselect }: SectionProps<EditorAudioClip>) {
-  const { view, patch } = useClipDraft(project, clip, onEdit);
+function AudioClipInspector({
+  project,
+  clip,
+  onEdit,
+  onDeselect,
+  store,
+}: SectionProps<EditorAudioClip> & Pick<MotionProps, 'store'>) {
+  const { view, patch, edits } = useClipDraft(project, clip, onEdit);
   const fadeMax = Math.min(5, view.durationSec);
   const setSpeed = (playbackRate: number) => {
     patch(editorClipAtSpeed(view, playbackRate), 'Change speed');
@@ -589,6 +595,7 @@ function AudioClipInspector({ project, clip, onEdit, onDeselect }: SectionProps<
         suffix="x"
         onChange={setSpeed}
       />
+      <KeyframeLane clip={clip} store={store} onEdit={edits.now} onSettle={edits.schedule} />
     </div>
   );
 }
@@ -1108,7 +1115,7 @@ export function WorkspaceInspector({
         />
       );
     case 'audio':
-      return <AudioClipInspector key={clip.id} {...section} clip={clip} />;
+      return <AudioClipInspector key={clip.id} {...section} clip={clip} store={store} />;
     case 'text':
       return <TextClipInspector key={clip.id} {...section} {...motion} clip={clip} />;
     case 'caption':

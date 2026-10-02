@@ -33,6 +33,7 @@ import { DUCKING, duckingKeyframes, type EditorProjectV2 } from '@continuum/cont
 import { expect, test } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { mintSessionBundleForEmail } from './support/auth';
+import { createBenchRecorder } from './support/benchRecorder';
 import { loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 import type { AudioRenderRun } from './support/videoEditorAudioRenderEntry';
 import { bootBackend, type Server } from './video-editor-workspace/harness';
@@ -155,9 +156,10 @@ function windows(durationSec: number) {
 test('a music bed ducks under speech in the real compositor, judged on the decoded mix', async ({
   browser,
 }) => {
+  const rec = createBenchRecorder('videoeditor:audio:render:bench', []);
   const current = bundle(false);
   const baseline = bundle(true);
-  const render = async (code: string, variant: 'ducked' | 'plain') => {
+  const render = async (code: string, variant: AudioRenderRun['variant']) => {
     const context = await browser.newContext();
     const page = await context.newPage();
     await page.route('**/video-editor-audio-render-bench', (route) =>
@@ -182,9 +184,11 @@ test('a music bed ducks under speech in the real compositor, judged on the decod
   const plain = await render(current, 'plain');
   const oldPlain = await render(baseline, 'plain');
   const oldDucked = await render(baseline, 'ducked');
+  const automated = await render(current, 'automated');
 
   const lines: string[] = [];
   const check = (name: string, ok: boolean, detail: string) => {
+    rec.record(name, ok ? 'PASS' : 'FAIL', detail);
     lines.push(`${ok ? 'PASS' : 'FAIL'}  ${name} — ${detail}`);
     expect.soft(ok, `${name}: ${detail}`).toBe(true);
   };
@@ -289,10 +293,66 @@ test('a music bed ducks under speech in the real compositor, judged on the decod
       .join(' | ')})`,
   );
 
+  console.log(
+    'decoded audio origins:',
+    JSON.stringify(
+      [ducked, plain, automated].map(({ variant, decodedStartSec }) => ({
+        variant,
+        decodedStartSec,
+      })),
+    ),
+  );
+  const automatedPcm = pcmOf(automated);
+  const envelope = [
+    [1.5, 0.8],
+    [2.5, 0.5],
+    [3.5, 0.2],
+    [4.25, 0.251665],
+    [4.5, 0.4],
+    [4.75, 0.548335],
+    [5.5, 0.6],
+    [6.5, 0.8],
+  ];
+  const levels = envelope.map(([at, expected]) => ({
+    at,
+    expected,
+    actual:
+      toneRms(automatedPcm, automated.sampleRate, MUSIC_HZ * 1.25, at - 0.05, at + 0.05) / bedRms,
+  }));
+  check(
+    'volume automation: holds, linear ramps and bezier easing match decoded gain after trim and speed',
+    automated.keyframes.length === 7 &&
+      levels.every((level) => Math.abs(level.actual - level.expected) <= 0.03),
+    JSON.stringify(levels),
+  );
+  check(
+    'AAC presentation: music starts on the timeline without encoder priming delay',
+    toneRms(automatedPcm, automated.sampleRate, MUSIC_HZ * 1.25, 0.975, 0.985) < 0.005 &&
+      Math.abs(
+        toneRms(automatedPcm, automated.sampleRate, MUSIC_HZ * 1.25, 1.005, 1.015) / bedRms - 0.8,
+      ) <= 0.04,
+    `first audible window gain ${toneRms(automatedPcm, automated.sampleRate, MUSIC_HZ * 1.25, 1.005, 1.015) / bedRms}`,
+  );
+  check(
+    'volume automation: clip-local gain begins at the offset and ends with the clip',
+    toneRms(automatedPcm, automated.sampleRate, MUSIC_HZ * 1.25, 0.4, 0.6) < 0.001 &&
+      toneRms(automatedPcm, automated.sampleRate, MUSIC_HZ * 1.25, 7.4, 7.6) < 0.001 &&
+      Math.abs(automated.durationSec - 8) <= 1 / 30,
+    `duration ${automated.durationSec}s`,
+  );
+  check(
+    'volume automation: speech and picture remain unchanged',
+    underSpeech.every((at) => Math.abs(levelDb(automatedPcm, plainPcm, SPEECH_HZ, at)) <= 0.5) &&
+      automated.frames.every((rgb, index) =>
+        rgb.every((channel, c) => Math.abs(channel - plain.frames[index][c]) <= 1),
+      ),
+    'Measured separate speech frequency and decoded picture',
+  );
+
   const run = `render-${new Date().toISOString().replace(/[:.]/g, '-')}`;
   const scratch = mkdtempSync(join(tmpdir(), 'video-editor-audio-render-'));
   try {
-    for (const rendered of [ducked, plain]) {
+    for (const rendered of [ducked, plain, automated]) {
       writeFileSync(
         join(scratch, `${rendered.variant}.mp4`),
         Buffer.from(rendered.mp4Base64, 'base64'),
@@ -310,6 +370,7 @@ test('a music bed ducks under speech in the real compositor, judged on the decod
             max: Math.max(...outside),
           },
           residualDb,
+          automation: levels,
           notExercised: ['server export via Render /v1/timeline — needs an owner Render rebuild'],
         },
         null,
@@ -334,6 +395,10 @@ test('a music bed ducks under speech in the real compositor, judged on the decod
   lines.push(
     'NOT EXERCISED  server export of ducking — Render /v1/timeline serves the compositor bundled into the Render image, which the owner must rebuild',
   );
+  rec.notes.push(
+    'NOT EXERCISED: automatic speech detection, audio preview, editor control/store latency, or production Backend/Frontend. Tone fixtures isolate gain accuracy; they are not speech-detection accuracy evidence. Server export requires its separate mode.',
+  );
+  rec.print();
   const passed = lines.filter((line) => line.startsWith('PASS')).length;
   const failed = lines.filter((line) => line.startsWith('FAIL')).length;
   console.log(

@@ -637,6 +637,116 @@ test(BENCH, async ({ browser }) => {
         ),
     );
 
+    const audioId = `volume-${RUN}`;
+    const audioTrack = `audio-${RUN}`;
+    const audioSeed = await postOp(api, projectId, 'apply_commands', {
+      expectedRevision: project.revision,
+      commands: [
+        {
+          commandType: 'add_track',
+          track: {
+            id: audioTrack,
+            name: 'Volume automation',
+            kind: 'audio',
+            order: Math.max(...project.tracks.map((track) => track.order)) + 1,
+            clips: [
+              {
+                id: audioId,
+                kind: 'audio',
+                timelineStartSec: 0,
+                durationSec: CUT_SEC,
+                source: 'source' in clipA ? clipA.source : undefined,
+                volume: 1,
+              },
+            ],
+          },
+        },
+      ],
+    });
+    check(
+      'audio automation: existing Library source lands on its audio track',
+      audioSeed.status === 200,
+      audioSeed.text.slice(0, 100),
+    );
+    await expect(page.locator(`[data-clip-id="${audioId}"]:visible`)).toHaveCount(1, {
+      timeout: STEP_MS,
+    });
+    await selectClip(page, audioId);
+    check(
+      'audio automation: Volume lane shown without visual channels',
+      (await shows(page.getByRole('button', { name: 'Add Volume keyframe' }))) &&
+        (await visible(page.getByRole('button', { name: 'Add Position keyframe' })).count()) === 0,
+    );
+    const automationSaveMs: number[] = [];
+    for (const [atSec, gain] of [
+      [0.25, 0.25],
+      [1.25, 0.6],
+      [2.25, 0.9],
+    ]) {
+      await seek(page, pxPerSec, atSec);
+      const added = page.waitForResponse(
+        (response) =>
+          response.url().endsWith(`/${projectId}/commands`) &&
+          response.request().method() === 'POST',
+      );
+      await visible(page.getByRole('button', { name: 'Add Volume keyframe' })).click();
+      expect((await added).ok()).toBe(true);
+      const field = visible(page.getByTestId('keyframe-editor')).getByLabel('Volume', {
+        exact: true,
+      });
+      const saved = page.waitForResponse(
+        (response) =>
+          response.url().endsWith(`/${projectId}/commands`) &&
+          response.request().method() === 'POST',
+      );
+      const started = performance.now();
+      await field.fill(String(gain));
+      await field.press('Tab');
+      const response = await saved;
+      automationSaveMs.push(performance.now() - started);
+      project = await getProject(api, projectId);
+      check(
+        `audio automation: ${gain} gain at ${atSec}s survives a fresh read`,
+        response.ok() &&
+          keyframesOf(clipById(project, audioId)).some(
+            (key) =>
+              key.property === 'audio.volume' &&
+              near(key.timeSec, atSec, 0.05) &&
+              key.value === gain,
+          ),
+      );
+    }
+    note(`speed samples: ${JSON.stringify({ volume_control_save: automationSaveMs })}`);
+    await visible(page.getByTestId('keyframe-editor'))
+      .getByRole('button', { name: 'Ease out' })
+      .click();
+    project = await until(
+      () => getProject(api, projectId),
+      (value) =>
+        keyframesOf(clipById(value, audioId)).some(
+          (key) => near(key.timeSec, 2.25, 0.05) && key.interpolation === 'bezier',
+        ),
+    );
+    check(
+      'audio automation: easing is persisted on the volume key',
+      keyframesOf(clipById(project, audioId)).some(
+        (key) =>
+          key.property === 'audio.volume' && key.interpolation === 'bezier' && Boolean(key.easing),
+      ),
+    );
+    const volumeKey = visible(page.getByRole('button', { name: 'Volume keyframe at 2.25 s' }));
+    await volumeKey.focus();
+    await page.keyboard.press('Delete');
+    project = await until(
+      () => getProject(api, projectId),
+      (value) => keyframesOf(clipById(value, audioId)).length === 2,
+    );
+    check(
+      'audio automation: deleting a key preserves the source and other keys',
+      keyframesOf(clipById(project, audioId)).length === 2 &&
+        sourceOf(clipById(project, audioId)) === SOURCE_ASSET_ID,
+    );
+
     const outside = await postOp(api, projectId, 'add_text', {
       text: OUTSIDE_LINE,
       startSec: 4,
