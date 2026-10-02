@@ -1587,6 +1587,9 @@ export function TemplateDetail({
           >
             <TabsTrigger value="checks">Checks</TabsTrigger>
             <TabsTrigger value="layers">Edit layers</TabsTrigger>
+            <TabsTrigger value="variants" className="flex-none px-0 text-xs">
+              Variants {familyVariants.length ? `(${familyVariants.length})` : ''}
+            </TabsTrigger>
             <TabsTrigger value="variables" className="flex-none px-0 text-xs">
               Variables
             </TabsTrigger>
@@ -1600,9 +1603,6 @@ export function TemplateDetail({
             ) : null}
             <TabsTrigger value="source" className="flex-none px-0 text-xs">
               Source revision
-            </TabsTrigger>
-            <TabsTrigger value="variants" className="flex-none px-0 text-xs">
-              Variants {familyVariants.length ? `(${familyVariants.length})` : ''}
             </TabsTrigger>
             <TabsTrigger value="history" className="flex-none px-0 text-xs">
               History
