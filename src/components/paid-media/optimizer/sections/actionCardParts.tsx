@@ -23,6 +23,7 @@ import * as typeScale from '../typeScale';
 import type { OptimizerActionFeedRow } from '../useOptimizerData';
 import {
   type ActionChange,
+  actionPlatform,
   actorLabel,
   readActionChange,
   readReceiptTrace,
@@ -30,6 +31,7 @@ import {
   revertState,
 } from './actionRows';
 import { formatWhen, ReceiptToken } from './feedChrome';
+import { PlatformChip } from './platforms/PlatformChip';
 import { RevertApplyDialog } from './RevertApplyDialog';
 
 const FAMILY_LABEL: Record<string, string> = {
@@ -206,11 +208,13 @@ export function ActionDetailBody({
 }) {
   const change = readActionChange(row);
   const entity = actionEntity(row, entityNames);
+  const platform = actionPlatform(row);
   const receipt = readReceiptTrace(row);
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <ActionFamilyBadge family={row.family} />
+        <PlatformChip platform={platform} />
         <ActionMeta row={row} />
       </div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
@@ -246,7 +250,11 @@ export function ActionDetailBody({
       </div>
       {row.justification ? <ActionWhy text={row.justification} /> : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        {receipt ? <ReceiptToken value={receipt} className="mt-0 text-xs" /> : <span />}
+        {receipt ? (
+          <ReceiptToken value={receipt} platform={platform} className="mt-0 text-xs" />
+        ) : (
+          <span />
+        )}
         <ActionRevertControl row={row} brandId={brandId} currency={currency} />
       </div>
     </div>

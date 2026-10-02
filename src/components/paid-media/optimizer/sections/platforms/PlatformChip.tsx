@@ -89,3 +89,23 @@ export function PlatformChip({
     </span>
   );
 }
+
+/** Every platform a portfolio holds, one chip each, in the order given. */
+export function PlatformChips({
+  platforms,
+  className,
+}: {
+  platforms: readonly AdPlatform[];
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn('inline-flex flex-wrap items-center gap-1', className)}
+      data-testid="platform-chips"
+    >
+      {platforms.map((platform) => (
+        <PlatformChip key={platform} platform={platform} />
+      ))}
+    </span>
+  );
+}

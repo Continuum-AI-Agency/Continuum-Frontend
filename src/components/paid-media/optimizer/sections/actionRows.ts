@@ -10,6 +10,11 @@
 // 'convert') must still render as something honest rather than crash the page.
 
 import type { OptimizerActionFeedRow } from '../useOptimizerData';
+import {
+  type AdPlatform,
+  OPTIMIZER_MANAGED_PLATFORM,
+  readAdPlatform,
+} from './platforms/platformTabsModel';
 
 /** How one action's before/after should be printed. `unit` decides the formatter:
  *  'money' values are MINOR units and the caller applies its currency; 'text' is printed
@@ -98,12 +103,27 @@ export function actorLabel(row: OptimizerActionFeedRow): string {
   }
 }
 
-/** The Meta trace id, when the write carried one. The receipt jsonb is the raw
- *  `apply_audits.meta_receipt`, so the key is whatever the applier stored. */
+/** Which platform the write landed on. The RPC does not send `platform` yet (every applier
+ *  today is Meta's), so a row without one — or with a spelling the contract does not know —
+ *  reads as Meta; the row schema is loose, so the field is read the day the RPC adds it. */
+export function actionPlatform(row: OptimizerActionFeedRow): AdPlatform {
+  return readAdPlatform(row.platform) ?? OPTIMIZER_MANAGED_PLATFORM;
+}
+
+/** Where each platform's applier puts the id its support desk asks for: Meta's fbtrace, the
+ *  Google Ads `request-id` header, TikTok's `request_id`. */
+const RECEIPT_KEYS: Record<AdPlatform, readonly string[]> = {
+  meta: ['fbtrace_id', 'fbtraceId', 'trace_id', 'id'],
+  google_ads: ['requestId', 'request_id'],
+  tiktok_ads: ['request_id'],
+};
+
+/** The write's receipt id, when it carried one. The receipt jsonb is the raw audit receipt,
+ *  so the key is whatever that platform's applier stored. */
 export function readReceiptTrace(row: OptimizerActionFeedRow): string | null {
   const receipt = row.receipt;
   if (!receipt) return null;
-  for (const key of ['fbtrace_id', 'fbtraceId', 'trace_id', 'id']) {
+  for (const key of RECEIPT_KEYS[actionPlatform(row)]) {
     const value = receipt[key];
     if (typeof value === 'string' && value.trim() !== '') return value;
   }

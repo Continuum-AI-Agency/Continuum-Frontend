@@ -377,3 +377,122 @@ describe('OptimizerActionFeed — entity names', () => {
     expect(trigger.className).not.toMatch(/text-[23]xs/);
   });
 });
+
+// Every action says which platform it wrote to, and its receipt is named by that platform
+// (frontend.html §7, feature 11). The RPC sends no `platform` yet, so a row without one is Meta.
+describe('OptimizerActionFeed — platform chip and receipt', () => {
+  const chipsIn = (node: HTMLElement) =>
+    Array.from(node.querySelectorAll('[data-testid="platform-chip"]')).map((chip) =>
+      chip.getAttribute('data-platform'),
+    );
+
+  it('puts a Meta chip on the featured card and on every grid card', () => {
+    actionsState = {
+      data: [
+        action({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000001' }),
+        action({
+          id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000002',
+          ts: new Date(Date.now() - 60_000).toISOString(),
+        }),
+        action({
+          id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000003',
+          ts: new Date(Date.now() - 120_000).toISOString(),
+        }),
+      ],
+      isLoading: false,
+    };
+    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    expect(chipsIn(screen.getByTestId('action-featured'))).toEqual(['meta']);
+    const cards = Array.from(screen.getByTestId('action-grid').children) as HTMLElement[];
+    expect(cards.map(chipsIn)).toEqual([['meta'], ['meta']]);
+  });
+
+  it('labels the copyable receipt as the Meta trace id', () => {
+    actionsState = { data: [action()], isLoading: false };
+    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    const receipt = within(screen.getByTestId('action-featured')).getByTestId('receipt-token');
+    expect(receipt.getAttribute('aria-label')).toBe('Copy Meta trace id AbC123traceZ');
+    expect(within(receipt).getByTestId('receipt-label').textContent).toBe('Meta trace id');
+  });
+
+  it('reads the platform from the row when it carries one, and its receipt by that platform', () => {
+    actionsState = {
+      data: [action({ platform: 'google_ads', receipt: { requestId: 'req-9Xy' } })],
+      isLoading: false,
+    };
+    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    const featured = screen.getByTestId('action-featured');
+    expect(chipsIn(featured)).toEqual(['google_ads']);
+    const receipt = within(featured).getByTestId('receipt-token');
+    expect(receipt.getAttribute('aria-label')).toBe('Copy Google request id req-9Xy');
+    expect(featured.textContent).not.toContain('Meta');
+  });
+
+  it('falls back to Meta when the row names a platform the contract does not know', () => {
+    actionsState = { data: [action({ platform: 'snapchat' })], isLoading: false };
+    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    expect(chipsIn(screen.getByTestId('action-featured'))).toEqual(['meta']);
+  });
+
+  it('names the platform in the detail of a grid card too', async () => {
+    actionsState = {
+      data: [
+        action({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000001' }),
+        action({
+          id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000002',
+          ts: new Date(Date.now() - 60_000).toISOString(),
+          platform: 'tiktok_ads',
+          receipt: { request_id: 'tt-req-1' },
+        }),
+      ],
+      isLoading: false,
+    };
+    render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    const [card] = Array.from(screen.getByTestId('action-grid').children) as HTMLElement[];
+    fireEvent.click(within(card).getByRole('button'));
+    const dialog = await waitFor(() => screen.getByRole('dialog'));
+    expect(chipsIn(dialog)).toEqual(['tiktok_ads']);
+    expect(within(dialog).getByTestId('receipt-token').getAttribute('aria-label')).toBe(
+      'Copy TikTok request id tt-req-1',
+    );
+  });
+
+  it('never puts a chip inside a figure, and figures never take a platform colour', () => {
+    actionsState = {
+      data: [
+        action(),
+        action({
+          id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000009',
+          ts: new Date(Date.now() - 60_000).toISOString(),
+        }),
+      ],
+      isLoading: false,
+    };
+    const { container } = render(<OptimizerActionFeed brandId="brand-1" currency="USD" />);
+    const figures = Array.from(container.querySelectorAll('[data-figure-role]'));
+    expect(figures.length).toBeGreaterThan(0);
+    for (const figure of figures) {
+      expect(figure.querySelector('[data-testid="platform-chip"]')).toBeNull();
+      expect(figure.closest('[data-testid="platform-chip"]')).toBeNull();
+      expect(figure.outerHTML).not.toMatch(/platform-(meta|google|tiktok)/);
+    }
+  });
+});
+
+// ActionRow is the dense row the portfolio Actions tab lists under "Recently applied".
+describe('ActionRow — platform chip and receipt', () => {
+  it('carries the chip beside the family badge and the platform-named receipt', async () => {
+    const { ActionRow } = await import('./OptimizerActionFeed');
+    render(
+      <ul>
+        <ActionRow row={action()} brandId="brand-1" currency="USD" />
+      </ul>,
+    );
+    const chip = screen.getByTestId('platform-chip');
+    expect(chip.getAttribute('data-platform')).toBe('meta');
+    expect(chip.textContent).toBe('Meta');
+    expect(screen.getByTestId('receipt-token').getAttribute('aria-label')).toBe(
+      'Copy Meta trace id AbC123traceZ',
+    );
+  });
+});

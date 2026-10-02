@@ -3,7 +3,7 @@
 // One square card in the action grid: what it touched, where it landed, how far it moved, when.
 //
 // The card is a summary; the whole card is the button that opens the full action — why,
-// before → after, the Meta receipt and the revert — in a dialog, so nothing the old row showed
+// before → after, the platform's receipt and the revert — in a dialog, so nothing the old row showed
 // became unreachable. A reverted action still says so on its face.
 
 import { useState } from 'react';
@@ -21,8 +21,9 @@ import {
   NO_ENTITY_NAMES,
   printChangeValue,
 } from './actionCardParts';
-import { readActionChange } from './actionRows';
+import { actionPlatform, readActionChange } from './actionRows';
 import { formatWhen } from './feedChrome';
+import { PlatformChip } from './platforms/PlatformChip';
 
 export function ActionGridCard({
   row,
@@ -48,7 +49,10 @@ export function ActionGridCard({
         className="flex min-h-36 w-full sm:aspect-square min-w-0 flex-col gap-2 rounded-lg border border-border/60 bg-card p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="flex w-full items-center justify-between gap-2">
-          <ActionFamilyBadge family={row.family} />
+          <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <ActionFamilyBadge family={row.family} />
+            <PlatformChip platform={actionPlatform(row)} />
+          </span>
           {row.reverted_by ? <ActionRevertedBadge /> : null}
         </div>
         <div className="w-full min-w-0">

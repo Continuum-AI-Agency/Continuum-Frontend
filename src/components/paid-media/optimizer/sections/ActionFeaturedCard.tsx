@@ -3,7 +3,7 @@
 // The lead of the action feed: the newest thing the optimizer did, at a size a person reads.
 //
 // It carries everything the old row carried — family, when, who, what it touched, before →
-// after, why, the Meta receipt, and the revert (or "reverted") — with the change itself in
+// after, why, the platform and its receipt, and the revert (or "reverted") — with the change itself in
 // large type and the move as a signed, coloured percentage.
 //
 // No sparkline: an action row is one before and one after (public.optimizer_list_actions
@@ -24,8 +24,9 @@ import {
   NO_ENTITY_NAMES,
   printChangeValue,
 } from './actionCardParts';
-import { readActionChange, readReceiptTrace } from './actionRows';
+import { actionPlatform, readActionChange, readReceiptTrace } from './actionRows';
 import { ReceiptToken } from './feedChrome';
+import { PlatformChip } from './platforms/PlatformChip';
 
 export function ActionFeaturedCard({
   row,
@@ -39,6 +40,7 @@ export function ActionFeaturedCard({
   entityNames?: ActionEntityNames;
 }) {
   const change = readActionChange(row);
+  const platform = actionPlatform(row);
   const receipt = readReceiptTrace(row);
   const entity = actionEntity(row, entityNames);
 
@@ -51,6 +53,7 @@ export function ActionFeaturedCard({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <ActionFamilyBadge family={row.family} />
+          <PlatformChip platform={platform} />
           <ActionMeta row={row} />
         </div>
         <ActionRevertControl row={row} brandId={brandId} currency={currency} />
@@ -84,7 +87,9 @@ export function ActionFeaturedCard({
       </div>
 
       {row.justification ? <ActionWhy text={row.justification} /> : null}
-      {receipt ? <ReceiptToken value={receipt} className="mt-0 self-start text-xs" /> : null}
+      {receipt ? (
+        <ReceiptToken value={receipt} platform={platform} className="mt-0 self-start text-xs" />
+      ) : null}
     </article>
   );
 }

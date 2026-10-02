@@ -3,7 +3,7 @@
 // The chrome both optimizer feeds share — the ACTION feed (what we did to the ad account)
 // and the SERVER LOG (what the machine did). They render different rows from different RPCs;
 // what they have in common is how a feed behaves: relative timestamps, a portfolio narrowing
-// of what has loaded, a copyable Meta receipt, and an honest "load more" that appears only
+// of what has loaded, a copyable platform receipt, and an honest "load more" that appears only
 // when the RPC's own cursor says there IS more.
 
 import { OPTIMIZER_FEED_WINDOW_DAYS, type OptimizerFeedWindowDays } from '@continuum/contracts';
@@ -20,6 +20,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { ALL_PORTFOLIOS } from './logFilters';
+import { type AdPlatform, PLATFORM_NAMES } from './platforms/platformTabsModel';
 
 const SKELETON_KEYS = ['s1', 's2', 's3', 's4', 's5', 's6'];
 
@@ -71,11 +72,32 @@ export function RowHeader({
   );
 }
 
-/** The Meta trace id, one-click copyable — the receipt an operator pastes into a Graph API
- *  support ticket. Clipboard access is optional-chained so a render environment without it
- *  (or a denied permission) never throws. `className` lets a roomier surface (the action
- *  cards) lift the type size; without it the token renders exactly as the dense feeds use it. */
-export function ReceiptToken({ value, className }: { value: string; className?: string }) {
+/** What each platform calls the id its support desk asks for. */
+const RECEIPT_NAME: Record<AdPlatform, string> = {
+  meta: 'trace id',
+  google_ads: 'request id',
+  tiktok_ads: 'request id',
+};
+
+export function receiptLabel(platform: AdPlatform): string {
+  return `${PLATFORM_NAMES[platform]} ${RECEIPT_NAME[platform]}`;
+}
+
+/** The write's receipt, one-click copyable and named by its platform — the id an operator
+ *  pastes into that platform's support ticket. Clipboard access is optional-chained so a render
+ *  environment without it (or a denied permission) never throws. `className` lets a roomier
+ *  surface (the action cards) lift the type size; without it the token renders exactly as the
+ *  dense feeds use it. */
+export function ReceiptToken({
+  value,
+  platform,
+  className,
+}: {
+  value: string;
+  platform: AdPlatform;
+  className?: string;
+}) {
+  const label = receiptLabel(platform);
   const [copied, setCopied] = useState(false);
   const copy = () => {
     void navigator.clipboard?.writeText(value)?.catch(() => {});
@@ -86,7 +108,8 @@ export function ReceiptToken({ value, className }: { value: string; className?: 
     <button
       type="button"
       onClick={copy}
-      aria-label={`Copy Meta trace id ${value}`}
+      aria-label={`Copy ${label} ${value}`}
+      data-testid="receipt-token"
       className={cn(
         'mt-1 inline-flex max-w-full items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-xs tabular-nums text-muted-foreground transition-colors hover:bg-muted',
         className,
@@ -97,6 +120,9 @@ export function ReceiptToken({ value, className }: { value: string; className?: 
       ) : (
         <CopyIcon aria-hidden="true" className="size-3 shrink-0" />
       )}
+      <span className="shrink-0 font-sans" data-testid="receipt-label">
+        {label}
+      </span>
       <span className="truncate">{value}</span>
     </button>
   );

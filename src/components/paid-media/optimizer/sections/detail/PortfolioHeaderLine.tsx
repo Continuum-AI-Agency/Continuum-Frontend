@@ -1,6 +1,7 @@
 'use client';
 
-// The first line of the portfolio module: its name and how it runs as a pill, then one grey
+// The first line of the portfolio module: its name, the platforms it holds as chips, and how it
+// runs as a pill, then one grey
 // line — how many ad sets it holds, when it was last read, and the objective, strategy and
 // window as plain text that still opens the matching field in Manage. The controls (stop /
 // resume / review, run now) sit on its right. The budget and the target are not here: the
@@ -11,11 +12,15 @@ import { CheckCheckIcon, PauseIcon, PlayIcon, RefreshCwIcon } from 'lucide-react
 import { Fragment } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { PlatformChips } from '../platforms/PlatformChip';
+import type { AdPlatform } from '../platforms/platformTabsModel';
 import { resultNouns } from './headlineModel';
 import type { HeroHeader, HeroSetting } from './heroHeaderModel';
 
 export type PortfolioHeaderLineProps = {
   header: HeroHeader;
+  /** The platforms the portfolio holds, one chip each beside its name. */
+  platforms: readonly AdPlatform[];
   onEditSetting: (setting: HeroSetting) => void;
   /** Stop / resume autopilot, or open the moves waiting in Recommend. */
   onSecondary: () => void;
@@ -45,6 +50,7 @@ const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text
 
 export function PortfolioHeaderLine({
   header,
+  platforms,
   onEditSetting,
   onSecondary,
   secondaryPending = false,
@@ -99,6 +105,7 @@ export function PortfolioHeaderLine({
           <h3 className="break-words font-semibold text-base text-foreground tracking-tight">
             {header.name}
           </h3>
+          <PlatformChips platforms={platforms} />
           {header.mode ? (
             <span className={cn(PILL, MODE_TONE[header.mode.tone])} data-testid="header-mode">
               {header.mode.tone === 'good' || header.mode.tone === 'warn' ? (

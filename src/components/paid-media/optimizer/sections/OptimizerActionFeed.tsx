@@ -5,7 +5,8 @@
 // One row = one state change with a real before and a real after: a budget write, an ad-set
 // pause or unpause, a portfolio setting edit, a recommendation approved or rejected. It comes
 // from public.optimizer_list_actions, which reads the audit tables directly, so the row also
-// carries WHO authorized it, WHY (the justification persisted at cycle time), the Meta receipt,
+// carries WHO authorized it, WHY (the justification persisted at cycle time), the platform it
+// wrote to with that platform's receipt,
 // and whether it can still be undone.
 //
 // Revert is gated on the row's own `reversible` flag from the RPC — never on a client guess —
@@ -30,6 +31,7 @@ import { ActionGridCard } from './ActionGridCard';
 import type { ActionEntityNames } from './actionCardParts';
 import {
   type ActionChange,
+  actionPlatform,
   actorLabel,
   readActionChange,
   readReceiptTrace,
@@ -39,6 +41,7 @@ import {
 import { FeedFooter, FeedSkeleton, PortfolioFilter, ReceiptToken, RowHeader } from './feedChrome';
 import { ALL_PORTFOLIOS, distinctPortfolioNames, filterByPortfolio } from './logFilters';
 import { OptimizerReadError } from './OptimizerReadError';
+import { PlatformChip } from './platforms/PlatformChip';
 import { RevertApplyDialog } from './RevertApplyDialog';
 
 type OptimizerActionFeedProps = {
@@ -108,12 +111,16 @@ export function ActionRow({
   currency: string | null;
 }) {
   const change = readActionChange(row);
+  const platform = actionPlatform(row);
   const receipt = readReceiptTrace(row);
   const revert = revertState(row);
 
   return (
     <li className="flex items-start gap-3 rounded-lg border border-border/70 bg-card px-4 py-3">
-      <FamilyBadge family={row.family} />
+      <div className="flex shrink-0 flex-col items-start gap-1">
+        <FamilyBadge family={row.family} />
+        <PlatformChip platform={platform} />
+      </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
@@ -147,7 +154,7 @@ export function ActionRow({
             <span className="font-medium text-foreground">Why:</span> {row.justification}
           </p>
         ) : null}
-        {receipt ? <ReceiptToken value={receipt} className="text-xs" /> : null}
+        {receipt ? <ReceiptToken value={receipt} platform={platform} className="text-xs" /> : null}
       </div>
     </li>
   );

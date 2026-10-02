@@ -37,6 +37,17 @@ export function parsePlatformTab(raw: string | null): PlatformTab {
  */
 export const OPTIMIZER_MANAGED_PLATFORM: AdPlatform = 'meta';
 
+/** The platforms a portfolio holds. PortfolioListItem carries no `platforms` yet, and every
+ *  portfolio the engine runs is on OPTIMIZER_MANAGED_PLATFORM. When the list item gains
+ *  `platforms[]` (derived from its members), read it there and delete this. */
+export const OPTIMIZER_PORTFOLIO_PLATFORMS: readonly AdPlatform[] = [OPTIMIZER_MANAGED_PLATFORM];
+
+/** A loose read-model value (a jsonb field, a row the contract has not caught up with) as one
+ *  of the canonical platform ids, or null when it names none of them. */
+export function readAdPlatform(raw: unknown): AdPlatform | null {
+  return AD_PLATFORMS.find((platform) => platform === raw) ?? null;
+}
+
 /** list_brand_ad_accounts spells Meta `meta_ads` and Google `google_ads`; it has no TikTok row. */
 function accountPlatform(account: AdAccount): AdPlatform | null {
   if (account.platform === 'meta_ads' || account.platform === 'meta') return 'meta';

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import type { OptimizerActionFeedRow } from '../useOptimizerData';
 import {
+  actionPlatform,
   actorLabel,
   readActionChange,
   readReceiptTrace,
@@ -101,10 +102,32 @@ describe('actorLabel', () => {
   });
 });
 
+describe('actionPlatform', () => {
+  it('reads the row platform, and Meta when it is absent or unknown', () => {
+    expect(actionPlatform(action({ platform: 'google_ads' }))).toBe('google_ads');
+    expect(actionPlatform(action({ platform: 'tiktok_ads' }))).toBe('tiktok_ads');
+    expect(actionPlatform(action())).toBe('meta');
+    expect(actionPlatform(action({ platform: 'snapchat' }))).toBe('meta');
+  });
+});
+
 describe('readReceiptTrace', () => {
   it('finds the Meta trace id whichever key the applier stored it under', () => {
     expect(readReceiptTrace(action({ receipt: { fbtrace_id: 'AbC1' } }))).toBe('AbC1');
     expect(readReceiptTrace(action({ receipt: { fbtraceId: 'AbC2' } }))).toBe('AbC2');
+  });
+
+  it('reads the receipt of each platform under its own key', () => {
+    expect(
+      readReceiptTrace(action({ platform: 'google_ads', receipt: { requestId: 'g-1', id: 'x' } })),
+    ).toBe('g-1');
+    expect(
+      readReceiptTrace(action({ platform: 'tiktok_ads', receipt: { request_id: 't-1' } })),
+    ).toBe('t-1');
+    // A Google row never borrows Meta's fbtrace key.
+    expect(
+      readReceiptTrace(action({ platform: 'google_ads', receipt: { fbtrace_id: 'AbC1' } })),
+    ).toBeNull();
   });
 
   it('is null when there is no receipt', () => {

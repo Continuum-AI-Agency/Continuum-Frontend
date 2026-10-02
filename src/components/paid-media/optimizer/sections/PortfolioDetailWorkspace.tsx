@@ -103,6 +103,7 @@ import {
 import { OptimizerPanel } from './OptimizerPanel';
 import { OptimizerReadError } from './OptimizerReadError';
 import { PortfolioManagePanel } from './PortfolioManagePanel';
+import { OPTIMIZER_PORTFOLIO_PLATFORMS } from './platforms/platformTabsModel';
 import { isStale } from './portfolioStaleness';
 import { RunOutcomeNotice } from './RunOutcomeNotice';
 import { SignalReadinessCard } from './SignalReadinessCard';
@@ -666,6 +667,7 @@ export function PortfolioDetailWorkspace({
             )}
             header={{
               header: heroHeader,
+              platforms: OPTIMIZER_PORTFOLIO_PLATFORMS,
               onEditSetting,
               onSecondary,
               secondaryPending: setPaused.isPending,

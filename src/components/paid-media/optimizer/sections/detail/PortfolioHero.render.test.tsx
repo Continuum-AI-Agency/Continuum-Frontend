@@ -449,6 +449,7 @@ function wholeHero(
       explainHref="#"
       header={{
         header,
+        platforms: ['meta'],
         onEditSetting: (setting) => handlers.edits?.push(setting),
         onSecondary: () => undefined,
         onRun: () => handlers.runs?.push(1),
@@ -763,4 +764,32 @@ describe('PortfolioHero — a stale portfolio is promised an attempt, not a cycl
     expect(text).toMatch(/As of Aug [45].* · next attempt Sep 2[34]/);
     expect(text).not.toContain('next cycle');
   });
+});
+
+// The header line names the platforms the portfolio holds (frontend.html §7, feature 02):
+// a chip beside the name, never inside a figure, and no figure painted a platform colour.
+describe('PortfolioHero — the header names its platforms', () => {
+  it('shows the Meta chip on the header line, beside the name', () => {
+    const { container } = wholeHero('formularios');
+    const header = container.querySelector('[data-testid="portfolio-header"]');
+    const chips = Array.from(header?.querySelectorAll('[data-testid="platform-chip"]') ?? []);
+    expect(chips.map((chip) => chip.getAttribute('data-platform'))).toEqual(['meta']);
+    expect(chips.map((chip) => chip.textContent)).toEqual(['Meta']);
+    expect(chips[0]?.getAttribute('data-token')).toBe('--platform-meta');
+    const name = header?.querySelector('h3');
+    expect(follows(name, chips[0])).toBe(true);
+  });
+
+  for (const name of ['formularios', 'prueba', 'mensajes', 'tours'] as const) {
+    it(`${name}: no chip inside a figure, and no figure in a platform colour`, () => {
+      const { container } = wholeHero(name);
+      const figures = Array.from(container.querySelectorAll('[data-figure-role]'));
+      expect(figures.length).toBeGreaterThan(0);
+      for (const figure of figures) {
+        expect(figure.querySelector('[data-testid="platform-chip"]')).toBeNull();
+        expect(figure.outerHTML).not.toMatch(/platform-(meta|google|tiktok)/);
+      }
+      expect(container.querySelectorAll('[data-testid="platform-chip"]')).toHaveLength(1);
+    });
+  }
 });
