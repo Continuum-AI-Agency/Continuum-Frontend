@@ -411,11 +411,20 @@ export function EditWorkspace({
     () => quickOp('Auto-captions', () => runOp('set_captions', {})),
     [quickOp, runOp],
   );
-  const cutOnBeat = useCallback(
-    () =>
-      quickOp('Quick cuts', () => runOp('beat_cut', { mode: 'switch_shots', everyNBeats: 0.5 })),
-    [quickOp, runOp],
-  );
+  const cutOnBeat = useCallback(() => {
+    const primary = projectRef.current.tracks
+      .filter((track) => track.kind === 'video' && track.enabled)
+      .sort((a, b) => a.order - b.order)[0];
+    const selected = primary?.clips.filter((clip) => selectionRef.current.includes(clip.id)) ?? [];
+    const sources = selected.length ? selected : (primary?.clips ?? []);
+    return quickOp('Quick cuts', () =>
+      runOp('beat_cut', {
+        mode: sources.length === 1 ? 'jump_cuts' : 'switch_shots',
+        everyNBeats: 0.5,
+        clipIds: sources.map((clip) => clip.id),
+      }),
+    );
+  }, [quickOp, runOp]);
   const setFormat = useCallback(
     (preset: PlatformExportPresetId) =>
       quickOp(`Format: ${PLATFORM_EXPORT_PRESETS[preset].label}`, () =>

@@ -488,11 +488,11 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      'Make a rhythmic montage: switch_shots alternates at least two distinct source spans while keeping the original audio continuous. everyNBeats 0.5 or 0.25 makes rapid half/quarter-beat cuts. cut_on_beat only splits continuous footage for edit preparation. An explicit audioClipId redetects beats from that audio.',
+      'Make rhythmic cuts: jump_cuts skips footage from one forward, unanimated primary clip and shortens the timeline. It protects speech/captions and keeps music-bed audio continuous; speech protection can prevent cuts. Reversed, ramped or animated clips in the affected range are refused until their curves can be preserved. switch_shots alternates at least two distinct source spans with original audio continuous. everyNBeats 0.5 or 0.25 makes half/quarter-beat cuts. cut_on_beat only splits for edit preparation. audioClipId redetects the beat source; it does not label narration as music.',
     input: z
       .object({
         ...projectRef,
-        mode: z.enum(['cut_on_beat', 'switch_shots']).default('switch_shots'),
+        mode: z.enum(['cut_on_beat', 'switch_shots', 'jump_cuts']).default('switch_shots'),
         everyNBeats: z
           .number()
           .finite()
@@ -511,7 +511,7 @@ export const VIDEO_EDITOR_OPS = {
         range: timelineRangeSchema.optional(),
       })
       .strict(),
-    output: committed({ cuts: z.array(secSchema) }),
+    output: committed({ cuts: z.array(secSchema), removedSec: secSchema.optional() }),
   },
   collage: {
     group: 'motion',
