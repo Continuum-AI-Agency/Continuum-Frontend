@@ -99,6 +99,16 @@ export function CompetitorOrganicExplorer({
       ? SEARCH_ERROR_COPY[instagramLookupErrorKind(search.error)]
       : null;
 
+  // Tracked-feed staleness: the rows are served for metrics, but their IG CDN
+  // preview URLs expired because the last sync failed. Banner the connection
+  // fault so a dead tile reads as actionable, not broken.
+  const syncFaults = youtube ? [] : (feed.data?.syncFaults ?? []);
+  const firstFault = syncFaults[0];
+  const syncFaultNotice =
+    !isSearching && !feed.isLoading && firstFault
+      ? `Live previews for ${syncFaults.map((fault) => `@${fault.instagramUsername}`).join(', ')} are unavailable. ${SEARCH_ERROR_COPY[firstFault.kind]}`
+      : null;
+
   const submit = () => {
     const clean = input.replace(/^@/, '').trim();
     if (clean.length < 2) return;
@@ -149,6 +159,12 @@ export function CompetitorOrganicExplorer({
         </p>
       ) : null}
 
+      {syncFaultNotice ? (
+        <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-muted-foreground">
+          {syncFaultNotice}
+        </p>
+      ) : null}
+
       {searchError ? (
         <p className="rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
           {searchError}
@@ -157,7 +173,7 @@ export function CompetitorOrganicExplorer({
         <FilterablePostGrid
           brandId={brandId}
           showFilters={!compact}
-          views={isSearching ? searchViews : (feed.data ?? [])}
+          views={isSearching ? searchViews : (feed.data?.items ?? [])}
           isLoading={isSearching ? search.isLoading : feed.isLoading}
           isError={isSearching ? false : feed.isError}
           gridClassName={gridClassName}
