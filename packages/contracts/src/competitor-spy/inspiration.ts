@@ -107,8 +107,33 @@ export type InspirationSort = z.infer<typeof inspirationSortSchema>;
 
 // GET /api/competitor-ad-spy/instagram/posts?brandId&competitorId?&limit?&sort?&platform?
 // (platform defaults to instagram; the path predates YouTube).
+//
+// `syncFaults` names the tracked competitors whose persisted window is too
+// stale to show live previews (IG CDN URLs expire after a few days) because
+// their last sync failed. The read path still serves their rows for metrics;
+// the UI banners these so a dead tile reads as a connection fault, not a bug.
+export const organicSyncFaultKindSchema = z.enum([
+  'account_required',
+  'permission_denied',
+  'facebook_login_required',
+  'not_found',
+  'generic',
+]);
+export type OrganicSyncFaultKind = z.infer<typeof organicSyncFaultKindSchema>;
+
+export const organicSyncFaultSchema = z.object({
+  competitorId: z.string().uuid(),
+  competitorName: z.string(),
+  // Same ponytail as competitorInspirationPostSchema: the account handle on
+  // post.platform, kept under this name for consistency across the surface.
+  instagramUsername: z.string(),
+  kind: organicSyncFaultKindSchema,
+});
+export type OrganicSyncFault = z.infer<typeof organicSyncFaultSchema>;
+
 export const inspirationPostsResponseSchema = z.object({
   items: z.array(competitorInspirationPostSchema),
+  syncFaults: z.array(organicSyncFaultSchema).default([]),
 });
 export type InspirationPostsResponse = z.infer<typeof inspirationPostsResponseSchema>;
 

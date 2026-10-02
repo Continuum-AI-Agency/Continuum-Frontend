@@ -12,7 +12,7 @@
 
 export type PlannerUrlState = {
   view?: 'week' | 'month' | 'list';
-  tab?: 'planner' | 'metrics' | 'agent' | 'review' | 'styles';
+  tab?: 'planner' | 'metrics' | 'explore' | 'agent' | 'review' | 'styles';
   /** null REMOVES the param — a dismissed preview panel must not leave a deep link behind. */
   draftId?: string | null;
   edit?: string | null;
