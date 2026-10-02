@@ -8,7 +8,6 @@ import {
   type EditorTrack,
   type EditorVideoClip,
   motionRecipeFromClip,
-  parentPositionDelta,
   parseMotionRecipe,
 } from '@continuum/contracts';
 import {
@@ -28,7 +27,11 @@ import { useElementMutations, useElements } from '@/lib/ai-studio/elements';
 import { clipEffectSpecFromEditorClip } from '@/lib/client-render/executors/timelineEditor';
 import { captionAnimationFromEditorId, captionMotionTransform } from '@/lib/clips/captionAnimation';
 import type { TimelineInputSource, TimelineItem } from '../../types';
-import { clipEffectsToCss, type ResolvedTextOverlay } from '../../utils/render/effectSpec';
+import {
+  clipEffectsToCss,
+  type ResolvedTextOverlay,
+  resolveTransformAt,
+} from '../../utils/render/effectSpec';
 import { mergeClipShaderEffects } from '../../utils/render/shaderStack';
 import { AUDIO_DROP_ID, AudioTracks } from './AudioTracks';
 import { MediaOverlayEditor } from './assembly/MediaOverlayEditor';
@@ -201,7 +204,7 @@ export function EditorProjectV2Assembly({
   const activeEffectTimeSec = active ? Math.max(0, playback.playheadSec - active.startSec) : 0;
   const activeEffects = activeVideoClip
     ? mergeClipShaderEffects(
-        clipEffectSpecFromEditorClip(activeVideoClip),
+        clipEffectSpecFromEditorClip(activeVideoClip, viewProject),
         poolSourceForClip(activeVideoClip, pool)?.shaderStack,
       )
     : undefined;
@@ -229,11 +232,16 @@ export function EditorProjectV2Assembly({
         outputTimeSec: playback.playheadSec,
         fontPx: clip.style.fontSizePx,
       });
+      const spec = clipEffectSpecFromEditorClip(clip, viewProject);
+      const at = resolveTransformAt(
+        spec,
+        (playback.playheadSec - clip.timelineStartSec) / clip.durationSec,
+      );
       return {
         id: clip.id,
         text: clip.text,
-        xFrac: clip.transform.position.x,
-        yFrac: clip.transform.position.y,
+        xFrac: 0.5 + at.offsetX,
+        yFrac: 0.5 + at.offsetY,
         sizeFrac: clip.style.fontSizePx / project.canvas.height,
         color: clip.style.color,
         background: clip.style.backgroundColor,
@@ -261,18 +269,13 @@ export function EditorProjectV2Assembly({
       return null;
     const effectTimeSec = playheadSec - clip.timelineStartSec;
     const effects = mergeClipShaderEffects(
-      clipEffectSpecFromEditorClip(clip),
+      clipEffectSpecFromEditorClip(clip, space),
       poolSourceForClip(clip, pool)?.shaderStack,
     );
     const css = clipEffectsToCss(
       effects,
       clip.durationSec > 0 ? effectTimeSec / clip.durationSec : 0,
     );
-    const parentDelta = parentPositionDelta(space, clip.id, playheadSec);
-    const parentTranslate =
-      parentDelta.x || parentDelta.y
-        ? `translate(${parentDelta.x * 100}%, ${parentDelta.y * 100}%)`
-        : '';
     return {
       id: clip.id,
       kind: clip.mediaKind === 'video' ? 'video' : 'image',
@@ -285,7 +288,6 @@ export function EditorProjectV2Assembly({
       effectTimeSec,
       mediaStyle: {
         ...css,
-        transform: [parentTranslate, css.transform].filter(Boolean).join(' ') || undefined,
         transformOrigin: `${clip.transform.anchorX * 100}% ${clip.transform.anchorY * 100}%`,
       },
       textOverlays: [],

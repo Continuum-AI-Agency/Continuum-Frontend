@@ -658,7 +658,11 @@ export function deleteClipsEdit(
       (transition) => !removing.has(transition.fromClipId) && !removing.has(transition.toClipId),
     );
     const order = orderedVideoClips(main).filter((clip) => !removing.has(clip.id));
-    forward.push(...repackMain(transitions, main.id, order));
+    forward.push(
+      ...repackMain(transitions, main.id, order).map((command) =>
+        command.commandType === 'move_clip' ? { ...command, preserveParentMotion: true } : command,
+      ),
+    );
   }
   for (const track of project.tracks) {
     if (track.id === main?.id || track.locked || !isLaneKind(track.kind)) continue;
@@ -684,6 +688,7 @@ export function deleteClipsEdit(
           fromTrackId: track.id,
           toTrackId: track.id,
           timelineStartSec: Math.max(0, clip.timelineStartSec - shift),
+          preserveParentMotion: true,
         });
       }
     }

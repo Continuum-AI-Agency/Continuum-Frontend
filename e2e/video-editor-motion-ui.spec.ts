@@ -52,6 +52,7 @@ const BENCH = 'videoeditor:motion:e2e:bench';
 const LOCAL_CURVE_JOURNEY = process.env.VIDEO_EDITOR_CURVE_JOURNEY_LOCAL === '1';
 const SPEECH_JOURNEY = process.env.VIDEO_EDITOR_SPEECH_JOURNEY === '1';
 const TEXT_JOURNEY = process.env.VIDEO_EDITOR_TEXT_JOURNEY === '1';
+const PARENT_JOURNEY = process.env.VIDEO_EDITOR_PARENT_JOURNEY === '1';
 const BRAND =
   process.env.CONTINUUM_TEST_BRAND_ID ??
   (LOCAL_CURVE_JOURNEY
@@ -1084,9 +1085,11 @@ test('retained project journey: native splits and deletes preserve stored pictur
   const proof = createBenchRecorder(
     SPEECH_JOURNEY
       ? 'videoeditor:motion:e2e:bench:speech-jumps'
-      : TEXT_JOURNEY
-        ? 'videoeditor:motion:e2e:bench:retained-text'
-        : 'videoeditor:motion:e2e:bench:retained-project',
+      : PARENT_JOURNEY
+        ? 'videoeditor:motion:e2e:bench:retained-parent'
+        : TEXT_JOURNEY
+          ? 'videoeditor:motion:e2e:bench:retained-text'
+          : 'videoeditor:motion:e2e:bench:retained-project',
     [],
   );
   proof.notes.push(
@@ -1799,7 +1802,26 @@ test('retained project journey: native splits and deletes preserve stored pictur
                   volume: 0.6,
                   fadeInSec: 3,
                   fadeOutSec: 3,
-                  keyframes: keys,
+                  ...(PARENT_JOURNEY ? { parentClipId: `driver-${interpolation}` } : {}),
+                  keyframes: PARENT_JOURNEY
+                    ? [
+                        ...keys,
+                        {
+                          id: 'move-a',
+                          property: 'transform.position',
+                          timeSec: 0,
+                          value: { x: 0.5, y: 0.5 },
+                          interpolation: 'linear',
+                        },
+                        {
+                          id: 'move-b',
+                          property: 'transform.position',
+                          timeSec: 4,
+                          value: { x: 0.62, y: 0.5 },
+                          interpolation: 'linear',
+                        },
+                      ]
+                    : keys,
                 },
               ],
             },
@@ -1820,6 +1842,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
                         timelineStartSec: 0,
                         durationSec: 4,
                         text: 'KEEP THE CLOCK',
+                        ...(PARENT_JOURNEY ? { parentClipId: `source-${interpolation}` } : {}),
                         style: {
                           fontFamily: 'Arial',
                           fontSizePx: 64,
@@ -1835,6 +1858,54 @@ test('retained project journey: native splits and deletes preserve stored pictur
                         }[interpolation],
                         animationOut: 'wipe',
                         keyframes: keys.filter((key) => key.property === 'transform.opacity'),
+                      },
+                    ],
+                  },
+                },
+              ]
+            : []),
+          ...(PARENT_JOURNEY
+            ? [
+                {
+                  commandType: 'add_track',
+                  track: {
+                    id: `driver-track-${interpolation}`,
+                    name: 'Parent clock driver',
+                    kind: 'text',
+                    order: 2,
+                    enabled: false,
+                    clips: [
+                      {
+                        id: `driver-${interpolation}`,
+                        kind: 'text',
+                        text: 'MOTION',
+                        timelineStartSec: 0.5,
+                        durationSec: 1,
+                        enabled: false,
+                        style: {
+                          fontFamily: 'Arial',
+                          fontSizePx: 64,
+                          fontWeight: 700,
+                          color: '#ffffff',
+                        },
+                        keyframes: [
+                          {
+                            id: 'driver-a',
+                            property: 'transform.position',
+                            timeSec: 0,
+                            value: { x: 0.5, y: 0.5 },
+                            interpolation: 'bezier',
+                            easing: { x1: 0.42, y1: 0, x2: 0.58, y2: 1 },
+                            expression: 'wiggle(0.7, 0.02)',
+                          },
+                          {
+                            id: 'driver-b',
+                            property: 'transform.position',
+                            timeSec: 3,
+                            value: { x: 0.5, y: 0.6 },
+                            interpolation: 'linear',
+                          },
+                        ],
                       },
                     ],
                   },
@@ -1952,9 +2023,9 @@ test('retained project journey: native splits and deletes preserve stored pictur
         if (!clip) throw new Error(`Retained source span ${sourceInSec} missing`);
         await selectClip(page, clip.id);
         if (TEXT_JOURNEY) {
-          const title = textClips(current).find((item) =>
-            near(item.timelineStartSec, clip.timelineStartSec, 1 / 60),
-          );
+          const title = textClips(current)
+            .filter((item) => item.enabled)
+            .find((item) => near(item.timelineStartSec, clip.timelineStartSec, 1 / 60));
           if (!title) throw new Error('Matching text piece missing');
           await page
             .locator(`[data-clip-id="${title.id}"]:visible`)
@@ -2001,9 +2072,9 @@ test('retained project journey: native splits and deletes preserve stored pictur
         ),
       );
       if (TEXT_JOURNEY) {
-        const titles = textClips(edited).toSorted(
-          (a, b) => a.timelineStartSec - b.timelineStartSec,
-        );
+        const titles = textClips(edited)
+          .filter((item) => item.enabled)
+          .toSorted((a, b) => a.timelineStartSec - b.timelineStartSec);
         assert(
           `${interpolation}: deleting matching picture and text ranges ripples each lane once`,
           titles.length === 2 &&
@@ -2153,6 +2224,89 @@ test('retained project journey: native splits and deletes preserve stored pictur
         previewErrors.every((error) => error < 0.02),
         JSON.stringify(previewErrors),
       );
+      if (PARENT_JOURNEY) {
+        const drivers =
+          edited.tracks.find((track) => track.id === `driver-track-${interpolation}`)?.clips ?? [];
+        assert(
+          `${interpolation}: live ancestor remains editable without copied fallback curves`,
+          drivers.length > 0 &&
+            retained.every((clip) =>
+              clip.parentMotionBinding?.ancestors.every(
+                (ancestor) => ancestor.fallback === undefined,
+              ),
+            ),
+        );
+        await selectClip(page, drivers[0]!.id);
+        for (const driver of drivers.slice(1))
+          await page
+            .locator(`[data-clip-id="${driver.id}"]:visible`)
+            .click({ modifiers: ['Shift'] });
+        await page.locator(`[data-clip-id="${drivers[0]!.id}"]:visible`).click({ button: 'right' });
+        await page.getByRole('menuitem', { name: 'Delete, leave gap', exact: true }).click();
+        const withoutParent = await until(
+          () => getProject(api, projectId),
+          (value) =>
+            value.tracks.find((track) => track.id === `driver-track-${interpolation}`)?.clips
+              .length === 0,
+        );
+        assert(
+          `${interpolation}: native complete ancestor removal retains full fallback motion`,
+          mainClips(withoutParent).every(
+            (clip) =>
+              !clip.parentClipId &&
+              clip.parentMotionBinding?.ancestors.every(
+                (ancestor) => ancestor.fallback?.keyframes.length === 2,
+              ),
+          ),
+        );
+        await page.reload();
+        await expect(page.locator('[data-clip-kind="video"]:visible')).toHaveCount(2, {
+          timeout: 30_000,
+        });
+        const reloadedParentRemoval = await getProject(api, projectId);
+        assert(
+          `${interpolation}: reload preserves the exact parent-removal document`,
+          JSON.stringify(reloadedParentRemoval.tracks) === JSON.stringify(withoutParent.tracks),
+        );
+        const removedPreviewErrors = [];
+        for (const [index, sec] of [0.2, 0.7, 1.2, 1.7].entries()) {
+          const actual = await titlePreview(sec, `parent-removed-${index}`);
+          const expected = baselineTitles[index]!;
+          removedPreviewErrors.push(
+            actual.length === expected.length
+              ? actual.reduce((max, value, i) => Math.max(max, Math.abs(value - expected[i]!)), 0)
+              : Infinity,
+          );
+        }
+        assert(
+          `${interpolation}: native title pixels survive complete ancestor removal`,
+          removedPreviewErrors.every((error) => error <= 1),
+          JSON.stringify(removedPreviewErrors),
+        );
+        const parentRemovedPath = join(folder, `${interpolation}-parent-removed.mp4`);
+        await render(reloadedParentRemoval, parentRemovedPath);
+        const removedFrameErrors = [0.25, 0.75, 1.25, 1.75].map((sec) => {
+          const actual = frame(parentRemovedPath, sec),
+            expected = frame(actualPath, sec);
+          return actual.length && actual.length === expected.length
+            ? actual.reduce((sum, value, i) => sum + Math.abs(value - expected[i]!), 0) /
+                actual.length
+            : Infinity;
+        });
+        assert(
+          `${interpolation}: encoded picture survives complete ancestor removal`,
+          removedFrameErrors.every((error) => error < 4),
+          JSON.stringify(removedFrameErrors),
+        );
+        writeFileSync(
+          join(folder, `${interpolation}-parent-removal-readback.json`),
+          JSON.stringify(
+            { project: reloadedParentRemoval, removedPreviewErrors, removedFrameErrors },
+            null,
+            2,
+          ),
+        );
+      }
       const undo = await postOp(api, projectId, 'undo', { toRevision: before.revision });
       const restored = await getProject(api, projectId);
       assert(

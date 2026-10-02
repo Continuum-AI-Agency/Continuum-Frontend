@@ -331,6 +331,43 @@ export type EditorAudioFadeClock = z.infer<typeof editorAudioFadeClockSchema>;
 export const editorTextAnimationClockSchema = editorClipClockSchema;
 export type EditorTextAnimationClock = z.infer<typeof editorTextAnimationClockSchema>;
 
+const parentMotionTimeSchema = z.number().finite().min(-86_400).max(86_400);
+export const editorParentMotionBindingSchema = z
+  .object({
+    childStartSec: secondsSchema,
+    ancestors: z
+      .array(
+        z
+          .object({
+            clipId: editorIdSchema,
+            startOffsetSec: parentMotionTimeSchema,
+            keyframeOffsetSec: parentMotionTimeSchema,
+            ancestorStartSec: secondsSchema,
+            ancestorKeyframeOffsetSec: parentMotionTimeSchema,
+            // Only removed ancestors need a copy; surviving curves remain editable.
+            fallback: z
+              .object({
+                position: z.object({ x: z.number().finite(), y: z.number().finite() }).strict(),
+                keyframes: z
+                  .array(
+                    editorKeyframeSchema.refine(
+                      (key) => key.property === 'transform.position',
+                      'parent motion fallback requires position keys',
+                    ),
+                  )
+                  .max(500),
+              })
+              .strict()
+              .optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(100),
+  })
+  .strict();
+export type EditorParentMotionBinding = z.infer<typeof editorParentMotionBindingSchema>;
+
 const editorClipBaseShape = {
   id: editorIdSchema,
   name: z.string().min(1).max(500).optional(),
@@ -340,6 +377,7 @@ const editorClipBaseShape = {
   locked: z.boolean().default(false),
   tags: z.array(z.string().min(1).max(100)).max(40).default([]),
   parentClipId: editorIdSchema.optional(),
+  parentMotionBinding: editorParentMotionBindingSchema.optional(),
   /** Retained automation stays on its original clip clock after a split or range cut. */
   keyframeOffsetSec: z.number().finite().min(-86_400).max(86_400).optional(),
 };
@@ -1185,6 +1223,8 @@ export const editorCommandSchema = z.discriminatedUnion('commandType', [
       fromTrackId: editorIdSchema,
       toTrackId: editorIdSchema,
       timelineStartSec: secondsSchema,
+      /** Ripple moves retain source motion; intentional moves follow project time. */
+      preserveParentMotion: z.boolean().optional(),
     })
     .strict(),
   z

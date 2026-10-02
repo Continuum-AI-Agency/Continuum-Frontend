@@ -5,7 +5,13 @@
 // (plain JSON, no React) so it serializes into the canvas node blob + the
 // splice worker message, and so it is unit-testable.
 
-import { type EditorCrop, type ShaderStackV1, sampleNumericTrack } from '@continuum/contracts';
+import {
+  type EditorCrop,
+  type EditorParentPositionTrack,
+  type ShaderStackV1,
+  sampleNumericTrack,
+  sampleParentPositionTracks,
+} from '@continuum/contracts';
 
 export interface ClipAdjustments {
   /** 1 = unchanged. Maps to CSS/canvas `brightness()`. */
@@ -134,6 +140,7 @@ export interface ClipEffectSpec {
   /** Original automation clock in seconds; absent for legacy normalized specs. */
   motionDurationSec?: number;
   keyframeOffsetSec?: number;
+  parentPositionTracks?: EditorParentPositionTrack[];
   /** Playback rate, 1 = normal. >1 faster, <1 slower. Video only. */
   speed?: number;
   text?: TextOverlay[];
@@ -380,7 +387,7 @@ function lerpTransform(
   };
 }
 
-export function resolveTransformAt(
+function resolveLocalTransformAt(
   spec: ClipEffectSpec | undefined,
   u: number,
 ): ResolvedClipTransform {
@@ -435,6 +442,20 @@ export function resolveTransformAt(
     return lerpTransform(from, to, k);
   }
   return resolveTransform(spec?.transform);
+}
+
+/** Child geometry and inherited parent motion share the preview/export evaluator. */
+export function resolveTransformAt(
+  spec: ClipEffectSpec | undefined,
+  u: number,
+): ResolvedClipTransform {
+  const local = resolveLocalTransformAt(spec, u);
+  if (!spec?.parentPositionTracks?.length) return local;
+  const parent = sampleParentPositionTracks(
+    spec.parentPositionTracks,
+    Math.max(0, Math.min(1, u)) * (spec.motionDurationSec ?? 1),
+  );
+  return { ...local, offsetX: local.offsetX + parent.x, offsetY: local.offsetY + parent.y };
 }
 
 /** CSS/canvas filter string (same syntax on both). Empty when nothing to apply. */
@@ -621,6 +642,7 @@ export function hasVisualEffects(spec: ClipEffectSpec | undefined): boolean {
       spec.flipV ||
       (spec.blendMode && spec.blendMode !== 'normal') ||
       spec.kenBurns ||
+      spec.parentPositionTracks?.length ||
       (spec.keyframes && spec.keyframes.length >= 2) ||
       spec.text?.length ||
       // EVERY draw-time effect must be listed here or `drawClipFrame` takes its

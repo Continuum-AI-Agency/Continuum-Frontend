@@ -2,9 +2,11 @@ import {
   CANVAS_MEDIA_SIGN_MAX_ITEMS,
   CANVAS_MEDIA_SIGN_ROUTE,
   type CanvasMediaSignResponse,
+  type EditorParentMotionBinding,
   type EditorProjectV2,
   type EditorTextClip,
   type EditorTransition,
+  parentPositionTracks,
 } from '@continuum/contracts';
 import { request } from '@/lib/api/http';
 import { captionAnimationFromEditorId } from '@/lib/clips/captionAnimation';
@@ -215,32 +217,44 @@ const motionChannelsFor = (clip: {
  * instances, this reads them; changing one without the other reopens the gap where
  * `chroma_key` sat in the schema for a whole release and never moved a pixel.
  */
-export const clipEffectSpecFromEditorClip = (clip: {
-  timelineStartSec: number;
-  durationSec: number;
-  playbackRate?: number;
-  transform?: {
-    position: { x: number; y: number };
-    scaleX: number;
-    scaleY: number;
-    rotationDeg: number;
-    rotateXDeg?: number;
-    rotateYDeg?: number;
-    perspective?: number;
-    opacity: number;
-  };
-  crop?: ClipEffectSpec['crop'];
-  blendMode?: ClipEffectSpec['blendMode'];
-  effects?: Array<{
-    enabled: boolean;
-    effectType: string;
-    effectId: string;
-    mix?: number;
-    parameters: Record<string, unknown>;
-  }>;
-  keyframes?: EditorClipKeyframe[];
-  keyframeOffsetSec?: number;
-}): ClipEffectSpec => ({
+export const clipEffectSpecFromEditorClip = (
+  clip: {
+    id?: string;
+    parentClipId?: string;
+    parentMotionBinding?: EditorParentMotionBinding;
+    timelineStartSec: number;
+    durationSec: number;
+    playbackRate?: number;
+    transform?: {
+      position: { x: number; y: number };
+      scaleX: number;
+      scaleY: number;
+      rotationDeg: number;
+      rotateXDeg?: number;
+      rotateYDeg?: number;
+      perspective?: number;
+      opacity: number;
+    };
+    crop?: ClipEffectSpec['crop'];
+    blendMode?: ClipEffectSpec['blendMode'];
+    effects?: Array<{
+      enabled: boolean;
+      effectType: string;
+      effectId: string;
+      mix?: number;
+      parameters: Record<string, unknown>;
+    }>;
+    keyframes?: EditorClipKeyframe[];
+    keyframeOffsetSec?: number;
+  },
+  project?: EditorProjectV2,
+): ClipEffectSpec => ({
+  ...(project && clip.id && (clip.parentClipId || clip.parentMotionBinding)
+    ? {
+        parentPositionTracks: parentPositionTracks(project, clip.id),
+        motionDurationSec: clip.durationSec,
+      }
+    : {}),
   ...(clip.keyframes?.length
     ? { motionDurationSec: clip.durationSec, keyframeOffsetSec: clip.keyframeOffsetSec }
     : {}),
@@ -409,13 +423,23 @@ const transitionFor = (transition: EditorTransition | undefined): ClipTransition
 };
 
 /** The part of a clip's render spec that moves a text clip: transform, opacity, keyframes. */
-const textMotionFor = (clip: Parameters<typeof clipEffectSpecFromEditorClip>[0]) => {
-  const { transform, opacity, motionChannels, motionDurationSec, keyframeOffsetSec } =
-    clipEffectSpecFromEditorClip(clip);
+const textMotionFor = (
+  clip: Parameters<typeof clipEffectSpecFromEditorClip>[0],
+  project?: EditorProjectV2,
+) => {
+  const {
+    transform,
+    opacity,
+    motionChannels,
+    motionDurationSec,
+    keyframeOffsetSec,
+    parentPositionTracks,
+  } = clipEffectSpecFromEditorClip(clip, project);
   return {
     ...(transform ? { transform } : {}),
     ...(opacity !== undefined ? { opacity } : {}),
     ...(motionChannels ? { motionChannels, motionDurationSec, keyframeOffsetSec } : {}),
+    ...(parentPositionTracks?.length ? { parentPositionTracks, motionDurationSec } : {}),
   };
 };
 
@@ -474,7 +498,11 @@ const TEXT_SHADOW_OFFSET_FRAC = 0.06;
  * its transform and keyframes, which move the whole line as they move a video clip. The one
  * mapping — the export plan and the workspace stage both draw text through it.
  */
-export function textCueFor(clip: EditorTextClip, canvasHeight: number): CaptionCue {
+export function textCueFor(
+  clip: EditorTextClip,
+  canvasHeight: number,
+  project?: EditorProjectV2,
+): CaptionCue {
   const endSec = clip.timelineStartSec + clip.durationSec;
   return {
     id: clip.id,
@@ -487,7 +515,7 @@ export function textCueFor(clip: EditorTextClip, canvasHeight: number): CaptionC
       animation: captionAnimationFromEditorId(clip.animationIn),
       exitAnimation: captionAnimationFromEditorId(clip.animationOut),
     },
-    motion: textMotionFor(clip),
+    motion: textMotionFor(clip, project),
   };
 }
 
@@ -660,7 +688,7 @@ export async function buildTimelineEditorRenderPlan(input: {
       audioFadeOutSec: clip.fadeOutSec,
       volumeKeyframes: volumeKeyframesOf(clip.keyframes),
       keyframeOffsetSec: clip.keyframeOffsetSec,
-      effects: effectsFor(clip),
+      effects: effectsFor(clip, input.project),
       transition: transitionFor(incomingTransitionByClip.get(clip.id)),
     })),
   );
@@ -722,7 +750,7 @@ export async function buildTimelineEditorRenderPlan(input: {
           : {}),
         durationSec: clip.durationSec,
         muteAudio: true,
-        effects: effectsFor(clip),
+        effects: effectsFor(clip, input.project),
       })),
   );
 
@@ -782,7 +810,7 @@ export async function buildTimelineEditorRenderPlan(input: {
   for (const track of input.project.tracks.filter(isTextTrack)) {
     if (!track.enabled || track.muted) continue;
     for (const clip of track.clips.filter((candidate) => candidate.enabled)) {
-      captionCues.push(textCueFor(clip, input.project.canvas.height));
+      captionCues.push(textCueFor(clip, input.project.canvas.height, input.project));
     }
   }
   captionCues.sort((left, right) => left.startSec - right.startSec);

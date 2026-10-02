@@ -4,11 +4,7 @@ import type {
   EditorProjectV2,
   EditorTextClip,
 } from '@continuum/contracts';
-import {
-  nestedChildTimeSec,
-  parentPositionDelta,
-  resolveNestedSequence,
-} from '@continuum/contracts';
+import { nestedChildTimeSec, resolveNestedSequence } from '@continuum/contracts';
 import type { CSSProperties } from 'react';
 import { clipEffectSpecFromEditorClip } from '@/lib/client-render/executors/timelineEditor';
 import { clipEffectsToCss } from '../../utils/render/effectSpec';
@@ -21,13 +17,9 @@ export function nestedInstanceStyle(
 ): CSSProperties {
   const local = Math.max(0, playheadSec - clip.timelineStartSec);
   const u = clip.durationSec > 0 ? local / clip.durationSec : 0;
-  const css = clipEffectsToCss(clipEffectSpecFromEditorClip(clip), u);
-  const delta = parentPositionDelta(project, clip.id, playheadSec);
-  const parentTranslate =
-    delta.x || delta.y ? `translate(${delta.x * 100}%, ${delta.y * 100}%)` : '';
+  const css = clipEffectsToCss(clipEffectSpecFromEditorClip(clip, project), u);
   return {
     ...css,
-    transform: [parentTranslate, css.transform].filter(Boolean).join(' ') || undefined,
     transformOrigin: `${clip.transform.anchorX * 100}% ${clip.transform.anchorY * 100}%`,
   };
 }

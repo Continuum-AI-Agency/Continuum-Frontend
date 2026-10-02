@@ -3,9 +3,11 @@ import {
   createEditorProjectV2,
   editorProjectV2Schema,
   numericKeysForProperty,
+  parentPositionDelta,
+  retainParentMotionForEdit,
   sampleNumericTrack,
 } from '@continuum/contracts';
-import { opacityFor } from '@/StudioCanvas/utils/render/effectSpec';
+import { opacityFor, resolveTransformAt } from '@/StudioCanvas/utils/render/effectSpec';
 import {
   assertSupportedTimelineEditorExport,
   buildTimelineEditorRenderPlan,
@@ -766,6 +768,90 @@ it('retained curve projection keeps source-clock easing, endpoints and expressio
         );
         expect(opacityFor(spec, localSec / 2)).toBeCloseTo(Math.max(0, Math.min(1, expected)), 10);
       }
+    }
+  }
+});
+
+it('serializes separate parent curves into the same transform used by preview and worker', () => {
+  for (const interpolation of ['hold', 'linear', 'bezier', 'spring'] as const) {
+    const key = (id: string, timeSec: number, x: number, y: number) => ({
+      id,
+      property: 'transform.position',
+      timeSec,
+      value: { x, y },
+      interpolation,
+      ...(interpolation === 'bezier'
+        ? { easing: { x1: 0.42, y1: 0, x2: 0.58, y2: 1 }, expression: 'wiggle(0.7, 0.02)' }
+        : {}),
+      ...(interpolation === 'spring' ? { spring: { bounce: 0.7 }, expression: 'loop' } : {}),
+    });
+    const text = {
+      kind: 'text',
+      text: 'Clock',
+      durationSec: 4,
+      style: { fontFamily: 'Arial', fontSizePx: 64, fontWeight: 700, color: '#fff' },
+    };
+    const project = editorProjectV2Schema.parse({
+      ...createEditorProjectV2({ projectId: 'p', title: 'Parents', width: 360, height: 640 }),
+      durationSec: 6,
+      tracks: [
+        {
+          id: 't',
+          name: 'T',
+          kind: 'text',
+          order: 0,
+          clips: [
+            {
+              ...text,
+              id: 'grandparent',
+              timelineStartSec: 0.5,
+              durationSec: 1,
+              keyframeOffsetSec: 0.3,
+              keyframes: [key('g0', 0, 0.5, 0.5), key('g3', 3, 0.5, 0.65)],
+            },
+            {
+              ...text,
+              id: 'parent',
+              timelineStartSec: 1,
+              parentClipId: 'grandparent',
+              keyframes: [key('p0', 0, 0.5, 0.5), key('p3', 3, 0.7, 0.5)],
+            },
+            {
+              ...text,
+              id: 'child',
+              timelineStartSec: 2,
+              parentClipId: 'parent',
+              transform: { position: { x: 0.4, y: 0.3, unit: 'normalized' } },
+            },
+          ],
+        },
+      ],
+    });
+    const child = project.tracks[0]!.clips[2]!;
+    const compiled = clipEffectSpecFromEditorClip(child, project);
+    const spec: typeof compiled = JSON.parse(JSON.stringify(compiled));
+    expect(spec.parentPositionTracks).toHaveLength(2);
+    const removedParents = retainParentMotionForEdit(
+      project,
+      {
+        ...project,
+        tracks: project.tracks.map((track) => ({
+          ...track,
+          clips: track.clips.filter((clip) => clip.id === child.id),
+        })),
+      },
+      new Map([[child.id, { clipId: child.id, offsetSec: 0 }]]),
+    );
+    const retainedChild = removedParents.tracks[0]!.clips[0]!;
+    expect(retainedChild.parentClipId).toBeUndefined();
+    const fallbackSpec = clipEffectSpecFromEditorClip(retainedChild, removedParents);
+    expect(fallbackSpec.parentPositionTracks).toHaveLength(2);
+    for (const localSec of [0, 0.2, 1.3, 2.7]) {
+      const got = resolveTransformAt(spec, localSec / child.durationSec);
+      const delta = parentPositionDelta(project, child.id, child.timelineStartSec + localSec);
+      expect(got.offsetX).toBeCloseTo(-0.1 + delta.x, 12);
+      expect(got.offsetY).toBeCloseTo(-0.2 + delta.y, 12);
+      expect(resolveTransformAt(fallbackSpec, localSec / child.durationSec)).toEqual(got);
     }
   }
 });

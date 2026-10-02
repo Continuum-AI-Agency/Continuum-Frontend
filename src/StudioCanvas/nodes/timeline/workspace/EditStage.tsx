@@ -1,12 +1,11 @@
 'use client';
 
-import {
-  type EditorCaptionClip,
-  type EditorClip,
-  type EditorOverlayClip,
-  type EditorProjectV2,
-  type EditorVideoClip,
-  parentPositionDelta,
+import type {
+  EditorCaptionClip,
+  EditorClip,
+  EditorOverlayClip,
+  EditorProjectV2,
+  EditorVideoClip,
 } from '@continuum/contracts';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { StageTextCanvas } from '@/components/video-studio/motion/StageTextCanvas';
@@ -67,14 +66,11 @@ function layerFor(
   if (!url || !activeAt(clip, sec)) return null;
   const effectTimeSec = sec - clip.timelineStartSec;
   const rate = clip.kind === 'video' ? clip.playbackRate : 1;
-  const effects = clipEffectSpecFromEditorClip(clip);
+  const effects = clipEffectSpecFromEditorClip(clip, project);
   const css = clipEffectsToCss(
     effects,
     clip.durationSec > 0 ? effectTimeSec / clip.durationSec : 0,
   );
-  const parent = parentPositionDelta(project, clip.id, sec);
-  const parentTranslate =
-    parent.x || parent.y ? `translate(${parent.x * 100}%, ${parent.y * 100}%)` : '';
   return {
     id: clip.id,
     kind: clip.kind === 'overlay' && clip.mediaKind === 'image' ? 'image' : 'video',
@@ -87,7 +83,6 @@ function layerFor(
     effectTimeSec,
     mediaStyle: {
       ...css,
-      transform: [parentTranslate, css.transform].filter(Boolean).join(' ') || undefined,
       transformOrigin: `${clip.transform.anchorX * 100}% ${clip.transform.anchorY * 100}%`,
     },
     textOverlays: [],
@@ -195,7 +190,7 @@ export const EditStage = memo(function EditStage({
   useEffect(() => store.publish(playback.playheadSec, playback.isPlaying));
   const sec = playback.playheadSec;
   const active = orderedVideoClips(main).find((clip) => activeAt(clip, sec));
-  const activeEffects = active ? clipEffectSpecFromEditorClip(active) : undefined;
+  const activeEffects = active ? clipEffectSpecFromEditorClip(active, project) : undefined;
   const activeT = active
     ? Math.max(0, Math.min(1, (sec - active.timelineStartSec) / active.durationSec))
     : 0;
@@ -266,6 +261,7 @@ export const EditStage = memo(function EditStage({
             <>
               <StageTextCanvas
                 clips={textClips}
+                project={project}
                 sec={sec}
                 width={canvasWidth}
                 height={canvasHeight}

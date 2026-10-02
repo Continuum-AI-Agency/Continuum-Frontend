@@ -4,7 +4,7 @@
 // export plan's own cue (textCueFor), so every entrance, exit and keyframe the export burns
 // in — slides, typewriter, wipe, blur, a keyed position — plays on the stage too.
 
-import type { EditorTextClip } from '@continuum/contracts';
+import type { EditorProjectV2, EditorTextClip } from '@continuum/contracts';
 import { useLayoutEffect, useRef } from 'react';
 import { textCueFor } from '@/lib/client-render/executors/timelineEditor';
 import { DEFAULT_CAPTION_STYLE } from '@/lib/clips/clipCaptionStyle';
@@ -13,11 +13,13 @@ import { drawActiveCaption } from '@/StudioCanvas/utils/splice/drawCaptions';
 /** Every live text clip at `sec`, drawn at the project's own resolution over the picture. */
 export function StageTextCanvas({
   clips,
+  project,
   sec,
   width,
   height,
 }: {
   clips: readonly EditorTextClip[];
+  project?: EditorProjectV2;
   sec: number;
   width: number;
   height: number;
@@ -36,7 +38,7 @@ export function StageTextCanvas({
       // The renderer is typed for the worker's OffscreenCanvas; the DOM context draws the same.
       drawActiveCaption(
         context as unknown as OffscreenCanvasRenderingContext2D,
-        textCueFor(clip, height),
+        textCueFor(clip, height, project),
         sec,
         width,
         height,

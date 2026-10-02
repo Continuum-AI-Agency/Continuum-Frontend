@@ -411,3 +411,12 @@ it('filter intensity interpolates from neutral and keeps manual adjustments', ()
     }),
   ).toMatchObject({ sepia: 0.225, saturation: 0.925, contrast: 1.05, brightness: 2 });
 });
+
+it('a serialized parent position track requires the compositor effect draw path', () => {
+  expect(
+    hasVisualEffects({
+      parentPositionTracks: [{ startOffsetSec: 0, position: { x: 0.5, y: 0.5 }, keyframes: [] }],
+    }),
+  ).toBe(true);
+  expect(hasVisualEffects({ parentPositionTracks: [] })).toBe(false);
+});

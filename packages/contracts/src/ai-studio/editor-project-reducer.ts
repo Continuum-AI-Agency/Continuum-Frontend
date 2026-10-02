@@ -16,6 +16,7 @@ import {
   editorCommandBatchSchema,
   editorProjectV2Schema,
 } from './editor-project-v2';
+import { type EditorClipOrigin, retainParentMotionForEdit } from './motion-parent';
 import { compileMotionStyle, trimStyleInstance } from './motion-styles';
 
 export class EditorProjectConflictError extends Error {
@@ -1001,7 +1002,21 @@ const applyTimelineCommand = (
           'invalid_command',
         );
       }
-      return updateTrack(
+      let parentId: string | null | undefined = command.parentClipId;
+      const seen = new Set<string>([command.clipId]);
+      while (parentId) {
+        if (seen.has(parentId)) {
+          throw new EditorProjectConflictError(
+            'Clip parenting cannot create a cycle.',
+            'invalid_command',
+          );
+        }
+        seen.add(parentId);
+        parentId = project.tracks
+          .flatMap((track) => track.clips as EditorClip[])
+          .find((clip) => clip.id === parentId)?.parentClipId;
+      }
+      const updated = updateTrack(
         project,
         command.trackId,
         (track) =>
@@ -1017,6 +1032,20 @@ const applyTimelineCommand = (
             ),
           }) as typeof track,
       );
+      return {
+        ...updated,
+        tracks: updated.tracks.map((track) => ({
+          ...track,
+          clips: track.clips.map((clip) =>
+            clip.id === command.clipId ||
+            clip.parentMotionBinding?.ancestors.some(
+              (ancestor) => ancestor.clipId === command.clipId,
+            )
+              ? { ...clip, parentMotionBinding: undefined }
+              : clip,
+          ),
+        })),
+      } as EditorProjectV2;
     }
     case 'remove_keyframes': {
       const { clip } = requireEditableClip(project, command.trackId, command.clipId);
@@ -1492,7 +1521,58 @@ export function applyEditorCommandBatch(
     );
   }
   let next = project;
-  for (const command of batch.commands) next = applyProductionCommand(next, command);
+  const origins = new Map<string, EditorClipOrigin>(
+    project.tracks.flatMap((track) =>
+      track.clips.map((clip) => [clip.id, { clipId: clip.id, offsetSec: 0 }] as const),
+    ),
+  );
+  const reparented = new Set<string>();
+  let retainsParentMotion = false;
+  for (const command of batch.commands) {
+    if (command.commandType === 'split_clip') {
+      const origin = origins.get(command.clipId);
+      if (origin)
+        origins.set(command.rightClipId, {
+          ...origin,
+          offsetSec: origin.offsetSec + command.splitAtSec,
+        });
+      retainsParentMotion = true;
+    } else if (command.commandType === 'trim_clip') {
+      const clip = next.tracks
+        .flatMap((track) => track.clips as EditorClip[])
+        .find((clip) => clip.id === command.clipId);
+      const origin = origins.get(command.clipId);
+      if (clip && origin) {
+        const offset =
+          'sourceInSec' in clip && command.sourceInSec !== undefined
+            ? (command.sourceInSec - (clip.sourceInSec ?? 0)) /
+              ('playbackRate' in clip ? clip.playbackRate : 1)
+            : clip.kind === 'text'
+              ? (command.timelineStartSec ?? clip.timelineStartSec) - clip.timelineStartSec
+              : 0;
+        origins.set(clip.id, { ...origin, offsetSec: origin.offsetSec + offset });
+      }
+      retainsParentMotion = true;
+    } else if (command.commandType === 'move_clip') {
+      const clip = next.tracks
+        .flatMap((track) => track.clips as EditorClip[])
+        .find((clip) => clip.id === command.clipId);
+      const origin = origins.get(command.clipId);
+      if (clip && origin && !command.preserveParentMotion)
+        origins.set(clip.id, {
+          ...origin,
+          motionShiftSec:
+            (origin.motionShiftSec ?? 0) + command.timelineStartSec - clip.timelineStartSec,
+        });
+      if (command.preserveParentMotion) retainsParentMotion = true;
+    } else if (command.commandType === 'remove_clip' || command.commandType === 'remove_track') {
+      retainsParentMotion = true;
+    } else if (command.commandType === 'set_clip_parent') {
+      reparented.add(command.clipId);
+    }
+    next = applyProductionCommand(next, command);
+  }
+  if (retainsParentMotion) next = retainParentMotionForEdit(project, next, origins, reparented);
   if (
     next.transitions.length > 0 ||
     batch.commands.some(

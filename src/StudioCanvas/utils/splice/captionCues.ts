@@ -34,7 +34,12 @@ export type CaptionCue = {
    */
   motion?: Pick<
     ClipEffectSpec,
-    'opacity' | 'transform' | 'motionChannels' | 'motionDurationSec' | 'keyframeOffsetSec'
+    | 'opacity'
+    | 'transform'
+    | 'motionChannels'
+    | 'motionDurationSec'
+    | 'keyframeOffsetSec'
+    | 'parentPositionTracks'
   >;
 };
 type SourceRange = { startSec: number; endSec: number };
