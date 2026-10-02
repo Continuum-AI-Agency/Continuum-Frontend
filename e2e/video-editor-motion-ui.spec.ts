@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import {
   type EditorClip,
   type EditorProjectV2,
+  editorCaptionWordSchema,
   editorExportSettingsSchema,
   registerGeneratedAssetResponseSchema,
 } from '@continuum/contracts';
@@ -16,6 +17,13 @@ import { mintSessionBundleForEmail } from './support/auth';
 import { createBenchRecorder } from './support/benchRecorder';
 import type { DurableTimelineRequest } from './support/editorV2DurableRenderBenchEntry';
 import { loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
+import {
+  captionBand,
+  decodeBandRgb,
+  highlightMask,
+  judgeWordTiming,
+  spokenWordPerFrame,
+} from './video-editor-journey/frames';
 import { bootBackend, bootFrontend, freePort, type Server } from './video-editor-workspace/harness';
 import { removeProjects } from './video-editor-workspace/ledger';
 
@@ -42,6 +50,7 @@ test.describe.configure({ timeout: 900_000 });
 
 const BENCH = 'videoeditor:motion:e2e:bench';
 const LOCAL_CURVE_JOURNEY = process.env.VIDEO_EDITOR_CURVE_JOURNEY_LOCAL === '1';
+const SPEECH_JOURNEY = process.env.VIDEO_EDITOR_SPEECH_JOURNEY === '1';
 const BRAND =
   process.env.CONTINUUM_TEST_BRAND_ID ??
   (LOCAL_CURVE_JOURNEY
@@ -186,6 +195,13 @@ async function seek(page: Page, pxPerSec: number, sec: number) {
   const ruler = await page.locator('[data-timeline-ruler]:visible').boundingBox();
   if (!ruler) throw new Error('ruler not visible');
   await page.mouse.click(ruler.x + pxPerSec * sec, ruler.y + ruler.height / 2);
+  await expect
+    .poll(async () => {
+      const clock = await page.locator('[data-testid="timeline-clock"]:visible').innerText();
+      const match = /^(\d+):([\d.]+)/.exec(clock);
+      return match ? Number(match[1]) * 60 + Number(match[2]) : Number.NaN;
+    })
+    .toBeCloseTo(sec, 1);
 }
 async function selectClip(page: Page, clipId: string) {
   // The middle of the block: its edges are trim handles and transition seams.
@@ -1063,7 +1079,12 @@ test('retained project journey: native splits and deletes preserve stored pictur
     process.env.VIDEO_EDITOR_CURVE_JOURNEY !== '1',
     'Set VIDEO_EDITOR_CURVE_JOURNEY=1 for the disposable real-store journey.',
   );
-  const proof = createBenchRecorder('videoeditor:motion:e2e:bench:retained-project', []);
+  const proof = createBenchRecorder(
+    SPEECH_JOURNEY
+      ? 'videoeditor:motion:e2e:bench:speech-jumps'
+      : 'videoeditor:motion:e2e:bench:retained-project',
+    [],
+  );
   proof.notes.push(
     `store target: ${LOCAL_CURVE_JOURNEY ? 'local loopback Supabase, existing authorization migration' : 'hosted designated bench store'}`,
   );
@@ -1074,6 +1095,8 @@ test('retained project journey: native splits and deletes preserve stored pictur
   let previousBrand: string | null | undefined;
   let brandChanged = false;
   let localSource: { path: string; assetId?: string; receiptKey?: string } | null = null;
+  let transcriptPath: string | null = null;
+  let sourceWords: Array<{ text: string; startSec: number; endSec: number }> = [];
   const folder =
     process.env.VIDEO_EDITOR_CURVE_JOURNEY_OUTPUT ??
     join(tmpdir(), `video-editor-curve-journey-${RUN}`);
@@ -1083,8 +1106,13 @@ test('retained project journey: native splits and deletes preserve stored pictur
     expect(ok, `${name}${detail ? `: ${detail}` : ''}`).toBe(true);
   };
   try {
+    if (SPEECH_JOURNEY && !LOCAL_CURVE_JOURNEY)
+      throw new Error('Speech journey fixtures are loopback-only.');
     const fePort = await freePort();
-    const backend = await bootBackend(`http://localhost:${fePort}`);
+    const backend = await bootBackend(
+      `http://localhost:${fePort}`,
+      SPEECH_JOURNEY ? { AI_STUDIO_BUCKET: 'brand-profile-assets' } : {},
+    );
     servers.push(backend);
     const frontend = await bootFrontend(fePort, backend.url, '.next/video-curve-journey-e2e');
     servers.push(frontend);
@@ -1177,6 +1205,55 @@ test('retained project journey: native splits and deletes preserve stored pictur
         'actual recorded fixture registers in local Library with an exact version',
         receipt.status === 'created',
       );
+      if (SPEECH_JOURNEY) {
+        const transcriptFile = process.env.VIDEO_EDITOR_SPEECH_TRANSCRIPT;
+        if (!transcriptFile)
+          throw new Error('Speech journey requires an existing real transcript.');
+        assert(
+          'real NASA recording matches the frozen fixture checksum',
+          createHash('sha256').update(bytes).digest('hex') ===
+            '59c4807dc9c32bfbd2d97e7bfd400373ccc4eaa14ee14f3ba7f5aa88914cdc51',
+        );
+        const cached = JSON.parse(readFileSync(transcriptFile, 'utf8')) as {
+          setId: string;
+          sources: Array<{
+            versionId: string;
+            durationSec: number;
+            language: string;
+            words: unknown[];
+          }>;
+        };
+        const source = cached.sources?.[0];
+        assert(
+          'cached real transcript covers the exact source without a new STT call',
+          cached.setId === 'nasa-melvin' &&
+            source?.versionId === 'fixture:nasa-ksc-122210-itow-melvin@59c4807dc9c3' &&
+            source.durationSec >= Number(probe.format.duration) - 0.01 &&
+            Array.isArray(source.words) &&
+            source.words.length > 0,
+        );
+        if (!source) throw new Error('Real transcript source missing.');
+        sourceWords = source.words.map((word) => editorCaptionWordSchema.parse(word));
+        transcriptPath = `${BRAND}/video-editor/transcripts/${versionId}.json`;
+        const { error } = await admin.storage.from('brand-profile-assets').upload(
+          transcriptPath,
+          JSON.stringify({
+            ranges: [
+              {
+                startSec: 0,
+                endSec: source.durationSec,
+                words: sourceWords,
+                language: source.language,
+              },
+            ],
+          }),
+          { contentType: 'application/json' },
+        );
+        if (error) throw error;
+        proof.notes.push(
+          `Existing transcript SHA256: ${createHash('sha256').update(readFileSync(transcriptFile)).digest('hex')}; actual silence detection remains exercised.`,
+        );
+      }
     }
     const { data: version, error: versionError } = await admin
       .schema('media')
@@ -1264,7 +1341,396 @@ test('retained project journey: native splits and deletes preserve stored pictur
           body: (await response.text()).slice(0, 800),
         });
     });
-    for (const interpolation of ['hold', 'linear', 'bezier', 'spring'] as const) {
+    if (SPEECH_JOURNEY) {
+      await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
+      await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180_000 });
+      const projectId = /\/studio\/video\/([0-9a-f-]{36})/.exec(page.url())?.[1];
+      if (!projectId) throw new Error('New speech project URL missing');
+      ids.push(projectId);
+      const initial = await getProject(api, projectId);
+      // Start/end between complete cached words; an already-truncated source word
+      // cannot establish preservation by the subsequent jump operation.
+      const sourceInSec = 64.7;
+      const durationSec = 11.3;
+      const seeded = await postOp(api, projectId, 'apply_commands', {
+        expectedRevision: initial.revision,
+        commands: [
+          {
+            commandType: 'add_track',
+            track: {
+              id: 'interview',
+              kind: 'video',
+              name: 'Real NASA interview',
+              order: 0,
+              clips: [
+                {
+                  id: 'speaker',
+                  kind: 'video',
+                  timelineStartSec: 0,
+                  sourceInSec,
+                  durationSec,
+                  audioEnabled: true,
+                  source: { sourceType: 'library_asset', assetId, renditionId: versionId },
+                },
+              ],
+            },
+          },
+          ...initial.tracks.map((track) => ({ commandType: 'remove_track', trackId: track.id })),
+          {
+            commandType: 'set_project_metadata',
+            canvas: { ...initial.canvas, width: 640, height: 640 },
+            durationSec,
+          },
+          {
+            commandType: 'set_export_settings',
+            exportSettings: editorExportSettingsSchema.parse({
+              ...initial.exportSettings,
+              width: 640,
+              height: 640,
+              frameRate: { numerator: 30, denominator: 1 },
+              videoBitrateKbps: 2500,
+              audioBitrateKbps: 128,
+            }),
+          },
+          {
+            commandType: 'set_markers',
+            markers: Array.from({ length: Math.floor(durationSec * 2) + 1 }, (_, i) => ({
+              id: `beat:${i}`,
+              kind: 'beat',
+              label: `Beat ${i + 1}`,
+              timeSec: i / 2,
+              beatIndex: i,
+            })),
+          },
+        ],
+      });
+      assert(
+        'real interview and explicit beat grid persist',
+        seeded.status === 200,
+        seeded.text.slice(0, 200),
+      );
+      await page.reload();
+      await expect(page.locator('[data-clip-id="speaker"]:visible')).toHaveCount(1, {
+        timeout: 30_000,
+      });
+      const captionStarted = performance.now();
+      await visible(page.getByRole('button', { name: 'Auto-captions', exact: true })).click();
+      const captioned = await until(
+        () => getProject(api, projectId),
+        (p) => p.tracks.some((t) => t.kind === 'caption' && t.clips.length > 0),
+      );
+      proof.notes.push(
+        `Native Auto-captions wall time including UI/store readback: ${performance.now() - captionStarted}ms`,
+      );
+      const wordsOf = (project: EditorProjectV2) =>
+        project.tracks
+          .filter((track) => track.kind === 'caption')
+          .flatMap((track): EditorClip[] => track.clips)
+          .flatMap((clip) =>
+            clip.kind === 'caption'
+              ? clip.words.map((word) => ({
+                  text: word.text,
+                  startSec: clip.timelineStartSec + word.startSec,
+                  endSec: clip.timelineStartSec + word.endSec,
+                }))
+              : [],
+          )
+          .sort((a, b) => a.startSec - b.startSec);
+      const expectedWords = sourceWords
+        .filter((word) => word.endSec > sourceInSec && word.startSec < sourceInSec + durationSec)
+        .map((word) => ({
+          text: word.text,
+          startSec: Math.max(0, word.startSec - sourceInSec),
+          endSec: Math.min(durationSec, word.endSec - sourceInSec),
+        }));
+      const captionWords = wordsOf(captioned);
+      writeFileSync(
+        join(folder, 'caption-input-readback.json'),
+        JSON.stringify(
+          { sourceInSec, durationSec, expectedWords, captionWords, captioned },
+          null,
+          2,
+        ),
+      );
+      assert(
+        'native auto-captions retain all cached real words and source-relative timing',
+        captionWords.length === expectedWords.length &&
+          captionWords.every((word, index) => {
+            const expected = expectedWords[index]!;
+            return (
+              word.text === expected.text &&
+              near(word.startSec, expected.startSec, 1e-5) &&
+              near(word.endSec, expected.endSec, 1e-5)
+            );
+          }),
+        JSON.stringify({ expected: expectedWords.length, actual: captionWords.length }),
+      );
+      const bareSettings = { ...captioned.exportSettings, captionMode: 'none' as const };
+      const bare = await postOp(api, projectId, 'apply_commands', {
+        expectedRevision: captioned.revision,
+        commands: [{ commandType: 'set_export_settings', exportSettings: bareSettings }],
+      });
+      assert('baseline caption-free export settings persist', bare.status === 200);
+      const before = await getProject(api, projectId);
+      const baselinePath = join(folder, 'speech-baseline.mp4');
+      await render(before, baselinePath);
+      await page.reload();
+      await expect(page.locator('[data-clip-id="speaker"]:visible')).toHaveCount(1, {
+        timeout: 30_000,
+      });
+      await selectClip(page, 'speaker');
+      const jumpStarted = performance.now();
+      await visible(page.getByRole('button', { name: 'Quick cuts', exact: true })).click();
+      const edited = await until(
+        () => getProject(api, projectId),
+        (p) => p.revision > before.revision,
+      );
+      proof.notes.push(
+        `Native speech jump wall time including UI/store readback: ${performance.now() - jumpStarted}ms`,
+      );
+      const clips = mainClips(edited).filter((clip) => clip.kind === 'video');
+      assert(
+        'native Quick cuts makes real source jumps in one atomic revision',
+        clips.length > 1 &&
+          edited.revision === before.revision + 1 &&
+          edited.durationSec < before.durationSec,
+        JSON.stringify({
+          clips: clips.length,
+          revisions: [before.revision, edited.revision],
+          commandResponses,
+          pageErrors,
+        }),
+      );
+      const removed = clips.slice(1).map((clip, i) => ({
+        startSec: clips[i]!.sourceInSec + clips[i]!.durationSec,
+        endSec: clip.sourceInSec,
+      }));
+      const shift = (sourceTime: number) =>
+        removed.reduce(
+          (total, range) =>
+            total + Math.max(0, Math.min(sourceTime, range.endSec) - range.startSec),
+          0,
+        );
+      const rebased = wordsOf(edited);
+      writeFileSync(
+        join(folder, 'speech-jump-readback.json'),
+        JSON.stringify({ expectedWords, rebased, before, edited, removed }, null, 2),
+      );
+      assert(
+        'every real spoken word survives with unchanged duration and ripple-correct captions',
+        rebased.length === expectedWords.length &&
+          rebased.every((word, index) => {
+            const expected = expectedWords[index]!;
+            const moved = shift(expected.startSec + sourceInSec);
+            return (
+              word.text === expected.text &&
+              near(word.startSec, expected.startSec - moved, 1e-5) &&
+              near(word.endSec, expected.endSec - moved, 1e-5)
+            );
+          }),
+        `${rebased.length} retained words; removed ${JSON.stringify(removed)}`,
+      );
+      assert(
+        'no source jump cuts through a transcript word or its 80ms breathing room',
+        removed.every((range) =>
+          expectedWords.every(
+            (word) =>
+              range.endSec <= sourceInSec + word.startSec - 0.08 + 1e-5 ||
+              range.startSec >= sourceInSec + word.endSec + 0.08 - 1e-5,
+          ),
+        ),
+      );
+      assert(
+        'source jumps remain frame-aligned, gapless, and on output half-beats',
+        clips.every(
+          (clip, index) =>
+            near(clip.timelineStartSec * 30, Math.round(clip.timelineStartSec * 30), 1e-4) &&
+            near(clip.durationSec * 30, Math.round(clip.durationSec * 30), 1e-4) &&
+            (!index ||
+              (near(
+                clip.timelineStartSec,
+                clips[index - 1]!.timelineStartSec + clips[index - 1]!.durationSec,
+                1e-5,
+              ) &&
+                Math.abs(clip.timelineStartSec - Math.round(clip.timelineStartSec * 4) / 4) <=
+                  1 / 60 + 1e-5)),
+        ),
+      );
+      await page.reload();
+      await expect(page.locator('[data-clip-kind="video"]:visible')).toHaveCount(clips.length, {
+        timeout: 30_000,
+      });
+      const reloaded = await getProject(api, projectId);
+      assert(
+        'reload retains the exact cut and caption tracks',
+        JSON.stringify(reloaded.tracks) === JSON.stringify(edited.tracks),
+      );
+      const editedPath = join(folder, 'speech-edited-bare.mp4');
+      await render(reloaded, editedPath);
+      const pcm = (file: string) => {
+        const bytes = execFileSync('ffmpeg', [
+          '-v',
+          'error',
+          '-i',
+          file,
+          '-vn',
+          '-ac',
+          '1',
+          '-ar',
+          '16000',
+          '-f',
+          'f32le',
+          'pipe:1',
+        ]);
+        return new Float32Array(
+          bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+        );
+      };
+      const baselinePcm = pcm(baselinePath),
+        actualPcm = pcm(editedPath);
+      let delta = 0,
+        energy = 0,
+        testedWords = 0;
+      for (const [index, word] of expectedWords.entries()) {
+        if (word.endSec - word.startSec < 0.04) continue;
+        const center = (word.startSec + word.endSec) / 2;
+        const outputCenter = (rebased[index]!.startSec + rebased[index]!.endSec) / 2;
+        for (let i = -160; i < 160; i++) {
+          const expected = baselinePcm[Math.round(center * 16000) + i] ?? 0;
+          const actual = actualPcm[Math.round(outputCenter * 16000) + i] ?? 0;
+          delta += (actual - expected) ** 2;
+          energy += expected ** 2;
+        }
+        testedWords++;
+      }
+      assert(
+        'independent decoded speech PCM preserves every measured word',
+        testedWords > 20 && energy > 1e-6 && delta / energy < 0.02,
+        JSON.stringify({ testedWords, relativePcmError: delta / energy }),
+      );
+      const frame = (file: string, sec: number) =>
+        execFileSync('ffmpeg', [
+          '-v',
+          'error',
+          '-ss',
+          String(sec),
+          '-i',
+          file,
+          '-frames:v',
+          '1',
+          '-vf',
+          'scale=64:64,format=rgb24',
+          '-f',
+          'rawvideo',
+          'pipe:1',
+        ]);
+      const frameErrors = clips.map((clip) => {
+        const outputSec =
+          Math.floor((clip.timelineStartSec + clip.durationSec / 2) * 30) / 30 + 1 / 60;
+        const sourceSec = outputSec - clip.timelineStartSec + clip.sourceInSec - sourceInSec;
+        const got = frame(editedPath, outputSec),
+          expected = frame(baselinePath, sourceSec);
+        return got.length && got.length === expected.length
+          ? got.reduce((sum, value, i) => sum + Math.abs(value - expected[i]!), 0) / got.length
+          : Infinity;
+      });
+      assert(
+        'independent decoded picture follows each retained speech source span',
+        frameErrors.every((error) => error < 4),
+        JSON.stringify(frameErrors),
+      );
+      const burn = await postOp(api, projectId, 'apply_commands', {
+        expectedRevision: reloaded.revision,
+        commands: [
+          {
+            commandType: 'set_export_settings',
+            exportSettings: { ...reloaded.exportSettings, captionMode: 'burn_in' },
+          },
+        ],
+      });
+      assert(
+        'caption-burn export settings persist without editing the timeline',
+        burn.status === 200,
+      );
+      const burnedProject = await getProject(api, projectId);
+      assert(
+        'caption burn consumes the same persisted speech and caption tracks',
+        JSON.stringify(burnedProject.tracks) === JSON.stringify(edited.tracks),
+      );
+      const burnedPath = join(folder, 'speech-edited-captions.mp4');
+      await render(burnedProject, burnedPath);
+      const encoded = JSON.parse(
+        execFileSync(
+          'ffprobe',
+          [
+            '-v',
+            'error',
+            '-count_frames',
+            '-select_streams',
+            'v:0',
+            '-show_entries',
+            'stream=duration,nb_read_frames,avg_frame_rate',
+            '-of',
+            'json',
+            burnedPath,
+          ],
+          { encoding: 'utf8' },
+        ),
+      ) as { streams: Array<{ duration: string; nb_read_frames: string; avg_frame_rate: string }> };
+      assert(
+        'encoded speech export has every 30fps timeline frame and exact duration',
+        encoded.streams[0]?.avg_frame_rate === '30/1' &&
+          Number(encoded.streams[0]?.nb_read_frames) ===
+            Math.round(burnedProject.durationSec * 30) &&
+          near(Number(encoded.streams[0]?.duration), burnedProject.durationSec, 1e-5),
+        JSON.stringify(encoded),
+      );
+      const band = captionBand(burnedProject, 640);
+      const burnedFrames = decodeBandRgb(burnedPath, 640, band),
+        bareFrames = decodeBandRgb(editedPath, 640, band);
+      assert(
+        'burned and bare exports have the same frame count',
+        burnedFrames.length === bareFrames.length && burnedFrames.length > 0,
+      );
+      const wordTiming = judgeWordTiming(
+        spokenWordPerFrame(burnedProject, burnedFrames.length, 30),
+        burnedFrames.map((frame, i) => highlightMask(frame, bareFrames[i]!)),
+      );
+      assert(
+        'exported caption highlights follow rebased real speech within one frame',
+        wordTiming.offsets.length > 10 &&
+          wordTiming.off.length === 0 &&
+          wordTiming.unseen === 0 &&
+          wordTiming.darkWhileSpoken === 0 &&
+          wordTiming.litWhileSilent === 0,
+        JSON.stringify(wordTiming),
+      );
+      const undo = await postOp(api, projectId, 'undo', { toRevision: before.revision });
+      const restored = await getProject(api, projectId);
+      assert(
+        'one undo restores the original speech timeline and all captions',
+        undo.status === 200 &&
+          JSON.stringify(restored.tracks) === JSON.stringify(before.tracks) &&
+          JSON.stringify(restored.markers) === JSON.stringify(before.markers) &&
+          near(restored.durationSec, before.durationSec, 1e-5),
+      );
+      summary.push({
+        fixture: 'nasa-melvin',
+        sourceInSec,
+        durationSec,
+        before,
+        edited,
+        burnedProject,
+        removed,
+        testedWords,
+        pcmRelativeError: delta / energy,
+        frameErrors,
+        wordTiming,
+      });
+    }
+    for (const interpolation of SPEECH_JOURNEY
+      ? []
+      : (['hold', 'linear', 'bezier', 'spring'] as const)) {
       await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
       await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180_000 });
       const projectId = /\/studio\/video\/([0-9a-f-]{36})/.exec(page.url())?.[1];
@@ -1545,7 +2011,9 @@ test('retained project journey: native splits and deletes preserve stored pictur
     proof.record(
       'unexercised release and dialogue paths',
       'SKIP',
-      'Native UI/store→browser compositor only. Export dialog, hosted Render, real spoken/caption protection, animated jump operation, speed and agent unexercised. All media stayed local.',
+      SPEECH_JOURNEY
+        ? 'Native cached Auto-captions/Quick cuts/store→browser compositor only. Transcript accuracy, fresh STT, Export dialog, hosted Render, animated jump operation, speed and agent unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
+        : 'Native UI/store→browser compositor only. Export dialog, hosted Render, real spoken/caption protection, animated jump operation, speed and agent unexercised. All media stayed local.',
     );
   } catch (error) {
     proof.record(
@@ -1594,6 +2062,20 @@ test('retained project journey: native splits and deletes preserve stored pictur
         assert('own minted session revoked', !error);
       }
       if (localSource) {
+        if (transcriptPath) {
+          const { error } = await admin.storage
+            .from('brand-profile-assets')
+            .remove([transcriptPath]);
+          const { data, error: listError } = await admin.storage
+            .from('brand-profile-assets')
+            .list(transcriptPath.slice(0, transcriptPath.lastIndexOf('/')), {
+              search: transcriptPath.slice(transcriptPath.lastIndexOf('/') + 1),
+            });
+          assert(
+            'owned cached transcript removed from loopback storage',
+            !error && !listError && data?.length === 0,
+          );
+        }
         const { error: storageError } = await admin.storage
           .from('media-library')
           .remove([localSource.path]);

@@ -104,8 +104,8 @@ export type ComposeTimelineOptions = {
   // aac, so 'webm' pairs with vp9 video and opus audio.
   videoCodec?: 'avc' | 'hevc' | 'vp9';
   container?: 'mp4' | 'webm';
-  // Nominal encoded packet cadence. Mediabunny uses this to resample source
-  // cadence (including VFR inputs) into the requested constant-rate track.
+  // Exact output cadence. Append helpers sample the source at these ticks;
+  // Mediabunny's track metadata snaps timestamps but does not fill missing frames.
   frameRate?: number;
   /** Render one composed PNG instead of encoding the timeline. */
   frameTimeSec?: number;
