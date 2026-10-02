@@ -185,6 +185,9 @@ test('a music bed ducks under speech in the real compositor, judged on the decod
   const oldPlain = await render(baseline, 'plain');
   const oldDucked = await render(baseline, 'ducked');
   const automated = await render(current, 'automated');
+  const videoAutomated = await render(current, 'video-automated');
+  const videoPlain = await render(current, 'video-plain');
+  const videoSolo = await render(current, 'video-solo');
 
   const lines: string[] = [];
   const check = (name: string, ok: boolean, detail: string) => {
@@ -349,10 +352,104 @@ test('a music bed ducks under speech in the real compositor, judged on the decod
     'Measured separate speech frequency and decoded picture',
   );
 
+  const audioPreview = pcmOf({ ...automated, pcmBase64: automated.previewPcmBase64 ?? '' });
+  const audioPreviewLevels = envelope.map(([at, expected]) => ({
+    at,
+    expected,
+    actual: toneRms(audioPreview, 48000, 1250, at - 0.05, at + 0.05) / bedRms,
+  }));
+  check(
+    'audio preview: standalone clip gain matches its export at the offset, trim and speed',
+    audioPreviewLevels.every((level) => Math.abs(level.actual - level.expected) <= 0.03),
+    JSON.stringify(audioPreviewLevels),
+  );
+
+  const embeddedRms = 0.35 / Math.SQRT2;
+  const embeddedEnvelope = [
+    [0.5, 0.4],
+    [1.5, 0.5],
+    [2.5, 0.2],
+    [3.25, 0.251665],
+    [3.5, 0.4],
+    [3.75, 0.548335],
+    [4.5, 0.6],
+    [5.5, 0.8],
+    [6.5, 0.85],
+    [7.25, 0.625],
+    [7.75, 0.2375],
+  ];
+  const fromBase64 = (base64: string) => pcmOf({ ...videoAutomated, pcmBase64: base64 });
+  const primaryLevels = (pcm: Float32Array, from = 0) =>
+    embeddedEnvelope
+      .filter(([at]) => at > from + 0.1)
+      .map(([at, expected]) => ({
+        at,
+        expected,
+        actual: toneRms(pcm, 48000, 1500 * 0.75, at - from - 0.05, at - from + 0.05) / embeddedRms,
+      }));
+  const videoLevels = primaryLevels(pcmOf(videoAutomated));
+  check(
+    'embedded video: gain keys and manual fades reach decoded export after trim and speed',
+    videoAutomated.keyframes.length === 8 &&
+      videoLevels.every((level) => Math.abs(level.actual - level.expected) <= 0.03),
+    JSON.stringify(videoLevels),
+  );
+  const previewLevels = primaryLevels(fromBase64(videoAutomated.previewPcmBase64 ?? ''));
+  check(
+    'audio preview: real Web Audio output matches primary-video keys, fades, trim and speed',
+    previewLevels.every((level) => Math.abs(level.actual - level.expected) <= 0.03),
+    JSON.stringify(previewLevels),
+  );
+  const seekLevels = primaryLevels(fromBase64(videoAutomated.previewSeekPcmBase64 ?? ''), 3.5);
+  check(
+    'audio preview: a seek into the keyed video resumes at the correct gain',
+    seekLevels.every((level) => Math.abs(level.actual - level.expected) <= 0.03),
+    JSON.stringify(seekLevels),
+  );
+  const staticLevels = [0.5, 2.5, 4.5, 7.75].map((at) => ({
+    at,
+    expected: 0.65 * (at < 1 ? at : at > 7.5 ? (8 - at) / 0.5 : 1),
+    actual: toneRms(pcmOf(videoPlain), 48000, 1125, at - 0.05, at + 0.05) / embeddedRms,
+  }));
+  check(
+    'embedded video: unkeyed volume and fades reach the decoded master',
+    staticLevels.every((level) => Math.abs(level.actual - level.expected) <= 0.03),
+    JSON.stringify(staticLevels),
+  );
+  check(
+    'embedded video automation leaves speech, music and picture unchanged',
+    [2.5, 5.5].every(
+      (at) =>
+        Math.abs(levelDb(pcmOf(videoAutomated), pcmOf(videoPlain), SPEECH_HZ, at)) <= 0.5 &&
+        Math.abs(levelDb(pcmOf(videoAutomated), pcmOf(videoPlain), MUSIC_HZ, at)) <= 0.5,
+    ) &&
+      videoAutomated.frames.every((rgb, index) =>
+        rgb.every((value, c) => Math.abs(value - videoPlain.frames[index][c]) <= 1),
+      ),
+    'Distinct embedded, voice and bed frequencies; decoded video',
+  );
+
+  const soloPcm = pcmOf(videoSolo);
+  const soloPreview = pcmOf({ ...videoSolo, pcmBase64: videoSolo.previewPcmBase64 ?? '' });
+  const soloMeasurements = [soloPcm, soloPreview].map((pcm) => ({
+    video: toneRms(pcm, 48000, 1125, 2.5, 2.6),
+    voice: toneRms(pcm, 48000, 220, 2.5, 2.6),
+    bed: toneRms(pcm, 48000, 1000, 2.5, 2.6),
+  }));
+  check(
+    'solo: preview and export silence primary video and voice when the music track is soloed',
+    videoSolo.audioTracks === 1 &&
+      soloMeasurements.every(
+        (level) =>
+          level.video < 0.005 && level.voice < 0.005 && Math.abs(level.bed / bedRms - 1) < 0.03,
+      ),
+    JSON.stringify(soloMeasurements),
+  );
+
   const run = `render-${new Date().toISOString().replace(/[:.]/g, '-')}`;
   const scratch = mkdtempSync(join(tmpdir(), 'video-editor-audio-render-'));
   try {
-    for (const rendered of [ducked, plain, automated]) {
+    for (const rendered of [ducked, plain, automated, videoAutomated, videoPlain, videoSolo]) {
       writeFileSync(
         join(scratch, `${rendered.variant}.mp4`),
         Buffer.from(rendered.mp4Base64, 'base64'),
@@ -371,6 +468,12 @@ test('a music bed ducks under speech in the real compositor, judged on the decod
           },
           residualDb,
           automation: levels,
+          embeddedVideo: videoLevels,
+          audioPreview: previewLevels,
+          standaloneAudioPreview: audioPreviewLevels,
+          audioPreviewSeek: seekLevels,
+          embeddedStatic: staticLevels,
+          solo: soloMeasurements,
           notExercised: ['server export via Render /v1/timeline — needs an owner Render rebuild'],
         },
         null,
@@ -396,7 +499,7 @@ test('a music bed ducks under speech in the real compositor, judged on the decod
     'NOT EXERCISED  server export of ducking — Render /v1/timeline serves the compositor bundled into the Render image, which the owner must rebuild',
   );
   rec.notes.push(
-    'NOT EXERCISED: automatic speech detection, audio preview, editor control/store latency, or production Backend/Frontend. Tone fixtures isolate gain accuracy; they are not speech-detection accuracy evidence. Server export requires its separate mode.',
+    'NOT EXERCISED: automatic speech detection, live AudioContext playback/device output, editor control/store latency, or production Backend/Frontend. Tone fixtures isolate gain accuracy; they are not speech-detection accuracy evidence. Server export requires its separate mode.',
   );
   rec.print();
   const passed = lines.filter((line) => line.startsWith('PASS')).length;

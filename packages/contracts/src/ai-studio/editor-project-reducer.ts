@@ -476,11 +476,15 @@ const trimClipInternals = (clip: EditorClip, durationSec: number): EditorClip =>
     'keyframes' in clip
       ? { ...clip, keyframes: clip.keyframes.filter((keyframe) => keyframe.timeSec <= durationSec) }
       : clip;
-  if (keyframed.kind === 'audio') {
+  if (keyframed.kind === 'audio' || keyframed.kind === 'video') {
     return {
       ...keyframed,
-      fadeInSec: Math.min(keyframed.fadeInSec, durationSec),
-      fadeOutSec: Math.min(keyframed.fadeOutSec, durationSec),
+      ...(keyframed.fadeInSec !== undefined
+        ? { fadeInSec: Math.min(keyframed.fadeInSec, durationSec) }
+        : {}),
+      ...(keyframed.fadeOutSec !== undefined
+        ? { fadeOutSec: Math.min(keyframed.fadeOutSec, durationSec) }
+        : {}),
     };
   }
   if (keyframed.kind === 'caption') {
@@ -515,6 +519,9 @@ const splitClip = (
     {
       ...clip,
       durationSec: splitAtSec,
+      ...((clip.kind === 'audio' || clip.kind === 'video') && clip.fadeOutSec !== undefined
+        ? { fadeOutSec: 0 }
+        : {}),
       ...('keyframes' in clip ? { keyframes: leftKeyframes ?? [] } : {}),
     } as EditorClip,
     splitAtSec,
@@ -524,6 +531,9 @@ const splitClip = (
     id: rightClipId,
     timelineStartSec: clip.timelineStartSec + splitAtSec,
     durationSec: rightDurationSec,
+    ...((clip.kind === 'audio' || clip.kind === 'video') && clip.fadeInSec !== undefined
+      ? { fadeInSec: 0 }
+      : {}),
     ...('sourceInSec' in clip ? { sourceInSec: (clip.sourceInSec ?? 0) + sourceOffset } : {}),
     ...('keyframes' in clip ? { keyframes: rightKeyframes ?? [] } : {}),
   } as EditorClip;

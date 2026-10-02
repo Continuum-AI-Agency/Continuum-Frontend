@@ -20,6 +20,10 @@ import {
   valueKeyEdit,
 } from '../../src/components/video-studio/motion/keyframeEdits';
 import { buildTimelineEditorRenderPlan } from '../../src/lib/client-render/executors/timelineEditor';
+import { videoTimelineItems } from '../../src/StudioCanvas/nodes/timeline/editorProjectV2AssemblyModel';
+import { buildEditorProjectV2AudioPreviewPlan } from '../../src/StudioCanvas/nodes/timeline/useEditorProjectV2AudioPreview';
+import { computeLayout } from '../../src/StudioCanvas/nodes/timeline/useTimelineEditorModel';
+import { TimelineWebAudioPreviewEngine } from '../../src/StudioCanvas/nodes/timeline/webAudioPreviewEngine';
 import { simulate } from '../../src/StudioCanvas/nodes/timeline/workspace/timelineEdits';
 import { calibratedAacConfig } from '../../src/StudioCanvas/utils/splice/aacTiming';
 import { composeTimeline } from '../../src/StudioCanvas/utils/splice/composeTimeline';
@@ -41,7 +45,7 @@ const SPEECH: SpeechRange[] = [
 ];
 
 export type AudioRenderRun = {
-  variant: 'ducked' | 'plain' | 'automated';
+  variant: 'ducked' | 'plain' | 'automated' | 'video-automated' | 'video-plain' | 'video-solo';
   keyframes: { timeSec: number; value: number }[];
   audioTracks: number;
   durationSec: number;
@@ -50,6 +54,8 @@ export type AudioRenderRun = {
   /** The mix's left channel as little-endian Float32. */
   pcmBase64: string;
   mp4Base64: string;
+  previewPcmBase64?: string;
+  previewSeekPcmBase64?: string;
   /** Mean RGB of the whole frame at 1, 2.5, 4 and 5.5 s. */
   frames: [number, number, number][];
 };
@@ -62,7 +68,7 @@ const toBase64 = (bytes: Uint8Array): string => {
   return btoa(binary);
 };
 
-async function encodeSolidVideo(): Promise<Blob> {
+async function encodeSolidVideo(embeddedAudio = false): Promise<Blob> {
   const { Output, BufferTarget, Mp4OutputFormat, CanvasSource, QUALITY_MEDIUM } = await import(
     'mediabunny'
   );
@@ -72,11 +78,33 @@ async function encodeSolidVideo(): Promise<Blob> {
   const output = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() });
   const source = new CanvasSource(canvas, { codec: 'avc', bitrate: QUALITY_MEDIUM });
   output.addVideoTrack(source);
+  const mb = await import('mediabunny');
+  const audio = embeddedAudio
+    ? new mb.AudioSampleSource(await calibratedAacConfig(mb, 192_000))
+    : undefined;
+  if (audio) output.addAudioTrack(audio);
   await output.start();
   for (let frame = 0; frame < DURATION_SEC * FPS; frame += 1) {
     context.fillStyle = PICTURE;
     context.fillRect(0, 0, WIDTH, HEIGHT);
     await source.add(frame / FPS, 1 / FPS);
+  }
+  if (audio) {
+    const data = new Float32Array(DURATION_SEC * RATE);
+    for (let index = 0; index < data.length; index += 1)
+      data[index] = 0.35 * Math.sin((2 * Math.PI * 1500 * index) / RATE);
+    const sample = new mb.AudioSample({
+      data,
+      format: 'f32-planar',
+      numberOfChannels: 1,
+      sampleRate: RATE,
+      timestamp: 0,
+    });
+    try {
+      await audio.add(sample);
+    } finally {
+      sample.close();
+    }
   }
   await output.finalize();
   if (!output.target.buffer) throw new Error('Source encoder returned no bytes');
@@ -163,7 +191,10 @@ function audioProject(variant: AudioRenderRun['variant']) {
             timelineStartSec: 0,
             durationSec: DURATION_SEC,
             source: source('picture'),
-            audioEnabled: false,
+            audioEnabled: variant.startsWith('video-'),
+            ...(variant.startsWith('video-')
+              ? { sourceInSec: 1, playbackRate: 0.75, volume: 0.65, fadeInSec: 1, fadeOutSec: 0.5 }
+              : {}),
           },
         ],
       },
@@ -185,6 +216,7 @@ function audioProject(variant: AudioRenderRun['variant']) {
       {
         id: 'bed',
         name: 'Music',
+        solo: variant === 'video-solo',
         order: 2,
         kind: 'audio',
         clips: [
@@ -203,7 +235,8 @@ function audioProject(variant: AudioRenderRun['variant']) {
       },
     ],
   });
-  if (variant === 'automated') {
+  if (variant === 'automated' || variant === 'video-automated') {
+    const target = variant === 'video-automated' ? 'picture' : 'music';
     for (const [timeSec, value] of [
       [0, 0.8],
       [1, 0.8],
@@ -212,15 +245,16 @@ function audioProject(variant: AudioRenderRun['variant']) {
       [4, 0.6],
       [5, 0.6],
       [6, 1],
+      ...(variant === 'video-automated' ? [[8, 0.4]] : []),
     ]) {
-      const added = addKeyEdit(project, 'music', 'volume', timeSec);
+      const added = addKeyEdit(project, target, 'volume', timeSec);
       if (!added) throw new Error('Audio volume key was not editable.');
       project = simulate(project, added.forward);
-      const changed = valueKeyEdit(project, 'music', 'volume', timeSec, value);
+      const changed = valueKeyEdit(project, target, 'volume', timeSec, value);
       if (!changed) throw new Error('Audio volume value was not editable.');
       project = simulate(project, changed.forward);
     }
-    const eased = easeKeyEdit(project, 'music', 'volume', 3, {
+    const eased = easeKeyEdit(project, target, 'volume', 3, {
       interpolation: 'bezier',
       easing: { x1: 0.42, y1: 0, x2: 0.58, y2: 1 },
     });
@@ -282,7 +316,7 @@ async function decodedLeft(
 
 export async function runAudioRender(variant: AudioRenderRun['variant']): Promise<AudioRenderRun> {
   const blobs = new Map([
-    ['picture', await encodeSolidVideo()],
+    ['picture', await encodeSolidVideo(variant.startsWith('video-'))],
     [
       'speech',
       await encodeAudio((t) =>
@@ -324,11 +358,35 @@ export async function runAudioRender(variant: AudioRenderRun['variant']): Promis
     const input = new Input({ source: new BlobSource(rendered.blob), formats: ALL_FORMATS });
     try {
       const { pcm, sampleRate, decodedStartSec } = await decodedLeft(input);
+      let previewPcmBase64: string | undefined;
+      let previewSeekPcmBase64: string | undefined;
+      if (variant.startsWith('video-') || variant === 'automated') {
+        const previewPlan = buildEditorProjectV2AudioPreviewPlan({
+          project,
+          layout: computeLayout(videoTimelineItems(project), () => DURATION_SEC, 80),
+          blobsByClipId: blobs,
+        });
+        const renderPreview = async (from: number) => {
+          const context = new OfflineAudioContext(2, (DURATION_SEC - from) * RATE, RATE);
+          const engine = new TimelineWebAudioPreviewEngine(context);
+          try {
+            if (!(await engine.play(previewPlan, from)))
+              throw new Error('Preview did not schedule audio.');
+            const buffer = await context.startRendering();
+            return toBase64(new Uint8Array(buffer.getChannelData(0).buffer));
+          } finally {
+            await engine.dispose();
+          }
+        };
+        previewPcmBase64 = await renderPreview(0);
+        previewSeekPcmBase64 = await renderPreview(3.5);
+      }
       const music = project.tracks
         .flatMap((track) => track.clips)
-        .find((clip) => clip.id === 'music');
+        .find((clip) => clip.id === (variant.startsWith('video-') ? 'picture' : 'music'));
       return {
         variant,
+        ...(previewPcmBase64 ? { previewPcmBase64, previewSeekPcmBase64 } : {}),
         keyframes:
           music && 'keyframes' in music
             ? music.keyframes.map((key) => ({ timeSec: key.timeSec, value: Number(key.value) }))

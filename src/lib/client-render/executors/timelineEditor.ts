@@ -27,7 +27,10 @@ import type {
 import type { ClipTransition } from '@/StudioCanvas/utils/render/transitions';
 import { overlapInSecFor } from '@/StudioCanvas/utils/render/transitions';
 import { type CaptionCue, wordsForCaptionText } from '@/StudioCanvas/utils/splice/captionCues';
-import { volumeKeyframesOf } from '@/StudioCanvas/utils/splice/timelineAudioEnvelope';
+import {
+  editorAudioTracks,
+  volumeKeyframesOf,
+} from '@/StudioCanvas/utils/splice/timelineAudioEnvelope';
 import { runTimelineInWorker } from '@/StudioCanvas/workers/spliceWorkerClient';
 import type {
   TimelineAudioWorkerItem,
@@ -633,6 +636,7 @@ export async function buildTimelineEditorRenderPlan(input: {
       `Project duration ${input.project.durationSec}s does not match the canonical sequence duration ${expectedStartSec}s.`,
     );
   }
+  const audibleTracks = new Set(editorAudioTracks(input.project).map((track) => track.id));
   const items: TimelineWorkerItem[] = await Promise.all(
     primaryClips.map(async (clip) => ({
       itemId: clip.id,
@@ -641,7 +645,11 @@ export async function buildTimelineEditorRenderPlan(input: {
       trimStartSec: clip.sourceInSec,
       trimEndSec: clip.sourceInSec + clip.durationSec * clip.playbackRate,
       durationSec: clip.durationSec,
-      muteAudio: !clip.audioEnabled || primary.muted,
+      muteAudio: !clip.audioEnabled || !audibleTracks.has(primary.id),
+      volume: clip.volume,
+      audioFadeInSec: clip.fadeInSec,
+      audioFadeOutSec: clip.fadeOutSec,
+      volumeKeyframes: volumeKeyframesOf(clip.keyframes),
       effects: effectsFor(clip),
       transition: transitionFor(incomingTransitionByClip.get(clip.id)),
     })),
@@ -709,7 +717,7 @@ export async function buildTimelineEditorRenderPlan(input: {
   );
 
   const audioTracks: TimelineAudioWorkerItem[] = await Promise.all(
-    input.project.tracks
+    editorAudioTracks(input.project)
       .filter(isAudioTrack)
       .filter((track) => track.enabled && !track.muted)
       .flatMap((track) => track.clips)

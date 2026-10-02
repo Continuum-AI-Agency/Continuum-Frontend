@@ -244,42 +244,44 @@ export function ClipInspector({
             />
           )}
 
-          <div className="flex flex-col gap-3">
-            <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Audio
-            </span>
-            <SliderField
-              label="Volume"
-              value={item.volume ?? 1}
-              min={0}
-              max={2}
-              step={0.05}
-              format={{ style: 'percent', maximumFractionDigits: 0 }}
-              onChange={(v) => onSetAudio?.({ volume: v })}
-            />
-            {context === 'overlay' ? null : (
-              <>
-                <SliderField
-                  label="Fade in"
-                  value={item.audioFadeInSec ?? 0}
-                  min={0}
-                  max={2}
-                  step={0.1}
-                  suffix="s"
-                  onChange={(v) => onSetAudio?.({ audioFadeInSec: v })}
-                />
-                <SliderField
-                  label="Fade out"
-                  value={item.audioFadeOutSec ?? 0}
-                  min={0}
-                  max={2}
-                  step={0.1}
-                  suffix="s"
-                  onChange={(v) => onSetAudio?.({ audioFadeOutSec: v })}
-                />
-              </>
-            )}
-          </div>
+          {onSetAudio ? (
+            <div className="flex flex-col gap-3">
+              <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Audio
+              </span>
+              <SliderField
+                label="Volume"
+                value={item.volume ?? 1}
+                min={0}
+                max={2}
+                step={0.05}
+                format={{ style: 'percent', maximumFractionDigits: 0 }}
+                onChange={(v) => onSetAudio?.({ volume: v })}
+              />
+              {context === 'overlay' ? null : (
+                <>
+                  <SliderField
+                    label="Fade in"
+                    value={item.audioFadeInSec ?? 0}
+                    min={0}
+                    max={2}
+                    step={0.1}
+                    suffix="s"
+                    onChange={(v) => onSetAudio?.({ audioFadeInSec: v })}
+                  />
+                  <SliderField
+                    label="Fade out"
+                    value={item.audioFadeOutSec ?? 0}
+                    min={0}
+                    max={2}
+                    step={0.1}
+                    suffix="s"
+                    onChange={(v) => onSetAudio?.({ audioFadeOutSec: v })}
+                  />
+                </>
+              )}
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="flex flex-col gap-1">

@@ -43,7 +43,11 @@ export type LaneChannel = (typeof LANE_CHANNELS)[number];
 export type LaneChannelId = LaneChannel['id'];
 
 export const channelsFor = (clip: KeyedClip): readonly LaneChannel[] =>
-  LANE_CHANNELS.filter((channel) => (clip.kind === 'audio') === (channel.id === 'volume'));
+  LANE_CHANNELS.filter((channel) =>
+    channel.id === 'volume'
+      ? clip.kind === 'audio' || clip.kind === 'video'
+      : clip.kind !== 'audio',
+  );
 
 /** Stops closer than this are one key: the reducer merges same-property stops at 1 ms. */
 const SAME_KEY_SEC = 0.001;
@@ -87,8 +91,9 @@ export function valueAt(
 ): EditorKeyframe['value'] {
   let base: EditorKeyframe['value'];
   if (property === 'audio.volume') {
-    if (clip.kind !== 'audio') throw new Error('Volume lane requires an audio clip.');
-    base = clip.volume;
+    if (clip.kind !== 'audio' && clip.kind !== 'video')
+      throw new Error('Volume lane requires an audio-bearing clip.');
+    base = clip.volume ?? 1;
   } else {
     if (clip.kind === 'audio') throw new Error('Audio clips only expose volume keyframes.');
     base = currentPropertyValue(clip.transform, property);

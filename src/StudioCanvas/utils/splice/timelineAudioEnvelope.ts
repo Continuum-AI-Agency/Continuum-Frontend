@@ -1,4 +1,9 @@
-import type { EditorKeyframe, NumericKeyframe } from '@continuum/contracts';
+import type {
+  EditorKeyframe,
+  EditorProjectV2,
+  EditorTrack,
+  NumericKeyframe,
+} from '@continuum/contracts';
 
 export interface TimelineAudioEnvelopeInput {
   gain?: number;
@@ -46,4 +51,16 @@ export function volumeKeyframesOf(keyframes: readonly EditorKeyframe[]): Numeric
         ]
       : [],
   );
+}
+
+/** Only the primary video and audio tracks carry sound; secondary videos are visual layers. */
+export function editorAudioTracks(project: EditorProjectV2): EditorTrack[] {
+  const primary = project.tracks
+    .filter((track) => track.kind === 'video' && track.enabled)
+    .toSorted((left, right) => left.order - right.order)[0];
+  const tracks = project.tracks.filter(
+    (track) =>
+      track.enabled && !track.muted && (track.id === primary?.id || track.kind === 'audio'),
+  );
+  return tracks.some((track) => track.solo) ? tracks.filter((track) => track.solo) : tracks;
 }

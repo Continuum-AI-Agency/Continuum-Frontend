@@ -580,6 +580,47 @@ describe('editor project reducer', () => {
     expect(removed.durationSec).toBe(0);
   });
 
+  test('video split preserves gain and fades only on the original outer edges', () => {
+    let project = projectWithTimeline();
+    const clip = project.tracks[0]!.clips[0]!;
+    project = applyEditorCommandBatch(
+      project,
+      command(project, {
+        commandType: 'upsert_clip',
+        trackId: 'video-main',
+        clip: { ...clip, volume: 0.6, fadeInSec: 3, fadeOutSec: 3 },
+      }),
+    );
+    const split = applyEditorCommandBatch(
+      project,
+      command(project, {
+        commandType: 'split_clip',
+        trackId: 'video-main',
+        clipId: 'clip-left',
+        splitAtSec: 2,
+        rightClipId: 'audio-right',
+      }),
+    );
+    expect(split.tracks[0]!.clips[0]).toMatchObject({ volume: 0.6, fadeInSec: 2, fadeOutSec: 0 });
+    expect(split.tracks[0]!.clips[1]).toMatchObject({ volume: 0.6, fadeInSec: 0, fadeOutSec: 2 });
+    const old = projectWithTimeline();
+    const unchanged = applyEditorCommandBatch(
+      old,
+      command(old, {
+        commandType: 'split_clip',
+        trackId: 'video-main',
+        clipId: 'clip-left',
+        splitAtSec: 2,
+        rightClipId: 'old-right',
+      }),
+    );
+    for (const part of unchanged.tracks[0]!.clips.slice(0, 2)) {
+      expect('volume' in part).toBe(false);
+      expect('fadeInSec' in part).toBe(false);
+      expect('fadeOutSec' in part).toBe(false);
+    }
+  });
+
   test('splits source time and keyframes while keeping the outgoing transition at the real cut', () => {
     let project = projectWithTimeline();
     project = applyEditorCommandBatch(

@@ -87,7 +87,12 @@ describe('visual clip ↔ effect spec', () => {
   });
 
   test('constant speed keeps the source span and stretches keyframes with it', () => {
-    const next = clipWithEffectSpec(clip, { ...inspectorSpecFor(clip), speed: 2 }, false);
+    const next = clipWithEffectSpec(
+      { ...clip, volume: 0.6, fadeInSec: 2, fadeOutSec: 3 },
+      { ...inspectorSpecFor(clip), speed: 2 },
+      false,
+    );
+    expect([next.volume, next.fadeInSec, next.fadeOutSec]).toEqual([0.6, 1, 1.5]);
     expect([next.playbackRate, next.durationSec, next.sourceInSec]).toEqual([2, 2, 1]);
     expect(next.keyframes.map((keyframe) => keyframe.timeSec)).toEqual([0, 1]);
   });

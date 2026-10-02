@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-import { resolveTimelineAudioEnvelope, volumeKeyframesOf } from './timelineAudioEnvelope';
+import { createEditorProjectV2, editorProjectV2Schema } from '@continuum/contracts';
+import {
+  editorAudioTracks,
+  resolveTimelineAudioEnvelope,
+  volumeKeyframesOf,
+} from './timelineAudioEnvelope';
 
 describe('resolveTimelineAudioEnvelope', () => {
   it('uses the longer transition or manual fade on each edge', () => {
@@ -57,4 +62,20 @@ describe('volumeKeyframesOf', () => {
       },
     ]);
   });
+});
+
+it('preview and export audibility honors primary video, mute and solo without secondary-video audio', () => {
+  const project = editorProjectV2Schema.parse({
+    ...createEditorProjectV2({ projectId: 'p', title: 'Audio', width: 320, height: 180 }),
+    tracks: [
+      { id: 'v2', kind: 'video', name: 'V2', order: 2, clips: [] },
+      { id: 'a1', kind: 'audio', name: 'Bed', order: 1, clips: [] },
+      { id: 'v1', kind: 'video', name: 'Main', order: 0, clips: [] },
+    ],
+  });
+  expect(editorAudioTracks(project).map((track) => track.id)).toEqual(['a1', 'v1']);
+  project.tracks[1]!.solo = true;
+  expect(editorAudioTracks(project).map((track) => track.id)).toEqual(['a1']);
+  project.tracks[1]!.muted = true;
+  expect(editorAudioTracks(project).map((track) => track.id)).toEqual(['v1']);
 });

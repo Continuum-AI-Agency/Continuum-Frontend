@@ -38,6 +38,7 @@ export type TimelineWorkerItem = {
   durationSec?: number;
   muteAudio?: boolean;
   volume?: number;
+  volumeKeyframes?: NumericKeyframe[];
   audioFadeInSec?: number;
   audioFadeOutSec?: number;
   effects?: ClipEffectSpec;

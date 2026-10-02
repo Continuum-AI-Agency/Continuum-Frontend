@@ -169,7 +169,7 @@ function scheduleLinearEnvelope(input: {
 }
 
 export class TimelineWebAudioPreviewEngine {
-  private context: AudioContext | null = null;
+  private context: AudioContext | OfflineAudioContext | null;
   private masterGain: GainNode | null = null;
   private readonly decodedCache = new Map<string, Promise<DecodedPreviewAudioAsset>>();
   private activeSources: AudioBufferSourceNode[] = [];
@@ -180,17 +180,21 @@ export class TimelineWebAudioPreviewEngine {
   private contextEpochSec = 0;
   private totalDurationSec = 0;
 
+  constructor(context?: AudioContext | OfflineAudioContext) {
+    this.context = context ?? null;
+  }
+
   isSupported(): boolean {
-    return typeof globalThis.AudioContext !== 'undefined';
+    return this.context !== null || typeof globalThis.AudioContext !== 'undefined';
   }
 
   isPlaying(): boolean {
     return this.playing;
   }
 
-  private ensureContext(): AudioContext {
-    if (this.context) return this.context;
-    const context = new AudioContext({ latencyHint: 'interactive' });
+  private ensureContext(): AudioContext | OfflineAudioContext {
+    if (this.context && this.masterGain) return this.context;
+    const context = this.context ?? new AudioContext({ latencyHint: 'interactive' });
     const masterGain = context.createGain();
     masterGain.connect(context.destination);
     this.context = context;
@@ -228,7 +232,7 @@ export class TimelineWebAudioPreviewEngine {
     this.playing = false;
 
     const context = this.ensureContext();
-    if (context.state === 'suspended') await context.resume();
+    if ('baseLatency' in context && context.state === 'suspended') await context.resume();
 
     const decodedBySource = new Map<string, DecodedPreviewAudioAsset>();
     const uniqueEvents = new Map(plan.events.map((event) => [event.sourceKey, event]));
@@ -242,7 +246,8 @@ export class TimelineWebAudioPreviewEngine {
     for (const entry of decoded) decodedBySource.set(entry.sourceKey, entry.asset);
 
     const safeFrom = Math.max(0, Math.min(fromTimelineSec, plan.totalDurationSec));
-    const latencyLead = Math.max(SCHEDULE_LEAD_SEC, context.baseLatency || 0);
+    const latencyLead =
+      'baseLatency' in context ? Math.max(SCHEDULE_LEAD_SEC, context.baseLatency || 0) : 0;
     const contextStartSec = context.currentTime + latencyLead;
     const schedule = buildPreviewAudioSchedule({
       plan,
@@ -319,7 +324,8 @@ export class TimelineWebAudioPreviewEngine {
     this.generation += 1;
     this.stopSources();
     this.playing = false;
-    if (this.context?.state === 'running') void this.context.suspend();
+    if (this.context && 'baseLatency' in this.context && this.context.state === 'running')
+      void this.context.suspend();
     return timelineSec;
   }
 
@@ -335,6 +341,6 @@ export class TimelineWebAudioPreviewEngine {
     const context = this.context;
     this.context = null;
     this.masterGain = null;
-    if (context && context.state !== 'closed') await context.close();
+    if (context && 'close' in context && context.state !== 'closed') await context.close();
   }
 }

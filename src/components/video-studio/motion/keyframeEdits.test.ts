@@ -76,7 +76,16 @@ describe('keyframe lane edits', () => {
     ]);
     expect(addKeyEdit(project, clipId, 'position', 1)).toBeNull();
     const visual = withClip();
-    expect(addKeyEdit(visual.project, visual.clipId, 'volume', 1)).toBeNull();
+    const keyedVideo = commit(
+      visual.project,
+      addKeyEdit(visual.project, visual.clipId, 'volume', 1),
+    );
+    expect(valueAt(clipOf(keyedVideo, visual.clipId), 'audio.volume', 1)).toBe(1);
+    const changedVideo = commit(
+      keyedVideo,
+      valueKeyEdit(keyedVideo, visual.clipId, 'volume', 1, 0.3),
+    );
+    expect(valueAt(clipOf(changedVideo, visual.clipId), 'audio.volume', 1)).toBe(0.3);
   });
   test('add keys the resting value at the playhead; scale keys X and Y together', () => {
     const { project, clipId } = withClip();

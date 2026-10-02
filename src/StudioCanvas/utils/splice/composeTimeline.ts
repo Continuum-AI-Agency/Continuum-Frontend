@@ -48,6 +48,7 @@ export type TimelineRenderItem = {
   // Per-clip audio gain (1 = unchanged) and manual audio fades, applied in the
   // mixdown on top of any transition crossfade.
   volume?: number;
+  volumeKeyframes?: NumericKeyframe[];
   audioFadeInSec?: number;
   audioFadeOutSec?: number;
   // Per-clip visual/audio effects (color, opacity, transform, Ken Burns, speed,
@@ -646,6 +647,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
         sourceEndSec: item.range.endSec,
         speed: item.range.durationSec / item.outputDurationSec,
         outputStartSec: place.outputStartSec,
+        volumeKeyframes: src.volumeKeyframes,
         ...envelope,
       });
     }

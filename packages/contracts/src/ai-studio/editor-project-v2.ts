@@ -346,10 +346,21 @@ export const editorVideoClipSchema = z
       .enum(['normal', 'multiply', 'screen', 'overlay', 'lighten', 'darken', 'difference'])
       .default('normal'),
     audioEnabled: z.boolean().default(true),
+    // Optional fields keep existing project documents and fingerprints unchanged.
+    volume: z.number().finite().min(0).max(4).optional(),
+    fadeInSec: secondsSchema.optional(),
+    fadeOutSec: secondsSchema.optional(),
     effects: z.array(editorEffectInstanceSchema).max(50).default([]),
     keyframes: z.array(editorKeyframeSchema).max(500).default([]),
   })
-  .strict();
+  .strict()
+  .refine(
+    (clip) =>
+      (clip.fadeInSec ?? 0) <= clip.durationSec && (clip.fadeOutSec ?? 0) <= clip.durationSec,
+    {
+      message: 'video audio fades cannot exceed clip duration',
+    },
+  );
 export type EditorVideoClip = z.infer<typeof editorVideoClipSchema>;
 
 export const editorAudioClipSchema = z

@@ -297,7 +297,7 @@ export function clipWithEffectSpec<T extends VisualClip>(
   const owned = (effect: EditorVideoClip['effects'][number]) =>
     SPEC_EFFECT_TYPES.has(effect.effectType) || SPEC_EFFECT_IDS.has(effect.effectId);
   const next = {
-    ...clip,
+    ...retimed,
     transform: {
       ...mapped.transform,
       anchorX: clip.transform.anchorX,
@@ -420,7 +420,10 @@ function VisualClipInspector({
     trimStartSec: sourceIn,
     trimEndSec: sourceIn + clip.durationSec * rate,
     // Layers render muted; only a main-sequence video clip carries sound.
-    muteAudio: clip.kind === 'video' ? !clip.audioEnabled : true,
+    muteAudio: clip.kind === 'video' && onMain ? !clip.audioEnabled : true,
+    ...(view.kind === 'video'
+      ? { volume: view.volume, audioFadeInSec: view.fadeInSec, audioFadeOutSec: view.fadeOutSec }
+      : {}),
     effects,
     transition: draftTransition ? draftTransition.value : committedTransition,
   };
@@ -479,6 +482,23 @@ function VisualClipInspector({
               ),
             );
           }}
+          onSetAudio={
+            onMain && clip.kind === 'video'
+              ? (audio) =>
+                  patch(
+                    {
+                      ...(audio.volume !== undefined ? { volume: audio.volume } : {}),
+                      ...(audio.audioFadeInSec !== undefined
+                        ? { fadeInSec: Math.min(audio.audioFadeInSec, view.durationSec) }
+                        : {}),
+                      ...(audio.audioFadeOutSec !== undefined
+                        ? { fadeOutSec: Math.min(audio.audioFadeOutSec, view.durationSec) }
+                        : {}),
+                    },
+                    'Edit clip audio',
+                  )
+              : undefined
+          }
           onSetEffects={setEffects}
           onSetTransition={(next) => {
             setDraftTransition({ value: next });
@@ -503,7 +523,7 @@ function VisualClipInspector({
         ))}
       </div>
       <MotionPresetsSection clip={clip} getPlayheadSec={store.getSec} runOp={runOp} />
-      <KeyframeLane clip={clip} store={store} onEdit={now} onSettle={schedule} />
+      <KeyframeLane clip={clip} audio={onMain} store={store} onEdit={now} onSettle={schedule} />
       <LookSection clip={clip} runOp={runOp} />
     </div>
   );

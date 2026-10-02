@@ -19,10 +19,14 @@ export function editorClipAtSpeed<T extends EditorVideoClip | EditorAudioClip>(
       ...keyframe,
       timeSec: keyframe.timeSec * factor,
     })),
+    ...(clip.fadeInSec !== undefined
+      ? { fadeInSec: Math.min(clip.fadeInSec * factor, durationSec) }
+      : {}),
+    ...(clip.fadeOutSec !== undefined
+      ? { fadeOutSec: Math.min(clip.fadeOutSec * factor, durationSec) }
+      : {}),
     ...(clip.kind === 'audio'
       ? {
-          fadeInSec: Math.min(clip.fadeInSec * factor, durationSec),
-          fadeOutSec: Math.min(clip.fadeOutSec * factor, durationSec),
           ...(clip.automation
             ? {
                 automation: clip.automation.map((point) => ({

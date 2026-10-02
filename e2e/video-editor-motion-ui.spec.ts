@@ -637,6 +637,63 @@ test(BENCH, async ({ browser }) => {
         ),
     );
 
+    await selectClip(page, clipA.id);
+    for (const [label, expected] of [
+      ['Volume', 0.65],
+      ['Fade in', 0.4],
+      ['Fade out', 0.6],
+    ] as const) {
+      const field = visible(
+        page.getByRole('group', { name: label, exact: true }).getByRole('slider'),
+      );
+      await expect(field).toHaveCount(1, { timeout: STEP_MS });
+      await field.focus();
+      await field.press('Home');
+      const steps = label === 'Volume' ? 13 : label === 'Fade in' ? 4 : 6;
+      for (let step = 0; step < steps; step += 1) await field.press('ArrowRight');
+      const property =
+        label === 'Volume' ? 'volume' : label === 'Fade in' ? 'fadeInSec' : 'fadeOutSec';
+      project = await until(
+        () => getProject(api, projectId),
+        (value) => {
+          const clip = clipById(value, clipA.id);
+          return clip?.kind === 'video' && near(clip[property], expected, 0.001);
+        },
+      );
+      check(
+        `video audio: ${label} survives a fresh store read`,
+        clipById(project, clipA.id)?.kind === 'video',
+      );
+    }
+    await seek(page, pxPerSec, 1.25);
+    const videoAdded = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/${projectId}/commands`) && response.request().method() === 'POST',
+    );
+    await visible(page.getByRole('button', { name: 'Add Volume keyframe' })).click();
+    expect((await videoAdded).ok()).toBe(true);
+    const videoGain = visible(page.getByTestId('keyframe-editor')).getByLabel('Volume', {
+      exact: true,
+    });
+    const videoSaved = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/${projectId}/commands`) && response.request().method() === 'POST',
+    );
+    await videoGain.fill('0.35');
+    await videoGain.press('Tab');
+    expect((await videoSaved).ok()).toBe(true);
+    project = await getProject(api, projectId);
+    check(
+      'video audio: gain key coexists with visual motion and preserves the pinned source',
+      keyframesOf(clipById(project, clipA.id)).some(
+        (key) => key.property === 'audio.volume' && key.value === 0.35,
+      ) &&
+        keyframesOf(clipById(project, clipA.id)).some(
+          (key) => key.property === 'transform.scaleX',
+        ) &&
+        sourceOf(clipById(project, clipA.id)) === SOURCE_ASSET_ID,
+    );
+
     const audioId = `volume-${RUN}`;
     const audioTrack = `audio-${RUN}`;
     const audioSeed = await postOp(api, projectId, 'apply_commands', {
