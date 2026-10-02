@@ -305,7 +305,10 @@ export function clipWithEffectSpec<T extends VisualClip>(
     },
     effects: [...clip.effects.filter((effect) => !owned(effect)), ...mapped.effects],
     blendMode: mapped.blendMode,
-    keyframes: [...kept, ...motion],
+    keyframes: [
+      ...kept,
+      ...motion.map((key) => ({ ...key, timeSec: key.timeSec + (retimed.keyframeOffsetSec ?? 0) })),
+    ],
   };
   return (clip.kind === 'video' ? { ...next, playbackRate: nextRate, durationSec } : next) as T;
 }

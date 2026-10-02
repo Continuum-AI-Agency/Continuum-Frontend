@@ -45,6 +45,7 @@ export function volumeKeyframesOf(keyframes: readonly EditorKeyframe[]): Numeric
             timeSec: keyframe.timeSec,
             value: keyframe.value,
             interpolation: keyframe.interpolation,
+            ...(keyframe.expression ? { expression: keyframe.expression } : {}),
             ...(keyframe.easing ? { easing: keyframe.easing } : {}),
             ...(keyframe.spring ? { spring: { bounce: keyframe.spring.bounce } } : {}),
           },

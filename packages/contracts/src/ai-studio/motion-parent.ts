@@ -22,6 +22,7 @@ export function parentPositionDelta(
       positionKeysForProperty(parent.keyframes),
       localSec,
       parent.transform.position,
+      parent.keyframeOffsetSec,
     );
     delta = {
       x: delta.x + (sampled.x - parent.transform.position.x),

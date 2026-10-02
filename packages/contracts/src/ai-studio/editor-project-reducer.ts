@@ -1,3 +1,4 @@
+import { editorClipAtSourceIn } from './editor-clip-edits';
 import {
   type EditorActorRef,
   type EditorClip,
@@ -472,10 +473,7 @@ const upsertKeyframe = (
 };
 
 const trimClipInternals = (clip: EditorClip, durationSec: number): EditorClip => {
-  const keyframed =
-    'keyframes' in clip
-      ? { ...clip, keyframes: clip.keyframes.filter((keyframe) => keyframe.timeSec <= durationSec) }
-      : clip;
+  const keyframed = 'keyframes' in clip ? { ...clip, keyframes: clip.keyframes } : clip;
   if (keyframed.kind === 'audio' || keyframed.kind === 'video') {
     return {
       ...keyframed,
@@ -505,16 +503,8 @@ const splitClip = (
 ): [EditorClip, EditorClip] => {
   const rightDurationSec = clip.durationSec - splitAtSec;
   const sourceOffset = splitAtSec * ('playbackRate' in clip ? clip.playbackRate : 1);
-  const leftKeyframes =
-    'keyframes' in clip
-      ? clip.keyframes.filter((keyframe) => keyframe.timeSec <= splitAtSec)
-      : undefined;
-  const rightKeyframes =
-    'keyframes' in clip
-      ? clip.keyframes
-          .filter((keyframe) => keyframe.timeSec >= splitAtSec)
-          .map((keyframe) => ({ ...keyframe, timeSec: keyframe.timeSec - splitAtSec }))
-      : undefined;
+  const leftKeyframes = 'keyframes' in clip ? clip.keyframes : undefined;
+  const rightKeyframes = leftKeyframes;
   const left = trimClipInternals(
     {
       ...clip,
@@ -536,6 +526,9 @@ const splitClip = (
       : {}),
     ...('sourceInSec' in clip ? { sourceInSec: (clip.sourceInSec ?? 0) + sourceOffset } : {}),
     ...('keyframes' in clip ? { keyframes: rightKeyframes ?? [] } : {}),
+    ...('keyframes' in clip && clip.keyframes.length
+      ? { keyframeOffsetSec: (clip.keyframeOffsetSec ?? 0) + splitAtSec }
+      : {}),
   } as EditorClip;
   if (right.kind === 'caption') {
     right = {
@@ -797,12 +790,11 @@ const applyTimelineCommand = (
               clip.id === command.clipId
                 ? trimClipInternals(
                     {
-                      ...clip,
+                      ...('sourceInSec' in clip && command.sourceInSec !== undefined
+                        ? editorClipAtSourceIn(clip, command.sourceInSec)
+                        : clip),
                       durationSec: command.durationSec,
                       timelineStartSec: command.timelineStartSec ?? clip.timelineStartSec,
-                      ...('sourceInSec' in clip && command.sourceInSec !== undefined
-                        ? { sourceInSec: command.sourceInSec }
-                        : {}),
                     } as EditorClip,
                     command.durationSec,
                   )
@@ -903,7 +895,7 @@ const applyTimelineCommand = (
       const compiled = compileMotionStyle({
         styleId: command.styleId,
         instanceId: command.instanceId,
-        timelineOffsetSec: command.timelineOffsetSec,
+        timelineOffsetSec: command.timelineOffsetSec + (clip.keyframeOffsetSec ?? 0),
         durationSec: command.durationSec,
         base: clip.transform,
       });
@@ -949,8 +941,8 @@ const applyTimelineCommand = (
                     keyframes: trimStyleInstance(
                       candidate.keyframes,
                       command.instanceId,
-                      command.startSec,
-                      command.endSec,
+                      command.startSec + (candidate.keyframeOffsetSec ?? 0),
+                      command.endSec + (candidate.keyframeOffsetSec ?? 0),
                     ),
                   }
                 : candidate,

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   cubicBezierProgress,
   MOTION_BEZIER_PRESETS,
+  motionExpressionAtScale,
   numericKeysForProperty,
   sampleNumericTrack,
   samplePositionTrack,
@@ -200,4 +201,21 @@ describe('numericKeysForProperty', () => {
       { timeSec: 1, value: 1, interpolation: 'hold' },
     ]);
   });
+});
+
+test('clock stretching keeps wiggle phase at the same retained source time', () => {
+  const original = [
+    { timeSec: 0, value: 0.5, interpolation: 'linear' as const, expression: 'wiggle(0.7, 0.1)' },
+    { timeSec: 4, value: 1, interpolation: 'linear' as const },
+  ];
+  const scaled = original.map((key) => ({
+    ...key,
+    timeSec: key.timeSec * 0.5,
+    ...(key.expression ? { expression: motionExpressionAtScale(key.expression, 0.5) } : {}),
+  }));
+  for (const local of [0, 0.25, 0.6])
+    expect(sampleNumericTrack(scaled, local, 1, 1)).toBeCloseTo(
+      sampleNumericTrack(original, local * 2, 1, 2),
+      10,
+    );
 });

@@ -71,8 +71,10 @@ export function channelKeys(clip: KeyedClip, channelId: LaneChannelId): LaneKey[
     .toSorted((left, right) => left.timeSec - right.timeSec);
   for (const keyframe of own) {
     const last = keys.at(-1);
-    if (last && keyframe.timeSec - last.timeSec <= SAME_KEY_SEC) last.keyframes.push(keyframe);
-    else keys.push({ timeSec: keyframe.timeSec, keyframes: [keyframe] });
+    const localSec = keyframe.timeSec - (clip.keyframeOffsetSec ?? 0);
+    if (localSec < -SAME_KEY_SEC || localSec > clip.durationSec + SAME_KEY_SEC) continue;
+    if (last && localSec - last.timeSec <= SAME_KEY_SEC) last.keyframes.push(keyframe);
+    else keys.push({ timeSec: localSec, keyframes: [keyframe] });
   }
   return keys;
 }
@@ -103,11 +105,17 @@ export function valueAt(
       positionKeysForProperty(clip.keyframes, property),
       localSec,
       base as { x: number; y: number },
+      clip.keyframeOffsetSec,
     );
     return { x: roundSec(at.x), y: roundSec(at.y) };
   }
   return roundSec(
-    sampleNumericTrack(numericKeysForProperty(clip.keyframes, property), localSec, Number(base)),
+    sampleNumericTrack(
+      numericKeysForProperty(clip.keyframes, property),
+      localSec,
+      Number(base),
+      clip.keyframeOffsetSec,
+    ),
   );
 }
 
@@ -155,7 +163,7 @@ export function addKeyEdit(
         ...(same ?? { interpolation: 'linear' as const }),
         id: same?.id ?? crypto.randomUUID(),
         property,
-        timeSec,
+        timeSec: timeSec + (at.clip.keyframeOffsetSec ?? 0),
         value: valueAt(at.clip, property, timeSec),
       });
     }),
@@ -193,7 +201,12 @@ export function moveKeyEdit(
             },
           ]
         : []),
-      ...moving.keyframes.map((keyframe) => upsert(at.trackId, clipId, { ...keyframe, timeSec })),
+      ...moving.keyframes.map((keyframe) =>
+        upsert(at.trackId, clipId, {
+          ...keyframe,
+          timeSec: timeSec + (at.clip.keyframeOffsetSec ?? 0),
+        }),
+      ),
     ],
   };
 }

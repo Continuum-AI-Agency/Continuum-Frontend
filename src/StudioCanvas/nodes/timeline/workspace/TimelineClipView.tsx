@@ -1,6 +1,6 @@
 'use client';
 
-import type { EditorClip } from '@continuum/contracts';
+import { type EditorClip, sampleNumericTrack } from '@continuum/contracts';
 import { AudioLines, Copy, Scissors, Trash2, VolumeX, Waves } from 'lucide-react';
 import {
   ContextMenu,
@@ -82,12 +82,13 @@ function VolumeLine({ clip }: { clip: Extract<EditorClip, { kind: 'audio' }> }) 
   const last = keys.at(-1);
   if (!first || !last) return null;
   const end = clip.durationSec;
-  // Before the first key the clip plays at its own volume; after the last, at the last key.
-  const stops = [
-    { timeSec: 0, value: first.timeSec > 0 ? clip.volume : first.value },
-    ...keys.filter((key) => key.timeSec > 0 && key.timeSec < end),
-    { timeSec: end, value: last.value },
-  ];
+  const stops = Array.from({ length: 41 }, (_, index) => {
+    const timeSec = (index / 40) * end;
+    return {
+      timeSec,
+      value: sampleNumericTrack(keys, timeSec, clip.volume, clip.keyframeOffsetSec),
+    };
+  });
   const peak = Math.max(1e-6, ...stops.map((stop) => stop.value));
   const points = stops
     .map((stop) => `${stop.timeSec.toFixed(4)},${(1 - (0.9 * stop.value) / peak).toFixed(4)}`)

@@ -12,6 +12,7 @@ export function sampleValueSpeedGraph(
   durationSec: number,
   fallback: number,
   count = 80,
+  timeOffsetSec = 0,
 ): MotionGraphPoint[] {
   if (durationSec <= 0 || count < 2) return [];
   const numeric = keys.flatMap((keyframe) => {
@@ -51,7 +52,7 @@ export function sampleValueSpeedGraph(
   let previous = fallback;
   for (let index = 0; index < count; index += 1) {
     const t = index * dt;
-    const value = sampleNumericTrack(numeric, t, fallback);
+    const value = sampleNumericTrack(numeric, t, fallback, timeOffsetSec);
     points.push({
       t,
       value,

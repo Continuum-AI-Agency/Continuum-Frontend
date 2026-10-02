@@ -69,6 +69,7 @@ export interface EnvelopeOptions {
   /** `audio.volume` keyframes, clip-local seconds; when present they ARE the gain
    *  (the clip's volume outside them), sampled like every other keyed property. */
   volumeKeyframes?: readonly NumericKeyframe[];
+  keyframeOffsetSec?: number;
 }
 
 /** Frames between two samples of a keyed gain curve; the gain is linear in between. */
@@ -85,7 +86,12 @@ export function applyEnvelope(pcm: StereoPcm, opts: EnvelopeOptions): void {
   const fadeOut = Math.min(n, Math.round(Math.max(0, opts.fadeOutSec ?? 0) * AUDIO_SAMPLE_RATE));
   const keys = opts.volumeKeyframes?.length ? opts.volumeKeyframes : null;
   const keyedGain = (frame: number) =>
-    keys ? Math.max(0, sampleNumericTrack(keys, frame / AUDIO_SAMPLE_RATE, gain)) : gain;
+    keys
+      ? Math.max(
+          0,
+          sampleNumericTrack(keys, frame / AUDIO_SAMPLE_RATE, gain, opts.keyframeOffsetSec),
+        )
+      : gain;
   let fromGain = gain;
   let toGain = gain;
   for (let i = 0; i < n; i += 1) {
@@ -160,6 +166,7 @@ export interface AudioPlanItem {
   fadeInSec: number;
   fadeOutSec: number;
   volumeKeyframes?: readonly NumericKeyframe[];
+  keyframeOffsetSec?: number;
 }
 
 export async function decodeClipPcm(
@@ -246,7 +253,9 @@ export async function mixdownTimelineAudio(
       gain: item.gain,
       fadeInSec: item.fadeInSec,
       fadeOutSec: item.fadeOutSec,
-      ...(item.volumeKeyframes ? { volumeKeyframes: item.volumeKeyframes } : {}),
+      ...(item.volumeKeyframes
+        ? { volumeKeyframes: item.volumeKeyframes, keyframeOffsetSec: item.keyframeOffsetSec }
+        : {}),
     });
     mixInto(master, pcm, item.outputStartSec * AUDIO_SAMPLE_RATE);
   }

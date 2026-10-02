@@ -165,3 +165,79 @@ describe('keyframe lane edits', () => {
     expect(addKeyEdit(next, 'missing', 'scale', 1)).toBeNull();
   });
 });
+
+test('retained curves show local keys and edit the original animation clock', () => {
+  const initial = withClip();
+  const original = clipOf(initial.project, initial.clipId);
+  let project = simulate(initial.project, [
+    {
+      commandType: 'upsert_clip',
+      trackId: initial.project.tracks[0]!.id,
+      clip: {
+        ...original,
+        durationSec: 1.5,
+        keyframeOffsetSec: 1.5,
+        keyframes: [
+          {
+            id: 'before',
+            property: 'audio.volume',
+            timeSec: 0.5,
+            value: 0.1,
+            interpolation: 'linear',
+          },
+          {
+            id: 'visible',
+            property: 'audio.volume',
+            timeSec: 2.5,
+            value: 0.5,
+            interpolation: 'linear',
+          },
+          {
+            id: 'after',
+            property: 'audio.volume',
+            timeSec: 4,
+            value: 0.8,
+            interpolation: 'linear',
+          },
+        ],
+      },
+    },
+  ]);
+  expect(channelKeys(clipOf(project, initial.clipId), 'volume').map((key) => key.timeSec)).toEqual([
+    1,
+  ]);
+  expect(valueAt(clipOf(project, initial.clipId), 'audio.volume', 0)).toBe(0.3);
+  project = commit(project, addKeyEdit(project, initial.clipId, 'volume', 0.25));
+  expect(
+    clipOf(project, initial.clipId).keyframes.find((key) => key.timeSec === 1.75),
+  ).toBeDefined();
+  project = commit(project, moveKeyEdit(project, initial.clipId, 'volume', 1, 0.75));
+  expect(
+    clipOf(project, initial.clipId).keyframes.find((key) => key.id === 'visible')?.timeSec,
+  ).toBe(2.25);
+  project = commit(
+    project,
+    easeKeyEdit(project, initial.clipId, 'volume', 0.75, { interpolation: 'hold' }),
+  );
+  expect(
+    clipOf(project, initial.clipId).keyframes.find((key) => key.id === 'visible')?.interpolation,
+  ).toBe('hold');
+  project = commit(project, removeKeyEdit(project, initial.clipId, 'volume', 0.75));
+  expect(
+    clipOf(project, initial.clipId).keyframes.find((key) => key.id === 'visible'),
+  ).toBeUndefined();
+  expect(clipOf(project, initial.clipId).keyframes.some((key) => key.id === 'before')).toBe(true);
+  const negative = clipOf(project, initial.clipId);
+  project = simulate(project, [
+    {
+      commandType: 'upsert_clip',
+      trackId: initial.project.tracks[0]!.id,
+      clip: { ...negative, keyframeOffsetSec: -1 },
+    },
+  ]);
+  project = commit(project, addKeyEdit(project, initial.clipId, 'volume', 0));
+  expect(clipOf(project, initial.clipId).keyframes.some((key) => key.timeSec === -1)).toBe(true);
+  expect(
+    channelKeys(clipOf(project, initial.clipId), 'volume').some((key) => key.timeSec === 0),
+  ).toBe(true);
+});

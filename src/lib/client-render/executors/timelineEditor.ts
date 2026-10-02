@@ -132,6 +132,7 @@ type EditorClipKeyframe = {
   interpolation?: ClipPropertyStop['interpolation'];
   easing?: ClipPropertyStop['easing'];
   spring?: ClipPropertyStop['spring'];
+  expression?: string;
 };
 
 const toStop = (
@@ -139,11 +140,12 @@ const toStop = (
   durationSec: number,
   value: number,
 ): ClipPropertyStop => ({
-  t: Math.max(0, Math.min(1, keyframe.timeSec / durationSec)),
+  t: keyframe.timeSec / durationSec,
   value,
   interpolation: keyframe.interpolation ?? 'linear',
   ...(keyframe.easing ? { easing: keyframe.easing } : {}),
   ...(keyframe.spring ? { spring: keyframe.spring } : {}),
+  ...(keyframe.expression ? { expression: keyframe.expression } : {}),
 });
 
 const numericStopsFor = (
@@ -237,7 +239,11 @@ export const clipEffectSpecFromEditorClip = (clip: {
     parameters: Record<string, unknown>;
   }>;
   keyframes?: EditorClipKeyframe[];
+  keyframeOffsetSec?: number;
 }): ClipEffectSpec => ({
+  ...(clip.keyframes?.length
+    ? { motionDurationSec: clip.durationSec, keyframeOffsetSec: clip.keyframeOffsetSec }
+    : {}),
   ...(clip.playbackRate && clip.playbackRate !== 1 ? { speed: clip.playbackRate } : {}),
   ...(clip.transform
     ? {
@@ -404,11 +410,12 @@ const transitionFor = (transition: EditorTransition | undefined): ClipTransition
 
 /** The part of a clip's render spec that moves a text clip: transform, opacity, keyframes. */
 const textMotionFor = (clip: Parameters<typeof clipEffectSpecFromEditorClip>[0]) => {
-  const { transform, opacity, motionChannels } = clipEffectSpecFromEditorClip(clip);
+  const { transform, opacity, motionChannels, motionDurationSec, keyframeOffsetSec } =
+    clipEffectSpecFromEditorClip(clip);
   return {
     ...(transform ? { transform } : {}),
     ...(opacity !== undefined ? { opacity } : {}),
-    ...(motionChannels ? { motionChannels } : {}),
+    ...(motionChannels ? { motionChannels, motionDurationSec, keyframeOffsetSec } : {}),
   };
 };
 
@@ -650,6 +657,7 @@ export async function buildTimelineEditorRenderPlan(input: {
       audioFadeInSec: clip.fadeInSec,
       audioFadeOutSec: clip.fadeOutSec,
       volumeKeyframes: volumeKeyframesOf(clip.keyframes),
+      keyframeOffsetSec: clip.keyframeOffsetSec,
       effects: effectsFor(clip),
       transition: transitionFor(incomingTransitionByClip.get(clip.id)),
     })),
@@ -734,7 +742,9 @@ export async function buildTimelineEditorRenderPlan(input: {
           volume: clip.volume,
           fadeInSec: clip.fadeInSec,
           fadeOutSec: clip.fadeOutSec,
-          ...(volumeKeyframes.length > 0 ? { volumeKeyframes } : {}),
+          ...(volumeKeyframes.length > 0
+            ? { volumeKeyframes, keyframeOffsetSec: clip.keyframeOffsetSec }
+            : {}),
         };
       }),
   );

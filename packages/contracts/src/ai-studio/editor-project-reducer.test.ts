@@ -661,14 +661,18 @@ describe('editor project reducer', () => {
     const clips = split.tracks[0]?.clips ?? [];
 
     expect(clips[0]).toMatchObject({ id: 'clip-left', durationSec: 2, sourceInSec: 0 });
-    expect(clips[0]?.keyframes).toEqual([expect.objectContaining({ id: 'key-left', timeSec: 1 })]);
+    expect(clips[0]?.keyframes).toEqual([
+      expect.objectContaining({ id: 'key-left', timeSec: 1 }),
+      expect.objectContaining({ id: 'key-right', timeSec: 3 }),
+    ]);
     expect(clips[1]).toMatchObject({
       id: 'clip-middle',
       timelineStartSec: 2,
       durationSec: 2,
       sourceInSec: 2,
     });
-    expect(clips[1]?.keyframes).toEqual([expect.objectContaining({ id: 'key-right', timeSec: 1 })]);
+    expect(clips[1]?.keyframes).toEqual(clips[0]?.keyframes);
+    expect(clips[1]?.keyframeOffsetSec).toBe(2);
     expect(split.transitions[0]).toMatchObject({
       fromClipId: 'clip-middle',
       toClipId: 'clip-right',

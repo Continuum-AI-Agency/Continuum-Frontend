@@ -17,6 +17,7 @@ import {
   textCueFor,
 } from '../../src/lib/client-render/executors/timelineEditor';
 import { registerCaptionFonts } from '../../src/lib/clips/captionFonts';
+import { simulate } from '../../src/StudioCanvas/nodes/timeline/workspace/timelineEdits';
 import { composeTimeline } from '../../src/StudioCanvas/utils/splice/composeTimeline';
 import { drawActiveCaption } from '../../src/StudioCanvas/utils/splice/drawCaptions';
 
@@ -955,6 +956,150 @@ export async function runLooks() {
   }
 }
 
+export async function runRetainedCurves(sourceUrl: string) {
+  const results = [];
+  const { Input, BlobSource, ALL_FORMATS } = await import('mediabunny');
+  for (const interpolation of ['hold', 'linear', 'bezier', 'spring'] as const) {
+    const project = editorProjectV2Schema.parse({
+      ...createEditorProjectV2({
+        projectId: 'curve-proof',
+        title: 'Recorded curve proof',
+        width: WIDTH,
+        height: HEIGHT,
+      }),
+      durationSec: 4,
+      tracks: [
+        {
+          id: 'picture',
+          kind: 'video',
+          name: 'Recorded footage',
+          order: 0,
+          clips: [
+            {
+              id: 'source',
+              kind: 'video',
+              timelineStartSec: 0,
+              durationSec: 4,
+              source: { sourceType: 'external_url', url: sourceUrl },
+              volume: 0.6,
+              keyframes: ['transform.opacity', 'audio.volume'].flatMap((property) => [
+                {
+                  id: `${property}:a`,
+                  property,
+                  timeSec: 0.5,
+                  value: 0.3,
+                  interpolation,
+                  ...(interpolation === 'bezier'
+                    ? {
+                        easing: { x1: 0.42, y1: 0, x2: 0.58, y2: 1 },
+                        expression: 'wiggle(0.7, 0.05)',
+                      }
+                    : {}),
+                  ...(interpolation === 'spring'
+                    ? { spring: { bounce: 0.7 }, expression: 'loop' }
+                    : {}),
+                },
+                {
+                  id: `${property}:b`,
+                  property,
+                  timeSec: 3.5,
+                  value: 0.8,
+                  interpolation: 'linear',
+                },
+              ]),
+            },
+          ],
+        },
+      ],
+    });
+    const sliced = simulate(project, [
+      {
+        commandType: 'split_clip',
+        trackId: 'picture',
+        clipId: 'source',
+        splitAtSec: 1,
+        rightClipId: 'middle',
+      },
+      {
+        commandType: 'split_clip',
+        trackId: 'picture',
+        clipId: 'middle',
+        splitAtSec: 1,
+        rightClipId: 'end',
+      },
+      { commandType: 'trim_clip', trackId: 'picture', clipId: 'end', durationSec: 1 },
+      { commandType: 'remove_clip', trackId: 'picture', clipId: 'middle' },
+      {
+        commandType: 'move_clip',
+        fromTrackId: 'picture',
+        toTrackId: 'picture',
+        clipId: 'end',
+        timelineStartSec: 1,
+      },
+    ]);
+    const render = async (value: typeof project) => {
+      const plan = await buildTimelineEditorRenderPlan({
+        project: value,
+        jobInputs: value.tracks.flatMap((track) =>
+          track.clips.map((clip) => ({
+            sourceId: clip.id,
+            storage: { bucket: 'bench', path: clip.id },
+          })),
+        ),
+        signedUrls: new Map(
+          value.tracks.flatMap((track) =>
+            track.clips.map((clip) => [`bench\n${clip.id}`, sourceUrl] as const),
+          ),
+        ),
+        signal: new AbortController().signal,
+      });
+      return composeTimeline({
+        ...plan,
+        videoBitrate: 1_500_000,
+        audioBitrate: 128_000,
+        targetWidth: WIDTH,
+        targetHeight: HEIGHT,
+        frameRate: 30,
+      });
+    };
+    const baseline = await render(project);
+    const actual = await render(sliced);
+    const a = new Input({ source: new BlobSource(baseline.blob), formats: ALL_FORMATS });
+    const b = new Input({ source: new BlobSource(actual.blob), formats: ALL_FORMATS });
+    try {
+      const frames = [];
+      for (const time of [0.25, 0.75, 1.25, 1.75]) {
+        const expected = await framePixels(a, time < 1 ? time : time + 1);
+        const got = await framePixels(b, time);
+        frames.push(
+          got.reduce((sum, value, index) => sum + Math.abs(value - expected[index]), 0) /
+            got.length,
+        );
+      }
+      const encode = async (blob: Blob) => {
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += 0x8000)
+          binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        return btoa(binary);
+      };
+      results.push({
+        interpolation,
+        frames,
+        project: sliced,
+        baseline: await encode(baseline.blob),
+        actual: await encode(actual.blob),
+      });
+    } finally {
+      a.dispose();
+      b.dispose();
+      URL.revokeObjectURL(baseline.objectUrl);
+      URL.revokeObjectURL(actual.objectUrl);
+    }
+  }
+  return results;
+}
+
 declare global {
   interface Window {
     __motionRenderBench: {
@@ -963,6 +1108,7 @@ declare global {
       compare: typeof runServerCompare;
       highlights: typeof runCaptionHighlights;
       looks: typeof runLooks;
+      curves: typeof runRetainedCurves;
     };
   }
 }
@@ -973,4 +1119,5 @@ window.__motionRenderBench = {
   compare: runServerCompare,
   highlights: runCaptionHighlights,
   looks: runLooks,
+  curves: runRetainedCurves,
 };

@@ -131,6 +131,9 @@ export interface ClipEffectSpec {
   opacityStops?: ClipPropertyStop[];
   /** Independent geometric channels. Win over bundled `keyframes` when present. */
   motionChannels?: ClipMotionChannels;
+  /** Original automation clock in seconds; absent for legacy normalized specs. */
+  motionDurationSec?: number;
+  keyframeOffsetSec?: number;
   /** Playback rate, 1 = normal. >1 faster, <1 slower. Video only. */
   speed?: number;
   text?: TextOverlay[];
@@ -206,6 +209,7 @@ export interface ClipPropertyStop {
   interpolation?: 'hold' | 'linear' | 'bezier' | 'spring';
   easing?: { x1: number; y1: number; x2: number; y2: number };
   spring?: { bounce: number };
+  expression?: string;
 }
 
 export type ClipMotionChannel =
@@ -315,18 +319,26 @@ function resolveTransform(transform: ClipTransform | undefined): ResolvedClipTra
   };
 }
 
-function sampleStops(stops: ClipPropertyStop[] | undefined, u: number, fallback: number): number {
+function sampleStops(
+  stops: ClipPropertyStop[] | undefined,
+  u: number,
+  fallback: number,
+  spec?: ClipEffectSpec,
+): number {
+  const duration = spec?.motionDurationSec ?? 1;
   if (!stops?.length) return fallback;
   return sampleNumericTrack(
     stops.map((stop) => ({
-      timeSec: stop.t,
+      timeSec: stop.t * duration,
       value: stop.value,
       interpolation: stop.interpolation ?? 'linear',
       ...(stop.easing ? { easing: stop.easing } : {}),
       ...(stop.spring ? { spring: stop.spring } : {}),
+      ...(stop.expression ? { expression: stop.expression } : {}),
     })),
-    u,
+    u * duration,
     fallback,
+    spec?.keyframeOffsetSec,
   );
 }
 
@@ -341,7 +353,7 @@ export function opacityFor(spec: ClipEffectSpec | undefined, u = 0): number {
   const fallback = spec?.opacity;
   const base = fallback === undefined ? 1 : Math.max(0, Math.min(1, fallback));
   const stops = spec?.motionChannels?.opacity ?? spec?.opacityStops;
-  return Math.max(0, Math.min(1, sampleStops(stops, u, base)));
+  return Math.max(0, Math.min(1, sampleStops(stops, u, base, spec)));
 }
 
 /**
@@ -385,17 +397,17 @@ export function resolveTransformAt(
   );
   if (hasGeometricChannels) {
     const base = resolveTransform(spec?.transform);
-    const scaleX = sampleStops(channels?.scaleX, clamped, base.scaleX);
-    const scaleY = sampleStops(channels?.scaleY, clamped, base.scaleY);
+    const scaleX = sampleStops(channels?.scaleX, clamped, base.scaleX, spec);
+    const scaleY = sampleStops(channels?.scaleY, clamped, base.scaleY, spec);
     return {
       scale: Math.max(Math.abs(scaleX), Math.abs(scaleY)),
       scaleX,
       scaleY,
-      offsetX: sampleStops(channels?.offsetX, clamped, base.offsetX),
-      offsetY: sampleStops(channels?.offsetY, clamped, base.offsetY),
-      rotate: sampleStops(channels?.rotate, clamped, base.rotate),
-      rotateX: sampleStops(channels?.rotateX, clamped, base.rotateX),
-      rotateY: sampleStops(channels?.rotateY, clamped, base.rotateY),
+      offsetX: sampleStops(channels?.offsetX, clamped, base.offsetX, spec),
+      offsetY: sampleStops(channels?.offsetY, clamped, base.offsetY, spec),
+      rotate: sampleStops(channels?.rotate, clamped, base.rotate, spec),
+      rotateX: sampleStops(channels?.rotateX, clamped, base.rotateX, spec),
+      rotateY: sampleStops(channels?.rotateY, clamped, base.rotateY, spec),
       perspective: base.perspective,
     };
   }

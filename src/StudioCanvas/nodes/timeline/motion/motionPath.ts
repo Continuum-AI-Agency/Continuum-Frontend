@@ -9,6 +9,7 @@ import {
 export function motionPathPoints(
   clip: {
     durationSec: number;
+    keyframeOffsetSec?: number;
     transform: { position: { x: number; y: number } };
     keyframes: EditorKeyframe[];
   },
@@ -19,7 +20,9 @@ export function motionPathPoints(
   const points: Array<{ x: number; y: number }> = [];
   for (let index = 0; index <= samples; index += 1) {
     const timeSec = (index / samples) * clip.durationSec;
-    points.push(samplePositionTrack(keys, timeSec, clip.transform.position));
+    points.push(
+      samplePositionTrack(keys, timeSec, clip.transform.position, clip.keyframeOffsetSec),
+    );
   }
   return points;
 }
@@ -27,6 +30,7 @@ export function motionPathPoints(
 export function sampledOpacity(
   clip: {
     durationSec: number;
+    keyframeOffsetSec?: number;
     transform: { opacity: number };
     keyframes: EditorKeyframe[];
   },
@@ -36,5 +40,6 @@ export function sampledOpacity(
     numericKeysForProperty(clip.keyframes, 'transform.opacity'),
     localSec,
     clip.transform.opacity,
+    clip.keyframeOffsetSec,
   );
 }

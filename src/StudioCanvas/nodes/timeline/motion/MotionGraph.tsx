@@ -31,16 +31,18 @@ export function MotionGraph({
   fallback,
   playheadSec,
   label,
+  keyframeOffsetSec,
 }: {
   keys: readonly EditorKeyframe[];
   durationSec: number;
   fallback: number;
   playheadSec: number;
   label: string;
+  keyframeOffsetSec?: number;
 }) {
   const points = useMemo(
-    () => sampleValueSpeedGraph(keys, durationSec, fallback),
-    [keys, durationSec, fallback],
+    () => sampleValueSpeedGraph(keys, durationSec, fallback, 80, keyframeOffsetSec),
+    [keys, durationSec, fallback, keyframeOffsetSec],
   );
   const valueExtent = useMemo(() => {
     const values = points.map((point) => point.value);

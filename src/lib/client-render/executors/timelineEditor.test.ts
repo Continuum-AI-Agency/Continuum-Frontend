@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { createEditorProjectV2, editorProjectV2Schema } from '@continuum/contracts';
+import {
+  createEditorProjectV2,
+  editorProjectV2Schema,
+  numericKeysForProperty,
+  sampleNumericTrack,
+} from '@continuum/contracts';
 import { opacityFor } from '@/StudioCanvas/utils/render/effectSpec';
 import {
   assertSupportedTimelineEditorExport,
@@ -724,4 +729,43 @@ describe('timeline editor client render executor', () => {
       'frameRate must be 30 fps; project and export frameRate must match; format must be mp4; videoCodec must be h264; audioCodec must be aac; sampleRateHz must be 48000; project and export sampleRateHz must match; colorSpace must be rec709; alpha must be false; sidecar captions are not supported',
     );
   });
+});
+
+it('retained curve projection keeps source-clock easing, endpoints and expressions', () => {
+  for (const interpolation of ['hold', 'linear', 'bezier', 'spring'] as const) {
+    for (const expression of [undefined, 'loop', 'wiggle(0.7, 0.1)']) {
+      const keys = [
+        {
+          id: 'a',
+          property: 'transform.opacity' as const,
+          timeSec: 1,
+          value: 0.2,
+          interpolation,
+          ...(interpolation === 'bezier'
+            ? { easing: { x1: 0.42, y1: -0.2, x2: 0.58, y2: 1.2 } }
+            : {}),
+          ...(interpolation === 'spring' ? { spring: { bounce: 0.7 } } : {}),
+          ...(expression ? { expression } : {}),
+        },
+        {
+          id: 'b',
+          property: 'transform.opacity' as const,
+          timeSec: 8,
+          value: 0.8,
+          interpolation: 'linear' as const,
+        },
+      ];
+      const clip = { timelineStartSec: 0, durationSec: 2, keyframeOffsetSec: 3, keyframes: keys };
+      const spec = clipEffectSpecFromEditorClip(clip);
+      expect(spec.opacityStops?.map((stop) => stop.t)).toEqual([0.5, 4]);
+      for (const localSec of [0, 0.1, 0.75, 1.9]) {
+        const expected = sampleNumericTrack(
+          numericKeysForProperty(keys, 'transform.opacity'),
+          localSec + 3,
+          1,
+        );
+        expect(opacityFor(spec, localSec / 2)).toBeCloseTo(Math.max(0, Math.min(1, expected)), 10);
+      }
+    }
+  }
 });

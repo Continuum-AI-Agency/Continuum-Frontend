@@ -263,7 +263,8 @@ export const editorKeyframeSchema = z
       'text.fontSize',
     ]),
     parameterName: z.string().min(1).max(200).optional(),
-    timeSec: secondsSchema,
+    // Control points may precede the retained clip clock after a start extension.
+    timeSec: z.number().finite().min(-86_400).max(86_400),
     value: editorKeyframeValueSchema,
     interpolation: z.enum(['hold', 'linear', 'bezier', 'spring']),
     easing: editorKeyframeEasingSchema.optional(),
@@ -328,6 +329,8 @@ const editorClipBaseShape = {
   locked: z.boolean().default(false),
   tags: z.array(z.string().min(1).max(100)).max(40).default([]),
   parentClipId: editorIdSchema.optional(),
+  /** Retained automation stays on its original clip clock after a split or range cut. */
+  keyframeOffsetSec: z.number().finite().min(-86_400).max(86_400).optional(),
 };
 
 export const editorVideoClipSchema = z

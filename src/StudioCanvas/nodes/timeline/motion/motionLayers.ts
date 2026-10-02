@@ -74,10 +74,15 @@ export function motionLayersFromProject(project: EditorProjectV2): MotionLayerRo
           property,
           label: PROPERTY_LABEL[property],
           keys: keys
-            .filter((keyframe) => keyframe.property === property)
+            .filter(
+              (keyframe) =>
+                keyframe.property === property &&
+                keyframe.timeSec >= (clip.keyframeOffsetSec ?? 0) &&
+                keyframe.timeSec <= (clip.keyframeOffsetSec ?? 0) + clip.durationSec,
+            )
             .map((keyframe) => ({
               id: keyframe.id,
-              timeSec: keyframe.timeSec,
+              timeSec: keyframe.timeSec - (clip.keyframeOffsetSec ?? 0),
               interpolation: keyframe.interpolation,
             })),
         })),

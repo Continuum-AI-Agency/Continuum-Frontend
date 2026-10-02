@@ -49,6 +49,7 @@ export type TimelineRenderItem = {
   // mixdown on top of any transition crossfade.
   volume?: number;
   volumeKeyframes?: NumericKeyframe[];
+  keyframeOffsetSec?: number;
   audioFadeInSec?: number;
   audioFadeOutSec?: number;
   // Per-clip visual/audio effects (color, opacity, transform, Ken Burns, speed,
@@ -89,6 +90,7 @@ export type TimelineAudioRenderItem = {
   fadeOutSec?: number;
   /** `audio.volume` keyframes, clip-local seconds (a ducked music bed). */
   volumeKeyframes?: NumericKeyframe[];
+  keyframeOffsetSec?: number;
 };
 
 export type ComposeTimelineOptions = {
@@ -152,6 +154,7 @@ export type PreparedTimelineAudio = {
   fadeInSec: number;
   fadeOutSec: number;
   volumeKeyframes?: NumericKeyframe[];
+  keyframeOffsetSec?: number;
 };
 
 export function buildAudioBedPlanItems(items: PreparedTimelineAudio[]): AudioPlanItem[] {
@@ -164,7 +167,9 @@ export function buildAudioBedPlanItems(items: PreparedTimelineAudio[]): AudioPla
     gain: item.gain,
     fadeInSec: item.fadeInSec,
     fadeOutSec: item.fadeOutSec,
-    ...(item.volumeKeyframes?.length ? { volumeKeyframes: item.volumeKeyframes } : {}),
+    ...(item.volumeKeyframes?.length
+      ? { volumeKeyframes: item.volumeKeyframes, keyframeOffsetSec: item.keyframeOffsetSec }
+      : {}),
   }));
 }
 
@@ -442,7 +447,9 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
         gain: typeof bed.volume === 'number' && bed.volume >= 0 ? bed.volume : 1,
         fadeInSec: Math.max(0, bed.fadeInSec ?? 0),
         fadeOutSec: Math.max(0, bed.fadeOutSec ?? 0),
-        ...(bed.volumeKeyframes?.length ? { volumeKeyframes: bed.volumeKeyframes } : {}),
+        ...(bed.volumeKeyframes?.length
+          ? { volumeKeyframes: bed.volumeKeyframes, keyframeOffsetSec: bed.keyframeOffsetSec }
+          : {}),
       });
     }
     const compositeOverlays: CompositeOverlays | undefined =
@@ -648,6 +655,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
         speed: item.range.durationSec / item.outputDurationSec,
         outputStartSec: place.outputStartSec,
         volumeKeyframes: src.volumeKeyframes,
+        keyframeOffsetSec: src.keyframeOffsetSec,
         ...envelope,
       });
     }

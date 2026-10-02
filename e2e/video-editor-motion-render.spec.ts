@@ -596,3 +596,119 @@ test('server export matches the client render, frame for frame', async ({ browse
       .join('\n'),
   );
 });
+
+test('retained curves preserve recorded picture and source gain through actual splits', async ({
+  browser,
+}) => {
+  const fixture = process.env.VIDEO_EDITOR_RECORDED_FIXTURE;
+  test.skip(!fixture, 'Recorded media fixture not supplied; curve/media coverage unexercised.');
+  const rec = createBenchRecorder('videoeditor:motion:render:bench:retained-curves', []);
+  let failed = 0;
+  const check = (name: string, pass: boolean, detail?: string) => {
+    rec.record(name, pass ? 'PASS' : 'FAIL', detail);
+    if (!pass) failed += 1;
+  };
+  const context = await browser.newContext();
+  const scratch = mkdtempSync(join(tmpdir(), 'video-editor-retained-curves-'));
+  try {
+    const page = await context.newPage();
+    await page.route('https://recorded.bench/source.mp4', (route) =>
+      route.fulfill({ contentType: 'video/mp4', body: readFileSync(fixture!) }),
+    );
+    await page.route('**/video-editor-motion-render-bench', (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body: '<!doctype html><html><body></body></html>',
+      }),
+    );
+    await page.goto('http://127.0.0.1:4173/video-editor-motion-render-bench');
+    await page.addScriptTag({ content: buildBrowserBundle(), type: 'module' });
+    await page.waitForFunction(() => Boolean(window.__motionRenderBench));
+    const runs = await rec.step('recorded curve renders through candidate compositor', () =>
+      page.evaluate(() => window.__motionRenderBench.curves('https://recorded.bench/source.mp4')),
+    );
+    for (const run of runs) {
+      check(
+        `${run.interpolation}: retained decoded frames agree with original source clock`,
+        run.frames.every((mae) => mae < 4),
+        JSON.stringify(run.frames),
+      );
+      const a = join(scratch, `${run.interpolation}-baseline.mp4`),
+        b = join(scratch, `${run.interpolation}-sliced.mp4`);
+      writeFileSync(a, Buffer.from(run.baseline, 'base64'));
+      writeFileSync(b, Buffer.from(run.actual, 'base64'));
+      const pcm = (file: string) => {
+        const bytes = execFileSync('ffmpeg', [
+          '-v',
+          'error',
+          '-i',
+          file,
+          '-vn',
+          '-ac',
+          '1',
+          '-ar',
+          '16000',
+          '-f',
+          'f32le',
+          'pipe:1',
+        ]);
+        return new Float32Array(
+          bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+        );
+      };
+      const original = pcm(a),
+        sliced = pcm(b);
+      let delta = 0,
+        energy = 0;
+      for (const localSec of [0.25, 0.75, 1.25, 1.75]) {
+        const expectedSec = localSec < 1 ? localSec : localSec + 1;
+        for (let i = 0; i < 640; i++) {
+          const got = sliced[Math.round(localSec * 16000) + i] ?? 0;
+          const expected = original[Math.round(expectedSec * 16000) + i] ?? 0;
+          delta += (got - expected) ** 2;
+          energy += expected ** 2;
+        }
+      }
+      check(
+        `${run.interpolation}: independent PCM follows retained gain curve`,
+        energy > 1e-6 && delta / energy < 0.02,
+        `relative PCM error ${delta / energy}`,
+      );
+      check(
+        `${run.interpolation}: canonical schema retains full endpoints and clock`,
+        run.project.tracks[0]?.clips[1]?.keyframeOffsetSec === 2 &&
+          run.project.tracks[0]?.clips[1]?.kind === 'video' &&
+          run.project.tracks[0]?.clips[1]?.keyframes?.length === 4,
+      );
+    }
+    rec.record(
+      'hosted Render/store/UI/agent',
+      'SKIP',
+      'Candidate browser/reducer/recorded-media proof only; hosted compositor rebuild, real project persistence, native UI and agent remain unexercised.',
+    );
+    const folder = process.env.VIDEO_EDITOR_CURVES_OUTPUT;
+    if (folder) {
+      execFileSync('mkdir', ['-p', folder]);
+      for (const name of ['hold', 'linear', 'bezier', 'spring'])
+        for (const variant of ['baseline', 'sliced']) {
+          writeFileSync(
+            join(folder, `${name}-${variant}.mp4`),
+            readFileSync(join(scratch, `${name}-${variant}.mp4`)),
+          );
+        }
+      writeFileSync(
+        join(folder, 'summary.json'),
+        JSON.stringify(
+          runs.map(({ baseline, actual, ...rest }) => rest),
+          null,
+          2,
+        ),
+      );
+    }
+    expect(failed).toBe(0);
+  } finally {
+    rec.print();
+    await context.close();
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});

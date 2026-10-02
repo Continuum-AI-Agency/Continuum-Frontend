@@ -58,14 +58,22 @@ export function volumeAutomation(
   const times = new Set<number>([start, end]);
   for (let at = start + VOLUME_STEP_SEC; at < end; at += VOLUME_STEP_SEC) times.add(at);
   for (const key of keys) {
-    const at = event.outputStartSec + key.timeSec;
+    const at = event.outputStartSec + key.timeSec - (event.keyframeOffsetSec ?? 0);
     if (at > start && at < end) times.add(at);
   }
   return [...times]
     .sort((left, right) => left - right)
     .map((timelineSec) => ({
       timelineSec,
-      value: Math.max(0, sampleNumericTrack(keys, timelineSec - event.outputStartSec, event.gain)),
+      value: Math.max(
+        0,
+        sampleNumericTrack(
+          keys,
+          timelineSec - event.outputStartSec,
+          event.gain,
+          event.keyframeOffsetSec,
+        ),
+      ),
     }));
 }
 

@@ -93,6 +93,7 @@ export function buildEditorProjectV2AudioPreviewPlan(input: {
       sourceEndSec: clip.sourceInSec + placement.durationSec * clip.playbackRate,
       playbackRate: clip.playbackRate,
       volumeKeyframes: volumeKeyframesOf(clip.keyframes),
+      keyframeOffsetSec: clip.keyframeOffsetSec,
       ...envelope,
     });
   }
@@ -118,7 +119,9 @@ export function buildEditorProjectV2AudioPreviewPlan(input: {
         manualFadeInSec: clip.fadeInSec,
         manualFadeOutSec: clip.fadeOutSec,
       }),
-      ...(volumeKeyframes.length > 0 ? { volumeKeyframes } : {}),
+      ...(volumeKeyframes.length > 0
+        ? { volumeKeyframes, keyframeOffsetSec: clip.keyframeOffsetSec }
+        : {}),
     });
   }
 

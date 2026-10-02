@@ -32,6 +32,7 @@ export interface TimelinePreviewAudioEvent {
   fadeOutSec: number;
   /** `audio.volume` keyframes, clip-local seconds; when present they ARE the gain. */
   volumeKeyframes?: readonly NumericKeyframe[];
+  keyframeOffsetSec?: number;
 }
 
 export interface TimelinePreviewAudioPlan {
