@@ -21986,6 +21986,20 @@ export type Database = {
         }
         Returns: Json
       }
+      register_template_artwork_repair: {
+        Args: {
+          p_asset_id: string
+          p_brand_id: string
+          p_bucket: string
+          p_checksum: string
+          p_file_name: string
+          p_repairs: number
+          p_size_bytes: number
+          p_source_version_id: string
+          p_storage_path: string
+        }
+        Returns: Json
+      }
       replace_element: {
         Args: {
           p_brand_id: string
