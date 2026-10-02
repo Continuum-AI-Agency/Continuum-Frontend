@@ -1,0 +1,75 @@
+import { expect, test } from 'bun:test';
+import {
+  editorCaptionWordsWithText,
+  editorClipAtSourceIn,
+  editorClipAtSpeed,
+} from './editor-clip-edits';
+import { editorAudioClipSchema, editorVideoClipSchema } from './editor-project-v2';
+
+test('speed keeps source span and scales keyframes, fades and automation together', () => {
+  const clip = editorAudioClipSchema.parse({
+    id: 'sound',
+    kind: 'audio',
+    timelineStartSec: 3,
+    durationSec: 8,
+    sourceInSec: 2,
+    source: { sourceType: 'library_asset', assetId: 'a' },
+    fadeInSec: 2,
+    fadeOutSec: 4,
+    keyframes: [
+      { id: 'gain', property: 'audio.volume', timeSec: 6, value: 0.5, interpolation: 'linear' },
+    ],
+  });
+  const next = editorClipAtSpeed(clip, 2);
+  expect(next.durationSec * next.playbackRate).toBe(8);
+  expect(next.sourceInSec).toBe(2);
+  expect(next.keyframes[0].timeSec).toBe(3);
+  expect([next.fadeInSec, next.fadeOutSec]).toEqual([1, 2]);
+  expect(() => editorClipAtSpeed(clip, 0)).toThrow();
+  expect(() => editorClipAtSpeed({ ...clip, reverse: true }, 2)).toThrow();
+});
+
+test('caption spelling keeps timing and metadata and refuses an implicit realignment', () => {
+  const words = [
+    { text: 'Apollo', startSec: 0.2, endSec: 0.8, confidence: 0.9, emphasis: true },
+    { text: 'eleven', startSec: 1.1, endSec: 1.6 },
+  ];
+  expect(editorCaptionWordsWithText(words, 'Apollo 11')).toEqual([
+    { ...words[0] },
+    { ...words[1], text: '11' },
+  ]);
+  expect(() => editorCaptionWordsWithText(words, 'Apollo mission eleven')).toThrow();
+});
+
+test('speed scales present video fades and preserves absence in legacy video documents', () => {
+  const clip = editorVideoClipSchema.parse({
+    id: 'v',
+    kind: 'video',
+    timelineStartSec: 0,
+    durationSec: 8,
+    source: { sourceType: 'library_asset', assetId: 'a' },
+  });
+  const unchanged = editorClipAtSpeed(clip, 2);
+  expect('fadeInSec' in unchanged).toBe(false);
+  expect('fadeOutSec' in unchanged).toBe(false);
+  const edited = editorClipAtSpeed({ ...clip, volume: 0.6, fadeInSec: 2, fadeOutSec: 4 }, 2);
+  expect(edited).toMatchObject({ volume: 0.6, durationSec: 4, fadeInSec: 1, fadeOutSec: 2 });
+});
+
+test('start trims and extensions retain the automation clock in output seconds', () => {
+  const clip = editorVideoClipSchema.parse({
+    id: 'trim-clock',
+    kind: 'video',
+    timelineStartSec: 0,
+    durationSec: 4,
+    source: { sourceType: 'library_asset', assetId: 'a' },
+    sourceInSec: 3,
+    playbackRate: 2,
+    keyframes: [
+      { id: 'key', property: 'transform.opacity', timeSec: 1, value: 0.5, interpolation: 'linear' },
+    ],
+  });
+  expect(editorVideoClipSchema.parse(editorClipAtSourceIn(clip, 5)).keyframeOffsetSec).toBe(1);
+  expect(editorVideoClipSchema.parse(editorClipAtSourceIn(clip, 1)).keyframeOffsetSec).toBe(-1);
+  expect(editorClipAtSpeed({ ...clip, keyframeOffsetSec: 2 }, 4).keyframeOffsetSec).toBe(1);
+});
