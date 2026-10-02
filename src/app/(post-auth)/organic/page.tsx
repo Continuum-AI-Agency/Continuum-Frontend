@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 import { ProductGate } from '@/components/billing/ProductGate';
 import type { OrganicAgentMentionContext } from '@/components/organic/agent/OrganicAgentPanel';
 import { OrganicAgentPanelLazy } from '@/components/organic/agent/OrganicAgentPanelLazy';
+import { OrganicExploreLazy } from '@/components/organic/OrganicExploreLazy';
 import { OrganicMetricsDashboardLazy } from '@/components/organic/OrganicMetricsDashboardLazy';
 import { OrganicNoticeBridge } from '@/components/organic/OrganicNoticeBridge';
 import { OrganicWorkspaceTabs } from '@/components/organic/OrganicWorkspaceTabs';
@@ -420,6 +421,7 @@ async function OrganicContent({
             initialSessionId={initialAgentSessionId}
           />
         }
+        exploreSlot={<OrganicExploreLazy brandId={brandProfileId} />}
         reviewSlot={<ReviewQueueLazy brandId={brandProfileId} />}
         stylesSlot={<StylesShelfLazy brandId={brandProfileId} />}
       />

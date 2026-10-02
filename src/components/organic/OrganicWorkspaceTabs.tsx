@@ -30,15 +30,19 @@ type Props = {
   plannerSlot: React.ReactNode;
   metricsSlot: React.ReactNode;
   metricsPrefetchParams?: MetricsPrefetchParams;
+  exploreSlot?: React.ReactNode;
   agentSlot?: React.ReactNode;
   reviewSlot?: React.ReactNode;
   stylesSlot?: React.ReactNode;
   brandId?: string | null;
 };
 
-const WORKSPACE_LABELS: Record<'planner' | 'metrics' | 'agent' | 'review' | 'styles', string> = {
+type OrganicView = 'planner' | 'metrics' | 'explore' | 'agent' | 'review' | 'styles';
+
+const WORKSPACE_LABELS: Record<OrganicView, string> = {
   planner: 'Planner',
   metrics: 'Metrics',
+  explore: 'Explore',
   agent: 'Agent',
   review: 'Review',
   styles: 'Styles',
@@ -48,6 +52,7 @@ export function OrganicWorkspaceTabs({
   plannerSlot,
   metricsSlot,
   metricsPrefetchParams,
+  exploreSlot,
   agentSlot,
   reviewSlot,
   stylesSlot,
@@ -55,16 +60,19 @@ export function OrganicWorkspaceTabs({
 }: Props) {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const initialView: 'planner' | 'metrics' | 'agent' | 'review' | 'styles' =
-    tabParam === 'metrics' || tabParam === 'agent' || tabParam === 'review' || tabParam === 'styles'
+  const initialView: OrganicView =
+    tabParam === 'metrics' ||
+    tabParam === 'explore' ||
+    tabParam === 'agent' ||
+    tabParam === 'review' ||
+    tabParam === 'styles'
       ? tabParam
       : 'planner';
-  const [activeView, setActiveView] = React.useState<
-    'planner' | 'metrics' | 'agent' | 'review' | 'styles'
-  >(initialView);
+  const [activeView, setActiveView] = React.useState<OrganicView>(initialView);
   // Track whether metrics/agent tabs have ever been shown — once mounted, keep alive
   // so switching back doesn't re-fetch / re-mount the components.
   const [metricsEverShown, setMetricsEverShown] = React.useState(initialView === 'metrics');
+  const [exploreEverShown, setExploreEverShown] = React.useState(initialView === 'explore');
   const [agentEverShown, setAgentEverShown] = React.useState(initialView === 'agent');
   const [reviewEverShown, setReviewEverShown] = React.useState(initialView === 'review');
   const [stylesEverShown, setStylesEverShown] = React.useState(initialView === 'styles');
@@ -95,8 +103,9 @@ export function OrganicWorkspaceTabs({
   }, [activeView, metricsPrefetchParams]);
 
   React.useEffect(() => {
-    const nextView: 'planner' | 'metrics' | 'agent' | 'review' | 'styles' =
+    const nextView: OrganicView =
       tabParam === 'metrics' ||
+      tabParam === 'explore' ||
       tabParam === 'agent' ||
       tabParam === 'review' ||
       tabParam === 'styles'
@@ -105,6 +114,7 @@ export function OrganicWorkspaceTabs({
     if (nextView !== activeView) {
       setActiveView(nextView);
       if (nextView === 'metrics') setMetricsEverShown(true);
+      if (nextView === 'explore') setExploreEverShown(true);
       if (nextView === 'agent') setAgentEverShown(true);
       if (nextView === 'review') setReviewEverShown(true);
       if (nextView === 'styles') setStylesEverShown(true);
@@ -112,11 +122,12 @@ export function OrganicWorkspaceTabs({
   }, [activeView, tabParam]);
 
   const handleValueChange = React.useCallback((value: string) => {
-    const nextView = value as 'planner' | 'metrics' | 'agent' | 'review' | 'styles';
+    const nextView = value as OrganicView;
 
     const apply = () => {
       setActiveView(nextView);
       if (nextView === 'metrics') setMetricsEverShown(true);
+      if (nextView === 'explore') setExploreEverShown(true);
       if (nextView === 'agent') setAgentEverShown(true);
       if (nextView === 'review') setReviewEverShown(true);
       if (nextView === 'styles') setStylesEverShown(true);
@@ -156,10 +167,11 @@ export function OrganicWorkspaceTabs({
                 [
                   'planner',
                   'metrics',
+                  ...(exploreSlot !== undefined ? ['explore'] : []),
                   ...(agentSlot !== undefined ? ['agent'] : []),
                   ...(reviewSlot !== undefined ? ['review'] : []),
                   ...(stylesSlot !== undefined ? ['styles'] : []),
-                ] as Array<'planner' | 'metrics' | 'agent' | 'review' | 'styles'>
+                ] as Array<OrganicView>
               ).map((view) => {
                 const isActive = activeView === view;
 
@@ -209,6 +221,15 @@ export function OrganicWorkspaceTabs({
                 hidden={activeView !== 'metrics'}
               >
                 {metricsSlot}
+              </div>
+            )}
+            {/* Defer explore mount until first viewed, then keep alive */}
+            {exploreSlot !== undefined && exploreEverShown && (
+              <div
+                className="h-full w-full min-h-0 overflow-y-auto px-[var(--card-pad)]"
+                hidden={activeView !== 'explore'}
+              >
+                {exploreSlot}
               </div>
             )}
             {/* Defer agent mount until first viewed, then keep alive */}

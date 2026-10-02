@@ -4,6 +4,7 @@ import {
   COMPETITOR_POST_FORMAT_LABELS,
   competitorPostFormat,
   competitorPostFormatSchema,
+  inspirationPostsResponseSchema,
 } from './inspiration';
 
 describe('competitorPostFormat', () => {
@@ -27,5 +28,12 @@ describe('competitorPostFormat', () => {
     expect(competitorPostFormat('reel', null)).toBe('reel');
     expect(competitorPostFormat('carousel', {})).toBe('photo_carousel');
     expect(competitorPostFormat('post', null)).toBe('photo');
+  });
+});
+
+describe('inspirationPostsResponseSchema', () => {
+  test('older payloads without syncFaults still parse (faults default to empty)', () => {
+    const parsed = inspirationPostsResponseSchema.parse({ items: [] });
+    expect(parsed.syncFaults).toEqual([]);
   });
 });
