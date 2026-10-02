@@ -192,9 +192,10 @@ const near = (value: number | undefined, target: number, tolerance: number) =>
 
 /** Seek by clicking the ruler at `sec`; the default zoom is read off a clip's width. */
 async function seek(page: Page, pxPerSec: number, sec: number) {
-  const ruler = await page.locator('[data-timeline-ruler]:visible').boundingBox();
-  if (!ruler) throw new Error('ruler not visible');
-  await page.mouse.click(ruler.x + pxPerSec * sec, ruler.y + ruler.height / 2);
+  const ruler = page.locator('[data-timeline-ruler]:visible');
+  const box = await ruler.boundingBox();
+  if (!box) throw new Error('ruler not visible');
+  await ruler.click({ position: { x: pxPerSec * sec, y: box.height / 2 } });
   await expect
     .poll(async () => {
       const clock = await page.locator('[data-testid="timeline-clock"]:visible').innerText();
@@ -1332,6 +1333,27 @@ test('retained project journey: native splits and deletes preserve stored pictur
       writeFileSync(path, Buffer.from(result.base64, 'base64'));
       return result;
     };
+    const previewAudio = async (project: EditorProjectV2, fromSec = 0) => {
+      const request: DurableTimelineRequest = {
+        project,
+        inputs: mainClips(project).map((clip) => ({
+          sourceId: clip.id,
+          sourceAssetId: assetId,
+          sourceRevision: versionId,
+          storage: { bucket: version.bucket, path: version.storage_path },
+          url: signed.signedUrl,
+        })),
+      };
+      const result = await compositor.evaluate(
+        ({ request, fromSec }) =>
+          window.__editorV2DurableRenderBench.previewTimelineAudio(request, fromSec),
+        { request, fromSec },
+      );
+      const bytes = Buffer.from(result.pcmBase64, 'base64');
+      return new Float32Array(
+        bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+      );
+    };
     const summary = [];
     const commandResponses: Array<{ status: number; body: string }> = [];
     page.on('response', async (response) => {
@@ -1772,6 +1794,8 @@ test('retained project journey: native splits and deletes preserve stored pictur
                   durationSec: 4,
                   source: { sourceType: 'library_asset', assetId, renditionId: versionId },
                   volume: 0.6,
+                  fadeInSec: 3,
+                  fadeOutSec: 3,
                   keyframes: keys,
                 },
               ],
@@ -1894,6 +1918,17 @@ test('retained project journey: native splits and deletes preserve stored pictur
           near(retained[1].sourceInSec, 2, 1 / 60) &&
           edited.revision === before.revision + 5,
       );
+      assert(
+        `${interpolation}: reload retains both authored fade ramps and their original clock`,
+        retained.every(
+          (clip, index) =>
+            clip.kind === 'video' &&
+            clip.fadeInSec === 3 &&
+            clip.fadeOutSec === 3 &&
+            clip.audioFadeClock?.durationSec === 4 &&
+            near(clip.audioFadeClock.offsetSec, index * 2, 1e-6),
+        ),
+      );
       const actualPath = join(folder, `${interpolation}-edited.mp4`);
       const rendered = await render(edited, actualPath);
       const probe = JSON.parse(
@@ -1988,6 +2023,28 @@ test('retained project journey: native splits and deletes preserve stored pictur
         energy > 1e-6 && delta / energy < 0.02,
         `relative PCM error ${delta / energy}`,
       );
+      const originalPreview = await previewAudio(before),
+        editedPreview = await previewAudio(edited),
+        seekPreview = await previewAudio(edited, 1.1);
+      const previewErrors = [0, 1.1].map((fromSec) => {
+        const actual = fromSec === 0 ? editedPreview : seekPreview;
+        let error = 0,
+          energy = 0;
+        for (const sec of [0.25, 0.75, 1.25, 1.75].filter((time) => time >= fromSec))
+          for (let sample = 0; sample < 1920; sample++) {
+            const got = actual[Math.round((sec - fromSec) * 48000) + sample] ?? 0;
+            const expected =
+              originalPreview[Math.round((sec < 1 ? sec : sec + 1) * 48000) + sample] ?? 0;
+            error += (got - expected) ** 2;
+            energy += expected ** 2;
+          }
+        return energy > 1e-6 ? error / energy : Infinity;
+      });
+      assert(
+        `${interpolation}: native Web Audio preview and seek retain the original fade envelope`,
+        previewErrors.every((error) => error < 0.02),
+        JSON.stringify(previewErrors),
+      );
       const undo = await postOp(api, projectId, 'undo', { toRevision: before.revision });
       const restored = await getProject(api, projectId);
       assert(
@@ -2000,6 +2057,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
         edited,
         frames: errors,
         pcmRelativeError: delta / energy,
+        previewErrors,
       });
     }
     writeFileSync(join(folder, 'summary.json'), JSON.stringify(summary, null, 2));

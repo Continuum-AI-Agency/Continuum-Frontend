@@ -1,4 +1,9 @@
-import { type NumericKeyframe, sampleNumericTrack } from '@continuum/contracts';
+import {
+  type EditorAudioFadeClock,
+  editorAudioFadeGainAt,
+  type NumericKeyframe,
+  sampleNumericTrack,
+} from '@continuum/contracts';
 import { throwIfAborted } from './appendRange';
 
 // PCM mixdown for the Video Editor (timelineEditor) render. The old audio path
@@ -64,6 +69,9 @@ export function resampleToStereo48k(
 
 export interface EnvelopeOptions {
   gain?: number;
+  audioFadeClock?: EditorAudioFadeClock;
+  transitionFadeInSec?: number;
+  transitionFadeOutSec?: number;
   fadeInSec?: number;
   fadeOutSec?: number;
   /** `audio.volume` keyframes, clip-local seconds; when present they ARE the gain
@@ -92,6 +100,7 @@ export function applyEnvelope(pcm: StereoPcm, opts: EnvelopeOptions): void {
           sampleNumericTrack(keys, frame / AUDIO_SAMPLE_RATE, gain, opts.keyframeOffsetSec),
         )
       : gain;
+  const clip = { ...opts, durationSec: n / AUDIO_SAMPLE_RATE };
   let fromGain = gain;
   let toGain = gain;
   for (let i = 0; i < n; i += 1) {
@@ -104,8 +113,24 @@ export function applyEnvelope(pcm: StereoPcm, opts: EnvelopeOptions): void {
       }
       g = fromGain + ((toGain - fromGain) * step) / GAIN_CONTROL_FRAMES;
     }
-    if (fadeIn > 0 && i < fadeIn) g *= i / fadeIn;
-    if (fadeOut > 0 && i >= n - fadeOut) g *= Math.max(0, n - 1 - i) / fadeOut;
+    if (opts.audioFadeClock) {
+      const localSec = i / AUDIO_SAMPLE_RATE;
+      const transitionIn =
+        (opts.transitionFadeInSec ?? 0) > 0 ? Math.min(1, localSec / opts.transitionFadeInSec!) : 1;
+      const transitionOut =
+        (opts.transitionFadeOutSec ?? 0) > 0
+          ? Math.max(0, Math.min(1, (n - 1 - i) / AUDIO_SAMPLE_RATE / opts.transitionFadeOutSec!))
+          : 1;
+      g *= Math.min(editorAudioFadeGainAt(clip, localSec, 'in'), transitionIn);
+      // Retain the mixer's last-sample-at-zero convention on the authored clock.
+      g *= Math.min(
+        editorAudioFadeGainAt(clip, localSec + 1 / AUDIO_SAMPLE_RATE, 'out'),
+        transitionOut,
+      );
+    } else {
+      if (fadeIn > 0 && i < fadeIn) g *= i / fadeIn;
+      if (fadeOut > 0 && i >= n - fadeOut) g *= Math.max(0, n - 1 - i) / fadeOut;
+    }
     pcm.left[i] *= g;
     pcm.right[i] *= g;
   }
@@ -163,6 +188,9 @@ export interface AudioPlanItem {
   speed: number;
   outputStartSec: number;
   gain: number;
+  audioFadeClock?: EditorAudioFadeClock;
+  transitionFadeInSec?: number;
+  transitionFadeOutSec?: number;
   fadeInSec: number;
   fadeOutSec: number;
   volumeKeyframes?: readonly NumericKeyframe[];
@@ -251,6 +279,9 @@ export async function mixdownTimelineAudio(
     const pcm = resampleToStereo48k(decoded.channels, decoded.sampleRate, item.speed);
     applyEnvelope(pcm, {
       gain: item.gain,
+      audioFadeClock: item.audioFadeClock,
+      transitionFadeInSec: item.transitionFadeInSec,
+      transitionFadeOutSec: item.transitionFadeOutSec,
       fadeInSec: item.fadeInSec,
       fadeOutSec: item.fadeOutSec,
       ...(item.volumeKeyframes

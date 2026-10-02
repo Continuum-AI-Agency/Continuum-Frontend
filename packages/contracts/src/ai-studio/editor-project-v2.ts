@@ -320,6 +320,14 @@ export const editorEffectInstanceSchema = z
   .strict();
 export type EditorEffectInstance = z.infer<typeof editorEffectInstanceSchema>;
 
+export const editorAudioFadeClockSchema = z
+  .object({
+    offsetSec: z.number().finite().min(-86_400).max(86_400),
+    durationSec: positiveSecondsSchema,
+  })
+  .strict();
+export type EditorAudioFadeClock = z.infer<typeof editorAudioFadeClockSchema>;
+
 const editorClipBaseShape = {
   id: editorIdSchema,
   name: z.string().min(1).max(500).optional(),
@@ -351,6 +359,7 @@ export const editorVideoClipSchema = z
     audioEnabled: z.boolean().default(true),
     // Optional fields keep existing project documents and fingerprints unchanged.
     volume: z.number().finite().min(0).max(4).optional(),
+    audioFadeClock: editorAudioFadeClockSchema.optional(),
     fadeInSec: secondsSchema.optional(),
     fadeOutSec: secondsSchema.optional(),
     effects: z.array(editorEffectInstanceSchema).max(50).default([]),
@@ -359,7 +368,8 @@ export const editorVideoClipSchema = z
   .strict()
   .refine(
     (clip) =>
-      (clip.fadeInSec ?? 0) <= clip.durationSec && (clip.fadeOutSec ?? 0) <= clip.durationSec,
+      (clip.fadeInSec ?? 0) <= (clip.audioFadeClock?.durationSec ?? clip.durationSec) &&
+      (clip.fadeOutSec ?? 0) <= (clip.audioFadeClock?.durationSec ?? clip.durationSec),
     {
       message: 'video audio fades cannot exceed clip duration',
     },
@@ -378,6 +388,7 @@ export const editorAudioClipSchema = z
     volume: z.number().finite().min(0).max(4).default(1),
     pan: signedUnitSchema.default(0),
     muted: z.boolean().default(false),
+    audioFadeClock: editorAudioFadeClockSchema.optional(),
     fadeInSec: secondsSchema.default(0),
     fadeOutSec: secondsSchema.default(0),
     effects: z.array(editorEffectInstanceSchema).max(50).default([]),
@@ -385,9 +396,14 @@ export const editorAudioClipSchema = z
     automation: z.array(editorAudioAutomationPointSchema).max(1_000).optional(),
   })
   .strict()
-  .refine((clip) => clip.fadeInSec <= clip.durationSec && clip.fadeOutSec <= clip.durationSec, {
-    message: 'audio fades cannot exceed clip duration',
-  });
+  .refine(
+    (clip) =>
+      clip.fadeInSec <= (clip.audioFadeClock?.durationSec ?? clip.durationSec) &&
+      clip.fadeOutSec <= (clip.audioFadeClock?.durationSec ?? clip.durationSec),
+    {
+      message: 'audio fades cannot exceed clip duration',
+    },
+  );
 export type EditorAudioClip = z.infer<typeof editorAudioClipSchema>;
 
 export const editorOverlayClipSchema = z

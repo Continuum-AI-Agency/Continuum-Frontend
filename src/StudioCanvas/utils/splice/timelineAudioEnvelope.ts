@@ -1,4 +1,5 @@
 import type {
+  EditorAudioFadeClock,
   EditorKeyframe,
   EditorProjectV2,
   EditorTrack,
@@ -7,6 +8,7 @@ import type {
 
 export interface TimelineAudioEnvelopeInput {
   gain?: number;
+  audioFadeClock?: EditorAudioFadeClock;
   manualFadeInSec?: number;
   manualFadeOutSec?: number;
   transitionFadeInSec?: number;
@@ -15,6 +17,9 @@ export interface TimelineAudioEnvelopeInput {
 
 export interface TimelineAudioEnvelope {
   gain: number;
+  audioFadeClock?: EditorAudioFadeClock;
+  transitionFadeInSec?: number;
+  transitionFadeOutSec?: number;
   fadeInSec: number;
   fadeOutSec: number;
 }
@@ -22,7 +27,8 @@ export interface TimelineAudioEnvelope {
 /**
  * Canonical audio-envelope projection shared by interactive preview and export.
  * Transition fades and author-authored fades are not additive: the longer ramp
- * wins, matching the render mixer's behaviour.
+ * wins when they share an origin. Retained manual fades keep their original clock;
+ * transition ramps stay on the current clip clock.
  */
 export function resolveTimelineAudioEnvelope(
   input: TimelineAudioEnvelopeInput,
@@ -30,8 +36,23 @@ export function resolveTimelineAudioEnvelope(
   return {
     gain:
       typeof input.gain === 'number' && Number.isFinite(input.gain) ? Math.max(0, input.gain) : 1,
-    fadeInSec: Math.max(0, input.manualFadeInSec ?? 0, input.transitionFadeInSec ?? 0),
-    fadeOutSec: Math.max(0, input.manualFadeOutSec ?? 0, input.transitionFadeOutSec ?? 0),
+    fadeInSec: Math.max(
+      0,
+      input.manualFadeInSec ?? 0,
+      input.audioFadeClock ? 0 : (input.transitionFadeInSec ?? 0),
+    ),
+    fadeOutSec: Math.max(
+      0,
+      input.manualFadeOutSec ?? 0,
+      input.audioFadeClock ? 0 : (input.transitionFadeOutSec ?? 0),
+    ),
+    ...(input.audioFadeClock
+      ? {
+          audioFadeClock: input.audioFadeClock,
+          transitionFadeInSec: Math.max(0, input.transitionFadeInSec ?? 0),
+          transitionFadeOutSec: Math.max(0, input.transitionFadeOutSec ?? 0),
+        }
+      : {}),
   };
 }
 

@@ -1,4 +1,4 @@
-import type { ActionId, NumericKeyframe } from '@continuum/contracts';
+import type { ActionId, EditorAudioFadeClock, NumericKeyframe } from '@continuum/contracts';
 import type { CaptionFontPayload } from '@/lib/clips/captionFonts';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { ClipEffectSpec } from '../utils/render/effectSpec';
@@ -40,6 +40,7 @@ export type TimelineWorkerItem = {
   volume?: number;
   volumeKeyframes?: NumericKeyframe[];
   keyframeOffsetSec?: number;
+  audioFadeClock?: EditorAudioFadeClock;
   audioFadeInSec?: number;
   audioFadeOutSec?: number;
   effects?: ClipEffectSpec;
@@ -71,6 +72,7 @@ export type TimelineAudioWorkerItem = {
   trimEndSec?: number;
   speed?: number;
   volume?: number;
+  audioFadeClock?: EditorAudioFadeClock;
   fadeInSec?: number;
   fadeOutSec?: number;
   /** `audio.volume` keyframes, clip-local seconds (a ducked music bed). */

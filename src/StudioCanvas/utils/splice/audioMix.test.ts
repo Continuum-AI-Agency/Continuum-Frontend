@@ -218,3 +218,31 @@ describe('stereoToPlanar', () => {
     expect(Array.from(stereoToPlanar(pcm, 1, 2))).toEqual([2, 3, 6, 7]);
   });
 });
+
+it('retained fade PCM matches the original window while transition fades keep local time', () => {
+  const ones = (sec: number) => ({
+    left: new Float32Array(sec * AUDIO_SAMPLE_RATE).fill(1),
+    right: new Float32Array(sec * AUDIO_SAMPLE_RATE).fill(1),
+  });
+  const original = ones(10),
+    retained = ones(2),
+    transitioned = ones(2);
+  applyEnvelope(original, { fadeInSec: 8, fadeOutSec: 7 });
+  const options = {
+    fadeInSec: 8,
+    fadeOutSec: 7,
+    audioFadeClock: { offsetSec: 4, durationSec: 10 },
+  };
+  applyEnvelope(retained, options);
+  applyEnvelope(transitioned, { ...options, transitionFadeInSec: 1, transitionFadeOutSec: 0.5 });
+  for (const local of [0, 0.25, 0.75, 1, 1.75]) {
+    const frame = Math.round(local * AUDIO_SAMPLE_RATE);
+    expect(retained.left[frame]).toBeCloseTo(original.left[4 * AUDIO_SAMPLE_RATE + frame]!, 6);
+    const manualIn = (4 + local) / 8,
+      manualOut = (6 - local - 1 / AUDIO_SAMPLE_RATE) / 7;
+    const expected =
+      Math.min(manualIn, local) *
+      Math.min(manualOut, Math.max(0, Math.min(1, (2 - local - 1 / AUDIO_SAMPLE_RATE) / 0.5)));
+    expect(transitioned.left[frame]).toBeCloseTo(expected, 6);
+  }
+});

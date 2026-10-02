@@ -16,6 +16,8 @@ import {
   type EditorTrack,
   type EditorVideoClip,
   editorClipAtSpeed,
+  editorClipWithLocalFades,
+  editorClipWithRetainedFades,
 } from '@continuum/contracts';
 import { AlignCenter, AlignLeft, AlignRight, Loader2, Music, Type, Wand2, X } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -144,7 +146,17 @@ function patchClipEdit(
   label: string,
 ): TimelineEdit | null {
   const found = findClip(project, clipId);
-  return found ? replaceClipEdit(project, { ...found.clip, ...fields } as EditorClip, label) : null;
+  if (!found) return null;
+  const clip = found.clip;
+  const retained =
+    (clip.kind === 'audio' || clip.kind === 'video') &&
+    fields.durationSec !== undefined &&
+    fields.durationSec !== clip.durationSec &&
+    !('playbackRate' in fields && fields.playbackRate !== clip.playbackRate) &&
+    !('audioFadeClock' in fields)
+      ? editorClipWithRetainedFades(clip)
+      : clip;
+  return replaceClipEdit(project, { ...retained, ...fields } as EditorClip, label);
 }
 
 /** Several pending edits as ONE revision, each built on the project the previous leaves. */
@@ -491,11 +503,12 @@ function VisualClipInspector({
                   patch(
                     {
                       ...(audio.volume !== undefined ? { volume: audio.volume } : {}),
-                      ...(audio.audioFadeInSec !== undefined
-                        ? { fadeInSec: Math.min(audio.audioFadeInSec, view.durationSec) }
-                        : {}),
-                      ...(audio.audioFadeOutSec !== undefined
-                        ? { fadeOutSec: Math.min(audio.audioFadeOutSec, view.durationSec) }
+                      ...(view.kind === 'video' &&
+                      (audio.audioFadeInSec !== undefined || audio.audioFadeOutSec !== undefined)
+                        ? editorClipWithLocalFades(view, {
+                            fadeInSec: audio.audioFadeInSec,
+                            fadeOutSec: audio.audioFadeOutSec,
+                          })
                         : {}),
                     },
                     'Edit clip audio',
@@ -598,7 +611,7 @@ function AudioClipInspector({
         max={fadeMax}
         step={0.1}
         suffix="s"
-        onChange={(fadeInSec) => patch({ fadeInSec }, 'Fade in')}
+        onChange={(fadeInSec) => patch(editorClipWithLocalFades(view, { fadeInSec }), 'Fade in')}
       />
       <SliderField
         label="Fade out"
@@ -607,7 +620,7 @@ function AudioClipInspector({
         max={fadeMax}
         step={0.1}
         suffix="s"
-        onChange={(fadeOutSec) => patch({ fadeOutSec }, 'Fade out')}
+        onChange={(fadeOutSec) => patch(editorClipWithLocalFades(view, { fadeOutSec }), 'Fade out')}
       />
       <SliderField
         label="Speed"

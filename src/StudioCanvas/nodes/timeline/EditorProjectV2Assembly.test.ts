@@ -436,6 +436,32 @@ describe('canonical EditorProjectV2 assembly operations', () => {
     );
     const patchedAudio = patched.tracks.find((track) => track.id === audioTrack.id)?.clips[0];
     expect(patchedAudio).toMatchObject({ volume: 0.6, fadeInSec: 1 });
+    const trimmed = applyDrafts(
+      patched,
+      patchAudioOperation(patched, audioTrack.id, audio.id, { durationSec: 2, sourceInSec: 4 })
+        .forward,
+    );
+    expect(trimmed.tracks.find((track) => track.id === audioTrack.id)?.clips[0]).toMatchObject({
+      fadeInSec: 1,
+      audioFadeClock: { offsetSec: 4, durationSec: 12 },
+    });
+    const volumeOnly = applyDrafts(
+      trimmed,
+      patchAudioOperation(trimmed, audioTrack.id, audio.id, { volume: 0.4 }).forward,
+    );
+    expect(volumeOnly.tracks.find((track) => track.id === audioTrack.id)?.clips[0]).toMatchObject({
+      volume: 0.4,
+      fadeInSec: 1,
+      audioFadeClock: { offsetSec: 4, durationSec: 12 },
+    });
+    const reauthored = applyDrafts(
+      volumeOnly,
+      patchAudioOperation(volumeOnly, audioTrack.id, audio.id, { fadeInSec: 0.5 }).forward,
+    );
+    expect(reauthored.tracks.find((track) => track.id === audioTrack.id)?.clips[0]).toMatchObject({
+      fadeInSec: 0.5,
+      audioFadeClock: undefined,
+    });
   });
 
   test('crossfades use shared overlap geometry for commands, preview, and project duration', () => {

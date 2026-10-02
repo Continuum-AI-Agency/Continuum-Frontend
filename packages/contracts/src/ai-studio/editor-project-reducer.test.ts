@@ -580,7 +580,7 @@ describe('editor project reducer', () => {
     expect(removed.durationSec).toBe(0);
   });
 
-  test('video split preserves gain and fades only on the original outer edges', () => {
+  test('video split preserves the authored gain and fade clock on both pieces', () => {
     let project = projectWithTimeline();
     const clip = project.tracks[0]!.clips[0]!;
     project = applyEditorCommandBatch(
@@ -601,8 +601,18 @@ describe('editor project reducer', () => {
         rightClipId: 'audio-right',
       }),
     );
-    expect(split.tracks[0]!.clips[0]).toMatchObject({ volume: 0.6, fadeInSec: 2, fadeOutSec: 0 });
-    expect(split.tracks[0]!.clips[1]).toMatchObject({ volume: 0.6, fadeInSec: 0, fadeOutSec: 2 });
+    expect(split.tracks[0]!.clips[0]).toMatchObject({
+      volume: 0.6,
+      fadeInSec: 3,
+      fadeOutSec: 3,
+      audioFadeClock: { offsetSec: 0, durationSec: 4 },
+    });
+    expect(split.tracks[0]!.clips[1]).toMatchObject({
+      volume: 0.6,
+      fadeInSec: 3,
+      fadeOutSec: 3,
+      audioFadeClock: { offsetSec: 2, durationSec: 4 },
+    });
     const old = projectWithTimeline();
     const unchanged = applyEditorCommandBatch(
       old,

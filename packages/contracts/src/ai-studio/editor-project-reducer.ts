@@ -1,4 +1,4 @@
-import { editorClipAtSourceIn } from './editor-clip-edits';
+import { editorClipAtSourceIn, editorClipWithRetainedFades } from './editor-clip-edits';
 import {
   type EditorActorRef,
   type EditorClip,
@@ -473,15 +473,29 @@ const upsertKeyframe = (
 };
 
 const trimClipInternals = (clip: EditorClip, durationSec: number): EditorClip => {
-  const keyframed = 'keyframes' in clip ? { ...clip, keyframes: clip.keyframes } : clip;
+  const retained =
+    (clip.kind === 'audio' || clip.kind === 'video') && clip.durationSec !== durationSec
+      ? editorClipWithRetainedFades(clip)
+      : clip;
+  const keyframed = { ...retained, durationSec };
   if (keyframed.kind === 'audio' || keyframed.kind === 'video') {
     return {
       ...keyframed,
       ...(keyframed.fadeInSec !== undefined
-        ? { fadeInSec: Math.min(keyframed.fadeInSec, durationSec) }
+        ? {
+            fadeInSec: Math.min(
+              keyframed.fadeInSec,
+              keyframed.audioFadeClock?.durationSec ?? durationSec,
+            ),
+          }
         : {}),
       ...(keyframed.fadeOutSec !== undefined
-        ? { fadeOutSec: Math.min(keyframed.fadeOutSec, durationSec) }
+        ? {
+            fadeOutSec: Math.min(
+              keyframed.fadeOutSec,
+              keyframed.audioFadeClock?.durationSec ?? durationSec,
+            ),
+          }
         : {}),
     };
   }
@@ -507,23 +521,22 @@ const splitClip = (
   const rightKeyframes = leftKeyframes;
   const left = trimClipInternals(
     {
-      ...clip,
+      ...(clip.kind === 'audio' || clip.kind === 'video'
+        ? editorClipWithRetainedFades(clip)
+        : clip),
       durationSec: splitAtSec,
-      ...((clip.kind === 'audio' || clip.kind === 'video') && clip.fadeOutSec !== undefined
-        ? { fadeOutSec: 0 }
-        : {}),
       ...('keyframes' in clip ? { keyframes: leftKeyframes ?? [] } : {}),
     } as EditorClip,
     splitAtSec,
   );
   let right = {
-    ...clip,
+    ...(clip.kind === 'audio' || clip.kind === 'video'
+      ? editorClipWithRetainedFades(clip, splitAtSec)
+      : clip),
     id: rightClipId,
     timelineStartSec: clip.timelineStartSec + splitAtSec,
     durationSec: rightDurationSec,
-    ...((clip.kind === 'audio' || clip.kind === 'video') && clip.fadeInSec !== undefined
-      ? { fadeInSec: 0 }
-      : {}),
+
     ...('sourceInSec' in clip ? { sourceInSec: (clip.sourceInSec ?? 0) + sourceOffset } : {}),
     ...('keyframes' in clip ? { keyframes: rightKeyframes ?? [] } : {}),
     ...('keyframes' in clip && clip.keyframes.length
@@ -793,7 +806,6 @@ const applyTimelineCommand = (
                       ...('sourceInSec' in clip && command.sourceInSec !== undefined
                         ? editorClipAtSourceIn(clip, command.sourceInSec)
                         : clip),
-                      durationSec: command.durationSec,
                       timelineStartSec: command.timelineStartSec ?? clip.timelineStartSec,
                     } as EditorClip,
                     command.durationSec,

@@ -111,3 +111,22 @@ describe('keyed volume in the preview', () => {
     expect(volumeAutomation(event, 0)).toEqual([]);
   });
 });
+
+it('retained manual fades and new transitions sample their independent clocks when seeking', () => {
+  const retained = {
+    ...event,
+    outputEndSec: 6,
+    fadeInSec: 8,
+    fadeOutSec: 7,
+    audioFadeClock: { offsetSec: 4, durationSec: 10 },
+    transitionFadeInSec: 1,
+    transitionFadeOutSec: 0.5,
+  };
+  for (const local of [0, 0.25, 0.75, 1, 1.75]) {
+    expect(fadeInGainAt(retained, 4 + local)).toBeCloseTo(Math.min((4 + local) / 8, local, 1), 10);
+    expect(fadeOutGainAt(retained, 4 + local)).toBeCloseTo(
+      Math.min((6 - local) / 7, (2 - local) / 0.5, 1),
+      10,
+    );
+  }
+});

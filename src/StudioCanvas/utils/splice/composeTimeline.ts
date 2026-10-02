@@ -1,4 +1,4 @@
-import type { NumericKeyframe } from '@continuum/contracts';
+import type { EditorAudioFadeClock, NumericKeyframe } from '@continuum/contracts';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import {
   type ClipEffectSpec,
@@ -50,6 +50,7 @@ export type TimelineRenderItem = {
   volume?: number;
   volumeKeyframes?: NumericKeyframe[];
   keyframeOffsetSec?: number;
+  audioFadeClock?: EditorAudioFadeClock;
   audioFadeInSec?: number;
   audioFadeOutSec?: number;
   // Per-clip visual/audio effects (color, opacity, transform, Ken Burns, speed,
@@ -86,6 +87,7 @@ export type TimelineAudioRenderItem = {
   trimEndSec?: number;
   speed?: number;
   volume?: number;
+  audioFadeClock?: EditorAudioFadeClock;
   fadeInSec?: number;
   fadeOutSec?: number;
   /** `audio.volume` keyframes, clip-local seconds (a ducked music bed). */
@@ -153,6 +155,7 @@ export type PreparedTimelineAudio = {
   gain: number;
   fadeInSec: number;
   fadeOutSec: number;
+  audioFadeClock?: EditorAudioFadeClock;
   volumeKeyframes?: NumericKeyframe[];
   keyframeOffsetSec?: number;
 };
@@ -165,6 +168,7 @@ export function buildAudioBedPlanItems(items: PreparedTimelineAudio[]): AudioPla
     speed: item.speed,
     outputStartSec: item.outputStartSec,
     gain: item.gain,
+    audioFadeClock: item.audioFadeClock,
     fadeInSec: item.fadeInSec,
     fadeOutSec: item.fadeOutSec,
     ...(item.volumeKeyframes?.length
@@ -445,6 +449,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
         speed: typeof bed.speed === 'number' && bed.speed > 0 ? bed.speed : 1,
         outputStartSec: Math.max(0, bed.startSec),
         gain: typeof bed.volume === 'number' && bed.volume >= 0 ? bed.volume : 1,
+        audioFadeClock: bed.audioFadeClock,
         fadeInSec: Math.max(0, bed.fadeInSec ?? 0),
         fadeOutSec: Math.max(0, bed.fadeOutSec ?? 0),
         ...(bed.volumeKeyframes?.length
@@ -643,6 +648,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
       const place = placements[i];
       const envelope = resolveTimelineAudioEnvelope({
         gain: src.volume,
+        audioFadeClock: src.audioFadeClock,
         manualFadeInSec: src.audioFadeInSec,
         manualFadeOutSec: src.audioFadeOutSec,
         transitionFadeInSec: Math.max(place.inOverlapSec, item.headFade?.durationSec ?? 0),

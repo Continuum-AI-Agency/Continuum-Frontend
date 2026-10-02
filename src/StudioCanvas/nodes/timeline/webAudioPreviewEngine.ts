@@ -1,4 +1,4 @@
-import { sampleNumericTrack } from '@continuum/contracts';
+import { editorAudioFadeGainAt, sampleNumericTrack } from '@continuum/contracts';
 import type {
   TimelinePreviewAudioEvent,
   TimelinePreviewAudioPlan,
@@ -32,13 +32,29 @@ function clamp01(value: number): number {
 }
 
 export function fadeInGainAt(event: TimelinePreviewAudioEvent, timelineSec: number): number {
-  if (event.fadeInSec <= 0) return 1;
-  return clamp01((timelineSec - event.outputStartSec) / event.fadeInSec);
+  const localSec = timelineSec - event.outputStartSec;
+  return Math.min(
+    editorAudioFadeGainAt(
+      { ...event, durationSec: event.outputEndSec - event.outputStartSec },
+      localSec,
+      'in',
+    ),
+    (event.transitionFadeInSec ?? 0) > 0 ? clamp01(localSec / event.transitionFadeInSec!) : 1,
+  );
 }
 
 export function fadeOutGainAt(event: TimelinePreviewAudioEvent, timelineSec: number): number {
-  if (event.fadeOutSec <= 0) return 1;
-  return clamp01((event.outputEndSec - timelineSec) / event.fadeOutSec);
+  const localSec = timelineSec - event.outputStartSec;
+  return Math.min(
+    editorAudioFadeGainAt(
+      { ...event, durationSec: event.outputEndSec - event.outputStartSec },
+      localSec,
+      'out',
+    ),
+    (event.transitionFadeOutSec ?? 0) > 0
+      ? clamp01((event.outputEndSec - timelineSec) / event.transitionFadeOutSec!)
+      : 1,
+  );
 }
 
 /**
@@ -160,19 +176,42 @@ function scheduleLinearEnvelope(input: {
   const toContextTime = (timelineSec: number) =>
     contextStartSec + Math.max(0, timelineSec - fromTimelineSec);
 
+  const duration = activeEnd - event.outputStartSec;
+  const offset = event.audioFadeClock?.offsetSec ?? 0;
+  const originalDuration = event.audioFadeClock?.durationSec ?? duration;
+  const manual = edge === 'in' ? event.fadeInSec : event.fadeOutSec;
+  const transition = (edge === 'in' ? event.transitionFadeInSec : event.transitionFadeOutSec) ?? 0;
+  const localTimes =
+    edge === 'in'
+      ? [
+          -offset,
+          manual - offset,
+          transition,
+          manual !== transition ? (-offset * transition) / (transition - manual) : 0,
+        ]
+      : [
+          originalDuration - offset - manual,
+          originalDuration - offset,
+          duration - transition,
+          manual !== transition
+            ? (manual * duration - transition * (originalDuration - offset)) / (manual - transition)
+            : 0,
+        ];
+  const times = [
+    ...new Set([
+      activeStart,
+      activeEnd,
+      ...localTimes
+        .map((time) => event.outputStartSec + time)
+        .filter((time) => time > activeStart && time < activeEnd),
+    ]),
+  ].sort((a, b) => a - b);
+  const sample = edge === 'in' ? fadeInGainAt : fadeOutGainAt;
   param.cancelScheduledValues(contextStartSec);
-  if (edge === 'in') {
-    const fadeEnd = Math.min(activeEnd, event.outputStartSec + event.fadeInSec);
-    param.setValueAtTime(fadeInGainAt(event, activeStart), toContextTime(activeStart));
-    if (fadeEnd > activeStart) param.linearRampToValueAtTime(1, toContextTime(fadeEnd));
-    return;
-  }
-
-  const fadeStart = Math.max(event.outputStartSec, event.outputEndSec - event.fadeOutSec);
-  param.setValueAtTime(fadeOutGainAt(event, activeStart), toContextTime(activeStart));
-  if (fadeStart > activeStart) param.setValueAtTime(1, toContextTime(fadeStart));
-  if (activeEnd > Math.max(activeStart, fadeStart)) {
-    param.linearRampToValueAtTime(0, toContextTime(activeEnd));
+  for (const [index, time] of times.entries()) {
+    const gain = sample(event, time);
+    if (index === 0) param.setValueAtTime(gain, toContextTime(time));
+    else param.linearRampToValueAtTime(gain, toContextTime(time));
   }
 }
 

@@ -14,6 +14,8 @@ import {
   type EditorTransition,
   type EditorVideoClip,
   editorClipAtSourceIn,
+  editorClipWithLocalFades,
+  editorClipWithRetainedFades,
   type MediaAssetVersion,
   type MotionRecipe,
 } from '@continuum/contracts';
@@ -1158,17 +1160,34 @@ export function patchAudioOperation(
     Math.min(patch.durationSec ?? current.durationSec, available),
   );
   const clip: EditorAudioClip = {
-    ...editorClipAtSourceIn(current, Math.max(0, patch.sourceInSec ?? current.sourceInSec)),
+    ...editorClipAtSourceIn(
+      durationSec !== current.durationSec ? editorClipWithRetainedFades(current) : current,
+      Math.max(0, patch.sourceInSec ?? current.sourceInSec),
+    ),
     timelineStartSec: start,
     sourceInSec: Math.max(0, patch.sourceInSec ?? current.sourceInSec),
     durationSec,
     volume: Math.max(0, Math.min(4, patch.volume ?? current.volume)),
-    fadeInSec: Math.min(durationSec, Math.max(0, patch.fadeInSec ?? current.fadeInSec)),
-    fadeOutSec: Math.min(durationSec, Math.max(0, patch.fadeOutSec ?? current.fadeOutSec)),
   };
   return {
     label: 'Edit audio placement',
-    forward: [{ commandType: 'upsert_clip', trackId, clip }],
+    forward: [
+      {
+        commandType: 'upsert_clip',
+        trackId,
+        clip:
+          patch.fadeInSec !== undefined || patch.fadeOutSec !== undefined
+            ? editorClipWithLocalFades(clip, {
+                ...(patch.fadeInSec !== undefined
+                  ? { fadeInSec: Math.max(0, patch.fadeInSec) }
+                  : {}),
+                ...(patch.fadeOutSec !== undefined
+                  ? { fadeOutSec: Math.max(0, patch.fadeOutSec) }
+                  : {}),
+              })
+            : clip,
+      },
+    ],
     inverse: [{ commandType: 'upsert_clip', trackId, clip: current }],
   };
 }

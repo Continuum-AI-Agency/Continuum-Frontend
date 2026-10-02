@@ -1,8 +1,11 @@
 import { expect, test } from 'bun:test';
 import {
+  editorAudioFadeGainAt,
   editorCaptionWordsWithText,
   editorClipAtSourceIn,
   editorClipAtSpeed,
+  editorClipWithLocalFades,
+  editorClipWithRetainedFades,
 } from './editor-clip-edits';
 import { editorAudioClipSchema, editorVideoClipSchema } from './editor-project-v2';
 
@@ -72,4 +75,47 @@ test('start trims and extensions retain the automation clock in output seconds',
   expect(editorVideoClipSchema.parse(editorClipAtSourceIn(clip, 5)).keyframeOffsetSec).toBe(1);
   expect(editorVideoClipSchema.parse(editorClipAtSourceIn(clip, 1)).keyframeOffsetSec).toBe(-1);
   expect(editorClipAtSpeed({ ...clip, keyframeOffsetSec: 2 }, 4).keyframeOffsetSec).toBe(1);
+});
+
+test('retained fade clocks survive source trim, speed and explicit local reauthoring', () => {
+  const original = editorAudioClipSchema.parse({
+    id: 'fade',
+    kind: 'audio',
+    timelineStartSec: 0,
+    durationSec: 10,
+    source: { sourceType: 'library_asset', assetId: 'a' },
+    fadeInSec: 8,
+    fadeOutSec: 7,
+  });
+  const trimmed = editorAudioClipSchema.parse({
+    ...editorClipAtSourceIn(original, 4),
+    durationSec: 2,
+  });
+  expect(trimmed.audioFadeClock).toEqual({ offsetSec: 4, durationSec: 10 });
+  const sped = editorAudioClipSchema.parse(editorClipAtSpeed(trimmed, 2));
+  expect(sped.audioFadeClock).toEqual({ offsetSec: 2, durationSec: 5 });
+  for (const edge of ['in', 'out'] as const) {
+    expect(editorAudioFadeGainAt(trimmed, 0.5, edge)).toBeCloseTo(
+      editorAudioFadeGainAt(original, 4.5, edge),
+      10,
+    );
+    expect(editorAudioFadeGainAt(sped, 0.25, edge)).toBeCloseTo(
+      editorAudioFadeGainAt(trimmed, 0.5, edge),
+      10,
+    );
+  }
+  const authored = editorAudioClipSchema.parse(
+    editorClipWithLocalFades(trimmed, { fadeInSec: 0.5 }),
+  );
+  expect(authored.audioFadeClock).toBeUndefined();
+  expect([authored.fadeInSec, authored.fadeOutSec]).toEqual([0.5, 2]);
+  expect(
+    editorClipWithRetainedFades({ ...original, fadeInSec: 0, fadeOutSec: 0 }),
+  ).not.toHaveProperty('audioFadeClock');
+  expect(() =>
+    editorAudioClipSchema.parse({
+      ...trimmed,
+      audioFadeClock: { offsetSec: NaN, durationSec: 10 },
+    }),
+  ).toThrow();
 });

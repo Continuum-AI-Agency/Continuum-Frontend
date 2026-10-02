@@ -654,6 +654,7 @@ export async function buildTimelineEditorRenderPlan(input: {
       durationSec: clip.durationSec,
       muteAudio: !clip.audioEnabled || !audibleTracks.has(primary.id),
       volume: clip.volume,
+      audioFadeClock: clip.audioFadeClock,
       audioFadeInSec: clip.fadeInSec,
       audioFadeOutSec: clip.fadeOutSec,
       volumeKeyframes: volumeKeyframesOf(clip.keyframes),
@@ -740,6 +741,7 @@ export async function buildTimelineEditorRenderPlan(input: {
           trimEndSec: clip.sourceInSec + clip.durationSec * clip.playbackRate,
           speed: clip.playbackRate,
           volume: clip.volume,
+          audioFadeClock: clip.audioFadeClock,
           fadeInSec: clip.fadeInSec,
           fadeOutSec: clip.fadeOutSec,
           ...(volumeKeyframes.length > 0

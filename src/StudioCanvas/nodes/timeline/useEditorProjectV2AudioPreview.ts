@@ -70,6 +70,7 @@ export function buildEditorProjectV2AudioPreviewPlan(input: {
       : 0;
     const envelope = resolveTimelineAudioEnvelope({
       gain: clip.volume,
+      audioFadeClock: clip.audioFadeClock,
       manualFadeInSec: clip.fadeInSec,
       manualFadeOutSec: clip.fadeOutSec,
       transitionFadeInSec: Math.max(
@@ -116,6 +117,7 @@ export function buildEditorProjectV2AudioPreviewPlan(input: {
       playbackRate: clip.playbackRate,
       ...resolveTimelineAudioEnvelope({
         gain: clip.volume,
+        audioFadeClock: clip.audioFadeClock,
         manualFadeInSec: clip.fadeInSec,
         manualFadeOutSec: clip.fadeOutSec,
       }),
