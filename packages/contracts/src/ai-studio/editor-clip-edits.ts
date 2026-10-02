@@ -2,6 +2,7 @@ import type {
   EditorAudioClip,
   EditorAudioFadeClock,
   EditorCaptionWord,
+  EditorTextClip,
   EditorVideoClip,
 } from './editor-project-v2';
 import { motionExpressionAtScale } from './motion-eval';
@@ -21,6 +22,21 @@ export function editorClipWithRetainedFades<
     audioFadeClock: {
       offsetSec: (clip.audioFadeClock?.offsetSec ?? 0) + offsetSec,
       durationSec: clip.audioFadeClock?.durationSec ?? clip.durationSec,
+    },
+  };
+}
+
+/** Keep title entrances and exits on their authored clock through a range cut. */
+export function editorTextWithRetainedAnimation<T extends EditorTextClip>(
+  clip: T,
+  offsetSec = 0,
+): T {
+  if (!clip.textAnimationClock && !clip.animationIn && !clip.animationOut) return clip;
+  return {
+    ...clip,
+    textAnimationClock: {
+      offsetSec: (clip.textAnimationClock?.offsetSec ?? 0) + offsetSec,
+      durationSec: clip.textAnimationClock?.durationSec ?? clip.durationSec,
     },
   };
 }

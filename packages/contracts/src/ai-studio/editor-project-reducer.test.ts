@@ -5,6 +5,7 @@ import {
   createEditorProjectV2,
   type EditorCommandBatch,
   editorProjectSourceSlots,
+  editorTextClipSchema,
 } from './index';
 
 const user = { actorId: 'user-1', actorType: 'user' as const };
@@ -1221,5 +1222,117 @@ describe('editor project reducer', () => {
         }),
       ),
     ).toThrow('cannot contain another nested sequence');
+  });
+});
+
+test('text split, start trim, end trim and move preserve independent title and keyframe clocks', () => {
+  let project = createEditorProjectV2({
+    projectId: 'text-clocks',
+    title: 'Titles',
+    width: 360,
+    height: 640,
+  });
+  project = applyEditorCommandBatch(
+    project,
+    command(project, {
+      commandType: 'add_track',
+      track: {
+        id: 'titles',
+        name: 'Titles',
+        kind: 'text',
+        order: 0,
+        enabled: true,
+        locked: false,
+        muted: false,
+        solo: false,
+        clips: [],
+      },
+    }),
+  );
+  const title = editorTextClipSchema.parse({
+    id: 'title',
+    kind: 'text',
+    timelineStartSec: 0,
+    durationSec: 4,
+    text: 'Keep the clock',
+    style: { fontFamily: 'Arial', fontSizePx: 64, fontWeight: 700, color: '#ffffff' },
+    animationIn: 'typewriter',
+    animationOut: 'wipe',
+    keyframes: [
+      {
+        id: 'opacity',
+        property: 'transform.opacity',
+        timeSec: 3,
+        value: 0.5,
+        interpolation: 'linear',
+      },
+    ],
+  });
+  expect(title.textAnimationClock).toBeUndefined();
+  expect(() =>
+    editorTextClipSchema.parse({
+      ...title,
+      textAnimationClock: { offsetSec: Infinity, durationSec: 4 },
+    }),
+  ).toThrow();
+  expect(() =>
+    editorTextClipSchema.parse({ ...title, textAnimationClock: { offsetSec: 0, durationSec: 0 } }),
+  ).toThrow();
+  project = applyEditorCommandBatch(
+    project,
+    command(project, { commandType: 'upsert_clip', trackId: 'titles', clip: title }),
+  );
+  project = applyEditorCommandBatch(
+    project,
+    command(project, {
+      commandType: 'split_clip',
+      trackId: 'titles',
+      clipId: 'title',
+      splitAtSec: 2,
+      rightClipId: 'right',
+    }),
+  );
+  expect(project.tracks[0]?.clips[0]).toMatchObject({
+    textAnimationClock: { offsetSec: 0, durationSec: 4 },
+  });
+  expect(project.tracks[0]?.clips[1]).toMatchObject({
+    textAnimationClock: { offsetSec: 2, durationSec: 4 },
+    keyframeOffsetSec: 2,
+  });
+  project = applyEditorCommandBatch(
+    project,
+    command(project, {
+      commandType: 'trim_clip',
+      trackId: 'titles',
+      clipId: 'right',
+      timelineStartSec: 2.5,
+      durationSec: 1,
+    }),
+  );
+  project = applyEditorCommandBatch(
+    project,
+    command(project, {
+      commandType: 'trim_clip',
+      trackId: 'titles',
+      clipId: 'right',
+      durationSec: 0.5,
+    }),
+  );
+  project = applyEditorCommandBatch(
+    project,
+    command(project, {
+      commandType: 'move_clip',
+      clipId: 'right',
+      fromTrackId: 'titles',
+      toTrackId: 'titles',
+      timelineStartSec: 0,
+    }),
+  );
+  expect(project.tracks[0]?.clips.find((clip) => clip.id === 'right')).toMatchObject({
+    timelineStartSec: 0,
+    durationSec: 0.5,
+    textAnimationClock: { offsetSec: 2.5, durationSec: 4 },
+    keyframeOffsetSec: 2.5,
+    keyframes: title.keyframes,
   });
 });

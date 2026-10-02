@@ -1,4 +1,4 @@
-import { editorCaptionWordsWithText } from '@continuum/contracts';
+import { type EditorTextAnimationClock, editorCaptionWordsWithText } from '@continuum/contracts';
 import type { CaptionStyleOverride } from '@/lib/clips/clipCaptionStyle';
 import type { ClipEffectSpec } from '../render/effectSpec';
 
@@ -26,12 +26,16 @@ export type CaptionCue = {
   endSec: number;
   words: CaptionWord[];
   style?: CaptionStyleOverride;
+  animationClock?: EditorTextAnimationClock;
   /**
    * A text clip's own transform and keyframes (position, scale, rotation, opacity), which
    * drawCaptions samples over [startSec, endSec] and applies to the whole cue — the same
    * spec, and the same sampler, a video or overlay clip moves by.
    */
-  motion?: Pick<ClipEffectSpec, 'opacity' | 'transform' | 'motionChannels'>;
+  motion?: Pick<
+    ClipEffectSpec,
+    'opacity' | 'transform' | 'motionChannels' | 'motionDurationSec' | 'keyframeOffsetSec'
+  >;
 };
 type SourceRange = { startSec: number; endSec: number };
 

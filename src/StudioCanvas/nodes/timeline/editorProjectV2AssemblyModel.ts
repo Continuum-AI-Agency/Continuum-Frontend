@@ -16,6 +16,7 @@ import {
   editorClipAtSourceIn,
   editorClipWithLocalFades,
   editorClipWithRetainedFades,
+  editorTextWithRetainedAnimation,
   type MediaAssetVersion,
   type MotionRecipe,
 } from '@continuum/contracts';
@@ -525,6 +526,10 @@ export function upsertTextOperation(
   const clipId = input.clipId ?? crypto.randomUUID();
   const timelineStartSec = placementStart(project, input.timelineStartSec);
   const maxDuration = project.durationSec - timelineStartSec;
+  const retained =
+    existing && input.durationSec !== existing.durationSec
+      ? editorTextWithRetainedAnimation(existing)
+      : existing;
   const clip: EditorTextClip = {
     id: clipId,
     name: existing?.name ?? 'Text overlay',
@@ -574,6 +579,14 @@ export function upsertTextOperation(
       input.animationIn === 'none' ? undefined : (input.animationIn ?? existing?.animationIn),
     animationOut:
       input.animationOut === 'none' ? undefined : (input.animationOut ?? existing?.animationOut),
+    ...((input.animationIn !== undefined &&
+      (input.animationIn === 'none' ? undefined : input.animationIn) !== existing?.animationIn) ||
+    (input.animationOut !== undefined &&
+      (input.animationOut === 'none' ? undefined : input.animationOut) !== existing?.animationOut)
+      ? { textAnimationClock: undefined }
+      : retained?.textAnimationClock
+        ? { textAnimationClock: retained.textAnimationClock }
+        : {}),
     effects: existing?.effects ?? [],
     keyframes: existing?.keyframes ?? [],
     ...(existing?.keyframeOffsetSec !== undefined

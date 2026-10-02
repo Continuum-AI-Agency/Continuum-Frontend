@@ -51,6 +51,7 @@ test.describe.configure({ timeout: 900_000 });
 const BENCH = 'videoeditor:motion:e2e:bench';
 const LOCAL_CURVE_JOURNEY = process.env.VIDEO_EDITOR_CURVE_JOURNEY_LOCAL === '1';
 const SPEECH_JOURNEY = process.env.VIDEO_EDITOR_SPEECH_JOURNEY === '1';
+const TEXT_JOURNEY = process.env.VIDEO_EDITOR_TEXT_JOURNEY === '1';
 const BRAND =
   process.env.CONTINUUM_TEST_BRAND_ID ??
   (LOCAL_CURVE_JOURNEY
@@ -1083,7 +1084,9 @@ test('retained project journey: native splits and deletes preserve stored pictur
   const proof = createBenchRecorder(
     SPEECH_JOURNEY
       ? 'videoeditor:motion:e2e:bench:speech-jumps'
-      : 'videoeditor:motion:e2e:bench:retained-project',
+      : TEXT_JOURNEY
+        ? 'videoeditor:motion:e2e:bench:retained-text'
+        : 'videoeditor:motion:e2e:bench:retained-project',
     [],
   );
   proof.notes.push(
@@ -1801,6 +1804,43 @@ test('retained project journey: native splits and deletes preserve stored pictur
               ],
             },
           },
+          ...(TEXT_JOURNEY
+            ? [
+                {
+                  commandType: 'add_track',
+                  track: {
+                    id: `titles-${interpolation}`,
+                    kind: 'text',
+                    name: 'Retained title',
+                    order: 1,
+                    clips: [
+                      {
+                        id: `title-${interpolation}`,
+                        kind: 'text',
+                        timelineStartSec: 0,
+                        durationSec: 4,
+                        text: 'KEEP THE CLOCK',
+                        style: {
+                          fontFamily: 'Arial',
+                          fontSizePx: 64,
+                          fontWeight: 700,
+                          color: '#ffffff',
+                        },
+                        transform: { position: { x: 0.5, y: 0.3, unit: 'normalized' } },
+                        animationIn: {
+                          hold: 'typewriter',
+                          linear: 'slideLeft',
+                          bezier: 'wordPop',
+                          spring: 'blurIn',
+                        }[interpolation],
+                        animationOut: 'wipe',
+                        keyframes: keys.filter((key) => key.property === 'transform.opacity'),
+                      },
+                    ],
+                  },
+                },
+              ]
+            : []),
           ...initial.tracks.map((track) => ({ commandType: 'remove_track', trackId: track.id })),
           {
             commandType: 'set_project_metadata',
@@ -1839,6 +1879,28 @@ test('retained project journey: native splits and deletes preserve stored pictur
       const box = await page.locator(`[data-clip-id="${original.id}"]:visible`).boundingBox();
       if (!box) throw new Error('Original clip not visible');
       const pxPerSec = box.width / 4;
+      const titlePreview = async (sec: number, label: string) => {
+        await seek(page, pxPerSec, sec);
+        const canvas = page.getByTestId('stage-text');
+        await expect
+          .poll(async () => Number(await canvas.getAttribute('data-playhead-sec')))
+          .toBeCloseTo(sec, 3);
+        const url = await canvas.evaluate((element) =>
+          (element as HTMLCanvasElement).toDataURL('image/png'),
+        );
+        const png = Buffer.from(url.split(',')[1]!, 'base64');
+        writeFileSync(join(folder, `${interpolation}-native-${label}.png`), png);
+        return execFileSync(
+          'ffmpeg',
+          ['-v', 'error', '-i', 'pipe:0', '-f', 'rawvideo', '-pix_fmt', 'rgba', 'pipe:1'],
+          { input: png, maxBuffer: 4_000_000 },
+        );
+      };
+      const baselineTitles: Buffer[] = [];
+      if (TEXT_JOURNEY) {
+        for (const [index, sec] of [0.2, 0.7, 2.2, 2.7].entries())
+          baselineTitles.push(await titlePreview(sec, `baseline-${index}`));
+      }
       for (const sec of [1, 2, 3]) {
         await page.bringToFront();
         await page.keyboard.press('Escape');
@@ -1889,6 +1951,15 @@ test('retained project journey: native splits and deletes preserve stored pictur
         );
         if (!clip) throw new Error(`Retained source span ${sourceInSec} missing`);
         await selectClip(page, clip.id);
+        if (TEXT_JOURNEY) {
+          const title = textClips(current).find((item) =>
+            near(item.timelineStartSec, clip.timelineStartSec, 1 / 60),
+          );
+          if (!title) throw new Error('Matching text piece missing');
+          await page
+            .locator(`[data-clip-id="${title.id}"]:visible`)
+            .click({ modifiers: ['Shift'] });
+        }
         await visible(
           page.getByRole('button', { name: 'Ripple delete selection', exact: true }),
         ).click();
@@ -1929,6 +2000,43 @@ test('retained project journey: native splits and deletes preserve stored pictur
             near(clip.audioFadeClock.offsetSec, index * 2, 1e-6),
         ),
       );
+      if (TEXT_JOURNEY) {
+        const titles = textClips(edited).toSorted(
+          (a, b) => a.timelineStartSec - b.timelineStartSec,
+        );
+        assert(
+          `${interpolation}: deleting matching picture and text ranges ripples each lane once`,
+          titles.length === 2 &&
+            titles.every((title, index) => near(title.timelineStartSec, index, 1e-6)),
+        );
+        assert(
+          `${interpolation}: reload retains title animation and opacity clocks independently`,
+          titles.every(
+            (title, index) =>
+              title.textAnimationClock?.durationSec === 4 &&
+              near(title.textAnimationClock.offsetSec, index * 2, 1e-6) &&
+              near(title.keyframeOffsetSec ?? 0, index * 2, 1e-6),
+          ),
+        );
+      }
+      if (TEXT_JOURNEY) {
+        const previewErrors = [];
+        for (const [index, sec] of [0.2, 0.7, 1.2, 1.7].entries()) {
+          const got = await titlePreview(sec, `edited-${index}`);
+          const expected = baselineTitles[index]!;
+          const maxError =
+            got.length === expected.length
+              ? got.reduce((max, value, i) => Math.max(max, Math.abs(value - expected[i]!)), 0)
+              : Infinity;
+          const painted = expected.some((value, i) => i % 4 === 3 && value > 0);
+          previewErrors.push({ maxError, painted });
+        }
+        assert(
+          `${interpolation}: native title canvas preserves original pixels at retained times`,
+          previewErrors.every(({ maxError, painted }) => painted && maxError <= 1),
+          JSON.stringify(previewErrors),
+        );
+      }
       const actualPath = join(folder, `${interpolation}-edited.mp4`);
       const rendered = await render(edited, actualPath);
       const probe = JSON.parse(

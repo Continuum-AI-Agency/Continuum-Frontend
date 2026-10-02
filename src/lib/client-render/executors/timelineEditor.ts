@@ -481,6 +481,7 @@ export function textCueFor(clip: EditorTextClip, canvasHeight: number): CaptionC
     startSec: clip.timelineStartSec,
     endSec,
     words: wordsForCaptionText(clip.text, clip.timelineStartSec, endSec),
+    ...(clip.textAnimationClock ? { animationClock: clip.textAnimationClock } : {}),
     style: {
       ...captionStyleFor(clip, canvasHeight),
       animation: captionAnimationFromEditorId(clip.animationIn),

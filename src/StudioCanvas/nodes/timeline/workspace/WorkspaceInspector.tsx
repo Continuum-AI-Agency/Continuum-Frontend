@@ -18,6 +18,7 @@ import {
   editorClipAtSpeed,
   editorClipWithLocalFades,
   editorClipWithRetainedFades,
+  editorTextWithRetainedAnimation,
 } from '@continuum/contracts';
 import { AlignCenter, AlignLeft, AlignRight, Loader2, Music, Type, Wand2, X } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -155,7 +156,12 @@ function patchClipEdit(
     !('playbackRate' in fields && fields.playbackRate !== clip.playbackRate) &&
     !('audioFadeClock' in fields)
       ? editorClipWithRetainedFades(clip)
-      : clip;
+      : clip.kind === 'text' &&
+          fields.durationSec !== undefined &&
+          fields.durationSec !== clip.durationSec &&
+          !('textAnimationClock' in fields)
+        ? editorTextWithRetainedAnimation(clip)
+        : clip;
   return replaceClipEdit(project, { ...retained, ...fields } as EditorClip, label);
 }
 
@@ -830,7 +836,10 @@ function TextClipInspector({
           onPick={(field, id) => {
             const value = id === 'none' ? undefined : id;
             patch(
-              field === 'animationIn' ? { animationIn: value } : { animationOut: value },
+              {
+                ...(field === 'animationIn' ? { animationIn: value } : { animationOut: value }),
+                textAnimationClock: undefined,
+              },
               'Animate text',
             );
             edits.flush();

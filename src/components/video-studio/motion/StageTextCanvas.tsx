@@ -52,6 +52,7 @@ export function StageTextCanvas({
       height={height}
       aria-hidden
       data-testid="stage-text"
+      data-playhead-sec={sec}
       className="pointer-events-none absolute inset-0 z-10 h-full w-full"
     />
   );

@@ -1,4 +1,8 @@
-import { editorClipAtSourceIn, editorClipWithRetainedFades } from './editor-clip-edits';
+import {
+  editorClipAtSourceIn,
+  editorClipWithRetainedFades,
+  editorTextWithRetainedAnimation,
+} from './editor-clip-edits';
 import {
   type EditorActorRef,
   type EditorClip,
@@ -476,7 +480,9 @@ const trimClipInternals = (clip: EditorClip, durationSec: number): EditorClip =>
   const retained =
     (clip.kind === 'audio' || clip.kind === 'video') && clip.durationSec !== durationSec
       ? editorClipWithRetainedFades(clip)
-      : clip;
+      : clip.kind === 'text' && clip.durationSec !== durationSec
+        ? editorTextWithRetainedAnimation(clip)
+        : clip;
   const keyframed = { ...retained, durationSec };
   if (keyframed.kind === 'audio' || keyframed.kind === 'video') {
     return {
@@ -523,7 +529,9 @@ const splitClip = (
     {
       ...(clip.kind === 'audio' || clip.kind === 'video'
         ? editorClipWithRetainedFades(clip)
-        : clip),
+        : clip.kind === 'text'
+          ? editorTextWithRetainedAnimation(clip)
+          : clip),
       durationSec: splitAtSec,
       ...('keyframes' in clip ? { keyframes: leftKeyframes ?? [] } : {}),
     } as EditorClip,
@@ -532,7 +540,9 @@ const splitClip = (
   let right = {
     ...(clip.kind === 'audio' || clip.kind === 'video'
       ? editorClipWithRetainedFades(clip, splitAtSec)
-      : clip),
+      : clip.kind === 'text'
+        ? editorTextWithRetainedAnimation(clip, splitAtSec)
+        : clip),
     id: rightClipId,
     timelineStartSec: clip.timelineStartSec + splitAtSec,
     durationSec: rightDurationSec,
@@ -805,7 +815,24 @@ const applyTimelineCommand = (
                     {
                       ...('sourceInSec' in clip && command.sourceInSec !== undefined
                         ? editorClipAtSourceIn(clip, command.sourceInSec)
-                        : clip),
+                        : clip.kind === 'text' &&
+                            command.timelineStartSec !== undefined &&
+                            command.timelineStartSec !== clip.timelineStartSec
+                          ? {
+                              ...editorTextWithRetainedAnimation(
+                                clip,
+                                command.timelineStartSec - clip.timelineStartSec,
+                              ),
+                              ...(clip.keyframes.length
+                                ? {
+                                    keyframeOffsetSec:
+                                      (clip.keyframeOffsetSec ?? 0) +
+                                      command.timelineStartSec -
+                                      clip.timelineStartSec,
+                                  }
+                                : {}),
+                            }
+                          : clip),
                       timelineStartSec: command.timelineStartSec ?? clip.timelineStartSec,
                     } as EditorClip,
                     command.durationSec,

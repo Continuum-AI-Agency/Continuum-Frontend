@@ -16,6 +16,7 @@ import {
   type EditorProjectV2,
   type EditorTrack,
   type EditorVideoClip,
+  mergeSpeech,
   type VideoEditorPoolAsset,
 } from '@continuum/contracts';
 import {
@@ -647,53 +648,44 @@ export function deleteClipsEdit(
     clipId: ref.clip.id,
   }));
   const main = mainVideoTrack(project);
-  if (ripple) {
-    for (const track of new Set(refs.map((ref) => ref.track))) {
-      if (track.id === main?.id) continue;
-      const removed = track.clips.filter((clip) => removing.has(clip.id));
-      for (const clip of track.clips) {
-        if (removing.has(clip.id)) continue;
-        const shift = removed
-          .filter((gone) => gone.timelineStartSec < clip.timelineStartSec)
-          .reduce((sum, gone) => sum + gone.durationSec, 0);
-        if (shift > EPSILON) {
-          forward.push({
-            commandType: 'move_clip',
-            clipId: clip.id,
-            fromTrackId: track.id,
-            toTrackId: track.id,
-            timelineStartSec: Math.max(0, clip.timelineStartSec - shift),
-          });
-        }
-      }
-    }
-  }
-  if (main && refs.some((ref) => ref.track.id === main.id)) {
+  const removedMain = main
+    ? orderedVideoClips(main)
+        .filter((clip) => removing.has(clip.id))
+        .map((clip) => ({ startSec: clip.timelineStartSec, endSec: clipEnd(clip) }))
+    : [];
+  if (main && removedMain.length > 0) {
     const transitions = project.transitions.filter(
       (transition) => !removing.has(transition.fromClipId) && !removing.has(transition.toClipId),
     );
     const order = orderedVideoClips(main).filter((clip) => !removing.has(clip.id));
     forward.push(...repackMain(transitions, main.id, order));
-    const removed = orderedVideoClips(main)
-      .filter((clip) => removing.has(clip.id))
-      .map((clip) => ({ startSec: clip.timelineStartSec, endSec: clipEnd(clip) }));
-    const laneShifts = followMainTrack(project, { removed }, removing);
-    // A clip already rippled on its own lane moves by both amounts.
-    for (const shift of laneShifts) {
-      if (shift.commandType !== 'move_clip') continue;
-      const own = forward.find(
-        (draft): draft is Extract<EditorCommandDraft, { commandType: 'move_clip' }> =>
-          draft.commandType === 'move_clip' && draft.clipId === shift.clipId,
-      );
-      if (!own) {
-        forward.push(shift);
-        continue;
+  }
+  for (const track of project.tracks) {
+    if (track.id === main?.id || track.locked || !isLaneKind(track.kind)) continue;
+    // Matching cuts on picture and another lane remove the same time only once.
+    const removed = mergeSpeech(
+      [
+        ...removedMain,
+        ...(ripple
+          ? track.clips
+              .filter((clip) => removing.has(clip.id))
+              .map((clip) => ({ startSec: clip.timelineStartSec, endSec: clipEnd(clip) }))
+          : []),
+      ],
+      0,
+    );
+    for (const clip of track.clips) {
+      if (removing.has(clip.id)) continue;
+      const shift = measureBefore(removed, clip.timelineStartSec);
+      if (shift > EPSILON) {
+        forward.push({
+          commandType: 'move_clip',
+          clipId: clip.id,
+          fromTrackId: track.id,
+          toTrackId: track.id,
+          timelineStartSec: Math.max(0, clip.timelineStartSec - shift),
+        });
       }
-      const original = findClip(project, shift.clipId)?.clip.timelineStartSec ?? 0;
-      own.timelineStartSec = Math.max(
-        0,
-        own.timelineStartSec - (original - shift.timelineStartSec),
-      );
     }
   }
   return {

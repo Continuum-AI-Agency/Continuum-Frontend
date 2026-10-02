@@ -320,13 +320,16 @@ export const editorEffectInstanceSchema = z
   .strict();
 export type EditorEffectInstance = z.infer<typeof editorEffectInstanceSchema>;
 
-export const editorAudioFadeClockSchema = z
+export const editorClipClockSchema = z
   .object({
     offsetSec: z.number().finite().min(-86_400).max(86_400),
     durationSec: positiveSecondsSchema,
   })
   .strict();
+export const editorAudioFadeClockSchema = editorClipClockSchema;
 export type EditorAudioFadeClock = z.infer<typeof editorAudioFadeClockSchema>;
+export const editorTextAnimationClockSchema = editorClipClockSchema;
+export type EditorTextAnimationClock = z.infer<typeof editorTextAnimationClockSchema>;
 
 const editorClipBaseShape = {
   id: editorIdSchema,
@@ -454,6 +457,7 @@ export const editorTextClipSchema = z
     transform: editorTransformSchema.default(defaultEditorTransform),
     animationIn: editorIdSchema.optional(),
     animationOut: editorIdSchema.optional(),
+    textAnimationClock: editorTextAnimationClockSchema.optional(),
     effects: z.array(editorEffectInstanceSchema).max(50).default([]),
     keyframes: z.array(editorKeyframeSchema).max(500).default([]),
   })

@@ -257,14 +257,14 @@ export function drawActiveCaption(
   // arrives and leaves with it. Word-anchored captions keep the static panel, which is what
   // keeps `classic` byte-identical.
   const animations = [animation, exitAnimation].filter((entry) => entry !== undefined);
-  const lineMoves =
-    animations.length > 0 && animations.every((entry) => entry.anchor === 'cue');
+  const lineMoves = animations.length > 0 && animations.every((entry) => entry.anchor === 'cue');
   const lineMotion = lineMoves
     ? captionMotionTransform({
         entry: animation,
         exit: exitAnimation,
         cueStartSec: cue.startSec,
         cueEndSec: cue.endSec,
+        cueAnimationClock: cue.animationClock,
         wordStartSec: cue.startSec,
         wordEndSec: cue.endSec,
         outputTimeSec,
@@ -310,6 +310,7 @@ export function drawActiveCaption(
         exit: exitAnimation,
         cueStartSec: cue.startSec,
         cueEndSec: cue.endSec,
+        cueAnimationClock: cue.animationClock,
         wordStartSec: word.startSec,
         wordEndSec: word.endSec,
         outputTimeSec,

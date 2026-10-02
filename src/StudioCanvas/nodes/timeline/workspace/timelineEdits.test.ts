@@ -244,6 +244,89 @@ describe('other lanes follow the main track', () => {
     );
   });
 
+  test.each([
+    { name: 'matching ranges', start: 2, duration: 2, ripple: true, main: true, expected: 3 },
+    {
+      name: 'partly overlapping ranges',
+      start: 3,
+      duration: 2,
+      ripple: true,
+      main: true,
+      expected: 2,
+    },
+    { name: 'disjoint ranges', start: 0, duration: 1, ripple: true, main: true, expected: 2 },
+    {
+      name: 'plain delete follows only the main cut',
+      start: 0,
+      duration: 1,
+      ripple: false,
+      main: true,
+      expected: 3,
+    },
+    { name: 'lane-only ripple', start: 2, duration: 1, ripple: true, main: false, expected: 4 },
+  ])('$name shifts surviving captions by removed time once', ({
+    start,
+    duration,
+    ripple,
+    main,
+    expected,
+  }) => {
+    let project = withCaption(threeClips(), 5);
+    const caption = findClip(project, 'cap')?.clip;
+    if (!caption || caption.kind !== 'caption') throw new Error('no caption');
+    project = simulate(project, [
+      {
+        commandType: 'upsert_clip',
+        trackId: 'captions',
+        clip: {
+          ...caption,
+          id: 'gone-caption',
+          timelineStartSec: start,
+          durationSec: duration,
+          words: [],
+        },
+      },
+    ]);
+    const middle = mainVideoTrack(project)?.clips.find((clip) => clip.name === 'b');
+    if (!middle) throw new Error('no middle clip');
+    project = commit(
+      project,
+      deleteClipsEdit(project, ['gone-caption', ...(main ? [middle.id] : [])], ripple),
+    );
+    expect(findClip(project, 'cap')?.clip.timelineStartSec).toBe(expected);
+    expect(findClip(project, 'gone-caption')).toBeUndefined();
+    expect(findClip(project, 'cap')?.clip.durationSec).toBe(1);
+  });
+
+  test('overlapping removals on one lane ripple their union, preserving words and clocks', () => {
+    let project = withCaption(threeClips(), 5);
+    const caption = findClip(project, 'cap')?.clip;
+    if (!caption || caption.kind !== 'caption') throw new Error('no caption');
+    project = simulate(project, [
+      {
+        commandType: 'upsert_clip',
+        trackId: 'captions',
+        clip: { ...caption, keyframeOffsetSec: 2 },
+      },
+      ...[1, 2].map((start) => ({
+        commandType: 'upsert_clip' as const,
+        trackId: 'captions',
+        clip: {
+          ...caption,
+          id: `gone-${start}`,
+          timelineStartSec: start,
+          durationSec: 2,
+          words: [],
+        },
+      })),
+    ]);
+    project = commit(project, deleteClipsEdit(project, ['gone-1', 'gone-2'], true));
+    const retained = findClip(project, 'cap')?.clip;
+    expect(retained?.timelineStartSec).toBe(2);
+    expect(retained?.keyframeOffsetSec).toBe(2);
+    expect(retained?.kind === 'caption' && retained.words).toEqual(caption.words);
+  });
+
   test('two trims built one after the other keep V1 packed, and the caption follows both', () => {
     let project = withCaption(threeClips(), 4.5);
     const byName = (name: string) =>

@@ -223,6 +223,7 @@ export function EditorProjectV2Assembly({
         exit: captionAnimationFromEditorId(clip.animationOut),
         cueStartSec: clip.timelineStartSec,
         cueEndSec: clip.timelineStartSec + clip.durationSec,
+        cueAnimationClock: clip.textAnimationClock,
         wordStartSec: clip.timelineStartSec,
         wordEndSec: clip.timelineStartSec + clip.durationSec,
         outputTimeSec: playback.playheadSec,
