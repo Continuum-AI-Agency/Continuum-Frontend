@@ -4,9 +4,15 @@
  * detail panel and back.
  */
 
-import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import type { TemplateSource } from '@continuum/contracts';
 import React from 'react';
+import * as realtime from '@/lib/supabase/realtime';
+
+const subscribe = spyOn(realtime, 'subscribeToPostgresChanges').mockImplementation(
+  () => () => undefined,
+);
+afterAll(() => subscribe.mockRestore());
 
 const BRAND = '22222222-2222-4222-8222-222222222222';
 const ASSET = '55555555-5555-4555-8555-555555555555';
@@ -52,10 +58,12 @@ const renameTemplateSource = mock(async (_brandId: string, _assetId: string, tit
 
 mock.module('@/lib/library/templateSources', () => ({
   fetchTemplateSources,
+  fetchTemplateVariants: async () => [],
   importDesignTemplate,
   renameTemplateSource,
   fetchRenderWorkspaces,
   discoverWorkspaceTemplates,
+  loadWorkspaceTemplates: async () => (await discoverWorkspaceTemplates()).items,
   setTemplateAdoption: async () => ({ granted: true }),
   fetchTemplateVariables: async () => ({ variables: [], edits: [], parseState: 'parsed' }),
   saveTemplateVariables: async () => undefined,

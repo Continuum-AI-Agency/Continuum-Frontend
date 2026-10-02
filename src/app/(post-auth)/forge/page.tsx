@@ -1,8 +1,8 @@
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import { ProductGate } from '@/components/billing/ProductGate';
-import { ForgeTabs } from '@/components/forge/ForgeTabs';
 import { ForgeSourceHandoff } from '@/components/forge/ForgeSourceHandoff';
+import { ForgeTabs } from '@/components/forge/ForgeTabs';
 import { MetaWritesSwitch } from '@/components/forge/MetaWritesSwitch';
 import { getActiveBrandContext } from '@/lib/brands/active-brand-context';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -45,7 +45,8 @@ export default async function ForgePage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Forge</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Turn After Effects projects into templates, fill them in, and render.
+            Turn Photoshop, Illustrator and After Effects files into templates, choose variants, and
+            render.
           </p>
         </div>
         <MetaWritesSwitch
@@ -54,7 +55,9 @@ export default async function ForgePage() {
           canEdit={role === 'owner' || role === 'admin'}
         />
       </header>
-      <Suspense fallback={null}><ForgeSourceHandoff brandId={activeBrandId} /></Suspense>
+      <Suspense fallback={null}>
+        <ForgeSourceHandoff brandId={activeBrandId} />
+      </Suspense>
       <ForgeTabs
         brandId={activeBrandId}
         brandName={brandSummaries.find((brand) => brand.id === activeBrandId)?.name}

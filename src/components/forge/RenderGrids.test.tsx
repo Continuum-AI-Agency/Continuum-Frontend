@@ -1795,7 +1795,7 @@ describe('RenderRequestsGrid', () => {
     render(<RenderRequestsGrid brandId={BRAND} />);
     await screen.findByDisplayValue('Hola mundo');
     fireEvent.change(screen.getByLabelText('Template variant'), {
-      target: { value: 'output:Headline' },
+      target: { value: 'Headline' },
     });
     expect(await screen.findByRole('button', { name: 'Formats Headline' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Add', exact: true }));
@@ -1823,10 +1823,10 @@ describe('RenderRequestsGrid', () => {
       />,
     );
     await screen.findByDisplayValue('Hola mundo');
-    const picker = await screen.findByLabelText('Template variant');
+    const picker = await screen.findByLabelText('Template source variant');
     expect(within(picker).getByRole('option', { name: 'Child B' })).toBeTruthy();
     expect(within(picker).queryByRole('option', { name: 'Other workspace' })).toBeNull();
-    fireEvent.change(picker, { target: { value: `template:${TEMPLATE.bindingId}:135` } });
+    fireEvent.change(picker, { target: { value: `${TEMPLATE.bindingId}:135` } });
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Template', exact: true }).textContent).toContain(
         'Child B',
@@ -1915,4 +1915,60 @@ describe('RenderRequestsGrid', () => {
     await screen.findByDisplayValue('Hola mundo');
     expect(screen.getByRole('columnheader', { name: 'Output' })).toBeTruthy();
   });
+});
+
+test('published source variants select their own template key across independent source assets', async () => {
+  const root = '55555555-5555-4555-8555-555555555555';
+  const child = '66666666-6666-4666-8666-666666666666';
+  extraTemplates = [
+    { ...TEMPLATE, key: '134', sourceAssetId: root, displayName: 'Original design' },
+    {
+      ...TEMPLATE,
+      key: '135',
+      name: 'Reordered portrait',
+      sourceAssetId: child,
+      displayName: 'Reordered design',
+    },
+    {
+      ...TEMPLATE,
+      key: '137',
+      name: 'Reordered square',
+      sourceAssetId: child,
+      displayName: 'Reordered design',
+    },
+    {
+      ...TEMPLATE,
+      key: '136',
+      sourceAssetId: child,
+      bindingId: '44444444-4444-4444-8444-444444444449',
+      displayName: 'Other workspace',
+    },
+  ];
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(forgeQueryKeys.templateVariants(BRAND), [
+    { assetId: root, rootAssetId: root, parentAssetId: null },
+    { assetId: child, rootAssetId: root, parentAssetId: root },
+  ]);
+  render(
+    <RenderRequestsGrid
+      brandId={BRAND}
+      intent={{ templateKey: '134', bindingId: TEMPLATE.bindingId }}
+    />,
+    client,
+  );
+  await screen.findByDisplayValue('Hola mundo');
+  const picker = await screen.findByLabelText('Template source variant');
+  expect(
+    within(picker).getByRole('option', { name: 'Reordered design · Reordered portrait' }),
+  ).toBeTruthy();
+  expect(
+    within(picker).getByRole('option', { name: 'Reordered design · Reordered square' }),
+  ).toBeTruthy();
+  expect(within(picker).queryByRole('option', { name: 'Other workspace' })).toBeNull();
+  fireEvent.change(picker, { target: { value: `${TEMPLATE.bindingId}:135` } });
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Template', exact: true }).textContent).toContain(
+      'Reordered design',
+    ),
+  );
 });

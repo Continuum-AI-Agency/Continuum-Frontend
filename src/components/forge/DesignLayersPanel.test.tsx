@@ -13,19 +13,12 @@ const LAYERS: DesignLayersResponse = {
   arrangements: [],
 };
 let read: () => Promise<DesignLayersResponse> = async () => LAYERS;
-const saved = mock(
-  async (_brandId: string, _assetId: string, arrangements: DesignArrangement[]) => ({
-    versionId: 'v2',
-    parseState: 'parsed',
-    comps: ['PAUTAS-15', ...arrangements.map((arrangement) => arrangement.name)],
-    arrangements,
-  }),
-);
+const saved = mock(async (_assetId: string, _request: unknown) => ({ assetId: 'new-variant' }));
 const sources = { ...(await import('@/lib/library/templateSources')) };
 mock.module('@/lib/library/templateSources', () => ({
   ...sources,
   fetchDesignLayers: () => read(),
-  saveDesignArrangements: saved,
+  createTemplateVariant: saved,
 }));
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -56,16 +49,32 @@ describe('DesignLayersPanel', () => {
     const reads = mock(async () => LAYERS);
     read = reads;
     const { rerender } = render(
-      <DesignLayersPanel brandId="b" assetId="a" active={false} onSaved={() => {}} />,
+      <DesignLayersPanel
+        brandId="b"
+        assetId="a"
+        expectedVersionId="v1"
+        active={false}
+        onSaved={() => {}}
+      />,
     );
     expect(reads).not.toHaveBeenCalled();
-    rerender(<DesignLayersPanel brandId="b" assetId="a" active onSaved={() => {}} />);
+    rerender(
+      <DesignLayersPanel
+        brandId="b"
+        assetId="a"
+        expectedVersionId="v1"
+        active
+        onSaved={() => {}}
+      />,
+    );
     await waitFor(() => expect(reads).toHaveBeenCalledTimes(1));
   });
 
   test('a new arrangement re-stacks the file’s layers and saves the exact order, bottom first', async () => {
     const onSaved = mock(() => {});
-    render(<DesignLayersPanel brandId="b" assetId="a" active onSaved={onSaved} />);
+    render(
+      <DesignLayersPanel brandId="b" assetId="a" expectedVersionId="v1" active onSaved={onSaved} />,
+    );
     const [file] = await screen.findAllByRole('list');
     // Front first, the way a layers panel reads.
     expect(names(file!)).toEqual(['DE DESCUENTO', 'LOGO VIVO', '<Rectángulo>']);
@@ -90,11 +99,14 @@ describe('DesignLayersPanel', () => {
     // The file's own stack is untouched.
     expect(names(file!)).toEqual(['DE DESCUENTO', 'LOGO VIVO', '<Rectángulo>']);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save variants' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create variant' }));
     await waitFor(() =>
-      expect(saved).toHaveBeenCalledWith('b', 'a', [
-        { name: 'Oferta detrás', artboardId: null, order: [17, 22, 5] },
-      ]),
+      expect(saved).toHaveBeenCalledWith('a', {
+        brandId: 'b',
+        expectedVersionId: 'v1',
+        name: 'Oferta detrás',
+        arrangement: { name: 'Oferta detrás', artboardId: null, order: [17, 22, 5] },
+      }),
     );
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
   });
@@ -104,7 +116,15 @@ describe('DesignLayersPanel', () => {
       ...LAYERS,
       arrangements: [{ name: 'Alt', artboardId: null, order: [17, 22, 5] }],
     });
-    render(<DesignLayersPanel brandId="b" assetId="a" active onSaved={() => {}} />);
+    render(
+      <DesignLayersPanel
+        brandId="b"
+        assetId="a"
+        expectedVersionId="v1"
+        active
+        onSaved={() => {}}
+      />,
+    );
     const arrangement = await screen.findByRole('region', { name: 'Variant Alt' });
     fireEvent.click(within(arrangement).getByRole('button', { name: /Reset to the file’s order/ }));
     expect(names(within(arrangement).getByRole('list'))).toEqual([
@@ -115,7 +135,15 @@ describe('DesignLayersPanel', () => {
   });
 
   test('removing and adding variants keeps unique names and shows errors beside the editor', async () => {
-    render(<DesignLayersPanel brandId="b" assetId="a" active onSaved={() => {}} />);
+    render(
+      <DesignLayersPanel
+        brandId="b"
+        assetId="a"
+        expectedVersionId="v1"
+        active
+        onSaved={() => {}}
+      />,
+    );
     fireEvent.click(await screen.findByRole('button', { name: 'New variant' }));
     fireEvent.click(screen.getByRole('button', { name: 'New variant' }));
     fireEvent.change(screen.getByLabelText('Edit variant'), { target: { value: '0' } });
@@ -125,7 +153,7 @@ describe('DesignLayersPanel', () => {
     fireEvent.change(screen.getByLabelText('Variant name'), {
       target: { value: ' PAUTAS-15 · 3 ' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save variants' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create variant' }));
     expect(screen.getByRole('alert').textContent).toContain('different name');
     expect(saved).not.toHaveBeenCalled();
   });
@@ -136,7 +164,15 @@ describe('DesignLayersPanel', () => {
         'layer order can be changed on templates imported from a Photoshop or Illustrator file',
       );
     };
-    render(<DesignLayersPanel brandId="b" assetId="a" active onSaved={() => {}} />);
+    render(
+      <DesignLayersPanel
+        brandId="b"
+        assetId="a"
+        expectedVersionId="v1"
+        active
+        onSaved={() => {}}
+      />,
+    );
     expect(await screen.findByText(/imported from a Photoshop or Illustrator file/)).toBeTruthy();
   });
 });

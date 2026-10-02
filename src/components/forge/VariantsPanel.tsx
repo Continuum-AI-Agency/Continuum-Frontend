@@ -1,24 +1,25 @@
 'use client';
 
-import type { ForgeLineageNode, ForgeLineageView } from '@continuum/contracts';
-import { useEffect, useState } from 'react';
-import { formatRelativeTime } from '@/components/approvals/formatters';
+import {
+  type ForgeLineageNode,
+  type ForgeLineageView,
+  type TemplateVariant,
+  templateDisplayName,
+} from '@continuum/contracts';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { fetchTemplateLineage } from '@/lib/library/templateSources';
-import { shortSha, variantLabel } from './templateVersion';
-
-/**
- * The template's VARIANTS — its named heads.
- *
- * A variant is a sibling version that differs deliberately: a ratio, a language, a legal wrap, a
- * motion preset. Same lineage, its own ref. Until now they had no representation anywhere in the
- * Forge at all: the gallery showed flat ratio chips, the Render tab's "forks" are forks of DATA,
- * and the only way to know which forks existed for a template was to read a delivery spec.
- *
- * Built from the version tree's refs rather than a new route, because a named head IS the variant
- * — `<templateKey>/<ratio>/<class>[@state]`. See template-forge `docs/TEMPLATE_IDENTITY.md`.
- */
+import { Input } from '@/components/ui/input';
+import {
+  createTemplateVariant,
+  fetchTemplateVariants,
+  loadWorkspaceTemplates,
+} from '@/lib/library/templateSources';
+import { uploadMediaAsset } from '@/lib/library/uploadMediaAsset';
+import { FORGE_STALE_MS, forgeQueryKeys } from './queryKeys';
+import type { ForgeRenderIntent } from './RenderRequestsGrid';
+import { variantLabel } from './templateVersion';
 
 export type VariantRow = {
   sha: string;
@@ -73,112 +74,204 @@ export function variantsOf(view: Pick<ForgeLineageView, 'roots'>): VariantRow[] 
 export function VariantsPanel({
   brandId,
   assetId,
-  selectedRef,
-  onSelect,
+  expectedVersionId,
+  onInspect,
+  onCreated,
+  onDelete,
+  onRender,
 }: {
   brandId: string;
   assetId: string;
-  /** The head the Render tab is currently pinned to, or null for the template's live pointer. */
-  selectedRef?: string | null;
-  /**
-   * Pick this head for the next render, or unpick it. Omitted, the panel stays read-only —
-   * which is what it was before, and is still right anywhere there is no render to aim at.
-   */
-  onSelect?: (ref: string | null) => void;
+  expectedVersionId: string;
+  onInspect?: (assetId: string) => void | Promise<void>;
+  onCreated?: (variant: TemplateVariant) => void | Promise<void>;
+  onDelete?: (variant: TemplateVariant) => void;
+  onRender?: (intent: ForgeRenderIntent) => void;
 }) {
-  const [view, setView] = useState<ForgeLineageView | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    fetchTemplateLineage(brandId, assetId)
-      .then((answer) => live && setView(answer))
-      .catch(
-        (cause: unknown) =>
-          live && setError(cause instanceof Error ? cause.message : String(cause)),
-      );
-    return () => {
-      live = false;
-    };
-  }, [brandId, assetId]);
-
-  if (error) {
-    return <p className="text-xs text-muted-foreground">Could not read the variants. {error}</p>;
-  }
-  if (!view) return <p className="text-xs text-muted-foreground">Reading the variants…</p>;
-  // A mirrored tree still lists the variants; only no forge AND no mirror has nothing to show.
-  if (!view.connected && !view.cachedAt) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        Variants are not connected — Template Forge is not configured for this environment.
-      </p>
-    );
-  }
-
-  const variants = variantsOf(view);
-  if (!variants.length) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        No variants yet. A variant is this template made for another use case — another size, a
-        language, a legal wrap or a look — and it renders from the same rows. Template Forge makes
-        them today; each one appears here once it has a name.
-      </p>
-    );
-  }
-
+  const queryClient = useQueryClient();
+  const {
+    data: catalog,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: forgeQueryKeys.templateVariants(brandId),
+    queryFn: () => fetchTemplateVariants(brandId),
+    staleTime: FORGE_STALE_MS.active,
+  });
+  const { data: published = [] } = useQuery({
+    queryKey: forgeQueryKeys.workspaceTemplates(brandId),
+    queryFn: () => loadWorkspaceTemplates(brandId),
+    staleTime: FORGE_STALE_MS.lists,
+  });
+  const selected = catalog?.find((item) => item.assetId === assetId);
+  const rootId = selected?.rootAssetId ?? assetId;
+  const variants = catalog?.filter((item) => item.rootAssetId === rootId) ?? [];
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [uploaded, setUploaded] = useState<{ id: string; key: string } | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const upload = async (file: File | undefined) => {
+    if (!file || busy) return;
+    if (!/\.(aep|aepx|aet|zip)$/i.test(file.name)) {
+      setUploadError('Choose an After Effects project or ZIP package.');
+      return;
+    }
+    setBusy(true);
+    setUploadError(null);
+    try {
+      const fileKey = `${file.name}:${file.size}:${file.lastModified}`;
+      let uploadedId = uploaded?.key === fileKey ? uploaded.id : null;
+      if (!uploadedId) {
+        uploadedId = (await uploadMediaAsset({ brandId, file })).assetId;
+        setUploaded({ id: uploadedId, key: fileKey });
+      }
+      const created = await createTemplateVariant(assetId, {
+        brandId,
+        expectedVersionId,
+        name: name.trim() || file.name.replace(/\.[^.]+$/, ''),
+        uploadAssetId: uploadedId,
+      });
+      setUploaded(null);
+      setName('');
+      await queryClient.invalidateQueries({ queryKey: forgeQueryKeys.templateVariants(brandId) });
+      await onCreated?.(created);
+    } catch (cause) {
+      setUploadError(cause instanceof Error ? cause.message : 'Could not create the variant');
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
-    <ul className="flex flex-col gap-1.5">
-      <li className="text-xs text-muted-foreground">
-        Each variant is this template made for a use case. Render this sends your rows to it.
-      </li>
-      {view.cachedAt ? (
-        <li className="text-xs text-muted-foreground" title={view.cachedAt}>
-          Showing the last variants Template Forge reported, from{' '}
-          {formatRelativeTime(view.cachedAt)}.
-        </li>
+    <div className="flex flex-col gap-4">
+      <p className="text-xs text-muted-foreground">
+        Choose a variant to inspect its source, checks and layers. Publish it after its test render
+        to use it in render sets.
+      </p>
+      {error ? (
+        <p role="alert" className="text-xs text-destructive">
+          Could not read variants.{' '}
+          <Button size="xs" variant="outline" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </p>
+      ) : !catalog ? (
+        <p className="text-xs text-muted-foreground">Reading variants…</p>
       ) : null}
-      {variants.map((variant) => (
-        <li
-          key={variant.sha}
-          className="flex flex-wrap items-center gap-2 rounded-md border border-border px-3 py-2 text-xs"
-        >
-          <span className="font-medium" title={variant.refs.join(' · ')}>
-            {variant.name}
-          </span>
-          <span className="font-mono text-muted-foreground tabular-nums" title={variant.sha}>
-            {shortSha(variant.sha)}
-          </span>
-          {variant.state ? <Badge variant="secondary">{variant.state}</Badge> : null}
-          {variant.accepted ? <Badge variant="secondary">AE accepted</Badge> : null}
-          {variant.shippedAs !== null ? (
-            <Badge variant="secondary" title={`attachment ${variant.shippedAs}`}>
-              shipped
-            </Badge>
-          ) : null}
-          {/* The pointer is the one mutable thing in the pipeline and it is live for everyone, so
-              the last move it made is worth showing beside the variant it moved to. */}
-          {variant.lastPointer ? (
-            <span className="text-muted-foreground" title={variant.lastPointer.at}>
-              pointer {variant.lastPointer.direction}
-            </span>
-          ) : null}
-          {/* The panel could list heads and never render one, which made every name on it
-              decoration. Choosing one OVERRIDES the template's live pointer for the next
-              render — so it is a toggle with a visible pinned state, not a fire-and-forget
-              button someone could press twice without knowing what changed. */}
-          {onSelect && variant.refs[0] ? (
-            <Button
-              type="button"
-              size="sm"
-              variant={selectedRef === variant.refs[0] ? 'default' : 'outline'}
-              className="ml-auto h-6 px-2 text-xs"
-              onClick={() => onSelect(selectedRef === variant.refs[0] ? null : variant.refs[0])}
+      <ul className="flex flex-col gap-2" aria-label="Template variants">
+        {variants.map((variant) => {
+          const targets = published.filter(
+            (item) => item.sourceAssetId === variant.assetId && item.granted,
+          );
+          return (
+            <li
+              key={variant.assetId}
+              className="flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-xs"
             >
-              {selectedRef === variant.refs[0] ? 'Rendering this' : 'Render this'}
-            </Button>
-          ) : null}
-        </li>
-      ))}
-    </ul>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">
+                  {variant.parentAssetId ? variant.name : 'Original'}
+                </p>
+                <p className="truncate text-muted-foreground">{variant.originalFileName}</p>
+              </div>
+              <Badge variant="secondary">
+                {variant.source.templateKey || targets.length
+                  ? 'Published'
+                  : variant.source.parseState !== 'parsed'
+                    ? variant.source.parseState
+                    : 'Draft'}
+              </Badge>
+              {onInspect ? (
+                <Button
+                  size="xs"
+                  variant={variant.assetId === assetId ? 'default' : 'outline'}
+                  onClick={() => void onInspect(variant.assetId)}
+                >
+                  {variant.assetId === assetId ? 'Inspecting' : 'Inspect'}
+                </Button>
+              ) : null}
+              {onRender
+                ? (targets.length
+                    ? targets
+                    : variant.source.templateKey
+                      ? [
+                          {
+                            templateKey: variant.source.templateKey,
+                            bindingId: undefined,
+                            name: variant.name,
+                            displayName: variant.name,
+                          },
+                        ]
+                      : []
+                  ).map((target) => (
+                    <Button
+                      key={`${target.bindingId}:${target.templateKey}`}
+                      size="xs"
+                      variant="outline"
+                      onClick={() =>
+                        onRender({ templateKey: target.templateKey, bindingId: target.bindingId })
+                      }
+                    >
+                      Render this variant
+                      {targets.length > 1 ? ` · ${templateDisplayName(target.name)}` : ''}
+                    </Button>
+                  ))
+                : null}
+              {variant.parentAssetId && onDelete ? (
+                <Button
+                  size="xs"
+                  variant="outline"
+                  aria-label={`Delete variant ${variant.name}`}
+                  onClick={() => onDelete(variant)}
+                >
+                  Delete
+                </Button>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+      <section
+        aria-label="Upload a variant"
+        className="flex flex-col gap-2 rounded-md border border-dashed p-3"
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault();
+          void upload(event.dataTransfer.files[0]);
+        }}
+      >
+        <p className="text-xs font-medium">Upload an After Effects variant</p>
+        <Input
+          aria-label="New variant name"
+          placeholder="Variant name"
+          maxLength={60}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          disabled={busy}
+        />
+        <Input
+          aria-label="After Effects variant file"
+          type="file"
+          accept=".aep,.aepx,.aet,.zip"
+          disabled={busy}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            void upload(file);
+            event.target.value = '';
+          }}
+        />
+        <p className="text-xs text-muted-foreground">
+          Drop a project here or choose a file. Photoshop and Illustrator variants are created in
+          Edit layers.
+        </p>
+        {busy ? (
+          <p className="text-xs text-muted-foreground">Uploading and reading the variant…</p>
+        ) : null}
+        {uploadError ? (
+          <p role="alert" className="text-xs text-destructive">
+            {uploadError}
+          </p>
+        ) : null}
+      </section>
+    </div>
   );
 }

@@ -1,15 +1,14 @@
 'use client';
 
 // The preview inspector’s layer editor for a Photoshop or Illustrator template: the file's own stack,
-// and the approved arrangements — the same layers in another front-to-back order. The server
-// re-authors each arrangement as its own comp of this template, so a render row picks it like a
-// format. Every layer carries its masks and clipping in its own pixels, so any order is safe.
+// and editable layer orders. Saving authors a separate variant from the immutable original design.
 
 import {
   type DesignArrangement,
   type DesignLayersResponse,
   designArrangementsRequestSchema,
   readableLayerName,
+  type TemplateVariant,
 } from '@continuum/contracts';
 import {
   ArrowDown,
@@ -33,7 +32,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from '@/components/ui/toast-imperative';
-import { fetchDesignLayers, saveDesignArrangements } from '@/lib/library/templateSources';
+import { createTemplateVariant, fetchDesignLayers } from '@/lib/library/templateSources';
 
 type Layers = DesignLayersResponse;
 type Board = Layers['artboards'][number];
@@ -117,12 +116,16 @@ export function DesignLayersPanel({
   assetId,
   active,
   onSaved,
+  expectedVersionId,
+  onCreated,
 }: {
   brandId: string;
   assetId: string;
   /** Reading the layers opens the source file, so it waits until the tab is first shown. */
   active: boolean;
   onSaved: () => Promise<unknown> | unknown;
+  expectedVersionId: string;
+  onCreated?: (variant: TemplateVariant) => Promise<unknown> | unknown;
 }) {
   const [layers, setLayers] = useState<Layers | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
@@ -164,13 +167,21 @@ export function DesignLayersPanel({
     setDraft((current) => current.map((item, at) => (at === index ? { ...item, ...patch } : item)));
 
   const addArrangement = () => {
-    const board = layers.artboards[0];
+    const base = draft[selected];
+    const board = base ? boardOf(base) : layers.artboards[0];
     if (!board) return;
     let suffix = 2;
     const name = () => `${board.name.slice(0, 52)} · ${suffix}`;
     while (draft.some((item) => item.name === name())) suffix++;
     setSelected(draft.length);
-    setDraft([...draft, { name: name(), artboardId: board.id, order: fileOrder(layers, board) }]);
+    setDraft([
+      ...draft,
+      {
+        name: name(),
+        artboardId: board.id,
+        order: base ? [...base.order] : fileOrder(layers, board),
+      },
+    ]);
   };
 
   const save = async () => {
@@ -186,13 +197,20 @@ export function DesignLayersPanel({
     setSaveError(null);
     setSaving(true);
     try {
-      const saved = await saveDesignArrangements(brandId, assetId, valid.data);
-      setLayers({ ...layers, arrangements: saved.arrangements });
-      setDraft(saved.arrangements);
-      toast.success(
-        `Saved as the template’s next revision (${saved.comps.length} comps). Build and publish it to select these variants in render sets.`,
-      );
+      const arrangement = valid.data[Math.min(selected, valid.data.length - 1)];
+      if (!arrangement) throw new Error('Create a named variant first.');
+      const name = layers.arrangements.some((item) => item.name === arrangement.name)
+        ? `${arrangement.name.slice(0, 52)} copy`
+        : arrangement.name;
+      const created = await createTemplateVariant(assetId, {
+        brandId,
+        expectedVersionId,
+        name,
+        arrangement: { ...arrangement, name },
+      });
+      toast.success('Variant created. Inspect its checks, then build and publish it to render.');
       await onSaved();
+      await onCreated?.(created);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not save the variants';
       setSaveError(message);
@@ -206,7 +224,7 @@ export function DesignLayersPanel({
     <div className="flex flex-col gap-4">
       <p className="text-xs text-muted-foreground">
         Create a named variant, then move layers forward or backward. Build and publish the saved
-        revision to choose its variants when making a render set.
+        variant to choose it when making a render set.
       </p>
 
       <div className="flex items-center gap-2">
@@ -223,11 +241,11 @@ export function DesignLayersPanel({
           {saving ? (
             <Loader2 className="animate-spin" data-icon="inline-start" aria-hidden />
           ) : null}
-          Save variants
+          Create variant
         </Button>
         {changed ? (
           <span className="text-xs text-muted-foreground">
-            Saving re-authors the template as its next revision.
+            Saving creates a new variant; the original is retained.
           </span>
         ) : null}
       </div>

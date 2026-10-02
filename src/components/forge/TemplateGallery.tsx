@@ -3,11 +3,13 @@
 import type { ApiRenderJob, TemplatePreview, TemplateSourceSummary } from '@continuum/contracts';
 import { templateDisplayName } from '@continuum/contracts';
 import { useQuery } from '@tanstack/react-query';
-import { Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight, Search } from 'lucide-react';
+import { Fragment, useMemo, useState } from 'react';
 import { ForgeProjectDrop } from '@/components/forge/ForgeProjectDrop';
 import { FORGE_STALE_MS, forgeQueryKeys } from '@/components/forge/queryKeys';
 import type { ForgeRenderIntent } from '@/components/forge/RenderRequestsGrid';
+import { Button } from '@/components/ui/button';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -16,15 +18,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { fetchTemplateVariants } from '@/lib/library/templateSources';
 import { cn } from '@/lib/utils';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import {
+  InlineRename,
   type SharedTemplate,
   SharedTemplateCard,
   sharedTemplateId,
   sourceDisplayName,
   TEMPLATE_STATUS,
-  TemplateCard,
+  TemplateFacts,
+  TemplateStatusPill,
   templateStatus,
 } from './TemplateCard';
 
@@ -48,7 +61,30 @@ const MOTIONS = [
 ] as const;
 type Motion = (typeof MOTIONS)[number]['id'];
 
-const SORTS = { updated: 'Recently updated', name: 'Name', motion: 'Animated first' } as const;
+const SOURCE_TYPES = {
+  all: 'All source types',
+  photoshop: 'Photoshop',
+  illustrator: 'Illustrator',
+  after_effects: 'After Effects',
+  other: 'Other',
+} as const;
+type SourceType = keyof typeof SOURCE_TYPES;
+const typeOf = (item: Item): Exclude<SourceType, 'all'> =>
+  item.kind === 'source' && item.sourceKind
+    ? item.sourceKind
+    : item.kind === 'source' && item.source.family.startsWith('after_effects')
+      ? 'after_effects'
+      : item.kind === 'source' && item.source.family in SOURCE_TYPES
+        ? (item.source.family as Exclude<SourceType, 'all'>)
+        : item.kind === 'shared'
+          ? 'after_effects'
+          : 'other';
+const SORTS = {
+  updated: 'Recently updated',
+  name: 'Name',
+  motion: 'Animated first',
+  type: 'Source type',
+} as const;
 type Sort = keyof typeof SORTS;
 const MOTION_RANK: Record<Motion | 'unknown', number> = { animated: 0, static: 1, unknown: 2 };
 
@@ -95,6 +131,7 @@ type Item =
       updatedAt: string;
       motion: Motion | null;
       source: TemplateSourceSummary;
+      sourceKind?: Exclude<SourceType, 'all'>;
     }
   | {
       kind: 'shared';
@@ -140,6 +177,8 @@ export function TemplateGallery({
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('updated');
   const [motion, setMotion] = useState<Motion | null>(null);
+  const [sourceType, setSourceType] = useState<SourceType>('all');
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   // Every card's picture from ONE read, grouped here — never a read per card.
   const { data: finished } = useQuery({
@@ -160,20 +199,36 @@ export function TemplateGallery({
   const rendersOf = (templateKey: string | null) =>
     (templateKey ? rendersByTemplate.get(templateKey) : undefined) ?? NO_RENDERS;
 
+  const {
+    data: catalog,
+    error: catalogError,
+    refetch: reloadCatalog,
+  } = useQuery({
+    queryKey: forgeQueryKeys.templateVariants(brandId),
+    queryFn: () => fetchTemplateVariants(brandId),
+    staleTime: FORGE_STALE_MS.active,
+  });
+  const metadata = new Map(catalog?.map((item) => [item.assetId, item]));
   const items = useMemo<Item[]>(
     () => [
-      ...sources.map((source) => ({
-        kind: 'source' as const,
-        key: source.assetId,
-        name: sourceDisplayName(source),
-        group: TEMPLATE_STATUS[templateStatus(source)].group,
-        updatedAt: source.updatedAt ?? source.createdAt,
-        motion: templateMotion(
-          source.parse,
-          rendersByTemplate.get(source.templateKey ?? '') ?? NO_RENDERS,
-        ),
-        source,
-      })),
+      ...sources
+        .filter((source) => {
+          const parent = catalog?.find((item) => item.assetId === source.assetId)?.parentAssetId;
+          return !parent || !catalog?.some((item) => item.assetId === parent);
+        })
+        .map((source) => ({
+          sourceKind: catalog?.find((item) => item.assetId === source.assetId)?.sourceKind,
+          kind: 'source' as const,
+          key: source.assetId,
+          name: sourceDisplayName(source),
+          group: TEMPLATE_STATUS[templateStatus(source)].group,
+          updatedAt: source.updatedAt ?? source.createdAt,
+          motion: templateMotion(
+            source.parse,
+            rendersByTemplate.get(source.templateKey ?? '') ?? NO_RENDERS,
+          ),
+          source,
+        })),
       ...shared.map((template) => ({
         kind: 'shared' as const,
         key: `shared:${sharedTemplateId(template)}`,
@@ -184,7 +239,7 @@ export function TemplateGallery({
         shared: template,
       })),
     ],
-    [sources, shared, rendersByTemplate],
+    [sources, shared, rendersByTemplate, catalog],
   );
 
   const counts = useMemo(() => {
@@ -212,19 +267,29 @@ export function TemplateGallery({
           (filter === 'all' ||
             (filter === 'shared' ? item.kind === 'shared' : item.group === filter)) &&
           (!motion || item.motion === motion) &&
+          (sourceType === 'all' || typeOf(item) === sourceType) &&
           (!needle || item.name.toLowerCase().includes(needle)),
       )
       .sort(
         (a, b) =>
+          (sort === 'type' ? SOURCE_TYPES[typeOf(a)].localeCompare(SOURCE_TYPES[typeOf(b)]) : 0) ||
           (sort === 'motion'
             ? MOTION_RANK[a.motion ?? 'unknown'] - MOTION_RANK[b.motion ?? 'unknown']
             : 0) ||
           (sort === 'name' ? a.name.localeCompare(b.name) : b.updatedAt.localeCompare(a.updatedAt)),
       );
-  }, [items, query, filter, sort, motion]);
+  }, [items, query, filter, sort, motion, sourceType]);
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
+      {catalogError ? (
+        <p role="alert" className="text-xs text-destructive">
+          Could not read source types and variants.{' '}
+          <Button size="xs" variant="outline" onClick={() => void reloadCatalog()}>
+            Retry
+          </Button>
+        </p>
+      ) : null}
       <div className="sticky top-0 z-20 -mx-1 flex flex-wrap items-center gap-2 bg-background/95 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div className="relative w-full sm:w-64">
           <Search
@@ -268,6 +333,18 @@ export function TemplateGallery({
             </button>
           ))}
         </fieldset>
+        <Select value={sourceType} onValueChange={(next) => setSourceType(next as SourceType)}>
+          <SelectTrigger className="h-8 w-44 text-xs" aria-label="Filter by source type">
+            <SelectValue>{SOURCE_TYPES[sourceType]}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(SOURCE_TYPES).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <div className="ml-auto">
           <Select value={sort} onValueChange={(next) => setSort(next as Sort)}>
             <SelectTrigger className="h-8 w-44 text-xs" aria-label="Sort templates">
@@ -284,46 +361,200 @@ export function TemplateGallery({
         </div>
       </div>
 
-      <ul
-        className="grid grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-4"
-        aria-label="Templates"
-      >
-        {filter === 'shared' ? null : (
-          <li className="min-w-0">
-            <ForgeProjectDrop onFiles={onFiles} onFonts={onFonts} onRejected={onRejected} />
-          </li>
-        )}
-        {visible.map((item) => (
-          <li key={item.key} className="min-w-0">
-            {item.kind === 'source' ? (
-              <TemplateCard
-                brandId={brandId}
-                source={item.source}
-                renders={rendersOf(item.source.templateKey)}
-                emptyLabel={emptyLabel}
-                onOpen={() => onOpen(item.source.assetId)}
-                onRename={(title) => onRename(item.source.assetId, title)}
-              />
-            ) : (
-              <SharedTemplateCard
-                brandId={brandId}
-                template={item.shared}
-                brandName={brandName}
-                renders={rendersOf(item.shared.templateKey)}
-                emptyLabel={emptyLabel}
-                busy={adopting === sharedTemplateId(item.shared)}
-                onOpen={() => onOpenShared(item.shared)}
-                onToggle={() => onToggleShared(item.shared)}
-                onRender={
-                  onOpenRender
-                    ? () => onOpenRender({ templateKey: item.shared.templateKey })
-                    : undefined
-                }
-              />
-            )}
-          </li>
-        ))}
-      </ul>
+      {filter !== 'shared' ? (
+        <ForgeProjectDrop compact onFiles={onFiles} onFonts={onFonts} onRejected={onRejected} />
+      ) : null}
+      <div className="overflow-hidden rounded-lg border">
+        <Table aria-label="Templates" className="text-xs">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="min-w-64">Template</TableHead>
+              <TableHead>Source</TableHead>
+              <TableHead>Formats / variants</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Updated</TableHead>
+              <TableHead>
+                <span className="sr-only">Actions</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {['ready', 'drafts', 'attention'].map((group) => {
+              const rows = visible.filter((item) => item.group === group);
+              if (!rows.length) return null;
+              const closed = collapsed.has(group);
+              const label = FILTERS.find((option) => option.id === group)?.label ?? group;
+              return (
+                <Fragment key={group}>
+                  <TableRow className="bg-muted/40 hover:bg-muted/40">
+                    <TableCell colSpan={6} className="py-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-expanded={!closed}
+                        aria-label={`${closed ? 'Expand' : 'Collapse'} ${label}`}
+                        onClick={() =>
+                          setCollapsed((previous) => {
+                            const next = new Set(previous);
+                            if (next.has(group)) next.delete(group);
+                            else next.add(group);
+                            return next;
+                          })
+                        }
+                      >
+                        {closed ? <ChevronRight aria-hidden /> : <ChevronDown aria-hidden />}{' '}
+                        {label}{' '}
+                        <span className="font-mono text-muted-foreground">{rows.length}</span>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                  {!closed &&
+                    rows.map((item) => (
+                      <TableRow key={item.key}>
+                        <TableCell className="py-2">
+                          <HoverCard openDelay={300}>
+                            <HoverCardTrigger
+                              render={
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="max-w-full justify-start px-0 font-medium"
+                                  aria-label={`Open ${item.name}`}
+                                  onClick={() =>
+                                    item.kind === 'source'
+                                      ? onOpen(item.source.assetId)
+                                      : onOpenShared(item.shared)
+                                  }
+                                />
+                              }
+                            >
+                              {item.name}
+                            </HoverCardTrigger>
+                            <HoverCardContent
+                              align="start"
+                              className="w-96 max-w-[calc(100vw-2rem)]"
+                            >
+                              {item.kind === 'source' ? (
+                                <div className="flex flex-col gap-3">
+                                  <TemplateFacts
+                                    brandId={brandId}
+                                    source={item.source}
+                                    lastRender={rendersOf(item.source.templateKey)[0]}
+                                    emptyLabel={emptyLabel}
+                                  />
+                                  <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+                                    <dt className="text-muted-foreground">Source file</dt>
+                                    <dd className="break-all">
+                                      {metadata.get(item.source.assetId)?.originalFileName ??
+                                        item.source.parse?.filename ??
+                                        'Not parsed yet'}
+                                    </dd>
+                                    <dt className="text-muted-foreground">Uploaded</dt>
+                                    <dd>{new Date(item.source.createdAt).toLocaleString()}</dd>
+                                    <dt className="text-muted-foreground">Parsing</dt>
+                                    <dd>{item.source.parseState}</dd>
+                                    <dt className="text-muted-foreground">Build</dt>
+                                    <dd>{item.source.forgeState ?? 'Not built'}</dd>
+                                    <dt className="text-muted-foreground">Missing media</dt>
+                                    <dd>{item.source.parse?.missingFootage?.length ?? '—'}</dd>
+                                  </dl>
+                                  {item.source.parseError ? (
+                                    <p className="text-destructive">{item.source.parseError}</p>
+                                  ) : null}
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => onOpen(item.source.assetId)}
+                                  >
+                                    Inspect checks and original files
+                                  </Button>
+                                </div>
+                              ) : (
+                                <SharedTemplateCard
+                                  brandId={brandId}
+                                  template={item.shared}
+                                  brandName={brandName}
+                                  renders={rendersOf(item.shared.templateKey)}
+                                  emptyLabel={emptyLabel}
+                                  busy={adopting === sharedTemplateId(item.shared)}
+                                  onOpen={() => onOpenShared(item.shared)}
+                                  onToggle={() => onToggleShared(item.shared)}
+                                />
+                              )}
+                            </HoverCardContent>
+                          </HoverCard>
+                        </TableCell>
+                        <TableCell>
+                          <span className="whitespace-nowrap">{SOURCE_TYPES[typeOf(item)]}</span>
+                          <span className="mt-0.5 block text-2xs text-muted-foreground">
+                            {item.motion === 'animated'
+                              ? 'Motion'
+                              : item.motion === 'static'
+                                ? 'Static'
+                                : 'Not rendered'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="font-mono">
+                          {item.kind === 'source'
+                            ? (item.source.ratios.join(' · ') || '—') +
+                              ` / ${1 + (catalog?.filter((variant) => variant.rootAssetId === item.source.assetId && variant.assetId !== item.source.assetId).length ?? 0)}`
+                            : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {item.kind === 'source' ? (
+                            <TemplateStatusPill status={templateStatus(item.source)} />
+                          ) : item.shared.draft ? (
+                            'Draft · Shared'
+                          ) : (
+                            'Ready · Shared'
+                          )}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-muted-foreground">
+                          <time dateTime={item.updatedAt} title={item.updatedAt}>
+                            {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : '—'}
+                          </time>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {item.kind === 'source' ? (
+                            <InlineRename
+                              iconOnly
+                              value={item.name}
+                              onRename={(title) => onRename(item.source.assetId, title)}
+                            />
+                          ) : (
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                disabled={adopting === sharedTemplateId(item.shared)}
+                                onClick={() => onToggleShared(item.shared)}
+                              >
+                                {item.shared.granted
+                                  ? `Remove ${item.name} from ${brandName ?? 'this brand'}`
+                                  : `Use in ${brandName ?? 'this brand'}`}
+                              </Button>
+                              {item.shared.granted && onOpenRender ? (
+                                <Button
+                                  size="xs"
+                                  variant="outline"
+                                  onClick={() =>
+                                    onOpenRender({ templateKey: item.shared.templateKey })
+                                  }
+                                >
+                                  Render
+                                </Button>
+                              ) : null}
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                </Fragment>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
       {visible.length === 0 && items.length > 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">No templates match.</p>
       ) : null}

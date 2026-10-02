@@ -13,6 +13,8 @@ import type {
   WorkspaceTemplate,
 } from '@continuum/contracts';
 import {
+  type CreateTemplateVariantRequest,
+  createTemplateVariantRequestSchema,
   type DesignArrangement,
   type DesignArrangementsResponse,
   type DesignImportRequest,
@@ -31,6 +33,7 @@ import {
   type TemplateSourceEvent,
   type TemplateTextMoveRequest,
   type TemplateTextMoveResponse,
+  type TemplateVariant,
   templateFontAliasRequestSchema,
   templateFontCandidatesResponseSchema,
   templateFontHealResultSchema,
@@ -44,6 +47,8 @@ import {
   templateSourceSchema,
   templateSourceSummarySchema,
   templateTextMoveResponseSchema,
+  templateVariantSchema,
+  templateVariantsResponseSchema,
 } from '@continuum/contracts';
 import { getApiUrl } from '@/lib/api/config';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -577,4 +582,30 @@ export async function advanceTemplateForgeRun(
     body: JSON.stringify({ brandId, ...(extra ?? {}) }),
   });
   await unwrap(response, `Forge ${action}`);
+}
+
+export async function fetchTemplateVariants(
+  brandId: string,
+  assetId?: string,
+): Promise<TemplateVariant[]> {
+  const params = new URLSearchParams({ brandId, ...(assetId ? { assetId } : {}) });
+  const response = await authorizedFetch(`/api/ai-studio/template-variants?${params}`);
+  return templateVariantsResponseSchema.parse(await unwrap(response, 'Template variants')).items;
+}
+export async function createTemplateVariant(
+  assetId: string,
+  request: CreateTemplateVariantRequest,
+): Promise<TemplateVariant> {
+  const response = await authorizedFetch(
+    `/api/ai-studio/templates/${encodeURIComponent(assetId)}/variants`,
+    { method: 'POST', body: JSON.stringify(createTemplateVariantRequestSchema.parse(request)) },
+  );
+  return templateVariantSchema.parse(await unwrap(response, 'Create variant'));
+}
+
+/** No workspace is normal for a new brand; discovery is advisory to its upload list. */
+export async function loadWorkspaceTemplates(brandId: string): Promise<WorkspaceTemplate[]> {
+  return discoverWorkspaceTemplates(brandId)
+    .then((result) => result.items)
+    .catch(() => []);
 }

@@ -121,10 +121,12 @@ export function InlineRename({
   value,
   onRename,
   className,
+  iconOnly = false,
 }: {
   value: string;
   onRename: (next: string) => void;
   className?: string;
+  iconOnly?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(value);
@@ -167,14 +169,17 @@ export function InlineRename({
       )}
     >
       {/* biome-ignore lint/a11y/noStaticElementInteractions: a shortcut beside the pencil button, which is the accessible path */}
-      <span className="truncate" title={value} onDoubleClick={begin}>
+      <span className={iconOnly ? 'sr-only' : 'truncate'} title={value} onDoubleClick={begin}>
         {value}
       </span>
       <button
         type="button"
         aria-label={`Rename ${value}`}
         onClick={begin}
-        className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/rename:opacity-100"
+        className={cn(
+          'shrink-0 rounded p-0.5 text-muted-foreground transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/rename:opacity-100',
+          !iconOnly && 'opacity-0',
+        )}
       >
         <Pencil className="size-3.5" aria-hidden />
       </button>
@@ -289,7 +294,7 @@ const shortDate = (value: string) =>
  * its cache — never a fetch of its own. Named-variable and missing-font counts need the template's
  * own reads, so they appear once the template has been opened.
  */
-function TemplateFacts({
+export function TemplateFacts({
   brandId,
   source,
   lastRender,

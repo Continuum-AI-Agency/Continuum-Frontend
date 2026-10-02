@@ -90,10 +90,12 @@ export function partitionForgeProjectFiles(files: File[]): {
 }
 
 export function ForgeProjectDrop({
+  compact = false,
   onFiles,
   onFonts,
   onRejected,
 }: {
+  compact?: boolean;
   onFiles: (files: File[]) => void;
   onFonts: (files: File[]) => Promise<void>;
   onRejected: (files: File[]) => void;
@@ -130,6 +132,7 @@ export function ForgeProjectDrop({
         variant="outline"
         className={cn(
           'h-full min-h-40 w-full flex-col items-center justify-center gap-2 whitespace-normal rounded-xl border-dashed px-[var(--card-pad)] py-6 text-center',
+          compact && 'min-h-0 flex-row justify-start py-3 text-left [&>span:last-child]:max-w-none',
           dragDepth > 0 && 'border-primary bg-primary/5',
         )}
         onClick={choose}

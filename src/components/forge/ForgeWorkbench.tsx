@@ -42,6 +42,7 @@ import { bulkDeleteAssetsOperation } from '@/lib/library/creativeOperations';
 import {
   discoverWorkspaceTemplates,
   fetchTemplateSources,
+  loadWorkspaceTemplates,
   renameTemplateSource,
   setTemplateAdoption,
   uploadTemplateFontFiles,
@@ -54,27 +55,6 @@ import { DesignTemplateImports, useDesignTemplateImports } from './DesignTemplat
 // The Library still OWNS the file: an upload here goes through the same resumable path into the
 // same `media-source` bucket and becomes the same `media.assets` row. This screen is where you
 // work on it — find it in the gallery, open it, and say what its variables mean.
-
-/**
- * What the brand's workspaces hold, split in two.
- *
- * Templates built from this brand's own uploads lend their build name to the matching card, so a
- * template nobody titled still reads as what it was built as. Everything else is "shared": discovery
- * ends at an intersection — what the workspace holds ∩ what this brand has been granted — so a brand
- * nobody granted anything sees an empty picker however much is really there, and this is that list
- * with the grant as a button.
- *
- * ONE read, whatever the brand's topology. This used to list the brand's workspaces and fan a
- * discover call out per workspace from the browser; the server merges them now, and each row
- * carries the binding it came from so adoption still names the right one.
- */
-async function loadWorkspaceTemplates(brandId: string): Promise<WorkspaceTemplate[]> {
-  // Advisory: a brand with no binding yet has no workspace to read, which is a normal state for a
-  // new tenant and must not put an error on the page.
-  return discoverWorkspaceTemplates(brandId)
-    .then((result) => result.items)
-    .catch(() => []);
-}
 
 function splitWorkspaceTemplates(
   items: WorkspaceTemplate[],
@@ -123,6 +103,7 @@ export function ForgeWorkbench({
   const [selectedShared, setSelectedShared] = useState<string | null>(null);
   const [adopting, setAdopting] = useState<string | null>(null);
   const [removing, setRemoving] = useState<TemplateSourceSummary | null>(null);
+  const [removalReturn, setRemovalReturn] = useState<string | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
   // Dropped files named like a template already here, waiting for "revision or new template?".
   const [sameName, setSameName] = useState<Array<{ file: File; source: TemplateSourceSummary }>>(
@@ -185,6 +166,7 @@ export function ForgeWorkbench({
         queryClient.invalidateQueries({ queryKey: forgeQueryKeys.workspaceTemplates(brandId) }),
         queryClient.invalidateQueries({ queryKey: forgeQueryKeys.templates(brandId) }),
         queryClient.invalidateQueries({ queryKey: forgeQueryKeys.contracts(brandId) }),
+        queryClient.invalidateQueries({ queryKey: forgeQueryKeys.templateVariants(brandId) }),
       ]).then(() => undefined),
     [brandId, queryClient, sourceKey],
   );
@@ -278,22 +260,20 @@ export function ForgeWorkbench({
     setRemoveBusy(true);
     let accessDisabled = false;
     try {
-      if (source.templateKey) {
-        const workspaceId =
-          (workspaceQuery.data ?? []).find((item) => item.sourceAssetId === source.assetId)
-            ?.bindingId ??
-          (await discoverWorkspaceTemplates(brandId)).items.find(
-            (item) => item.sourceAssetId === source.assetId,
-          )?.bindingId;
-        if (!workspaceId)
-          throw new Error(
-            'Could not find this template’s render workspace. Refresh and try again.',
-          );
+      const published =
+        source.templateKey || source.forgeRunId
+          ? (await discoverWorkspaceTemplates(brandId)).items.filter(
+              (item) => item.sourceAssetId === source.assetId && item.granted,
+            )
+          : [];
+      if (source.templateKey && !published.some((item) => item.templateKey === source.templateKey))
+        throw new Error('Could not find this template’s render workspace. Refresh and try again.');
+      for (const item of published) {
         const disabled = await setTemplateAdoption({
           brandId,
-          templateKey: source.templateKey,
+          templateKey: item.templateKey,
           enabled: false,
-          workspaceId,
+          workspaceId: item.bindingId,
         });
         if (!disabled.granted)
           throw new Error('Could not turn off render access for this template.');
@@ -304,7 +284,8 @@ export function ForgeWorkbench({
         assetIds: [source.assetId],
       });
       if (!removed.includes(source.assetId)) throw new Error('The template file was not removed.');
-      setSelected(null);
+      if (selected === source.assetId) setSelected(removalReturn);
+      setRemovalReturn(null);
       setRemoving(null);
       toast.success(`${sourceDisplayName(source)} removed from ${brandName ?? 'this brand'}`);
     } catch (error) {
@@ -432,8 +413,19 @@ export function ForgeWorkbench({
           brandId={brandId}
           source={current}
           onBack={() => open(null)}
+          onOpenVariant={async (assetId) => {
+            await refreshTemplate();
+            open(assetId);
+          }}
           onRename={(title) => void rename(current.assetId, title)}
-          onRemove={() => setRemoving(current)}
+          onDeleteVariant={(variant) => {
+            setRemovalReturn(variant.rootAssetId);
+            setRemoving(variant.source);
+          }}
+          onRemove={() => {
+            setRemovalReturn(null);
+            setRemoving(current);
+          }}
           onOpenRender={onOpenRender}
           onChanged={refreshTemplate}
           revisionFile={revision?.assetId === current.assetId ? revision.file : undefined}

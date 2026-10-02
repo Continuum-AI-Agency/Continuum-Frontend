@@ -1,5 +1,6 @@
-@import "tailwindcss";
+@import "tailwindcss" source("../");
 @import "tw-animate-css";
+@source "../../packages/contracts/src";
 @source "../node_modules/streamdown/dist/*.js";
 @source not "../../.next-shell-review-41739";
 @source not "../../tmp/continuum-next-e2e-shell";
@@ -1562,7 +1563,7 @@ button:focus-visible .mention-inline__label {
   everything above a downward point, so the bottom edge reads as a tear-off serration.
 */
 .receipt-edge {
-  -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% /
-    8px 100%;
+  -webkit-mask:
+    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 8px 100%;
   mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 8px 100%;
 }

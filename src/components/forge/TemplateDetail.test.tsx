@@ -367,6 +367,7 @@ function renderDetail(
   source: TemplateSource = SOURCE,
 ) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(['forge', BRAND, 'template-variants'], []);
   const tree = (nextSource: TemplateSource) => (
     <QueryClientProvider client={client}>
       <TemplateDetail
@@ -637,7 +638,8 @@ describe('TemplateDetail', () => {
     expect(within(preview).getByRole('img', { name: '9:16 layout' })).toBeTruthy();
     expect(within(preview).getByText('Estimate · wireframe')).toBeTruthy();
 
-    // Its renders, grouped by the set that asked for them.
+    // Its renders live in the right-hand inspector and remain grouped by their set.
+    fireEvent.click(screen.getByRole('tab', { name: 'Render ledger' }));
     expect(await screen.findByRole('button', { name: /Launch week/ })).toBeTruthy();
     expect(screen.getByText('Spain')).toBeTruthy();
   });

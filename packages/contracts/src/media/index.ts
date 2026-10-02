@@ -64,6 +64,7 @@ export * from './template-rebind';
 export * from './template-source';
 export * from './template-source-events';
 export * from './template-source-slot';
+export * from './template-variants';
 export * from './timeline-draft';
 export * from './transcription';
 export * from './transformations';

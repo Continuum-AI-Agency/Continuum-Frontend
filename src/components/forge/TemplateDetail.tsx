@@ -78,6 +78,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/toast-imperative';
+import { downloadLibraryAsset } from '@/lib/library/assetDownload';
 import {
   advanceTemplateForgeBundle,
   advanceTemplateForgeRun,
@@ -89,6 +90,7 @@ import {
   fetchTemplateForgeBundle,
   fetchTemplateMappingReview,
   fetchTemplateVariables,
+  fetchTemplateVariants,
   healTemplateFonts,
   previewTemplateRebind,
   pushTemplateFonts,
@@ -204,6 +206,8 @@ export function TemplateDetail({
   brandId,
   source,
   onBack,
+  onOpenVariant,
+  onDeleteVariant,
   onRename,
   onRemove,
   onOpenRender,
@@ -214,6 +218,8 @@ export function TemplateDetail({
   brandId: string;
   source: TemplateSourceSummary;
   onBack: () => void;
+  onOpenVariant?: (assetId: string) => void | Promise<void>;
+  onDeleteVariant?: (variant: import('@continuum/contracts').TemplateVariant) => void;
   onRename: (title: string) => void;
   onRemove?: () => void;
   onOpenRender?: (intent: ForgeRenderIntent) => void;
@@ -234,6 +240,15 @@ export function TemplateDetail({
     [assetId, brandId, source.versionId],
   );
   const name = sourceDisplayName(source);
+  const { data: variantCatalog } = useQuery({
+    queryKey: forgeQueryKeys.templateVariants(brandId),
+    queryFn: () => fetchTemplateVariants(brandId),
+    staleTime: FORGE_STALE_MS.active,
+  });
+  const variantRoot =
+    variantCatalog?.find((variant) => variant.assetId === assetId)?.rootAssetId ?? assetId;
+  const familyVariants =
+    variantCatalog?.filter((variant) => variant.rootAssetId === variantRoot) ?? [];
   const { run, pushed, refresh: refreshRun } = useForgeRun(brandId, assetId);
   const multiDelivery = publicationCompsOfParse(source.parse).length > 1;
   const bundleKey = ['template-forge-bundle', brandId, assetId, source.versionId];
@@ -262,8 +277,7 @@ export function TemplateDetail({
   const [savedMediaRepair, setSavedMediaRepair] = useState<string | null>(null);
   const [savingText, setSavingText] = useState(false);
   // Read once: the dropped file is handed off moments after mount, and the tab must not follow it.
-  const [tab, setTab] = useState(revisionFile ? 'source' : 'variables');
-  const [inspectorTab, setInspectorTab] = useState('checks');
+  const [tab, setTab] = useState(revisionFile ? 'source' : 'checks');
   const missingFootage = source.parse?.missingFootage ?? [];
   // Open on a format that has something to show. A parse can list a precomp as a format (KAMAY's
   // "Gradient Background 1" came first), and landing on its empty frame reads as a broken preview.
@@ -1219,6 +1233,24 @@ export function TemplateDetail({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {onOpenVariant && familyVariants.length ? (
+            <label className="flex items-center gap-2 text-xs">
+              Variant
+              <select
+                aria-label="Inspect template variant"
+                className="h-8 max-w-56 rounded-md border border-input bg-background px-2 text-xs"
+                value={assetId}
+                onChange={(event) => void onOpenVariant(event.target.value)}
+              >
+                {familyVariants.map((variant) => (
+                  <option key={variant.assetId} value={variant.assetId}>
+                    {variant.parentAssetId ? variant.name : 'Original'} ·{' '}
+                    {variant.source.templateKey ? 'Published' : 'Draft'}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <span className="inline-flex items-center gap-2 text-xs">
             {library ? (
               <>
@@ -1548,13 +1580,38 @@ export function TemplateDetail({
           ) : null}
         </div>
 
-        <Tabs value={inspectorTab} onValueChange={setInspectorTab} className="min-w-0 gap-0">
+        <Tabs value={tab} onValueChange={setTab} className="min-w-0 gap-0">
           <TabsList
             variant="line"
-            className="h-9 w-full justify-start border-b px-[var(--card-pad)]"
+            className="h-auto min-h-9 w-full flex-wrap justify-start gap-x-3 gap-y-1 border-b px-[var(--card-pad)] py-2"
           >
             <TabsTrigger value="checks">Checks</TabsTrigger>
             <TabsTrigger value="layers">Edit layers</TabsTrigger>
+            <TabsTrigger value="variables" className="flex-none px-0 text-xs">
+              Variables
+            </TabsTrigger>
+            <TabsTrigger value="mapping" className="flex-none px-0 text-xs">
+              Mapping
+            </TabsTrigger>
+            {templateKey ? (
+              <TabsTrigger value="output" className="flex-none px-0 text-xs">
+                Output
+              </TabsTrigger>
+            ) : null}
+            <TabsTrigger value="source" className="flex-none px-0 text-xs">
+              Source revision
+            </TabsTrigger>
+            <TabsTrigger value="variants" className="flex-none px-0 text-xs">
+              Variants {familyVariants.length ? `(${familyVariants.length})` : ''}
+            </TabsTrigger>
+            <TabsTrigger value="history" className="flex-none px-0 text-xs">
+              History
+            </TabsTrigger>
+            <TabsTrigger value="details" className="flex-none px-0 text-xs">
+              Details
+            </TabsTrigger>
+
+            {templateKey ? <TabsTrigger value="renders">Render ledger</TabsTrigger> : null}
           </TabsList>
           <TabsContent value="checks" keepMounted>
             <FactList
@@ -1629,122 +1686,126 @@ export function TemplateDetail({
             <DesignLayersPanel
               brandId={brandId}
               assetId={assetId}
-              active={inspectorTab === 'layers'}
+              active={tab === 'layers'}
+              expectedVersionId={source.versionId}
+              onCreated={async (variant) => {
+                await queryClient.invalidateQueries({
+                  queryKey: forgeQueryKeys.templateVariants(brandId),
+                });
+                await onChanged();
+                await onOpenVariant?.(variant.assetId);
+              }}
               onSaved={() => Promise.all([onChanged(), loadVariables()])}
             />
           </TabsContent>
+          <TabsContent value="variables" keepMounted>
+            <VariableEditor
+              brandId={brandId}
+              variables={variables}
+              savedDefaults={savedDefaults}
+              savedBindings={savedBindings}
+              parseState={parseState}
+              saving={saving}
+              onSave={onSave}
+            />
+          </TabsContent>
+          <TabsContent value="mapping" keepMounted className="p-[var(--card-pad)]">
+            <TemplateMappingReviewPanel review={mappingReview ?? null} />
+          </TabsContent>
+          {templateKey ? (
+            <TabsContent value="output" keepMounted className="p-[var(--card-pad)]">
+              {/* Renders nothing until the template's contract carries output settings. */}
+              {/* The server resolves which binding holds this key; the page never asks. */}
+              <OutputSettingsPanel brandId={brandId} templateKey={templateKey} bindingId={null} />
+            </TabsContent>
+          ) : null}
+          <TabsContent value="source" keepMounted className="p-[var(--card-pad)]">
+            <SourceRebindPanel
+              brandId={brandId}
+              assetId={assetId}
+              expectedVersionId={source.versionId}
+              suggestedVersionId={savedTextRepair?.versionId ?? savedMediaRepair ?? undefined}
+              aepName={source.parse?.filename}
+              missingFootage={missingFootage}
+              initialFile={revisionFile}
+              onInitialFileTaken={onRevisionTaken}
+              onConfirmed={async () => {
+                await Promise.all([onChanged(), loadVariables()]);
+                setSavedTextRepair(null);
+                setSavedMediaRepair(null);
+              }}
+            />
+          </TabsContent>
+          <TabsContent value="variants" keepMounted className="p-[var(--card-pad)]">
+            <VariantsPanel
+              brandId={brandId}
+              assetId={assetId}
+              expectedVersionId={source.versionId}
+              onInspect={onOpenVariant}
+              onDelete={onDeleteVariant}
+              onCreated={async (variant) => {
+                await onChanged();
+                await onOpenVariant?.(variant.assetId);
+              }}
+              onRender={onOpenRender}
+            />
+          </TabsContent>
+          <TabsContent value="history" keepMounted className="p-[var(--card-pad)]">
+            <LineagePanel brandId={brandId} assetId={assetId} />
+          </TabsContent>
+          <TabsContent value="details" keepMounted className="p-[var(--card-pad)]">
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1.5 text-xs">
+              <dt className="text-muted-foreground">Template key</dt>
+              <dd className="break-all font-mono">{templateKey ?? '—'}</dd>
+              {/* Where the build actually RAN, read off the run. Not a choice and not a control:
+                the Details tab is operator plumbing, and a build has exactly one home. */}
+              <dt className="text-muted-foreground">Rendered in</dt>
+              <dd className="break-all font-mono">{run?.application ?? '—'}</dd>
+              <dt className="text-muted-foreground">Root table</dt>
+              <dd className="break-all font-mono">{run?.root_table ?? '—'}</dd>
+              <dt className="text-muted-foreground">Asset id</dt>
+              <dd className="break-all font-mono">{assetId}</dd>
+              <dt className="text-muted-foreground">Original file</dt>
+              <dd>
+                {(() => {
+                  const original = variantCatalog?.find((variant) => variant.assetId === assetId);
+                  return original ? (
+                    <Button
+                      size="xs"
+                      variant="link"
+                      className="h-auto p-0 text-xs"
+                      onClick={() =>
+                        void downloadLibraryAsset({
+                          brandId,
+                          assetId: original.originalAssetId,
+                          versionId: original.originalVersionId,
+                          fileName: original.originalFileName,
+                        }).catch((error) => toast.error(error.message))
+                      }
+                    >
+                      {original.originalFileName}
+                    </Button>
+                  ) : (
+                    '—'
+                  );
+                })()}
+              </dd>
+              <dt className="text-muted-foreground">Uploaded</dt>
+              <dd>{new Date(source.createdAt).toLocaleString()}</dd>
+              <dt className="text-muted-foreground">Source revision</dt>
+              <dd className="break-all font-mono">{source.versionId}</dd>
+              <dt className="text-muted-foreground">Source file</dt>
+              <dd className="break-all font-mono">{source.parse?.filename ?? '—'}</dd>
+            </dl>
+          </TabsContent>
+
+          {templateKey ? (
+            <TabsContent value="renders" keepMounted>
+              <TemplateRenders brandId={brandId} templateKey={templateKey} formats={formats} />
+            </TabsContent>
+          ) : null}
         </Tabs>
       </div>
-
-      {templateKey ? (
-        <TemplateRenders brandId={brandId} templateKey={templateKey} formats={formats} />
-      ) : null}
-
-      {/* Every panel stays mounted while hidden: switching tabs must never drop an unsaved edit. */}
-      <Tabs value={tab} onValueChange={setTab} className="gap-0">
-        <TabsList
-          variant="line"
-          className="h-9 w-full justify-start gap-3 rounded-none border-b border-border px-[var(--card-pad)]"
-        >
-          <TabsTrigger value="variables" className="flex-none px-0 text-xs">
-            Variables
-          </TabsTrigger>
-          <TabsTrigger value="mapping" className="flex-none px-0 text-xs">
-            Mapping
-          </TabsTrigger>
-          {templateKey ? (
-            <TabsTrigger value="output" className="flex-none px-0 text-xs">
-              Output
-            </TabsTrigger>
-          ) : null}
-          <TabsTrigger value="source" className="flex-none px-0 text-xs">
-            Source revision
-          </TabsTrigger>
-          <TabsTrigger value="variants" className="flex-none px-0 text-xs">
-            Variants
-          </TabsTrigger>
-          <TabsTrigger value="history" className="flex-none px-0 text-xs">
-            History
-          </TabsTrigger>
-          <TabsTrigger value="details" className="flex-none px-0 text-xs">
-            Details
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="variables" keepMounted>
-          <VariableEditor
-            brandId={brandId}
-            variables={variables}
-            savedDefaults={savedDefaults}
-            savedBindings={savedBindings}
-            parseState={parseState}
-            saving={saving}
-            onSave={onSave}
-          />
-        </TabsContent>
-        <TabsContent value="mapping" keepMounted className="p-[var(--card-pad)]">
-          <TemplateMappingReviewPanel review={mappingReview ?? null} />
-        </TabsContent>
-        {templateKey ? (
-          <TabsContent value="output" keepMounted className="p-[var(--card-pad)]">
-            {/* Renders nothing until the template's contract carries output settings. */}
-            {/* The server resolves which binding holds this key; the page never asks. */}
-            <OutputSettingsPanel brandId={brandId} templateKey={templateKey} bindingId={null} />
-          </TabsContent>
-        ) : null}
-        <TabsContent value="source" keepMounted className="p-[var(--card-pad)]">
-          <SourceRebindPanel
-            brandId={brandId}
-            assetId={assetId}
-            expectedVersionId={source.versionId}
-            suggestedVersionId={savedTextRepair?.versionId ?? savedMediaRepair ?? undefined}
-            aepName={source.parse?.filename}
-            missingFootage={missingFootage}
-            initialFile={revisionFile}
-            onInitialFileTaken={onRevisionTaken}
-            onConfirmed={async () => {
-              await Promise.all([onChanged(), loadVariables()]);
-              setSavedTextRepair(null);
-              setSavedMediaRepair(null);
-            }}
-          />
-        </TabsContent>
-        <TabsContent value="variants" keepMounted className="p-[var(--card-pad)]">
-          {/* Ratio twins, language forks and legal wraps as siblings — the view that had no home:
-              the gallery shows flat ratio chips and the Render tab's forks are forks of DATA. */}
-          <VariantsPanel
-            brandId={brandId}
-            assetId={assetId}
-            // Only when this template can actually be rendered from — a panel that offers to
-            // render a template with no key, or with nowhere to send the choice, would be the
-            // dangling affordance this whole hop exists to avoid.
-            {...(onOpenRender && templateKey
-              ? {
-                  onSelect: (ref: string | null) =>
-                    onOpenRender({ templateKey, ...(ref ? { templateRef: ref } : {}) }),
-                }
-              : {})}
-          />
-        </TabsContent>
-        <TabsContent value="history" keepMounted className="p-[var(--card-pad)]">
-          <LineagePanel brandId={brandId} assetId={assetId} />
-        </TabsContent>
-        <TabsContent value="details" keepMounted className="p-[var(--card-pad)]">
-          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1.5 text-xs">
-            <dt className="text-muted-foreground">Template key</dt>
-            <dd className="break-all font-mono">{templateKey ?? '—'}</dd>
-            {/* Where the build actually RAN, read off the run. Not a choice and not a control:
-                the Details tab is operator plumbing, and a build has exactly one home. */}
-            <dt className="text-muted-foreground">Rendered in</dt>
-            <dd className="break-all font-mono">{run?.application ?? '—'}</dd>
-            <dt className="text-muted-foreground">Root table</dt>
-            <dd className="break-all font-mono">{run?.root_table ?? '—'}</dd>
-            <dt className="text-muted-foreground">Asset id</dt>
-            <dd className="break-all font-mono">{assetId}</dd>
-            <dt className="text-muted-foreground">Source file</dt>
-            <dd className="break-all font-mono">{source.parse?.filename ?? '—'}</dd>
-          </dl>
-        </TabsContent>
-      </Tabs>
 
       <AlertDialog open={fontPlan !== null} onOpenChange={(open) => !open && setFontPlan(null)}>
         <AlertDialogContent>

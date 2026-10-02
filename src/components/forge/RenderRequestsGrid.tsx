@@ -32,7 +32,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   type ColumnDef,
   type ExpandedState,
@@ -144,7 +144,7 @@ import { Button } from '@/components/ui/button';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { toast } from '@/components/ui/toast-imperative';
 import { ApiError } from '@/lib/api/errors';
-import { saveTemplateVariables } from '@/lib/library/templateSources';
+import { fetchTemplateVariants, saveTemplateVariables } from '@/lib/library/templateSources';
 import { formatRelativeTime } from '@/lib/time/relativeTime';
 import { apiRendersApi } from '@/StudioCanvas/nodes/api-render/apiRendersApi';
 import { pickedPins, pinFromAsset } from '@/StudioCanvas/nodes/api-render/RenderVariableFields';
@@ -1120,6 +1120,27 @@ export function RenderRequestsGrid({
     focusRowId.current = added.id;
   };
 
+  const { data: sourceVariants } = useQuery({
+    queryKey: forgeQueryKeys.templateVariants(brandId),
+    queryFn: () => fetchTemplateVariants(brandId),
+    staleTime: FORGE_STALE_MS.active,
+  });
+  const currentSource = sourceVariants?.find(
+    (item) => item.assetId === contract?.template.sourceAssetId,
+  );
+  const sourceRoot = currentSource?.rootAssetId;
+  const variantSources = new Set(
+    sourceVariants?.filter((item) => item.rootAssetId === sourceRoot).map((item) => item.assetId),
+  );
+  const publishedVariants = sourceRoot
+    ? templates.filter(
+        (item) =>
+          item.sourceAssetId &&
+          variantSources.has(item.sourceAssetId) &&
+          (!bindingId || item.bindingId === bindingId),
+      )
+    : [];
+
   // One click from Render: a layer's Show switch becomes a column for every set of this
   // template — the same edit as "Ask per row" in the template's Variables. Rows that never set
   // it keep rendering what the file has.
@@ -2072,11 +2093,13 @@ export function RenderRequestsGrid({
         onTemplateChange={(ref) => {
           const picked = templates.find((template) => templateRefOf(template) === ref);
           if (!picked || (picked.key === templateKey && picked.bindingId === bindingId)) return;
-          confirmDiscard(() =>
-            setSelection({ templateKey: picked.key, bindingId: picked.bindingId }),
-          );
+          confirmDiscard(() => {
+            setTemplateRef(null);
+            setSelection({ templateKey: picked.key, bindingId: picked.bindingId });
+          });
         }}
         ready={contract !== null}
+        sourceVariants={sourceRoot ? publishedVariants : undefined}
         variants={contract?.outputs}
         variant={variant}
         onVariantChange={(id) => {
