@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import type { EfficiencySeriesPoint, PortfolioListItem } from '@continuum/contracts';
+import type { GoogleAdsOverviewState } from './platforms/useGoogleAdsOverview';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 
 // The apply-mode pill needs a tooltip provider ancestor and is not what these tests are
@@ -20,9 +21,28 @@ let efficiency: {
   failed: number;
   retryFailed: () => void;
 } = { series: [], pending: false, failed: 0, retryFailed };
+// The platform tab lives in the URL (?platform=); the hook reads it through next/navigation.
+const navigation = { params: new URLSearchParams('tab=performance') };
+mock.module('next/navigation', () => ({
+  usePathname: () => '/scale',
+  useSearchParams: () => navigation.params,
+}));
+const replaceState = spyOn(window.history, 'replaceState').mockImplementation(() => undefined);
+
+let adAccounts: { platform: string; account_id: string; name: string | null; status: string | null; currency: string | null }[] = [
+  { platform: 'meta_ads', account_id: 'act_easyfit', name: 'Easy Fit', status: 'active', currency: 'MXN' },
+];
+let googleState: GoogleAdsOverviewState = { status: 'no-connection' };
+const realGoogleOverview = await import('./platforms/useGoogleAdsOverview');
+mock.module('./platforms/useGoogleAdsOverview', () => ({
+  ...realGoogleOverview,
+  useGoogleAdsOverview: () => googleState,
+}));
+
 const realOptimizerData = await import('../useOptimizerData');
 mock.module('../useOptimizerData', () => ({
   ...realOptimizerData,
+  useOptimizerAdAccounts: () => ({ data: adAccounts, isLoading: false, isError: false, isSuccess: true }),
   useOptimizerAccountRead: () => ({ data: accountReadData, isLoading: false, isError: false }),
   useAccountApprovals: () => ({ data: approvalMaps, isLoading: false, isError: false }),
   useRequestAccountRead: () => ({ mutate: () => {}, isPending: false, error: null }),
@@ -168,6 +188,12 @@ const follows = (a: Element, b: Element) =>
   Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 
 afterEach(() => {
+  navigation.params = new URLSearchParams('tab=performance');
+  replaceState.mockClear();
+  adAccounts = [
+    { platform: 'meta_ads', account_id: 'act_easyfit', name: 'Easy Fit', status: 'active', currency: 'MXN' },
+  ];
+  googleState = { status: 'no-connection' };
   accountReadData = null;
   approvalMaps = { families: {}, insights: {} };
   efficiency = { series: EASY_FIT_SERIES, pending: false, failed: 0, retryFailed };
@@ -586,5 +612,91 @@ describe('OptimizerOverview — the header', () => {
       FORMULARIOS,
     ]);
     expect(getByTestId('book-line').textContent).toBe('2 portfolios · 17 ad sets · 4 lost');
+  });
+});
+
+describe('OptimizerOverview — the platform tabs', () => {
+  it('puts All · Meta · Google · TikTok above the headline, All selected by default', () => {
+    const { getByTestId } = mount();
+    const tabs = getByTestId('platform-tabs');
+    expect(
+      [...tabs.querySelectorAll('[role="tab"]')].map((tab) => tab.getAttribute('data-tab')),
+    ).toEqual(['all', 'meta', 'google_ads', 'tiktok_ads']);
+    expect(getByTestId('platform-tab-all').getAttribute('aria-selected')).toBe('true');
+    expect(follows(tabs, getByTestId('overview-headline'))).toBe(true);
+  });
+
+  it('keeps a platform with no connection in the row with Connect', () => {
+    const { getByTestId } = mount();
+    expect(getByTestId('platform-tab-meta').textContent).toBe('Meta');
+    expect(getByTestId('platform-tab-google_ads').textContent).toBe('Google· Connect');
+    expect(getByTestId('platform-tab-tiktok_ads').textContent).toBe('TikTok· Connect');
+  });
+
+  it('drops Connect from Google once a Google Ads account is granted to the brand', () => {
+    adAccounts = [
+      ...adAccounts,
+      { platform: 'google_ads', account_id: '3710693645', name: 'Vivo 47', status: null, currency: 'MXN' },
+    ];
+    const { getByTestId } = mount();
+    expect(getByTestId('platform-tab-google_ads').getAttribute('data-connected')).toBe('true');
+    expect(getByTestId('platform-tab-google_ads').textContent).toBe('Google');
+  });
+
+  it('keeps the tab in the URL as ?platform=, and All out of it', () => {
+    navigation.params = new URLSearchParams('tab=performance&platform=meta');
+    const { getByTestId } = mount();
+    fireEvent.click(getByTestId('platform-tab-google_ads'));
+    expect(replaceState).toHaveBeenLastCalledWith(null, '', '/scale?tab=performance&platform=google_ads');
+    fireEvent.click(getByTestId('platform-tab-all'));
+    expect(replaceState).toHaveBeenLastCalledWith(null, '', '/scale?tab=performance');
+  });
+
+  it('underlines the active platform tab in its own colour', () => {
+    navigation.params = new URLSearchParams('platform=meta');
+    const { getByTestId } = mount();
+    expect(getByTestId('platform-tab-meta').className).toContain('border-platform-meta');
+    expect(getByTestId('platform-tab-google_ads').className).toContain('border-transparent');
+  });
+
+  for (const tab of ['all', 'meta'] as const) {
+    it(`renders today's O1 under ${tab}, with a Meta chip on every card and every row`, () => {
+      navigation.params = new URLSearchParams(tab === 'all' ? '' : `platform=${tab}`);
+      accountReadData = envelope({
+        candidates: [candidate(), candidate({ id: 'dead_tail:prueba', portfolio_ids: ['prueba'] })],
+        guards: [],
+        model: 'deterministic',
+      });
+      const { getAllByTestId, getByTestId } = mount();
+      expect(getByTestId('overview-headline')).toBeTruthy();
+      expect(getByTestId('account-tiles')).toBeTruthy();
+      const cards = getAllByTestId('account-card');
+      const rows = getAllByTestId('portfolio-row');
+      expect(cards).toHaveLength(2);
+      expect(rows).toHaveLength(4);
+      for (const node of [...cards, ...rows]) {
+        const chip = node.querySelector('[data-testid="platform-chip"]');
+        expect(chip?.getAttribute('data-platform')).toBe('meta');
+        expect(chip?.textContent).toBe('Meta');
+      }
+    });
+  }
+
+  it('renders Google as its own screen, without the Meta book', () => {
+    navigation.params = new URLSearchParams('platform=google_ads');
+    googleState = { status: 'no-grant' };
+    const { getByTestId, queryByTestId } = mount();
+    expect(getByTestId('platform-tab-google_ads').getAttribute('aria-selected')).toBe('true');
+    expect(getByTestId('google-empty-no-grant')).toBeTruthy();
+    expect(queryByTestId('overview-headline')).toBeNull();
+    expect(queryByTestId('portfolio-rows')).toBeNull();
+  });
+
+  it('renders TikTok as not connected, with no numbers', () => {
+    navigation.params = new URLSearchParams('platform=tiktok_ads');
+    const { getByTestId, queryAllByTestId } = mount();
+    expect(getByTestId('tiktok-empty').textContent).toContain("TikTok Ads isn't connected yet");
+    expect(queryAllByTestId('figure')).toHaveLength(0);
+    expect(getByTestId('tiktok-empty').textContent).not.toMatch(/\d/);
   });
 });

@@ -202,3 +202,28 @@ describe('useOptimizerUrlState — reporting range', () => {
     expect(garbage.result.current.range).toEqual({ kind: 'preset', preset: 'd7' });
   });
 });
+
+describe('useOptimizerUrlState — the Overview platform tab', () => {
+  it('reads ?platform= and falls back to All for a missing or unknown value', () => {
+    navigation.params = new URLSearchParams('tab=performance&platform=google_ads');
+    expect(renderHook(() => useOptimizerUrlState()).result.current.platform).toBe('google_ads');
+    cleanup();
+    navigation.params = new URLSearchParams('tab=performance&platform=bing');
+    expect(renderHook(() => useOptimizerUrlState()).result.current.platform).toBe('all');
+  });
+
+  it('writes the tab with replaceState and keeps All out of the URL', () => {
+    navigation.params = new URLSearchParams('tab=performance&platform=meta');
+    const { result } = renderHook(() => useOptimizerUrlState());
+    result.current.setPlatform('tiktok_ads');
+    result.current.setPlatform('all');
+    expect(replaceState).toHaveBeenNthCalledWith(
+      1,
+      null,
+      '',
+      '/scale?tab=performance&platform=tiktok_ads',
+    );
+    expect(replaceState).toHaveBeenNthCalledWith(2, null, '', '/scale?tab=performance');
+    expect(pushState).not.toHaveBeenCalled();
+  });
+});

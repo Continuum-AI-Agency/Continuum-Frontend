@@ -22,6 +22,8 @@ import {
   targetSide,
   vsTargetLabel,
 } from './account/overviewModel';
+import { PlatformChip } from './platforms/PlatformChip';
+import type { AdPlatform } from './platforms/platformTabsModel';
 import { StalenessChips } from './StalenessChips';
 
 type PortfolioRowCardProps = {
@@ -34,6 +36,8 @@ type PortfolioRowCardProps = {
   /** This portfolio's 7-day window from `portfolioWindow()` in sections/account/overviewModel.ts.
    *  Null/absent = no cycle yet: the three figures render as '—' and the chip says 'no cycle yet'. */
   window?: PortfolioWindow | null;
+  /** The platform the portfolio buys on; the row names it in a chip before the objective. */
+  platform?: AdPlatform;
 };
 
 /**
@@ -128,6 +132,7 @@ export function PortfolioRowCard({
   onSelect,
   onPrefetch,
   window = null,
+  platform,
 }: PortfolioRowCardProps) {
   const pending = pendingWorkCount(portfolio);
   const metric = getOptimizationMetricDefinition(portfolio.target_metric ?? portfolio.objective);
@@ -169,6 +174,7 @@ export function PortfolioRowCard({
             typeScale.caption,
           )}
         >
+          {platform ? <PlatformChip platform={platform} /> : null}
           <span>{humanize(portfolio.objective)}</span>
           <span aria-hidden>·</span>
           <span>

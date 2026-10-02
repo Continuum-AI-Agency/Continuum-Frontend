@@ -257,7 +257,7 @@ describe('CreativeRecommendationCard — the optimizer type scale (Activity and 
       eligibleAds: 1,
       totalAds: 1,
     });
-    const [left, , right] = screen
+    const [left, right] = screen
       .getByTestId('creative-recommendation-card')
       .querySelectorAll(':scope > section');
     expect(left.outerHTML).not.toMatch(MICRO);

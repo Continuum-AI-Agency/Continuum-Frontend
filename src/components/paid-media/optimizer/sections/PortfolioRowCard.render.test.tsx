@@ -423,3 +423,19 @@ describe('PortfolioRowCard — a portfolio dead on Meta wears its staleness besi
     expect(getByTestId('stale-chip')).toBeTruthy();
   });
 });
+
+describe('PortfolioRowCard — the platform chip', () => {
+  it('names the platform before the objective when it is given one', () => {
+    const { getByTestId } = render(
+      <PortfolioRowCard platform="meta" portfolio={portfolio()} window={null} />,
+    );
+    const chip = getByTestId('platform-chip');
+    expect(chip.textContent).toBe('Meta');
+    expect(chip.getAttribute('data-token')).toBe('--platform-meta');
+  });
+
+  it('shows no chip when the caller does not say the platform', () => {
+    const { queryByTestId } = render(<PortfolioRowCard portfolio={portfolio()} window={null} />);
+    expect(queryByTestId('platform-chip')).toBeNull();
+  });
+});

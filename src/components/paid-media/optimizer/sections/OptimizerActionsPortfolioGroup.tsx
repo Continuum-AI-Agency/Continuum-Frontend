@@ -1912,20 +1912,7 @@ function RowDetail({
           <CreativeCardHost evidence={evidence} name={row.name} rec={row.rec} />
           {row.route === 'hidden' ? (
             <p className="mt-2">{notImplementedMessage(row.rec.kind)}</p>
-          ) : row.route === 'creative' ? null : (
-            <div className="mt-2 border-border/50 border-t pt-2">
-              <RecEvidenceChart
-                currency={currency}
-                denominatorMultiplier={evidence.denominatorMultiplier}
-                item={evidence.itemById.get(row.adsetId) ?? null}
-                kpiField={evidence.kpiField}
-                maxCpa={evidence.maxCpa}
-                name={row.name}
-                rec={row.rec}
-                snapshot={evidence.snapshotById.get(row.adsetId) ?? null}
-              />
-            </div>
-          )}
+          ) : null}
         </>
       ) : row.route === 'hidden' ? (
         <p>{notImplementedMessage(row.rec.kind)}</p>
@@ -1979,6 +1966,7 @@ function CreativeCardHost({
   );
   return (
     <CreativeRecommendationCard
+      adAccountId={evidence.adAccountId}
       ads={ads}
       adsLoading={adsQuery.isLoading}
       adsetName={name}
@@ -1989,10 +1977,12 @@ function CreativeCardHost({
       generating={evidence.generatingIds.has(rec.id)}
       implementingKey={evidence.implementingKey}
       jobs={evidence.swapJobs}
+      kpiField={evidence.kpiField}
       onGenerate={canGenerate ? () => evidence.requestGeneration(rec, name, ads) : null}
       onImplement={evidence.implementCreative}
       rec={rec}
       resultWord={evidence.resultWord}
+      snapshot={snapshot}
       standing={standing}
       targets={targets}
     />
