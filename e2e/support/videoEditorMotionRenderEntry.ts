@@ -10,6 +10,7 @@ import {
   LOOK_EFFECTS,
   type LookEffectId,
   lookEffectInstance,
+  TEXT_ANIMATION_IDS,
 } from '@continuum/contracts';
 import {
   buildTimelineEditorRenderPlan,
@@ -439,28 +440,13 @@ export async function runMotionRender(variant: 'control' | 'styled'): Promise<Mo
 }
 
 /** Every entrance the contract names, one after another, each on its own 1.1 s text clip. */
-const ENTRANCES = [
-  'fade',
-  'pop',
-  'scale-in',
-  'float-in',
-  'slide-up',
-  'slide-down',
-  'slide-left',
-  'slide-right',
-  'typewriter',
-  'word-pop',
-  'bounce',
-  'blur-in',
-  'zoom-out',
-  'wipe',
-] as const;
+const ENTRANCES = TEXT_ANIMATION_IDS;
 const ENTRANCE_SEC = 1.1;
 
 export type EntranceSample = { id: string; early: TextBox; settled: TextBox };
 
 /** Each entrance sampled 0.1 s in and once it has settled, on a plain blue ground. */
-export async function runEntrances(): Promise<EntranceSample[]> {
+export async function runEntrances(direction: 'in' | 'out' = 'in'): Promise<EntranceSample[]> {
   const total = ENTRANCES.length * ENTRANCE_SEC;
   const ground = await encodeSolidVideo(BLUE, total);
   const url = URL.createObjectURL(ground);
@@ -505,7 +491,7 @@ export async function runEntrances(): Promise<EntranceSample[]> {
         kind: 'text',
         clips: ENTRANCES.map((id, index) =>
           textClip(`in-${id}`, 'WORD POP', index * ENTRANCE_SEC, ENTRANCE_SEC, {
-            animationIn: id,
+            ...(direction === 'in' ? { animationIn: id } : { animationOut: id }),
           }),
         ),
       },
@@ -544,8 +530,16 @@ export async function runEntrances(): Promise<EntranceSample[]> {
         const at = (sec: number) => (Math.floor((start + sec) * 30) + 0.5) / 30;
         samples.push({
           id,
-          early: textBox(await framePixels(input, at(0.1)), TOP_BAND, at(0.1)),
-          settled: textBox(await framePixels(input, at(0.95)), TOP_BAND, at(0.95)),
+          early: textBox(
+            await framePixels(input, at(direction === 'in' ? 0.1 : 1.05)),
+            TOP_BAND,
+            at(direction === 'in' ? 0.1 : 1.05),
+          ),
+          settled: textBox(
+            await framePixels(input, at(direction === 'in' ? 0.95 : 0.1)),
+            TOP_BAND,
+            at(direction === 'in' ? 0.95 : 0.1),
+          ),
         });
       }
       return samples;

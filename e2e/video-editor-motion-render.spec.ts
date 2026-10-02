@@ -107,6 +107,7 @@ test('the motion vocabulary renders in the real compositor, judged per frame', a
   const entrances = (await page.evaluate(() =>
     window.__motionRenderBench.entrances(),
   )) as EntranceSample[];
+  const exits = await page.evaluate(() => window.__motionRenderBench.entrances('out'));
   const highlights = await page.evaluate(() => window.__motionRenderBench.highlights());
   const looks = await page.evaluate(() => window.__motionRenderBench.looks());
   await context.close();
@@ -281,15 +282,23 @@ test('the motion vocabulary renders in the real compositor, judged per frame', a
 
   // Every entrance id: 0.1 s in, the text is visibly mid-motion (moved, sized, partly
   // revealed or faded) against the same text once settled.
-  for (const { id, early, settled } of entrances) {
-    const moved = (['left', 'right', 'top', 'bottom'] as const).some(
-      (edge) => Math.abs(early[edge] - settled[edge]) >= 3,
-    );
-    check(
-      `entrance ${id}: animates in the compositor, then settles`,
-      settled.count > 500 && (early.count === 0 || moved || early.mass < 0.85 * settled.mass),
-      `0.1 s ${describe([early])} ‖ settled ${describe([settled])}`,
-    );
+  for (const [direction, samples] of [
+    ['entrance', entrances],
+    ['exit', exits],
+  ] as const) {
+    for (const { id, early, settled } of samples) {
+      const moved = (['left', 'right', 'top', 'bottom'] as const).some(
+        (edge) => Math.abs(early[edge] - settled[edge]) >= 3,
+      );
+      check(
+        `${direction} ${id}: animates in the compositor, then settles`,
+        settled.count > 500 &&
+          (id === 'none'
+            ? !moved && Math.abs(early.mass - settled.mass) <= settled.mass * 0.01
+            : early.count === 0 || moved || early.mass < 0.85 * settled.mass),
+        `0.1 s ${describe([early])} ‖ settled ${describe([settled])}`,
+      );
+    }
   }
 
   // Masters to GCS, never the Library.
