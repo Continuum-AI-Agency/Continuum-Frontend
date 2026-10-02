@@ -735,6 +735,12 @@ test(BENCH, async ({ browser }) => {
         (await visible(page.getByRole('button', { name: 'Add Position keyframe' })).count()) === 0,
     );
     const automationSaveMs: number[] = [];
+    const automationPhases: {
+      inputToRequestMs: number;
+      requestToHeadersMs: number;
+      requestToBodyMs: number;
+      serverTiming: string | null;
+    }[] = [];
     for (const [atSec, gain] of [
       [0.25, 0.25],
       [1.25, 0.6],
@@ -748,6 +754,7 @@ test(BENCH, async ({ browser }) => {
       );
       await visible(page.getByRole('button', { name: 'Add Volume keyframe' })).click();
       expect((await added).ok()).toBe(true);
+      const beforeValue = await getProject(api, projectId);
       const field = visible(page.getByTestId('keyframe-editor')).getByLabel('Volume', {
         exact: true,
       });
@@ -756,15 +763,31 @@ test(BENCH, async ({ browser }) => {
           response.url().endsWith(`/${projectId}/commands`) &&
           response.request().method() === 'POST',
       );
+      const dispatched = page
+        .waitForRequest(
+          (request) =>
+            request.url().endsWith(`/${projectId}/commands`) && request.method() === 'POST',
+        )
+        .then(() => performance.now());
       const started = performance.now();
       await field.fill(String(gain));
       await field.press('Tab');
       const response = await saved;
       automationSaveMs.push(performance.now() - started);
+      const dispatchedAt = await dispatched;
+      await response.finished();
+      const timing = response.request().timing();
+      automationPhases.push({
+        inputToRequestMs: dispatchedAt - started,
+        requestToHeadersMs: timing.responseStart - timing.requestStart,
+        requestToBodyMs: timing.responseEnd - timing.requestStart,
+        serverTiming: await response.headerValue('server-timing'),
+      });
       project = await getProject(api, projectId);
       check(
         `audio automation: ${gain} gain at ${atSec}s survives a fresh read`,
         response.ok() &&
+          project.revision === beforeValue.revision + 1 &&
           keyframesOf(clipById(project, audioId)).some(
             (key) =>
               key.property === 'audio.volume' &&
@@ -774,6 +797,53 @@ test(BENCH, async ({ browser }) => {
       );
     }
     note(`speed samples: ${JSON.stringify({ volume_control_save: automationSaveMs })}`);
+    note(`save phases: ${JSON.stringify(automationPhases)}`);
+    const settledRevision = project.revision;
+    await page.waitForTimeout(350);
+    project = await getProject(api, projectId);
+    check(
+      'numeric commit cancels its settling timer without a duplicate revision',
+      project.revision === settledRevision,
+    );
+    const beforeDeselect = project.revision;
+    await visible(page.getByTestId('keyframe-editor'))
+      .getByLabel('Volume', { exact: true })
+      .fill('0.75');
+    await selectClip(page, clipA.id);
+    project = await until(
+      () => getProject(api, projectId),
+      (value) =>
+        keyframesOf(clipById(value, audioId)).some(
+          (key) =>
+            key.property === 'audio.volume' && near(key.timeSec, 2.25, 0.05) && key.value === 0.75,
+        ),
+      STEP_MS,
+    );
+    await page.waitForTimeout(350);
+    project = await getProject(api, projectId);
+    check(
+      'deselecting a numeric edit keeps its latest value in exactly one revision',
+      project.revision === beforeDeselect + 1 &&
+        keyframesOf(clipById(project, audioId)).some(
+          (key) =>
+            key.property === 'audio.volume' && near(key.timeSec, 2.25, 0.05) && key.value === 0.75,
+        ),
+    );
+    await selectClip(page, audioId);
+    await visible(
+      page.getByRole('button', { name: 'Volume keyframe at 2.25 s', exact: true }),
+    ).click();
+    check(
+      'save phase timings cover input dispatch, response body and server work',
+      automationPhases.length === 3 &&
+        automationPhases.every(
+          (phase) =>
+            phase.inputToRequestMs >= 0 &&
+            phase.requestToHeadersMs >= 0 &&
+            phase.requestToBodyMs >= phase.requestToHeadersMs &&
+            Boolean(phase.serverTiming),
+        ),
+    );
     await visible(page.getByTestId('keyframe-editor'))
       .getByRole('button', { name: 'Ease out' })
       .click();

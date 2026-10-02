@@ -133,10 +133,12 @@ function KeyValueFields({
   channelId,
   keyframes,
   onValue,
+  onCommit,
 }: {
   channelId: LaneChannelId;
   keyframes: EditorKeyframe[];
   onValue: (value: EditorKeyframe['value']) => void;
+  onCommit: () => void;
 }) {
   const stored = keyframes[0]?.value;
   const [draft, setDraft] = useState<EditorKeyframe['value'] | undefined>(undefined);
@@ -159,6 +161,7 @@ function KeyValueFields({
             max={2}
             step={0.01}
             onChange={(next) => set({ ...value, [axis]: next })}
+            onCommit={onCommit}
           />
         ))}
       </div>
@@ -187,6 +190,7 @@ function KeyValueFields({
       value={numeric}
       {...range}
       onChange={set}
+      onCommit={onCommit}
     />
   );
 }
@@ -327,6 +331,8 @@ export function KeyframeLane({
             key={`${selected.channelId}:${selectedKey.timeSec}`}
             channelId={selected.channelId}
             keyframes={selectedKey.keyframes}
+            // A null build flushes pending values without adding a second value edit.
+            onCommit={() => onEdit(() => null)}
             onValue={(value) =>
               onSettle(`keyframe-value:${selected.channelId}`, (latest) =>
                 valueKeyEdit(latest, clipId, selected.channelId, selectedKey.timeSec, value),

@@ -259,6 +259,16 @@ test(BENCH, async ({ browser }) => {
       `clip ${dropped?.durationSec.toFixed(3)} s vs source ${sourceSec.toFixed(3)} s`,
     );
 
+    const brief = page.locator('[data-testid="brief-dialog"]:visible');
+    await expect(brief).toHaveCount(1);
+    const offeredBrief = await brief.count();
+    await page.keyboard.press('Escape');
+    await expect(brief).toHaveCount(0);
+    check(
+      'first-footage Brief offer can be dismissed before manual editing',
+      offeredBrief === 1 && (await brief.count()) === 0,
+    );
+
     // ── trim by dragging the end handle ───────────────────────────────────────────────
     const handle = videoClip.locator('[data-trim-handle="end"]');
     const box = await handle.boundingBox();
