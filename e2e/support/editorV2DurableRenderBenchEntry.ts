@@ -149,7 +149,9 @@ const renderTimeline = async (
   });
   const result = await composeTimeline({
     ...plan,
-    frameRate: input.project.exportSettings.fps,
+    frameRate:
+      input.project.exportSettings.frameRate.numerator /
+      input.project.exportSettings.frameRate.denominator,
     targetWidth: input.project.exportSettings.width,
     targetHeight: input.project.exportSettings.height,
     signal,

@@ -1,9 +1,20 @@
-import { randomUUID } from 'node:crypto';
-import type { EditorClip, EditorProjectV2 } from '@continuum/contracts';
+import { execFileSync } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  type EditorClip,
+  type EditorProjectV2,
+  editorExportSettingsSchema,
+  registerGeneratedAssetResponseSchema,
+} from '@continuum/contracts';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { Recorder } from '../../Continuum-Backend/scripts/_bench/recorder';
 import { mintSessionBundleForEmail } from './support/auth';
+import { createBenchRecorder } from './support/benchRecorder';
+import type { DurableTimelineRequest } from './support/editorV2DurableRenderBenchEntry';
 import { loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 import { bootBackend, bootFrontend, freePort, type Server } from './video-editor-workspace/harness';
 import { removeProjects } from './video-editor-workspace/ledger';
@@ -30,8 +41,15 @@ import { removeProjects } from './video-editor-workspace/ledger';
 test.describe.configure({ timeout: 900_000 });
 
 const BENCH = 'videoeditor:motion:e2e:bench';
-const BRAND = process.env.CONTINUUM_TEST_BRAND_ID ?? 'b411bba9-d09c-4892-9b86-5ff340ce64e5';
-const OWNER_EMAIL = readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai';
+const LOCAL_CURVE_JOURNEY = process.env.VIDEO_EDITOR_CURVE_JOURNEY_LOCAL === '1';
+const BRAND =
+  process.env.CONTINUUM_TEST_BRAND_ID ??
+  (LOCAL_CURVE_JOURNEY
+    ? '00000000-0000-4000-8000-0000000000b2'
+    : 'b411bba9-d09c-4892-9b86-5ff340ce64e5');
+const OWNER_EMAIL = LOCAL_CURVE_JOURNEY
+  ? 'local@continuum.test'
+  : (readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai');
 /** "Solicita tu Day Pass en Vivo 4047" — a 6.6 s Vivo 47 clip on the bench brand. */
 const SOURCE_ASSET_ID =
   process.env.VIDEO_MOTION_SOURCE_ASSET ?? 'd0cae5f0-d938-4825-952b-f1d24cef0069';
@@ -44,7 +62,38 @@ const OUTSIDE_LINE = `Outside ${RUN}`;
 const WORKFLOW_NAME = `Workflow ${RUN}`;
 const WORKFLOW_PROMPT = 'Make the current edit YouTube.';
 
-const { url: supabaseUrl, serviceRoleKey } = loadProdSupabaseEnv();
+const { url: supabaseUrl, serviceRoleKey } = LOCAL_CURVE_JOURNEY
+  ? (() => {
+      const status = execFileSync('supabase', ['status', '-o', 'env'], {
+        cwd: join(__dirname, '../..'),
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      const env = Object.fromEntries(
+        status.split('\n').flatMap((line) => {
+          const match = /^([A-Z_]+)="(.*)"$/.exec(line);
+          return match ? [[match[1], match[2]]] : [];
+        }),
+      );
+      const url = env.API_URL;
+      if (
+        !url ||
+        !['localhost', '127.0.0.1', '[::1]'].includes(new URL(url).hostname) ||
+        !env.SERVICE_ROLE_KEY ||
+        !env.ANON_KEY
+      )
+        throw new Error(
+          'Local curve journey requires the running loopback Supabase stack; no reset/hydration is performed.',
+        );
+      process.env.SUPABASE_ANON_KEY = env.ANON_KEY;
+      process.env.SUPABASE_SERVICE_ROLE_KEY = env.SERVICE_ROLE_KEY;
+      process.env.NEXT_PUBLIC_SUPABASE_URL = url;
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = env.ANON_KEY;
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY = env.ANON_KEY;
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY = env.ANON_KEY;
+      return { url, serviceRoleKey: env.SERVICE_ROLE_KEY };
+    })()
+  : loadProdSupabaseEnv();
 process.env.SUPABASE_URL = supabaseUrl;
 const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 const rec = new Recorder(BENCH);
@@ -151,6 +200,10 @@ const shows = (locator: Locator, count = 1, timeout = 10_000) =>
     .catch(() => false);
 
 test(BENCH, async ({ browser }) => {
+  test.skip(
+    LOCAL_CURVE_JOURNEY,
+    'The original hosted motion UI suite is not covered by the local retained-curve journey.',
+  );
   const servers: Server[] = [];
   const createdProjects: string[] = [];
   let previousActiveBrand: string | null = null;
@@ -1001,4 +1054,605 @@ test(BENCH, async ({ browser }) => {
   }
   const failures = printEnvelope();
   expect(failures, 'graded FAIL steps').toBe(0);
+});
+
+test('retained project journey: native splits and deletes preserve stored picture and gain', async ({
+  browser,
+}) => {
+  test.skip(
+    process.env.VIDEO_EDITOR_CURVE_JOURNEY !== '1',
+    'Set VIDEO_EDITOR_CURVE_JOURNEY=1 for the disposable real-store journey.',
+  );
+  const proof = createBenchRecorder('videoeditor:motion:e2e:bench:retained-project', []);
+  proof.notes.push(
+    `store target: ${LOCAL_CURVE_JOURNEY ? 'local loopback Supabase, existing authorization migration' : 'hosted designated bench store'}`,
+  );
+  const servers: Server[] = [];
+  const ids: string[] = [];
+  let session: Awaited<ReturnType<typeof mintSessionBundleForEmail>> | null = null;
+  let context: Awaited<ReturnType<typeof browser.newContext>> | null = null;
+  let previousBrand: string | null | undefined;
+  let brandChanged = false;
+  let localSource: { path: string; assetId?: string; receiptKey?: string } | null = null;
+  const folder =
+    process.env.VIDEO_EDITOR_CURVE_JOURNEY_OUTPUT ??
+    join(tmpdir(), `video-editor-curve-journey-${RUN}`);
+  mkdirSync(folder, { recursive: true });
+  const assert = (name: string, ok: boolean, detail?: string) => {
+    proof.record(name, ok ? 'PASS' : 'FAIL', detail);
+    expect(ok, `${name}${detail ? `: ${detail}` : ''}`).toBe(true);
+  };
+  try {
+    const fePort = await freePort();
+    const backend = await bootBackend(`http://localhost:${fePort}`);
+    servers.push(backend);
+    const frontend = await bootFrontend(fePort, backend.url, '.next/video-curve-journey-e2e');
+    servers.push(frontend);
+    process.env.PLAYWRIGHT_BASE_URL = frontend.url;
+    session = await mintSessionBundleForEmail(OWNER_EMAIL);
+    const api: Api = { base: backend.url, token: session.accessToken };
+    const { data: preference, error: preferenceError } = await admin
+      .schema('brand_profiles')
+      .from('user_brand_preferences')
+      .select('active_brand_id')
+      .eq('user_id', session.userId)
+      .maybeSingle();
+    if (preferenceError) throw preferenceError;
+    previousBrand = preference ? preference.active_brand_id : undefined;
+    const { error: brandError } = await admin
+      .schema('brand_profiles')
+      .from('user_brand_preferences')
+      .upsert(
+        { user_id: session.userId, active_brand_id: BRAND, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' },
+      );
+    if (brandError) throw brandError;
+    brandChanged = true;
+    let assetId = '8e14e8ab-fc86-4fe5-a6bb-64de70d5e553';
+    let versionId = '9616fdc0-c811-4017-b97e-4445fd41492c';
+    if (LOCAL_CURVE_JOURNEY) {
+      const file = process.env.VIDEO_EDITOR_RECORDED_FIXTURE;
+      if (!file)
+        throw new Error(
+          'Local journey requires VIDEO_EDITOR_RECORDED_FIXTURE with real recorded MP4 bytes.',
+        );
+      const bytes = readFileSync(file);
+      const { buildRegisterGeneratedAssetOperation } = await import(
+        '../../Continuum-Backend/App/media/registerGeneratedAsset'
+      );
+      localSource = { path: `${BRAND}/video-editor-bench/${randomUUID()}/recorded-curves.mp4` };
+      const probe = JSON.parse(
+        execFileSync(
+          'ffprobe',
+          [
+            '-v',
+            'error',
+            '-select_streams',
+            'v:0',
+            '-show_entries',
+            'stream=width,height:format=duration',
+            '-of',
+            'json',
+            file,
+          ],
+          { encoding: 'utf8' },
+        ),
+      ) as { streams: Array<{ width: number; height: number }>; format: { duration: string } };
+      const operation = buildRegisterGeneratedAssetOperation({
+        brandId: BRAND,
+        kind: 'video',
+        bucket: 'media-library',
+        storagePath: localSource.path,
+        fileName: `bench-recorded-curves-${RUN}.mp4`,
+        mimeType: 'video/mp4',
+        createdBy: session.userId,
+        width: probe.streams[0]?.width,
+        height: probe.streams[0]?.height,
+        durationMs: Math.round(Number(probe.format.duration) * 1000),
+        sizeBytes: bytes.length,
+        checksum: createHash('sha256').update(bytes).digest('hex'),
+        source: 'canvas',
+        operation: 'video_editor_local_fixture',
+        originRef: { bench: 'retained_curves', actualRecordedMedia: true },
+      });
+      const { error: uploadError } = await admin.storage
+        .from('media-library')
+        .upload(localSource.path, bytes, { contentType: 'video/mp4' });
+      if (uploadError) throw uploadError;
+      localSource.receiptKey = operation.idempotencyKey;
+      // The pure builder + RPC register a real exact version, without the Outcome
+      // helper's automatic video-analysis call. This branch is loopback-only.
+      const { data, error: registerError } = await admin
+        .schema('media')
+        .rpc('library_execute_operation', {
+          p_action: operation.action,
+          p_payload: { ...operation, actor: session.userId },
+        });
+      if (registerError) throw registerError;
+      const receipt = registerGeneratedAssetResponseSchema.parse(data);
+      assetId = receipt.assetId;
+      versionId = receipt.versionId;
+      localSource.assetId = assetId;
+      assert(
+        'actual recorded fixture registers in local Library with an exact version',
+        receipt.status === 'created',
+      );
+    }
+    const { data: version, error: versionError } = await admin
+      .schema('media')
+      .from('asset_versions')
+      .select('bucket, storage_path')
+      .eq('id', versionId)
+      .eq('asset_id', assetId)
+      .single();
+    if (versionError || !version) throw versionError ?? new Error('Pinned recording missing');
+    const { data: signed, error: signedError } = await admin.storage
+      .from(version.bucket)
+      .createSignedUrl(version.storage_path, 1800);
+    if (signedError || !signed) throw signedError ?? new Error('Recording sign failed');
+    const sourceResponse = await fetch(signed.signedUrl);
+    assert(
+      'signed exact recording is readable over real storage HTTP',
+      sourceResponse.ok,
+      `status ${sourceResponse.status}, origin ${new URL(signed.signedUrl).origin}`,
+    );
+    await sourceResponse.body?.cancel();
+    context = await browser.newContext({
+      storageState: session.state,
+      viewport: { width: 1600, height: 1000 },
+    });
+    if (LOCAL_CURVE_JOURNEY)
+      await context.grantPermissions(['local-network-access'], { origin: frontend.url });
+    const page = await context.newPage();
+    const pageErrors: string[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    // The existing durable render entry consumes the exact stored document. Calling only
+    // renderTimeline keeps all MP4s local; its upload/job helpers are never invoked.
+    const bundle = join(tmpdir(), `video-editor-curve-compositor-${RUN}.js`);
+    execFileSync(
+      'bun',
+      [
+        'build',
+        'e2e/support/editorV2DurableRenderBenchEntry.ts',
+        '--target=browser',
+        '--outfile',
+        bundle,
+        '--define',
+        `process.env=${JSON.stringify({ NODE_ENV: 'production', NEXT_PUBLIC_SUPABASE_URL: supabaseUrl, NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, NEXT_PUBLIC_API_URL: backend.url })}`,
+      ],
+      { stdio: 'pipe' },
+    );
+    const compositor = await context.newPage();
+    compositor.on('requestfailed', (request) =>
+      proof.notes.push(
+        `browser media request failed: ${new URL(request.url()).origin} ${request.failure()?.errorText}`,
+      ),
+    );
+    await compositor.route('**/curve-compositor', (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body: '<!doctype html><html><body></body></html>',
+      }),
+    );
+    await compositor.goto(`${frontend.url}/curve-compositor`);
+    await compositor.addScriptTag({ content: readFileSync(bundle, 'utf8'), type: 'module' });
+    await compositor.waitForFunction(() => Boolean(window.__editorV2DurableRenderBench));
+    const render = async (project: EditorProjectV2, path: string) => {
+      const request: DurableTimelineRequest = {
+        project,
+        inputs: mainClips(project).map((clip) => ({
+          sourceId: clip.id,
+          sourceAssetId: assetId,
+          sourceRevision: versionId,
+          storage: { bucket: version.bucket, path: version.storage_path },
+          url: signed.signedUrl,
+        })),
+      };
+      const result = await compositor.evaluate(
+        (input) => window.__editorV2DurableRenderBench.renderTimeline(input),
+        request,
+      );
+      writeFileSync(path, Buffer.from(result.base64, 'base64'));
+      return result;
+    };
+    const summary = [];
+    const commandResponses: Array<{ status: number; body: string }> = [];
+    page.on('response', async (response) => {
+      if (/\/video-projects\/[^/]+\/commands$/.test(response.url()))
+        commandResponses.push({
+          status: response.status(),
+          body: (await response.text()).slice(0, 800),
+        });
+    });
+    for (const interpolation of ['hold', 'linear', 'bezier', 'spring'] as const) {
+      await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
+      await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180_000 });
+      const projectId = /\/studio\/video\/([0-9a-f-]{36})/.exec(page.url())?.[1];
+      if (!projectId) throw new Error('New project URL missing');
+      ids.push(projectId);
+      await expect(page.locator('[data-testid="video-studio-edit"]:visible')).toHaveCount(1, {
+        timeout: 180_000,
+      });
+      const initial = await getProject(api, projectId);
+      const keys = ['transform.opacity', 'audio.volume'].flatMap((property) => [
+        {
+          id: `${property}:a`,
+          property,
+          timeSec: 0.5,
+          value: 0.3,
+          interpolation,
+          ...(interpolation === 'bezier'
+            ? { easing: { x1: 0.42, y1: 0, x2: 0.58, y2: 1 }, expression: 'wiggle(0.7, 0.05)' }
+            : {}),
+          ...(interpolation === 'spring' ? { spring: { bounce: 0.7 }, expression: 'loop' } : {}),
+        },
+        { id: `${property}:b`, property, timeSec: 3.5, value: 0.8, interpolation: 'linear' },
+      ]);
+      const seeded = await postOp(api, projectId, 'apply_commands', {
+        expectedRevision: initial.revision,
+        commands: [
+          {
+            commandType: 'add_track',
+            track: {
+              id: `curve-${interpolation}`,
+              kind: 'video',
+              name: 'Recorded curves',
+              order: 0,
+              clips: [
+                {
+                  id: `source-${interpolation}`,
+                  kind: 'video',
+                  timelineStartSec: 0,
+                  durationSec: 4,
+                  source: { sourceType: 'library_asset', assetId, renditionId: versionId },
+                  volume: 0.6,
+                  keyframes: keys,
+                },
+              ],
+            },
+          },
+          ...initial.tracks.map((track) => ({ commandType: 'remove_track', trackId: track.id })),
+          {
+            commandType: 'set_project_metadata',
+            canvas: { ...initial.canvas, width: 360, height: 640 },
+            durationSec: 4,
+          },
+          {
+            commandType: 'set_export_settings',
+            exportSettings: editorExportSettingsSchema.parse({
+              ...initial.exportSettings,
+              width: 360,
+              height: 640,
+              frameRate: { numerator: 30, denominator: 1 },
+              videoBitrateKbps: 1500,
+              audioBitrateKbps: 128,
+            }),
+          },
+        ],
+      });
+      assert(
+        `${interpolation}: actual recording and curve keys persist`,
+        seeded.status === 200,
+        seeded.status === 200 ? undefined : seeded.text.slice(0, 400),
+      );
+      const before = await getProject(api, projectId);
+      // Start native editing from a real document reload. This journey certifies
+      // durable edits/composition, not external-write Realtime delivery.
+      await page.reload();
+      await expect(page.locator('[data-clip-kind="video"]:visible')).toHaveCount(1, {
+        timeout: 20_000,
+      });
+      const original = mainClips(before)[0];
+      if (!original) throw new Error('Original clip missing');
+      const baselinePath = join(folder, `${interpolation}-baseline.mp4`);
+      await render(before, baselinePath);
+      const box = await page.locator(`[data-clip-id="${original.id}"]:visible`).boundingBox();
+      if (!box) throw new Error('Original clip not visible');
+      const pxPerSec = box.width / 4;
+      for (const sec of [1, 2, 3]) {
+        await page.bringToFront();
+        await page.keyboard.press('Escape');
+        await seek(page, pxPerSec, sec);
+        proof.notes.push(
+          JSON.stringify(
+            await page.evaluate(
+              (sec) => ({
+                seekSec: sec,
+                clock: document.querySelector('[data-testid="timeline-clock"]')?.textContent,
+                modals: [
+                  ...document.querySelectorAll(
+                    '[data-slot="dialog-content"],[data-slot="alert-dialog-content"],[data-slot="sheet-content"],[role="dialog"][aria-modal="true"]',
+                  ),
+                ].map((node) => ({
+                  visible: node.getClientRects().length > 0,
+                  text: node.textContent?.slice(0, 160),
+                })),
+              }),
+              sec,
+            ),
+          ),
+        );
+        await page.locator('body').press('s');
+        const split = await until(
+          () => getProject(api, projectId),
+          (value) => mainClips(value).length === sec + 1,
+        );
+        assert(
+          `${interpolation}: native split at ${sec}s commits`,
+          mainClips(split).length === sec + 1,
+          JSON.stringify({
+            revision: split.revision,
+            clips: mainClips(split).map((clip) => ({
+              id: clip.id,
+              start: clip.timelineStartSec,
+              duration: clip.durationSec,
+            })),
+            commandResponses,
+            pageErrors,
+          }),
+        );
+      }
+      for (const sourceInSec of [3, 1]) {
+        const current = await getProject(api, projectId);
+        const clip = mainClips(current).find(
+          (item) => 'sourceInSec' in item && Math.abs(item.sourceInSec - sourceInSec) < 1 / 60,
+        );
+        if (!clip) throw new Error(`Retained source span ${sourceInSec} missing`);
+        await selectClip(page, clip.id);
+        await visible(
+          page.getByRole('button', { name: 'Ripple delete selection', exact: true }),
+        ).click();
+        const deleted = await until(
+          () => getProject(api, projectId),
+          (value) => mainClips(value).length === mainClips(current).length - 1,
+        );
+        assert(
+          `${interpolation}: native delete of source ${sourceInSec}s commits`,
+          mainClips(deleted).length === mainClips(current).length - 1,
+        );
+      }
+      await page.reload();
+      await expect(page.locator('[data-clip-kind="video"]:visible')).toHaveCount(2, {
+        timeout: 30_000,
+      });
+      const edited = await getProject(api, projectId);
+      const retained = mainClips(edited);
+      assert(
+        `${interpolation}: reload preserves full keys and retained source clock`,
+        retained.length === 2 &&
+          retained.every(
+            (clip) => JSON.stringify(keyframesOf(clip)) === JSON.stringify(keyframesOf(original)),
+          ) &&
+          near(retained[1]?.keyframeOffsetSec, 2, 1 / 60) &&
+          'sourceInSec' in retained[1]! &&
+          near(retained[1].sourceInSec, 2, 1 / 60) &&
+          edited.revision === before.revision + 5,
+      );
+      const actualPath = join(folder, `${interpolation}-edited.mp4`);
+      const rendered = await render(edited, actualPath);
+      const probe = JSON.parse(
+        execFileSync(
+          'ffprobe',
+          [
+            '-v',
+            'error',
+            '-select_streams',
+            'v:0',
+            '-show_entries',
+            'stream=avg_frame_rate,width,height',
+            '-of',
+            'json',
+            actualPath,
+          ],
+          { encoding: 'utf8' },
+        ),
+      ) as { streams: Array<{ avg_frame_rate: string; width: number; height: number }> };
+      assert(
+        `${interpolation}: stored export settings control encoded size and frame rate`,
+        probe.streams[0]?.avg_frame_rate === '30/1' &&
+          probe.streams[0]?.width === 360 &&
+          probe.streams[0]?.height === 640,
+      );
+      const frame = (file: string, sec: number) =>
+        execFileSync(
+          'ffmpeg',
+          [
+            '-v',
+            'error',
+            '-ss',
+            String(sec),
+            '-i',
+            file,
+            '-frames:v',
+            '1',
+            '-f',
+            'rawvideo',
+            '-pix_fmt',
+            'rgb24',
+            'pipe:1',
+          ],
+          { maxBuffer: 4_000_000 },
+        );
+      const errors = [0.25, 0.75, 1.25, 1.75].map((sec) => {
+        const got = frame(actualPath, sec),
+          expected = frame(baselinePath, sec < 1 ? sec : sec + 1);
+        if (got.length !== expected.length || got.length === 0) return Infinity;
+        return (
+          got.reduce((sum, value, index) => sum + Math.abs(value - expected[index]!), 0) /
+          got.length
+        );
+      });
+      assert(
+        `${interpolation}: same stored revision composes source-correct frames`,
+        errors.every((value) => value < 4) && near(rendered.durationSec, 2, 1 / 30),
+        JSON.stringify(errors),
+      );
+      const pcm = (file: string) => {
+        const bytes = execFileSync('ffmpeg', [
+          '-v',
+          'error',
+          '-i',
+          file,
+          '-vn',
+          '-ac',
+          '1',
+          '-ar',
+          '16000',
+          '-f',
+          'f32le',
+          'pipe:1',
+        ]);
+        return new Float32Array(
+          bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+        );
+      };
+      const expected = pcm(baselinePath),
+        got = pcm(actualPath);
+      let delta = 0,
+        energy = 0;
+      for (const sec of [0.25, 0.75, 1.25, 1.75])
+        for (let i = 0; i < 640; i++) {
+          const a = got[Math.round(sec * 16000) + i] ?? 0;
+          const b = expected[Math.round((sec < 1 ? sec : sec + 1) * 16000) + i] ?? 0;
+          delta += (a - b) ** 2;
+          energy += b ** 2;
+        }
+      assert(
+        `${interpolation}: independent PCM retains source gain and phase`,
+        energy > 1e-6 && delta / energy < 0.02,
+        `relative PCM error ${delta / energy}`,
+      );
+      const undo = await postOp(api, projectId, 'undo', { toRevision: before.revision });
+      const restored = await getProject(api, projectId);
+      assert(
+        `${interpolation}: undo restores the complete original timeline`,
+        undo.status === 200 && JSON.stringify(restored.tracks) === JSON.stringify(before.tracks),
+      );
+      summary.push({
+        interpolation,
+        baseline: before,
+        edited,
+        frames: errors,
+        pcmRelativeError: delta / energy,
+      });
+    }
+    writeFileSync(join(folder, 'summary.json'), JSON.stringify(summary, null, 2));
+    assert(
+      'native page has no uncaught errors',
+      pageErrors.length === 0,
+      pageErrors.slice(0, 3).join(' | '),
+    );
+    proof.record(
+      'unexercised release and dialogue paths',
+      'SKIP',
+      'Native UI/store→browser compositor only. Export dialog, hosted Render, real spoken/caption protection, animated jump operation, speed and agent unexercised. All media stayed local.',
+    );
+  } catch (error) {
+    proof.record(
+      'journey completion',
+      'FAIL',
+      error instanceof Error ? error.message.slice(0, 500) : String(error),
+    );
+    throw error;
+  } finally {
+    await context?.close();
+    try {
+      await removeProjects(admin, BRAND, ids);
+      if (ids.length > 0) {
+        const { count, error } = await admin
+          .schema('media')
+          .from('editor_projects')
+          .select('id', { count: 'exact', head: true })
+          .in('id', ids);
+        const { count: revisions, error: revisionError } = await admin
+          .schema('media')
+          .from('editor_project_revisions')
+          .select('project_id', { count: 'exact', head: true })
+          .in('project_id', ids);
+        assert(
+          'owned projects and revisions removed',
+          !error && !revisionError && count === 0 && revisions === 0,
+        );
+      }
+      if (session) {
+        if (brandChanged) {
+          const preferences = admin.schema('brand_profiles').from('user_brand_preferences');
+          const { error: restoreError } =
+            previousBrand === undefined
+              ? await preferences.delete().eq('user_id', session.userId)
+              : await preferences.upsert(
+                  {
+                    user_id: session.userId,
+                    active_brand_id: previousBrand,
+                    updated_at: new Date().toISOString(),
+                  },
+                  { onConflict: 'user_id' },
+                );
+          assert('bench brand preference restored', !restoreError);
+        }
+        const { error } = await admin.auth.admin.signOut(session.accessToken, 'local');
+        assert('own minted session revoked', !error);
+      }
+      if (localSource) {
+        const { error: storageError } = await admin.storage
+          .from('media-library')
+          .remove([localSource.path]);
+        if (localSource.assetId) {
+          const { error: assetError } = await admin
+            .schema('media')
+            .from('assets')
+            .delete()
+            .eq('id', localSource.assetId)
+            .eq('brand_id', BRAND);
+          assert('local recorded fixture asset delete succeeds', !assetError);
+        }
+        if (localSource.receiptKey) {
+          assert(
+            'local receipt cleanup identity valid',
+            /^generated:[a-f0-9]{64}$/.test(localSource.receiptKey) &&
+              /^[a-f0-9-]{36}$/.test(BRAND),
+          );
+          const receiptsLeft = execFileSync(
+            'docker',
+            [
+              'exec',
+              'supabase_db_continuum',
+              'psql',
+              '-U',
+              'postgres',
+              '-d',
+              'postgres',
+              '-v',
+              'ON_ERROR_STOP=1',
+              '-Atc',
+              `delete from library_internal.operation_receipts where brand_id='${BRAND}' and idempotency_key='${localSource.receiptKey}'; select count(*) from library_internal.operation_receipts where brand_id='${BRAND}' and idempotency_key='${localSource.receiptKey}';`,
+            ],
+            { stdio: 'pipe', encoding: 'utf8' },
+          );
+          assert(
+            'local recorded fixture registration receipt removed',
+            receiptsLeft.trim().split('\n').at(-1) === '0',
+          );
+        }
+        const { data: objects, error: objectError } = await admin.storage
+          .from('media-library')
+          .list(localSource.path.slice(0, localSource.path.lastIndexOf('/')));
+        const { count, error: assetReadError } = localSource.assetId
+          ? await admin
+              .schema('media')
+              .from('assets')
+              .select('id', { count: 'exact', head: true })
+              .eq('id', localSource.assetId)
+          : { count: 0, error: null };
+        assert(
+          'local recorded fixture asset and storage removed',
+          !storageError && !objectError && !assetReadError && count === 0 && objects?.length === 0,
+        );
+      }
+    } finally {
+      for (const server of servers.reverse()) server.stop();
+      proof.notes.push(`local media retained: ${folder}`);
+      proof.print();
+    }
+  }
 });
