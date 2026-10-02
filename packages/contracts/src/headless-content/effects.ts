@@ -84,6 +84,19 @@ const pictureOps = [
     })
     .strict(),
   z.object({ op: z.literal('frame'), asset: z.enum(EFFECT_FRAME_ASSETS) }).strict(),
+  /** Sparse specks and a hairline scratch. `animated` renews them; a still holds one field. */
+  z.object({ op: z.literal('dust'), amount: unit, animated: z.boolean().default(true) }).strict(),
+  /**
+   * A coloured flare washing in from one edge. The swatches are ll1 magenta, ll2 red,
+   * ll3 violet, ght gold.
+   */
+  z
+    .object({
+      op: z.literal('lightLeak'),
+      preset: z.enum(['ll1', 'll2', 'll3', 'ght']),
+      amount: unit,
+    })
+    .strict(),
 ] as const;
 
 /** Ops that move pixels: Render applies them to the person matte too, deterministic per frame. */
@@ -120,7 +133,16 @@ const effectOpsSchema = z
   .max(8)
   .superRefine((ops, ctx) => {
     const count = (op: EffectOp['op']) => ops.filter((item) => item.op === op).length;
-    for (const op of ['lens', 'frame', 'bars', 'mono', 'duotone', 'halftone'] as const)
+    for (const op of [
+      'lens',
+      'frame',
+      'bars',
+      'mono',
+      'duotone',
+      'halftone',
+      'dust',
+      'lightLeak',
+    ] as const)
       if (count(op) > 1) ctx.addIssue({ code: 'custom', message: `at most one ${op} op` });
     if (count('stamp') > 2) ctx.addIssue({ code: 'custom', message: 'at most two stamps' });
   });
@@ -751,6 +773,23 @@ export const HEADLESS_EFFECTS: readonly HeadlessEffect[] = [
       { op: 'vignette', amount: 0.85 },
       { op: 'grain', amount: 0.25, animated: true },
     ],
+  }),
+  catalog({
+    id: 'dust',
+    label: 'Dust',
+    summary: 'Film dust and a hairline scratch: sparse specks that renew, not a flat grain.',
+    whenToUse: 'Over a film or golden-hour grade, when the reel should look printed.',
+    category: 'film',
+    ops: [{ op: 'dust', amount: 0.55, animated: true }],
+  }),
+  catalog({
+    id: 'light-leak',
+    label: 'Light leak',
+    summary:
+      'A magenta flare from the left. The same op swaps preset: ll2 red, ll3 violet, ght gold.',
+    whenToUse: 'One printed-film flare on a warm or night reel. Do not stack two leaks.',
+    category: 'film',
+    ops: [{ op: 'lightLeak', preset: 'll1', amount: 0.7 }],
   }),
   catalog({
     id: 'brand-duotone',

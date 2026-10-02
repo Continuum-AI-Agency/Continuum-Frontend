@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  reelFaceFor,
   reelAnalysisSchema,
   reelAnalysisWire,
+  reelFaceFor,
   reelPresentationSchema,
   reelPresentationWire,
   reelResolvedPresentationSchema,
@@ -44,7 +44,17 @@ describe('reel presentation', () => {
   // Shapes returned by the deployed continuum-reels rev 00002, before any field this workstream added.
   const rev2Analysis = {
     version: 1,
-    scenes: [{ id: 'hook', durationSec: 3.2, width: 720, height: 1280, hasAudio: true, silence: [{ startSec: 2.8, endSec: 3.2 }], cutTimesSec: [] }],
+    scenes: [
+      {
+        id: 'hook',
+        durationSec: 3.2,
+        width: 720,
+        height: 1280,
+        hasAudio: true,
+        silence: [{ startSec: 2.8, endSec: 3.2 }],
+        cutTimesSec: [],
+      },
+    ],
   };
   const rev2Resolved = {
     version: 1,
@@ -62,6 +72,8 @@ describe('reel presentation', () => {
   test('rev 00002 responses parse, and go back on the wire exactly as they came', () => {
     const analysis = reelAnalysisSchema.parse(rev2Analysis);
     expect(analysis.scenes[0].loudness).toEqual([]);
+    expect(analysis.scenes[0].beatsSec).toEqual([]);
+    expect(analysis.scenes[0].bpm).toBeNull();
     expect(JSON.stringify(reelAnalysisWire(analysis))).toBe(JSON.stringify(rev2Analysis));
     const resolved = reelResolvedPresentationSchema.parse(rev2Resolved);
     expect(resolved.motion).toEqual([]);
@@ -70,12 +82,47 @@ describe('reel presentation', () => {
   });
 
   test('a presentation sends none of the post-rev-00002 keys until it uses them', () => {
-    const rev2Keys = ['version', 'captionPreset', 'treatment', 'cta', 'emphasisPhrases', 'events', 'insetAssetId', 'soundAccents'];
-    expect(Object.keys(reelPresentationWire(reelPresentationSchema.parse(base))).every((key) => rev2Keys.includes(key))).toBe(true);
-    const used = reelPresentationWire(reelPresentationSchema.parse({ ...base, transitions: [{ afterSceneId: 'hook', kind: 'crossfade', durationSec: 0.3 }], ctaEntrance: 'fade' }));
+    const rev2Keys = [
+      'version',
+      'captionPreset',
+      'treatment',
+      'cta',
+      'emphasisPhrases',
+      'events',
+      'insetAssetId',
+      'soundAccents',
+    ];
+    expect(
+      Object.keys(reelPresentationWire(reelPresentationSchema.parse(base))).every((key) =>
+        rev2Keys.includes(key),
+      ),
+    ).toBe(true);
+    const used = reelPresentationWire(
+      reelPresentationSchema.parse({
+        ...base,
+        transitions: [{ afterSceneId: 'hook', kind: 'crossfade', durationSec: 0.3 }],
+        ctaEntrance: 'fade',
+      }),
+    );
     expect(Object.keys(used)).toContain('transitions');
     expect(Object.keys(used)).toContain('ctaEntrance');
     expect(Object.keys(used)).not.toContain('motion');
+  });
+
+  test('beats and beat sync travel only when they are set', () => {
+    const analysis = reelAnalysisSchema.parse({
+      ...rev2Analysis,
+      scenes: [{ ...rev2Analysis.scenes[0], loudness: [-20], beatsSec: [0.5, 1], bpm: 120 }],
+    });
+    expect(reelAnalysisWire(analysis).scenes[0]).toMatchObject({
+      loudness: [-20],
+      beatsSec: [0.5, 1],
+      bpm: 120,
+    });
+    expect(reelPresentationWire(reelPresentationSchema.parse(base)).beatSync).toBeUndefined();
+    expect(
+      reelPresentationWire(reelPresentationSchema.parse({ ...base, beatSync: true })).beatSync,
+    ).toBe(true);
   });
 });
 
