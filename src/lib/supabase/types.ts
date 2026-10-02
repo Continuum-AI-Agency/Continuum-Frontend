@@ -21991,6 +21991,13 @@ export type Database = {
         Args: { p_collection: string }
         Returns: string
       }
+      read_editor_project_for_edit: {
+        Args: { p_project_id: string; p_user_id: string }
+        Returns: {
+          can_edit: boolean
+          project: Json
+        }[]
+      }
       reap_expired_client_render_leases: { Args: never; Returns: number }
       reap_expired_preview_jobs: { Args: never; Returns: Json }
       reap_expired_service_render_jobs: { Args: never; Returns: number }
