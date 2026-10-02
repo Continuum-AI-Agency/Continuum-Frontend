@@ -1,6 +1,10 @@
 'use client';
 
-import type { VideoEditorAgentRequest, VideoEditorPoolAsset } from '@continuum/contracts';
+import type {
+  VideoEditorAgentRequest,
+  VideoEditorPoolAsset,
+  VideoEditorWorkflow,
+} from '@continuum/contracts';
 import {
   AtSign,
   Check,
@@ -29,7 +33,8 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { SafeMarkdown } from '@/components/ui/SafeMarkdownLazy';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
@@ -106,6 +111,11 @@ export function EditorAgentPanel({
   const [mentions, setMentions] = useState<Mention[]>([]);
   const [mentionOpen, setMentionOpen] = useState(false);
   const [pool, setPool] = useState<VideoEditorPoolAsset[] | null>(null);
+  const [workflowOpen, setWorkflowOpen] = useState(false);
+  const [workflows, setWorkflows] = useState<VideoEditorWorkflow[]>([]);
+  const [workflowName, setWorkflowName] = useState('');
+  const [workflowBusy, setWorkflowBusy] = useState(false);
+  const [workflowError, setWorkflowError] = useState('');
   const abortRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const running = turns.at(-1)?.status === 'running';
@@ -221,6 +231,38 @@ export function EditorAgentPanel({
 
   const lastCommitted = [...turns].reverse().find((turn) => turn.committed && !turn.undone);
 
+  const openWorkflows = async (open: boolean) => {
+    setWorkflowOpen(open);
+    if (!open) return;
+    setWorkflowBusy(true);
+    setWorkflowError('');
+    try {
+      setWorkflows((await studio.runOp('list_workflows', {})).workflows);
+    } catch (error) {
+      setWorkflowError(error instanceof Error ? error.message : 'Could not load workflows.');
+    } finally {
+      setWorkflowBusy(false);
+    }
+  };
+
+  const saveWorkflow = async () => {
+    if (!workflowName.trim() || !draft.trim() || workflowBusy) return;
+    setWorkflowBusy(true);
+    setWorkflowError('');
+    try {
+      const { workflow } = await studio.runOp('save_workflow', {
+        name: workflowName.trim(),
+        prompt: draft.trim(),
+      });
+      setWorkflows((all) => [workflow, ...all]);
+      setWorkflowName('');
+    } catch (error) {
+      setWorkflowError(error instanceof Error ? error.message : 'Could not save workflow.');
+    } finally {
+      setWorkflowBusy(false);
+    }
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="editor-agent-panel">
       <Conversation className="flex-1">
@@ -284,6 +326,75 @@ export function EditorAgentPanel({
       </Conversation>
 
       <div className="flex flex-col gap-2 border-t p-3">
+        <Popover open={workflowOpen} onOpenChange={(open) => void openWorkflows(open)}>
+          <PopoverTrigger
+            render={
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 w-fit text-xs"
+                disabled={running}
+              />
+            }
+          >
+            Saved workflows
+          </PopoverTrigger>
+          <PopoverContent side="top" align="start" className="flex w-80 flex-col gap-3">
+            <p className="text-xs text-muted-foreground">
+              Reusable instructions for the current edit. Choose one, then send it to the agent.
+            </p>
+            <div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
+              {workflowBusy ? (
+                <Spinner className="size-4" />
+              ) : workflows.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No saved workflows yet.</p>
+              ) : (
+                workflows.map((workflow) => (
+                  <Button
+                    key={workflow.id}
+                    variant="ghost"
+                    className="justify-start truncate"
+                    title={workflow.prompt}
+                    onClick={() => {
+                      setDraft(workflow.prompt);
+                      setMentions([]);
+                      setWorkflowOpen(false);
+                      requestAnimationFrame(() => textareaRef.current?.focus());
+                    }}
+                  >
+                    {workflow.name}
+                  </Button>
+                ))
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                aria-label="Workflow name"
+                placeholder="Name this prompt"
+                maxLength={100}
+                value={workflowName}
+                onChange={(event) => setWorkflowName(event.target.value)}
+              />
+              <Button
+                size="sm"
+                disabled={
+                  workflowBusy ||
+                  !workflowName.trim() ||
+                  !draft.trim() ||
+                  draft.trim().length > 2000
+                }
+                onClick={() => void saveWorkflow()}
+              >
+                Save prompt
+              </Button>
+            </div>
+            {workflowError ? (
+              <p role="alert" className="text-xs text-destructive">
+                {workflowError}
+              </p>
+            ) : null}
+          </PopoverContent>
+        </Popover>
         <Suggestions>
           {(!studio.project.brief && hasFootage(studio.project)
             ? [FIRST_CUT_SUGGESTION, ...SUGGESTIONS]

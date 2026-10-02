@@ -4,7 +4,13 @@
 // compositor, and measures decoded frames by pixels and bounding boxes (never OCR). The
 // Playwright spec asserts on the numbers.
 
-import { createEditorProjectV2, editorProjectV2Schema } from '@continuum/contracts';
+import {
+  createEditorProjectV2,
+  editorProjectV2Schema,
+  LOOK_EFFECTS,
+  type LookEffectId,
+  lookEffectInstance,
+} from '@continuum/contracts';
 import {
   buildTimelineEditorRenderPlan,
   textCueFor,
@@ -758,8 +764,8 @@ async function runCaptionHighlights() {
                 kind: 'caption',
                 timelineStartSec: 0,
                 durationSec: 1,
-              text: 'BRAND',
-              language: 'en',
+                text: 'BRAND',
+                language: 'en',
                 words: [{ text: 'BRAND', startSec: 0, endSec: 1 }],
                 highlightMode,
                 highlightColor: '#ff3366',
@@ -823,6 +829,138 @@ async function runCaptionHighlights() {
   }
 }
 
+export async function runLooks() {
+  const image = new OffscreenCanvas(WIDTH, HEIGHT);
+  const brush = image.getContext('2d');
+  if (!brush) throw new Error('No looks fixture canvas.');
+  brush.fillStyle = '#00ff00';
+  brush.fillRect(0, 0, WIDTH, HEIGHT);
+  for (let y = 100; y < HEIGHT - 100; y += 3)
+    for (let x = 80; x < WIDTH - 80; x += 3) {
+      brush.fillStyle = (x + y) % 2 ? '#db253e' : '#8e1430';
+      brush.fillRect(x, y, 3, 3);
+    }
+  const url = URL.createObjectURL(await image.convertToBlob({ type: 'image/png' }));
+  const groundUrl = URL.createObjectURL(await encodeSolidVideo(BLUE, 1));
+  const base = createEditorProjectV2({
+    projectId: '00000000-0000-4000-8000-000000000779',
+    title: 'Look vocabulary proof',
+    width: WIDTH,
+    height: HEIGHT,
+    now: '2026-10-01T12:00:00.000Z',
+  });
+  const render = async (effect?: LookEffectId, strength = 1) => {
+    const started = performance.now();
+    const project = editorProjectV2Schema.parse({
+      ...base,
+      durationSec: 1,
+      tracks: [
+        {
+          id: 'ground',
+          name: 'Ground',
+          kind: 'video',
+          order: 0,
+          clips: [
+            {
+              id: 'ground',
+              kind: 'video',
+              timelineStartSec: 0,
+              durationSec: 1,
+              source: source('ground'),
+              audioEnabled: false,
+            },
+          ],
+        },
+        {
+          id: 'image',
+          name: 'Image',
+          kind: 'overlay',
+          order: 1,
+          clips: [
+            {
+              id: 'image',
+              kind: 'overlay',
+              mediaKind: 'image',
+              timelineStartSec: 0,
+              durationSec: 1,
+              source: source('image'),
+              effects: effect ? [lookEffectInstance(effect, { id: 'look', strength })] : [],
+            },
+          ],
+        },
+      ],
+    });
+    const plan = await buildTimelineEditorRenderPlan({
+      project,
+      jobInputs: [
+        {
+          sourceId: 'ground',
+          sourceAssetId: 'asset-ground',
+          sourceRevision: 'version-ground',
+          storage: { bucket: 'bench', path: 'ground' },
+        },
+        {
+          sourceId: 'image',
+          sourceAssetId: 'asset-image',
+          sourceRevision: 'version-image',
+          storage: { bucket: 'bench', path: 'image.png' },
+        },
+      ],
+      signedUrls: new Map([
+        ['bench\nimage.png', url],
+        ['bench\nground', groundUrl],
+      ]),
+      signal: new AbortController().signal,
+    });
+    const rendered = await composeTimeline({
+      ...plan,
+      targetWidth: WIDTH,
+      targetHeight: HEIGHT,
+      frameTimeSec: 0.5,
+    });
+    const bitmap = await createImageBitmap(rendered.blob);
+    try {
+      const frame = new OffscreenCanvas(WIDTH, HEIGHT);
+      const ctx = frame.getContext('2d');
+      if (!ctx) throw new Error('No looks readback canvas.');
+      ctx.drawImage(bitmap, 0, 0);
+      return {
+        pixels: ctx.getImageData(0, 0, WIDTH, HEIGHT).data,
+        durationMs: performance.now() - started,
+      };
+    } finally {
+      bitmap.close();
+      URL.revokeObjectURL(rendered.objectUrl);
+    }
+  };
+  try {
+    const control = await render();
+    const difference = (pixels: Uint8ClampedArray) =>
+      pixels.reduce((sum, value, index) => sum + Math.abs(value - control.pixels[index]), 0) /
+      pixels.length;
+    const results = [];
+    for (const id of Object.keys(LOOK_EFFECTS) as LookEffectId[]) {
+      const actual = await render(id, id === 'chroma_key' ? 0.6 : 1);
+      const zero =
+        LOOK_EFFECTS[id].parameter === null ? difference((await render(id, 0)).pixels) : null;
+      const corner = 4 * (20 * WIDTH + 20);
+      const centre = 4 * (Math.floor(HEIGHT / 2) * WIDTH + Math.floor(WIDTH / 2));
+      results.push({
+        id,
+        difference: difference(actual.pixels),
+        zeroDifference: zero,
+        durationMs: actual.durationMs,
+        corner: [...actual.pixels.slice(corner, corner + 4)],
+        centre: [...actual.pixels.slice(centre, centre + 4)],
+      });
+    }
+    return results;
+  } finally {
+    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(groundUrl);
+  }
+}
+
 declare global {
   interface Window {
     __motionRenderBench: {
@@ -830,6 +968,7 @@ declare global {
       entrances: typeof runEntrances;
       compare: typeof runServerCompare;
       highlights: typeof runCaptionHighlights;
+      looks: typeof runLooks;
     };
   }
 }
@@ -839,4 +978,5 @@ window.__motionRenderBench = {
   entrances: runEntrances,
   compare: runServerCompare,
   highlights: runCaptionHighlights,
+  looks: runLooks,
 };

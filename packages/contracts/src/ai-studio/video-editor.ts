@@ -245,6 +245,14 @@ export const videoEditorDraftVariantSchema = z
 export type VideoEditorDraftVariant = z.infer<typeof videoEditorDraftVariantSchema>;
 
 // ── The ops ────────────────────────────────────────────────────────────────────────────
+export const videoEditorWorkflowSchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string().min(1).max(100),
+    prompt: z.string().min(1).max(2_000),
+  })
+  .strict();
+export type VideoEditorWorkflow = z.infer<typeof videoEditorWorkflowSchema>;
 
 export type VideoEditorOpGroup = 'see' | 'edit' | 'quick' | 'motion' | 'draft' | 'ship' | 'sources';
 
@@ -262,6 +270,32 @@ type OpSpec = {
 };
 
 export const VIDEO_EDITOR_OPS = {
+  list_workflows: {
+    group: 'see',
+    commits: false,
+    scope: 'project',
+    access: 'read',
+    description:
+      'List saved editing workflows for this brand. When asked to run one, read its prompt and carry out those instructions on the CURRENT project with the named editor operations. A saved workflow is reusable instructions, not fixed clip IDs.',
+    input: z.object({ ...projectRef }).strict(),
+    output: z.object({ workflows: z.array(videoEditorWorkflowSchema) }).strict(),
+  },
+  save_workflow: {
+    group: 'edit',
+    commits: false,
+    scope: 'project',
+    access: 'operate',
+    description:
+      'Save reusable editing instructions in the brand workflow library, without changing the timeline. Use general instructions about the current footage or selected clips; do not freeze project IDs or clip IDs. Saving does not run the instructions.',
+    input: z
+      .object({
+        ...projectRef,
+        name: z.string().trim().min(1).max(100),
+        prompt: z.string().trim().min(1).max(2_000),
+      })
+      .strict(),
+    output: z.object({ workflow: videoEditorWorkflowSchema }).strict(),
+  },
   list_projects: {
     group: 'see',
     commits: false,
@@ -468,7 +502,10 @@ export const VIDEO_EDITOR_OPS = {
             (value) => value === 0.25 || value === 0.5 || Number.isInteger(value),
             'Use quarter, half, or whole beats',
           )
-          .default(1),
+          .default(1)
+          .describe(
+            'Beats per shot: 0.5 = every half beat, 0.25 = every quarter beat, 1 = every beat. For quick splices or doka doka doka use 0.5.',
+          ),
         clipIds: z.array(z.string()).max(50).optional(),
         audioClipId: z.string().optional(),
         range: timelineRangeSchema.optional(),
@@ -493,7 +530,15 @@ export const VIDEO_EDITOR_OPS = {
           .refine((ids) => new Set(ids).size === ids.length, 'Select different clips'),
         layout: z.enum(['stack', 'side_by_side', 'grid']).default('stack'),
         atSec: secSchema.default(0),
-        durationSec: z.number().finite().min(0.1).max(120).optional(),
+        durationSec: z
+          .number()
+          .finite()
+          .min(0.1)
+          .max(120)
+          .optional()
+          .describe(
+            'Omit to fit the panels to the shortest selected source and remaining timeline. Specify only when the person requests a duration.',
+          ),
       })
       .strict(),
     output: committed({ clipIds: z.array(z.string()), trackId: z.string() }),

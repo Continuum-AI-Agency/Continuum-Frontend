@@ -41,6 +41,8 @@ const STEP_MS = 20_000;
 const RUN = randomUUID().slice(0, 8);
 const HOOK_LINE = `Motion bench ${RUN}`;
 const OUTSIDE_LINE = `Outside ${RUN}`;
+const WORKFLOW_NAME = `Workflow ${RUN}`;
+const WORKFLOW_PROMPT = 'Make the current edit YouTube.';
 
 const { url: supabaseUrl, serviceRoleKey } = loadProdSupabaseEnv();
 process.env.SUPABASE_URL = supabaseUrl;
@@ -155,15 +157,32 @@ test(BENCH, async ({ browser }) => {
   let session: Awaited<ReturnType<typeof mintSessionBundleForEmail>> | null = null;
   try {
     // ── servers + identity ────────────────────────────────────────────────────────────
-    const fePort = await freePort();
-    const backend = await bootBackend(`http://localhost:${fePort}`);
-    servers.push(backend);
-    const frontend = await bootFrontend(fePort, backend.url);
-    servers.push(frontend);
-    note(`local Backend ${backend.url} (workers off, log ${backend.log}); Next ${frontend.url}`);
-    process.env.PLAYWRIGHT_BASE_URL = frontend.url;
+    const hostedFrontend = process.env.VIDEO_EDITOR_FRONTEND_URL;
+    let frontendUrl: string;
+    let backendUrl: string;
+    if (hostedFrontend) {
+      frontendUrl = hostedFrontend;
+      backendUrl = process.env.VIDEO_EDITOR_BACKEND_URL ?? 'https://api.trycontinuum.ai';
+      const version = await fetch(`${frontendUrl}/api/system/version?bench=${RUN}`, {
+        cache: 'no-store',
+      });
+      const { sha } = (await version.json()) as { sha?: string };
+      if (!version.ok || !sha || !/^[0-9a-f]{7,40}$/.test(sha))
+        throw new Error('Hosted Frontend revision unavailable');
+      note(`verified hosted Frontend revision: ${sha}`);
+    } else {
+      const fePort = await freePort();
+      const backend = await bootBackend(`http://localhost:${fePort}`);
+      servers.push(backend);
+      const frontend = await bootFrontend(fePort, backend.url);
+      servers.push(frontend);
+      frontendUrl = frontend.url;
+      backendUrl = backend.url;
+      note(`local Backend ${backend.url} (workers off, log ${backend.log}); Next ${frontend.url}`);
+    }
+    process.env.PLAYWRIGHT_BASE_URL = frontendUrl;
     session = await mintSessionBundleForEmail(OWNER_EMAIL);
-    const api: Api = { base: backend.url, token: session.accessToken };
+    const api: Api = { base: backendUrl, token: session.accessToken };
 
     const { data: preference } = await admin
       .schema('brand_profiles')
@@ -189,7 +208,7 @@ test(BENCH, async ({ browser }) => {
     const page = await context.newPage();
     const pageErrors: string[] = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
-    await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
+    await page.goto(`${frontendUrl}/studio/video/new`, { timeout: 300_000 });
     await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180_000 });
     const projectId = /\/studio\/video\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? '';
     createdProjects.push(projectId);
@@ -648,6 +667,28 @@ test(BENCH, async ({ browser }) => {
       revisionLabel.includes(`Revision ${final.revision}`),
       `${revisionLabel} vs ${final.revision}`,
     );
+    await visible(page.getByRole('tab', { name: 'Agent', exact: true })).click();
+    await visible(page.getByTestId('editor-agent-input')).fill(WORKFLOW_PROMPT);
+    await visible(page.getByRole('button', { name: 'Saved workflows', exact: true })).click();
+    await page.getByRole('textbox', { name: 'Workflow name' }).fill(WORKFLOW_NAME);
+    const workflowSaved = page.waitForResponse((response) =>
+      response.url().includes('/ops/save_workflow'),
+    );
+    await page.getByRole('button', { name: 'Save prompt', exact: true }).click();
+    check(
+      'workflow UI saves instructions without editing the project',
+      (await workflowSaved).ok() && (await getProject(api, projectId)).revision === final.revision,
+    );
+    await page.keyboard.press('Escape');
+    await page.reload();
+    await visible(page.getByRole('tab', { name: 'Agent', exact: true })).click();
+    await visible(page.getByRole('button', { name: 'Saved workflows', exact: true })).click();
+    await page.getByRole('button', { name: WORKFLOW_NAME, exact: true }).click();
+    check(
+      'workflow UI reloads persisted instructions into the current edit prompt',
+      (await visible(page.getByTestId('editor-agent-input')).inputValue()) === WORKFLOW_PROMPT &&
+        (await getProject(api, projectId)).revision === final.revision,
+    );
     check(
       'no uncaught page errors',
       pageErrors.length === 0,
@@ -666,6 +707,22 @@ test(BENCH, async ({ browser }) => {
   } finally {
     // ── cleanup + net-zero ────────────────────────────────────────────────────────────
     try {
+      const { error: workflowCleanupError } = await admin
+        .schema('brand_profiles')
+        .from('canvas_workflows')
+        .delete()
+        .eq('brand_profile_id', BRAND)
+        .eq('name', `Video Studio: ${WORKFLOW_NAME}`);
+      const { count: workflowLeft } = await admin
+        .schema('brand_profiles')
+        .from('canvas_workflows')
+        .select('id', { count: 'exact', head: true })
+        .eq('brand_profile_id', BRAND)
+        .eq('name', `Video Studio: ${WORKFLOW_NAME}`);
+      check(
+        'workflow UI removes its disposable saved prompt',
+        !workflowCleanupError && workflowLeft === 0,
+      );
       const removed = await removeProjects(admin, BRAND, createdProjects);
       const ids = createdProjects.length > 0 ? createdProjects : [randomUUID()];
       const { count: leftProjects } = await admin

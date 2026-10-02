@@ -108,6 +108,7 @@ test('the motion vocabulary renders in the real compositor, judged per frame', a
     window.__motionRenderBench.entrances(),
   )) as EntranceSample[];
   const highlights = await page.evaluate(() => window.__motionRenderBench.highlights());
+  const looks = await page.evaluate(() => window.__motionRenderBench.looks());
   await context.close();
 
   const lines: string[] = [];
@@ -116,6 +117,28 @@ test('the motion vocabulary renders in the real compositor, judged per frame', a
     lines.push(`${ok ? 'PASS' : 'FAIL'}  ${name} — ${detail}`);
     expect.soft(ok, `${name}: ${detail}`).toBe(true);
   };
+  check(
+    'all seven filters and nine effects change the composed image pixels',
+    looks.length === 16 && looks.every((look) => look.difference > 0.1),
+    JSON.stringify(looks),
+  );
+  check(
+    'all seven named filters are neutral at zero intensity',
+    looks.filter((look) => look.zeroDifference !== null).length === 7 &&
+      looks.every((look) => look.zeroDifference === null || look.zeroDifference === 0),
+    JSON.stringify(looks.map(({ id, zeroDifference }) => ({ id, zeroDifference }))),
+  );
+  const key = looks.find((look) => look.id === 'chroma_key');
+  check(
+    'chroma key removes green while keeping the red subject',
+    Boolean(
+      key && key.corner[1] < 70 && key.corner[2] > 90 && key.centre[0] > 100 && key.centre[1] < 70,
+    ),
+    JSON.stringify(key),
+  );
+  rec.notes.push(
+    `speed samples: ${JSON.stringify({ looks_render: looks.filter((look) => ['vhs', 'pixelate', 'chroma_key'].includes(look.id)).map((look) => look.durationMs), motion_snapshot: [...control.snapshots, ...styled.snapshots].map((frame) => frame.durationMs) })}`,
+  );
 
   check(
     'persisted caption highlight colour renders for word and karaoke, and none disables it',
