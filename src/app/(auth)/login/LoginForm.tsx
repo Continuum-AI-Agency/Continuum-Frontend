@@ -1,6 +1,5 @@
 'use client';
 
-import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
@@ -42,7 +41,14 @@ export function LoginForm({ redirectTo, initialError }: LoginFormProps) {
     resetField,
     formState: { errors },
   } = useForm<PasswordSignInInput>({
-    resolver: zodResolver(usePassword ? passwordSignInSchema : magicLinkFormSchema),
+    resolver: async (values, context, options) => {
+      const { zodResolver } = await import('@hookform/resolvers/zod');
+      return zodResolver(usePassword ? passwordSignInSchema : magicLinkFormSchema)(
+        values,
+        context,
+        options,
+      );
+    },
     defaultValues: { email: '', password: '' },
   });
 
