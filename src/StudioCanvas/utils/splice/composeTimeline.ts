@@ -138,6 +138,7 @@ export type ComposeTimelineOptions = {
   // these dimensions (aspect conversion); otherwise the first clip's size is used.
   targetWidth?: number;
   targetHeight?: number;
+  backgroundColor?: string;
   // Editable caption cues (already in OUTPUT time) take precedence over the
   // flat-word compatibility input.
   captionCues?: CaptionCue[];
@@ -677,6 +678,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
             audioSource,
             targetWidth,
             targetHeight,
+            backgroundColor: options.backgroundColor,
             cumulativeOffset: place.soloStartSec,
             frameTimeSec: options.frameTimeSec,
             effects: item.effects,
@@ -702,6 +704,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
             audioSource,
             targetWidth,
             targetHeight,
+            backgroundColor: options.backgroundColor,
             cumulativeOffset: place.soloStartSec,
             frameTimeSec: options.frameTimeSec,
             muteAudio: item.muteAudio,
@@ -728,6 +731,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
           videoSource,
           targetWidth,
           targetHeight,
+          backgroundColor: options.backgroundColor,
           // The overlap between clip i and i+1 is driven by i+1's incoming transition.
           type: items[i + 1]?.transition?.type ?? 'crossDissolve',
           outgoing: toCrossClip(item),

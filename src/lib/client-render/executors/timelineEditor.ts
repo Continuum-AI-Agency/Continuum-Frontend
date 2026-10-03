@@ -49,6 +49,7 @@ import type {
 import type { ClientRenderExecutor } from '../executorRegistry';
 
 type RenderPlan = {
+  backgroundColor: string;
   items: TimelineWorkerItem[];
   overlays: TimelineOverlayWorkerItem[];
   groups: TimelineNestedRenderGroup[];
@@ -911,6 +912,7 @@ export async function buildTimelineEditorRenderPlan(input: {
     ),
   );
   return {
+    backgroundColor: input.project.canvas.backgroundColor,
     items,
     overlays,
     groups,

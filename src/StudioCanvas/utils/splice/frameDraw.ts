@@ -11,7 +11,7 @@ import {
   resolveTransformAt,
 } from '../render/effectSpec';
 import { shaderStackFromClipEffects } from '../render/shaderStack';
-import { computeCropRects, drawLetterboxed } from './letterbox';
+import { computeCropRects, drawCanvasBackground, drawLetterboxed } from './letterbox';
 
 // Shared frame-drawing primitives for the timeline renderer. `drawClipFrame`
 // draws a single letterboxed frame with the clip's effects (used for solos);
@@ -394,7 +394,7 @@ export async function drawEffectFrame(
 
 /**
  * Draw one source frame with the clip's visual effects baked in. Without effects
- * this is a plain letterbox; with effects the frame is drawn over a black
+ * this is a plain letterbox; with effects the frame is drawn over the canvas
  * background under the clip's transform/filter/opacity, mirroring the CSS
  * preview.
  */
@@ -408,15 +408,21 @@ export async function drawClipFrame(
   effects: ClipEffectSpec | undefined,
   t: number,
   timeSec = t,
+  backgroundColor?: string,
 ): Promise<void> {
   if (!effects || !hasVisualEffects(effects)) {
-    drawLetterboxed(ctx, source, sourceWidth, sourceHeight, targetWidth, targetHeight);
+    drawLetterboxed(
+      ctx,
+      source,
+      sourceWidth,
+      sourceHeight,
+      targetWidth,
+      targetHeight,
+      backgroundColor,
+    );
     return;
   }
-  ctx.filter = 'none';
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, targetWidth, targetHeight);
+  drawCanvasBackground(ctx, targetWidth, targetHeight, backgroundColor);
   await drawEffectFrame(
     ctx,
     source,

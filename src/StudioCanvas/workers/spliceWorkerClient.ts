@@ -57,6 +57,7 @@ export type RunTimelineInWorkerOptions = {
   frameRate?: number;
   targetWidth?: number;
   targetHeight?: number;
+  backgroundColor?: string;
   captionCues?: CaptionCue[];
   captionWords?: CaptionWord[];
   captionStyle?: CaptionStyle;
@@ -312,6 +313,7 @@ export function runTimelineInWorker(
     frameRate,
     targetWidth,
     targetHeight,
+    backgroundColor,
     captionCues,
     captionWords,
     captionStyle,
@@ -334,6 +336,7 @@ export function runTimelineInWorker(
       frameRate,
       targetWidth,
       targetHeight,
+      backgroundColor,
       captionCues,
       captionWords,
       captionStyle,

@@ -234,6 +234,7 @@ describe('runTimelineInWorker export codec', () => {
       items,
       videoCodec: 'vp9',
       container: 'webm',
+      backgroundColor: '#17384d',
       groups: [
         {
           itemId: 'child-instance',
@@ -256,6 +257,7 @@ describe('runTimelineInWorker export codec', () => {
     if (message.kind === 'start_timeline') {
       expect(message.videoCodec).toBe('vp9');
       expect(message.container).toBe('webm');
+      expect(message.backgroundColor).toBe('#17384d');
       expect(message.groups?.[0]).toMatchObject({
         itemId: 'child-instance',
         sourceInSec: 0.5,

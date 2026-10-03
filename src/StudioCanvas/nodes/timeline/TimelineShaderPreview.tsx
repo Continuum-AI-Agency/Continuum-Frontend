@@ -75,6 +75,8 @@ export function TimelineShaderPreview({
       const width = image?.width ?? videoRef.current?.videoWidth ?? 0;
       const height = image?.height ?? videoRef.current?.videoHeight ?? 0;
       if (!source || width <= 0 || height <= 0) return;
+      // A seek changes currentTime before the decoded picture is available.
+      if (!image && (videoRef.current?.seeking || (videoRef.current?.readyState ?? 0) < 2)) return;
       let rendered: ImageBitmap | undefined;
       try {
         if (hasShaderStack(effects)) {
@@ -89,7 +91,11 @@ export function TimelineShaderPreview({
             timeSec,
           });
         }
-        if (cancelled) return;
+        if (
+          cancelled ||
+          (!image && (videoRef.current?.seeking || (videoRef.current?.readyState ?? 0) < 2))
+        )
+          return;
         const canvas = canvasRef.current;
         const context = canvas?.getContext('2d');
         if (!canvas || !context) throw new Error('Could not create the timeline media preview');
@@ -121,6 +127,7 @@ export function TimelineShaderPreview({
           rect.height,
         );
         canvas.dataset.timeSec = String(timeSec);
+        if (!image) canvas.dataset.sourceSec = String(videoRef.current?.currentTime);
         setError(undefined);
       } catch (problem) {
         if (!cancelled) setError(problem instanceof Error ? problem.message : String(problem));

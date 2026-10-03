@@ -153,6 +153,7 @@ async function handleStartTimeline(
       frameRate: input.frameRate,
       targetWidth: input.targetWidth,
       targetHeight: input.targetHeight,
+      backgroundColor: input.backgroundColor,
       captionCues: input.captionCues,
       captionWords: input.captionWords,
       captionStyle: input.captionStyle,

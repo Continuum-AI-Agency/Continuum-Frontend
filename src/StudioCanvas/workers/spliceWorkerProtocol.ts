@@ -124,6 +124,7 @@ export type SpliceWorkerInbound =
       frameRate?: number;
       targetWidth?: number;
       targetHeight?: number;
+      backgroundColor?: string;
       // Auto-caption words (output-time) + style, burned in when present.
       captionCues?: CaptionCue[];
       captionWords?: CaptionWord[];

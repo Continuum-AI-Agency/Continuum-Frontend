@@ -956,9 +956,30 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
       ],
     });
     for (const [index, values] of [
-      { scale: 0.85, rotate: 10, gain: 0.6, speed: 1.25, crop: [0.1, 0.05, 0.15, 0.1] },
-      { scale: 1.1, rotate: -15, gain: 0.8, speed: 1.5, crop: [0.05, 0.15, 0.1, 0.05] },
-      { scale: 0.75, rotate: 30, gain: 0.35, speed: 0.75, crop: [0.15, 0.1, 0.05, 0.15] },
+      {
+        background: '#17384d',
+        scale: 0.85,
+        rotate: 10,
+        gain: 0.6,
+        speed: 1.25,
+        crop: [0.1, 0.05, 0.15, 0.1],
+      },
+      {
+        background: '#e5c9a3',
+        scale: 1.1,
+        rotate: -15,
+        gain: 0.8,
+        speed: 1.5,
+        crop: [0.05, 0.15, 0.1, 0.05],
+      },
+      {
+        background: '#000000',
+        scale: 0.75,
+        rotate: 30,
+        gain: 0.35,
+        speed: 0.75,
+        crop: [0.15, 0.1, 0.05, 0.15],
+      },
     ].entries()) {
       await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
       await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180_000 });
@@ -972,7 +993,12 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
         commands: [
           {
             commandType: 'set_project_metadata',
-            canvas: { ...blank.canvas, width: 360, height: 640 },
+            canvas: {
+              ...blank.canvas,
+              width: 360,
+              height: 640,
+              backgroundColor: values.background,
+            },
           },
           {
             commandType: 'set_export_settings',
@@ -1206,6 +1232,9 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
           rendered.height === 640,
       );
       const pictures = [];
+      const backgroundRgb = [1, 3, 5].map((offset) =>
+        Number.parseInt(values.background.slice(offset, offset + 2), 16),
+      );
       for (const time of [0.4, 1.2, 2.2]) {
         const ruler = page.locator('[data-timeline-ruler]:visible');
         const rb = await ruler.boundingBox();
@@ -1216,6 +1245,9 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
         await expect
           .poll(async () => Number(await nativeCanvas.getAttribute('data-time-sec')))
           .toBeCloseTo(time, 2);
+        await expect
+          .poll(async () => Number(await nativeCanvas.getAttribute('data-source-sec')))
+          .toBeCloseTo(c.sourceInSec + time * c.playbackRate, 2);
         const videoElement = page.getByTestId('edit-stage').locator('video').first();
         await expect
           .poll(() => videoElement.evaluate((v) => v.currentTime))
@@ -1263,9 +1295,28 @@ test('workspace inspector: native transform, crop, gain and constant-speed rende
           native.reduce((sum, v, i) => sum + Math.abs(v - encoded[i]!), 0) / native.length;
         assert(
           `f06 case ${index}: native and encoded frames at ${time}s contain visible media`,
-          native.some((v) => v > 32) && encoded.some((v) => v > 32),
+          [native, encoded].every(
+            (pixels) =>
+              pixels.filter((v, i) => Math.abs(v - backgroundRgb[i % 3]!) > 32).length > 1000,
+          ),
         );
-        pictures.push({ time, error });
+        const backgroundErrors = [native, encoded].map((pixels) => {
+          let difference = 0;
+          for (let y = 16; y < 24; y++)
+            for (let x = 16; x < 24; x++)
+              for (let channel = 0; channel < 3; channel++)
+                difference += Math.abs(
+                  pixels[(y * 360 + x) * 3 + channel]! - backgroundRgb[channel]!,
+                );
+          return difference / (8 * 8 * 3);
+        });
+        assert(
+          `f06 case ${index}: stored canvas background matches native and encoded plate at ${time}s`,
+          project.canvas.backgroundColor === values.background &&
+            backgroundErrors.every((value) => value < 4),
+          JSON.stringify({ color: values.background, backgroundErrors }),
+        );
+        pictures.push({ time, error, backgroundErrors });
       }
       assert(
         `f06 case ${index}: transform and asymmetric crop preview match encoded picture`,

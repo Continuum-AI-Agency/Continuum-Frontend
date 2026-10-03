@@ -33,6 +33,23 @@ export function computeLetterboxRect(
   return { x, y: 0, width, height };
 }
 
+export function drawCanvasBackground(
+  ctx: OffscreenCanvasRenderingContext2D,
+  width: number,
+  height: number,
+  color?: string,
+): void {
+  ctx.filter = 'none';
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, width, height);
+  if (color) {
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, width, height);
+  }
+}
+
 export function drawLetterboxed(
   ctx: OffscreenCanvasRenderingContext2D,
   source: CanvasImageSource,
@@ -40,9 +57,9 @@ export function drawLetterboxed(
   sourceHeight: number,
   targetWidth: number,
   targetHeight: number,
+  backgroundColor?: string,
 ): void {
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, targetWidth, targetHeight);
+  drawCanvasBackground(ctx, targetWidth, targetHeight, backgroundColor);
   const rect = computeLetterboxRect(sourceWidth, sourceHeight, targetWidth, targetHeight);
   ctx.drawImage(source, rect.x, rect.y, rect.width, rect.height);
 }

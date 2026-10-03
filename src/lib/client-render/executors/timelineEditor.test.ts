@@ -176,6 +176,7 @@ describe('timeline editor client render executor', () => {
     });
     const project = editorProjectV2Schema.parse({
       ...created,
+      canvas: { ...created.canvas, backgroundColor: '#17384d' },
       durationSec: 8,
       tracks: [
         {
@@ -217,6 +218,7 @@ describe('timeline editor client render executor', () => {
       ]),
       signal: new AbortController().signal,
     });
+    expect(plan.backgroundColor).toBe('#17384d');
     expect(plan.items).toHaveLength(1);
     expect(plan.items[0]).toMatchObject({
       itemId: 'master:hook',

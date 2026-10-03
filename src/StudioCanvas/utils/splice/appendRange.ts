@@ -43,6 +43,7 @@ export type AppendRangeParams = {
   audioSource: MbAudioSampleSource;
   targetWidth: number;
   targetHeight: number;
+  backgroundColor?: string;
   cumulativeOffset: number;
   muteAudio: boolean;
   // When set, sample the source at every output tick, including the source
@@ -159,6 +160,7 @@ export async function appendRange(params: AppendRangeParams): Promise<void> {
           effects,
           clipT,
           localOut,
+          params.backgroundColor,
         );
         if (overlays.length > 0) drawTextOverlays(ctx, overlays, targetWidth, targetHeight);
       },
@@ -249,6 +251,7 @@ export type AppendStillParams = {
   audioSource: MbAudioSampleSource;
   targetWidth: number;
   targetHeight: number;
+  backgroundColor?: string;
   cumulativeOffset: number;
   effects?: ClipEffectSpec;
   headFade?: FadeOverlay;
@@ -318,6 +321,7 @@ export async function appendStill(params: AppendStillParams): Promise<void> {
       effects,
       t,
       timeSec,
+      params.backgroundColor,
     );
     if (overlays.length > 0) drawTextOverlays(ctx, overlays, targetWidth, targetHeight);
   };
