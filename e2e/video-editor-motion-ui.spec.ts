@@ -61,6 +61,7 @@ const KEYFRAME_LOCAL = KEYFRAME_JOURNEY || KEYFRAME_HOLD_JOURNEY;
 const LOCAL_CURVE_JOURNEY = process.env.VIDEO_EDITOR_CURVE_JOURNEY_LOCAL === '1';
 const SPEECH_JOURNEY = process.env.VIDEO_EDITOR_SPEECH_JOURNEY === '1';
 const ANIMATED_SPEECH_JOURNEY = process.env.VIDEO_EDITOR_ANIMATED_SPEECH_JOURNEY === '1';
+const COLLAGE_JOURNEY = process.env.VIDEO_EDITOR_COLLAGE_JOURNEY === '1';
 const TEXT_JOURNEY = process.env.VIDEO_EDITOR_TEXT_JOURNEY === '1';
 const PARENT_JOURNEY = process.env.VIDEO_EDITOR_PARENT_JOURNEY === '1';
 const PARENT_RANGE_JOURNEY = process.env.VIDEO_EDITOR_PARENT_RANGE_JOURNEY === '1';
@@ -1073,27 +1074,29 @@ test('retained project journey: native splits and deletes preserve stored pictur
     'Set VIDEO_EDITOR_CURVE_JOURNEY=1 for the disposable real-store journey.',
   );
   const proof = createBenchRecorder(
-    KEYFRAME_LOCAL
-      ? BENCH
-      : STAGE_JOURNEY
-        ? 'videoeditor:motion:e2e:bench:stage-handles'
-        : NESTED_CONTROLS_JOURNEY
-          ? 'videoeditor:motion:e2e:bench:composition-controls'
-          : NESTED_AUDIO_JOURNEY
-            ? 'videoeditor:motion:e2e:bench:retained-nested-audio'
-            : NESTED_JOURNEY
-              ? 'videoeditor:motion:e2e:bench:retained-nested'
-              : CAPTION_JOURNEY
-                ? 'videoeditor:motion:e2e:bench:retained-captions'
-                : SPEECH_JOURNEY
-                  ? ANIMATED_SPEECH_JOURNEY
-                    ? 'videoeditor:motion:e2e:bench:animated-speech-jumps'
-                    : 'videoeditor:motion:e2e:bench:speech-jumps'
-                  : PARENT_JOURNEY
-                    ? 'videoeditor:motion:e2e:bench:retained-parent'
-                    : TEXT_JOURNEY
-                      ? 'videoeditor:motion:e2e:bench:retained-text'
-                      : 'videoeditor:motion:e2e:bench:retained-project',
+    COLLAGE_JOURNEY
+      ? 'videoeditor:motion:e2e:bench:collage'
+      : KEYFRAME_LOCAL
+        ? BENCH
+        : STAGE_JOURNEY
+          ? 'videoeditor:motion:e2e:bench:stage-handles'
+          : NESTED_CONTROLS_JOURNEY
+            ? 'videoeditor:motion:e2e:bench:composition-controls'
+            : NESTED_AUDIO_JOURNEY
+              ? 'videoeditor:motion:e2e:bench:retained-nested-audio'
+              : NESTED_JOURNEY
+                ? 'videoeditor:motion:e2e:bench:retained-nested'
+                : CAPTION_JOURNEY
+                  ? 'videoeditor:motion:e2e:bench:retained-captions'
+                  : SPEECH_JOURNEY
+                    ? ANIMATED_SPEECH_JOURNEY
+                      ? 'videoeditor:motion:e2e:bench:animated-speech-jumps'
+                      : 'videoeditor:motion:e2e:bench:speech-jumps'
+                    : PARENT_JOURNEY
+                      ? 'videoeditor:motion:e2e:bench:retained-parent'
+                      : TEXT_JOURNEY
+                        ? 'videoeditor:motion:e2e:bench:retained-text'
+                        : 'videoeditor:motion:e2e:bench:retained-project',
     [],
   );
   proof.notes.push(
@@ -1106,6 +1109,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
   let previousBrand: string | null | undefined;
   let brandChanged = false;
   let localSource: { path: string; assetId?: string; receiptKey?: string } | null = null;
+  const ownedSources: Array<{ path: string; assetId?: string; receiptKey?: string }> = [];
   let transcriptPath: string | null = null;
   let sourceWords: Array<{ text: string; startSec: number; endSec: number }> = [];
   const folder =
@@ -1117,6 +1121,16 @@ test('retained project journey: native splits and deletes preserve stored pictur
     expect(ok, `${name}${detail ? `: ${detail}` : ''}`).toBe(true);
   };
   try {
+    if (
+      COLLAGE_JOURNEY &&
+      (!LOCAL_CURVE_JOURNEY ||
+        KEYFRAME_LOCAL ||
+        SPEECH_JOURNEY ||
+        TEXT_JOURNEY ||
+        PARENT_JOURNEY ||
+        NESTED_JOURNEY)
+    )
+      throw new Error('Collage journey requires the loopback recording without other modes.');
     if (
       KEYFRAME_LOCAL &&
       (!LOCAL_CURVE_JOURNEY || SPEECH_JOURNEY || TEXT_JOURNEY || PARENT_JOURNEY || NESTED_JOURNEY)
@@ -1182,6 +1196,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
         '../../Continuum-Backend/App/media/registerGeneratedAsset'
       );
       localSource = { path: `${BRAND}/video-editor-bench/${randomUUID()}/recorded-curves.mp4` };
+      ownedSources.push(localSource);
       const probe = JSON.parse(
         execFileSync(
           'ffprobe',
@@ -1347,6 +1362,28 @@ test('retained project journey: native splits and deletes preserve stored pictur
     await compositor.goto(`${frontend.url}/curve-compositor`);
     await compositor.addScriptTag({ content: readFileSync(bundle, 'utf8'), type: 'module' });
     await compositor.waitForFunction(() => Boolean(window.__editorV2DurableRenderBench));
+    const mediaVersions = new Map([
+      [versionId, { bucket: version.bucket, path: version.storage_path, url: signed.signedUrl }],
+    ]);
+    const inputOf = (clip: EditorClip) => {
+      if (!('source' in clip) || clip.source.sourceType !== 'library_asset') return [];
+      const media = mediaVersions.get(clip.source.renditionId!);
+      if (!media && COLLAGE_JOURNEY) throw new Error('Unregistered collage source version');
+      const bound = media ?? {
+        bucket: version.bucket,
+        path: version.storage_path,
+        url: signed.signedUrl,
+      };
+      return [
+        {
+          sourceId: clip.id,
+          sourceAssetId: clip.source.assetId,
+          sourceRevision: clip.source.renditionId!,
+          storage: { bucket: bound.bucket, path: bound.path },
+          url: bound.url,
+        },
+      ];
+    };
     const render = async (project: EditorProjectV2, path: string, frameTimeSec?: number) => {
       const request: DurableTimelineRequest = {
         project,
@@ -1354,21 +1391,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
         inputs: [
           ...project.tracks,
           ...project.nestedSequences.flatMap((sequence) => sequence.tracks),
-        ].flatMap((track) =>
-          track.clips.flatMap((clip) =>
-            'source' in clip && clip.source.sourceType === 'library_asset'
-              ? [
-                  {
-                    sourceId: clip.id,
-                    sourceAssetId: clip.source.assetId,
-                    sourceRevision: clip.source.renditionId!,
-                    storage: { bucket: version.bucket, path: version.storage_path },
-                    url: signed.signedUrl,
-                  },
-                ]
-              : [],
-          ),
-        ),
+        ].flatMap((track) => track.clips.flatMap(inputOf)),
       };
       const result = await compositor.evaluate(
         (input) => window.__editorV2DurableRenderBench.renderTimeline(input),
@@ -1377,32 +1400,28 @@ test('retained project journey: native splits and deletes preserve stored pictur
       writeFileSync(path, Buffer.from(result.base64, 'base64'));
       return result;
     };
-    const previewAudio = async (project: EditorProjectV2, fromSec = 0, channel = 0) => {
+    const previewChannels = async (project: EditorProjectV2, fromSec = 0) => {
       const request: DurableTimelineRequest = {
         project,
         inputs: [
           ...project.tracks,
           ...project.nestedSequences.flatMap((sequence) => sequence.tracks),
-        ]
-          .flatMap((track) => track.clips.filter((clip) => 'source' in clip))
-          .map((clip) => ({
-            sourceId: clip.id,
-            sourceAssetId: assetId,
-            sourceRevision: versionId,
-            storage: { bucket: version.bucket, path: version.storage_path },
-            url: signed.signedUrl,
-          })),
+        ].flatMap((track) => track.clips.flatMap(inputOf)),
       };
       const result = await compositor.evaluate(
         ({ request, fromSec }) =>
           window.__editorV2DurableRenderBench.previewTimelineAudio(request, fromSec),
         { request, fromSec },
       );
-      const bytes = Buffer.from(result.channelsBase64[channel]!, 'base64');
-      return new Float32Array(
-        bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
-      );
+      return result.channelsBase64.map((channel) => {
+        const bytes = Buffer.from(channel, 'base64');
+        return new Float32Array(
+          bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+        );
+      });
     };
+    const previewAudio = async (project: EditorProjectV2, fromSec = 0, channel = 0) =>
+      (await previewChannels(project, fromSec))[channel]!;
     const summary = [];
     const commandResponses: Array<{ status: number; body: string }> = [];
     page.on('response', async (response) => {
@@ -1412,6 +1431,720 @@ test('retained project journey: native splits and deletes preserve stored pictur
           body: (await response.text()).slice(0, 800),
         });
     });
+    if (COLLAGE_JOURNEY) {
+      const fixture = process.env.VIDEO_EDITOR_RECORDED_FIXTURE!;
+      assert(
+        'collage uses the frozen real NASA recording',
+        createHash('sha256').update(readFileSync(fixture)).digest('hex') ===
+          '59c4807dc9c32bfbd2d97e7bfd400373ccc4eaa14ee14f3ba7f5aa88914cdc51',
+      );
+      const { buildRegisterGeneratedAssetOperation } = await import(
+        '../../Continuum-Backend/App/media/registerGeneratedAsset'
+      );
+      const photos = [];
+      for (const [index, image] of [
+        { sec: 248, crop: '600:338:100:56', width: 600, height: 338 },
+        { sec: 138, crop: '338:338:231:56', width: 338, height: 338 },
+      ].entries()) {
+        const file = join(folder, `recorded-photo-${index}.png`);
+        execFileSync('ffmpeg', [
+          '-v',
+          'error',
+          '-ss',
+          String(image.sec),
+          '-i',
+          fixture,
+          '-vf',
+          `crop=${image.crop}`,
+          '-frames:v',
+          '1',
+          '-y',
+          file,
+        ]);
+        const bytes = readFileSync(file),
+          owned = {
+            path: `${BRAND}/video-editor-bench/${randomUUID()}/photo.png`,
+            assetId: undefined as string | undefined,
+            receiptKey: undefined as string | undefined,
+          };
+        ownedSources.push(owned);
+        const operation = buildRegisterGeneratedAssetOperation({
+          brandId: BRAND,
+          kind: 'image',
+          bucket: 'media-library',
+          storagePath: owned.path,
+          fileName: `bench-recorded-photo-${RUN}-${index}.png`,
+          mimeType: 'image/png',
+          createdBy: session.userId,
+          width: image.width,
+          height: image.height,
+          sizeBytes: bytes.length,
+          checksum: createHash('sha256').update(bytes).digest('hex'),
+          source: 'canvas',
+          operation: 'video_editor_local_fixture',
+          originRef: {
+            bench: 'collage',
+            actualRecordedMedia: true,
+            sourceRecordingSha256:
+              '59c4807dc9c32bfbd2d97e7bfd400373ccc4eaa14ee14f3ba7f5aa88914cdc51',
+            sourceSec: image.sec,
+            crop: image.crop,
+          },
+        });
+        const uploaded = await admin.storage
+          .from('media-library')
+          .upload(owned.path, bytes, { contentType: 'image/png' });
+        if (uploaded.error) throw uploaded.error;
+        owned.receiptKey = operation.idempotencyKey;
+        const registered = await admin.schema('media').rpc('library_execute_operation', {
+          p_action: operation.action,
+          p_payload: { ...operation, actor: session.userId },
+        });
+        if (registered.error) throw registered.error;
+        const receipt = registerGeneratedAssetResponseSchema.parse(registered.data);
+        owned.assetId = receipt.assetId;
+        const signedImage = await admin.storage
+          .from('media-library')
+          .createSignedUrl(owned.path, 1800);
+        if (signedImage.error || !signedImage.data)
+          throw signedImage.error ?? new Error('Photo URL missing');
+        mediaVersions.set(receipt.versionId, {
+          bucket: 'media-library',
+          path: owned.path,
+          url: signedImage.data.signedUrl,
+        });
+        // Raw ffmpeg RGB ignores this recording's PNG transfer profile. Normalize
+        // through an independent browser image decode before spatial comparisons.
+        const normalized = await compositor.evaluate(async (url) => {
+          const bitmap = await createImageBitmap(await (await fetch(url)).blob());
+          const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+          const ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error('Reference canvas unavailable');
+          ctx.drawImage(bitmap, 0, 0);
+          const bytes = new Uint8Array(
+            await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer(),
+          );
+          let binary = '';
+          for (let offset = 0; offset < bytes.length; offset += 32768)
+            binary += String.fromCharCode(...bytes.subarray(offset, offset + 32768));
+          bitmap.close();
+          return { width: canvas.width, height: canvas.height, base64: btoa(binary) };
+        }, signedImage.data.signedUrl);
+        const referenceFile = join(folder, `recorded-photo-${index}-srgb.png`);
+        writeFileSync(referenceFile, Buffer.from(normalized.base64, 'base64'));
+        assert(
+          `photo ${index} independent decode retains exact dimensions`,
+          normalized.width === image.width && normalized.height === image.height,
+        );
+        photos.push({
+          ...image,
+          file,
+          referenceFile,
+          assetId: receipt.assetId,
+          versionId: receipt.versionId,
+          sha256: createHash('sha256').update(bytes).digest('hex'),
+        });
+        assert(
+          `actual recorded photo ${index} registers an exact local Library version`,
+          receipt.status === 'created',
+        );
+      }
+      writeFileSync(join(folder, 'recorded-photos.json'), JSON.stringify(photos, null, 2));
+      const decode = (file: string, width: number, height: number, sec?: number) =>
+        execFileSync(
+          'ffmpeg',
+          [
+            '-v',
+            'error',
+            ...(sec === undefined ? [] : ['-ss', String(sec)]),
+            '-i',
+            file,
+            '-frames:v',
+            '1',
+            '-vf',
+            `scale=${width}:${height},format=rgb24`,
+            '-f',
+            'rawvideo',
+            'pipe:1',
+          ],
+          { maxBuffer: 4 * 1024 * 1024 },
+        );
+      const pcm = (file: string, channel: number) => {
+        const bytes = execFileSync(
+          'ffmpeg',
+          [
+            '-v',
+            'error',
+            '-i',
+            file,
+            '-vn',
+            '-af',
+            `pan=mono|c0=c${channel}`,
+            '-ar',
+            '48000',
+            '-f',
+            'f32le',
+            'pipe:1',
+          ],
+          { maxBuffer: 4 * 1024 * 1024 },
+        );
+        return new Float32Array(
+          bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+        );
+      };
+      const mae = (a: Uint8Array, b: Uint8Array) =>
+        a.length === b.length && a.length > 0
+          ? a.reduce((sum, v, i) => sum + Math.abs(v - b[i]!), 0) / a.length
+          : Infinity;
+      const audioError = (actual: Float32Array, expected: Float32Array) => {
+        let energy = 0,
+          error = 0;
+        for (let n = 0; n < expected.length; n++) {
+          energy += expected[n]! ** 2;
+          error += ((actual[n] ?? 0) - expected[n]!) ** 2;
+        }
+        return {
+          energy,
+          relativeError: error / energy,
+          lengthMatches: actual.length === expected.length,
+        };
+      };
+      const sourceFrames = new Map<string, string>();
+      const editTimings = [];
+      const comparisons = [];
+      for (const [format, width, height] of [
+        ['portrait', 324, 576],
+        ['landscape', 576, 324],
+        ['square', 576, 576],
+      ] as const) {
+        await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
+        await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180_000 });
+        const projectId = /\/studio\/video\/([0-9a-f-]{36})/.exec(page.url())?.[1];
+        if (!projectId) throw new Error('Collage project missing');
+        ids.push(projectId);
+        const initial = await getProject(api, projectId);
+        const source = { sourceType: 'library_asset', assetId, renditionId: versionId };
+        const seeded = await postOp(api, projectId, 'apply_commands', {
+          expectedRevision: initial.revision,
+          commands: [
+            {
+              commandType: 'add_track',
+              track: {
+                id: 'main',
+                name: 'Real interview',
+                kind: 'video',
+                order: 0,
+                clips: [
+                  {
+                    id: 'interview',
+                    kind: 'video',
+                    timelineStartSec: 0,
+                    sourceInSec: 64.7,
+                    durationSec: 5,
+                    audioEnabled: true,
+                    source,
+                    keyframes: [
+                      {
+                        id: 'gain:a',
+                        property: 'audio.volume',
+                        timeSec: 0,
+                        value: 0.4,
+                        interpolation: 'linear',
+                      },
+                      {
+                        id: 'gain:b',
+                        property: 'audio.volume',
+                        timeSec: 5,
+                        value: 0.8,
+                        interpolation: 'linear',
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+            {
+              commandType: 'add_track',
+              track: {
+                id: 'movie-pool',
+                name: 'Ocean source',
+                kind: 'video',
+                order: 1,
+                enabled: false,
+                clips: [
+                  {
+                    id: 'ocean',
+                    kind: 'video',
+                    timelineStartSec: 0,
+                    sourceInSec: 138,
+                    durationSec: 5,
+                    audioEnabled: false,
+                    source,
+                  },
+                ],
+              },
+            },
+            ...photos.map((photo, index) => ({
+              commandType: 'add_track',
+              track: {
+                id: `photo-pool-${index}`,
+                name: `Real photo ${index + 1}`,
+                kind: 'overlay',
+                order: 2 + index,
+                enabled: false,
+                clips: [
+                  {
+                    id: `photo-${index}`,
+                    kind: 'overlay',
+                    mediaKind: 'image',
+                    timelineStartSec: 0,
+                    durationSec: 5,
+                    source: {
+                      sourceType: 'library_asset',
+                      assetId: photo.assetId,
+                      renditionId: photo.versionId,
+                    },
+                  },
+                ],
+              },
+            })),
+            ...initial.tracks.map((track) => ({ commandType: 'remove_track', trackId: track.id })),
+            {
+              commandType: 'set_project_metadata',
+              canvas: { ...initial.canvas, width, height },
+              durationSec: 5,
+            },
+            {
+              commandType: 'set_export_settings',
+              exportSettings: editorExportSettingsSchema.parse({
+                ...initial.exportSettings,
+                width,
+                height,
+                frameRate: { numerator: 30, denominator: 1 },
+                captionMode: 'none',
+                videoBitrateKbps: 2500,
+                audioBitrateKbps: 128,
+              }),
+            },
+          ],
+        });
+        assert(
+          `${format}: real videos and stills persist through the editor store`,
+          seeded.status === 200,
+          seeded.text.slice(0, 300),
+        );
+        const baseline = await getProject(api, projectId),
+          baselineFilm = join(folder, `${format}-baseline.mp4`);
+        await render(baseline, baselineFilm);
+        const baselinePcm = [pcm(baselineFilm, 0), pcm(baselineFilm, 1)];
+        const baselinePreview = [...(await previewChannels(baseline))];
+        const outsideRefs = [];
+        for (const at of [0.2, 4.8]) {
+          const path = join(folder, `${format}-outside-${at}.png`);
+          await render(baseline, path, at);
+          outsideRefs.push({ at, path });
+        }
+        for (const bad of [
+          { clipIds: ['interview', 'interview'], layout: 'stack', atSec: 0.5 },
+          { clipIds: ['interview', 'missing'], layout: 'stack', atSec: 0.5 },
+          { clipIds: ['interview', 'ocean', 'photo-0'], layout: 'grid', atSec: 0.5 },
+          { clipIds: ['interview', 'photo-0'], layout: 'stack', atSec: 5 },
+          { clipIds: ['interview', 'photo-0'], layout: 'stack', atSec: 0.5, durationSec: 4.7 },
+        ]) {
+          const beforeBad = await getProject(api, projectId);
+          const rejected = await postOp(api, projectId, 'collage', bad);
+          const afterBad = await getProject(api, projectId);
+          assert(
+            `${format}: invalid collage ${JSON.stringify(bad)} never commits`,
+            rejected.status >= 400 && JSON.stringify(afterBad) === JSON.stringify(beforeBad),
+            rejected.text.slice(0, 250),
+          );
+        }
+        for (const properties of [{ reverse: true }, { playbackRate: 2 }]) {
+          const original = await getProject(api, projectId),
+            movie = clipById(original, 'ocean');
+          if (!movie || movie.kind !== 'video') throw new Error('Input video missing');
+          const setup = await postOp(api, projectId, 'apply_commands', {
+            expectedRevision: original.revision,
+            commands: [
+              {
+                commandType: 'upsert_clip',
+                trackId: 'movie-pool',
+                clip: { ...movie, ...properties },
+              },
+            ],
+          });
+          assert(`${format}: unsupported input fixture persists`, setup.status === 200);
+          const beforeBad = await getProject(api, projectId);
+          const rejected = await postOp(api, projectId, 'collage', {
+            clipIds: ['interview', 'ocean'],
+            layout: 'stack',
+            atSec: 0.5,
+          });
+          assert(
+            `${format}: reverse/speed collage never commits`,
+            rejected.status >= 400 &&
+              JSON.stringify(await getProject(api, projectId)) === JSON.stringify(beforeBad),
+          );
+          const undo = await postOp(api, projectId, 'undo', { toRevision: original.revision });
+          assert(
+            `${format}: unsupported-source fixture undo restores original inputs`,
+            undo.status === 200 &&
+              JSON.stringify((await getProject(api, projectId)).tracks) ===
+                JSON.stringify(original.tracks),
+          );
+        }
+        const originalIds = ['interview', 'ocean', 'photo-0', 'photo-1'];
+        for (const [layout, count] of [
+          ['stack', 2],
+          ['stack', 3],
+          ['stack', 4],
+          ['side_by_side', 2],
+          ['side_by_side', 3],
+          ['side_by_side', 4],
+          ['grid', 4],
+        ] as const) {
+          const clipIds =
+            count === 2 ? [originalIds[0]!, originalIds[2]!] : originalIds.slice(0, count);
+          const atSec = layout === 'stack' ? 0.5 : layout === 'side_by_side' ? 1 : 1.5;
+          const tag = `${format}-${layout}-${count}`,
+            before = await getProject(api, projectId);
+          await page.reload();
+          await expect(page.locator('[data-clip-id="interview"]:visible')).toHaveCount(1, {
+            timeout: 30_000,
+          });
+          const mainBox = await page.locator('[data-clip-id="interview"]:visible').boundingBox();
+          if (!mainBox) throw new Error('Main clip is not visible');
+          const pxPerSec = mainBox.width / 5;
+          const snapping = page.getByRole('button', { name: 'Toggle snapping', exact: true });
+          if ((await snapping.getAttribute('aria-pressed')) === 'true') await snapping.click();
+          await seek(page, pxPerSec, atSec);
+          await selectClip(page, clipIds[0]!);
+          await page.keyboard.down('Shift');
+          for (const clipId of clipIds.slice(1)) await selectClip(page, clipId);
+          await page.keyboard.up('Shift');
+          await visible(page.getByRole('button', { name: 'Collage', exact: false })).click();
+          const pending = page.waitForResponse(
+            (r) => r.request().method() === 'POST' && r.url().endsWith(`/${projectId}/ops/collage`),
+          );
+          await page.evaluate(() =>
+            window.addEventListener(
+              'pointerup',
+              () => {
+                (window as unknown as { __collageCommitAt: number }).__collageCommitAt =
+                  performance.now();
+              },
+              { once: true, capture: true },
+            ),
+          );
+          await page
+            .getByRole('menuitem', {
+              name:
+                layout === 'stack'
+                  ? 'Film strips'
+                  : layout === 'side_by_side'
+                    ? 'Side by side'
+                    : 'Four-panel grid',
+              exact: true,
+            })
+            .click();
+          const response = await pending;
+          await response.finished();
+          assert(
+            `${tag}: native collage commits successfully`,
+            response.ok(),
+            (await response.text()).slice(0, 400),
+          );
+          const durationMs = await page.evaluate((url) => {
+            const start = (window as unknown as { __collageCommitAt: number }).__collageCommitAt;
+            const resource = performance
+              .getEntriesByName(url)
+              .filter((e) => e.startTime >= start - 0.5)
+              .at(-1) as PerformanceResourceTiming | undefined;
+            if (!resource || !Number.isFinite(start))
+              throw new Error('Collage commit timing missing');
+            return resource.responseEnd - start;
+          }, response.url());
+          editTimings.push({ tag, durationMs });
+          const edited = await getProject(api, projectId),
+            track = edited.tracks.find((t) => t.name === 'Collage');
+          if (!track || track.kind !== 'overlay') throw new Error('Collage panels missing');
+          const columns = layout === 'side_by_side' ? count : layout === 'grid' ? 2 : 1,
+            rows = layout === 'stack' ? count : layout === 'grid' ? 2 : 1;
+          const panels = track.clips;
+          assert(
+            `${tag}: selected sources fill the requested cells in one atomic revision`,
+            edited.revision === before.revision + 1 &&
+              panels.length === count &&
+              panels.every((panel, index) => {
+                const sourceClip = clipById(before, clipIds[index]!);
+                return (
+                  sourceClip &&
+                  'source' in sourceClip &&
+                  JSON.stringify(panel.source) === JSON.stringify(sourceClip.source) &&
+                  panel.mediaKind === (sourceClip.kind === 'video' ? 'video' : 'image') &&
+                  near(panel.timelineStartSec, atSec, 1e-5) &&
+                  panel.durationSec === 3 &&
+                  near(panel.transform.position.x, ((index % columns) + 0.5) / columns, 1e-5) &&
+                  near(panel.transform.position.y, (Math.floor(index / columns) + 0.5) / rows, 1e-5)
+                );
+              }),
+          );
+          assert(
+            `${tag}: collage preserves every original track, source span, gain key and total duration`,
+            edited.durationSec === before.durationSec &&
+              JSON.stringify(edited.tracks.filter((t) => t.id !== track.id)) ===
+                JSON.stringify(before.tracks),
+          );
+          writeFileSync(
+            join(folder, `${tag}.json`),
+            JSON.stringify(
+              { before, edited, request: response.request().postDataJSON(), durationMs },
+              null,
+              2,
+            ),
+          );
+          await page.reload();
+          const reloaded = await getProject(api, projectId);
+          assert(
+            `${tag}: reload retains the complete collage document`,
+            JSON.stringify(reloaded.tracks) === JSON.stringify(edited.tracks),
+          );
+          const film = join(folder, `${tag}.mp4`);
+          await render(reloaded, film);
+          const meta = JSON.parse(
+            execFileSync(
+              'ffprobe',
+              [
+                '-v',
+                'error',
+                '-select_streams',
+                'v:0',
+                '-show_entries',
+                'stream=width,height,nb_frames,avg_frame_rate:format=duration',
+                '-of',
+                'json',
+                film,
+              ],
+              { encoding: 'utf8' },
+            ),
+          ) as {
+            streams: Array<{
+              width: number;
+              height: number;
+              nb_frames: string;
+              avg_frame_rate: string;
+            }>;
+            format: { duration: string };
+          };
+          assert(
+            `${tag}: encoded film has all150 frames at exact five-second duration`,
+            meta.streams[0]?.width === width &&
+              meta.streams[0]?.height === height &&
+              Number(meta.streams[0]?.nb_frames) === 150 &&
+              meta.streams[0]?.avg_frame_rate === '30/1' &&
+              near(Number(meta.format.duration), 5, 1e-5),
+          );
+          const audioErrors = baselinePcm.map((expected, channel) =>
+            audioError(pcm(film, channel), expected),
+          );
+          assert(
+            `${tag}: encoded stereo sound is continuous and unchanged by picture panels`,
+            audioErrors.every((e) => e.energy > 1e-6 && e.lengthMatches && e.relativeError < 0.02),
+            JSON.stringify(audioErrors),
+          );
+          const previewErrors = [];
+          const actualPreview = await previewChannels(edited);
+          for (const channel of [0, 1])
+            previewErrors.push(audioError(actualPreview[channel]!, baselinePreview[channel]!));
+          assert(
+            `${tag}: native stereo sound retains the original automated gain`,
+            previewErrors.every(
+              (e) => e.energy > 1e-6 && e.lengthMatches && e.relativeError < 0.02,
+            ),
+            JSON.stringify(previewErrors),
+          );
+          for (const ref of outsideRefs) {
+            const actual = join(folder, `${tag}-outside-${ref.at}.png`);
+            await render(edited, actual, ref.at);
+            assert(
+              `${tag} ${ref.at}s: collage changes no picture outside its active window`,
+              readFileSync(actual).equals(readFileSync(ref.path)),
+            );
+          }
+          for (const local of [0.5, 1.5, 2.5]) {
+            const images = [];
+            for (const id of clipIds) {
+              const original = clipById(before, id);
+              if (!original || !('source' in original))
+                throw new Error('Reference picture missing');
+              if (original.kind === 'overlay') {
+                const photo = photos.find((p) => p.assetId === original.source.assetId);
+                if (!photo) throw new Error('Reference still missing');
+                images.push(photo.referenceFile);
+              } else if (original.kind === 'video') {
+                const key = `${original.source.renditionId}:${original.sourceInSec}:${local}`;
+                let path = sourceFrames.get(key);
+                if (!path) {
+                  path = join(folder, `source-${original.id}-${local}.png`);
+                  const control = structuredClone(before);
+                  control.canvas = { ...control.canvas, width: 800, height: 450 };
+                  control.exportSettings = { ...control.exportSettings, width: 800, height: 450 };
+                  control.tracks = [
+                    {
+                      ...before.tracks[0]!,
+                      kind: 'video',
+                      clips: [
+                        {
+                          ...original,
+                          id: 'reference',
+                          timelineStartSec: 0,
+                          durationSec: 5,
+                          keyframes: [],
+                          keyframeOffsetSec: 0,
+                          audioEnabled: false,
+                        },
+                      ],
+                    },
+                  ];
+                  await render(control, path, local);
+                  sourceFrames.set(key, path);
+                }
+                images.push(path);
+              }
+            }
+            const reference = join(folder, `${tag}-${local}-reference.png`),
+              wrongReference = join(folder, `${tag}-${local}-swapped.png`);
+            const physicalReference = (files: string[], target: string) => {
+              const w = width / columns,
+                h = height / rows;
+              const filters = files.map(
+                (_, i) =>
+                  `[${i}:v]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1[p${i}]`,
+              );
+              filters.push(
+                `${files.map((_, i) => `[p${i}]`).join('')}xstack=inputs=${files.length}:layout=${files.map((_, i) => `${(i % columns) * w}_${Math.floor(i / columns) * h}`).join('|')}[out]`,
+              );
+              execFileSync('ffmpeg', [
+                '-v',
+                'error',
+                '-filter_complex_threads',
+                '1',
+                ...files.flatMap((file) => ['-i', file]),
+                '-filter_complex',
+                filters.join(';'),
+                '-map',
+                '[out]',
+                '-frames:v',
+                '1',
+                '-y',
+                target,
+              ]);
+            };
+            physicalReference(images, reference);
+            physicalReference([images[1]!, images[0]!, ...images.slice(2)], wrongReference);
+            const actual = decode(film, width, height, atSec + local),
+              expected = decode(reference, width, height),
+              wrong = decode(wrongReference, width, height);
+            const error = mae(actual, expected),
+              wrongError = mae(actual, wrong);
+            if (tag === 'portrait-stack-2' && local === 0.5) {
+              const rawProfile = join(folder, 'raw-photo-profile-control.png');
+              physicalReference([images[0]!, photos[0]!.file], rawProfile);
+              const raw = decode(rawProfile, width, height);
+              const from = ((width * height) / 2) * 3;
+              const rawCellError = mae(actual.subarray(from), raw.subarray(from));
+              assert(
+                'independent picture oracle rejects the unconverted video-profile PNG',
+                rawCellError > 8,
+                JSON.stringify({ rawCellError }),
+              );
+            }
+            const cells = panels.map((_, i) => {
+              let energy = 0,
+                delta = 0;
+              const w = width / columns,
+                h = height / rows,
+                x0 = (i % columns) * w,
+                y0 = Math.floor(i / columns) * h;
+              for (let y = y0; y < y0 + h; y++)
+                for (let x = x0; x < x0 + w; x++)
+                  for (let c = 0; c < 3; c++) {
+                    const offset = (y * width + x) * 3 + c;
+                    energy += expected[offset]!;
+                    delta += Math.abs(actual[offset]! - expected[offset]!);
+                  }
+              return { energy, error: delta / (w * h * 3) };
+            });
+            assert(
+              `${tag} ${local}s: every decoded cell matches an independent center-fill reference`,
+              error < 8 && cells.every((c) => c.energy > 10000 && c.error < 8),
+              JSON.stringify({ error, cells }),
+            );
+            assert(
+              `${tag} ${local}s: the physical oracle rejects swapped sources`,
+              wrongError > error + 4,
+              JSON.stringify({ error, wrongError }),
+            );
+            const snap = page.getByRole('button', { name: 'Toggle snapping', exact: true });
+            if ((await snap.getAttribute('aria-pressed')) === 'true') await snap.click();
+            await seek(page, pxPerSec, atSec + local);
+            let videoIndex = 1;
+            for (const panel of panels)
+              if (panel.mediaKind === 'video') {
+                const element = page.getByTestId('edit-stage').locator('video').nth(videoIndex++);
+                await expect
+                  .poll(() => element.evaluate((v) => v.readyState))
+                  .toBeGreaterThanOrEqual(2);
+                await expect
+                  .poll(() => element.evaluate((v) => v.currentTime))
+                  .toBeCloseTo(panel.sourceInSec + local, 2);
+              }
+            const native = join(folder, `${tag}-${local}-native.png`);
+            writeFileSync(
+              native,
+              await page
+                .getByTestId('edit-stage')
+                .locator('video')
+                .first()
+                .locator('..')
+                .screenshot(),
+            );
+            const nativeError = mae(decode(native, width, height), expected);
+            assert(
+              `${tag} ${local}s: native collage framing matches the physical reference`,
+              nativeError < 12,
+              JSON.stringify({ nativeError }),
+            );
+            comparisons.push({ tag, local, error, wrongError, nativeError, cells });
+          }
+          const undone = await postOp(api, projectId, 'undo', { toRevision: before.revision }),
+            restored = await getProject(api, projectId);
+          assert(
+            `${tag}: one undo removes every panel and restores all source tracks`,
+            undone.status === 200 &&
+              JSON.stringify(restored.tracks) === JSON.stringify(before.tracks) &&
+              restored.durationSec === before.durationSec,
+          );
+          summary.push({ tag, before, edited, audioErrors, previewErrors, durationMs });
+        }
+      }
+      writeFileSync(
+        join(folder, 'collage-results.json'),
+        JSON.stringify({ editTimings, comparisons, photos }, null, 2),
+      );
+      proof.notes.push(
+        `speed samples: ${JSON.stringify({ collage_save: editTimings.map((sample) => sample.durationMs) })}`,
+      );
+      proof.notes.push(
+        `All native collage pointer-release→response-end samples: ${JSON.stringify(editTimings.map((s) => s.durationMs))}`,
+      );
+      assert(
+        'all21 native collage saves meet the one-second local editor-operation ceiling',
+        editTimings.length === 21 &&
+          editTimings.every((s) => s.durationMs > 0 && s.durationMs <= 1000),
+      );
+    }
     for (const interpolation of !SPEECH_JOURNEY
       ? []
       : ANIMATED_SPEECH_JOURNEY
@@ -1973,7 +2706,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
         wordTiming,
       });
     }
-    for (const interpolation of SPEECH_JOURNEY
+    for (const interpolation of SPEECH_JOURNEY || COLLAGE_JOURNEY
       ? []
       : KEYFRAME_LOCAL
         ? (['linear'] as const)
@@ -4770,13 +5503,15 @@ test('retained project journey: native splits and deletes preserve stored pictur
     proof.record(
       'unexercised release and dialogue paths',
       'SKIP',
-      KEYFRAME_JOURNEY
-        ? 'Native keyframe UI/store→browser compositor and commit timings exercised. Export dialog, hosted Render, real spoken/caption protection, animated jump operation and agent unexercised. All media stayed local.'
-        : ANIMATED_SPEECH_JOURNEY
-          ? 'Native cached Auto-captions and animated Quick cuts/store/browser compositor exercised in four curve modes, with native stereo gain and source-clock samples. Transcript accuracy, fresh STT, varied dialogue/music, Export dialog, hosted Render, speed and agent model unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
-          : SPEECH_JOURNEY
-            ? 'Native cached Auto-captions/Quick cuts/store→browser compositor only. Transcript accuracy, fresh STT, Export dialog, hosted Render, animated jump operation, speed and agent unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
-            : 'Native UI/store→browser compositor only. Export dialog, hosted Render, real spoken/caption protection, animated jump operation, speed and agent unexercised. All media stayed local.',
+      COLLAGE_JOURNEY
+        ? 'Real recorded videos/stills, native collage UI/store/browser export exercised. Physical device output, native Export dialog/hosted Render, effect/motion/parent combinations, agent/MCP model/live production are unexercised. All media and fixtures stayed local.'
+        : KEYFRAME_JOURNEY
+          ? 'Native keyframe UI/store→browser compositor and commit timings exercised. Export dialog, hosted Render, real spoken/caption protection, animated jump operation and agent unexercised. All media stayed local.'
+          : ANIMATED_SPEECH_JOURNEY
+            ? 'Native cached Auto-captions and animated Quick cuts/store/browser compositor exercised in four curve modes, with native stereo gain and source-clock samples. Transcript accuracy, fresh STT, varied dialogue/music, Export dialog, hosted Render, speed and agent model unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
+            : SPEECH_JOURNEY
+              ? 'Native cached Auto-captions/Quick cuts/store→browser compositor only. Transcript accuracy, fresh STT, Export dialog, hosted Render, animated jump operation, speed and agent unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
+              : 'Native UI/store→browser compositor only. Export dialog, hosted Render, real spoken/caption protection, animated jump operation, speed and agent unexercised. All media stayed local.',
     );
   } catch (error) {
     proof.record(
@@ -4824,7 +5559,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
         const { error } = await admin.auth.admin.signOut(session.accessToken, 'local');
         assert('own minted session revoked', !error);
       }
-      if (localSource) {
+      for (const localSource of ownedSources) {
         if (transcriptPath) {
           const { error } = await admin.storage
             .from('brand-profile-assets')
