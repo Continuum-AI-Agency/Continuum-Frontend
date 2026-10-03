@@ -12,6 +12,7 @@ import { clipEffectSpecFromEditorClip } from '@/lib/client-render/executors/time
 import type { TimelineItem } from '../../../types';
 import { clipEffectsToCss } from '../../../utils/render/effectSpec';
 import { orderedVideoClips } from '../editorProjectV2AssemblyModel';
+import { nestedPreviewGroups } from '../nestedSequencePreview';
 import type { OverlayPreviewLayer } from '../overlayPreview';
 import { TimelinePreview } from '../TimelinePreview';
 import { useEditorProjectV2AudioPreview } from '../useEditorProjectV2AudioPreview';
@@ -215,6 +216,11 @@ export const EditStage = memo(function EditStage({
           shaderEffects={activeEffects}
           shaderTimeSec={active ? sec - active.timelineStartSec : 0}
           overlayLayers={overlayLayers}
+          nestedGroups={nestedPreviewGroups({
+            project,
+            playheadSec: sec,
+            overlayLayerFor: (clip, time, space) => layerFor(space, clip, urls.get(clip.id), time),
+          })}
           mediaMuted={audioPreview.active || !active?.audioEnabled || Boolean(main?.muted)}
           motionPath={
             <>

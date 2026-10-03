@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   createEditorProjectV2,
   type EditorProjectV2,
+  editorProjectV2Schema,
   type VideoEditorPoolAsset,
 } from '@continuum/contracts';
 import {
@@ -47,6 +48,55 @@ const round = (sec: number) => Math.round(sec * 1_000) / 1_000;
 
 const blank = () =>
   createEditorProjectV2({ projectId: 'p1', title: 'Edit', width: 1080, height: 1920 });
+
+test('nested lanes split their source clock and bound trims to the child duration', () => {
+  const base = commit(blank(), placeAssetEdit(blank(), video('a', 10), { atSec: 0 }));
+  const project = editorProjectV2Schema.parse({
+    ...base,
+    nestedSequences: [
+      { id: 'child', name: 'Child', canvas: base.canvas, durationSec: 4, tracks: [] },
+    ],
+    tracks: [
+      ...base.tracks,
+      {
+        id: 'groups',
+        name: 'Groups',
+        kind: 'nested_sequence',
+        order: 2,
+        clips: [
+          {
+            id: 'group',
+            kind: 'nested_sequence',
+            sequenceId: 'child',
+            timelineStartSec: 2,
+            durationSec: 1,
+            sourceInSec: 1,
+            playbackRate: 2,
+          },
+        ],
+      },
+    ],
+  });
+  expect(laneTracks(project)[0]?.id).toBe('groups');
+  const split = commit(project, splitEdit(project, ['group'], 2.5));
+  const pieces = split.tracks.find((track) => track.id === 'groups')?.clips;
+  expect(
+    pieces?.map((clip) => [
+      clip.timelineStartSec,
+      clip.durationSec,
+      'sourceInSec' in clip ? clip.sourceInSec : -1,
+    ]),
+  ).toEqual([
+    [2, 0.5, 1],
+    [2.5, 0.5, 2],
+  ]);
+  const extendedStart = commit(project, trimEdit(project, 'group', 'start', 0));
+  const earlier = findClip(extendedStart, 'group')?.clip;
+  expect(earlier?.timelineStartSec).toBe(1.5);
+  expect(earlier && 'sourceInSec' in earlier ? earlier.sourceInSec : -1).toBe(0);
+  const extendedEnd = commit(project, trimEdit(project, 'group', 'end', 9));
+  expect(findClip(extendedEnd, 'group')?.clip.durationSec).toBe(1.5);
+});
 
 describe('magnetic main track', () => {
   test('drops pack end to end, and a drop time picks the slot', () => {

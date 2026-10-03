@@ -726,6 +726,169 @@ describe('timeline editor client render executor', () => {
     ).rejects.toThrow('canonical sequence requires 3.5s');
   });
 
+  it('keeps nested child media, parent motion and text on their own clock under one instance', async () => {
+    globalThis.fetch = (async () => new Response(new Blob(['recorded-media']))) as typeof fetch;
+    const created = createEditorProjectV2({
+      projectId: 'nested-render',
+      title: 'Nested clocks',
+      width: 360,
+      height: 640,
+    });
+    const project = editorProjectV2Schema.parse({
+      ...created,
+      durationSec: 4,
+      tracks: [
+        {
+          id: 'main',
+          name: 'Main',
+          kind: 'video',
+          order: 0,
+          clips: [
+            {
+              id: 'base',
+              kind: 'video',
+              timelineStartSec: 0,
+              durationSec: 4,
+              source: { sourceType: 'library_asset', assetId: 'asset', renditionId: 'version' },
+            },
+          ],
+        },
+        {
+          id: 'nests',
+          name: 'Nests',
+          kind: 'nested_sequence',
+          order: 1,
+          muted: true,
+          clips: [
+            {
+              id: 'instance',
+              kind: 'nested_sequence',
+              sequenceId: 'child',
+              timelineStartSec: 1,
+              durationSec: 2,
+              sourceInSec: 0.5,
+              playbackRate: 2,
+              transform: { opacity: 0.5, scaleX: 0.8, rotationDeg: 15 },
+            },
+          ],
+        },
+      ],
+      nestedSequences: [
+        {
+          id: 'child',
+          name: 'Child',
+          durationSec: 5,
+          canvas: { width: 640, height: 360 },
+          tracks: [
+            {
+              id: 'child-picture',
+              name: 'Child picture',
+              kind: 'overlay',
+              order: 0,
+              clips: [
+                {
+                  id: 'child-overlay',
+                  kind: 'overlay',
+                  mediaKind: 'video',
+                  timelineStartSec: 0.2,
+                  durationSec: 1,
+                  sourceInSec: 2,
+                  source: { sourceType: 'library_asset', assetId: 'asset', renditionId: 'version' },
+                  parentClipId: 'child-driver',
+                  transform: { position: { x: 0.4, y: 0.5, unit: 'normalized' } },
+                },
+              ],
+            },
+            {
+              id: 'child-text',
+              name: 'Child text',
+              kind: 'text',
+              order: 1,
+              clips: [
+                {
+                  id: 'child-title',
+                  kind: 'text',
+                  timelineStartSec: 0,
+                  durationSec: 5,
+                  text: 'CHILD CLOCK',
+                  style: { fontFamily: 'Arial', fontSizePx: 48, fontWeight: 700, color: '#ffffff' },
+                  parentClipId: 'child-driver',
+                },
+              ],
+            },
+            {
+              id: 'child-driver-track',
+              name: 'Driver',
+              kind: 'text',
+              order: 2,
+              enabled: false,
+              clips: [
+                {
+                  id: 'child-driver',
+                  kind: 'text',
+                  timelineStartSec: 0,
+                  durationSec: 5,
+                  text: 'DRIVER',
+                  style: { fontFamily: 'Arial', fontSizePx: 48, fontWeight: 700, color: '#ffffff' },
+                  keyframes: [
+                    {
+                      id: 'a',
+                      property: 'transform.position',
+                      timeSec: 0,
+                      value: { x: 0.5, y: 0.5 },
+                      interpolation: 'linear',
+                    },
+                    {
+                      id: 'b',
+                      property: 'transform.position',
+                      timeSec: 2,
+                      value: { x: 0.7, y: 0.6 },
+                      interpolation: 'linear',
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const plan = await buildTimelineEditorRenderPlan({
+      project,
+      jobInputs: ['base', 'child-overlay'].map((sourceId) => ({
+        sourceId,
+        sourceAssetId: 'asset',
+        sourceRevision: 'version',
+        storage: { bucket: 'media-library', path: 'recorded.mp4' },
+      })),
+      signedUrls: new Map([['media-library\nrecorded.mp4', 'https://signed.example/recorded.mp4']]),
+      signal: new AbortController().signal,
+    });
+    expect(plan.overlays).toHaveLength(0);
+    expect(plan.groups).toHaveLength(1);
+    const group = plan.groups[0]!;
+    expect(group).toMatchObject({
+      startSec: 1,
+      durationSec: 2,
+      sourceInSec: 0.5,
+      playbackRate: 2,
+      childDurationSec: 5,
+      width: 640,
+      height: 360,
+    });
+    expect(group.overlays[0]).toMatchObject({
+      startSec: 0.2,
+      durationSec: 1,
+      trimStartSec: 2,
+      trimEndSec: 3,
+    });
+    expect(resolveTransformAt(group.overlays[0]?.effects, 0.5).offsetX).toBeCloseTo(-0.03, 8);
+    expect(group.captionCues.map((cue) => cue.id)).toEqual(['child-title']);
+    expect(group.captionCues[0]?.style?.fontSizeFrac).toBeCloseTo(48 / 360, 8);
+    expect(resolveTransformAt(group.captionCues[0]?.motion, 0.2).offsetX).toBeCloseTo(0.1, 8);
+    expect(opacityFor(group.effects, 0.5)).toBe(0.5);
+  });
+
   it('fails closed when a requested export contract cannot be honored', () => {
     const created = createEditorProjectV2({
       projectId: '00000000-0000-4000-8000-000000000555',

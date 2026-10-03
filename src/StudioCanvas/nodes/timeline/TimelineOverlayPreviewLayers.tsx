@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { StageTextCanvas } from '@/components/video-studio/motion/StageTextCanvas';
 import type { ResolvedTextOverlay } from '../../utils/render/effectSpec';
 import { hasShaderStack } from '../../utils/render/shaderStack';
 import type { NestedPreviewGroup } from './nestedSequencePreview';
@@ -127,9 +128,16 @@ export function TimelineOverlayPreviewLayers({
           data-testid={`nested-preview-${group.id}`}
           style={group.style}
         >
-          {group.layers.map((layer) => (
-            <OverlayLayer key={layer.id} layer={layer} isPlaying={isPlaying} />
-          ))}
+          <div className="absolute overflow-hidden" style={group.frameStyle}>
+            <TimelineOverlayPreviewLayers layers={group.layers} isPlaying={isPlaying} />
+            <StageTextCanvas
+              clips={group.textClips}
+              project={group.project}
+              sec={group.childTimeSec}
+              width={group.project.canvas.width}
+              height={group.project.canvas.height}
+            />
+          </div>
         </div>
       ))}
     </>

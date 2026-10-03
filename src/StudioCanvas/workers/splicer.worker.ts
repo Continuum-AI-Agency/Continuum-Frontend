@@ -144,6 +144,7 @@ async function handleStartTimeline(
     const result = await composeTimeline({
       items: input.items,
       overlays: input.overlays,
+      groups: input.groups,
       audioTracks: input.audioTracks,
       videoBitrate: input.videoBitrate,
       audioBitrate: input.audioBitrate,

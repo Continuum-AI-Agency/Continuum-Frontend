@@ -1,4 +1,8 @@
-import type { EditorAudioFadeClock, NumericKeyframe } from '@continuum/contracts';
+import {
+  type EditorAudioFadeClock,
+  type NumericKeyframe,
+  nestedChildTimeSec,
+} from '@continuum/contracts';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import {
   type ClipEffectSpec,
@@ -19,6 +23,7 @@ import { appendRange, appendStill, loadMediabunny, throwIfAborted } from './appe
 import { type AudioPlanItem, feedMixdown, mixdownTimelineAudio } from './audioMix';
 import { type CaptionCue, type CaptionWord, groupWordsIntoCues } from './captionCues';
 import { appendOverlapTransition, type CrossDissolveClip } from './crossDissolve';
+import { drawActiveCaption } from './drawCaptions';
 import { drawEffectFrame } from './frameDraw';
 import type { SpliceProgress, SpliceResult } from './spliceClips';
 import { resolveTimelineAudioEnvelope } from './timelineAudioEnvelope';
@@ -95,9 +100,25 @@ export type TimelineAudioRenderItem = {
   keyframeOffsetSec?: number;
 };
 
+/** Child-local layers, rasterized transparently before applying the host instance. */
+export type TimelineNestedRenderGroup = {
+  itemId: string;
+  startSec: number;
+  durationSec: number;
+  sourceInSec: number;
+  playbackRate: number;
+  childDurationSec: number;
+  width: number;
+  height: number;
+  effects?: ClipEffectSpec;
+  overlays: TimelineOverlayRenderItem[];
+  captionCues: CaptionCue[];
+};
+
 export type ComposeTimelineOptions = {
   items: TimelineRenderItem[];
   overlays?: TimelineOverlayRenderItem[];
+  groups?: TimelineNestedRenderGroup[];
   audioTracks?: TimelineAudioRenderItem[];
   videoBitrate?: number;
   audioBitrate?: number;
@@ -141,6 +162,13 @@ type PreparedOverlay = {
   speed: number;
   effects?: ClipEffectSpec;
   dispose: () => void;
+};
+
+type PreparedGroup = {
+  spec: TimelineNestedRenderGroup;
+  canvas: OffscreenCanvas;
+  context: OffscreenCanvasRenderingContext2D;
+  overlays: PreparedOverlay[];
 };
 
 type MediabunnyModule = Awaited<ReturnType<typeof loadMediabunny>>;
@@ -290,6 +318,100 @@ async function prepareOverlays(
   return prepared;
 }
 
+async function drawPreparedOverlays(
+  context: OffscreenCanvasRenderingContext2D,
+  overlays: PreparedOverlay[],
+  sec: number,
+  width: number,
+  height: number,
+): Promise<void> {
+  for (const overlay of overlays) {
+    const local = sec - overlay.startSec;
+    if (local < 0 || local >= overlay.outputDurationSec) continue;
+    const frame = await overlay.frameAt(
+      overlay.kind === 'video' ? overlay.sourceStartSec + local * overlay.speed : 0,
+    );
+    if (!frame) continue;
+    await drawEffectFrame(
+      context,
+      frame.image,
+      frame.width,
+      frame.height,
+      width,
+      height,
+      overlay.effects,
+      local / overlay.outputDurationSec,
+      1,
+      local,
+    );
+    drawTextOverlays(context, resolveTextOverlays(overlay.effects), width, height);
+  }
+}
+
+function disposeGroup(group: PreparedGroup): void {
+  for (const overlay of group.overlays) overlay.dispose();
+  group.canvas.width = 0;
+  group.canvas.height = 0;
+}
+
+async function prepareGroup(
+  mb: MediabunnyModule,
+  spec: TimelineNestedRenderGroup,
+): Promise<PreparedGroup> {
+  const canvas = new OffscreenCanvas(spec.width, spec.height);
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error(`Nested group "${spec.itemId}": no 2D canvas.`);
+  const group: PreparedGroup = { spec, canvas, context, overlays: [] };
+  try {
+    group.overlays.push(...(await prepareOverlays(mb, spec.overlays)));
+    return group;
+  } catch (error) {
+    disposeGroup(group);
+    throw error;
+  }
+}
+
+async function drawPreparedGroups(
+  context: OffscreenCanvasRenderingContext2D,
+  groups: PreparedGroup[],
+  sec: number,
+  width: number,
+  height: number,
+  captionStyle: CaptionStyle | undefined,
+): Promise<void> {
+  for (const group of groups) {
+    const { spec, canvas, context: childContext } = group;
+    const local = sec - spec.startSec;
+    if (local < 0 || local >= spec.durationSec) continue;
+    const childSec = nestedChildTimeSec(
+      {
+        timelineStartSec: spec.startSec,
+        sourceInSec: spec.sourceInSec,
+        playbackRate: spec.playbackRate,
+      },
+      spec.childDurationSec,
+      sec,
+    );
+    childContext.clearRect(0, 0, spec.width, spec.height);
+    await drawPreparedOverlays(childContext, group.overlays, childSec, spec.width, spec.height);
+    for (const cue of spec.captionCues)
+      if (childSec >= cue.startSec && childSec < cue.endSec)
+        drawActiveCaption(childContext, cue, childSec, spec.width, spec.height, captionStyle);
+    await drawEffectFrame(
+      context,
+      canvas,
+      spec.width,
+      spec.height,
+      width,
+      height,
+      spec.effects,
+      local / spec.durationSec,
+      1,
+      local,
+    );
+  }
+}
+
 export async function composeTimeline(options: ComposeTimelineOptions): Promise<SpliceResult> {
   const { items, signal } = options;
   if (items.length < 1) {
@@ -309,6 +431,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
 
   const prepared: PreparedItem[] = [];
   const preparedOverlays: PreparedOverlay[] = [];
+  const preparedGroups: PreparedGroup[] = [];
   const preparedAudio: PreparedTimelineAudio[] = [];
   let targetWidth = 0;
   let targetHeight = 0;
@@ -425,6 +548,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
     if (options.overlays && options.overlays.length > 0) {
       preparedOverlays.push(...(await prepareOverlays(mb, options.overlays)));
     }
+    for (const group of options.groups ?? []) preparedGroups.push(await prepareGroup(mb, group));
     for (const bed of options.frameTimeSec === undefined ? (options.audioTracks ?? []) : []) {
       const input = new mb.Input({
         source: new mb.BlobSource(bed.blob),
@@ -458,34 +582,24 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
       });
     }
     const compositeOverlays: CompositeOverlays | undefined =
-      preparedOverlays.length === 0
+      preparedOverlays.length === 0 && preparedGroups.length === 0
         ? undefined
         : async (overlayCtx, outputTimestampSec) => {
-            for (const overlay of preparedOverlays) {
-              const local = outputTimestampSec - overlay.startSec;
-              if (local < 0 || local >= overlay.outputDurationSec) continue;
-              const sourceSec =
-                overlay.kind === 'video' ? overlay.sourceStartSec + local * overlay.speed : 0;
-              const frame = await overlay.frameAt(sourceSec);
-              if (!frame) continue;
-              const t = overlay.outputDurationSec > 0 ? local / overlay.outputDurationSec : 0;
-              await drawEffectFrame(
-                overlayCtx,
-                frame.image,
-                frame.width,
-                frame.height,
-                targetWidth,
-                targetHeight,
-                overlay.effects,
-                t,
-                1,
-                local,
-              );
-              const textOverlays = resolveTextOverlays(overlay.effects);
-              if (textOverlays.length > 0) {
-                drawTextOverlays(overlayCtx, textOverlays, targetWidth, targetHeight);
-              }
-            }
+            await drawPreparedOverlays(
+              overlayCtx,
+              preparedOverlays,
+              outputTimestampSec,
+              targetWidth,
+              targetHeight,
+            );
+            await drawPreparedGroups(
+              overlayCtx,
+              preparedGroups,
+              outputTimestampSec,
+              targetWidth,
+              targetHeight,
+              captionStyle,
+            );
           };
 
     // Cross-dissolves overlap adjacent clips, so output placement (and the total)
@@ -727,6 +841,7 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
     for (const overlay of preparedOverlays) {
       overlay.dispose();
     }
+    for (const group of preparedGroups) disposeGroup(group);
     for (const audio of preparedAudio) {
       disposeInput(audio.input);
     }

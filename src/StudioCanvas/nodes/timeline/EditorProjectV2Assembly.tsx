@@ -255,7 +255,7 @@ export function EditorProjectV2Assembly({
     (track): track is OverlayTrack => track.kind === 'overlay',
   );
   const overlayLayerAt = (
-    clip: EditorOverlayClip,
+    clip: EditorOverlayClip | EditorVideoClip,
     playheadSec: number,
     space: EditorProjectV2,
   ): OverlayPreviewLayer | null => {
@@ -278,10 +278,11 @@ export function EditorProjectV2Assembly({
     );
     return {
       id: clip.id,
-      kind: clip.mediaKind === 'video' ? 'video' : 'image',
+      kind: clip.kind === 'video' || clip.mediaKind === 'video' ? 'video' : 'image',
       url,
-      sourceSec: (clip.sourceInSec ?? 0) + playheadSec - clip.timelineStartSec,
-      playbackRate: 1,
+      sourceSec:
+        (clip.sourceInSec ?? 0) + effectTimeSec * (clip.kind === 'video' ? clip.playbackRate : 1),
+      playbackRate: clip.kind === 'video' ? clip.playbackRate : 1,
       muted: true,
       volume: 0,
       effects,
@@ -302,7 +303,7 @@ export function EditorProjectV2Assembly({
     : nestedPreviewGroups({
         project,
         playheadSec: playback.playheadSec,
-        overlayLayerFor: (clip, timeSec) => overlayLayerAt(clip, timeSec, project),
+        overlayLayerFor: overlayLayerAt,
       });
 
   const audioTracks = project.tracks.filter(

@@ -234,6 +234,20 @@ describe('runTimelineInWorker export codec', () => {
       items,
       videoCodec: 'vp9',
       container: 'webm',
+      groups: [
+        {
+          itemId: 'child-instance',
+          startSec: 1,
+          durationSec: 2,
+          sourceInSec: 0.5,
+          playbackRate: 2,
+          childDurationSec: 5,
+          width: 640,
+          height: 360,
+          overlays: [],
+          captionCues: [],
+        },
+      ],
       workerFactory: () => worker as unknown as Worker,
     });
 
@@ -242,6 +256,13 @@ describe('runTimelineInWorker export codec', () => {
     if (message.kind === 'start_timeline') {
       expect(message.videoCodec).toBe('vp9');
       expect(message.container).toBe('webm');
+      expect(message.groups?.[0]).toMatchObject({
+        itemId: 'child-instance',
+        sourceInSec: 0.5,
+        playbackRate: 2,
+        width: 640,
+        height: 360,
+      });
     }
     await finish(worker, promise);
   });

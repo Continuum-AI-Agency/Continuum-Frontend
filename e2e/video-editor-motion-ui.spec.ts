@@ -55,6 +55,7 @@ const TEXT_JOURNEY = process.env.VIDEO_EDITOR_TEXT_JOURNEY === '1';
 const PARENT_JOURNEY = process.env.VIDEO_EDITOR_PARENT_JOURNEY === '1';
 const PARENT_RANGE_JOURNEY = process.env.VIDEO_EDITOR_PARENT_RANGE_JOURNEY === '1';
 const CAPTION_JOURNEY = process.env.VIDEO_EDITOR_CAPTION_JOURNEY === '1';
+const NESTED_JOURNEY = process.env.VIDEO_EDITOR_NESTED_JOURNEY === '1';
 const BRAND =
   process.env.CONTINUUM_TEST_BRAND_ID ??
   (LOCAL_CURVE_JOURNEY
@@ -210,7 +211,7 @@ async function seek(page: Page, pxPerSec: number, sec: number) {
 }
 async function selectClip(page: Page, clipId: string) {
   // The middle of the block: its edges are trim handles and transition seams.
-  await page.locator(`[data-clip-id="${clipId}"]:visible`).click();
+  await page.locator(`[data-clip-id="${clipId}"]:visible`).click({ timeout: STEP_MS });
 }
 const visible = (locator: Locator) => locator.filter({ visible: true });
 /** Whether a locator reaches `count` visible matches in time — never throws. */
@@ -1085,15 +1086,17 @@ test('retained project journey: native splits and deletes preserve stored pictur
     'Set VIDEO_EDITOR_CURVE_JOURNEY=1 for the disposable real-store journey.',
   );
   const proof = createBenchRecorder(
-    CAPTION_JOURNEY
-      ? 'videoeditor:motion:e2e:bench:retained-captions'
-      : SPEECH_JOURNEY
-        ? 'videoeditor:motion:e2e:bench:speech-jumps'
-        : PARENT_JOURNEY
-          ? 'videoeditor:motion:e2e:bench:retained-parent'
-          : TEXT_JOURNEY
-            ? 'videoeditor:motion:e2e:bench:retained-text'
-            : 'videoeditor:motion:e2e:bench:retained-project',
+    NESTED_JOURNEY
+      ? 'videoeditor:motion:e2e:bench:retained-nested'
+      : CAPTION_JOURNEY
+        ? 'videoeditor:motion:e2e:bench:retained-captions'
+        : SPEECH_JOURNEY
+          ? 'videoeditor:motion:e2e:bench:speech-jumps'
+          : PARENT_JOURNEY
+            ? 'videoeditor:motion:e2e:bench:retained-parent'
+            : TEXT_JOURNEY
+              ? 'videoeditor:motion:e2e:bench:retained-text'
+              : 'videoeditor:motion:e2e:bench:retained-project',
     [],
   );
   proof.notes.push(
@@ -1121,6 +1124,8 @@ test('retained project journey: native splits and deletes preserve stored pictur
       throw new Error(
         'Caption motion journey requires the text and parent journeys, without speech mode.',
       );
+    if (NESTED_JOURNEY && (!TEXT_JOURNEY || !PARENT_JOURNEY || SPEECH_JOURNEY))
+      throw new Error('Nested journey requires the text and parent journeys, without speech mode.');
     if (SPEECH_JOURNEY && !LOCAL_CURVE_JOURNEY)
       throw new Error('Speech journey fixtures are loopback-only.');
     const fePort = await freePort();
@@ -1332,13 +1337,24 @@ test('retained project journey: native splits and deletes preserve stored pictur
     const render = async (project: EditorProjectV2, path: string) => {
       const request: DurableTimelineRequest = {
         project,
-        inputs: mainClips(project).map((clip) => ({
-          sourceId: clip.id,
-          sourceAssetId: assetId,
-          sourceRevision: versionId,
-          storage: { bucket: version.bucket, path: version.storage_path },
-          url: signed.signedUrl,
-        })),
+        inputs: [
+          ...project.tracks,
+          ...project.nestedSequences.flatMap((sequence) => sequence.tracks),
+        ].flatMap((track) =>
+          track.clips.flatMap((clip) =>
+            'source' in clip && clip.source.sourceType === 'library_asset'
+              ? [
+                  {
+                    sourceId: clip.id,
+                    sourceAssetId: clip.source.assetId,
+                    sourceRevision: clip.source.renditionId!,
+                    storage: { bucket: version.bucket, path: version.storage_path },
+                    url: signed.signedUrl,
+                  },
+                ]
+              : [],
+          ),
+        ),
       };
       const result = await compositor.evaluate(
         (input) => window.__editorV2DurableRenderBench.renderTimeline(input),
@@ -2627,6 +2643,313 @@ test('retained project journey: native splits and deletes preserve stored pictur
           beatUndo.status === 200 &&
             JSON.stringify(beatRestored.tracks) === JSON.stringify(before.tracks) &&
             JSON.stringify(beatRestored.markers) === JSON.stringify(before.markers),
+        );
+      }
+      if (NESTED_JOURNEY) {
+        const sequenceId = `nested-child-${interpolation}`;
+        const instanceId = `nested-instance-${interpolation}`;
+        const nestedTrackId = `nested-track-${interpolation}`;
+        const driver = before.tracks
+          .flatMap((track) => track.clips)
+          .find((clip) => clip.id === `driver-${interpolation}`);
+        if (!driver || driver.kind !== 'text') throw new Error('Nested clock driver missing');
+        const nestedSetup = await postOp(api, projectId, 'apply_commands', {
+          expectedRevision: (await getProject(api, projectId)).revision,
+          commands: [
+            {
+              commandType: 'set_nested_sequence',
+              sequence: {
+                id: sequenceId,
+                name: 'Recorded nested child',
+                durationSec: 4,
+                canvas: { ...before.canvas, width: 640, height: 360 },
+                tracks: [
+                  {
+                    id: `${sequenceId}-picture`,
+                    name: 'Child picture',
+                    kind: 'overlay',
+                    order: 0,
+                    clips: [
+                      {
+                        id: `${sequenceId}-video`,
+                        kind: 'overlay',
+                        mediaKind: 'video',
+                        timelineStartSec: 0,
+                        durationSec: 4,
+                        source: { sourceType: 'library_asset', assetId, renditionId: versionId },
+                        sourceInSec: 0,
+                        parentClipId: `${sequenceId}-driver`,
+                        keyframes: keys.filter((key) => key.property === 'transform.opacity'),
+                      },
+                    ],
+                  },
+                  {
+                    id: `${sequenceId}-titles`,
+                    name: 'Child title',
+                    kind: 'text',
+                    order: 1,
+                    clips: [
+                      {
+                        id: `${sequenceId}-title`,
+                        kind: 'text',
+                        timelineStartSec: 0,
+                        durationSec: 4,
+                        text: 'NEST',
+                        parentClipId: `${sequenceId}-video`,
+                        transform: { position: { x: 0.5, y: 0.65, unit: 'normalized' } },
+                        style: {
+                          fontFamily: 'Arial',
+                          fontSizePx: 52,
+                          fontWeight: 700,
+                          color: '#ff00ff',
+                        },
+                      },
+                    ],
+                  },
+                  {
+                    id: `${sequenceId}-driver-track`,
+                    name: 'Child driver',
+                    kind: 'text',
+                    order: 2,
+                    enabled: false,
+                    clips: [{ ...driver, id: `${sequenceId}-driver` }],
+                  },
+                ],
+              },
+            },
+            {
+              commandType: 'add_track',
+              track: {
+                id: nestedTrackId,
+                name: 'Nested picture and title',
+                kind: 'nested_sequence',
+                order: 4,
+                clips: [
+                  {
+                    id: instanceId,
+                    kind: 'nested_sequence',
+                    sequenceId,
+                    timelineStartSec: 0.5,
+                    durationSec: 3,
+                    sourceInSec: 0.25,
+                    playbackRate: 1.1,
+                    audioEnabled: false,
+                    parentClipId: original.id,
+                    transform: {
+                      position: { x: 0.55, y: 0.6, unit: 'normalized' },
+                      scaleX: 0.8,
+                      scaleY: 0.75,
+                      rotationDeg: 12,
+                      opacity: 0.7,
+                    },
+                    keyframes: [
+                      {
+                        id: 'nest-rotate-a',
+                        property: 'transform.rotationDeg',
+                        timeSec: 0,
+                        value: 12,
+                        interpolation,
+                        ...(interpolation === 'bezier'
+                          ? { easing: { x1: 0.42, y1: 0, x2: 0.58, y2: 1 } }
+                          : {}),
+                        ...(interpolation === 'spring' ? { spring: { bounce: 0.7 } } : {}),
+                      },
+                      {
+                        id: 'nest-rotate-b',
+                        property: 'transform.rotationDeg',
+                        timeSec: 3,
+                        value: 25,
+                        interpolation: 'linear',
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        });
+        assert(
+          `${interpolation}: actual nested media, title and independent clocks persist`,
+          nestedSetup.status === 200,
+          nestedSetup.status === 200 ? undefined : nestedSetup.text.slice(0, 400),
+        );
+        const nestedBefore = await getProject(api, projectId);
+        await page.reload();
+        await expect(page.locator('[data-clip-kind="video"]:visible')).toHaveCount(1, {
+          timeout: 30_000,
+        });
+        const nestedBaselinePath = join(folder, `${interpolation}-nested-baseline.mp4`);
+        await render(nestedBefore, nestedBaselinePath);
+        const samples = [0.8, 1.3, 2.3, 3.2];
+        const nativeNested = async (project: EditorProjectV2, sec: number, label: string) => {
+          await seek(page, pxPerSec, sec);
+          const instance = project.tracks
+            .flatMap((track) => (track.kind === 'nested_sequence' ? track.clips : []))
+            .find(
+              (clip) =>
+                sec >= clip.timelineStartSec && sec < clip.timelineStartSec + clip.durationSec,
+            );
+          if (!instance) throw new Error('Active nested instance missing');
+          const canvas = page
+            .getByTestId(`nested-preview-${instance.id}`)
+            .getByTestId('stage-text');
+          await expect
+            .poll(async () => Number(await canvas.getAttribute('data-playhead-sec')))
+            .toBeCloseTo(
+              instance.sourceInSec + (sec - instance.timelineStartSec) * instance.playbackRate,
+              3,
+            );
+          const frameElement = page
+            .getByTestId('edit-stage')
+            .locator('video')
+            .first()
+            .locator('..');
+          const png = await frameElement.screenshot();
+          writeFileSync(join(folder, `${interpolation}-nested-native-${label}.png`), png);
+          return execFileSync(
+            'ffmpeg',
+            [
+              '-v',
+              'error',
+              '-i',
+              'pipe:0',
+              '-vf',
+              'scale=360:640',
+              '-f',
+              'rawvideo',
+              '-pix_fmt',
+              'rgb24',
+              'pipe:1',
+            ],
+            { input: png, maxBuffer: 4_000_000 },
+          );
+        };
+        const magentaCenter = (pixels: Buffer) => {
+          let mass = 0,
+            x = 0,
+            y = 0;
+          for (let row = 0; row < 640; row++)
+            for (let col = 0; col < 360; col++) {
+              const at = (row * 360 + col) * 3;
+              const strength = Math.min(
+                pixels[at]! - pixels[at + 1]!,
+                pixels[at + 2]! - pixels[at + 1]!,
+              );
+              if (strength < 60) continue;
+              mass += strength;
+              x += strength * col;
+              y += strength * row;
+            }
+          return { mass, x: x / mass, y: y / mass };
+        };
+        const nestedParity = [];
+        for (const [index, sec] of samples.entries()) {
+          const native = magentaCenter(await nativeNested(nestedBefore, sec, `baseline-${index}`));
+          const encoded = magentaCenter(frame(nestedBaselinePath, sec));
+          nestedParity.push({
+            sec,
+            native,
+            encoded,
+            distance: Math.hypot(native.x - encoded.x, native.y - encoded.y),
+          });
+        }
+        assert(
+          `${interpolation}: nested native picture/title placement matches decoded export`,
+          nestedParity.every(
+            ({ native, encoded, distance }) => native.mass > 0 && encoded.mass > 0 && distance < 3,
+          ),
+          JSON.stringify(nestedParity),
+        );
+        const transparentErrors = samples.map((sec) => {
+          const actual = frame(nestedBaselinePath, sec),
+            reference = frame(baselinePath, sec);
+          const count = 360 * 64 * 3;
+          return (
+            actual
+              .subarray(0, count)
+              .reduce((sum, value, i) => sum + Math.abs(value - reference[i]!), 0) / count
+          );
+        });
+        assert(
+          `${interpolation}: nested transparent canvas preserves uncovered recorded picture`,
+          transparentErrors.every((error) => error < 4),
+          JSON.stringify(transparentErrors),
+        );
+        await selectClip(page, instanceId);
+        await seek(page, pxPerSec, 2);
+        await page.locator('body').press('s');
+        const splitNested = await until(
+          () => getProject(api, projectId),
+          (project) =>
+            project.tracks.find((track) => track.id === nestedTrackId)?.clips.length === 2,
+        );
+        const pieces = splitNested.tracks
+          .flatMap((track) =>
+            track.id === nestedTrackId && track.kind === 'nested_sequence' ? track.clips : [],
+          )
+          .toSorted((left, right) => left.timelineStartSec - right.timelineStartSec);
+        assert(
+          `${interpolation}: native nested split retains child source and host keyframe clocks`,
+          pieces.length === 2 &&
+            near(pieces[1]?.sourceInSec, 1.9, 1e-6) &&
+            near(pieces[1]?.keyframeOffsetSec, 1.5, 1e-6) &&
+            JSON.stringify(splitNested.nestedSequences) ===
+              JSON.stringify(nestedBefore.nestedSequences),
+        );
+        await page.reload();
+        await expect(page.locator('[data-clip-kind="video"]:visible')).toHaveCount(1, {
+          timeout: 30_000,
+        });
+        const nestedAfter = await getProject(api, projectId);
+        const nestedEditedPath = join(folder, `${interpolation}-nested-split.mp4`);
+        await render(nestedAfter, nestedEditedPath);
+        const retainedErrors = samples.map((sec) => {
+          const actual = frame(nestedEditedPath, sec),
+            reference = frame(nestedBaselinePath, sec);
+          return (
+            actual.reduce((sum, value, i) => sum + Math.abs(value - reference[i]!), 0) /
+            actual.length
+          );
+        });
+        assert(
+          `${interpolation}: reload and nested split preserve encoded group frames`,
+          retainedErrors.every((error) => error < 4),
+          JSON.stringify(retainedErrors),
+        );
+        const retainedNative = [];
+        for (const [index, sec] of samples.entries()) {
+          const native = magentaCenter(await nativeNested(nestedAfter, sec, `split-${index}`));
+          const expected = nestedParity[index]!.native;
+          retainedNative.push(Math.hypot(native.x - expected.x, native.y - expected.y));
+        }
+        assert(
+          `${interpolation}: native nested split preserves the original child/group placement`,
+          retainedNative.every((error) => error < 1),
+          JSON.stringify(retainedNative),
+        );
+        const nestedUndo = await postOp(api, projectId, 'undo', { toRevision: before.revision });
+        const nestedRestored = await getProject(api, projectId);
+        assert(
+          `${interpolation}: undo restores the original project and removes the temporary nested sequence`,
+          nestedUndo.status === 200 &&
+            JSON.stringify(nestedRestored.tracks) === JSON.stringify(before.tracks) &&
+            JSON.stringify(nestedRestored.nestedSequences) ===
+              JSON.stringify(before.nestedSequences),
+        );
+        writeFileSync(
+          join(folder, `${interpolation}-nested-readback.json`),
+          JSON.stringify(
+            {
+              before: nestedBefore,
+              after: nestedAfter,
+              nestedParity,
+              transparentErrors,
+              retainedErrors,
+              retainedNative,
+            },
+            null,
+            2,
+          ),
         );
       }
       summary.push({

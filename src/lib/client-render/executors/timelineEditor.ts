@@ -3,11 +3,14 @@ import {
   CANVAS_MEDIA_SIGN_ROUTE,
   type CanvasMediaSignResponse,
   type EditorCaptionClip,
+  type EditorOverlayClip,
   type EditorParentMotionBinding,
   type EditorProjectV2,
   type EditorTextClip,
   type EditorTransition,
+  type EditorVideoClip,
   parentPositionTracks,
+  resolveNestedSequence,
 } from '@continuum/contracts';
 import { request } from '@/lib/api/http';
 import { captionAnimationFromEditorId } from '@/lib/clips/captionAnimation';
@@ -21,6 +24,7 @@ import {
   type CaptionStyleOverride,
   DEFAULT_CAPTION_STYLE,
 } from '@/lib/clips/clipCaptionStyle';
+import { viewProjectForSequence } from '@/StudioCanvas/nodes/timeline/editorProjectV2AssemblyModel';
 import { persistTimelineRender } from '@/StudioCanvas/utils/persistTimelineRender';
 import type {
   ClipEffectSpec,
@@ -30,6 +34,7 @@ import type {
 import type { ClipTransition } from '@/StudioCanvas/utils/render/transitions';
 import { overlapInSecFor } from '@/StudioCanvas/utils/render/transitions';
 import { type CaptionCue, wordsForCaptionText } from '@/StudioCanvas/utils/splice/captionCues';
+import type { TimelineNestedRenderGroup } from '@/StudioCanvas/utils/splice/composeTimeline';
 import {
   editorAudioTracks,
   volumeKeyframesOf,
@@ -45,6 +50,7 @@ import type { ClientRenderExecutor } from '../executorRegistry';
 type RenderPlan = {
   items: TimelineWorkerItem[];
   overlays: TimelineOverlayWorkerItem[];
+  groups: TimelineNestedRenderGroup[];
   audioTracks: TimelineAudioWorkerItem[];
   captionCues: CaptionCue[];
   captionStyle: CaptionStyle;
@@ -718,65 +724,37 @@ export async function buildTimelineEditorRenderPlan(input: {
     })),
   );
 
-  const nestedOverlayClips = input.project.tracks
-    .filter((track) => track.kind === 'nested_sequence' && track.enabled && !track.muted)
-    .flatMap((track) =>
-      track.clips.flatMap((instance) => {
-        if (instance.kind !== 'nested_sequence' || !instance.enabled) return [];
-        const nested = input.project.nestedSequences.find(
-          (sequence) => sequence.id === instance.sequenceId,
-        );
-        if (!nested) return [];
-        const rate = instance.playbackRate > 0 ? instance.playbackRate : 1;
-        return nested.tracks
-          .filter(isOverlayTrack)
-          .filter((childTrack) => childTrack.enabled && !childTrack.muted)
-          .flatMap((childTrack) =>
-            childTrack.clips
-              .filter((clip) => clip.enabled)
-              .map((clip) => ({
-                ...clip,
-                timelineStartSec:
-                  instance.timelineStartSec +
-                  Math.max(0, clip.timelineStartSec - instance.sourceInSec) / rate,
-                durationSec: Math.min(instance.durationSec, clip.durationSec / rate),
-              })),
-          );
-      }),
-    );
   const overlayClips = [
     ...input.project.tracks
       .filter(isOverlayTrack)
       .filter((track) => track.enabled && !track.muted)
       .flatMap((track) => track.clips),
-    ...nestedOverlayClips,
     ...videoTracks
       .slice(1)
       .flatMap((track) => track.clips.map((clip) => ({ ...clip, mediaKind: 'video' as const }))),
   ];
-  const overlays: TimelineOverlayWorkerItem[] = await Promise.all(
-    overlayClips
-      .filter((clip) => clip.enabled)
-      .map(async (clip) => ({
-        itemId: clip.id,
-        kind: clip.mediaKind === 'image' ? ('image' as const) : ('video' as const),
-        blob: await blobFor(clip.id),
-        startSec: clip.timelineStartSec,
-        trimStartSec: clip.sourceInSec,
-        ...(clip.mediaKind === 'video'
-          ? {
-              trimEndSec:
-                (clip.sourceInSec ?? 0) +
-                clip.durationSec *
-                  ('playbackRate' in clip && typeof clip.playbackRate === 'number'
-                    ? clip.playbackRate
-                    : 1),
-            }
-          : {}),
-        durationSec: clip.durationSec,
-        muteAudio: true,
-        effects: effectsFor(clip, input.project),
-      })),
+  const overlayFor = async (
+    clip: EditorOverlayClip | EditorVideoClip,
+    space: EditorProjectV2,
+  ): Promise<TimelineOverlayWorkerItem> => ({
+    itemId: clip.id,
+    kind: clip.kind === 'overlay' && clip.mediaKind === 'image' ? 'image' : 'video',
+    blob: await blobFor(clip.id),
+    startSec: clip.timelineStartSec,
+    trimStartSec: clip.sourceInSec,
+    ...(clip.kind === 'video' || clip.mediaKind === 'video'
+      ? {
+          trimEndSec:
+            (clip.sourceInSec ?? 0) +
+            clip.durationSec * (clip.kind === 'video' ? clip.playbackRate : 1),
+        }
+      : {}),
+    durationSec: clip.durationSec,
+    muteAudio: true,
+    effects: effectsFor(clip, space),
+  });
+  const overlays = await Promise.all(
+    overlayClips.filter((clip) => clip.enabled).map((clip) => overlayFor(clip, input.project)),
   );
 
   const audioTracks: TimelineAudioWorkerItem[] = await Promise.all(
@@ -821,18 +799,99 @@ export async function buildTimelineEditorRenderPlan(input: {
     }
   }
   captionCues.sort((left, right) => left.startSec - right.startSec);
+  const fontCues = [...captionCues];
+  const groups: TimelineNestedRenderGroup[] = [];
+  for (const track of input.project.tracks) {
+    if (track.kind !== 'nested_sequence' || !track.enabled) continue;
+    for (const instance of track.clips) {
+      if (!instance.enabled) continue;
+      const nested = resolveNestedSequence(input.project, instance);
+      if (!nested)
+        throw new Error(`Nested instance "${instance.id}" has no available local sequence.`);
+      if (nested.tracks.some((lane) => lane.kind === 'nested_sequence'))
+        throw new Error(
+          `Nested sequence "${nested.id}": another nested sequence is not supported.`,
+        );
+      const child = viewProjectForSequence(input.project, nested.id);
+      if (nested.transitions.length)
+        throw new Error(`Nested sequence "${nested.id}": child transitions are not supported yet.`);
+      if (
+        instance.audioEnabled &&
+        !track.muted &&
+        editorAudioTracks(child).some((lane) =>
+          lane.clips.some(
+            (clip) =>
+              clip.enabled &&
+              ((clip.kind === 'audio' && !clip.muted) ||
+                (clip.kind === 'video' && clip.audioEnabled)),
+          ),
+        )
+      )
+        throw new Error(`Nested sequence "${nested.id}": child audio is not supported yet.`);
+      if (
+        child.tracks.some(
+          (lane) =>
+            lane.kind === 'effect' &&
+            lane.enabled &&
+            !lane.muted &&
+            lane.clips.some((clip) => clip.enabled),
+        )
+      )
+        throw new Error(`Nested sequence "${nested.id}": effect tracks are not supported yet.`);
+      const visible = child.tracks
+        .filter((lane) => lane.enabled && (lane.kind === 'video' || !lane.muted))
+        .toSorted((left, right) => left.order - right.order);
+      const childOverlays = await Promise.all(
+        visible
+          .flatMap((lane) =>
+            lane.kind === 'overlay' || lane.kind === 'video'
+              ? lane.clips.filter((clip) => clip.enabled)
+              : [],
+          )
+          .map((clip) => overlayFor(clip, child)),
+      );
+      const cues = visible
+        .flatMap((lane) =>
+          lane.kind === 'text'
+            ? lane.clips
+                .filter((clip) => clip.enabled)
+                .map((clip) => textCueFor(clip, nested.canvas.height, child))
+            : lane.kind === 'caption' && input.project.exportSettings.captionMode === 'burn_in'
+              ? lane.clips
+                  .filter((clip) => clip.enabled)
+                  .map((clip) => captionCueFor(clip, nested.canvas.height, child))
+              : [],
+        )
+        .sort((left, right) => left.startSec - right.startSec);
+      fontCues.push(...cues);
+      groups.push({
+        itemId: instance.id,
+        startSec: instance.timelineStartSec,
+        durationSec: instance.durationSec,
+        sourceInSec: instance.sourceInSec,
+        playbackRate: instance.playbackRate,
+        childDurationSec: nested.durationSec,
+        width: nested.canvas.width,
+        height: nested.canvas.height,
+        effects: effectsFor(instance, input.project),
+        overlays: childOverlays,
+        captionCues: cues,
+      });
+    }
+  }
   // The export draws text in the faces the preview does. Without their bytes the worker
   // (or Render's headless Chrome) falls back to whatever the platform has, and the type
   // metrics change between the browser and the server. A face that will not load fails
   // the export rather than silently burning in a substitute.
   const captionFonts = await loadCaptionFonts(
-    captionCues.flatMap((cue) =>
+    fontCues.flatMap((cue) =>
       isRegistrableCaptionFont(cue.style?.fontFamily) ? [cue.style?.fontFamily ?? ''] : [],
     ),
   );
   return {
     items,
     overlays,
+    groups,
     audioTracks,
     captionCues,
     captionStyle: DEFAULT_CAPTION_STYLE,

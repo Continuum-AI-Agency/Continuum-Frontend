@@ -2,6 +2,7 @@ import type { ActionId } from '@continuum/contracts';
 import type { CaptionFontPayload } from '@/lib/clips/captionFonts';
 import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { CaptionCue, CaptionWord } from '../utils/splice/captionCues';
+import type { TimelineNestedRenderGroup } from '../utils/splice/composeTimeline';
 import type {
   SingleSourceWorkerRange,
   SpliceWorkerInbound,
@@ -47,6 +48,7 @@ export type RunSingleSourceSpliceInWorkerOptions = {
 export type RunTimelineInWorkerOptions = {
   items: TimelineWorkerItem[];
   overlays?: TimelineOverlayWorkerItem[];
+  groups?: TimelineNestedRenderGroup[];
   audioTracks?: TimelineAudioWorkerItem[];
   videoBitrate?: number;
   audioBitrate?: number;
@@ -301,6 +303,7 @@ export function runTimelineInWorker(
   const {
     items,
     overlays,
+    groups,
     audioTracks,
     videoBitrate,
     audioBitrate,
@@ -322,6 +325,7 @@ export function runTimelineInWorker(
       kind: 'start_timeline',
       items,
       overlays,
+      groups,
       audioTracks,
       videoBitrate,
       audioBitrate,

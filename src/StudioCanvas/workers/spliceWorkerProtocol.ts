@@ -4,6 +4,7 @@ import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { ClipEffectSpec } from '../utils/render/effectSpec';
 import type { ClipTransition } from '../utils/render/transitions';
 import type { CaptionCue, CaptionWord } from '../utils/splice/captionCues';
+import type { TimelineNestedRenderGroup } from '../utils/splice/composeTimeline';
 
 // Encoder selection for timeline renders. Optional and additive: when absent the
 // worker encodes exactly as before (avc in mp4). Only `start_timeline` carries these —
@@ -112,6 +113,7 @@ export type SpliceWorkerInbound =
       kind: 'start_timeline';
       items: TimelineWorkerItem[];
       overlays?: TimelineOverlayWorkerItem[];
+      groups?: TimelineNestedRenderGroup[];
       audioTracks?: TimelineAudioWorkerItem[];
       videoBitrate?: number;
       audioBitrate?: number;

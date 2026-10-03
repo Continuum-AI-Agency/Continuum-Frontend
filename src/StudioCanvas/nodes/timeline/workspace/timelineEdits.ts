@@ -17,6 +17,7 @@ import {
   type EditorTrack,
   type EditorVideoClip,
   mergeSpeech,
+  resolveNestedSequence,
   type VideoEditorPoolAsset,
 } from '@continuum/contracts';
 import {
@@ -35,16 +36,17 @@ export type TimelineEdit = { label: string; forward: EditorCommandDraft[] };
 export type EditBuild = TimelineEdit | null | ((current: EditorProjectV2) => TimelineEdit | null);
 export type ClipRef = { track: EditorTrack; clip: EditorClip };
 type VideoTrack = Extract<EditorTrack, { kind: 'video' }>;
-export type LaneKind = 'video' | 'overlay' | 'text' | 'caption' | 'audio';
+export type LaneKind = 'video' | 'overlay' | 'text' | 'caption' | 'audio' | 'nested_sequence';
 
 const EPSILON = 0.001;
 const DEFAULT_STILL_SEC = 3;
 const LANE_ORDER: Record<LaneKind, number> = {
-  overlay: 0,
-  video: 1,
-  text: 2,
-  caption: 3,
-  audio: 4,
+  nested_sequence: 0,
+  overlay: 1,
+  video: 2,
+  text: 3,
+  caption: 4,
+  audio: 5,
 };
 
 export const isLaneKind = (kind: EditorTrack['kind']): kind is LaneKind => kind in LANE_ORDER;
@@ -67,7 +69,7 @@ export function mainVideoTrack(project: EditorProjectV2): VideoTrack | undefined
 export const mainEndSec = (project: EditorProjectV2): number =>
   orderedVideoClips(mainVideoTrack(project)).reduce((end, clip) => Math.max(end, clipEnd(clip)), 0);
 
-/** Lanes top to bottom: overlays, video (V2 above V1), text, captions, audio. */
+/** Lanes top to bottom: groups, overlays, video (V2 above V1), text, captions, audio. */
 export function laneTracks(project: EditorProjectV2): EditorTrack[] {
   return project.tracks
     .filter((track) => isLaneKind(track.kind))
@@ -227,6 +229,7 @@ function followMainTrack(
 // ── Tracks ────────────────────────────────────────────────────────────────────────────
 
 const TRACK_NAMES: Record<LaneKind, string> = {
+  nested_sequence: 'Group',
   video: 'V',
   overlay: 'Overlay',
   text: 'Text',
@@ -507,7 +510,13 @@ export function trimEdit(
   const { clip, track } = found;
   const rate = rateOf(clip);
   const sourceIn = 'sourceInSec' in clip ? (clip.sourceInSec ?? 0) : 0;
-  const hasMedia = 'source' in clip && !(clip.kind === 'overlay' && clip.mediaKind === 'image');
+  const hasMedia =
+    clip.kind === 'nested_sequence' ||
+    ('source' in clip && !(clip.kind === 'overlay' && clip.mediaKind === 'image'));
+  const sourceDuration =
+    clip.kind === 'nested_sequence'
+      ? resolveNestedSequence(project, clip)?.durationSec
+      : sourceDurationSec;
   const start = clip.timelineStartSec;
   const end = clipEnd(clip);
   let draft: EditorCommandDraft;
@@ -528,8 +537,8 @@ export function trimEdit(
   } else {
     const latest = !hasMedia
       ? Number.POSITIVE_INFINITY
-      : sourceDurationSec
-        ? start + (sourceDurationSec - sourceIn) / rate
+      : sourceDuration
+        ? start + (sourceDuration - sourceIn) / rate
         : end;
     const nextEnd = Math.min(latest, Math.max(toSec, start + MIN_ASSEMBLY_CLIP_SEC));
     if (Math.abs(nextEnd - end) < EPSILON) return null;

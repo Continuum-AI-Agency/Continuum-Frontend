@@ -73,6 +73,7 @@ import {
 
 const HEADER_PX = 132;
 const LANE_PX: Record<string, number> = {
+  nested_sequence: 44,
   video: 52,
   overlay: 44,
   text: 36,
@@ -125,6 +126,7 @@ type Drag =
   | { mode: 'scrub'; pointerId: number };
 
 const TRACK_ICONS: Record<LaneKind, typeof Film> = {
+  nested_sequence: Film,
   video: Film,
   overlay: ImageIcon,
   text: Type,
@@ -633,7 +635,13 @@ export const EditTimeline = memo(function EditTimeline({
                       </ContextMenuItem>
                       <ContextMenuSeparator />
                       <ContextMenuItem onClick={() => onAddTrack(track.kind as LaneKind)}>
-                        <Plus /> Add {track.kind === 'caption' ? 'captions' : track.kind} track
+                        <Plus /> Add{' '}
+                        {track.kind === 'nested_sequence'
+                          ? 'group'
+                          : track.kind === 'caption'
+                            ? 'captions'
+                            : track.kind}{' '}
+                        track
                       </ContextMenuItem>
                       <ContextMenuItem variant="destructive" onClick={() => onRemoveTrack(track)}>
                         <Trash2 /> Delete track

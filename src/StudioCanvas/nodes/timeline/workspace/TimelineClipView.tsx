@@ -34,6 +34,7 @@ export type ClipMenuActions = MotionMenuActions & {
 };
 
 const KIND_STYLES: Record<string, string> = {
+  nested_sequence: 'bg-indigo-600/85 border-indigo-300/60',
   video: 'bg-sky-600/85 border-sky-300/60',
   overlay: 'bg-violet-600/85 border-violet-300/60',
   text: 'bg-amber-600/85 border-amber-300/60',
