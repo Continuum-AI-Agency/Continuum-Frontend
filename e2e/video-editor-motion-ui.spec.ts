@@ -53,6 +53,7 @@ const LOCAL_CURVE_JOURNEY = process.env.VIDEO_EDITOR_CURVE_JOURNEY_LOCAL === '1'
 const SPEECH_JOURNEY = process.env.VIDEO_EDITOR_SPEECH_JOURNEY === '1';
 const TEXT_JOURNEY = process.env.VIDEO_EDITOR_TEXT_JOURNEY === '1';
 const PARENT_JOURNEY = process.env.VIDEO_EDITOR_PARENT_JOURNEY === '1';
+const PARENT_RANGE_JOURNEY = process.env.VIDEO_EDITOR_PARENT_RANGE_JOURNEY === '1';
 const BRAND =
   process.env.CONTINUUM_TEST_BRAND_ID ??
   (LOCAL_CURVE_JOURNEY
@@ -2313,6 +2314,186 @@ test('retained project journey: native splits and deletes preserve stored pictur
         `${interpolation}: undo restores the complete original timeline`,
         undo.status === 200 && JSON.stringify(restored.tracks) === JSON.stringify(before.tracks),
       );
+      if (PARENT_RANGE_JOURNEY) {
+        const cut = await postOp(api, projectId, 'cut_ranges', {
+          ranges: [
+            { startSec: 1, endSec: 2 },
+            { startSec: 3, endSec: 4 },
+          ],
+          ripple: true,
+        });
+        assert(
+          `${interpolation}: automatic range cut commits through the real HTTP operation`,
+          cut.status === 200,
+        );
+        const planned = await getProject(api, projectId);
+        assert(
+          `${interpolation}: automatic multi-track cut is one atomic revision`,
+          planned.revision === restored.revision + 1 &&
+            near(planned.durationSec, 2, 1e-6) &&
+            mainClips(planned).length === 2,
+        );
+        await page.reload();
+        await expect(page.locator('[data-clip-kind="video"]:visible')).toHaveCount(2, {
+          timeout: 30_000,
+        });
+        const nativeErrors = [];
+        for (const [index, sec] of [0.2, 0.7, 1.2, 1.7].entries()) {
+          const actual = await titlePreview(sec, `range-cut-${index}`),
+            expected = baselineTitles[index]!;
+          nativeErrors.push(
+            actual.length === expected.length
+              ? actual.reduce((max, value, i) => Math.max(max, Math.abs(value - expected[i]!)), 0)
+              : Infinity,
+          );
+        }
+        assert(
+          `${interpolation}: automatic range cut preserves original native title pixels`,
+          nativeErrors.every((error) => error <= 1),
+          JSON.stringify(nativeErrors),
+        );
+        const rangePath = join(folder, `${interpolation}-range-cut.mp4`);
+        await render(planned, rangePath);
+        const frameErrors = [0.25, 0.75, 1.25, 1.75].map((sec) => {
+          const actual = frame(rangePath, sec),
+            expected = frame(actualPath, sec);
+          return actual.length && actual.length === expected.length
+            ? actual.reduce((sum, value, i) => sum + Math.abs(value - expected[i]!), 0) /
+                actual.length
+            : Infinity;
+        });
+        assert(
+          `${interpolation}: automatic range cut matches native-cut encoded frames`,
+          frameErrors.every((error) => error < 4),
+          JSON.stringify(frameErrors),
+        );
+        writeFileSync(
+          join(folder, `${interpolation}-range-cut-readback.json`),
+          JSON.stringify({ project: planned, nativeErrors, frameErrors }, null, 2),
+        );
+        const rangeUndo = await postOp(api, projectId, 'undo', { toRevision: restored.revision });
+        const rangeRestored = await getProject(api, projectId);
+        assert(
+          `${interpolation}: one undo restores the automatic cut and parent bindings`,
+          rangeUndo.status === 200 &&
+            JSON.stringify(rangeRestored.tracks) === JSON.stringify(before.tracks),
+        );
+        const marked = await postOp(api, projectId, 'apply_commands', {
+          expectedRevision: rangeRestored.revision,
+          commands: [
+            {
+              commandType: 'set_markers',
+              markers: [0, 1, 2, 3].map((timeSec, beatIndex) => ({
+                id: `beat:${beatIndex}`,
+                kind: 'beat',
+                timeSec,
+                beatIndex,
+                label: `Beat ${beatIndex + 1}`,
+              })),
+            },
+          ],
+        });
+        assert(
+          `${interpolation}: supplied beat grid persists without analysis or provider calls`,
+          marked.status === 200,
+        );
+        const beatBefore = await getProject(api, projectId);
+        const beat = await postOp(api, projectId, 'beat_cut', {
+          mode: 'cut_on_beat',
+          everyNBeats: 1,
+        });
+        assert(
+          `${interpolation}: real beat-split operation commits one revision`,
+          beat.status === 200,
+        );
+        const beatProject = await getProject(api, projectId);
+        assert(
+          `${interpolation}: beat splits preserve exact source spans and timeline duration`,
+          beatProject.revision === beatBefore.revision + 1 &&
+            near(beatProject.durationSec, 4, 1e-6) &&
+            mainClips(beatProject).length === 4 &&
+            mainClips(beatProject).every(
+              (clip, index) =>
+                'sourceInSec' in clip &&
+                near(clip.sourceInSec, index, 1e-6) &&
+                near(clip.timelineStartSec, index, 1e-6) &&
+                near(clip.durationSec, 1, 1e-6),
+            ),
+        );
+        await page.reload();
+        await expect(page.locator('[data-clip-kind="video"]:visible')).toHaveCount(4, {
+          timeout: 30_000,
+        });
+        const beatNativeErrors = [];
+        for (const [index, sec] of [0.2, 0.7, 2.2, 2.7].entries()) {
+          const actual = await titlePreview(sec, `beat-split-${index}`),
+            expected = baselineTitles[index]!;
+          beatNativeErrors.push(
+            actual.length === expected.length
+              ? actual.reduce((max, value, i) => Math.max(max, Math.abs(value - expected[i]!)), 0)
+              : Infinity,
+          );
+        }
+        assert(
+          `${interpolation}: beat splits preserve original native title pixels`,
+          beatNativeErrors.every((error) => error <= 1),
+          JSON.stringify(beatNativeErrors),
+        );
+        const beatPath = join(folder, `${interpolation}-beat-split.mp4`);
+        await render(beatProject, beatPath);
+        const beatFrameErrors = [0.25, 0.75, 2.25, 2.75].map((sec) => {
+          const actual = frame(beatPath, sec),
+            expected = frame(baselinePath, sec);
+          return actual.length && actual.length === expected.length
+            ? actual.reduce((sum, value, i) => sum + Math.abs(value - expected[i]!), 0) /
+                actual.length
+            : Infinity;
+        });
+        assert(
+          `${interpolation}: beat splits preserve original encoded motion`,
+          beatFrameErrors.every((error) => error < 4),
+          JSON.stringify(beatFrameErrors),
+        );
+        const beatPcm = pcm(beatPath);
+        let beatDelta = 0,
+          beatEnergy = 0;
+        for (const sec of [0.25, 0.75, 2.25, 2.75])
+          for (let i = 0; i < 640; i++) {
+            const sample = Math.round(sec * 16000) + i;
+            const actual = beatPcm[sample] ?? 0,
+              reference = expected[sample] ?? 0;
+            beatDelta += (actual - reference) ** 2;
+            beatEnergy += reference ** 2;
+          }
+        assert(
+          `${interpolation}: beat splits preserve independently decoded audio gain and phase`,
+          beatEnergy > 1e-6 && beatDelta / beatEnergy < 0.02,
+          String(beatDelta / beatEnergy),
+        );
+        writeFileSync(
+          join(folder, `${interpolation}-beat-split-readback.json`),
+          JSON.stringify(
+            {
+              project: beatProject,
+              beatNativeErrors,
+              beatFrameErrors,
+              pcmError: beatDelta / beatEnergy,
+            },
+            null,
+            2,
+          ),
+        );
+        const beatUndo = await postOp(api, projectId, 'undo', {
+          toRevision: rangeRestored.revision,
+        });
+        const beatRestored = await getProject(api, projectId);
+        assert(
+          `${interpolation}: undo restores the entire beat edit and its temporary marker grid`,
+          beatUndo.status === 200 &&
+            JSON.stringify(beatRestored.tracks) === JSON.stringify(before.tracks) &&
+            JSON.stringify(beatRestored.markers) === JSON.stringify(before.markers),
+        );
+      }
       summary.push({
         interpolation,
         baseline: before,

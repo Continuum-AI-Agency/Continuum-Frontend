@@ -1569,6 +1569,19 @@ export function applyEditorCommandBatch(
       retainsParentMotion = true;
     } else if (command.commandType === 'set_clip_parent') {
       reparented.add(command.clipId);
+    } else if (command.commandType === 'upsert_clip' || command.commandType === 'add_track') {
+      const supplied = command.commandType === 'upsert_clip' ? [command.clip] : command.track.clips;
+      for (const clip of supplied) {
+        if (!clip.parentMotionBinding) continue;
+        const original = project.tracks
+          .flatMap((track) => track.clips as EditorClip[])
+          .find((candidate) => candidate.id === clip.id);
+        // Range planners carry explicit slice provenance in freshly computed bindings.
+        if (
+          JSON.stringify(clip.parentMotionBinding) !== JSON.stringify(original?.parentMotionBinding)
+        )
+          origins.delete(clip.id);
+      }
     }
     next = applyProductionCommand(next, command);
   }
