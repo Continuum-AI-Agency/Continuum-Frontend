@@ -21,7 +21,7 @@ import {
   motionStrip,
   reviewPlan,
 } from '@continuum/contracts/ai-studio/hyperframes-runtime/review';
-import { calibratedAacConfig } from '@/StudioCanvas/utils/splice/aacTiming';
+import { calibratedAacConfig, trimAacPadding } from '@/StudioCanvas/utils/splice/aacTiming';
 import {
   AUDIO_CHANNELS,
   AUDIO_SAMPLE_RATE,
@@ -601,7 +601,17 @@ export async function renderHyperframesVideo(params: {
     await output.finalize();
     if (!output.target.buffer) throw new Error('Mediabunny produced no MP4 buffer.');
     return {
-      blob: new Blob([output.target.buffer], { type: 'video/mp4' }),
+      blob: new Blob(
+        [
+          await trimAacPadding(
+            mb,
+            output.target.buffer,
+            params.composition.durationSeconds,
+            params.signal,
+          ),
+        ],
+        { type: 'video/mp4' },
+      ),
       width: params.composition.width,
       height: params.composition.height,
       durationSeconds: params.composition.durationSeconds,

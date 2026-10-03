@@ -18,7 +18,7 @@ import {
   overlapInSecFor,
   tailFadeFor,
 } from '../render/transitions';
-import { calibratedAacConfig } from './aacTiming';
+import { calibratedAacConfig, trimAacPadding } from './aacTiming';
 import { appendRange, appendStill, loadMediabunny, throwIfAborted } from './appendRange';
 import { type AudioPlanItem, feedMixdown, mixdownTimelineAudio } from './audioMix';
 import { type CaptionCue, type CaptionWord, groupWordsIntoCues } from './captionCues';
@@ -823,7 +823,11 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
     }
 
     const mimeType = await output.getMimeType().catch(() => 'video/mp4');
-    const blob = new Blob([buffer], { type: mimeType });
+    const encoded =
+      options.container === 'webm'
+        ? buffer
+        : await trimAacPadding(mb, buffer, totalDuration, signal);
+    const blob = new Blob([encoded], { type: mimeType });
     const objectUrl = URL.createObjectURL(blob);
 
     options.onProgress?.({

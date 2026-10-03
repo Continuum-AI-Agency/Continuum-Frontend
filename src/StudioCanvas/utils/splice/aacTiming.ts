@@ -113,3 +113,58 @@ export async function calibratedAacConfig(
     },
   };
 }
+
+/** Trim encoder-only tail packets without decoding or changing the authored sound. */
+export async function trimAacPadding(
+  mb: MediabunnyModule,
+  buffer: ArrayBuffer,
+  durationSec: number,
+  signal?: AbortSignal,
+): Promise<ArrayBuffer> {
+  if (!Number.isFinite(durationSec) || durationSec <= 0)
+    throw new Error('AAC timeline duration must be positive.');
+  const input = new mb.Input({ source: new mb.BufferSource(buffer), formats: [mb.MP4] });
+  const target = new mb.BufferTarget();
+  let output: InstanceType<MediabunnyModule['Output']> | undefined;
+  let finalized = false;
+  try {
+    const audio = await input.getPrimaryAudioTrack();
+    if (
+      !audio ||
+      (await audio.getCodec()) !== 'aac' ||
+      (await audio.computeDuration()) <= durationSec + 1 / AUDIO_SAMPLE_RATE
+    )
+      return buffer;
+    const video = await input.getPrimaryVideoTrack();
+    const codec = await video?.getCodec();
+    if (!video || !codec) throw new Error('Timeline export has no encoded video.');
+    output = new mb.Output({ format: new mb.Mp4OutputFormat(), target });
+    const picture = new mb.EncodedVideoPacketSource(codec);
+    const sound = new mb.EncodedAudioPacketSource('aac');
+    output.addVideoTrack(picture);
+    output.addAudioTrack(sound);
+    await output.start();
+    const videoConfig = await video.getDecoderConfig();
+    const audioConfig = await audio.getDecoderConfig();
+    if (!videoConfig || !audioConfig) throw new Error('Export decoder configuration missing.');
+    for await (const packet of new mb.EncodedPacketSink(video).packets()) {
+      signal?.throwIfAborted();
+      await picture.add(packet, { decoderConfig: videoConfig });
+    }
+    for await (const packet of new mb.EncodedPacketSink(audio).packets()) {
+      signal?.throwIfAborted();
+      if (packet.timestamp >= durationSec) continue;
+      await sound.add(
+        packet.clone({ duration: Math.min(packet.duration, durationSec - packet.timestamp) }),
+        { decoderConfig: audioConfig },
+      );
+    }
+    await output.finalize();
+    finalized = true;
+    if (!target.buffer) throw new Error('AAC tail trim produced no output.');
+    return target.buffer;
+  } finally {
+    input.dispose();
+    if (output && !finalized) await output.cancel().catch(() => undefined);
+  }
+}

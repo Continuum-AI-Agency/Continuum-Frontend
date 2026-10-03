@@ -40,6 +40,7 @@ export type DurableRenderReceipt = {
 export type DurablePixel = { r: number; g: number; b: number };
 
 export type DurableTimelineRequest = {
+  frameTimeSec?: number;
   project: EditorProjectV2;
   inputs: Array<{
     sourceId: string;
@@ -206,6 +207,7 @@ const renderTimeline = async (
   });
   const result = await composeTimeline({
     ...plan,
+    ...(input.frameTimeSec === undefined ? {} : { frameTimeSec: input.frameTimeSec }),
     frameRate:
       input.project.exportSettings.frameRate.numerator /
       input.project.exportSettings.frameRate.denominator,

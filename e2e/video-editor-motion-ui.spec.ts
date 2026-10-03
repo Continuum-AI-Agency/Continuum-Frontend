@@ -8,6 +8,7 @@ import {
   type EditorProjectV2,
   editorCaptionWordSchema,
   editorExportSettingsSchema,
+  editorProjectV2Schema,
   numericKeysForProperty,
   parentPositionDelta,
   positionKeysForProperty,
@@ -54,7 +55,9 @@ import { removeProjects } from './video-editor-workspace/ledger';
 test.describe.configure({ timeout: 900_000 });
 
 const BENCH = 'videoeditor:motion:e2e:bench';
+const KEYFRAME_JOURNEY = process.env.VIDEO_EDITOR_KEYFRAME_JOURNEY === '1';
 const KEYFRAME_HOLD_JOURNEY = process.env.VIDEO_EDITOR_KEYFRAME_HOLD_JOURNEY === '1';
+const KEYFRAME_LOCAL = KEYFRAME_JOURNEY || KEYFRAME_HOLD_JOURNEY;
 const LOCAL_CURVE_JOURNEY = process.env.VIDEO_EDITOR_CURVE_JOURNEY_LOCAL === '1';
 const SPEECH_JOURNEY = process.env.VIDEO_EDITOR_SPEECH_JOURNEY === '1';
 const TEXT_JOURNEY = process.env.VIDEO_EDITOR_TEXT_JOURNEY === '1';
@@ -1069,7 +1072,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
     'Set VIDEO_EDITOR_CURVE_JOURNEY=1 for the disposable real-store journey.',
   );
   const proof = createBenchRecorder(
-    KEYFRAME_HOLD_JOURNEY
+    KEYFRAME_LOCAL
       ? BENCH
       : STAGE_JOURNEY
         ? 'videoeditor:motion:e2e:bench:stage-handles'
@@ -1112,12 +1115,13 @@ test('retained project journey: native splits and deletes preserve stored pictur
   };
   try {
     if (
-      KEYFRAME_HOLD_JOURNEY &&
+      KEYFRAME_LOCAL &&
       (!LOCAL_CURVE_JOURNEY || SPEECH_JOURNEY || TEXT_JOURNEY || PARENT_JOURNEY || NESTED_JOURNEY)
     )
       throw new Error(
-        'Hold keyframe proof requires the loopback recording without other journey modes.',
+        'Keyframe proof requires the loopback recording without other journey modes.',
       );
+    if (KEYFRAME_JOURNEY && KEYFRAME_HOLD_JOURNEY) throw new Error('Select one keyframe journey.');
     if (STAGE_JOURNEY && !NESTED_CONTROLS_JOURNEY)
       throw new Error('Stage journey requires composition controls.');
     if (NESTED_CONTROLS_JOURNEY && !NESTED_AUDIO_JOURNEY)
@@ -1338,9 +1342,10 @@ test('retained project journey: native splits and deletes preserve stored pictur
     await compositor.goto(`${frontend.url}/curve-compositor`);
     await compositor.addScriptTag({ content: readFileSync(bundle, 'utf8'), type: 'module' });
     await compositor.waitForFunction(() => Boolean(window.__editorV2DurableRenderBench));
-    const render = async (project: EditorProjectV2, path: string) => {
+    const render = async (project: EditorProjectV2, path: string, frameTimeSec?: number) => {
       const request: DurableTimelineRequest = {
         project,
+        ...(frameTimeSec === undefined ? {} : { frameTimeSec }),
         inputs: [
           ...project.tracks,
           ...project.nestedSequences.flatMap((sequence) => sequence.tracks),
@@ -1367,7 +1372,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
       writeFileSync(path, Buffer.from(result.base64, 'base64'));
       return result;
     };
-    const previewAudio = async (project: EditorProjectV2, fromSec = 0) => {
+    const previewAudio = async (project: EditorProjectV2, fromSec = 0, channel = 0) => {
       const request: DurableTimelineRequest = {
         project,
         inputs: [
@@ -1388,7 +1393,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
           window.__editorV2DurableRenderBench.previewTimelineAudio(request, fromSec),
         { request, fromSec },
       );
-      const bytes = Buffer.from(result.pcmBase64, 'base64');
+      const bytes = Buffer.from(result.channelsBase64[channel]!, 'base64');
       return new Float32Array(
         bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
       );
@@ -1628,7 +1633,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
       );
       const editedPath = join(folder, 'speech-edited-bare.mp4');
       await render(reloaded, editedPath);
-      const pcm = (file: string) => {
+      const pcm = (file: string, channel: number) => {
         const bytes = execFileSync('ffmpeg', [
           '-v',
           'error',
@@ -1791,7 +1796,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
     }
     for (const interpolation of SPEECH_JOURNEY
       ? []
-      : KEYFRAME_HOLD_JOURNEY
+      : KEYFRAME_LOCAL
         ? (['linear'] as const)
         : (['hold', 'linear', 'bezier', 'spring'] as const)) {
       await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
@@ -1834,7 +1839,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
                   timelineStartSec: 0,
                   durationSec: 4,
                   source: { sourceType: 'library_asset', assetId, renditionId: versionId },
-                  ...(KEYFRAME_HOLD_JOURNEY ? { sourceInSec: 64.7 } : {}),
+                  ...(KEYFRAME_LOCAL ? { sourceInSec: 64.7 } : {}),
                   volume: 0.6,
                   fadeInSec: 3,
                   fadeOutSec: 3,
@@ -1991,8 +1996,8 @@ test('retained project journey: native splits and deletes preserve stored pictur
             commandType: 'set_project_metadata',
             canvas: {
               ...initial.canvas,
-              width: KEYFRAME_HOLD_JOURNEY ? 640 : 360,
-              height: KEYFRAME_HOLD_JOURNEY ? 360 : 640,
+              width: KEYFRAME_LOCAL ? 640 : 360,
+              height: KEYFRAME_LOCAL ? 360 : 640,
             },
             durationSec: 4,
           },
@@ -2000,8 +2005,8 @@ test('retained project journey: native splits and deletes preserve stored pictur
             commandType: 'set_export_settings',
             exportSettings: editorExportSettingsSchema.parse({
               ...initial.exportSettings,
-              width: KEYFRAME_HOLD_JOURNEY ? 640 : 360,
-              height: KEYFRAME_HOLD_JOURNEY ? 360 : 640,
+              width: KEYFRAME_LOCAL ? 640 : 360,
+              height: KEYFRAME_LOCAL ? 360 : 640,
               frameRate: { numerator: 30, denominator: 1 },
               videoBitrateKbps: 1500,
               audioBitrateKbps: 128,
@@ -2029,6 +2034,584 @@ test('retained project journey: native splits and deletes preserve stored pictur
       const box = await page.locator(`[data-clip-id="${original.id}"]:visible`).boundingBox();
       if (!box) throw new Error('Original clip not visible');
       const pxPerSec = box.width / 4;
+      if (KEYFRAME_JOURNEY) {
+        const editTimings: Array<{
+          label: string;
+          durationMs: number;
+          revision: number;
+          serverTiming: string | null;
+        }> = [];
+        const edit = async (
+          label: string,
+          action: () => Promise<unknown>,
+          event: 'pointerup' | 'blur' | 'keydown' = 'pointerup',
+        ) => {
+          const old = await getProject(api, projectId);
+          await page.evaluate((event) => {
+            const capture = (e: Event) => {
+              if (e instanceof KeyboardEvent && !['ArrowRight', 'Delete'].includes(e.key)) return;
+              (window as unknown as { __keyframeCommitAt: number }).__keyframeCommitAt =
+                performance.now();
+              window.removeEventListener(event, capture, true);
+            };
+            window.addEventListener(event, capture, true);
+          }, event);
+          const pending = page.waitForResponse(
+            (r) => r.request().method() === 'POST' && r.url().endsWith(`/${projectId}/commands`),
+          );
+          await action();
+          const response = await pending;
+          await response.finished();
+          const body = (await response.json()) as { project?: unknown };
+          const saved = editorProjectV2Schema.parse(body.project);
+          const timing = await page.evaluate((url) => {
+            const start = (window as unknown as { __keyframeCommitAt: number }).__keyframeCommitAt;
+            const resource = performance
+              .getEntriesByName(url)
+              .filter((e) => e.startTime >= start - 0.5)
+              .at(-1) as PerformanceResourceTiming | undefined;
+            if (!resource || !Number.isFinite(start))
+              throw new Error('Native keyframe save timing missing');
+            return resource.responseEnd - start;
+          }, response.url());
+          const persisted = await getProject(api, projectId);
+          assert(
+            `f22 ${label}: one native revision acknowledges the exact stored edit`,
+            response.ok() &&
+              saved.revision === old.revision + 1 &&
+              persisted.revision === saved.revision &&
+              JSON.stringify(saved.tracks) === JSON.stringify(persisted.tracks),
+          );
+          assert(
+            `f22 ${label}: release-to-response-end timing retained`,
+            Number.isFinite(timing) && timing > 0,
+          );
+          editTimings.push({
+            label,
+            durationMs: timing,
+            revision: saved.revision,
+            serverTiming: response.headers()['server-timing'] ?? null,
+          });
+          writeFileSync(
+            join(folder, 'keyframe-save-timings.json'),
+            JSON.stringify(editTimings, null, 2),
+          );
+          await page.waitForTimeout(250);
+          assert(
+            `f22 ${label}: settling does not create a duplicate revision`,
+            (await getProject(api, projectId)).revision === saved.revision,
+          );
+          return persisted;
+        };
+        const easingAt = (choice: string, u: number) => {
+          if (choice === 'Hold') return 1;
+          if (choice === 'Linear') return u;
+          if (choice === 'Spring') {
+            const bounce = 0.15,
+              d = Math.log(50) * (1.15 - 0.65 * bounce),
+              w = 2 * Math.PI * (0.75 + 2.25 * bounce);
+            return (1 - Math.exp(-d * u) * Math.cos(w * u)) / (1 - Math.exp(-d) * Math.cos(w));
+          }
+          const [x1, y1, x2, y2] = choice === 'Back' ? [0.34, 1.56, 0.64, 1] : [0, 0, 0.58, 1];
+          const bezier = (t: number, a: number, b: number) =>
+            3 * (1 - t) ** 2 * t * a + 3 * (1 - t) * t * t * b + t ** 3;
+          let lo = 0,
+            hi = 1;
+          for (let i = 0; i < 40; i++) {
+            const t = (lo + hi) / 2;
+            if (bezier(t, x1, x2) < u) lo = t;
+            else hi = t;
+          }
+          return bezier((lo + hi) / 2, y1, y2);
+        };
+        const decode = (file: string, time?: number) =>
+          execFileSync(
+            'ffmpeg',
+            [
+              '-v',
+              'error',
+              '-threads',
+              '1',
+              '-i',
+              file,
+              ...(time === undefined ? [] : ['-vf', `select=eq(n\\,${Math.round(time * 30)})`]),
+              '-frames:v',
+              '1',
+              '-f',
+              'rawvideo',
+              '-pix_fmt',
+              'rgb24',
+              'pipe:1',
+            ],
+            { maxBuffer: 4_000_000 },
+          );
+        const mae = (a: Buffer, b: Buffer) =>
+          a.length === b.length
+            ? a.reduce((s, v, i) => s + Math.abs(v - b[i]!), 0) / a.length
+            : Infinity;
+        const moments = (pixels: Buffer) => {
+          let energy = 0,
+            x = 0,
+            y = 0;
+          for (let i = 0; i < pixels.length; i += 3) {
+            const w = pixels[i]! + pixels[i + 1]! + pixels[i + 2]!,
+              p = i / 3;
+            energy += w;
+            x += w * ((p % 640) + 0.5);
+            y += w * (Math.floor(p / 640) + 0.5);
+          }
+          return { energy, x: x / energy, y: y / energy };
+        };
+        const pcm = (file: string, channel: number) => {
+          const raw = execFileSync(
+            'ffmpeg',
+            [
+              '-v',
+              'error',
+              '-i',
+              file,
+              '-vn',
+              '-af',
+              `pan=mono|c0=c${channel}`,
+              '-ar',
+              '48000',
+              '-f',
+              'f32le',
+              'pipe:1',
+            ],
+            { maxBuffer: 4_000_000 },
+          );
+          return new Float32Array(
+            raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength),
+          );
+        };
+        const sourceRaw = execFileSync(
+          'ffmpeg',
+          [
+            '-v',
+            'error',
+            '-i',
+            process.env.VIDEO_EDITOR_RECORDED_FIXTURE!,
+            '-ss',
+            '64.7',
+            '-t',
+            '4',
+            '-vn',
+            '-ac',
+            '2',
+            '-ar',
+            '48000',
+            '-f',
+            'f32le',
+            'pipe:1',
+          ],
+          { maxBuffer: 4_000_000 },
+        );
+        writeFileSync(join(folder, 'f22-source-audio.f32'), sourceRaw);
+        const sourcePcm = new Float32Array(
+          sourceRaw.buffer.slice(sourceRaw.byteOffset, sourceRaw.byteOffset + sourceRaw.byteLength),
+        );
+        const cases = [
+          {
+            label: 'Position',
+            properties: ['transform.position'],
+            initial: { x: 0.35, y: 0.4 },
+            a: { x: 0.4, y: 0.45 },
+            b: { x: 0.6, y: 0.55 },
+            fields: [
+              ['X', '0.4'],
+              ['Y', '0.45'],
+            ],
+          },
+          {
+            label: 'Scale',
+            properties: ['transform.scaleX', 'transform.scaleY'],
+            initial: 0.35,
+            a: 0.4,
+            b: 0.65,
+            fields: [['Scale', '0.4']],
+          },
+          {
+            label: 'Rotation',
+            properties: ['transform.rotationDeg'],
+            initial: -8,
+            a: -12,
+            b: 14,
+            fields: [['Rotation', '-12']],
+          },
+          {
+            label: 'Opacity',
+            properties: ['transform.opacity'],
+            initial: 0.45,
+            a: 0.55,
+            b: 0.75,
+            fields: [['Opacity', '0.55']],
+          },
+          {
+            label: 'Volume',
+            properties: ['audio.volume'],
+            initial: 0.3,
+            a: 0.4,
+            b: 0.8,
+            fields: [['Volume', '0.4']],
+          },
+        ] as const;
+        const comparisons: unknown[] = [];
+        for (const c of cases)
+          for (const [choiceIndex, choice] of [
+            'Linear',
+            'Hold',
+            'Ease out',
+            'Back',
+            'Spring',
+          ].entries()) {
+            const tag = `${c.label}-${choice.replaceAll(' ', '-')}`,
+              offset = choice === 'Back' ? 7.5 : 0;
+            const old = await getProject(api, projectId),
+              video = mainClips(old)[0];
+            if (!video || video.kind !== 'video') throw new Error('Matrix recorded video missing');
+            const seededClip = {
+              ...video,
+              keyframeOffsetSec: offset,
+              fadeInSec: 0,
+              fadeOutSec: 0,
+              volume: 0.7,
+              transform: {
+                ...video.transform,
+                position: { x: 0.5, y: 0.5, unit: 'normalized' },
+                scaleX: 0.45,
+                scaleY: 0.45,
+                rotationDeg: 0,
+                opacity: 0.75,
+              },
+              keyframes: c.properties.flatMap((property) => [
+                {
+                  id: `${property}-a`,
+                  property,
+                  timeSec: 0.5 + offset,
+                  value: c.initial,
+                  interpolation: 'linear',
+                },
+                {
+                  id: `${property}-b`,
+                  property,
+                  timeSec: 3.5 + offset,
+                  value: c.b,
+                  interpolation: 'linear',
+                },
+              ]),
+            };
+            const seeded = await postOp(api, projectId, 'apply_commands', {
+              expectedRevision: old.revision,
+              commands: [
+                {
+                  commandType: 'upsert_clip',
+                  trackId: old.tracks.find((t) => t.clips.some((v) => v.id === video.id))!.id,
+                  clip: seededClip,
+                },
+              ],
+            });
+            assert(
+              `f22 ${tag}: actual recorded source and retained clock seed`,
+              seeded.status === 200,
+              seeded.status === 200 ? undefined : seeded.text.slice(0, 400),
+            );
+            await page.reload();
+            await selectClip(page, video.id);
+            await visible(
+              page.getByRole('button', { name: `${c.label} keyframe at 0.50 s`, exact: true }),
+            ).click();
+            const editor = visible(page.getByTestId('keyframe-editor'));
+            for (const [field, value] of c.fields) {
+              const input = editor.getByLabel(field, { exact: true });
+              await input.fill(value);
+              await edit(`${tag} ${field} value`, () => input.press('Tab'), 'blur');
+            }
+            const edited = await edit(`${tag} easing`, () =>
+              editor.getByRole('button', { name: choice, exact: true }).click(),
+            );
+            const keyed = mainClips(edited)[0];
+            if (!keyed || keyed.kind !== 'video') throw new Error('Matrix edited video missing');
+            const expectedInterpolation =
+              choice === 'Hold'
+                ? 'hold'
+                : choice === 'Spring'
+                  ? 'spring'
+                  : ['Back', 'Ease out'].includes(choice)
+                    ? 'bezier'
+                    : 'linear';
+            assert(
+              `f22 ${tag}: typed key values and easing preserve both linked scale axes and source`,
+              keyed.sourceInSec === 64.7 &&
+                keyed.durationSec === 4 &&
+                keyed.keyframeOffsetSec === offset &&
+                JSON.stringify(keyed.source) === JSON.stringify(video.source) &&
+                keyed.keyframes.filter((k) => k.timeSec === 0.5 + offset).length ===
+                  c.properties.length &&
+                keyed.keyframes
+                  .filter((k) => k.timeSec === 0.5 + offset)
+                  .every(
+                    (k) =>
+                      JSON.stringify(k.value) === JSON.stringify(c.a) &&
+                      k.interpolation === expectedInterpolation,
+                  ),
+            );
+            writeFileSync(join(folder, `${tag}.json`), JSON.stringify(edited, null, 2));
+            const film = join(folder, `${tag}.mp4`);
+            await render(edited, film);
+            const meta = JSON.parse(
+              execFileSync(
+                'ffprobe',
+                [
+                  '-v',
+                  'error',
+                  '-select_streams',
+                  'v:0',
+                  '-show_entries',
+                  'stream=width,height,nb_frames,avg_frame_rate:format=duration',
+                  '-of',
+                  'json',
+                  film,
+                ],
+                { encoding: 'utf8' },
+              ),
+            ) as {
+              streams: Array<{
+                width: number;
+                height: number;
+                nb_frames: string;
+                avg_frame_rate: string;
+              }>;
+              format: { duration: string };
+            };
+            assert(
+              `f22 ${tag}: actual browser export contains 120 recorded frames at exact duration`,
+              meta.streams[0]?.width === 640 &&
+                meta.streams[0]?.height === 360 &&
+                Number(meta.streams[0]?.nb_frames) === 120 &&
+                meta.streams[0]?.avg_frame_rate === '30/1' &&
+                Math.abs(Number(meta.format.duration) - 4) < 1e-5,
+            );
+            for (const sec of [1, 2, 3]) {
+              const u = (sec - 0.5) / 3,
+                k = easingAt(choice, u);
+              const value =
+                typeof c.a === 'number' && typeof c.b === 'number'
+                  ? c.a + (c.b - c.a) * k
+                  : { x: 0.4 + 0.2 * k, y: 0.45 + 0.1 * k };
+              const control = structuredClone(edited),
+                fixed = mainClips(control)[0];
+              if (!fixed || fixed.kind !== 'video')
+                throw new Error('Matrix static reference missing');
+              fixed.keyframes = [];
+              fixed.keyframeOffsetSec = 0;
+              if (c.label === 'Position' && typeof value === 'object')
+                fixed.transform.position = { ...value, unit: 'normalized' };
+              else if (c.label === 'Scale' && typeof value === 'number') {
+                fixed.transform.scaleX = value;
+                fixed.transform.scaleY = value;
+              } else if (c.label === 'Rotation' && typeof value === 'number')
+                fixed.transform.rotationDeg = value;
+              else if (c.label === 'Opacity' && typeof value === 'number')
+                fixed.transform.opacity = value;
+              else if (c.label === 'Volume' && typeof value === 'number') fixed.volume = value;
+              const reference = join(folder, `${tag}-${sec}-reference.png`),
+                image = await render(control, reference, sec);
+              assert(
+                `f22 ${tag} ${sec}s: independent static physical reference is full PNG`,
+                image.contentType === 'image/png' && image.width === 640 && image.height === 360,
+              );
+              const a = decode(film, sec),
+                b = decode(reference),
+                actual = moments(a),
+                expected = moments(b),
+                error = mae(a, b),
+                distance = Math.hypot(actual.x - expected.x, actual.y - expected.y),
+                energyError = Math.abs(actual.energy - expected.energy) / expected.energy;
+              assert(
+                `f22 ${tag} ${sec}s: encoded motion matches independent easing and physical transform`,
+                a.length === 640 * 360 * 3 &&
+                  error <= 2 &&
+                  actual.energy > 10000 &&
+                  expected.energy > 10000 &&
+                  distance <= 2 &&
+                  energyError <= 0.1,
+                JSON.stringify({ value, k, error, distance, energyError }),
+              );
+              await seek(page, pxPerSec, sec);
+              const element = page.getByTestId('edit-stage').locator('video').first();
+              const nativeError = async () =>
+                element.evaluate((v, t) => {
+                  const s = getComputedStyle(v),
+                    m = new DOMMatrix(s.transform),
+                    r = (t.rotationDeg * Math.PI) / 180;
+                  return Math.max(
+                    Math.abs(m.a - Math.cos(r) * t.scaleX) / 0.002,
+                    Math.abs(m.b - Math.sin(r) * t.scaleX) / 0.002,
+                    Math.abs(m.c + Math.sin(r) * t.scaleY) / 0.002,
+                    Math.abs(m.d - Math.cos(r) * t.scaleY) / 0.002,
+                    Math.abs(m.e - (t.position.x - 0.5) * v.clientWidth),
+                    Math.abs(m.f - (t.position.y - 0.5) * v.clientHeight),
+                    Math.abs(Number(s.opacity) - t.opacity) / 0.003,
+                  );
+                }, fixed.transform);
+              await expect.poll(nativeError).toBeLessThanOrEqual(1);
+              await expect
+                .poll(() => element.evaluate((v) => v.currentTime))
+                .toBeCloseTo(64.7 + sec, 2);
+              writeFileSync(
+                join(folder, `${tag}-${sec}-native.png`),
+                await element.locator('..').screenshot(),
+              );
+              assert(
+                `f22 ${tag} ${sec}s: native transform and source clock match physical values`,
+                (await nativeError()) <= 1,
+              );
+              comparisons.push({ tag, sec, k, value, error, distance, energyError });
+            }
+            if (c.label === 'Volume') {
+              const errors = [];
+              for (const channel of [0, 1]) {
+                const encoded = pcm(film, channel),
+                  native = await previewAudio(edited, 0, channel);
+                writeFileSync(
+                  join(folder, `${tag}-native-${channel}.f32`),
+                  Buffer.from(native.buffer),
+                );
+                for (const [index, audio] of [native, encoded].entries()) {
+                  let energy = 0,
+                    error = 0;
+                  for (const sec of [1, 2, 3])
+                    for (let n = 0; n < 1920; n++) {
+                      const at = sec + n / 48000,
+                        gain = 0.4 + 0.4 * easingAt(choice, (at - 0.5) / 3),
+                        expected = (sourcePcm[Math.round(at * 48000) * 2 + channel] ?? 0) * gain;
+                      energy += expected ** 2;
+                      error += ((audio[Math.round(at * 48000)] ?? 0) - expected) ** 2;
+                    }
+                  errors.push({
+                    channel,
+                    output: index === 0 ? 'native Web Audio' : 'encoded AAC',
+                    energy,
+                    relativeError: error / energy,
+                  });
+                }
+              }
+              assert(
+                `f22 ${tag}: native and encoded stereo gain follow independently decoded recorded audio`,
+                errors.every((e) => e.energy > 1e-9 && e.relativeError < 0.05),
+                JSON.stringify(errors),
+              );
+              comparisons.push({ tag, audioErrors: errors });
+            }
+            const reloaded = await getProject(api, projectId);
+            assert(
+              `f22 ${tag}: fresh read retains all authored keys`,
+              JSON.stringify(reloaded.tracks) === JSON.stringify(edited.tracks),
+            );
+            if (choiceIndex === 0) {
+              await seek(page, pxPerSec, 2);
+              const added = await edit(`${c.label} add`, () =>
+                visible(
+                  page.getByRole('button', { name: `Add ${c.label} keyframe`, exact: true }),
+                ).click(),
+              );
+              assert(
+                `f22 ${c.label}: native add retains local and original clock`,
+                keyframesOf(clipById(added, video.id)).filter(
+                  (k) =>
+                    (c.properties as readonly string[]).includes(k.property) &&
+                    Math.abs(k.timeSec - 2 - offset) < 1e-6,
+                ).length === c.properties.length,
+              );
+              let diamond = visible(
+                page.getByRole('button', { name: `${c.label} keyframe at 2.00 s`, exact: true }),
+              );
+              await diamond.focus();
+              const nudged = await edit(
+                `${c.label} nudge`,
+                () => diamond.press('ArrowRight'),
+                'keydown',
+              );
+              assert(
+                `f22 ${c.label}: native arrow nudges one frame without moving the clip`,
+                keyframesOf(clipById(nudged, video.id)).filter(
+                  (k) =>
+                    (c.properties as readonly string[]).includes(k.property) &&
+                    Math.abs(k.timeSec - (2 + 1 / 30) - offset) < 0.001,
+                ).length === c.properties.length && mainClips(nudged)[0]?.timelineStartSec === 0,
+              );
+              diamond = visible(
+                page.getByRole('button', { name: `${c.label} keyframe at 2.03 s`, exact: true }),
+              );
+              const row = await diamond.locator('..').boundingBox(),
+                box = await diamond.boundingBox();
+              if (!row || !box) throw new Error('Keyframe drag geometry missing');
+              await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+              await page.mouse.down();
+              await page.mouse.move(row.x + (row.width * 2.5) / 4, box.y + box.height / 2, {
+                steps: 5,
+              });
+              const dragged = await edit(`${c.label} drag`, () => page.mouse.up());
+              assert(
+                `f22 ${c.label}: native drag retains one key per channel property`,
+                keyframesOf(clipById(dragged, video.id)).filter(
+                  (k) =>
+                    (c.properties as readonly string[]).includes(k.property) &&
+                    Math.abs(k.timeSec - 2.5 - offset) < 0.015,
+                ).length === c.properties.length,
+              );
+              const moving = keyframesOf(clipById(dragged, video.id)).find(
+                (k) =>
+                  (c.properties as readonly string[]).includes(k.property) &&
+                  Math.abs(k.timeSec - 2.5 - offset) < 0.015,
+              );
+              if (!moving) throw new Error('Dragged key missing');
+              diamond = visible(
+                page.getByRole('button', {
+                  name: `${c.label} keyframe at ${(moving.timeSec - offset).toFixed(2)} s`,
+                  exact: true,
+                }),
+              );
+              await diamond.focus();
+              const removed = await edit(
+                `${c.label} delete`,
+                () => diamond.press('Delete'),
+                'keydown',
+              );
+              assert(
+                `f22 ${c.label}: native delete restores the exact pre-gesture keys`,
+                JSON.stringify(mainClips(removed)[0]?.keyframes) ===
+                  JSON.stringify(keyed.keyframes) && mainClips(removed).length === 1,
+              );
+            }
+          }
+        const undo = await postOp(api, projectId, 'undo', { toRevision: before.revision }),
+          restored = await getProject(api, projectId);
+        assert(
+          'f22 persisted undo restores the complete original matrix timeline',
+          undo.status === 200 && JSON.stringify(restored.tracks) === JSON.stringify(before.tracks),
+        );
+        await page.reload();
+        assert(
+          'f22 native reload sees the restored durable keys',
+          JSON.stringify((await getProject(api, projectId)).tracks) ===
+            JSON.stringify(before.tracks),
+        );
+        proof.notes.push(
+          `speed samples: ${JSON.stringify({ keyframe_save: editTimings.map((t) => t.durationMs) })}`,
+        );
+        writeFileSync(
+          join(folder, 'keyframe-matrix-results.json'),
+          JSON.stringify({ comparisons, editTimings }, null, 2),
+        );
+        summary.push({ fixture: 'NASA recorded Library', cases: 25, comparisons, editTimings });
+        proof.record(
+          'f22 native Export dialog, physical device audio, arbitrary expressions/3D/nested combinations, agent and production remain open',
+          'SKIP',
+        );
+        continue;
+      }
       if (KEYFRAME_HOLD_JOURNEY) {
         await selectClip(page, original.id);
         await visible(
@@ -2478,7 +3061,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
         errors.every((value) => value < 4) && near(rendered.durationSec, 2, 1 / 30),
         JSON.stringify(errors),
       );
-      const pcm = (file: string) => {
+      const pcm = (file: string, channel: number) => {
         const bytes = execFileSync('ffmpeg', [
           '-v',
           'error',
@@ -4008,9 +4591,11 @@ test('retained project journey: native splits and deletes preserve stored pictur
     proof.record(
       'unexercised release and dialogue paths',
       'SKIP',
-      SPEECH_JOURNEY
-        ? 'Native cached Auto-captions/Quick cuts/store→browser compositor only. Transcript accuracy, fresh STT, Export dialog, hosted Render, animated jump operation, speed and agent unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
-        : 'Native UI/store→browser compositor only. Export dialog, hosted Render, real spoken/caption protection, animated jump operation, speed and agent unexercised. All media stayed local.',
+      KEYFRAME_JOURNEY
+        ? 'Native keyframe UI/store→browser compositor and commit timings exercised. Export dialog, hosted Render, real spoken/caption protection, animated jump operation and agent unexercised. All media stayed local.'
+        : SPEECH_JOURNEY
+          ? 'Native cached Auto-captions/Quick cuts/store→browser compositor only. Transcript accuracy, fresh STT, Export dialog, hosted Render, animated jump operation, speed and agent unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
+          : 'Native UI/store→browser compositor only. Export dialog, hosted Render, real spoken/caption protection, animated jump operation, speed and agent unexercised. All media stayed local.',
     );
   } catch (error) {
     proof.record(
