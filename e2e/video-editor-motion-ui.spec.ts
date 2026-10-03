@@ -60,6 +60,7 @@ const KEYFRAME_HOLD_JOURNEY = process.env.VIDEO_EDITOR_KEYFRAME_HOLD_JOURNEY ===
 const KEYFRAME_LOCAL = KEYFRAME_JOURNEY || KEYFRAME_HOLD_JOURNEY;
 const LOCAL_CURVE_JOURNEY = process.env.VIDEO_EDITOR_CURVE_JOURNEY_LOCAL === '1';
 const SPEECH_JOURNEY = process.env.VIDEO_EDITOR_SPEECH_JOURNEY === '1';
+const ANIMATED_SPEECH_JOURNEY = process.env.VIDEO_EDITOR_ANIMATED_SPEECH_JOURNEY === '1';
 const TEXT_JOURNEY = process.env.VIDEO_EDITOR_TEXT_JOURNEY === '1';
 const PARENT_JOURNEY = process.env.VIDEO_EDITOR_PARENT_JOURNEY === '1';
 const PARENT_RANGE_JOURNEY = process.env.VIDEO_EDITOR_PARENT_RANGE_JOURNEY === '1';
@@ -1085,7 +1086,9 @@ test('retained project journey: native splits and deletes preserve stored pictur
               : CAPTION_JOURNEY
                 ? 'videoeditor:motion:e2e:bench:retained-captions'
                 : SPEECH_JOURNEY
-                  ? 'videoeditor:motion:e2e:bench:speech-jumps'
+                  ? ANIMATED_SPEECH_JOURNEY
+                    ? 'videoeditor:motion:e2e:bench:animated-speech-jumps'
+                    : 'videoeditor:motion:e2e:bench:speech-jumps'
                   : PARENT_JOURNEY
                     ? 'videoeditor:motion:e2e:bench:retained-parent'
                     : TEXT_JOURNEY
@@ -1134,6 +1137,8 @@ test('retained project journey: native splits and deletes preserve stored pictur
       );
     if (NESTED_JOURNEY && (!TEXT_JOURNEY || !PARENT_JOURNEY || SPEECH_JOURNEY))
       throw new Error('Nested journey requires the text and parent journeys, without speech mode.');
+    if (ANIMATED_SPEECH_JOURNEY && (!SPEECH_JOURNEY || TEXT_JOURNEY || PARENT_JOURNEY))
+      throw new Error('Animated speech requires the loopback speech journey only.');
     if (SPEECH_JOURNEY && !LOCAL_CURVE_JOURNEY)
       throw new Error('Speech journey fixtures are loopback-only.');
     const fePort = await freePort();
@@ -1407,7 +1412,13 @@ test('retained project journey: native splits and deletes preserve stored pictur
           body: (await response.text()).slice(0, 800),
         });
     });
-    if (SPEECH_JOURNEY) {
+    for (const interpolation of !SPEECH_JOURNEY
+      ? []
+      : ANIMATED_SPEECH_JOURNEY
+        ? (['hold', 'linear', 'bezier', 'spring'] as const)
+        : ([undefined] as const)) {
+      const speechFolder = interpolation ? join(folder, interpolation) : folder;
+      mkdirSync(speechFolder, { recursive: true });
       await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
       await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180_000 });
       const projectId = /\/studio\/video\/([0-9a-f-]{36})/.exec(page.url())?.[1];
@@ -1436,6 +1447,56 @@ test('retained project journey: native splits and deletes preserve stored pictur
                   sourceInSec,
                   durationSec,
                   audioEnabled: true,
+                  ...(interpolation
+                    ? {
+                        keyframeOffsetSec: 2.3,
+                        keyframes: [
+                          ...['transform.opacity', 'audio.volume'].flatMap((property) => [
+                            {
+                              id: `${property}:a`,
+                              property,
+                              timeSec: 2.3,
+                              value: property === 'audio.volume' ? 0.25 : 0.65,
+                              interpolation,
+                              ...(interpolation === 'bezier'
+                                ? {
+                                    easing: { x1: 0.42, y1: 0, x2: 0.58, y2: 1 },
+                                    expression: 'wiggle(0.7, 0.03)',
+                                  }
+                                : {}),
+                              ...(interpolation === 'spring'
+                                ? { spring: { bounce: 0.4 }, expression: 'loop' }
+                                : {}),
+                            },
+                            {
+                              id: `${property}:b`,
+                              property,
+                              timeSec: 5.3,
+                              value: property === 'audio.volume' ? 0.85 : 0.9,
+                              interpolation: 'linear',
+                            },
+                          ]),
+                          {
+                            id: 'position:a',
+                            property: 'transform.position',
+                            timeSec: 2.3,
+                            value: { x: 0.42, y: 0.45 },
+                            interpolation,
+                            ...(interpolation === 'bezier'
+                              ? { easing: { x1: 0.42, y1: 0, x2: 0.58, y2: 1 } }
+                              : {}),
+                            ...(interpolation === 'spring' ? { spring: { bounce: 0.4 } } : {}),
+                          },
+                          {
+                            id: 'position:b',
+                            property: 'transform.position',
+                            timeSec: 5.3,
+                            value: { x: 0.58, y: 0.55 },
+                            interpolation: 'linear',
+                          },
+                        ],
+                      }
+                    : {}),
                   source: { sourceType: 'library_asset', assetId, renditionId: versionId },
                 },
               ],
@@ -1511,7 +1572,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
         }));
       const captionWords = wordsOf(captioned);
       writeFileSync(
-        join(folder, 'caption-input-readback.json'),
+        join(speechFolder, 'caption-input-readback.json'),
         JSON.stringify(
           { sourceInSec, durationSec, expectedWords, captionWords, captioned },
           null,
@@ -1538,7 +1599,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
       });
       assert('baseline caption-free export settings persist', bare.status === 200);
       const before = await getProject(api, projectId);
-      const baselinePath = join(folder, 'speech-baseline.mp4');
+      const baselinePath = join(speechFolder, 'speech-baseline.mp4');
       await render(before, baselinePath);
       await page.reload();
       await expect(page.locator('[data-clip-id="speaker"]:visible')).toHaveCount(1, {
@@ -1546,7 +1607,18 @@ test('retained project journey: native splits and deletes preserve stored pictur
       });
       await selectClip(page, 'speaker');
       const jumpStarted = performance.now();
+      const jumpResponse = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'POST' &&
+          response.url().endsWith(`/${projectId}/ops/beat_cut`),
+      );
       await visible(page.getByRole('button', { name: 'Quick cuts', exact: true })).click();
+      const jumped = await jumpResponse;
+      assert(
+        `${interpolation ?? 'plain'}: native Quick cuts accepts the interview`,
+        jumped.ok(),
+        (await jumped.text()).slice(0, 500),
+      );
       const edited = await until(
         () => getProject(api, projectId),
         (p) => p.revision > before.revision,
@@ -1579,7 +1651,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
         );
       const rebased = wordsOf(edited);
       writeFileSync(
-        join(folder, 'speech-jump-readback.json'),
+        join(speechFolder, 'speech-jump-readback.json'),
         JSON.stringify({ expectedWords, rebased, before, edited, removed }, null, 2),
       );
       assert(
@@ -1631,9 +1703,9 @@ test('retained project journey: native splits and deletes preserve stored pictur
         'reload retains the exact cut and caption tracks',
         JSON.stringify(reloaded.tracks) === JSON.stringify(edited.tracks),
       );
-      const editedPath = join(folder, 'speech-edited-bare.mp4');
+      const editedPath = join(speechFolder, 'speech-edited-bare.mp4');
       await render(reloaded, editedPath);
-      const pcm = (file: string, channel: number) => {
+      const pcm = (file: string) => {
         const bytes = execFileSync('ffmpeg', [
           '-v',
           'error',
@@ -1675,36 +1747,140 @@ test('retained project journey: native splits and deletes preserve stored pictur
         JSON.stringify({ testedWords, relativePcmError: delta / energy }),
       );
       const frame = (file: string, sec: number) =>
-        execFileSync('ffmpeg', [
-          '-v',
-          'error',
-          '-ss',
-          String(sec),
-          '-i',
-          file,
-          '-frames:v',
-          '1',
-          '-vf',
-          'scale=64:64,format=rgb24',
-          '-f',
-          'rawvideo',
-          'pipe:1',
-        ]);
-      const frameErrors = clips.map((clip) => {
-        const outputSec =
-          Math.floor((clip.timelineStartSec + clip.durationSec / 2) * 30) / 30 + 1 / 60;
-        const sourceSec = outputSec - clip.timelineStartSec + clip.sourceInSec - sourceInSec;
-        const got = frame(editedPath, outputSec),
-          expected = frame(baselinePath, sourceSec);
-        return got.length && got.length === expected.length
-          ? got.reduce((sum, value, i) => sum + Math.abs(value - expected[i]!), 0) / got.length
-          : Infinity;
-      });
+        execFileSync(
+          'ffmpeg',
+          [
+            '-v',
+            'error',
+            '-ss',
+            String(sec),
+            '-i',
+            file,
+            '-frames:v',
+            '1',
+            '-vf',
+            'scale=640:640,format=rgb24',
+            '-f',
+            'rawvideo',
+            'pipe:1',
+          ],
+          { maxBuffer: 2 * 1024 * 1024 },
+        );
+      const frameErrors = clips.flatMap((clip) =>
+        (interpolation ? [1 / 3, 2 / 3] : [0.5]).map((fraction) => {
+          const outputSec =
+            Math.floor((clip.timelineStartSec + clip.durationSec * fraction) * 30) / 30 + 1 / 60;
+          const sourceSec = outputSec - clip.timelineStartSec + clip.sourceInSec - sourceInSec;
+          const got = frame(editedPath, outputSec),
+            expected = frame(baselinePath, sourceSec);
+          return got.length && got.length === expected.length
+            ? got.reduce((sum, value, i) => sum + Math.abs(value - expected[i]!), 0) / got.length
+            : Infinity;
+        }),
+      );
       assert(
         'independent decoded picture follows each retained speech source span',
         frameErrors.every((error) => error < 4),
         JSON.stringify(frameErrors),
       );
+      const nativeSamples = [],
+        previewErrors = [];
+      if (interpolation) {
+        const original = mainClips(before)[0];
+        if (!original || original.kind !== 'video') throw new Error('Animated source missing');
+        assert(
+          `${interpolation}: every retained picture keeps authored keys and original clock`,
+          clips.every(
+            (clip) =>
+              JSON.stringify(clip.keyframes) === JSON.stringify(original.keyframes) &&
+              near(clip.keyframeOffsetSec, 2.3 + clip.sourceInSec - sourceInSec, 1e-5),
+          ),
+        );
+        const snapping = page.getByRole('button', { name: 'Toggle snapping', exact: true });
+        if ((await snapping.getAttribute('aria-pressed')) === 'true') await snapping.click();
+        const block = await page.locator(`[data-clip-id="${clips[0]!.id}"]:visible`).boundingBox();
+        if (!block) throw new Error('Animated retained clip is not visible');
+        const pxPerSec = block.width / clips[0]!.durationSec;
+        for (const clip of clips)
+          for (const fraction of [1 / 3, 2 / 3]) {
+            const at = Math.floor((clip.timelineStartSec + clip.durationSec * fraction) * 30) / 30;
+            const sourceLocal = at - clip.timelineStartSec + clip.sourceInSec - sourceInSec;
+            const position = samplePositionTrack(
+              positionKeysForProperty(original.keyframes),
+              sourceLocal,
+              original.transform.position,
+              original.keyframeOffsetSec,
+            );
+            const opacity = sampleNumericTrack(
+              numericKeysForProperty(original.keyframes, 'transform.opacity'),
+              sourceLocal,
+              original.transform.opacity,
+              original.keyframeOffsetSec,
+            );
+            await seek(page, pxPerSec, at);
+            const element = page.getByTestId('edit-stage').locator('video').first();
+            const native = () =>
+              element.evaluate(
+                (v, expected) => {
+                  const style = getComputedStyle(v),
+                    m = new DOMMatrix(style.transform);
+                  return {
+                    error: Math.max(
+                      Math.abs(m.e - (expected.position.x - 0.5) * v.clientWidth),
+                      Math.abs(m.f - (expected.position.y - 0.5) * v.clientHeight),
+                      Math.abs(Number(style.opacity) - expected.opacity) / 0.003,
+                    ),
+                    sourceTime: v.currentTime,
+                  };
+                },
+                { position, opacity },
+              );
+            await expect.poll(async () => (await native()).error).toBeLessThanOrEqual(1);
+            await expect
+              .poll(async () => (await native()).sourceTime)
+              .toBeCloseTo(sourceInSec + sourceLocal, 2);
+            nativeSamples.push({ at, sourceLocal, position, opacity, ...(await native()) });
+            writeFileSync(
+              join(speechFolder, `native-${nativeSamples.length}.png`),
+              await element.locator('..').screenshot(),
+            );
+          }
+        assert(
+          `${interpolation}: native picture samples retain source, motion and expression phase`,
+          nativeSamples.length === clips.length * 2 &&
+            nativeSamples.every((sample) => sample.error <= 1),
+        );
+        for (const channel of [0, 1]) {
+          const baseline = await previewAudio(before, 0, channel),
+            actual = await previewAudio(edited, 0, channel);
+          writeFileSync(
+            join(speechFolder, `preview-before-${channel}.f32`),
+            Buffer.from(baseline.buffer),
+          );
+          writeFileSync(
+            join(speechFolder, `preview-after-${channel}.f32`),
+            Buffer.from(actual.buffer),
+          );
+          let energy = 0,
+            error = 0;
+          for (const [index, word] of expectedWords.entries()) {
+            if (word.endSec - word.startSec < 0.04) continue;
+            const center = (word.startSec + word.endSec) / 2,
+              outputCenter = (rebased[index]!.startSec + rebased[index]!.endSec) / 2;
+            for (let i = -480; i < 480; i++) {
+              const wanted = baseline[Math.round(center * 48000) + i] ?? 0;
+              error += ((actual[Math.round(outputCenter * 48000) + i] ?? 0) - wanted) ** 2;
+              energy += wanted ** 2;
+            }
+          }
+          previewErrors.push({ channel, energy, relativeError: error / energy });
+        }
+        assert(
+          `${interpolation}: native stereo gain retains every measured spoken-word phase`,
+          previewErrors.every((sample) => sample.energy > 1e-6 && sample.relativeError < 0.02),
+          JSON.stringify(previewErrors),
+        );
+      }
       const burn = await postOp(api, projectId, 'apply_commands', {
         expectedRevision: reloaded.revision,
         commands: [
@@ -1723,7 +1899,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
         'caption burn consumes the same persisted speech and caption tracks',
         JSON.stringify(burnedProject.tracks) === JSON.stringify(edited.tracks),
       );
-      const burnedPath = join(folder, 'speech-edited-captions.mp4');
+      const burnedPath = join(speechFolder, 'speech-edited-captions.mp4');
       await render(burnedProject, burnedPath);
       const encoded = JSON.parse(
         execFileSync(
@@ -1782,6 +1958,9 @@ test('retained project journey: native splits and deletes preserve stored pictur
       );
       summary.push({
         fixture: 'nasa-melvin',
+        interpolation,
+        nativeSamples,
+        previewErrors,
         sourceInSec,
         durationSec,
         before,
@@ -4593,9 +4772,11 @@ test('retained project journey: native splits and deletes preserve stored pictur
       'SKIP',
       KEYFRAME_JOURNEY
         ? 'Native keyframe UI/store→browser compositor and commit timings exercised. Export dialog, hosted Render, real spoken/caption protection, animated jump operation and agent unexercised. All media stayed local.'
-        : SPEECH_JOURNEY
-          ? 'Native cached Auto-captions/Quick cuts/store→browser compositor only. Transcript accuracy, fresh STT, Export dialog, hosted Render, animated jump operation, speed and agent unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
-          : 'Native UI/store→browser compositor only. Export dialog, hosted Render, real spoken/caption protection, animated jump operation, speed and agent unexercised. All media stayed local.',
+        : ANIMATED_SPEECH_JOURNEY
+          ? 'Native cached Auto-captions and animated Quick cuts/store/browser compositor exercised in four curve modes, with native stereo gain and source-clock samples. Transcript accuracy, fresh STT, varied dialogue/music, Export dialog, hosted Render, speed and agent model unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
+          : SPEECH_JOURNEY
+            ? 'Native cached Auto-captions/Quick cuts/store→browser compositor only. Transcript accuracy, fresh STT, Export dialog, hosted Render, animated jump operation, speed and agent unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
+            : 'Native UI/store→browser compositor only. Export dialog, hosted Render, real spoken/caption protection, animated jump operation, speed and agent unexercised. All media stayed local.',
     );
   } catch (error) {
     proof.record(
