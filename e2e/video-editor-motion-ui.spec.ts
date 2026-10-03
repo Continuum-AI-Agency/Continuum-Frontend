@@ -54,6 +54,7 @@ const SPEECH_JOURNEY = process.env.VIDEO_EDITOR_SPEECH_JOURNEY === '1';
 const TEXT_JOURNEY = process.env.VIDEO_EDITOR_TEXT_JOURNEY === '1';
 const PARENT_JOURNEY = process.env.VIDEO_EDITOR_PARENT_JOURNEY === '1';
 const PARENT_RANGE_JOURNEY = process.env.VIDEO_EDITOR_PARENT_RANGE_JOURNEY === '1';
+const CAPTION_JOURNEY = process.env.VIDEO_EDITOR_CAPTION_JOURNEY === '1';
 const BRAND =
   process.env.CONTINUUM_TEST_BRAND_ID ??
   (LOCAL_CURVE_JOURNEY
@@ -1084,13 +1085,15 @@ test('retained project journey: native splits and deletes preserve stored pictur
     'Set VIDEO_EDITOR_CURVE_JOURNEY=1 for the disposable real-store journey.',
   );
   const proof = createBenchRecorder(
-    SPEECH_JOURNEY
-      ? 'videoeditor:motion:e2e:bench:speech-jumps'
-      : PARENT_JOURNEY
-        ? 'videoeditor:motion:e2e:bench:retained-parent'
-        : TEXT_JOURNEY
-          ? 'videoeditor:motion:e2e:bench:retained-text'
-          : 'videoeditor:motion:e2e:bench:retained-project',
+    CAPTION_JOURNEY
+      ? 'videoeditor:motion:e2e:bench:retained-captions'
+      : SPEECH_JOURNEY
+        ? 'videoeditor:motion:e2e:bench:speech-jumps'
+        : PARENT_JOURNEY
+          ? 'videoeditor:motion:e2e:bench:retained-parent'
+          : TEXT_JOURNEY
+            ? 'videoeditor:motion:e2e:bench:retained-text'
+            : 'videoeditor:motion:e2e:bench:retained-project',
     [],
   );
   proof.notes.push(
@@ -1114,6 +1117,10 @@ test('retained project journey: native splits and deletes preserve stored pictur
     expect(ok, `${name}${detail ? `: ${detail}` : ''}`).toBe(true);
   };
   try {
+    if (CAPTION_JOURNEY && (!TEXT_JOURNEY || !PARENT_JOURNEY || SPEECH_JOURNEY))
+      throw new Error(
+        'Caption motion journey requires the text and parent journeys, without speech mode.',
+      );
     if (SPEECH_JOURNEY && !LOCAL_CURVE_JOURNEY)
       throw new Error('Speech journey fixtures are loopback-only.');
     const fePort = await freePort();
@@ -1865,6 +1872,44 @@ test('retained project journey: native splits and deletes preserve stored pictur
                 },
               ]
             : []),
+          ...(CAPTION_JOURNEY
+            ? [
+                {
+                  commandType: 'add_track',
+                  track: {
+                    id: `captions-${interpolation}`,
+                    name: 'Retained captions',
+                    kind: 'caption',
+                    order: 3,
+                    clips: [0, 1, 2, 3].map((index) => ({
+                      id: `caption-${interpolation}-${index}`,
+                      kind: 'caption',
+                      timelineStartSec: index,
+                      durationSec: 1,
+                      text: 'BEAT',
+                      language: 'en',
+                      words: [{ text: 'BEAT', startSec: 0.1, endSec: 0.9, emphasis: true }],
+                      parentClipId: `source-${interpolation}`,
+                      highlightMode: 'word',
+                      highlightColor: '#ff00ff',
+                      style: {
+                        fontFamily: 'Arial',
+                        fontSizePx: 64,
+                        fontWeight: 700,
+                        color: '#ffffff',
+                      },
+                      transform: {
+                        position: { x: 0.4, y: 0.75, unit: 'normalized' },
+                        scaleX: 1.1,
+                        scaleY: 0.9,
+                        rotationDeg: 5,
+                        opacity: 0.65,
+                      },
+                    })),
+                  },
+                },
+              ]
+            : []),
           ...(PARENT_JOURNEY
             ? [
                 {
@@ -1928,6 +1973,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
               frameRate: { numerator: 30, denominator: 1 },
               videoBitrateKbps: 1500,
               audioBitrateKbps: 128,
+              ...(CAPTION_JOURNEY ? { captionMode: 'burn_in' } : {}),
             }),
           },
         ],
@@ -1972,6 +2018,69 @@ test('retained project journey: native splits and deletes preserve stored pictur
       if (TEXT_JOURNEY) {
         for (const [index, sec] of [0.2, 0.7, 2.2, 2.7].entries())
           baselineTitles.push(await titlePreview(sec, `baseline-${index}`));
+      }
+      if (CAPTION_JOURNEY) {
+        const centroid = (pixels: Buffer, channels: 3 | 4) => {
+          let mass = 0,
+            x = 0,
+            y = 0;
+          for (let row = 320; row < 640; row++)
+            for (let col = 0; col < 360; col++) {
+              const at = (row * 360 + col) * channels;
+              // Isolate this fixture's magenta caption, excluding white titles and picture.
+              const strength = Math.min(
+                pixels[at]! - pixels[at + 1]!,
+                pixels[at + 2]! - pixels[at + 1]!,
+              );
+              if (strength < 60) continue;
+              const weight = strength * (channels === 4 ? pixels[at + 3]! / 255 : 1);
+              mass += weight;
+              x += weight * col;
+              y += weight * row;
+            }
+          return { mass, x: x / mass, y: y / mass };
+        };
+        const positions = baselineTitles.map((pixels) => centroid(pixels, 4));
+        assert(
+          `${interpolation}: native caption canvas paints visible inherited motion`,
+          positions.every((position) => position.mass > 0) &&
+            Math.hypot(positions[1]!.x - positions[0]!.x, positions[1]!.y - positions[0]!.y) > 0.5,
+          JSON.stringify(positions),
+        );
+        const parity = [0.2, 0.7, 2.2, 2.7].map((sec, index) => {
+          const pixels = execFileSync(
+            'ffmpeg',
+            [
+              '-v',
+              'error',
+              '-ss',
+              String(sec),
+              '-i',
+              baselinePath,
+              '-frames:v',
+              '1',
+              '-f',
+              'rawvideo',
+              '-pix_fmt',
+              'rgb24',
+              'pipe:1',
+            ],
+            { maxBuffer: 4_000_000 },
+          );
+          const encoded = centroid(pixels, 3),
+            native = positions[index]!;
+          return {
+            sec,
+            native,
+            encoded,
+            distance: Math.hypot(encoded.x - native.x, encoded.y - native.y),
+          };
+        });
+        assert(
+          `${interpolation}: independently decoded caption placement matches the native preview within one pixel`,
+          parity.every(({ encoded, distance }) => encoded.mass > 0 && distance <= 1),
+          JSON.stringify(parity),
+        );
       }
       for (const sec of [1, 2, 3]) {
         await page.bringToFront();
@@ -2032,6 +2141,15 @@ test('retained project journey: native splits and deletes preserve stored pictur
             .locator(`[data-clip-id="${title.id}"]:visible`)
             .click({ modifiers: ['Shift'] });
         }
+        if (CAPTION_JOURNEY) {
+          const caption = current.tracks
+            .flatMap((track) => (track.kind === 'caption' ? track.clips : []))
+            .find((item) => near(item.timelineStartSec, clip.timelineStartSec, 1 / 60));
+          if (!caption) throw new Error('Matching caption piece missing');
+          await page
+            .locator(`[data-clip-id="${caption.id}"]:visible`)
+            .click({ modifiers: ['Shift'] });
+        }
         await visible(
           page.getByRole('button', { name: 'Ripple delete selection', exact: true }),
         ).click();
@@ -2089,6 +2207,23 @@ test('retained project journey: native splits and deletes preserve stored pictur
               near(title.textAnimationClock.offsetSec, index * 2, 1e-6) &&
               near(title.keyframeOffsetSec ?? 0, index * 2, 1e-6),
           ),
+        );
+      }
+      if (CAPTION_JOURNEY) {
+        const captions = edited.tracks.flatMap((track) =>
+          track.kind === 'caption' ? track.clips : [],
+        );
+        assert(
+          `${interpolation}: reload retains two caption ranges, word emphasis and ancestor bindings`,
+          captions.length === 2 &&
+            captions.every(
+              (clip, index) =>
+                near(clip.timelineStartSec, index, 1e-6) &&
+                clip.words[0]?.emphasis === true &&
+                near(clip.words[0].startSec, 0.1, 1e-6) &&
+                near(clip.words[0].endSec, 0.9, 1e-6) &&
+                (clip.parentMotionBinding?.ancestors.length ?? 0) > 0,
+            ),
         );
       }
       if (TEXT_JOURNEY) {

@@ -274,6 +274,22 @@ describe('timeline editor client render executor', () => {
                 assetId: 'asset-shot',
                 renditionId: 'version-shot',
               },
+              keyframes: [
+                {
+                  id: 'parent-a',
+                  property: 'transform.position',
+                  timeSec: 0,
+                  value: { x: 0.5, y: 0.5 },
+                  interpolation: 'linear',
+                },
+                {
+                  id: 'parent-b',
+                  property: 'transform.position',
+                  timeSec: 4,
+                  value: { x: 0.7, y: 0.5 },
+                  interpolation: 'linear',
+                },
+              ],
             },
           ],
         },
@@ -288,13 +304,15 @@ describe('timeline editor client render executor', () => {
               timelineStartSec: 2,
               durationSec: 1.5,
               kind: 'caption',
+              parentClipId: 'shot',
               text: 'Late words',
               language: 'en',
               words: [
-                { text: 'Late', startSec: 0.25, endSec: 0.6 },
+                { text: 'Late', startSec: 0.25, endSec: 0.6, emphasis: true },
                 { text: 'words', startSec: 0.7, endSec: 1.2 },
               ],
               style: { fontFamily: 'Inter', fontSizePx: 64, fontWeight: 700, color: '#ffffff' },
+              transform: { opacity: 0.5 },
             },
           ],
         },
@@ -318,6 +336,10 @@ describe('timeline editor client render executor', () => {
       [2.25, 2.6],
       [2.7, 3.2],
     ]);
+    expect(plan.captionCues[0]?.words[0]?.emphasis).toBe(true);
+    expect(plan.captionCues[0]?.motion).toBeDefined();
+    expect(resolveTransformAt(plan.captionCues[0]?.motion, 0.5).offsetX).toBeCloseTo(0.1375, 8);
+    expect(opacityFor(plan.captionCues[0]?.motion, 0.5)).toBeCloseTo(0.5, 8);
   });
 
   it('preserves V2 transitions, layers, audio, captions, text, looks, and keyframes', async () => {

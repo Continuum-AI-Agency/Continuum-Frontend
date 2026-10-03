@@ -1,7 +1,6 @@
 'use client';
 
 import type {
-  EditorCaptionClip,
   EditorClip,
   EditorOverlayClip,
   EditorProjectV2,
@@ -10,10 +9,8 @@ import type {
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { StageTextCanvas } from '@/components/video-studio/motion/StageTextCanvas';
 import { clipEffectSpecFromEditorClip } from '@/lib/client-render/executors/timelineEditor';
-import type { CaptionStyle } from '@/lib/clips/clipCaptionStyle';
 import type { TimelineItem } from '../../../types';
 import { clipEffectsToCss } from '../../../utils/render/effectSpec';
-import type { CaptionCue } from '../../../utils/splice/captionCues';
 import { orderedVideoClips } from '../editorProjectV2AssemblyModel';
 import type { OverlayPreviewLayer } from '../overlayPreview';
 import { TimelinePreview } from '../TimelinePreview';
@@ -86,41 +83,6 @@ function layerFor(
       transformOrigin: `${clip.transform.anchorX * 100}% ${clip.transform.anchorY * 100}%`,
     },
     textOverlays: [],
-  };
-}
-
-/** Caption clips carry timeline-time words — the same reading the burn-in makes. */
-function captionFor(
-  clip: EditorCaptionClip,
-  canvasHeight: number,
-): { cue: CaptionCue; style: CaptionStyle } {
-  const words =
-    clip.words.length > 0
-      ? // Words count from the clip's start; the preview, like the burn-in, adds it.
-        clip.words.map((word) => ({
-          text: word.text,
-          startSec: clip.timelineStartSec + word.startSec,
-          endSec: clip.timelineStartSec + word.endSec,
-          ...(word.emphasis ? { emphasis: true } : {}),
-        }))
-      : [{ text: clip.text, startSec: clip.timelineStartSec, endSec: clipEnd(clip) }];
-  return {
-    cue: { id: clip.id, startSec: clip.timelineStartSec, endSec: clipEnd(clip), words },
-    style: {
-      textColor: clip.style.color,
-      highlightColor:
-        clip.highlightMode === 'none' ? clip.style.color : (clip.highlightColor ?? '#ffd400'),
-      outlineColor: clip.style.outlineColor ?? '#000000',
-      fontFamily: clip.style.fontFamily,
-      fontWeight: clip.style.fontWeight,
-      fontSizeFrac: clip.style.fontSizePx / canvasHeight,
-      outlineWidthFrac:
-        clip.style.fontSizePx > 0 ? clip.style.outlineWidthPx / clip.style.fontSizePx : 0,
-      position: { xFrac: clip.transform.position.x, yFrac: clip.transform.position.y },
-      ...(clip.style.backgroundColor
-        ? { backgroundColor: clip.style.backgroundColor, backgroundMode: 'line' as const }
-        : {}),
-    },
   };
 }
 
@@ -211,10 +173,9 @@ export const EditStage = memo(function EditStage({
   const textClips = visible.flatMap((track) =>
     track.kind === 'text' ? track.clips.filter((clip) => clip.enabled) : [],
   );
-  const captionClip = visible
-    .flatMap((track) => (track.kind === 'caption' ? track.clips : []))
-    .find((clip) => activeAt(clip, sec));
-  const caption = captionClip ? captionFor(captionClip, canvasHeight) : undefined;
+  const captionClips = visible.flatMap((track) =>
+    track.kind === 'caption' ? track.clips.filter((clip) => clip.enabled) : [],
+  );
 
   const selected = selectedClipId ? findClip(project, selectedClipId)?.clip : undefined;
   const handlesFor =
@@ -254,13 +215,11 @@ export const EditStage = memo(function EditStage({
           shaderEffects={activeEffects}
           shaderTimeSec={active ? sec - active.timelineStartSec : 0}
           overlayLayers={overlayLayers}
-          caption={caption?.cue}
-          captionStyle={caption?.style}
           mediaMuted={audioPreview.active || !active?.audioEnabled || Boolean(main?.muted)}
           motionPath={
             <>
               <StageTextCanvas
-                clips={textClips}
+                clips={[...captionClips, ...textClips]}
                 project={project}
                 sec={sec}
                 width={canvasWidth}

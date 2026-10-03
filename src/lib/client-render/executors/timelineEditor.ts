@@ -2,6 +2,7 @@ import {
   CANVAS_MEDIA_SIGN_MAX_ITEMS,
   CANVAS_MEDIA_SIGN_ROUTE,
   type CanvasMediaSignResponse,
+  type EditorCaptionClip,
   type EditorParentMotionBinding,
   type EditorProjectV2,
   type EditorTextClip,
@@ -519,6 +520,30 @@ export function textCueFor(
   };
 }
 
+/** Clip-relative speech words and motion, shared by the native stage and burn-in. */
+export function captionCueFor(
+  clip: EditorCaptionClip,
+  canvasHeight: number,
+  project?: EditorProjectV2,
+): CaptionCue {
+  const endSec = clip.timelineStartSec + clip.durationSec;
+  return {
+    id: clip.id,
+    startSec: clip.timelineStartSec,
+    endSec,
+    words: clip.words.length
+      ? clip.words.map((word) => ({
+          text: word.text,
+          startSec: clip.timelineStartSec + word.startSec,
+          endSec: clip.timelineStartSec + word.endSec,
+          ...(word.emphasis ? { emphasis: true } : {}),
+        }))
+      : wordsForCaptionText(clip.text, clip.timelineStartSec, endSec),
+    style: captionStyleFor(clip, canvasHeight),
+    motion: textMotionFor(clip, project),
+  };
+}
+
 async function signedUrlsFor(
   brandId: string,
   inputs: Array<{ storage?: { bucket: string; path: string } }>,
@@ -785,25 +810,7 @@ export async function buildTimelineEditorRenderPlan(input: {
     for (const track of input.project.tracks.filter(isCaptionTrack)) {
       if (!track.enabled || track.muted) continue;
       for (const clip of track.clips.filter((candidate) => candidate.enabled)) {
-        captionCues.push({
-          id: clip.id,
-          startSec: clip.timelineStartSec,
-          endSec: clip.timelineStartSec + clip.durationSec,
-          // Word times are seconds from the clip's start (editorCaptionWordSchema).
-          words:
-            clip.words.length > 0
-              ? clip.words.map((word) => ({
-                  text: word.text,
-                  startSec: clip.timelineStartSec + word.startSec,
-                  endSec: clip.timelineStartSec + word.endSec,
-                }))
-              : wordsForCaptionText(
-                  clip.text,
-                  clip.timelineStartSec,
-                  clip.timelineStartSec + clip.durationSec,
-                ),
-          style: captionStyleFor(clip, input.project.canvas.height),
-        });
+        captionCues.push(captionCueFor(clip, input.project.canvas.height, input.project));
       }
     }
   }
