@@ -15,6 +15,7 @@ interface Renderer {
   input: Texture;
   targets: [Target, Target];
   outputCanvas: OffscreenCanvas;
+  videoCanvas?: OffscreenCanvas;
   output: Surface;
   shader: Effect;
   sampler: GPUSampler;
@@ -40,6 +41,8 @@ const EFFECT_KIND: Record<ShaderEffectV1['effectId'], number> = {
   pixelate: 5,
   chromatic_aberration: 6,
   vhs: 7,
+  dust: 8,
+  light_leaks: 9,
 };
 
 let rendererPromise: Promise<Renderer> | undefined;
@@ -223,8 +226,19 @@ async function render(options: RenderShaderStackFrameOptions): Promise<ImageBitm
   if (enabled.length === 0) return createImageBitmap(options.source);
   const renderer = await acquireRenderer(width, height);
   renderer.asyncError = undefined;
+  let uploadSource = options.source;
+  if (typeof HTMLVideoElement !== 'undefined' && options.source instanceof HTMLVideoElement) {
+    // Direct video upload can interpret its transfer profile differently from Canvas 2D.
+    // Normalize once to the same browser RGB pixels used by native crop and export.
+    renderer.videoCanvas ??= new OffscreenCanvas(width, height);
+    const context = renderer.videoCanvas.getContext('2d');
+    if (!context) throw new Error('Could not normalize the video shader source.');
+    context.clearRect(0, 0, width, height);
+    context.drawImage(options.source, 0, 0, width, height);
+    uploadSource = renderer.videoCanvas;
+  }
   renderer.gpu.gpu.queue.copyExternalImageToTexture(
-    { source: options.source as GPUCopyExternalImageSource },
+    { source: uploadSource as GPUCopyExternalImageSource },
     { texture: renderer.input.gpu },
     [width, height],
   );

@@ -214,6 +214,7 @@ export function TimelinePreview({
       >
         <video
           ref={videoRef}
+          crossOrigin="anonymous"
           playsInline
           muted={false}
           className="absolute inset-0 h-full w-full object-contain transition-opacity"

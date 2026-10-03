@@ -225,6 +225,8 @@ function effectsFor(itemId: string, effects: ClipEffectSpec | undefined): Editor
   for (const [effectId, parameters] of [
     ['vignette', effects.vignette?.amount ? { amount: effects.vignette.amount } : undefined],
     ['film_grain', effects.filmGrain?.amount ? { amount: effects.filmGrain.amount } : undefined],
+    ['dust', effects.dust?.amount ? { amount: effects.dust.amount } : undefined],
+    ['light_leaks', effects.lightLeaks?.amount ? { amount: effects.lightLeaks.amount } : undefined],
     [
       'pixelate',
       effects.pixelate && effects.pixelate.blockPx >= 2

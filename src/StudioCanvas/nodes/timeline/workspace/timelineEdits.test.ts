@@ -7,6 +7,7 @@ import {
 } from '@continuum/contracts';
 import {
   clipEnd,
+  clipRows,
   deleteClipsEdit,
   duplicateClipsEdit,
   finalizeEdit,
@@ -424,4 +425,23 @@ describe('other lanes follow the main track', () => {
     project = commit(project, setTrackStateEdit(main, { muted: true }));
     expect(mainVideoTrack(project)?.id).toBe(main.id);
   });
+});
+
+test('simultaneous clips get distinct reachable rows and adjacent clips reuse them without mutation', () => {
+  const project = commit(blank(), placeAssetEdit(blank(), video('a', 4), { atSec: 0 }));
+  const source = project.tracks[0].clips[0];
+  const clips = [
+    { ...source, id: 'late', timelineStartSec: 4, durationSec: 2 },
+    { ...source, id: 'a', timelineStartSec: 1, durationSec: 3 },
+    { ...source, id: 'b', timelineStartSec: 1, durationSec: 3 },
+    { ...source, id: 'c', timelineStartSec: 1, durationSec: 3 },
+    { ...source, id: 'd', timelineStartSec: 1, durationSec: 3 },
+  ];
+  const original = structuredClone(clips),
+    layout = clipRows(clips);
+  expect(layout.count).toBe(4);
+  expect(new Set(['a', 'b', 'c', 'd'].map((id) => layout.rows.get(id))).size).toBe(4);
+  expect(layout.rows.get('late')).toBe(0);
+  expect(clips).toEqual(original);
+  expect(clipRows([]).count).toBe(1);
 });

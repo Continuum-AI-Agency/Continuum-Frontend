@@ -124,6 +124,8 @@ const PIXEL_LOOKS = new Set([
   'tint',
   'vignette',
   'film_grain',
+  'dust',
+  'light_leaks',
   'chromatic_aberration',
   'vhs',
   'chroma_key',

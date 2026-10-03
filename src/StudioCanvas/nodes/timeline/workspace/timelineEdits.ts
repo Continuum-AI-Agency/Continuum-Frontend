@@ -51,6 +51,23 @@ const LANE_ORDER: Record<LaneKind, number> = {
 
 export const isLaneKind = (kind: EditorTrack['kind']): kind is LaneKind => kind in LANE_ORDER;
 export const clipEnd = (clip: EditorClip): number => clip.timelineStartSec + clip.durationSec;
+/** Keep simultaneous clips reachable without changing their authored tracks or timing. */
+export function clipRows(clips: readonly EditorClip[]): {
+  rows: Map<string, number>;
+  count: number;
+} {
+  const ends: number[] = [],
+    rows = new Map<string, number>();
+  for (const clip of clips.toSorted((a, b) => a.timelineStartSec - b.timelineStartSec)) {
+    // ponytail: scan visible rows; use an end-time heap if dense tracks make this measurable.
+    const reusable = ends.findIndex((end) => end <= clip.timelineStartSec);
+    const row = reusable < 0 ? ends.length : reusable;
+    ends[row] = clipEnd(clip);
+    rows.set(clip.id, row);
+  }
+  return { rows, count: Math.max(1, ends.length) };
+}
+
 const rateOf = (clip: EditorClip): number =>
   'playbackRate' in clip && clip.playbackRate > 0 ? clip.playbackRate : 1;
 const newId = (): string => crypto.randomUUID();

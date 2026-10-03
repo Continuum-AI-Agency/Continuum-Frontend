@@ -384,11 +384,15 @@ export const clipEffectSpecFromEditorClip = (
     })();
     const vignette = amountFor('vignette');
     const filmGrain = amountFor('film_grain');
+    const dust = amountFor('dust');
+    const lightLeaks = amountFor('light_leaks');
     const chromaticAberration = amountFor('chromatic_aberration');
     const vhs = amountFor('vhs');
     return {
       ...(vignette !== undefined && vignette > 0 ? { vignette: { amount: vignette } } : {}),
       ...(filmGrain !== undefined && filmGrain > 0 ? { filmGrain: { amount: filmGrain } } : {}),
+      ...(dust !== undefined && dust > 0 ? { dust: { amount: dust } } : {}),
+      ...(lightLeaks !== undefined && lightLeaks > 0 ? { lightLeaks: { amount: lightLeaks } } : {}),
       ...(blockPx !== undefined && blockPx >= 2 ? { pixelate: { blockPx } } : {}),
       ...(chromaticAberration !== undefined && chromaticAberration > 0
         ? { chromaticAberration: { amount: chromaticAberration } }

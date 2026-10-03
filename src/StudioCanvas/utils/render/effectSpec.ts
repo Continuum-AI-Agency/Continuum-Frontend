@@ -195,6 +195,10 @@ export interface ClipEffectSpec {
   vignette?: { amount: number };
   /** Additive hashed noise, animated across the clip. 0..1. */
   filmGrain?: { amount: number };
+  /** Sparse moving film flecks; source alpha is preserved. 0..1. */
+  dust?: { amount: number };
+  /** Warm, slowly moving edge exposure; source alpha is preserved. 0..1. */
+  lightLeaks?: { amount: number };
   /** Mosaic block size in SOURCE pixels. >= 2. */
   pixelate?: { blockPx: number };
   /** Radial R/B channel split, the way a lens fringes toward its edge. 0..1. */
@@ -672,6 +676,8 @@ export function hasVisualEffects(spec: ClipEffectSpec | undefined): boolean {
       cornerRadiusFracFor(spec) > 0 ||
       (spec.vignette && spec.vignette.amount > 0) ||
       (spec.filmGrain && spec.filmGrain.amount > 0) ||
+      (spec.dust && spec.dust.amount > 0) ||
+      (spec.lightLeaks && spec.lightLeaks.amount > 0) ||
       (spec.pixelate && spec.pixelate.blockPx >= 2) ||
       (spec.chromaticAberration && spec.chromaticAberration.amount > 0) ||
       (spec.vhs && spec.vhs.amount > 0) ||
@@ -685,6 +691,8 @@ export type UnpreviewableEffect =
   | 'tint'
   | 'vignette'
   | 'filmGrain'
+  | 'dust'
+  | 'lightLeaks'
   | 'pixelate'
   | 'chromaticAberration'
   | 'vhs';
@@ -709,6 +717,8 @@ export function unpreviewableEffects(
   if (spec.tint && spec.tint.amount > 0) missing.push('tint');
   if (spec.vignette && spec.vignette.amount > 0) missing.push('vignette');
   if (spec.filmGrain && spec.filmGrain.amount > 0) missing.push('filmGrain');
+  if (spec.dust && spec.dust.amount > 0) missing.push('dust');
+  if (spec.lightLeaks && spec.lightLeaks.amount > 0) missing.push('lightLeaks');
   if (spec.pixelate && spec.pixelate.blockPx >= 2) missing.push('pixelate');
   if (spec.chromaticAberration && spec.chromaticAberration.amount > 0) {
     missing.push('chromaticAberration');

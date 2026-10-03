@@ -765,7 +765,7 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      'Give a video or overlay clip a look: a filter (bw, vintage, vivid, cool, warm, noir, dream) or an effect (blur, tint, vignette, film_grain, chromatic_aberration, vhs, pixelate, corner_radius, chroma_key) at a strength 0–1; remove takes it off.',
+      'Give a video or overlay clip a look: a filter (bw, vintage, vivid, cool, warm, noir, dream) or an effect (blur, tint, vignette, film_grain, dust, light_leaks, chromatic_aberration, vhs, pixelate, corner_radius, chroma_key) at a strength 0–1; remove takes it off.',
     input: z
       .object({
         ...projectRef,

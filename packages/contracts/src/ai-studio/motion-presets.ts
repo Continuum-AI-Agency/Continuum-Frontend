@@ -368,6 +368,8 @@ export const LOOK_EFFECTS = {
   tint: { label: 'Tint', effectType: 'video_filter', parameter: 'amount' },
   vignette: { label: 'Vignette', effectType: 'video_filter', parameter: 'amount' },
   film_grain: { label: 'Film grain', effectType: 'video_filter', parameter: 'amount' },
+  dust: { label: 'Dust', effectType: 'video_filter', parameter: 'amount' },
+  light_leaks: { label: 'Light leaks', effectType: 'video_filter', parameter: 'amount' },
   chromatic_aberration: {
     label: 'Chromatic aberration',
     effectType: 'video_filter',

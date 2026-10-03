@@ -216,7 +216,7 @@ function describeActionOps(): string {
     'is { version: 1, effects: [{ effectId, enabled, parameters, keyframes }] }. Never write WGSL.',
     `Legal effectId values: ${SHADER_PRESET_IDS.join(', ')}.`,
     'Parameters: chroma_key=color tolerance softness; tint=color amount; pixelate=blockPx;',
-    'vignette, film_grain, chromatic_aberration and vhs=amount. Keyframes animate numeric',
+    'vignette, film_grain, dust, light_leaks, chromatic_aberration and vhs=amount. Keyframes animate numeric',
     'parameters with { id, property: "effect.parameter", parameterName, timeSec, value, interpolation }.',
   );
   return lines.join('\n');

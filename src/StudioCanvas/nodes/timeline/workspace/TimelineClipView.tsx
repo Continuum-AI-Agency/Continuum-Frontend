@@ -124,6 +124,8 @@ export function TimelineClipView({
   isMain,
   leftPx,
   widthPx,
+  topPx = 4,
+  heightPx,
   selected,
   ghost,
   previewUrl,
@@ -136,6 +138,8 @@ export function TimelineClipView({
   isMain: boolean;
   leftPx: number;
   widthPx: number;
+  topPx?: number;
+  heightPx?: number;
   selected: boolean;
   ghost?: boolean;
   previewUrl?: string;
@@ -180,7 +184,12 @@ export function TimelineClipView({
               ghost && 'pointer-events-none opacity-60',
               !clip.enabled && 'opacity-40',
             )}
-            style={{ left: leftPx, width: Math.max(4, widthPx) }}
+            style={{
+              left: leftPx,
+              width: Math.max(4, widthPx),
+              top: topPx,
+              ...(heightPx === undefined ? {} : { height: heightPx, bottom: 'auto' }),
+            }}
           />
         }
       >

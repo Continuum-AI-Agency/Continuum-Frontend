@@ -270,6 +270,12 @@ function shaderControlsEffects(stack: ShaderStackV1): ClipEffectSpec {
       case 'film_grain':
         if (amount !== undefined) effects.filmGrain = { amount };
         break;
+      case 'dust':
+        if (amount !== undefined) effects.dust = { amount };
+        break;
+      case 'light_leaks':
+        if (amount !== undefined) effects.lightLeaks = { amount };
+        break;
       case 'pixelate': {
         const blockPx = numberParameter(effect.parameters.blockPx);
         if (blockPx !== undefined) effects.pixelate = { blockPx };
@@ -317,6 +323,8 @@ function patchShaderStack(stack: ShaderStackV1, patch: Partial<ClipEffectSpec>):
   if ('tint' in patch) next = writeShaderEffect(next, 'tint', patch.tint);
   if ('vignette' in patch) next = writeShaderEffect(next, 'vignette', patch.vignette);
   if ('filmGrain' in patch) next = writeShaderEffect(next, 'film_grain', patch.filmGrain);
+  if ('dust' in patch) next = writeShaderEffect(next, 'dust', patch.dust);
+  if ('lightLeaks' in patch) next = writeShaderEffect(next, 'light_leaks', patch.lightLeaks);
   if ('pixelate' in patch) next = writeShaderEffect(next, 'pixelate', patch.pixelate);
   if ('chromaticAberration' in patch) {
     next = writeShaderEffect(next, 'chromatic_aberration', patch.chromaticAberration);

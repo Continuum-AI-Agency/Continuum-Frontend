@@ -139,6 +139,8 @@ const SPEC_EFFECT_IDS = new Set([
   'tint',
   'vignette',
   'film_grain',
+  'dust',
+  'light_leaks',
   'pixelate',
   'chromatic_aberration',
   'vhs',

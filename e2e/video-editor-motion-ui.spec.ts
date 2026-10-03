@@ -62,6 +62,7 @@ const LOCAL_CURVE_JOURNEY = process.env.VIDEO_EDITOR_CURVE_JOURNEY_LOCAL === '1'
 const SPEECH_JOURNEY = process.env.VIDEO_EDITOR_SPEECH_JOURNEY === '1';
 const ANIMATED_SPEECH_JOURNEY = process.env.VIDEO_EDITOR_ANIMATED_SPEECH_JOURNEY === '1';
 const COLLAGE_JOURNEY = process.env.VIDEO_EDITOR_COLLAGE_JOURNEY === '1';
+const VINTAGE_LOOK_JOURNEY = process.env.VIDEO_EDITOR_VINTAGE_LOOK_JOURNEY === '1';
 const TEXT_JOURNEY = process.env.VIDEO_EDITOR_TEXT_JOURNEY === '1';
 const PARENT_JOURNEY = process.env.VIDEO_EDITOR_PARENT_JOURNEY === '1';
 const PARENT_RANGE_JOURNEY = process.env.VIDEO_EDITOR_PARENT_RANGE_JOURNEY === '1';
@@ -1075,7 +1076,9 @@ test('retained project journey: native splits and deletes preserve stored pictur
   );
   const proof = createBenchRecorder(
     COLLAGE_JOURNEY
-      ? 'videoeditor:motion:e2e:bench:collage'
+      ? VINTAGE_LOOK_JOURNEY
+        ? 'videoeditor:motion:e2e:bench:vintage-looks'
+        : 'videoeditor:motion:e2e:bench:collage'
       : KEYFRAME_LOCAL
         ? BENCH
         : STAGE_JOURNEY
@@ -1121,6 +1124,8 @@ test('retained project journey: native splits and deletes preserve stored pictur
     expect(ok, `${name}${detail ? `: ${detail}` : ''}`).toBe(true);
   };
   try {
+    if (VINTAGE_LOOK_JOURNEY && !COLLAGE_JOURNEY)
+      throw new Error('Vintage looks require the local collage journey');
     if (
       COLLAGE_JOURNEY &&
       (!LOCAL_CURVE_JOURNEY ||
@@ -1423,6 +1428,16 @@ test('retained project journey: native splits and deletes preserve stored pictur
     const previewAudio = async (project: EditorProjectV2, fromSec = 0, channel = 0) =>
       (await previewChannels(project, fromSec))[channel]!;
     const summary = [];
+    const vintageResults: Array<{
+      tag: string;
+      target: string;
+      effect: string;
+      amount: number;
+      saveMs: number;
+      looked: EditorProjectV2;
+      audio: unknown[];
+      samples: unknown[];
+    }> = [];
     const commandResponses: Array<{ status: number; body: string }> = [];
     page.on('response', async (response) => {
       if (/\/video-projects\/[^/]+\/commands$/.test(response.url()))
@@ -1804,6 +1819,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
           ['side_by_side', 4],
           ['grid', 4],
         ] as const) {
+          if (VINTAGE_LOOK_JOURNEY && layout !== 'grid') continue;
           const clipIds =
             count === 2 ? [originalIds[0]!, originalIds[2]!] : originalIds.slice(0, count);
           const atSec = layout === 'stack' ? 0.5 : layout === 'side_by_side' ? 1 : 1.5;
@@ -2100,6 +2116,50 @@ test('retained project journey: native splits and deletes preserve stored pictur
                   .poll(() => element.evaluate((v) => v.currentTime))
                   .toBeCloseTo(panel.sourceInSec + local, 2);
               }
+            if (VINTAGE_LOOK_JOURNEY) {
+              const croppedPanels = panels.filter((p) => Object.values(p.crop).some((v) => v > 0));
+              await expect(
+                page.locator(`[data-testid="media-effect-preview"][data-time-sec="${local}"]`),
+              ).toHaveCount(croppedPanels.length);
+              for (const targetIndex of [0, 2]) {
+                const panel = panels[targetIndex]!;
+                const canvasIndex = croppedPanels.findIndex((p) => p.id === panel.id);
+                const base64 =
+                  canvasIndex >= 0
+                    ? await page
+                        .getByTestId('media-effect-preview')
+                        .nth(canvasIndex)
+                        .evaluate(
+                          (el) => (el as HTMLCanvasElement).toDataURL('image/png').split(',')[1]!,
+                        )
+                    : await page
+                        .getByTestId('edit-stage')
+                        .locator('video')
+                        .nth(1)
+                        .evaluate(
+                          async (video, size) => {
+                            const canvas = new OffscreenCanvas(size.width, size.height),
+                              ctx = canvas.getContext('2d');
+                            if (!ctx) throw new Error('Clean native canvas unavailable');
+                            ctx.drawImage(video, 0, 0, size.width, size.height);
+                            const bytes = new Uint8Array(
+                              await (
+                                await canvas.convertToBlob({ type: 'image/png' })
+                              ).arrayBuffer(),
+                            );
+                            let binary = '';
+                            for (let i = 0; i < bytes.length; i += 32768)
+                              binary += String.fromCharCode(...bytes.subarray(i, i + 32768));
+                            return btoa(binary);
+                          },
+                          { width, height },
+                        );
+                writeFileSync(
+                  join(folder, `${tag}-${local}-${targetIndex}-clean-native-canvas.png`),
+                  Buffer.from(base64, 'base64'),
+                );
+              }
+            }
             const native = join(folder, `${tag}-${local}-native.png`);
             writeFileSync(
               native,
@@ -2118,6 +2178,430 @@ test('retained project journey: native splits and deletes preserve stored pictur
             );
             comparisons.push({ tag, local, error, wrongError, nativeError, cells });
           }
+          if (VINTAGE_LOOK_JOURNEY) {
+            for (const targetIndex of [0, 2]) {
+              const target = panels[targetIndex]!;
+              for (const effect of ['dust', 'light_leaks'] as const)
+                for (const amount of [0, 0.25, 0.6, 1]) {
+                  const lookTag = `${format}-${target.mediaKind}-${effect}-${amount}`;
+                  await page.reload();
+                  await selectClip(page, target.id);
+                  const label = effect === 'dust' ? 'Dust' : 'Light leaks';
+                  const currentAmount = (p: EditorProjectV2) => {
+                    const clip = clipById(p, target.id);
+                    return clip && 'effects' in clip
+                      ? clip.effects.find((e) => e.effectId === effect)?.parameters.amount
+                      : undefined;
+                  };
+                  const measureStart = async (event: string) =>
+                    page.evaluate((event) => {
+                      window.addEventListener(
+                        event,
+                        () => {
+                          (window as unknown as { __lookCommitAt: number }).__lookCommitAt =
+                            performance.now();
+                        },
+                        { once: true, capture: true },
+                      );
+                    }, event);
+                  const pending = page.waitForResponse(
+                    (r) =>
+                      r.request().method() === 'POST' &&
+                      r.url().endsWith(`/${projectId}/ops/apply_effect`),
+                  );
+                  await measureStart('pointerup');
+                  await visible(page.locator(`[data-look="${effect}"]`)).click();
+                  let response = await pending;
+                  await response.finished();
+                  assert(
+                    `${lookTag}: native look applies to real ${target.mediaKind}`,
+                    response.ok(),
+                    (await response.text()).slice(0, 300),
+                  );
+                  await until(
+                    () => getProject(api, projectId),
+                    (p) => currentAmount(p) === 0.6,
+                  );
+                  if (amount !== 0.6) {
+                    const slider = visible(
+                      page
+                        .getByRole('group', { name: `${label} strength`, exact: true })
+                        .getByRole('slider'),
+                    );
+                    await slider.focus();
+                    const pendingStrength = page.waitForResponse(
+                      (r) =>
+                        r.request().method() === 'POST' &&
+                        r.url().endsWith(`/${projectId}/ops/apply_effect`) &&
+                        r.request().postDataJSON().strength === amount,
+                    );
+                    await measureStart('keydown');
+                    await page.keyboard.press(amount === 1 ? 'End' : 'Home');
+                    if (amount === 0.25)
+                      for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight');
+                    response = await pendingStrength;
+                    await response.finished();
+                    assert(
+                      `${lookTag}: native strength commits successfully`,
+                      response.ok(),
+                      (await response.text()).slice(0, 300),
+                    );
+                  }
+                  const saveMs = await page.evaluate((url) => {
+                    const start = (window as unknown as { __lookCommitAt: number }).__lookCommitAt;
+                    const resource = performance
+                      .getEntriesByName(url)
+                      .filter((e) => e.startTime >= start - 0.5)
+                      .at(-1) as PerformanceResourceTiming | undefined;
+                    if (!resource || !Number.isFinite(start))
+                      throw new Error('Look save timing missing');
+                    return resource.responseEnd - start;
+                  }, response.url());
+                  const looked = await until(
+                    () => getProject(api, projectId),
+                    (p) => near(Number(currentAmount(p)), amount, 1e-6),
+                  );
+                  const oldTarget = clipById(edited, target.id),
+                    newTarget = clipById(looked, target.id);
+                  if (!oldTarget || !newTarget || !('effects' in newTarget))
+                    throw new Error('Look target missing');
+                  const restoredTracks = structuredClone(looked.tracks);
+                  for (const lane of restoredTracks)
+                    for (const clip of lane.clips)
+                      if (clip.id === target.id && 'effects' in clip) clip.effects = target.effects;
+                  assert(
+                    `${lookTag}: only the selected clip look changes`,
+                    JSON.stringify(restoredTracks) === JSON.stringify(edited.tracks) &&
+                      looked.durationSec === edited.durationSec &&
+                      newTarget.effects.filter((e) => e.effectId === effect).length === 1,
+                  );
+                  await page.reload();
+                  assert(
+                    `${lookTag}: complete look persists after reload`,
+                    JSON.stringify((await getProject(api, projectId)).tracks) ===
+                      JSON.stringify(looked.tracks),
+                  );
+                  const lookedFilm = join(folder, `${lookTag}.mp4`);
+                  await render(looked, lookedFilm);
+                  const meta = JSON.parse(
+                    execFileSync(
+                      'ffprobe',
+                      [
+                        '-v',
+                        'error',
+                        '-select_streams',
+                        'v:0',
+                        '-show_entries',
+                        'stream=width,height,nb_frames:format=duration',
+                        '-of',
+                        'json',
+                        lookedFilm,
+                      ],
+                      { encoding: 'utf8' },
+                    ),
+                  );
+                  assert(
+                    `${lookTag}: encoded look preserves dimensions, cadence and duration`,
+                    meta.streams[0].width === width &&
+                      meta.streams[0].height === height &&
+                      Number(meta.streams[0].nb_frames) === 150 &&
+                      near(Number(meta.format.duration), 5, 1e-5),
+                  );
+                  const audio = [0, 1].map((c) => audioError(pcm(lookedFilm, c), baselinePcm[c]!));
+                  assert(
+                    `${lookTag}: picture look leaves full stereo sound unchanged`,
+                    audio.every(
+                      (a) => a.energy > 1e-6 && a.lengthMatches && a.relativeError < 0.02,
+                    ),
+                    JSON.stringify(audio),
+                  );
+                  const samples = [];
+                  for (const local of [0.5, 1.5, 2.5]) {
+                    const png = join(folder, `${lookTag}-${local}.png`),
+                      clean = join(folder, `${lookTag}-${local}-clean.png`);
+                    await render(looked, png, atSec + local);
+                    await render(edited, clean, atSec + local);
+                    const expected = decode(png, width, height),
+                      original = decode(clean, width, height),
+                      encoded = decode(lookedFilm, width, height, atSec + local);
+                    let selectedDelta = 0,
+                      changedPixels = 0,
+                      outsideDelta = 0;
+                    for (let y = 0; y < height; y++)
+                      for (let x = 0; x < width; x++) {
+                        const inTarget =
+                          Math.floor(x / (width / 2)) + Math.floor(y / (height / 2)) * 2 ===
+                          targetIndex;
+                        let delta = 0;
+                        for (let c = 0; c < 3; c++)
+                          delta += Math.abs(
+                            expected[(y * width + x) * 3 + c]! - original[(y * width + x) * 3 + c]!,
+                          );
+                        if (inTarget) {
+                          selectedDelta += delta;
+                          if (delta > 3) changedPixels++;
+                        } else outsideDelta += delta;
+                      }
+                    const changedFraction = changedPixels / ((width * height) / 4);
+                    const pictureError = mae(encoded, expected);
+                    assert(
+                      `${lookTag} ${local}s: look alters only its selected picture`,
+                      outsideDelta === 0 &&
+                        (amount === 0 ? selectedDelta === 0 : selectedDelta > 100),
+                      JSON.stringify({ selectedDelta, outsideDelta, changedFraction }),
+                    );
+                    let dustChangedFraction: number | undefined;
+                    if (effect === 'dust' && amount > 0) {
+                      // Isolate flecks from bitmap-vs-pixel-buffer resize rounding. An
+                      // effectively zero amount runs the same pixel pass without changing bytes.
+                      const probe = structuredClone(looked);
+                      const probeClip = clipById(probe, target.id);
+                      if (!probeClip || !('effects' in probeClip))
+                        throw new Error('Dust sampling control missing');
+                      for (const instance of probeClip.effects)
+                        if (instance.effectId === 'dust') instance.parameters.amount = 1e-10;
+                      const probePath = join(folder, `${lookTag}-${local}-sampling-control.png`);
+                      await render(probe, probePath, atSec + local);
+                      const probePixels = decode(probePath, width, height);
+                      const samplingError = mae(probePixels, original);
+                      assert(
+                        `${lookTag} ${local}s: zero-delta pixel-pass control retains the source`,
+                        samplingError < 2,
+                        JSON.stringify({ samplingError }),
+                      );
+                      let dustPixels = 0;
+                      for (let y = 0; y < height; y++)
+                        for (let x = 0; x < width; x++) {
+                          if (
+                            Math.floor(x / (width / 2)) + Math.floor(y / (height / 2)) * 2 !==
+                            targetIndex
+                          )
+                            continue;
+                          const offset = (y * width + x) * 3;
+                          const delta = [0, 1, 2].reduce(
+                            (sum, c) =>
+                              sum + Math.abs(expected[offset + c]! - probePixels[offset + c]!),
+                            0,
+                          );
+                          if (delta > 3) dustPixels++;
+                        }
+                      dustChangedFraction = dustPixels / ((width * height) / 4);
+                      assert(
+                        `${lookTag} ${local}s: real dust remains sparse`,
+                        dustChangedFraction > 0.0001 && dustChangedFraction < 0.08,
+                        JSON.stringify({ dustChangedFraction, changedFraction }),
+                      );
+                    }
+                    assert(
+                      `${lookTag} ${local}s: decoded film matches the authored effect frame`,
+                      pictureError < 4,
+                      JSON.stringify({ pictureError }),
+                    );
+                    const snap = page.getByRole('button', { name: 'Toggle snapping', exact: true });
+                    if ((await snap.getAttribute('aria-pressed')) === 'true') await snap.click();
+                    await seek(page, pxPerSec, atSec + local);
+                    let videoIndex = 1;
+                    for (const panel of panels)
+                      if (panel.mediaKind === 'video') {
+                        const video = page
+                          .getByTestId('edit-stage')
+                          .locator('video')
+                          .nth(videoIndex++);
+                        await expect
+                          .poll(() => video.evaluate((v) => v.currentTime))
+                          .toBeCloseTo(panel.sourceInSec + local, 2);
+                        await expect
+                          .poll(() => video.evaluate((v) => v.readyState))
+                          .toBeGreaterThanOrEqual(2);
+                        await expect.poll(() => video.evaluate((v) => v.seeking)).toBe(false);
+                      }
+                    const canvasCount = panels.filter(
+                      (p) =>
+                        Object.values(p.crop).some((v) => v > 0) ||
+                        (p.id === target.id && amount > 0),
+                    ).length;
+                    if (amount > 0) {
+                      const state = await page.evaluate(async () => ({
+                        gpuAvailable: Boolean(navigator.gpu),
+                        adapterAvailable: Boolean(await navigator.gpu?.requestAdapter()),
+                        errors: [...document.querySelectorAll('[class*="bg-destructive"]')].map(
+                          (el) => el.textContent,
+                        ),
+                        previews: [
+                          ...document.querySelectorAll('[data-testid="media-effect-preview"]'),
+                        ].map((el) => ({
+                          time: el.getAttribute('data-time-sec'),
+                          source: el.getAttribute('data-source-sec'),
+                        })),
+                      }));
+                      writeFileSync(
+                        join(folder, `${lookTag}-${local}-preview-state.json`),
+                        JSON.stringify(state, null, 2),
+                      );
+                      writeFileSync(
+                        join(folder, `${lookTag}-${local}-before-poll.png`),
+                        await page.getByTestId('edit-stage').screenshot(),
+                      );
+                    }
+                    await expect(
+                      page.locator(
+                        `[data-testid="media-effect-preview"][data-time-sec="${local}"]`,
+                      ),
+                    ).toHaveCount(canvasCount);
+                    const native = join(folder, `${lookTag}-${local}-native.png`);
+                    writeFileSync(
+                      native,
+                      await page
+                        .getByTestId('edit-stage')
+                        .locator('video')
+                        .first()
+                        .locator('..')
+                        .screenshot(),
+                    );
+                    const nativePixels = decode(native, width, height);
+                    const nativeError = mae(nativePixels, expected);
+                    let effectEnergy = 0,
+                      nativeEnergy = 0,
+                      dot = 0,
+                      deltaError = 0,
+                      maskPixels = 0;
+                    if (amount > 0) {
+                      const previewPanels = panels.filter(
+                        (p) => Object.values(p.crop).some((v) => v > 0) || p.id === target.id,
+                      );
+                      const canvasIndex = previewPanels.findIndex((p) => p.id === target.id);
+                      const rawNative = join(folder, `${lookTag}-${local}-native-canvas.png`);
+                      const base64 = await page
+                        .getByTestId('media-effect-preview')
+                        .nth(canvasIndex)
+                        .evaluate(
+                          (el) => (el as HTMLCanvasElement).toDataURL('image/png').split(',')[1]!,
+                        );
+                      writeFileSync(rawNative, Buffer.from(base64, 'base64'));
+                      const control = structuredClone(looked);
+                      control.tracks = [
+                        ...looked.tracks.filter((t) => t.kind === 'video' && t.enabled),
+                        {
+                          ...track,
+                          clips: [
+                            {
+                              ...target,
+                              effects: newTarget.effects,
+                              transform: {
+                                ...target.transform,
+                                position: { x: 0.5, y: 0.5, unit: 'normalized' },
+                                scaleX: 1,
+                                scaleY: 1,
+                              },
+                            },
+                          ],
+                        },
+                      ];
+                      control.transitions = [];
+                      const rawExpected = join(folder, `${lookTag}-${local}-effect-control.png`),
+                        rawClean = join(folder, `${lookTag}-${local}-clean-control.png`);
+                      await render(control, rawExpected, atSec + local);
+                      const controlTrack = control.tracks.find((t) => t.id === track.id);
+                      if (!controlTrack || controlTrack.kind !== 'overlay')
+                        throw new Error('Physical control missing');
+                      controlTrack.clips[0]!.effects = target.effects;
+                      await render(control, rawClean, atSec + local);
+                      const authoredPixels = decode(rawExpected, width, height),
+                        cleanPixels = decode(rawClean, width, height);
+                      const displayedPixels = decode(rawNative, width, height),
+                        cleanNative = decode(
+                          join(folder, `${tag}-${local}-${targetIndex}-clean-native-canvas.png`),
+                          width,
+                          height,
+                        );
+                      for (let i = 0; i < authoredPixels.length; i += 3) {
+                        if (
+                          [0, 1, 2].reduce(
+                            (sum, c) =>
+                              sum + Math.abs(authoredPixels[i + c]! - cleanPixels[i + c]!),
+                            0,
+                          ) <= 3
+                        )
+                          continue;
+                        maskPixels++;
+                        for (let c = 0; c < 3; c++) {
+                          const authored = authoredPixels[i + c]! - cleanPixels[i + c]!;
+                          const displayed = displayedPixels[i + c]! - cleanNative[i + c]!;
+                          effectEnergy += authored * authored;
+                          nativeEnergy += displayed * displayed;
+                          dot += authored * displayed;
+                          deltaError += (authored - displayed) ** 2;
+                        }
+                      }
+                      const rawPixelError = mae(displayedPixels, authoredPixels);
+                      assert(
+                        `${lookTag} ${local}s: native unscaled RGB matches the exported source look`,
+                        rawPixelError < 1,
+                        JSON.stringify({ rawPixelError }),
+                      );
+                      const relativeError = deltaError / effectEnergy,
+                        cosine = dot / Math.sqrt(effectEnergy * nativeEnergy);
+                      assert(
+                        `${lookTag} ${local}s: native unscaled effect delta rejects a missing or wrong effect`,
+                        maskPixels >= 10 && relativeError < 0.5 && cosine > 0.8,
+                        JSON.stringify({ maskPixels, relativeError, cosine }),
+                      );
+                    }
+                    assert(
+                      `${lookTag} ${local}s: native GPU and encoded pixel path agree`,
+                      nativeError < 12,
+                      JSON.stringify({ nativeError }),
+                    );
+                    samples.push({
+                      local,
+                      pictureError,
+                      nativeError,
+                      maskPixels,
+                      effectEnergy,
+                      nativeEnergy,
+                      dot,
+                      deltaError,
+                      selectedDelta,
+                      outsideDelta,
+                      changedFraction,
+                      dustChangedFraction,
+                    });
+                  }
+                  for (const ref of outsideRefs) {
+                    const outside = join(folder, `${lookTag}-outside-${ref.at}.png`);
+                    await render(looked, outside, ref.at);
+                    assert(
+                      `${lookTag} ${ref.at}s: look changes nothing outside the collage window`,
+                      readFileSync(outside).equals(readFileSync(ref.path)),
+                    );
+                  }
+                  const undo = await postOp(api, projectId, 'undo', {
+                    toRevision: edited.revision,
+                  });
+                  assert(
+                    `${lookTag}: one undo restores the full collage before the look`,
+                    undo.status === 200 &&
+                      JSON.stringify((await getProject(api, projectId)).tracks) ===
+                        JSON.stringify(edited.tracks),
+                  );
+                  vintageResults.push({
+                    tag: lookTag,
+                    target: target.mediaKind,
+                    effect,
+                    amount,
+                    saveMs,
+                    looked,
+                    audio,
+                    samples,
+                  });
+                  writeFileSync(
+                    join(folder, 'vintage-results.json'),
+                    JSON.stringify(vintageResults, null, 2),
+                  );
+                }
+            }
+          }
+
           const undone = await postOp(api, projectId, 'undo', { toRevision: before.revision }),
             restored = await getProject(api, projectId);
           assert(
@@ -2139,9 +2623,19 @@ test('retained project journey: native splits and deletes preserve stored pictur
       proof.notes.push(
         `All native collage pointer-release→response-end samples: ${JSON.stringify(editTimings.map((s) => s.durationMs))}`,
       );
+      if (VINTAGE_LOOK_JOURNEY) {
+        proof.notes.push(
+          `speed samples: ${JSON.stringify({ look_save: vintageResults.map((r) => r.saveMs) })}`,
+        );
+        assert(
+          'all48 native look saves meet the one-second operation ceiling',
+          vintageResults.length === 48 &&
+            vintageResults.every((r) => r.saveMs > 0 && r.saveMs <= 1000),
+        );
+      }
       assert(
-        'all21 native collage saves meet the one-second local editor-operation ceiling',
-        editTimings.length === 21 &&
+        'all native collage saves meet the one-second local editor-operation ceiling',
+        editTimings.length === (VINTAGE_LOOK_JOURNEY ? 3 : 21) &&
           editTimings.every((s) => s.durationMs > 0 && s.durationMs <= 1000),
       );
     }

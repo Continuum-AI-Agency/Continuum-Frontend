@@ -153,3 +153,47 @@ describe('effect ordering', () => {
     expect(pixelAt(image, 4, 4)).toEqual([1, 2, 3, 255]);
   });
 });
+
+describe('vintage exposure effects', () => {
+  it('dust is sparse, reproducible, animated and preserves source alpha', () => {
+    const first = run(frameOf(320, 240, [128, 128, 128]), { dust: { amount: 0.6 } }, 0.25);
+    const repeated = run(frameOf(320, 240, [128, 128, 128]), { dust: { amount: 0.6 } }, 0.25);
+    const moved = run(frameOf(320, 240, [128, 128, 128]), { dust: { amount: 0.6 } }, 0.5);
+    const fraction =
+      [...first.data].filter((v, i) => i % 4 === 0 && v !== 128).length / (320 * 240);
+    expect(fraction).toBeGreaterThan(0.001);
+    expect(fraction).toBeLessThan(0.05);
+    expect(first.data).toEqual(repeated.data);
+    expect(first.data).not.toEqual(moved.data);
+    expect([...first.data].every((v, i) => i % 4 !== 3 || v === 255)).toBe(true);
+  });
+
+  it('light leaks brighten warm edges without washing out the center and move over time', () => {
+    const first = run(frameOf(320, 240, [64, 64, 64]), { lightLeaks: { amount: 0.6 } }, 0);
+    const moved = run(frameOf(320, 240, [64, 64, 64]), { lightLeaks: { amount: 0.6 } }, 1);
+    const [r, g, b, alpha] = pixelAt(first, 0, 60);
+    expect(r).toBeGreaterThan(g);
+    expect(g).toBeGreaterThan(b);
+    expect(b).toBeGreaterThan(64);
+    expect(alpha).toBe(255);
+    expect(pixelAt(first, 160, 120)).toEqual([64, 64, 64, 255]);
+    expect(first.data).not.toEqual(moved.data);
+  });
+
+  it('zero intensity preserves every pixel; greater intensity has a greater physical effect', () => {
+    for (const field of ['dust', 'lightLeaks'] as const) {
+      const source = frameOf(320, 240, [64, 64, 64]);
+      source.data[3] = 0;
+      expect(run(structuredClone(source), { [field]: { amount: 0 } }, 0.5).data).toEqual(
+        source.data,
+      );
+      const delta = (amount: number) =>
+        [...run(structuredClone(source), { [field]: { amount } }, 0.5).data].reduce(
+          (sum, value, i) => sum + (i % 4 === 3 ? 0 : Math.abs(value - source.data[i])),
+          0,
+        );
+      expect(delta(1)).toBeGreaterThan(delta(0.25) * 3);
+      expect(run(structuredClone(source), { [field]: { amount: 1 } }, 0.5).data[3]).toBe(0);
+    }
+  });
+});

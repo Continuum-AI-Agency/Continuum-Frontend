@@ -60,6 +60,7 @@ function VideoLayer({
       {/* biome-ignore lint/a11y/useMediaCaption: the editor previews authored media; captions are composited separately. */}
       <video
         ref={ref}
+        crossOrigin="anonymous"
         src={layer.url}
         playsInline
         preload="metadata"
