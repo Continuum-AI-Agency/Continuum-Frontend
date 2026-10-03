@@ -118,6 +118,23 @@ describe('applyEnvelope with audio.volume keyframes', () => {
   const at = (pcm: { left: Float32Array }, sec: number) =>
     pcm.left[Math.round(sec * AUDIO_SAMPLE_RATE)] ?? Number.NaN;
 
+  it('multiplies independent child and group gain curves on their retained clocks', () => {
+    const pcm = ones(1);
+    applyEnvelope(pcm, {
+      volumeKeyframes: [
+        { timeSec: 0, value: 0.2, interpolation: 'linear' },
+        { timeSec: 2, value: 0.8, interpolation: 'linear' },
+      ],
+      keyframeOffsetSec: 0.5,
+      groupVolumeKeyframes: [
+        { timeSec: 0, value: 1, interpolation: 'linear' },
+        { timeSec: 2, value: 0.5, interpolation: 'linear' },
+      ],
+      groupKeyframeOffsetSec: 0.25,
+    });
+    expect(at(pcm, 0.5)).toBeCloseTo(0.40625, 5);
+  });
+
   it('ducks a bed to duckTo × volume under speech and recovers after it', () => {
     const volume = 0.8;
     const keys = duckingKeyframes({

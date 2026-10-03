@@ -1,4 +1,5 @@
-import { editorAudioFadeGainAt, sampleNumericTrack } from '@continuum/contracts';
+import { editorAudioFadeGainAt } from '@continuum/contracts';
+import { audioGainAt } from '../../utils/splice/timelineAudioEnvelope';
 import type {
   TimelinePreviewAudioEvent,
   TimelinePreviewAudioPlan,
@@ -67,29 +68,25 @@ export function volumeAutomation(
   fromTimelineSec: number,
 ): { timelineSec: number; value: number }[] {
   const keys = event.volumeKeyframes;
-  if (!keys?.length) return [];
+  if (!keys?.length && !event.groupVolumeKeyframes?.length) return [];
   const start = Math.max(fromTimelineSec, event.outputStartSec);
   const end = event.outputEndSec;
   if (end <= start) return [];
   const times = new Set<number>([start, end]);
   for (let at = start + VOLUME_STEP_SEC; at < end; at += VOLUME_STEP_SEC) times.add(at);
-  for (const key of keys) {
-    const at = event.outputStartSec + key.timeSec - (event.keyframeOffsetSec ?? 0);
-    if (at > start && at < end) times.add(at);
-  }
+  for (const [track, offset] of [
+    [keys, event.keyframeOffsetSec],
+    [event.groupVolumeKeyframes, event.groupKeyframeOffsetSec],
+  ] as const)
+    for (const key of track ?? []) {
+      const at = event.outputStartSec + key.timeSec - (offset ?? 0);
+      if (at > start && at < end) times.add(at);
+    }
   return [...times]
     .sort((left, right) => left - right)
     .map((timelineSec) => ({
       timelineSec,
-      value: Math.max(
-        0,
-        sampleNumericTrack(
-          keys,
-          timelineSec - event.outputStartSec,
-          event.gain,
-          event.keyframeOffsetSec,
-        ),
-      ),
+      value: audioGainAt(event, timelineSec - event.outputStartSec),
     }));
 }
 

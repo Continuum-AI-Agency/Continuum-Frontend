@@ -37,6 +37,7 @@ import { type CaptionCue, wordsForCaptionText } from '@/StudioCanvas/utils/splic
 import type { TimelineNestedRenderGroup } from '@/StudioCanvas/utils/splice/composeTimeline';
 import {
   editorAudioTracks,
+  nestedAudioClips,
   volumeKeyframesOf,
 } from '@/StudioCanvas/utils/splice/timelineAudioEnvelope';
 import { runTimelineInWorker } from '@/StudioCanvas/workers/spliceWorkerClient';
@@ -783,6 +784,30 @@ export async function buildTimelineEditorRenderPlan(input: {
       }),
   );
 
+  audioTracks.push(
+    ...(await Promise.all(
+      nestedAudioClips(input.project).map(async (item) => {
+        const clip = item.clock;
+        return {
+          itemId: item.id,
+          blob: await blobFor(item.sourceClipId),
+          startSec: item.outputStartSec,
+          trimStartSec: item.sourceStartSec,
+          trimEndSec: item.sourceEndSec,
+          speed: item.playbackRate,
+          volume: clip.volume,
+          audioFadeClock: clip.audioFadeClock,
+          fadeInSec: clip.fadeInSec,
+          fadeOutSec: clip.fadeOutSec,
+          volumeKeyframes: volumeKeyframesOf(clip.keyframes),
+          keyframeOffsetSec: clip.keyframeOffsetSec,
+          groupVolumeKeyframes: item.groupVolumeKeyframes,
+          groupKeyframeOffsetSec: item.groupKeyframeOffsetSec,
+        };
+      }),
+    )),
+  );
+
   const captionCues: CaptionCue[] = [];
   if (input.project.exportSettings.captionMode === 'burn_in') {
     for (const track of input.project.tracks.filter(isCaptionTrack)) {
@@ -815,19 +840,6 @@ export async function buildTimelineEditorRenderPlan(input: {
       const child = viewProjectForSequence(input.project, nested.id);
       if (nested.transitions.length)
         throw new Error(`Nested sequence "${nested.id}": child transitions are not supported yet.`);
-      if (
-        instance.audioEnabled &&
-        !track.muted &&
-        editorAudioTracks(child).some((lane) =>
-          lane.clips.some(
-            (clip) =>
-              clip.enabled &&
-              ((clip.kind === 'audio' && !clip.muted) ||
-                (clip.kind === 'video' && clip.audioEnabled)),
-          ),
-        )
-      )
-        throw new Error(`Nested sequence "${nested.id}": child audio is not supported yet.`);
       if (
         child.tracks.some(
           (lane) =>

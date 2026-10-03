@@ -98,6 +98,8 @@ export type TimelineAudioRenderItem = {
   /** `audio.volume` keyframes, clip-local seconds (a ducked music bed). */
   volumeKeyframes?: NumericKeyframe[];
   keyframeOffsetSec?: number;
+  groupVolumeKeyframes?: NumericKeyframe[];
+  groupKeyframeOffsetSec?: number;
 };
 
 /** Child-local layers, rasterized transparently before applying the host instance. */
@@ -186,6 +188,8 @@ export type PreparedTimelineAudio = {
   audioFadeClock?: EditorAudioFadeClock;
   volumeKeyframes?: NumericKeyframe[];
   keyframeOffsetSec?: number;
+  groupVolumeKeyframes?: NumericKeyframe[];
+  groupKeyframeOffsetSec?: number;
 };
 
 export function buildAudioBedPlanItems(items: PreparedTimelineAudio[]): AudioPlanItem[] {
@@ -201,6 +205,12 @@ export function buildAudioBedPlanItems(items: PreparedTimelineAudio[]): AudioPla
     fadeOutSec: item.fadeOutSec,
     ...(item.volumeKeyframes?.length
       ? { volumeKeyframes: item.volumeKeyframes, keyframeOffsetSec: item.keyframeOffsetSec }
+      : {}),
+    ...(item.groupVolumeKeyframes?.length
+      ? {
+          groupVolumeKeyframes: item.groupVolumeKeyframes,
+          groupKeyframeOffsetSec: item.groupKeyframeOffsetSec,
+        }
       : {}),
   }));
 }
@@ -576,6 +586,8 @@ export async function composeTimeline(options: ComposeTimelineOptions): Promise<
         audioFadeClock: bed.audioFadeClock,
         fadeInSec: Math.max(0, bed.fadeInSec ?? 0),
         fadeOutSec: Math.max(0, bed.fadeOutSec ?? 0),
+        groupVolumeKeyframes: bed.groupVolumeKeyframes,
+        groupKeyframeOffsetSec: bed.groupKeyframeOffsetSec,
         ...(bed.volumeKeyframes?.length
           ? { volumeKeyframes: bed.volumeKeyframes, keyframeOffsetSec: bed.keyframeOffsetSec }
           : {}),

@@ -79,6 +79,8 @@ export type TimelineAudioWorkerItem = {
   /** `audio.volume` keyframes, clip-local seconds (a ducked music bed). */
   volumeKeyframes?: NumericKeyframe[];
   keyframeOffsetSec?: number;
+  groupVolumeKeyframes?: NumericKeyframe[];
+  groupKeyframeOffsetSec?: number;
 };
 
 // WOFF2 bytes ride WITH the job rather than being fetched worker-side: a worker has no

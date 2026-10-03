@@ -56,6 +56,7 @@ const PARENT_JOURNEY = process.env.VIDEO_EDITOR_PARENT_JOURNEY === '1';
 const PARENT_RANGE_JOURNEY = process.env.VIDEO_EDITOR_PARENT_RANGE_JOURNEY === '1';
 const CAPTION_JOURNEY = process.env.VIDEO_EDITOR_CAPTION_JOURNEY === '1';
 const NESTED_JOURNEY = process.env.VIDEO_EDITOR_NESTED_JOURNEY === '1';
+const NESTED_AUDIO_JOURNEY = process.env.VIDEO_EDITOR_NESTED_AUDIO_JOURNEY === '1';
 const BRAND =
   process.env.CONTINUUM_TEST_BRAND_ID ??
   (LOCAL_CURVE_JOURNEY
@@ -209,9 +210,12 @@ async function seek(page: Page, pxPerSec: number, sec: number) {
     })
     .toBeCloseTo(sec, 1);
 }
-async function selectClip(page: Page, clipId: string) {
-  // The middle of the block: its edges are trim handles and transition seams.
-  await page.locator(`[data-clip-id="${clipId}"]:visible`).click({ timeout: STEP_MS });
+async function selectClip(page: Page, clipId: string, fraction = 0.5) {
+  const clip = page.locator(`[data-clip-id="${clipId}"]:visible`);
+  const box = await clip.boundingBox();
+  if (!box) throw new Error(`Clip ${clipId} is not visible`);
+  // Click inside the block; an overlapping layer can cover its center.
+  await clip.click({ position: { x: box.width * fraction, y: box.height / 2 }, timeout: STEP_MS });
 }
 const visible = (locator: Locator) => locator.filter({ visible: true });
 /** Whether a locator reaches `count` visible matches in time — never throws. */
@@ -1086,17 +1090,19 @@ test('retained project journey: native splits and deletes preserve stored pictur
     'Set VIDEO_EDITOR_CURVE_JOURNEY=1 for the disposable real-store journey.',
   );
   const proof = createBenchRecorder(
-    NESTED_JOURNEY
-      ? 'videoeditor:motion:e2e:bench:retained-nested'
-      : CAPTION_JOURNEY
-        ? 'videoeditor:motion:e2e:bench:retained-captions'
-        : SPEECH_JOURNEY
-          ? 'videoeditor:motion:e2e:bench:speech-jumps'
-          : PARENT_JOURNEY
-            ? 'videoeditor:motion:e2e:bench:retained-parent'
-            : TEXT_JOURNEY
-              ? 'videoeditor:motion:e2e:bench:retained-text'
-              : 'videoeditor:motion:e2e:bench:retained-project',
+    NESTED_AUDIO_JOURNEY
+      ? 'videoeditor:motion:e2e:bench:retained-nested-audio'
+      : NESTED_JOURNEY
+        ? 'videoeditor:motion:e2e:bench:retained-nested'
+        : CAPTION_JOURNEY
+          ? 'videoeditor:motion:e2e:bench:retained-captions'
+          : SPEECH_JOURNEY
+            ? 'videoeditor:motion:e2e:bench:speech-jumps'
+            : PARENT_JOURNEY
+              ? 'videoeditor:motion:e2e:bench:retained-parent'
+              : TEXT_JOURNEY
+                ? 'videoeditor:motion:e2e:bench:retained-text'
+                : 'videoeditor:motion:e2e:bench:retained-project',
     [],
   );
   proof.notes.push(
@@ -1120,6 +1126,8 @@ test('retained project journey: native splits and deletes preserve stored pictur
     expect(ok, `${name}${detail ? `: ${detail}` : ''}`).toBe(true);
   };
   try {
+    if (NESTED_AUDIO_JOURNEY && (!NESTED_JOURNEY || !LOCAL_CURVE_JOURNEY))
+      throw new Error('Nested audio journey requires nested mode and the loopback store.');
     if (CAPTION_JOURNEY && (!TEXT_JOURNEY || !PARENT_JOURNEY || SPEECH_JOURNEY))
       throw new Error(
         'Caption motion journey requires the text and parent journeys, without speech mode.',
@@ -1366,13 +1374,18 @@ test('retained project journey: native splits and deletes preserve stored pictur
     const previewAudio = async (project: EditorProjectV2, fromSec = 0) => {
       const request: DurableTimelineRequest = {
         project,
-        inputs: mainClips(project).map((clip) => ({
-          sourceId: clip.id,
-          sourceAssetId: assetId,
-          sourceRevision: versionId,
-          storage: { bucket: version.bucket, path: version.storage_path },
-          url: signed.signedUrl,
-        })),
+        inputs: [
+          ...project.tracks,
+          ...project.nestedSequences.flatMap((sequence) => sequence.tracks),
+        ]
+          .flatMap((track) => track.clips.filter((clip) => 'source' in clip))
+          .map((clip) => ({
+            sourceId: clip.id,
+            sourceAssetId: assetId,
+            sourceRevision: versionId,
+            storage: { bucket: version.bucket, path: version.storage_path },
+            url: signed.signedUrl,
+          })),
       };
       const result = await compositor.evaluate(
         ({ request, fromSec }) =>
@@ -2648,6 +2661,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
       if (NESTED_JOURNEY) {
         const sequenceId = `nested-child-${interpolation}`;
         const instanceId = `nested-instance-${interpolation}`;
+        const repeatedInstanceId = `${instanceId}-audio-repeat`;
         const nestedTrackId = `nested-track-${interpolation}`;
         const driver = before.tracks
           .flatMap((track) => track.clips)
@@ -2667,19 +2681,47 @@ test('retained project journey: native splits and deletes preserve stored pictur
                   {
                     id: `${sequenceId}-picture`,
                     name: 'Child picture',
-                    kind: 'overlay',
+                    kind: NESTED_AUDIO_JOURNEY ? 'video' : 'overlay',
                     order: 0,
                     clips: [
                       {
                         id: `${sequenceId}-video`,
-                        kind: 'overlay',
-                        mediaKind: 'video',
+                        ...(NESTED_AUDIO_JOURNEY
+                          ? {
+                              kind: 'video',
+                              playbackRate: 0.75,
+                              audioEnabled: true,
+                              volume: 0.5,
+                              fadeInSec: 2.5,
+                              fadeOutSec: 2.5,
+                            }
+                          : { kind: 'overlay', mediaKind: 'video' }),
                         timelineStartSec: 0,
                         durationSec: 4,
                         source: { sourceType: 'library_asset', assetId, renditionId: versionId },
-                        sourceInSec: 0,
+                        sourceInSec: NESTED_AUDIO_JOURNEY ? 0.2 : 0,
                         parentClipId: `${sequenceId}-driver`,
-                        keyframes: keys.filter((key) => key.property === 'transform.opacity'),
+                        keyframes: [
+                          ...keys.filter((key) => key.property === 'transform.opacity'),
+                          ...(NESTED_AUDIO_JOURNEY
+                            ? [
+                                {
+                                  id: 'child-gain-0',
+                                  property: 'audio.volume',
+                                  timeSec: 0,
+                                  value: 0.25,
+                                  interpolation: 'linear',
+                                },
+                                {
+                                  id: 'child-gain-4',
+                                  property: 'audio.volume',
+                                  timeSec: 4,
+                                  value: 0.75,
+                                  interpolation: 'linear',
+                                },
+                              ]
+                            : []),
+                        ],
                       },
                     ],
                   },
@@ -2714,6 +2756,34 @@ test('retained project journey: native splits and deletes preserve stored pictur
                     enabled: false,
                     clips: [{ ...driver, id: `${sequenceId}-driver` }],
                   },
+                  ...(NESTED_AUDIO_JOURNEY
+                    ? [
+                        {
+                          id: `${sequenceId}-audio`,
+                          name: 'Child bed',
+                          kind: 'audio',
+                          order: 3,
+                          clips: [
+                            {
+                              id: `${sequenceId}-bed`,
+                              kind: 'audio',
+                              timelineStartSec: 1,
+                              durationSec: 2,
+                              source: {
+                                sourceType: 'library_asset',
+                                assetId,
+                                renditionId: versionId,
+                              },
+                              sourceInSec: 1,
+                              playbackRate: 0.8,
+                              volume: 0.18,
+                              fadeInSec: 0.4,
+                              fadeOutSec: 0.4,
+                            },
+                          ],
+                        },
+                      ]
+                    : []),
                 ],
               },
             },
@@ -2733,7 +2803,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
                     durationSec: 3,
                     sourceInSec: 0.25,
                     playbackRate: 1.1,
-                    audioEnabled: false,
+                    audioEnabled: NESTED_AUDIO_JOURNEY,
                     parentClipId: original.id,
                     transform: {
                       position: { x: 0.55, y: 0.6, unit: 'normalized' },
@@ -2743,6 +2813,24 @@ test('retained project journey: native splits and deletes preserve stored pictur
                       opacity: 0.7,
                     },
                     keyframes: [
+                      ...(NESTED_AUDIO_JOURNEY
+                        ? [
+                            {
+                              id: 'group-gain-0',
+                              property: 'audio.volume',
+                              timeSec: 0,
+                              value: 0.4,
+                              interpolation: 'linear',
+                            },
+                            {
+                              id: 'group-gain-3',
+                              property: 'audio.volume',
+                              timeSec: 3,
+                              value: 0.8,
+                              interpolation: 'linear',
+                            },
+                          ]
+                        : []),
                       {
                         id: 'nest-rotate-a',
                         property: 'transform.rotationDeg',
@@ -2763,9 +2851,44 @@ test('retained project journey: native splits and deletes preserve stored pictur
                       },
                     ],
                   },
+                  ...(NESTED_AUDIO_JOURNEY
+                    ? [
+                        {
+                          id: repeatedInstanceId,
+                          kind: 'nested_sequence',
+                          sequenceId,
+                          timelineStartSec: 1.5,
+                          durationSec: 1.6,
+                          sourceInSec: 1.2,
+                          playbackRate: 0.8,
+                          audioEnabled: true,
+                          transform: { opacity: 0 },
+                          keyframes: [
+                            {
+                              id: 'repeat-gain',
+                              property: 'audio.volume',
+                              timeSec: 0,
+                              value: 0.35,
+                              interpolation: 'linear',
+                            },
+                          ],
+                        },
+                      ]
+                    : []),
                 ],
               },
             },
+            ...(NESTED_AUDIO_JOURNEY
+              ? [
+                  {
+                    commandType: 'set_track_state',
+                    trackId: before.tracks.find((track) =>
+                      track.clips.some((clip) => clip.id === original.id),
+                    )!.id,
+                    muted: true,
+                  },
+                ]
+              : []),
           ],
         });
         assert(
@@ -2782,6 +2905,8 @@ test('retained project journey: native splits and deletes preserve stored pictur
         await render(nestedBefore, nestedBaselinePath);
         const samples = [0.8, 1.3, 2.3, 3.2];
         const nativeNested = async (project: EditorProjectV2, sec: number, label: string) => {
+          const snapping = page.getByRole('button', { name: 'Toggle snapping', exact: true });
+          if ((await snapping.getAttribute('aria-pressed')) === 'true') await snapping.click();
           await seek(page, pxPerSec, sec);
           const instance = project.tracks
             .flatMap((track) => (track.kind === 'nested_sequence' ? track.clips : []))
@@ -2875,18 +3000,20 @@ test('retained project journey: native splits and deletes preserve stored pictur
           transparentErrors.every((error) => error < 4),
           JSON.stringify(transparentErrors),
         );
-        await selectClip(page, instanceId);
+        await selectClip(page, instanceId, NESTED_AUDIO_JOURNEY ? 0.2 : 0.5);
         await seek(page, pxPerSec, 2);
         await page.locator('body').press('s');
         const splitNested = await until(
           () => getProject(api, projectId),
           (project) =>
-            project.tracks.find((track) => track.id === nestedTrackId)?.clips.length === 2,
+            project.tracks.find((track) => track.id === nestedTrackId)?.clips.length ===
+            (NESTED_AUDIO_JOURNEY ? 3 : 2),
         );
         const pieces = splitNested.tracks
           .flatMap((track) =>
             track.id === nestedTrackId && track.kind === 'nested_sequence' ? track.clips : [],
           )
+          .filter((clip) => clip.id !== repeatedInstanceId)
           .toSorted((left, right) => left.timelineStartSec - right.timelineStartSec);
         assert(
           `${interpolation}: native nested split retains child source and host keyframe clocks`,
@@ -2927,6 +3054,159 @@ test('retained project journey: native splits and deletes preserve stored pictur
           retainedNative.every((error) => error < 1),
           JSON.stringify(retainedNative),
         );
+        const nestedAudioProof = [];
+        if (NESTED_AUDIO_JOURNEY) {
+          const floats = (bytes: Buffer) =>
+            new Float32Array(
+              bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+            );
+          const decodeAudio = (file: string) =>
+            floats(
+              execFileSync(
+                'ffmpeg',
+                [
+                  '-v',
+                  'error',
+                  '-i',
+                  file,
+                  '-vn',
+                  '-af',
+                  'pan=mono|c0=c0',
+                  '-ar',
+                  '48000',
+                  '-f',
+                  'f32le',
+                  'pipe:1',
+                ],
+                { maxBuffer: 8_000_000 },
+              ),
+            );
+          const sourceAudio = decodeAudio(process.env.VIDEO_EDITOR_RECORDED_FIXTURE!);
+          const sourceAt = (sec: number) => {
+            const at = sec * 48000,
+              index = Math.floor(at),
+              fraction = at - index;
+            return (
+              (sourceAudio[index] ?? 0) * (1 - fraction) + (sourceAudio[index + 1] ?? 0) * fraction
+            );
+          };
+          // Independent source PCM and analytic author curves, without the editor's projection or mixer.
+          const oracleAt = (sec: number) => {
+            let sum = 0;
+            for (const group of [
+              {
+                start: 0.5,
+                duration: 3,
+                source: 0.25,
+                rate: 1.1,
+                gain: (local: number) => 0.4 + (0.4 * local) / 3,
+              },
+              { start: 1.5, duration: 1.6, source: 1.2, rate: 0.8, gain: () => 0.35 },
+            ]) {
+              const local = sec - group.start;
+              if (local < 0 || local >= group.duration) continue;
+              const child = group.source + local * group.rate;
+              const videoGain =
+                (0.25 + (0.5 * child) / 4) *
+                Math.min(1, child / 2.5) *
+                Math.min(1, (4 - child) / 2.5);
+              let sound = sourceAt(0.2 + child * 0.75) * videoGain;
+              if (child >= 1 && child < 3)
+                sound +=
+                  sourceAt(1 + (child - 1) * 0.8) *
+                  0.18 *
+                  Math.min(1, (child - 1) / 0.4) *
+                  Math.min(1, (3 - child) / 0.4);
+              sum += sound * group.gain(local);
+            }
+            return sum;
+          };
+          const compare = (
+            actual: Float32Array,
+            expected: (sec: number) => number,
+            fromSec = 0,
+          ) => {
+            let error = 0,
+              energy = 0;
+            for (const sec of [0.8, 1.3, 1.8, 2.3, 2.8, 3.2].filter((sec) => sec >= fromSec))
+              for (let sample = 0; sample < 1920; sample++) {
+                const time = sec + sample / 48000;
+                const reference = expected(time);
+                const got = actual[Math.round((time - fromSec) * 48000)] ?? 0;
+                energy += reference ** 2;
+                error += (got - reference) ** 2;
+              }
+            return { energy, relativeError: energy > 1e-6 ? error / energy : Infinity };
+          };
+          const originalAudio = decodeAudio(nestedBaselinePath),
+            splitAudio = decodeAudio(nestedEditedPath);
+          const originalNativeAudio = await previewAudio(nestedBefore),
+            splitNativeAudio = await previewAudio(nestedAfter);
+          const seekNativeAudio = await previewAudio(nestedAfter, 1.1);
+          writeFileSync(
+            join(folder, `${interpolation}-nested-audio-preview.f32`),
+            Buffer.from(originalNativeAudio.buffer),
+          );
+          writeFileSync(
+            join(folder, `${interpolation}-nested-audio-split-preview.f32`),
+            Buffer.from(splitNativeAudio.buffer),
+          );
+          writeFileSync(
+            join(folder, `${interpolation}-nested-audio-seek-preview.f32`),
+            Buffer.from(seekNativeAudio.buffer),
+          );
+          const oracleErrors = [
+            compare(originalAudio, oracleAt),
+            compare(originalNativeAudio, oracleAt),
+          ];
+          assert(
+            `${interpolation}: nested video and bed audio match independent source PCM, rates, fades and multiplying host gains`,
+            oracleErrors.every((result) => result.relativeError < 0.05),
+            JSON.stringify(oracleErrors),
+          );
+          const retainedAudio = compare(
+            splitAudio,
+            (sec) => originalAudio[Math.round(sec * 48000)] ?? 0,
+          );
+          const retainedNativeAudio = compare(
+            splitNativeAudio,
+            (sec) => originalNativeAudio[Math.round(sec * 48000)] ?? 0,
+          );
+          const seekAudio = compare(
+            seekNativeAudio,
+            (sec) => originalNativeAudio[Math.round(sec * 48000)] ?? 0,
+            1.1,
+          );
+          assert(
+            `${interpolation}: native nested split, reload and seek retain child and repeated-instance sound`,
+            [retainedAudio, retainedNativeAudio, seekAudio].every(
+              (result) => result.relativeError < 0.02,
+            ),
+            JSON.stringify({ retainedAudio, retainedNativeAudio, seekAudio }),
+          );
+          const silenceEnergy = [originalAudio, originalNativeAudio].map((audio) => {
+            let energy = 0,
+              count = 0;
+            for (const sec of [0, 3.8])
+              for (let sample = 0; sample < 4800; sample++) {
+                energy += (audio[Math.round(sec * 48000) + sample] ?? 0) ** 2;
+                count++;
+              }
+            return energy / count;
+          });
+          assert(
+            `${interpolation}: nested sound is silent outside its mapped host windows`,
+            silenceEnergy.every((energy) => energy < 1e-8),
+            JSON.stringify(silenceEnergy),
+          );
+          nestedAudioProof.push({
+            oracleErrors,
+            retainedAudio,
+            retainedNativeAudio,
+            seekAudio,
+            silenceEnergy,
+          });
+        }
         const nestedUndo = await postOp(api, projectId, 'undo', { toRevision: before.revision });
         const nestedRestored = await getProject(api, projectId);
         assert(
@@ -2946,6 +3226,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
               transparentErrors,
               retainedErrors,
               retainedNative,
+              nestedAudioProof,
             },
             null,
             2,

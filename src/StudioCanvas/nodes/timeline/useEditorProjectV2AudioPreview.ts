@@ -6,6 +6,8 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { headFadeFor, tailFadeFor } from '../../utils/render/transitions';
 import {
   editorAudioTracks,
+  nestedAudioClips,
+  nestedAudioSources,
   resolveTimelineAudioEnvelope,
   volumeKeyframesOf,
 } from '../../utils/splice/timelineAudioEnvelope';
@@ -40,7 +42,13 @@ export function editorProjectV2AudioClipIds(project: EditorProjectV2): string[] 
     .flatMap((track) =>
       track.clips.filter((clip) => clip.enabled && !clip.muted).map((clip) => clip.id),
     );
-  return [...videoIds, ...audioIds];
+  return [
+    ...new Set([
+      ...videoIds,
+      ...audioIds,
+      ...nestedAudioSources(project).map((item) => item.child.id),
+    ]),
+  ];
 }
 
 export function buildEditorProjectV2AudioPreviewPlan(input: {
@@ -127,6 +135,33 @@ export function buildEditorProjectV2AudioPreviewPlan(input: {
     });
   }
 
+  for (const item of nestedAudioClips(input.project)) {
+    const blob = input.blobsByClipId.get(item.sourceClipId);
+    if (!blob) continue;
+    const clip = item.clock;
+    events.push({
+      id: item.id,
+      sourceKey: exactSourceKey(clip),
+      sourceNodeId: item.sourceClipId,
+      kind: 'audio',
+      blob,
+      outputStartSec: item.outputStartSec,
+      outputEndSec: item.outputStartSec + clip.durationSec,
+      sourceStartSec: item.sourceStartSec,
+      sourceEndSec: item.sourceEndSec,
+      playbackRate: item.playbackRate,
+      volumeKeyframes: volumeKeyframesOf(clip.keyframes),
+      keyframeOffsetSec: clip.keyframeOffsetSec,
+      groupVolumeKeyframes: item.groupVolumeKeyframes,
+      groupKeyframeOffsetSec: item.groupKeyframeOffsetSec,
+      ...resolveTimelineAudioEnvelope({
+        gain: clip.volume,
+        audioFadeClock: clip.audioFadeClock,
+        manualFadeInSec: clip.fadeInSec,
+        manualFadeOutSec: clip.fadeOutSec,
+      }),
+    });
+  }
   return {
     events: events.sort(
       (left, right) =>

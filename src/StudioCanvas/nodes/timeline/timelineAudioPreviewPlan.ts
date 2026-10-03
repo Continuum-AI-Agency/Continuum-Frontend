@@ -36,6 +36,8 @@ export interface TimelinePreviewAudioEvent {
   /** `audio.volume` keyframes, clip-local seconds; when present they ARE the gain. */
   volumeKeyframes?: readonly NumericKeyframe[];
   keyframeOffsetSec?: number;
+  groupVolumeKeyframes?: readonly NumericKeyframe[];
+  groupKeyframeOffsetSec?: number;
 }
 
 export interface TimelinePreviewAudioPlan {

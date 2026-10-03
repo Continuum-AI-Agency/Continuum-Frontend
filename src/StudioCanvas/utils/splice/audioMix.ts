@@ -2,9 +2,9 @@ import {
   type EditorAudioFadeClock,
   editorAudioFadeGainAt,
   type NumericKeyframe,
-  sampleNumericTrack,
 } from '@continuum/contracts';
 import { throwIfAborted } from './appendRange';
+import { audioGainAt } from './timelineAudioEnvelope';
 
 // PCM mixdown for the Video Editor (timelineEditor) render. The old audio path
 // appended each clip's samples inline into one AudioSampleSource, so overlapping
@@ -78,6 +78,8 @@ export interface EnvelopeOptions {
    *  (the clip's volume outside them), sampled like every other keyed property. */
   volumeKeyframes?: readonly NumericKeyframe[];
   keyframeOffsetSec?: number;
+  groupVolumeKeyframes?: readonly NumericKeyframe[];
+  groupKeyframeOffsetSec?: number;
 }
 
 /** Frames between two samples of a keyed gain curve; the gain is linear in between. */
@@ -92,20 +94,14 @@ export function applyEnvelope(pcm: StereoPcm, opts: EnvelopeOptions): void {
   if (n === 0) return;
   const fadeIn = Math.min(n, Math.round(Math.max(0, opts.fadeInSec ?? 0) * AUDIO_SAMPLE_RATE));
   const fadeOut = Math.min(n, Math.round(Math.max(0, opts.fadeOutSec ?? 0) * AUDIO_SAMPLE_RATE));
-  const keys = opts.volumeKeyframes?.length ? opts.volumeKeyframes : null;
-  const keyedGain = (frame: number) =>
-    keys
-      ? Math.max(
-          0,
-          sampleNumericTrack(keys, frame / AUDIO_SAMPLE_RATE, gain, opts.keyframeOffsetSec),
-        )
-      : gain;
+  const hasKeys = Boolean(opts.volumeKeyframes?.length || opts.groupVolumeKeyframes?.length);
+  const keyedGain = (frame: number) => audioGainAt(opts, frame / AUDIO_SAMPLE_RATE);
   const clip = { ...opts, durationSec: n / AUDIO_SAMPLE_RATE };
   let fromGain = gain;
   let toGain = gain;
   for (let i = 0; i < n; i += 1) {
     let g = gain;
-    if (keys) {
+    if (hasKeys) {
       const step = i % GAIN_CONTROL_FRAMES;
       if (step === 0) {
         fromGain = keyedGain(i);
@@ -195,6 +191,8 @@ export interface AudioPlanItem {
   fadeOutSec: number;
   volumeKeyframes?: readonly NumericKeyframe[];
   keyframeOffsetSec?: number;
+  groupVolumeKeyframes?: readonly NumericKeyframe[];
+  groupKeyframeOffsetSec?: number;
 }
 
 export async function decodeClipPcm(
@@ -284,6 +282,8 @@ export async function mixdownTimelineAudio(
       transitionFadeOutSec: item.transitionFadeOutSec,
       fadeInSec: item.fadeInSec,
       fadeOutSec: item.fadeOutSec,
+      groupVolumeKeyframes: item.groupVolumeKeyframes,
+      groupKeyframeOffsetSec: item.groupKeyframeOffsetSec,
       ...(item.volumeKeyframes
         ? { volumeKeyframes: item.volumeKeyframes, keyframeOffsetSec: item.keyframeOffsetSec }
         : {}),
