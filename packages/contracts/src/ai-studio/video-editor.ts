@@ -637,7 +637,7 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      'Switch the project to a platform format (TikTok/Reels/Shorts 9:16, YouTube 16:9, square, 4:5) and reframe every clip to cover (fill, crop edges) or contain (fit, letterbox).',
+      'Switch the project to a platform format (TikTok/Reels/Shorts 9:16, YouTube 16:9, square, 4:5) and refit unlocked, centered full-frame video clips to cover (fill, crop edges) or contain (fit, letterbox). Preserve authored positioning, pivots, motion and 3D transforms.',
     input: z
       .object({
         ...projectRef,
