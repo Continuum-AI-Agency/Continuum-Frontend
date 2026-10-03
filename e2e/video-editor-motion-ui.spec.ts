@@ -54,6 +54,7 @@ import { removeProjects } from './video-editor-workspace/ledger';
 test.describe.configure({ timeout: 900_000 });
 
 const BENCH = 'videoeditor:motion:e2e:bench';
+const KEYFRAME_HOLD_JOURNEY = process.env.VIDEO_EDITOR_KEYFRAME_HOLD_JOURNEY === '1';
 const LOCAL_CURVE_JOURNEY = process.env.VIDEO_EDITOR_CURVE_JOURNEY_LOCAL === '1';
 const SPEECH_JOURNEY = process.env.VIDEO_EDITOR_SPEECH_JOURNEY === '1';
 const TEXT_JOURNEY = process.env.VIDEO_EDITOR_TEXT_JOURNEY === '1';
@@ -1068,23 +1069,25 @@ test('retained project journey: native splits and deletes preserve stored pictur
     'Set VIDEO_EDITOR_CURVE_JOURNEY=1 for the disposable real-store journey.',
   );
   const proof = createBenchRecorder(
-    STAGE_JOURNEY
-      ? 'videoeditor:motion:e2e:bench:stage-handles'
-      : NESTED_CONTROLS_JOURNEY
-        ? 'videoeditor:motion:e2e:bench:composition-controls'
-        : NESTED_AUDIO_JOURNEY
-          ? 'videoeditor:motion:e2e:bench:retained-nested-audio'
-          : NESTED_JOURNEY
-            ? 'videoeditor:motion:e2e:bench:retained-nested'
-            : CAPTION_JOURNEY
-              ? 'videoeditor:motion:e2e:bench:retained-captions'
-              : SPEECH_JOURNEY
-                ? 'videoeditor:motion:e2e:bench:speech-jumps'
-                : PARENT_JOURNEY
-                  ? 'videoeditor:motion:e2e:bench:retained-parent'
-                  : TEXT_JOURNEY
-                    ? 'videoeditor:motion:e2e:bench:retained-text'
-                    : 'videoeditor:motion:e2e:bench:retained-project',
+    KEYFRAME_HOLD_JOURNEY
+      ? BENCH
+      : STAGE_JOURNEY
+        ? 'videoeditor:motion:e2e:bench:stage-handles'
+        : NESTED_CONTROLS_JOURNEY
+          ? 'videoeditor:motion:e2e:bench:composition-controls'
+          : NESTED_AUDIO_JOURNEY
+            ? 'videoeditor:motion:e2e:bench:retained-nested-audio'
+            : NESTED_JOURNEY
+              ? 'videoeditor:motion:e2e:bench:retained-nested'
+              : CAPTION_JOURNEY
+                ? 'videoeditor:motion:e2e:bench:retained-captions'
+                : SPEECH_JOURNEY
+                  ? 'videoeditor:motion:e2e:bench:speech-jumps'
+                  : PARENT_JOURNEY
+                    ? 'videoeditor:motion:e2e:bench:retained-parent'
+                    : TEXT_JOURNEY
+                      ? 'videoeditor:motion:e2e:bench:retained-text'
+                      : 'videoeditor:motion:e2e:bench:retained-project',
     [],
   );
   proof.notes.push(
@@ -1108,6 +1111,13 @@ test('retained project journey: native splits and deletes preserve stored pictur
     expect(ok, `${name}${detail ? `: ${detail}` : ''}`).toBe(true);
   };
   try {
+    if (
+      KEYFRAME_HOLD_JOURNEY &&
+      (!LOCAL_CURVE_JOURNEY || SPEECH_JOURNEY || TEXT_JOURNEY || PARENT_JOURNEY || NESTED_JOURNEY)
+    )
+      throw new Error(
+        'Hold keyframe proof requires the loopback recording without other journey modes.',
+      );
     if (STAGE_JOURNEY && !NESTED_CONTROLS_JOURNEY)
       throw new Error('Stage journey requires composition controls.');
     if (NESTED_CONTROLS_JOURNEY && !NESTED_AUDIO_JOURNEY)
@@ -1781,7 +1791,9 @@ test('retained project journey: native splits and deletes preserve stored pictur
     }
     for (const interpolation of SPEECH_JOURNEY
       ? []
-      : (['hold', 'linear', 'bezier', 'spring'] as const)) {
+      : KEYFRAME_HOLD_JOURNEY
+        ? (['linear'] as const)
+        : (['hold', 'linear', 'bezier', 'spring'] as const)) {
       await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
       await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180_000 });
       const projectId = /\/studio\/video\/([0-9a-f-]{36})/.exec(page.url())?.[1];
@@ -1822,6 +1834,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
                   timelineStartSec: 0,
                   durationSec: 4,
                   source: { sourceType: 'library_asset', assetId, renditionId: versionId },
+                  ...(KEYFRAME_HOLD_JOURNEY ? { sourceInSec: 64.7 } : {}),
                   volume: 0.6,
                   fadeInSec: 3,
                   fadeOutSec: 3,
@@ -1976,15 +1989,19 @@ test('retained project journey: native splits and deletes preserve stored pictur
           ...initial.tracks.map((track) => ({ commandType: 'remove_track', trackId: track.id })),
           {
             commandType: 'set_project_metadata',
-            canvas: { ...initial.canvas, width: 360, height: 640 },
+            canvas: {
+              ...initial.canvas,
+              width: KEYFRAME_HOLD_JOURNEY ? 640 : 360,
+              height: KEYFRAME_HOLD_JOURNEY ? 360 : 640,
+            },
             durationSec: 4,
           },
           {
             commandType: 'set_export_settings',
             exportSettings: editorExportSettingsSchema.parse({
               ...initial.exportSettings,
-              width: 360,
-              height: 640,
+              width: KEYFRAME_HOLD_JOURNEY ? 640 : 360,
+              height: KEYFRAME_HOLD_JOURNEY ? 360 : 640,
               frameRate: { numerator: 30, denominator: 1 },
               videoBitrateKbps: 1500,
               audioBitrateKbps: 128,
@@ -2012,6 +2029,148 @@ test('retained project journey: native splits and deletes preserve stored pictur
       const box = await page.locator(`[data-clip-id="${original.id}"]:visible`).boundingBox();
       if (!box) throw new Error('Original clip not visible');
       const pxPerSec = box.width / 4;
+      if (KEYFRAME_HOLD_JOURNEY) {
+        await selectClip(page, original.id);
+        await visible(
+          page.getByRole('button', { name: 'Opacity keyframe at 0.50 s', exact: true }),
+        ).click();
+        const editor = visible(page.getByTestId('keyframe-editor'));
+        const save = page.waitForResponse(
+          (response) =>
+            response.request().method() === 'POST' &&
+            response.url().endsWith(`/${projectId}/commands`),
+        );
+        const started = performance.now();
+        await editor.getByRole('button', { name: 'Hold', exact: true }).click();
+        const response = await save;
+        await response.finished();
+        const saveMs = performance.now() - started;
+        const held = await getProject(api, projectId);
+        const heldClip = clipById(held, original.id);
+        assert(
+          'hold lane: native preset persists exactly one authorized revision',
+          response.ok() &&
+            held.revision === before.revision + 1 &&
+            keyframesOf(heldClip).some(
+              (key) =>
+                key.property === 'transform.opacity' &&
+                key.timeSec === 0.5 &&
+                key.interpolation === 'hold',
+            ),
+        );
+        const path = await editor
+          .getByRole('img', { name: 'Easing curve' })
+          .locator('path')
+          .getAttribute('d');
+        const points = [...(path ?? '').matchAll(/[ML]([\d.-]+) ([\d.-]+)/g)].map((match) => [
+          Number(match[1]),
+          Number(match[2]),
+        ]);
+        const graphCorrect = points.length > 2 && points.every((point) => point[1] === 16);
+        writeFileSync(
+          join(folder, 'hold-easing-path.json'),
+          JSON.stringify({ path, points, graphCorrect, saveMs, held }, null, 2),
+        );
+        const actualPath = join(folder, 'hold-edited.mp4');
+        await render(held, actualPath);
+        const controls = new Map<number, string>();
+        for (const alpha of [1, 0.3, 0.8]) {
+          const control = structuredClone(held);
+          const clip = mainClips(control)[0];
+          if (!clip || clip.kind !== 'video') throw new Error('Hold reference video missing');
+          clip.keyframes = clip.keyframes.filter((key) => key.property !== 'transform.opacity');
+          clip.transform.opacity = alpha;
+          const path = join(folder, `hold-static-${alpha}.mp4`);
+          await render(control, path);
+          controls.set(alpha, path);
+        }
+        const frame = (file: string, sec: number) =>
+          execFileSync(
+            'ffmpeg',
+            [
+              '-v',
+              'error',
+              '-threads',
+              '1',
+              '-i',
+              file,
+              '-vf',
+              `select=eq(n\\,${Math.round(sec * 30)})`,
+              '-frames:v',
+              '1',
+              '-f',
+              'rawvideo',
+              '-pix_fmt',
+              'rgb24',
+              'pipe:1',
+            ],
+            { maxBuffer: 4_000_000 },
+          );
+        const mae = (a: Buffer, b: Buffer) =>
+          a.length === b.length
+            ? a.reduce((sum, v, i) => sum + Math.abs(v - b[i]!), 0) / a.length
+            : Infinity;
+        const samples = [];
+        for (const sec of [0.2, 0.5, 0.8, 2.5, 3.5, 3.7]) {
+          // The documented Figma Hold jumps to the arriving value at the departing key.
+          const alpha = sec < 0.5 ? 1 : 0.8;
+          await seek(page, pxPerSec, sec);
+          const video = page.getByTestId('edit-stage').locator('video').first();
+          await expect
+            .poll(() => video.evaluate((v) => Number(getComputedStyle(v).opacity)))
+            .toBeCloseTo(alpha, 3);
+          await expect.poll(() => video.evaluate((v) => v.currentTime)).toBeCloseTo(64.7 + sec, 2);
+          writeFileSync(
+            join(folder, `hold-native-${sec}.png`),
+            await video.locator('..').screenshot(),
+          );
+          const actual = frame(actualPath, sec),
+            expected = frame(controls.get(alpha)!, sec),
+            opposite = frame(controls.get(0.3)!, sec);
+          const error = mae(actual, expected),
+            wrong = mae(actual, opposite);
+          assert(
+            `hold lane: decoded output at ${sec}s matches the documented immediate Hold value`,
+            actual.length === 360 * 640 * 3 && error <= 2 && wrong >= 8 && error < wrong / 4,
+            JSON.stringify({ alpha, error, wrong }),
+          );
+          samples.push({ sec, alpha, error, wrong });
+        }
+        await page.reload();
+        await expect(page.locator(`[data-clip-id="${original.id}"]:visible`)).toHaveCount(1);
+        const reloaded = await getProject(api, projectId);
+        assert(
+          'hold lane: authored keys survive native reload without changing the source',
+          JSON.stringify(reloaded.tracks) === JSON.stringify(held.tracks),
+        );
+        const undo = await postOp(api, projectId, 'undo', { toRevision: before.revision });
+        const restored = await getProject(api, projectId);
+        assert(
+          'hold lane: persisted undo restores the original linear keys exactly',
+          undo.status === 200 && JSON.stringify(restored.tracks) === JSON.stringify(before.tracks),
+        );
+        summary.push({
+          fixture: 'actual recorded media',
+          before,
+          held,
+          samples,
+          graphCorrect,
+          saveMs,
+        });
+        proof.notes.push(
+          `hold preset save samples: ${JSON.stringify([saveMs])}; one sample only, not a frozen Speed award.`,
+        );
+        assert(
+          'hold lane: native easing diagram matches immediate Hold at its first tick',
+          graphCorrect,
+          path ?? 'missing path',
+        );
+        proof.record(
+          'hold lane: other easing modes, channels, gestures, all-sample speed, native Export, agent and production remain open',
+          'SKIP',
+        );
+        continue;
+      }
       const titlePreview = async (sec: number, label: string) => {
         await seek(page, pxPerSec, sec);
         const canvas = page.getByTestId('stage-text');

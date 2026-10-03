@@ -8,6 +8,7 @@ import {
 } from '@continuum/contracts';
 import { cleanup, createEvent, fireEvent, render, waitFor } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { EasingCurveEditor } from '@/StudioCanvas/nodes/timeline/motion/EasingCurveEditor';
 import { createPlayheadStore } from '@/StudioCanvas/nodes/timeline/workspace/playheadStore';
 import {
   placeAssetEdit,
@@ -268,5 +269,31 @@ describe('KeyButton drag', () => {
       commandType: 'upsert_keyframe',
       keyframe: { property: 'transform.position', timeSec: 2.5 },
     });
+  });
+});
+
+describe('shared easing diagram', () => {
+  it('shows immediate Figma Hold from the first tick, matching playback', () => {
+    const view = render(
+      <EasingCurveEditor
+        keyframe={{
+          id: 'hold',
+          property: 'transform.opacity',
+          timeSec: 0,
+          value: 0.3,
+          interpolation: 'hold',
+        }}
+        onChange={() => undefined}
+      />,
+    );
+    const path =
+      view.getByRole('img', { name: 'Easing curve' }).querySelector('path')?.getAttribute('d') ??
+      '';
+    const points = [...path.matchAll(/[ML]([\d.-]+) ([\d.-]+)/g)].map((match) => [
+      Number(match[1]),
+      Number(match[2]),
+    ]);
+    expect(points.length).toBeGreaterThan(2);
+    expect(points.every((point) => point[1] === 16)).toBe(true);
   });
 });
