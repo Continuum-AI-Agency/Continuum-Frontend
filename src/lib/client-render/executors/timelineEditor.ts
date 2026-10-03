@@ -250,6 +250,8 @@ export const clipEffectSpecFromEditorClip = (
       rotateYDeg?: number;
       perspective?: number;
       opacity: number;
+      anchorX?: number;
+      anchorY?: number;
     };
     crop?: ClipEffectSpec['crop'];
     blendMode?: ClipEffectSpec['blendMode'];
@@ -288,6 +290,8 @@ export const clipEffectSpecFromEditorClip = (
           rotateX: clip.transform.rotateXDeg ?? 0,
           rotateY: clip.transform.rotateYDeg ?? 0,
           perspective: clip.transform.perspective ?? 0,
+          anchorX: clip.transform.anchorX,
+          anchorY: clip.transform.anchorY,
         },
       }
     : {}),

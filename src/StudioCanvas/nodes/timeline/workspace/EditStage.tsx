@@ -76,7 +76,6 @@ function layerFor(
     effectTimeSec,
     mediaStyle: {
       ...css,
-      transformOrigin: `${clip.transform.anchorX * 100}% ${clip.transform.anchorY * 100}%`,
     },
     textOverlays: [],
   };
@@ -215,6 +214,7 @@ export const EditStage = memo(function EditStage({
           playheadSec={sec}
           totalSec={project.durationSec}
           mediaStyle={clipEffectsToCss(activeEffects, activeT)}
+          frameSize={project.canvas}
           shaderEffects={activeEffects}
           shaderTimeSec={active ? sec - active.timelineStartSec : 0}
           overlayLayers={overlayLayers}

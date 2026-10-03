@@ -208,3 +208,43 @@ it('stage scale keeps axes signed and independent, edits the displayed hold stop
   });
   expect(stageTransformEdit(locked, 'child', shown, 'rotate', 1.5)).toBeNull();
 });
+
+it('non-center stage drags keep the pivot and convert picture-center moves back into canonical position', () => {
+  const project = animated();
+  const original = childOf(project);
+  const changed = {
+    ...original,
+    transform: { ...original.transform, anchorX: 0.25, anchorY: 0.75 },
+  };
+  const altered = editorProjectV2Schema.parse({
+    ...project,
+    tracks: project.tracks.map((track) => ({
+      ...track,
+      clips: track.clips.map((clip) => (clip.id === changed.id ? changed : clip)),
+    })),
+  });
+  const shown = stageTransformAt(altered, childOf(altered), 1.5);
+  const desired = { ...shown, position: { ...shown.position, x: shown.position.x + 0.1 } };
+  const edit = stageTransformEdit(altered, 'child', desired, 'move', 1.5);
+  if (!edit) throw new Error('Missing edit');
+  const next = simulate(altered, edit.forward);
+  expect(stageTransformAt(next, childOf(next), 1.5).position.x).toBeCloseTo(desired.position.x, 5);
+  expect(childOf(next).transform.anchorX).toBe(0.25);
+  const axis = {
+    ...start,
+    position: { x: 0.375, y: 0.5, unit: 'normalized' as const },
+    anchorX: 0.25,
+    scaleX: 0.5,
+    scaleY: 0.5,
+  };
+  const scaled = dragTransform({
+    gesture: 'scale',
+    start: axis,
+    startPointer: { x: 500, y: 250 },
+    pointer: { x: 750, y: 250 },
+    frame,
+    shift: false,
+  });
+  expect(scaled.transform.scaleX).toBe(1);
+  expect(scaled.transform.position.x).toBe(0.5);
+});

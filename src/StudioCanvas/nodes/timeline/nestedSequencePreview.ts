@@ -24,7 +24,6 @@ export function nestedInstanceStyle(
   const css = clipEffectsToCss(clipEffectSpecFromEditorClip(clip, project), u);
   return {
     ...css,
-    transformOrigin: `${clip.transform.anchorX * 100}% ${clip.transform.anchorY * 100}%`,
   };
 }
 

@@ -90,6 +90,9 @@ const previewTimelineAudio = async (input: DurableTimelineRequest, fromSec = 0) 
     const buffer = await context.startRendering();
     return {
       pcmBase64: bytesToBase64(new Uint8Array(buffer.getChannelData(0).buffer)),
+      channelsBase64: Array.from({ length: buffer.numberOfChannels }, (_, channel) =>
+        bytesToBase64(new Uint8Array(buffer.getChannelData(channel).buffer)),
+      ),
       sampleRate: rate,
     };
   } finally {

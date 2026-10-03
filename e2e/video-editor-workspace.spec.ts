@@ -1,10 +1,21 @@
-import { randomUUID } from 'node:crypto';
-import type { EditorProjectV2 } from '@continuum/contracts';
+import { execFileSync } from 'node:child_process';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  type EditorProjectV2,
+  type EditorVideoClip,
+  editorExportSettingsSchema,
+  editorProjectResponseSchema,
+  registerGeneratedAssetResponseSchema,
+} from '@continuum/contracts';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { Recorder } from '../../Continuum-Backend/scripts/_bench/recorder';
 import { mintSessionBundleForEmail } from './support/auth';
-import { loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
+import type { DurableTimelineRequest } from './support/editorV2DurableRenderBenchEntry';
+import { loadLocalSupabaseEnv, loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 import { bootBackend, bootFrontend, freePort, type Server } from './video-editor-workspace/harness';
 import {
   brandObjectCount,
@@ -33,8 +44,15 @@ import {
 test.describe.configure({ timeout: 900_000 });
 
 const BENCH = 'videoeditor:workspace:e2e:bench';
-const BRAND = process.env.CONTINUUM_TEST_BRAND_ID ?? 'b411bba9-d09c-4892-9b86-5ff340ce64e5';
-const OWNER_EMAIL = readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai';
+const INSPECTOR_JOURNEY = process.env.VIDEO_EDITOR_INSPECTOR_JOURNEY === '1';
+const BRAND =
+  process.env.CONTINUUM_TEST_BRAND_ID ??
+  (INSPECTOR_JOURNEY
+    ? '00000000-0000-4000-8000-0000000000b2'
+    : 'b411bba9-d09c-4892-9b86-5ff340ce64e5');
+const OWNER_EMAIL = INSPECTOR_JOURNEY
+  ? 'local@continuum.test'
+  : (readBackendEnv('CONTINUUM_BENCH_OWNER_EMAIL') ?? 'bench@trycontinuum.ai');
 /** "Solicita tu Day Pass en Vivo 4047" — a 6.6 s Vivo 47 clip with its own speech. */
 const SOURCE_ASSET_ID =
   process.env.VIDEO_WORKSPACE_SOURCE_ASSET ?? 'd0cae5f0-d938-4825-952b-f1d24cef0069';
@@ -42,7 +60,9 @@ const LIVE_EDIT_BUDGET_MS = 3_000;
 const RUN = randomUUID().slice(0, 8);
 const DROP_NAME = `bench-video-workspace-${RUN}.mp4`;
 
-const { url: supabaseUrl, serviceRoleKey } = loadProdSupabaseEnv();
+const { url: supabaseUrl, serviceRoleKey } = INSPECTOR_JOURNEY
+  ? loadLocalSupabaseEnv()
+  : loadProdSupabaseEnv();
 process.env.SUPABASE_URL = supabaseUrl;
 const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 const rec = new Recorder(BENCH);
@@ -121,6 +141,10 @@ async function dropFile(page: Page, target: Locator, bytes: Buffer, name: string
 }
 
 test(BENCH, async ({ browser }) => {
+  test.skip(
+    INSPECTOR_JOURNEY,
+    'Original hosted Library-drop workspace activities are not exercised by the loopback f06 inspector case.',
+  );
   const sinkLibrary = process.env.BENCH_SINK === 'library';
   if (!check('Library sink enabled for the upload hop', sinkLibrary, 'BENCH_SINK=library')) {
     printEnvelope();
@@ -706,5 +730,705 @@ test(BENCH, async ({ browser }) => {
     for (const server of servers.reverse()) server.stop();
   }
   const failures = printEnvelope();
+  expect(failures, 'graded FAIL steps').toBe(0);
+});
+
+test('workspace inspector: native transform, crop, gain and constant-speed render parity', async ({
+  browser,
+}) => {
+  test.skip(
+    !INSPECTOR_JOURNEY,
+    'Set VIDEO_EDITOR_INSPECTOR_JOURNEY=1 for the full f06 loopback case.',
+  );
+  const folder =
+    process.env.VIDEO_EDITOR_INSPECTOR_OUTPUT ?? join(tmpdir(), `video-inspector-${RUN}`);
+  mkdirSync(folder, { recursive: true });
+  const assert = (name: string, ok: boolean, detail?: string) => {
+    check(name, ok, detail);
+    expect(ok, name).toBe(true);
+  };
+  const servers: Server[] = [],
+    ids: string[] = [];
+  let context: Awaited<ReturnType<typeof browser.newContext>> | undefined;
+  let session: Awaited<ReturnType<typeof mintSessionBundleForEmail>> | undefined;
+  let previousBrand: string | null | undefined,
+    brandChanged = false;
+  let owned: { path: string; assetId?: string; receiptKey?: string } | undefined;
+  const timings: Array<{
+    case: number;
+    control: string;
+    durationMs: number;
+    resourceStart: number;
+    responseEnd: number;
+    revision: number;
+  }> = [];
+  try {
+    note(
+      'f06 scope: full native transform/crop/gain/constant-speed inspection, real loopback Library/HTTP/store, browser compositor. Original hosted upload/drop workspace case, native Export dialog and hosted Render are not exercised.',
+    );
+    const file = process.env.VIDEO_EDITOR_RECORDED_FIXTURE;
+    if (!file) throw new Error('Inspector journey requires a real recorded MP4.');
+    const bytes = readFileSync(file);
+    const probe = JSON.parse(
+      execFileSync(
+        'ffprobe',
+        [
+          '-v',
+          'error',
+          '-select_streams',
+          'v:0',
+          '-show_entries',
+          'stream=width,height:format=duration',
+          '-of',
+          'json',
+          file,
+        ],
+        { encoding: 'utf8' },
+      ),
+    ) as { streams: Array<{ width: number; height: number }>; format: { duration: string } };
+    assert(
+      'f06 recorded source has enough media and retained checksum',
+      Number(probe.format.duration) >= 4.2,
+      createHash('sha256').update(bytes).digest('hex'),
+    );
+    const port = await freePort(),
+      backend = await bootBackend(`http://localhost:${port}`);
+    servers.push(backend);
+    const frontend = await bootFrontend(port, backend.url, '.next/video-workspace-inspector');
+    servers.push(frontend);
+    process.env.PLAYWRIGHT_BASE_URL = frontend.url;
+    session = await mintSessionBundleForEmail(OWNER_EMAIL);
+    const api: Api = { base: backend.url, token: session.accessToken };
+    const { data: preference, error: prefError } = await admin
+      .schema('brand_profiles')
+      .from('user_brand_preferences')
+      .select('active_brand_id')
+      .eq('user_id', session.userId)
+      .maybeSingle();
+    if (prefError) throw prefError;
+    previousBrand = preference ? preference.active_brand_id : undefined;
+    const { error: prefSetError } = await admin
+      .schema('brand_profiles')
+      .from('user_brand_preferences')
+      .upsert(
+        { user_id: session.userId, active_brand_id: BRAND, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' },
+      );
+    if (prefSetError) throw prefSetError;
+    brandChanged = true;
+    const { buildRegisterGeneratedAssetOperation } = await import(
+      '../../Continuum-Backend/App/media/registerGeneratedAsset'
+    );
+    owned = { path: `${BRAND}/video-inspector-bench/${randomUUID()}/recorded.mp4` };
+    const operation = buildRegisterGeneratedAssetOperation({
+      brandId: BRAND,
+      kind: 'video',
+      bucket: 'media-library',
+      storagePath: owned.path,
+      fileName: `bench-inspector-${RUN}.mp4`,
+      mimeType: 'video/mp4',
+      createdBy: session.userId,
+      width: probe.streams[0]?.width,
+      height: probe.streams[0]?.height,
+      durationMs: Math.round(Number(probe.format.duration) * 1000),
+      sizeBytes: bytes.length,
+      checksum: createHash('sha256').update(bytes).digest('hex'),
+      source: 'canvas',
+      operation: 'video_editor_local_fixture',
+      originRef: { bench: BENCH, actualRecordedMedia: true },
+    });
+    const { error: uploadError } = await admin.storage
+      .from('media-library')
+      .upload(owned.path, bytes, { contentType: 'video/mp4' });
+    if (uploadError) throw uploadError;
+    owned.receiptKey = operation.idempotencyKey;
+    const { data: receiptData, error: receiptError } = await admin
+      .schema('media')
+      .rpc('library_execute_operation', {
+        p_action: operation.action,
+        p_payload: { ...operation, actor: session.userId },
+      });
+    if (receiptError) throw receiptError;
+    const receipt = registerGeneratedAssetResponseSchema.parse(receiptData);
+    owned.assetId = receipt.assetId;
+    assert('f06 exact recorded Library version is registered', receipt.status === 'created');
+    const { data: signed, error: signError } = await admin.storage
+      .from('media-library')
+      .createSignedUrl(owned.path, 1800);
+    if (signError || !signed) throw signError ?? new Error('Sign failed');
+    context = await browser.newContext({
+      storageState: session.state,
+      viewport: { width: 1600, height: 1000 },
+    });
+    await context.grantPermissions(['local-network-access'], { origin: frontend.url });
+    const page = await context.newPage(),
+      errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    const compositor = await context.newPage(),
+      bundle = join(folder, 'compositor.js');
+    execFileSync(
+      'bun',
+      [
+        'build',
+        'e2e/support/editorV2DurableRenderBenchEntry.ts',
+        '--target=browser',
+        '--outfile',
+        bundle,
+        '--define',
+        `process.env=${JSON.stringify({ NODE_ENV: 'production', NEXT_PUBLIC_SUPABASE_URL: supabaseUrl, NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, NEXT_PUBLIC_API_URL: backend.url })}`,
+      ],
+      { stdio: 'pipe' },
+    );
+    await compositor.route('**/inspector-compositor', (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body: '<!doctype html><html><body></body></html>',
+      }),
+    );
+    await compositor.goto(`${frontend.url}/inspector-compositor`);
+    await compositor.addScriptTag({ content: readFileSync(bundle, 'utf8'), type: 'module' });
+    await compositor.waitForFunction(() => Boolean(window.__editorV2DurableRenderBench));
+    const post = async (id: string, op: string, args: Record<string, unknown>) => {
+      const response = await fetch(`${api.base}/api/ai-studio/video-projects/${id}/ops/${op}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${api.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(args),
+      });
+      if (!response.ok) throw new Error(`${op}: ${response.status} ${await response.text()}`);
+      return response.json();
+    };
+    const video = (project: EditorProjectV2): EditorVideoClip => {
+      const c = mainClips(project)[0];
+      if (!c || c.kind !== 'video') throw new Error('Missing video');
+      return c;
+    };
+    const pcm = (path: string): Float32Array[] => {
+      const channelCount = Number(
+        execFileSync(
+          'ffprobe',
+          [
+            '-v',
+            'error',
+            '-select_streams',
+            'a:0',
+            '-show_entries',
+            'stream=channels',
+            '-of',
+            'csv=p=0',
+            path,
+          ],
+          { encoding: 'utf8', timeout: 20_000 },
+        ).trim(),
+      );
+      if (![1, 2].includes(channelCount)) throw new Error(`Expected mono or stereo audio: ${path}`);
+      const b = execFileSync(
+        'ffmpeg',
+        ['-v', 'error', '-i', path, '-vn', '-ar', '48000', '-f', 'f32le', 'pipe:1'],
+        { maxBuffer: 30_000_000, timeout: 30_000 },
+      );
+      const samples = new Float32Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
+      const channels = Array.from(
+        { length: channelCount },
+        () => new Float32Array(samples.length / channelCount),
+      );
+      for (let i = 0; i < samples.length; i++)
+        channels[i % channelCount]![Math.floor(i / channelCount)] = samples[i]!;
+      return channels;
+    };
+    const sourcePcm = pcm(file);
+    const sourceAt = (time: number, channel: number) => {
+      const n = time * 48000,
+        lo = Math.floor(n),
+        mix = n - lo,
+        source = sourcePcm[Math.min(channel, sourcePcm.length - 1)]!;
+      return (source[lo] ?? 0) * (1 - mix) + (source[lo + 1] ?? 0) * mix;
+    };
+    const request = (project: EditorProjectV2): DurableTimelineRequest => ({
+      project,
+      inputs: [
+        {
+          sourceId: video(project).id,
+          sourceAssetId: receipt.assetId,
+          sourceRevision: receipt.versionId,
+          storage: { bucket: 'media-library', path: owned!.path },
+          url: signed.signedUrl,
+        },
+      ],
+    });
+    for (const [index, values] of [
+      { scale: 0.85, rotate: 10, gain: 0.6, speed: 1.25, crop: [0.1, 0.05, 0.15, 0.1] },
+      { scale: 1.1, rotate: -15, gain: 0.8, speed: 1.5, crop: [0.05, 0.15, 0.1, 0.05] },
+      { scale: 0.75, rotate: 30, gain: 0.35, speed: 0.75, crop: [0.15, 0.1, 0.05, 0.15] },
+    ].entries()) {
+      await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
+      await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180_000 });
+      const id = /\/studio\/video\/([0-9a-f-]{36})/.exec(page.url())?.[1];
+      if (!id) throw new Error('Missing project');
+      ids.push(id);
+      await expect(page.getByTestId('video-studio-edit')).toBeVisible({ timeout: 180_000 });
+      const blank = await getProject(api, id);
+      await post(id, 'apply_commands', {
+        expectedRevision: blank.revision,
+        commands: [
+          {
+            commandType: 'set_project_metadata',
+            canvas: { ...blank.canvas, width: 360, height: 640 },
+          },
+          {
+            commandType: 'set_export_settings',
+            exportSettings: editorExportSettingsSchema.parse({
+              ...blank.exportSettings,
+              width: 360,
+              height: 640,
+              frameRate: { numerator: 30, denominator: 1 },
+            }),
+          },
+          {
+            commandType: 'add_track',
+            track: {
+              id: 'video',
+              name: 'Recorded',
+              kind: 'video',
+              order: 0,
+              clips: [
+                {
+                  id: 'recorded',
+                  kind: 'video',
+                  timelineStartSec: 0,
+                  durationSec: 4,
+                  source: {
+                    sourceType: 'library_asset',
+                    assetId: receipt.assetId,
+                    renditionId: receipt.versionId,
+                  },
+                  sourceInSec: 0.2,
+                  playbackRate: 1,
+                  transform: { scaleX: -0.9, scaleY: 0.75, anchorX: 0.25, anchorY: 0.75 },
+                  audioEnabled: true,
+                  volume: 1,
+                },
+              ],
+            },
+          },
+        ],
+      });
+      await page.reload();
+      const clip = page.locator('[data-clip-id="recorded"]:visible');
+      await expect(clip).toBeVisible({ timeout: 30_000 });
+      const clipBox = await clip.boundingBox();
+      if (!clipBox) throw new Error('Clip box absent');
+      await clip.click({ position: { x: clipBox.width * 0.1, y: clipBox.height / 2 } });
+      let project = await getProject(api, id);
+      const commitPointerEdit = async (label: string) => {
+        await page.evaluate(() =>
+          window.addEventListener(
+            'pointerup',
+            () => {
+              (window as unknown as { __inspectorCommitAt: number }).__inspectorCommitAt =
+                performance.now();
+            },
+            { capture: true, once: true },
+          ),
+        );
+        const responsePromise = page.waitForResponse(
+          (r) =>
+            r.url().endsWith(`/video-projects/${id}/commands`) && r.request().method() === 'POST',
+          { timeout: 20_000 },
+        );
+        await page.mouse.up();
+        const response = await responsePromise;
+        await response.finished();
+        assert(`f06 case ${index}: ${label} control saves successfully`, response.status() === 200);
+        const saved = editorProjectResponseSchema.parse(await response.json());
+        const timing = await page.evaluate((url) => {
+          const start = (window as unknown as { __inspectorCommitAt: number }).__inspectorCommitAt;
+          const entry = performance
+            .getEntriesByName(url)
+            .filter((e) => e.startTime >= start - 0.5)
+            .at(-1) as PerformanceResourceTiming | undefined;
+          if (!entry) throw new Error('Save timing entry missing');
+          return {
+            durationMs: entry.responseEnd - start,
+            resourceStart: entry.startTime,
+            responseEnd: entry.responseEnd,
+          };
+        }, response.url());
+        assert(
+          `f06 case ${index}: ${label} save timing is retained`,
+          Number.isFinite(timing.durationMs) && timing.durationMs > 0,
+        );
+        timings.push({ case: index, control: label, ...timing, revision: saved.project.revision });
+        project = await getProject(api, id);
+        assert(
+          `f06 case ${index}: ${label} acknowledgement matches persisted revision`,
+          project.revision === saved.project.revision,
+        );
+      };
+      const setSlider = async (label: string, value: number) => {
+        const group = page.getByRole('group', { name: label, exact: true });
+        const slider = group.getByRole('slider');
+        const control = group.locator('[data-slot="slider-track"]');
+        await control.scrollIntoViewIfNeeded();
+        const bounds = await slider.evaluate((element) => ({
+          min: Number(
+            element instanceof HTMLInputElement
+              ? element.min
+              : element.getAttribute('aria-valuemin'),
+          ),
+          max: Number(
+            element instanceof HTMLInputElement
+              ? element.max
+              : element.getAttribute('aria-valuemax'),
+          ),
+          html: element.outerHTML,
+        }));
+        const { min, max } = bounds;
+        writeFileSync(
+          join(folder, `case-${index}-${label.replaceAll(' ', '-')}-slider.json`),
+          JSON.stringify(bounds, null, 2),
+        );
+        assert(
+          `f06 case ${index}: ${label} native slider has valid bounds`,
+          Number.isFinite(min) && Number.isFinite(max) && max > min,
+        );
+        const thumbControl = group.locator('[data-slot="slider-thumb"]');
+        await thumbControl.hover();
+        const box = await control.locator('..').boundingBox();
+        const thumb = await thumbControl.boundingBox();
+        if (!box || !thumb) throw new Error(`No ${label} control or thumb`);
+        const pointerHit = await page.evaluate(
+          ({ x, y }) => {
+            const element = document.elementFromPoint(x, y);
+            return {
+              label: element?.closest('[data-slot="slider"]')?.getAttribute('aria-label'),
+              thumb: Boolean(element?.closest('[data-slot="slider-thumb"]')),
+            };
+          },
+          { x: thumb.x + thumb.width / 2, y: thumb.y + thumb.height / 2 },
+        );
+        writeFileSync(
+          join(folder, `case-${index}-${label.replaceAll(' ', '-')}-slider.json`),
+          JSON.stringify({ ...bounds, box, thumb, pointerHit }, null, 2),
+        );
+        assert(
+          `f06 case ${index}: ${label} thumb is reachable`,
+          pointerHit.label === label && pointerHit.thumb,
+        );
+        await page.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(
+          box.x + thumb.width / 2 + ((value - min) / (max - min)) * (box.width - thumb.width),
+          box.y + box.height / 2,
+          { steps: 4 },
+        );
+        await expect
+          .poll(async () => Number(await slider.getAttribute('aria-valuenow')), { timeout: 1000 })
+          .toBeCloseTo(value, 6);
+        await commitPointerEdit(label);
+      };
+      await setSlider('Scale', values.scale);
+      await setSlider('Rotate', values.rotate);
+      for (const [edge, value] of ['left', 'top', 'right', 'bottom'].map(
+        (edge, i) => [edge, values.crop[i]!] as const,
+      ))
+        await setSlider(`Crop ${edge}`, value);
+      await setSlider('Volume', values.gain);
+      const frameBox = await page.getByTestId('stage-transform-box').locator('..').boundingBox();
+      const moveBox = await page
+        .getByRole('button', { name: 'Move selected clip', exact: true })
+        .boundingBox();
+      if (!frameBox || !moveBox) throw new Error('Native position handle missing');
+      const from = {
+        x:
+          (Math.max(moveBox.x, frameBox.x) +
+            Math.min(moveBox.x + moveBox.width, frameBox.x + frameBox.width)) /
+          2,
+        y:
+          (Math.max(moveBox.y, frameBox.y) +
+            Math.min(moveBox.y + moveBox.height, frameBox.y + frameBox.height)) /
+          2,
+      };
+      const hit = await page.evaluate(
+        ({ x, y }) =>
+          document.elementFromPoint(x, y)?.closest('button')?.getAttribute('aria-label'),
+        from,
+      );
+      writeFileSync(
+        join(folder, `case-${index}-position-pointer.json`),
+        JSON.stringify({ frameBox, moveBox, from, hit }, null, 2),
+      );
+      assert(
+        `f06 case ${index}: position handle is reachable`,
+        hit === 'Move selected clip',
+        JSON.stringify({ from, hit }),
+      );
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      await page.mouse.move(from.x + frameBox.width * 0.04, from.y - frameBox.height * 0.02, {
+        steps: 4,
+      });
+      await commitPointerEdit('Position');
+      await setSlider('Speed', values.speed);
+      const c = video(project);
+      assert(
+        `f06 case ${index}: native inspector fields and source span persist`,
+        Math.abs(c.transform.scaleX + values.scale) < 0.026 &&
+          Math.abs(c.transform.scaleY - (values.scale * 0.75) / 0.9) < 0.026 &&
+          Math.abs(c.transform.rotationDeg - values.rotate) < 2.6 &&
+          Math.abs(c.volume! - values.gain) < 0.026 &&
+          Math.abs(c.playbackRate - values.speed) < 0.026 &&
+          Math.abs(c.durationSec * c.playbackRate - 4) < 0.001 &&
+          c.sourceInSec === 0.2 &&
+          c.transform.anchorX === 0.25 &&
+          c.transform.anchorY === 0.75 &&
+          Math.abs(c.transform.position.x - 0.54) < 0.003 &&
+          Math.abs(c.transform.position.y - 0.48) < 0.003 &&
+          Object.values(c.crop).every((v, i) => Math.abs(v - values.crop[i]!) < 0.006),
+        JSON.stringify(c),
+      );
+      writeFileSync(join(folder, `case-${index}-readback.json`), JSON.stringify(project, null, 2));
+      await page.reload();
+      await expect(clip).toBeVisible({ timeout: 30_000 });
+      assert(
+        `f06 case ${index}: inspector state survives reload`,
+        JSON.stringify(video(await getProject(api, id))) === JSON.stringify(c),
+      );
+      const rendered = await compositor.evaluate(
+        (input) => window.__editorV2DurableRenderBench.renderTimeline(input),
+        request(project),
+      );
+      const output = join(folder, `case-${index}.mp4`);
+      writeFileSync(output, Buffer.from(rendered.base64, 'base64'));
+      assert(
+        `f06 case ${index}: rendered duration follows constant speed`,
+        Math.abs(rendered.durationSec - c.durationSec) < 1 / 30 + 0.001 &&
+          rendered.width === 360 &&
+          rendered.height === 640,
+      );
+      const pictures = [];
+      for (const time of [0.4, 1.2, 2.2]) {
+        const ruler = page.locator('[data-timeline-ruler]:visible');
+        const rb = await ruler.boundingBox();
+        const cb = await clip.boundingBox();
+        if (!rb || !cb) throw new Error('Seek geometry missing');
+        await ruler.click({ position: { x: (time * cb.width) / c.durationSec, y: rb.height / 2 } });
+        const nativeCanvas = page.getByTestId('media-effect-preview').first();
+        await expect
+          .poll(async () => Number(await nativeCanvas.getAttribute('data-time-sec')))
+          .toBeCloseTo(time, 2);
+        const videoElement = page.getByTestId('edit-stage').locator('video').first();
+        await expect
+          .poll(() => videoElement.evaluate((v) => v.currentTime))
+          .toBeCloseTo(c.sourceInSec + time * c.playbackRate, 2);
+        const frame = videoElement.locator('..'),
+          png = join(folder, `case-${index}-native-${time}.png`);
+        writeFileSync(png, await frame.screenshot());
+        const native = execFileSync(
+          'ffmpeg',
+          [
+            '-v',
+            'error',
+            '-i',
+            png,
+            '-vf',
+            'scale=360:640',
+            '-f',
+            'rawvideo',
+            '-pix_fmt',
+            'rgb24',
+            'pipe:1',
+          ],
+          { maxBuffer: 4_000_000, timeout: 20_000 },
+        );
+        const encoded = execFileSync(
+          'ffmpeg',
+          [
+            '-v',
+            'error',
+            '-ss',
+            String(time),
+            '-i',
+            output,
+            '-frames:v',
+            '1',
+            '-f',
+            'rawvideo',
+            '-pix_fmt',
+            'rgb24',
+            'pipe:1',
+          ],
+          { maxBuffer: 4_000_000, timeout: 20_000 },
+        );
+        const error =
+          native.reduce((sum, v, i) => sum + Math.abs(v - encoded[i]!), 0) / native.length;
+        assert(
+          `f06 case ${index}: native and encoded frames at ${time}s contain visible media`,
+          native.some((v) => v > 32) && encoded.some((v) => v > 32),
+        );
+        pictures.push({ time, error });
+      }
+      assert(
+        `f06 case ${index}: transform and asymmetric crop preview match encoded picture`,
+        pictures.every((p) => p.error < 12),
+        JSON.stringify(pictures),
+      );
+      const preview = await compositor.evaluate(
+        (input) => window.__editorV2DurableRenderBench.previewTimelineAudio(input),
+        request(project),
+      );
+      const nativePcm = preview.channelsBase64.map((encoded, channel) => {
+        const raw = Buffer.from(encoded, 'base64');
+        writeFileSync(join(folder, `case-${index}-preview-channel-${channel}.f32`), raw);
+        return new Float32Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength));
+      });
+      const encodedPcm = pcm(output);
+      assert(
+        `f06 case ${index}: preview and export retain both audio channels`,
+        preview.sampleRate === 48000 && nativePcm.length === 2 && encodedPcm.length === 2,
+      );
+      const audioErrors = [nativePcm, encodedPcm].flatMap((channels, outputIndex) =>
+        channels.map((audio, channel) => {
+          let energy = 0,
+            error = 0;
+          for (const sec of [0.4, 1.2, 2.2])
+            for (let n = 0; n < 1920; n++) {
+              const at = sec + n / 48000,
+                expected = sourceAt(c.sourceInSec + at * c.playbackRate, channel) * c.volume!;
+              energy += expected ** 2;
+              error += ((audio[Math.round(at * 48000)] ?? 0) - expected) ** 2;
+            }
+          return {
+            output: outputIndex === 0 ? 'preview' : 'export',
+            channel,
+            energy,
+            relativeError: error / energy,
+          };
+        }),
+      );
+      assert(
+        `f06 case ${index}: native gain and speed audio match source and encoded output`,
+        audioErrors.every((a) => a.energy > 1e-12 && a.relativeError < 0.05),
+        JSON.stringify(audioErrors),
+      );
+      writeFileSync(
+        join(folder, `case-${index}-parity.json`),
+        JSON.stringify(
+          {
+            pictures,
+            audioErrors,
+            rendered: {
+              durationSec: rendered.durationSec,
+              width: rendered.width,
+              height: rendered.height,
+            },
+          },
+          null,
+          2,
+        ),
+      );
+      await post(id, 'undo', { toRevision: project.revision - 1 });
+      const undone = await getProject(api, id);
+      assert(
+        `f06 case ${index}: inspector speed is undoable without losing crop or gain`,
+        video(undone).playbackRate === 1 &&
+          JSON.stringify(video(undone).crop) === JSON.stringify(c.crop) &&
+          video(undone).volume === c.volume,
+      );
+    }
+    assert('f06 native page has no uncaught errors', errors.length === 0, errors.join(' | '));
+  } catch (error) {
+    check('f06 journey completed', false, error instanceof Error ? error.message : String(error));
+  } finally {
+    note(`speed samples: ${JSON.stringify({ inspector: timings.map((t) => t.durationMs) })}`);
+    note(
+      `f06 inspector 200ms gate: ${timings.length >= 3 && timings.every((t) => t.durationMs <= 200) ? 'PASS' : 'OPEN'}; every sample retained, no excluded slow saves`,
+    );
+    writeFileSync(join(folder, 'save-timings.json'), JSON.stringify(timings, null, 2));
+    await context?.close();
+    try {
+      await removeProjects(admin, BRAND, ids);
+      if (ids.length) {
+        const { count, error } = await admin
+          .schema('media')
+          .from('editor_projects')
+          .select('id', { count: 'exact', head: true })
+          .in('id', ids);
+        const { count: revisions, error: revError } = await admin
+          .schema('media')
+          .from('editor_project_revisions')
+          .select('project_id', { count: 'exact', head: true })
+          .in('project_id', ids);
+        assert(
+          'f06 owned projects and revisions removed',
+          !error && !revError && count === 0 && revisions === 0,
+        );
+      }
+      if (session && brandChanged) {
+        const prefs = admin.schema('brand_profiles').from('user_brand_preferences');
+        const { error } =
+          previousBrand === undefined
+            ? await prefs.delete().eq('user_id', session.userId)
+            : await prefs.upsert(
+                {
+                  user_id: session.userId,
+                  active_brand_id: previousBrand,
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: 'user_id' },
+              );
+        assert('f06 bench preference restored', !error);
+      }
+      if (session) {
+        const { error } = await admin.auth.admin.signOut(session.accessToken, 'local');
+        assert('f06 owned session revoked', !error);
+      }
+      if (owned) {
+        const { error: storageError } = await admin.storage
+          .from('media-library')
+          .remove([owned.path]);
+        const { error: assetError } = owned.assetId
+          ? await admin
+              .schema('media')
+              .from('assets')
+              .delete()
+              .eq('id', owned.assetId)
+              .eq('brand_id', BRAND)
+          : { error: null };
+        assert('f06 owned media removed', !storageError && !assetError);
+        if (owned.receiptKey) {
+          assert(
+            'f06 owned receipt identity is safe',
+            /^generated:[a-f0-9]{64}$/.test(owned.receiptKey) && /^[a-f0-9-]{36}$/.test(BRAND),
+          );
+          const left = execFileSync(
+            'docker',
+            [
+              'exec',
+              'supabase_db_continuum',
+              'psql',
+              '-U',
+              'postgres',
+              '-d',
+              'postgres',
+              '-v',
+              'ON_ERROR_STOP=1',
+              '-Atc',
+              `delete from library_internal.operation_receipts where brand_id='${BRAND}' and idempotency_key='${owned.receiptKey}'; select count(*) from library_internal.operation_receipts where brand_id='${BRAND}' and idempotency_key='${owned.receiptKey}';`,
+            ],
+            { stdio: 'pipe', encoding: 'utf8' },
+          );
+          assert('f06 owned receipt removed', left.trim().split('\n').at(-1) === '0');
+        }
+      }
+    } catch (error) {
+      check('f06 cleanup', false, error instanceof Error ? error.message : String(error));
+    }
+    for (const server of servers.reverse()) server.stop();
+  }
+  const failures = printEnvelope();
+  writeFileSync(
+    join(folder, 'summary.json'),
+    JSON.stringify({ bench: BENCH, results, notes, counts: rec.summary() }, null, 2),
+  );
   expect(failures, 'graded FAIL steps').toBe(0);
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { computeLetterboxRect } from './letterbox';
+import { computeCropRects, computeLetterboxRect } from './letterbox';
 
 describe('computeLetterboxRect', () => {
   it('returns full-bleed rect when aspect ratios match', () => {
@@ -50,4 +50,21 @@ describe('computeLetterboxRect', () => {
     expect(rect.width).toBe(500);
     expect(rect.height).toBe(250);
   });
+});
+
+it('fits the cropped source aspect into the target and keeps all four source edges', () => {
+  const rects = computeCropRects(1000, 500, 360, 640, {
+    left: 0.1,
+    right: 0.3,
+    top: 0.2,
+    bottom: 0.1,
+  });
+  expect(rects.source.x).toBe(100);
+  expect(rects.source.y).toBe(100);
+  expect(rects.source.width).toBeCloseTo(600, 10);
+  expect(rects.source.height).toBeCloseTo(350, 10);
+  expect(rects.target).toEqual({ x: 0, y: 215, width: 360, height: 210 });
+  expect(computeCropRects(1000, 500, 360, 640).target).toEqual(
+    computeLetterboxRect(1000, 500, 360, 640),
+  );
 });

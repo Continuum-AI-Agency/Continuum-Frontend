@@ -528,6 +528,7 @@ export function EditorProjectV2Assembly({
 
         <div className="grid min-w-0 grid-rows-[minmax(280px,1fr)_220px_auto_110px] gap-3 lg:min-h-0">
           <TimelinePreview
+            frameSize={project.canvas}
             videoRef={playback.videoRef}
             showVideo={Boolean(active)}
             isEmpty={!clips.length}

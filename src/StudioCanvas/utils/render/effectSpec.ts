@@ -39,6 +39,9 @@ export interface ClipTransform {
   scaleX?: number;
   /** Independent Y scale. Wins over `scale` when set. */
   scaleY?: number;
+  /** Transform pivot as a fraction of the target frame; omitted means center. */
+  anchorX?: number;
+  anchorY?: number;
   /** Fraction of frame width, 0 = centered. Maps to CSS translate %. */
   offsetX?: number;
   /** Fraction of frame height, 0 = centered. */
@@ -51,6 +54,8 @@ export interface ClipTransform {
 }
 
 export type ResolvedClipTransform = {
+  anchorX?: number;
+  anchorY?: number;
   scale: number;
   scaleX: number;
   scaleY: number;
@@ -323,6 +328,8 @@ function resolveTransform(transform: ClipTransform | undefined): ResolvedClipTra
     rotateX: transform?.rotateX ?? 0,
     rotateY: transform?.rotateY ?? 0,
     perspective: transform?.perspective ?? 0,
+    ...(transform?.anchorX !== undefined ? { anchorX: transform.anchorX } : {}),
+    ...(transform?.anchorY !== undefined ? { anchorY: transform.anchorY } : {}),
   };
 }
 
@@ -384,6 +391,12 @@ function lerpTransform(
     rotateX: lerp(a.rotateX, b.rotateX, k),
     rotateY: lerp(a.rotateY, b.rotateY, k),
     perspective: lerp(a.perspective, b.perspective, k),
+    ...(a.anchorX !== undefined || b.anchorX !== undefined
+      ? { anchorX: lerp(a.anchorX ?? 0.5, b.anchorX ?? 0.5, k) }
+      : {}),
+    ...(a.anchorY !== undefined || b.anchorY !== undefined
+      ? { anchorY: lerp(a.anchorY ?? 0.5, b.anchorY ?? 0.5, k) }
+      : {}),
   };
 }
 
@@ -407,6 +420,7 @@ function resolveLocalTransformAt(
     const scaleX = sampleStops(channels?.scaleX, clamped, base.scaleX, spec);
     const scaleY = sampleStops(channels?.scaleY, clamped, base.scaleY, spec);
     return {
+      ...base,
       scale: Math.max(Math.abs(scaleX), Math.abs(scaleY)),
       scaleX,
       scaleY,
@@ -512,6 +526,7 @@ export function resolveTextOverlays(spec: ClipEffectSpec | undefined): ResolvedT
 export type ClipEffectCss = {
   filter?: string;
   transform?: string;
+  transformOrigin?: string;
   opacity?: number;
   // A `BlendMode` value is a subset of CSS `mix-blend-mode`, so this is directly
   // assignable to React.CSSProperties.
@@ -554,6 +569,9 @@ export function clipEffectsToCss(spec: ClipEffectSpec | undefined, u: number): C
   return {
     filter,
     transform,
+    ...(t.anchorX !== undefined || t.anchorY !== undefined
+      ? { transformOrigin: `${(t.anchorX ?? 0.5) * 100}% ${(t.anchorY ?? 0.5) * 100}%` }
+      : {}),
     opacity: opacity === 1 ? undefined : opacity,
     mixBlendMode,
     borderRadius,
@@ -574,8 +592,8 @@ export function applyCanvasTransform(
   targetHeight: number,
   flip?: { h?: boolean; v?: boolean },
 ): void {
-  const cx = targetWidth / 2;
-  const cy = targetHeight / 2;
+  const cx = targetWidth * (transform.anchorX ?? 0.5);
+  const cy = targetHeight * (transform.anchorY ?? 0.5);
   ctx.translate(cx + transform.offsetX * targetWidth, cy + transform.offsetY * targetHeight);
   if (transform.rotate) ctx.rotate((transform.rotate * Math.PI) / 180);
   const sx = transform.scaleX * (flip?.h ? -1 : 1);

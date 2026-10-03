@@ -21,7 +21,7 @@ import { Recorder } from '../../Continuum-Backend/scripts/_bench/recorder';
 import { mintSessionBundleForEmail } from './support/auth';
 import { createBenchRecorder } from './support/benchRecorder';
 import type { DurableTimelineRequest } from './support/editorV2DurableRenderBenchEntry';
-import { loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
+import { loadLocalSupabaseEnv, loadProdSupabaseEnv, readBackendEnv } from './support/prodEnv';
 import {
   captionBand,
   decodeBandRgb,
@@ -85,36 +85,7 @@ const WORKFLOW_NAME = `Workflow ${RUN}`;
 const WORKFLOW_PROMPT = 'Make the current edit YouTube.';
 
 const { url: supabaseUrl, serviceRoleKey } = LOCAL_CURVE_JOURNEY
-  ? (() => {
-      const status = execFileSync('supabase', ['status', '-o', 'env'], {
-        cwd: join(__dirname, '../..'),
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-      const env = Object.fromEntries(
-        status.split('\n').flatMap((line) => {
-          const match = /^([A-Z_]+)="(.*)"$/.exec(line);
-          return match ? [[match[1], match[2]]] : [];
-        }),
-      );
-      const url = env.API_URL;
-      if (
-        !url ||
-        !['localhost', '127.0.0.1', '[::1]'].includes(new URL(url).hostname) ||
-        !env.SERVICE_ROLE_KEY ||
-        !env.ANON_KEY
-      )
-        throw new Error(
-          'Local curve journey requires the running loopback Supabase stack; no reset/hydration is performed.',
-        );
-      process.env.SUPABASE_ANON_KEY = env.ANON_KEY;
-      process.env.SUPABASE_SERVICE_ROLE_KEY = env.SERVICE_ROLE_KEY;
-      process.env.NEXT_PUBLIC_SUPABASE_URL = url;
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = env.ANON_KEY;
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY = env.ANON_KEY;
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY = env.ANON_KEY;
-      return { url, serviceRoleKey: env.SERVICE_ROLE_KEY };
-    })()
+  ? loadLocalSupabaseEnv()
   : loadProdSupabaseEnv();
 process.env.SUPABASE_URL = supabaseUrl;
 const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });

@@ -545,6 +545,7 @@ function VisualClipInspector({
               : undefined
           }
           onSetEffects={setEffects}
+          onCommit={edits.flush}
           onSetTransition={(next) => {
             setDraftTransition({ value: next });
             schedule('transition', (latest) => transitionEdit(latest, clip.id, next));
@@ -564,6 +565,7 @@ function VisualClipInspector({
             step={0.01}
             format={{ style: 'percent', maximumFractionDigits: 0 }}
             onChange={(value) => patch({ crop: { ...view.crop, [edge]: value } }, 'Crop clip')}
+            onCommit={() => edits.flush()}
           />
         ))}
       </div>

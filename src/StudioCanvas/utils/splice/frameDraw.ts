@@ -11,7 +11,7 @@ import {
   resolveTransformAt,
 } from '../render/effectSpec';
 import { shaderStackFromClipEffects } from '../render/shaderStack';
-import { computeLetterboxRect, drawLetterboxed } from './letterbox';
+import { computeCropRects, drawLetterboxed } from './letterbox';
 
 // Shared frame-drawing primitives for the timeline renderer. `drawClipFrame`
 // draws a single letterboxed frame with the clip's effects (used for solos);
@@ -357,12 +357,13 @@ export async function drawEffectFrame(
         v: effects.flipV,
       });
     }
-    const crop = effects?.crop;
-    const sx = sourceWidth * (crop?.left ?? 0);
-    const sy = sourceHeight * (crop?.top ?? 0);
-    const sw = sourceWidth * (1 - (crop?.left ?? 0) - (crop?.right ?? 0));
-    const sh = sourceHeight * (1 - (crop?.top ?? 0) - (crop?.bottom ?? 0));
-    const rect = computeLetterboxRect(sw, sh, targetWidth, targetHeight);
+    const { source: cropped, target: rect } = computeCropRects(
+      sourceWidth,
+      sourceHeight,
+      targetWidth,
+      targetHeight,
+      effects?.crop,
+    );
     const radiusFrac = cornerRadiusFracFor(effects);
     if (radiusFrac > 0 && typeof ctx.roundRect === 'function') {
       ctx.beginPath();
@@ -372,8 +373,17 @@ export async function drawEffectFrame(
       ctx.clip();
     }
     const prepared = await prepareSource(source, sourceWidth, sourceHeight, effects, timeSec);
-    if (crop) ctx.drawImage(prepared, sx, sy, sw, sh, rect.x, rect.y, rect.width, rect.height);
-    else ctx.drawImage(prepared, rect.x, rect.y, rect.width, rect.height);
+    ctx.drawImage(
+      prepared,
+      cropped.x,
+      cropped.y,
+      cropped.width,
+      cropped.height,
+      rect.x,
+      rect.y,
+      rect.width,
+      rect.height,
+    );
   } finally {
     ctx.restore();
     ctx.filter = 'none';

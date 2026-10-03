@@ -47,7 +47,11 @@ export function dragTransform(input: {
   shift: boolean;
 }): { transform: EditorTransform; guides: StageGuides } {
   const { gesture, start, startPointer, pointer, frame, shift } = input;
-  const centre = { x: start.position.x * frame.width, y: start.position.y * frame.height };
+  const offset = rotatedCenterOffset(start, frame);
+  const centre = {
+    x: start.position.x * frame.width - offset.x,
+    y: start.position.y * frame.height - offset.y,
+  };
   const none: StageGuides = { x: false, y: false };
 
   if (gesture === 'move') {
@@ -69,11 +73,20 @@ export function dragTransform(input: {
     const from = Math.hypot(startPointer.x - centre.x, startPointer.y - centre.y);
     if (from < 1) return { transform: start, guides: none };
     const factor = Math.hypot(pointer.x - centre.x, pointer.y - centre.y) / from;
+    const transformed = {
+      ...start,
+      scaleX: scaleAxis(start.scaleX, factor),
+      scaleY: scaleAxis(start.scaleY, factor),
+    };
+    const nextOffset = rotatedCenterOffset(transformed, frame);
     return {
       transform: {
-        ...start,
-        scaleX: scaleAxis(start.scaleX, factor),
-        scaleY: scaleAxis(start.scaleY, factor),
+        ...transformed,
+        position: {
+          ...start.position,
+          x: (centre.x + nextOffset.x) / frame.width,
+          y: (centre.y + nextOffset.y) / frame.height,
+        },
       },
       guides: none,
     };
@@ -84,7 +97,41 @@ export function dragTransform(input: {
   let rotation = start.rotationDeg + angleDeg(pointer, centre) - angleDeg(startPointer, centre);
   if (shift) rotation = Math.round(rotation / ROTATE_SNAP_DEG) * ROTATE_SNAP_DEG;
   rotation = ((((rotation + 180) % 360) + 360) % 360) - 180;
-  return { transform: { ...start, rotationDeg: rotation }, guides: none };
+  const transformed = { ...start, rotationDeg: rotation };
+  const nextOffset = rotatedCenterOffset(transformed, frame);
+  return {
+    transform: {
+      ...transformed,
+      position: {
+        ...start.position,
+        x: (centre.x + nextOffset.x) / frame.width,
+        y: (centre.y + nextOffset.y) / frame.height,
+      },
+    },
+    guides: none,
+  };
+}
+
+/** Vector from transformed pivot to the picture center, in frame pixels. */
+function rotatedCenterOffset(
+  transform: EditorTransform,
+  frame: { width: number; height: number },
+): Point {
+  const angle = (transform.rotationDeg * Math.PI) / 180;
+  const x = (0.5 - transform.anchorX) * frame.width * transform.scaleX;
+  const y = (0.5 - transform.anchorY) * frame.height * transform.scaleY;
+  return {
+    x: x * Math.cos(angle) - y * Math.sin(angle),
+    y: x * Math.sin(angle) + y * Math.cos(angle),
+  };
+}
+
+function anchorCenterShift(transform: EditorTransform, frameAspect: number): Point {
+  const rotated = rotatedCenterOffset(transform, { width: frameAspect, height: 1 });
+  return {
+    x: transform.anchorX - 0.5 + rotated.x / frameAspect,
+    y: transform.anchorY - 0.5 + rotated.y,
+  };
 }
 
 type StageClip = Extract<EditorClip, { kind: 'video' | 'overlay' | 'text' | 'nested_sequence' }>;
@@ -99,12 +146,21 @@ export function stageTransformAt(
     clipEffectSpecFromEditorClip(clip, project),
     (timelineSec - clip.timelineStartSec) / clip.durationSec,
   );
-  return {
+  const transform = {
     ...clip.transform,
-    position: { ...clip.transform.position, x: sampled.offsetX + 0.5, y: sampled.offsetY + 0.5 },
+    ...(clip.kind === 'text' ? { anchorX: 0.5, anchorY: 0.5 } : {}),
     scaleX: sampled.scaleX,
     scaleY: sampled.scaleY,
     rotationDeg: sampled.rotate,
+  };
+  const shift = anchorCenterShift(transform, project.canvas.width / project.canvas.height);
+  return {
+    ...transform,
+    position: {
+      ...transform.position,
+      x: sampled.offsetX + 0.5 + shift.x,
+      y: sampled.offsetY + 0.5 + shift.y,
+    },
   };
 }
 
@@ -131,9 +187,18 @@ export function stageTransformEdit(
     return null;
   const clip = found.clip as StageClip;
   const parent = parentPositionDelta(project, clipId, timelineSec);
+  const shift = anchorCenterShift(
+    stageTransformAt(project, clip, timelineSec),
+    project.canvas.width / project.canvas.height,
+  );
   const values: Array<[EditorKeyframe['property'], EditorKeyframe['value']]> =
     gesture === 'move'
-      ? [['transform.position', { x: shown.position.x - parent.x, y: shown.position.y - parent.y }]]
+      ? [
+          [
+            'transform.position',
+            { x: shown.position.x - parent.x - shift.x, y: shown.position.y - parent.y - shift.y },
+          ],
+        ]
       : gesture === 'scale'
         ? [
             ['transform.scaleX', shown.scaleX],
