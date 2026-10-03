@@ -274,7 +274,18 @@ function useClipDraft<T extends EditorClip>(
 /** A visual clip as the spec ClipInspector edits. Ken Burns is read from the clip's own
  *  motion keyframes, so the toggle shows what the clip actually does. */
 export function inspectorSpecFor(clip: VisualClip): ClipEffectSpec {
-  const spec = clipEffectSpecFromEditorClip(clip);
+  const rendered = clipEffectSpecFromEditorClip(clip);
+  // The legacy inspector edits flips separately; canonical render geometry stays signed.
+  const spec: ClipEffectSpec = {
+    ...rendered,
+    transform: {
+      ...rendered.transform,
+      scaleX: Math.abs(clip.transform.scaleX),
+      scaleY: Math.abs(clip.transform.scaleY),
+    },
+    flipH: clip.transform.scaleX < 0,
+    flipV: clip.transform.scaleY < 0,
+  };
   if (!clip.keyframes.some((keyframe) => MOTION_PROPERTIES.has(keyframe.property))) return spec;
   const stops = spec.keyframes ?? [];
   return {

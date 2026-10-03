@@ -5,8 +5,20 @@
 // source pixels (LayerEditorLayer), while an EditorTransform is a normalized centre with
 // scale relative to the frame. Bridging would mean faking a layer per pointer move.
 
-import type { EditorTransform } from '@continuum/contracts';
+import {
+  type EditorClip,
+  type EditorKeyframe,
+  type EditorProjectV2,
+  type EditorTransform,
+  motionTrackTime,
+  parentPositionDelta,
+  parseMotionExpression,
+  sampleNumericTrack,
+} from '@continuum/contracts';
+import { clipEffectSpecFromEditorClip } from '@/lib/client-render/executors/timelineEditor';
 import type { Point } from '../../../utils/layers/layerTransform';
+import { resolveTransformAt } from '../../../utils/render/effectSpec';
+import { findClip, replaceClipEdit, type TimelineEdit } from './timelineEdits';
 
 export type StageGesture = 'move' | 'scale' | 'rotate';
 export type StageGuides = { x: boolean; y: boolean };
@@ -73,4 +85,114 @@ export function dragTransform(input: {
   if (shift) rotation = Math.round(rotation / ROTATE_SNAP_DEG) * ROTATE_SNAP_DEG;
   rotation = ((((rotation + 180) % 360) + 360) % 360) - 180;
   return { transform: { ...start, rotationDeg: rotation }, guides: none };
+}
+
+type StageClip = Extract<EditorClip, { kind: 'video' | 'overlay' | 'text' | 'nested_sequence' }>;
+
+/** Handles use exactly the geometry drawn by preview and export. */
+export function stageTransformAt(
+  project: EditorProjectV2,
+  clip: StageClip,
+  timelineSec: number,
+): EditorTransform {
+  const sampled = resolveTransformAt(
+    clipEffectSpecFromEditorClip(clip, project),
+    (timelineSec - clip.timelineStartSec) / clip.durationSec,
+  );
+  return {
+    ...clip.transform,
+    position: { ...clip.transform.position, x: sampled.offsetX + 0.5, y: sampled.offsetY + 0.5 },
+    scaleX: sampled.scaleX,
+    scaleY: sampled.scaleY,
+    rotationDeg: sampled.rotate,
+  };
+}
+
+/** Author only the gesture's channels against the latest project, at its captured playhead. */
+export function stageTransformEdit(
+  project: EditorProjectV2,
+  clipId: string,
+  shown: EditorTransform,
+  gesture: StageGesture,
+  timelineSec: number,
+): TimelineEdit | null {
+  const found = findClip(project, clipId);
+  if (
+    !found ||
+    found.track.locked ||
+    found.clip.locked ||
+    !found.clip.enabled ||
+    !found.track.enabled ||
+    !Number.isFinite(timelineSec) ||
+    timelineSec < found.clip.timelineStartSec ||
+    timelineSec >= found.clip.timelineStartSec + found.clip.durationSec ||
+    !['video', 'overlay', 'text', 'nested_sequence'].includes(found.clip.kind)
+  )
+    return null;
+  const clip = found.clip as StageClip;
+  const parent = parentPositionDelta(project, clipId, timelineSec);
+  const values: Array<[EditorKeyframe['property'], EditorKeyframe['value']]> =
+    gesture === 'move'
+      ? [['transform.position', { x: shown.position.x - parent.x, y: shown.position.y - parent.y }]]
+      : gesture === 'scale'
+        ? [
+            ['transform.scaleX', shown.scaleX],
+            ['transform.scaleY', shown.scaleY],
+          ]
+        : [['transform.rotationDeg', shown.rotationDeg]];
+  let transform = { ...clip.transform };
+  let keyframes = [...clip.keyframes];
+  const clock = timelineSec - clip.timelineStartSec + (clip.keyframeOffsetSec ?? 0);
+  for (const [property, target] of values) {
+    const keys = clip.keyframes
+      .filter((key) => key.property === property)
+      .toSorted((a, b) => a.timeSec - b.timeSec);
+    const timeSec = motionTrackTime(keys, clock);
+    const noise = sampleNumericTrack(
+      keys.map((key) => ({ ...key, value: 0 })),
+      clock,
+      0,
+    );
+    const value =
+      typeof target === 'number'
+        ? target - noise
+        : typeof target === 'object' && target && 'x' in target
+          ? { x: target.x - noise, y: target.y - noise }
+          : target;
+    if (!keys.length || timeSec < keys[0]!.timeSec - 1e-6) {
+      if (property === 'transform.position' && typeof value === 'object' && value && 'x' in value)
+        transform = { ...transform, position: { ...transform.position, x: value.x, y: value.y } };
+      else if (property === 'transform.scaleX' && typeof value === 'number')
+        transform.scaleX = value;
+      else if (property === 'transform.scaleY' && typeof value === 'number')
+        transform.scaleY = value;
+      else if (property === 'transform.rotationDeg' && typeof value === 'number')
+        transform.rotationDeg = value;
+      continue;
+    }
+    const right = keys.find((key) => key.timeSec > timeSec);
+    const left = keys.findLast((key) => key.timeSec <= timeSec);
+    // Hold displays the arriving stop for the entire span, so edit that stop.
+    const same =
+      keys.length === 1 && parseMotionExpression(keys[0]?.expression)?.kind === 'loop'
+        ? keys[0]
+        : left?.interpolation === 'hold' && right
+          ? right
+          : keys.find((key) => Math.abs(key.timeSec - timeSec) <= 0.001);
+    const key: EditorKeyframe = same
+      ? { ...same, value }
+      : {
+          id: crypto.randomUUID(),
+          property,
+          timeSec,
+          value,
+          interpolation: left?.interpolation ?? 'linear',
+          ...(left?.easing ? { easing: left.easing } : {}),
+          ...(left?.spring ? { spring: left.spring } : {}),
+        };
+    keyframes = same
+      ? keyframes.map((existing) => (existing.id === same.id ? key : existing))
+      : [...keyframes, key];
+  }
+  return replaceClipEdit(project, { ...clip, transform, keyframes }, 'Transform clip');
 }

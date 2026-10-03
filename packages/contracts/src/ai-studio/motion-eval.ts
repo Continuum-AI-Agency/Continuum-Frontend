@@ -129,6 +129,21 @@ export function springProgress(progress: number, bounce: number): number {
 
 const KEY_TIME_EPSILON_SEC = 1e-6;
 
+/** The authored clock sampled by a looping track; expressions keep their original phase. */
+export function motionTrackTime(
+  keyframes: readonly Pick<NumericKeyframe, 'timeSec' | 'expression'>[],
+  timeSec: number,
+): number {
+  if (!keyframes.some((keyframe) => parseMotionExpression(keyframe.expression)?.kind === 'loop'))
+    return timeSec;
+  const first = Math.min(...keyframes.map((keyframe) => keyframe.timeSec));
+  const last = Math.max(...keyframes.map((keyframe) => keyframe.timeSec));
+  const period = last - first;
+  return period > KEY_TIME_EPSILON_SEC && timeSec > first
+    ? first + ((timeSec - first) % period)
+    : timeSec;
+}
+
 export function sampleNumericTrack(
   keyframes: readonly NumericKeyframe[],
   timeSec: number,
@@ -144,14 +159,7 @@ export function sampleNumericTrack(
   const first = sorted[0];
   const last = sorted[sorted.length - 1];
   if (!first || !last) return fallback;
-  const loops = sorted.some(
-    (keyframe) => parseMotionExpression(keyframe.expression)?.kind === 'loop',
-  );
-  const period = last.timeSec - first.timeSec;
-  let sampleAt = timeSec;
-  if (loops && period > KEY_TIME_EPSILON_SEC && timeSec > first.timeSec) {
-    sampleAt = first.timeSec + ((timeSec - first.timeSec) % period);
-  }
+  const sampleAt = motionTrackTime(sorted, timeSec);
   let value: number;
   if (sampleAt < first.timeSec - KEY_TIME_EPSILON_SEC) value = fallback;
   else if (sampleAt >= last.timeSec - KEY_TIME_EPSILON_SEC) value = last.value;

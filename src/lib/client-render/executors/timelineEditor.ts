@@ -94,7 +94,15 @@ const transformKeyframesFor = (clip: {
 }): NonNullable<ClipEffectSpec['keyframes']> | undefined => {
   const grouped = new Map<number, NonNullable<ClipEffectSpec['keyframes']>[number]['transform']>();
   for (const keyframe of clip.keyframes ?? []) {
-    if (!keyframe.property.startsWith('transform.')) continue;
+    if (
+      ![
+        'transform.position',
+        'transform.scaleX',
+        'transform.scaleY',
+        'transform.rotationDeg',
+      ].includes(keyframe.property)
+    )
+      continue;
     // V2 keyframe times are local to their clip (split commands shift the right
     // clip's stops back to zero), while the worker consumes normalized clip time.
     const at = Math.max(0, Math.min(1, keyframe.timeSec / clip.durationSec));
@@ -272,8 +280,8 @@ export const clipEffectSpecFromEditorClip = (
         opacity: clip.transform.opacity,
         transform: {
           scale: Math.max(Math.abs(clip.transform.scaleX), Math.abs(clip.transform.scaleY)),
-          scaleX: Math.abs(clip.transform.scaleX),
-          scaleY: Math.abs(clip.transform.scaleY),
+          scaleX: clip.transform.scaleX,
+          scaleY: clip.transform.scaleY,
           offsetX: clip.transform.position.x - 0.5,
           offsetY: clip.transform.position.y - 0.5,
           rotate: clip.transform.rotationDeg,
@@ -281,8 +289,6 @@ export const clipEffectSpecFromEditorClip = (
           rotateY: clip.transform.rotateYDeg ?? 0,
           perspective: clip.transform.perspective ?? 0,
         },
-        flipH: clip.transform.scaleX < 0,
-        flipV: clip.transform.scaleY < 0,
       }
     : {}),
   ...(clip.crop && Object.values(clip.crop).some((value) => value !== 0)

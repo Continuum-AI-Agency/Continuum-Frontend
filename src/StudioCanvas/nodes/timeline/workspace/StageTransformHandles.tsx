@@ -15,6 +15,7 @@ import { dragTransform, type StageGesture, type StageGuides } from './stageTrans
 
 type Gesture = {
   kind: StageGesture;
+  timeSec: number;
   start: EditorTransform;
   /** Mirrors `draft` so pointerup never reads a render-stale closure. */
   latest: EditorTransform;
@@ -40,12 +41,18 @@ const cornerStyle = (corner: CornerHandle, rotationDeg: number) => ({
 export function StageTransformHandles({
   transform,
   baseSize,
+  frameAspect,
+  timeSec,
+  onBegin,
   onCommit,
 }: {
   transform: EditorTransform;
   /** Box size at scale 1 as a fraction of the frame: media clips {1,1}; a text clip passes its approximate text box. */
   baseSize: { width: number; height: number };
-  onCommit: (transform: EditorTransform) => void;
+  frameAspect: number;
+  timeSec: number;
+  onBegin: () => void;
+  onCommit: (transform: EditorTransform, gesture: StageGesture, timeSec: number) => void;
 }): ReactNode {
   const rootRef = useRef<HTMLDivElement>(null);
   const gestureRef = useRef<Gesture | null>(null);
@@ -64,7 +71,7 @@ export function StageTransformHandles({
         gesture.element.releasePointerCapture(gesture.pointerId);
       }
       if (commit && JSON.stringify(gesture.latest) !== JSON.stringify(gesture.start)) {
-        onCommit(gesture.latest);
+        onCommit(gesture.latest, gesture.kind, gesture.timeSec);
       }
       setDraft(null);
       setGuides(NO_GUIDES);
@@ -92,10 +99,12 @@ export function StageTransformHandles({
     // Without this the stage underneath would start its own gesture too.
     event.stopPropagation();
     event.preventDefault();
+    onBegin();
     const frame = root.getBoundingClientRect();
     event.currentTarget.setPointerCapture(event.pointerId);
     gestureRef.current = {
       kind,
+      timeSec,
       start: transform,
       latest: transform,
       startPointer: { x: event.clientX - frame.left, y: event.clientY - frame.top },
@@ -123,13 +132,25 @@ export function StageTransformHandles({
   };
 
   const shown = draft ?? transform;
+  const angle = (shown.rotationDeg * Math.PI) / 180;
+  const halfHeight = (Math.abs(shown.scaleY) * baseSize.height) / 2;
+  const gripX = shown.position.x + (Math.sin(angle) * halfHeight) / frameAspect;
+  const gripY = shown.position.y - Math.cos(angle) * halfHeight;
 
   return (
-    <div ref={rootRef} className="pointer-events-none absolute inset-0">
+    <div
+      ref={rootRef}
+      className="pointer-events-none absolute inset-0"
+      onPointerMove={onPointerMove}
+      onPointerUp={() => finish(true)}
+      onPointerCancel={() => finish(false)}
+      onLostPointerCapture={() => finish(true)}
+    >
       {guides.x ? <div className="absolute inset-y-0 left-1/2 w-px bg-primary/60" /> : null}
       {guides.y ? <div className="absolute inset-x-0 top-1/2 h-px bg-primary/60" /> : null}
-      {/* Captured pointer events from the three kinds of handle bubble up to here. */}
+      {/* The selection box follows sampled geometry; pointer capture lives on the frame. */}
       <div
+        data-testid="stage-transform-box"
         className="absolute border border-primary"
         style={{
           left: `${shown.position.x * 100}%`,
@@ -138,10 +159,6 @@ export function StageTransformHandles({
           height: `${Math.abs(shown.scaleY) * baseSize.height * 100}%`,
           transform: `translate(-50%, -50%) rotate(${shown.rotationDeg}deg)`,
         }}
-        onPointerMove={onPointerMove}
-        onPointerUp={() => finish(true)}
-        onPointerCancel={() => finish(false)}
-        onLostPointerCapture={() => finish(true)}
       >
         <button
           type="button"
@@ -159,13 +176,18 @@ export function StageTransformHandles({
             onPointerDown={begin('scale')}
           />
         ))}
-        <button
-          type="button"
-          aria-label="Rotate selected clip"
-          className="pointer-events-auto absolute -top-6 left-1/2 size-3 -translate-x-1/2 cursor-grab touch-none rounded-full border border-primary bg-background"
-          onPointerDown={begin('rotate')}
-        />
       </div>
+      {/* Keep the grip reachable when the selected picture extends beyond the frame. */}
+      <button
+        type="button"
+        aria-label="Rotate selected clip"
+        className="pointer-events-auto absolute size-3 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-full border border-primary bg-background"
+        style={{
+          left: `clamp(12px, calc(${gripX * 100}% + ${Math.sin(angle) * 24}px), calc(100% - 12px))`,
+          top: `clamp(12px, calc(${gripY * 100}% - ${Math.cos(angle) * 24}px), calc(100% - 12px))`,
+        }}
+        onPointerDown={begin('rotate')}
+      />
     </div>
   );
 }

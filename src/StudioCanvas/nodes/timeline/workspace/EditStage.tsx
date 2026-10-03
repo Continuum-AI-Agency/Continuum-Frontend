@@ -20,13 +20,8 @@ import { type ClipMedia, usePlayheadPlayback } from '../usePlayheadPlayback';
 import type { TimelineLayout } from '../useTimelineEditorModel';
 import type { PlayheadStore } from './playheadStore';
 import { StageTransformHandles } from './StageTransformHandles';
-import {
-  clipEnd,
-  type EditBuild,
-  findClip,
-  mainVideoTrack,
-  replaceClipEdit,
-} from './timelineEdits';
+import { stageTransformAt, stageTransformEdit } from './stageTransform';
+import { clipEnd, type EditBuild, findClip, mainVideoTrack } from './timelineEdits';
 
 const CONTROLS_PX = 44;
 
@@ -178,11 +173,18 @@ export const EditStage = memo(function EditStage({
     track.kind === 'caption' ? track.clips.filter((clip) => clip.enabled) : [],
   );
 
-  const selected = selectedClipId ? findClip(project, selectedClipId)?.clip : undefined;
+  const selection = selectedClipId ? findClip(project, selectedClipId) : undefined;
+  const selected = selection?.clip;
   const handlesFor =
     selected &&
     activeAt(selected, sec) &&
-    (selected.kind === 'video' || selected.kind === 'overlay' || selected.kind === 'text')
+    !selected.locked &&
+    !selection?.track.locked &&
+    visible.some((track) => track.id === selection?.track.id) &&
+    (selected.kind === 'video' ||
+      selected.kind === 'overlay' ||
+      selected.kind === 'text' ||
+      selected.kind === 'nested_sequence')
       ? selected
       : undefined;
   const baseSize =
@@ -234,24 +236,15 @@ export const EditStage = memo(function EditStage({
               {handlesFor ? (
                 <StageTransformHandles
                   key={handlesFor.id}
-                  transform={handlesFor.transform}
+                  transform={stageTransformAt(project, handlesFor, sec)}
+                  timeSec={sec}
+                  onBegin={playback.pause}
                   baseSize={baseSize}
-                  onCommit={(transform) =>
-                    // Built on the project at apply time, and only the geometry the handles
-                    // own: an opacity or crop change still in flight is not undone.
-                    onEdit((current) => {
-                      const clip = findClip(current, handlesFor.id)?.clip;
-                      if (!clip || !('transform' in clip)) return null;
-                      const { position, scaleX, scaleY, rotationDeg } = transform;
-                      return replaceClipEdit(
-                        current,
-                        {
-                          ...clip,
-                          transform: { ...clip.transform, position, scaleX, scaleY, rotationDeg },
-                        } as EditorClip,
-                        'Transform clip',
-                      );
-                    })
+                  frameAspect={canvasWidth / canvasHeight}
+                  onCommit={(transform, gesture, timeSec) =>
+                    onEdit((current) =>
+                      stageTransformEdit(current, handlesFor.id, transform, gesture, timeSec),
+                    )
                   }
                 />
               ) : null}

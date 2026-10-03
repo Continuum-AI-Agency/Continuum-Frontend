@@ -7,7 +7,11 @@ import {
   retainParentMotionForEdit,
   sampleNumericTrack,
 } from '@continuum/contracts';
-import { opacityFor, resolveTransformAt } from '@/StudioCanvas/utils/render/effectSpec';
+import {
+  clipEffectsToCss,
+  opacityFor,
+  resolveTransformAt,
+} from '@/StudioCanvas/utils/render/effectSpec';
 import {
   assertSupportedTimelineEditorExport,
   buildTimelineEditorRenderPlan,
@@ -20,6 +24,60 @@ afterEach(() => {
 });
 
 describe('clipEffectSpecFromEditorClip', () => {
+  it('keeps signed nonuniform geometry and tilt when only opacity animates', () => {
+    const spec = clipEffectSpecFromEditorClip({
+      timelineStartSec: 0,
+      durationSec: 2,
+      transform: {
+        position: { x: 0.6, y: 0.4 },
+        scaleX: -1.5,
+        scaleY: 0.75,
+        rotationDeg: 10,
+        rotateXDeg: 20,
+        rotateYDeg: -5,
+        perspective: 2,
+        opacity: 0.8,
+      },
+      keyframes: [0, 2].map((timeSec) => ({
+        property: 'transform.opacity',
+        timeSec,
+        value: timeSec / 2,
+        interpolation: 'linear' as const,
+      })),
+    });
+    expect(spec.keyframes).toBeUndefined();
+    expect(resolveTransformAt(spec, 0.5)).toMatchObject({
+      scaleX: -1.5,
+      scaleY: 0.75,
+      rotate: 10,
+      rotateX: 20,
+      rotateY: -5,
+      perspective: 2,
+    });
+    expect(clipEffectsToCss(spec, 0.5).transform).toContain('scale(-1.5, 0.75)');
+  });
+
+  it('does not flip signed animated scale a second time', () => {
+    const spec = clipEffectSpecFromEditorClip({
+      timelineStartSec: 0,
+      durationSec: 2,
+      transform: {
+        position: { x: 0.5, y: 0.5 },
+        scaleX: -1,
+        scaleY: 0.5,
+        rotationDeg: 0,
+        opacity: 1,
+      },
+      keyframes: [0, 2].map((timeSec) => ({
+        property: 'transform.scaleX',
+        timeSec,
+        value: -1 - timeSec / 2,
+        interpolation: 'linear' as const,
+      })),
+    });
+    expect(clipEffectsToCss(spec, 0.5).transform).toContain('scale(-1.5, 0.5)');
+  });
+
   it('maps transform.opacity keys onto sampled opacityStops', () => {
     const spec = clipEffectSpecFromEditorClip({
       timelineStartSec: 0,

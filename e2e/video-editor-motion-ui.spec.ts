@@ -8,7 +8,12 @@ import {
   type EditorProjectV2,
   editorCaptionWordSchema,
   editorExportSettingsSchema,
+  numericKeysForProperty,
+  parentPositionDelta,
+  positionKeysForProperty,
   registerGeneratedAssetResponseSchema,
+  sampleNumericTrack,
+  samplePositionTrack,
 } from '@continuum/contracts';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
@@ -57,6 +62,7 @@ const PARENT_RANGE_JOURNEY = process.env.VIDEO_EDITOR_PARENT_RANGE_JOURNEY === '
 const CAPTION_JOURNEY = process.env.VIDEO_EDITOR_CAPTION_JOURNEY === '1';
 const NESTED_JOURNEY = process.env.VIDEO_EDITOR_NESTED_JOURNEY === '1';
 const NESTED_AUDIO_JOURNEY = process.env.VIDEO_EDITOR_NESTED_AUDIO_JOURNEY === '1';
+const STAGE_JOURNEY = process.env.VIDEO_EDITOR_STAGE_JOURNEY === '1';
 const NESTED_CONTROLS_JOURNEY = process.env.VIDEO_EDITOR_NESTED_CONTROLS_JOURNEY === '1';
 const BRAND =
   process.env.CONTINUUM_TEST_BRAND_ID ??
@@ -1091,21 +1097,23 @@ test('retained project journey: native splits and deletes preserve stored pictur
     'Set VIDEO_EDITOR_CURVE_JOURNEY=1 for the disposable real-store journey.',
   );
   const proof = createBenchRecorder(
-    NESTED_CONTROLS_JOURNEY
-      ? 'videoeditor:motion:e2e:bench:composition-controls'
-      : NESTED_AUDIO_JOURNEY
-        ? 'videoeditor:motion:e2e:bench:retained-nested-audio'
-        : NESTED_JOURNEY
-          ? 'videoeditor:motion:e2e:bench:retained-nested'
-          : CAPTION_JOURNEY
-            ? 'videoeditor:motion:e2e:bench:retained-captions'
-            : SPEECH_JOURNEY
-              ? 'videoeditor:motion:e2e:bench:speech-jumps'
-              : PARENT_JOURNEY
-                ? 'videoeditor:motion:e2e:bench:retained-parent'
-                : TEXT_JOURNEY
-                  ? 'videoeditor:motion:e2e:bench:retained-text'
-                  : 'videoeditor:motion:e2e:bench:retained-project',
+    STAGE_JOURNEY
+      ? 'videoeditor:motion:e2e:bench:stage-handles'
+      : NESTED_CONTROLS_JOURNEY
+        ? 'videoeditor:motion:e2e:bench:composition-controls'
+        : NESTED_AUDIO_JOURNEY
+          ? 'videoeditor:motion:e2e:bench:retained-nested-audio'
+          : NESTED_JOURNEY
+            ? 'videoeditor:motion:e2e:bench:retained-nested'
+            : CAPTION_JOURNEY
+              ? 'videoeditor:motion:e2e:bench:retained-captions'
+              : SPEECH_JOURNEY
+                ? 'videoeditor:motion:e2e:bench:speech-jumps'
+                : PARENT_JOURNEY
+                  ? 'videoeditor:motion:e2e:bench:retained-parent'
+                  : TEXT_JOURNEY
+                    ? 'videoeditor:motion:e2e:bench:retained-text'
+                    : 'videoeditor:motion:e2e:bench:retained-project',
     [],
   );
   proof.notes.push(
@@ -1129,6 +1137,8 @@ test('retained project journey: native splits and deletes preserve stored pictur
     expect(ok, `${name}${detail ? `: ${detail}` : ''}`).toBe(true);
   };
   try {
+    if (STAGE_JOURNEY && !NESTED_CONTROLS_JOURNEY)
+      throw new Error('Stage journey requires composition controls.');
     if (NESTED_CONTROLS_JOURNEY && !NESTED_AUDIO_JOURNEY)
       throw new Error('Composition controls journey requires the real nested audio journey.');
     if (NESTED_AUDIO_JOURNEY && (!NESTED_JOURNEY || !LOCAL_CURVE_JOURNEY))
@@ -3383,6 +3393,332 @@ test('retained project journey: native splits and deletes preserve stored pictur
             controlParity.every((p) => p.native.mass > 0 && p.encoded.mass > 0 && p.distance < 3),
             JSON.stringify(controlParity),
           );
+          if (STAGE_JOURNEY) {
+            const stageOriginal = commandSped;
+            const setup = await postOp(api, projectId, 'apply_commands', {
+              expectedRevision: stageOriginal.revision,
+              commands: [
+                {
+                  commandType: 'upsert_clip',
+                  trackId: nestedTrackId,
+                  clip: {
+                    ...composition(stageOriginal),
+                    transform: { ...composition(stageOriginal).transform, scaleX: -0.9 },
+                    keyframes: [
+                      ...composition(stageOriginal).keyframes,
+                      {
+                        id: 'stage-pos-a',
+                        property: 'transform.position',
+                        timeSec: 0,
+                        value: { x: 0.55, y: 0.6 },
+                        interpolation: 'linear',
+                        expression: 'loop',
+                      },
+                      {
+                        id: 'stage-pos-b',
+                        property: 'transform.position',
+                        timeSec: 1,
+                        value: { x: 0.6, y: 0.6 },
+                        interpolation: 'linear',
+                        expression: 'wiggle(0.25, 0.015)',
+                      },
+                      {
+                        id: 'stage-scale-a',
+                        property: 'transform.scaleX',
+                        timeSec: 0,
+                        value: -0.9,
+                        interpolation: 'linear',
+                      },
+                      {
+                        id: 'stage-scale-b',
+                        property: 'transform.scaleX',
+                        timeSec: 2.7,
+                        value: -0.8,
+                        interpolation: 'linear',
+                      },
+                    ],
+                  },
+                },
+              ],
+            });
+            assert(
+              `${interpolation}: stage expression/flip setup persists`,
+              setup.status === 200,
+              setup.text.slice(0, 200),
+            );
+            let stageProject = await getProject(api, projectId);
+            await page.reload();
+            await expect(page.locator('[data-clip-kind="nested_sequence"]:visible')).toHaveCount(
+              2,
+              { timeout: 30_000 },
+            );
+            await selectClip(page, instanceId, 0.2);
+            await seek(page, pxPerSec, 2.3);
+            const stageTime = Number(
+              await page
+                .getByTestId('edit-stage')
+                .getByTestId('stage-text')
+                .first()
+                .getAttribute('data-playhead-sec'),
+            );
+            const expectedGeometry = (project: EditorProjectV2) => {
+              const c = composition(project),
+                local = stageTime - c.timelineStartSec;
+              const own = samplePositionTrack(
+                positionKeysForProperty(c.keyframes),
+                local,
+                c.transform.position,
+                c.keyframeOffsetSec,
+              );
+              const parent = parentPositionDelta(project, c.id, stageTime);
+              return {
+                x: own.x + parent.x,
+                y: own.y + parent.y,
+                sx: sampleNumericTrack(
+                  numericKeysForProperty(c.keyframes, 'transform.scaleX'),
+                  local,
+                  c.transform.scaleX,
+                  c.keyframeOffsetSec,
+                ),
+                sy: sampleNumericTrack(
+                  numericKeysForProperty(c.keyframes, 'transform.scaleY'),
+                  local,
+                  c.transform.scaleY,
+                  c.keyframeOffsetSec,
+                ),
+                rotation: sampleNumericTrack(
+                  numericKeysForProperty(c.keyframes, 'transform.rotationDeg'),
+                  local,
+                  c.transform.rotationDeg,
+                  c.keyframeOffsetSec,
+                ),
+              };
+            };
+            const box = page.getByTestId('stage-transform-box');
+            await expect(box).toBeVisible();
+            const geometry = () =>
+              box.evaluate((element) => ({
+                x: parseFloat(element.style.left) / 100,
+                y: parseFloat(element.style.top) / 100,
+                width: parseFloat(element.style.width) / 100,
+                height: parseFloat(element.style.height) / 100,
+                rotation: Number(element.style.transform.match(/rotate\(([-.\d]+)deg\)/)?.[1]),
+              }));
+            const initial = await geometry(),
+              expected = expectedGeometry(stageProject);
+            assert(
+              `${interpolation}: native handles sample parent, retained expressions and signed axes`,
+              near(initial.x, expected.x, 0.001) &&
+                near(initial.y, expected.y, 0.001) &&
+                near(initial.width, Math.abs(expected.sx), 0.001) &&
+                near(initial.height, Math.abs(expected.sy), 0.001) &&
+                near(initial.rotation, expected.rotation, 0.001),
+              JSON.stringify({ initial, expected, stageTime }),
+            );
+            const frameBox = await box.locator('..').boundingBox();
+            if (!frameBox) throw new Error('Missing stage frame');
+            const move = page.getByRole('button', { name: 'Move selected clip', exact: true });
+            const moveBox = await move.boundingBox();
+            if (!moveBox) throw new Error('Missing move handle');
+            await page.mouse.move(moveBox.x + moveBox.width / 2, moveBox.y + moveBox.height / 2);
+            await page.mouse.down();
+            await page.mouse.move(
+              moveBox.x + moveBox.width / 2 + frameBox.width * 0.06,
+              moveBox.y + moveBox.height / 2 - frameBox.height * 0.04,
+              { steps: 5 },
+            );
+            await page.mouse.up();
+            const moved = await until(
+              () => getProject(api, projectId),
+              (p) => p.revision > stageProject.revision,
+            );
+            const movedGeometry = expectedGeometry(moved);
+            assert(
+              `${interpolation}: native move authors only wrapped position and retains expression phase`,
+              near(movedGeometry.x, expected.x + 0.06, 0.003) &&
+                near(movedGeometry.y, expected.y - 0.04, 0.003) &&
+                JSON.stringify(composition(moved).transform) ===
+                  JSON.stringify(composition(stageProject).transform) &&
+                JSON.stringify(
+                  composition(moved).keyframes.filter((k) => k.property !== 'transform.position'),
+                ) ===
+                  JSON.stringify(
+                    composition(stageProject).keyframes.filter(
+                      (k) => k.property !== 'transform.position',
+                    ),
+                  ),
+              JSON.stringify({ movedGeometry, expected }),
+            );
+            stageProject = moved;
+            const beforeScale = expectedGeometry(stageProject);
+            const scaleHandle = page
+              .getByRole('button', { name: 'Scale selected clip', exact: true })
+              .first();
+            const scaleBox = await scaleHandle.boundingBox();
+            if (!scaleBox) throw new Error('Missing scale handle');
+            const scaleStart = {
+              x: scaleBox.x + scaleBox.width / 2,
+              y: scaleBox.y + scaleBox.height / 2,
+            };
+            const centre = {
+              x: frameBox.x + beforeScale.x * frameBox.width,
+              y: frameBox.y + beforeScale.y * frameBox.height,
+            };
+            await page.mouse.move(scaleStart.x, scaleStart.y);
+            await page.mouse.down();
+            await page.mouse.move(
+              centre.x + (scaleStart.x - centre.x) * 0.95,
+              centre.y + (scaleStart.y - centre.y) * 0.95,
+              { steps: 5 },
+            );
+            await page.mouse.up();
+            const scaled = await until(
+              () => getProject(api, projectId),
+              (p) => p.revision > stageProject.revision,
+            );
+            const scaledGeometry = expectedGeometry(scaled);
+            assert(
+              `${interpolation}: native scale keeps negative/nonuniform axes and unrelated motion`,
+              near(scaledGeometry.sx, beforeScale.sx * 0.95, 0.003) &&
+                near(scaledGeometry.sy, beforeScale.sy * 0.95, 0.003) &&
+                JSON.stringify(
+                  composition(scaled).keyframes.filter(
+                    (k) => !['transform.scaleX', 'transform.scaleY'].includes(k.property),
+                  ),
+                ) ===
+                  JSON.stringify(
+                    composition(stageProject).keyframes.filter(
+                      (k) => !['transform.scaleX', 'transform.scaleY'].includes(k.property),
+                    ),
+                  ),
+              JSON.stringify({ scaledGeometry, beforeScale }),
+            );
+            stageProject = scaled;
+            const rotate = page.getByRole('button', { name: 'Rotate selected clip', exact: true });
+            const rotateBox = await rotate.boundingBox();
+            if (!rotateBox) throw new Error('Missing rotate handle');
+            const from = {
+              x: rotateBox.x + rotateBox.width / 2,
+              y: rotateBox.y + rotateBox.height / 2,
+            };
+            const pointerTarget = await page.evaluate(({ x, y }) => {
+              const element = document.elementFromPoint(x, y);
+              return {
+                tag: element?.tagName,
+                label: element?.closest('button')?.getAttribute('aria-label'),
+              };
+            }, from);
+            writeFileSync(
+              join(folder, `${interpolation}-stage-pointer.json`),
+              JSON.stringify(
+                {
+                  rotateBox,
+                  from,
+                  frameBox,
+                  centre,
+                  geometry: await geometry(),
+                  pointerTarget,
+                  scaled,
+                },
+                null,
+                2,
+              ),
+            );
+            assert(
+              `${interpolation}: rotation grip is reachable inside the visible frame`,
+              pointerTarget.label === 'Rotate selected clip',
+              JSON.stringify({ pointerTarget, rotateBox, frameBox }),
+            );
+
+            const theta = (10 * Math.PI) / 180,
+              dx = from.x - centre.x,
+              dy = from.y - centre.y;
+            await page.mouse.move(from.x, from.y);
+            await page.mouse.down();
+            await page.mouse.move(
+              centre.x + dx * Math.cos(theta) - dy * Math.sin(theta),
+              centre.y + dx * Math.sin(theta) + dy * Math.cos(theta),
+              { steps: 5 },
+            );
+            await page.mouse.up();
+            const rotated = await until(
+              () => getProject(api, projectId),
+              (p) => p.revision > stageProject.revision,
+            );
+            const rotatedGeometry = expectedGeometry(rotated);
+            writeFileSync(
+              join(folder, `${interpolation}-stage-rotated-readback.json`),
+              JSON.stringify(rotated, null, 2),
+            );
+            assert(
+              `${interpolation}: native rotation edits displayed key and preserves other channels`,
+              near(rotatedGeometry.rotation, scaledGeometry.rotation + 10, 0.1) &&
+                JSON.stringify(
+                  composition(rotated).keyframes.filter(
+                    (k) => k.property !== 'transform.rotationDeg',
+                  ),
+                ) ===
+                  JSON.stringify(
+                    composition(stageProject).keyframes.filter(
+                      (k) => k.property !== 'transform.rotationDeg',
+                    ),
+                  ),
+              JSON.stringify({ rotatedGeometry, scaledGeometry }),
+            );
+            await page.reload();
+            await expect(page.locator('[data-clip-kind="nested_sequence"]:visible')).toHaveCount(
+              2,
+              { timeout: 30_000 },
+            );
+            await selectClip(page, instanceId, 0.2);
+            await seek(page, pxPerSec, stageTime);
+            const reloaded = await geometry();
+            assert(
+              `${interpolation}: native stage geometry survives reload`,
+              near(reloaded.x, rotatedGeometry.x, 0.001) &&
+                near(reloaded.width, Math.abs(rotatedGeometry.sx), 0.001) &&
+                near(reloaded.rotation, rotatedGeometry.rotation, 0.001),
+            );
+            const stagePath = join(folder, `${interpolation}-stage-handles.mp4`);
+            await render(rotated, stagePath);
+            const stageParity = [];
+            for (const [index, sec] of [0.8, 1.3, 2.3, 3.2].entries()) {
+              const native = magentaCenter(await nativeNested(rotated, sec, `stage-${index}`));
+              const encoded = magentaCenter(frame(stagePath, sec));
+              stageParity.push({
+                sec,
+                native,
+                encoded,
+                distance: Math.hypot(native.x - encoded.x, native.y - encoded.y),
+              });
+            }
+            assert(
+              `${interpolation}: native stage drags match decoded export placement`,
+              stageParity.every((p) => p.native.mass > 0 && p.encoded.mass > 0 && p.distance < 3),
+              JSON.stringify(stageParity),
+            );
+            assert(
+              `${interpolation}: stage drags preserve child sequence and other instance`,
+              JSON.stringify(rotated.nestedSequences) ===
+                JSON.stringify(stageOriginal.nestedSequences) &&
+                JSON.stringify(clipById(rotated, repeatedInstanceId)) ===
+                  JSON.stringify(clipById(stageOriginal, repeatedInstanceId)),
+            );
+            writeFileSync(
+              join(folder, `${interpolation}-stage-handles.json`),
+              JSON.stringify(
+                { stageTime, initial, expected, moved, scaled, rotated, reloaded, stageParity },
+                null,
+                2,
+              ),
+            );
+            await postOp(api, projectId, 'undo', { toRevision: stageOriginal.revision });
+            await page.reload();
+            await expect(page.locator('[data-clip-kind="nested_sequence"]:visible')).toHaveCount(
+              2,
+              { timeout: 30_000 },
+            );
+          }
           await selectClip(page, instanceId, 0.2);
           await page
             .getByTestId('composition-inspector')
@@ -3477,7 +3813,8 @@ test('retained project journey: native splits and deletes preserve stored pictur
           assert(
             `${interpolation}: locked composition shows an unlock instruction and no editable inspector`,
             lockedResponse.status === 200 &&
-              (await page.getByTestId('composition-inspector').count()) === 0,
+              (await page.getByTestId('composition-inspector').count()) === 0 &&
+              (!STAGE_JOURNEY || (await page.getByTestId('stage-transform-box').count()) === 0),
           );
           writeFileSync(
             join(folder, `${interpolation}-composition-controls.json`),
