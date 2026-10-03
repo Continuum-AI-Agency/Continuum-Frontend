@@ -574,7 +574,7 @@ export const VIDEO_EDITOR_OPS = {
     scope: 'project',
     access: 'operate',
     description:
-      'Change a video or audio clip to a constant playback rate, keeping its source span and scaling automation. Repack the main sequence and carry its captions and overlays with it. Reverse and speed ramps are not supported. One undo restores the edit.',
+      'Change a video, audio or composition clip to a constant playback rate, keeping its source span and scaling its own automation. Main-video changes repack the sequence and carry its captions and overlays; composition changes retain other instances and the child sequence. Reverse and speed ramps are not supported. One undo restores the edit.',
     input: z
       .object({
         ...projectRef,

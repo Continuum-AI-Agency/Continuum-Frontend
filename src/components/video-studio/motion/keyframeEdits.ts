@@ -16,9 +16,16 @@ import type { EditorCommandDraft } from '@/StudioCanvas/nodes/timeline/editorPro
 import { currentPropertyValue } from '@/StudioCanvas/nodes/timeline/motion/motionLayers';
 import { findClip, type TimelineEdit } from '@/StudioCanvas/nodes/timeline/workspace/timelineEdits';
 
-export type KeyedClip = Extract<EditorClip, { kind: 'video' | 'overlay' | 'text' | 'audio' }>;
+export type KeyedClip = Extract<
+  EditorClip,
+  { kind: 'video' | 'overlay' | 'text' | 'audio' | 'nested_sequence' }
+>;
 export const isKeyedClip = (clip: EditorClip): clip is KeyedClip =>
-  clip.kind === 'video' || clip.kind === 'overlay' || clip.kind === 'text' || clip.kind === 'audio';
+  clip.kind === 'video' ||
+  clip.kind === 'overlay' ||
+  clip.kind === 'text' ||
+  clip.kind === 'audio' ||
+  clip.kind === 'nested_sequence';
 
 type LaneProperty =
   | 'transform.position'
@@ -45,7 +52,7 @@ export type LaneChannelId = LaneChannel['id'];
 export const channelsFor = (clip: KeyedClip): readonly LaneChannel[] =>
   LANE_CHANNELS.filter((channel) =>
     channel.id === 'volume'
-      ? clip.kind === 'audio' || clip.kind === 'video'
+      ? clip.kind === 'audio' || clip.kind === 'video' || clip.kind === 'nested_sequence'
       : clip.kind !== 'audio',
   );
 
@@ -93,9 +100,9 @@ export function valueAt(
 ): EditorKeyframe['value'] {
   let base: EditorKeyframe['value'];
   if (property === 'audio.volume') {
-    if (clip.kind !== 'audio' && clip.kind !== 'video')
+    if (clip.kind !== 'audio' && clip.kind !== 'video' && clip.kind !== 'nested_sequence')
       throw new Error('Volume lane requires an audio-bearing clip.');
-    base = clip.volume ?? 1;
+    base = clip.kind === 'nested_sequence' ? 1 : (clip.volume ?? 1);
   } else {
     if (clip.kind === 'audio') throw new Error('Audio clips only expose volume keyframes.');
     base = currentPropertyValue(clip.transform, property);

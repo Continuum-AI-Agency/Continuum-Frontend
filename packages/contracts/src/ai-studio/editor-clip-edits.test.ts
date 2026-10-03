@@ -7,7 +7,43 @@ import {
   editorClipWithLocalFades,
   editorClipWithRetainedFades,
 } from './editor-clip-edits';
-import { editorAudioClipSchema, editorVideoClipSchema } from './editor-project-v2';
+import {
+  editorAudioClipSchema,
+  editorNestedSequenceClipSchema,
+  editorVideoClipSchema,
+} from './editor-project-v2';
+
+test('composition speed retains child span, complete own curves and independent parent clocks', () => {
+  const clip = editorNestedSequenceClipSchema.parse({
+    id: 'group',
+    kind: 'nested_sequence',
+    sequenceId: 'child',
+    timelineStartSec: 2,
+    durationSec: 3,
+    sourceInSec: 1,
+    playbackRate: 1,
+    keyframeOffsetSec: 0.5,
+    parentClipId: 'driver',
+    keyframes: [
+      {
+        id: 'before',
+        property: 'transform.opacity',
+        timeSec: 0,
+        value: 0.2,
+        interpolation: 'linear',
+      },
+      { id: 'after', property: 'audio.volume', timeSec: 5, value: 0.8, interpolation: 'linear' },
+    ],
+  });
+  const sped = editorNestedSequenceClipSchema.parse(editorClipAtSpeed(clip, 2));
+  expect(sped.durationSec * sped.playbackRate).toBe(clip.durationSec * clip.playbackRate);
+  expect(sped.sourceInSec).toBe(1);
+  expect(sped.keyframeOffsetSec).toBe(0.25);
+  expect(sped.parentClipId).toBe('driver');
+  expect(sped.keyframes.map((key) => key.timeSec)).toEqual([0, 2.5]);
+  expect(sped.audioEnabled).toBe(true);
+  expect('audioFadeClock' in sped).toBe(false);
+});
 
 test('speed keeps source span and scales keyframes, fades and automation together', () => {
   const clip = editorAudioClipSchema.parse({

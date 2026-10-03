@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { createEditorProjectV2, EASE_OUT, type EditorProjectV2 } from '@continuum/contracts';
+import {
+  createEditorProjectV2,
+  EASE_OUT,
+  type EditorProjectV2,
+  editorProjectV2Schema,
+} from '@continuum/contracts';
 import {
   findClip,
   placeAssetEdit,
@@ -45,6 +50,43 @@ const clipOf = (project: EditorProjectV2, clipId: string): KeyedClip => {
 };
 
 describe('keyframe lane edits', () => {
+  test('composition channels author gain and transform through the real reducer', () => {
+    const base = withClip().project;
+    let project = editorProjectV2Schema.parse({
+      ...base,
+      nestedSequences: [
+        { id: 'child', name: 'Child', canvas: base.canvas, durationSec: 4, tracks: [] },
+      ],
+      tracks: [
+        ...base.tracks,
+        {
+          id: 'groups',
+          name: 'Groups',
+          kind: 'nested_sequence',
+          order: 2,
+          clips: [
+            {
+              id: 'group',
+              kind: 'nested_sequence',
+              sequenceId: 'child',
+              timelineStartSec: 0,
+              durationSec: 4,
+            },
+          ],
+        },
+      ],
+    });
+    project = commit(project, addKeyEdit(project, 'group', 'volume', 0));
+    expect(valueAt(clipOf(project, 'group'), 'audio.volume', 0)).toBe(1);
+    project = commit(project, valueKeyEdit(project, 'group', 'volume', 0, 0.25));
+    project = commit(project, addKeyEdit(project, 'group', 'volume', 2));
+    project = commit(project, valueKeyEdit(project, 'group', 'volume', 2, 0.75));
+    expect(valueAt(clipOf(project, 'group'), 'audio.volume', 1)).toBe(0.5);
+    project = commit(project, addKeyEdit(project, 'group', 'scale', 1));
+    expect(
+      channelKeys(clipOf(project, 'group'), 'scale')[0]?.keyframes.map((key) => key.value),
+    ).toEqual([1, 1]);
+  });
   test('audio volume keys sample absolute gain, move, ease and delete without visual channels', () => {
     const placed = placeAssetEdit(
       blank(),

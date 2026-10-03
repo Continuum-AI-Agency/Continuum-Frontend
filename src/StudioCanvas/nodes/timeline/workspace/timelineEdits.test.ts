@@ -16,6 +16,7 @@ import {
   mainVideoTrack,
   moveClipEdit,
   placeAssetEdit,
+  replaceClipEdit,
   setTrackStateEdit,
   simulate,
   splitEdit,
@@ -48,6 +49,22 @@ const round = (sec: number) => Math.round(sec * 1_000) / 1_000;
 
 const blank = () =>
   createEditorProjectV2({ projectId: 'p1', title: 'Edit', width: 1080, height: 1920 });
+
+test('inspector replacement honors the latest clip and track locks', () => {
+  const project = commit(blank(), placeAssetEdit(blank(), video('a', 4), { atSec: 0 }));
+  const clip = project.tracks[0].clips[0];
+  expect(replaceClipEdit(project, { ...clip, name: 'Changed' })).not.toBeNull();
+  const locked = editorProjectV2Schema.parse({
+    ...project,
+    tracks: [{ ...project.tracks[0], clips: [{ ...clip, locked: true }] }],
+  });
+  expect(replaceClipEdit(locked, { ...clip, locked: false, name: 'Changed' })).toBeNull();
+  const lockedTrack = editorProjectV2Schema.parse({
+    ...project,
+    tracks: [{ ...project.tracks[0], locked: true }],
+  });
+  expect(replaceClipEdit(lockedTrack, clip)).toBeNull();
+});
 
 test('nested lanes split their source clock and bound trims to the child duration', () => {
   const base = commit(blank(), placeAssetEdit(blank(), video('a', 10), { atSec: 0 }));

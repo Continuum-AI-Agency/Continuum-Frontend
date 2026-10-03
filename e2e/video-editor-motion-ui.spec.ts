@@ -57,6 +57,7 @@ const PARENT_RANGE_JOURNEY = process.env.VIDEO_EDITOR_PARENT_RANGE_JOURNEY === '
 const CAPTION_JOURNEY = process.env.VIDEO_EDITOR_CAPTION_JOURNEY === '1';
 const NESTED_JOURNEY = process.env.VIDEO_EDITOR_NESTED_JOURNEY === '1';
 const NESTED_AUDIO_JOURNEY = process.env.VIDEO_EDITOR_NESTED_AUDIO_JOURNEY === '1';
+const NESTED_CONTROLS_JOURNEY = process.env.VIDEO_EDITOR_NESTED_CONTROLS_JOURNEY === '1';
 const BRAND =
   process.env.CONTINUUM_TEST_BRAND_ID ??
   (LOCAL_CURVE_JOURNEY
@@ -1090,19 +1091,21 @@ test('retained project journey: native splits and deletes preserve stored pictur
     'Set VIDEO_EDITOR_CURVE_JOURNEY=1 for the disposable real-store journey.',
   );
   const proof = createBenchRecorder(
-    NESTED_AUDIO_JOURNEY
-      ? 'videoeditor:motion:e2e:bench:retained-nested-audio'
-      : NESTED_JOURNEY
-        ? 'videoeditor:motion:e2e:bench:retained-nested'
-        : CAPTION_JOURNEY
-          ? 'videoeditor:motion:e2e:bench:retained-captions'
-          : SPEECH_JOURNEY
-            ? 'videoeditor:motion:e2e:bench:speech-jumps'
-            : PARENT_JOURNEY
-              ? 'videoeditor:motion:e2e:bench:retained-parent'
-              : TEXT_JOURNEY
-                ? 'videoeditor:motion:e2e:bench:retained-text'
-                : 'videoeditor:motion:e2e:bench:retained-project',
+    NESTED_CONTROLS_JOURNEY
+      ? 'videoeditor:motion:e2e:bench:composition-controls'
+      : NESTED_AUDIO_JOURNEY
+        ? 'videoeditor:motion:e2e:bench:retained-nested-audio'
+        : NESTED_JOURNEY
+          ? 'videoeditor:motion:e2e:bench:retained-nested'
+          : CAPTION_JOURNEY
+            ? 'videoeditor:motion:e2e:bench:retained-captions'
+            : SPEECH_JOURNEY
+              ? 'videoeditor:motion:e2e:bench:speech-jumps'
+              : PARENT_JOURNEY
+                ? 'videoeditor:motion:e2e:bench:retained-parent'
+                : TEXT_JOURNEY
+                  ? 'videoeditor:motion:e2e:bench:retained-text'
+                  : 'videoeditor:motion:e2e:bench:retained-project',
     [],
   );
   proof.notes.push(
@@ -1126,6 +1129,8 @@ test('retained project journey: native splits and deletes preserve stored pictur
     expect(ok, `${name}${detail ? `: ${detail}` : ''}`).toBe(true);
   };
   try {
+    if (NESTED_CONTROLS_JOURNEY && !NESTED_AUDIO_JOURNEY)
+      throw new Error('Composition controls journey requires the real nested audio journey.');
     if (NESTED_AUDIO_JOURNEY && (!NESTED_JOURNEY || !LOCAL_CURVE_JOURNEY))
       throw new Error('Nested audio journey requires nested mode and the loopback store.');
     if (CAPTION_JOURNEY && (!TEXT_JOURNEY || !PARENT_JOURNEY || SPEECH_JOURNEY))
@@ -2036,11 +2041,12 @@ test('retained project journey: native splits and deletes preserve stored pictur
           (element as HTMLCanvasElement).toDataURL('image/png'),
         );
         const png = Buffer.from(url.split(',')[1]!, 'base64');
-        writeFileSync(join(folder, `${interpolation}-native-${label}.png`), png);
+        const pngPath = join(folder, `${interpolation}-native-${label}.png`);
+        writeFileSync(pngPath, png);
         return execFileSync(
           'ffmpeg',
-          ['-v', 'error', '-i', 'pipe:0', '-f', 'rawvideo', '-pix_fmt', 'rgba', 'pipe:1'],
-          { input: png, maxBuffer: 4_000_000 },
+          ['-v', 'error', '-i', pngPath, '-f', 'rawvideo', '-pix_fmt', 'rgba', 'pipe:1'],
+          { maxBuffer: 4_000_000, timeout: 20_000 },
         );
       };
       const baselineTitles: Buffer[] = [];
@@ -2930,14 +2936,15 @@ test('retained project journey: native splits and deletes preserve stored pictur
             .first()
             .locator('..');
           const png = await frameElement.screenshot();
-          writeFileSync(join(folder, `${interpolation}-nested-native-${label}.png`), png);
+          const pngPath = join(folder, `${interpolation}-nested-native-${label}.png`);
+          writeFileSync(pngPath, png);
           return execFileSync(
             'ffmpeg',
             [
               '-v',
               'error',
               '-i',
-              'pipe:0',
+              pngPath,
               '-vf',
               'scale=360:640',
               '-f',
@@ -2946,7 +2953,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
               'rgb24',
               'pipe:1',
             ],
-            { input: png, maxBuffer: 4_000_000 },
+            { maxBuffer: 4_000_000, timeout: 20_000 },
           );
         };
         const magentaCenter = (pixels: Buffer) => {
@@ -3055,6 +3062,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
           JSON.stringify(retainedNative),
         );
         const nestedAudioProof = [];
+        let repeatReference: ((sec: number) => number) | undefined;
         if (NESTED_AUDIO_JOURNEY) {
           const floats = (bytes: Buffer) =>
             new Float32Array(
@@ -3091,7 +3099,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
             );
           };
           // Independent source PCM and analytic author curves, without the editor's projection or mixer.
-          const oracleAt = (sec: number) => {
+          const oracleAt = (sec: number, repeatOnly = false) => {
             let sum = 0;
             for (const group of [
               {
@@ -3103,6 +3111,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
               },
               { start: 1.5, duration: 1.6, source: 1.2, rate: 0.8, gain: () => 0.35 },
             ]) {
+              if (repeatOnly && group.start !== 1.5) continue;
               const local = sec - group.start;
               if (local < 0 || local >= group.duration) continue;
               const child = group.source + local * group.rate;
@@ -3121,6 +3130,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
             }
             return sum;
           };
+          repeatReference = (sec) => oracleAt(sec, true);
           const compare = (
             actual: Float32Array,
             expected: (sec: number) => number,
@@ -3206,6 +3216,286 @@ test('retained project journey: native splits and deletes preserve stored pictur
             seekAudio,
             silenceEnergy,
           });
+        }
+        if (NESTED_CONTROLS_JOURNEY) {
+          const composition = (project: EditorProjectV2) => {
+            const clip = clipById(project, instanceId);
+            if (clip?.kind !== 'nested_sequence') throw new Error('Missing composition instance');
+            return clip;
+          };
+          await postOp(api, projectId, 'undo', { toRevision: nestedBefore.revision });
+          await page.reload();
+          await expect(page.locator('[data-clip-kind="nested_sequence"]:visible')).toHaveCount(2, {
+            timeout: 30_000,
+          });
+          await selectClip(page, instanceId, 0.2);
+          const inspector = page.getByTestId('composition-inspector');
+          await expect(inspector).toBeVisible();
+          await expect(inspector.locator('[data-channel="volume"]')).toBeVisible();
+          await expect(
+            inspector.getByRole('textbox', { name: 'Rotation', exact: true }),
+          ).toBeDisabled();
+          const number = async (label: string, value: number) => {
+            const field = inspector.getByRole('textbox', { name: label, exact: true });
+            await field.fill(String(value));
+            await field.press('Tab');
+          };
+          await number('Position X', 0.58);
+          await until(
+            () => getProject(api, projectId),
+            (p) => {
+              const c = clipById(p, instanceId);
+              return c?.kind === 'nested_sequence' && near(c.transform.position.x, 0.58, 0.001);
+            },
+          );
+          await number('Scale X', 0.9);
+          await until(
+            () => getProject(api, projectId),
+            (p) => {
+              const c = clipById(p, instanceId);
+              return c?.kind === 'nested_sequence' && near(c.transform.scaleX, 0.9, 0.001);
+            },
+          );
+          const opacity = inspector
+            .getByRole('group', { name: 'Opacity', exact: true })
+            .getByRole('slider');
+          await opacity.focus();
+          await opacity.press('Home');
+          for (let i = 0; i < 15; i++) await opacity.press('ArrowRight');
+          const transformed = await until(
+            () => getProject(api, projectId),
+            (p) => {
+              const c = clipById(p, instanceId);
+              return c?.kind === 'nested_sequence' && near(c.transform.opacity, 0.75, 0.001);
+            },
+          );
+          assert(
+            `${interpolation}: native composition geometry preserves rotation keys and parent`,
+            JSON.stringify(composition(transformed).keyframes) ===
+              JSON.stringify(composition(nestedBefore).keyframes) &&
+              clipById(transformed, instanceId)?.parentClipId === original.id,
+          );
+          await number('Speed', 2.2);
+          const sped = await until(
+            () => getProject(api, projectId),
+            (p) => {
+              const c = clipById(p, instanceId);
+              return c?.kind === 'nested_sequence' && near(c.playbackRate, 2.2, 0.001);
+            },
+          );
+          const spedClip = clipById(sped, instanceId);
+          assert(
+            `${interpolation}: native composition speed retains child source span and all curves`,
+            spedClip?.kind === 'nested_sequence' &&
+              near(spedClip.durationSec, 1.5, 0.001) &&
+              spedClip.keyframes.every((key, i) =>
+                near(key.timeSec, composition(nestedBefore).keyframes[i]!.timeSec / 2, 0.001),
+              ) &&
+              JSON.stringify(sped.nestedSequences) === JSON.stringify(nestedBefore.nestedSequences),
+          );
+          await number('Source start', 0.47);
+          const trimmed = await until(
+            () => getProject(api, projectId),
+            (p) => {
+              const c = clipById(p, instanceId);
+              return c?.kind === 'nested_sequence' && near(c.sourceInSec, 0.47, 0.001);
+            },
+          );
+          const trimmedClip = clipById(trimmed, instanceId);
+          assert(
+            `${interpolation}: native child source trim advances the retained own clock`,
+            trimmedClip?.kind === 'nested_sequence' &&
+              near(trimmedClip.timelineStartSec, 0.6, 0.001) &&
+              near(trimmedClip.durationSec, 1.4, 0.001) &&
+              near(trimmedClip.keyframeOffsetSec ?? 0, 0.1, 0.001),
+          );
+          await number('Source end', 3.44);
+          const endTrimmed = await until(
+            () => getProject(api, projectId),
+            (p) => near(composition(p).durationSec, 1.35, 0.001),
+          );
+          assert(
+            `${interpolation}: native child end trim retains source start and clocks`,
+            near(composition(endTrimmed).sourceInSec, 0.47, 0.001) &&
+              near(composition(endTrimmed).keyframeOffsetSec ?? 0, 0.1, 0.001),
+          );
+          const speedOp = await postOp(api, projectId, 'set_speed', {
+            clipId: instanceId,
+            rate: 1.1,
+            expectedRevision: endTrimmed.revision,
+          });
+          let commandSped = await getProject(api, projectId);
+          assert(
+            `${interpolation}: agent composition speed preserves other instances, main track and child`,
+            speedOp.status === 200 &&
+              clipById(commandSped, instanceId)?.kind === 'nested_sequence' &&
+              near(clipById(commandSped, instanceId)!.durationSec, 2.7, 0.001) &&
+              JSON.stringify(clipById(commandSped, repeatedInstanceId)) ===
+                JSON.stringify(clipById(trimmed, repeatedInstanceId)) &&
+              JSON.stringify(commandSped.tracks[0]) === JSON.stringify(trimmed.tracks[0]) &&
+              JSON.stringify(commandSped.nestedSequences) ===
+                JSON.stringify(trimmed.nestedSequences),
+          );
+          await page.reload();
+          await expect(page.locator('[data-clip-kind="nested_sequence"]:visible')).toHaveCount(2, {
+            timeout: 30_000,
+          });
+          await selectClip(page, instanceId, 0.2);
+          await seek(page, pxPerSec, 1.3);
+          const gainKeysBefore = composition(commandSped).keyframes.filter(
+            (key) => key.property === 'audio.volume',
+          ).length;
+          await page
+            .getByTestId('composition-inspector')
+            .getByRole('button', { name: 'Add Volume keyframe', exact: true })
+            .click();
+          commandSped = await until(
+            () => getProject(api, projectId),
+            (p) =>
+              composition(p).keyframes.filter((key) => key.property === 'audio.volume').length ===
+              gainKeysBefore + 1,
+          );
+          assert(
+            `${interpolation}: native composition lane authors gain at the retained playhead`,
+            composition(commandSped).keyframes.some(
+              (key) => key.property === 'audio.volume' && near(key.timeSec, 0.9, 0.001),
+            ),
+          );
+          await page.reload();
+          await expect(page.locator('[data-clip-kind="nested_sequence"]:visible')).toHaveCount(2, {
+            timeout: 30_000,
+          });
+          const controlPath = join(folder, `${interpolation}-composition-controls.mp4`);
+          await render(commandSped, controlPath);
+          const controlParity = [];
+          for (const [index, sec] of [0.8, 1.3, 2.3, 3.2].entries()) {
+            const native = magentaCenter(await nativeNested(commandSped, sec, `controls-${index}`));
+            const encoded = magentaCenter(frame(controlPath, sec));
+            controlParity.push({
+              sec,
+              native,
+              encoded,
+              distance: Math.hypot(native.x - encoded.x, native.y - encoded.y),
+            });
+          }
+          assert(
+            `${interpolation}: native composition control edits match decoded export placement`,
+            controlParity.every((p) => p.native.mass > 0 && p.encoded.mass > 0 && p.distance < 3),
+            JSON.stringify(controlParity),
+          );
+          await selectClip(page, instanceId, 0.2);
+          await page
+            .getByTestId('composition-inspector')
+            .getByRole('button', { name: 'Composition audio', exact: true })
+            .click();
+          const muted = await until(
+            () => getProject(api, projectId),
+            (p) => {
+              const c = clipById(p, instanceId);
+              return c?.kind === 'nested_sequence' && !c.audioEnabled;
+            },
+          );
+          const mutedNative = await previewAudio(muted);
+          const mutedPath = join(folder, `${interpolation}-composition-muted.mp4`);
+          await render(muted, mutedPath);
+          const mutedBytes = execFileSync(
+            'ffmpeg',
+            [
+              '-v',
+              'error',
+              '-i',
+              mutedPath,
+              '-vn',
+              '-af',
+              'pan=mono|c0=c0',
+              '-ar',
+              '48000',
+              '-f',
+              'f32le',
+              'pipe:1',
+            ],
+            { maxBuffer: 8_000_000 },
+          );
+          const mutedEncoded = new Float32Array(
+            mutedBytes.buffer.slice(
+              mutedBytes.byteOffset,
+              mutedBytes.byteOffset + mutedBytes.byteLength,
+            ),
+          );
+          const muteEnergy = [mutedNative, mutedEncoded].map((audio) => {
+            let sum = 0;
+            for (let i = 38400; i < 43200; i++) sum += (audio[i] ?? 0) ** 2;
+            return sum / 4800;
+          });
+          if (!repeatReference) throw new Error('Independent repeated-child reference missing');
+          const repeatErrors = [mutedNative, mutedEncoded].map((audio) => {
+            let energy = 0,
+              error = 0;
+            for (const sec of [1.8, 2.3, 2.8])
+              for (let sample = 0; sample < 1920; sample++) {
+                const at = sec + sample / 48000;
+                const expected = repeatReference!(at);
+                energy += expected ** 2;
+                error += ((audio[Math.round(at * 48000)] ?? 0) - expected) ** 2;
+              }
+            return { energy, relativeError: error / energy };
+          });
+          assert(
+            `${interpolation}: native composition mute silences its window and retains repeated child sound`,
+            muteEnergy.every((energy) => energy < 1e-8) &&
+              repeatErrors.every((result) => result.energy > 1e-12 && result.relativeError < 0.05),
+            JSON.stringify({ muteEnergy, repeatErrors }),
+          );
+          writeFileSync(
+            join(folder, `${interpolation}-composition-muted-preview.f32`),
+            Buffer.from(mutedNative.buffer),
+          );
+          const lockedResponse = await postOp(api, projectId, 'apply_commands', {
+            expectedRevision: muted.revision,
+            commands: [
+              {
+                commandType: 'upsert_clip',
+                trackId: nestedTrackId,
+                clip: { ...composition(muted), locked: true },
+              },
+            ],
+          });
+          const lockedProject = await getProject(api, projectId);
+          assert(
+            `${interpolation}: composition lock persists before inspecting it`,
+            lockedResponse.status === 200 && composition(lockedProject).locked,
+            lockedResponse.text.slice(0, 400),
+          );
+          await page.reload();
+          await expect(page.locator('[data-clip-kind="nested_sequence"]:visible')).toHaveCount(2, {
+            timeout: 30_000,
+          });
+          await selectClip(page, instanceId, 0.2);
+          await expect(
+            page.getByText('Unlock this clip to edit it.', { exact: true }),
+          ).toBeVisible();
+          assert(
+            `${interpolation}: locked composition shows an unlock instruction and no editable inspector`,
+            lockedResponse.status === 200 &&
+              (await page.getByTestId('composition-inspector').count()) === 0,
+          );
+          writeFileSync(
+            join(folder, `${interpolation}-composition-controls.json`),
+            JSON.stringify(
+              {
+                transformed,
+                sped,
+                trimmed,
+                commandSped,
+                muted,
+                controlParity,
+                muteEnergy,
+                repeatErrors,
+              },
+              null,
+              2,
+            ),
+          );
         }
         const nestedUndo = await postOp(api, projectId, 'undo', { toRevision: before.revision });
         const nestedRestored = await getProject(api, projectId);

@@ -2,6 +2,7 @@ import type {
   EditorAudioClip,
   EditorAudioFadeClock,
   EditorCaptionWord,
+  EditorNestedSequenceClip,
   EditorTextClip,
   EditorVideoClip,
 } from './editor-project-v2';
@@ -77,13 +78,14 @@ export function editorAudioFadeGainAt(
 }
 
 /** Constant speed keeps the same source span and scales clip-local automation with it. */
-export function editorClipAtSpeed<T extends EditorVideoClip | EditorAudioClip>(
-  clip: T,
-  rate: number,
-): T {
+export function editorClipAtSpeed<
+  T extends EditorVideoClip | EditorAudioClip | EditorNestedSequenceClip,
+>(clip: T, rate: number): T {
   if (!Number.isFinite(rate) || rate < 0.05 || rate > 20)
     throw new Error('Speed must be between 0.05 and 20.');
-  if (clip.reverse || clip.timeRemap?.length)
+  const media: EditorVideoClip | EditorAudioClip | undefined =
+    clip.kind === 'video' || clip.kind === 'audio' ? clip : undefined;
+  if (media?.reverse || media?.timeRemap?.length)
     throw new Error('Constant speed cannot edit a reversed or time-remapped clip.');
   const factor = clip.playbackRate / rate;
   const durationSec = clip.durationSec * factor;
@@ -94,11 +96,11 @@ export function editorClipAtSpeed<T extends EditorVideoClip | EditorAudioClip>(
     ...(clip.keyframeOffsetSec !== undefined
       ? { keyframeOffsetSec: clip.keyframeOffsetSec * factor }
       : {}),
-    ...(clip.audioFadeClock
+    ...(media?.audioFadeClock
       ? {
           audioFadeClock: {
-            offsetSec: clip.audioFadeClock.offsetSec * factor,
-            durationSec: clip.audioFadeClock.durationSec * factor,
+            offsetSec: media.audioFadeClock.offsetSec * factor,
+            durationSec: media.audioFadeClock.durationSec * factor,
           },
         }
       : {}),
@@ -109,19 +111,19 @@ export function editorClipAtSpeed<T extends EditorVideoClip | EditorAudioClip>(
         ? { expression: motionExpressionAtScale(keyframe.expression, factor) }
         : {}),
     })),
-    ...(clip.fadeInSec !== undefined
+    ...(media?.fadeInSec !== undefined
       ? {
           fadeInSec: Math.min(
-            clip.fadeInSec * factor,
-            (clip.audioFadeClock?.durationSec ?? clip.durationSec) * factor,
+            media.fadeInSec * factor,
+            (media.audioFadeClock?.durationSec ?? clip.durationSec) * factor,
           ),
         }
       : {}),
-    ...(clip.fadeOutSec !== undefined
+    ...(media?.fadeOutSec !== undefined
       ? {
           fadeOutSec: Math.min(
-            clip.fadeOutSec * factor,
-            (clip.audioFadeClock?.durationSec ?? clip.durationSec) * factor,
+            media.fadeOutSec * factor,
+            (media.audioFadeClock?.durationSec ?? clip.durationSec) * factor,
           ),
         }
       : {}),

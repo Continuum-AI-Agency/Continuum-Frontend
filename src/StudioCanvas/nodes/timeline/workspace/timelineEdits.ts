@@ -854,7 +854,7 @@ export function replaceClipEdit(
   label = 'Edit clip',
 ): TimelineEdit | null {
   const found = findClip(project, clip.id);
-  if (!found || found.track.locked) return null;
+  if (!found || found.track.locked || found.clip.locked) return null;
   const forward: EditorCommandDraft[] = [
     { commandType: 'upsert_clip', trackId: found.track.id, clip },
   ];
