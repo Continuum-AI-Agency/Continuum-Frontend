@@ -3,12 +3,20 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import {
+  CLIP_MOTION_PRESET_IDS,
+  CLIP_MOTION_PRESETS,
   type EditorClip,
   type EditorProjectV2,
   editorCaptionWordSchema,
   editorExportSettingsSchema,
+  editorKeyframeSchema,
   editorProjectV2Schema,
+  LOOK_EFFECT_IDS,
+  LOOK_EFFECTS,
+  lookEffectInstance,
+  motionPresetKeyframes,
   numericKeysForProperty,
   parentPositionDelta,
   positionKeysForProperty,
@@ -19,6 +27,10 @@ import {
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { Recorder } from '../../Continuum-Backend/scripts/_bench/recorder';
+import {
+  SEAM_TRANSITIONS,
+  TRANSITION_LABELS,
+} from '../src/components/video-studio/motion/TransitionSeam';
 import { mintSessionBundleForEmail } from './support/auth';
 import { createBenchRecorder } from './support/benchRecorder';
 import type { DurableTimelineRequest } from './support/editorV2DurableRenderBenchEntry';
@@ -59,6 +71,7 @@ const BENCH = VOLUME_JOURNEY ? 'videoeditor:audio:render:bench' : 'videoeditor:m
 const KEYFRAME_JOURNEY = VOLUME_JOURNEY || process.env.VIDEO_EDITOR_KEYFRAME_JOURNEY === '1';
 const KEYFRAME_HOLD_JOURNEY = process.env.VIDEO_EDITOR_KEYFRAME_HOLD_JOURNEY === '1';
 const KEYFRAME_LOCAL = KEYFRAME_JOURNEY || KEYFRAME_HOLD_JOURNEY;
+const MENU_JOURNEY = process.env.VIDEO_EDITOR_MENU_JOURNEY === '1';
 const LOCAL_CURVE_JOURNEY = process.env.VIDEO_EDITOR_CURVE_JOURNEY_LOCAL === '1';
 const SPEECH_JOURNEY = process.env.VIDEO_EDITOR_SPEECH_JOURNEY === '1';
 const ANIMATED_SPEECH_JOURNEY = process.env.VIDEO_EDITOR_ANIMATED_SPEECH_JOURNEY === '1';
@@ -1080,7 +1093,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
       ? VINTAGE_LOOK_JOURNEY
         ? 'videoeditor:motion:e2e:bench:vintage-looks'
         : 'videoeditor:motion:e2e:bench:collage'
-      : KEYFRAME_LOCAL
+      : KEYFRAME_LOCAL || MENU_JOURNEY
         ? BENCH
         : STAGE_JOURNEY
           ? 'videoeditor:motion:e2e:bench:stage-handles'
@@ -1132,6 +1145,17 @@ test('retained project journey: native splits and deletes preserve stored pictur
     expect(ok, `${name}${detail ? `: ${detail}` : ''}`).toBe(true);
   };
   try {
+    if (
+      MENU_JOURNEY &&
+      (!LOCAL_CURVE_JOURNEY ||
+        KEYFRAME_LOCAL ||
+        COLLAGE_JOURNEY ||
+        SPEECH_JOURNEY ||
+        TEXT_JOURNEY ||
+        PARENT_JOURNEY ||
+        NESTED_JOURNEY)
+    )
+      throw new Error('Menu proof requires only the loopback recording journey.');
     if (VINTAGE_LOOK_JOURNEY && !COLLAGE_JOURNEY)
       throw new Error('Vintage looks require the local collage journey');
     if (
@@ -3242,7 +3266,9 @@ test('retained project journey: native splits and deletes preserve stored pictur
       ? []
       : KEYFRAME_LOCAL
         ? (['linear'] as const)
-        : (['hold', 'linear', 'bezier', 'spring'] as const)) {
+        : MENU_JOURNEY
+          ? (['hold', 'linear', 'bezier'] as const)
+          : (['hold', 'linear', 'bezier', 'spring'] as const)) {
       await page.goto(`${frontend.url}/studio/video/new`, { timeout: 300_000 });
       await page.waitForURL(/\/studio\/video\/[0-9a-f-]{36}/, { timeout: 180_000 });
       const projectId = /\/studio\/video\/([0-9a-f-]{36})/.exec(page.url())?.[1];
@@ -3281,33 +3307,47 @@ test('retained project journey: native splits and deletes preserve stored pictur
                   id: `source-${interpolation}`,
                   kind: 'video',
                   timelineStartSec: 0,
-                  durationSec: 4,
+                  durationSec: MENU_JOURNEY ? 2 : 4,
                   source: { sourceType: 'library_asset', assetId, renditionId: versionId },
                   ...(KEYFRAME_LOCAL ? { sourceInSec: 64.7 } : {}),
                   volume: 0.6,
-                  fadeInSec: 3,
-                  fadeOutSec: 3,
+                  fadeInSec: MENU_JOURNEY ? 0 : 3,
+                  fadeOutSec: MENU_JOURNEY ? 0 : 3,
                   ...(PARENT_JOURNEY ? { parentClipId: `driver-${interpolation}` } : {}),
-                  keyframes: PARENT_JOURNEY
-                    ? [
-                        ...keys,
-                        {
-                          id: 'move-a',
-                          property: 'transform.position',
-                          timeSec: 0,
-                          value: { x: 0.5, y: 0.5 },
-                          interpolation: 'linear',
-                        },
-                        {
-                          id: 'move-b',
-                          property: 'transform.position',
-                          timeSec: 4,
-                          value: { x: 0.62, y: 0.5 },
-                          interpolation: 'linear',
-                        },
-                      ]
-                    : keys,
+                  keyframes: MENU_JOURNEY
+                    ? []
+                    : PARENT_JOURNEY
+                      ? [
+                          ...keys,
+                          {
+                            id: 'move-a',
+                            property: 'transform.position',
+                            timeSec: 0,
+                            value: { x: 0.5, y: 0.5 },
+                            interpolation: 'linear',
+                          },
+                          {
+                            id: 'move-b',
+                            property: 'transform.position',
+                            timeSec: 4,
+                            value: { x: 0.62, y: 0.5 },
+                            interpolation: 'linear',
+                          },
+                        ]
+                      : keys,
                 },
+                ...(MENU_JOURNEY
+                  ? [
+                      {
+                        id: `next-${interpolation}`,
+                        kind: 'video',
+                        timelineStartSec: 2,
+                        durationSec: 2,
+                        sourceInSec: 2,
+                        source: { sourceType: 'library_asset', assetId, renditionId: versionId },
+                      },
+                    ]
+                  : []),
               ],
             },
           },
@@ -3468,11 +3508,224 @@ test('retained project journey: native splits and deletes preserve stored pictur
       // Start native editing from a real document reload. This journey certifies
       // durable edits/composition, not external-write Realtime delivery.
       await page.reload();
-      await expect(page.locator('[data-clip-kind="video"]:visible')).toHaveCount(1, {
-        timeout: 20_000,
-      });
+      await expect(page.locator('[data-clip-kind="video"]:visible')).toHaveCount(
+        MENU_JOURNEY ? 2 : 1,
+        {
+          timeout: 20_000,
+        },
+      );
       const original = mainClips(before)[0];
       if (!original) throw new Error('Original clip missing');
+      if (MENU_JOURNEY) {
+        const timings: Array<{
+          door: string;
+          label: string;
+          commitMs: number;
+          refreshedMs: number;
+          revision: number;
+          before: EditorProjectV2;
+          after: EditorProjectV2;
+        }> = [];
+        const actions = [
+          ...CLIP_MOTION_PRESET_IDS.map((preset) => ({
+            group: 'Animate',
+            label: CLIP_MOTION_PRESETS[preset].label,
+            palette: `Animate: ${CLIP_MOTION_PRESETS[preset].label}`,
+            op: 'animate_clip',
+            preset,
+            effect: undefined,
+            transition: undefined,
+          })),
+          ...LOOK_EFFECT_IDS.map((effect) => ({
+            group: 'Look',
+            label: LOOK_EFFECTS[effect].label,
+            palette: `Look: ${LOOK_EFFECTS[effect].label}`,
+            op: 'apply_effect',
+            preset: undefined,
+            effect,
+            transition: undefined,
+          })),
+          ...SEAM_TRANSITIONS.map((transition) => ({
+            group: 'Transition',
+            label: `${TRANSITION_LABELS[transition]} into next`,
+            palette: `Transition: ${TRANSITION_LABELS[transition]} into next clip`,
+            op: 'add_transition',
+            preset: undefined,
+            effect: undefined,
+            transition,
+          })),
+        ];
+        for (const door of ['palette', 'context menu'] as const) {
+          for (const action of actions) {
+            await selectClip(page, original.id);
+            const old = await getProject(api, projectId);
+            if (door === 'palette') {
+              await page.getByRole('button', { name: 'Command palette', exact: true }).click();
+              await page.getByPlaceholder('Search actions…').fill(action.palette);
+            } else {
+              await page
+                .locator(`[data-clip-id="${original.id}"]:visible`)
+                .click({ button: 'right' });
+              await page.getByRole('menuitem', { name: action.group, exact: true }).hover();
+            }
+            const target = page.getByRole(door === 'palette' ? 'option' : 'menuitem', {
+              name: door === 'palette' ? action.palette : action.label,
+              exact: true,
+            });
+            // Locator/scroll/menu preparation precedes the actual user's action.
+            await target.scrollIntoViewIfNeeded();
+            await page.evaluate(() => {
+              // The browser's default resource buffer fills during a large menu matrix.
+              performance.clearResourceTimings();
+              window.addEventListener(
+                'click',
+                () => {
+                  (window as unknown as { __menuCommitAt: number }).__menuCommitAt =
+                    performance.now();
+                },
+                { capture: true, once: true },
+              );
+            });
+            const pending = page.waitForResponse(
+              (r) =>
+                r.request().method() === 'POST' &&
+                r.url().endsWith(`/${projectId}/ops/${action.op}`),
+            );
+            const refreshed = page.waitForResponse(async (r) => {
+              if (r.request().method() !== 'GET' || !r.url().endsWith(`/${projectId}`))
+                return false;
+              return (
+                ((await r.json()) as { project: EditorProjectV2 }).project.revision ===
+                old.revision + 1
+              );
+            });
+            await target.click();
+            const response = await pending;
+            await response.finished();
+            const reloadResponse = await refreshed;
+            await reloadResponse.finished();
+            const timing = await page.evaluate(
+              ({ commitUrl, refreshUrl }) => {
+                const start = (window as unknown as { __menuCommitAt: number }).__menuCommitAt;
+                const end = (url: string) => {
+                  const resource = performance
+                    .getEntriesByName(url)
+                    .filter((e) => e.startTime >= start - 0.5)
+                    .at(-1) as PerformanceResourceTiming | undefined;
+                  if (!resource || !Number.isFinite(start))
+                    throw new Error('Native menu timing missing');
+                  return resource.responseEnd - start;
+                };
+                return { commitMs: end(commitUrl), refreshedMs: end(refreshUrl) };
+              },
+              { commitUrl: response.url(), refreshUrl: reloadResponse.url() },
+            );
+            const saved = await getProject(api, projectId);
+            const updated = clipById(saved, original.id);
+            const label = `${interpolation} ${door} ${action.label}`;
+            assert(
+              `f09 ${label}: requested edit commits exactly once`,
+              response.ok() && saved.revision === old.revision + 1,
+            );
+            const normalizeKeys = (keys: ReturnType<typeof keyframesOf>) =>
+              keys
+                .map((key) => {
+                  const { id: _id, ...parsed } = editorKeyframeSchema.parse(key);
+                  return parsed;
+                })
+                .sort((a, b) => a.timeSec - b.timeSec);
+            writeFileSync(
+              join(folder, 'last-menu-action.json'),
+              JSON.stringify({ label, action, old, saved }, null, 2),
+            );
+            const matches =
+              action.preset && updated && 'transform' in updated
+                ? JSON.stringify(normalizeKeys(keyframesOf(updated))) ===
+                  JSON.stringify(
+                    normalizeKeys(
+                      motionPresetKeyframes(action.preset, {
+                        clipDurationSec: 2,
+                        base: updated.transform,
+                        idPrefix: 'expected',
+                        atSec: 0,
+                      }),
+                    ),
+                  )
+                : action.effect && updated && 'effects' in updated
+                  ? isDeepStrictEqual(
+                      updated.effects.map(({ id: _id, ...effect }) => effect),
+                      [lookEffectInstance(action.effect, { id: 'expected' })].map(
+                        ({ id: _id, ...effect }) => effect,
+                      ),
+                    )
+                  : saved.transitions.length === 1 &&
+                    saved.transitions[0]?.fromClipId === original.id &&
+                    saved.transitions[0]?.toClipId === `next-${interpolation}` &&
+                    saved.transitions[0]?.transitionType === action.transition &&
+                    saved.transitions[0]?.durationSec === 0.5;
+            assert(
+              `f09 ${label}: exact requested preset look or seam persists`,
+              Boolean(matches),
+              JSON.stringify(updated).slice(0, 500),
+            );
+            assert(
+              `f09 ${label}: original source windows and untargeted values remain`,
+              mainClips(saved).length === 2 &&
+                mainClips(saved).every(
+                  (clip, i) =>
+                    clip.kind === 'video' &&
+                    clip.durationSec === 2 &&
+                    clip.sourceInSec === i * 2 &&
+                    JSON.stringify(clip.source) === JSON.stringify(mainClips(old)[i]?.source),
+                ) &&
+                JSON.stringify(saved.canvas) === JSON.stringify(old.canvas) &&
+                JSON.stringify(saved.exportSettings) === JSON.stringify(old.exportSettings),
+            );
+            timings.push({
+              door,
+              label,
+              ...timing,
+              revision: saved.revision,
+              before: old,
+              after: saved,
+            });
+            writeFileSync(
+              join(folder, `${interpolation}-menu-timings.json`),
+              JSON.stringify(timings, null, 2),
+            );
+            assert(
+              `f09 ${label}: complete action commit and refreshed project timing retained`,
+              timing.commitMs > 0 && timing.refreshedMs >= timing.commitMs,
+              JSON.stringify(timing),
+            );
+            await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeEnabled();
+            const undo = page.waitForResponse(
+              (r) =>
+                r.request().method() === 'POST' &&
+                r.url().endsWith(`/${projectId}/timeline/restore`),
+            );
+            await page.getByRole('button', { name: 'Undo', exact: true }).click();
+            const undoneResponse = await undo;
+            const restored = await getProject(api, projectId);
+            assert(
+              `f09 ${label}: native undo restores all original timeline data`,
+              undoneResponse.ok() &&
+                JSON.stringify(restored.tracks) === JSON.stringify(old.tracks) &&
+                JSON.stringify(restored.transitions) === JSON.stringify(old.transitions) &&
+                restored.durationSec === old.durationSec,
+            );
+          }
+        }
+        await page.reload();
+        await expect(page.locator('[data-clip-kind="video"]:visible')).toHaveCount(2);
+        assert(
+          `f09 ${interpolation}: reload preserves the restored exact source timeline`,
+          JSON.stringify((await getProject(api, projectId)).tracks) ===
+            JSON.stringify(before.tracks),
+        );
+        summary.push({ interpolation, timings });
+        continue;
+      }
       const baselinePath = join(folder, `${interpolation}-baseline.mp4`);
       await render(before, baselinePath);
       const box = await page.locator(`[data-clip-id="${original.id}"]:visible`).boundingBox();
@@ -6046,18 +6299,36 @@ test('retained project journey: native splits and deletes preserve stored pictur
       pageErrors.length === 0,
       pageErrors.slice(0, 3).join(' | '),
     );
+    if (MENU_JOURNEY) {
+      const samples = summary.flatMap((item) =>
+        'timings' in item ? item.timings.map((v) => v.refreshedMs) : [],
+      );
+      proof.notes.push(`speed samples: ${JSON.stringify({ command_menus: samples })}`);
+      assert('f09 all native menu actions commit the exact requested edits', samples.length > 0);
+      assert(
+        'f09 all native menu actions preserve sources and restore via undo and reload',
+        summary.length === 3,
+      );
+      assert(
+        'f09 all menu actions including cold commits and refresh meet original 200ms',
+        samples.every((ms) => ms > 0 && ms <= 200),
+        JSON.stringify(samples),
+      );
+    }
     proof.record(
       'unexercised release and dialogue paths',
       'SKIP',
-      COLLAGE_JOURNEY
-        ? 'Real recorded videos/stills, native collage UI/store/browser export exercised. Physical device output, native Export dialog/hosted Render, effect/motion/parent combinations, agent/MCP model/live production are unexercised. All media and fixtures stayed local.'
-        : KEYFRAME_JOURNEY
-          ? 'Native keyframe UI/store→browser compositor and commit timings exercised. Export dialog, hosted Render, real spoken/caption protection, animated jump operation and agent unexercised. All media stayed local.'
-          : ANIMATED_SPEECH_JOURNEY
-            ? 'Native cached Auto-captions and animated Quick cuts/store/browser compositor exercised in four curve modes, with native stereo gain and source-clock samples. Transcript accuracy, fresh STT, varied dialogue/music, Export dialog, hosted Render, speed and agent model unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
-            : SPEECH_JOURNEY
-              ? 'Native cached Auto-captions/Quick cuts/store→browser compositor only. Transcript accuracy, fresh STT, Export dialog, hosted Render, animated jump operation, speed and agent unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
-              : 'Native UI/store→browser compositor only. Export dialog, hosted Render, real spoken/caption protection, animated jump operation, speed and agent unexercised. All media stayed local.',
+      MENU_JOURNEY
+        ? 'Every offered motion preset/look/seam through both native menus, real loopback store, undo/reload and full commit plus refresh latency. Timeline/text/format/provider-dependent palette commands, multi-selection, hosted production and model agent are unexercised.'
+        : COLLAGE_JOURNEY
+          ? 'Real recorded videos/stills, native collage UI/store/browser export exercised. Physical device output, native Export dialog/hosted Render, effect/motion/parent combinations, agent/MCP model/live production are unexercised. All media and fixtures stayed local.'
+          : KEYFRAME_JOURNEY
+            ? 'Native keyframe UI/store→browser compositor and commit timings exercised. Export dialog, hosted Render, real spoken/caption protection, animated jump operation and agent unexercised. All media stayed local.'
+            : ANIMATED_SPEECH_JOURNEY
+              ? 'Native cached Auto-captions and animated Quick cuts/store/browser compositor exercised in four curve modes, with native stereo gain and source-clock samples. Transcript accuracy, fresh STT, varied dialogue/music, Export dialog, hosted Render, speed and agent model unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
+              : SPEECH_JOURNEY
+                ? 'Native cached Auto-captions/Quick cuts/store→browser compositor only. Transcript accuracy, fresh STT, Export dialog, hosted Render, animated jump operation, speed and agent unexercised. Supplied beat markers do not certify beat detection. All media stayed local.'
+                : 'Native UI/store→browser compositor only. Export dialog, hosted Render, real spoken/caption protection, animated jump operation, speed and agent unexercised. All media stayed local.',
     );
   } catch (error) {
     proof.record(
