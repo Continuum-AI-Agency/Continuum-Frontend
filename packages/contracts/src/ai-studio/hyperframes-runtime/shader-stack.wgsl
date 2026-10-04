@@ -4,6 +4,7 @@ struct Params {
   kind: f32,
   primary: vec4f,
   secondary: vec4f,
+  viewport: vec4f,
 }
 
 @group(0) @binding(0) var src: texture_2d<f32>;
@@ -94,7 +95,8 @@ fn dust(uv: vec2f, color: vec4f) -> vec4f {
   return vec4f(mix(color.rgb, vec3f(pigment), opacity), color.a);
 }
 
-fn lightLeaks(uv: vec2f, color: vec4f) -> vec4f {
+fn lightLeaks(sourceUv: vec2f, color: vec4f) -> vec4f {
+  let uv = (sourceUv * params.size - params.viewport.xy) / params.viewport.zw;
   let cycle = fract(max(0.0, params.time) / 4.0);
   let phase = 1.0 - abs(cycle * 2.0 - 1.0);
   let leftOffset = (uv - vec2f(-0.12 + phase * 0.15, 0.25 + phase * 0.5)) / vec2f(0.5, 0.85);

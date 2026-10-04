@@ -11,7 +11,7 @@ import {
   resolveTransformAt,
 } from '../render/effectSpec';
 import { shaderStackFromClipEffects } from '../render/shaderStack';
-import { computeCropRects, drawCanvasBackground, drawLetterboxed } from './letterbox';
+import { computeCropRects, drawCanvasBackground, drawLetterboxed, type FitRect } from './letterbox';
 
 // Shared frame-drawing primitives for the timeline renderer. `drawClipFrame`
 // draws a single letterboxed frame with the clip's effects (used for solos);
@@ -121,6 +121,7 @@ export function applyPixelEffects(
   width: number,
   height: number,
   t: number,
+  viewport: FitRect = { x: 0, y: 0, width, height },
 ): void {
   const { data } = image;
   const aberration = effects.chromaticAberration?.amount ?? 0;
@@ -196,8 +197,8 @@ export function applyPixelEffects(
         }
       }
       if (leak > 0) {
-        const u = (x + 0.5) / width,
-          v = (y + 0.5) / height;
+        const u = (x + 0.5 - viewport.x) / viewport.width,
+          v = (y + 0.5 - viewport.y) / viewport.height;
         const left = clamp01(
           1 - ((u + 0.12 - phase * 0.15) / 0.5) ** 2 - ((v - 0.25 - phase * 0.5) / 0.85) ** 2,
         );
@@ -332,6 +333,7 @@ async function prepareSource(
   sourceHeight: number,
   effects: ClipEffectSpec | undefined,
   timeSec: number,
+  viewport: FitRect,
 ): Promise<CanvasImageSource> {
   if (sourceWidth <= 0 || sourceHeight <= 0 || !effects) return source;
   // Multiple effects in an explicit stack must keep their authored order.
@@ -346,6 +348,7 @@ async function prepareSource(
       height: sourceHeight,
       stack,
       timeSec,
+      viewport,
     });
   }
   const looks = pixelLooks(effects, timeSec);
@@ -368,7 +371,7 @@ async function prepareSource(
     pixelateScratch(buffer, sourceWidth, sourceHeight, looks.pixelate?.blockPx ?? 0);
   }
   const image = buffer.getImageData(0, 0, sourceWidth, sourceHeight);
-  applyPixelEffects(image, looks, sourceWidth, sourceHeight, timeSec);
+  applyPixelEffects(image, looks, sourceWidth, sourceHeight, timeSec, viewport);
   buffer.putImageData(image, 0, 0);
   return scratch as OffscreenCanvas;
 }
@@ -418,7 +421,14 @@ export async function drawEffectFrame(
       ]);
       ctx.clip();
     }
-    const prepared = await prepareSource(source, sourceWidth, sourceHeight, effects, timeSec);
+    const prepared = await prepareSource(
+      source,
+      sourceWidth,
+      sourceHeight,
+      effects,
+      timeSec,
+      cropped,
+    );
     ctx.drawImage(
       prepared,
       cropped.x,

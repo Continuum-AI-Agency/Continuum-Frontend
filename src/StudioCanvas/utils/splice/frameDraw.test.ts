@@ -180,6 +180,18 @@ describe('vintage exposure effects', () => {
     expect(first.data).not.toEqual(moved.data);
   });
 
+  it('anchors light leaks to the visible crop while preserving its center', () => {
+    const image = frameOf(320, 240, [128, 128, 128]);
+    applyPixelEffects(image, { lightLeaks: { amount: 1 } }, 320, 240, 0, {
+      x: 110,
+      y: 20,
+      width: 100,
+      height: 200,
+    });
+    expect(pixelAt(image, 110, 70)[0]).toBeGreaterThan(160);
+    expect(pixelAt(image, 160, 120)).toEqual([128, 128, 128, 255]);
+  });
+
   it('zero intensity preserves every pixel; greater intensity has a greater physical effect', () => {
     for (const field of ['dust', 'lightLeaks'] as const) {
       const source = frameOf(320, 240, [64, 64, 64]);

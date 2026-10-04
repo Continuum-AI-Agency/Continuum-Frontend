@@ -45,15 +45,21 @@ function VideoLayer({
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
-    video.playbackRate = layer.playbackRate;
-    video.volume = layer.volume;
-    video.muted = layer.muted;
-    if (Math.abs(video.currentTime - layer.sourceSec) > 0.12) {
-      video.currentTime = Math.max(0, layer.sourceSec);
-    }
-    if (isPlaying) void video.play().catch(() => undefined);
-    else video.pause();
-  }, [isPlaying, layer.muted, layer.playbackRate, layer.sourceSec, layer.volume]);
+    const sync = () => {
+      video.playbackRate = layer.playbackRate;
+      video.volume = layer.volume;
+      video.muted = layer.muted;
+      if (video.readyState >= 1 && Math.abs(video.currentTime - layer.sourceSec) > 0.12) {
+        video.currentTime = Math.max(0, layer.sourceSec);
+      }
+      if (isPlaying) void video.play().catch(() => undefined);
+      else video.pause();
+    };
+    // Browsers can discard a seek issued before the source metadata arrives.
+    video.addEventListener('loadedmetadata', sync);
+    sync();
+    return () => video.removeEventListener('loadedmetadata', sync);
+  }, [isPlaying, layer.muted, layer.playbackRate, layer.sourceSec, layer.url, layer.volume]);
 
   return (
     <>

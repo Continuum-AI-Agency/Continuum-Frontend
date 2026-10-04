@@ -79,6 +79,20 @@ export function TimelineShaderPreview({
       if (!image && (videoRef.current?.seeking || (videoRef.current?.readyState ?? 0) < 2)) return;
       let rendered: ImageBitmap | undefined;
       try {
+        const canvas = canvasRef.current;
+        const context = canvas?.getContext('2d');
+        if (!canvas || !context) throw new Error('Could not create the timeline media preview');
+        const targetWidth =
+          canvasSize?.width ?? Math.round(canvas.parentElement?.clientWidth ?? width);
+        const targetHeight =
+          canvasSize?.height ?? Math.round(canvas.parentElement?.clientHeight ?? height);
+        const { source: cropped, target: rect } = computeCropRects(
+          width,
+          height,
+          targetWidth,
+          targetHeight,
+          effects?.crop,
+        );
         if (hasShaderStack(effects)) {
           const { renderShaderStackFrame } = await import(
             '@continuum/contracts/ai-studio/hyperframes-runtime/renderShaderStack'
@@ -89,6 +103,7 @@ export function TimelineShaderPreview({
             height,
             stack: shaderStackFromClipEffects(effects),
             timeSec,
+            viewport: cropped,
           });
         }
         if (
@@ -96,25 +111,11 @@ export function TimelineShaderPreview({
           (!image && (videoRef.current?.seeking || (videoRef.current?.readyState ?? 0) < 2))
         )
           return;
-        const canvas = canvasRef.current;
-        const context = canvas?.getContext('2d');
-        if (!canvas || !context) throw new Error('Could not create the timeline media preview');
-        const targetWidth =
-          canvasSize?.width ?? Math.round(canvas.parentElement?.clientWidth ?? width);
-        const targetHeight =
-          canvasSize?.height ?? Math.round(canvas.parentElement?.clientHeight ?? height);
         if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
           canvas.width = targetWidth;
           canvas.height = targetHeight;
         }
         context.clearRect(0, 0, targetWidth, targetHeight);
-        const { source: cropped, target: rect } = computeCropRects(
-          width,
-          height,
-          targetWidth,
-          targetHeight,
-          effects?.crop,
-        );
         context.drawImage(
           rendered ?? source,
           cropped.x,

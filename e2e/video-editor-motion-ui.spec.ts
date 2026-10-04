@@ -1119,7 +1119,14 @@ test('retained project journey: native splits and deletes preserve stored pictur
     process.env.VIDEO_EDITOR_CURVE_JOURNEY_OUTPUT ??
     join(tmpdir(), `video-editor-curve-journey-${RUN}`);
   mkdirSync(folder, { recursive: true });
+  const journeyStartedMs = Date.now();
+  const progress = (step: string) =>
+    writeFileSync(
+      join(folder, 'progress.json'),
+      JSON.stringify({ step, elapsedMs: Date.now() - journeyStartedMs }, null, 2),
+    );
   const assert = (name: string, ok: boolean, detail?: string) => {
+    progress(name);
     proof.record(name, ok ? 'PASS' : 'FAIL', detail);
     expect(ok, `${name}${detail ? `: ${detail}` : ''}`).toBe(true);
   };
@@ -1825,7 +1832,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
           const atSec = layout === 'stack' ? 0.5 : layout === 'side_by_side' ? 1 : 1.5;
           const tag = `${format}-${layout}-${count}`,
             before = await getProject(api, projectId);
-          await page.reload();
+          await page.reload({ waitUntil: 'domcontentloaded' });
           await expect(page.locator('[data-clip-id="interview"]:visible')).toHaveCount(1, {
             timeout: 30_000,
           });
@@ -1920,7 +1927,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
               2,
             ),
           );
-          await page.reload();
+          await page.reload({ waitUntil: 'domcontentloaded' });
           const reloaded = await getProject(api, projectId);
           assert(
             `${tag}: reload retains the complete collage document`,
@@ -2184,7 +2191,8 @@ test('retained project journey: native splits and deletes preserve stored pictur
               for (const effect of ['dust', 'light_leaks'] as const)
                 for (const amount of [0, 0.25, 0.6, 1]) {
                   const lookTag = `${format}-${target.mediaKind}-${effect}-${amount}`;
-                  await page.reload();
+                  progress(`${lookTag}: editor reload begins`);
+                  await page.reload({ waitUntil: 'domcontentloaded' });
                   await selectClip(page, target.id);
                   const label = effect === 'dust' ? 'Dust' : 'Light leaks';
                   const currentAmount = (p: EditorProjectV2) => {
@@ -2275,7 +2283,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
                       looked.durationSec === edited.durationSec &&
                       newTarget.effects.filter((e) => e.effectId === effect).length === 1,
                   );
-                  await page.reload();
+                  await page.reload({ waitUntil: 'domcontentloaded' });
                   assert(
                     `${lookTag}: complete look persists after reload`,
                     JSON.stringify((await getProject(api, projectId)).tracks) ===
@@ -2350,6 +2358,13 @@ test('retained project journey: native splits and deletes preserve stored pictur
                         (amount === 0 ? selectedDelta === 0 : selectedDelta > 100),
                       JSON.stringify({ selectedDelta, outsideDelta, changedFraction }),
                     );
+                    const selectedMeanRgbDelta = selectedDelta / ((width * height * 3) / 4);
+                    if (effect === 'light_leaks' && amount === 1)
+                      assert(
+                        `${lookTag} ${local}s: full-strength exposure remains visible after framing`,
+                        selectedMeanRgbDelta >= 5,
+                        JSON.stringify({ selectedMeanRgbDelta, minimum: 5 }),
+                      );
                     let dustChangedFraction: number | undefined;
                     if (effect === 'dust' && amount > 0) {
                       // Isolate flecks from bitmap-vs-pixel-buffer resize rounding. An
@@ -2399,7 +2414,9 @@ test('retained project journey: native splits and deletes preserve stored pictur
                     );
                     const snap = page.getByRole('button', { name: 'Toggle snapping', exact: true });
                     if ((await snap.getAttribute('aria-pressed')) === 'true') await snap.click();
+                    progress(`${lookTag} ${local}s: native seek begins`);
                     await seek(page, pxPerSec, atSec + local);
+                    progress(`${lookTag} ${local}s: native video readiness begins`);
                     let videoIndex = 1;
                     for (const panel of panels)
                       if (panel.mediaKind === 'video') {
@@ -2408,19 +2425,37 @@ test('retained project journey: native splits and deletes preserve stored pictur
                           .locator('video')
                           .nth(videoIndex++);
                         await expect
-                          .poll(() => video.evaluate((v) => v.currentTime))
+                          .poll(async () => {
+                            const state = await video.evaluate((v) => ({
+                              currentTime: v.currentTime,
+                              readyState: v.readyState,
+                              seeking: v.seeking,
+                              videoWidth: v.videoWidth,
+                            }));
+                            writeFileSync(
+                              join(folder, `${lookTag}-${local}-${panel.id}-native-clock.json`),
+                              JSON.stringify(
+                                { ...state, expected: panel.sourceInSec + local },
+                                null,
+                                2,
+                              ),
+                            );
+                            return state.currentTime;
+                          })
                           .toBeCloseTo(panel.sourceInSec + local, 2);
                         await expect
                           .poll(() => video.evaluate((v) => v.readyState))
                           .toBeGreaterThanOrEqual(2);
                         await expect.poll(() => video.evaluate((v) => v.seeking)).toBe(false);
                       }
+                    progress(`${lookTag} ${local}s: native video readiness complete`);
                     const canvasCount = panels.filter(
                       (p) =>
                         Object.values(p.crop).some((v) => v > 0) ||
                         (p.id === target.id && amount > 0),
                     ).length;
                     if (amount > 0) {
+                      progress(`${lookTag} ${local}s: GPU adapter observation begins`);
                       const state = await page.evaluate(async () => ({
                         gpuAvailable: Boolean(navigator.gpu),
                         adapterAvailable: Boolean(await navigator.gpu?.requestAdapter()),
@@ -2443,6 +2478,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
                         await page.getByTestId('edit-stage').screenshot(),
                       );
                     }
+                    progress(`${lookTag} ${local}s: native effect readiness begins`);
                     await expect(
                       page.locator(
                         `[data-testid="media-effect-preview"][data-time-sec="${local}"]`,
@@ -2562,6 +2598,7 @@ test('retained project journey: native splits and deletes preserve stored pictur
                       dot,
                       deltaError,
                       selectedDelta,
+                      selectedMeanRgbDelta,
                       outsideDelta,
                       changedFraction,
                       dustChangedFraction,
